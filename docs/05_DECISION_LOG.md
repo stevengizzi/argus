@@ -390,5 +390,20 @@ Each entry follows this format:
 
 ---
 
+### DEC-035 | Sprint 2 Micro-Decisions
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-15 |
+| **Decision** | Five implementation micro-decisions for Sprint 2: (1) Weekly loss limit uses calendar week (Mon–Fri reset), not rolling 5-day. (2) Circuit breaker internally enforced by Risk Manager via `_circuit_breaker_active` flag — auto-rejects all signals until `reset_daily_state()`. (3) SimulatedBroker has `simulate_price_update(symbol, price)` for testing bracket order stop/target triggers. (4) PDT $25K threshold stored in config (`pdt.threshold_balance`) — regulatory value but respects no-hardcode rule. (5) Risk Manager queries Broker for account state (source of truth); maintains in-memory tracking only for daily/weekly P&L and PDT counts via EventBus subscription. |
+| **Alternatives** | (1) Rolling 5-day window (more complex, marginal benefit). (2) External enforcement by Orchestrator (doesn't exist yet). (3) Manual test setup per test (tedious). (4) Hardcode in code (violates architectural rules). (5) Mirror all state internally (stale data risk). |
+| **Rationale** | Each choice optimizes for simplicity, correctness, and consistency with existing architectural decisions (DEC-027, DEC-028, DEC-032). |
+| **Status** | Active |
+```
+```
+- [ ] config/risk_limits.yaml: Add `threshold_balance: 25000` under `pdt` section
+- [ ] CLAUDE.md: No changes needed (current state already says Sprint 2 in progress)
+
+---
+
 *End of Decision Log v1.0*
 *New decisions are appended chronologically as the project progresses.*

@@ -80,6 +80,7 @@ class PDTConfig(BaseModel):
     """Pattern Day Trader tracking configuration."""
     enabled: bool = True
     account_type: AccountType = AccountType.MARGIN
+    threshold_balance: float = 25000.0  # FINRA PDT threshold
 
 
 class RiskConfig(BaseModel):

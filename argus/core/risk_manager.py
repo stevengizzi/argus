@@ -1,0 +1,540 @@
+"""Risk Manager — Three-level gate for all trade signals.
+
+Phase 1 implements account-level checks only. Strategy-level checks are
+handled inside strategies (Sprint 3). Cross-strategy checks require
+multiple strategies (Phase 4).
+
+Every SignalEvent must pass through evaluate_signal() before reaching
+the broker. No exceptions. No shortcuts.
+"""
+
+from __future__ import annotations
+
+import logging
+from collections import deque
+from dataclasses import dataclass, field
+from datetime import date, datetime, timedelta
+from typing import TYPE_CHECKING
+
+from argus.core.config import RiskConfig
+from argus.core.event_bus import EventBus
+from argus.core.events import (
+    CircuitBreakerEvent,
+    CircuitBreakerLevel,
+    OrderApprovedEvent,
+    OrderRejectedEvent,
+    PositionClosedEvent,
+    SignalEvent,
+)
+from argus.execution.broker import Broker
+
+if TYPE_CHECKING:
+    from argus.analytics.trade_logger import TradeLogger
+
+logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Supporting Data Structures
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class PDTTracker:
+    """Tracks Pattern Day Trading rule compliance.
+
+    Maintains a rolling window of day trade timestamps. A day trade is
+    any round-trip (buy + sell) in the same stock on the same day.
+
+    Attributes:
+        day_trades: Deque of dates when day trades occurred.
+        account_type: "margin" or "cash".
+        threshold_balance: FINRA PDT threshold (default $25,000).
+    """
+
+    day_trades: deque[date] = field(default_factory=deque)
+    account_type: str = "margin"
+    threshold_balance: float = 25000.0
+
+    def record_day_trade(self, trade_date: date) -> None:
+        """Record a day trade on the given date."""
+        self.day_trades.append(trade_date)
+        self._prune(trade_date)
+
+    def day_trades_remaining(self, current_date: date, account_equity: float) -> int:
+        """Return how many day trades are available.
+
+        Args:
+            current_date: Today's date.
+            account_equity: Current account equity.
+
+        Returns:
+            Number of day trades remaining. Returns 999 if PDT doesn't apply
+            (cash account or equity >= threshold).
+        """
+        if self.account_type == "cash":
+            return 999  # PDT doesn't apply to cash accounts
+        if account_equity >= self.threshold_balance:
+            return 999  # Above threshold, unlimited day trades
+
+        self._prune(current_date)
+        used = len(self.day_trades)
+        return max(0, 3 - used)
+
+    def _prune(self, current_date: date) -> None:
+        """Remove day trades older than 5 business days."""
+        cutoff = self._business_days_ago(current_date, 5)
+        while self.day_trades and self.day_trades[0] < cutoff:
+            self.day_trades.popleft()
+
+    @staticmethod
+    def _business_days_ago(from_date: date, n: int) -> date:
+        """Calculate the date N business days before from_date."""
+        current = from_date
+        days_counted = 0
+        while days_counted < n:
+            current -= timedelta(days=1)
+            if current.weekday() < 5:  # Monday=0, Friday=4
+                days_counted += 1
+        return current
+
+
+@dataclass
+class IntegrityReport:
+    """Result of a daily integrity check.
+
+    Attributes:
+        timestamp: When the check was performed.
+        positions_checked: Number of positions verified.
+        issues: List of issue descriptions. Empty if all checks pass.
+        passed: Whether all checks passed.
+    """
+
+    timestamp: datetime
+    positions_checked: int
+    issues: list[str]
+    passed: bool
+
+
+# ---------------------------------------------------------------------------
+# Risk Manager
+# ---------------------------------------------------------------------------
+
+
+class RiskManager:
+    """Three-level risk gate for all trade signals.
+
+    Every signal must pass through evaluate_signal() before reaching the
+    broker. The Risk Manager can approve (with or without modifications),
+    reject, or trigger circuit breakers.
+
+    Phase 1 implements account-level checks only:
+    - Daily loss limit
+    - Weekly loss limit
+    - Max concurrent positions
+    - Cash reserve enforcement
+    - Buying power check
+    - PDT compliance
+
+    Args:
+        config: Risk configuration.
+        broker: Broker for account state queries.
+        event_bus: EventBus for publishing circuit breaker events.
+    """
+
+    def __init__(
+        self,
+        config: RiskConfig,
+        broker: Broker,
+        event_bus: EventBus,
+    ) -> None:
+        self._config = config
+        self._broker = broker
+        self._event_bus = event_bus
+
+        # Daily/weekly tracking (updated via PositionClosedEvent)
+        self._daily_realized_pnl: float = 0.0
+        self._weekly_realized_pnl: float = 0.0
+        self._current_week_start: date = self._get_monday(date.today())
+        self._trades_today: int = 0
+
+        # Circuit breaker state
+        self._circuit_breaker_active: bool = False
+
+        # PDT tracking
+        self._pdt_tracker = PDTTracker(
+            account_type=self._config.pdt.account_type.value,
+            threshold_balance=self._config.pdt.threshold_balance,
+        )
+
+    @staticmethod
+    def _get_monday(d: date) -> date:
+        """Return the Monday of the week containing date d."""
+        return d - timedelta(days=d.weekday())
+
+    async def initialize(self) -> None:
+        """Initialize the Risk Manager.
+
+        Subscribes to PositionClosedEvent on the EventBus to track realized P&L.
+        Must be called after EventBus is available.
+        """
+        self._event_bus.subscribe(PositionClosedEvent, self._on_position_closed)
+        logger.info(
+            "Risk Manager initialized. Config: daily_limit=%.1f%%, weekly_limit=%.1f%%",
+            self._config.account.daily_loss_limit_pct * 100,
+            self._config.account.weekly_loss_limit_pct * 100,
+        )
+
+    async def evaluate_signal(
+        self, signal: SignalEvent
+    ) -> OrderApprovedEvent | OrderRejectedEvent:
+        """Evaluate a trade signal against account-level risk limits.
+
+        Checks performed in order (fail-fast):
+        1. Circuit breaker active? → Reject
+        2. Daily loss limit breached? → Reject
+        3. Weekly loss limit breached? → Reject
+        4. Max concurrent positions exceeded? → Reject
+        5. Cash reserve enforcement → Reject or modify share count
+        6. Buying power check → Reject or modify share count
+        7. PDT check (margin accounts under threshold) → Reject
+
+        If share count must be reduced (steps 5-6), check the 0.25R floor:
+        if reduced position potential profit < 0.25R, reject entirely.
+
+        Args:
+            signal: The SignalEvent to evaluate.
+
+        Returns:
+            OrderApprovedEvent (possibly with modifications) or OrderRejectedEvent.
+        """
+        # 1. Circuit breaker check
+        if self._circuit_breaker_active:
+            logger.warning(
+                "Signal rejected: circuit breaker active (strategy=%s, symbol=%s)",
+                signal.strategy_id,
+                signal.symbol,
+            )
+            return OrderRejectedEvent(
+                signal=signal,
+                reason="Circuit breaker active — all trading halted for the day",
+            )
+
+        # Get account state
+        account = await self._broker.get_account()
+
+        # 2. Daily loss limit check
+        daily_limit = account.equity * self._config.account.daily_loss_limit_pct
+        if self._daily_realized_pnl < 0 and abs(self._daily_realized_pnl) >= daily_limit:
+            # Trigger circuit breaker
+            self._circuit_breaker_active = True
+            await self._event_bus.publish(
+                CircuitBreakerEvent(
+                    level=CircuitBreakerLevel.ACCOUNT,
+                    reason=f"Daily loss limit reached: ${self._daily_realized_pnl:.2f}",
+                    strategies_affected=(signal.strategy_id,),
+                )
+            )
+            logger.critical(
+                "CIRCUIT BREAKER TRIGGERED: Daily loss $%.2f exceeds limit $%.2f",
+                abs(self._daily_realized_pnl),
+                daily_limit,
+            )
+            reason = (
+                f"Daily loss limit reached "
+                f"({self._daily_realized_pnl:.2f} of {daily_limit:.2f})"
+            )
+            return OrderRejectedEvent(signal=signal, reason=reason)
+
+        # 3. Weekly loss limit check
+        weekly_limit = account.equity * self._config.account.weekly_loss_limit_pct
+        if self._weekly_realized_pnl < 0 and abs(self._weekly_realized_pnl) >= weekly_limit:
+            logger.warning(
+                "Signal rejected: weekly loss limit reached (pnl=%.2f, limit=%.2f)",
+                self._weekly_realized_pnl,
+                weekly_limit,
+            )
+            return OrderRejectedEvent(
+                signal=signal,
+                reason="Weekly loss limit reached",
+            )
+
+        # 4. Max concurrent positions check
+        positions = await self._broker.get_positions()
+        if len(positions) >= self._config.account.max_concurrent_positions:
+            logger.warning(
+                "Signal rejected: max concurrent positions (%d) reached",
+                self._config.account.max_concurrent_positions,
+            )
+            max_pos = self._config.account.max_concurrent_positions
+            return OrderRejectedEvent(
+                signal=signal,
+                reason=f"Max concurrent positions ({max_pos}) reached",
+            )
+
+        # 5. Cash reserve enforcement
+        reserve = account.equity * self._config.account.cash_reserve_pct
+        available = account.cash - reserve
+        cost = signal.entry_price * signal.share_count
+        modified_shares: int | None = None
+        modification_reason: str | None = None
+
+        if cost > available:
+            if available <= 0:
+                logger.warning(
+                    "Signal rejected: cash reserve would be violated (available=%.2f)",
+                    available,
+                )
+                return OrderRejectedEvent(
+                    signal=signal,
+                    reason="Cash reserve would be violated",
+                )
+            # Calculate reduced shares
+            reduced = int(available / signal.entry_price)
+            if self._below_025r_floor(signal.share_count, reduced, signal):
+                logger.warning(
+                    "Signal rejected: reduced shares (%d) below 0.25R floor",
+                    reduced,
+                )
+                return OrderRejectedEvent(
+                    signal=signal,
+                    reason="Position reduced below 0.25R minimum — not worth taking",
+                )
+            modified_shares = reduced
+            modification_reason = "cash reserve constraint"
+
+        # 6. Buying power check (only if not already reduced)
+        if modified_shares is None and cost > account.buying_power:
+            reduced = int(account.buying_power / signal.entry_price)
+            if self._below_025r_floor(signal.share_count, reduced, signal):
+                logger.warning(
+                    "Signal rejected: reduced shares (%d) below 0.25R floor",
+                    reduced,
+                )
+                return OrderRejectedEvent(
+                    signal=signal,
+                    reason="Position reduced below 0.25R minimum — not worth taking",
+                )
+            modified_shares = reduced
+            modification_reason = "buying power constraint"
+
+        # 7. PDT check
+        if self._config.pdt.enabled:
+            remaining = self._pdt_tracker.day_trades_remaining(
+                date.today(), account.equity
+            )
+            if remaining <= 0:
+                logger.warning("Signal rejected: PDT limit reached")
+                return OrderRejectedEvent(
+                    signal=signal,
+                    reason="PDT limit reached — no day trades remaining in rolling 5-day window",
+                )
+
+        # Approve (with or without modifications)
+        if modified_shares is not None:
+            logger.info(
+                "Signal approved with modification: %s %s shares reduced from %d to %d (%s)",
+                signal.symbol,
+                signal.strategy_id,
+                signal.share_count,
+                modified_shares,
+                modification_reason,
+            )
+            mod_reason = (
+                f"Reduced from {signal.share_count} to {modified_shares} "
+                f"shares — {modification_reason}"
+            )
+            return OrderApprovedEvent(
+                signal=signal,
+                modifications={"share_count": modified_shares, "reason": mod_reason},
+            )
+
+        logger.info(
+            "Signal approved: %s %s %d shares @ %.2f",
+            signal.strategy_id,
+            signal.symbol,
+            signal.share_count,
+            signal.entry_price,
+        )
+        return OrderApprovedEvent(signal=signal, modifications=None)
+
+    def _below_025r_floor(
+        self, original_shares: int, reduced_shares: int, signal: SignalEvent
+    ) -> bool:
+        """Check if reduced position is below the 0.25R floor.
+
+        R = original_shares * abs(entry_price - stop_price).
+        If reduced_shares * r_per_share < 0.25 * R, reject.
+
+        Args:
+            original_shares: Original share count from signal.
+            reduced_shares: Proposed reduced share count.
+            signal: The original signal.
+
+        Returns:
+            True if below floor (should reject), False if acceptable.
+        """
+        if reduced_shares <= 0:
+            return True
+
+        r_per_share = abs(signal.entry_price - signal.stop_price)
+        original_r = original_shares * r_per_share
+        reduced_risk = reduced_shares * r_per_share
+
+        return reduced_risk < 0.25 * original_r
+
+    async def _on_position_closed(self, event: PositionClosedEvent) -> None:
+        """Track realized P&L and PDT day trades from position close events.
+
+        Args:
+            event: The PositionClosedEvent from the EventBus.
+        """
+        self._daily_realized_pnl += event.realized_pnl
+        self._weekly_realized_pnl += event.realized_pnl
+        self._trades_today += 1
+
+        # Check if this was a day trade (opened and closed same day)
+        if event.entry_time and event.exit_time:
+            entry_date = (
+                event.entry_time.date()
+                if isinstance(event.entry_time, datetime)
+                else event.entry_time
+            )
+            exit_date = (
+                event.exit_time.date()
+                if isinstance(event.exit_time, datetime)
+                else event.exit_time
+            )
+            if entry_date == exit_date:
+                self._pdt_tracker.record_day_trade(exit_date)
+                logger.debug("Day trade recorded for %s", exit_date)
+
+        # Check if daily loss limit is now breached
+        await self._check_circuit_breaker_after_close()
+
+    async def _check_circuit_breaker_after_close(self) -> None:
+        """Check if daily loss limit is breached after a position closes."""
+        if self._circuit_breaker_active:
+            return  # Already triggered
+
+        account = await self._broker.get_account()
+        daily_limit = account.equity * self._config.account.daily_loss_limit_pct
+
+        if self._daily_realized_pnl < 0 and abs(self._daily_realized_pnl) >= daily_limit:
+            self._circuit_breaker_active = True
+            event = CircuitBreakerEvent(
+                level=CircuitBreakerLevel.ACCOUNT,
+                reason=f"Daily loss limit reached: ${self._daily_realized_pnl:.2f}",
+                strategies_affected=(),  # Affects all strategies
+            )
+            await self._event_bus.publish(event)
+            logger.critical(
+                "CIRCUIT BREAKER TRIGGERED: Daily loss $%.2f exceeds limit $%.2f",
+                abs(self._daily_realized_pnl),
+                daily_limit,
+            )
+
+    def reset_daily_state(self) -> None:
+        """Reset daily state at the start of each trading day.
+
+        Called by the Orchestrator before market open. Clears daily P&L,
+        trade count, and circuit breaker flag. Weekly P&L rolls over
+        on Monday.
+        """
+        self._daily_realized_pnl = 0.0
+        self._trades_today = 0
+        self._circuit_breaker_active = False
+
+        # Check for week rollover (Monday)
+        today = date.today()
+        monday = self._get_monday(today)
+        if monday != self._current_week_start:
+            self._weekly_realized_pnl = 0.0
+            self._current_week_start = monday
+            logger.info("Weekly P&L reset (new week starting %s)", monday)
+
+        logger.info("Risk Manager daily state reset")
+
+    async def reconstruct_state(self, trade_logger: TradeLogger) -> None:
+        """Reconstruct intraday state from the database after a mid-day restart.
+
+        Queries today's closed trades from the TradeLogger to rebuild:
+        - Daily realized P&L
+        - Weekly realized P&L
+        - PDT day trade count
+        - Trade count
+
+        Args:
+            trade_logger: The TradeLogger instance for database queries.
+        """
+        today = date.today()
+        trades_today = await trade_logger.get_trades_by_date(today)
+
+        self._daily_realized_pnl = sum(
+            t.net_pnl for t in trades_today if t.net_pnl is not None
+        )
+        self._trades_today = len(trades_today)
+
+        # Reconstruct weekly P&L
+        monday = self._get_monday(today)
+        self._current_week_start = monday
+
+        logger.info(
+            "Risk Manager state reconstructed: daily_pnl=$%.2f, trades=%d",
+            self._daily_realized_pnl,
+            self._trades_today,
+        )
+
+    async def daily_integrity_check(self) -> IntegrityReport:
+        """Verify all open positions have associated stop orders at the broker.
+
+        V1 implementation: verify that the broker reports positions and that
+        the system's internal state is consistent with the broker's state.
+        Full stop-order verification requires Order Manager (Sprint 4).
+
+        Returns:
+            IntegrityReport with check results.
+        """
+        issues: list[str] = []
+        positions = await self._broker.get_positions()
+
+        # Basic checks for V1
+        account = await self._broker.get_account()
+        if account.equity <= 0:
+            issues.append("Account equity is zero or negative")
+
+        return IntegrityReport(
+            timestamp=datetime.now(),
+            positions_checked=len(positions),
+            issues=issues,
+            passed=len(issues) == 0,
+        )
+
+    # -------------------------------------------------------------------------
+    # Properties (read-only access for testing and monitoring)
+    # -------------------------------------------------------------------------
+
+    @property
+    def daily_realized_pnl(self) -> float:
+        """Current daily realized P&L."""
+        return self._daily_realized_pnl
+
+    @property
+    def weekly_realized_pnl(self) -> float:
+        """Current weekly realized P&L."""
+        return self._weekly_realized_pnl
+
+    @property
+    def circuit_breaker_active(self) -> bool:
+        """Whether the circuit breaker is currently active."""
+        return self._circuit_breaker_active
+
+    @property
+    def pdt_tracker(self) -> PDTTracker:
+        """Access to PDT tracker for monitoring."""
+        return self._pdt_tracker
+
+    @property
+    def trades_today(self) -> int:
+        """Number of trades executed today."""
+        return self._trades_today

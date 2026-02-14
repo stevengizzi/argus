@@ -235,6 +235,8 @@ class PositionClosedEvent(Event):
     realized_pnl: float = 0.0
     exit_reason: ExitReason = ExitReason.MANUAL
     hold_duration_seconds: int = 0
+    entry_time: datetime | None = None
+    exit_time: datetime | None = None
 
 
 # ---------------------------------------------------------------------------

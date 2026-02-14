@@ -13,3 +13,4 @@ cross_strategy:
 pdt:
   enabled: true
   account_type: "margin"
+  threshold_balance: 25000  # FINRA regulatory minimum for unlimited day trading

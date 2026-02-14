@@ -116,6 +116,23 @@ class BracketOrderResult(BaseModel):
     targets: list[OrderResult] = Field(default_factory=list)
 
 
+class AccountInfo(BaseModel):
+    """Snapshot of the brokerage account state.
+
+    Attributes:
+        equity: Total account equity (cash + positions value).
+        cash: Available cash balance.
+        buying_power: Available buying power for new orders.
+        positions_value: Total value of open positions.
+        daily_pnl: Realized P&L for today.
+    """
+    equity: float
+    cash: float
+    buying_power: float
+    positions_value: float = 0.0
+    daily_pnl: float = 0.0
+
+
 # ---------------------------------------------------------------------------
 # Position Model
 # ---------------------------------------------------------------------------

@@ -8,7 +8,9 @@ import pytest
 from argus.analytics.trade_logger import TradeLogger
 from argus.core.config import ArgusConfig, load_config
 from argus.core.event_bus import EventBus
+from argus.core.risk_manager import RiskManager
 from argus.db.manager import DatabaseManager
+from argus.execution.simulated_broker import SimulatedBroker
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
@@ -44,3 +46,21 @@ async def db(tmp_path: Path) -> AsyncGenerator[DatabaseManager, None]:
 def trade_logger(db: DatabaseManager) -> TradeLogger:
     """Provide a TradeLogger backed by a temp database."""
     return TradeLogger(db)
+
+
+@pytest.fixture
+def simulated_broker() -> SimulatedBroker:
+    """SimulatedBroker with default settings."""
+    return SimulatedBroker(initial_cash=100_000.0)
+
+
+@pytest.fixture
+def risk_manager(
+    config: ArgusConfig, simulated_broker: SimulatedBroker, bus: EventBus
+) -> RiskManager:
+    """RiskManager with default config, simulated broker, and event bus."""
+    return RiskManager(
+        config=config.risk,
+        broker=simulated_broker,
+        event_bus=bus,
+    )
