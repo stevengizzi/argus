@@ -1,0 +1,7 @@
+scanner_type: "static"
+static_symbols:
+  - "AAPL"
+  - "MSFT"
+  - "NVDA"
+  - "TSLA"
+  - "AMD"

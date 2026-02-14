@@ -438,7 +438,7 @@ class TestRiskManagerStateManagement:
         rm._trades_today = 5
         rm._circuit_breaker_active = True
 
-        rm.reset_daily_state()
+        await rm.reset_daily_state()
 
         assert rm.daily_realized_pnl == 0.0
         assert rm.trades_today == 0
@@ -644,5 +644,117 @@ class TestRiskManagerReconstruction:
         # The overnight trade should NOT count as a day trade
         remaining = rm.pdt_tracker.day_trades_remaining(today, 20000)
         assert remaining == 1  # 3 - 2 = 1
+
+        await db.close()
+
+
+class TestStartOfDayEquity:
+    """Tests for DEC-037: Start-of-day equity for cash reserve calculations."""
+
+    @pytest.mark.asyncio
+    async def test_reset_daily_state_snapshots_equity(self) -> None:
+        """reset_daily_state should snapshot start-of-day equity."""
+        broker = SimulatedBroker(initial_cash=100_000)
+        await broker.connect()
+        bus = EventBus()
+        config = make_risk_config()
+
+        rm = RiskManager(config=config, broker=broker, event_bus=bus)
+        await rm.initialize()
+
+        # Initially start_of_day_equity is 0
+        assert rm.start_of_day_equity == 0.0
+
+        await rm.reset_daily_state()
+
+        # After reset, start_of_day_equity should equal account equity
+        assert rm.start_of_day_equity == 100_000.0
+
+    @pytest.mark.asyncio
+    async def test_cash_reserve_uses_start_of_day_equity(self) -> None:
+        """Cash reserve check should use start-of-day equity, not live equity."""
+        broker = SimulatedBroker(initial_cash=100_000)
+        await broker.connect()
+        bus = EventBus()
+        config = make_risk_config(cash_reserve_pct=0.20)
+
+        rm = RiskManager(config=config, broker=broker, event_bus=bus)
+        await rm.initialize()
+        await rm.reset_daily_state()
+
+        # Now simulate position gains changing live equity
+        # Buy shares to change account state
+        deploy_order = Order(
+            strategy_id="test",
+            symbol="SPY",
+            side=OrderSide.BUY,
+            quantity=100,
+            limit_price=150.0,
+        )
+        await broker.place_order(deploy_order)
+
+        # Account state after order:
+        # Cash is now 100_000 - 15_000 = 85_000
+        # Equity is still ~100_000 (cash + position value)
+
+        # The reserve calculation should use start_of_day_equity (100K)
+        # not live equity which could fluctuate with unrealized P&L
+        # Reserve = 100K * 0.20 = 20K
+        # Available = 85K - 20K = 65K
+        # Signal for 500 shares at 150 = 75K (exceeds 65K available)
+        # Should be reduced to int(65000/150) = 433 shares
+        signal = make_signal(share_count=500, entry_price=150.0, stop_price=147.0)
+        result = await rm.evaluate_signal(signal)
+
+        assert isinstance(result, OrderApprovedEvent)
+        assert result.modifications is not None
+        assert result.modifications["share_count"] == 433
+
+    @pytest.mark.asyncio
+    async def test_fallback_to_live_equity_when_not_snapshotted(self) -> None:
+        """When start_of_day_equity is 0, should fall back to live equity."""
+        broker = SimulatedBroker(initial_cash=100_000)
+        await broker.connect()
+        bus = EventBus()
+        config = make_risk_config(cash_reserve_pct=0.20)
+
+        rm = RiskManager(config=config, broker=broker, event_bus=bus)
+        await rm.initialize()
+
+        # Do NOT call reset_daily_state - start_of_day_equity remains 0
+        assert rm.start_of_day_equity == 0.0
+
+        # Signal should still work using live equity fallback
+        # Reserve = 100K * 0.20 = 20K (using live equity)
+        # Available = 100K - 20K = 80K
+        # Signal for 100 shares at 150 = 15K (within available)
+        signal = make_signal(share_count=100, entry_price=150.0, stop_price=147.0)
+        result = await rm.evaluate_signal(signal)
+
+        assert isinstance(result, OrderApprovedEvent)
+        assert result.modifications is None
+
+    @pytest.mark.asyncio
+    async def test_reconstruct_state_snapshots_equity(self, tmp_path: Path) -> None:
+        """reconstruct_state should also snapshot start-of-day equity."""
+        db = DatabaseManager(tmp_path / "test_reconstruct_equity.db")
+        await db.initialize()
+        trade_logger = TradeLogger(db)
+
+        broker = SimulatedBroker(initial_cash=100_000)
+        await broker.connect()
+        bus = EventBus()
+        config = make_risk_config()
+
+        rm = RiskManager(config=config, broker=broker, event_bus=bus)
+        await rm.initialize()
+
+        # Initially start_of_day_equity is 0
+        assert rm.start_of_day_equity == 0.0
+
+        await rm.reconstruct_state(trade_logger)
+
+        # After reconstruct, start_of_day_equity should be set
+        assert rm.start_of_day_equity == 100_000.0
 
         await db.close()

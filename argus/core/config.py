@@ -194,6 +194,59 @@ class StrategyConfig(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Data Service Config (Sprint 3)
+# ---------------------------------------------------------------------------
+
+
+class DataServiceConfig(BaseModel):
+    """Configuration for the Data Service."""
+
+    active_timeframes: list[str] = Field(default_factory=lambda: ["1m"])
+    supported_timeframes: list[str] = Field(
+        default_factory=lambda: ["1s", "5s", "1m", "5m", "15m"]
+    )
+    indicators: list[str] = Field(
+        default_factory=lambda: ["vwap", "atr_14", "rvol", "sma_9", "sma_20", "sma_50"]
+    )
+    stale_data_timeout_seconds: int = Field(default=30, ge=1)
+
+
+# ---------------------------------------------------------------------------
+# Scanner Config (Sprint 3)
+# ---------------------------------------------------------------------------
+
+
+class ScannerConfig(BaseModel):
+    """Configuration for the Scanner."""
+
+    scanner_type: str = "static"  # "static" or "alpaca" (future)
+    static_symbols: list[str] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# ORB Breakout Strategy Config (Sprint 3)
+# ---------------------------------------------------------------------------
+
+
+class OrbBreakoutConfig(StrategyConfig):
+    """ORB-specific configuration extending the base StrategyConfig.
+
+    Validates ORB-specific parameters on top of the common strategy config.
+    """
+
+    orb_window_minutes: int = Field(default=15, ge=1, le=60)
+    stop_placement: str = "midpoint"  # "midpoint" or "bottom"
+    volume_threshold_rvol: float = Field(default=2.0, gt=0)
+    target_1_r: float = Field(default=1.0, gt=0)
+    target_2_r: float = Field(default=2.0, gt=0)
+    time_stop_minutes: int = Field(default=30, ge=1)
+    min_range_atr_ratio: float = Field(default=0.5, gt=0)
+    max_range_atr_ratio: float = Field(default=2.0, gt=0)
+    chase_protection_pct: float = Field(default=0.005, ge=0, le=0.05)
+    breakout_volume_multiplier: float = Field(default=1.5, gt=0)
+
+
+# ---------------------------------------------------------------------------
 # Config Loader
 # ---------------------------------------------------------------------------
 
@@ -275,3 +328,54 @@ def load_strategy_config(path: Path) -> StrategyConfig:
     """
     data = load_yaml_file(path)
     return StrategyConfig(**data)
+
+
+def load_orb_config(path: Path) -> OrbBreakoutConfig:
+    """Load ORB Breakout strategy configuration from a YAML file.
+
+    Args:
+        path: Path to the ORB strategy YAML file.
+
+    Returns:
+        Validated OrbBreakoutConfig instance.
+
+    Raises:
+        FileNotFoundError: If the file does not exist.
+        pydantic.ValidationError: If validation fails.
+    """
+    data = load_yaml_file(path)
+    return OrbBreakoutConfig(**data)
+
+
+def load_scanner_config(path: Path) -> ScannerConfig:
+    """Load scanner configuration from a YAML file.
+
+    Args:
+        path: Path to the scanner YAML file.
+
+    Returns:
+        Validated ScannerConfig instance.
+
+    Raises:
+        FileNotFoundError: If the file does not exist.
+        pydantic.ValidationError: If validation fails.
+    """
+    data = load_yaml_file(path)
+    return ScannerConfig(**data)
+
+
+def load_data_service_config(path: Path) -> DataServiceConfig:
+    """Load data service configuration from a YAML file.
+
+    Args:
+        path: Path to the data service YAML file.
+
+    Returns:
+        Validated DataServiceConfig instance.
+
+    Raises:
+        FileNotFoundError: If the file does not exist.
+        pydantic.ValidationError: If validation fails.
+    """
+    data = load_yaml_file(path)
+    return DataServiceConfig(**data)

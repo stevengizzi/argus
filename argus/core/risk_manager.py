@@ -158,6 +158,11 @@ class RiskManager:
         self._current_week_start: date = self._get_monday(date.today())
         self._trades_today: int = 0
 
+        # Start-of-day equity for cash reserve calculations (DEC-037)
+        # Snapshotted in reset_daily_state() or reconstruct_state()
+        # If 0.0, falls back to live equity for safety
+        self._start_of_day_equity: float = 0.0
+
         # Circuit breaker state
         self._circuit_breaker_active: bool = False
 
@@ -272,8 +277,12 @@ class RiskManager:
                 reason=f"Max concurrent positions ({max_pos}) reached",
             )
 
-        # 5. Cash reserve enforcement
-        reserve = account.equity * self._config.account.cash_reserve_pct
+        # 5. Cash reserve enforcement (DEC-037: use start-of-day equity)
+        # Fall back to live equity if start-of-day equity not yet snapshotted
+        equity_for_reserve = (
+            self._start_of_day_equity if self._start_of_day_equity > 0 else account.equity
+        )
+        reserve = equity_for_reserve * self._config.account.cash_reserve_pct
         available = account.cash - reserve
         cost = signal.entry_price * signal.share_count
         modified_shares: int | None = None
@@ -434,16 +443,21 @@ class RiskManager:
                 daily_limit,
             )
 
-    def reset_daily_state(self) -> None:
+    async def reset_daily_state(self) -> None:
         """Reset daily state at the start of each trading day.
 
         Called by the Orchestrator before market open. Clears daily P&L,
         trade count, and circuit breaker flag. Weekly P&L rolls over
-        on Monday.
+        on Monday. Snapshots start-of-day equity for cash reserve calculations.
         """
         self._daily_realized_pnl = 0.0
         self._trades_today = 0
         self._circuit_breaker_active = False
+
+        # Snapshot start-of-day equity (DEC-037)
+        account = await self._broker.get_account()
+        self._start_of_day_equity = account.equity
+        logger.info("Start-of-day equity snapshotted: $%.2f", self._start_of_day_equity)
 
         # Check for week rollover (Monday)
         today = date.today()
@@ -463,6 +477,7 @@ class RiskManager:
         - Weekly realized P&L
         - PDT day trade count
         - Trade count
+        - Start-of-day equity snapshot
 
         Args:
             trade_logger: The TradeLogger instance for database queries.
@@ -494,13 +509,19 @@ class RiskManager:
             if entry_date == exit_date:
                 self._pdt_tracker.record_day_trade(exit_date)
 
+        # Snapshot start-of-day equity (DEC-037)
+        # On mid-day restart, use current equity as approximation
+        account = await self._broker.get_account()
+        self._start_of_day_equity = account.equity
+
         logger.info(
             "Risk Manager state reconstructed: daily_pnl=$%.2f, weekly_pnl=$%.2f, "
-            "trades=%d, pdt_day_trades=%d",
+            "trades=%d, pdt_day_trades=%d, start_of_day_equity=$%.2f",
             self._daily_realized_pnl,
             self._weekly_realized_pnl,
             self._trades_today,
             len(self._pdt_tracker.day_trades),
+            self._start_of_day_equity,
         )
 
     async def daily_integrity_check(self) -> IntegrityReport:
@@ -556,3 +577,8 @@ class RiskManager:
     def trades_today(self) -> int:
         """Number of trades executed today."""
         return self._trades_today
+
+    @property
+    def start_of_day_equity(self) -> float:
+        """Start-of-day equity snapshot for cash reserve calculations."""
+        return self._start_of_day_equity

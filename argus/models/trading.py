@@ -7,7 +7,7 @@ need to exchange trading data use these types.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import StrEnum
 
 from pydantic import BaseModel, Field
@@ -96,7 +96,7 @@ class Order(BaseModel):
     limit_price: float | None = None
     stop_price: float | None = None
     time_in_force: str = "day"  # 'day', 'gtc', 'ioc', 'fok'
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class OrderResult(BaseModel):

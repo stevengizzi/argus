@@ -8,7 +8,7 @@ Event Bus at publish time — never set it manually.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
 
@@ -75,7 +75,7 @@ class Event:
         timestamp: When the event was created (UTC).
     """
     sequence: int = field(default=0)
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 # ---------------------------------------------------------------------------

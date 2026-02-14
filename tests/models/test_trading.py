@@ -1,6 +1,6 @@
 """Tests for trading data models."""
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -55,7 +55,7 @@ class TestPositionModel:
             symbol="AAPL",
             side=OrderSide.BUY,
             entry_price=150.0,
-            entry_time=datetime.utcnow(),
+            entry_time=datetime.now(UTC),
             shares=100,
             stop_price=148.0,
             target_prices=[152.0, 154.0],
@@ -106,9 +106,9 @@ class TestTradeModel:
             symbol="AAPL",
             side=OrderSide.BUY,
             entry_price=150.0,
-            entry_time=datetime.utcnow(),
+            entry_time=datetime.now(UTC),
             exit_price=148.0,
-            exit_time=datetime.utcnow() + timedelta(minutes=10),
+            exit_time=datetime.now(UTC) + timedelta(minutes=10),
             shares=100,
             stop_price=148.0,
             exit_reason=ExitReason.STOP_LOSS,

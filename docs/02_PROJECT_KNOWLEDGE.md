@@ -41,6 +41,13 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 - **Event Bus filtering:** Type-only subscription; filtering happens in handlers, not at bus level. DEC-033.
 - **Database access:** aiosqlite for async DB; DatabaseManager owns connection; TradeLogger is sole persistence interface. DEC-034.
 - **SimulatedBroker margin:** No margin model in V1. buying_power = cash. Diverges from real brokers. DEC-036.
+- **Scanner architecture:** ABC + StaticScanner in Sprint 3. Real AlpacaScanner in Sprint 4. DEC-038.
+- **Data Service timeframes:** Multi-timeframe framework, only 1m in Sprint 3. DEC-038.
+- **Indicators:** Computed inside Data Service, published as IndicatorEvent. DEC-038.
+- **ORB opening range:** Tracked internally by strategy, not shared indicator. DEC-038.
+- **Replay data format:** Parquet only. DEC-038.
+- **ORB entry:** Market order + chase protection filter. DEC-038.
+- **Breakout confirmation:** Candle close > OR high, volume > 1.5x avg, price > VWAP. DEC-038.
 
 ## Architecture Summary
 

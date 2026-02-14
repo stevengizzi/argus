@@ -412,5 +412,26 @@ Each entry follows this format:
 
 ---
 
+### DEC-037 | Cash Reserve Uses Start-of-Day Equity
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-15 |
+| **Decision** | The Risk Manager's cash reserve is calculated as `start_of_day_equity * cash_reserve_pct`. The `_start_of_day_equity` value is snapshotted during `reset_daily_state()` (called by the Orchestrator pre-market). It does not change during the trading day. |
+| **Alternatives** | (a) Use live equity (includes unrealized P&L — creates perverse incentive where drawdowns lower the reserve threshold, allowing more risk). (c) Use high water mark (ratchets up permanently — overly conservative, one good day raises the floor forever). |
+| **Rationale** | Start-of-day equity is stable throughout the session, immune to unrealized P&L swings, and resets naturally each morning. Avoids the perverse dynamic of live equity while not being permanently ratcheted like high water mark. |
+| **Status** | Active |
+
+---
+
+### DEC-038 | Sprint 3 Micro-Decisions
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-15 |
+| **Decision** | Six implementation decisions for Sprint 3: (1) Scanner architecture: ABC + StaticScanner; real AlpacaScanner deferred to Sprint 4. (2) Data Service timeframes: multi-timeframe framework built, only 1m implemented in Sprint 3. (3) Indicator computation: inside Data Service, published as IndicatorEvent on the Event Bus. (4) ORB opening range tracking: internal to the strategy as daily state. (5) ReplayDataService data format: Parquet only. (6) ORB entry order: market order with chase protection pre-entry filter (skip if >0.5% past breakout). (7) Breakout confirmation: candle must close above OR high, breakout candle volume > 1.5x average of OR formation candles, price above VWAP. |
+| **Rationale** | (1) Testable interface without requiring live data; StaticScanner supports replay/backtest. (2) Framework-first avoids rework; 1m is all ORB needs. (3) Centralized computation avoids duplicate work across strategies. (4) Opening range is ORB-specific, not a shared indicator. (5) Parquet is typed, compact, standard in quant. (6) Market orders guarantee fills; chase filter handles slippage risk pre-entry. (7) Close-based confirmation avoids false signals from wicks; volume and VWAP provide conviction. |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
 *New decisions are appended chronologically as the project progresses.*

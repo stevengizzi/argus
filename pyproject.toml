@@ -12,6 +12,8 @@ dependencies = [
     "PyYAML>=6.0,<7",
     "aiosqlite>=0.19,<1",
     "python-ulid>=2.2,<3",
+    "pandas>=2.0,<3",
+    "pyarrow>=14.0,<18",
 ]
 
 [project.optional-dependencies]

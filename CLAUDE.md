@@ -9,9 +9,15 @@ Assumptions and risks: @docs/RISK_REGISTER.md
 
 ## Current State
 
-Phase 1 — Core Trading Engine with ORB strategy. Sprint 2 complete (Broker Abstraction + Risk Manager, 107+ tests passing). Sprint 3 next.
+Phase 1 — Core Trading Engine with ORB strategy. Sprint 3 complete (Strategy Framework + ORB Breakout, 222 tests passing). Sprint 4 next.
 
-Update this section as development progresses.
+Components implemented:
+- Event Bus, EventStore, core events
+- Broker abstraction (SimulatedBroker)
+- Risk Manager with three-tier evaluation
+- BaseStrategy ABC, Scanner ABC, DataService ABC
+- ReplayDataService with indicator computation (VWAP, ATR, SMA, RVOL)
+- OrbBreakoutStrategy (full implementation)
 
 ## Architecture
 
@@ -142,8 +148,8 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 | ID | Item | Trigger | Context |
 |----|------|---------|---------|
 | DEF-001 | Inject clock/date provider into Risk Manager | Sprint 4 starts | `date.today()` calls make date-boundary testing hard. Consider a `Clock` protocol that can be replaced with a fixed-time mock in tests. |
-| DEF-002 | Cash reserve basis: switch to start-of-day equity | Sprint 2 polish or Sprint 3 | Risk Manager currently uses `account.equity` for reserve calc. DEC-037 says use `_start_of_day_equity` snapshotted in `reset_daily_state()`. Verify this is implemented; if not, implement it. |
-| DEF-003 | Replace `datetime.utcnow()` with `datetime.now(timezone.utc)` | Any session touching affected files | Deprecated in Python 3.12+. Sprint 2 polish should have caught these. Verify. |
+| ~~DEF-002~~ | ~~Cash reserve basis: switch to start-of-day equity~~ | ~~Sprint 3~~ | **DONE** — Implemented in Sprint 3 (DEC-037). |
+| ~~DEF-003~~ | ~~Replace datetime.utcnow() with datetime.now(UTC)~~ | ~~Sprint 3~~ | **DONE** — Fixed in events.py, trading.py, and tests. |
 | DEF-004 | Discuss cash reserve calc with CPA before live trading | Sprint 5 (pre-live) | Equity vs start-of-day capital vs high water mark has tax and risk implications worth a professional opinion. |
 ```
 
