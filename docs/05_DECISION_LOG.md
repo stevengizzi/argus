@@ -254,5 +254,36 @@ Each entry follows this format:
 
 ---
 
+### DEC-022 | Two-Claude Workflow with Git as Bridge
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-14 |
+| **Decision** | Strategic work (design, decisions, document drafting, review) happens in the Claude.ai project. Implementation (coding, testing, debugging) happens in Claude Code. The `docs/` folder in the git repo is the shared bridge. Claude.ai syncs via GitHub integration; Claude Code reads from the local filesystem. The user keeps both in sync by committing doc updates and clicking "Sync now." |
+| **Rationale** | Claude.ai and Claude Code have completely independent context systems with no automatic cross-communication. Shared documentation in a version-controlled repository is the simplest reliable bridge. Git provides history, diffing, and rollback for free. |
+| **Status** | Active |
+
+---
+
+### DEC-023 | Documentation Update Protocol Baked into Both Claude Contexts
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-14 |
+| **Decision** | Both Claude instances have explicit documentation update rules in their instructions. Claude.ai outputs a Docs Sync Checklist with copy-paste-ready content at the end of every decision-making conversation. Claude Code performs a docs audit at the end of every significant coding session via `.claude/rules/doc-updates.md`. |
+| **Rationale** | AI does not consistently perform behaviors not in its instructions. Making doc hygiene an explicit rule — not a hope — ensures it happens. Checklist entries are formatted to match each document's exact template so the user can copy-paste-commit without reformatting. |
+| **Status** | Active |
+
+---
+
+### DEC-024 | GitHub Repo Connected to Claude.ai Project via Native Integration
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-14 |
+| **Decision** | The Argus GitHub repository is connected to the Claude.ai project via Anthropic's native GitHub integration. Selected files/folders synced: `docs/`, `CLAUDE.md`, `config/`. Project instructions (02_PROJECT_KNOWLEDGE.md text) remain manually maintained separately. |
+| **Rationale** | Eliminates manual file re-upload. Both Claudes read from the same git-based source of truth — Claude Code reads from the local filesystem, Claude.ai reads via GitHub sync. Clicking "Sync now" after pushing is the only manual step. Project instructions are a separate text field that doesn't sync from GitHub, but they change infrequently (major milestones only). |
+| **Alternatives Considered** | ClaudeSync (third-party Python tool, one-way sync — unnecessary given native integration), manual file upload (tedious, error-prone), syncing entire repo (wasteful — Claude.ai doesn't need source code for strategic conversations) |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
 *New decisions are appended chronologically as the project progresses.*
