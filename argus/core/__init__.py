@@ -1,1 +1,1 @@
-"""Core components: Orchestrator, Risk Manager, Portfolio, Event Bus."""
+"""Core components: config, event bus, orchestrator, risk manager."""

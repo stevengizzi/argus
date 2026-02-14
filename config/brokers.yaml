@@ -1,0 +1,6 @@
+primary: "alpaca"
+alpaca:
+  enabled: true
+  paper_trading: true
+  base_url: "https://paper-api.alpaca.markets"
+  data_feed: "iex"

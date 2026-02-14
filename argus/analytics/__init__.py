@@ -1,1 +1,1 @@
-"""Analytics: Trade Logger, Strategy Reports, Portfolio Reports."""
+"""Analytics: trade logger, strategy reports, portfolio reports."""

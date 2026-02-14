@@ -1,1 +1,1 @@
-"""Backtesting: VectorBT helpers, Backtrader configs, Replay Harness."""
+"""Backtesting: VectorBT helpers, Backtrader configs, replay harness."""

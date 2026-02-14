@@ -1,1 +1,1 @@
-"""Accounting: Tax tracking, P&L, Wash Sale detection."""
+"""Accounting: tax tracking, P&L, wash sale detection."""

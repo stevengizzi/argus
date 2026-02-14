@@ -1,1 +1,1 @@
-"""API server: FastAPI REST + WebSocket endpoints."""
+"""API server: FastAPI REST and WebSocket endpoints."""

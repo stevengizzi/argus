@@ -1,0 +1,15 @@
+account:
+  daily_loss_limit_pct: 0.03
+  weekly_loss_limit_pct: 0.05
+  cash_reserve_pct: 0.20
+  max_concurrent_positions: 10
+  emergency_shutdown_enabled: true
+
+cross_strategy:
+  max_single_stock_pct: 0.05
+  max_single_sector_pct: 0.15
+  duplicate_stock_policy: "priority_by_win_rate"
+
+pdt:
+  enabled: true
+  account_type: "margin"

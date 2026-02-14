@@ -1,1 +1,1 @@
-"""Data services: Scanner, Data Service, Indicators."""
+"""Data services: scanner, data service, indicators."""

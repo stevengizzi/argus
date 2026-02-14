@@ -1,1 +1,1 @@
-"""Notifications: Push, Email, Telegram/Discord handlers."""
+"""Notifications: push, email, Telegram, Discord handlers."""

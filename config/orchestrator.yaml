@@ -1,0 +1,8 @@
+allocation_method: "equal_weight"
+max_allocation_pct: 0.40
+min_allocation_pct: 0.10
+cash_reserve_pct: 0.20
+performance_lookback_days: 20
+consecutive_loss_throttle: 5
+suspension_sharpe_threshold: 0.0
+suspension_drawdown_pct: 0.15

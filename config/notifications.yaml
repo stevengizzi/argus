@@ -1,0 +1,12 @@
+telegram:
+  enabled: false
+  settings: {}
+discord:
+  enabled: false
+  settings: {}
+email:
+  enabled: false
+  settings: {}
+push:
+  enabled: false
+  settings: {}

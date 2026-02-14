@@ -1,1 +1,1 @@
-"""Execution layer: Broker abstraction, Order Manager."""
+"""Execution layer: broker abstraction, order manager."""

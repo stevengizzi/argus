@@ -1,1 +1,1 @@
-"""Tests for analytics."""
+"""Tests for argus.analytics modules."""

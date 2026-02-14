@@ -1,1 +1,1 @@
-"""Tests for core components."""
+"""Tests for argus.core modules."""

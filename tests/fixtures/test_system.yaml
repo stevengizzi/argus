@@ -1,0 +1,6 @@
+timezone: "America/New_York"
+market_open: "09:30"
+market_close: "16:00"
+log_level: "DEBUG"
+heartbeat_interval_seconds: 10
+data_dir: "/tmp/argus_test_data"
