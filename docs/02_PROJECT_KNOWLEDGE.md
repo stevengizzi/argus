@@ -29,6 +29,13 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 - **Starting capital:** TBD. System designed for $25K–$100K+. Minimum $25K recommended to avoid PDT.
 - **Trading direction:** Long only for V1. Short selling evaluated later.
 - **Holding duration:** Seconds to hours. All positions closed intraday (for stock strategies).
+- **Event Bus:** FIFO per subscriber, monotonic sequence numbers on all events, no priority queues. In-process asyncio only.
+- **Trade IDs:** ULIDs (time-sortable, unique) via `python-ulid` for all database primary keys.
+- **Risk Manager modifications:** Approve-with-modification for share count reduction and target tightening. Never modify stops or entry. Minimum 0.25R floor on modified positions.
+- **Strategy statefulness:** Daily-stateful, session-stateless. State accumulates during market hours, resets between days, reconstructs from DB on mid-day restart.
+- **Data delivery:** Event Bus is the sole streaming mechanism. No callback subscription on DataService. Sync query methods retained.
+- **Order Manager model:** Event-driven (tick-subscribed for open positions) + 5-second fallback poll + scheduled EOD flatten.
+- **IBKR timing:** Broker abstraction from day one, IBKR adapter deferred to Phase 3+. DEC-003 amended.
 
 ## Architecture Summary
 

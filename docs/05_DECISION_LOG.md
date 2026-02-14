@@ -45,14 +45,15 @@ Each entry follows this format:
 
 ---
 
-### DEC-003 — Brokerage Architecture
+### DEC-003 — Brokerage Architecture (AMENDED)
 | Field | Value |
 |-------|-------|
-| **Date** | 2026-02-14 |
-| **Decision** | Broker-agnostic abstraction layer. Implement both Alpaca and Interactive Brokers from day one. |
-| **Alternatives** | Alpaca only, IBKR only, single-broker with abstraction added later |
-| **Rationale** | Alpaca is ideal for development and early live trading (free, clean API, built-in paper trading, included data). IBKR is superior for production scaling (better execution, more asset classes). Abstraction layer costs minimal extra effort upfront and prevents lock-in. |
-| **Status** | Active |
+| **Date** | 2026-02-14 (amended 2026-02-15) |
+| **Decision** | Broker-agnostic abstraction layer from day one. Alpaca implemented from day one. Interactive Brokers implemented when needed for production scaling (Phase 3+). |
+| **Alternatives** | Alpaca only, IBKR only, single-broker with abstraction added later, both implemented from day one (original decision) |
+| **Rationale** | Original rationale (abstraction prevents lock-in) still holds. Amended to defer IBKR *implementation* because the abstraction layer alone achieves the anti-lock-in goal. IBKR adapter complexity (TWS Gateway, auth model, event loop integration) provides no value during development and early live trading, which all use Alpaca. See DEC-031 for full rationale. |
+| **Status** | Active (amended) |
+| **Supersedes** | Original DEC-003 (2026-02-14) |
 
 ---
 
@@ -281,6 +282,83 @@ Each entry follows this format:
 | **Decision** | The Argus GitHub repository is connected to the Claude.ai project via Anthropic's native GitHub integration. Selected files/folders synced: `docs/`, `CLAUDE.md`, `config/`. Project instructions (02_PROJECT_KNOWLEDGE.md text) remain manually maintained separately. |
 | **Rationale** | Eliminates manual file re-upload. Both Claudes read from the same git-based source of truth — Claude Code reads from the local filesystem, Claude.ai reads via GitHub sync. Clicking "Sync now" after pushing is the only manual step. Project instructions are a separate text field that doesn't sync from GitHub, but they change infrequently (major milestones only). |
 | **Alternatives Considered** | ClaudeSync (third-party Python tool, one-way sync — unnecessary given native integration), manual file upload (tedious, error-prone), syncing entire repo (wasteful — Claude.ai doesn't need source code for strategic conversations) |
+| **Status** | Active |
+
+---
+
+### DEC-025 | Event Bus Ordering Guarantees
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-15 |
+| **Decision** | FIFO delivery per subscriber. No global ordering guarantees. No priority queues. Every event carries a monotonic sequence number for debugging and replay. |
+| **Alternatives** | Priority queues, global total ordering, external message broker (RabbitMQ, Redis Streams) |
+| **Rationale** | In-process asyncio pub/sub at V1 volumes (hundreds of events/second peak) has no realistic ordering issues. FIFO per subscriber is the natural asyncio behavior. Monotonic sequence numbers cost nothing and enable deterministic replay and post-hoc debugging (sort any event log by sequence number to see exact order). Global ordering and priority queues add complexity with no demonstrated need at this scale. Revisit if the system moves to multi-process or distributed architecture. |
+| **Status** | Active |
+
+---
+
+### DEC-026 | Trade ID Format
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-15 |
+| **Decision** | Use ULIDs (Universally Unique Lexicographically Sortable Identifiers) for all primary keys across all database tables. Use the `python-ulid` library. |
+| **Alternatives** | UUIDs (v4), auto-incrementing integers, custom timestamp-based IDs |
+| **Rationale** | ULIDs provide global uniqueness (like UUIDs) plus chronological sortability. `SELECT * FROM trades ORDER BY id` returns trades in time order without touching the timestamp column. 26 characters (vs UUID's 36). The timestamp component allows visual inspection of when a record was created from the ID alone. Millisecond precision handles V1 volumes with no collision risk. |
+| **Status** | Active |
+
+---
+
+### DEC-027 | Risk Manager Modification Behavior
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-15 |
+| **Decision** | Risk Manager uses an "approve-with-modification" model. Permitted modifications: reduce share count (with minimum viable size floor — reject if reduced position yields less than 0.25R potential profit), tighten profit targets. Prohibited modifications: widen stops, change entry price, change side. All modifications logged with rationale in the `OrderApprovedEvent.modifications` field. Trade Logger records both the original signal and the modified execution. |
+| **Alternatives** | Reject-only model (signal is all-or-nothing), unconstrained modification |
+| **Rationale** | Rejecting outright when a signal is partially valid wastes edge. If ORB identifies a quality setup but buying power only allows 60% of the requested size, taking the smaller trade is usually correct. Prohibiting stop modification preserves the strategy's thesis — stops are set for a reason. The 0.25R floor prevents taking positions too small to matter. Logging both original and modified values enables analysis of modification frequency and impact on performance. |
+| **Status** | Active |
+
+---
+
+### DEC-028 | Strategy Statefulness Model
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-15 |
+| **Decision** | Strategies follow a "daily-stateful, session-stateless" model. Within a trading day, strategies accumulate state (opening range, trade count, daily P&L, active watchlist). Between trading days, all state is wiped by `reset_daily_state()`. On mid-day restart, strategies reconstruct intraday state from the database (open positions, today's trades). |
+| **Alternatives** | Fully stateless (query DB on every decision), fully stateful (persist in-memory state to disk) |
+| **Rationale** | ORB must track the opening range as it forms. All strategies must know their trade count and daily P&L for internal risk limits. This is intraday state. Calling strategies "stateless" (as prior docs did) was misleading. "Daily-stateful, session-stateless" precisely describes the reality: state accumulates during market hours, resets at day boundary, and can be reconstructed from the database after a crash. The reconstruction requirement ensures no data loss on restart — the database is the durable source of truth, in-memory state is a performance cache. |
+| **Status** | Active |
+
+---
+
+### DEC-029 | Data Delivery Mechanism
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-15 |
+| **Decision** | Market data flows exclusively through the Event Bus. The Data Service publishes `CandleEvent`, `TickEvent`, and `IndicatorEvent` to the bus. Strategies and other components subscribe via the Event Bus. The callback-based subscription API (`subscribe_candles`, `subscribe_ticks`) is removed from the `DataService` interface. Synchronous query methods (`get_current_price`, `get_indicator`, `get_historical_candles`) are retained for point-in-time lookups. |
+| **Alternatives** | Dual delivery (Event Bus + callbacks), callback-only, direct method calls |
+| **Rationale** | Two parallel data paths (Event Bus and callbacks) create confusion about which to use and risk subtle bugs where some consumers get data via one path and others via the other. The Event Bus is the system's communication backbone (per DEC-025 and the Architecture doc). Making it the sole delivery mechanism for streaming data is consistent. Synchronous query methods serve a different purpose (point-in-time lookups for position sizing, indicator checks) and don't duplicate the streaming path. |
+| **Status** | Active |
+
+---
+
+### DEC-030 | Order Manager Position Management Model
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-15 |
+| **Decision** | Position management is event-driven. The Order Manager subscribes to `TickEvent` for all symbols with open positions and evaluates exit conditions on each tick. A 5-second fallback polling loop handles time-based exits (time stops, inactivity in illiquid stocks). End-of-day flattening is a scheduled task (default 3:50 PM EST, configurable). No per-strategy management interval configuration. |
+| **Alternatives** | Fixed polling interval (configurable per strategy), pure polling, pure event-driven with no fallback |
+| **Rationale** | Event-driven management naturally adapts to each strategy's speed: ORB Scalp (seconds) gets tick-level management automatically, while ORB (minutes) doesn't waste cycles polling. The 5-second fallback covers edge cases where tick data is sparse (illiquid stocks) or the data feed stalls — time stops and EOD flatten must fire regardless of data availability. EOD flatten as a scheduled task is cleaner than embedding it in the polling loop. This approach handles all five V1 strategies without per-strategy configuration. |
+| **Status** | Active |
+
+---
+
+### DEC-031 | IBKR Adapter Phase Deferral
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-15 |
+| **Decision** | Phase 1 builds the `Broker` ABC, `SimulatedBroker`, and `AlpacaBroker`. The IBKR adapter is deferred to Phase 3 or later (when production scaling is needed). A comprehensive `Broker` ABC test suite ensures any future adapter is drop-in compatible. |
+| **Alternatives** | Implement IBKR adapter in Phase 1 (per original DEC-003) |
+| **Rationale** | The broker abstraction layer (built in Phase 1) achieves the anti-lock-in goal of DEC-003 without actually implementing IBKR. The IBKR adapter is meaningfully harder than Alpaca (requires TWS Gateway, different auth model, `ib_insync` event loop integration, different order model). This represents 3–5 days of work providing zero value until production scaling — all Phase 1-3 trading uses Alpaca. A comprehensive test suite against the `Broker` ABC guarantees drop-in compatibility when IBKR is implemented. See amended DEC-003. |
 | **Status** | Active |
 
 ---

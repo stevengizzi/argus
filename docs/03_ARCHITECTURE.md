@@ -88,10 +88,18 @@ All three tiers share a single database and configuration store.
 
 The internal communication backbone. Components publish events and subscribe to event types. This decouples modules — strategies don't import the Risk Manager, they publish signals on the bus.
 
-**Pattern:** In-process pub/sub using Python's `asyncio`. No external message broker needed for V1.
+**Pattern:** In-process pub/sub using Python's `asyncio`. No external message broker needed for V1. FIFO delivery per subscriber. No global ordering guarantees or priority queues.
+
+**Sequence Numbers:** Every event carries a monotonic sequence number assigned at publish time. This enables deterministic replay and post-hoc debugging — sort any event log by sequence number to reconstruct exact ordering.
 
 **Event Types:**
 ```python
+# Base event
+@dataclass
+class Event:
+    sequence: int          # Monotonic, assigned by EventBus at publish time
+    timestamp: datetime    # When the event was created
+
 # Market data events
 CandleEvent(symbol, timeframe, open, high, low, close, volume, timestamp)
 TickEvent(symbol, price, volume, timestamp)
@@ -149,13 +157,29 @@ Single source of market data for the entire system.
 **Interface:**
 ```python
 class DataService(ABC):
-    async def subscribe_candles(self, symbol: str, timeframe: str, callback: Callable)
-    async def subscribe_ticks(self, symbol: str, callback: Callable)
-    async def get_indicator(self, symbol: str, indicator: str) -> float
-    async def get_current_price(self, symbol: str) -> float
-    async def get_historical_candles(self, symbol: str, timeframe: str, start: datetime, end: datetime) -> pd.DataFrame
-    async def get_watchlist_data(self, symbols: list[str]) -> dict
+    async def start(self, symbols: list[str], timeframes: list[str]) -> None:
+        """Start streaming data for these symbols. Publishes CandleEvent, TickEvent,
+        and IndicatorEvent to the Event Bus. This is the sole streaming delivery
+        mechanism — there is no callback-based subscription API."""
+
+    async def stop(self) -> None:
+        """Stop streaming and clean up connections."""
+
+    async def get_current_price(self, symbol: str) -> float:
+        """Synchronous lookup of last known price from in-memory cache."""
+
+    async def get_indicator(self, symbol: str, indicator: str) -> float:
+        """Synchronous lookup of current indicator value from in-memory cache."""
+
+    async def get_historical_candles(self, symbol: str, timeframe: str,
+                                      start: datetime, end: datetime) -> pd.DataFrame:
+        """Fetch historical data via REST call or local cache."""
+
+    async def get_watchlist_data(self, symbols: list[str]) -> dict:
+        """Fetch current data summary for a list of symbols."""
 ```
+
+**Data Delivery:** All streaming market data flows through the Event Bus. Strategies and other components subscribe to `CandleEvent`, `TickEvent`, and `IndicatorEvent` via the Event Bus. The synchronous query methods (`get_current_price`, `get_indicator`) serve a different purpose — point-in-time lookups for position sizing and indicator checks — and do not duplicate the streaming path.
 
 **Implementations:**
 - `AlpacaDataService` — live WebSocket + REST historical
@@ -194,9 +218,14 @@ class BrokerRouter:
         return self.broker_map[asset_class]
 ```
 
+**Phase 1 Scope:** `SimulatedBroker` and `AlpacaBroker` are implemented in Phase 1. `IBKRBroker` is deferred to Phase 3+ per DEC-031. A comprehensive test suite against the `Broker` ABC ensures any future adapter is drop-in compatible.
+
 ### 3.4 Base Strategy (`strategies/base_strategy.py`)
 
-Every strategy implements this interface.
+Every strategy implements this interface. Strategies follow a **daily-stateful, session-stateless** model:
+- **Within a trading day:** Strategies accumulate state (opening range, trade count, daily P&L, active watchlist).
+- **Between trading days:** All state is wiped by `reset_daily_state()`. No information carries over except what's in the database and config.
+- **On mid-day restart:** Strategies reconstruct intraday state from the database (open positions, today's trades via the Trade Logger). The database is the durable source of truth; in-memory state is a performance cache.
 
 ```python
 class BaseStrategy(ABC):
@@ -210,7 +239,7 @@ class BaseStrategy(ABC):
     # Configuration (loaded from YAML)
     config: StrategyConfig
 
-    # State
+    # State (daily-stateful: accumulates during market hours, reset between days)
     pipeline_stage: PipelineStage  # concept, exploration, validation, paper, live, etc.
     is_active: bool
     allocated_capital: float  # set by Orchestrator
@@ -246,7 +275,11 @@ class BaseStrategy(ABC):
         """Check strategy-level risk limits (max daily loss, max positions, etc.)."""
 
     def reset_daily_state(self) -> None:
-        """Called at start of each trading day."""
+        """Called at start of each trading day. Wipes all intraday state."""
+
+    async def reconstruct_state(self, trade_logger: TradeLogger) -> None:
+        """Reconstruct intraday state from database after mid-day restart.
+        Queries today's trades and open positions from the Trade Logger."""
 ```
 
 ### 3.5 Risk Manager (`core/risk_manager.py`)
@@ -273,6 +306,23 @@ class RiskManager:
     async def daily_integrity_check(self) -> IntegrityReport:
         """Verify all open positions have broker-side stops. Reconcile with broker records."""
 ```
+
+**Modification Rules:**
+
+When a signal is partially valid, the Risk Manager may approve with modifications rather than rejecting outright:
+
+| Permitted Modifications | Rules |
+|------------------------|-------|
+| Reduce share count | Reduce to fit buying power or position limits. Reject if reduced position yields < 0.25R potential profit. |
+| Tighten profit targets | If cross-strategy exposure limits require faster exit. |
+
+| Prohibited Modifications | Reason |
+|-------------------------|--------|
+| Widen stop loss | Strategy set the stop for a reason. Reduced shares is the correct response to excess risk. |
+| Change entry price | Risk Manager gates execution; it does not alter the signal's thesis. |
+| Change side (long/short) | Signal's direction is inviolable. |
+
+All modifications are recorded in `OrderApprovedEvent.modifications` with a reason string. The Trade Logger records both the original `SignalEvent` and the modified execution parameters to enable analysis of modification frequency and impact.
 
 **Configuration (from `config/risk_limits.yaml`):**
 ```yaml
@@ -323,7 +373,7 @@ class Orchestrator:
 
 ### 3.7 Order Manager (`execution/order_manager.py`)
 
-Manages the lifecycle of every order from submission to fill/cancel.
+Manages the lifecycle of every order from submission to fill/cancel. Position management is event-driven.
 
 ```python
 class OrderManager:
@@ -331,24 +381,41 @@ class OrderManager:
         """Convert approved signal to broker order(s). Submit via BrokerRouter."""
 
     async def on_fill(self, event: OrderFilledEvent) -> None:
-        """Handle partial and full fills. Update position tracking."""
+        """Handle partial and full fills. Update position tracking.
+        Subscribe to TickEvents for the filled symbol."""
 
-    async def manage_open_positions(self) -> None:
+    async def on_tick(self, event: TickEvent) -> None:
+        """Primary position management trigger. Called on each tick for symbols
+        with open positions. Evaluates:
+        - Stop-to-breakeven (when T1 hits)
+        - Trailing stops (if configured)
+        - Price-based exit conditions
         """
-        Continuous loop:
-        - Move stops to breakeven when T1 hits
-        - Execute time stops
-        - Execute end-of-day flattening at 3:50 PM
-        - Execute trailing stops if configured
+
+    async def fallback_poll(self) -> None:
+        """Runs every 5 seconds. Handles time-based exits that don't depend on ticks:
+        - Time stops (positions open longer than max duration)
+        - Inactivity detection for illiquid stocks
         """
+
+    async def eod_flatten(self) -> None:
+        """Scheduled task at 3:50 PM EST (configurable). Closes all remaining
+        positions at market. This is a scheduled event, not part of the poll loop."""
 
     async def emergency_flatten(self) -> None:
         """Close all positions at market. Used by circuit breakers and manual override."""
 ```
 
+**Position Management Architecture:**
+- **Primary:** Event-driven via `TickEvent` subscription. When a position opens, the Order Manager subscribes to ticks for that symbol. On each tick, it evaluates all exit conditions for that position. When a position closes, it unsubscribes.
+- **Fallback:** 5-second polling loop for time-based exits. Catches positions in illiquid stocks where ticks may be infrequent, and ensures time stops fire even if the data feed stalls.
+- **EOD Flatten:** Scheduled task (APScheduler) at configurable time (default 3:50 PM EST). Independent of both the event-driven and polling paths.
+
 ### 3.8 Trade Logger (`analytics/trade_log.py`)
 
 Every trade is recorded with comprehensive metadata.
+
+**ID Format:** All `id TEXT PRIMARY KEY` columns use ULIDs (Universally Unique Lexicographically Sortable Identifiers) generated via the `python-ulid` library. ULIDs are globally unique, time-sortable, and 26 characters long. `ORDER BY id` returns records in chronological order.
 
 **Database Schema (SQLite):**
 ```sql
@@ -793,6 +860,7 @@ config/
 | Deployment | AWS EC2 / systemd / Nginx |
 | Version Control | Git |
 | Secrets | age-encryption or SOPS (production: AWS Secrets Manager) |
+| ID Generation | python-ulid (ULIDs) |
 
 ---
 

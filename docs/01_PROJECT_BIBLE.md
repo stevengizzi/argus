@@ -66,6 +66,8 @@ Claude integration as co-captain — advisory analysis, action proposals with ap
 
 Every strategy is a self-contained module that implements a common interface. Strategies are independent — they don't know about each other. They emit trade signals that pass through the Risk Manager and Orchestrator before reaching the broker.
 
+Strategies follow a **daily-stateful, session-stateless** model. Within a trading day, strategies accumulate state (e.g., the opening range as it forms, trade count, daily P&L). Between trading days, all state is wiped clean by `reset_daily_state()` — no information carries over from one day to the next except what's in the database and configuration files. If the system restarts mid-day, strategies reconstruct their intraday state from the database (open positions, today's trades). The database is the durable source of truth; in-memory state is a performance cache.
+
 Every strategy defines:
 - **Identity:** Name, unique ID, version, asset class, description
 - **Market Conditions Filter:** Conditions under which this strategy is eligible to activate
