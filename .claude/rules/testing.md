@@ -1,0 +1,61 @@
+# Testing Rules
+
+## Test Structure
+
+Mirror the source tree:
+```
+argus/core/risk_manager.py    → tests/core/test_risk_manager.py
+argus/strategies/orb.py       → tests/strategies/test_orb.py
+argus/execution/broker.py     → tests/execution/test_broker.py
+```
+
+## Naming
+
+Test functions describe behavior and expected outcome:
+```python
+# CORRECT
+def test_signal_exceeding_daily_loss_limit_is_rejected():
+def test_orb_entry_requires_volume_above_threshold():
+def test_emergency_flatten_closes_all_positions():
+
+# WRONG — vague
+def test_risk_manager():
+def test_orb():
+def test_flatten():
+```
+
+## What Must Be Tested
+
+### Safety-Critical (>95% coverage required)
+- Risk Manager: every approval path, every rejection path, every circuit breaker condition
+- Order Manager: every state transition, emergency flatten, EOD flatten
+- Position Sizing: every invariant (see risk-rules.md)
+
+### Core Logic (>90% coverage required)
+- Strategy entry/exit logic (each criterion individually and in combination)
+- Orchestrator allocation calculations
+- Data Service candle building and indicator calculations
+
+### Integration Tests
+- Full signal-to-fill pipeline with SimulatedBroker
+- Full backtest replay of a known historical period with expected results
+- Risk Manager correctly blocks orders that violate cross-strategy limits
+
+## Mocking
+
+- Mock broker APIs in unit tests (never hit real Alpaca/IBKR in tests)
+- Mock data feeds with deterministic historical data
+- Use SimulatedBroker and ReplayDataService for integration tests
+- Never mock the Risk Manager in integration tests — it must run for real
+
+## Running Tests
+
+Always run the full test suite before committing:
+```
+python -m pytest tests/ -x --tb=short
+```
+
+Run specific test files during development:
+```
+python -m pytest tests/core/test_risk_manager.py -v
+```
