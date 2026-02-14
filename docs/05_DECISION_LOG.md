@@ -361,6 +361,33 @@ Each entry follows this format:
 | **Rationale** | The broker abstraction layer (built in Phase 1) achieves the anti-lock-in goal of DEC-003 without actually implementing IBKR. The IBKR adapter is meaningfully harder than Alpaca (requires TWS Gateway, different auth model, `ib_insync` event loop integration, different order model). This represents 3–5 days of work providing zero value until production scaling — all Phase 1-3 trading uses Alpaca. A comprehensive test suite against the `Broker` ABC guarantees drop-in compatibility when IBKR is implemented. See amended DEC-003. |
 | **Status** | Active |
 
+### DEC-032 | Configuration Validation via Pydantic
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-15 |
+| **Decision** | Use Pydantic `BaseModel` (not `BaseSettings`) for all configuration validation. YAML files are loaded via `yaml.safe_load()`, then passed to Pydantic models for type validation, default values, and constraint enforcement. Each config domain has its own model (`SystemConfig`, `RiskConfig`, `BrokerConfig`, `OrchestratorConfig`, `NotificationsConfig`). A top-level `ArgusConfig` composes them. Strategy configs use a `StrategyConfig` base that individual strategies extend. |
+| **Alternatives** | Raw dicts with manual validation, dataclasses with manual checks, attrs, Pydantic `BaseSettings` (designed for env vars, not YAML) |
+| **Rationale** | Pydantic provides type coercion, range validation (`Field(ge=0, le=1.0)`), nested model support, clear error messages, and IDE autocomplete — all for free. Manual validation would be more code, worse error messages, and no schema documentation. `BaseModel` was chosen over `BaseSettings` because our configs come from YAML files, not environment variables. Missing YAML files fall back to model defaults, so the system always has a valid configuration. |
+| **Status** | Active |
+
+### DEC-033 | Event Bus Type-Only Subscription (V1)
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-15 |
+| **Decision** | Event Bus subscribers register for an event type only (e.g., `CandleEvent`). All filtering (by symbol, timeframe, etc.) happens inside the handler. No predicate-based filtering at the bus level.
+| **Alternatives** | Type + predicate subscription `(subscribe(CandleEvent, handler, filter=lambda e: e.symbol in watchlist))`, topic-based routing |
+| **Rationale** | At V1 volumes (~50 symbols, hundreds of events/second peak), the overhead of delivering unneeded events to a handler that immediately discards them is negligible. Predicate filtering at the bus level makes debugging harder — you can't easily inspect "what events did this subscriber receive?" because the filtering is invisible. Type-only subscription keeps the Event Bus simple and transparent. Predicate filtering can be added later as a backward-compatible enhancement if profiling shows it's needed. |
+| **Status** | Active |
+
+### DEC-034 | Async Database Access via aiosqlite
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-15 |
+| **Decision** | Use `aiosqlite` for all database operations. The `DatabaseManager` class owns the connection and provides async methods (`execute`, `fetch_one`, `fetch_all`). The `TradeLogger` is the sole interface for trade-related persistence — other components read and write through it, never accessing the database directly. |
+| **Alternatives** | Synchronous `sqlite3` (stdlib), SQLAlchemy async, raw `aiosqlite` without manager abstraction |
+| **Rationale** | The main event loop is async. Synchronous `sqlite3` calls block the entire loop — during a fast market open, a database write could delay processing the next tick. `aiosqlite` runs SQLite operations in a thread pool, keeping the event loop responsive. A `DatabaseManager` abstraction centralizes connection management, schema initialization, and provides a clean async interface. The `TradeLogger` as sole persistence interface prevents scattered database access and gives a single place to manage queries, migrations, and connection lifecycle. SQLAlchemy was rejected as unnecessary overhead for a single-user SQLite system. |
+| **Status** | Active |
+
 ---
 
 *End of Decision Log v1.0*

@@ -199,7 +199,7 @@ Flag updates to **CLAUDE.md** when:
 
 ### Drafting Updates
 
-When flagging an update, don't just say "update the Decision Log." Draft the actual content so the user can copy-paste it. For example:
+When flagging an update, don't just say "update the Decision Log." Draft the actual content so the user can copy-paste it. All drafted content should use code notation. For example:
 
 "Add to Decision Log:
 ### DEC-025 | WebSocket Library Choice
