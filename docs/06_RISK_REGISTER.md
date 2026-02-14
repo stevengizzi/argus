@@ -275,6 +275,16 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 
 ---
 
+### RSK-013 — Weekly Loss Limit Reset on Restart
+| Field | Value |
+|-------|-------|
+| **Severity** | Medium |
+| **Likelihood** | Low |
+| **Description** | If the system restarts mid-week, the weekly realized P&L must be reconstructed from the database. Without reconstruction, the weekly loss limit effectively resets to zero, allowing more risk than intended. |
+| **Mitigation** | `reconstruct_state()` method queries TradeLogger for the current week's trades and rebuilds weekly P&L. Tested explicitly. Integrity check verifies reconstruction accuracy. Implemented and tested in Sprint 2 polish. |
+| **Owner** | Risk Manager |
+
+
 ## Review Schedule
 
 | Review Type | Frequency | Next Review |

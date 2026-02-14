@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime
+from datetime import date, datetime
 
 from argus.core.ids import generate_id
 from argus.db.manager import DatabaseManager
@@ -184,20 +184,52 @@ class TradeLogger:
 
     async def get_trades_by_date(
         self,
-        date: str,
+        trade_date: str | date,
         strategy_id: str | None = None,
     ) -> list[Trade]:
         """Retrieve trades for a specific date.
 
         Args:
-            date: Date string in YYYY-MM-DD format.
+            trade_date: Date string in YYYY-MM-DD format or date object.
             strategy_id: Optional strategy filter.
 
         Returns:
             List of trades, ordered by exit_time.
         """
+        date_str = trade_date.isoformat() if isinstance(trade_date, date) else trade_date
         sql = "SELECT * FROM trades WHERE date(exit_time) = ?"
-        params: list[object] = [date]
+        params: list[object] = [date_str]
+
+        if strategy_id is not None:
+            sql += " AND strategy_id = ?"
+            params.append(strategy_id)
+
+        sql += " ORDER BY exit_time"
+
+        rows = await self._db.fetch_all(sql, tuple(params))
+        return [self._row_to_trade(row) for row in rows]
+
+    async def get_trades_by_date_range(
+        self,
+        start_date: str | date,
+        end_date: str | date,
+        strategy_id: str | None = None,
+    ) -> list[Trade]:
+        """Retrieve trades within a date range (inclusive).
+
+        Args:
+            start_date: Start date (YYYY-MM-DD format or date object).
+            end_date: End date (YYYY-MM-DD format or date object).
+            strategy_id: Optional strategy filter.
+
+        Returns:
+            List of trades, ordered by exit_time.
+        """
+        start_str = start_date.isoformat() if isinstance(start_date, date) else start_date
+        end_str = end_date.isoformat() if isinstance(end_date, date) else end_date
+
+        sql = "SELECT * FROM trades WHERE date(exit_time) >= ? AND date(exit_time) <= ?"
+        params: list[object] = [start_str, end_str]
 
         if strategy_id is not None:
             sql += " AND strategy_id = ?"

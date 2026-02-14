@@ -398,10 +398,17 @@ Each entry follows this format:
 | **Alternatives** | (1) Rolling 5-day window (more complex, marginal benefit). (2) External enforcement by Orchestrator (doesn't exist yet). (3) Manual test setup per test (tedious). (4) Hardcode in code (violates architectural rules). (5) Mirror all state internally (stale data risk). |
 | **Rationale** | Each choice optimizes for simplicity, correctness, and consistency with existing architectural decisions (DEC-027, DEC-028, DEC-032). |
 | **Status** | Active |
-```
-```
-- [ ] config/risk_limits.yaml: Add `threshold_balance: 25000` under `pdt` section
-- [ ] CLAUDE.md: No changes needed (current state already says Sprint 2 in progress)
+
+---
+
+### DEC-036 | SimulatedBroker Has No Margin Model
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-15 |
+| **Decision** | SimulatedBroker sets `buying_power = cash` (no margin). The Risk Manager's cash reserve check (step 5) and buying power check (step 6) currently produce equivalent results. These will diverge when AlpacaBroker introduces margin in Sprint 4. |
+| **Alternatives** | Simulate margin in SimulatedBroker |
+| **Rationale** | Margin simulation adds complexity with no testing value until real margin data is available. The two-step check structure is correct; only the input data differs between simulated and real brokers. |
+| **Status** | Active |
 
 ---
 

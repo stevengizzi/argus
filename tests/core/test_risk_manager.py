@@ -1,9 +1,11 @@
 """Tests for the Risk Manager."""
 
 from datetime import date, datetime, timedelta
+from pathlib import Path
 
 import pytest
 
+from argus.analytics.trade_logger import TradeLogger
 from argus.core.config import (
     AccountRiskConfig,
     AccountType,
@@ -21,8 +23,9 @@ from argus.core.events import (
     SignalEvent,
 )
 from argus.core.risk_manager import PDTTracker, RiskManager
+from argus.db.manager import DatabaseManager
 from argus.execution.simulated_broker import SimulatedBroker
-from argus.models.trading import Order, OrderSide
+from argus.models.trading import ExitReason, Order, OrderSide, Trade
 
 
 def make_signal(
@@ -152,6 +155,59 @@ class TestRiskManagerApproval:
         assert isinstance(result, OrderApprovedEvent)
         assert result.modifications is not None
         assert result.modifications["share_count"] == 533
+
+    @pytest.mark.asyncio
+    async def test_signal_approved_with_reduced_shares_buying_power(self) -> None:
+        """Signal exceeding buying power should be approved with reduced shares.
+
+        Note: In SimulatedBroker V1, buying_power == cash. The buying power
+        check (step 6 in evaluate_signal) only runs when the cash reserve check
+        (step 5) passes without modification. Since:
+          - available = cash - reserve
+          - buying_power = cash
+
+        Any signal that triggers step 6 (cost > buying_power) would also trigger
+        step 5 (cost > available) first, because available <= buying_power.
+
+        This test verifies that share reduction works correctly when buying
+        power is depleted by open positions. The reduction is applied by step 5
+        in SimulatedBroker V1, but when AlpacaBroker is added (Sprint 4) with
+        margin accounts where buying_power > cash, step 6 will trigger
+        independently for margin-constrained signals.
+        """
+        # Start with 100K, deploy 60K into positions
+        broker = SimulatedBroker(initial_cash=100_000)
+        await broker.connect()
+
+        # Buy 400 shares at 150 = 60K, leaving 40K cash/buying_power
+        deploy_order = Order(
+            strategy_id="test",
+            symbol="SPY",
+            side=OrderSide.BUY,
+            quantity=400,
+            limit_price=150.0,
+        )
+        await broker.place_order(deploy_order)
+
+        bus = EventBus()
+        # With 0% reserve, available == cash == buying_power
+        config = make_risk_config(cash_reserve_pct=0.0)
+
+        rm = RiskManager(config=config, broker=broker, event_bus=bus)
+        await rm.initialize()
+
+        # Account state: cash=40K, equity=100K, buying_power=40K, reserve=0
+        # Signal: 300 shares at 150 = 45K (exceeds 40K buying_power)
+        # Should be reduced to int(40000/150) = 266 shares
+        signal = make_signal(share_count=300, entry_price=150.0, stop_price=147.0)
+        result = await rm.evaluate_signal(signal)
+
+        assert isinstance(result, OrderApprovedEvent)
+        assert result.modifications is not None
+        assert result.modifications["share_count"] == 266
+        # V1: hits step 5 (cash reserve) since buying_power == cash
+        # When margin is added, this would say "buying power constraint"
+        assert "constraint" in result.modifications["reason"].lower()
 
 
 class TestRiskManagerRejection:
@@ -407,3 +463,186 @@ class TestRiskManagerIntegrityCheck:
 
         assert report.passed is True
         assert len(report.issues) == 0
+
+
+class TestRiskManagerReconstruction:
+    """Tests for state reconstruction after restart."""
+
+    def _make_trade(
+        self,
+        strategy_id: str = "strat_orb",
+        symbol: str = "AAPL",
+        net_pnl: float = 100.0,
+        entry_time: datetime | None = None,
+        exit_time: datetime | None = None,
+    ) -> Trade:
+        """Helper to create a test trade."""
+        if entry_time is None:
+            entry_time = datetime(2026, 2, 15, 10, 0, 0)
+        if exit_time is None:
+            exit_time = datetime(2026, 2, 15, 10, 30, 0)
+
+        return Trade(
+            strategy_id=strategy_id,
+            symbol=symbol,
+            side=OrderSide.BUY,
+            entry_price=150.0,
+            entry_time=entry_time,
+            exit_price=151.0 if net_pnl > 0 else 149.0,
+            exit_time=exit_time,
+            shares=100,
+            stop_price=148.0,
+            exit_reason=ExitReason.TARGET_1 if net_pnl > 0 else ExitReason.STOP_LOSS,
+            gross_pnl=net_pnl + 1.0,  # gross = net + commission
+            commission=1.0,
+        )
+
+    @pytest.mark.asyncio
+    async def test_reconstruct_state_rebuilds_daily_pnl(self, tmp_path: Path) -> None:
+        """reconstruct_state should rebuild daily P&L from database."""
+        # Set up database and trade logger
+        db = DatabaseManager(tmp_path / "test_reconstruct.db")
+        await db.initialize()
+        trade_logger = TradeLogger(db)
+
+        # Insert trades for today
+        today = date.today()
+        await trade_logger.log_trade(
+            self._make_trade(
+                net_pnl=100.0,
+                entry_time=datetime.combine(today, datetime.min.time().replace(hour=10)),
+                exit_time=datetime.combine(today, datetime.min.time().replace(hour=10, minute=30)),
+            )
+        )
+        await trade_logger.log_trade(
+            self._make_trade(
+                net_pnl=-50.0,
+                entry_time=datetime.combine(today, datetime.min.time().replace(hour=11)),
+                exit_time=datetime.combine(today, datetime.min.time().replace(hour=11, minute=30)),
+            )
+        )
+
+        # Create Risk Manager and reconstruct state
+        broker = SimulatedBroker(initial_cash=100_000)
+        await broker.connect()
+        bus = EventBus()
+        config = make_risk_config()
+
+        rm = RiskManager(config=config, broker=broker, event_bus=bus)
+        await rm.initialize()
+        await rm.reconstruct_state(trade_logger)
+
+        # Verify daily P&L: 100 + (-50) = 50 (net_pnl values)
+        # Note: net_pnl = gross_pnl - commission = (pnl + 1) - 1 = pnl
+        assert rm.daily_realized_pnl == 50.0
+        assert rm.trades_today == 2
+
+        await db.close()
+
+    @pytest.mark.asyncio
+    async def test_reconstruct_state_rebuilds_weekly_pnl(self, tmp_path: Path) -> None:
+        """reconstruct_state should rebuild weekly P&L from Monday through today."""
+        db = DatabaseManager(tmp_path / "test_reconstruct_weekly.db")
+        await db.initialize()
+        trade_logger = TradeLogger(db)
+
+        today = date.today()
+        monday = today - timedelta(days=today.weekday())  # Monday of this week
+
+        # Insert trades for Monday, Tuesday, and today
+        await trade_logger.log_trade(
+            self._make_trade(
+                net_pnl=100.0,
+                entry_time=datetime.combine(monday, datetime.min.time().replace(hour=10)),
+                exit_time=datetime.combine(monday, datetime.min.time().replace(hour=10, minute=30)),
+            )
+        )
+        tuesday = monday + timedelta(days=1)
+        if tuesday <= today:  # Only add if Tuesday is in the past
+            tue_entry = datetime.combine(tuesday, datetime.min.time().replace(hour=10))
+            tue_exit = datetime.combine(tuesday, datetime.min.time().replace(hour=10, minute=30))
+            await trade_logger.log_trade(
+                self._make_trade(net_pnl=200.0, entry_time=tue_entry, exit_time=tue_exit)
+            )
+        # Add today's trade
+        await trade_logger.log_trade(
+            self._make_trade(
+                net_pnl=-50.0,
+                entry_time=datetime.combine(today, datetime.min.time().replace(hour=10)),
+                exit_time=datetime.combine(today, datetime.min.time().replace(hour=10, minute=30)),
+            )
+        )
+
+        # Create Risk Manager and reconstruct state
+        broker = SimulatedBroker(initial_cash=100_000)
+        await broker.connect()
+        bus = EventBus()
+        config = make_risk_config()
+
+        rm = RiskManager(config=config, broker=broker, event_bus=bus)
+        await rm.initialize()
+        await rm.reconstruct_state(trade_logger)
+
+        # Verify weekly P&L includes all trades from this week
+        # If today is Monday: 100 + (-50) = 50
+        # If today is Tuesday or later: 100 + 200 + (-50) = 250
+        is_monday = today.weekday() == 0
+        expected_weekly = 50.0 if is_monday else (250.0 if tuesday <= today else 50.0)
+
+        assert rm.weekly_realized_pnl == expected_weekly
+
+        await db.close()
+
+    @pytest.mark.asyncio
+    async def test_reconstruct_state_rebuilds_pdt_trades(self, tmp_path: Path) -> None:
+        """reconstruct_state should rebuild PDT day trades from rolling 5 days."""
+        db = DatabaseManager(tmp_path / "test_reconstruct_pdt.db")
+        await db.initialize()
+        trade_logger = TradeLogger(db)
+
+        today = date.today()
+
+        # Create day trades (entry and exit same day) within last 5 business days
+        # A day trade is when entry_date == exit_date
+        await trade_logger.log_trade(
+            self._make_trade(
+                net_pnl=100.0,
+                entry_time=datetime.combine(today, datetime.min.time().replace(hour=10)),
+                exit_time=datetime.combine(today, datetime.min.time().replace(hour=10, minute=30)),
+            )
+        )
+        # Add another day trade today
+        await trade_logger.log_trade(
+            self._make_trade(
+                net_pnl=50.0,
+                entry_time=datetime.combine(today, datetime.min.time().replace(hour=11)),
+                exit_time=datetime.combine(today, datetime.min.time().replace(hour=11, minute=30)),
+            )
+        )
+
+        # Add an overnight trade (not a day trade - entry yesterday, exit today)
+        yesterday = today - timedelta(days=1)
+        await trade_logger.log_trade(
+            self._make_trade(
+                net_pnl=75.0,
+                entry_time=datetime.combine(yesterday, datetime.min.time().replace(hour=15)),
+                exit_time=datetime.combine(today, datetime.min.time().replace(hour=9, minute=30)),
+            )
+        )
+
+        # Create Risk Manager and reconstruct state
+        broker = SimulatedBroker(initial_cash=20_000)  # Under PDT threshold
+        await broker.connect()
+        bus = EventBus()
+        config = make_risk_config(pdt_enabled=True, pdt_threshold=25000)
+
+        rm = RiskManager(config=config, broker=broker, event_bus=bus)
+        await rm.initialize()
+        await rm.reconstruct_state(trade_logger)
+
+        # Verify PDT tracker has 2 day trades (both same-day trades today)
+        # The overnight trade should NOT count as a day trade
+        remaining = rm.pdt_tracker.day_trades_remaining(today, 20000)
+        assert remaining == 1  # 3 - 2 = 1
+
+        await db.close()

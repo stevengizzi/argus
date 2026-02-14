@@ -359,6 +359,94 @@ class TestSimulatedBrokerPriceUpdates:
         assert len(broker._pending_brackets) == 0
         assert len(await broker.get_positions()) == 0
 
+    @pytest.mark.asyncio
+    async def test_partial_target_fill_preserves_remaining_position_and_stop(
+        self,
+    ) -> None:
+        """Partial target fill should preserve remaining position and adjust stop.
+
+        This tests the core ORB exit pattern:
+        1. Buy 100 shares at 150
+        2. Place bracket: stop at 145, T1 (sell 50) at 153, T2 (sell 50) at 156
+        3. Price hits 153 → T1 fills, 50 shares sold
+        4. Position still has 50 shares, remaining brackets still pending
+        5. Price hits 156 → T2 fills, remaining 50 sold
+        6. Position closed, all brackets cleared
+        """
+        broker = SimulatedBroker()
+        await broker.connect()
+
+        # 1. Entry order for 100 shares at 150
+        entry = make_order(side=OrderSide.BUY, quantity=100, price=150.0)
+
+        # Stop for full position (will need to be adjusted after T1)
+        stop = Order(
+            strategy_id="test",
+            symbol="AAPL",
+            side=OrderSide.SELL,
+            quantity=100,
+            stop_price=145.0,
+            order_type=OrderType.STOP,
+        )
+
+        # T1: Sell 50 at 153
+        target1 = Order(
+            strategy_id="test",
+            symbol="AAPL",
+            side=OrderSide.SELL,
+            quantity=50,
+            limit_price=153.0,
+            order_type=OrderType.LIMIT,
+        )
+
+        # T2: Sell 50 at 156
+        target2 = Order(
+            strategy_id="test",
+            symbol="AAPL",
+            side=OrderSide.SELL,
+            quantity=50,
+            limit_price=156.0,
+            order_type=OrderType.LIMIT,
+        )
+
+        # 2. Place bracket order
+        result = await broker.place_bracket_order(entry, stop, [target1, target2])
+        assert result.entry.status == OrderStatus.FILLED
+        assert result.stop.status == OrderStatus.PENDING
+        assert len(result.targets) == 2
+        assert result.targets[0].status == OrderStatus.PENDING
+        assert result.targets[1].status == OrderStatus.PENDING
+
+        # Verify initial position: 100 shares
+        positions = await broker.get_positions()
+        assert len(positions) == 1
+        assert positions[0].shares == 100
+
+        # 3. Price hits 153 → T1 should fill
+        results = await broker.simulate_price_update("AAPL", 153.0)
+        assert len(results) == 1
+        assert results[0].filled_quantity == 50
+
+        # 4. Verify: position still has 50 shares
+        positions = await broker.get_positions()
+        assert len(positions) == 1
+        assert positions[0].shares == 50
+
+        # Verify: T2 and stop are still pending (2 brackets remain)
+        # Note: stop quantity wasn't automatically adjusted - this is a V1 limitation
+        # The Order Manager (Sprint 4) will handle stop adjustment
+        assert len(broker._pending_brackets) == 2
+
+        # 5. Price hits 156 → T2 should fill
+        results = await broker.simulate_price_update("AAPL", 156.0)
+        assert len(results) == 1
+        assert results[0].filled_quantity == 50
+
+        # 6. Position closed, all brackets cleared
+        positions = await broker.get_positions()
+        assert len(positions) == 0
+        assert len(broker._pending_brackets) == 0
+
 
 class TestSimulatedBrokerCancelModify:
     """Tests for order cancellation and modification."""

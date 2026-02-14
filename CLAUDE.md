@@ -9,7 +9,7 @@ Assumptions and risks: @docs/RISK_REGISTER.md
 
 ## Current State
 
-Phase 1 — Sprint 1 complete. Config system, Event Bus, database layer, and Trade Logger are built and tested (52 tests). Currently preparing for Sprint 2 (Broker Abstraction + Risk Manager).
+Phase 1 — Core Trading Engine with ORB strategy. Sprint 2 complete (Broker Abstraction + Risk Manager, 107+ tests passing). Sprint 3 next.
 
 Update this section as development progresses.
 
@@ -134,3 +134,19 @@ At the END of every significant coding session, output a brief "Docs Status" sum
 - Which docs were updated and why
 - Which docs SHOULD be updated but weren't (flag for user)
 - Any decisions made during the session that should be recorded
+
+## Deferred Items
+
+Track items that are intentionally postponed. Each item has a trigger condition. When that condition is met during a session, surface the item proactively.
+
+| ID | Item | Trigger | Context |
+|----|------|---------|---------|
+| DEF-001 | Inject clock/date provider into Risk Manager | Sprint 4 starts | `date.today()` calls make date-boundary testing hard. Consider a `Clock` protocol that can be replaced with a fixed-time mock in tests. |
+| DEF-002 | Cash reserve basis: switch to start-of-day equity | Sprint 2 polish or Sprint 3 | Risk Manager currently uses `account.equity` for reserve calc. DEC-037 says use `_start_of_day_equity` snapshotted in `reset_daily_state()`. Verify this is implemented; if not, implement it. |
+| DEF-003 | Replace `datetime.utcnow()` with `datetime.now(timezone.utc)` | Any session touching affected files | Deprecated in Python 3.12+. Sprint 2 polish should have caught these. Verify. |
+| DEF-004 | Discuss cash reserve calc with CPA before live trading | Sprint 5 (pre-live) | Equity vs start-of-day capital vs high water mark has tax and risk implications worth a professional opinion. |
+```
+
+This keeps it lightweight — no new document, no new sync burden. Items get removed (or moved to "Completed") as they're addressed. Both Claudes see the trigger column and know when to raise the flag.
+
+I'd also add one line to the Project Knowledge doc's "Communication Style Notes" or similar section so this Claude knows the convention exists:

@@ -6,7 +6,7 @@ SignalEvent → RiskManager.evaluate_signal() → OrderApprovedEvent/OrderReject
   → TradeLogger.log_trade()
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -227,7 +227,7 @@ class TestEndToEndFlow:
             quantity=signal.share_count,
             limit_price=signal.entry_price,
         )
-        entry_time = datetime.utcnow()
+        entry_time = datetime.now(UTC)
         entry_fill = await broker.place_order(entry_order)
         assert entry_fill.status == OrderStatus.FILLED
 
@@ -250,7 +250,7 @@ class TestEndToEndFlow:
             entry_price=entry_fill.filled_avg_price,
             entry_time=entry_time,
             exit_price=exit_fill.filled_avg_price,
-            exit_time=datetime.utcnow(),
+            exit_time=datetime.now(UTC),
             shares=signal.share_count,
             stop_price=signal.stop_price,
             target_prices=list(signal.target_prices),
@@ -271,7 +271,7 @@ class TestEndToEndFlow:
             exit_price=155.0,
             realized_pnl=500.0,
             entry_time=entry_time,
-            exit_time=datetime.utcnow(),
+            exit_time=datetime.now(UTC),
         )
         await bus.publish(event)
         await bus.drain()

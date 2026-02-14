@@ -11,7 +11,7 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 ## Current Project State
 
 **Phase:** Phase 1 in progress. Sprint 1 complete (config, event bus, database, trade logger — 52 tests passing). Sprint 2 next.
-**Current sprint:** Sprint 2 — Broker Abstraction + SimulatedBroker + Risk Manager (Account Level). Steps 4–5 of 11.
+**Current sprint:** Sprint 2 polish complete. Sprint 3 next — BaseStrategy ABC + Scanner + Data Service + ORB Strategy.
 **Next milestone:** Full signal → risk check → order → fill flow working end-to-end with SimulatedBroker.
 
 ## Key Decisions Made (Do Not Relitigate)
@@ -40,6 +40,7 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 - **Config validation:** Pydantic BaseModel (not BaseSettings) for all config. YAML → Pydantic flow. DEC-032.
 - **Event Bus filtering:** Type-only subscription; filtering happens in handlers, not at bus level. DEC-033.
 - **Database access:** aiosqlite for async DB; DatabaseManager owns connection; TradeLogger is sole persistence interface. DEC-034.
+- **SimulatedBroker margin:** No margin model in V1. buying_power = cash. Diverges from real brokers. DEC-036.
 
 ## Architecture Summary
 
@@ -146,6 +147,8 @@ argus/
 ## Communication Style Notes
 
 The user prefers thorough, detailed explanations. He appreciates when Claude pushes back or raises concerns proactively. He values being asked clarifying questions before assumptions are made. He wants to understand the *why* behind every recommendation, not just the *what*. He is building this for his family's financial future — treat every design decision with the seriousness that implies.
+
+- **Deferred items:** Tracked in CLAUDE.md under "Deferred Items" section. Surface proactively when trigger conditions are met.
 
 ## Documentation Sync Protocol
 

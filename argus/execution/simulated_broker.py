@@ -14,7 +14,7 @@ from __future__ import annotations
 import logging
 import random
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 
 from argus.core.ids import generate_id
 from argus.execution.broker import Broker
@@ -59,6 +59,7 @@ class PendingBracketOrder:
         trigger_price: Price at which this order triggers.
         order_type: "stop" or "limit" (determines trigger direction).
         parent_position_symbol: Symbol of the associated position.
+        strategy_id: ID of the strategy that created this bracket.
     """
 
     order_id: str
@@ -68,6 +69,7 @@ class PendingBracketOrder:
     trigger_price: float
     order_type: str  # "stop" or "limit"
     parent_position_symbol: str
+    strategy_id: str
 
 
 class SimulatedBroker(Broker):
@@ -201,7 +203,7 @@ class SimulatedBroker(Broker):
                     side=OrderSide.BUY,
                     status=PositionStatus.OPEN,
                     entry_price=fill_price,
-                    entry_time=datetime.utcnow(),
+                    entry_time=datetime.now(UTC),
                     shares=order.quantity,
                     stop_price=order.stop_price or 0.0,
                     target_prices=[],
@@ -340,6 +342,7 @@ class SimulatedBroker(Broker):
                 trigger_price=stop.stop_price or 0.0,
                 order_type="stop",
                 parent_position_symbol=entry.symbol,
+                strategy_id=entry.strategy_id,
             )
         )
         stop_result = OrderResult(
@@ -364,6 +367,7 @@ class SimulatedBroker(Broker):
                     trigger_price=target.limit_price or 0.0,
                     order_type="limit",
                     parent_position_symbol=entry.symbol,
+                    strategy_id=entry.strategy_id,
                 )
             )
             target_result = OrderResult(
@@ -486,7 +490,10 @@ class SimulatedBroker(Broker):
         return AccountInfo(
             equity=equity,
             cash=self._cash,
-            buying_power=self._cash,  # Simplified: no margin
+            # V1: buying_power = cash (no margin). When AlpacaBroker is added (Sprint 4),
+            # buying_power will differ from cash for margin accounts. The Risk Manager's
+            # cash reserve (step 5) and buying power (step 6) checks will then diverge.
+            buying_power=self._cash,
             positions_value=positions_value,
             daily_pnl=0.0,  # Not tracked in V1
         )
@@ -599,13 +606,9 @@ class SimulatedBroker(Broker):
             )
 
             if triggered:
-                # Get strategy_id from position if it exists
-                pos = self._positions.get(symbol)
-                strategy_id = pos.strategy_id if pos else ""
-
                 # Execute the bracket order
                 sell_order = Order(
-                    strategy_id=strategy_id,
+                    strategy_id=bracket.strategy_id,
                     symbol=symbol,
                     side=bracket.side,
                     quantity=bracket.quantity,
