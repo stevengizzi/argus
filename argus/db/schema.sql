@@ -158,3 +158,116 @@ CREATE TABLE IF NOT EXISTS system_events (
 
 CREATE INDEX IF NOT EXISTS idx_system_events_type ON system_events(event_type);
 CREATE INDEX IF NOT EXISTS idx_system_events_created ON system_events(created_at);
+
+-- ---------------------------------------------------------------------------
+-- Strategy Daily Performance Table
+-- ---------------------------------------------------------------------------
+-- Per-strategy daily metrics (from Architecture doc Section 3.8)
+CREATE TABLE IF NOT EXISTS strategy_daily_performance (
+    date TEXT NOT NULL,
+    strategy_id TEXT NOT NULL,
+    trades_taken INTEGER DEFAULT 0,
+    wins INTEGER DEFAULT 0,
+    losses INTEGER DEFAULT 0,
+    gross_pnl REAL DEFAULT 0,
+    net_pnl REAL DEFAULT 0,
+    largest_win REAL DEFAULT 0,
+    largest_loss REAL DEFAULT 0,
+    avg_r_multiple REAL,
+    allocated_capital REAL,
+    market_regime TEXT,
+    circuit_breaker_triggered INTEGER DEFAULT 0,
+    PRIMARY KEY (date, strategy_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_strategy_daily_perf_date ON strategy_daily_performance(date);
+CREATE INDEX IF NOT EXISTS idx_strategy_daily_perf_strategy ON strategy_daily_performance(strategy_id);
+
+-- ---------------------------------------------------------------------------
+-- Account Daily Snapshot Table
+-- ---------------------------------------------------------------------------
+-- Account-wide daily snapshot (from Architecture doc Section 3.8)
+CREATE TABLE IF NOT EXISTS account_daily_snapshot (
+    date TEXT PRIMARY KEY,
+    total_equity REAL NOT NULL,
+    cash_balance REAL NOT NULL,
+    deployed_capital REAL NOT NULL,
+    total_pnl REAL NOT NULL,
+    active_strategies INTEGER,
+    total_trades INTEGER,
+    market_regime TEXT,
+    base_capital REAL,
+    growth_pool REAL
+);
+
+CREATE INDEX IF NOT EXISTS idx_account_daily_date ON account_daily_snapshot(date);
+
+-- ---------------------------------------------------------------------------
+-- Orchestrator Decisions Table
+-- ---------------------------------------------------------------------------
+-- Logged orchestrator decisions (from Architecture doc Section 3.8)
+CREATE TABLE IF NOT EXISTS orchestrator_decisions (
+    id TEXT PRIMARY KEY,                    -- ULID
+    date TEXT NOT NULL,
+    decision_type TEXT NOT NULL,            -- 'allocation', 'activation', 'suspension', 'throttle'
+    strategy_id TEXT,
+    details TEXT,                           -- JSON
+    rationale TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_orchestrator_date ON orchestrator_decisions(date);
+CREATE INDEX IF NOT EXISTS idx_orchestrator_type ON orchestrator_decisions(decision_type);
+
+-- ---------------------------------------------------------------------------
+-- Approval Log Table
+-- ---------------------------------------------------------------------------
+-- Approval workflow log (from Architecture doc Section 3.8)
+CREATE TABLE IF NOT EXISTS approval_log (
+    id TEXT PRIMARY KEY,                    -- ULID
+    action_type TEXT NOT NULL,
+    description TEXT NOT NULL,
+    risk_level TEXT NOT NULL,               -- 'low', 'medium', 'high'
+    proposed_by TEXT NOT NULL,              -- 'orchestrator', 'risk_manager', 'claude', 'system'
+    status TEXT NOT NULL,                   -- 'pending', 'approved', 'rejected', 'expired'
+    proposed_at TEXT NOT NULL,
+    resolved_at TEXT,
+    resolved_by TEXT,                       -- 'user' or 'timeout'
+    notes TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_approval_status ON approval_log(status);
+CREATE INDEX IF NOT EXISTS idx_approval_proposed_at ON approval_log(proposed_at);
+
+-- ---------------------------------------------------------------------------
+-- Journal Entries Table
+-- ---------------------------------------------------------------------------
+-- Learning journal (from Architecture doc Section 3.8)
+CREATE TABLE IF NOT EXISTS journal_entries (
+    id TEXT PRIMARY KEY,                    -- ULID
+    entry_type TEXT NOT NULL,               -- 'observation', 'analysis', 'decision', 'insight'
+    content TEXT NOT NULL,
+    author TEXT NOT NULL,                   -- 'user' or 'claude'
+    linked_strategy_id TEXT,
+    linked_trade_ids TEXT,                  -- JSON array
+    linked_date_range TEXT,                 -- JSON: {start, end}
+    tags TEXT,                              -- JSON array
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_journal_type ON journal_entries(entry_type);
+CREATE INDEX IF NOT EXISTS idx_journal_author ON journal_entries(author);
+CREATE INDEX IF NOT EXISTS idx_journal_created ON journal_entries(created_at);
+
+-- ---------------------------------------------------------------------------
+-- System Health Table
+-- ---------------------------------------------------------------------------
+-- NOTE: Deferred to Step 10 (System Health Monitoring)
+-- CREATE TABLE IF NOT EXISTS system_health (
+--     id INTEGER PRIMARY KEY AUTOINCREMENT,
+--     timestamp TEXT NOT NULL,
+--     component TEXT NOT NULL,
+--     status TEXT NOT NULL,                 -- 'healthy', 'degraded', 'down'
+--     latency_ms REAL,
+--     details TEXT
+-- );

@@ -9,7 +9,7 @@ Assumptions and risks: @docs/RISK_REGISTER.md
 
 ## Current State
 
-Phase 1 — Core Trading Engine with ORB strategy. No code written yet. Scaffolding the project.
+Phase 1 — Sprint 1 complete. Config system, Event Bus, database layer, and Trade Logger are built and tested (52 tests). Currently preparing for Sprint 2 (Broker Abstraction + Risk Manager).
 
 Update this section as development progresses.
 

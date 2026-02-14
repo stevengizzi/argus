@@ -5,15 +5,6 @@ import pytest
 from argus.db.manager import DatabaseManager
 
 
-@pytest.fixture
-async def db() -> DatabaseManager:
-    """Create an in-memory database for testing."""
-    manager = DatabaseManager(":memory:")
-    await manager.initialize()
-    yield manager
-    await manager.close()
-
-
 class TestDatabaseManager:
     """Tests for DatabaseManager."""
 
@@ -31,6 +22,13 @@ class TestDatabaseManager:
         assert "daily_summaries" in table_names
         assert "risk_events" in table_names
         assert "system_events" in table_names
+        # Tables from Architecture doc Section 3.8
+        assert "strategy_daily_performance" in table_names
+        assert "account_daily_snapshot" in table_names
+        assert "orchestrator_decisions" in table_names
+        assert "approval_log" in table_names
+        assert "journal_entries" in table_names
+        # Note: system_health is deferred to Step 10
 
     async def test_execute_and_fetch(self, db: DatabaseManager) -> None:
         """execute() and fetch methods work correctly."""

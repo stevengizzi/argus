@@ -2,26 +2,9 @@
 
 from datetime import datetime
 
-import pytest
-
 from argus.analytics.trade_logger import TradeLogger
 from argus.db.manager import DatabaseManager
 from argus.models.trading import ExitReason, OrderSide, Trade
-
-
-@pytest.fixture
-async def db() -> DatabaseManager:
-    """Create an in-memory database for testing."""
-    manager = DatabaseManager(":memory:")
-    await manager.initialize()
-    yield manager
-    await manager.close()
-
-
-@pytest.fixture
-def trade_logger(db: DatabaseManager) -> TradeLogger:
-    """Create a trade logger with the test database."""
-    return TradeLogger(db)
 
 
 def make_trade(

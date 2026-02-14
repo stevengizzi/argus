@@ -10,8 +10,9 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 
 ## Current Project State
 
-**Phase:** Pre-development. Foundational documents drafted. No code written yet.
-**Next milestone:** Build Phase 1 — Core Trading Engine with ORB strategy, broker connections, risk manager, and trade logger.
+**Phase:** Phase 1 in progress. Sprint 1 complete (config, event bus, database, trade logger — 52 tests passing). Sprint 2 next.
+**Current sprint:** Sprint 2 — Broker Abstraction + SimulatedBroker + Risk Manager (Account Level). Steps 4–5 of 11.
+**Next milestone:** Full signal → risk check → order → fill flow working end-to-end with SimulatedBroker.
 
 ## Key Decisions Made (Do Not Relitigate)
 
@@ -36,6 +37,9 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 - **Data delivery:** Event Bus is the sole streaming mechanism. No callback subscription on DataService. Sync query methods retained.
 - **Order Manager model:** Event-driven (tick-subscribed for open positions) + 5-second fallback poll + scheduled EOD flatten.
 - **IBKR timing:** Broker abstraction from day one, IBKR adapter deferred to Phase 3+. DEC-003 amended.
+- **Config validation:** Pydantic BaseModel (not BaseSettings) for all config. YAML → Pydantic flow. DEC-032.
+- **Event Bus filtering:** Type-only subscription; filtering happens in handlers, not at bus level. DEC-033.
+- **Database access:** aiosqlite for async DB; DatabaseManager owns connection; TradeLogger is sole persistence interface. DEC-034.
 
 ## Architecture Summary
 
@@ -45,7 +49,7 @@ Three-tier system:
 3. **AI Layer** (Project C): Claude API integration, approval workflow, report narration, analysis, Claude Code integration
 
 Key components:
-- **Strategies** are stateless, modular plugins implementing a base interface
+- **Strategies** are daily-stateful, session-stateless modular plugins implementing a base interface (state accumulates during market hours, resets between days, reconstructs from DB on restart)
 - **Orchestrator** manages capital allocation, strategy activation, performance throttling
 - **Risk Manager** gates every order at three levels: strategy, cross-strategy, account
 - **Data Service** is the single source of market data, builds candles at multiple timeframes, computes shared indicators (VWAP, ATR, RVOL), exposes pub/sub API to strategies
@@ -116,7 +120,12 @@ argus/
 
 ## Build Phases
 
-1. **Core Engine + ORB Strategy** (Weeks 1–4): Base interfaces, ORB module, Risk Manager (account level), Alpaca + IBKR broker adapters, Trade Logger, basic monitoring
+1. **Core Engine + ORB Strategy** (Weeks 1–4): Base interfaces, ORB module, Risk Manager (account level), Alpaca broker adapter, Trade Logger, basic monitoring
+   - Sprint 1 COMPLETE: Config system, Event Bus, data models, database (SQLite + aiosqlite), Trade Logger
+   - Sprint 2 IN PROGRESS: Broker Abstraction + SimulatedBroker + Risk Manager (account level)
+   - Sprint 3 PENDING: BaseStrategy + ORB strategy + Data Service
+   - Sprint 4 PENDING: Alpaca Broker adapter + Order Manager
+   - Sprint 5 PENDING: Health monitoring + Integration testing
 2. **Backtesting Validation** (Weeks 3–6): VectorBT parameter sweeps, Backtrader validation, Replay Harness build
 3. **Live Validation** (Weeks 5–10): ORB live at minimum size, compare to backtest
 4. **Orchestrator + Second Strategy** (Weeks 8–12): Orchestrator framework, ORB Scalp, cross-strategy risk management
