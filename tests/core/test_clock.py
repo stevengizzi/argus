@@ -1,6 +1,6 @@
 """Tests for the Clock abstraction (SystemClock and FixedClock)."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -14,12 +14,12 @@ class TestSystemClock:
     def test_now_returns_current_utc_time(self):
         """SystemClock.now() should return current UTC datetime with timezone."""
         clock = SystemClock()
-        before = datetime.now(timezone.utc)
+        before = datetime.now(UTC)
         result = clock.now()
-        after = datetime.now(timezone.utc)
+        after = datetime.now(UTC)
 
         assert before <= result <= after
-        assert result.tzinfo == timezone.utc
+        assert result.tzinfo == UTC
 
     def test_today_returns_current_date_in_configured_timezone(self):
         """SystemClock.today() should return today's date in configured timezone."""
@@ -65,21 +65,21 @@ class TestFixedClock:
 
     def test_now_returns_fixed_time(self):
         """FixedClock.now() should return the exact time it was initialized with."""
-        fixed_time = datetime(2026, 2, 15, 14, 30, 0, tzinfo=timezone.utc)
+        fixed_time = datetime(2026, 2, 15, 14, 30, 0, tzinfo=UTC)
         clock = FixedClock(fixed_time)
 
         assert clock.now() == fixed_time
 
     def test_today_returns_date_portion_of_fixed_time(self):
         """FixedClock.today() should return the date portion of fixed time."""
-        fixed_time = datetime(2026, 2, 15, 14, 30, 0, tzinfo=timezone.utc)
+        fixed_time = datetime(2026, 2, 15, 14, 30, 0, tzinfo=UTC)
         clock = FixedClock(fixed_time)
 
         assert clock.today() == fixed_time.date()
 
     def test_advance_moves_time_forward(self):
         """FixedClock.advance() should move time forward by specified delta."""
-        fixed_time = datetime(2026, 2, 15, 14, 30, 0, tzinfo=timezone.utc)
+        fixed_time = datetime(2026, 2, 15, 14, 30, 0, tzinfo=UTC)
         clock = FixedClock(fixed_time)
 
         clock.advance(hours=1, minutes=30)
@@ -89,7 +89,7 @@ class TestFixedClock:
 
     def test_advance_with_days(self):
         """FixedClock.advance() should handle day advancement."""
-        fixed_time = datetime(2026, 2, 15, 14, 30, 0, tzinfo=timezone.utc)
+        fixed_time = datetime(2026, 2, 15, 14, 30, 0, tzinfo=UTC)
         clock = FixedClock(fixed_time)
 
         clock.advance(days=1)
@@ -100,10 +100,10 @@ class TestFixedClock:
 
     def test_set_changes_time_to_specific_datetime(self):
         """FixedClock.set() should change time to a specific datetime."""
-        fixed_time = datetime(2026, 2, 15, 14, 30, 0, tzinfo=timezone.utc)
+        fixed_time = datetime(2026, 2, 15, 14, 30, 0, tzinfo=UTC)
         clock = FixedClock(fixed_time)
 
-        new_time = datetime(2026, 3, 20, 9, 0, 0, tzinfo=timezone.utc)
+        new_time = datetime(2026, 3, 20, 9, 0, 0, tzinfo=UTC)
         clock.set(new_time)
 
         assert clock.now() == new_time
@@ -118,7 +118,7 @@ class TestFixedClock:
 
     def test_fixed_clock_rejects_naive_datetime_in_set(self):
         """FixedClock.set() should raise ValueError if given naive datetime."""
-        fixed_time = datetime(2026, 2, 15, 14, 30, 0, tzinfo=timezone.utc)
+        fixed_time = datetime(2026, 2, 15, 14, 30, 0, tzinfo=UTC)
         clock = FixedClock(fixed_time)
 
         naive_time = datetime(2026, 3, 20, 9, 0, 0)  # No tzinfo
@@ -128,7 +128,7 @@ class TestFixedClock:
 
     def test_multiple_advances(self):
         """FixedClock should handle multiple advance() calls correctly."""
-        fixed_time = datetime(2026, 2, 15, 9, 30, 0, tzinfo=timezone.utc)
+        fixed_time = datetime(2026, 2, 15, 9, 30, 0, tzinfo=UTC)
         clock = FixedClock(fixed_time)
 
         clock.advance(minutes=15)
@@ -140,11 +140,11 @@ class TestFixedClock:
 
     def test_advance_across_date_boundary(self):
         """FixedClock.advance() should correctly handle date boundary crossing."""
-        fixed_time = datetime(2026, 2, 15, 23, 30, 0, tzinfo=timezone.utc)
+        fixed_time = datetime(2026, 2, 15, 23, 30, 0, tzinfo=UTC)
         clock = FixedClock(fixed_time)
 
         clock.advance(hours=2)
 
-        expected = datetime(2026, 2, 16, 1, 30, 0, tzinfo=timezone.utc)
+        expected = datetime(2026, 2, 16, 1, 30, 0, tzinfo=UTC)
         assert clock.now() == expected
         assert clock.today() == expected.date()

@@ -7,8 +7,9 @@ with historical data fetching for indicator warm-up via REST API.
 import asyncio
 import logging
 import os
+import random
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 import pandas as pd
@@ -20,8 +21,8 @@ from alpaca.data.timeframe import TimeFrame
 
 from argus.core.clock import Clock, SystemClock
 from argus.core.config import AlpacaConfig, DataServiceConfig
-from argus.core.events import CandleEvent, IndicatorEvent, TickEvent
 from argus.core.event_bus import EventBus
+from argus.core.events import CandleEvent, IndicatorEvent, TickEvent
 from argus.data.service import DataService
 
 logger = logging.getLogger(__name__)
@@ -431,7 +432,8 @@ class AlpacaDataService(DataService):
                             state.rvol_baseline_volume = sum(state.rvol_volume_samples[:20]) / 20
                         if state.rvol_baseline_volume > 0:
                             cumulative_volume = sum(state.rvol_volume_samples)
-                            expected_volume = state.rvol_baseline_volume * len(state.rvol_volume_samples)
+                            num_samples = len(state.rvol_volume_samples)
+                            expected_volume = state.rvol_baseline_volume * num_samples
                             state.rvol = cumulative_volume / expected_volume
 
                 logger.debug(
@@ -552,7 +554,6 @@ class AlpacaDataService(DataService):
                 delay = min(base_delay * (2 ** (self._consecutive_failures - 1)), max_delay)
 
                 # Add jitter (±20%)
-                import random
                 jitter = delay * 0.2 * (random.random() * 2 - 1)
                 delay = delay + jitter
 

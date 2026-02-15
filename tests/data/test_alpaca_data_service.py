@@ -3,16 +3,14 @@
 import asyncio
 import os
 from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
-import pandas as pd
 import pytest
-from alpaca.data.models import Bar, Trade
 
 from argus.core.clock import FixedClock
 from argus.core.config import AlpacaConfig, DataServiceConfig
-from argus.core.events import CandleEvent, IndicatorEvent, TickEvent
 from argus.core.event_bus import EventBus
+from argus.core.events import CandleEvent, IndicatorEvent, TickEvent
 from argus.data.alpaca_data_service import AlpacaDataService, IndicatorState
 
 
@@ -156,16 +154,15 @@ class TestAlpacaDataServiceStart:
             with patch(
                 "argus.data.alpaca_data_service.StockHistoricalDataClient",
                 return_value=mock_historical_client,
+            ), patch(
+                "argus.data.alpaca_data_service.StockDataStream",
+                return_value=mock_data_stream,
             ):
-                with patch(
-                    "argus.data.alpaca_data_service.StockDataStream",
-                    return_value=mock_data_stream,
+                # Mock warm-up to avoid historical data fetch
+                with patch.object(
+                    data_service, "_warm_up_indicators", new_callable=AsyncMock
                 ):
-                    # Mock warm-up to avoid historical data fetch
-                    with patch.object(
-                        data_service, "_warm_up_indicators", new_callable=AsyncMock
-                    ):
-                        await data_service.start(["AAPL", "TSLA"], ["1m"])
+                    await data_service.start(["AAPL", "TSLA"], ["1m"])
 
             # Verify clients initialized
             assert data_service._historical_client is mock_historical_client
@@ -202,15 +199,13 @@ class TestAlpacaDataServiceStop:
             with patch(
                 "argus.data.alpaca_data_service.StockHistoricalDataClient",
                 return_value=mock_historical_client,
+            ), patch(
+                "argus.data.alpaca_data_service.StockDataStream",
+                return_value=mock_data_stream,
+            ), patch.object(
+                data_service, "_warm_up_indicators", new_callable=AsyncMock
             ):
-                with patch(
-                    "argus.data.alpaca_data_service.StockDataStream",
-                    return_value=mock_data_stream,
-                ):
-                    with patch.object(
-                        data_service, "_warm_up_indicators", new_callable=AsyncMock
-                    ):
-                        await data_service.start(["AAPL"], ["1m"])
+                await data_service.start(["AAPL"], ["1m"])
 
             # Stop the service
             await data_service.stop()
@@ -548,24 +543,36 @@ class TestAlpacaDataServiceReconnection:
     async def test_reconnection_with_exponential_backoff(
         self, data_service, mock_data_stream, alpaca_config
     ):
-        """Test reconnection uses exponential backoff."""
+        """Test reconnection uses exponential backoff with jitter."""
         data_service._data_stream = mock_data_stream
         data_service._running = True
 
-        # Mock stream to fail twice then cancel
+        # Mock stream to fail 3 times then succeed with CancelledError (stop)
         mock_data_stream._run_forever.side_effect = [
-            Exception("Connection failed"),
-            Exception("Connection failed again"),
+            Exception("Connection failed 1"),
+            Exception("Connection failed 2"),
+            Exception("Connection failed 3"),
             asyncio.CancelledError(),  # Simulate stop
         ]
 
-        # Run reconnection (with longer timeout to allow retries)
-        try:
-            await asyncio.wait_for(
-                data_service._run_stream_with_reconnect(), timeout=3.0
-            )
-        except asyncio.TimeoutError:
-            pass
+        # Mock asyncio.sleep and random.random to make test deterministic
+        with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+            with patch("random.random", return_value=0.5):  # Jitter = 0% (0.5 * 2 - 1 = 0)
+                # Run reconnection
+                try:
+                    await data_service._run_stream_with_reconnect()
+                except asyncio.CancelledError:
+                    pass
 
-        # Verify at least one failure was tracked
-        assert data_service._consecutive_failures >= 1
+        # Verify exponential backoff delays
+        # First failure: 1s * 2^0 = 1s (+ 0% jitter = 1.0s)
+        # Second failure: 1s * 2^1 = 2s (+ 0% jitter = 2.0s)
+        # Third failure: 1s * 2^2 = 4s (+ 0% jitter = 4.0s)
+        assert mock_sleep.call_count == 3
+        sleep_calls = [call.args[0] for call in mock_sleep.call_args_list]
+        assert sleep_calls[0] == pytest.approx(1.0, abs=0.01)
+        assert sleep_calls[1] == pytest.approx(2.0, abs=0.01)
+        assert sleep_calls[2] == pytest.approx(4.0, abs=0.01)
+
+        # Verify 3 consecutive failures tracked
+        assert data_service._consecutive_failures == 3

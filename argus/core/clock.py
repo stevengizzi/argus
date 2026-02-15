@@ -8,7 +8,7 @@ Components using Clock: Risk Manager, BaseStrategy, and any component where
 date boundaries matter for logic or testing.
 """
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from typing import Protocol
 from zoneinfo import ZoneInfo
 
@@ -60,7 +60,7 @@ class SystemClock:
         Returns:
             Current datetime in UTC with timezone info.
         """
-        return datetime.now(timezone.utc)
+        return datetime.now(UTC)
 
     def today(self) -> date:
         """Return today's date in the configured timezone.

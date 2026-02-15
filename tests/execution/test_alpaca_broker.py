@@ -289,6 +289,37 @@ async def test_place_stop_order(broker: AlpacaBroker) -> None:
 
 
 @pytest.mark.asyncio
+async def test_place_stop_limit_order(broker: AlpacaBroker) -> None:
+    """Test placing a stop-limit order."""
+    order = Order(
+        strategy_id="test_strategy",
+        symbol="NVDA",
+        side=OrderSide.SELL,
+        order_type=OrderType.STOP_LIMIT,
+        quantity=75,
+        stop_price=900.0,
+        limit_price=895.0,
+    )
+
+    # Mock Alpaca response
+    mock_order = Mock()
+    mock_order.id = "alpaca-order-stoplimit-1"
+    broker._trading_client.submit_order.return_value = mock_order
+
+    result = await broker.place_order(order)
+
+    # Verify stop-limit order submitted with both prices
+    broker._trading_client.submit_order.assert_called_once()
+    call_args = broker._trading_client.submit_order.call_args[0][0]
+    assert call_args.symbol == "NVDA"
+    assert call_args.qty == 75
+    assert call_args.stop_price == 900.0
+    assert call_args.limit_price == 895.0
+
+    assert result.status == OrderStatus.SUBMITTED
+
+
+@pytest.mark.asyncio
 async def test_place_bracket_order(broker: AlpacaBroker) -> None:
     """Test placing a bracket order (entry + stop + target)."""
     entry = Order(
@@ -443,6 +474,40 @@ async def test_modify_order(broker: AlpacaBroker) -> None:
     assert "alpaca-order-111" not in broker._reverse_id_map
 
 
+@pytest.mark.asyncio
+async def test_modify_order_success(broker: AlpacaBroker) -> None:
+    """Test successful order modification with quantity change."""
+    # Place initial order
+    order = Order(
+        strategy_id="test_strategy",
+        symbol="TSLA",
+        side=OrderSide.BUY,
+        order_type=OrderType.LIMIT,
+        quantity=50,
+        limit_price=200.0,
+    )
+    mock_order = Mock()
+    mock_order.id = "alpaca-order-modify-1"
+    broker._trading_client.submit_order.return_value = mock_order
+    await broker.place_order(order)
+
+    # Mock successful replace with new quantity
+    replaced_order = Mock()
+    replaced_order.id = "alpaca-order-modify-2"
+    broker._trading_client.replace_order_by_id.return_value = replaced_order
+
+    # Modify quantity
+    result = await broker.modify_order(order.id, {"quantity": 100})
+
+    # Verify ReplaceOrderRequest called with correct order ID
+    call_args = broker._trading_client.replace_order_by_id.call_args
+    assert call_args[0][0] == "alpaca-order-modify-1"  # First arg is order_id
+
+    # Verify result
+    assert result.status == OrderStatus.SUBMITTED
+    assert result.broker_order_id == "alpaca-order-modify-2"
+
+
 # ---------------------------------------------------------------------------
 # Get Positions/Account Tests
 # ---------------------------------------------------------------------------
@@ -503,6 +568,27 @@ async def test_get_account(broker: AlpacaBroker) -> None:
     assert account.buying_power == 200000.0
     assert account.positions_value == 50000.0  # equity - cash
     assert account.daily_pnl == 1000.0  # 100000 - 99000
+
+
+@pytest.mark.asyncio
+async def test_get_account_with_positions_value(broker: AlpacaBroker) -> None:
+    """Test get_account with open positions (equity > cash)."""
+    # Mock account with positions
+    mock_account = Mock()
+    mock_account.equity = "125000.0"  # Total account value
+    mock_account.cash = "75000.0"     # Cash portion
+    mock_account.buying_power = "150000.0"
+    mock_account.last_equity = "120000.0"
+
+    broker._trading_client.get_account.return_value = mock_account
+
+    account = await broker.get_account()
+
+    # Verify positions value calculated correctly
+    assert account.equity == 125000.0
+    assert account.cash == 75000.0
+    assert account.positions_value == 50000.0  # 125000 - 75000
+    assert account.daily_pnl == 5000.0  # 125000 - 120000
 
 
 # ---------------------------------------------------------------------------
@@ -574,6 +660,46 @@ async def test_flatten_all(broker: AlpacaBroker) -> None:
     assert len(results) == 2
     assert all(r.status == OrderStatus.SUBMITTED for r in results)
     assert "Emergency flatten" in results[0].message
+
+
+@pytest.mark.asyncio
+async def test_flatten_all_with_positions(broker: AlpacaBroker) -> None:
+    """Test flatten_all when positions exist."""
+    # Mock position close responses
+    close_resp1 = Mock()
+    close_resp1.symbol = "SPY"
+    close_resp1.id = "close-spy-1"
+    close_resp1.status = "accepted"
+
+    close_resp2 = Mock()
+    close_resp2.symbol = "QQQ"
+    close_resp2.id = "close-qqq-1"
+    close_resp2.status = "accepted"
+
+    close_resp3 = Mock()
+    close_resp3.symbol = "IWM"
+    close_resp3.id = "close-iwm-1"
+    close_resp3.status = "accepted"
+
+    broker._trading_client.close_all_positions.return_value = [
+        close_resp1,
+        close_resp2,
+        close_resp3,
+    ]
+
+    results = await broker.flatten_all()
+
+    # Verify cancel_orders called first
+    broker._trading_client.cancel_orders.assert_called_once()
+
+    # Verify close_all_positions called with cancel_orders=True
+    broker._trading_client.close_all_positions.assert_called_once_with(cancel_orders=True)
+
+    # Verify correct number of results
+    assert len(results) == 3
+
+    # Verify all results are SUBMITTED status
+    assert all(r.status == OrderStatus.SUBMITTED for r in results)
 
 
 # ---------------------------------------------------------------------------
@@ -682,3 +808,51 @@ async def test_on_trade_update_ignores_unknown_order(broker: AlpacaBroker) -> No
 
     # Should not raise, just log warning
     await broker._on_trade_update(mock_update)
+
+
+@pytest.mark.asyncio
+async def test_on_trade_update_partial_fill(broker: AlpacaBroker) -> None:
+    """Test trade update handler publishes OrderFilledEvent on partial fill."""
+    # Place an order
+    order = Order(
+        strategy_id="test_strategy",
+        symbol="AAPL",
+        side=OrderSide.BUY,
+        order_type=OrderType.LIMIT,
+        quantity=200,
+        limit_price=150.0,
+    )
+    mock_order = Mock()
+    mock_order.id = "alpaca-order-partial-1"
+    broker._trading_client.submit_order.return_value = mock_order
+    await broker.place_order(order)
+
+    # Mock partial fill trade update
+    mock_update = Mock()
+    mock_update.event = "partial_fill"
+    mock_update.order = Mock()
+    mock_update.order.id = "alpaca-order-partial-1"
+    mock_update.order.symbol = "AAPL"
+    mock_update.order.side = "buy"
+    mock_update.order.order_type = "limit"
+    mock_update.order.filled_qty = "100"  # Only half filled
+    mock_update.order.filled_avg_price = "149.75"
+
+    # Subscribe to OrderFilledEvent
+    received_events = []
+
+    async def handler(event: OrderFilledEvent) -> None:
+        received_events.append(event)
+
+    broker._event_bus.subscribe(OrderFilledEvent, handler)
+
+    # Trigger partial fill update
+    await broker._on_trade_update(mock_update)
+    await asyncio.sleep(0.1)  # Let event propagate
+
+    # Verify OrderFilledEvent published with partial quantity
+    assert len(received_events) == 1
+    event = received_events[0]
+    assert event.order_id == order.id
+    assert event.fill_price == 149.75
+    assert event.fill_quantity == 100  # Partial fill
