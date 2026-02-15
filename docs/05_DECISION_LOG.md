@@ -532,5 +532,49 @@ Each entry follows this format:
 
 ---
 
+### DEC-048 | Parquet File Granularity
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-16 |
+| **Decision** | One Parquet file per symbol per month. Path: `data/historical/1m/{SYMBOL}/{SYMBOL}_{YYYY}-{MM}.parquet` |
+| **Rationale** | Small files (~300–500 KB), trivial resume on interrupted downloads, aligns with walk-forward monthly boundaries, efficient selective loading for date range queries. |
+| **Alternatives** | Per-quarter (fewer files but harder resume), per-year (simpler but loads too much for partial ranges). |
+| **Status** | Active |
+
+---
+
+### DEC-049 | Historical Data Time Zone Storage
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-16 |
+| **Decision** | Store all historical bar timestamps in UTC. Convert to ET at read time in consumers. |
+| **Rationale** | UTC is unambiguous (no DST transitions), matches Alpaca API output, matches existing ReplayDataService expectation (`timestamp: datetime (UTC)` in Sprint 3 spec), future-proof for non-US assets. |
+| **Alternatives** | Store in ET (simpler for strategy logic but introduces DST ambiguity and diverges from existing code). |
+| **Status** | Active |
+
+---
+
+### DEC-050 | Split-Adjusted Prices for Backtesting
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-16 |
+| **Decision** | Always use `adjustment=Adjustment.SPLIT` when fetching historical bars. No dividend adjustment. |
+| **Rationale** | Day trading strategies don't hold overnight, so dividends don't affect P&L. Split adjustment is essential to avoid phantom price jumps. Adjustment type recorded in manifest for traceability. |
+| **Alternatives** | `all` (split + dividend — unnecessary for intraday), `raw` (would break any backtest spanning a split). |
+| **Status** | Active |
+
+---
+
+### DEC-051 | Alpaca Free Tier Rate Limit Handling
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-16 |
+| **Decision** | Throttle to 150 requests/minute (vs 200 limit). Sliding window rate limiter. Exponential backoff retry on 429. No overnight batching needed — full download completes in ~2–3 minutes. |
+| **Rationale** | 30 symbols × 12 months = 360 requests, each returning ~8,190 bars (under 10,000 limit). Leaving 25% headroom prevents hitting the hard limit. Retry logic is a safety net, not expected to fire. |
+| **Alternatives** | Paid plan at $99/month for 10,000 req/min (unnecessary for this volume). |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
 *New decisions are appended chronologically as the project progresses.*
