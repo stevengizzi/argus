@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
 
 import pandas as pd
+from alpaca.data.enums import DataFeed
 from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.data.live import StockDataStream
 from alpaca.data.models import Bar, Trade
@@ -295,11 +296,19 @@ class AlpacaDataService(DataService):
         if timeframe not in timeframe_map:
             raise ValueError(f"Unsupported timeframe: {timeframe}")
 
+        # Map config data_feed string to DataFeed enum
+        feed_map = {
+            "iex": DataFeed.IEX,
+            "sip": DataFeed.SIP,
+        }
+        feed = feed_map.get(self._alpaca_config.data_feed.lower(), DataFeed.IEX)
+
         request = StockBarsRequest(
             symbol_or_symbols=symbol,
             timeframe=timeframe_map[timeframe],
             start=start,
             end=end,
+            feed=feed,
         )
 
         bars = self._historical_client.get_stock_bars(request)

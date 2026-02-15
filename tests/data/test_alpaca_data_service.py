@@ -351,6 +351,30 @@ class TestAlpacaDataServiceHistoricalCandles:
         ]
 
 
+    @pytest.mark.asyncio
+    async def test_get_historical_candles_passes_data_feed_parameter(
+        self, data_service, mock_historical_client, alpaca_config
+    ):
+        """Test get_historical_candles passes the feed parameter from config."""
+        from alpaca.data.enums import DataFeed
+
+        data_service._historical_client = mock_historical_client
+        mock_historical_client.get_stock_bars.return_value = {}
+
+        start = datetime(2026, 2, 15, 9, 30, 0, tzinfo=UTC)
+        end = datetime(2026, 2, 15, 10, 30, 0, tzinfo=UTC)
+
+        await data_service.get_historical_candles("AAPL", "1m", start, end)
+
+        # Verify the request was called with correct feed
+        mock_historical_client.get_stock_bars.assert_called_once()
+        call_args = mock_historical_client.get_stock_bars.call_args
+        request = call_args[0][0]  # First positional argument
+
+        # Config has data_feed="iex", so request.feed should be DataFeed.IEX
+        assert request.feed == DataFeed.IEX
+
+
 class TestAlpacaDataServiceWarmUp:
     """Test AlpacaDataService indicator warm-up."""
 
@@ -578,3 +602,53 @@ class TestAlpacaDataServiceReconnection:
 
         # Verify 3 consecutive failures tracked
         assert data_service._consecutive_failures == 3
+
+
+class TestAlpacaDataServiceFetchTodaysBars:
+    """Test AlpacaDataService fetch_todays_bars method."""
+
+    @pytest.mark.asyncio
+    async def test_fetch_todays_bars_passes_feed_parameter(
+        self, data_service, mock_historical_client, fixed_clock
+    ):
+        """Test fetch_todays_bars uses correct feed parameter from config."""
+        from alpaca.data.enums import DataFeed
+
+        data_service._historical_client = mock_historical_client
+        mock_historical_client.get_stock_bars.return_value = {}
+
+        await data_service.fetch_todays_bars(["AAPL"])
+
+        # Verify the request was called with correct feed
+        mock_historical_client.get_stock_bars.assert_called_once()
+        call_args = mock_historical_client.get_stock_bars.call_args
+        request = call_args[0][0]
+
+        # Config has data_feed="iex", so request.feed should be DataFeed.IEX
+        assert request.feed == DataFeed.IEX
+
+    @pytest.mark.asyncio
+    async def test_fetch_todays_bars_returns_candle_events(
+        self, data_service, mock_historical_client, fixed_clock
+    ):
+        """Test fetch_todays_bars returns properly formatted CandleEvents."""
+        data_service._historical_client = mock_historical_client
+
+        # Mock historical data
+        mock_bar = MagicMock()
+        mock_bar.timestamp = datetime(2026, 2, 16, 14, 30, 0, tzinfo=UTC)  # 9:30 ET
+        mock_bar.open = 150.0
+        mock_bar.high = 151.0
+        mock_bar.low = 149.0
+        mock_bar.close = 150.5
+        mock_bar.volume = 1000000
+
+        mock_historical_client.get_stock_bars.return_value = {"AAPL": [mock_bar]}
+
+        events = await data_service.fetch_todays_bars(["AAPL"])
+
+        assert len(events) == 1
+        assert events[0].symbol == "AAPL"
+        assert events[0].timeframe == "1m"
+        assert events[0].close == 150.5
+        assert events[0].volume == 1000000
