@@ -22,8 +22,8 @@ The original plan defined 11 implementation steps. During execution, steps were 
 | 3 | Data models + Database + Trade Logger | S1 | As planned. SQLite + aiosqlite, ULIDs (DEC-026), DatabaseManager + TradeLogger (DEC-034). | ✅ Complete |
 | 4 | Broker Abstraction + Simulated Broker | S2 | As planned. Broker ABC, SimulatedBroker (no margin, DEC-036), BrokerRouter. IBKR deferred (DEC-031). | ✅ Complete |
 | 5 | Risk Manager (account level) | S2 | As planned + extras. Three-level risk (strategy/cross-strategy/account), PDT tracking, circuit breakers, approve-with-modification (DEC-027), start-of-day equity (DEC-037). | ✅ Complete |
-| 6 | Base Strategy + ORB Strategy | S3 | Expanded. BaseStrategy ABC + ORB Breakout + Scanner ABC + StaticScanner (MD-1, added to plan). | 🔜 Next |
-| 7a | Data Service Abstraction | S3 | Split from original Step 7. DataService ABC + ReplayDataService (Parquet, 1m candles, indicator computation). Event Bus delivery only (DEC-029). | 🔜 Next |
+| 6 | Base Strategy + ORB Strategy | S3 | Expanded. BaseStrategy ABC + ORB Breakout + Scanner ABC + StaticScanner (MD-1, added to plan). | ✅ Complete |
+| 7a | Data Service Abstraction | S3 | Split from original Step 7. DataService ABC + ReplayDataService (Parquet, 1m candles, indicator computation). Event Bus delivery only (DEC-029). | ✅ Complete |
 | 7b | Alpaca Data Service (live) | S4a | Split from original Step 7. AlpacaDataService (WebSocket streaming, live candle building, live indicators). Needed for paper trading. | Pending |
 | 8 | Alpaca Broker Adapter | S4a | As planned. AlpacaBroker (paper trading mode via alpaca-trade-api SDK). | Pending |
 | 9 | Order Manager + Position Management | S4b | As planned. Event-driven position management (DEC-030): tick subscription + 5s fallback poll + scheduled EOD flatten. | Pending |

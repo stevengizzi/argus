@@ -1,6 +1,6 @@
 # ARGUS — Project Knowledge (Claude Context)
 
-> *Paste this into Claude's project instructions. Keep updated as the project evolves. Last updated: Feb 14, 2026.*
+> *Paste this into Claude's project instructions. Keep updated as the project evolves. Last updated: Feb 15, 2026.*
 
 ---
 
@@ -10,9 +10,9 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 
 ## Current Project State
 
-**Phase:** Phase 1 in progress. Sprint 1 complete (config, event bus, database, trade logger — 52 tests passing). Sprint 2 next.
-**Current sprint:** Sprint 2 polish complete. Sprint 3 next — BaseStrategy ABC + Scanner + Data Service + ORB Strategy.
-**Next milestone:** Full signal → risk check → order → fill flow working end-to-end with SimulatedBroker.
+**Phase:** Phase 1 in progress. Sprints 1–3 complete (222 tests passing). Sprint 4a next.
+**Current sprint:** Sprint 3 complete (Strategy Framework + ORB Breakout). Sprint 4a next — AlpacaDataService (live WebSocket streaming) + AlpacaBroker (paper trading) + Clock injection.
+**Next milestone:** Real market data flowing in and paper orders placed on Alpaca end-to-end: AlpacaDataService → OrbBreakout → RiskManager → AlpacaBroker.
 
 ## Key Decisions Made (Do Not Relitigate)
 
