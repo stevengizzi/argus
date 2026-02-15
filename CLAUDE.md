@@ -10,15 +10,19 @@ Phase 1 sprint plan: @docs/07_PHASE1_SPRINT_PLAN.md
 
 ## Current State
 
-Phase 1 — Core Trading Engine with ORB strategy. Sprint 3 complete (Strategy Framework + ORB Breakout, 222 tests passing). Sprint 4 next.
+Phase 1 — Core Trading Engine with ORB strategy. Sprint 4a complete (Live Connections — Clock injection + AlpacaDataService + AlpacaBroker, 277 tests, 276 passing, 1 flaky). Sprint 4a polish next (fix flaky test, add missing broker tests), then Sprint 4b.
 
 Components implemented:
 - Event Bus, EventStore, core events
-- Broker abstraction (SimulatedBroker)
-- Risk Manager with three-tier evaluation
-- BaseStrategy ABC, Scanner ABC, DataService ABC
+- Clock protocol (SystemClock, FixedClock) — injectable time provider. DEF-001 resolved.
+- Broker abstraction (SimulatedBroker, AlpacaBroker)
+- Risk Manager with three-tier evaluation (clock-injected)
+- BaseStrategy ABC (clock-injected), Scanner ABC, DataService ABC
 - ReplayDataService with indicator computation (VWAP, ATR, SMA, RVOL)
+- AlpacaDataService — live WebSocket streaming via alpaca-py (bars + trades), indicator warm-up, stale data monitoring, reconnection with backoff
+- AlpacaBroker — paper/live trading via alpaca-py REST + WebSocket, bracket orders (single T1 target), order ID mapping (ULID ↔ Alpaca UUID)
 - OrbBreakoutStrategy (full implementation)
+- Dependencies: alpaca-py>=0.30, python-dotenv>=1.0 (NOT alpaca-trade-api — deprecated)
 
 ## Architecture
 
@@ -34,7 +38,8 @@ Currently building: Tier 1, Phase 1.
 - Python 3.11+, asyncio throughout
 - FastAPI (REST + WebSocket API server)
 - SQLite (WAL mode) for trade logging and state
-- alpaca-trade-api SDK (primary broker)
+- alpaca-py>=0.30 (NOT alpaca-trade-api — deprecated)
+- python-dotenv>=1.0
 - ib_insync (secondary broker, IBKR)
 - pandas, numpy, pandas-ta for data/indicators
 - VectorBT for parameter exploration
@@ -156,7 +161,7 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 
 | ID | Item | Trigger | Context |
 |----|------|---------|---------|
-| DEF-001 | Inject clock/date provider into Risk Manager | Sprint 4 starts | `date.today()` calls make date-boundary testing hard. Consider a `Clock` protocol that can be replaced with a fixed-time mock in tests. |
+| ~~DEF-001~~ | ~~Inject clock/date provider into Risk Manager~~ | ~~Sprint 4 starts~~ | **DONE** Clock injection into Risk Manager + BaseStrategy is complete. |
 | ~~DEF-002~~ | ~~Cash reserve basis: switch to start-of-day equity~~ | ~~Sprint 3~~ | **DONE** — Implemented in Sprint 3 (DEC-037). |
 | ~~DEF-003~~ | ~~Replace datetime.utcnow() with datetime.now(UTC)~~ | ~~Sprint 3~~ | **DONE** — Fixed in events.py, trading.py, and tests. |
 | DEF-004 | Discuss cash reserve calc with CPA before live trading | Sprint 5 (pre-live) | Equity vs start-of-day capital vs high water mark has tax and risk implications worth a professional opinion. |

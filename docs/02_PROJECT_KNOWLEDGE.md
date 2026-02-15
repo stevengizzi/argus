@@ -10,9 +10,9 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 
 ## Current Project State
 
-**Phase:** Phase 1 in progress. Sprints 1–3 complete (222 tests passing). Sprint 4a next.
-**Current sprint:** Sprint 3 complete (Strategy Framework + ORB Breakout). Sprint 4a next — AlpacaDataService (live WebSocket streaming) + AlpacaBroker (paper trading) + Clock injection.
-**Next milestone:** Real market data flowing in and paper orders placed on Alpaca end-to-end: AlpacaDataService → OrbBreakout → RiskManager → AlpacaBroker.
+**Phase:** Phase 1 in progress. Sprints 1–4a complete (277 tests, 276 passing). Sprint 4b next.
+**Current sprint:** Sprint 4a complete (Clock injection + AlpacaDataService + AlpacaBroker). Sprint 4b next — Order Manager + AlpacaScanner + EOD flatten.
+**Next milestone:** Active position management with dynamic stop/target adjustments on paper trades: OrderManager subscribes to ticks, moves stops to breakeven on T1 hit, enforces time stops, flattens at EOD.
 
 ## Key Decisions Made (Do Not Relitigate)
 
@@ -48,6 +48,10 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 - **Replay data format:** Parquet only. DEC-038.
 - **ORB entry:** Market order + chase protection filter. DEC-038.
 - **Breakout confirmation:** Candle close > OR high, volume > 1.5x avg, price > VWAP. DEC-038.
+- **Alpaca SDK:** alpaca-py (not alpaca-trade-api, which is deprecated). DEC-039/MD-4a-3.
+- **Clock injection:** Clock protocol with SystemClock + FixedClock. Scoped to Risk Manager + BaseStrategy. DEF-001 resolved. DEC-039/MD-4a-5.
+- **AlpacaDataService streams:** Subscribes to both 1m bar stream (CandleEvents) and trade stream (TickEvents + price cache). DEC-039/MD-4a-1.
+- **Bracket orders:** Single T1 take-profit (Alpaca limitation). Order Manager handles T1/T2 split in Sprint 4b. DEC-039/MD-4a-6.
 
 ## Architecture Summary
 

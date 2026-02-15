@@ -433,5 +433,15 @@ Each entry follows this format:
 
 ---
 
+### DEC-039 | Sprint 4a Micro-Decisions
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-15 |
+| **Decision** | Sprint 4a implementation decisions (MD-4a-1 through MD-4a-6 from spec), plus: MD-4a-7: AlpacaDataService uses IndicatorState dataclass (matching ReplayDataService pattern) instead of separate IndicatorEngine class. |
+| **Rationale** | MD-4a-1: Dual stream (bars + trades) provides reliable candles plus real-time price cache. MD-4a-2: Exponential backoff with jitter matches Architecture doc. MD-4a-3: alpaca-py is the current official SDK. MD-4a-4: Direct async integration via _run_forever() on existing event loop. MD-4a-5: Clock injection scoped to Risk Manager + BaseStrategy. MD-4a-6: Single T1 target for bracket orders (Alpaca limitation). MD-4a-7: Consistent indicator pattern across DataService implementations. |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
 *New decisions are appended chronologically as the project progresses.*

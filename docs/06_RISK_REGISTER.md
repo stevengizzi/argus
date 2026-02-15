@@ -284,6 +284,27 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 | **Mitigation** | `reconstruct_state()` method queries TradeLogger for the current week's trades and rebuilds weekly P&L. Tested explicitly. Integrity check verifies reconstruction accuracy. Implemented and tested in Sprint 2 polish. |
 | **Owner** | Risk Manager |
 
+---
+
+### RSK-014 — Flaky Reconnection Test
+| Field | Value |
+|-------|-------|
+| **Severity** | Low |
+| **Likelihood** | High |
+| **Description** | `test_reconnection_with_exponential_backoff` in AlpacaDataService tests is timing-dependent and fails intermittently. Not a production issue, but degrades CI reliability and masks real failures. |
+| **Mitigation** | Fix in Sprint 4a polish session: mock `asyncio.sleep` to make the test deterministic. Validate by running 10x in a loop with no failures. |
+| **Owner** | Development |
+
+---
+
+### RSK-015 — Stale Data False Positives Outside Market Hours
+| Field | Value |
+|-------|-------|
+| **Severity** | Medium |
+| **Likelihood** | High |
+| **Description** | The stale data monitor in AlpacaDataService runs continuously but only expects data during market hours (9:30 AM – 4:00 PM EST). Outside those hours, lack of data is normal but will trigger stale data alerts and potentially pause strategies unnecessarily during pre-market startup. |
+| **Mitigation** | Add market hours check to `_stale_data_monitor()` using Clock + system.yaml `market_open`/`market_close` config. TODO left in code during Sprint 4a — fix in Sprint 4b or Sprint 5. |
+| **Owner** | Data Service |
 
 ## Review Schedule
 

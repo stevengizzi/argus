@@ -204,7 +204,7 @@ class Broker(ABC):
 ```
 
 **Implementations:**
-- `AlpacaBroker` — wraps `alpaca-trade-api` SDK
+- `AlpacaBroker` — wraps `alpaca-py` SDK (REST via TradingClient + WebSocket via TradingStream)
 - `IBKRBroker` — wraps `ib_insync` / `ib_api`
 - `SimulatedBroker` — fills orders at historical prices (for Replay Harness and Shadow System)
 
@@ -219,6 +219,21 @@ class BrokerRouter:
 ```
 
 **Phase 1 Scope:** `SimulatedBroker` and `AlpacaBroker` are implemented in Phase 1. `IBKRBroker` is deferred to Phase 3+ per DEC-031. A comprehensive test suite against the `Broker` ABC ensures any future adapter is drop-in compatible.
+
+### 3.3b Clock Protocol (`core/clock.py`)
+
+Injectable time provider for components where date boundaries matter for logic or testing.
+```python
+class Clock(Protocol):
+    def now(self) -> datetime:    # UTC, timezone-aware
+    def today(self) -> date:      # In configured timezone (default America/New_York)
+```
+
+**Implementations:**
+- `SystemClock` — production clock using real system time. Configurable timezone for `today()`.
+- `FixedClock` — test clock with `advance(**kwargs)` and `set(new_time)` for controllable time.
+
+**Injected into:** Risk Manager, BaseStrategy. Passed via constructor, defaults to `SystemClock` for backward compatibility.
 
 ### 3.4 Base Strategy (`strategies/base_strategy.py`)
 
@@ -844,7 +859,8 @@ config/
 |-----------|-----------|
 | Language | Python 3.11+ |
 | Async Runtime | asyncio |
-| Broker SDKs | alpaca-trade-api, ib_insync |
+| Broker SDKs | alpaca-py>=0.30, ib_insync |
+| Environment | python-dotenv>=1.0 |
 | Data Manipulation | pandas, numpy |
 | Technical Indicators | pandas-ta or ta-lib |
 | Backtesting (fast) | VectorBT |

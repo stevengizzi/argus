@@ -24,8 +24,8 @@ The original plan defined 11 implementation steps. During execution, steps were 
 | 5 | Risk Manager (account level) | S2 | As planned + extras. Three-level risk (strategy/cross-strategy/account), PDT tracking, circuit breakers, approve-with-modification (DEC-027), start-of-day equity (DEC-037). | ✅ Complete |
 | 6 | Base Strategy + ORB Strategy | S3 | Expanded. BaseStrategy ABC + ORB Breakout + Scanner ABC + StaticScanner (MD-1, added to plan). | ✅ Complete |
 | 7a | Data Service Abstraction | S3 | Split from original Step 7. DataService ABC + ReplayDataService (Parquet, 1m candles, indicator computation). Event Bus delivery only (DEC-029). | ✅ Complete |
-| 7b | Alpaca Data Service (live) | S4a | Split from original Step 7. AlpacaDataService (WebSocket streaming, live candle building, live indicators). Needed for paper trading. | Pending |
-| 8 | Alpaca Broker Adapter | S4a | As planned. AlpacaBroker (paper trading mode via alpaca-trade-api SDK). | Pending |
+| 7b | Alpaca Data Service (live) | S4a | Split from original Step 7. AlpacaDataService (WebSocket bars + trades via alpaca-py, indicator warm-up, stale data monitoring, reconnection with backoff). 20 tests. | ✅ Complete |
+| 8 | Alpaca Broker Adapter | S4a | AlpacaBroker (paper trading via alpaca-py SDK, REST + WebSocket, bracket orders with single T1 target, ULID↔UUID order ID mapping). Also: Clock protocol + injection (DEF-001 resolved), AlpacaConfig model. 14 + 19 + 2 tests. | ✅ Complete |
 | 9 | Order Manager + Position Management | S4b | As planned. Event-driven position management (DEC-030): tick subscription + 5s fallback poll + scheduled EOD flatten. | Pending |
 | — | AlpacaScanner | S4b | Added to plan. Implements Scanner ABC using Alpaca screener/snapshot API for real pre-market scanning. | Pending |
 | 10 | Health Checks + Basic Monitoring | S5 | As planned. Heartbeat, stale data detection, dead man's switch, integrity checks, system health table. | Pending |
@@ -80,16 +80,20 @@ The original plan defined 11 implementation steps. During execution, steps were 
 
 **After this sprint:** ORB can receive replayed historical data and produce correct SignalEvents that pass through the Risk Manager and reach the SimulatedBroker. No live broker connection. No active position management.
 
-### Sprint 4a — Live Connections (Steps 7b, 8)
-**Target tests:** ~180+
+### Sprint 4a — Live Connections (Steps 7b, 8) ✅ Complete
 
-**Scope:**
-- **AlpacaDataService:** WebSocket streaming from Alpaca, real-time candle building at 1m, live indicator computation (same indicators as ReplayDataService), stale data detection (30-second timeout). Implements the same DataService ABC so strategies don't know the difference.
-- **AlpacaBroker:** Implements Broker ABC using alpaca-trade-api SDK. Paper trading mode (paper-api.alpaca.markets). Place orders, bracket orders, cancel, modify, get positions/account, flatten_all. WebSocket subscription for order status updates (fills, cancels, rejects).
-- **Clock injection:** Replace `date.today()` calls with injectable Clock protocol for date-boundary testing (DEF-001).
-- **Integration:** AlpacaDataService → OrbBreakout → RiskManager → AlpacaBroker end-to-end with paper trading
+**Test count:** 277 total (276 passing, 1 flaky — `test_reconnection_with_exponential_backoff` timing issue, fix in progress)
+**Commits:** fe0af1a (Clock + AlpacaConfig), 1535cfa (AlpacaDataService), 422814d (AlpacaBroker), 58067c1 (integration tests), fa8ceaa (sprint docs)
 
-**After this sprint:** Real market data flows in, ORB detects breakouts on live data, and paper orders are placed on Alpaca. Bracket orders placed at the broker provide basic exit coverage (stop and targets submitted with the entry), but there's no dynamic position management — no stop-to-breakeven, no time stops, no EOD flatten beyond what the broker-side bracket provides.
+**Scope delivered:**
+- **Clock protocol** (`argus/core/clock.py`): SystemClock, FixedClock, Clock protocol. Injected into Risk Manager + BaseStrategy. Resolves DEF-001. 14 tests.
+- **AlpacaConfig** (`argus/core/config.py`): New config model for Alpaca connections. Updated `config/brokers.yaml`.
+- **Dependencies**: `alpaca-py>=0.30`, `python-dotenv>=1.0`. `.env.example` created. Switched from deprecated `alpaca-trade-api` to current `alpaca-py` (DEC-039/MD-4a-3).
+- **AlpacaDataService** (`argus/data/alpaca_data_service.py`): Implements DataService ABC via alpaca-py. Subscribes to both 1m bar stream (CandleEvents) and trade stream (TickEvents + price cache). Indicator warm-up from 60 historical candles. Stale data monitoring (30s timeout). WebSocket reconnection with exponential backoff + jitter. 20 tests.
+- **AlpacaBroker** (`argus/execution/alpaca_broker.py`): Implements Broker ABC via alpaca-py. REST (TradingClient) + WebSocket (TradingStream). Order ID mapping (ULID ↔ Alpaca UUID). Bracket orders with single T1 target (Alpaca limitation — Order Manager handles T1/T2 split in Sprint 4b). 19 tests.
+- **Integration tests**: 2 tests — signal→risk→broker pipeline, bracket order flow. All alpaca-py clients mocked.
+
+**After this sprint:** The system can receive live market data, detect ORB breakouts on real stocks, and submit paper orders to Alpaca. No dynamic position management yet — broker-side bracket orders provide basic exit coverage. Sprint 4a polish (fix flaky test, add missing broker tests) precedes Sprint 4b.
 
 ### Sprint 4b — Position Management + Live Scanning (Step 9)
 **Target tests:** ~220+
