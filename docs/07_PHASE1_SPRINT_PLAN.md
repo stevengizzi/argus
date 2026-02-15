@@ -26,8 +26,8 @@ The original plan defined 11 implementation steps. During execution, steps were 
 | 7a | Data Service Abstraction | S3 | Split from original Step 7. DataService ABC + ReplayDataService (Parquet, 1m candles, indicator computation). Event Bus delivery only (DEC-029). | ✅ Complete |
 | 7b | Alpaca Data Service (live) | S4a | Split from original Step 7. AlpacaDataService (WebSocket bars + trades via alpaca-py, indicator warm-up, stale data monitoring, reconnection with backoff). 20 tests. | ✅ Complete |
 | 8 | Alpaca Broker Adapter | S4a | AlpacaBroker (paper trading via alpaca-py SDK, REST + WebSocket, bracket orders with single T1 target, ULID↔UUID order ID mapping). Also: Clock protocol + injection (DEF-001 resolved), AlpacaConfig model. 14 + 19 + 2 tests. Polish: flaky test fix, ruff cleanup, missing broker tests. | ✅ Complete |
-| 9 | Order Manager + Position Management | S4b | As planned. Event-driven position management (DEC-030): tick subscription + 5s fallback poll + scheduled EOD flatten. | 🔜 Next |
-| — | AlpacaScanner | S4b | Added to plan. Implements Scanner ABC using Alpaca screener/snapshot API for real pre-market scanning. | 🔜 Next |
+| 9 | Order Manager + Position Management | S4b | As planned. Event-driven position management (DEC-030): tick subscription + 5s fallback poll + EOD flatten in poll loop. OrderManager + ManagedPosition + PendingManagedOrder. T1/T2 split with cancel-and-resubmit stop management (DEC-040). 25 tests. | ✅ Complete |
+| — | AlpacaScanner | S4b | Added to plan. Implements Scanner ABC using Alpaca StockHistoricalDataClient snapshots. Gap/price/volume filtering. 10 tests. | ✅ Complete |
 | 10 | Health Checks + Basic Monitoring | S5 | As planned. Heartbeat, stale data detection, dead man's switch, integrity checks, system health table. | Pending |
 | 11 | Integration Test Suite + First Paper Trading Run | S5 | As planned. Full system on Alpaca paper trading, minimum 3 trading days unattended. | Pending |
 
@@ -97,13 +97,17 @@ The original plan defined 11 implementation steps. During execution, steps were 
 
 **After this sprint:** The system can receive live market data, detect ORB breakouts on real stocks, and submit paper orders to Alpaca. No dynamic position management yet — broker-side bracket orders provide basic exit coverage.
 
-### Sprint 4b — Position Management + Live Scanning (Step 9) 🔜 NEXT
-**Target tests:** ~320+ (282 current + ~40 new)
+### Sprint 4b — Position Management + Live Scanning (Step 9) ✅ COMPLETE
+**Test count:** 320 total (282 + 38 new: 25 Order Manager + 10 AlpacaScanner + 3 integration)
+**Completion date:** February 15, 2026
+**Commits:** 099ac72 (feat: Order Manager + AlpacaScanner), 76c98ef (docs: sprint docs)
 
-**Scope:**
-- **Order Manager:** Converts approved signals to broker orders. Manages open positions via tick subscription (DEC-030). Stop-to-breakeven when T1 hits. Trailing stop support. Time stop enforcement. EOD flatten at 3:50 PM EST (scheduled task). Emergency flatten for circuit breakers. 5-second fallback poll for time-based exits in illiquid stocks.
-- **AlpacaScanner:** Implements Scanner ABC using Alpaca's screener/snapshot API for real pre-market gap screening. Replaces StaticScanner for live trading.
-- **Integration:** Full pipeline wired end-to-end: AlpacaDataService → AlpacaScanner → OrbBreakout → RiskManager → OrderManager → AlpacaBroker
+**Scope delivered:**
+- **Order Manager** (`argus/execution/order_manager.py`): Converts approved signals to broker orders. Manages open positions via tick subscription (DEC-030). T1/T2 split with separate limit orders. Stop-to-breakeven when T1 hits (cancel-and-resubmit, DEC-040). Time stop enforcement (max_position_duration_minutes). EOD flatten checked in fallback poll loop (DEC-041). Emergency flatten for circuit breakers. 5-second fallback poll for time-based exits. TradeLogger integration via direct call (DEC-042). 25 tests.
+- **AlpacaScanner** (`argus/data/alpaca_scanner.py`): Implements Scanner ABC using Alpaca's StockHistoricalDataClient.get_stock_snapshot() for batch pre-market gap screening. Filters by gap%, price range, volume. Sorts by gap descending, caps at max_symbols_returned. Static universe from config (DEC-043). 10 tests.
+- **Config models:** OrderManagerConfig, AlpacaScannerConfig in `argus/core/config.py`. YAML files: `config/order_manager.yaml`, updated `config/scanner.yaml`.
+- **Data models:** ManagedPosition, PendingManagedOrder dataclasses for position lifecycle tracking.
+- **Integration tests:** 3 tests — full pipeline happy path (T1→T2), stop out, EOD flatten.
 
 **After this sprint:** The complete ORB lifecycle works with real market data and paper orders. Positions are actively managed — stops move to breakeven, time stops fire, EOD flattens everything. The system can run during market hours autonomously. Not yet hardened for unattended operation.
 

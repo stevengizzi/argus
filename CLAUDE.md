@@ -10,7 +10,7 @@ Phase 1 sprint plan: @docs/07_PHASE1_SPRINT_PLAN.md
 
 ## Current State
 
-Phase 1 — Core Trading Engine with ORB strategy. Sprint 4a complete + polished (Live Connections — Clock injection + AlpacaDataService + AlpacaBroker, 282 tests, 0 flaky, ruff clean). Sprint 4b next (Order Manager + AlpacaScanner).
+Phase 1 — Core Trading Engine with ORB strategy. Sprint 4b complete (Order Manager + AlpacaScanner, 320 tests, 0 flaky, ruff clean). Sprint 5 next (Health monitoring, integration hardening, paper trading validation).
 
 Components implemented:
 - Event Bus, EventStore, core events
@@ -22,6 +22,8 @@ Components implemented:
 - AlpacaDataService — live WebSocket streaming via alpaca-py (bars + trades), indicator warm-up, stale data monitoring, reconnection with backoff
 - AlpacaBroker — paper/live trading via alpaca-py REST + WebSocket, bracket orders (single T1 target), order ID mapping (ULID ↔ Alpaca UUID)
 - OrbBreakoutStrategy (full implementation)
+- Order Manager — position lifecycle management, T1/T2 split, stop-to-breakeven, time stops, EOD flatten, emergency flatten
+- AlpacaScanner — live pre-market gap scanning via Alpaca snapshots
 - Dependencies: alpaca-py>=0.30, python-dotenv>=1.0 (NOT alpaca-trade-api — deprecated)
 
 ## Architecture

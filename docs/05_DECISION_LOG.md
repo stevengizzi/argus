@@ -443,5 +443,60 @@ Each entry follows this format:
 
 ---
 
+### DEC-040 | Order Manager Stop Management — Cancel and Resubmit
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-15 |
+| **Decision** | When T1 fills and stop needs to move to breakeven, cancel the old stop order and submit a new one. Do not use broker modify_order(). |
+| **Rationale** | modify_order on Alpaca replaces the entire order. If the replace fails mid-flight, position could briefly have no stop protection with no detection mechanism. Cancel-then-submit is explicit: failure to submit new stop is immediately detectable and triggers emergency flatten. Brief window between cancel and resubmit is acceptable because Order Manager also monitors ticks. |
+| **Alternatives Rejected** | Modify-in-place via broker.modify_order() — risk of silent failure leaving position unprotected. |
+| **Status** | Active |
+
+---
+
+### DEC-041 | EOD Flatten Scheduling — Fallback Poll
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-15 |
+| **Decision** | EOD flatten time check piggybacks on the 5-second fallback poll loop. No APScheduler dependency. |
+| **Rationale** | Fallback poll already runs every 5 seconds. Adding clock.now() >= eod_flatten_time check is trivial. A _flattened_today flag prevents re-triggering. APScheduler can be introduced in Sprint 5+ if needed. |
+| **Alternatives Rejected** | APScheduler — adds dependency for a single scheduled task. |
+| **Status** | Active |
+
+---
+
+### DEC-042 | TradeLogger Integration — Direct Call from Order Manager
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-15 |
+| **Decision** | Order Manager calls TradeLogger directly when a position fully closes. TradeLogger is an optional constructor dependency (None in tests). PositionClosedEvent is still published for other subscribers. |
+| **Rationale** | Order Manager has complete trade data at close time (entry price, exit price, shares, P&L, hold duration, exit reason). Direct call is simpler than event-driven persistence and avoids race conditions. |
+| **Alternatives Rejected** | Event-driven: publish PositionClosedEvent and let a listener handle persistence — adds indirection without benefit at this stage. |
+| **Status** | Active |
+
+---
+
+### DEC-043 | AlpacaScanner Universe — Static Config
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-15 |
+| **Decision** | Scanner universe is a fixed list of symbols in config/scanner.yaml. No dynamic fetching. |
+| **Rationale** | A curated list of 20-50 liquid stocks is sufficient for ORB. Dynamic universe adds complexity (API failures at startup, rate limits, mid-day changes) for no V1 benefit. |
+| **Alternatives Rejected** | Dynamic: fetch top N by volume from Alpaca assets endpoint — fragile at startup, rate limit risk. |
+| **Status** | Active |
+
+---
+
+### DEC-044 | Exit Rules Delivery — Prices from Signal, Time/Trail from Config
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-15 |
+| **Decision** | Order Manager extracts stop_price and target_prices from SignalEvent (via OrderApprovedEvent). Time-based rules (max_position_duration_minutes) and trailing stop settings come from OrderManagerConfig. All positions share the same time/trail config. |
+| **Rationale** | SignalEvent already carries stop_price and target_prices. Adding ExitRules to the frozen dataclass would require modifying the event model. Per-strategy exit rule customization is deferred to Phase 2+. |
+| **Alternatives Rejected** | Embed full ExitRules in SignalEvent — requires modifying frozen dataclass and all producers. Query strategy by ID — couples Order Manager to strategy instances. |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
 *New decisions are appended chronologically as the project progresses.*

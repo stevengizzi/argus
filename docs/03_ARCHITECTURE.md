@@ -390,41 +390,140 @@ class Orchestrator:
 
 Manages the lifecycle of every order from submission to fill/cancel. Position management is event-driven.
 
+**Constructor:**
 ```python
 class OrderManager:
-    async def submit_signal(self, approved_signal: OrderApprovedEvent) -> None:
-        """Convert approved signal to broker order(s). Submit via BrokerRouter."""
+    def __init__(
+        self,
+        event_bus: EventBus,
+        broker: Broker,
+        clock: Clock,
+        config: OrderManagerConfig,
+        trade_logger: TradeLogger | None = None,  # Optional, None in tests
+    ) -> None
+```
+
+**Internal State:**
+- `_managed_positions: dict[str, list[ManagedPosition]]` — Supports multiple positions per symbol
+- `_pending_orders: dict[str, PendingManagedOrder]` — Keyed by order_id, tracks order type and context
+
+**Event Subscriptions:** OrderApprovedEvent, OrderFilledEvent, OrderCancelledEvent, TickEvent, CircuitBreakerEvent
+
+**Events Published:** OrderSubmittedEvent, PositionOpenedEvent, PositionClosedEvent
+
+```python
+class OrderManager:
+    async def start(self) -> None:
+        """Start the Order Manager. Launches fallback poll task."""
+
+    async def stop(self) -> None:
+        """Stop the Order Manager. Cancel the poll task."""
+
+    async def on_approved(self, event: OrderApprovedEvent) -> None:
+        """Convert approved signal to broker order(s). Submit entry order."""
 
     async def on_fill(self, event: OrderFilledEvent) -> None:
-        """Handle partial and full fills. Update position tracking.
-        Subscribe to TickEvents for the filled symbol."""
+        """Handle fills by order type (entry, T1, stop, flatten).
+        Entry fill: create ManagedPosition, submit stop + T1 orders.
+        T1 fill: move stop to breakeven (cancel old, submit new).
+        Stop/flatten fill: close position, publish PositionClosedEvent."""
 
     async def on_tick(self, event: TickEvent) -> None:
-        """Primary position management trigger. Called on each tick for symbols
-        with open positions. Evaluates:
-        - Stop-to-breakeven (when T1 hits)
-        - Trailing stops (if configured)
-        - Price-based exit conditions
+        """Primary position management trigger. On each tick:
+        - Check T2 price reached → flatten remaining shares
+        - Trailing stop updates (if configured)
         """
 
-    async def fallback_poll(self) -> None:
-        """Runs every 5 seconds. Handles time-based exits that don't depend on ticks:
-        - Time stops (positions open longer than max duration)
-        - Inactivity detection for illiquid stocks
-        """
+    async def on_cancel(self, event: OrderCancelledEvent) -> None:
+        """Handle order cancellation from broker."""
+
+    async def on_circuit_breaker(self, event: CircuitBreakerEvent) -> None:
+        """Circuit breaker triggered. Emergency flatten all positions."""
 
     async def eod_flatten(self) -> None:
-        """Scheduled task at 3:50 PM EST (configurable). Closes all remaining
-        positions at market. This is a scheduled event, not part of the poll loop."""
+        """Close all positions at market. Called from poll loop when
+        clock.now() >= eod_flatten_time. Sets _flattened_today flag."""
 
     async def emergency_flatten(self) -> None:
-        """Close all positions at market. Used by circuit breakers and manual override."""
+        """Close all positions at market. Used by circuit breakers."""
 ```
 
 **Position Management Architecture:**
-- **Primary:** Event-driven via `TickEvent` subscription. When a position opens, the Order Manager subscribes to ticks for that symbol. On each tick, it evaluates all exit conditions for that position. When a position closes, it unsubscribes.
-- **Fallback:** 5-second polling loop for time-based exits. Catches positions in illiquid stocks where ticks may be infrequent, and ensures time stops fire even if the data feed stalls.
-- **EOD Flatten:** Scheduled task (APScheduler) at configurable time (default 3:50 PM EST). Independent of both the event-driven and polling paths.
+- **Primary:** Event-driven via `TickEvent` subscription. On each tick, evaluates T2 price exit conditions for open positions.
+- **Fallback:** 5-second polling loop handles time-based exits (time stops, EOD flatten). Checked via `clock.now()` against configured thresholds.
+- **EOD Flatten:** Checked in the fallback poll loop (not APScheduler per DEC-041). Default 3:50 PM ET, configurable via `eod_flatten_time` and `eod_flatten_timezone`.
+- **Stop Management:** Cancel-and-resubmit pattern (not modify-in-place) per DEC-040. When T1 fills, old stop is cancelled and new stop at breakeven is submitted.
+- **T1/T2 Split:** Entry uses market order, then separate limit orders for T1 target and stop. T2 exit is via tick monitoring + market flatten order.
+
+**Data Models:**
+```python
+@dataclass
+class ManagedPosition:
+    position_id: str
+    strategy_id: str
+    symbol: str
+    entry_price: float
+    entry_time: datetime
+    shares_total: int
+    shares_remaining: int
+    stop_price: float
+    t1_price: float
+    t2_price: float
+    t1_shares: int
+    t1_filled: bool = False
+    stop_order_id: str | None = None
+    t1_order_id: str | None = None
+    realized_pnl: float = 0.0
+
+@dataclass
+class PendingManagedOrder:
+    order_id: str
+    symbol: str
+    strategy_id: str
+    order_type: str  # "entry", "stop", "t1", "flatten"
+    signal: SignalEvent | None = None
+```
+
+### 3.7b AlpacaScanner (`data/alpaca_scanner.py`)
+
+Live pre-market scanner using Alpaca's snapshot API.
+
+**Constructor:**
+```python
+class AlpacaScanner(Scanner):
+    def __init__(
+        self,
+        config: AlpacaScannerConfig,
+        alpaca_config: AlpacaConfig,
+    ) -> None
+```
+
+**Interface (implements Scanner ABC):**
+```python
+class AlpacaScanner(Scanner):
+    async def start(self) -> None:
+        """Initialize StockHistoricalDataClient from alpaca-py."""
+
+    async def stop(self) -> None:
+        """Clean up client resources."""
+
+    async def scan(self, criteria_list: list[ScannerCriteria]) -> list[WatchlistItem]:
+        """Scan universe using Alpaca snapshots.
+        1. Merge criteria from all active strategies (widest ranges)
+        2. Fetch snapshots via get_stock_snapshot()
+        3. Filter by gap%, price range, volume
+        4. Sort by gap_pct descending
+        5. Return top max_symbols_returned as WatchlistItems
+        """
+```
+
+**Configuration (AlpacaScannerConfig):**
+- `universe_symbols: list[str]` — Static list from config (DEC-043)
+- `min_price`, `max_price` — Price range filter
+- `min_volume_yesterday` — Volume filter
+- `max_symbols_returned` — Cap on results
+
+**Data Source:** Uses `StockHistoricalDataClient.get_stock_snapshot()` for batch snapshot retrieval. Gap calculated as `(open_price - prev_close) / prev_close`.
 
 ### 3.8 Trade Logger (`analytics/trade_log.py`)
 
