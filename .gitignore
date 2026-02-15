@@ -62,3 +62,7 @@ logs/
 *.db
 *.sqlite
 *.sqlite3
+
+# Historical data (large Parquet files)
+data/historical/
+data/backtest_runs/

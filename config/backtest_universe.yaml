@@ -1,0 +1,41 @@
+# Backtest Universe — symbols for historical data download
+# These are high-liquidity US stocks that frequently appear in ORB scans.
+# Expand as needed. SPY is included for market regime context.
+
+symbols:
+  # Market reference
+  - SPY
+
+  # Large-cap tech / momentum
+  - AAPL
+  - MSFT
+  - NVDA
+  - TSLA
+  - META
+  - AMZN
+  - GOOG
+  - AMD
+  - NFLX
+
+  # High-ADV momentum / day trading favorites
+  - PLTR
+  - SOFI
+  - COIN
+  - MARA
+  - RIOT
+  - SQ
+  - SNAP
+  - UBER
+  - SHOP
+  - ROKU
+
+  # Additional liquid large-caps
+  - BA
+  - DIS
+  - JPM
+  - GS
+  - XOM
+  - INTC
+  - MU
+  - SMCI
+  - ARM
