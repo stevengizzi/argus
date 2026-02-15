@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 from datetime import time
 from typing import TYPE_CHECKING
 
+from argus.core.clock import Clock
 from argus.core.config import OrbBreakoutConfig
 from argus.core.events import CandleEvent, Side, SignalEvent, TickEvent
 from argus.models.strategy import (
@@ -75,14 +76,16 @@ class OrbBreakoutStrategy(BaseStrategy):
         self,
         config: OrbBreakoutConfig,
         data_service: DataService | None = None,
+        clock: Clock | None = None,
     ) -> None:
         """Initialize the ORB strategy.
 
         Args:
             config: OrbBreakoutConfig with strategy parameters.
             data_service: DataService for indicator queries (VWAP, ATR).
+            clock: Clock for time access. Defaults to SystemClock() if not provided.
         """
-        super().__init__(config)
+        super().__init__(config, clock=clock)
         self._orb_config = config
         self._data_service = data_service
 

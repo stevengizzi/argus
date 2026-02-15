@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from typing import TYPE_CHECKING
 
+from argus.core.clock import Clock, SystemClock
 from argus.core.config import RiskConfig
 from argus.core.event_bus import EventBus
 from argus.core.events import (
@@ -140,6 +141,7 @@ class RiskManager:
         config: Risk configuration.
         broker: Broker for account state queries.
         event_bus: EventBus for publishing circuit breaker events.
+        clock: Clock for time access. Defaults to SystemClock() if not provided.
     """
 
     def __init__(
@@ -147,15 +149,17 @@ class RiskManager:
         config: RiskConfig,
         broker: Broker,
         event_bus: EventBus,
+        clock: Clock | None = None,
     ) -> None:
         self._config = config
         self._broker = broker
         self._event_bus = event_bus
+        self._clock: Clock = clock if clock is not None else SystemClock()
 
         # Daily/weekly tracking (updated via PositionClosedEvent)
         self._daily_realized_pnl: float = 0.0
         self._weekly_realized_pnl: float = 0.0
-        self._current_week_start: date = self._get_monday(date.today())
+        self._current_week_start: date = self._get_monday(self._clock.today())
         self._trades_today: int = 0
 
         # Start-of-day equity for cash reserve calculations (DEC-037)
@@ -330,7 +334,7 @@ class RiskManager:
         # 7. PDT check
         if self._config.pdt.enabled:
             remaining = self._pdt_tracker.day_trades_remaining(
-                date.today(), account.equity
+                self._clock.today(), account.equity
             )
             if remaining <= 0:
                 logger.warning("Signal rejected: PDT limit reached")
@@ -460,7 +464,7 @@ class RiskManager:
         logger.info("Start-of-day equity snapshotted: $%.2f", self._start_of_day_equity)
 
         # Check for week rollover (Monday)
-        today = date.today()
+        today = self._clock.today()
         monday = self._get_monday(today)
         if monday != self._current_week_start:
             self._weekly_realized_pnl = 0.0
@@ -482,7 +486,7 @@ class RiskManager:
         Args:
             trade_logger: The TradeLogger instance for database queries.
         """
-        today = date.today()
+        today = self._clock.today()
         trades_today = await trade_logger.get_trades_by_date(today)
 
         self._daily_realized_pnl = sum(
@@ -543,7 +547,7 @@ class RiskManager:
             issues.append("Account equity is zero or negative")
 
         return IntegrityReport(
-            timestamp=datetime.now(),
+            timestamp=self._clock.now(),
             positions_checked=len(positions),
             issues=issues,
             passed=len(issues) == 0,

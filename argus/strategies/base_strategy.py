@@ -16,6 +16,7 @@ import logging
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
+from argus.core.clock import Clock, SystemClock
 from argus.core.config import StrategyConfig
 from argus.core.events import CandleEvent, SignalEvent, TickEvent
 from argus.models.strategy import (
@@ -41,13 +42,15 @@ class BaseStrategy(ABC):
     Subclasses must implement all abstract methods and properties.
     """
 
-    def __init__(self, config: StrategyConfig) -> None:
+    def __init__(self, config: StrategyConfig, clock: Clock | None = None) -> None:
         """Initialize strategy with validated configuration.
 
         Args:
             config: Strategy configuration loaded from YAML and validated by Pydantic.
+            clock: Clock for time access. Defaults to SystemClock() if not provided.
         """
         self._config = config
+        self._clock: Clock = clock if clock is not None else SystemClock()
         self._allocated_capital: float = 0.0
         self._is_active: bool = False
         self._daily_pnl: float = 0.0
@@ -206,9 +209,7 @@ class BaseStrategy(ABC):
         Args:
             trade_logger: TradeLogger instance for database queries.
         """
-        from datetime import date
-
-        today = date.today()
+        today = self._clock.today()
         trades_today = await trade_logger.get_trades_by_date(today)
 
         # Filter trades for this strategy

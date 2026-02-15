@@ -1,6 +1,19 @@
 primary: "alpaca"
 alpaca:
   enabled: true
-  paper_trading: true
-  base_url: "https://paper-api.alpaca.markets"
-  data_feed: "iex"
+  api_key_env: "ALPACA_API_KEY"  # Env var name (not the key itself!)
+  secret_key_env: "ALPACA_SECRET_KEY"  # Env var name (not the key itself!)
+  paper: true  # Paper trading mode
+  data_feed: "iex"  # "iex" (free) or "sip" (paid)
+
+  # WebSocket reconnection
+  ws_reconnect_base_seconds: 1.0
+  ws_reconnect_max_seconds: 30.0
+  ws_reconnect_max_failures_before_alert: 3
+
+  # Stale data
+  stale_data_timeout_seconds: 30.0
+
+  # Data streams
+  subscribe_bars: true  # 1m bar stream
+  subscribe_trades: true  # Individual trade stream

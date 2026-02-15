@@ -90,18 +90,33 @@ class RiskConfig(BaseModel):
     pdt: PDTConfig = PDTConfig()
 
 
-class BrokerConnectionConfig(BaseModel):
-    """Configuration for a single broker connection."""
+class AlpacaConfig(BaseModel):
+    """Configuration for Alpaca API connections."""
+
     enabled: bool = True
-    paper_trading: bool = True
-    base_url: str = ""
-    data_feed: str = "iex"  # Alpaca-specific: 'iex' (free) or 'sip' (paid)
+    api_key_env: str = "ALPACA_API_KEY"  # Env var name (not the key itself!)
+    secret_key_env: str = "ALPACA_SECRET_KEY"  # Env var name (not the key itself!)
+    paper: bool = True  # Paper trading mode
+    data_feed: str = "iex"  # "iex" (free) or "sip" (paid)
+
+    # WebSocket reconnection
+    ws_reconnect_base_seconds: float = 1.0
+    ws_reconnect_max_seconds: float = 30.0
+    ws_reconnect_max_failures_before_alert: int = 3
+
+    # Stale data
+    stale_data_timeout_seconds: float = 30.0
+
+    # Data streams
+    subscribe_bars: bool = True  # 1m bar stream
+    subscribe_trades: bool = True  # Individual trade stream
 
 
 class BrokerConfig(BaseModel):
     """Broker routing and connection configuration."""
+
     primary: str = "alpaca"
-    alpaca: BrokerConnectionConfig = BrokerConnectionConfig()
+    alpaca: AlpacaConfig = AlpacaConfig()
 
 
 class OrchestratorConfig(BaseModel):
