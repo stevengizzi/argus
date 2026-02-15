@@ -525,7 +525,69 @@ class AlpacaScanner(Scanner):
 
 **Data Source:** Uses `StockHistoricalDataClient.get_stock_snapshot()` for batch snapshot retrieval. Gap calculated as `(open_price - prev_close) / prev_close`.
 
-### 3.8 Trade Logger (`analytics/trade_log.py`)
+### 3.8 Health Monitor (`core/health.py`)
+
+Tracks system health, sends heartbeat pings, and dispatches critical alerts.
+
+**Constructor:**
+```python
+class HealthMonitor:
+    def __init__(
+        self,
+        event_bus: EventBus,
+        clock: Clock,
+        config: HealthConfig,
+        broker: Broker | None = None,       # For integrity checks
+        trade_logger: TradeLogger | None = None,  # For reconciliation
+    ) -> None
+```
+
+**Responsibilities:**
+- Component health registry (each component reports status via `update_component()`)
+- Periodic heartbeat HTTP POST to configured URL (default: Healthchecks.io)
+- Critical alert dispatch via webhook (Discord, Slack, or generic JSON)
+- Daily integrity check (verify all open positions have broker-side stop orders)
+- Weekly reconciliation (compare trade log with broker records)
+
+**Status Model:** STARTING → HEALTHY → DEGRADED → UNHEALTHY → STOPPED
+
+**Overall system status:** UNHEALTHY if any component is UNHEALTHY, DEGRADED if any DEGRADED, STARTING if any STARTING and none UNHEALTHY, HEALTHY otherwise.
+
+**Configuration (from `config/system.yaml`):**
+```yaml
+health:
+  heartbeat_interval_seconds: 60
+  heartbeat_url: ""           # Healthchecks.io or similar
+  alert_webhook_url: ""       # Discord webhook or similar
+  daily_check_enabled: true
+  weekly_reconciliation_enabled: true
+```
+
+### 3.9 System Entry Point (`main.py`)
+
+Wires all components together with a 10-phase startup sequence:
+
+1. Config + Clock + EventBus
+2. Database + TradeLogger
+3. Broker connection
+4. HealthMonitor
+5. RiskManager (with state reconstruction)
+6. AlpacaDataService
+7. AlpacaScanner (pre-market scan)
+8. OrbBreakoutStrategy (with mid-day reconstruction if applicable)
+9. OrderManager (with broker position reconstruction)
+10. Start data streaming
+
+Shutdown runs in reverse order. SIGINT/SIGTERM trigger graceful shutdown.
+
+**CLI:**
+```
+python -m argus.main                    # Default config
+python -m argus.main --config /path/to  # Custom config
+python -m argus.main --dry-run          # Connect but don't trade
+```
+
+### 3.10 Trade Logger (`analytics/trade_log.py`)
 
 Every trade is recorded with comprehensive metadata.
 

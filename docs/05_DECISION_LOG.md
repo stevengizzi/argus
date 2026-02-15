@@ -498,5 +498,16 @@ Each entry follows this format:
 
 ---
 
+### DEC-045 | Sprint 5 Micro-Decisions
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-16 |
+| **Decision** | Six implementation-level decisions for Sprint 5: (1) External monitoring via generic webhook with Healthchecks.io as default target (MD-5-1). (2) Critical alerts via webhook POST — Discord webhook for paper trading phase (MD-5-2). (3) Strategy state reconstruction on mid-day restart — fetch today's historical 1m bars from Alpaca REST, replay through strategy; if fetch fails, strategy sits out the day (MD-5-3). (4) Order Manager reconstruction — query broker for open positions and orders at startup, rebuild ManagedPosition objects, resume management (MD-5-4). (5) System health status stored in-memory only — ephemeral by nature, logged for post-hoc analysis (MD-5-5). (6) Procedural `main()` entry point — single `async def main()` with explicit component wiring, no DI container (MD-5-6). |
+| **Alternatives** | MD-5-1: Uptime Kuma (self-hosted), custom endpoint. MD-5-2: Logging only, console only. MD-5-3: Skip-day only, hybrid. MD-5-4: Emergency flatten orphaned positions, skip reconstruction. MD-5-5: SQLite table. MD-5-6: DI container. |
+| **Rationale** | All decisions optimize for simplicity and minimal new dependencies while meeting Sprint 5's operational requirements. Webhook pattern is reusable across heartbeat and alerts with zero infrastructure. Procedural main is readable, debuggable, and sufficient for a single-strategy single-user system. In-memory health avoids unnecessary persistence for inherently ephemeral data. Broker-based reconstruction enables the <5 minute recovery target. |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
 *New decisions are appended chronologically as the project progresses.*

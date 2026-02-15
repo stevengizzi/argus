@@ -10,9 +10,9 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 
 ## Current Project State
 
-**Phase:** Phase 1 in progress. Sprints 1–4a complete (282 tests passing). Sprint 4b next.
-**Current sprint:** Sprint 4a complete + polished (Live Connections — Clock injection + AlpacaDataService + AlpacaBroker). Sprint 4b next — Order Manager (position lifecycle management) + AlpacaScanner (live pre-market scanning).
-**Next milestone:** Active position management with dynamic stop/target adjustments on paper trades: OrderManager subscribes to ticks, moves stops to breakeven on T1 hit, enforces time stops, flattens at EOD. Full pipeline: AlpacaDataService → AlpacaScanner → OrbBreakout → RiskManager → OrderManager → AlpacaBroker.
+**Phase:** Phase 1 COMPLETE. All 5 sprints done (359 tests passing). Ready for paper trading validation.
+**Current sprint:** Sprint 5 complete (Health monitoring, system entry point, integration hardening, state reconstruction). Phase 1 finished.
+**Next milestone:** Paper trading validation — run system for 3+ trading days on Alpaca paper trading. Then Phase 2 (Backtesting Validation).
 
 ## Key Decisions Made (Do Not Relitigate)
 
@@ -52,6 +52,12 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 - **Clock injection:** Clock protocol with SystemClock + FixedClock. Scoped to Risk Manager + BaseStrategy. DEF-001 resolved. DEC-039/MD-4a-5.
 - **AlpacaDataService streams:** Subscribes to both 1m bar stream (CandleEvents) and trade stream (TickEvents + price cache). DEC-039/MD-4a-1.
 - **Bracket orders:** Single T1 take-profit (Alpaca limitation). Order Manager handles T1/T2 split in Sprint 4b. DEC-039/MD-4a-6.
+- **External monitoring:** Generic webhook heartbeat (Healthchecks.io default). DEC-045/MD-5-1.
+- **Critical alerts:** Webhook POST to Discord/Slack/generic endpoint. DEC-045/MD-5-2.
+- **Strategy reconstruction:** Fetch today's historical bars from Alpaca REST on mid-day restart. Skip-day fallback on failure. DEC-045/MD-5-3.
+- **Order Manager reconstruction:** Query broker for open positions/orders at startup, rebuild ManagedPosition objects. DEC-045/MD-5-4.
+- **Health storage:** In-memory only (ephemeral). DEC-045/MD-5-5.
+- **Entry point:** Procedural main() with explicit 10-phase startup sequence. DEC-045/MD-5-6.
 
 ## Architecture Summary
 

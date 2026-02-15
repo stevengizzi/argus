@@ -298,13 +298,14 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 
 ---
 
-### RSK-015 — Stale Data False Positives Outside Market Hours
+### RSK-015 — Stale Data False Positives Outside Market Hours ✅ CLOSED
 | Field | Value |
 |-------|-------|
 | **Severity** | Medium |
 | **Likelihood** | High |
 | **Description** | The stale data monitor in AlpacaDataService runs continuously but only expects data during market hours (9:30 AM – 4:00 PM EST). Outside those hours, lack of data is normal but will trigger stale data alerts and potentially pause strategies unnecessarily during pre-market startup. |
-| **Mitigation** | Add market hours check to `_stale_data_monitor()` using Clock + system.yaml `market_open`/`market_close` config. TODO left in code during Sprint 4a — fix in Sprint 4b or Sprint 5. |
+| **Mitigation** | Stale data monitor now checks market hours (9:30–16:00 ET) and weekdays before alerting. Implemented in Sprint 5 with market hours gating in `_stale_data_monitor()`. |
+| **Status** | **Closed** — February 16, 2026 |
 | **Owner** | Data Service |
 
 ## Review Schedule
