@@ -10,7 +10,13 @@ Phase 1 sprint plan: @docs/07_PHASE1_SPRINT_PLAN.md
 
 ## Current State
 
-Phase 1 — Core Trading Engine with ORB strategy. Sprint 5 complete (Health monitoring, system entry point, integration tests). 359 tests, 0 flaky, ruff clean. Ready for paper trading validation.
+Phase 1 COMPLETE (February 16, 2026). 362 tests, 0 flaky, ruff clean.
+
+**Dual-track work in progress:**
+- **Track 1 — Paper Trading Validation:** Running Argus on Alpaca paper trading. Validating stability, data integrity, risk compliance, trade lifecycle. See `docs/08_PAPER_TRADING_GUIDE.md`.
+- **Track 2 — Phase 2 (Backtesting Validation):** Building data acquisition, Replay Harness, VectorBT sweeps, walk-forward analysis, reporting. See `docs/09_PHASE2_SPRINT_PLAN.md`.
+
+Phase 2 sprints start at Sprint 6 (continuing from Phase 1's Sprint 5).
 
 Components implemented:
 - Event Bus, EventStore, core events
@@ -47,8 +53,8 @@ Currently building: Tier 1, Phase 1.
 - python-dotenv>=1.0
 - ib_insync (secondary broker, IBKR)
 - pandas, numpy, pandas-ta for data/indicators
-- VectorBT for parameter exploration
-- Backtrader for strategy validation
+- VectorBT for parameter exploration (Phase 2)
+- plotly for backtest report visualization (Phase 2)
 - APScheduler for scheduling
 - YAML for all configuration
 
@@ -56,26 +62,37 @@ Currently building: Tier 1, Phase 1.
 
 ```
 argus/
-├── core/           # Orchestrator, Risk Manager, Portfolio, Event Bus
+├── core/           # Orchestrator, Risk Manager, Portfolio, Event Bus, Health
 ├── strategies/     # BaseStrategy + individual strategy modules
 ├── data/           # Scanner, Data Service, Indicators
 ├── execution/      # Broker abstraction, Order Manager
 ├── analytics/      # Trade Logger, Strategy Reports, Portfolio Reports
-├── backtest/       # VectorBT helpers, Backtrader configs, Replay Harness
+├── backtest/       # Data fetcher, Replay Harness, VectorBT sweeps, walk-forward, metrics, reports
+├── db/             # DatabaseManager
 ├── notifications/  # Push, Email, Telegram/Discord handlers
 ├── accounting/     # Tax tracking, P&L, Wash Sale detection
 ├── api/            # FastAPI server (REST + WebSocket)
 config/             # YAML config files (strategies, risk, brokers, etc.)
+data/
+├── historical/     # Downloaded Parquet files for backtesting (gitignored)
+└── backtest_runs/  # Output databases per backtest run (gitignored)
 tests/              # Unit and integration tests
-docs/               # Project documentation (Bible, Architecture, etc.)
+docs/
+├── sprints/        # Sprint spec documents
+├── backtesting/    # DATA_INVENTORY, BACKTEST_RUN_LOG, PARAMETER_VALIDATION_REPORT
+└── *.md            # Bible, Architecture, Decision Log, Risk Register, etc.
 ```
 
 ## Commands
 
 - `python -m pytest tests/` — Run all tests
 - `python -m pytest tests/ -x` — Run tests, stop on first failure
-- `python -m argus.main` — Start the trading engine
-- `python -m argus.backtest.replay` — Run the replay harness
+- `python -m argus.main` — Start the trading engine (paper trading default)
+- `python -m argus.main --dry-run` — Connect and validate without trading
+- `python -m argus.backtest.data_fetcher --symbols TSLA,NVDA --start 2025-03-01 --end 2026-02-01` — Download historical data
+- `python -m argus.backtest.replay_harness --data-dir data/historical/1m --start 2025-06-01 --end 2025-12-31` — Run replay backtest
+- `python -m argus.backtest.vectorbt_orb --data-dir data/historical/1m --symbols TSLA,NVDA` — Run VectorBT parameter sweep
+- `python -m argus.backtest.report_generator --db data/backtest_runs/run_xxx.db --output reports/orb_validation.html` — Generate backtest report
 
 ## Code Style
 
@@ -120,11 +137,14 @@ docs/               # Project documentation (Bible, Architecture, etc.)
 IMPORTANT: When making changes during a coding session, evaluate whether any of the following documents need to be updated. If they do, either update them directly or flag them for the user to update.
 
 **Update docs/07_PHASE1_SPRINT_PLAN.md when:**
-- A sprint is confirmed complete (change status from 🔜/Pending to ✅ Complete)
+- Phase 1 is complete. This document is now historical reference. No further updates expected.
+
+**Update docs/09_PHASE2_SPRINT_PLAN.md when:**
+- A sprint is confirmed complete (change status from ⬜ PENDING to ✅ COMPLETE)
 - A sprint's scope changes (components added, removed, or moved between sprints)
 - A sprint's test count target is finalized or actual count is known
 - The build order or sprint boundaries change for any reason
-- Phase 1 is complete (mark all sprints ✅, add completion date to header)
+- Phase 2 is complete (mark all sprints ✅, add completion date to header)
 
 **Update docs/DECISION_LOG.md when:**
 - A new technical decision is made (library choice, pattern choice, design tradeoff)
@@ -169,8 +189,9 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 | ~~DEF-001~~ | ~~Inject clock/date provider into Risk Manager~~ | ~~Sprint 4 starts~~ | **DONE** Clock injection into Risk Manager + BaseStrategy is complete. |
 | ~~DEF-002~~ | ~~Cash reserve basis: switch to start-of-day equity~~ | ~~Sprint 3~~ | **DONE** — Implemented in Sprint 3 (DEC-037). |
 | ~~DEF-003~~ | ~~Replace datetime.utcnow() with datetime.now(UTC)~~ | ~~Sprint 3~~ | **DONE** — Fixed in events.py, trading.py, and tests. |
-| DEF-004 | Discuss cash reserve calc with CPA before live trading | Sprint 5 (pre-live) | Equity vs start-of-day capital vs high water mark has tax and risk implications worth a professional opinion. |
-| DEF-005 | Move webhook URLs to .env (security) | Post paper trading validation | Discord webhook URL and Healthchecks.io ping URL contain auth tokens. Move to `.env` file and read via `os.getenv()` in HealthMonitor, matching AlpacaBroker's existing pattern. Low risk while system.yaml has empty defaults committed to git. |
+| DEF-004 | Discuss cash reserve calc with CPA before live trading | Phase 3 start | Equity vs start-of-day capital vs high water mark has tax and risk implications worth a professional opinion. |
+| DEF-005 | Move webhook URLs to .env (security) | Post paper trading validation | Discord webhook URL and Healthchecks.io ping URL contain auth tokens. |
+| DEF-006 | Backtrader integration if Replay Harness too slow | Phase 2 Sprint 7 (if replay takes >1hr for 6mo data) | Backtrader dropped from Phase 2 (DEC-046). Reconsidered only if Replay Harness performance is insufficient for iterative parameter work. |
 ```
 
 This keeps it lightweight — no new document, no new sync burden. Items get removed (or moved to "Completed") as they're addressed. Both Claudes see the trigger column and know when to raise the flag.

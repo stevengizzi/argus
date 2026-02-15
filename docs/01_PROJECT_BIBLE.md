@@ -104,7 +104,7 @@ Every strategy follows a formalized lifecycle:
 
 1. **Concept** — Idea is defined and documented in a Strategy Spec Sheet
 2. **Exploration** — Parameter sweeps via VectorBT to identify promising configurations
-3. **Validation** — Full logic tested in Backtrader with confirmed parameters
+3. **Validation** — Full-fidelity testing via the Replay Harness, which feeds historical data through the actual production code (Event Bus, Strategy, Risk Manager, SimulatedBroker) using FixedClock injection. Walk-forward analysis validates that parameters generalize beyond the optimization period (DEC-047).
 4. **Ecosystem Replay** — Strategy added to the full system and tested via the Replay Harness against historical data alongside other active strategies
 5. **Paper Trading** — Live paper trading for minimum 20–30 trading days
 6. **Live (Minimum Size)** — Real money, minimum position sizes, for minimum 20 trading days

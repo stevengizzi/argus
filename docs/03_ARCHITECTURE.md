@@ -751,71 +751,111 @@ ws://host/ws/v1/live
 
 ## 5. Backtesting Toolkit
 
-### 5.1 VectorBT Layer (`backtest/vectorbt/`)
+Two-layer approach: VectorBT for fast parameter exploration, Replay Harness for full-fidelity validation. Backtrader was dropped (DEC-046) — the Replay Harness runs actual production code, making Backtrader's intermediate-fidelity approach redundant.
 
-Used for rapid parameter exploration. Strategies are expressed in simplified vectorized form.
+### 5.1 VectorBT Layer (`backtest/vectorbt_orb.py`)
 
+Used for rapid parameter exploration. Strategies are expressed in simplified vectorized form. Not a full simulation — an approximation for directional guidance on parameter sensitivity.
 ```python
 # Example: ORB parameter sweep
 import vectorbt as vbt
 
 # Load historical 1-minute data
-data = load_historical_data("2025-06-01", "2025-12-31", symbols=scanner_results)
+data = load_historical_data("2025-06-01", "2025-12-31", symbols=universe)
 
 # Define parameter ranges
 orb_windows = [5, 10, 15, 20, 30]
-stop_ratios = [0.3, 0.4, 0.5, 0.6]  # Stop at X of range from high
-target_ratios = [1.0, 1.5, 2.0, 2.5]
-volume_filters = [1.5, 2.0, 2.5, 3.0]
+target_r = [1.0, 1.5, 2.0, 2.5, 3.0]
+stop_buffers = [0.0, 0.1, 0.2, 0.5]
+max_hold = [15, 30, 45, 60, 90, 120]
+min_gaps = [1.0, 1.5, 2.0, 3.0, 5.0]
 
-# Run combinatorial sweep (all parameter combinations)
-results = sweep_orb_parameters(data, orb_windows, stop_ratios, target_ratios, volume_filters)
+# Run combinatorial sweep (3,000 combinations per symbol)
+results = sweep_orb_parameters(data, orb_windows, target_r, stop_buffers, max_hold, min_gaps)
 
 # Output: DataFrame of metrics per parameter combination
-# Sort by Sharpe ratio, profit factor, or custom scoring function
+# Visualize as 2D heatmaps to identify stable vs fragile regions
 ```
 
-### 5.2 Backtrader Layer (`backtest/backtrader/`)
+### 5.2 Replay Harness (`backtest/replay_harness.py`)
 
-Used for full-fidelity single-strategy validation at specific parameters.
-
-```python
-# Example: Validate ORB-15 with selected parameters
-import backtrader as bt
-
-cerebro = bt.Cerebro()
-cerebro.addstrategy(OrbBacktraderStrategy, 
-    orb_window=15, stop_ratio=0.5, target_1=1.0, target_2=2.0, volume_filter=2.0)
-cerebro.adddata(historical_minute_data)
-cerebro.broker.setcash(25000)
-cerebro.broker.setcommission(commission=0.0)
-results = cerebro.run()
-# Analyze: win rate, profit factor, max drawdown, equity curve
-```
-
-### 5.3 Replay Harness (`backtest/replay/`)
-
-Feeds historical data through the production system.
+The highest-fidelity backtest. Feeds historical data through the production system using real components with injected time.
 
 **Architecture:**
-```
-ReplayDataService (implements DataService interface)
-  → reads historical data from Parquet/CSV files
-  → emits CandleEvents and TickEvents at configurable speed
-  → supports: real-time speed, accelerated (e.g., 100x), or instant (as fast as possible)
-
-SimulatedBroker (implements Broker interface)
-  → fills orders at historical prices
-  → simulates slippage (configurable: none, fixed, random within range)
-  → simulates partial fills (configurable)
-  → enforces buying power and margin rules
-
+FixedClock (advancing with each bar)
+→ provides simulated time to all components
+ReplayDataService (from Sprint 3)
+→ reads historical data from Parquet files
+→ publishes CandleEvents on the Event Bus
+OrbBreakoutStrategy (production code, unmodified)
+→ receives CandleEvents, generates SignalEvents
+RiskManager (production code)
+→ evaluates signals with SimulatedBroker
+OrderManager (production code)
+→ manages positions using synthetic TickEvents from bar OHLC
+→ handles T1/T2 exits, stop-to-breakeven, time stops, EOD flatten
+SimulatedBroker (from Sprint 2)
+→ fills orders at historical prices with configurable slippage
+TradeLogger (production code)
+→ writes to a separate backtest SQLite database
 ReplayHarness (orchestration)
-  → initializes production system with ReplayDataService + SimulatedBroker
-  → runs the full stack: all strategies, Orchestrator, Risk Manager
-  → records all events and trades
-  → produces comparison report: expected vs actual behavior
-```
+→ initializes all components with FixedClock + SimulatedBroker
+→ runs one trading day at a time: reset state, feed bars, EOD flatten
+→ produces a complete trade log in the same schema as production
+
+**Key design decisions:**
+- Uses FixedClock injection (DEF-001) so all time-dependent logic sees simulated time
+- OrderManager receives synthetic TickEvents derived from bar OHLC data
+- Each backtest run writes to its own SQLite database (`data/backtest_runs/run_YYYYMMDD_HHMMSS.db`)
+- Same database schema as production — all existing SQL queries work on backtest output
+- Config overrides allow running the same harness with different parameters without modifying YAML files
+
+### 5.3 Walk-Forward Analysis (`backtest/walk_forward.py`)
+
+Mandatory overfitting defense (DEC-047). Splits historical data into rolling windows:
+
+1. **In-sample:** Optimize parameters using VectorBT (default: 4 months)
+2. **Out-of-sample:** Test those parameters using Replay Harness (default: 2 months)
+3. **Roll forward:** Slide the window and repeat (default: 2-month steps)
+
+Key metric: **Walk-Forward Efficiency** = OOS return / IS return. Values > 0.5 indicate robust parameters. Values < 0.3 indicate overfitting.
+
+### 5.4 Performance Metrics (`backtest/metrics.py`)
+
+Standard backtest metrics computed from trade logs:
+- Win rate, loss rate, profit factor
+- Average R-multiple, max consecutive wins/losses
+- Maximum drawdown (peak-to-trough equity decline)
+- Sharpe ratio (annualized from daily returns)
+- Recovery factor (net profit / max drawdown)
+- Performance by time-of-day and day-of-week
+
+### 5.5 Report Generator (`backtest/report_generator.py`)
+
+Generates self-contained HTML reports with:
+- Equity curve, monthly P&L table, R-multiple distribution
+- Parameter sensitivity heatmaps
+- Walk-forward in-sample vs out-of-sample comparison
+- Best/worst trade tables for manual spot-checking
+
+### 5.6 Directory Structure
+argus/backtest/
+├── init.py
+├── data_fetcher.py       # Historical data download from Alpaca
+├── replay_harness.py     # Production code replay engine
+├── vectorbt_orb.py       # VectorBT parameter sweeps
+├── metrics.py            # Performance metric calculations
+├── walk_forward.py       # Walk-forward analysis framework
+└── report_generator.py   # HTML report generation
+data/
+├── historical/           # Downloaded Parquet files (gitignored)
+│   ├── manifest.json     # Download tracking
+│   └── 1m/               # 1-minute bars per symbol
+└── backtest_runs/        # Output databases per run (gitignored)
+docs/backtesting/
+├── DATA_INVENTORY.md
+├── BACKTEST_RUN_LOG.md
+└── PARAMETER_VALIDATION_REPORT.md
 
 ---
 

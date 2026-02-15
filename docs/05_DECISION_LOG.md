@@ -509,5 +509,28 @@ Each entry follows this format:
 
 ---
 
+### DEC-046 | Backtrader Removal from Phase 2
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-16 |
+| **Decision** | Drop Backtrader from the backtesting toolkit. Phase 2 uses only VectorBT (fast parameter sweeps) and the Replay Harness (full-fidelity production code replay). |
+| **Alternatives** | Keep all three layers as originally planned (DEC-006/DEC-038 backtesting section). |
+| **Rationale** | The Replay Harness runs actual production code (Event Bus, Strategy, Risk Manager, Order Manager) with FixedClock injection — zero translation gap between backtest and live. VectorBT covers fast parameter exploration. Backtrader would require reimplementing strategy logic as a Backtrader Strategy subclass, creating a parallel implementation that could diverge from production. The engineering effort provides no unique value. If the Replay Harness proves too slow for iterative work, Backtrader can be reconsidered (tracked as DEF-006). |
+| **Supersedes** | Amends DEC-006 (Three-layer → Two-layer) |
+| **Status** | Active |
+
+---
+
+### DEC-047 | Walk-Forward Validation Requirement
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-16 |
+| **Decision** | All parameter optimization in Phase 2 must include walk-forward validation. Minimum 70/30 in-sample/out-of-sample split. Walk-forward efficiency (OOS return / IS return) must be reported for every parameter set. Parameters with walk-forward efficiency below 0.3 are flagged as overfit. |
+| **Alternatives** | Simple train/test split, no formal overfitting check, rely on paper trading as the out-of-sample test. |
+| **Rationale** | Overfitting is the single biggest risk in backtesting. A strategy that looks amazing on historical data but fails live is worse than useless — it creates false confidence. Walk-forward analysis is the industry standard defense. Making it non-negotiable prevents the temptation to skip it when results "look good enough." |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
 *New decisions are appended chronologically as the project progresses.*

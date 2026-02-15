@@ -308,6 +308,17 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 | **Status** | **Closed** — February 16, 2026 |
 | **Owner** | Data Service |
 
+---
+
+### RSK-016 — Backtest Overfitting Risk
+| Field | Value |
+|-------|-------|
+| **Severity** | High |
+| **Likelihood** | Medium |
+| **Description** | Parameter optimization against historical data may produce values that look excellent in backtest but fail in live trading. With 3,000+ parameter combinations being tested via VectorBT, the probability of finding a combination that works by chance on the specific historical period is high. |
+| **Mitigation** | Walk-forward validation is mandatory (DEC-047). Parameters must show walk-forward efficiency > 0.3. Final parameter selection prioritizes robustness (stable performance across a neighborhood of values) over maximum backtest return. Manual spot-checking of 20+ trades against charts provides a sanity check. |
+| **Owner** | Backtest |
+
 ## Review Schedule
 
 | Review Type | Frequency | Next Review |

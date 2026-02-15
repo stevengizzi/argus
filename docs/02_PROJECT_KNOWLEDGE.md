@@ -1,6 +1,6 @@
 # ARGUS — Project Knowledge (Claude Context)
 
-> *Paste this into Claude's project instructions. Keep updated as the project evolves. Last updated: Feb 15, 2026.*
+> *Paste this into Claude's project instructions. Keep updated as the project evolves. Last updated: Feb 16, 2026.*
 
 ---
 
@@ -10,9 +10,10 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 
 ## Current Project State
 
-**Phase:** Phase 1 COMPLETE. All 5 sprints done (359 tests passing). Ready for paper trading validation.
-**Current sprint:** Sprint 5 complete (Health monitoring, system entry point, integration hardening, state reconstruction). Phase 1 finished.
-**Next milestone:** Paper trading validation — run system for 3+ trading days on Alpaca paper trading. Then Phase 2 (Backtesting Validation).
+**Phase:** Phase 1 COMPLETE (362 tests, February 16, 2026). Dual-track work in progress.
+**Track 1 — Paper Trading Validation:** Running Argus on Alpaca paper trading for 3+ trading days. Validating stability, data integrity, risk compliance, and trade lifecycle correctness. See `08_PAPER_TRADING_GUIDE.md`.
+**Track 2 — Phase 2 Build (Backtesting Validation):** Building Replay Harness, VectorBT parameter sweeps, walk-forward analysis, and reporting tooling. Runs in parallel with paper validation. See `09_PHASE2_SPRINT_PLAN.md`.
+**Next milestone:** Complete paper validation (3+ clean trading days) AND Phase 2 Parameter Validation Report. Then Phase 3 (Live Validation).
 
 ## Key Decisions Made (Do Not Relitigate)
 
@@ -20,7 +21,8 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 - **Language:** Python 3.11+
 - **Brokerages:** Broker-agnostic abstraction layer. Alpaca (primary, free, paper+live) and Interactive Brokers (production scaling). Both implemented from day one.
 - **Data:** Alpaca's free market data API for real-time and historical. Data Service abstraction for future swap to Polygon.io or IBKR data.
-- **Backtesting:** Three-layer toolkit — VectorBT (fast parameter sweeps), Backtrader (full logic validation), custom Replay Harness (ecosystem-level testing using production code).
+- **Backtesting:** Two-layer toolkit — VectorBT (fast parameter sweeps) and custom Replay Harness (ecosystem-level testing using production code). Backtrader dropped (DEC-046) — Replay Harness provides higher fidelity by running actual production code, and VectorBT covers fast parameter exploration.
+- **Walk-forward validation:** Mandatory for all parameter optimization. 70/30 in-sample/out-of-sample split minimum. Non-negotiable overfitting defense (DEC-047).
 - **UI Platform:** Tauri desktop app + mobile-responsive web app. Single React codebase shared between both.
 - **Orchestrator V1:** Rules-based. Designed for AI enhancement in V2+.
 - **Claude's role:** Co-captain with full action capability, gated by user approval. Can analyze, recommend, propose changes, generate reports, implement code (via Claude Code). Never bypasses approval system.
@@ -58,6 +60,8 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 - **Order Manager reconstruction:** Query broker for open positions/orders at startup, rebuild ManagedPosition objects. DEC-045/MD-5-4.
 - **Health storage:** In-memory only (ephemeral). DEC-045/MD-5-5.
 - **Entry point:** Procedural main() with explicit 10-phase startup sequence. DEC-045/MD-5-6.
+- **Backtesting layers (revised):** Two layers — VectorBT (parameter sweeps) + Replay Harness (production code replay). Backtrader dropped. DEC-046.
+- **Walk-forward validation:** Mandatory for all parameter optimization. 70/30 IS/OOS split. Walk-forward efficiency > 0.3 required. DEC-047.
 
 ## Architecture Summary
 
@@ -85,7 +89,7 @@ Key components:
 
 ## Strategy Incubator Pipeline (10 Stages)
 
-Concept → Exploration (VectorBT) → Validation (Backtrader) → Ecosystem Replay → Paper Trading (20-30 days) → Live Minimum Size (20 days) → Live Full Size → Active Monitoring → Suspended → Retired
+Concept → Exploration (VectorBT) → Validation (Replay Harness + Walk-Forward) → Ecosystem Replay → Paper Trading (20-30 days) → Live Minimum Size (20 days) → Live Full Size → Active Monitoring → Suspended → Retired
 
 ## Risk Limits (Defaults, Configurable)
 
@@ -138,19 +142,20 @@ argus/
 
 ## Build Phases
 
-1. **Core Engine + ORB Strategy** (Weeks 1–4): Base interfaces, ORB module, Risk Manager (account level), Alpaca broker adapter, Trade Logger, basic monitoring
-   - Sprint 1 COMPLETE: Config system, Event Bus, data models, database (SQLite + aiosqlite), Trade Logger
-   - Sprint 2 IN PROGRESS: Broker Abstraction + SimulatedBroker + Risk Manager (account level)
-   - Sprint 3 PENDING: BaseStrategy + ORB strategy + Data Service
-   - Sprint 4 PENDING: Alpaca Broker adapter + Order Manager
-   - Sprint 5 PENDING: Health monitoring + Integration testing
-2. **Backtesting Validation** (Weeks 3–6): VectorBT parameter sweeps, Backtrader validation, Replay Harness build
-3. **Live Validation** (Weeks 5–10): ORB live at minimum size, compare to backtest
-4. **Orchestrator + Second Strategy** (Weeks 8–12): Orchestrator framework, ORB Scalp, cross-strategy risk management
-5. **Command Center MVP** (Weeks 10–16): Tauri app, real-time dashboard, basic controls
-6. **AI Layer** (Weeks 14–20): Claude API integration, approval workflow, report generation
-7. **Expand Strategies** (Ongoing): Add strategies one at a time through Incubator Pipeline
-8. **Multi-Asset Expansion** (Future): Crypto via Alpaca, then Forex, then Futures
+1. **Core Engine + ORB Strategy** ✅ COMPLETE (Feb 14–16, 2026, 359 tests):
+   - Sprint 1: Config system, Event Bus, data models, database, Trade Logger (52 tests)
+   - Sprint 2: Broker Abstraction, SimulatedBroker, Risk Manager (112 tests)
+   - Sprint 3: BaseStrategy, ORB Breakout, ReplayDataService, Scanner ABC (222 tests)
+   - Sprint 4a: AlpacaDataService, AlpacaBroker, Clock injection (282 tests)
+   - Sprint 4b: Order Manager, AlpacaScanner (320 tests)
+   - Sprint 5: HealthMonitor, system entry point, state reconstruction, structured logging (359 tests)
+2. **Backtesting Validation** (IN PROGRESS): Historical data acquisition, Replay Harness, VectorBT parameter sweeps, walk-forward analysis, Parameter Validation Report. Backtrader dropped (DEC-046). See `09_PHASE2_SPRINT_PLAN.md`.
+3. **Live Validation**: ORB live at minimum size, compare to backtest expectations. Calendar-bound (20+ trading days).
+4. **Orchestrator + Second Strategy**: Orchestrator framework, ORB Scalp, cross-strategy risk management.
+5. **Command Center MVP**: Tauri app, real-time dashboard, basic controls.
+6. **AI Layer**: Claude API integration, approval workflow, report generation.
+7. **Expand Strategies** (Ongoing): Add strategies one at a time through Incubator Pipeline.
+8. **Multi-Asset Expansion** (Future): Crypto via Alpaca, then Forex, then Futures.
 
 ## Reference Documents
 
@@ -160,7 +165,9 @@ argus/
 - `04_STRATEGY_TEMPLATE.md` — Standard template for strategy documentation
 - `05_DECISION_LOG.md` — Record of all key decisions with rationale
 - `06_RISK_REGISTER.md` — Assumptions and risks being tracked
-- `07_PHASE1_SPRINT_PLAN.md` — Canonical Phase 1 build order with sprint status tracking. **Both Claude instances must update this when sprints complete or scope changes.**
+- `07_PHASE1_SPRINT_PLAN.md` — Phase 1 build order (COMPLETE). Historical reference.
+- `08_PAPER_TRADING_GUIDE.md` — Step-by-step guide for Alpaca paper trading validation.
+- `09_PHASE2_SPRINT_PLAN.md` — Canonical Phase 2 build order with sprint status tracking. **Both Claude instances must update this when sprints complete or scope changes.**
 
 ## Communication Style Notes
 
@@ -188,6 +195,7 @@ Output a **Docs Sync Checklist** at the end of the response. Format:
 - [ ] 05_DECISION_LOG.md: [new entries needed — list them]
 - [ ] 06_RISK_REGISTER.md: [new entries needed, or "no changes needed"]
 - [ ] 07_PHASE1_SPRINT_PLAN.md: [status updates needed, or "no changes needed"]
+- [ ] 09_PHASE2_SPRINT_PLAN.md: [status updates needed, or "no changes needed"]
 - [ ] CLAUDE.md (repo root): [what to update, or "no changes needed"]
 ```
 

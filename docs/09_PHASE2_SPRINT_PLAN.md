@@ -1,0 +1,375 @@
+# ARGUS — Phase 2 Sprint Plan (Backtesting Validation)
+
+> *Version 1.0 | February 16, 2026*
+> *This is the canonical plan for Phase 2 (Backtesting Validation). It follows the same conventions as `07_PHASE1_SPRINT_PLAN.md`. If reality diverges from this plan, update the plan — don't operate from memory.*
+
+---
+
+## Phase 2 Goal
+
+Validate the ORB Breakout strategy against historical data. Confirm that the strategy logic implemented in Phase 1 produces sensible results on past market data before risking real capital. Deliver three capabilities:
+
+1. **Replay Harness:** Feed historical Parquet data through the production Event Bus, Strategy, Risk Manager, and (simulated) Order Manager. The most trustworthy backtest because it runs your actual code.
+2. **VectorBT Parameter Sweeps:** Fast vectorized exploration of parameter sensitivity (opening range duration, confirmation thresholds, profit targets, stop placement). Not a full simulation — an approximation for directional guidance.
+3. **Analysis & Reporting Tooling:** Scripts and notebooks to visualize backtest results, compute performance metrics, detect overfitting risk, and produce a formal parameter validation report.
+
+**Exit criteria for Phase 2:**
+- Replay Harness produces a trade log for 6+ months of historical data that matches what the strategy *should* have done (verified by manual spot-check of 20+ trades against charts)
+- VectorBT parameter sweeps identify the sensitivity of key parameters (which matter most, which are stable)
+- Walk-forward analysis shows the strategy doesn't catastrophically degrade on out-of-sample data
+- A written Parameter Validation Report documents findings and recommended parameter values for Phase 3 live trading
+
+**Non-goals:**
+- Achieving a specific win rate or profit factor (we're validating, not optimizing for a number)
+- Backtrader integration (dropped — see rationale below)
+- Live trading or real money decisions
+
+---
+
+## Architectural Decisions for Phase 2
+
+### Why No Backtrader
+
+The original plan called for three backtesting layers: VectorBT, Backtrader, and the Replay Harness. Backtrader has been dropped because:
+
+1. The Replay Harness runs your *actual production code* — same Event Bus, same OrbBreakout strategy, same Risk Manager. There's zero translation gap. Backtrader would require reimplementing the strategy as a Backtrader Strategy subclass, creating a parallel implementation that could diverge from production.
+2. VectorBT covers the "fast parameter exploration" use case that Backtrader partially served.
+3. The engineering effort for Backtrader integration (adapter layer, data feed translation, result extraction) provides no unique value that the Replay Harness + VectorBT combination doesn't cover.
+
+If the Replay Harness proves too slow for iterative parameter work (unlikely for 6–12 months of 1-minute data on a single strategy), we'll reassess. Tracked as a contingency, not a planned sprint.
+
+### Data Strategy
+
+Historical 1-minute bar data for US equities is required. Sources:
+
+- **Alpaca Historical Data API** (free tier with account): Provides 1-minute bars. The free plan has rate limits but is sufficient for batch downloads. This is the primary source.
+- **Polygon.io** (fallback): If Alpaca's free tier depth or rate limits are insufficient, Polygon.io offers deep historical data. The basic plan ($29/month, pay for one month) provides 5+ years of 1-minute data. Decision deferred to Sprint 1 — try Alpaca first.
+
+Data is stored as Parquet files (DEC-038), one file per symbol per date range. The ReplayDataService from Sprint 3 already reads Parquet.
+
+### Overfitting Defense: Walk-Forward Analysis
+
+This is non-negotiable. Every parameter optimization must use walk-forward validation:
+
+1. **In-sample period:** Train/optimize parameters on months 1–N.
+2. **Out-of-sample period:** Test those parameters on months N+1 to N+M (data the optimizer never saw).
+3. **Roll forward:** Slide the window and repeat.
+
+If performance degrades sharply on out-of-sample data, the parameters are overfit. We report this honestly rather than hiding it.
+
+Minimum split: 70% in-sample / 30% out-of-sample. For 12 months of data, that's 8 months optimize, 4 months validate.
+
+### Directory Structure
+
+```
+argus/
+├── backtest/
+│   ├── __init__.py
+│   ├── data_fetcher.py       # Historical data download from Alpaca/Polygon
+│   ├── replay_harness.py     # Feeds Parquet through production pipeline
+│   ├── vectorbt_orb.py       # VectorBT ORB parameter sweeps
+│   ├── metrics.py            # Performance metric calculations
+│   ├── walk_forward.py       # Walk-forward analysis framework
+│   └── report_generator.py   # Generate HTML/PDF validation reports
+├── data/
+│   └── historical/           # Downloaded Parquet files (gitignored)
+│       ├── manifest.json     # Tracks what's been downloaded
+│       └── 1m/               # 1-minute bars
+│           ├── AAPL_2025.parquet
+│           └── ...
+├── docs/
+│   └── backtesting/
+│       ├── DATA_INVENTORY.md     # What data we have, source, date ranges
+│       ├── BACKTEST_RUN_LOG.md   # Log of every backtest run with parameters and results
+│       └── PARAMETER_VALIDATION_REPORT.md  # Final findings (Phase 2 deliverable)
+└── tests/
+    └── test_backtest/
+        ├── test_data_fetcher.py
+        ├── test_replay_harness.py
+        ├── test_vectorbt_orb.py
+        ├── test_metrics.py
+        └── test_walk_forward.py
+```
+
+---
+
+## Sprint Overview
+
+| Sprint | Scope | Estimated Duration | Dependencies |
+|--------|-------|--------------------|--------------|
+| 6 | Historical Data Acquisition | 1 day | Alpaca account (already have) |
+| 7 | Replay Harness | 1–2 days | Sprint 6 data |
+| 8 | VectorBT Parameter Sweeps | 1–2 days | Sprint 6 data |
+| 9 | Walk-Forward + Analysis Tooling | 1–2 days | Sprints 7 and 8 |
+| 10 | Parameter Validation Report | 1 day (analysis-mode, not build-mode) | Sprints 7, 8, 9 |
+
+**Total estimated build time:** 5–8 days.
+**Total calendar time:** Runs in parallel with paper trading validation, so 1–2 weeks wall clock.
+
+Sprint numbers continue from Phase 1 (which ended at Sprint 5) to maintain a single sequence.
+
+---
+
+## Sprint Details
+
+### Sprint 6 — Historical Data Acquisition ⬜ PENDING
+**Estimated tests:** ~15–20
+
+**Goal:** Download and store 6–12 months of 1-minute bar data for a universe of liquid US stocks. Build the tooling to make future downloads easy and track what you have.
+
+**Scope:**
+
+- **DataFetcher** (`argus/backtest/data_fetcher.py`):
+  - Async download of 1-minute bars from Alpaca's `StockHistoricalDataClient.get_stock_bars()`
+  - Rate limit handling (sleep/retry on 429 responses)
+  - Saves as Parquet files, one per symbol per month (or per quarter — decide based on file size)
+  - Manifest file (`data/historical/manifest.json`) tracking: symbol, date range downloaded, source, download timestamp, row count
+  - Resume capability: if a download is interrupted, pick up where it left off based on manifest
+  - CLI interface: `python -m argus.backtest.data_fetcher --symbols TSLA,NVDA,AAPL --start 2025-03-01 --end 2026-02-01`
+
+- **Symbol Universe:**
+  - Start with 20–30 high-liquidity stocks that frequently appear in ORB scans: large-cap tech, popular momentum names, high-ADV stocks.
+  - Include SPY (needed for market regime context and VWAP reference).
+  - Store the list in a config file (`config/backtest_universe.yaml`) so it's easy to expand later.
+  - This is NOT the scanner universe from `config/scanner.yaml` — that's for live scanning. This is a curated historical dataset.
+
+- **Data Validation:**
+  - After download, verify: no missing trading days, no zero-volume bars during market hours, timestamps are in correct timezone, OHLC data is internally consistent (high >= open, high >= close, low <= open, low <= close).
+  - Log any data quality issues to a validation report.
+
+- **Data Inventory Document** (`docs/backtesting/DATA_INVENTORY.md`):
+  - List of all symbols downloaded with date ranges
+  - Data source and API tier used
+  - Any data quality issues found
+  - Total disk usage
+
+**Micro-decisions to make before implementation:**
+- MD-6-1: Parquet file granularity — one file per symbol per month? Per quarter? Per year? (Tradeoff: smaller files = easier partial downloads, larger files = fewer file handles during replay)
+- MD-6-2: Alpaca free tier rate limits — how many bars can we fetch per minute? Do we need to batch requests overnight?
+- MD-6-3: Do we need adjusted (split-adjusted) prices? Alpaca provides both raw and adjusted. Always use adjusted for backtesting.
+- MD-6-4: Time zone storage — store bars in UTC or ET? (Recommend ET since all strategy logic is ET-based, but this needs to match what ReplayDataService expects.)
+
+**After this sprint:** You have a `data/historical/` directory full of Parquet files covering 6–12 months of 1-minute data for ~20–30 stocks, with a manifest tracking everything and a validation report confirming data quality.
+
+---
+
+### Sprint 7 — Replay Harness ⬜ PENDING
+**Estimated tests:** ~20–25
+
+**Goal:** Build the Replay Harness that feeds historical Parquet data through the production trading pipeline. This is the highest-fidelity backtest — it runs your actual code with simulated time.
+
+**Scope:**
+
+- **ReplayHarness** (`argus/backtest/replay_harness.py`):
+  - Orchestrates a complete backtest run using production components:
+    - EventBus (real)
+    - FixedClock (injected, advancing with each bar)
+    - ReplayDataService (already built in Sprint 3 — reads Parquet, publishes CandleEvents)
+    - OrbBreakoutStrategy (real production code)
+    - RiskManager (real, with SimulatedBroker)
+    - SimulatedBroker (real, from Sprint 2)
+    - OrderManager (real production code — but may need modifications, see below)
+    - TradeLogger (real, writing to a separate backtest database)
+  - **Clock advancing:** The FixedClock advances with each bar timestamp. All components that use `clock.now()` see the simulated time. This is why we invested in clock injection.
+  - **Daily lifecycle:** For each trading day in the data:
+    1. Reset strategy state (`reset_daily_state()`)
+    2. Reset Risk Manager daily state
+    3. Feed the day's bars through the pipeline in order
+    4. Force EOD flatten at 3:50 PM ET (simulated)
+    5. Log daily summary
+  - **Scanner simulation:** Since we can't run the pre-market scanner against historical data (we don't have pre-market data in our Parquet files), the harness either:
+    - (a) Uses a pre-computed watchlist per day (derived from gap data if available), OR
+    - (b) Feeds ALL symbols in the universe and lets the strategy decide which ones to watch based on early price action.
+    - Decision: MD-7-1.
+  - **Output:** A separate SQLite database per backtest run (`data/backtest_runs/run_YYYYMMDD_HHMMSS.db`) with the same schema as the production database. This means all existing SQL queries for analyzing trades work on backtest output.
+  - **Configuration:** Takes a config override dict so you can run the same harness with different parameters without modifying YAML files.
+  - **CLI:** `python -m argus.backtest.replay_harness --data-dir data/historical/1m --start 2025-06-01 --end 2025-12-31 --config-override '{"orb_breakout": {"opening_range_minutes": 15}}'`
+
+- **Order Manager Adaptation:**
+  - The production Order Manager is tick-driven (subscribes to TickEvents). In replay mode, we only have 1-minute bars, not tick data.
+  - Two options:
+    - (a) Synthesize TickEvents from each bar's OHLC (simulate intra-bar price path: open → high → low → close, or open → low → high → close depending on close vs open direction). This lets the Order Manager work unmodified.
+    - (b) Create a simplified replay-mode Order Manager that evaluates exits on each bar close using bar high/low to determine if stops or targets were hit.
+  - Decision: MD-7-2. Leaning toward (a) — synthetic ticks from bars — because it tests the actual Order Manager code.
+
+- **Metrics Calculation** (`argus/backtest/metrics.py`):
+  - Compute standard backtest metrics from the trade log:
+    - Total trades, win rate, loss rate
+    - Profit factor (gross wins / gross losses)
+    - Average R-multiple per trade
+    - Maximum drawdown (peak-to-trough equity decline)
+    - Sharpe ratio (annualized, using daily returns)
+    - Average hold duration
+    - Largest win, largest loss
+    - Consecutive wins/losses (max streak)
+    - Profit by time of day (are ORB trades better at 9:45 vs 10:30?)
+    - Profit by day of week
+    - Recovery factor (net profit / max drawdown)
+
+**Micro-decisions to make before implementation:**
+- MD-7-1: Scanner simulation approach — pre-computed watchlist or feed all symbols?
+- MD-7-2: Order Manager in replay — synthetic ticks from bars or simplified bar-close evaluation?
+- MD-7-3: How to handle the 15-minute opening range in replay — does the harness need to "hold" bars 1–15 for the strategy to form the OR, then continue? (Yes — this should work naturally if the strategy's `on_candle` is called with bars in timestamp order, which ReplayDataService already does.)
+- MD-7-4: Slippage model for SimulatedBroker in backtest — use a fixed slippage (e.g., 1 cent per share)? Percentage-based? Volume-dependent? Keep it simple for V1.
+- MD-7-5: Backtest database location and naming convention.
+
+**After this sprint:** You can run `python -m argus.backtest.replay_harness` and get a complete trade log for months of historical data, computed by your actual production strategy code. You can query the output database with SQL to analyze every trade.
+
+---
+
+### Sprint 8 — VectorBT Parameter Sweeps ⬜ PENDING
+**Estimated tests:** ~15–20
+
+**Goal:** Build fast parameter exploration tooling using VectorBT's vectorized operations. This is an approximation — it won't match the Replay Harness exactly, but it can test thousands of parameter combinations in minutes instead of hours.
+
+**Scope:**
+
+- **VectorBT ORB Implementation** (`argus/backtest/vectorbt_orb.py`):
+  - Reimplement the ORB logic in a vectorized form suitable for VectorBT:
+    - Opening range calculation (rolling high/low over configurable window)
+    - Breakout detection (close > OR high)
+    - Simplified entry/exit logic (market order at breakout bar close, fixed stop at OR low, fixed target at entry + N * R)
+  - This is intentionally simplified compared to production. No VWAP confirmation, no volume filter, no multi-target exits. The goal is parameter sensitivity, not exact replication.
+  - **Parameters to sweep:**
+    - `opening_range_minutes`: [5, 10, 15, 20, 30]
+    - `profit_target_r`: [1.0, 1.5, 2.0, 2.5, 3.0]
+    - `stop_buffer_pct`: [0.0, 0.1, 0.2, 0.5] (additional buffer below OR low)
+    - `max_hold_minutes`: [15, 30, 45, 60, 90, 120]
+    - `min_gap_pct`: [1.0, 1.5, 2.0, 3.0, 5.0] (pre-filter)
+  - Total combinations: 5 × 5 × 4 × 6 × 5 = 3,000 per symbol. VectorBT handles this in seconds.
+  - Output: DataFrame with parameter combinations and their performance metrics (total return, Sharpe, max drawdown, win rate, trade count).
+
+- **Heatmap & Visualization:**
+  - Generate 2D heatmaps showing how performance varies across parameter pairs (e.g., opening_range_minutes vs profit_target_r)
+  - Identify "stable regions" where performance is good across a neighborhood of parameters (robust) vs "spike regions" where one specific combination looks amazing but neighbors are bad (overfit).
+  - Save plots as PNG to `data/backtest_runs/sweeps/`.
+
+- **CLI:** `python -m argus.backtest.vectorbt_orb --data-dir data/historical/1m --symbols TSLA,NVDA,AAPL --start 2025-06-01 --end 2025-12-31`
+
+**Micro-decisions to make before implementation:**
+- MD-8-1: VectorBT version and installation. VectorBT Pro vs open-source? (Open-source is sufficient for our needs.)
+- MD-8-2: How to model the opening range gap scan in VectorBT — use previous day's close vs current day's open to compute gap, filter by min_gap_pct, then only run ORB logic on qualifying days.
+- MD-8-3: How to handle multiple symbols — run sweeps per-symbol then aggregate, or build a portfolio-level sweep? (Per-symbol first, then aggregate for the report.)
+
+**After this sprint:** You have heatmaps showing which ORB parameters are robust and which are fragile. You know whether a 15-minute opening range is clearly better than 10 or 20, or whether it doesn't matter much. This informs which parameters to "lock in" vs which to keep experimenting with.
+
+---
+
+### Sprint 9 — Walk-Forward Analysis + Reporting ⬜ PENDING
+**Estimated tests:** ~15–20
+
+**Goal:** Build the walk-forward framework to test for overfitting, and build the reporting tooling that generates the final Parameter Validation Report.
+
+**Scope:**
+
+- **Walk-Forward Engine** (`argus/backtest/walk_forward.py`):
+  - Takes a date range, splits it into rolling windows
+  - For each window: optimize parameters on in-sample period using VectorBT, then run Replay Harness on out-of-sample period with those parameters
+  - Compares in-sample performance to out-of-sample performance
+  - Key metric: **Walk-Forward Efficiency** = (out-of-sample return) / (in-sample return). Values above 0.5 suggest parameters generalize reasonably. Values below 0.3 suggest overfitting.
+  - Configuration:
+    - `in_sample_months`: 4 (default)
+    - `out_of_sample_months`: 2 (default)
+    - `step_months`: 2 (how far to slide the window each iteration)
+    - For 12 months of data with 4/2 split stepping by 2: you get ~4 walk-forward windows.
+
+- **Report Generator** (`argus/backtest/report_generator.py`):
+  - Generates an HTML report (self-contained, can be opened in any browser) containing:
+    - Executive summary: total trades, win rate, profit factor, max drawdown, Sharpe
+    - Equity curve chart (daily cumulative P&L over the backtest period)
+    - Monthly P&L breakdown table
+    - Trade distribution: histogram of R-multiples
+    - Time-of-day analysis: average P&L by entry hour
+    - Day-of-week analysis: average P&L by entry day
+    - Parameter sensitivity heatmaps (from VectorBT)
+    - Walk-forward results: in-sample vs out-of-sample performance per window
+    - Worst trades table: the 10 biggest losers with entry/exit details for manual review
+    - Best trades table: the 10 biggest winners (for sanity-checking — make sure they're not data artifacts)
+  - Uses matplotlib or plotly for charts, rendered to embedded PNGs or interactive plotly HTML.
+  - CLI: `python -m argus.backtest.report_generator --db data/backtest_runs/run_xxx.db --output reports/orb_validation.html`
+
+- **Backtest Run Log** (`docs/backtesting/BACKTEST_RUN_LOG.md`):
+  - Template for logging each backtest run: date, parameters used, data range, key metrics, observations, whether it was in-sample or out-of-sample.
+  - This is a manual document that you update as you run backtests during the analysis phase (Sprint 10).
+
+**Micro-decisions to make before implementation:**
+- MD-9-1: Walk-forward optimization metric — what does "best" mean in the in-sample optimization? Maximize Sharpe? Profit factor? A composite score? (Recommend Sharpe — it balances return and risk.)
+- MD-9-2: Report format — HTML only? Or also PDF? (HTML first — it's easier to generate and can embed interactive charts. PDF can be added later via headless Chrome or weasyprint.)
+- MD-9-3: Chart library — matplotlib (static, simple) or plotly (interactive, heavier)? (Recommend plotly for the HTML report since it supports hover tooltips on equity curves and trade markers.)
+
+**After this sprint:** You have the full analysis toolkit. You can run walk-forward analysis, generate polished reports, and document your findings. The tools are ready for the analysis phase.
+
+---
+
+### Sprint 10 — Analysis & Parameter Validation Report ⬜ PENDING
+**Estimated tests:** 0 new tests (this is analysis work, not code)
+
+**Goal:** Use the tools built in Sprints 6–9 to actually run backtests, interpret results, tune parameters, and produce the formal Parameter Validation Report.
+
+**This sprint operates in analysis mode, not build mode.** There are no specs or test targets. Instead, it's a structured workflow:
+
+**Step 1: Baseline Backtest**
+- Run the Replay Harness with the current production ORB parameters (from `config/orb_breakout.yaml`) on the full dataset.
+- Generate the report. This is the "how does the strategy perform as-built?" baseline.
+- Manually spot-check 20+ trades against real charts (use TradingView or similar). Do the entries and exits make sense? Are there obvious errors in the replay logic?
+
+**Step 2: Parameter Sensitivity**
+- Run VectorBT sweeps across all key parameters.
+- Identify which parameters have high sensitivity (small changes = big performance swings) and which are stable.
+- Document findings in the backtest run log.
+
+**Step 3: Walk-Forward Validation**
+- Run walk-forward analysis with the baseline parameters.
+- Run walk-forward analysis with VectorBT's "best" parameters.
+- Compare walk-forward efficiency. If the "optimized" parameters show much worse walk-forward efficiency than baseline, you've confirmed overfitting.
+
+**Step 4: Parameter Recommendations**
+- Based on Steps 1–3, recommend final parameter values for Phase 3 live trading.
+- Prioritize robustness over maximum backtest return.
+- Document the reasoning for every parameter choice.
+
+**Step 5: Write the Report**
+- Produce `docs/backtesting/PARAMETER_VALIDATION_REPORT.md`
+- This document is the formal deliverable of Phase 2. It should contain:
+  - Dataset description (symbols, date range, data source)
+  - Baseline performance metrics
+  - Parameter sensitivity findings
+  - Walk-forward validation results
+  - Recommended parameter values with justification
+  - Known limitations and caveats
+  - Risk assessment: what market conditions would this strategy struggle in?
+  - Recommendation for Phase 3 live sizing
+
+**After this sprint:** Phase 2 is complete. You have a written, evidence-based case for (or against) proceeding to live trading with the ORB strategy, including specific parameter recommendations and an honest assessment of the strategy's strengths and weaknesses.
+
+---
+
+## What Changed From the Original Phase 2 Plan
+
+| Change | Why |
+|--------|-----|
+| Backtrader dropped | Replay Harness provides higher-fidelity backtesting with production code. VectorBT covers fast parameter exploration. Backtrader adds engineering cost with no unique value. |
+| Explicit walk-forward requirement added | Overfitting defense is the most important aspect of backtesting. Making it a first-class sprint item ensures it's not skipped. |
+| Analysis mode (Sprint 10) separated from build mode (Sprints 6–9) | Building tools and using tools require different workflows. Sprint 10 is collaborative analysis between the user and Claude, not spec-driven implementation. |
+| Formal Parameter Validation Report added | Phase 2's deliverable isn't code — it's a decision document. Making this explicit prevents the common trap of "we built the tools but never wrote up the findings." |
+
+---
+
+## Post-Phase 2 Transition to Phase 3
+
+Phase 3 (Live Validation) begins when:
+1. Paper trading validation is complete (from the parallel track)
+2. The Parameter Validation Report is written and its recommendations are incorporated into config
+3. The user has consulted with their CPA on capital/risk implications (DEF-004)
+4. The user makes an explicit decision to proceed with real capital
+
+Phase 3 will use the same system with these changes:
+- Switch from paper to live Alpaca account
+- Start with minimum position sizes (e.g., 10–25 shares regardless of what sizing model says)
+- Run the Shadow System (paper trading in parallel with live) for comparison
+- Minimum 20 trading days before scaling up position sizes
+
+---
+
+*End of Phase 2 Sprint Plan v1.0*
+*Update this document when sprint scope changes or sprints complete.*

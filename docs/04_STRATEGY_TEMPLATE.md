@@ -162,35 +162,38 @@ All positions closed at market by [time].
 
 *Filled in after Exploration and Validation phases.*
 
-### VectorBT Exploration
+### VectorBT Parameter Exploration
 | Parameter Set | Win Rate | Avg R | Profit Factor | Max DD | Sharpe | Notes |
 |---------------|----------|-------|---------------|--------|--------|-------|
 | | | | | | | |
 | | | | | | | |
 | | | | | | | |
 
+**Parameter Sensitivity:** [Which parameters matter most? Which are stable across a range?]
 **Selected Parameters:** [Which combination was chosen and why]
 
-### Backtrader Validation
+### Replay Harness Validation
 | Metric | Value |
 |--------|-------|
 | Period Tested | |
 | Total Trades | |
 | Win Rate | |
-| Average Winner | |
-| Average Loser | |
+| Average Winner (R) | |
+| Average Loser (R) | |
 | Profit Factor | |
 | Max Drawdown | |
 | Sharpe Ratio | |
+| Recovery Factor | |
 
-### Ecosystem Replay
-| Metric | Value |
-|--------|-------|
-| Period Replayed | |
-| Concurrent Strategies | |
-| Conflicts with Other Strategies | |
-| Capital Allocation Used | |
-| Net Contribution to Portfolio | |
+### Walk-Forward Analysis
+| Window | IS Period | OOS Period | IS Return | OOS Return | WF Efficiency |
+|--------|-----------|------------|-----------|------------|---------------|
+| 1 | | | | | |
+| 2 | | | | | |
+| 3 | | | | | |
+| 4 | | | | | |
+
+**Walk-Forward Assessment:** [Do parameters generalize? Is there evidence of overfitting?]
 
 ---
 
