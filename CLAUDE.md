@@ -170,6 +170,7 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 | ~~DEF-002~~ | ~~Cash reserve basis: switch to start-of-day equity~~ | ~~Sprint 3~~ | **DONE** — Implemented in Sprint 3 (DEC-037). |
 | ~~DEF-003~~ | ~~Replace datetime.utcnow() with datetime.now(UTC)~~ | ~~Sprint 3~~ | **DONE** — Fixed in events.py, trading.py, and tests. |
 | DEF-004 | Discuss cash reserve calc with CPA before live trading | Sprint 5 (pre-live) | Equity vs start-of-day capital vs high water mark has tax and risk implications worth a professional opinion. |
+| DEF-005 | Move webhook URLs to .env (security) | Post paper trading validation | Discord webhook URL and Healthchecks.io ping URL contain auth tokens. Move to `.env` file and read via `os.getenv()` in HealthMonitor, matching AlpacaBroker's existing pattern. Low risk while system.yaml has empty defaults committed to git. |
 ```
 
 This keeps it lightweight — no new document, no new sync burden. Items get removed (or moved to "Completed") as they're addressed. Both Claudes see the trigger column and know when to raise the flag.
