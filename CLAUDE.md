@@ -6,6 +6,7 @@ Full vision: @docs/PROJECT_BIBLE.md
 Technical blueprint: @docs/ARCHITECTURE.md
 All key decisions: @docs/DECISION_LOG.md
 Assumptions and risks: @docs/RISK_REGISTER.md
+Phase 1 sprint plan: @docs/07_PHASE1_SPRINT_PLAN.md
 
 ## Current State
 
@@ -108,6 +109,13 @@ docs/               # Project documentation (Bible, Architecture, etc.)
 
 IMPORTANT: When making changes during a coding session, evaluate whether any of the following documents need to be updated. If they do, either update them directly or flag them for the user to update.
 
+**Update docs/07_PHASE1_SPRINT_PLAN.md when:**
+- A sprint is confirmed complete (change status from 🔜/Pending to ✅ Complete)
+- A sprint's scope changes (components added, removed, or moved between sprints)
+- A sprint's test count target is finalized or actual count is known
+- The build order or sprint boundaries change for any reason
+- Phase 1 is complete (mark all sprints ✅, add completion date to header)
+
 **Update docs/DECISION_LOG.md when:**
 - A new technical decision is made (library choice, pattern choice, design tradeoff)
 - An existing decision is changed or superseded
@@ -140,6 +148,7 @@ At the END of every significant coding session, output a brief "Docs Status" sum
 - Which docs were updated and why
 - Which docs SHOULD be updated but weren't (flag for user)
 - Any decisions made during the session that should be recorded
+- Whether 07_PHASE1_SPRINT_PLAN.md needs a status update (sprint completion, scope change)
 
 ## Deferred Items
 

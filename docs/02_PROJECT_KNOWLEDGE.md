@@ -150,6 +150,7 @@ argus/
 - `04_STRATEGY_TEMPLATE.md` — Standard template for strategy documentation
 - `05_DECISION_LOG.md` — Record of all key decisions with rationale
 - `06_RISK_REGISTER.md` — Assumptions and risks being tracked
+- `07_PHASE1_SPRINT_PLAN.md` — Canonical Phase 1 build order with sprint status tracking. **Both Claude instances must update this when sprints complete or scope changes.**
 
 ## Communication Style Notes
 
@@ -176,6 +177,7 @@ Output a **Docs Sync Checklist** at the end of the response. Format:
 - [ ] 03_ARCHITECTURE.md: [what to update, or "no changes needed"]
 - [ ] 05_DECISION_LOG.md: [new entries needed — list them]
 - [ ] 06_RISK_REGISTER.md: [new entries needed, or "no changes needed"]
+- [ ] 07_PHASE1_SPRINT_PLAN.md: [status updates needed, or "no changes needed"]
 - [ ] CLAUDE.md (repo root): [what to update, or "no changes needed"]
 ```
 
@@ -215,6 +217,12 @@ Flag updates to **CLAUDE.md** when:
 - Project structure changes
 - New commands are available
 - New architectural rules are established
+
+Flag updates to **Phase 1 Sprint Plan (07)** when:
+- A sprint is reviewed and confirmed complete
+- Sprint scope changes (components move between sprints)
+- New sprints are added or existing ones are split/merged
+- The document should always reflect current reality — never let it go stale
 
 ### Drafting Updates
 
