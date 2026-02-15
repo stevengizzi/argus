@@ -5,6 +5,7 @@ with historical data fetching for indicator warm-up via REST API.
 """
 
 import asyncio
+import contextlib
 import logging
 import os
 import random
@@ -188,17 +189,13 @@ class AlpacaDataService(DataService):
         # Cancel tasks
         if self._stream_task:
             self._stream_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._stream_task
-            except asyncio.CancelledError:
-                pass
 
         if self._monitor_task:
             self._monitor_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._monitor_task
-            except asyncio.CancelledError:
-                pass
 
         # Close WebSocket connection
         if self._data_stream:

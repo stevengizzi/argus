@@ -1,6 +1,7 @@
 """Tests for AlpacaDataService."""
 
 import asyncio
+import contextlib
 import os
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -151,18 +152,20 @@ class TestAlpacaDataServiceStart:
         os.environ["TEST_ALPACA_SECRET_KEY"] = "test_secret"
 
         try:
-            with patch(
-                "argus.data.alpaca_data_service.StockHistoricalDataClient",
-                return_value=mock_historical_client,
-            ), patch(
-                "argus.data.alpaca_data_service.StockDataStream",
-                return_value=mock_data_stream,
-            ):
-                # Mock warm-up to avoid historical data fetch
-                with patch.object(
+            with (
+                patch(
+                    "argus.data.alpaca_data_service.StockHistoricalDataClient",
+                    return_value=mock_historical_client,
+                ),
+                patch(
+                    "argus.data.alpaca_data_service.StockDataStream",
+                    return_value=mock_data_stream,
+                ),
+                patch.object(
                     data_service, "_warm_up_indicators", new_callable=AsyncMock
-                ):
-                    await data_service.start(["AAPL", "TSLA"], ["1m"])
+                ),
+            ):
+                await data_service.start(["AAPL", "TSLA"], ["1m"])
 
             # Verify clients initialized
             assert data_service._historical_client is mock_historical_client
@@ -500,10 +503,8 @@ class TestAlpacaDataServiceStaleDataMonitor:
 
         # Clean up
         data_service._running = False
-        try:
+        with contextlib.suppress(asyncio.CancelledError):
             await monitor_task
-        except asyncio.CancelledError:
-            pass
 
     @pytest.mark.asyncio
     async def test_stale_data_recovery(self, data_service, alpaca_config, fixed_clock):
@@ -530,10 +531,8 @@ class TestAlpacaDataServiceStaleDataMonitor:
 
         # Clean up
         data_service._running = False
-        try:
+        with contextlib.suppress(asyncio.CancelledError):
             await monitor_task
-        except asyncio.CancelledError:
-            pass
 
 
 class TestAlpacaDataServiceReconnection:
@@ -556,13 +555,13 @@ class TestAlpacaDataServiceReconnection:
         ]
 
         # Mock asyncio.sleep and random.random to make test deterministic
-        with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
-            with patch("random.random", return_value=0.5):  # Jitter = 0% (0.5 * 2 - 1 = 0)
-                # Run reconnection
-                try:
-                    await data_service._run_stream_with_reconnect()
-                except asyncio.CancelledError:
-                    pass
+        with (
+            patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+            patch("random.random", return_value=0.5),  # Jitter = 0% (0.5 * 2 - 1 = 0)
+            contextlib.suppress(asyncio.CancelledError),
+        ):
+            # Run reconnection
+            await data_service._run_stream_with_reconnect()
 
         # Verify exponential backoff delays
         # First failure: 1s * 2^0 = 1s (+ 0% jitter = 1.0s)
