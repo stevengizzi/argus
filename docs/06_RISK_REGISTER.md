@@ -286,13 +286,14 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 
 ---
 
-### RSK-014 — Flaky Reconnection Test
+### RSK-014 — Flaky Reconnection Test ✅ CLOSED
 | Field | Value |
 |-------|-------|
 | **Severity** | Low |
 | **Likelihood** | High |
 | **Description** | `test_reconnection_with_exponential_backoff` in AlpacaDataService tests is timing-dependent and fails intermittently. Not a production issue, but degrades CI reliability and masks real failures. |
-| **Mitigation** | Fix in Sprint 4a polish session: mock `asyncio.sleep` to make the test deterministic. Validate by running 10x in a loop with no failures. |
+| **Mitigation** | Fixed in Sprint 4a polish: mocked `asyncio.sleep` to make the test deterministic. Validated with 10x consecutive passes. Commit 738aab8. |
+| **Status** | **Closed** — February 15, 2026 |
 | **Owner** | Development |
 
 ---

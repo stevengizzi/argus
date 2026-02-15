@@ -25,9 +25,9 @@ The original plan defined 11 implementation steps. During execution, steps were 
 | 6 | Base Strategy + ORB Strategy | S3 | Expanded. BaseStrategy ABC + ORB Breakout + Scanner ABC + StaticScanner (MD-1, added to plan). | ✅ Complete |
 | 7a | Data Service Abstraction | S3 | Split from original Step 7. DataService ABC + ReplayDataService (Parquet, 1m candles, indicator computation). Event Bus delivery only (DEC-029). | ✅ Complete |
 | 7b | Alpaca Data Service (live) | S4a | Split from original Step 7. AlpacaDataService (WebSocket bars + trades via alpaca-py, indicator warm-up, stale data monitoring, reconnection with backoff). 20 tests. | ✅ Complete |
-| 8 | Alpaca Broker Adapter | S4a | AlpacaBroker (paper trading via alpaca-py SDK, REST + WebSocket, bracket orders with single T1 target, ULID↔UUID order ID mapping). Also: Clock protocol + injection (DEF-001 resolved), AlpacaConfig model. 14 + 19 + 2 tests. | ✅ Complete |
-| 9 | Order Manager + Position Management | S4b | As planned. Event-driven position management (DEC-030): tick subscription + 5s fallback poll + scheduled EOD flatten. | Pending |
-| — | AlpacaScanner | S4b | Added to plan. Implements Scanner ABC using Alpaca screener/snapshot API for real pre-market scanning. | Pending |
+| 8 | Alpaca Broker Adapter | S4a | AlpacaBroker (paper trading via alpaca-py SDK, REST + WebSocket, bracket orders with single T1 target, ULID↔UUID order ID mapping). Also: Clock protocol + injection (DEF-001 resolved), AlpacaConfig model. 14 + 19 + 2 tests. Polish: flaky test fix, ruff cleanup, missing broker tests. | ✅ Complete |
+| 9 | Order Manager + Position Management | S4b | As planned. Event-driven position management (DEC-030): tick subscription + 5s fallback poll + scheduled EOD flatten. | 🔜 Next |
+| — | AlpacaScanner | S4b | Added to plan. Implements Scanner ABC using Alpaca screener/snapshot API for real pre-market scanning. | 🔜 Next |
 | 10 | Health Checks + Basic Monitoring | S5 | As planned. Heartbeat, stale data detection, dead man's switch, integrity checks, system health table. | Pending |
 | 11 | Integration Test Suite + First Paper Trading Run | S5 | As planned. Full system on Alpaca paper trading, minimum 3 trading days unattended. | Pending |
 
@@ -65,7 +65,7 @@ The original plan defined 11 implementation steps. During execution, steps were 
 - Approve-with-modification (share reduction with 0.25R floor, target tightening)
 - State reconstruction from database on mid-day restart (daily P&L, weekly P&L, PDT trades)
 
-### Sprint 3 — Strategy + Data Layer (Steps 6, 7a) 🔜 NEXT
+### Sprint 3 — Strategy + Data Layer (Steps 6, 7a) ✅ Complete
 **Target tests:** ~150+
 
 **Scope:**
@@ -93,10 +93,12 @@ The original plan defined 11 implementation steps. During execution, steps were 
 - **AlpacaBroker** (`argus/execution/alpaca_broker.py`): Implements Broker ABC via alpaca-py. REST (TradingClient) + WebSocket (TradingStream). Order ID mapping (ULID ↔ Alpaca UUID). Bracket orders with single T1 target (Alpaca limitation — Order Manager handles T1/T2 split in Sprint 4b). 19 tests.
 - **Integration tests**: 2 tests — signal→risk→broker pipeline, bracket order flow. All alpaca-py clients mocked.
 
-**After this sprint:** The system can receive live market data, detect ORB breakouts on real stocks, and submit paper orders to Alpaca. No dynamic position management yet — broker-side bracket orders provide basic exit coverage. Sprint 4a polish (fix flaky test, add missing broker tests) precedes Sprint 4b.
+**Sprint 4a Polish:** Flaky reconnection test fixed (mocked `asyncio.sleep`), `import random` moved to module level, 5 missing AlpacaBroker tests added, all ruff warnings resolved (SIM105, SIM117). Final: 282 tests, 0 flaky, ruff clean. Commits: 738aab8 (polish), b95db95 (final cleanup).
 
-### Sprint 4b — Position Management + Live Scanning (Step 9)
-**Target tests:** ~220+
+**After this sprint:** The system can receive live market data, detect ORB breakouts on real stocks, and submit paper orders to Alpaca. No dynamic position management yet — broker-side bracket orders provide basic exit coverage.
+
+### Sprint 4b — Position Management + Live Scanning (Step 9) 🔜 NEXT
+**Target tests:** ~320+ (282 current + ~40 new)
 
 **Scope:**
 - **Order Manager:** Converts approved signals to broker orders. Manages open positions via tick subscription (DEC-030). Stop-to-breakeven when T1 hits. Trailing stop support. Time stop enforcement. EOD flatten at 3:50 PM EST (scheduled task). Emergency flatten for circuit breakers. 5-second fallback poll for time-based exits in illiquid stocks.

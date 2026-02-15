@@ -10,9 +10,9 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 
 ## Current Project State
 
-**Phase:** Phase 1 in progress. Sprints 1–4a complete (277 tests, 276 passing). Sprint 4b next.
-**Current sprint:** Sprint 4a complete (Clock injection + AlpacaDataService + AlpacaBroker). Sprint 4b next — Order Manager + AlpacaScanner + EOD flatten.
-**Next milestone:** Active position management with dynamic stop/target adjustments on paper trades: OrderManager subscribes to ticks, moves stops to breakeven on T1 hit, enforces time stops, flattens at EOD.
+**Phase:** Phase 1 in progress. Sprints 1–4a complete (282 tests passing). Sprint 4b next.
+**Current sprint:** Sprint 4a complete + polished (Live Connections — Clock injection + AlpacaDataService + AlpacaBroker). Sprint 4b next — Order Manager (position lifecycle management) + AlpacaScanner (live pre-market scanning).
+**Next milestone:** Active position management with dynamic stop/target adjustments on paper trades: OrderManager subscribes to ticks, moves stops to breakeven on T1 hit, enforces time stops, flattens at EOD. Full pipeline: AlpacaDataService → AlpacaScanner → OrbBreakout → RiskManager → OrderManager → AlpacaBroker.
 
 ## Key Decisions Made (Do Not Relitigate)
 

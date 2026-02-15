@@ -10,7 +10,7 @@ Phase 1 sprint plan: @docs/07_PHASE1_SPRINT_PLAN.md
 
 ## Current State
 
-Phase 1 — Core Trading Engine with ORB strategy. Sprint 4a complete (Live Connections — Clock injection + AlpacaDataService + AlpacaBroker, 277 tests, 276 passing, 1 flaky). Sprint 4a polish next (fix flaky test, add missing broker tests), then Sprint 4b.
+Phase 1 — Core Trading Engine with ORB strategy. Sprint 4a complete + polished (Live Connections — Clock injection + AlpacaDataService + AlpacaBroker, 282 tests, 0 flaky, ruff clean). Sprint 4b next (Order Manager + AlpacaScanner).
 
 Components implemented:
 - Event Bus, EventStore, core events
