@@ -1,11 +1,12 @@
 """Tests for the BaseStrategy ABC."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
 from argus.analytics.trade_logger import TradeLogger
+from argus.core.clock import Clock, FixedClock
 from argus.core.config import StrategyConfig, StrategyRiskLimits
 from argus.core.events import CandleEvent, Side, SignalEvent, TickEvent
 from argus.db.manager import DatabaseManager
@@ -22,8 +23,8 @@ from argus.strategies.base_strategy import BaseStrategy
 class ConcreteTestStrategy(BaseStrategy):
     """Minimal concrete implementation of BaseStrategy for testing."""
 
-    def __init__(self, config: StrategyConfig) -> None:
-        super().__init__(config)
+    def __init__(self, config: StrategyConfig, clock: Clock | None = None) -> None:
+        super().__init__(config, clock)
         self._last_signal: SignalEvent | None = None
 
     async def on_candle(self, event: CandleEvent) -> SignalEvent | None:
@@ -424,26 +425,37 @@ class TestReconstructState:
         """reconstruct_state rebuilds state from database."""
         from datetime import date
 
+        # Use a fixed date to avoid timezone issues
+        test_date = date(2026, 2, 16)
+        clock = FixedClock(datetime(2026, 2, 16, 15, 0, 0, tzinfo=UTC))
+
         db = DatabaseManager(tmp_path / "test_reconstruct.db")
         await db.initialize()
         trade_logger = TradeLogger(db)
 
-        # Insert trades for today
-        today = date.today()
+        # Insert trades for test_date
         await trade_logger.log_trade(
             self._make_trade(
                 strategy_id="test_strat",
                 net_pnl=100.0,
-                entry_time=datetime.combine(today, datetime.min.time().replace(hour=10)),
-                exit_time=datetime.combine(today, datetime.min.time().replace(hour=10, minute=30)),
+                entry_time=datetime.combine(
+                    test_date, datetime.min.time().replace(hour=10)
+                ),
+                exit_time=datetime.combine(
+                    test_date, datetime.min.time().replace(hour=10, minute=30)
+                ),
             )
         )
         await trade_logger.log_trade(
             self._make_trade(
                 strategy_id="test_strat",
                 net_pnl=-50.0,
-                entry_time=datetime.combine(today, datetime.min.time().replace(hour=11)),
-                exit_time=datetime.combine(today, datetime.min.time().replace(hour=11, minute=30)),
+                entry_time=datetime.combine(
+                    test_date, datetime.min.time().replace(hour=11)
+                ),
+                exit_time=datetime.combine(
+                    test_date, datetime.min.time().replace(hour=11, minute=30)
+                ),
             )
         )
         # Trade for different strategy (should be ignored)
@@ -451,13 +463,19 @@ class TestReconstructState:
             self._make_trade(
                 strategy_id="other_strat",
                 net_pnl=200.0,
-                entry_time=datetime.combine(today, datetime.min.time().replace(hour=12)),
-                exit_time=datetime.combine(today, datetime.min.time().replace(hour=12, minute=30)),
+                entry_time=datetime.combine(
+                    test_date, datetime.min.time().replace(hour=12)
+                ),
+                exit_time=datetime.combine(
+                    test_date, datetime.min.time().replace(hour=12, minute=30)
+                ),
             )
         )
 
-        # Create strategy and reconstruct state
-        strategy = ConcreteTestStrategy(make_config(strategy_id="test_strat"))
+        # Create strategy with fixed clock and reconstruct state
+        strategy = ConcreteTestStrategy(
+            make_config(strategy_id="test_strat"), clock=clock
+        )
         await strategy.reconstruct_state(trade_logger)
 
         # Should only count trades for this strategy

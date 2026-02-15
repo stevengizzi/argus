@@ -1068,3 +1068,105 @@ async def test_circuit_breaker_triggers_emergency_flatten(
     assert mock_broker.place_order.called
 
     await order_manager.stop()
+
+
+# ---------------------------------------------------------------------------
+# Reconstruction Tests (3)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_reconstruct_from_broker_recovers_positions(
+    event_bus: EventBus,
+    fixed_clock: FixedClock,
+    config: OrderManagerConfig,
+) -> None:
+    """Mock broker with open positions and orders → ManagedPositions created."""
+    mock_broker = MagicMock()
+
+    # Create mock positions
+    pos1 = MagicMock()
+    pos1.symbol = "AAPL"
+    pos1.qty = 100
+    pos1.avg_entry_price = 150.0
+
+    pos2 = MagicMock()
+    pos2.symbol = "TSLA"
+    pos2.qty = 50
+    pos2.avg_entry_price = 200.0
+
+    mock_broker.get_positions = AsyncMock(return_value=[pos1, pos2])
+
+    # Create mock orders (stop for AAPL, limit for TSLA)
+    stop_order = MagicMock()
+    stop_order.symbol = "AAPL"
+    stop_order.order_type = "stop"
+    stop_order.stop_price = 148.0
+    stop_order.id = "stop-123"
+
+    limit_order = MagicMock()
+    limit_order.symbol = "TSLA"
+    limit_order.order_type = "limit"
+    limit_order.limit_price = 210.0
+    limit_order.id = "limit-456"
+    limit_order.qty = 25
+
+    mock_broker.get_open_orders = AsyncMock(return_value=[stop_order, limit_order])
+    mock_broker.place_order = AsyncMock()
+    mock_broker.cancel_order = AsyncMock()
+
+    om = OrderManager(
+        event_bus=event_bus,
+        broker=mock_broker,
+        clock=fixed_clock,
+        config=config,
+    )
+
+    await om.reconstruct_from_broker()
+
+    # Verify positions were reconstructed
+    assert "AAPL" in om._managed_positions
+    assert "TSLA" in om._managed_positions
+
+    aapl_pos = om._managed_positions["AAPL"][0]
+    assert aapl_pos.shares_remaining == 100
+    assert aapl_pos.entry_price == 150.0
+    assert aapl_pos.stop_price == 148.0
+    assert aapl_pos.stop_order_id == "stop-123"
+    assert aapl_pos.strategy_id == "reconstructed"
+
+    tsla_pos = om._managed_positions["TSLA"][0]
+    assert tsla_pos.shares_remaining == 50
+    assert tsla_pos.entry_price == 200.0
+    assert tsla_pos.t1_price == 210.0
+    assert tsla_pos.t1_order_id == "limit-456"
+
+
+@pytest.mark.asyncio
+async def test_reconstruct_from_broker_no_positions(
+    order_manager: OrderManager,
+    mock_broker: MagicMock,
+) -> None:
+    """Empty broker → no positions, no crash."""
+    mock_broker.get_positions = AsyncMock(return_value=[])
+
+    # Should not raise
+    await order_manager.reconstruct_from_broker()
+
+    # Verify no positions created
+    assert len(order_manager._managed_positions) == 0
+
+
+@pytest.mark.asyncio
+async def test_reconstruct_from_broker_handles_error(
+    order_manager: OrderManager,
+    mock_broker: MagicMock,
+) -> None:
+    """Broker raises → error logged, no crash."""
+    mock_broker.get_positions = AsyncMock(side_effect=Exception("Network error"))
+
+    # Should not raise
+    await order_manager.reconstruct_from_broker()
+
+    # Verify system still functional (no positions, but no crash)
+    assert len(order_manager._managed_positions) == 0

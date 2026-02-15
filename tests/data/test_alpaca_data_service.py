@@ -51,8 +51,11 @@ def data_config():
 
 @pytest.fixture
 def fixed_clock():
-    """Create a fixed clock for testing."""
-    return FixedClock(datetime(2026, 2, 15, 14, 30, 0, tzinfo=UTC))
+    """Create a fixed clock for testing.
+
+    Set to Monday Feb 16, 2026 at 10:00 AM ET (15:00 UTC) — within market hours.
+    """
+    return FixedClock(datetime(2026, 2, 16, 15, 0, 0, tzinfo=UTC))
 
 
 @pytest.fixture

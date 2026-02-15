@@ -624,6 +624,134 @@ class OrderManager:
         logger.warning("EMERGENCY FLATTEN — closing all positions immediately")
         await self.eod_flatten()
 
+    async def reconstruct_from_broker(self) -> None:
+        """Reconstruct managed positions from broker state.
+
+        Called at startup to recover any open positions that existed
+        before a restart.
+
+        1. Query broker for all open positions.
+        2. Query broker for all open orders.
+        3. For each position, create a ManagedPosition with:
+           - Entry price from broker position data.
+           - Stop price from any matching stop order.
+           - T1/T2 inferred from stop orders and limit orders.
+        4. Subscribe to TickEvents for these symbols.
+
+        Limitations:
+        - Cannot reconstruct exact entry_time (not available from broker).
+        - Cannot reconstruct original strategy_id (uses "reconstructed").
+        - T1/T2 status is inferred from order types, not exact.
+
+        These limitations are acceptable because:
+        - Time stops use conservative defaults.
+        - The position will still be managed (stops moved, EOD flattened).
+        - Full accuracy requires the system to not crash, which is the goal.
+        """
+        try:
+            positions = await self._broker.get_positions()
+
+            if not positions:
+                logger.info("Order Manager reconstruction: No open positions at broker.")
+                return
+
+            orders = await self._broker.get_open_orders()
+
+            logger.info(
+                "Reconstructing %d positions and %d open orders from broker",
+                len(positions), len(orders),
+            )
+
+            # Build order lookup by symbol
+            orders_by_symbol: dict[str, list] = {}
+            for order in orders:
+                symbol = getattr(order, "symbol", "")
+                if symbol:
+                    if symbol not in orders_by_symbol:
+                        orders_by_symbol[symbol] = []
+                    orders_by_symbol[symbol].append(order)
+
+            for pos in positions:
+                symbol = getattr(pos, "symbol", str(pos))
+                qty = int(getattr(pos, "qty", 0))
+                avg_entry = float(getattr(pos, "avg_entry_price", 0.0))
+
+                # Find matching stop order
+                stop_price = 0.0
+                stop_order_id = None
+                symbol_orders = orders_by_symbol.get(symbol, [])
+                for order in symbol_orders:
+                    order_type = str(getattr(order, "order_type", "")).lower()
+                    if "stop" in order_type:
+                        stop_price = float(getattr(order, "stop_price", 0) or 0)
+                        stop_order_id = str(getattr(order, "id", ""))
+                        break
+
+                # Find matching limit order (T1)
+                t1_price = 0.0
+                t1_order_id = None
+                t1_shares = 0
+                for order in symbol_orders:
+                    order_type = str(getattr(order, "order_type", "")).lower()
+                    if "limit" in order_type:
+                        t1_price = float(getattr(order, "limit_price", 0) or 0)
+                        t1_order_id = str(getattr(order, "id", ""))
+                        t1_shares = int(getattr(order, "qty", 0) or 0)
+                        break
+
+                managed = ManagedPosition(
+                    symbol=symbol,
+                    strategy_id="reconstructed",
+                    entry_price=avg_entry,
+                    entry_time=self._clock.now(),  # Approximation
+                    shares_total=qty,
+                    shares_remaining=qty,
+                    stop_price=stop_price,
+                    stop_order_id=stop_order_id,
+                    t1_price=t1_price,
+                    t1_order_id=t1_order_id,
+                    t1_shares=t1_shares,
+                    t1_filled=(t1_order_id is None and t1_shares == 0),
+                    t2_price=0.0,  # Unknown — position rides to stop or EOD
+                    high_watermark=avg_entry,
+                )
+
+                if symbol not in self._managed_positions:
+                    self._managed_positions[symbol] = []
+                self._managed_positions[symbol].append(managed)
+
+                # Track the stop and T1 orders in pending orders
+                if stop_order_id:
+                    self._pending_orders[stop_order_id] = PendingManagedOrder(
+                        order_id=stop_order_id,
+                        symbol=symbol,
+                        strategy_id="reconstructed",
+                        order_type="stop",
+                        shares=qty,
+                    )
+                if t1_order_id:
+                    self._pending_orders[t1_order_id] = PendingManagedOrder(
+                        order_id=t1_order_id,
+                        symbol=symbol,
+                        strategy_id="reconstructed",
+                        order_type="t1_target",
+                        shares=t1_shares,
+                    )
+
+                logger.info(
+                    "Reconstructed position: %s %d shares @ %.2f (stop=%.2f)",
+                    symbol, qty, avg_entry, stop_price,
+                )
+
+            logger.info(
+                "Order Manager reconstruction complete: %d positions recovered",
+                len(positions),
+            )
+
+        except Exception as e:
+            logger.error("Order Manager reconstruction failed: %s", e)
+            # Don't crash — system can still manage new positions
+
     # ---------------------------------------------------------------------------
     # Helper Methods
     # ---------------------------------------------------------------------------

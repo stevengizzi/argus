@@ -1,11 +1,12 @@
 """Tests for the Risk Manager."""
 
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 import pytest
 
 from argus.analytics.trade_logger import TradeLogger
+from argus.core.clock import FixedClock
 from argus.core.config import (
     AccountRiskConfig,
     AccountType,
@@ -500,35 +501,47 @@ class TestRiskManagerReconstruction:
     @pytest.mark.asyncio
     async def test_reconstruct_state_rebuilds_daily_pnl(self, tmp_path: Path) -> None:
         """reconstruct_state should rebuild daily P&L from database."""
+        # Use a fixed date to avoid timezone issues between local date and clock
+        test_date = date(2026, 2, 16)
+        # Clock set to 10 AM ET on test_date (15:00 UTC)
+        clock = FixedClock(datetime(2026, 2, 16, 15, 0, 0, tzinfo=UTC))
+
         # Set up database and trade logger
         db = DatabaseManager(tmp_path / "test_reconstruct.db")
         await db.initialize()
         trade_logger = TradeLogger(db)
 
-        # Insert trades for today
-        today = date.today()
+        # Insert trades for test_date
         await trade_logger.log_trade(
             self._make_trade(
                 net_pnl=100.0,
-                entry_time=datetime.combine(today, datetime.min.time().replace(hour=10)),
-                exit_time=datetime.combine(today, datetime.min.time().replace(hour=10, minute=30)),
+                entry_time=datetime.combine(
+                    test_date, datetime.min.time().replace(hour=10)
+                ),
+                exit_time=datetime.combine(
+                    test_date, datetime.min.time().replace(hour=10, minute=30)
+                ),
             )
         )
         await trade_logger.log_trade(
             self._make_trade(
                 net_pnl=-50.0,
-                entry_time=datetime.combine(today, datetime.min.time().replace(hour=11)),
-                exit_time=datetime.combine(today, datetime.min.time().replace(hour=11, minute=30)),
+                entry_time=datetime.combine(
+                    test_date, datetime.min.time().replace(hour=11)
+                ),
+                exit_time=datetime.combine(
+                    test_date, datetime.min.time().replace(hour=11, minute=30)
+                ),
             )
         )
 
-        # Create Risk Manager and reconstruct state
+        # Create Risk Manager with fixed clock and reconstruct state
         broker = SimulatedBroker(initial_cash=100_000)
         await broker.connect()
         bus = EventBus()
         config = make_risk_config()
 
-        rm = RiskManager(config=config, broker=broker, event_bus=bus)
+        rm = RiskManager(config=config, broker=broker, event_bus=bus, clock=clock)
         await rm.initialize()
         await rm.reconstruct_state(trade_logger)
 
@@ -542,53 +555,64 @@ class TestRiskManagerReconstruction:
     @pytest.mark.asyncio
     async def test_reconstruct_state_rebuilds_weekly_pnl(self, tmp_path: Path) -> None:
         """reconstruct_state should rebuild weekly P&L from Monday through today."""
+        # Use fixed dates: Wednesday Feb 18, 2026
+        # Monday = Feb 16, Tuesday = Feb 17, Wednesday = Feb 18
+        test_date = date(2026, 2, 18)  # Wednesday
+        monday = date(2026, 2, 16)
+        tuesday = date(2026, 2, 17)
+        clock = FixedClock(datetime(2026, 2, 18, 15, 0, 0, tzinfo=UTC))
+
         db = DatabaseManager(tmp_path / "test_reconstruct_weekly.db")
         await db.initialize()
         trade_logger = TradeLogger(db)
 
-        today = date.today()
-        monday = today - timedelta(days=today.weekday())  # Monday of this week
-
-        # Insert trades for Monday, Tuesday, and today
+        # Insert trades for Monday, Tuesday, and Wednesday
         await trade_logger.log_trade(
             self._make_trade(
                 net_pnl=100.0,
-                entry_time=datetime.combine(monday, datetime.min.time().replace(hour=10)),
-                exit_time=datetime.combine(monday, datetime.min.time().replace(hour=10, minute=30)),
+                entry_time=datetime.combine(
+                    monday, datetime.min.time().replace(hour=10)
+                ),
+                exit_time=datetime.combine(
+                    monday, datetime.min.time().replace(hour=10, minute=30)
+                ),
             )
         )
-        tuesday = monday + timedelta(days=1)
-        if tuesday <= today:  # Only add if Tuesday is in the past
-            tue_entry = datetime.combine(tuesday, datetime.min.time().replace(hour=10))
-            tue_exit = datetime.combine(tuesday, datetime.min.time().replace(hour=10, minute=30))
-            await trade_logger.log_trade(
-                self._make_trade(net_pnl=200.0, entry_time=tue_entry, exit_time=tue_exit)
+        await trade_logger.log_trade(
+            self._make_trade(
+                net_pnl=200.0,
+                entry_time=datetime.combine(
+                    tuesday, datetime.min.time().replace(hour=10)
+                ),
+                exit_time=datetime.combine(
+                    tuesday, datetime.min.time().replace(hour=10, minute=30)
+                ),
             )
-        # Add today's trade
+        )
         await trade_logger.log_trade(
             self._make_trade(
                 net_pnl=-50.0,
-                entry_time=datetime.combine(today, datetime.min.time().replace(hour=10)),
-                exit_time=datetime.combine(today, datetime.min.time().replace(hour=10, minute=30)),
+                entry_time=datetime.combine(
+                    test_date, datetime.min.time().replace(hour=10)
+                ),
+                exit_time=datetime.combine(
+                    test_date, datetime.min.time().replace(hour=10, minute=30)
+                ),
             )
         )
 
-        # Create Risk Manager and reconstruct state
+        # Create Risk Manager with fixed clock and reconstruct state
         broker = SimulatedBroker(initial_cash=100_000)
         await broker.connect()
         bus = EventBus()
         config = make_risk_config()
 
-        rm = RiskManager(config=config, broker=broker, event_bus=bus)
+        rm = RiskManager(config=config, broker=broker, event_bus=bus, clock=clock)
         await rm.initialize()
         await rm.reconstruct_state(trade_logger)
 
-        # Verify weekly P&L includes all trades from this week
-        # If today is Monday: 100 + (-50) = 50
-        # If today is Tuesday or later: 100 + 200 + (-50) = 250
-        is_monday = today.weekday() == 0
-        expected_weekly = 50.0 if is_monday else (250.0 if tuesday <= today else 50.0)
-
+        # Verify weekly P&L: 100 + 200 + (-50) = 250
+        expected_weekly = 250.0
         assert rm.weekly_realized_pnl == expected_weekly
 
         await db.close()
@@ -596,53 +620,67 @@ class TestRiskManagerReconstruction:
     @pytest.mark.asyncio
     async def test_reconstruct_state_rebuilds_pdt_trades(self, tmp_path: Path) -> None:
         """reconstruct_state should rebuild PDT day trades from rolling 5 days."""
+        # Use a fixed date: Monday Feb 16, 2026
+        test_date = date(2026, 2, 16)
+        yesterday = date(2026, 2, 15)
+        clock = FixedClock(datetime(2026, 2, 16, 15, 0, 0, tzinfo=UTC))
+
         db = DatabaseManager(tmp_path / "test_reconstruct_pdt.db")
         await db.initialize()
         trade_logger = TradeLogger(db)
-
-        today = date.today()
 
         # Create day trades (entry and exit same day) within last 5 business days
         # A day trade is when entry_date == exit_date
         await trade_logger.log_trade(
             self._make_trade(
                 net_pnl=100.0,
-                entry_time=datetime.combine(today, datetime.min.time().replace(hour=10)),
-                exit_time=datetime.combine(today, datetime.min.time().replace(hour=10, minute=30)),
+                entry_time=datetime.combine(
+                    test_date, datetime.min.time().replace(hour=10)
+                ),
+                exit_time=datetime.combine(
+                    test_date, datetime.min.time().replace(hour=10, minute=30)
+                ),
             )
         )
         # Add another day trade today
         await trade_logger.log_trade(
             self._make_trade(
                 net_pnl=50.0,
-                entry_time=datetime.combine(today, datetime.min.time().replace(hour=11)),
-                exit_time=datetime.combine(today, datetime.min.time().replace(hour=11, minute=30)),
+                entry_time=datetime.combine(
+                    test_date, datetime.min.time().replace(hour=11)
+                ),
+                exit_time=datetime.combine(
+                    test_date, datetime.min.time().replace(hour=11, minute=30)
+                ),
             )
         )
 
         # Add an overnight trade (not a day trade - entry yesterday, exit today)
-        yesterday = today - timedelta(days=1)
         await trade_logger.log_trade(
             self._make_trade(
                 net_pnl=75.0,
-                entry_time=datetime.combine(yesterday, datetime.min.time().replace(hour=15)),
-                exit_time=datetime.combine(today, datetime.min.time().replace(hour=9, minute=30)),
+                entry_time=datetime.combine(
+                    yesterday, datetime.min.time().replace(hour=15)
+                ),
+                exit_time=datetime.combine(
+                    test_date, datetime.min.time().replace(hour=9, minute=30)
+                ),
             )
         )
 
-        # Create Risk Manager and reconstruct state
+        # Create Risk Manager with fixed clock and reconstruct state
         broker = SimulatedBroker(initial_cash=20_000)  # Under PDT threshold
         await broker.connect()
         bus = EventBus()
         config = make_risk_config(pdt_enabled=True, pdt_threshold=25000)
 
-        rm = RiskManager(config=config, broker=broker, event_bus=bus)
+        rm = RiskManager(config=config, broker=broker, event_bus=bus, clock=clock)
         await rm.initialize()
         await rm.reconstruct_state(trade_logger)
 
-        # Verify PDT tracker has 2 day trades (both same-day trades today)
+        # Verify PDT tracker has 2 day trades (both same-day trades on test_date)
         # The overnight trade should NOT count as a day trade
-        remaining = rm.pdt_tracker.day_trades_remaining(today, 20000)
+        remaining = rm.pdt_tracker.day_trades_remaining(test_date, 20000)
         assert remaining == 1  # 3 - 2 = 1
 
         await db.close()

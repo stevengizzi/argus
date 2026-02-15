@@ -42,14 +42,25 @@ class LogLevel(StrEnum):
 # Config Sub-Models
 # ---------------------------------------------------------------------------
 
+class HealthConfig(BaseModel):
+    """Health monitoring configuration."""
+    heartbeat_interval_seconds: int = Field(default=60, ge=10, le=300)
+    heartbeat_url: str = ""           # Healthchecks.io ping URL or similar
+    alert_webhook_url: str = ""       # Discord webhook, Slack webhook, etc.
+    daily_check_enabled: bool = True
+    weekly_reconciliation_enabled: bool = True
+
+
 class SystemConfig(BaseModel):
     """Global system settings."""
     timezone: str = "America/New_York"
     market_open: str = "09:30"
     market_close: str = "16:00"
     log_level: LogLevel = LogLevel.INFO
+    # Legacy field — use health.heartbeat_interval_seconds instead
     heartbeat_interval_seconds: int = Field(default=60, ge=1)
     data_dir: str = "data"
+    health: HealthConfig = Field(default_factory=HealthConfig)
 
     @field_validator("timezone")
     @classmethod

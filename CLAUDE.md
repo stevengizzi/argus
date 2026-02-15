@@ -10,21 +10,24 @@ Phase 1 sprint plan: @docs/07_PHASE1_SPRINT_PLAN.md
 
 ## Current State
 
-Phase 1 — Core Trading Engine with ORB strategy. Sprint 4b complete (Order Manager + AlpacaScanner, 320 tests, 0 flaky, ruff clean). Sprint 5 next (Health monitoring, integration hardening, paper trading validation).
+Phase 1 — Core Trading Engine with ORB strategy. Sprint 5 complete (Health monitoring, system entry point, integration tests). 359 tests, 0 flaky, ruff clean. Ready for paper trading validation.
 
 Components implemented:
 - Event Bus, EventStore, core events
 - Clock protocol (SystemClock, FixedClock) — injectable time provider. DEF-001 resolved.
 - Broker abstraction (SimulatedBroker, AlpacaBroker)
-- Risk Manager with three-tier evaluation (clock-injected)
+- Risk Manager with three-tier evaluation (clock-injected), state reconstruction
 - BaseStrategy ABC (clock-injected), Scanner ABC, DataService ABC
 - ReplayDataService with indicator computation (VWAP, ATR, SMA, RVOL)
-- AlpacaDataService — live WebSocket streaming via alpaca-py (bars + trades), indicator warm-up, stale data monitoring, reconnection with backoff
+- AlpacaDataService — live WebSocket streaming via alpaca-py (bars + trades), indicator warm-up, stale data monitoring (market hours only), reconnection with backoff, fetch_todays_bars for reconstruction
 - AlpacaBroker — paper/live trading via alpaca-py REST + WebSocket, bracket orders (single T1 target), order ID mapping (ULID ↔ Alpaca UUID)
 - OrbBreakoutStrategy (full implementation)
-- Order Manager — position lifecycle management, T1/T2 split, stop-to-breakeven, time stops, EOD flatten, emergency flatten
+- Order Manager — position lifecycle management, T1/T2 split, stop-to-breakeven, time stops, EOD flatten, emergency flatten, reconstruct_from_broker
 - AlpacaScanner — live pre-market gap scanning via Alpaca snapshots
-- Dependencies: alpaca-py>=0.30, python-dotenv>=1.0 (NOT alpaca-trade-api — deprecated)
+- HealthMonitor — component status, heartbeat, webhook alerts, daily/weekly integrity checks
+- Structured logging — JSON file output, colored console
+- System entry point (argus/main.py) — 10-phase startup, graceful shutdown, signal handlers
+- Dependencies: alpaca-py>=0.30, python-dotenv>=1.0, aiohttp>=3.9 (NOT alpaca-trade-api — deprecated)
 
 ## Architecture
 

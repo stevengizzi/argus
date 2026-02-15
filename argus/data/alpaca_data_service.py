@@ -4,6 +4,8 @@ This module provides real-time market data streaming from Alpaca via WebSocket,
 with historical data fetching for indicator warm-up via REST API.
 """
 
+from __future__ import annotations
+
 import asyncio
 import contextlib
 import logging
@@ -11,7 +13,9 @@ import os
 import random
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Any
+from datetime import time as dt_time
+from typing import TYPE_CHECKING, Any
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 from alpaca.data.historical import StockHistoricalDataClient
@@ -25,6 +29,9 @@ from argus.core.config import AlpacaConfig, DataServiceConfig
 from argus.core.event_bus import EventBus
 from argus.core.events import CandleEvent, IndicatorEvent, TickEvent
 from argus.data.service import DataService
+
+if TYPE_CHECKING:
+    from argus.core.health import HealthMonitor
 
 logger = logging.getLogger(__name__)
 
@@ -91,6 +98,7 @@ class AlpacaDataService(DataService):
         config: AlpacaConfig,
         data_config: DataServiceConfig,
         clock: Clock | None = None,
+        health_monitor: HealthMonitor | None = None,
     ):
         """Initialize AlpacaDataService.
 
@@ -99,11 +107,13 @@ class AlpacaDataService(DataService):
             config: Alpaca-specific configuration.
             data_config: Data service configuration.
             clock: Injectable clock (defaults to SystemClock).
+            health_monitor: Optional health monitor for status updates.
         """
         self._event_bus = event_bus
         self._alpaca_config = config
         self._data_config = data_config
         self._clock = clock if clock is not None else SystemClock()
+        self._health_monitor = health_monitor
 
         # WebSocket and REST clients (initialized in start())
         self._data_stream: StockDataStream | None = None
@@ -346,6 +356,69 @@ class AlpacaDataService(DataService):
         """Check if data is currently stale (no recent updates)."""
         return self._is_stale
 
+    async def fetch_todays_bars(self, symbols: list[str]) -> list[CandleEvent]:
+        """Fetch today's 1m bars from Alpaca REST API for reconstruction.
+
+        Returns CandleEvent objects in chronological order, suitable for
+        replaying through strategies during mid-day restart reconstruction.
+
+        Uses StockHistoricalDataClient.get_stock_bars() with:
+        - timeframe: 1Min
+        - start: today at 9:30 AM ET
+        - end: now
+
+        Args:
+            symbols: List of ticker symbols to fetch.
+
+        Returns:
+            List of CandleEvent objects sorted by timestamp.
+        """
+        et_tz = ZoneInfo("America/New_York")
+        now = self._clock.now()
+        now_et = now.replace(tzinfo=et_tz) if now.tzinfo is None else now.astimezone(et_tz)
+
+        today_open = now_et.replace(hour=9, minute=30, second=0, microsecond=0)
+
+        events: list[CandleEvent] = []
+
+        if not self._historical_client:
+            # Initialize client if not already done
+            api_key = os.getenv(self._alpaca_config.api_key_env)
+            secret_key = os.getenv(self._alpaca_config.secret_key_env)
+            if not api_key or not secret_key:
+                logger.error("Cannot fetch today's bars: API keys not configured")
+                return events
+            self._historical_client = StockHistoricalDataClient(api_key, secret_key)
+
+        for symbol in symbols:
+            try:
+                df = await self.get_historical_candles(
+                    symbol=symbol,
+                    timeframe="1m",
+                    start=today_open,
+                    end=now_et,
+                )
+
+                for _, row in df.iterrows():
+                    events.append(CandleEvent(
+                        symbol=symbol,
+                        timeframe="1m",
+                        open=row["open"],
+                        high=row["high"],
+                        low=row["low"],
+                        close=row["close"],
+                        volume=row["volume"],
+                        timestamp=row["timestamp"],
+                    ))
+
+            except Exception as e:
+                logger.error("Failed to fetch today's bars for %s: %s", symbol, e)
+
+        # Sort by timestamp
+        events.sort(key=lambda e: e.timestamp)
+        logger.info("Fetched %d bars for reconstruction from %d symbols", len(events), len(symbols))
+        return events
+
     # --- Internal methods ---
 
     async def _warm_up_indicators(self, symbols: list[str]) -> None:
@@ -565,17 +638,30 @@ class AlpacaDataService(DataService):
         Checks if any subscribed symbol has not received data
         within stale_data_timeout_seconds (default 30s).
 
-        Sets _is_stale flag and publishes alerts as needed.
+        Only checks during market hours on weekdays (RSK-015 fix).
+        Sets _is_stale flag and updates health status as needed.
         """
         logger.info("Starting stale data monitor")
+
+        et_tz = ZoneInfo("America/New_York")
+        market_open = dt_time(9, 30)
+        market_close = dt_time(16, 0)
 
         while self._running:
             await asyncio.sleep(5)
 
-            # TODO: Add market hours check - only monitor during trading hours
-            # For now, always monitor
-
             now = self._clock.now()
+
+            # Convert to ET for market hours check
+            now_et = (now.replace(tzinfo=et_tz) if now.tzinfo is None
+                      else now.astimezone(et_tz))
+
+            # Only check for stale data during market hours on weekdays
+            if now_et.weekday() >= 5:  # Saturday=5, Sunday=6
+                continue
+            if not (market_open <= now_et.time() <= market_close):
+                continue
+
             timeout = timedelta(seconds=self._alpaca_config.stale_data_timeout_seconds)
 
             stale_symbols = []
@@ -591,13 +677,27 @@ class AlpacaDataService(DataService):
                 # Transition to stale
                 self._is_stale = True
                 logger.warning(f"Data stale for symbols: {stale_symbols}")
-                # TODO: Publish SystemAlertEvent when implemented in Sprint 5
+                # Update health status if monitor available
+                if self._health_monitor:
+                    from argus.core.health import ComponentStatus
+                    self._health_monitor.update_component(
+                        "data_service",
+                        ComponentStatus.DEGRADED,
+                        message=f"Stale data for: {', '.join(stale_symbols)}",
+                    )
 
             elif not stale_symbols and self._is_stale:
                 # Transition to fresh
                 self._is_stale = False
                 logger.info("Data feed recovered, no longer stale")
-                # TODO: Publish recovery event when implemented in Sprint 5
+                # Update health status if monitor available
+                if self._health_monitor:
+                    from argus.core.health import ComponentStatus
+                    self._health_monitor.update_component(
+                        "data_service",
+                        ComponentStatus.HEALTHY,
+                        message="Data feed active",
+                    )
 
         logger.info("Stale data monitor stopped")
 
