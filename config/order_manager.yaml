@@ -1,0 +1,29 @@
+# Order Manager Configuration
+# Controls position lifecycle management
+
+# End-of-day flatten
+eod_flatten_time: "15:50"  # HH:MM in ET
+eod_flatten_timezone: "America/New_York"
+
+# Fallback poll interval for time-based exits
+fallback_poll_interval_seconds: 5
+
+# Stop-to-breakeven when T1 hits
+enable_stop_to_breakeven: true
+breakeven_buffer_pct: 0.001  # 0.1% above entry
+
+# Trailing stop (disabled for V1)
+enable_trailing_stop: false
+trailing_stop_atr_multiplier: 2.0
+
+# Time stop - close position if open too long
+max_position_duration_minutes: 120
+
+# Entry order timeout
+entry_timeout_seconds: 30
+
+# T1/T2 position split
+t1_position_pct: 0.5  # 50% of position exits at T1
+
+# Stop order retry on failure
+stop_retry_max: 1

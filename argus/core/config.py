@@ -234,8 +234,53 @@ class DataServiceConfig(BaseModel):
 class ScannerConfig(BaseModel):
     """Configuration for the Scanner."""
 
-    scanner_type: str = "static"  # "static" or "alpaca" (future)
+    scanner_type: str = "static"  # "static" or "alpaca"
     static_symbols: list[str] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# Order Manager Config (Sprint 4b)
+# ---------------------------------------------------------------------------
+
+
+class OrderManagerConfig(BaseModel):
+    """Configuration for the Order Manager.
+
+    Controls position lifecycle management including T1/T2 targets,
+    stop-to-breakeven, time stops, and EOD flatten.
+    """
+
+    eod_flatten_time: str = "15:50"  # HH:MM in ET
+    eod_flatten_timezone: str = "America/New_York"
+    fallback_poll_interval_seconds: int = Field(default=5, ge=1)
+    enable_stop_to_breakeven: bool = True
+    breakeven_buffer_pct: float = Field(default=0.001, ge=0, le=0.1)  # 0.1%
+    enable_trailing_stop: bool = False  # V1: disabled by default
+    trailing_stop_atr_multiplier: float = Field(default=2.0, gt=0)
+    max_position_duration_minutes: int = Field(default=120, ge=1)  # Hard time stop
+    entry_timeout_seconds: int = Field(default=30, ge=1)
+    t1_position_pct: float = Field(default=0.5, gt=0, le=1.0)  # 50% at T1
+    stop_retry_max: int = Field(default=1, ge=0)
+
+
+# ---------------------------------------------------------------------------
+# Alpaca Scanner Config (Sprint 4b)
+# ---------------------------------------------------------------------------
+
+
+class AlpacaScannerConfig(BaseModel):
+    """Configuration for the Alpaca live scanner.
+
+    Scans a configured universe of symbols using Alpaca's snapshot API
+    to find stocks matching gap, volume, and price criteria.
+    """
+
+    universe_source: str = "config"  # "config" = use universe_symbols list
+    universe_symbols: list[str] = Field(default_factory=list)
+    min_price: float = Field(default=5.0, gt=0)
+    max_price: float = Field(default=500.0, gt=0)
+    min_volume_yesterday: int = Field(default=1_000_000, ge=0)
+    max_symbols_returned: int = Field(default=10, ge=1)
 
 
 # ---------------------------------------------------------------------------

@@ -1,7 +1,32 @@
+# Scanner Configuration
+# Controls pre-market stock selection
+
+# Scanner type: "static" for replay/backtest, "alpaca" for live trading
 scanner_type: "static"
+
+# Static scanner symbols (used when scanner_type = "static")
 static_symbols:
   - "AAPL"
   - "MSFT"
   - "NVDA"
   - "TSLA"
   - "AMD"
+
+# Alpaca scanner configuration (used when scanner_type = "alpaca")
+alpaca_scanner:
+  universe_source: "config"  # Use universe_symbols list
+  universe_symbols:
+    - "AAPL"
+    - "MSFT"
+    - "NVDA"
+    - "TSLA"
+    - "AMD"
+    - "AMZN"
+    - "META"
+    - "GOOGL"
+    - "NFLX"
+    - "SPY"
+  min_price: 5.0
+  max_price: 500.0
+  min_volume_yesterday: 1000000
+  max_symbols_returned: 10
