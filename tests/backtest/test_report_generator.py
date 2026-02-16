@@ -18,7 +18,14 @@ from argus.backtest.report_generator import (
 
 
 def _create_test_db(db_path: str, trades: list[dict]) -> None:
-    """Create a test SQLite database with trades."""
+    """Create a test SQLite database with trades.
+
+    Uses the PRODUCTION schema from argus/db/schema.sql:
+    - shares (not quantity)
+    - stop_price (not original_stop_price)
+    - target_prices (not original_target_price)
+    - commission (not commission_total)
+    """
     conn = sqlite3.connect(db_path)
     conn.execute(
         """
@@ -26,20 +33,25 @@ def _create_test_db(db_path: str, trades: list[dict]) -> None:
             id TEXT PRIMARY KEY,
             strategy_id TEXT,
             symbol TEXT,
+            asset_class TEXT DEFAULT 'us_stocks',
             side TEXT,
-            quantity INTEGER,
             entry_price REAL,
             entry_time TEXT,
             exit_price REAL,
             exit_time TEXT,
-            original_stop_price REAL,
-            original_target_price REAL,
-            initial_risk_per_share REAL,
-            net_pnl REAL,
-            r_multiple REAL,
+            shares INTEGER,
+            stop_price REAL,
+            target_prices TEXT,
             exit_reason TEXT,
-            hold_duration_seconds INTEGER,
-            commission_total REAL
+            gross_pnl REAL,
+            commission REAL DEFAULT 0,
+            net_pnl REAL,
+            r_multiple REAL DEFAULT 0,
+            hold_duration_seconds INTEGER DEFAULT 0,
+            outcome TEXT,
+            rationale TEXT,
+            notes TEXT,
+            created_at TEXT DEFAULT (datetime('now'))
         )
         """
     )
@@ -48,11 +60,11 @@ def _create_test_db(db_path: str, trades: list[dict]) -> None:
         conn.execute(
             """
             INSERT INTO trades (
-                id, strategy_id, symbol, side, quantity,
+                id, strategy_id, symbol, side, shares,
                 entry_price, entry_time, exit_price, exit_time,
-                original_stop_price, original_target_price,
-                initial_risk_per_share, net_pnl, r_multiple,
-                exit_reason, hold_duration_seconds, commission_total
+                stop_price, target_prices,
+                net_pnl, r_multiple,
+                exit_reason, hold_duration_seconds, commission, outcome
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
@@ -60,19 +72,19 @@ def _create_test_db(db_path: str, trades: list[dict]) -> None:
                 t.get("strategy_id", "orb"),
                 t.get("symbol", "TSLA"),
                 t.get("side", "buy"),
-                t.get("quantity", 100),
+                t.get("shares", t.get("quantity", 100)),
                 t.get("entry_price", 100.0),
                 t.get("entry_time", "2025-06-01T10:00:00"),
                 t.get("exit_price", 102.0),
                 t.get("exit_time", "2025-06-01T11:00:00"),
-                t.get("original_stop_price", 99.0),
-                t.get("original_target_price", 104.0),
-                t.get("initial_risk_per_share", 1.0),
+                t.get("stop_price", t.get("original_stop_price", 99.0)),
+                t.get("target_prices", t.get("original_target_price", "[104.0]")),
                 t.get("net_pnl", 200.0),
                 t.get("r_multiple", 2.0),
                 t.get("exit_reason", "target"),
                 t.get("hold_duration_seconds", 3600),
-                t.get("commission_total", 0.0),
+                t.get("commission", t.get("commission_total", 0.0)),
+                "win" if t.get("net_pnl", 200.0) > 0 else "loss",
             ),
         )
 

@@ -85,14 +85,17 @@ def load_replay_data(db_path: str) -> dict[str, Any]:
 
     try:
         # Load trades
+        # Note: Schema uses 'shares' not 'quantity', 'stop_price' not 'original_stop_price',
+        # 'target_prices' (JSON) not 'original_target_price', 'commission' not 'commission_total'
         cursor = conn.execute(
             """
             SELECT
-                id, strategy_id, symbol, side, quantity,
+                id, strategy_id, symbol, side, shares AS quantity,
                 entry_price, entry_time, exit_price, exit_time,
-                original_stop_price, original_target_price,
-                initial_risk_per_share, net_pnl, r_multiple,
-                exit_reason, hold_duration_seconds, commission_total
+                stop_price AS original_stop_price, target_prices AS original_target_price,
+                (entry_price - stop_price) AS initial_risk_per_share,
+                net_pnl, r_multiple,
+                exit_reason, hold_duration_seconds, commission AS commission_total
             FROM trades
             ORDER BY exit_time
             """

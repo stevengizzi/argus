@@ -904,6 +904,244 @@ def load_walk_forward_results(output_dir: str) -> WalkForwardResult | None:
 
 
 # ---------------------------------------------------------------------------
+# Fixed-Params Walk-Forward Analysis
+# ---------------------------------------------------------------------------
+
+
+async def evaluate_fixed_params_on_is(
+    is_start: date,
+    is_end: date,
+    fixed_params: dict[str, Any],
+    config: WalkForwardConfig,
+) -> dict[str, float]:
+    """Evaluate fixed parameters on IS period using VectorBT.
+
+    Args:
+        is_start: Start date for in-sample period.
+        is_end: End date for in-sample period.
+        fixed_params: Fixed parameter set (VectorBT naming).
+        config: WalkForwardConfig with data paths.
+
+    Returns:
+        Dict with sharpe, win_rate, profit_factor, total_pnl, total_trades.
+    """
+    # Build SweepConfig with single parameter combination
+    sweep_config = SweepConfig(
+        data_dir=Path(config.data_dir),
+        symbols=config.symbols or [],
+        start_date=is_start,
+        end_date=is_end,
+        output_dir=Path(config.output_dir) / "is_fixed",
+        or_minutes_list=[int(fixed_params["or_minutes"])],
+        target_r_list=[float(fixed_params["target_r"])],
+        stop_buffer_list=[float(fixed_params["stop_buffer_pct"])],
+        max_hold_list=[int(fixed_params["max_hold_minutes"])],
+        min_gap_list=[float(fixed_params["min_gap_pct"])],
+        max_range_atr_list=[float(fixed_params["max_range_atr_ratio"])],
+    )
+
+    loop = asyncio.get_running_loop()
+    results_df = await loop.run_in_executor(None, run_sweep, sweep_config)
+
+    if results_df.empty:
+        return {
+            "total_trades": 0,
+            "sharpe": 0.0,
+            "win_rate": 0.0,
+            "profit_factor": 0.0,
+            "total_pnl": 0.0,
+            "max_drawdown": 0.0,
+        }
+
+    # Aggregate across symbols
+    total_trades = int(results_df["total_trades"].sum())
+    avg_sharpe = float(results_df["sharpe_ratio"].mean())
+    avg_win_rate = float(results_df["win_rate"].mean())
+    avg_pf = float(results_df["profit_factor"].mean())
+    total_return = float(results_df["total_return_pct"].sum())
+    max_dd = float(results_df["max_drawdown_pct"].max())
+
+    total_pnl_dollars = total_return * config.initial_cash / 100.0
+
+    return {
+        "total_trades": total_trades,
+        "sharpe": avg_sharpe,
+        "win_rate": avg_win_rate,
+        "profit_factor": avg_pf,
+        "total_pnl": total_pnl_dollars,
+        "max_drawdown": max_dd,
+    }
+
+
+async def run_fixed_params_walk_forward(
+    config: WalkForwardConfig,
+    fixed_params: dict[str, Any],
+) -> WalkForwardResult:
+    """Execute walk-forward analysis with fixed parameters (no IS optimization).
+
+    For each window:
+    1. Evaluate fixed params on IS period using VectorBT
+    2. Evaluate fixed params on OOS period using Replay Harness
+    3. Compute WFE metrics
+
+    Args:
+        config: WalkForwardConfig with all settings.
+        fixed_params: Fixed parameter set (VectorBT naming convention).
+
+    Returns:
+        WalkForwardResult with all window results and aggregates.
+    """
+    run_started = datetime.now(UTC)
+
+    # Create output directory
+    output_dir = Path(config.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Detect data range from files
+    data_dir = Path(config.data_dir)
+    data_start, data_end = _detect_data_range(data_dir)
+
+    logger.info(
+        "Fixed-params walk-forward: data=%s to %s, IS=%d months, OOS=%d months",
+        data_start,
+        data_end,
+        config.in_sample_months,
+        config.out_of_sample_months,
+    )
+    logger.info("Fixed params: %s", fixed_params)
+
+    # Compute windows
+    windows_spec = compute_windows(data_start, data_end, config)
+
+    if not windows_spec:
+        logger.error("Data range too short for even one walk-forward window")
+        return _empty_walk_forward_result(config, run_started)
+
+    logger.info("Generated %d walk-forward windows", len(windows_spec))
+
+    # Process each window
+    window_results: list[WindowResult] = []
+
+    for i, (is_start, is_end, oos_start, oos_end) in enumerate(windows_spec, 1):
+        logger.info(
+            "Window %d/%d: IS=%s to %s, OOS=%s to %s",
+            i,
+            len(windows_spec),
+            is_start,
+            is_end,
+            oos_start,
+            oos_end,
+        )
+
+        try:
+            # 1. Evaluate fixed params on IS
+            is_metrics = await evaluate_fixed_params_on_is(is_start, is_end, fixed_params, config)
+            logger.info(
+                "Window %d IS: trades=%d, sharpe=%.2f",
+                i,
+                is_metrics["total_trades"],
+                is_metrics["sharpe"],
+            )
+
+            # 2. Validate on OOS with fixed params
+            oos_metrics = await validate_out_of_sample(oos_start, oos_end, fixed_params, config)
+            logger.info(
+                "Window %d OOS: trades=%d, sharpe=%.2f, pnl=$%.2f",
+                i,
+                oos_metrics["total_trades"],
+                oos_metrics["sharpe"],
+                oos_metrics["total_pnl"],
+            )
+
+            # 3. Compute WFE
+            wfe_sharpe = compute_wfe(is_metrics["sharpe"], oos_metrics["sharpe"])
+            wfe_pnl = compute_wfe(is_metrics["total_pnl"], oos_metrics["total_pnl"])
+
+            window_result = WindowResult(
+                window_number=i,
+                is_start=is_start,
+                is_end=is_end,
+                oos_start=oos_start,
+                oos_end=oos_end,
+                best_params=fixed_params,  # Fixed params, not optimized
+                is_total_trades=int(is_metrics["total_trades"]),
+                is_win_rate=float(is_metrics["win_rate"]),
+                is_profit_factor=float(is_metrics["profit_factor"]),
+                is_sharpe=float(is_metrics["sharpe"]),
+                is_total_pnl=float(is_metrics["total_pnl"]),
+                is_max_drawdown=float(is_metrics["max_drawdown"]),
+                oos_total_trades=oos_metrics["total_trades"],
+                oos_win_rate=oos_metrics["win_rate"],
+                oos_profit_factor=oos_metrics["profit_factor"],
+                oos_sharpe=oos_metrics["sharpe"],
+                oos_total_pnl=oos_metrics["total_pnl"],
+                oos_max_drawdown=oos_metrics["max_drawdown"],
+                wfe_sharpe=wfe_sharpe,
+                wfe_pnl=wfe_pnl,
+            )
+
+        except Exception as e:
+            logger.exception("Window %d failed: %s", i, str(e))
+            window_result = _error_window_result(i, is_start, is_end, oos_start, oos_end, str(e))
+
+        window_results.append(window_result)
+
+    # Compute aggregate metrics
+    valid_windows = [w for w in window_results if w.error is None]
+
+    if valid_windows:
+        avg_wfe_sharpe = sum(w.wfe_sharpe for w in valid_windows) / len(valid_windows)
+        avg_wfe_pnl = sum(w.wfe_pnl for w in valid_windows) / len(valid_windows)
+        total_oos_trades = sum(w.oos_total_trades for w in valid_windows)
+        overall_oos_pnl = sum(w.oos_total_pnl for w in valid_windows)
+
+        oos_sharpes = [w.oos_sharpe for w in valid_windows if w.oos_total_trades > 0]
+        overall_oos_sharpe = sum(oos_sharpes) / len(oos_sharpes) if oos_sharpes else 0.0
+    else:
+        avg_wfe_sharpe = 0.0
+        avg_wfe_pnl = 0.0
+        total_oos_trades = 0
+        overall_oos_pnl = 0.0
+        overall_oos_sharpe = 0.0
+
+    # For fixed params, stability is 100% by definition
+    parameter_stability = {
+        param: {"values": [v] * len(valid_windows), "mode": v, "stability": 1.0}
+        for param, v in fixed_params.items()
+    }
+
+    run_completed = datetime.now(UTC)
+    run_duration = (run_completed - run_started).total_seconds()
+
+    result = WalkForwardResult(
+        config=config,
+        windows=window_results,
+        avg_wfe_sharpe=avg_wfe_sharpe,
+        avg_wfe_pnl=avg_wfe_pnl,
+        parameter_stability=parameter_stability,
+        total_oos_trades=total_oos_trades,
+        overall_oos_sharpe=overall_oos_sharpe,
+        overall_oos_pnl=overall_oos_pnl,
+        run_started=run_started,
+        run_completed=run_completed,
+        run_duration_seconds=run_duration,
+    )
+
+    # Save results
+    save_walk_forward_results(result, config.output_dir)
+
+    logger.info(
+        "Fixed-params walk-forward complete: %d windows, avg WFE=%.2f, OOS trades=%d, OOS P&L=$%.2f",
+        len(window_results),
+        avg_wfe_sharpe,
+        total_oos_trades,
+        overall_oos_pnl,
+    )
+
+    return result
+
+
+# ---------------------------------------------------------------------------
 # Cross-Validation (DEF-009)
 # ---------------------------------------------------------------------------
 
@@ -1064,6 +1302,49 @@ def parse_args() -> argparse.Namespace:
         help="Starting capital for OOS validation",
     )
 
+    # Fixed-params mode
+    parser.add_argument(
+        "--fixed-params",
+        action="store_true",
+        help="Use fixed parameters across all windows (no IS optimization)",
+    )
+    parser.add_argument(
+        "--fp-or-minutes",
+        type=int,
+        default=15,
+        help="Fixed opening range minutes",
+    )
+    parser.add_argument(
+        "--fp-target-r",
+        type=float,
+        default=2.0,
+        help="Fixed target R-multiple",
+    )
+    parser.add_argument(
+        "--fp-stop-buffer",
+        type=float,
+        default=0.0,
+        help="Fixed stop buffer percent",
+    )
+    parser.add_argument(
+        "--fp-max-hold",
+        type=int,
+        default=60,
+        help="Fixed max hold minutes",
+    )
+    parser.add_argument(
+        "--fp-min-gap",
+        type=float,
+        default=2.0,
+        help="Fixed min gap percent",
+    )
+    parser.add_argument(
+        "--fp-max-atr",
+        type=float,
+        default=999.0,
+        help="Fixed max range ATR ratio",
+    )
+
     # Cross-validation mode
     parser.add_argument(
         "--cross-validate",
@@ -1166,8 +1447,86 @@ def main() -> None:
             print("  This suggests a bug in the vectorized implementation.")
         print("=" * 60)
 
+    elif args.fixed_params:
+        # Fixed-params walk-forward mode
+        symbols = [s.strip().upper() for s in args.symbols.split(",") if s.strip()] or None
+
+        config = WalkForwardConfig(
+            data_dir=args.data_dir,
+            symbols=symbols,
+            in_sample_months=args.is_months,
+            out_of_sample_months=args.oos_months,
+            step_months=args.step_months,
+            min_trades=args.min_trades,
+            optimization_metric=args.metric,
+            output_dir=args.output_dir,
+            initial_cash=args.initial_cash,
+        )
+
+        fixed_params = {
+            "or_minutes": args.fp_or_minutes,
+            "target_r": args.fp_target_r,
+            "stop_buffer_pct": args.fp_stop_buffer,
+            "max_hold_minutes": args.fp_max_hold,
+            "min_gap_pct": args.fp_min_gap,
+            "max_range_atr_ratio": args.fp_max_atr,
+        }
+
+        result = asyncio.run(run_fixed_params_walk_forward(config, fixed_params))
+
+        # Print summary
+        print("\n" + "=" * 60)
+        print("FIXED-PARAMS WALK-FORWARD ANALYSIS RESULTS")
+        print("=" * 60)
+        print(f"Fixed Parameters:  or={args.fp_or_minutes}, target_r={args.fp_target_r}, "
+              f"max_atr={args.fp_max_atr}")
+        print(f"                   max_hold={args.fp_max_hold}, min_gap={args.fp_min_gap}, "
+              f"stop_buf={args.fp_stop_buffer}")
+        print("-" * 60)
+        print(f"Windows Processed: {len(result.windows)}")
+        print(f"Valid Windows:     {len([w for w in result.windows if w.error is None])}")
+        print(f"Duration:          {result.run_duration_seconds:.1f} seconds")
+        print("-" * 60)
+        print(f"Avg WFE (Sharpe):  {result.avg_wfe_sharpe:.2f}")
+        print(f"Total OOS Trades:  {result.total_oos_trades}")
+        print(f"Overall OOS Sharpe:{result.overall_oos_sharpe:.2f}")
+        print(f"Overall OOS P&L:   ${result.overall_oos_pnl:,.2f}")
+        print("-" * 60)
+
+        # Per-window details
+        print("\nPer-Window Results:")
+        print(f"{'Window':<8} {'IS Period':<25} {'OOS Period':<25} {'IS Sharpe':<10} "
+              f"{'OOS Sharpe':<11} {'WFE':<8} {'OOS Trades':<11}")
+        print("-" * 100)
+        for w in result.windows:
+            if w.error:
+                print(f"{w.window_number:<8} ERROR: {w.error}")
+            else:
+                is_period = f"{w.is_start} to {w.is_end}"
+                oos_period = f"{w.oos_start} to {w.oos_end}"
+                print(f"{w.window_number:<8} {is_period:<25} {oos_period:<25} {w.is_sharpe:<10.2f} "
+                      f"{w.oos_sharpe:<11.2f} {w.wfe_sharpe:<8.2f} {w.oos_total_trades:<11}")
+        print("-" * 100)
+
+        # WFE assessment
+        windows_above_03 = len([w for w in result.windows if w.error is None and w.wfe_sharpe >= 0.3])
+        windows_above_05 = len([w for w in result.windows if w.error is None and w.wfe_sharpe >= 0.5])
+        valid_count = len([w for w in result.windows if w.error is None])
+        print(f"\nWindows with WFE >= 0.3: {windows_above_03}/{valid_count}")
+        print(f"Windows with WFE >= 0.5: {windows_above_05}/{valid_count}")
+
+        if result.avg_wfe_sharpe >= 0.5:
+            print("\nAssessment:        GOOD - WFE >= 0.5 indicates robust parameters")
+        elif result.avg_wfe_sharpe >= 0.3:
+            print("\nAssessment:        ACCEPTABLE - WFE >= 0.3 meets DEC-047 threshold")
+        else:
+            print("\nAssessment:        POOR - WFE < 0.3 indicates potential overfitting")
+
+        print("=" * 60)
+        print(f"Results saved to:  {args.output_dir}")
+
     else:
-        # Walk-forward mode
+        # Walk-forward mode (with IS optimization)
         symbols = [s.strip().upper() for s in args.symbols.split(",") if s.strip()] or None
 
         config = WalkForwardConfig(
