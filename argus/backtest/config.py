@@ -37,6 +37,7 @@ class BacktestConfig(BaseModel):
     Attributes:
         data_dir: Directory containing historical Parquet files.
         output_dir: Directory for backtest output databases.
+        symbols: Optional list of symbols to include. If None, use all symbols in data_dir.
         start_date: First trading day to include in the backtest.
         end_date: Last trading day to include in the backtest.
         strategy_id: Strategy to run (default: orb_breakout).
@@ -54,6 +55,7 @@ class BacktestConfig(BaseModel):
     # Data
     data_dir: Path = Field(default=Path("data/historical/1m"))
     output_dir: Path = Field(default=Path("data/backtest_runs"))
+    symbols: list[str] | None = Field(default=None)  # None = all symbols in data_dir
 
     # Date range
     start_date: date

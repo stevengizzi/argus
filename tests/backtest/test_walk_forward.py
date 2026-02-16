@@ -708,3 +708,29 @@ async def test_cross_validate_vectorbt_lt_replay_fails():
     assert result["replay_trades"] == 40
     assert result["ratio"] < 1.0
     assert result["assessment"] == "FAIL"
+
+
+# ---------------------------------------------------------------------------
+# Test 15: cross_validate_missing_params_raises (DEC-074 fix)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_cross_validate_missing_params_raises():
+    """Cross-validation raises KeyError if required params are missing."""
+    from argus.backtest.walk_forward import cross_validate_single_symbol
+
+    # Incomplete params dict - missing max_range_atr_ratio
+    incomplete_params = {
+        "or_minutes": 15,
+        "target_r": 2.0,
+        # Missing: stop_buffer_pct, max_hold_minutes, min_gap_pct, max_range_atr_ratio
+    }
+
+    with pytest.raises(KeyError, match="Missing required parameters"):
+        await cross_validate_single_symbol(
+            symbol="TSLA",
+            start=date(2025, 6, 1),
+            end=date(2025, 12, 31),
+            params=incomplete_params,
+        )

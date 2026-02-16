@@ -10,11 +10,11 @@ Phase 1 sprint plan: @docs/07_PHASE1_SPRINT_PLAN.md
 
 ## Current State
 
-Phase 1 COMPLETE (February 16, 2026). Phase 2 Sprints 6-9 COMPLETE. 541 tests, 0 flaky, ruff clean.
+Phase 1 COMPLETE (February 16, 2026). Phase 2 Sprints 6-9 COMPLETE. 542 tests, 0 flaky, ruff clean.
 
 **Dual-track work in progress:**
 - **Track 1 — Paper Trading Validation:** Running Argus on Alpaca paper trading. Validating stability, data integrity, risk compliance, trade lifecycle correctness.  See `docs/08_PAPER_TRADING_GUIDE.md`.
-- **Track 2 — Phase 2 Build:** Sprint 10 (Analysis & Report) IN PROGRESS. Steps 1-3 complete, Steps 4-5 pending. Cross-validation mismatch (DEC-074) must be investigated before finalizing. See `docs/09_PHASE2_SPRINT_PLAN.md`.
+- **Track 2 — Phase 2 Build:** Sprint 10 (Analysis & Report) IN PROGRESS. Steps 1-3 complete, DEC-074 cross-validation mismatch RESOLVED. Steps 4-5 pending. See `docs/09_PHASE2_SPRINT_PLAN.md`.
 
 Phase 2 sprints continue from Phase 1 (Sprint 6 onward).
 

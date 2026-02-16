@@ -151,10 +151,19 @@ class ReplayHarness:
         return result
 
     def _load_data(self) -> None:
-        """Load Parquet files for all symbols in the data directory."""
+        """Load Parquet files for symbols in the data directory.
+
+        If config.symbols is set, only those symbols are loaded.
+        Otherwise, all symbols in data_dir are loaded.
+        """
         data_dir = Path(self._config.data_dir)
         if not data_dir.exists():
             raise FileNotFoundError(f"Data directory not found: {data_dir}")
+
+        # Determine which symbols to load
+        symbols_filter: set[str] | None = None
+        if self._config.symbols:
+            symbols_filter = {s.upper() for s in self._config.symbols}
 
         # Find all symbol directories
         all_dates: set[date] = set()
@@ -164,6 +173,11 @@ class ReplayHarness:
                 continue
 
             symbol = symbol_dir.name.upper()
+
+            # Skip symbols not in filter (if filter is specified)
+            if symbols_filter is not None and symbol not in symbols_filter:
+                continue
+
             dfs = []
 
             # Load all Parquet files for this symbol

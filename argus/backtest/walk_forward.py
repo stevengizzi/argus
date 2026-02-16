@@ -343,6 +343,7 @@ async def validate_out_of_sample(
     backtest_config = BacktestConfig(
         data_dir=Path(config.data_dir),
         output_dir=Path(config.output_dir) / "oos_runs",
+        symbols=config.symbols,  # Pass symbols filter from WalkForwardConfig
         start_date=oos_start,
         end_date=oos_end,
         initial_cash=config.initial_cash,
@@ -1165,7 +1166,13 @@ async def cross_validate_single_symbol(
         symbol: Ticker symbol to test.
         start: Start date.
         end: End date.
-        params: Parameters to use (VectorBT naming convention).
+        params: Parameters to use (VectorBT naming convention). MUST contain all 6 keys:
+            - or_minutes: Opening range window in minutes
+            - target_r: Profit target as R-multiple
+            - stop_buffer_pct: Stop buffer percentage
+            - max_hold_minutes: Maximum hold time
+            - min_gap_pct: Minimum gap percentage for scanner
+            - max_range_atr_ratio: Maximum OR range / ATR ratio
         data_dir: Path to historical data.
         initial_cash: Starting capital for Replay Harness.
         slippage: Slippage per share for Replay Harness.
@@ -1178,8 +1185,25 @@ async def cross_validate_single_symbol(
         - replay_pnl: P&L from Replay Harness
         - ratio: vectorbt_trades / replay_trades
         - assessment: "PASS" if VectorBT >= Replay, else "FAIL"
+
+    Raises:
+        KeyError: If any required parameter is missing from params dict.
     """
+    # Validate all required params are present (no defaults - prevents mismatch bugs)
+    required_params = [
+        "or_minutes",
+        "target_r",
+        "stop_buffer_pct",
+        "max_hold_minutes",
+        "min_gap_pct",
+        "max_range_atr_ratio",
+    ]
+    missing = [p for p in required_params if p not in params]
+    if missing:
+        raise KeyError(f"Missing required parameters for cross-validation: {missing}")
+
     # Run VectorBT sweep with single parameter combination
+    # Use explicit indexing (no .get() defaults) to ensure identical params
     sweep_config = SweepConfig(
         data_dir=Path(data_dir),
         symbols=[symbol],
@@ -1188,10 +1212,10 @@ async def cross_validate_single_symbol(
         output_dir=Path(data_dir).parent.parent / "backtest_runs" / "cross_validation",
         or_minutes_list=[int(params["or_minutes"])],
         target_r_list=[float(params["target_r"])],
-        stop_buffer_list=[float(params.get("stop_buffer_pct", 0.0))],
-        max_hold_list=[int(params.get("max_hold_minutes", 60))],
-        min_gap_list=[float(params.get("min_gap_pct", 2.0))],
-        max_range_atr_list=[float(params.get("max_range_atr_ratio", 999.0))],
+        stop_buffer_list=[float(params["stop_buffer_pct"])],
+        max_hold_list=[int(params["max_hold_minutes"])],
+        min_gap_list=[float(params["min_gap_pct"])],
+        max_range_atr_list=[float(params["max_range_atr_ratio"])],
     )
 
     loop = asyncio.get_running_loop()
@@ -1378,6 +1402,30 @@ def parse_args() -> argparse.Namespace:
         default=2.0,
         help="Target R-multiple for cross-validation",
     )
+    parser.add_argument(
+        "--stop-buffer",
+        type=float,
+        default=0.0,
+        help="Stop buffer percentage for cross-validation",
+    )
+    parser.add_argument(
+        "--max-hold",
+        type=int,
+        default=60,
+        help="Maximum hold minutes for cross-validation",
+    )
+    parser.add_argument(
+        "--min-gap",
+        type=float,
+        default=2.0,
+        help="Minimum gap percentage for cross-validation",
+    )
+    parser.add_argument(
+        "--max-atr",
+        type=float,
+        default=999.0,
+        help="Maximum range/ATR ratio for cross-validation",
+    )
 
     parser.add_argument(
         "-v",
@@ -1411,13 +1459,14 @@ def main() -> None:
             start = date(2025, 6, 1)
             end = date(2025, 12, 31)
 
+        # All 6 parameters must be specified (no hidden defaults that cause mismatches)
         params = {
             "or_minutes": args.or_minutes,
             "target_r": args.target_r,
-            "stop_buffer_pct": 0.0,
-            "max_hold_minutes": 60,
-            "min_gap_pct": 2.0,
-            "max_range_atr_ratio": 999.0,
+            "stop_buffer_pct": args.stop_buffer,
+            "max_hold_minutes": args.max_hold,
+            "min_gap_pct": args.min_gap,
+            "max_range_atr_ratio": args.max_atr,
         }
 
         result = asyncio.run(
@@ -1431,11 +1480,18 @@ def main() -> None:
         )
 
         print("\n" + "=" * 60)
-        print("CROSS-VALIDATION RESULTS (DEF-009)")
+        print("CROSS-VALIDATION RESULTS (DEC-074 FIX)")
         print("=" * 60)
         print(f"Symbol:          {result['symbol']}")
         print(f"Period:          {result['start']} to {result['end']}")
-        print(f"Parameters:      or_minutes={params['or_minutes']}, target_r={params['target_r']}")
+        print("-" * 60)
+        print("Parameters (identical for both engines):")
+        print(f"  or_minutes:         {params['or_minutes']}")
+        print(f"  target_r:           {params['target_r']}")
+        print(f"  stop_buffer_pct:    {params['stop_buffer_pct']}")
+        print(f"  max_hold_minutes:   {params['max_hold_minutes']}")
+        print(f"  min_gap_pct:        {params['min_gap_pct']}")
+        print(f"  max_range_atr_ratio:{params['max_range_atr_ratio']}")
         print("-" * 60)
         print(f"VectorBT Trades: {result['vectorbt_trades']}")
         print(f"Replay Trades:   {result['replay_trades']}")
