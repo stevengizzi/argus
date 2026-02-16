@@ -147,8 +147,8 @@ Sprint numbers continue from Phase 1 (which ended at Sprint 5) to maintain a sin
 
 ---
 
-### Sprint 7 — Replay Harness ⬜ PENDING
-**Estimated tests:** ~20–25
+### Sprint 7 — Replay Harness ✅ COMPLETE
+**Tests:** 54 new (471 total)
 
 **Goal:** Build the Replay Harness that feeds historical Parquet data through the production trading pipeline. This is the highest-fidelity backtest — it runs your actual code with simulated time.
 
@@ -200,14 +200,26 @@ Sprint numbers continue from Phase 1 (which ended at Sprint 5) to maintain a sin
     - Profit by day of week
     - Recovery factor (net profit / max drawdown)
 
-**Micro-decisions to make before implementation:**
-- MD-7-1: Scanner simulation approach — pre-computed watchlist or feed all symbols?
-- MD-7-2: Order Manager in replay — synthetic ticks from bars or simplified bar-close evaluation?
-- MD-7-3: How to handle the 15-minute opening range in replay — does the harness need to "hold" bars 1–15 for the strategy to form the OR, then continue? (Yes — this should work naturally if the strategy's `on_candle` is called with bars in timestamp order, which ReplayDataService already does.)
-- MD-7-4: Slippage model for SimulatedBroker in backtest — use a fixed slippage (e.g., 1 cent per share)? Percentage-based? Volume-dependent? Keep it simple for V1.
-- MD-7-5: Backtest database location and naming convention.
+**Micro-decisions resolved:**
+- MD-7-1: Scanner simulation via gap computation from prev_close → day_open. Apply gap/price filters; fall back to all symbols (with price filter still applied) if no gaps pass (DEC-052).
+- MD-7-2: Synthetic ticks from bars — 4 ticks per bar: O→L→H→C (bullish) or O→H→L→C (bearish). Tests actual Order Manager code (DEC-053).
+- MD-7-3: No special handling — strategy's `on_candle()` accumulates OR bars naturally when fed in timestamp order.
+- MD-7-4: Fixed $0.01/share slippage, configured via `BacktestConfig.slippage_per_share` (DEC-054).
+- MD-7-5: Database naming: `data/backtest_runs/{strategy}_{start}_{end}_{timestamp}.db` (DEC-056).
+- MD-7-6: New BacktestDataService (step-driven) reusing IndicatorState from ReplayDataService (DEC-055).
+- MD-7-7: Harness publishes OrderFilledEvents after calling `simulate_price_update()`. SimulatedBroker unchanged.
+- MD-7-8: Pre-market data gap deferred (DEF-007). IEX feed only provides regular hours.
 
-**After this sprint:** You can run `python -m argus.backtest.replay_harness` and get a complete trade log for months of historical data, computed by your actual production strategy code. You can query the output database with SQL to analyze every trade.
+**Delivered:**
+- **BacktestConfig** (`argus/backtest/config.py`): Extended with date range, slippage, scanner settings, config_overrides.
+- **TickSynthesizer** (`argus/backtest/tick_synthesizer.py`): `SyntheticTick` dataclass + `synthesize_ticks()` function. 7 tests.
+- **ScannerSimulator** (`argus/backtest/scanner_simulator.py`): `DailyWatchlist` dataclass + `ScannerSimulator` class with `compute_watchlists()`. 10 tests.
+- **BacktestDataService** (`argus/backtest/backtest_data_service.py`): Step-driven DataService ABC implementation. Reuses `IndicatorState` from `replay_data_service.py`. Methods: `feed_bar()`, `publish_tick()`, `reset_daily_state()`. 13 tests.
+- **BacktestMetrics** (`argus/backtest/metrics.py`): `BacktestResult` dataclass + `compute_metrics()`, `compute_sharpe_ratio()`, `compute_max_drawdown()`. 12 tests.
+- **ReplayHarness** (`argus/backtest/replay_harness.py`): Main orchestrator with `run()`, `_load_data()`, `_setup()`, `_run_trading_day()`, `_process_bracket_triggers()`. CLI entry point with argparse. 10 tests.
+- **Test fixtures** (`tests/backtest/conftest.py`): Synthetic Parquet generators for harness tests.
+
+**After this sprint:** `python -m argus.backtest.replay_harness --start 2025-06-01 --end 2025-12-31` runs the complete production pipeline on historical data and outputs a SQLite database with the same schema as production. All existing SQL queries work on backtest output.
 
 ---
 

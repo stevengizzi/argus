@@ -298,7 +298,9 @@ class TestAlerts:
                 await asyncio.sleep(0.05)  # Let task run
 
                 # Then transition to UNHEALTHY
-                health_monitor.update_component("broker", ComponentStatus.UNHEALTHY, "Lost connection")
+                health_monitor.update_component(
+                    "broker", ComponentStatus.UNHEALTHY, "Lost connection"
+                )
                 await asyncio.sleep(0.05)  # Let task run
 
                 # Verify alert was sent

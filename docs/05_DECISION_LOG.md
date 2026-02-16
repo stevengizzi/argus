@@ -576,5 +576,60 @@ Each entry follows this format:
 
 ---
 
+### DEC-052 | Scanner Simulation via Gap Computation
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-16 |
+| **Decision** | Replay Harness simulates pre-market scanning by computing gap_pct from previous day's close to current day's 9:30 open. Applies same min_gap_pct and price filters as live scanner config. Falls back to all symbols if gap filter produces zero candidates. Price filters are always applied, even in fallback mode. |
+| **Rationale** | No pre-market data available in IEX feed (DEF-007). Gap computation from regular hours data captures overnight moves including pre-market activity reflected in the open. Fallback prevents wasting trading days on zero-candidate scenarios. The 28-symbol universe is already curated for liquidity, reducing the importance of volume-based filtering. |
+| **Alternatives** | (a) Static watchlist every day — unrealistic. (b) Feed all symbols always — doesn't test scanner interaction. (c) Download pre-market data — costs money, deferred. |
+| **Status** | Active |
+
+---
+
+### DEC-053 | Synthetic Tick Generation from Bar OHLC
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-16 |
+| **Decision** | Generate 4 synthetic ticks per 1m bar: Open, Low, High, Close for bullish bars; Open, High, Low, Close for bearish bars. This "worst-case for longs" ordering tests stops before targets on bullish bars, producing conservative results. |
+| **Rationale** | The Replay Harness must run the actual Order Manager code (tick-driven exits), which requires TickEvents. Synthetic ticks are an approximation but exercise the real code path. Option (b) — a simplified bar-close evaluator — would create a parallel implementation that could diverge from production. Known limitation: real intra-bar paths are more complex, and the 4-tick model may miss scenarios where both stop and target are hit within one bar. |
+| **Alternatives** | (b) Simplified replay-mode Order Manager evaluating on bar close only. (c) Random walk simulation within OHLC bounds — more complex, marginal benefit. |
+| **Status** | Active |
+
+---
+
+### DEC-054 | Fixed Slippage Model for V1 Backtesting
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-16 |
+| **Decision** | $0.01/share fixed slippage for all backtest fills. Configured via `BacktestConfig.slippage_per_share`. |
+| **Rationale** | Simple, conservative, configurable. At 100 shares per trade and 2 fills per round trip, this adds $2 drag per trade — meaningful over hundreds of trades. Can be refined in Sprint 9 after comparing backtest to paper trading results. Volume-dependent slippage adds complexity with no calibration data yet. |
+| **Alternatives** | (b) Percentage-based (0.05%). (c) Volume-dependent. (d) No slippage. |
+| **Status** | Active |
+
+---
+
+### DEC-055 | BacktestDataService (Step-Driven DataService)
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-16 |
+| **Decision** | New BacktestDataService implements DataService ABC but is driven step-by-step via `feed_bar()` and `publish_tick()` methods. Does not reuse ReplayDataService's `start()` method (which runs autonomously). Shares indicator computation logic with ReplayDataService via the IndicatorState dataclass. |
+| **Rationale** | The Replay Harness needs fine-grained control over clock advancement, event ordering, and daily lifecycle that ReplayDataService's autonomous iteration doesn't provide. The strategy needs a DataService for `get_indicator()` / `get_current_price()` lookups. BacktestDataService satisfies both requirements. Indicator logic is shared (not duplicated) to ensure identical computation across all DataService implementations. |
+| **Alternatives** | (a) Modify ReplayDataService to support step mode — invasive, breaks existing tests. (b) Harness publishes events directly without a DataService — strategy can't call `get_indicator()`. |
+| **Status** | Active |
+
+---
+
+### DEC-056 | Backtest Database Naming Convention
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-16 |
+| **Decision** | Backtest output databases stored at `data/backtest_runs/{strategy}_{start}_{end}_{timestamp}.db`. Example: `orb_breakout_20250601_20251231_20260216_143022.db`. Directory is gitignored. |
+| **Rationale** | Strategy name and date range in filename enables easy identification and filtering. Run timestamp ensures uniqueness across repeated runs. Same schema as production database allows reuse of all SQL queries and TradeLogger methods. |
+| **Alternatives** | (a) `run_YYYYMMDD_HHMMSS.db` — less informative filename. |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
 *New decisions are appended chronologically as the project progresses.*

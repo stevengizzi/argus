@@ -10,13 +10,13 @@ Phase 1 sprint plan: @docs/07_PHASE1_SPRINT_PLAN.md
 
 ## Current State
 
-Phase 1 COMPLETE (February 16, 2026). 417 tests, 0 flaky, ruff clean.
+Phase 1 COMPLETE (February 16, 2026). Phase 2 Sprints 6-7 COMPLETE. 471 tests, 0 flaky, ruff clean.
 
 **Dual-track work in progress:**
 - **Track 1 — Paper Trading Validation:** Running Argus on Alpaca paper trading. Validating stability, data integrity, risk compliance, trade lifecycle. See `docs/08_PAPER_TRADING_GUIDE.md`.
-- **Track 2 — Phase 2 (Backtesting Validation):** Building data acquisition, Replay Harness, VectorBT sweeps, walk-forward analysis, reporting. See `docs/09_PHASE2_SPRINT_PLAN.md`.
+- **Track 2 — Phase 2 (Backtesting Validation):** Sprint 6 (data acquisition) and Sprint 7 (Replay Harness + metrics) complete. Next: Sprint 8 (VectorBT sweeps). See `docs/09_PHASE2_SPRINT_PLAN.md`.
 
-Phase 2 sprints start at Sprint 6 (continuing from Phase 1's Sprint 5).
+Phase 2 sprints continue from Phase 1 (Sprint 6 onward).
 
 Components implemented:
 - Event Bus, EventStore, core events
@@ -33,6 +33,11 @@ Components implemented:
 - HealthMonitor — component status, heartbeat, webhook alerts, daily/weekly integrity checks
 - Structured logging — JSON file output, colored console
 - System entry point (argus/main.py) — 10-phase startup, graceful shutdown, signal handlers
+- DataFetcher — historical 1m bar download from Alpaca, Parquet storage, manifest tracking, data validation
+- ReplayHarness — high-fidelity backtesting using production components (EventBus, RiskManager, OrderManager, SimulatedBroker) with FixedClock injection
+- BacktestDataService — step-driven DataService for harness control, shares indicator logic with ReplayDataService
+- ScannerSimulator — gap-based watchlist computation for backtest mode
+- BacktestMetrics — Sharpe ratio, drawdown, profit factor, R-multiples, equity curve analysis
 - Dependencies: alpaca-py>=0.30, python-dotenv>=1.0, aiohttp>=3.9 (NOT alpaca-trade-api — deprecated)
 
 ## Architecture
@@ -42,7 +47,7 @@ Three tiers built in sequence:
 2. Command Center (Tauri + React) — dashboards, controls, reports
 3. AI Layer (Claude API) — advisory, approval workflow, reports
 
-Currently building: Tier 1, Phase 1.
+Currently building: Tier 1, Phase 2 (Backtesting Validation).
 
 ## Tech Stack
 
