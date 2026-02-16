@@ -77,6 +77,7 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 - **Report chart library:** Plotly primary, matplotlib fallback. DEC-068.
 - **Cross-validation (DEF-009):** `cross_validate_single_symbol()` compares VectorBT vs Replay Harness trade counts. VectorBT >= Replay = PASS. DEC-069.
 - **Legacy slow function removal (DEF-010):** `_simulate_trades_for_day_slow()` removed from vectorbt_orb.py after cross-validation confirmed vectorized path is correct. DEC-070.
+- **News & Catalyst Intelligence:** Three-tier architecture — Tier 1 (economic/earnings calendar, Phase 3), Tier 2 (news feed + classification, Phase 6), Tier 3 (AI sentiment via Claude API, Phase 6+). Defensive filtering value prioritized over signal generation. No independent trade signals from news in V1. DEC-071.
 
 ## Architecture Summary
 
@@ -165,10 +166,10 @@ argus/
    - Sprint 4b: Order Manager, AlpacaScanner (320 tests)
    - Sprint 5: HealthMonitor, system entry point, state reconstruction, structured logging (359 tests)
 2. **Backtesting Validation** (IN PROGRESS): Historical data acquisition, Replay Harness, VectorBT parameter sweeps, walk-forward analysis, Parameter Validation Report. Backtrader dropped (DEC-046). See `09_PHASE2_SPRINT_PLAN.md`.
-3. **Live Validation**: ORB live at minimum size, compare to backtest expectations. Calendar-bound (20+ trading days).
+3. **Live Validation**: ORB live at minimum size, compare to backtest expectations. Calendar-bound (20+ trading days). Includes Tier 1 News Integration (economic/earnings calendar as scanner metadata and risk filters).
 4. **Orchestrator + Second Strategy**: Orchestrator framework, ORB Scalp, cross-strategy risk management.
 5. **Command Center MVP**: Tauri app, real-time dashboard, basic controls.
-6. **AI Layer**: Claude API integration, approval workflow, report generation.
+6. **AI Layer + News Intelligence**: Claude API integration, approval workflow, report generation. Tier 2 news feed ingestion and catalyst classification. Tier 3 AI-powered sentiment analysis via Claude API.
 7. **Expand Strategies** (Ongoing): Add strategies one at a time through Incubator Pipeline.
 8. **Multi-Asset Expansion** (Future): Crypto via Alpaca, then Forex, then Futures.
 

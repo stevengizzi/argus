@@ -141,6 +141,18 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 
 ---
 
+### ASM-011 — News Data Availability and Quality
+| Field | Value |
+|-------|-------|
+| **Assumption** | Free or low-cost news APIs (Alpaca news, SEC EDGAR, free economic calendars) provide sufficient data quality and timeliness for Tier 1–2 catalyst classification. |
+| **Confidence** | Medium |
+| **Basis** | Alpaca includes basic news in their API. SEC EDGAR is free and structured. Economic calendar data is widely available. Benzinga Pro is available at $50–100/month if free sources prove insufficient. |
+| **If Wrong** | Tier 1 structured calendar data is reliable regardless (dates are facts). Tier 2 classification quality may degrade with poor news sources, producing noisy or late catalyst labels. |
+| **Contingency** | Start with Alpaca's built-in news + SEC EDGAR (both free). Evaluate quality during paper trading. Budget up to $200/month for premium feeds (Benzinga Pro) if free sources are insufficient. Tier 2 is only built after Tier 1 proves value, limiting wasted investment. |
+| **Review Date** | When Tier 2 implementation begins (Phase 6) |
+
+---
+
 ## Risks
 
 ### RSK-001 — Strategy Overfitting
@@ -321,7 +333,7 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 
 ---
 
-### R-017 | Timezone Comparison Bugs in Time-Windowed Logic
+### RSK-017 | Timezone Comparison Bugs in Time-Windowed Logic
 | Field | Value |
 |-------|-------|
 | **Identified** | 2026-02-16 |
@@ -330,6 +342,19 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 | **Impact** | High (strategy silently produces zero trades with no error or warning) |
 | **Mitigation** | (1) DEC-061 establishes the conversion pattern. (2) Architectural rule added to CLAUDE.md. (3) Consider a `market_time()` helper in BaseStrategy that all subclasses use, making it harder to accidentally use raw UTC. (4) 8 regression tests added covering UTC→ET conversion including DST. |
 | **Status** | Open — mitigated for OrbBreakout, pattern could recur in future strategies |
+
+---
+
+### RSK-018 — News Scanner Signal-to-Noise Ratio
+| Field | Value |
+|-------|-------|
+| **Severity** | Medium |
+| **Likelihood** | Medium |
+| **Description** | A poorly tuned news scanner adds noise instead of signal — false catalyst classifications, irrelevant headlines matched to symbols, or delayed information that triggers incorrect filtering (e.g., filtering out a valid setup due to stale negative news). |
+| **Mitigation** | Tier 1 uses only structured data (calendar dates, earnings dates) — no NLP noise. Tier 2 uses strict symbol-ticker matching (not company name matching, which produces false positives). Classification starts with conservative keyword patterns and is refined through manual review during paper trading. News metadata is advisory (enriches scanner output) — it does not veto trades in V1. Kill switch: any tier can be disabled without affecting core trading logic. Manual catalyst logging during Phase 3 paper trading provides ground truth for tuning. |
+| **Owner** | Data Service / Intelligence Module |
+
+---
 
 ## Review Schedule
 

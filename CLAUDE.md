@@ -75,6 +75,7 @@ argus/
 ├── data/           # Scanner, Data Service, Indicators
 ├── execution/      # Broker abstraction, Order Manager
 ├── analytics/      # Trade Logger, Strategy Reports, Portfolio Reports
+├── intelligence/   # News & catalyst intelligence (Tier 1: Phase 3, Tiers 2-3: Phase 6) [PLANNED]
 ├── backtest/       # Data fetcher, Replay Harness, VectorBT sweeps, walk-forward, metrics, reports
 ├── db/             # DatabaseManager
 ├── notifications/  # Push, Email, Telegram/Discord handlers

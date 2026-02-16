@@ -857,6 +857,16 @@ docs/backtesting/
 ├── BACKTEST_RUN_LOG.md
 └── PARAMETER_VALIDATION_REPORT.md
 
+### Future Module: `argus/intelligence/`
+Planned for Phase 3 (Tier 1) and Phase 6 (Tiers 2–3). Will contain:
+- `calendar.py` — Economic and earnings calendar ingestion
+- `news_feed.py` — News API subscription and symbol matching
+- `classifier.py` — Catalyst type classification (keyword → ML pipeline)
+- `edgar.py` — SEC EDGAR filing crawler (8-K, Form 4, 13F)
+- `sentiment.py` — Claude API sentiment analysis (Tier 3)
+
+Not yet implemented. Interface will publish `CatalystEvent` to the Event Bus for consumption by Scanner, Risk Manager, and Learning Journal.
+
 ---
 
 ## 6. Command Center (Tier 2)

@@ -453,7 +453,52 @@ The Learning Journal is the institutional memory of the trading operation. It tu
 
 ---
 
-## 18. Glossary
+## 18. News & Catalyst Intelligence
+
+### 18.1 Purpose
+
+News is the catalyst that creates the price action Argus trades. Gap stocks gap for a reason — earnings, FDA approvals, analyst upgrades, offerings, geopolitical events. Understanding *why* a stock is moving improves entry confidence, filters out low-quality setups, and protects against traps where a technically perfect pattern sits on a rotten fundamental foundation.
+
+This system provides context to the trading engine, not trading signals. It enhances existing strategies by adding catalyst-type metadata to scanner results, flagging known-risk events, and enriching the Learning Journal with post-trade context.
+
+### 18.2 Three-Tier Architecture
+
+**Tier 1 — Economic & Earnings Calendar (Phase 3)**
+Structured calendar data ingested daily before market open. No NLP required.
+- **Economic calendar:** FOMC dates, NFP, CPI, GDP releases, Fed speeches. Source: free economic calendar API or Alpaca news.
+- **Earnings calendar:** Which stocks report today/tomorrow. Flag any scanner candidates with pending earnings.
+- **Output:** Risk flags on scanner results ("AAPL reports earnings after close today"), regime modifier ("FOMC announcement at 2:00 PM — reduce position sizes in afternoon strategies").
+- **Integration point:** Scanner metadata and Risk Manager event-day filters.
+
+**Tier 2 — News Feed Ingestion & Classification (Phase 6)**
+Subscribe to a news API and match headlines to watchlist symbols by ticker mention. Classify into catalyst categories using keyword/regex patterns.
+- **Catalyst categories:** Earnings, Analyst Action, FDA/Regulatory, M&A, Offering/Dilution, Insider Activity, Macro/Sector, Legal/SEC, Product Launch, Guidance Change.
+- **Output:** Catalyst metadata on scanner results ("MRNA gapped +8%, catalyst: FDA approval"). Historical catalyst-to-outcome correlation data for the Learning Journal.
+- **Data sources (evaluated in priority order):** Alpaca built-in news (free, already integrated), Benzinga Pro ($50–100/month), SEC EDGAR filings (free, structured, high-value for 8-K/13F/insider transactions), NewsAPI (general news fallback).
+- **Integration point:** Scanner enrichment, Learning Journal, pre-market briefing.
+
+**Tier 3 — AI-Powered Sentiment & Analysis (Phase 6+)**
+Feed news articles through Claude's API for nuanced analysis beyond simple classification.
+- **Capabilities:** Catalyst quality assessment ("FDA approval for blockbuster category vs. niche indication"), follow-through probability estimation, cross-reference with historical patterns.
+- **Output:** Confidence modifiers on trade signals, narrative context in daily reports, automated Learning Journal entries linking news to trade outcomes.
+- **Integration point:** Orchestrator confidence weighting, Claude Co-Captain analysis, end-of-day report generation.
+
+### 18.3 Design Principles
+
+- **Defensive value first.** Avoiding bad trades is more valuable than finding good ones. Tier 1's primary job is filtering out landmines (earnings traps, dilutive offerings, pending regulatory actions).
+- **Pre-market focus.** For day trading, news latency requirements are relaxed — overnight and pre-market news matters most. Sub-second news latency is not a design goal.
+- **Signal over noise.** The financial news firehose is overwhelming. Relevance scoring and strict symbol-matching prevent information overload. Only news matching active watchlist symbols or broad market events (FOMC, CPI) passes through.
+- **Structured data first, NLP second.** Economic calendars, earnings dates, and SEC filings are structured and reliable. Unstructured news analysis (Tiers 2–3) layers on top only after structured data proves its value.
+
+### 18.4 Key Constraints
+
+- **Data cost:** Tier 1 is free or near-free. Tier 2 may require $50–200/month for quality real-time feeds. Budget evaluated before implementation.
+- **No trading signals from news alone.** News enhances pattern-based strategies; it does not generate independent trade signals in V1. A future "News Momentum" strategy could change this, but it would go through the standard Incubator Pipeline.
+- **SEC EDGAR integration:** Free, structured, and extremely valuable. An EDGAR crawler for 8-K filings, 13F institutional holdings changes, and insider transactions (Form 4) is a high-value, low-cost component prioritized within Tier 2.
+
+---
+
+## 19. Glossary
 
 | Term | Definition |
 |------|-----------|
@@ -472,6 +517,8 @@ The Learning Journal is the institutional memory of the trading operation. It tu
 | **Base Capital** | The minimum account balance required to operate all active strategies. |
 | **Growth Pool** | Profits above Base Capital, available for withdrawal or reinvestment. |
 | **Regime** | A characterization of current market conditions (trending/range-bound, high/low volatility) that influences strategy selection. |
+| **Catalyst** | The fundamental reason a stock's price moves significantly — earnings, FDA decisions, analyst actions, M&A announcements, etc. The "why" behind a gap or breakout. |
+| **Economic Calendar** | A schedule of known market-moving events (FOMC meetings, jobs reports, CPI releases) used to anticipate volatility regimes. |
 
 ---
 

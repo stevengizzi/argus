@@ -783,5 +783,16 @@ Each entry follows this format:
 
 ---
 
+### DEC-071 | News & Catalyst Intelligence — Three-Tier Architecture
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-17 |
+| **Decision** | Implement News & Catalyst Intelligence as a three-tier system: Tier 1 (economic/earnings calendar — structured data, Phase 3), Tier 2 (news feed ingestion + keyword classification, Phase 6), Tier 3 (AI-powered sentiment via Claude API, Phase 6+). Tier 1 integrates as scanner metadata and Risk Manager event-day filters. Tiers 2–3 enrich scanner results with catalyst type, feed the Learning Journal, and provide confidence modifiers to the Orchestrator. News does not generate independent trade signals in V1. |
+| **Alternatives** | (a) Build all tiers at once in a dedicated phase — too much scope, delays validation of simpler tiers. (b) Skip entirely and rely purely on price action — leaves money on the table defensively (avoiding bad setups) and offensively (catalyst quality assessment). (c) Third-party sentiment product (e.g., MarketPsych, Sentifi) — expensive, black box, less integration flexibility. |
+| **Rationale** | Gap stocks gap because of news. Understanding the catalyst type improves trade quality assessment (earnings gap vs. dilutive offering gap have very different follow-through profiles). Tier 1 is nearly free and provides immediate defensive value (don't trade into earnings, reduce size during FOMC). Tiers 2–3 build incrementally on proven Tier 1 value. SEC EDGAR filings (8-K, Form 4, 13F) are free, structured, and high-value — prioritized within Tier 2. Pre-market latency requirements are relaxed (overnight news, not millisecond), making implementation tractable. |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
 *New decisions are appended chronologically as the project progresses.*
