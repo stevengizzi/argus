@@ -148,7 +148,7 @@ Sprint numbers continue from Phase 1 (which ended at Sprint 5) to maintain a sin
 ---
 
 ### Sprint 7 — Replay Harness ✅ COMPLETE
-**Tests:** 54 new (471 total)
+**Tests:** 56 new (473 total)
 
 **Goal:** Build the Replay Harness that feeds historical Parquet data through the production trading pipeline. This is the highest-fidelity backtest — it runs your actual code with simulated time.
 

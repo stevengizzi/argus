@@ -10,10 +10,10 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 
 ## Current Project State
 
-**Phase:** Phase 1 COMPLETE (417 tests, February 16, 2026). Dual-track work in progress.
+**Phase:** Phase 1 COMPLETE (362 tests, February 16, 2026). Phase 2 in progress.
 **Track 1 — Paper Trading Validation:** Running Argus on Alpaca paper trading for 3+ trading days. Validating stability, data integrity, risk compliance, and trade lifecycle correctness. See `08_PAPER_TRADING_GUIDE.md`.
-**Track 2 — Phase 2 Build (Backtesting Validation):** Building Replay Harness, VectorBT parameter sweeps, walk-forward analysis, and reporting tooling. Runs in parallel with paper validation. See `09_PHASE2_SPRINT_PLAN.md`. Sprint 6 complete (417 tests). Historical data acquired: 28 symbols × 11 months.
-**Next milestone:** Complete paper validation (3+ clean trading days) AND Phase 2 Parameter Validation Report. Then Phase 3 (Live Validation).
+**Track 2 — Phase 2 Build (Backtesting Validation):** Sprint 6 (Historical Data Acquisition) and Sprint 7 (Replay Harness + Backtest Metrics) COMPLETE. 473 tests passing. Sprint 8 (VectorBT Parameter Sweeps) next. See `09_PHASE2_SPRINT_PLAN.md`.
+**Next milestone:** Sprint 8 VectorBT parameter sweeps → Sprint 9 Walk-Forward Analysis → Parameter Validation Report. Then Phase 3 (Live Validation).
 
 ## Key Decisions Made (Do Not Relitigate)
 
@@ -61,6 +61,13 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 - **Health storage:** In-memory only (ephemeral). DEC-045/MD-5-5.
 - **Entry point:** Procedural main() with explicit 10-phase startup sequence. DEC-045/MD-5-6.
 - **Backtesting layers (revised):** Two layers — VectorBT (parameter sweeps) + Replay Harness (production code replay). Backtrader dropped. DEC-046.
+- **Walk-forward validation:** Mandatory for all parameter optimization. 70/30 IS/OOS split. Walk-forward efficiency > 0.3 required. DEC-047.
+- **Scanner simulation (backtest):** Compute gap from prev_close to day_open, apply scanner filters (min_gap_pct, min_price, volume). Fall back to all symbols (with price filter) if zero candidates. DEC-052.
+- **Synthetic tick generation:** 4 ticks per bar (O→L→H→C bullish, O→H→L→C bearish). Worst-case-for-longs ordering. Tests actual Order Manager code path. DEC-053.
+- **Backtest slippage:** Fixed $0.01/share for V1. Simple, conservative, configurable. DEC-054.
+- **BacktestDataService:** Step-driven DataService controlled by ReplayHarness via feed_bar()/publish_tick(). Shares indicator logic with ReplayDataService. DEC-055.
+- **Backtest database naming:** data/backtest_runs/{strategy}_{start}_{end}_{timestamp}.db. Same schema as production. DEC-056.
+- **Backtrader dropped:** Replay Harness provides higher fidelity by running actual production code. VectorBT covers fast parameter exploration. DEC-046.
 - **Walk-forward validation:** Mandatory for all parameter optimization. 70/30 IS/OOS split. Walk-forward efficiency > 0.3 required. DEC-047.
 
 ## Architecture Summary
