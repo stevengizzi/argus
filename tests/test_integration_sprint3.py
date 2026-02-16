@@ -41,9 +41,14 @@ def generate_orb_test_parquet(
     """Generate Parquet data designed to trigger an ORB breakout.
 
     Creates:
-    - 15 candles during OR window (9:30-9:44) establishing the opening range
-    - 1 candle at 9:45 just after OR window (triggers OR finalization)
-    - 1 breakout candle at 10:00 that closes above OR high with volume
+    - 15 candles during OR window (9:30-9:44 ET) establishing the opening range
+    - 1 candle at 9:45 ET just after OR window (triggers OR finalization)
+    - 1 breakout candle at 10:00 ET that closes above OR high with volume
+
+    Timestamps are stored in UTC (per DEC-049). For February 2026 (EST, UTC-5):
+    - 9:30 AM ET = 14:30 UTC
+    - 9:45 AM ET = 14:45 UTC
+    - 10:00 AM ET = 15:00 UTC
 
     Args:
         symbol: Ticker symbol.
@@ -57,15 +62,15 @@ def generate_orb_test_parquet(
         Path to the generated Parquet file.
     """
     base_date = datetime(2026, 2, 15, tzinfo=UTC)
-    # Use ET market hours directly (9:30) - the strategy checks time() component
-    market_open = base_date.replace(hour=9, minute=30)
+    # February 2026 is EST (UTC-5). 9:30 AM ET = 14:30 UTC.
+    market_open_utc = base_date.replace(hour=14, minute=30)
 
     candles = []
 
     # OR window candles (9:30-9:44, 15 candles)
     or_midpoint = (or_high + or_low) / 2
     for i in range(15):
-        timestamp = market_open + timedelta(minutes=i)
+        timestamp = market_open_utc + timedelta(minutes=i)
         # Vary prices within OR range
         high = or_high if i == 5 else or_high - 0.3
         low = or_low if i == 10 else or_low + 0.2
@@ -82,7 +87,7 @@ def generate_orb_test_parquet(
         })
 
     # Post-OR candle (9:45) - triggers OR finalization
-    post_or_time = market_open + timedelta(minutes=15)
+    post_or_time = market_open_utc + timedelta(minutes=15)
     candles.append({
         "timestamp": post_or_time,
         "open": or_midpoint,
@@ -93,7 +98,7 @@ def generate_orb_test_parquet(
     })
 
     # Breakout candle (10:00)
-    breakout_time = market_open + timedelta(minutes=30)
+    breakout_time = market_open_utc + timedelta(minutes=30)
     candles.append({
         "timestamp": breakout_time,
         "open": or_high,

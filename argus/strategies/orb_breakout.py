@@ -20,6 +20,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import time
 from typing import TYPE_CHECKING
+from zoneinfo import ZoneInfo
 
 from argus.core.clock import Clock
 from argus.core.config import OrbBreakoutConfig
@@ -36,6 +37,9 @@ if TYPE_CHECKING:
     from argus.data.service import DataService
 
 logger = logging.getLogger(__name__)
+
+# Eastern Time zone for market hours comparisons
+ET = ZoneInfo("America/New_York")
 
 
 @dataclass
@@ -113,8 +117,13 @@ class OrbBreakoutStrategy(BaseStrategy):
         return self._symbol_state[symbol]
 
     def _get_candle_time(self, candle: CandleEvent) -> time:
-        """Extract time from candle timestamp."""
-        return candle.timestamp.time()
+        """Extract Eastern Time from candle timestamp.
+
+        Candle timestamps are stored in UTC (DEC-049). This method converts
+        to Eastern Time before extracting the time component for comparison
+        against market hours constants (which are defined in ET).
+        """
+        return candle.timestamp.astimezone(ET).time()
 
     def _is_in_or_window(self, candle: CandleEvent) -> bool:
         """Check if candle is within the opening range window."""

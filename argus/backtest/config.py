@@ -60,7 +60,7 @@ class BacktestConfig(BaseModel):
     end_date: date
 
     # Strategy
-    strategy_id: str = Field(default="orb_breakout")
+    strategy_id: str = Field(default="strat_orb_breakout")
 
     # Slippage (DEC-054: Fixed $0.01/share)
     slippage_per_share: float = Field(default=0.01, ge=0.0)

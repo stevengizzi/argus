@@ -94,6 +94,9 @@ class TestSprint4bIntegration:
         event_bus.subscribe(PositionOpenedEvent, on_opened)
         event_bus.subscribe(PositionClosedEvent, on_closed)
 
+        # Set current price in broker (required for market order fills)
+        broker.set_price("AAPL", 150.0)
+
         # Create and approve signal
         signal = SignalEvent(
             strategy_id="orb_breakout",
@@ -108,26 +111,13 @@ class TestSprint4bIntegration:
         assert isinstance(approved, OrderApprovedEvent)
 
         # Order Manager handles approval
+        # SimulatedBroker fills immediately and Order Manager processes the fill
         await order_manager.on_approved(approved)
+        await event_bus.drain()
 
-        # Simulate entry fill from SimulatedBroker
-        # (SimulatedBroker fills immediately at current price)
-        # We need to manually create a fill event since SimulatedBroker
-        # doesn't publish to EventBus
+        # Verify position created in broker
         positions = await broker.get_positions()
         assert len(positions) == 1
-
-        # Find the entry order ID
-        entry_order_id = list(order_manager._pending_orders.keys())[0]
-
-        # Manually trigger the fill event
-        fill_event = OrderFilledEvent(
-            order_id=entry_order_id,
-            fill_price=150.0,
-            fill_quantity=100,
-        )
-        await order_manager.on_fill(fill_event)
-        await event_bus.drain()
 
         # Verify position opened
         assert len(opened_events) == 1
@@ -159,18 +149,12 @@ class TestSprint4bIntegration:
         expected_breakeven = 150.0 * (1 + 0.001)
         assert position.stop_price == pytest.approx(expected_breakeven, abs=0.01)
 
-        # Simulate tick at T2 price
+        # Set broker price for T2 fill
+        broker.set_price("AAPL", 154.0)
+
+        # Simulate tick at T2 price - this triggers flatten which fills immediately
         tick = TickEvent(symbol="AAPL", price=154.0, volume=1000)
         await order_manager.on_tick(tick)
-
-        # Get flatten order ID and simulate fill
-        flatten_order_id = list(order_manager._pending_orders.keys())[-1]
-        flatten_fill = OrderFilledEvent(
-            order_id=flatten_order_id,
-            fill_price=154.0,
-            fill_quantity=50,
-        )
-        await order_manager.on_fill(flatten_fill)
         await event_bus.drain()
 
         # Verify position closed
@@ -224,6 +208,9 @@ class TestSprint4bIntegration:
 
         event_bus.subscribe(PositionClosedEvent, on_closed)
 
+        # Set current price in broker (required for market order fills)
+        broker.set_price("TSLA", 250.0)
+
         # Create and approve signal
         signal = SignalEvent(
             strategy_id="orb_breakout",
@@ -235,16 +222,9 @@ class TestSprint4bIntegration:
             rationale="ORB breakout",
         )
         approved = await risk_manager.evaluate_signal(signal)
-        await order_manager.on_approved(approved)
 
-        # Simulate entry fill
-        entry_order_id = list(order_manager._pending_orders.keys())[0]
-        fill_event = OrderFilledEvent(
-            order_id=entry_order_id,
-            fill_price=250.0,
-            fill_quantity=100,
-        )
-        await order_manager.on_fill(fill_event)
+        # Order Manager handles approval - SimulatedBroker fills immediately
+        await order_manager.on_approved(approved)
 
         # Get stop order ID
         position = order_manager._managed_positions["TSLA"][0]
@@ -316,6 +296,9 @@ class TestSprint4bIntegration:
 
         event_bus.subscribe(PositionClosedEvent, on_closed)
 
+        # Set current price in broker (required for market order fills)
+        broker.set_price("NVDA", 900.0)
+
         # Create and approve signal
         signal = SignalEvent(
             strategy_id="orb_breakout",
@@ -327,16 +310,9 @@ class TestSprint4bIntegration:
             rationale="ORB breakout",
         )
         approved = await risk_manager.evaluate_signal(signal)
-        await order_manager.on_approved(approved)
 
-        # Simulate entry fill
-        entry_order_id = list(order_manager._pending_orders.keys())[0]
-        fill_event = OrderFilledEvent(
-            order_id=entry_order_id,
-            fill_price=900.0,
-            fill_quantity=50,
-        )
-        await order_manager.on_fill(fill_event)
+        # Order Manager handles approval - SimulatedBroker fills immediately
+        await order_manager.on_approved(approved)
 
         # Verify position is open
         assert order_manager.has_open_positions
@@ -344,17 +320,12 @@ class TestSprint4bIntegration:
         # Advance clock past EOD flatten time (3:50 PM ET = 20:50 UTC)
         clock.advance(minutes=10)  # Now 20:55 UTC = 3:55 PM ET
 
-        # Trigger EOD flatten manually (normally done by poll loop)
-        await order_manager.eod_flatten()
+        # Update broker price to simulate market movement (905.0)
+        broker.set_price("NVDA", 905.0)
 
-        # Simulate flatten fill
-        flatten_order_id = list(order_manager._pending_orders.keys())[-1]
-        flatten_fill = OrderFilledEvent(
-            order_id=flatten_order_id,
-            fill_price=905.0,  # Exit at current price
-            fill_quantity=50,
-        )
-        await order_manager.on_fill(flatten_fill)
+        # Trigger EOD flatten manually (normally done by poll loop)
+        # SimulatedBroker fills immediately at current price (905.0)
+        await order_manager.eod_flatten()
         await event_bus.drain()
 
         # Verify position closed with EOD reason

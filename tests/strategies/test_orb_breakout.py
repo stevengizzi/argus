@@ -2,12 +2,15 @@
 
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock
+from zoneinfo import ZoneInfo
 
 import pytest
 
 from argus.core.config import OperatingWindow, OrbBreakoutConfig, StrategyRiskLimits
 from argus.core.events import CandleEvent, Side, SignalEvent
 from argus.strategies.orb_breakout import OrbBreakoutStrategy
+
+ET = ZoneInfo("America/New_York")
 
 
 def make_orb_config(
@@ -59,9 +62,18 @@ def make_candle(
     close: float = 100.5,
     volume: int = 100_000,
 ) -> CandleEvent:
-    """Create a CandleEvent for testing."""
+    """Create a CandleEvent for testing.
+
+    Timestamps should be provided in UTC. The strategy will convert to ET
+    for time window comparisons. For February 2026 (EST, UTC-5):
+    - 9:30 AM ET = 14:30 UTC
+    - 9:45 AM ET = 14:45 UTC
+    - 10:00 AM ET = 15:00 UTC
+    - 11:30 AM ET = 16:30 UTC
+    """
     if timestamp is None:
-        timestamp = datetime(2026, 2, 15, 9, 30, 0, tzinfo=UTC)
+        # Default: 9:30 AM ET = 14:30 UTC in February (EST)
+        timestamp = datetime(2026, 2, 15, 14, 30, 0, tzinfo=UTC)
     return CandleEvent(
         symbol=symbol,
         timeframe="1m",
@@ -81,11 +93,16 @@ def make_or_candles(
     or_high: float = 101.0,
     or_low: float = 99.0,
 ) -> list[CandleEvent]:
-    """Generate candles for the opening range window."""
+    """Generate candles for the opening range window.
+
+    Generates UTC timestamps that correspond to ET market hours.
+    For February 2026 (EST, UTC-5): 9:30 AM ET = 14:30 UTC.
+    """
     from datetime import timedelta
 
     if base_time is None:
-        base_time = datetime(2026, 2, 15, 9, 30, 0, tzinfo=UTC)
+        # 9:30 AM ET = 14:30 UTC in February (EST)
+        base_time = datetime(2026, 2, 15, 14, 30, 0, tzinfo=UTC)
 
     candles = []
     for i in range(num_candles):
@@ -145,7 +162,7 @@ class TestOrbOpeningRangeFormation:
         # Send first candle after OR window (9:45)
         post_or = make_candle(
             symbol="AAPL",
-            timestamp=datetime(2026, 2, 15, 9, 45, 0, tzinfo=UTC),
+            timestamp=datetime(2026, 2, 15, 14, 45, 0, tzinfo=UTC),
         )
         await strategy.on_candle(post_or)
 
@@ -175,7 +192,7 @@ class TestOrbOpeningRangeFormation:
         # Finalize
         post_or = make_candle(
             symbol="AAPL",
-            timestamp=datetime(2026, 2, 15, 9, 45, 0, tzinfo=UTC),
+            timestamp=datetime(2026, 2, 15, 14, 45, 0, tzinfo=UTC),
         )
         await strategy.on_candle(post_or)
 
@@ -204,7 +221,7 @@ class TestOrbOpeningRangeFormation:
         # Finalize
         post_or = make_candle(
             symbol="AAPL",
-            timestamp=datetime(2026, 2, 15, 9, 45, 0, tzinfo=UTC),
+            timestamp=datetime(2026, 2, 15, 14, 45, 0, tzinfo=UTC),
         )
         await strategy.on_candle(post_or)
 
@@ -234,7 +251,7 @@ class TestOrbBreakoutDetection:
         # Finalize OR
         post_or = make_candle(
             symbol=symbol,
-            timestamp=datetime(2026, 2, 15, 9, 45, 0, tzinfo=UTC),
+            timestamp=datetime(2026, 2, 15, 14, 45, 0, tzinfo=UTC),
         )
         await strategy.on_candle(post_or)
 
@@ -257,7 +274,7 @@ class TestOrbBreakoutDetection:
         # Chase limit = 101.0 * 1.02 = 103.02 (with 2% chase protection)
         breakout = make_candle(
             symbol="AAPL",
-            timestamp=datetime(2026, 2, 15, 10, 0, 0, tzinfo=UTC),
+            timestamp=datetime(2026, 2, 15, 15, 0, 0, tzinfo=UTC),
             open_price=101.0,
             high=102.5,
             low=100.8,
@@ -288,7 +305,7 @@ class TestOrbBreakoutDetection:
         # Wick above OR high but close below
         wick = make_candle(
             symbol="AAPL",
-            timestamp=datetime(2026, 2, 15, 10, 0, 0, tzinfo=UTC),
+            timestamp=datetime(2026, 2, 15, 15, 0, 0, tzinfo=UTC),
             open_price=100.5,
             high=102.0,  # Wicks above OR high
             low=100.3,
@@ -314,7 +331,7 @@ class TestOrbBreakoutDetection:
         # Breakout but low volume
         breakout = make_candle(
             symbol="AAPL",
-            timestamp=datetime(2026, 2, 15, 10, 0, 0, tzinfo=UTC),
+            timestamp=datetime(2026, 2, 15, 15, 0, 0, tzinfo=UTC),
             open_price=101.0,
             high=102.5,
             low=100.8,
@@ -343,7 +360,7 @@ class TestOrbBreakoutDetection:
         # Breakout but below VWAP
         breakout = make_candle(
             symbol="AAPL",
-            timestamp=datetime(2026, 2, 15, 10, 0, 0, tzinfo=UTC),
+            timestamp=datetime(2026, 2, 15, 15, 0, 0, tzinfo=UTC),
             close=102.0,  # Above OR high but below VWAP (105)
             volume=200_000,
         )
@@ -370,7 +387,7 @@ class TestOrbBreakoutDetection:
         # Close above this triggers chase protection
         breakout = make_candle(
             symbol="AAPL",
-            timestamp=datetime(2026, 2, 15, 10, 0, 0, tzinfo=UTC),
+            timestamp=datetime(2026, 2, 15, 15, 0, 0, tzinfo=UTC),
             close=102.0,  # Above chase protection limit
             volume=200_000,
         )
@@ -403,14 +420,14 @@ class TestSignalCorrectness:
 
         post_or = make_candle(
             symbol="AAPL",
-            timestamp=datetime(2026, 2, 15, 9, 45, 0, tzinfo=UTC),
+            timestamp=datetime(2026, 2, 15, 14, 45, 0, tzinfo=UTC),
         )
         await strategy.on_candle(post_or)
 
         # Breakout
         breakout = make_candle(
             symbol="AAPL",
-            timestamp=datetime(2026, 2, 15, 10, 0, 0, tzinfo=UTC),
+            timestamp=datetime(2026, 2, 15, 15, 0, 0, tzinfo=UTC),
             close=101.5,
             volume=200_000,
         )
@@ -440,13 +457,13 @@ class TestSignalCorrectness:
 
         post_or = make_candle(
             symbol="AAPL",
-            timestamp=datetime(2026, 2, 15, 9, 45, 0, tzinfo=UTC),
+            timestamp=datetime(2026, 2, 15, 14, 45, 0, tzinfo=UTC),
         )
         await strategy.on_candle(post_or)
 
         breakout = make_candle(
             symbol="AAPL",
-            timestamp=datetime(2026, 2, 15, 10, 0, 0, tzinfo=UTC),
+            timestamp=datetime(2026, 2, 15, 15, 0, 0, tzinfo=UTC),
             close=102.5,
             volume=200_000,
         )
@@ -476,14 +493,14 @@ class TestSignalCorrectness:
 
         post_or = make_candle(
             symbol="AAPL",
-            timestamp=datetime(2026, 2, 15, 9, 45, 0, tzinfo=UTC),
+            timestamp=datetime(2026, 2, 15, 14, 45, 0, tzinfo=UTC),
         )
         await strategy.on_candle(post_or)
 
         # Entry = 101.5, Stop = 100, Risk = 1.5
         breakout = make_candle(
             symbol="AAPL",
-            timestamp=datetime(2026, 2, 15, 10, 0, 0, tzinfo=UTC),
+            timestamp=datetime(2026, 2, 15, 15, 0, 0, tzinfo=UTC),
             close=101.5,
             volume=200_000,
         )
@@ -521,14 +538,14 @@ class TestRiskLimits:
 
         post_or = make_candle(
             symbol="AAPL",
-            timestamp=datetime(2026, 2, 15, 9, 45, 0, tzinfo=UTC),
+            timestamp=datetime(2026, 2, 15, 14, 45, 0, tzinfo=UTC),
         )
         await strategy.on_candle(post_or)
 
         # Valid breakout should be rejected due to max trades
         breakout = make_candle(
             symbol="AAPL",
-            timestamp=datetime(2026, 2, 15, 10, 0, 0, tzinfo=UTC),
+            timestamp=datetime(2026, 2, 15, 15, 0, 0, tzinfo=UTC),
             close=101.5,
             volume=200_000,
         )
@@ -557,13 +574,13 @@ class TestRiskLimits:
 
         post_or = make_candle(
             symbol="AAPL",
-            timestamp=datetime(2026, 2, 15, 9, 45, 0, tzinfo=UTC),
+            timestamp=datetime(2026, 2, 15, 14, 45, 0, tzinfo=UTC),
         )
         await strategy.on_candle(post_or)
 
         breakout = make_candle(
             symbol="AAPL",
-            timestamp=datetime(2026, 2, 15, 10, 0, 0, tzinfo=UTC),
+            timestamp=datetime(2026, 2, 15, 15, 0, 0, tzinfo=UTC),
             close=101.5,
             volume=200_000,
         )
@@ -593,14 +610,14 @@ class TestTimeWindow:
 
         post_or = make_candle(
             symbol="AAPL",
-            timestamp=datetime(2026, 2, 15, 9, 45, 0, tzinfo=UTC),
+            timestamp=datetime(2026, 2, 15, 14, 45, 0, tzinfo=UTC),
         )
         await strategy.on_candle(post_or)
 
         # Breakout after latest entry (11:31)
         breakout = make_candle(
             symbol="AAPL",
-            timestamp=datetime(2026, 2, 15, 11, 31, 0, tzinfo=UTC),
+            timestamp=datetime(2026, 2, 15, 16, 31, 0, tzinfo=UTC),
             close=101.5,
             volume=200_000,
         )
@@ -619,7 +636,7 @@ class TestTimeWindow:
         # Candle during OR window (9:44) - even if it looks like breakout
         candle = make_candle(
             symbol="AAPL",
-            timestamp=datetime(2026, 2, 15, 9, 44, 0, tzinfo=UTC),
+            timestamp=datetime(2026, 2, 15, 14, 44, 0, tzinfo=UTC),
             close=105.0,  # Would be above any OR high
             volume=200_000,
         )
@@ -676,13 +693,13 @@ class TestMultiSymbol:
         await strategy.on_candle(
             make_candle(
                 symbol="AAPL",
-                timestamp=datetime(2026, 2, 15, 9, 45, 0, tzinfo=UTC),
+                timestamp=datetime(2026, 2, 15, 14, 45, 0, tzinfo=UTC),
             )
         )
         await strategy.on_candle(
             make_candle(
                 symbol="MSFT",
-                timestamp=datetime(2026, 2, 15, 9, 45, 0, tzinfo=UTC),
+                timestamp=datetime(2026, 2, 15, 14, 45, 0, tzinfo=UTC),
             )
         )
 
@@ -718,3 +735,228 @@ class TestPositionSizing:
 
         shares = strategy.calculate_position_size(102.0, 100.0)
         assert shares == 0
+
+
+class TestTimezoneHandling:
+    """Tests for correct timezone handling (DEF-008 regression tests).
+
+    The strategy stores time constants in ET (9:30 AM market open, etc.) but
+    receives candles with UTC timestamps. These tests verify that UTC timestamps
+    are correctly converted to ET for time window comparisons.
+
+    In February 2026 (EST, UTC-5):
+    - 9:30 AM ET = 14:30 UTC
+    - 9:45 AM ET = 14:45 UTC
+    - 10:00 AM ET = 15:00 UTC
+    - 11:30 AM ET = 16:30 UTC
+    """
+
+    def test_utc_candle_at_market_open_recognized_as_in_or_window(self) -> None:
+        """A candle at 14:30 UTC (9:30 AM ET) should be in the OR window."""
+        config = make_orb_config(orb_window_minutes=15)
+        strategy = OrbBreakoutStrategy(config)
+
+        # 14:30 UTC = 9:30 AM ET (market open, in OR window)
+        candle = make_candle(
+            symbol="TSLA",
+            timestamp=datetime(2025, 6, 2, 13, 30, 0, tzinfo=UTC),  # EDT in June
+        )
+
+        assert strategy._is_in_or_window(candle) is True
+        assert strategy._is_past_or_window(candle) is False
+
+    def test_utc_candle_at_or_end_recognized_as_past_window(self) -> None:
+        """A candle at 14:45 UTC (9:45 AM ET) should be past a 15-min OR window."""
+        config = make_orb_config(orb_window_minutes=15)  # OR ends at 9:45 AM ET
+        strategy = OrbBreakoutStrategy(config)
+
+        # 13:45 UTC = 9:45 AM EDT (past 15-min OR window)
+        candle = make_candle(
+            symbol="TSLA",
+            timestamp=datetime(2025, 6, 2, 13, 45, 0, tzinfo=UTC),  # EDT in June
+        )
+
+        assert strategy._is_in_or_window(candle) is False
+        assert strategy._is_past_or_window(candle) is True
+
+    def test_utc_candle_mid_or_window(self) -> None:
+        """A candle at 13:37 UTC (9:37 AM EDT) should be in the OR window."""
+        config = make_orb_config(orb_window_minutes=15)
+        strategy = OrbBreakoutStrategy(config)
+
+        # 13:37 UTC = 9:37 AM EDT
+        candle = make_candle(
+            symbol="TSLA",
+            timestamp=datetime(2025, 6, 2, 13, 37, 0, tzinfo=UTC),
+        )
+
+        assert strategy._is_in_or_window(candle) is True
+        assert strategy._is_past_or_window(candle) is False
+
+    def test_utc_candle_before_latest_entry(self) -> None:
+        """A candle before latest entry time is correctly identified."""
+        config = make_orb_config(latest_entry="11:30")  # 11:30 AM ET
+        strategy = OrbBreakoutStrategy(config)
+
+        # 15:00 UTC = 10:00 AM ET (before 11:30 AM ET)
+        candle = make_candle(
+            symbol="TSLA",
+            timestamp=datetime(2025, 6, 2, 15, 0, 0, tzinfo=UTC),
+        )
+
+        assert strategy._is_before_latest_entry(candle) is True
+
+    def test_utc_candle_after_latest_entry(self) -> None:
+        """A candle after latest entry time is correctly identified."""
+        config = make_orb_config(latest_entry="11:30")  # 11:30 AM ET
+        strategy = OrbBreakoutStrategy(config)
+
+        # 16:00 UTC = 12:00 PM EDT (after 11:30 AM ET)
+        candle = make_candle(
+            symbol="TSLA",
+            timestamp=datetime(2025, 6, 2, 16, 0, 0, tzinfo=UTC),
+        )
+
+        assert strategy._is_before_latest_entry(candle) is False
+
+    @pytest.mark.asyncio
+    async def test_or_forms_correctly_with_utc_timestamps(self) -> None:
+        """Feed UTC-timestamped candles through on_candle, verify OR forms.
+
+        This is the key regression test for DEF-008. Prior to the fix,
+        UTC timestamps were compared directly against ET time constants,
+        causing the OR to never form (zero candles accumulated).
+        """
+        from datetime import timedelta
+
+        config = make_orb_config(orb_window_minutes=15)
+        mock_data_service = AsyncMock()
+        mock_data_service.get_indicator.return_value = 2.0  # ATR
+
+        strategy = OrbBreakoutStrategy(config, data_service=mock_data_service)
+        strategy.allocated_capital = 100_000
+        strategy.set_watchlist(["TSLA"])
+
+        # Feed 15 candles from 13:30-13:44 UTC (9:30-9:44 AM EDT in June)
+        base_time = datetime(2025, 6, 2, 13, 30, 0, tzinfo=UTC)
+        for i in range(15):
+            candle = make_candle(
+                symbol="TSLA",
+                timestamp=base_time + timedelta(minutes=i),
+                high=101.0 if i == 5 else 100.5,
+                low=99.0 if i == 10 else 99.5,
+                close=100.0 + (i % 3 - 1) * 0.2,
+                volume=100_000 + i * 1000,
+            )
+            await strategy.on_candle(candle)
+
+        state = strategy._get_symbol_state("TSLA")
+
+        # Verify candles were accumulated (this failed before the fix)
+        assert len(state.or_candles) == 15, (
+            f"Expected 15 candles in OR, got {len(state.or_candles)}. "
+            "Timezone conversion may not be working correctly."
+        )
+        assert not state.or_complete
+
+        # Now send first candle after OR window (13:45 UTC = 9:45 AM EDT)
+        post_or = make_candle(
+            symbol="TSLA",
+            timestamp=datetime(2025, 6, 2, 13, 45, 0, tzinfo=UTC),
+        )
+        await strategy.on_candle(post_or)
+
+        # Verify OR finalized correctly
+        assert state.or_complete is True
+        assert state.or_valid is True
+        assert state.or_high == 101.0
+        assert state.or_low == 99.0
+        assert state.or_midpoint == 100.0
+
+    @pytest.mark.asyncio
+    async def test_breakout_signal_with_utc_timestamps(self) -> None:
+        """Full pipeline test: OR formation and breakout with UTC timestamps."""
+        from datetime import timedelta
+
+        config = make_orb_config(
+            orb_window_minutes=15,
+            breakout_volume_multiplier=1.5,
+            chase_protection_pct=0.02,
+        )
+        mock_data_service = AsyncMock()
+        mock_data_service.get_indicator.side_effect = lambda s, i: {
+            "atr_14": 2.0,
+            "vwap": 100.0,
+        }.get(i)
+
+        strategy = OrbBreakoutStrategy(config, data_service=mock_data_service)
+        strategy.allocated_capital = 100_000
+        strategy.set_watchlist(["TSLA"])
+
+        # Feed OR candles (13:30-13:44 UTC = 9:30-9:44 AM EDT)
+        base_time = datetime(2025, 6, 2, 13, 30, 0, tzinfo=UTC)
+        for i in range(15):
+            candle = make_candle(
+                symbol="TSLA",
+                timestamp=base_time + timedelta(minutes=i),
+                high=101.0,
+                low=99.0,
+                close=100.0,
+                volume=100_000,
+            )
+            await strategy.on_candle(candle)
+
+        # Finalize OR (13:45 UTC = 9:45 AM EDT)
+        await strategy.on_candle(
+            make_candle(
+                symbol="TSLA",
+                timestamp=datetime(2025, 6, 2, 13, 45, 0, tzinfo=UTC),
+            )
+        )
+
+        # Send breakout candle (14:00 UTC = 10:00 AM EDT)
+        breakout = make_candle(
+            symbol="TSLA",
+            timestamp=datetime(2025, 6, 2, 14, 0, 0, tzinfo=UTC),
+            open_price=101.0,
+            high=102.5,
+            low=100.8,
+            close=102.0,  # Above OR high (101.0)
+            volume=200_000,  # Above 1.5x avg volume
+        )
+        signal = await strategy.on_candle(breakout)
+
+        # Should produce a valid signal
+        assert signal is not None
+        assert signal.symbol == "TSLA"
+        assert signal.side == Side.LONG
+        assert signal.entry_price == 102.0
+        assert signal.stop_price == 100.0  # OR midpoint
+
+    def test_dst_transition_edt_to_est(self) -> None:
+        """Verify correct handling across DST boundary (EDT→EST).
+
+        In early November, clocks "fall back". A timestamp at 14:30 UTC is:
+        - Before DST ends: 10:30 AM EDT (not in OR window)
+        - After DST ends: 9:30 AM EST (in OR window)
+
+        The strategy should handle both correctly based on the actual date.
+        """
+        config = make_orb_config(orb_window_minutes=15)
+        strategy = OrbBreakoutStrategy(config)
+
+        # November 3, 2025 is after DST ends (EST, UTC-5)
+        # 14:30 UTC = 9:30 AM EST = in OR window
+        candle_est = make_candle(
+            symbol="TSLA",
+            timestamp=datetime(2025, 11, 5, 14, 30, 0, tzinfo=UTC),
+        )
+        assert strategy._is_in_or_window(candle_est) is True
+
+        # June 2, 2025 is during DST (EDT, UTC-4)
+        # 14:30 UTC = 10:30 AM EDT = NOT in OR window (9:30-9:45)
+        candle_edt = make_candle(
+            symbol="TSLA",
+            timestamp=datetime(2025, 6, 2, 14, 30, 0, tzinfo=UTC),
+        )
+        assert strategy._is_in_or_window(candle_edt) is False

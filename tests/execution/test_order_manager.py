@@ -1170,3 +1170,323 @@ async def test_reconstruct_from_broker_handles_error(
 
     # Verify system still functional (no positions, but no crash)
     assert len(order_manager._managed_positions) == 0
+
+
+# ---------------------------------------------------------------------------
+# Trade Record Integrity Tests (5)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_trade_record_stores_original_stop_price(
+    order_manager: OrderManager,
+    mock_broker: MagicMock,
+    event_bus: EventBus,
+) -> None:
+    """Trade record should have original stop, not moved breakeven stop."""
+    # Track trades via a mock trade_logger
+    logged_trades: list = []
+
+    class MockTradeLogger:
+        async def log_trade(self, trade):
+            logged_trades.append(trade)
+
+    order_manager._trade_logger = MockTradeLogger()
+
+    await order_manager.start()
+
+    # Create signal with specific stop at 148.0
+    signal = make_signal(
+        entry_price=150.0,
+        stop_price=148.0,  # Original stop below entry
+        target_prices=(152.0, 154.0),
+    )
+    approved = make_approved(signal=signal)
+    await order_manager.on_approved(approved)
+    entry_order_id = mock_broker.place_order.call_args[0][0].id
+
+    fill_event = OrderFilledEvent(
+        order_id=entry_order_id,
+        fill_price=150.0,
+        fill_quantity=100,
+    )
+    await order_manager.on_fill(fill_event)
+
+    position = order_manager._managed_positions["AAPL"][0]
+    t1_order_id = position.t1_order_id
+
+    # Verify original stop stored
+    assert position.original_stop_price == 148.0
+
+    # T1 fills → stop moves to breakeven
+    t1_fill = OrderFilledEvent(
+        order_id=t1_order_id,
+        fill_price=152.0,
+        fill_quantity=50,
+    )
+    await order_manager.on_fill(t1_fill)
+
+    # Verify current stop moved but original preserved
+    assert position.stop_price > 148.0  # Moved to breakeven
+    assert position.original_stop_price == 148.0  # Still original
+
+    # Stop fills at breakeven
+    new_stop_id = position.stop_order_id
+    stop_fill = OrderFilledEvent(
+        order_id=new_stop_id,
+        fill_price=150.15,  # Breakeven fill
+        fill_quantity=50,
+    )
+    await order_manager.on_fill(stop_fill)
+    await event_bus.drain()
+
+    # Verify trade record has ORIGINAL stop, not breakeven
+    assert len(logged_trades) == 1
+    trade = logged_trades[0]
+    assert trade.stop_price == 148.0  # Original, not ~150.15
+
+    await order_manager.stop()
+
+
+@pytest.mark.asyncio
+async def test_stop_to_breakeven_does_not_corrupt_original_stop(
+    order_manager: OrderManager,
+    mock_broker: MagicMock,
+    config: OrderManagerConfig,
+) -> None:
+    """original_stop_price field persists unchanged after stop-to-breakeven."""
+    await order_manager.start()
+
+    signal = make_signal(
+        entry_price=100.0,
+        stop_price=95.0,  # 5% below entry
+    )
+    approved = make_approved(signal=signal)
+    await order_manager.on_approved(approved)
+    entry_order_id = mock_broker.place_order.call_args[0][0].id
+
+    fill_event = OrderFilledEvent(
+        order_id=entry_order_id,
+        fill_price=100.0,
+        fill_quantity=100,
+    )
+    await order_manager.on_fill(fill_event)
+
+    position = order_manager._managed_positions["AAPL"][0]
+
+    # Before T1: both stops are original
+    assert position.stop_price == 95.0
+    assert position.original_stop_price == 95.0
+
+    # T1 fills
+    t1_fill = OrderFilledEvent(
+        order_id=position.t1_order_id,
+        fill_price=102.0,
+        fill_quantity=50,
+    )
+    await order_manager.on_fill(t1_fill)
+
+    # After T1: current stop moved, original preserved
+    expected_breakeven = 100.0 * (1 + config.breakeven_buffer_pct)
+    assert abs(position.stop_price - expected_breakeven) < 0.01
+    assert position.original_stop_price == 95.0  # Unchanged!
+
+    await order_manager.stop()
+
+
+@pytest.mark.asyncio
+async def test_pnl_calculation_long_trade_loss(
+    order_manager: OrderManager,
+    mock_broker: MagicMock,
+    event_bus: EventBus,
+) -> None:
+    """Entry > Exit for long → negative P&L."""
+    closed_events: list[PositionClosedEvent] = []
+
+    async def handler(event: PositionClosedEvent) -> None:
+        closed_events.append(event)
+
+    event_bus.subscribe(PositionClosedEvent, handler)
+
+    await order_manager.start()
+
+    # Entry at 150, stop at 145
+    signal = make_signal(
+        entry_price=150.0,
+        stop_price=145.0,
+    )
+    approved = make_approved(signal=signal)
+    await order_manager.on_approved(approved)
+    entry_order_id = mock_broker.place_order.call_args[0][0].id
+
+    fill_event = OrderFilledEvent(
+        order_id=entry_order_id,
+        fill_price=150.0,
+        fill_quantity=100,
+    )
+    await order_manager.on_fill(fill_event)
+
+    position = order_manager._managed_positions["AAPL"][0]
+    stop_order_id = position.stop_order_id
+
+    # Stop fills at 145 (loss)
+    stop_fill = OrderFilledEvent(
+        order_id=stop_order_id,
+        fill_price=145.0,
+        fill_quantity=100,
+    )
+    await order_manager.on_fill(stop_fill)
+    await event_bus.drain()
+
+    # Verify negative P&L
+    assert len(closed_events) == 1
+    # P&L = (145 - 150) * 100 = -500
+    assert closed_events[0].realized_pnl == pytest.approx(-500.0)
+
+    await order_manager.stop()
+
+
+@pytest.mark.asyncio
+async def test_pnl_calculation_long_trade_win(
+    order_manager: OrderManager,
+    mock_broker: MagicMock,
+    event_bus: EventBus,
+) -> None:
+    """Exit > Entry for long → positive P&L."""
+    closed_events: list[PositionClosedEvent] = []
+
+    async def handler(event: PositionClosedEvent) -> None:
+        closed_events.append(event)
+
+    event_bus.subscribe(PositionClosedEvent, handler)
+
+    await order_manager.start()
+
+    signal = make_signal(
+        entry_price=150.0,
+        stop_price=145.0,
+        target_prices=(155.0, 160.0),
+    )
+    approved = make_approved(signal=signal)
+    await order_manager.on_approved(approved)
+    entry_order_id = mock_broker.place_order.call_args[0][0].id
+
+    fill_event = OrderFilledEvent(
+        order_id=entry_order_id,
+        fill_price=150.0,
+        fill_quantity=100,
+    )
+    await order_manager.on_fill(fill_event)
+
+    position = order_manager._managed_positions["AAPL"][0]
+    t1_order_id = position.t1_order_id
+
+    # T1 fills at 155 (profit)
+    t1_fill = OrderFilledEvent(
+        order_id=t1_order_id,
+        fill_price=155.0,
+        fill_quantity=50,
+    )
+    await order_manager.on_fill(t1_fill)
+
+    # Stop fills at breakeven (small profit due to buffer)
+    new_stop_id = position.stop_order_id
+    breakeven = 150.0 * 1.001  # Default buffer
+    stop_fill = OrderFilledEvent(
+        order_id=new_stop_id,
+        fill_price=breakeven,
+        fill_quantity=50,
+    )
+    await order_manager.on_fill(stop_fill)
+    await event_bus.drain()
+
+    # Verify positive P&L
+    assert len(closed_events) == 1
+    # T1 P&L: (155 - 150) * 50 = 250
+    # Stop P&L: (150.15 - 150) * 50 = 7.5
+    # Total: ~257.5
+    assert closed_events[0].realized_pnl > 250.0
+
+    await order_manager.stop()
+
+
+@pytest.mark.asyncio
+async def test_exit_price_reflects_weighted_average_after_t1(
+    order_manager: OrderManager,
+    mock_broker: MagicMock,
+    event_bus: EventBus,
+) -> None:
+    """When T1 hits before stop, exit_price is weighted average, not last fill."""
+    logged_trades: list = []
+
+    class MockTradeLogger:
+        async def log_trade(self, trade):
+            logged_trades.append(trade)
+
+    order_manager._trade_logger = MockTradeLogger()
+
+    closed_events: list[PositionClosedEvent] = []
+
+    async def handler(event: PositionClosedEvent) -> None:
+        closed_events.append(event)
+
+    event_bus.subscribe(PositionClosedEvent, handler)
+
+    await order_manager.start()
+
+    signal = make_signal(
+        entry_price=100.0,
+        stop_price=95.0,
+        target_prices=(110.0, 120.0),
+        share_count=100,
+    )
+    approved = make_approved(signal=signal)
+    await order_manager.on_approved(approved)
+    entry_order_id = mock_broker.place_order.call_args[0][0].id
+
+    fill_event = OrderFilledEvent(
+        order_id=entry_order_id,
+        fill_price=100.0,
+        fill_quantity=100,
+    )
+    await order_manager.on_fill(fill_event)
+
+    position = order_manager._managed_positions["AAPL"][0]
+    t1_order_id = position.t1_order_id
+
+    # T1 fills: 50 shares at 110
+    t1_fill = OrderFilledEvent(
+        order_id=t1_order_id,
+        fill_price=110.0,
+        fill_quantity=50,
+    )
+    await order_manager.on_fill(t1_fill)
+
+    # Stop fills: 50 shares at 98 (below entry, but after T1 profit)
+    new_stop_id = position.stop_order_id
+    stop_fill = OrderFilledEvent(
+        order_id=new_stop_id,
+        fill_price=98.0,
+        fill_quantity=50,
+    )
+    await order_manager.on_fill(stop_fill)
+    await event_bus.drain()
+
+    # Calculate expected values:
+    # T1 P&L: (110 - 100) * 50 = 500
+    # Stop P&L: (98 - 100) * 50 = -100
+    # Total P&L: 400
+    # Weighted exit: (400 / 100) + 100 = 104
+
+    assert len(closed_events) == 1
+    assert closed_events[0].realized_pnl == pytest.approx(400.0)
+    assert closed_events[0].exit_price == pytest.approx(104.0)
+
+    # Verify trade record has same exit price
+    assert len(logged_trades) == 1
+    assert logged_trades[0].exit_price == pytest.approx(104.0)
+
+    # Key test: exit_price (104) > entry (100), consistent with positive P&L
+    # Previously it would show 98 (last fill) which was inconsistent with +400 P&L
+
+    await order_manager.stop()

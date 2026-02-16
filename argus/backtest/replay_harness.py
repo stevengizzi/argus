@@ -402,6 +402,10 @@ class ReplayHarness:
             # Advance clock
             self._clock.set(bar_ts)
 
+            # Set current price in broker (for market order fills)
+            if self._broker is not None:
+                self._broker.set_price(symbol, float(row["close"]))
+
             # Feed bar to data service (publishes CandleEvent + IndicatorEvents)
             await self._data_service.feed_bar(
                 symbol=symbol,

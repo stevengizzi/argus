@@ -299,7 +299,7 @@ class TestBacktestConfig:
             end_date=date(2025, 6, 30),
         )
 
-        assert config.strategy_id == "orb_breakout"
+        assert config.strategy_id == "strat_orb_breakout"
         assert config.slippage_per_share == 0.01
         assert config.initial_cash == 100_000.0
         assert config.scanner_min_gap_pct == 0.02
@@ -314,3 +314,161 @@ class TestBacktestConfig:
         )
 
         assert config.config_overrides == overrides
+
+
+class TestBacktestFillPriceAndTradePersistence:
+    """Tests verifying backtest fill prices use market price and trades persist."""
+
+    @pytest.mark.asyncio
+    async def test_backtest_fill_price_includes_market_price_plus_slippage(
+        self,
+    ) -> None:
+        """Market orders fill at current price (from set_price) plus slippage.
+
+        Before the fix, fill price was just slippage (0.01) because there was
+        no market price reference. Now SimulatedBroker uses _current_prices
+        cache for market orders.
+        """
+        from argus.execution.simulated_broker import (
+            SimulatedBroker,
+            SimulatedSlippage,
+        )
+        from argus.models.trading import Order, OrderSide, OrderType
+
+        slippage = SimulatedSlippage(mode="fixed", fixed_amount=0.02)
+        broker = SimulatedBroker(initial_cash=100_000, slippage=slippage)
+        await broker.connect()
+
+        # Set current market price for AAPL
+        broker.set_price("AAPL", 150.0)
+
+        # Place a market order (no limit_price specified)
+        order = Order(
+            strategy_id="test",
+            symbol="AAPL",
+            side=OrderSide.BUY,
+            order_type=OrderType.MARKET,
+            quantity=100,
+        )
+        result = await broker.place_order(order)
+
+        # Fill price should be market price + slippage = 150.0 + 0.02 = 150.02
+        assert result.filled_avg_price == pytest.approx(150.02, abs=0.001)
+        assert result.filled_avg_price != pytest.approx(0.02, abs=0.001)  # Not just slippage
+
+        await broker.disconnect()
+
+    @pytest.mark.asyncio
+    async def test_backtest_completed_trade_persists_to_database(
+        self,
+    ) -> None:
+        """Completed trades in backtest mode are logged to the database.
+
+        Before the fix, SimulatedBroker fills weren't processed by Order
+        Manager because no OrderFilledEvent was published. Now Order Manager
+        handles immediate fills from SimulatedBroker.
+        """
+        from datetime import UTC, datetime
+
+        from argus.analytics.trade_logger import TradeLogger
+        from argus.core.clock import FixedClock
+        from argus.core.config import (
+            AccountRiskConfig,
+            OrderManagerConfig,
+            RiskConfig,
+        )
+        from argus.core.event_bus import EventBus
+        from argus.core.events import SignalEvent
+        from argus.core.risk_manager import RiskManager
+        from argus.db.manager import DatabaseManager
+        from argus.execution.order_manager import OrderManager
+        from argus.execution.simulated_broker import SimulatedBroker
+        from argus.models.trading import ExitReason
+
+        # Create components
+        event_bus = EventBus()
+        clock = FixedClock(datetime(2026, 2, 16, 10, 0, 0, tzinfo=UTC))
+        broker = SimulatedBroker(initial_cash=100_000)
+        await broker.connect()
+
+        # Set up database and trade logger
+        import tempfile
+
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+            db_path = Path(f.name)
+
+        db_manager = DatabaseManager(db_path)
+        await db_manager.initialize()
+        trade_logger = TradeLogger(db_manager)
+
+        # Set up risk manager and order manager
+        risk_config = RiskConfig(
+            account=AccountRiskConfig(
+                daily_loss_limit_pct=0.03,
+                max_concurrent_positions=10,
+            ),
+        )
+        risk_manager = RiskManager(
+            config=risk_config,
+            broker=broker,
+            event_bus=event_bus,
+            clock=clock,
+        )
+        await risk_manager.initialize()
+        await risk_manager.reset_daily_state()
+
+        order_config = OrderManagerConfig(t1_position_pct=0.5)
+        order_manager = OrderManager(
+            event_bus=event_bus,
+            broker=broker,
+            clock=clock,
+            config=order_config,
+            trade_logger=trade_logger,
+        )
+        await order_manager.start()
+
+        # Set broker price (required for market order fills)
+        broker.set_price("AAPL", 150.0)
+
+        # Create and approve signal
+        signal = SignalEvent(
+            strategy_id="orb_breakout",
+            symbol="AAPL",
+            entry_price=150.0,
+            stop_price=148.0,
+            target_prices=(152.0, 154.0),
+            share_count=100,
+            rationale="Test trade",
+        )
+        approved = await risk_manager.evaluate_signal(signal)
+
+        # Order Manager handles approval (entry fills immediately)
+        await order_manager.on_approved(approved)
+        await event_bus.drain()
+
+        # Verify position was created
+        assert order_manager.has_open_positions
+
+        # Update price and flatten to close the trade
+        broker.set_price("AAPL", 151.0)
+        await order_manager.eod_flatten()
+        await event_bus.drain()
+
+        # Verify trade was logged to database
+        trades = await trade_logger.get_trades_by_strategy("orb_breakout")
+        assert len(trades) >= 1
+
+        trade = trades[0]
+        assert trade.symbol == "AAPL"
+        assert trade.entry_price == pytest.approx(150.0, abs=0.1)
+        assert trade.exit_price == pytest.approx(151.0, abs=0.1)
+        assert trade.shares == 100
+        assert trade.exit_reason == ExitReason.EOD_FLATTEN
+        # Gross P&L should be (151 - 150) * 100 = 100
+        assert trade.gross_pnl == pytest.approx(100.0, abs=1.0)
+
+        # Cleanup
+        await order_manager.stop()
+        await broker.disconnect()
+        await db_manager.close()
+        db_path.unlink(missing_ok=True)

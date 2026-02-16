@@ -38,7 +38,7 @@ from argus.core.events import (
 )
 from argus.core.ids import generate_id
 from argus.execution.broker import Broker
-from argus.models.trading import Order, OrderSide
+from argus.models.trading import Order, OrderSide, OrderStatus
 from argus.models.trading import OrderType as TradingOrderType
 
 if TYPE_CHECKING:
@@ -66,6 +66,7 @@ class ManagedPosition:
     shares_total: int  # Original total shares
     shares_remaining: int  # Shares still open
     stop_price: float  # Current stop price (may move to breakeven)
+    original_stop_price: float  # Original stop from signal (never changes)
     stop_order_id: str | None  # Broker-side stop order ID
     t1_price: float  # T1 target price (target_prices[0])
     t1_order_id: str | None  # Broker-side T1 limit order ID
@@ -222,7 +223,7 @@ class OrderManager:
             return
 
         # Track as pending
-        self._pending_orders[entry_order_id] = PendingManagedOrder(
+        pending = PendingManagedOrder(
             order_id=entry_order_id,
             symbol=signal.symbol,
             strategy_id=signal.strategy_id,
@@ -230,6 +231,7 @@ class OrderManager:
             shares=share_count,
             signal=event,
         )
+        self._pending_orders[entry_order_id] = pending
 
         # Publish submission event
         await self._event_bus.publish(
@@ -249,6 +251,15 @@ class OrderManager:
             signal.symbol,
             entry_order_id,
         )
+
+        # Handle immediate fill (SimulatedBroker fills synchronously)
+        if order_result.status == OrderStatus.FILLED:
+            fill_event = OrderFilledEvent(
+                order_id=entry_order_id,
+                fill_price=order_result.filled_avg_price,
+                fill_quantity=order_result.filled_quantity,
+            )
+            await self.on_fill(fill_event)
 
     async def on_fill(self, event: OrderFilledEvent) -> None:
         """Route fill events to the appropriate handler.
@@ -385,6 +396,7 @@ class OrderManager:
             shares_total=filled_shares,
             shares_remaining=filled_shares,
             stop_price=signal.stop_price,
+            original_stop_price=signal.stop_price,  # Never changes
             stop_order_id=None,
             t1_price=t1_price,
             t1_order_id=None,
@@ -707,6 +719,7 @@ class OrderManager:
                     shares_total=qty,
                     shares_remaining=qty,
                     stop_price=stop_price,
+                    original_stop_price=stop_price,  # Best approximation on reconstruct
                     stop_order_id=stop_order_id,
                     t1_price=t1_price,
                     t1_order_id=t1_order_id,
@@ -862,13 +875,23 @@ class OrderManager:
                     quantity=position.shares_remaining,
                 )
                 result = await self._broker.place_order(order)
-                self._pending_orders[result.order_id] = PendingManagedOrder(
+                pending = PendingManagedOrder(
                     order_id=result.order_id,
                     symbol=position.symbol,
                     strategy_id=position.strategy_id,
                     order_type="flatten",
                     shares=position.shares_remaining,
                 )
+                self._pending_orders[result.order_id] = pending
+
+                # Handle immediate fill (SimulatedBroker fills market orders synchronously)
+                if result.status == OrderStatus.FILLED:
+                    fill_event = OrderFilledEvent(
+                        order_id=result.order_id,
+                        fill_price=result.filled_avg_price,
+                        fill_quantity=result.filled_quantity,
+                    )
+                    await self.on_fill(fill_event)
             except Exception:
                 logger.exception(
                     "CRITICAL: Failed to flatten %s (%d shares remain unprotected)",
@@ -885,11 +908,22 @@ class OrderManager:
         """Finalize a fully closed position. Log trade, publish event, clean up."""
         hold_seconds = int((self._clock.now() - position.entry_time).total_seconds())
 
+        # Calculate weighted average exit price from realized P&L.
+        # This ensures exit_price is consistent with gross_pnl when T1 hit
+        # before the final exit (stop/flatten/etc).
+        # Formula: weighted_exit = (realized_pnl / shares_total) + entry_price
+        if position.shares_total > 0:
+            weighted_exit_price = (
+                position.realized_pnl / position.shares_total
+            ) + position.entry_price
+        else:
+            weighted_exit_price = exit_price
+
         # Publish PositionClosedEvent
         await self._event_bus.publish(
             PositionClosedEvent(
                 position_id=generate_id(),
-                exit_price=exit_price,
+                exit_price=weighted_exit_price,
                 realized_pnl=position.realized_pnl,
                 exit_reason=exit_reason,
                 hold_duration_seconds=hold_seconds,
@@ -909,10 +943,10 @@ class OrderManager:
                     side=OrderSide.BUY,
                     entry_price=position.entry_price,
                     entry_time=position.entry_time,
-                    exit_price=exit_price,
+                    exit_price=weighted_exit_price,
                     exit_time=self._clock.now(),
                     shares=position.shares_total,
-                    stop_price=position.stop_price,
+                    stop_price=position.original_stop_price,  # Use original, not moved
                     target_prices=[position.t1_price, position.t2_price],
                     exit_reason=exit_reason,
                     gross_pnl=position.realized_pnl,

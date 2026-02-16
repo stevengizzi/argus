@@ -25,6 +25,7 @@ from argus.models.trading import (
     OrderResult,
     OrderSide,
     OrderStatus,
+    OrderType,
     Position,
     PositionStatus,
 )
@@ -96,6 +97,8 @@ class SimulatedBroker(Broker):
         self._orders: dict[str, OrderResult] = {}
         self._pending_brackets: list[PendingBracketOrder] = []
         self._connected: bool = False
+        # Current prices cache for market order fills in backtest mode
+        self._current_prices: dict[str, float] = {}
 
     async def connect(self) -> None:
         """Establish connection to the simulated broker."""
@@ -133,11 +136,73 @@ class SimulatedBroker(Broker):
         else:
             return price - slip
 
+    async def _register_pending_order(self, order: Order, order_id: str) -> OrderResult:
+        """Register a STOP or LIMIT order as pending (waits for price trigger).
+
+        The order will be filled when simulate_price_update() detects
+        the trigger condition is met.
+
+        Args:
+            order: The stop or limit order.
+            order_id: Pre-generated order ID.
+
+        Returns:
+            OrderResult with PENDING status.
+        """
+        # Determine trigger price and order type
+        if order.order_type == OrderType.STOP:
+            trigger_price = order.stop_price or 0.0
+            bracket_type = "stop"
+        elif order.order_type == OrderType.LIMIT:
+            trigger_price = order.limit_price or 0.0
+            bracket_type = "limit"
+        else:  # STOP_LIMIT
+            trigger_price = order.stop_price or 0.0
+            bracket_type = "stop"
+
+        # Register as pending bracket
+        self._pending_brackets.append(
+            PendingBracketOrder(
+                order_id=order_id,
+                symbol=order.symbol,
+                side=order.side,
+                quantity=order.quantity,
+                trigger_price=trigger_price,
+                order_type=bracket_type,
+                parent_position_symbol=order.symbol,
+                strategy_id=order.strategy_id,
+            )
+        )
+
+        result = OrderResult(
+            order_id=order_id,
+            status=OrderStatus.PENDING,
+            filled_quantity=0,
+            filled_avg_price=0.0,
+            message=f"{order.order_type.value} order pending at {trigger_price}",
+        )
+        self._orders[order_id] = result
+
+        logger.debug(
+            "Registered pending %s order: %s %d %s @ %.2f",
+            bracket_type,
+            order.side.value,
+            order.quantity,
+            order.symbol,
+            trigger_price,
+        )
+
+        return result
+
     async def place_order(self, order: Order) -> OrderResult:
         """Submit a single order to the simulated broker.
 
-        Orders are filled immediately at the specified price (plus slippage).
-        Buying power and position checks are performed.
+        MARKET orders are filled immediately at the current price (plus slippage).
+        STOP and LIMIT orders are registered as pending and trigger via
+        simulate_price_update().
+
+        For market orders without a limit_price, uses the current price from
+        the _current_prices cache (set by simulate_price_update or set_price).
 
         Args:
             order: The order to place.
@@ -148,10 +213,15 @@ class SimulatedBroker(Broker):
         self._check_connected()
 
         order_id = generate_id()
-        fill_price = self._apply_slippage(
-            order.limit_price or order.stop_price or 0.0,
-            order.side,
-        )
+
+        # Handle STOP and LIMIT orders as pending (they wait for price trigger)
+        if order.order_type in (OrderType.STOP, OrderType.LIMIT, OrderType.STOP_LIMIT):
+            return await self._register_pending_order(order, order_id)
+
+        # For MARKET orders, fill immediately
+        # Use: limit_price > current_price cache > 0.0
+        base_price = order.limit_price or self._current_prices.get(order.symbol, 0.0)
+        fill_price = self._apply_slippage(base_price, order.side)
         cost = fill_price * order.quantity
 
         if order.side == OrderSide.BUY:
@@ -557,13 +627,26 @@ class SimulatedBroker(Broker):
     # Testing Infrastructure (not on ABC)
     # -------------------------------------------------------------------------
 
+    def set_price(self, symbol: str, price: float) -> None:
+        """Set the current price for a symbol (for market order fills).
+
+        This is used in backtest mode to ensure market orders fill at
+        realistic prices rather than zero.
+
+        Args:
+            symbol: The symbol.
+            price: The current market price.
+        """
+        self._current_prices[symbol] = price
+
     async def simulate_price_update(
         self, symbol: str, price: float
     ) -> list[OrderResult]:
         """Simulate a price update and trigger any matching bracket orders.
 
-        This is testing infrastructure. It updates position current_price
-        and checks if any stop or target orders should trigger.
+        This is testing infrastructure. It updates position current_price,
+        updates the current price cache, and checks if any stop or target
+        orders should trigger.
 
         Args:
             symbol: The symbol to update.
@@ -573,6 +656,9 @@ class SimulatedBroker(Broker):
             List of OrderResults for any triggered orders.
         """
         self._check_connected()
+
+        # Update current price cache (for future market orders)
+        self._current_prices[symbol] = price
 
         # Update position price
         if symbol in self._positions:
@@ -668,4 +754,5 @@ class SimulatedBroker(Broker):
         self._positions.clear()
         self._orders.clear()
         self._pending_brackets.clear()
+        self._current_prices.clear()
         self._connected = False
