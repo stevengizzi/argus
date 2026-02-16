@@ -44,7 +44,7 @@ from argus.core.config import (
     load_yaml_file,
 )
 from argus.core.event_bus import EventBus
-from argus.core.events import OrderFilledEvent
+from argus.core.events import CandleEvent, OrderFilledEvent
 from argus.core.risk_manager import RiskManager
 from argus.db.manager import DatabaseManager
 from argus.execution.order_manager import OrderManager
@@ -290,22 +290,13 @@ class ReplayHarness:
         self._strategy.allocated_capital = self._config.initial_cash
 
         # Subscribe strategy to candle events
-        self._event_bus.subscribe(
-            type(await self._create_candle_event()),
-            self._on_candle_event,
-        )
+        self._event_bus.subscribe(CandleEvent, self._on_candle_event)
 
         logger.info(
             "Replay harness initialized: db=%s, initial_cash=%.2f",
             self._db_path,
             self._config.initial_cash,
         )
-
-    async def _create_candle_event(self):
-        """Create a dummy candle event to get the type for subscription."""
-        from argus.core.events import CandleEvent
-
-        return CandleEvent()
 
     async def _on_candle_event(self, event) -> None:
         """Route candle events to the strategy and risk manager."""

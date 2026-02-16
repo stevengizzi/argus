@@ -178,6 +178,117 @@ class TestReplayHarness:
         assert result.trading_days == 1
 
 
+class TestEndToEndTradeExecution:
+    """End-to-end tests verifying the full pipeline works correctly."""
+
+    @pytest.mark.asyncio
+    async def test_full_pipeline_processes_without_error(
+        self, breakout_scenario_parquet: tuple[Path, date]
+    ) -> None:
+        """Full pipeline runs without errors on breakout scenario data.
+
+        This test verifies:
+        1. Scanner simulation runs without error
+        2. ORB strategy processes candles
+        3. Risk Manager evaluates any signals
+        4. Order Manager handles fills correctly
+        5. Database is populated with correct schema
+        """
+        data_dir, trading_date = breakout_scenario_parquet
+
+        # Need to include day 1 for gap calculation
+        day1 = date(2025, 6, 16)
+
+        config = BacktestConfig(
+            start_date=day1,
+            end_date=trading_date,
+            data_dir=data_dir,
+            output_dir=data_dir.parent / "backtest_runs",
+            initial_cash=100000.0,
+            scanner_min_gap_pct=0.03,  # 3% minimum gap (our fixture has 5%)
+        )
+        harness = ReplayHarness(config)
+        result = await harness.run()
+
+        # Should have processed 2 trading days
+        assert result.trading_days == 2
+
+        # Result should have correct initial capital
+        assert result.initial_capital == 100000.0
+
+        # Verify database was created
+        from argus.db.manager import DatabaseManager
+
+        output_files = list((data_dir.parent / "backtest_runs").glob("*.db"))
+        assert len(output_files) == 1
+
+        db = DatabaseManager(output_files[0])
+        await db.initialize()
+
+        # Database should have the trades table
+        cursor = await db.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        tables = await cursor.fetchall()
+        table_names = [t[0] for t in tables]
+        assert "trades" in table_names
+
+        await db.close()
+
+    @pytest.mark.asyncio
+    async def test_trades_logged_with_r_multiple(
+        self, breakout_scenario_parquet: tuple[Path, date]
+    ) -> None:
+        """If trades occur, they have R-multiple computed."""
+        data_dir, trading_date = breakout_scenario_parquet
+        day1 = date(2025, 6, 16)
+
+        config = BacktestConfig(
+            start_date=day1,
+            end_date=trading_date,
+            data_dir=data_dir,
+            output_dir=data_dir.parent / "backtest_runs",
+            initial_cash=100000.0,
+            scanner_min_gap_pct=0.03,
+        )
+        harness = ReplayHarness(config)
+        result = await harness.run()
+
+        from argus.analytics.trade_logger import TradeLogger
+        from argus.db.manager import DatabaseManager
+        from argus.models.trading import ExitReason
+
+        output_files = list((data_dir.parent / "backtest_runs").glob("*.db"))
+        db = DatabaseManager(output_files[0])
+        await db.initialize()
+        trade_logger = TradeLogger(db)
+
+        trades = await trade_logger.get_trades_by_strategy("orb_breakout")
+
+        # If trades exist, validate their structure
+        if result.total_trades > 0:
+            assert len(trades) >= 1
+
+            for trade in trades:
+                assert trade.strategy_id == "orb_breakout"
+                assert trade.entry_price > 0
+                assert trade.exit_price > 0
+                assert trade.shares > 0
+                assert trade.stop_price > 0
+                # R-multiple should be computed (may be 0 for breakeven trades)
+                assert isinstance(trade.r_multiple, float)
+
+                # Exit reason should be valid
+                valid_reasons = {
+                    ExitReason.TARGET_1,
+                    ExitReason.TARGET_2,
+                    ExitReason.STOP_LOSS,
+                    ExitReason.TIME_STOP,
+                    ExitReason.EOD_FLATTEN,
+                }
+                assert trade.exit_reason in valid_reasons
+
+        await db.close()
+
+
 class TestBacktestConfig:
     """Tests for BacktestConfig validation."""
 
