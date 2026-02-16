@@ -319,6 +319,18 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 | **Mitigation** | Walk-forward validation is mandatory (DEC-047). Parameters must show walk-forward efficiency > 0.3. Final parameter selection prioritizes robustness (stable performance across a neighborhood of values) over maximum backtest return. Manual spot-checking of 20+ trades against charts provides a sanity check. |
 | **Owner** | Backtest |
 
+---
+
+### R-017 | Timezone Comparison Bugs in Time-Windowed Logic
+| Field | Value |
+|-------|-------|
+| **Identified** | 2026-02-16 |
+| **Description** | Any component that compares timestamps against hardcoded market-hours constants (ET) is vulnerable to UTC/ET confusion. Found in OrbBreakoutStrategy where `_get_candle_time()` returned UTC time and compared it to ET constants (9:30, 9:45), causing zero opening ranges to form. The bug was silent — no errors, just zero trades. |
+| **Likelihood** | Medium (same pattern could recur in new strategies or time-windowed logic) |
+| **Impact** | High (strategy silently produces zero trades with no error or warning) |
+| **Mitigation** | (1) DEC-061 establishes the conversion pattern. (2) Architectural rule added to CLAUDE.md. (3) Consider a `market_time()` helper in BaseStrategy that all subclasses use, making it harder to accidentally use raw UTC. (4) 8 regression tests added covering UTC→ET conversion including DST. |
+| **Status** | Open — mitigated for OrbBreakout, pattern could recur in future strategies |
+
 ## Review Schedule
 
 | Review Type | Frequency | Next Review |

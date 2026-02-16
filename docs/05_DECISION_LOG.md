@@ -631,5 +631,71 @@ Each entry follows this format:
 
 ---
 
+### DEC-057 | VectorBT Open-Source for Parameter Sweeps
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-16 |
+| **Decision** | Use open-source `vectorbt` package for Sprint 8 parameter sweeps. If compatibility issues arise with current NumPy/Pandas versions, fall back to pure NumPy/Pandas vectorized implementation. VectorBT Pro not needed. |
+| **Rationale** | Open-source VectorBT provides `Portfolio.from_signals()` which handles combinatorial parameter grids and portfolio statistics. The ORB sweep logic is simple enough (~100 lines of NumPy) to replicate without the framework if needed. Avoiding a paid dependency for functionality we may outgrow. |
+| **Alternatives** | (a) VectorBT Pro ($) — unnecessary features. (b) Pure NumPy from the start — viable but loses VectorBT's built-in stats and grid handling. |
+| **Status** | Active |
+
+---
+
+### DEC-058 | VectorBT Gap Scan Pre-Filter
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-16 |
+| **Decision** | Pre-compute qualifying trading days per symbol using gap_pct (prev close → day open) before parameter sweeps. Same logic as ScannerSimulator. min_gap_pct is a swept parameter. Non-qualifying days masked out of sweep entirely. |
+| **Rationale** | Mirrors production scanner behavior. Pre-filtering avoids evaluating 18,000 parameter combos on days the strategy would never trade, improving sweep performance. Sweeping min_gap_pct as a parameter tests whether the gap threshold itself is sensitive. |
+| **Alternatives** | (a) Run all days regardless of gap — unrealistic, inflates no-trade days. (b) Fixed gap threshold — misses the sensitivity question. |
+| **Status** | Active |
+
+---
+
+### DEC-059 | Per-Symbol VectorBT Sweeps with Aggregation
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-16 |
+| **Decision** | Run parameter sweeps independently per symbol. Store per-symbol results as Parquet. Aggregate across symbols for summary metrics. Portfolio-level sweeps deferred until Orchestrator exists (Phase 4). |
+| **Rationale** | Per-symbol sweeps isolate strategy logic performance from portfolio construction decisions (capital allocation, concurrent position limits) that belong to the Orchestrator. Cross-symbol aggregation (average Sharpe, parameter rank stability) identifies parameters that work broadly vs those that only work on specific symbols. |
+| **Alternatives** | (a) Portfolio-level sweep with capital allocation — premature without Orchestrator. (b) Single combined sweep across all symbols — obscures per-symbol behavior. |
+| **Status** | Active |
+
+---
+
+### DEC-060 | Dual Visualization for Parameter Sweeps
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-16 |
+| **Decision** | Generate both static (matplotlib + seaborn, PNG) and interactive (plotly, HTML) heatmaps from sweep results. Static for quick review and documentation. Interactive for deep exploration and reuse in Sprint 9 report generator. |
+| **Rationale** | Static PNGs are easy to embed in markdown reports and commit to git. Interactive HTML enables zooming, hovering for exact values, and parameter filtering — essential for exploring 18,000+ combinations. Building both from the same results DataFrame is trivial. Interactive files become building blocks for Sprint 9's report generator. |
+| **Alternatives** | (a) Static only — insufficient for exploration. (b) Interactive only — harder to embed in documentation. |
+| **Status** | Active |
+
+---
+
+### DEC-061 | Strategy Timezone Conversion at Consumer
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-16 |
+| **Decision** | All strategy time comparisons must convert UTC timestamps to Eastern Time before comparing against ET constants. Conversion happens in the strategy (consumer), not in the data layer. `_get_candle_time()` uses `candle.timestamp.astimezone(ET).time()`. Module-level `ET = ZoneInfo("America/New_York")` constant. |
+| **Rationale** | DEC-049 established UTC storage. The bug was the strategy extracting `.time()` from UTC timestamps and comparing against ET constants (9:30, 9:45, etc.), causing the opening range to never form. This affected both backtest and live trading. Fix follows the DEC-049 principle: store UTC, convert at read time in consumers. Codebase audit confirmed the bug was isolated to OrbBreakoutStrategy — other components (OrderManager, main.py, AlpacaDataService) already converted correctly. |
+| **Scope** | OrbBreakoutStrategy `_get_candle_time()` method. 8 regression tests added including DST edge case. |
+| **Status** | Active |
+
+---
+
+### DEC-062 | max_range_atr_ratio Added to VectorBT Sweep
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-16 |
+| **Decision** | Add `max_range_atr_ratio` as 6th sweep parameter with values [2.0, 3.0, 4.0, 5.0, 8.0, 999.0]. Total combinations increase from 3,000 to 18,000 per symbol. |
+| **Rationale** | 7-month harness validation showed 98.5% OR rejection rate at default threshold (~2.0). Relaxing to 5.0 increased trades from 5 to 59 (12x). This is the dominant parameter for trade volume and must be swept to find the robustness/volume tradeoff. 999.0 effectively disables the filter as a baseline. |
+| **Alternatives** | (a) Keep original 5-parameter grid — misses the most impactful parameter. (b) Remove the filter entirely — loses the ability to measure its effect. |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
 *New decisions are appended chronologically as the project progresses.*

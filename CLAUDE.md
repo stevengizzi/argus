@@ -10,7 +10,7 @@ Phase 1 sprint plan: @docs/07_PHASE1_SPRINT_PLAN.md
 
 ## Current State
 
-Phase 1 COMPLETE (February 16, 2026). Phase 2 Sprints 6-7 COMPLETE. 473 tests, 0 flaky, ruff clean.
+Phase 1 COMPLETE (February 16, 2026). Phase 2 Sprints 6-7 + pre-Sprint 8 fixes COMPLETE. 488 tests, 0 flaky, ruff clean.
 
 **Dual-track work in progress:**
 - **Track 1 — Paper Trading Validation:** Running Argus on Alpaca paper trading. Validating stability, data integrity, risk compliance, trade lifecycle. See `docs/08_PAPER_TRADING_GUIDE.md`.
@@ -96,9 +96,10 @@ docs/
 - `python -m argus.main --dry-run` — Connect and validate without trading
 - `python -m argus.backtest.data_fetcher --symbols TSLA,NVDA --start 2025-03-01 --end 2026-02-01` — Download historical data
 - `python -m argus.backtest.replay_harness --data-dir data/historical/1m --start 2025-06-01 --end 2025-12-31` — Run replay backtest
-- `python -m argus.backtest.vectorbt_orb --data-dir data/historical/1m --symbols TSLA,NVDA` — Run VectorBT parameter sweep
+- `python -m argus.backtest.vectorbt_orb --data-dir data/historical/1m --symbols TSLA,NVDA --start 2025-06-01 --end 2025-12-31` — Run VectorBT parameter sweep
 - `python -m argus.backtest.report_generator --db data/backtest_runs/run_xxx.db --output reports/orb_validation.html` — Generate backtest report
 - `python -m argus.backtest.data_fetcher --start 2025-03-01 --end 2026-02-01` — Download historical data
+
 
 ## Code Style
 
@@ -128,6 +129,7 @@ docs/
 - Broker API keys and secrets NEVER in code or committed files — environment variables only
 - Every public interface MUST have corresponding tests
 - async/await everywhere — no blocking calls in the main event loop
+- All market-hours time comparisons MUST convert UTC timestamps to ET first using `timestamp.astimezone(ZoneInfo("America/New_York"))`. NEVER compare `.timestamp.time()` directly against ET constants like `time(9, 30)`. (DEC-061)
 
 ## Testing
 
@@ -199,7 +201,7 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 | ~~DEF-005~~ | ~~Move webhook URLs to .env (security)~~ | ~~Post paper trading validation~~ | **DONE** — HealthConfig now reads heartbeat_url_env and alert_webhook_url_env from config, resolves actual URLs from environment variables. |
 | DEF-006 | Backtrader integration if Replay Harness too slow | Phase 2 Sprint 7 (if replay takes >1hr for 6mo data) | Backtrader dropped from Phase 2 (DEC-046). Reconsidered only if Replay Harness performance is insufficient for iterative parameter work. |
 | DEF-007 | Pre-market data for scanner accuracy | Backtest results promising AND scanner accuracy becomes bottleneck for live-vs-backtest correlation | IEX feed (free tier) only provides regular hours. Scanner simulation computes gap from prev close → day open, which captures overnight moves but misses pre-market volume patterns. Resolution: download 1 month SIP data to validate scanner accuracy, consider SIP for all historical data if significant. |
-| DEF-008 | Synthetic data e2e trade trigger test | Sprint 8 VectorBT runs produce zero trades on real data | The `breakout_scenario_parquet` fixture doesn't trigger ORB signals through the full pipeline due to ATR/VWAP/volume validation complexity. E2e tests verify pipeline plumbing but not trade execution. If real data produces trades normally, close as resolved-by-real-data. If zero trades, debug the harness pipeline. |
+| ~~DEF-008~~ | ~~Synthetic data e2e trade trigger test~~ | ~~Sprint 8~~ | **RESOLVED** — Root cause: timezone bug in OrbBreakout (DEC-061). After fix, harness produces 59 trades on 7 months of real data with relaxed max_range_atr_ratio. Additional fixes: fill price ($0.01 bug), trade logging (sync fill handling), data integrity (original stop, weighted exit price). 488 tests. |
 ```
 
 This keeps it lightweight — no new document, no new sync burden. Items get removed (or moved to "Completed") as they're addressed. Both Claudes see the trigger column and know when to raise the flag.

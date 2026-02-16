@@ -104,7 +104,7 @@ argus/
 |--------|-------|--------------------|--------------|
 | 6 | Historical Data Acquisition | 1 day | Alpaca account (already have) |
 | 7 | Replay Harness | 1–2 days | Sprint 6 data |
-| 8 | VectorBT Parameter Sweeps | 1–2 days | Sprint 6 data |
+| 8 | VectorBT Parameter Sweeps (6 params, 18K combos/symbol) | 1–2 days | Sprint 6 data, pre-sprint harness fixes |
 | 9 | Walk-Forward + Analysis Tooling | 1–2 days | Sprints 7 and 8 |
 | 10 | Parameter Validation Report | 1 day (analysis-mode, not build-mode) | Sprints 7, 8, 9 |
 
@@ -223,41 +223,52 @@ Sprint numbers continue from Phase 1 (which ended at Sprint 5) to maintain a sin
 
 ---
 
-### Sprint 8 — VectorBT Parameter Sweeps ⬜ PENDING
-**Estimated tests:** ~15–20
+### Sprint 8 — VectorBT Parameter Sweeps ⬜ IN PROGRESS
+**Estimated tests:** ~20 new (~508 total)
 
-**Goal:** Build fast parameter exploration tooling using VectorBT's vectorized operations. This is an approximation — it won't match the Replay Harness exactly, but it can test thousands of parameter combinations in minutes instead of hours.
+**Goal:** Build fast parameter exploration tooling using vectorized operations. This is an approximation — it won't match the Replay Harness exactly, but it can test thousands of parameter combinations in minutes instead of hours.
+
+**Pre-Sprint Fixes (completed before spec):**
+- **Timezone bug (DEC-061):** OrbBreakout compared UTC time against ET constants, preventing OR formation. Fixed. 8 regression tests added. 481 → 483 tests.
+- **Fill price bug:** SimulatedBroker used `limit_price or 0.0` for market orders, giving $0.01 fills. Fixed with `_current_prices` cache + `set_price()`. 2 tests added. 483 → 485 tests.
+- **Trade logging bug:** Order Manager waited for async `OrderFilledEvent` that SimulatedBroker never published. Fixed with synchronous fill detection. 485 tests.
+- **Data integrity:** Stop price recorded final (moved) stop instead of original. P&L calculation incorrect for partial exits. Fixed with `original_stop_price` field and weighted average exit. 5 tests added. 485 → 488 tests.
+- **strategy_id mismatch:** BacktestConfig default didn't match YAML. Aligned. 488 tests.
+
+**7-Month Harness Validation (gate check):**
+- Default params: 5 trades in 148 days. `max_range_atr_ratio` (default ~2.0) rejected 98.5% of ORs.
+- Relaxed params (5.0): 59 trades. Confirmed `max_range_atr_ratio` is the dominant parameter.
 
 **Scope:**
 
 - **VectorBT ORB Implementation** (`argus/backtest/vectorbt_orb.py`):
-  - Reimplement the ORB logic in a vectorized form suitable for VectorBT:
-    - Opening range calculation (rolling high/low over configurable window)
-    - Breakout detection (close > OR high)
-    - Simplified entry/exit logic (market order at breakout bar close, fixed stop at OR low, fixed target at entry + N * R)
-  - This is intentionally simplified compared to production. No VWAP confirmation, no volume filter, no multi-target exits. The goal is parameter sensitivity, not exact replication.
-  - **Parameters to sweep:**
+  - Reimplement ORB logic in vectorized form (simplified vs production: no VWAP, no volume filter, no T1/T2 split)
+  - Pure Python/NumPy implementation with optional VectorBT acceleration
+  - **Parameters to sweep (6 parameters, 18,000 combinations per symbol):**
     - `opening_range_minutes`: [5, 10, 15, 20, 30]
     - `profit_target_r`: [1.0, 1.5, 2.0, 2.5, 3.0]
-    - `stop_buffer_pct`: [0.0, 0.1, 0.2, 0.5] (additional buffer below OR low)
+    - `stop_buffer_pct`: [0.0, 0.1, 0.2, 0.5]
     - `max_hold_minutes`: [15, 30, 45, 60, 90, 120]
-    - `min_gap_pct`: [1.0, 1.5, 2.0, 3.0, 5.0] (pre-filter)
-  - Total combinations: 5 × 5 × 4 × 6 × 5 = 3,000 per symbol. VectorBT handles this in seconds.
-  - Output: DataFrame with parameter combinations and their performance metrics (total return, Sharpe, max drawdown, win rate, trade count).
+    - `min_gap_pct`: [1.0, 1.5, 2.0, 3.0, 5.0]
+    - `max_range_atr_ratio`: [2.0, 3.0, 4.0, 5.0, 8.0, 999.0] ← added based on gate check findings (DEC-062)
+  - Output: Per-symbol Parquet + cross-symbol summary Parquet
 
 - **Heatmap & Visualization:**
-  - Generate 2D heatmaps showing how performance varies across parameter pairs (e.g., opening_range_minutes vs profit_target_r)
-  - Identify "stable regions" where performance is good across a neighborhood of parameters (robust) vs "spike regions" where one specific combination looks amazing but neighbors are bad (overfit).
-  - Save plots as PNG to `data/backtest_runs/sweeps/`.
+  - Static heatmaps (matplotlib + seaborn, PNG) for quick review
+  - Interactive heatmaps (plotly, HTML) for deep exploration
+  - 5 parameter pairs × 4 metrics = 40 heatmaps (20 PNG + 20 HTML)
+  - Save to `data/backtest_runs/sweeps/`
 
 - **CLI:** `python -m argus.backtest.vectorbt_orb --data-dir data/historical/1m --symbols TSLA,NVDA,AAPL --start 2025-06-01 --end 2025-12-31`
 
-**Micro-decisions to make before implementation:**
-- MD-8-1: VectorBT version and installation. VectorBT Pro vs open-source? (Open-source is sufficient for our needs.)
-- MD-8-2: How to model the opening range gap scan in VectorBT — use previous day's close vs current day's open to compute gap, filter by min_gap_pct, then only run ORB logic on qualifying days.
-- MD-8-3: How to handle multiple symbols — run sweeps per-symbol then aggregate, or build a portfolio-level sweep? (Per-symbol first, then aggregate for the report.)
+**Micro-decisions (all resolved):**
+- MD-8-1: VectorBT open-source, NumPy fallback if compat issues (DEC-057)
+- MD-8-2: Gap scan pre-filter, same logic as ScannerSimulator (DEC-058)
+- MD-8-3: Per-symbol sweeps then aggregate cross-symbol (DEC-059)
+- MD-8-4: Dual visualization — static PNG + interactive HTML (DEC-060)
+- MD-8-5: `max_range_atr_ratio` as 6th sweep parameter (DEC-062)
 
-**After this sprint:** You have heatmaps showing which ORB parameters are robust and which are fragile. You know whether a 15-minute opening range is clearly better than 10 or 20, or whether it doesn't matter much. This informs which parameters to "lock in" vs which to keep experimenting with.
+**After this sprint:** You have heatmaps showing which ORB parameters are robust and which are fragile. You know whether a 15-minute opening range is clearly better than 10 or 20, or whether it doesn't matter much. You know the optimal `max_range_atr_ratio` range for trade volume vs quality tradeoff. This informs which parameters to "lock in" vs which to keep experimenting with.
 
 ---
 
