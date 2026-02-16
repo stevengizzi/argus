@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -29,11 +30,11 @@ def clock() -> FixedClock:
 
 @pytest.fixture
 def config() -> HealthConfig:
-    """Create default HealthConfig for tests."""
+    """Create default HealthConfig for tests (no webhooks)."""
     return HealthConfig(
         heartbeat_interval_seconds=60,
-        heartbeat_url="",
-        alert_webhook_url="",
+        heartbeat_url_env="",
+        alert_webhook_url_env="",
         daily_check_enabled=True,
         weekly_reconciliation_enabled=True,
     )
@@ -147,54 +148,57 @@ class TestHeartbeat:
         self, event_bus: EventBus, clock: FixedClock
     ) -> None:
         """Heartbeat sends HTTP POST to configured URL."""
-        config = HealthConfig(
-            heartbeat_interval_seconds=10,  # Minimum allowed
-            heartbeat_url="https://hc.example.com/ping/abc123",
-            alert_webhook_url="",
-        )
-        health_monitor = HealthMonitor(event_bus=event_bus, clock=clock, config=config)
-        health_monitor.update_component("broker", ComponentStatus.HEALTHY)
+        # Set env var for the heartbeat URL
+        with patch.dict(os.environ, {"TEST_HEARTBEAT_URL": "https://hc.example.com/ping/abc123"}):
+            config = HealthConfig(
+                heartbeat_interval_seconds=10,  # Minimum allowed
+                heartbeat_url_env="TEST_HEARTBEAT_URL",
+                alert_webhook_url_env="",
+            )
+            health_monitor = HealthMonitor(event_bus=event_bus, clock=clock, config=config)
+            health_monitor.update_component("broker", ComponentStatus.HEALTHY)
 
-        with patch("argus.core.health.aiohttp.ClientSession") as mock_session_class:
-            mock_session = MagicMock()
-            mock_response = MagicMock()
-            mock_response.status = 200
-            mock_context_manager = AsyncMock()
-            mock_context_manager.__aenter__.return_value = mock_response
-            mock_session.post.return_value = mock_context_manager
-            mock_session_class.return_value.__aenter__.return_value = mock_session
+            with patch("argus.core.health.aiohttp.ClientSession") as mock_session_class:
+                mock_session = MagicMock()
+                mock_response = MagicMock()
+                mock_response.status = 200
+                mock_context_manager = AsyncMock()
+                mock_context_manager.__aenter__.return_value = mock_response
+                mock_session.post.return_value = mock_context_manager
+                mock_session_class.return_value.__aenter__.return_value = mock_session
 
-            # Call _send_heartbeat directly to avoid waiting for interval
-            await health_monitor._send_heartbeat(ComponentStatus.HEALTHY)
+                # Call _send_heartbeat directly to avoid waiting for interval
+                await health_monitor._send_heartbeat(ComponentStatus.HEALTHY)
 
-            mock_session.post.assert_called()
-            call_args = mock_session.post.call_args
-            assert call_args[0][0] == "https://hc.example.com/ping/abc123"
+                mock_session.post.assert_called()
+                call_args = mock_session.post.call_args
+                assert call_args[0][0] == "https://hc.example.com/ping/abc123"
 
     @pytest.mark.asyncio
     async def test_heartbeat_handles_http_failure(
         self, event_bus: EventBus, clock: FixedClock
     ) -> None:
         """HTTP error during heartbeat is logged but doesn't crash."""
-        config = HealthConfig(
-            heartbeat_interval_seconds=10,  # Minimum allowed
-            heartbeat_url="https://hc.example.com/ping/abc123",
-            alert_webhook_url="",
-        )
-        health_monitor = HealthMonitor(event_bus=event_bus, clock=clock, config=config)
+        with patch.dict(os.environ, {"TEST_HEARTBEAT_URL": "https://hc.example.com/ping/abc123"}):
+            config = HealthConfig(
+                heartbeat_interval_seconds=10,  # Minimum allowed
+                heartbeat_url_env="TEST_HEARTBEAT_URL",
+                alert_webhook_url_env="",
+            )
+            health_monitor = HealthMonitor(event_bus=event_bus, clock=clock, config=config)
 
-        with patch("argus.core.health.aiohttp.ClientSession") as mock_session_class:
-            mock_session_class.return_value.__aenter__.side_effect = Exception("Network error")
+            with patch("argus.core.health.aiohttp.ClientSession") as mock_session_class:
+                mock_session_class.return_value.__aenter__.side_effect = Exception("Network error")
 
-            # Should not raise - call directly to test error handling
-            await health_monitor._send_heartbeat(ComponentStatus.HEALTHY)
+                # Should not raise - call directly to test error handling
+                await health_monitor._send_heartbeat(ComponentStatus.HEALTHY)
 
     @pytest.mark.asyncio
     async def test_heartbeat_skips_when_no_url(
         self, event_bus: EventBus, clock: FixedClock, config: HealthConfig
     ) -> None:
         """No HTTP call when heartbeat_url is empty."""
-        config.heartbeat_url = ""
+        # config fixture already has empty heartbeat_url_env
         health_monitor = HealthMonitor(event_bus=event_bus, clock=clock, config=config)
 
         with patch("aiohttp.ClientSession") as mock_session_class:
@@ -218,123 +222,127 @@ class TestAlerts:
         self, event_bus: EventBus, clock: FixedClock
     ) -> None:
         """Discord webhook URL triggers Discord payload format."""
-        config = HealthConfig(
-            heartbeat_interval_seconds=60,
-            heartbeat_url="",
-            alert_webhook_url="https://discord.com/api/webhooks/123/abc",
-        )
-        health_monitor = HealthMonitor(event_bus=event_bus, clock=clock, config=config)
+        with patch.dict(os.environ, {"TEST_ALERT_URL": "https://discord.com/api/webhooks/123/abc"}):
+            config = HealthConfig(
+                heartbeat_interval_seconds=60,
+                heartbeat_url_env="",
+                alert_webhook_url_env="TEST_ALERT_URL",
+            )
+            health_monitor = HealthMonitor(event_bus=event_bus, clock=clock, config=config)
 
-        with patch("aiohttp.ClientSession") as mock_session_class:
-            mock_session = AsyncMock()
-            mock_response = AsyncMock()
-            mock_response.status = 200
-            mock_session.post.return_value.__aenter__.return_value = mock_response
-            mock_session_class.return_value.__aenter__.return_value = mock_session
+            with patch("aiohttp.ClientSession") as mock_session_class:
+                mock_session = AsyncMock()
+                mock_response = AsyncMock()
+                mock_response.status = 200
+                mock_session.post.return_value.__aenter__.return_value = mock_response
+                mock_session_class.return_value.__aenter__.return_value = mock_session
 
-            await health_monitor.send_critical_alert("Test Alert", "Test body")
+                await health_monitor.send_critical_alert("Test Alert", "Test body")
 
-            call_args = mock_session.post.call_args
-            payload = call_args[1]["json"]
-            assert "content" in payload
-            assert "🚨" in payload["content"]
-            assert "**Test Alert**" in payload["content"]
+                call_args = mock_session.post.call_args
+                payload = call_args[1]["json"]
+                assert "content" in payload
+                assert "🚨" in payload["content"]
+                assert "**Test Alert**" in payload["content"]
 
     @pytest.mark.asyncio
     async def test_alert_sends_generic_format(
         self, event_bus: EventBus, clock: FixedClock
     ) -> None:
         """Non-Discord webhook URL triggers generic payload format."""
-        config = HealthConfig(
-            heartbeat_interval_seconds=60,
-            heartbeat_url="",
-            alert_webhook_url="https://webhook.example.com/alert",
-        )
-        health_monitor = HealthMonitor(event_bus=event_bus, clock=clock, config=config)
+        with patch.dict(os.environ, {"TEST_ALERT_URL": "https://webhook.example.com/alert"}):
+            config = HealthConfig(
+                heartbeat_interval_seconds=60,
+                heartbeat_url_env="",
+                alert_webhook_url_env="TEST_ALERT_URL",
+            )
+            health_monitor = HealthMonitor(event_bus=event_bus, clock=clock, config=config)
 
-        with patch("aiohttp.ClientSession") as mock_session_class:
-            mock_session = AsyncMock()
-            mock_response = AsyncMock()
-            mock_response.status = 200
-            mock_session.post.return_value.__aenter__.return_value = mock_response
-            mock_session_class.return_value.__aenter__.return_value = mock_session
+            with patch("aiohttp.ClientSession") as mock_session_class:
+                mock_session = AsyncMock()
+                mock_response = AsyncMock()
+                mock_response.status = 200
+                mock_session.post.return_value.__aenter__.return_value = mock_response
+                mock_session_class.return_value.__aenter__.return_value = mock_session
 
-            await health_monitor.send_critical_alert("Test Alert", "Test body")
+                await health_monitor.send_critical_alert("Test Alert", "Test body")
 
-            call_args = mock_session.post.call_args
-            payload = call_args[1]["json"]
-            assert payload["title"] == "Test Alert"
-            assert payload["body"] == "Test body"
-            assert payload["severity"] == "critical"
+                call_args = mock_session.post.call_args
+                payload = call_args[1]["json"]
+                assert payload["title"] == "Test Alert"
+                assert payload["body"] == "Test body"
+                assert payload["severity"] == "critical"
 
     @pytest.mark.asyncio
     async def test_unhealthy_transition_triggers_alert(
         self, event_bus: EventBus, clock: FixedClock
     ) -> None:
         """Transition to UNHEALTHY triggers an alert."""
-        config = HealthConfig(
-            heartbeat_interval_seconds=60,
-            heartbeat_url="",
-            alert_webhook_url="https://webhook.example.com/alert",
-        )
-        health_monitor = HealthMonitor(event_bus=event_bus, clock=clock, config=config)
+        with patch.dict(os.environ, {"TEST_ALERT_URL": "https://webhook.example.com/alert"}):
+            config = HealthConfig(
+                heartbeat_interval_seconds=60,
+                heartbeat_url_env="",
+                alert_webhook_url_env="TEST_ALERT_URL",
+            )
+            health_monitor = HealthMonitor(event_bus=event_bus, clock=clock, config=config)
 
-        with patch("aiohttp.ClientSession") as mock_session_class:
-            mock_session = AsyncMock()
-            mock_response = AsyncMock()
-            mock_response.status = 200
-            mock_session.post.return_value.__aenter__.return_value = mock_response
-            mock_session_class.return_value.__aenter__.return_value = mock_session
+            with patch("aiohttp.ClientSession") as mock_session_class:
+                mock_session = AsyncMock()
+                mock_response = AsyncMock()
+                mock_response.status = 200
+                mock_session.post.return_value.__aenter__.return_value = mock_response
+                mock_session_class.return_value.__aenter__.return_value = mock_session
 
-            # First set to HEALTHY
-            health_monitor.update_component("broker", ComponentStatus.HEALTHY)
-            await asyncio.sleep(0.05)  # Let task run
+                # First set to HEALTHY
+                health_monitor.update_component("broker", ComponentStatus.HEALTHY)
+                await asyncio.sleep(0.05)  # Let task run
 
-            # Then transition to UNHEALTHY
-            health_monitor.update_component("broker", ComponentStatus.UNHEALTHY, "Lost connection")
-            await asyncio.sleep(0.05)  # Let task run
+                # Then transition to UNHEALTHY
+                health_monitor.update_component("broker", ComponentStatus.UNHEALTHY, "Lost connection")
+                await asyncio.sleep(0.05)  # Let task run
 
-            # Verify alert was sent
-            assert mock_session.post.called
-            call_args = mock_session.post.call_args
-            payload = call_args[1]["json"]
-            assert "UNHEALTHY" in payload["title"]
+                # Verify alert was sent
+                assert mock_session.post.called
+                call_args = mock_session.post.call_args
+                payload = call_args[1]["json"]
+                assert "UNHEALTHY" in payload["title"]
 
     @pytest.mark.asyncio
     async def test_circuit_breaker_triggers_alert(
         self, event_bus: EventBus, clock: FixedClock
     ) -> None:
         """CircuitBreakerEvent triggers a critical alert."""
-        config = HealthConfig(
-            heartbeat_interval_seconds=60,
-            heartbeat_url="",
-            alert_webhook_url="https://webhook.example.com/alert",
-        )
-        health_monitor = HealthMonitor(event_bus=event_bus, clock=clock, config=config)
+        with patch.dict(os.environ, {"TEST_ALERT_URL": "https://webhook.example.com/alert"}):
+            config = HealthConfig(
+                heartbeat_interval_seconds=60,
+                heartbeat_url_env="",
+                alert_webhook_url_env="TEST_ALERT_URL",
+            )
+            health_monitor = HealthMonitor(event_bus=event_bus, clock=clock, config=config)
 
-        with patch("aiohttp.ClientSession") as mock_session_class:
-            mock_session = AsyncMock()
-            mock_response = AsyncMock()
-            mock_response.status = 200
-            mock_session.post.return_value.__aenter__.return_value = mock_response
-            mock_session_class.return_value.__aenter__.return_value = mock_session
+            with patch("aiohttp.ClientSession") as mock_session_class:
+                mock_session = AsyncMock()
+                mock_response = AsyncMock()
+                mock_response.status = 200
+                mock_session.post.return_value.__aenter__.return_value = mock_response
+                mock_session_class.return_value.__aenter__.return_value = mock_session
 
-            await health_monitor.start()
+                await health_monitor.start()
 
-            # Publish circuit breaker event
-            await event_bus.publish(CircuitBreakerEvent(
-                level=CircuitBreakerLevel.ACCOUNT,
-                reason="Daily loss limit exceeded",
-            ))
+                # Publish circuit breaker event
+                await event_bus.publish(CircuitBreakerEvent(
+                    level=CircuitBreakerLevel.ACCOUNT,
+                    reason="Daily loss limit exceeded",
+                ))
 
-            await asyncio.sleep(0.1)  # Let handler run
-            await health_monitor.stop()
+                await asyncio.sleep(0.1)  # Let handler run
+                await health_monitor.stop()
 
-            # Verify alert was sent
-            assert mock_session.post.called
-            call_args = mock_session.post.call_args
-            payload = call_args[1]["json"]
-            assert "Circuit Breaker" in payload["title"]
+                # Verify alert was sent
+                assert mock_session.post.called
+                call_args = mock_session.post.call_args
+                payload = call_args[1]["json"]
+                assert "Circuit Breaker" in payload["title"]
 
 
 # ---------------------------------------------------------------------------
@@ -350,40 +358,41 @@ class TestIntegrityChecks:
         self, event_bus: EventBus, clock: FixedClock
     ) -> None:
         """Daily check alerts when position has no stop order."""
-        config = HealthConfig(
-            heartbeat_interval_seconds=60,
-            heartbeat_url="",
-            alert_webhook_url="https://webhook.example.com/alert",
-        )
+        with patch.dict(os.environ, {"TEST_ALERT_URL": "https://webhook.example.com/alert"}):
+            config = HealthConfig(
+                heartbeat_interval_seconds=60,
+                heartbeat_url_env="",
+                alert_webhook_url_env="TEST_ALERT_URL",
+            )
 
-        mock_broker = AsyncMock()
-        mock_position = MagicMock()
-        mock_position.symbol = "AAPL"
-        mock_broker.get_positions.return_value = [mock_position]
-        mock_broker.get_open_orders.return_value = []  # No stop orders
+            mock_broker = AsyncMock()
+            mock_position = MagicMock()
+            mock_position.symbol = "AAPL"
+            mock_broker.get_positions.return_value = [mock_position]
+            mock_broker.get_open_orders.return_value = []  # No stop orders
 
-        health_monitor = HealthMonitor(
-            event_bus=event_bus,
-            clock=clock,
-            config=config,
-            broker=mock_broker,
-        )
+            health_monitor = HealthMonitor(
+                event_bus=event_bus,
+                clock=clock,
+                config=config,
+                broker=mock_broker,
+            )
 
-        with patch("aiohttp.ClientSession") as mock_session_class:
-            mock_session = AsyncMock()
-            mock_response = AsyncMock()
-            mock_response.status = 200
-            mock_session.post.return_value.__aenter__.return_value = mock_response
-            mock_session_class.return_value.__aenter__.return_value = mock_session
+            with patch("aiohttp.ClientSession") as mock_session_class:
+                mock_session = AsyncMock()
+                mock_response = AsyncMock()
+                mock_response.status = 200
+                mock_session.post.return_value.__aenter__.return_value = mock_response
+                mock_session_class.return_value.__aenter__.return_value = mock_session
 
-            await health_monitor._run_daily_integrity_check()
+                await health_monitor._run_daily_integrity_check()
 
-            # Should have sent an alert
-            assert mock_session.post.called
-            call_args = mock_session.post.call_args
-            payload = call_args[1]["json"]
-            assert "Integrity Check FAILED" in payload["title"]
-            assert "AAPL" in payload["body"]
+                # Should have sent an alert
+                assert mock_session.post.called
+                call_args = mock_session.post.call_args
+                payload = call_args[1]["json"]
+                assert "Integrity Check FAILED" in payload["title"]
+                assert "AAPL" in payload["body"]
 
     @pytest.mark.asyncio
     async def test_daily_check_all_positions_have_stops(
@@ -468,30 +477,31 @@ class TestLifecycle:
         self, event_bus: EventBus, clock: FixedClock
     ) -> None:
         """Same component going UNHEALTHY twice only sends one alert per transition."""
-        config = HealthConfig(
-            heartbeat_interval_seconds=60,
-            heartbeat_url="",
-            alert_webhook_url="https://webhook.example.com/alert",
-        )
-        health_monitor = HealthMonitor(event_bus=event_bus, clock=clock, config=config)
+        with patch.dict(os.environ, {"TEST_ALERT_URL": "https://webhook.example.com/alert"}):
+            config = HealthConfig(
+                heartbeat_interval_seconds=60,
+                heartbeat_url_env="",
+                alert_webhook_url_env="TEST_ALERT_URL",
+            )
+            health_monitor = HealthMonitor(event_bus=event_bus, clock=clock, config=config)
 
-        with patch("aiohttp.ClientSession") as mock_session_class:
-            mock_session = AsyncMock()
-            mock_response = AsyncMock()
-            mock_response.status = 200
-            mock_session.post.return_value.__aenter__.return_value = mock_response
-            mock_session_class.return_value.__aenter__.return_value = mock_session
+            with patch("aiohttp.ClientSession") as mock_session_class:
+                mock_session = AsyncMock()
+                mock_response = AsyncMock()
+                mock_response.status = 200
+                mock_session.post.return_value.__aenter__.return_value = mock_response
+                mock_session_class.return_value.__aenter__.return_value = mock_session
 
-            # First UNHEALTHY transition
-            health_monitor.update_component("broker", ComponentStatus.UNHEALTHY, "Error 1")
-            await asyncio.sleep(0.05)
+                # First UNHEALTHY transition
+                health_monitor.update_component("broker", ComponentStatus.UNHEALTHY, "Error 1")
+                await asyncio.sleep(0.05)
 
-            # Second UNHEALTHY (no transition, already unhealthy)
-            health_monitor.update_component("broker", ComponentStatus.UNHEALTHY, "Error 2")
-            await asyncio.sleep(0.05)
+                # Second UNHEALTHY (no transition, already unhealthy)
+                health_monitor.update_component("broker", ComponentStatus.UNHEALTHY, "Error 2")
+                await asyncio.sleep(0.05)
 
-            # Should only have called post once
-            assert mock_session.post.call_count == 1
+                # Should only have called post once
+                assert mock_session.post.call_count == 1
 
     @pytest.mark.asyncio
     async def test_component_recovery_clears_status(

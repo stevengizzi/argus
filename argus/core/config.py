@@ -45,10 +45,26 @@ class LogLevel(StrEnum):
 class HealthConfig(BaseModel):
     """Health monitoring configuration."""
     heartbeat_interval_seconds: int = Field(default=60, ge=10, le=300)
-    heartbeat_url: str = ""           # Healthchecks.io ping URL or similar
-    alert_webhook_url: str = ""       # Discord webhook, Slack webhook, etc.
+    heartbeat_url_env: str = ""       # Env var name for Healthchecks.io ping URL
+    alert_webhook_url_env: str = ""   # Env var name for Discord/Slack webhook
     daily_check_enabled: bool = True
     weekly_reconciliation_enabled: bool = True
+
+    @property
+    def heartbeat_url(self) -> str:
+        """Resolve heartbeat URL from environment variable."""
+        import os
+        if not self.heartbeat_url_env:
+            return ""
+        return os.environ.get(self.heartbeat_url_env, "")
+
+    @property
+    def alert_webhook_url(self) -> str:
+        """Resolve alert webhook URL from environment variable."""
+        import os
+        if not self.alert_webhook_url_env:
+            return ""
+        return os.environ.get(self.alert_webhook_url_env, "")
 
 
 class SystemConfig(BaseModel):

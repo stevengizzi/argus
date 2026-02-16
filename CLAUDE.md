@@ -10,7 +10,7 @@ Phase 1 sprint plan: @docs/07_PHASE1_SPRINT_PLAN.md
 
 ## Current State
 
-Phase 1 COMPLETE (February 16, 2026). 362 tests, 0 flaky, ruff clean.
+Phase 1 COMPLETE (February 16, 2026). 417 tests, 0 flaky, ruff clean.
 
 **Dual-track work in progress:**
 - **Track 1 — Paper Trading Validation:** Running Argus on Alpaca paper trading. Validating stability, data integrity, risk compliance, trade lifecycle. See `docs/08_PAPER_TRADING_GUIDE.md`.
@@ -93,6 +93,7 @@ docs/
 - `python -m argus.backtest.replay_harness --data-dir data/historical/1m --start 2025-06-01 --end 2025-12-31` — Run replay backtest
 - `python -m argus.backtest.vectorbt_orb --data-dir data/historical/1m --symbols TSLA,NVDA` — Run VectorBT parameter sweep
 - `python -m argus.backtest.report_generator --db data/backtest_runs/run_xxx.db --output reports/orb_validation.html` — Generate backtest report
+- `python -m argus.backtest.data_fetcher --start 2025-03-01 --end 2026-02-01` — Download historical data
 
 ## Code Style
 
@@ -190,7 +191,7 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 | ~~DEF-002~~ | ~~Cash reserve basis: switch to start-of-day equity~~ | ~~Sprint 3~~ | **DONE** — Implemented in Sprint 3 (DEC-037). |
 | ~~DEF-003~~ | ~~Replace datetime.utcnow() with datetime.now(UTC)~~ | ~~Sprint 3~~ | **DONE** — Fixed in events.py, trading.py, and tests. |
 | DEF-004 | Discuss cash reserve calc with CPA before live trading | Phase 3 start | Equity vs start-of-day capital vs high water mark has tax and risk implications worth a professional opinion. |
-| DEF-005 | Move webhook URLs to .env (security) | Post paper trading validation | Discord webhook URL and Healthchecks.io ping URL contain auth tokens. |
+| ~~DEF-005~~ | ~~Move webhook URLs to .env (security)~~ | ~~Post paper trading validation~~ | **DONE** — HealthConfig now reads heartbeat_url_env and alert_webhook_url_env from config, resolves actual URLs from environment variables. |
 | DEF-006 | Backtrader integration if Replay Harness too slow | Phase 2 Sprint 7 (if replay takes >1hr for 6mo data) | Backtrader dropped from Phase 2 (DEC-046). Reconsidered only if Replay Harness performance is insufficient for iterative parameter work. |
 ```
 

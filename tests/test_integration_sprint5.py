@@ -6,6 +6,7 @@ Tests the integration between components. All external services mocked.
 from __future__ import annotations
 
 import asyncio
+import os
 from datetime import UTC, datetime
 from datetime import time as dt_time
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -45,8 +46,8 @@ def health_config() -> HealthConfig:
     """Health configuration for tests."""
     return HealthConfig(
         heartbeat_interval_seconds=10,  # Minimum
-        heartbeat_url="",
-        alert_webhook_url="",
+        heartbeat_url_env="",
+        alert_webhook_url_env="",
         daily_check_enabled=False,
         weekly_reconciliation_enabled=False,
     )
@@ -95,8 +96,8 @@ class TestFullSystemIntegration:
         """Start system → verify HeartbeatEvent published."""
         config = HealthConfig(
             heartbeat_interval_seconds=10,  # Minimum
-            heartbeat_url="",
-            alert_webhook_url="",
+            heartbeat_url_env="",
+            alert_webhook_url_env="",
         )
 
         health_monitor = HealthMonitor(
@@ -125,49 +126,52 @@ class TestFullSystemIntegration:
         self, event_bus: EventBus, clock_market_hours: FixedClock
     ) -> None:
         """CircuitBreakerEvent → alert sent."""
-        config = HealthConfig(
-            heartbeat_interval_seconds=60,
-            heartbeat_url="",
-            alert_webhook_url="https://webhook.example.com/alert",
-        )
+        with patch.dict(
+            os.environ, {"TEST_ALERT_WEBHOOK": "https://webhook.example.com/alert"}
+        ):
+            config = HealthConfig(
+                heartbeat_interval_seconds=60,
+                heartbeat_url_env="",
+                alert_webhook_url_env="TEST_ALERT_WEBHOOK",
+            )
 
-        health_monitor = HealthMonitor(
-            event_bus=event_bus,
-            clock=clock_market_hours,
-            config=config,
-        )
+            health_monitor = HealthMonitor(
+                event_bus=event_bus,
+                clock=clock_market_hours,
+                config=config,
+            )
 
-        alert_sent = {"called": False}
+            alert_sent = {"called": False}
 
-        with patch("argus.core.health.aiohttp.ClientSession") as mock_session_class:
-            mock_session = MagicMock()
-            mock_response = MagicMock()
-            mock_response.status = 200
-            mock_context_manager = AsyncMock()
-            mock_context_manager.__aenter__.return_value = mock_response
-            mock_session.post.return_value = mock_context_manager
-            mock_session_class.return_value.__aenter__.return_value = mock_session
+            with patch("argus.core.health.aiohttp.ClientSession") as mock_session_class:
+                mock_session = MagicMock()
+                mock_response = MagicMock()
+                mock_response.status = 200
+                mock_context_manager = AsyncMock()
+                mock_context_manager.__aenter__.return_value = mock_response
+                mock_session.post.return_value = mock_context_manager
+                mock_session_class.return_value.__aenter__.return_value = mock_session
 
-            def track_alert(*args, **kwargs):
-                alert_sent["called"] = True
-                return mock_context_manager
+                def track_alert(*args, **kwargs):
+                    alert_sent["called"] = True
+                    return mock_context_manager
 
-            mock_session.post.side_effect = track_alert
+                mock_session.post.side_effect = track_alert
 
-            await health_monitor.start()
+                await health_monitor.start()
 
-            # Publish circuit breaker event
-            await event_bus.publish(CircuitBreakerEvent(
-                level=CircuitBreakerLevel.ACCOUNT,
-                reason="Daily loss limit exceeded",
-            ))
+                # Publish circuit breaker event
+                await event_bus.publish(CircuitBreakerEvent(
+                    level=CircuitBreakerLevel.ACCOUNT,
+                    reason="Daily loss limit exceeded",
+                ))
 
-            # Wait for handler
-            await asyncio.sleep(0.1)
-            await health_monitor.stop()
+                # Wait for handler
+                await asyncio.sleep(0.1)
+                await health_monitor.stop()
 
-            # Verify alert was triggered
-            assert alert_sent["called"]
+                # Verify alert was triggered
+                assert alert_sent["called"]
 
 
 class TestStaleDataIntegration:

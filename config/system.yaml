@@ -7,7 +7,7 @@ data_dir: "data"
 
 health:
   heartbeat_interval_seconds: 60
-  heartbeat_url: ""           # Set to Healthchecks.io URL when ready
-  alert_webhook_url: ""       # Set to Discord webhook URL when ready
+  heartbeat_url_env: "HEALTHCHECKS_PING_URL"  # Env var name (not the URL itself!)
+  alert_webhook_url_env: "DISCORD_WEBHOOK_URL"  # Env var name (not the URL itself!)
   daily_check_enabled: true
   weekly_reconciliation_enabled: true
