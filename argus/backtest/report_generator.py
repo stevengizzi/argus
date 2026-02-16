@@ -863,13 +863,21 @@ def _compute_summary_metrics(trades: list[dict]) -> dict[str, Any]:
 
     max_dd_pct = max_dd / peak * 100 if peak > 0 else 0.0
 
-    # Simplified Sharpe (from R-multiples)
-    r_multiples = [t.get("r_multiple", 0) for t in trades if t.get("r_multiple") is not None]
-    if len(r_multiples) >= 2:
-        mean_r = sum(r_multiples) / len(r_multiples)
-        variance = sum((r - mean_r) ** 2 for r in r_multiples) / (len(r_multiples) - 1)
-        std_r = variance ** 0.5
-        sharpe = (mean_r / std_r) * (252 ** 0.5) if std_r > 0 else 0.0
+    # Compute Sharpe from daily P&L (proper annualization)
+    # Group trades by exit date and sum P&L per day
+    daily_pnl: dict[str, float] = {}
+    for t in trades:
+        exit_time = t.get("exit_time", "")
+        if exit_time:
+            exit_date = exit_time[:10]  # Extract YYYY-MM-DD
+            daily_pnl[exit_date] = daily_pnl.get(exit_date, 0.0) + t.get("net_pnl", 0.0)
+
+    daily_returns = list(daily_pnl.values())
+    if len(daily_returns) >= 2:
+        mean_daily = sum(daily_returns) / len(daily_returns)
+        variance = sum((r - mean_daily) ** 2 for r in daily_returns) / (len(daily_returns) - 1)
+        std_daily = variance ** 0.5
+        sharpe = (mean_daily / std_daily) * (252 ** 0.5) if std_daily > 0 else 0.0
     else:
         sharpe = 0.0
 

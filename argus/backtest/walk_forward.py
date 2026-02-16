@@ -24,7 +24,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from pathlib import Path
-from statistics import StatisticsError, mode
+from statistics import mode
 from typing import Any
 
 import pandas as pd
@@ -238,7 +238,7 @@ async def optimize_in_sample(
     )
 
     # Run sweep (this is CPU-bound, run in executor to avoid blocking)
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     results_df = await loop.run_in_executor(None, run_sweep, sweep_config)
 
     if results_df.empty:
@@ -286,12 +286,15 @@ async def optimize_in_sample(
 
     best_params = {col: best_row[col] for col in param_cols}
 
+    # Convert total_return_pct (percentage) to dollar P&L for consistent units with OOS
+    total_pnl_dollars = float(best_row["total_return_pct"]) * config.initial_cash / 100.0
+
     is_metrics = {
         "total_trades": int(best_row["total_trades"]),
         "sharpe": float(best_row["sharpe_ratio"]),
         "win_rate": float(best_row["win_rate"]),
         "profit_factor": float(best_row["profit_factor"]),
-        "total_pnl": float(best_row["total_return_pct"]),  # This is return %, not dollar P&L
+        "total_pnl": total_pnl_dollars,
         "max_drawdown": float(best_row["max_drawdown_pct"]),
     }
 
@@ -422,11 +425,8 @@ def compute_parameter_stability(windows: list[WindowResult]) -> dict[str, dict[s
             continue
 
         # Find mode (most common value)
-        try:
-            mode_value = mode(values)
-        except StatisticsError:
-            # Multiple modes - pick the first one
-            mode_value = values[0]
+        # Python 3.8+ statistics.mode() no longer raises StatisticsError for multimodal data
+        mode_value = mode(values)
 
         # Stability = fraction of windows that chose the mode
         mode_count = sum(1 for v in values if v == mode_value)
@@ -611,8 +611,8 @@ async def run_walk_forward(config: WalkForwardConfig) -> WalkForwardResult:
 def _detect_data_range(data_dir: Path) -> tuple[date, date]:
     """Detect the date range of available data.
 
-    Scans all Parquet files in the data directory to find the earliest
-    and latest dates.
+    Optimized: reads only timestamp column and only first/last files per symbol
+    (sorted alphabetically, which corresponds to date order for our naming convention).
 
     Args:
         data_dir: Path to the historical data directory.
@@ -620,28 +620,49 @@ def _detect_data_range(data_dir: Path) -> tuple[date, date]:
     Returns:
         Tuple of (start_date, end_date).
     """
-    all_dates: set[date] = set()
+    min_date: date | None = None
+    max_date: date | None = None
 
     for symbol_dir in data_dir.iterdir():
         if not symbol_dir.is_dir():
             continue
 
-        for parquet_file in symbol_dir.glob("*.parquet"):
+        # Get sorted list of parquet files
+        parquet_files = sorted(symbol_dir.glob("*.parquet"))
+        if not parquet_files:
+            continue
+
+        # Only read first and last file (covers date range)
+        files_to_read = [parquet_files[0]]
+        if len(parquet_files) > 1:
+            files_to_read.append(parquet_files[-1])
+
+        for parquet_file in files_to_read:
             try:
-                df = pd.read_parquet(parquet_file)
-                if "timestamp" in df.columns:
-                    # Convert to dates
-                    if df["timestamp"].dt.tz is None:
-                        df["timestamp"] = df["timestamp"].dt.tz_localize("UTC")
-                    dates = df["timestamp"].dt.date
-                    all_dates.update(dates.unique())
+                # Read only timestamp column (column pushdown)
+                df = pd.read_parquet(parquet_file, columns=["timestamp"])
+                if df.empty:
+                    continue
+
+                # Convert to dates
+                if df["timestamp"].dt.tz is None:
+                    df["timestamp"] = df["timestamp"].dt.tz_localize("UTC")
+
+                file_min = df["timestamp"].min().date()
+                file_max = df["timestamp"].max().date()
+
+                if min_date is None or file_min < min_date:
+                    min_date = file_min
+                if max_date is None or file_max > max_date:
+                    max_date = file_max
+
             except Exception as e:
                 logger.warning("Error reading %s: %s", parquet_file, e)
 
-    if not all_dates:
+    if min_date is None or max_date is None:
         raise ValueError(f"No data found in {data_dir}")
 
-    return min(all_dates), max(all_dates)
+    return min_date, max_date
 
 
 def _empty_walk_forward_result(
@@ -926,7 +947,7 @@ async def cross_validate_single_symbol(
         symbols=[symbol],
         start_date=start,
         end_date=end,
-        output_dir=Path(data_dir).parent / "cross_validation",
+        output_dir=Path(data_dir).parent.parent / "backtest_runs" / "cross_validation",
         or_minutes_list=[int(params["or_minutes"])],
         target_r_list=[float(params["target_r"])],
         stop_buffer_list=[float(params.get("stop_buffer_pct", 0.0))],
@@ -935,7 +956,7 @@ async def cross_validate_single_symbol(
         max_range_atr_list=[float(params.get("max_range_atr_ratio", 999.0))],
     )
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     vbt_results = await loop.run_in_executor(None, run_sweep, sweep_config)
 
     vectorbt_trades = 0
