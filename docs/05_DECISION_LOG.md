@@ -794,5 +794,36 @@ Each entry follows this format:
 
 ---
 
+### DEC-072 | Walk-Forward Fixed-Params Mode
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-17 |
+| **Decision** | Added fixed-params walk-forward mode to `walk_forward.py`. This evaluates specific parameter sets across walk-forward windows without IS re-optimization, complementing the existing optimizer-driven mode. |
+| **Rationale** | The standard walk-forward flow optimizes parameters in each IS window. For Sprint 10 Step 3, we needed to test whether specific parameter sets (from the VectorBT sweep) generalize OOS — a different question than "does the optimizer find good params." Fixed-params mode answers "do THESE params hold forward?" |
+| **Status** | Active |
+
+---
+
+### DEC-073 | Sprint 10 Walk-Forward Results — Scenario C (Inconclusive)
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-17 |
+| **Decision** | Walk-forward validation produced inconclusive results (Scenario C per Sprint 10 spec). No candidate achieved WFE ≥ 0.3. Tight-filter candidates (A–C) produced only 2 OOS trades (insufficient for evaluation). Relaxed candidate (D) showed classic overfitting (IS Sharpe +3.49 → OOS Sharpe -7.24). Contributing factors: only 11 months of data yielding 3 walk-forward windows (industry standard is 8–12+), and a cross-validation mismatch between VectorBT and Replay Harness trade counts. |
+| **Rationale** | Per DEC-047, WFE > 0.3 is required. This threshold was not met. However, the result is inconclusive rather than definitively negative — the data quantity is insufficient for the tight-filter configurations that showed promise in the full-period sweep. Paper trading provides the forward-looking validation that backtesting cannot. |
+| **Implications** | (1) Do not abandon ORB strategy based solely on this result. (2) Investigate cross-validation mismatch before finalizing parameter recommendations. (3) Paper trading validation becomes the primary evidence for/against the strategy. (4) Consider acquiring more historical data (2–3 years) for future walk-forward analysis. |
+| **Status** | Active |
+
+---
+
+### DEC-074 | Cross-Validation Mismatch — Investigation Required
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-17 |
+| **Decision** | Cross-validation sanity check (DEF-009, DEC-069) FAILED for TSLA: VectorBT produced 21 trades vs Replay Harness 135 trades (ratio 0.16). Expected VectorBT ≥ Replay. Root cause: cross_validate function hardcodes `max_range_atr_ratio=999.0` for Replay but VectorBT used `or_minutes=5, target_r=2.0` with its own ATR filtering, creating a parameter mismatch. |
+| **Rationale** | The walk-forward engine chains VectorBT (IS optimization) with Replay Harness (OOS validation). If these two engines produce significantly different trade counts for identical parameters, the walk-forward WFE calculations may be unreliable. Must be investigated before finalizing Sprint 10 Steps 4–5. |
+| **Status** | Active — needs resolution |
+
+---
+
 *End of Decision Log v1.0*
 *New decisions are appended chronologically as the project progresses.*

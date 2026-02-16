@@ -356,6 +356,20 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 
 ---
 
+### RSK-019 | VectorBT / Replay Harness Trade Count Divergence
+| Field | Value |
+|-------|-------|
+| **Date Identified** | 2026-02-17 |
+| **Category** | Data Integrity |
+| **Likelihood** | Confirmed (cross-validation failed) |
+| **Impact** | High — walk-forward results may be unreliable if IS optimization (VectorBT) and OOS validation (Replay Harness) disagree on trade counts for identical parameters |
+| **Description** | Cross-validation on TSLA showed VectorBT producing 21 trades vs Replay Harness producing 135 for the same symbol and date range. Expected VectorBT ≥ Replay (VectorBT has fewer filters). Immediate cause: cross_validate function hardcodes `max_range_atr_ratio=999.0` for Replay. Deeper question: does the walk-forward engine pass consistent parameters to both engines? |
+| **Mitigation** | (1) Investigate cross_validate parameter passing — fix the hardcoded ATR override. (2) Re-run cross-validation with matched parameters. (3) If engines still diverge, audit the walk-forward pipeline for parameter consistency between IS and OOS phases. |
+| **Status** | Open |
+| **Trigger** | Blocks Sprint 10 Steps 4–5 (parameter recommendations and final report). |
+
+---
+
 ## Review Schedule
 
 | Review Type | Frequency | Next Review |

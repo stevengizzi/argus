@@ -324,46 +324,25 @@ Sprint numbers continue from Phase 1 (which ended at Sprint 5) to maintain a sin
 
 ---
 
-### Sprint 10 — Analysis & Parameter Validation Report ⬜ PENDING
-**Estimated tests:** 0 new tests (this is analysis work, not code)
+### Sprint 10 — Analysis & Parameter Validation Report 🔶 IN PROGRESS
+**Tests:** 0 new (541 total) — analysis mode, not build mode
 
-**Goal:** Use the tools built in Sprints 6–9 to actually run backtests, interpret results, tune parameters, and produce the formal Parameter Validation Report.
+**Goal:** Use the tools built in Sprints 6–9 to run backtests, interpret results, tune parameters, and produce the formal Parameter Validation Report.
 
-**This sprint operates in analysis mode, not build mode.** There are no specs or test targets. Instead, it's a structured workflow:
+**Progress:**
+- ✅ **Step 1: Baseline Backtest** — Default params: 8 trades (max_range_atr_ratio=2.0 too restrictive). Relaxed ATR (999.0): 135 trades, Sharpe -0.26, PF 1.00 (break-even).
+- ✅ **Step 2: Parameter Sensitivity** — VectorBT sweep (522K combos, 63s). Top params: or=5, hold=15, atr=0.5, gap=2.0 (Sharpe 3.87, PF 2.07, 179 trades). Current production config (or=15, hold=30, atr=2.0) confirmed suboptimal.
+- ✅ **Step 3: Walk-Forward Validation** — 4 candidates tested, 3 WF windows each. No candidate achieved WFE ≥ 0.3. Tight filters (A–C): only 2 OOS trades (inconclusive). Relaxed (D): 81 OOS trades, Sharpe -4.19 (classic overfitting). Result is Scenario C per spec — inconclusive due to insufficient data, not definitive failure.
+- ⬜ **Step 4: Parameter Recommendations** — Pending. Cross-validation mismatch (VectorBT 21 trades vs Replay 135 for TSLA) needs investigation first.
+- ⬜ **Step 5: Write the Report** — Pending.
 
-**Step 1: Baseline Backtest**
-- Run the Replay Harness with the current production ORB parameters (from `config/orb_breakout.yaml`) on the full dataset.
-- Generate the report. This is the "how does the strategy perform as-built?" baseline.
-- Manually spot-check 20+ trades against real charts (use TradingView or similar). Do the entries and exits make sense? Are there obvious errors in the replay logic?
+**Bug fix during sprint:** report_generator.py SQL column name mismatch (quantity→shares, original_stop_price→stop_price).
 
-**Step 2: Parameter Sensitivity**
-- Run VectorBT sweeps across all key parameters.
-- Identify which parameters have high sensitivity (small changes = big performance swings) and which are stable.
-- Document findings in the backtest run log.
+**Code enhancement during sprint:** Added fixed-params walk-forward mode to walk_forward.py for evaluating specific parameter sets without re-optimization.
 
-**Step 3: Walk-Forward Validation**
-- Run walk-forward analysis with the baseline parameters.
-- Run walk-forward analysis with VectorBT's "best" parameters.
-- Compare walk-forward efficiency. If the "optimized" parameters show much worse walk-forward efficiency than baseline, you've confirmed overfitting.
+**Key concern:** Cross-validation sanity check FAILED — VectorBT and Replay Harness trade counts diverge significantly (21 vs 135 for TSLA). The walk-forward engine chains VectorBT IS with Replay Harness OOS, so this mismatch may affect walk-forward result reliability. Must investigate before finalizing parameter recommendations.
 
-**Step 4: Parameter Recommendations**
-- Based on Steps 1–3, recommend final parameter values for Phase 3 live trading.
-- Prioritize robustness over maximum backtest return.
-- Document the reasoning for every parameter choice.
-
-**Step 5: Write the Report**
-- Produce `docs/backtesting/PARAMETER_VALIDATION_REPORT.md`
-- This document is the formal deliverable of Phase 2. It should contain:
-  - Dataset description (symbols, date range, data source)
-  - Baseline performance metrics
-  - Parameter sensitivity findings
-  - Walk-forward validation results
-  - Recommended parameter values with justification
-  - Known limitations and caveats
-  - Risk assessment: what market conditions would this strategy struggle in?
-  - Recommendation for Phase 3 live sizing
-
-**After this sprint:** Phase 2 is complete. You have a written, evidence-based case for (or against) proceeding to live trading with the ORB strategy, including specific parameter recommendations and an honest assessment of the strategy's strengths and weaknesses.
+**After this sprint:** Phase 2 is complete. Parameter Validation Report produced.
 
 ---
 
