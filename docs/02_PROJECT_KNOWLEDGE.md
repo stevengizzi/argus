@@ -12,8 +12,8 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 
 **Phase:** Phase 1 COMPLETE (362 tests, February 16, 2026). Phase 2 in progress.
 **Track 1 — Paper Trading Validation:** Running Argus on Alpaca paper trading for 3+ trading days. Validating stability, data integrity, risk compliance, and trade lifecycle correctness. See `08_PAPER_TRADING_GUIDE.md`.
-**Track 2 — Phase 2 Build (Backtesting Validation):** Sprint 6 (Historical Data Acquisition) and Sprint 7 (Replay Harness + Backtest Metrics) COMPLETE. 473 tests passing. Sprint 8 (VectorBT Parameter Sweeps) next. See `09_PHASE2_SPRINT_PLAN.md`.
-**Next milestone:** Sprint 8 VectorBT parameter sweeps → Sprint 9 Walk-Forward Analysis → Parameter Validation Report. Then Phase 3 (Live Validation).
+**Track 2 — Phase 2 Build (Backtesting Validation):** Sprints 6, 7, 8 COMPLETE. 513 tests passing. Sprint 9 (Walk-Forward Analysis) next. See `09_PHASE2_SPRINT_PLAN.md`.
+**Next milestone:** Sprint 9 Walk-Forward Analysis → Sprint 10 Parameter Validation Report. Then Phase 3 (Live Validation).
 
 ## Key Decisions Made (Do Not Relitigate)
 
@@ -69,6 +69,9 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 - **Backtest database naming:** data/backtest_runs/{strategy}_{start}_{end}_{timestamp}.db. Same schema as production. DEC-056.
 - **Backtrader dropped:** Replay Harness provides higher fidelity by running actual production code. VectorBT covers fast parameter exploration. DEC-046.
 - **Walk-forward validation:** Mandatory for all parameter optimization. 70/30 IS/OOS split. Walk-forward efficiency > 0.3 required. DEC-047.
+- **VectorBT fallback:** Pure NumPy/Pandas used instead of VectorBT library (numba compatibility issues). Equivalent functionality, 53-second full sweep. DEC-063.
+- **VectorBT ATR filter:** Entry pre-computation keyed on (or_minutes, day); ATR ratio filtering applied at runtime in max_range_atr loop. DEC-064.
+- **ATR sweep thresholds:** Changed from [2.0, 3.0, 4.0, 5.0, 8.0, 999.0] to [0.3, 0.5, 0.75, 1.0, 1.5, 999.0]. All OR range/ATR ratios in dataset below 2.0 (max 1.74), so old thresholds produced 5 identical buckets. New thresholds show 25%→65%→84%→89%→92%→100% trade count gradient. DEC-065.
 
 ## Architecture Summary
 

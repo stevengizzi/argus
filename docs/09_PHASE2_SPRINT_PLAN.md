@@ -250,7 +250,7 @@ Sprint numbers continue from Phase 1 (which ended at Sprint 5) to maintain a sin
     - `stop_buffer_pct`: [0.0, 0.1, 0.2, 0.5]
     - `max_hold_minutes`: [15, 30, 45, 60, 90, 120]
     - `min_gap_pct`: [1.0, 1.5, 2.0, 3.0, 5.0]
-    - `max_range_atr_ratio`: [2.0, 3.0, 4.0, 5.0, 8.0, 999.0]
+    - `max_range_atr_ratio`: [0.3, 0.5, 0.75, 1.0, 1.5, 999.0] (updated from [2.0–8.0] per DEC-065)
   - Core functions: `load_symbol_data()`, `compute_atr()`, `compute_qualifying_days()`, `compute_opening_ranges()`, `run_single_symbol_sweep()`, `run_sweep()`
   - Output: Per-symbol Parquet + cross-symbol summary Parquet (`sweep_summary.parquet`)
 
@@ -264,12 +264,21 @@ Sprint numbers continue from Phase 1 (which ended at Sprint 5) to maintain a sin
 
 - **Tests** (`tests/backtest/test_vectorbt_orb.py`): 22 tests covering data loading, ATR computation, gap filtering, OR computation, breakout detection, sweep logic, heatmap generation, and CLI.
 
+**Performance (final):**
+- Full sweep: 29 symbols × 18K combos = 522K combinations in **53 seconds** (M1 MacBook Pro)
+- ATR gradient: 0.3 → 25%, 0.5 → 65%, 0.75 → 84%, 1.0 → 89%, 1.5 → 92%, 999.0 → 100%
+- 513 tests passing, ruff clean
+
 **Micro-decisions (all resolved):**
 - MD-8-1: VectorBT open-source attempted; fell back to pure NumPy/Pandas due to numba/coverage compatibility (DEC-057)
 - MD-8-2: Gap scan pre-filter, same logic as ScannerSimulator (DEC-058)
 - MD-8-3: Per-symbol sweeps then aggregate cross-symbol (DEC-059)
 - MD-8-4: Dual visualization — static PNG + interactive HTML (DEC-060)
 - MD-8-5: `max_range_atr_ratio` as 6th sweep parameter (DEC-062)
+
+**Deferred to Sprint 9:**
+- Cross-validation of VectorBT results against Replay Harness (compare trade counts for matching parameters on one symbol)
+- Removal of `_simulate_trades_for_day_slow()` legacy function (kept for diff-testing reference)
 
 **After this sprint:** You have heatmaps showing which ORB parameters are robust and which are fragile. You know whether a 15-minute opening range is clearly better than 10 or 20, or whether it doesn't matter much. You know the optimal `max_range_atr_ratio` range for trade volume vs quality tradeoff. This informs which parameters to "lock in" vs which to keep experimenting with.
 

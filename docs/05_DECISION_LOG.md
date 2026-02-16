@@ -720,5 +720,17 @@ Each entry follows this format:
 
 ---
 
+### DEC-065 | ATR Sweep Threshold Adjustment
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-16 |
+| **Decision** | Changed `max_range_atr_list` default in `SweepConfig` from `[2.0, 3.0, 4.0, 5.0, 8.0, 999.0]` to `[0.3, 0.5, 0.75, 1.0, 1.5, 999.0]`. |
+| **Rationale** | Post-fix data analysis (DEC-064) revealed all OR range / ATR ratios in the 29-symbol dataset are below 2.0 (max 1.74, mean 0.41). Old thresholds 2.0–8.0 produced 5 identical trade counts — wasting 5/6 of the ATR dimension. New thresholds produce a clear gradient: 0.3 = 25% of baseline trades, 0.5 = 65%, 0.75 = 84%, 1.0 = 89%, 1.5 = 92%, 999.0 = 100%. This is critical for Sprint 9 walk-forward analysis — identical parameter values would produce artificially inflated robustness scores. |
+| **Alternatives** | (a) Keep old thresholds and add lower ones, expanding the grid beyond 6 values — increases sweep time. (b) Remove ATR filtering from sweep — loses ability to measure its effect. |
+| **Impact** | 522,000 combinations, 53-second full sweep. No test changes needed (tests use explicit overrides, not defaults). |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
 *New decisions are appended chronologically as the project progresses.*
