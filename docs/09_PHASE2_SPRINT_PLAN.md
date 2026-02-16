@@ -325,24 +325,23 @@ Sprint numbers continue from Phase 1 (which ended at Sprint 5) to maintain a sin
 ---
 
 ### Sprint 10 — Analysis & Parameter Validation Report 🔶 IN PROGRESS
-**Tests:** 0 new (541 total) — analysis mode, not build mode
+**Tests:** 1 new (542 total) — analysis mode, not build mode
 
 **Goal:** Use the tools built in Sprints 6–9 to run backtests, interpret results, tune parameters, and produce the formal Parameter Validation Report.
 
 **Progress:**
 - ✅ **Step 1: Baseline Backtest** — Default params: 8 trades (max_range_atr_ratio=2.0 too restrictive). Relaxed ATR (999.0): 135 trades, Sharpe -0.26, PF 1.00 (break-even).
 - ✅ **Step 2: Parameter Sensitivity** — VectorBT sweep (522K combos, 63s). Top params: or=5, hold=15, atr=0.5, gap=2.0 (Sharpe 3.87, PF 2.07, 179 trades). Current production config (or=15, hold=30, atr=2.0) confirmed suboptimal.
-- ✅ **Step 3: Walk-Forward Validation** — 4 candidates tested, 3 WF windows each. No candidate achieved WFE ≥ 0.3. Tight filters (A–C): only 2 OOS trades (inconclusive). Relaxed (D): 81 OOS trades, Sharpe -4.19 (classic overfitting). Result is Scenario C per spec — inconclusive due to insufficient data, not definitive failure.
-- ⬜ **Step 4: Parameter Recommendations** — Pending. Cross-validation mismatch (VectorBT 21 trades vs Replay 135 for TSLA) needs investigation first.
+- ✅ **Step 3: Walk-Forward Validation** — 4 candidates tested, 3 WF windows each. No candidate achieved WFE ≥ 0.3. Tight filters (A–C): only 2 OOS trades (inconclusive). Relaxed (D): 81 OOS trades, Sharpe -4.19 (classic overfitting). Result is Scenario C per spec — inconclusive due to insufficient data, not definitive failure. Note: tight-filter candidates were also affected by ATR calculation divergence (see below).
+- ✅ **Cross-validation fix (DEC-074)** — Three bugs found and fixed: (1) CLI hardcoded 4 of 6 params, (2) VectorBT used `.get()` with silent defaults, (3) Replay Harness loaded all 29 symbols instead of single target symbol. Walk-forward pipeline parameter handoff was already correct — no rerun needed. Revealed architectural ATR divergence: VectorBT computes ATR(14) from daily bars, Replay/production computes ATR(14) from 1-minute bars with Wilder smoothing, causing range/ATR ratios 5–10x higher in Replay. This means `max_range_atr_ratio` thresholds from VectorBT sweeps do not transfer directly to production. 542 tests passing.
+- ⬜ **Step 4: Parameter Recommendations** — Pending. ATR divergence reframes the approach: transferable params (opening_range_minutes, target_r, min_gap_pct, max_hold_minutes, stop_buffer_pct) can use sweep results. Non-transferable param (max_range_atr_ratio) needs separate calibration or disabling.
 - ⬜ **Step 5: Write the Report** — Pending.
 
-**Bug fix during sprint:** report_generator.py SQL column name mismatch (quantity→shares, original_stop_price→stop_price).
+**Bug fixes during sprint:** report_generator.py SQL column name mismatch (quantity→shares, original_stop_price→stop_price). Cross-validation parameter mismatch (DEC-074).
 
-**Code enhancement during sprint:** Added fixed-params walk-forward mode to walk_forward.py for evaluating specific parameter sets without re-optimization.
+**Code enhancements during sprint:** Added fixed-params walk-forward mode to walk_forward.py. Added `symbols` field to BacktestConfig for single-symbol Replay runs. All 6 cross-validation params now required explicitly (KeyError on missing).
 
-**Key concern:** Cross-validation sanity check FAILED — VectorBT and Replay Harness trade counts diverge significantly (21 vs 135 for TSLA). The walk-forward engine chains VectorBT IS with Replay Harness OOS, so this mismatch may affect walk-forward result reliability. Must investigate before finalizing parameter recommendations.
-
-**After this sprint:** Phase 2 is complete. Parameter Validation Report produced.
+**Key finding:** ATR calculation divergence between VectorBT (daily bars) and production (1-minute bars) is an architectural difference, not a bug. VectorBT remains valid for fast parameter exploration of non-ATR pa
 
 ---
 

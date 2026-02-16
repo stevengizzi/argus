@@ -12,8 +12,8 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 
 **Phase:** Phase 1 COMPLETE (362 tests, February 16, 2026). Phase 2 in progress.
 **Track 1 — Paper Trading Validation:** Running Argus on Alpaca paper trading for 3+ trading days. Validating stability, data integrity, risk compliance, and trade lifecycle correctness. See `08_PAPER_TRADING_GUIDE.md`.
-**Track 2 — Phase 2 Build (Backtesting Validation):** Sprints 6, 7, 8, 9 COMPLETE. 541 tests passing. Sprint 10 (Analysis & Parameter Validation Report) next. See `09_PHASE2_SPRINT_PLAN.md`.
-**Next milestone:** Sprint 10 Parameter Validation Report (analysis mode, no new code). Then Phase 3 (Live Validation).
+**Track 2 — Phase 2 Build (Backtesting Validation):** Sprints 6, 7, 8, 9 COMPLETE. 542 tests passing. Sprint 10 (Analysis & Parameter Validation Report) in progress — Steps 1–3 complete, cross-validation fix (DEC-074) resolved, Steps 4–5 pending. See `09_PHASE2_SPRINT_PLAN.md`.
+**Next milestone:** Sprint 10 Steps 4–5 (Parameter Recommendations + Write Report). Then Phase 3 (Live Validation).
 
 ## Key Decisions Made (Do Not Relitigate)
 
@@ -78,6 +78,7 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 - **Cross-validation (DEF-009):** `cross_validate_single_symbol()` compares VectorBT vs Replay Harness trade counts. VectorBT >= Replay = PASS. DEC-069.
 - **Legacy slow function removal (DEF-010):** `_simulate_trades_for_day_slow()` removed from vectorbt_orb.py after cross-validation confirmed vectorized path is correct. DEC-070.
 - **News & Catalyst Intelligence:** Three-tier architecture — Tier 1 (economic/earnings calendar, Phase 3), Tier 2 (news feed + classification, Phase 6), Tier 3 (AI sentiment via Claude API, Phase 6+). Defensive filtering value prioritized over signal generation. No independent trade signals from news in V1. DEC-071.
+- **Cross-validation fix (DEC-074):** Three bugs in cross_validate_single_symbol() fixed — CLI hardcoded params, VectorBT silent defaults, symbol filter missing. Walk-forward pipeline was already correct. Revealed ATR calculation divergence: VectorBT uses daily-bar ATR, production uses 1-minute-bar ATR with Wilder smoothing (5–10x ratio difference). `max_range_atr_ratio` from VectorBT sweeps does not transfer to production — must be calibrated separately or disabled. Other 5 sweep parameters transfer cleanly.
 
 ## Architecture Summary
 
