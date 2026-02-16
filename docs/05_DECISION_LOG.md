@@ -829,5 +829,17 @@ Each entry follows this format:
 
 ---
 
+### DEC-075 | Disable max_range_atr_ratio for Phase 3
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-17 |
+| **Decision** | Set `max_range_atr_ratio=999.0` (effectively disabled) for Phase 3 live validation. Do not build daily ATR infrastructure until paper trading demonstrates the filter is needed. |
+| **Rationale** | The production ATR is computed from 1-minute bars (Wilder smoothing), producing range/ATR ratios 5–10x higher than VectorBT's daily-bar ATR. VectorBT sweep thresholds (0.3–1.5) are meaningless in production-space. The "correct" fix is adding a daily-scale ATR indicator to the production DataService, but the ATR filter's value is unproven — the sweep showed `opening_range_minutes` and `min_gap_pct` are the dominant parameters. Building infrastructure for an unvalidated filter is premature. Paper trading will reveal whether wide-range setups are a consistent losing pattern. If so, add daily ATR indicator with empirical calibration data. If not, drop the parameter entirely. |
+| **Alternatives Rejected** | (1) Calibrate ATR threshold empirically in Replay-space — still building on a semantically wrong indicator (1-minute ATR vs daily volatility). (2) Align VectorBT to use 1-minute ATR — wrong direction, would destroy the parameter's discriminating power in sweeps. (3) Add daily ATR to production now — half-sprint of engineering for an unvalidated filter. |
+| **Implications** | (1) `orb_breakout.yaml` updated to `max_range_atr_ratio: 999.0` as part of Step 4 parameter finalization. (2) During Phase 3 paper trading, manually log whether losing trades had overextended opening ranges. (3) If pattern emerges, build daily ATR indicator (new DataService work + strategy update). If not, remove the parameter. (4) VectorBT sweep results for the other 5 parameters remain valid and transferable. |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
 *New decisions are appended chronologically as the project progresses.*
