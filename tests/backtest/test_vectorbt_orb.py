@@ -8,7 +8,8 @@ import pytest
 
 from argus.backtest.vectorbt_orb import (
     SweepConfig,
-    _simulate_trades_for_day,
+    _find_exit_vectorized,
+    _precompute_entries_for_day,
     compute_atr,
     compute_opening_ranges,
     compute_qualifying_days,
@@ -17,6 +18,59 @@ from argus.backtest.vectorbt_orb import (
     run_single_symbol_sweep,
     run_sweep,
 )
+
+
+def _simulate_trades_for_day(
+    day_bars: pd.DataFrame,
+    or_high: float,
+    or_low: float,
+    or_complete_bar: int,
+    stop_buffer_pct: float,
+    target_r: float,
+    max_hold_minutes: int,
+) -> dict | None:
+    """Wrapper that uses vectorized functions for backward compatibility with tests.
+
+    This function wraps _precompute_entries_for_day and _find_exit_vectorized
+    to provide the same interface as the removed _simulate_trades_for_day_slow.
+    """
+    or_range = or_high - or_low
+
+    # Precompute entry (this finds the breakout bar and extracts post-entry arrays)
+    entry_info = _precompute_entries_for_day(
+        day_bars=day_bars,
+        or_high=or_high,
+        or_low=or_low,
+        or_complete_bar=or_complete_bar,
+        or_range=or_range,
+        atr=None,  # ATR not used for this test interface
+    )
+
+    if entry_info is None:
+        return None
+
+    # Compute stop and target
+    stop_price = or_low * (1 - stop_buffer_pct / 100)
+    risk = entry_info["entry_price"] - stop_price
+    if risk <= 0:
+        return None
+
+    target_price = entry_info["entry_price"] + target_r * risk
+
+    # Find exit using vectorized function
+    result = _find_exit_vectorized(
+        post_entry_highs=entry_info["highs"],
+        post_entry_lows=entry_info["lows"],
+        post_entry_closes=entry_info["closes"],
+        post_entry_minutes=entry_info["minutes"],
+        entry_price=entry_info["entry_price"],
+        entry_minutes=entry_info["entry_minutes"],
+        stop_price=stop_price,
+        target_price=target_price,
+        max_hold_minutes=max_hold_minutes,
+    )
+
+    return result
 
 # =============================================================================
 # Test Fixtures

@@ -284,49 +284,43 @@ Sprint numbers continue from Phase 1 (which ended at Sprint 5) to maintain a sin
 
 ---
 
-### Sprint 9 — Walk-Forward Analysis + Reporting ⬜ PENDING
-**Estimated tests:** ~15–20
+### Sprint 9 — Walk-Forward Analysis + Reporting ✅ COMPLETE
+**Tests:** 28 new (541 total)
 
 **Goal:** Build the walk-forward framework to test for overfitting, and build the reporting tooling that generates the final Parameter Validation Report.
 
-**Scope:**
+**Delivered:**
 
 - **Walk-Forward Engine** (`argus/backtest/walk_forward.py`):
-  - Takes a date range, splits it into rolling windows
-  - For each window: optimize parameters on in-sample period using VectorBT, then run Replay Harness on out-of-sample period with those parameters
-  - Compares in-sample performance to out-of-sample performance
-  - Key metric: **Walk-Forward Efficiency** = (out-of-sample return) / (in-sample return). Values above 0.5 suggest parameters generalize reasonably. Values below 0.3 suggest overfitting.
-  - Configuration:
-    - `in_sample_months`: 4 (default)
-    - `out_of_sample_months`: 2 (default)
-    - `step_months`: 2 (how far to slide the window each iteration)
-    - For 12 months of data with 4/2 split stepping by 2: you get ~4 walk-forward windows.
+  - `WalkForwardConfig` dataclass with IS/OOS periods, step size, optimization metric, min_trades floor
+  - `WindowResult` and `WalkForwardResult` dataclasses for structured output
+  - `compute_windows()` — generates rolling IS/OOS date ranges
+  - `optimize_in_sample()` — runs VectorBT sweep, selects best params by Sharpe with min_trades floor
+  - `validate_out_of_sample()` — runs Replay Harness with selected params
+  - `compute_wfe()` — Walk-Forward Efficiency calculation (OOS Sharpe / IS Sharpe)
+  - `compute_parameter_stability()` — mode and consistency analysis across windows
+  - `run_walk_forward()` — full orchestration with JSON output
+  - `cross_validate_single_symbol()` — DEF-009 resolution, compares VectorBT vs Replay trade counts
+  - CLI entry point with argparse
+  - 14 tests
 
 - **Report Generator** (`argus/backtest/report_generator.py`):
-  - Generates an HTML report (self-contained, can be opened in any browser) containing:
-    - Executive summary: total trades, win rate, profit factor, max drawdown, Sharpe
-    - Equity curve chart (daily cumulative P&L over the backtest period)
-    - Monthly P&L breakdown table
-    - Trade distribution: histogram of R-multiples
-    - Time-of-day analysis: average P&L by entry hour
-    - Day-of-week analysis: average P&L by entry day
-    - Parameter sensitivity heatmaps (from VectorBT)
-    - Walk-forward results: in-sample vs out-of-sample performance per window
-    - Worst trades table: the 10 biggest losers with entry/exit details for manual review
-    - Best trades table: the 10 biggest winners (for sanity-checking — make sure they're not data artifacts)
-  - Uses matplotlib or plotly for charts, rendered to embedded PNGs or interactive plotly HTML.
+  - `ReportConfig` dataclass supporting multiple data sources (replay DB, sweep dir, walk-forward dir)
+  - Modular section generators: `generate_equity_curve()`, `generate_monthly_table()`, `generate_trade_distribution()`, `generate_time_analysis()`, `generate_parameter_sensitivity()`, `generate_walk_forward_section()`, `generate_trade_tables()`
+  - Uses Plotly for interactive charts embedded in HTML
+  - Self-contained HTML output with inline CSS
   - CLI: `python -m argus.backtest.report_generator --db data/backtest_runs/run_xxx.db --output reports/orb_validation.html`
+  - 14 tests
 
-- **Backtest Run Log** (`docs/backtesting/BACKTEST_RUN_LOG.md`):
-  - Template for logging each backtest run: date, parameters used, data range, key metrics, observations, whether it was in-sample or out-of-sample.
-  - This is a manual document that you update as you run backtests during the analysis phase (Sprint 10).
+- **DEF-009 Resolved:** Cross-validation function implemented. VectorBT >= Replay trades = PASS (DEC-069)
+- **DEF-010 Resolved:** `_simulate_trades_for_day_slow()` removed from vectorbt_orb.py. Test wrapper uses vectorized functions (DEC-070)
 
-**Micro-decisions to make before implementation:**
-- MD-9-1: Walk-forward optimization metric — what does "best" mean in the in-sample optimization? Maximize Sharpe? Profit factor? A composite score? (Recommend Sharpe — it balances return and risk.)
-- MD-9-2: Report format — HTML only? Or also PDF? (HTML first — it's easier to generate and can embed interactive charts. PDF can be added later via headless Chrome or weasyprint.)
-- MD-9-3: Chart library — matplotlib (static, simple) or plotly (interactive, heavier)? (Recommend plotly for the HTML report since it supports hover tooltips on equity curves and trade markers.)
+**Micro-decisions resolved:**
+- MD-9-1: Sharpe ratio with min_trades floor (default 20) as optimization metric (DEC-066)
+- MD-9-2: HTML-only reports, PDF deferred (DEC-067)
+- MD-9-3: Plotly primary, matplotlib fallback (DEC-068)
 
-**After this sprint:** You have the full analysis toolkit. You can run walk-forward analysis, generate polished reports, and document your findings. The tools are ready for the analysis phase.
+**After this sprint:** The full analysis toolkit is complete. Walk-forward analysis, polished HTML reports, and cross-validation tooling are ready for the analysis phase (Sprint 10).
 
 ---
 

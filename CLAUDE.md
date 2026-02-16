@@ -10,11 +10,11 @@ Phase 1 sprint plan: @docs/07_PHASE1_SPRINT_PLAN.md
 
 ## Current State
 
-Phase 1 COMPLETE (February 16, 2026). Phase 2 Sprints 6-8 COMPLETE. 513 tests, 0 flaky, ruff clean.
+Phase 1 COMPLETE (February 16, 2026). Phase 2 Sprints 6-9 COMPLETE. 541 tests, 0 flaky, ruff clean.
 
 **Dual-track work in progress:**
 - **Track 1 — Paper Trading Validation:** Running Argus on Alpaca paper trading. Validating stability, data integrity, risk compliance, trade lifecycle correctness.  See `docs/08_PAPER_TRADING_GUIDE.md`.
-- **Track 2 — Phase 2 Build:** Sprint 9 (Walk-Forward Analysis) is next. Sprints 6 (data), 7 (replay harness), 8 (VectorBT sweeps) complete. See `docs/09_PHASE2_SPRINT_PLAN.md`.
+- **Track 2 — Phase 2 Build:** Sprint 10 (Analysis & Report) is next. Sprints 6-9 complete. See `docs/09_PHASE2_SPRINT_PLAN.md`.
 
 Phase 2 sprints continue from Phase 1 (Sprint 6 onward).
 
@@ -39,6 +39,8 @@ Components implemented:
 - ScannerSimulator — gap-based watchlist computation for backtest mode
 - BacktestMetrics — Sharpe ratio, drawdown, profit factor, R-multiples, equity curve analysis
 - VectorBT ORB Sweeps — vectorized parameter exploration (pure NumPy/Pandas), 6-parameter grid (18K combos/symbol), heatmap generation (static PNG + interactive HTML)
+- Walk-Forward Engine — rolling window IS/OOS optimization with WFE calculation, parameter stability analysis, cross-validation
+- Report Generator — HTML reports with equity curves, monthly tables, trade distributions, walk-forward sections (Plotly interactive charts)
 - Dependencies: alpaca-py>=0.30, python-dotenv>=1.0, aiohttp>=3.9, plotly>=6.5, matplotlib>=3.8, seaborn>=0.13 (NOT alpaca-trade-api — deprecated)
 
 ## Architecture
@@ -203,8 +205,8 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 | DEF-006 | Backtrader integration if Replay Harness too slow | Phase 2 Sprint 7 (if replay takes >1hr for 6mo data) | Backtrader dropped from Phase 2 (DEC-046). Reconsidered only if Replay Harness performance is insufficient for iterative parameter work. |
 | DEF-007 | Pre-market data for scanner accuracy | Backtest results promising AND scanner accuracy becomes bottleneck for live-vs-backtest correlation | IEX feed (free tier) only provides regular hours. Scanner simulation computes gap from prev close → day open, which captures overnight moves but misses pre-market volume patterns. Resolution: download 1 month SIP data to validate scanner accuracy, consider SIP for all historical data if significant. |
 | ~~DEF-008~~ | ~~Synthetic data e2e trade trigger test~~ | ~~Sprint 8~~ | **RESOLVED** — Root cause: timezone bug in OrbBreakout (DEC-061). After fix, harness produces 59 trades on 7 months of real data with relaxed max_range_atr_ratio. Additional fixes: fill price ($0.01 bug), trade logging (sync fill handling), data integrity (original stop, weighted exit price). 488 tests. |
-| DEF-009 | VectorBT vs Replay Harness cross-validation | Sprint 9 starts | Pick one symbol (e.g., TSLA), run Replay Harness with or_minutes=15, target_r=2.0, compare trade counts. VectorBT should have ≥ Replay trades (fewer filters). Natural pre-step for walk-forward since you'll already be comparing sweep outputs against harness outputs. |
-| DEF-010 | Remove `_simulate_trades_for_day_slow()` | Sprint 9 completes | Legacy slow-path function kept in vectorbt_orb.py for diff-testing during vectorization. Safe to remove once Sprint 9 validates the vectorized path produces correct walk-forward results. |
+| ~~DEF-009~~ | ~~VectorBT vs Replay Harness cross-validation~~ | ~~Sprint 9 starts~~ | **DONE** — `cross_validate_single_symbol()` implemented in walk_forward.py. Compares VectorBT trade count vs Replay Harness for matching params; VectorBT >= Replay is PASS (DEC-069). |
+| ~~DEF-010~~ | ~~Remove `_simulate_trades_for_day_slow()`~~ | ~~Sprint 9 completes~~ | **DONE** — Legacy function removed from vectorbt_orb.py. Tests updated to use wrapper over vectorized functions (DEC-070). |
 ```
 
 This keeps it lightweight — no new document, no new sync burden. Items get removed (or moved to "Completed") as they're addressed. Both Claudes see the trigger column and know when to raise the flag.

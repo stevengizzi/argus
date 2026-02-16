@@ -732,5 +732,56 @@ Each entry follows this format:
 
 ---
 
+### DEC-066 | Walk-Forward Optimization Metric
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-16 |
+| **Decision** | Use Sharpe ratio with a configurable minimum trade count floor (default 20) as the walk-forward in-sample optimization metric. Parameter sets producing fewer than `min_trades` in the IS window are disqualified regardless of Sharpe. |
+| **Rationale** | Pure Sharpe can be gamed by parameter sets that trade very rarely but win when they do (VectorBT sweep showed as few as 5 trades with tight filters). A hard floor is simpler and more transparent than a composite score. |
+| **Alternatives** | (a) Pure Sharpe without floor — risks selecting rare-but-lucky params. (b) Composite score (`sharpe * min(1.0, trade_count / min_trades)`) — smoothly penalizes low counts but less transparent. (c) Profit factor — doesn't balance return and risk. |
+| **Status** | Active |
+
+---
+
+### DEC-067 | Report Format: HTML Only
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-16 |
+| **Decision** | Generate HTML-only reports in Sprint 9. PDF export deferred. |
+| **Rationale** | HTML is easier to generate, supports interactive Plotly charts with hover tooltips, and is sufficient for personal use. PDF adds a dependency (weasyprint or headless Chrome) with no unique value at this stage. |
+| **Status** | Active |
+
+---
+
+### DEC-068 | Report Chart Library: Plotly Primary
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-16 |
+| **Decision** | Use Plotly as primary chart library for report generation, matplotlib as fallback. Consistent with Sprint 8's dual-output pattern. |
+| **Rationale** | Plotly provides interactive hover tooltips on equity curves and trade markers, which are valuable for manual inspection. Already installed from Sprint 8. |
+| **Status** | Active |
+
+---
+
+### DEC-069 | Cross-Validation Implementation (DEF-009)
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-16 |
+| **Decision** | Implement `cross_validate_single_symbol()` in walk_forward.py. Compare VectorBT trade count vs Replay Harness trade count for identical parameters on one symbol. VectorBT >= Replay = PASS (VectorBT has fewer filters, so should produce equal or more trades). |
+| **Rationale** | VectorBT uses simplified ORB logic (no VWAP, no volume filter, no T1/T2 split) for speed. It should produce more trades than the full Replay Harness. If VectorBT produces fewer trades, something is wrong with the vectorized implementation. |
+| **Status** | Active |
+
+---
+
+### DEC-070 | Legacy Slow Function Removal (DEF-010)
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-16 |
+| **Decision** | Remove `_simulate_trades_for_day_slow()` from vectorbt_orb.py (~115 lines). Update tests to use a wrapper function that calls the vectorized `_precompute_entries_for_day()` and `_find_exit_vectorized()` functions. |
+| **Rationale** | The legacy slow-path was kept during Sprint 8 vectorization for diff-testing. Now that Sprint 9 walk-forward analysis validates the vectorized path produces correct results, the slow path is dead code. The test wrapper maintains backward compatibility with existing unit tests while using the production vectorized code. |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
 *New decisions are appended chronologically as the project progresses.*
