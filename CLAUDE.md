@@ -10,11 +10,11 @@ Phase 1 sprint plan: @docs/07_PHASE1_SPRINT_PLAN.md
 
 ## Current State
 
-Phase 1 COMPLETE (February 16, 2026). Phase 2 Sprints 6-7 + pre-Sprint 8 fixes COMPLETE. 488 tests, 0 flaky, ruff clean.
+Phase 1 COMPLETE (February 16, 2026). Phase 2 Sprints 6-8 COMPLETE. 510 tests, 0 flaky, ruff clean.
 
 **Dual-track work in progress:**
 - **Track 1 — Paper Trading Validation:** Running Argus on Alpaca paper trading. Validating stability, data integrity, risk compliance, trade lifecycle. See `docs/08_PAPER_TRADING_GUIDE.md`.
-- **Track 2 — Phase 2 (Backtesting Validation):** Sprint 6 (data acquisition) and Sprint 7 (Replay Harness + metrics) complete. Next: Sprint 8 (VectorBT sweeps). See `docs/09_PHASE2_SPRINT_PLAN.md`.
+- **Track 2 — Phase 2 (Backtesting Validation):** Sprints 6-8 complete. Next: Sprint 9 (Walk-Forward + Reporting). See `docs/09_PHASE2_SPRINT_PLAN.md`.
 
 Phase 2 sprints continue from Phase 1 (Sprint 6 onward).
 
@@ -38,7 +38,8 @@ Components implemented:
 - BacktestDataService — step-driven DataService for harness control, shares indicator logic with ReplayDataService
 - ScannerSimulator — gap-based watchlist computation for backtest mode
 - BacktestMetrics — Sharpe ratio, drawdown, profit factor, R-multiples, equity curve analysis
-- Dependencies: alpaca-py>=0.30, python-dotenv>=1.0, aiohttp>=3.9 (NOT alpaca-trade-api — deprecated)
+- VectorBT ORB Sweeps — vectorized parameter exploration (pure NumPy/Pandas), 6-parameter grid (18K combos/symbol), heatmap generation (static PNG + interactive HTML)
+- Dependencies: alpaca-py>=0.30, python-dotenv>=1.0, aiohttp>=3.9, plotly>=6.5, matplotlib>=3.8, seaborn>=0.13 (NOT alpaca-trade-api — deprecated)
 
 ## Architecture
 

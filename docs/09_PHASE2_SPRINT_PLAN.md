@@ -223,8 +223,8 @@ Sprint numbers continue from Phase 1 (which ended at Sprint 5) to maintain a sin
 
 ---
 
-### Sprint 8 — VectorBT Parameter Sweeps ⬜ IN PROGRESS
-**Estimated tests:** ~20 new (~508 total)
+### Sprint 8 — VectorBT Parameter Sweeps ✅ COMPLETE
+**Tests:** 22 new (510 total)
 
 **Goal:** Build fast parameter exploration tooling using vectorized operations. This is an approximation — it won't match the Replay Harness exactly, but it can test thousands of parameter combinations in minutes instead of hours.
 
@@ -239,30 +239,33 @@ Sprint numbers continue from Phase 1 (which ended at Sprint 5) to maintain a sin
 - Default params: 5 trades in 148 days. `max_range_atr_ratio` (default ~2.0) rejected 98.5% of ORs.
 - Relaxed params (5.0): 59 trades. Confirmed `max_range_atr_ratio` is the dominant parameter.
 
-**Scope:**
+**Delivered:**
 
 - **VectorBT ORB Implementation** (`argus/backtest/vectorbt_orb.py`):
-  - Reimplement ORB logic in vectorized form (simplified vs production: no VWAP, no volume filter, no T1/T2 split)
-  - Pure Python/NumPy implementation with optional VectorBT acceleration
-  - **Parameters to sweep (6 parameters, 18,000 combinations per symbol):**
+  - Pure NumPy/Pandas implementation (VectorBT had numba/coverage compatibility issues, used fallback per MD-8-1)
+  - Simplified ORB logic (no VWAP, no volume filter, no T1/T2 split) for fast parameter exploration
+  - **6 parameters, 18,000 combinations per symbol:**
     - `opening_range_minutes`: [5, 10, 15, 20, 30]
     - `profit_target_r`: [1.0, 1.5, 2.0, 2.5, 3.0]
     - `stop_buffer_pct`: [0.0, 0.1, 0.2, 0.5]
     - `max_hold_minutes`: [15, 30, 45, 60, 90, 120]
     - `min_gap_pct`: [1.0, 1.5, 2.0, 3.0, 5.0]
-    - `max_range_atr_ratio`: [2.0, 3.0, 4.0, 5.0, 8.0, 999.0] ← added based on gate check findings (DEC-062)
-  - Output: Per-symbol Parquet + cross-symbol summary Parquet
+    - `max_range_atr_ratio`: [2.0, 3.0, 4.0, 5.0, 8.0, 999.0]
+  - Core functions: `load_symbol_data()`, `compute_atr()`, `compute_qualifying_days()`, `compute_opening_ranges()`, `run_single_symbol_sweep()`, `run_sweep()`
+  - Output: Per-symbol Parquet + cross-symbol summary Parquet (`sweep_summary.parquet`)
 
-- **Heatmap & Visualization:**
-  - Static heatmaps (matplotlib + seaborn, PNG) for quick review
-  - Interactive heatmaps (plotly, HTML) for deep exploration
-  - 5 parameter pairs × 4 metrics = 40 heatmaps (20 PNG + 20 HTML)
-  - Save to `data/backtest_runs/sweeps/`
+- **Heatmap & Visualization** (`generate_heatmaps()`):
+  - Static heatmaps (matplotlib + seaborn, PNG) in `static/` subdirectory
+  - Interactive heatmaps (plotly, HTML) in `interactive/` subdirectory
+  - 15 parameter pairs × 2 formats = 30 heatmaps per symbol subset
+  - Default: top 5 symbols by trade count + aggregate; `--all-symbols` for all 28
 
-- **CLI:** `python -m argus.backtest.vectorbt_orb --data-dir data/historical/1m --symbols TSLA,NVDA,AAPL --start 2025-06-01 --end 2025-12-31`
+- **CLI:** `python -m argus.backtest.vectorbt_orb --data-dir data/historical/1m --symbols TSLA,NVDA --start 2025-06-01 --end 2025-12-31 --output-dir data/backtest_runs/sweeps`
+
+- **Tests** (`tests/backtest/test_vectorbt_orb.py`): 22 tests covering data loading, ATR computation, gap filtering, OR computation, breakout detection, sweep logic, heatmap generation, and CLI.
 
 **Micro-decisions (all resolved):**
-- MD-8-1: VectorBT open-source, NumPy fallback if compat issues (DEC-057)
+- MD-8-1: VectorBT open-source attempted; fell back to pure NumPy/Pandas due to numba/coverage compatibility (DEC-057)
 - MD-8-2: Gap scan pre-filter, same logic as ScannerSimulator (DEC-058)
 - MD-8-3: Per-symbol sweeps then aggregate cross-symbol (DEC-059)
 - MD-8-4: Dual visualization — static PNG + interactive HTML (DEC-060)

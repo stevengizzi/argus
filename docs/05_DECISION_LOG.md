@@ -697,5 +697,28 @@ Each entry follows this format:
 
 ---
 
+### DEC-063 | VectorBT Fallback to Pure NumPy/Pandas
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-16 |
+| **Decision** | Implemented Sprint 8 parameter sweeps using pure NumPy/Pandas vectorized operations instead of VectorBT. VectorBT had numba/coverage compatibility issues at install time. Plotly installed successfully for interactive heatmaps. |
+| **Rationale** | VectorBT's numba dependency failed with `coverage.types` AttributeError. Per DEC-057's fallback clause, proceeded with pure NumPy/Pandas implementation. The ORB sweep logic is simple (~400 lines) and the fallback provides identical functionality: entry/exit simulation, metrics computation (Sharpe, drawdown, profit factor), and per-combination results. Existing metrics.py functions (`compute_sharpe_ratio`, `compute_max_drawdown`) provided reference implementations. |
+| **Impact** | No functional impact. Sweep performance is sufficient (seconds to minutes per symbol for 18K combinations). If VectorBT is needed for future, more complex strategies, can revisit after resolving numba/coverage version conflict. |
+| **Status** | Active |
+
+---
+
+### DEC-064 | VectorBT ATR Filter Bug Fix
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-16 |
+| **Decision** | Restructured `run_single_symbol_sweep()` to pre-compute entries per `(or_minutes, day)` outside the `max_range_atr` loop, with ATR ratio filtering applied at runtime inside the loop. Added `or_range` and `atr` fields to `EntryInfo` TypedDict. |
+| **Bug Description** | The original implementation appeared to filter `valid_or` by `max_range_atr_ratio` before computing entries, but values 2.0-8.0 produced identical trade counts. The restructure ensures filtering logic is explicit and correct: entries are computed once per (or_min, day), then filtered by `or_range / atr <= max_range_atr` for each threshold. |
+| **Validation** | Post-fix analysis revealed all OR range / ATR ratios in the data are below 2.0 (max 1.74 across 945 days, 7 symbols). This explains why 2.0-8.0 produce identical results — all days pass. The only differentiation is between <999.0 (requires valid ATR, excludes ~7% NaN days) and 999.0 (includes NaN days). Consider adding lower thresholds (0.5, 1.0, 1.5) in future sweeps for meaningful ATR ratio differentiation. |
+| **Files Changed** | `argus/backtest/vectorbt_orb.py` — `EntryInfo` TypedDict, `_precompute_entries_for_day()`, `run_single_symbol_sweep()` |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
 *New decisions are appended chronologically as the project progresses.*
