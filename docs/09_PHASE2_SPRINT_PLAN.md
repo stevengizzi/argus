@@ -75,7 +75,12 @@ argus/
 │   └── historical/           # Downloaded Parquet files (gitignored)
 │       ├── manifest.json     # Tracks what's been downloaded
 │       └── 1m/               # 1-minute bars
-│           ├── AAPL_2025.parquet
+│           ├── AAPL/
+│           │   ├── AAPL_2025-03.parquet
+│           │   ├── AAPL_2025-04.parquet
+│           │   └── ...
+│           ├── TSLA/
+│           │   └── ...
 │           └── ...
 ├── docs/
 │   └── backtesting/
@@ -112,44 +117,33 @@ Sprint numbers continue from Phase 1 (which ended at Sprint 5) to maintain a sin
 
 ## Sprint Details
 
-### Sprint 6 — Historical Data Acquisition ⬜ PENDING
-**Estimated tests:** ~15–20
+### Sprint 6 — Historical Data Acquisition ✅ COMPLETE
+**Tests:** 55 new (417 total)
+**Data:** 28 symbols × 11 months (March 2025 – January 2026), 2,231,905 bars, 52 MB
 
 **Goal:** Download and store 6–12 months of 1-minute bar data for a universe of liquid US stocks. Build the tooling to make future downloads easy and track what you have.
 
-**Scope:**
+**Delivered:**
 
-- **DataFetcher** (`argus/backtest/data_fetcher.py`):
-  - Async download of 1-minute bars from Alpaca's `StockHistoricalDataClient.get_stock_bars()`
-  - Rate limit handling (sleep/retry on 429 responses)
-  - Saves as Parquet files, one per symbol per month (or per quarter — decide based on file size)
-  - Manifest file (`data/historical/manifest.json`) tracking: symbol, date range downloaded, source, download timestamp, row count
-  - Resume capability: if a download is interrupted, pick up where it left off based on manifest
-  - CLI interface: `python -m argus.backtest.data_fetcher --symbols TSLA,NVDA,AAPL --start 2025-03-01 --end 2026-02-01`
+- **DataFetcher** (`argus/backtest/data_fetcher.py`): Async download from Alpaca `StockHistoricalDataClient.get_stock_bars()`, rate limiting (150 req/min sliding window), retry on 429, saves as Parquet, manifest tracking, resume capability, CLI with `--symbols`, `--start`, `--end`, `--force`.
+- **DataFetcherConfig** (`argus/backtest/config.py`): Pydantic model for storage, rate limits, adjustment, feed.
+- **Manifest** (`argus/backtest/manifest.py`): `Manifest` + `SymbolMonthEntry` dataclasses with JSON save/load, resume detection, data inventory queries.
+- **Data Validator** (`argus/backtest/data_validator.py`): 5-point quality checks — OHLC consistency, zero-volume bars, timestamp timezone, duplicate timestamps, missing trading days.
+- **Symbol Universe** (`config/backtest_universe.yaml`): 28 active symbols (SQ removed — no IEX coverage; PYPL replacement pending).
+- **Data Inventory** (`docs/backtesting/DATA_INVENTORY.md`): Updated with actual download results.
 
-- **Symbol Universe:**
-  - Start with 20–30 high-liquidity stocks that frequently appear in ORB scans: large-cap tech, popular momentum names, high-ADV stocks.
-  - Include SPY (needed for market regime context and VWAP reference).
-  - Store the list in a config file (`config/backtest_universe.yaml`) so it's easy to expand later.
-  - This is NOT the scanner universe from `config/scanner.yaml` — that's for live scanning. This is a curated historical dataset.
+**Micro-decisions resolved:**
+- MD-6-1: Per-symbol-per-month Parquet files. Path: `data/historical/1m/{SYMBOL}/{SYMBOL}_{YYYY}-{MM}.parquet` (DEC-048)
+- MD-6-2: 150 req/min throttle on Alpaca free tier (200 limit). Full download completes in ~10 minutes for 28 symbols × 11 months (DEC-051)
+- MD-6-3: Split-adjusted prices via `Adjustment.SPLIT`. No dividend adjustment for intraday strategies (DEC-050)
+- MD-6-4: Store timestamps in UTC. Convert to ET at read time in consumers (DEC-049)
 
-- **Data Validation:**
-  - After download, verify: no missing trading days, no zero-volume bars during market hours, timestamps are in correct timezone, OHLC data is internally consistent (high >= open, high >= close, low <= open, low <= close).
-  - Log any data quality issues to a validation report.
+**Data quality notes:**
+- March 10, 2025 missing for all symbols — IEX feed gap (minor impact, one trading day)
+- SQ returned no data (IEX doesn't cover this ticker). Removed from universe. Replaced with PYPL.
+- alpaca-py `BarSet.__contains__` bug: `symbol in bars` returns False even when data exists. Fixed by using `bars.df` property instead. Note: `alpaca_data_service.py` line 317 has the same pattern (`if symbol not in bars:`) — latent bug to investigate on paper trading track.
 
-- **Data Inventory Document** (`docs/backtesting/DATA_INVENTORY.md`):
-  - List of all symbols downloaded with date ranges
-  - Data source and API tier used
-  - Any data quality issues found
-  - Total disk usage
-
-**Micro-decisions to make before implementation:**
-- MD-6-1: Parquet file granularity — one file per symbol per month? Per quarter? Per year? (Tradeoff: smaller files = easier partial downloads, larger files = fewer file handles during replay)
-- MD-6-2: Alpaca free tier rate limits — how many bars can we fetch per minute? Do we need to batch requests overnight?
-- MD-6-3: Do we need adjusted (split-adjusted) prices? Alpaca provides both raw and adjusted. Always use adjusted for backtesting.
-- MD-6-4: Time zone storage — store bars in UTC or ET? (Recommend ET since all strategy logic is ET-based, but this needs to match what ReplayDataService expects.)
-
-**After this sprint:** You have a `data/historical/` directory full of Parquet files covering 6–12 months of 1-minute data for ~20–30 stocks, with a manifest tracking everything and a validation report confirming data quality.
+**After this sprint:** `data/historical/` contains 308 Parquet files covering 28 symbols × 11 months of validated 1-minute bar data, with manifest tracking and quality report.
 
 ---
 

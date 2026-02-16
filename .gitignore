@@ -62,6 +62,8 @@ logs/
 *.db
 *.sqlite
 *.sqlite3
+*.db-shm
+*.db-wal
 
 # Historical data (large Parquet files)
 data/historical/
