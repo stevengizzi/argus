@@ -143,19 +143,20 @@ The original plan defined 11 implementation steps. During execution, steps were 
 
 ---
 
-## Post-Phase 1 Roadmap (Phases 2-8)
+## Post-Phase 1 Roadmap (Phases 2–9)
 
-Updated estimates reflect the two-Claude workflow velocity observed during Phase 1 (original 4-week estimate completed in 2 days).
+Updated estimates reflect the two-Claude workflow velocity observed during Phase 1 (original 4-week estimate completed in 2 days). Phase numbers updated per DEC-077 restructure.
 
 | Phase | Scope | Original Est. | Revised Est. | Notes |
 |-------|-------|--------------|-------------|-------|
-| 2 | Backtesting Validation — VectorBT sweeps, Replay Harness, walk-forward analysis | 3-4 weeks | 5-8 days (build) | Analysis/tuning phase is open-ended. Backtrader dropped (DEC-046). |
-| 3 | Live Validation — ORB live at minimum size, compare to backtest | 4-5 weeks | 4-5 weeks | Calendar-bound: 20+ trading days required. Cannot compress. |
-| 4 | Orchestrator + Second Strategy — Orchestrator framework, ORB Scalp, cross-strategy risk | 4-5 weeks | 2-4 days | Same pattern as Phase 1: backend Python, clear architecture. |
-| 5 | Command Center MVP — Tauri desktop app, real-time dashboard, basic controls | 6 weeks | 1-2 weeks | Frontend/UI is more iterative and harder to spec precisely. |
-| 6 | AI Layer — Claude API integration, approval workflow, report generation | 6 weeks | 3-5 days | Well-defined API integration work. |
-| 7 | Expand Strategies — Add strategies through Incubator Pipeline | Ongoing | Ongoing | Per-strategy effort: ~1-2 days build + validation period. |
-| 8 | Multi-Asset Expansion — Crypto via Alpaca, then Forex, then Futures | Future | Future | Requires broker adapter work per asset class. |
+| 2 | Backtesting Validation | 3-4 weeks | ✅ COMPLETE | 5 days. 542 tests. Parameter Validation Report written. |
+| 3 | Comprehensive Validation — Extended backtest + paper trading | N/A (new) | 1–2 days build + flexible paper trading | Sprint 11 + parallel paper trading. DEC-077. |
+| 4 | Live Trading — ORB live at minimum size, compare to backtest | 4-5 weeks | 4-5 weeks | Calendar-bound: 20+ trading days required. Cannot compress. |
+| 5 | Orchestrator + Second Strategy — Orchestrator framework, ORB Scalp, cross-strategy risk | 4-5 weeks | 2-4 days | Same pattern as Phase 1: backend Python, clear architecture. |
+| 6 | Command Center MVP — Tauri desktop app, real-time dashboard, basic controls | 6 weeks | 1-2 weeks | Frontend/UI is more iterative and harder to spec precisely. |
+| 7 | AI Layer + News Intelligence — Claude API, approval workflow, news tiers | 6 weeks | 3-5 days | Well-defined API integration work. |
+| 8 | Expand Strategies — Add strategies through Incubator Pipeline | Ongoing | Ongoing | Per-strategy effort: ~1-2 days build + validation period. |
+| 9 | Multi-Asset Expansion — Crypto via Alpaca, then Forex, then Futures | Future | Future | Requires broker adapter work per asset class. |
 
 ---
 

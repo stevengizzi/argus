@@ -852,5 +852,27 @@ Each entry follows this format:
 
 ---
 
+### DEC-076 | Phase 3 ORB Parameter Recommendations
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-17 |
+| **Decision** | ORB strategy parameters for Phase 3: `opening_range_minutes=5`, `max_hold_minutes=15`, `min_gap_pct=2.0`, `stop_buffer_pct=0.0`, `target_r=2.0`, `max_range_atr_ratio=999.0` (disabled). Two high-sensitivity parameters changed (or: 15→5, hold: 30→15). ATR filter disabled (DEC-075). Three low-sensitivity parameters unchanged. |
+| **Alternatives** | (a) Use sweep top-1 set exactly (or=5, hold=15, gap=2.0, atr=0.5, target_r=1.0, stop_buf=0.0) — rejected because ATR=0.5 is non-transferable (DEC-075) and target_r=1.0 shows no meaningful advantage over 2.0. (b) Change more parameters (raise min_gap to 3.0%) — rejected to preserve trade frequency for paper trading evaluation. (c) Keep all defaults — rejected because or=15 and hold=30 produce a break-even strategy. |
+| **Rationale** | Based on 522K-combination parameter sweep, sensitivity analysis, and final validation (137 trades, Sharpe 0.93, PF 1.18, +$8,087 on $100K over 11 months). Walk-forward inconclusive (DEC-073) due to insufficient data — Sprint 11 will revalidate with extended data. Conservative approach: only change the two parameters with high sensitivity and clear directional signal. |
+| **Status** | Active — pending revalidation in Sprint 11 |
+
+---
+
+### DEC-077 | Phase Restructure — Comprehensive Validation Phase
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-17 |
+| **Decision** | Restructured project phases. Former Phase 3 ("Live Validation") becomes Phase 4. New Phase 3 ("Comprehensive Validation") contains Sprint 11 (extended backtest with ~3 years of data) and paper trading validation as parallel tracks, with an exit gate requiring both to pass before live capital. All subsequent phases shift +1 (old Phase 4 → Phase 5, etc.). |
+| **Alternatives** | (a) Keep original structure, proceed to live trading after paper validation only — rejected because walk-forward was inconclusive and extended data is cheap to acquire. (b) Require a fixed paper trading duration (e.g., 40 days minimum) — rejected in favor of flexible user-decides-when-confident approach. |
+| **Rationale** | Paper trading was an informal parallel track during Phase 2, not formalized into the phase structure. Extended backtesting (Sprint 11) was identified as high-value/low-cost: ~1–2 days of work to extend data from 11 months to ~3 years, enabling 12+ walk-forward windows vs. the 3 that produced an inconclusive result. Making both activities first-class tracked items with an explicit exit gate ensures neither is rushed. |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
 *New decisions are appended chronologically as the project progresses.*

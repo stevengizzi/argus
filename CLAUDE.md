@@ -10,13 +10,18 @@ Phase 1 sprint plan: @docs/07_PHASE1_SPRINT_PLAN.md
 
 ## Current State
 
-Phase 1 COMPLETE (February 16, 2026). Phase 2 Sprints 6-9 COMPLETE. 542 tests, 0 flaky, ruff clean.
+Phase 2 COMPLETE (February 17, 2026). Phase 3 (Comprehensive Validation) IN PROGRESS. 542 tests, 0 flaky, ruff clean.
+
+**Phase 2 deliverable:** Parameter Validation Report at `docs/backtesting/PARAMETER_VALIDATION_REPORT.md`.
+**Recommended ORB parameters (DEC-076):** or=5, hold=15, gap=2.0, stop_buf=0.0, target_r=2.0, atr=999.0 (disabled).
 
 **Dual-track work in progress:**
-- **Track 1 — Paper Trading Validation:** Running Argus on Alpaca paper trading. Validating stability, data integrity, risk compliance, trade lifecycle correctness.  See `docs/08_PAPER_TRADING_GUIDE.md`.
-- **Track 2 — Phase 2 Build:** Sprint 10 (Analysis & Report) IN PROGRESS. Steps 1-3 complete, DEC-074 cross-validation mismatch RESOLVED. Steps 4-5 pending. See `docs/09_PHASE2_SPRINT_PLAN.md`.
+- **Track A — Extended Backtest (Sprint 11):** Extending historical data to ~3 years, re-running VectorBT sweep and walk-forward validation with 12+ windows. See `docs/10_PHASE3_SPRINT_PLAN.md` and `docs/sprints/SPRINT_11_SPEC.md`.
+- **Track B — Paper Trading:** Running Argus on Alpaca paper trading with DEC-076 parameters. Flexible duration. See `docs/08_PAPER_TRADING_GUIDE.md`.
 
-Phase 2 sprints continue from Phase 1 (Sprint 6 onward).
+**Phase 3 exit gate:** Walk-forward WFE ≥ 0.3 on extended data + user satisfied with paper trading results + CPA consultation → Phase 4 (Live Trading).
+
+Phase 3 sprints continue from Phase 2 (Sprint 11 onward).
 
 Components implemented:
 - Event Bus, EventStore, core events

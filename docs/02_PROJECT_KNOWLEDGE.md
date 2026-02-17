@@ -10,10 +10,11 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 
 ## Current Project State
 
-**Phase:** Phase 1 COMPLETE (362 tests, February 16, 2026). Phase 2 in progress.
-**Track 1 — Paper Trading Validation:** Running Argus on Alpaca paper trading for 3+ trading days. Validating stability, data integrity, risk compliance, and trade lifecycle correctness. See `08_PAPER_TRADING_GUIDE.md`.
-**Track 2 — Phase 2 Build (Backtesting Validation):** Sprints 6, 7, 8, 9 COMPLETE. 542 tests passing. Sprint 10 (Analysis & Parameter Validation Report) in progress — Steps 1–4 complete, Step 5 (write report) pending. See `09_PHASE2_SPRINT_PLAN.md`.
-**Next milestone:** Sprint 10 Step 5 (Write Parameter Validation Report). Then Phase 2 is complete → Phase 3 (Live Validation).
+**Phase:** Phase 2 COMPLETE (542 tests, February 17, 2026). Phase 3 (Comprehensive Validation) in progress.
+**Track A — Extended Backtest:** Sprint 11 — downloading ~3 years of historical data, re-running VectorBT sweep and walk-forward validation with 12+ windows. See `10_PHASE3_SPRINT_PLAN.md`.
+**Track B — Paper Trading:** Running Argus on Alpaca paper trading with recommended parameters (DEC-076). Flexible duration — user decides when confidence is sufficient. See `08_PAPER_TRADING_GUIDE.md`.
+**Phase 2 deliverable:** Parameter Validation Report at `docs/backtesting/PARAMETER_VALIDATION_REPORT.md`.
+**Next milestone:** Sprint 11 complete (definitive walk-forward result). Paper trading ongoing.
 
 ## Key Decisions Made (Do Not Relitigate)
 
@@ -80,6 +81,8 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 - **News & Catalyst Intelligence:** Three-tier architecture — Tier 1 (economic/earnings calendar, Phase 3), Tier 2 (news feed + classification, Phase 6), Tier 3 (AI sentiment via Claude API, Phase 6+). Defensive filtering value prioritized over signal generation. No independent trade signals from news in V1. DEC-071.
 - **Cross-validation fix (DEC-074):** Three bugs in cross_validate_single_symbol() fixed — CLI hardcoded params, VectorBT silent defaults, symbol filter missing. Walk-forward pipeline was already correct. Revealed ATR calculation divergence: VectorBT uses daily-bar ATR, production uses 1-minute-bar ATR with Wilder smoothing (5–10x ratio difference). `max_range_atr_ratio` from VectorBT sweeps does not transfer to production — must be calibrated separately or disabled. Other 5 sweep parameters transfer cleanly.
 - **ATR filter disabled for Phase 3 (DEC-075):** `max_range_atr_ratio` set to 999.0 (disabled). Production ATR uses 1-minute bars (semantically wrong for range filter — should be daily-scale ATR). Building daily ATR infrastructure is premature until paper trading validates the filter is needed. Other 5 sweep parameters transfer cleanly and are unaffected.
+- **Phase 3 ORB parameters (DEC-076):** opening_range_minutes=5, max_hold_minutes=15, min_gap_pct=2.0, stop_buffer_pct=0.0, target_r=2.0, max_range_atr_ratio=999.0 (disabled). Walk-forward inconclusive with 11 months — Sprint 11 revalidates with ~3 years.
+- **Phase restructure (DEC-077):** Phase 3 = Comprehensive Validation (extended backtest + paper trading). Phase 4 = Live Trading. All subsequent phases shifted +1.
 
 ## Architecture Summary
 
@@ -160,20 +163,30 @@ argus/
 
 ## Build Phases
 
-1. **Core Engine + ORB Strategy** ✅ COMPLETE (Feb 14–16, 2026, 359 tests):
+1. **Core Engine + ORB Strategy** ✅ COMPLETE (Feb 14–16, 2026, 362 tests):
    - Sprint 1: Config system, Event Bus, data models, database, Trade Logger (52 tests)
    - Sprint 2: Broker Abstraction, SimulatedBroker, Risk Manager (112 tests)
    - Sprint 3: BaseStrategy, ORB Breakout, ReplayDataService, Scanner ABC (222 tests)
    - Sprint 4a: AlpacaDataService, AlpacaBroker, Clock injection (282 tests)
    - Sprint 4b: Order Manager, AlpacaScanner (320 tests)
-   - Sprint 5: HealthMonitor, system entry point, state reconstruction, structured logging (359 tests)
-2. **Backtesting Validation** (IN PROGRESS): Historical data acquisition, Replay Harness, VectorBT parameter sweeps, walk-forward analysis, Parameter Validation Report. Backtrader dropped (DEC-046). See `09_PHASE2_SPRINT_PLAN.md`.
-3. **Live Validation**: ORB live at minimum size, compare to backtest expectations. Calendar-bound (20+ trading days). Includes Tier 1 News Integration (economic/earnings calendar as scanner metadata and risk filters).
-4. **Orchestrator + Second Strategy**: Orchestrator framework, ORB Scalp, cross-strategy risk management.
-5. **Command Center MVP**: Tauri app, real-time dashboard, basic controls.
-6. **AI Layer + News Intelligence**: Claude API integration, approval workflow, report generation. Tier 2 news feed ingestion and catalyst classification. Tier 3 AI-powered sentiment analysis via Claude API.
-7. **Expand Strategies** (Ongoing): Add strategies one at a time through Incubator Pipeline.
-8. **Multi-Asset Expansion** (Future): Crypto via Alpaca, then Forex, then Futures.
+   - Sprint 5: HealthMonitor, system entry point, state reconstruction, structured logging (362 tests)
+2. **Backtesting Validation** ✅ COMPLETE (Feb 16–17, 2026, 542 tests):
+   - Sprint 6: Historical data acquisition — DataFetcher, Manifest, DataValidator. 28 symbols × 11 months, 2.2M+ bars (417 tests)
+   - Sprint 7: Replay Harness — BacktestDataService, ReplayHarness, SimulatedBroker enhancements, synthetic tick generation (473 tests)
+   - Sprint 8: VectorBT parameter sweeps — vectorized ORB simulation, ATR filtering, heatmap generation. Pure NumPy/Pandas (DEC-063). Gate check confirmed tooling (506 tests)
+   - Sprint 9: Walk-forward validation — walk_forward.py (optimizer + fixed-params modes), cross-validation, HTML report generator with Plotly charts (542 tests)
+   - Sprint 10: Analysis & Parameter Validation Report — baseline backtests, 522K-combo sweep, walk-forward (inconclusive, DEC-073), parameter recommendations (DEC-076), final validation (137 trades, Sharpe 0.93, PF 1.18). Deliverable: `docs/backtesting/PARAMETER_VALIDATION_REPORT.md`
+3. **Comprehensive Validation** (IN PROGRESS):
+   - Sprint 11: Extended backtest — download ~3 years of historical data, re-run VectorBT sweep and walk-forward with 12+ windows. See `docs/sprints/SPRINT_11_SPEC.md`
+   - Paper Trading (parallel track): Argus on Alpaca paper with DEC-076 parameters. Flexible duration, kill criteria as guardrails. See `08_PAPER_TRADING_GUIDE.md`
+   - Exit gate: Walk-forward WFE ≥ 0.3 on extended data + user satisfied with paper trading + CPA consultation
+   - See `10_PHASE3_SPRINT_PLAN.md` for tracking
+4. **Live Trading**: ORB live at minimum size with real capital, compare to backtest/paper expectations. Shadow system in parallel. Calendar-bound (20+ trading days). Includes Tier 1 News Integration (economic/earnings calendar as scanner metadata and risk filters).
+5. **Orchestrator + Second Strategy**: Orchestrator framework, ORB Scalp, cross-strategy risk management.
+6. **Command Center MVP**: Tauri app, real-time dashboard, basic controls.
+7. **AI Layer + News Intelligence**: Claude API integration, approval workflow, report generation. Tier 2–3 news.
+8. **Expand Strategies** (Ongoing): Add strategies one at a time through Incubator Pipeline.
+9. **Multi-Asset Expansion** (Future): Crypto via Alpaca, then Forex, then Futures.
 
 ## Reference Documents
 
@@ -186,6 +199,8 @@ argus/
 - `07_PHASE1_SPRINT_PLAN.md` — Phase 1 build order (COMPLETE). Historical reference.
 - `08_PAPER_TRADING_GUIDE.md` — Step-by-step guide for Alpaca paper trading validation.
 - `09_PHASE2_SPRINT_PLAN.md` — Canonical Phase 2 build order with sprint status tracking. **Both Claude instances must update this when sprints complete or scope changes.**
+- `10_PHASE3_SPRINT_PLAN.md` — Phase 3 build order and paper trading tracking. Active sprint plan.
+- `docs/backtesting/PARAMETER_VALIDATION_REPORT.md` — Phase 2 deliverable. ORB parameter analysis and recommendations.
 
 ## Communication Style Notes
 

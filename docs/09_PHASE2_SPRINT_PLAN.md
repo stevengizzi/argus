@@ -324,24 +324,23 @@ Sprint numbers continue from Phase 1 (which ended at Sprint 5) to maintain a sin
 
 ---
 
-### Sprint 10 — Analysis & Parameter Validation Report 🔶 IN PROGRESS
-**Tests:** 1 new (542 total) — analysis mode, not build mode
+### Sprint 10 — Analysis & Parameter Validation Report ✅ COMPLETE
+**Tests:** 542 total (no new tests — analysis sprint)
 
-**Goal:** Use the tools built in Sprints 6–9 to run backtests, interpret results, tune parameters, and produce the formal Parameter Validation Report.
+**Goal:** Use the backtesting tools built in Sprints 6–9 to analyze the ORB strategy, optimize parameters, and produce the Phase 2 deliverable: the Parameter Validation Report.
 
-**Progress:**
-- ✅ **Step 1: Baseline Backtest** — Default params: 8 trades (max_range_atr_ratio=2.0 too restrictive). Relaxed ATR (999.0): 135 trades, Sharpe -0.26, PF 1.00 (break-even).
-- ✅ **Step 2: Parameter Sensitivity** — VectorBT sweep (522K combos, 63s). Top params: or=5, hold=15, atr=0.5, gap=2.0 (Sharpe 3.87, PF 2.07, 179 trades). Current production config (or=15, hold=30, atr=2.0) confirmed suboptimal.
-- ✅ **Step 3: Walk-Forward Validation** — 4 candidates tested, 3 WF windows each. No candidate achieved WFE ≥ 0.3. Tight filters (A–C): only 2 OOS trades (inconclusive). Relaxed (D): 81 OOS trades, Sharpe -4.19 (classic overfitting). Result is Scenario C per spec — inconclusive due to insufficient data, not definitive failure. Note: tight-filter candidates were also affected by ATR calculation divergence (see below).
-- ✅ **Cross-validation fix (DEC-074)** — Three bugs found and fixed: (1) CLI hardcoded 4 of 6 params, (2) VectorBT used `.get()` with silent defaults, (3) Replay Harness loaded all 29 symbols instead of single target symbol. Walk-forward pipeline parameter handoff was already correct — no rerun needed. Revealed architectural ATR divergence: VectorBT computes ATR(14) from daily bars, Replay/production computes ATR(14) from 1-minute bars with Wilder smoothing, causing range/ATR ratios 5–10x higher in Replay. This means `max_range_atr_ratio` thresholds from VectorBT sweeps do not transfer directly to production. 542 tests passing.
-- ✅ **Step 4: Parameter Recommendations** — DEC-076. Changed `orb_window_minutes` 15→5, `time_stop_minutes` 30→15, `max_range_atr_ratio` 2.0→999.0 (disabled per DEC-075). Three params unchanged (target_r, stop_buffer_pct, min_gap_pct). Final validation: 137 trades, Sharpe 0.93, PF 1.18, +$8,087 on $100K. Config updated, 542 tests passing. Notable: zero target hits — all profitable exits via time stop or EOD.
-- ⬜ **Step 5: Write the Report** — Pending. Handoff doc prepared.
+**Delivered:**
+- ✅ **Step 1: Baseline Backtest** — Three Replay Harness runs (default 8 trades, relaxed 135 trades, recommended 137 trades)
+- ✅ **Step 2: Parameter Sensitivity** — 522K-combination VectorBT sweep in 63 seconds. Sensitivity classification for all 6 parameters.
+- ✅ **Step 3: Walk-Forward Validation** — 4 candidates across 3 windows. Result: Scenario C (inconclusive) per DEC-073. 11 months insufficient for robust walk-forward.
+- ✅ **Step 4: Parameter Recommendations** — DEC-076: or=5, hold=15, atr=999.0 (disabled), three params unchanged.
+- ✅ **Step 5: Write the Report** — `docs/backtesting/PARAMETER_VALIDATION_REPORT.md` (10 sections, ~6,900 words).
 
 **Bug fixes during sprint:** report_generator.py SQL column name mismatch (quantity→shares, original_stop_price→stop_price). Cross-validation parameter mismatch (DEC-074).
 
 **Code enhancements during sprint:** Added fixed-params walk-forward mode to walk_forward.py. Added `symbols` field to BacktestConfig for single-symbol Replay runs. All 6 cross-validation params now required explicitly (KeyError on missing).
 
-**Key finding:** ATR calculation divergence between VectorBT (daily bars) and production (1-minute bars) is an architectural difference, not a bug. VectorBT remains valid for fast parameter exploration of non-ATR pa
+**Key finding:** ATR calculation divergence between VectorBT (daily bars) and production (1-minute bars) is an architectural difference, not a bug. VectorBT remains valid for fast parameter exploration of non-ATR parameters. ATR filter disabled for Phase 3 (DEC-075).
 
 ---
 
@@ -356,21 +355,19 @@ Sprint numbers continue from Phase 1 (which ended at Sprint 5) to maintain a sin
 
 ---
 
-## Post-Phase 2 Transition to Phase 3
+## Post-Phase 2 Transition
 
-Phase 3 (Live Validation) begins when:
-1. Paper trading validation is complete (from the parallel track)
-2. The Parameter Validation Report is written and its recommendations are incorporated into config
-3. The user has consulted with their CPA on capital/risk implications (DEF-004)
-4. The user makes an explicit decision to proceed with real capital
+Phase 2 is COMPLETE. Active sprint tracking has moved to `10_PHASE3_SPRINT_PLAN.md`.
 
-Phase 3 will use the same system with these changes:
-- Switch from paper to live Alpaca account
-- Start with minimum position sizes (e.g., 10–25 shares regardless of what sizing model says)
-- Run the Shadow System (paper trading in parallel with live) for comparison
-- Minimum 20 trading days before scaling up position sizes
+Phase 3 (Comprehensive Validation) restructured the original Phase 3 ("Live Validation") per DEC-077:
+- Sprint 11 extends historical data to ~3 years and re-runs walk-forward validation
+- Paper trading runs in parallel with flexible duration
+- Both tracks must pass an exit gate before Phase 4 (Live Trading with real capital)
+
+See `10_PHASE3_SPRINT_PLAN.md` for current sprint tracking.
 
 ---
 
-*End of Phase 2 Sprint Plan v1.0*
-*Update this document when sprint scope changes or sprints complete.*
+*End of Phase 2 Sprint Plan v1.1*
+*✅ PHASE 2 COMPLETE — February 17, 2026 — 542 tests passing.*
+*This document is now historical reference. For current work, see `10_PHASE3_SPRINT_PLAN.md`.*
