@@ -192,14 +192,15 @@ class TestOrbBreakoutConfig:
         config = load_orb_config(Path("config/strategies/orb_breakout.yaml"))
         assert config.strategy_id == "strat_orb_breakout"
         assert config.name == "ORB Breakout"
-        assert config.orb_window_minutes == 15
+        # Sprint 10 optimization: or=5, hold=15, atr=999 (DEC-075)
+        assert config.orb_window_minutes == 5
         assert config.stop_placement == "midpoint"
         assert config.volume_threshold_rvol == 2.0
         assert config.target_1_r == 1.0
         assert config.target_2_r == 2.0
-        assert config.time_stop_minutes == 30
+        assert config.time_stop_minutes == 15
         assert config.min_range_atr_ratio == 0.5
-        assert config.max_range_atr_ratio == 2.0
+        assert config.max_range_atr_ratio == 999.0
         assert config.chase_protection_pct == 0.005
         assert config.breakout_volume_multiplier == 1.5
 

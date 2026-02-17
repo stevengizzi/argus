@@ -26,13 +26,14 @@ benchmarks:
 
 # Strategy-specific parameters (not validated by base StrategyConfig —
 # will be validated by OrbBreakoutConfig which extends StrategyConfig)
-orb_window_minutes: 15
+# Updated 2026-02-17: Sprint 10 optimization — or=5, hold=15, atr=999 (DEC-075)
+orb_window_minutes: 5
 stop_placement: "midpoint"
 volume_threshold_rvol: 2.0
 target_1_r: 1.0
 target_2_r: 2.0
-time_stop_minutes: 30
+time_stop_minutes: 15
 min_range_atr_ratio: 0.5
-max_range_atr_ratio: 2.0
+max_range_atr_ratio: 999.0
 chase_protection_pct: 0.005
 breakout_volume_multiplier: 1.5

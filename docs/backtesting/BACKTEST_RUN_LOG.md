@@ -199,3 +199,90 @@
 1. **Cross-validation mismatch:** Does the walk-forward engine pass consistent parameters to both VectorBT (IS) and Replay Harness (OOS)? If not, the walk-forward results may be unreliable.
 2. **Data quantity:** 11 months / 3 windows is insufficient for walk-forward validation. Should we acquire more historical data before drawing conclusions?
 3. **Tight-filter inconclusive vs relaxed-filter failure:** The strategy may have an edge with tight filters that we simply can't validate yet. Paper trading is the forward-looking test.
+
+---
+
+## Run 8: Final Validation — Recommended Parameters
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-17 |
+| **Type** | Replay Harness |
+| **Dataset** | 29 symbols, 2025-03-01 to 2026-01-31 |
+| **Initial Cash** | $100,000 |
+| **Database** | `data/backtest_runs/strat_orb_breakout_20250301_20260131_20260217_174818.db` |
+| **Report** | `reports/orb_final_validation.html` |
+
+**Parameters (Sprint 10 recommended):**
+
+| Parameter | Value | Change from Default |
+|-----------|-------|---------------------|
+| `orb_window_minutes` | 5 | ↓ from 15 |
+| `time_stop_minutes` | 15 | ↓ from 30 |
+| `max_range_atr_ratio` | 999.0 | ↑ from 2.0 (disabled) |
+| All other parameters | Same as Run 1 | — |
+
+**Results:**
+
+| Metric | Value |
+|--------|-------|
+| Total trades | 137 |
+| Win rate | 46.7% |
+| Profit factor | 1.18 |
+| Sharpe ratio | 0.93 |
+| Max drawdown | $7,677.67 (6.6%) |
+| Recovery factor | 1.05 |
+| Avg R-multiple | 0.43 |
+| Expectancy | 0.430R |
+| Total P&L | $8,086.61 |
+| Final equity | $108,086.61 |
+| Avg hold (min) | 49 |
+| Trades/month | 12.5 |
+
+**Exit Distribution:**
+
+| Exit Type | Count | % |
+|-----------|-------|---|
+| Stop loss | 95 | 69.3% |
+| Time stop | 38 | 27.7% |
+| EOD flatten | 4 | 2.9% |
+| Target hit | 0 | 0% |
+
+**Monthly P&L Breakdown:**
+
+| Month | Trades | Net P&L | Win Rate |
+|-------|--------|---------|----------|
+| 2025-03 | 14 | +$724 | 50.0% |
+| 2025-04 | 20 | +$3,881 | 70.0% |
+| 2025-05 | 17 | +$412 | 58.8% |
+| 2025-06 | 9 | +$2,603 | 55.6% |
+| 2025-07 | 7 | +$937 | 42.9% |
+| 2025-08 | 6 | +$1,171 | 33.3% |
+| 2025-09 | 8 | +$5,759 | 75.0% |
+| 2025-10 | 18 | -$3,645 | 27.8% |
+| 2025-11 | 10 | +$3,624 | 60.0% |
+| 2025-12 | 14 | -$3,512 | 21.4% |
+| 2026-01 | 14 | -$3,869 | 21.4% |
+
+**Comparison vs Baselines:**
+
+| Metric | Default (or=15, hold=30, atr=2.0) | Relaxed (or=15, hold=30, atr=999) | Recommended (or=5, hold=15, atr=999) |
+|--------|-----------------------------------|-----------------------------------|--------------------------------------|
+| Total trades | 8 | 135 | 137 |
+| Win rate | 62.5% | 48.1% | 46.7% |
+| Sharpe | 5.06 | -0.26 | **0.93** |
+| Profit factor | 2.23 | 1.00 | **1.18** |
+| Max drawdown | 0.8% | 7.9% | 6.6% |
+| Net P&L | $1,065 | $71 | **$8,087** |
+| Avg R-multiple | 0.39 | 0.16 | **0.43** |
+| Avg hold (min) | 31 | 111 | **49** |
+| Recovery factor | — | — | **1.05** |
+
+**Observations:**
+
+1. **Significant improvement** over relaxed baseline: Net P&L $71 → $8,087, Sharpe -0.26 → 0.93.
+2. **Shorter OR window (5 min)** captures more actionable breakouts than the 15-min window.
+3. **Shorter time stop (15 min)** exits losing trades faster, reducing average hold from 111 to 49 min.
+4. **No target hits** — all exits via stop loss (69%), time stop (28%), or EOD (3%). This suggests targets may be set too aggressively or breakouts don't develop enough momentum.
+5. **Rough patch Oct–Jan** with 4 consecutive losing months after strong performance Mar–Sep. Suggests seasonality or regime sensitivity that warrants monitoring.
+6. **Config updated** (`config/strategies/orb_breakout.yaml`) to use recommended params. Decision logged as DEC-075.

@@ -12,8 +12,8 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 
 **Phase:** Phase 1 COMPLETE (362 tests, February 16, 2026). Phase 2 in progress.
 **Track 1 — Paper Trading Validation:** Running Argus on Alpaca paper trading for 3+ trading days. Validating stability, data integrity, risk compliance, and trade lifecycle correctness. See `08_PAPER_TRADING_GUIDE.md`.
-**Track 2 — Phase 2 Build (Backtesting Validation):** Sprints 6, 7, 8, 9 COMPLETE. 542 tests passing. Sprint 10 (Analysis & Parameter Validation Report) in progress — Steps 1–3 complete, cross-validation fix (DEC-074) resolved, Steps 4–5 pending. See `09_PHASE2_SPRINT_PLAN.md`.
-**Next milestone:** Sprint 10 Steps 4–5 (Parameter Recommendations + Write Report). Then Phase 3 (Live Validation).
+**Track 2 — Phase 2 Build (Backtesting Validation):** Sprints 6, 7, 8, 9 COMPLETE. 542 tests passing. Sprint 10 (Analysis & Parameter Validation Report) in progress — Steps 1–4 complete, Step 5 (write report) pending. See `09_PHASE2_SPRINT_PLAN.md`.
+**Next milestone:** Sprint 10 Step 5 (Write Parameter Validation Report). Then Phase 2 is complete → Phase 3 (Live Validation).
 
 ## Key Decisions Made (Do Not Relitigate)
 

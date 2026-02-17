@@ -841,5 +841,16 @@ Each entry follows this format:
 
 ---
 
+### DEC-076 | Sprint 10 Parameter Recommendations for Phase 3
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-17 |
+| **Decision** | Lock ORB strategy parameters for Phase 3 paper trading: `orb_window_minutes=5`, `time_stop_minutes=15`, `min_gap_pct=2.0`, `stop_buffer_pct=0.0`, `target_r=2.0`, `max_range_atr_ratio=999.0` (disabled). Config updated in `orb_breakout.yaml`. |
+| **Rationale** | Two high-sensitivity parameters changed based on VectorBT sweep (522K combos): `orb_window_minutes` 15→5 (monotonic shorter=better trend, all top-10 sets agree) and `time_stop_minutes` 30→15 (clear shorter=better gradient). Three low/medium-sensitivity parameters kept at defaults (target_r, stop_buffer_pct, min_gap_pct). ATR filter disabled per DEC-075. Walk-forward was inconclusive (Scenario C, DEC-073) so recommendations bias toward sweep consensus rather than optimized peaks. Final validation: 137 trades, Sharpe 0.93, PF 1.18, +$8,087 on $100K. |
+| **Alternatives Rejected** | (1) Keep original defaults (or=15, hold=30) — 8 trades in 11 months, untestable. (2) Use sweep winner exactly (or=5, hold=15, atr=0.5) — ATR threshold doesn't transfer (DEC-075). (3) Tighten min_gap to 3.0% — reduces trade frequency during paper validation when volume matters. |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
 *New decisions are appended chronologically as the project progresses.*
