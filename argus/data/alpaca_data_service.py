@@ -130,6 +130,8 @@ class AlpacaDataService(DataService):
         self._subscribed_symbols: set[str] = set()
         self._running = False
         self._consecutive_failures = 0
+        self._first_bar_logged = False
+        self._first_trade_logged = False
 
     async def start(self, symbols: list[str], timeframes: list[str]) -> None:
         """Start streaming live data for the given symbols.
@@ -161,11 +163,15 @@ class AlpacaDataService(DataService):
         # Initialize historical client (REST)
         self._historical_client = StockHistoricalDataClient(api_key, secret_key)
 
+        # Map config data_feed string to DataFeed enum
+        feed_map = {"iex": DataFeed.IEX, "sip": DataFeed.SIP}
+        data_feed_enum = feed_map.get(self._alpaca_config.data_feed.lower(), DataFeed.IEX)
+
         # Initialize data stream (WebSocket)
         self._data_stream = StockDataStream(
             api_key=api_key,
             secret_key=secret_key,
-            feed=self._alpaca_config.data_feed,
+            feed=data_feed_enum,
         )
 
         # Subscribe to bars and trades
@@ -181,9 +187,11 @@ class AlpacaDataService(DataService):
 
         # Start WebSocket stream as asyncio task (use _run_forever directly)
         self._stream_task = asyncio.create_task(self._run_stream_with_reconnect())
+        self._stream_task.add_done_callback(self._task_done_callback)
 
         # Start stale data monitor
         self._monitor_task = asyncio.create_task(self._stale_data_monitor())
+        self._monitor_task.add_done_callback(self._task_done_callback)
 
         self._running = True
         logger.info(f"AlpacaDataService started for {len(symbols)} symbols")
@@ -430,6 +438,23 @@ class AlpacaDataService(DataService):
 
     # --- Internal methods ---
 
+    def _task_done_callback(self, task: asyncio.Task) -> None:
+        """Log any exceptions from background tasks that would otherwise be silent.
+
+        Args:
+            task: The completed asyncio Task.
+        """
+        try:
+            exc = task.exception()
+            if exc is not None:
+                logger.critical(
+                    f"Background task '{task.get_name()}' died with exception: {exc!r}",
+                    exc_info=exc,
+                )
+        except asyncio.CancelledError:
+            # Task was cancelled, not an error
+            logger.debug(f"Background task '{task.get_name()}' was cancelled")
+
     async def _warm_up_indicators(self, symbols: list[str]) -> None:
         """Fetch historical candles and warm up indicator state.
 
@@ -537,6 +562,14 @@ class AlpacaDataService(DataService):
         symbol = bar.symbol
         timestamp = bar.timestamp
 
+        # Log first bar received to confirm stream is working
+        if not self._first_bar_logged:
+            self._first_bar_logged = True
+            logger.info(
+                f"First bar received from WebSocket: {symbol} @ {timestamp}, "
+                f"close={bar.close:.2f}, volume={bar.volume}"
+            )
+
         # Ensure indicator state exists
         if symbol not in self._indicator_state:
             # Create state if not exists (shouldn't happen if warm-up worked)
@@ -578,6 +611,14 @@ class AlpacaDataService(DataService):
         size = int(trade.size)
         timestamp = trade.timestamp
 
+        # Log first trade received to confirm stream is working
+        if not self._first_trade_logged:
+            self._first_trade_logged = True
+            logger.info(
+                f"First trade received from WebSocket: {symbol} @ ${price:.2f}, "
+                f"size={size}, timestamp={timestamp}"
+            )
+
         # Update price cache
         self._price_cache[symbol] = price
 
@@ -600,9 +641,16 @@ class AlpacaDataService(DataService):
         Publishes system alerts after consecutive failures.
         """
         logger.info("Starting WebSocket stream with reconnection support")
+        logger.info(
+            f"WebSocket config: feed={self._alpaca_config.data_feed}, "
+            f"bars={self._alpaca_config.subscribe_bars}, "
+            f"trades={self._alpaca_config.subscribe_trades}, "
+            f"symbols={list(self._subscribed_symbols)}"
+        )
 
         while self._running:
             try:
+                logger.info("Connecting to Alpaca WebSocket stream...")
                 # Run the stream's internal event loop
                 await self._data_stream._run_forever()
 
@@ -655,58 +703,80 @@ class AlpacaDataService(DataService):
         et_tz = ZoneInfo("America/New_York")
         market_open = dt_time(9, 30)
         market_close = dt_time(16, 0)
+        no_data_warning_logged = False
 
         while self._running:
-            await asyncio.sleep(5)
+            try:
+                await asyncio.sleep(5)
 
-            now = self._clock.now()
+                now = self._clock.now()
 
-            # Convert to ET for market hours check
-            now_et = (now.replace(tzinfo=et_tz) if now.tzinfo is None
-                      else now.astimezone(et_tz))
+                # Convert to ET for market hours check
+                now_et = (now.replace(tzinfo=et_tz) if now.tzinfo is None
+                          else now.astimezone(et_tz))
 
-            # Only check for stale data during market hours on weekdays
-            if now_et.weekday() >= 5:  # Saturday=5, Sunday=6
-                continue
-            if not (market_open <= now_et.time() <= market_close):
-                continue
-
-            timeout = timedelta(seconds=self._alpaca_config.stale_data_timeout_seconds)
-
-            stale_symbols = []
-            for symbol in self._subscribed_symbols:
-                last_time = self._last_data_time.get(symbol)
-                if last_time is None:
-                    # No data received yet (warm-up phase)
+                # Only check for stale data during market hours on weekdays
+                if now_et.weekday() >= 5:  # Saturday=5, Sunday=6
                     continue
-                if now - last_time > timeout:
-                    stale_symbols.append(symbol)
+                if not (market_open <= now_et.time() <= market_close):
+                    continue
 
-            if stale_symbols and not self._is_stale:
-                # Transition to stale
-                self._is_stale = True
-                logger.warning(f"Data stale for symbols: {stale_symbols}")
-                # Update health status if monitor available
-                if self._health_monitor:
-                    from argus.core.health import ComponentStatus
-                    self._health_monitor.update_component(
-                        "data_service",
-                        ComponentStatus.DEGRADED,
-                        message=f"Stale data for: {', '.join(stale_symbols)}",
-                    )
+                timeout = timedelta(seconds=self._alpaca_config.stale_data_timeout_seconds)
 
-            elif not stale_symbols and self._is_stale:
-                # Transition to fresh
-                self._is_stale = False
-                logger.info("Data feed recovered, no longer stale")
-                # Update health status if monitor available
-                if self._health_monitor:
-                    from argus.core.health import ComponentStatus
-                    self._health_monitor.update_component(
-                        "data_service",
-                        ComponentStatus.HEALTHY,
-                        message="Data feed active",
-                    )
+                stale_symbols = []
+                never_received = []
+                for symbol in self._subscribed_symbols:
+                    last_time = self._last_data_time.get(symbol)
+                    if last_time is None:
+                        # No data ever received for this symbol
+                        never_received.append(symbol)
+                    elif now - last_time > timeout:
+                        stale_symbols.append(symbol)
+
+                # If no data ever received for ALL symbols, that's a problem worth logging
+                # Only log once to avoid spamming
+                if never_received and len(never_received) == len(self._subscribed_symbols):
+                    if not no_data_warning_logged:
+                        no_data_warning_logged = True
+                        logger.warning(
+                            f"No data received from WebSocket for any symbol during "
+                            f"market hours. Symbols: {never_received}. "
+                            f"Check WebSocket connection and feed subscription."
+                        )
+                elif never_received:
+                    # Some symbols have data, some don't — reset the flag if we recover
+                    no_data_warning_logged = False
+
+                if stale_symbols and not self._is_stale:
+                    # Transition to stale
+                    self._is_stale = True
+                    logger.warning(f"Data stale for symbols: {stale_symbols}")
+                    # Update health status if monitor available
+                    if self._health_monitor:
+                        from argus.core.health import ComponentStatus
+                        self._health_monitor.update_component(
+                            "data_service",
+                            ComponentStatus.DEGRADED,
+                            message=f"Stale data for: {', '.join(stale_symbols)}",
+                        )
+
+                elif not stale_symbols and self._is_stale:
+                    # Transition to fresh
+                    self._is_stale = False
+                    logger.info("Data feed recovered, no longer stale")
+                    # Update health status if monitor available
+                    if self._health_monitor:
+                        from argus.core.health import ComponentStatus
+                        self._health_monitor.update_component(
+                            "data_service",
+                            ComponentStatus.HEALTHY,
+                            message="Data feed active",
+                        )
+
+            except Exception as e:
+                logger.error(f"Error in stale data monitor loop: {e}", exc_info=True)
+                # Don't crash the monitor, continue checking
+                await asyncio.sleep(5)
 
         logger.info("Stale data monitor stopped")
 
