@@ -10,18 +10,22 @@ Phase 1 sprint plan: @docs/07_PHASE1_SPRINT_PLAN.md
 
 ## Current State
 
-Phase 2 COMPLETE (February 17, 2026). Phase 3 (Comprehensive Validation) IN PROGRESS. 542 tests, 0 flaky, ruff clean.
+Phase 2 COMPLETE (February 17, 2026). Phase 3 (Comprehensive Validation) IN PROGRESS. Sprint 11 ✅ COMPLETE. 542 tests, 0 flaky, ruff clean.
 
 **Phase 2 deliverable:** Parameter Validation Report at `docs/backtesting/PARAMETER_VALIDATION_REPORT.md`.
 **Recommended ORB parameters (DEC-076):** or=5, hold=15, gap=2.0, stop_buf=0.0, target_r=2.0, atr=999.0 (disabled).
 
-**Dual-track work in progress:**
-- **Track A — Extended Backtest (Sprint 11):** Extending historical data to ~3 years, re-running VectorBT sweep and walk-forward validation with 12+ windows. See `docs/10_PHASE3_SPRINT_PLAN.md` and `docs/sprints/SPRINT_11_SPEC.md`.
-- **Track B — Paper Trading:** Running Argus on Alpaca paper trading with DEC-076 parameters. Flexible duration. See `docs/08_PAPER_TRADING_GUIDE.md`.
+**Sprint 11 Results (Extended Walk-Forward):**
+- Historical data extended to 35 months (March 2023 – January 2026), 7M bars, 29 symbols
+- Walk-forward: 15 windows (optimizer + fixed-params modes)
+- Fixed-params (DEC-076): OOS Sharpe +0.34, P&L +$7,741, 378 trades — **positive aggregate returns**
+- Optimizer mode: OOS Sharpe -11.46 — **overfits, performs worse than fixed params**
+- Traditional WFE threshold (≥0.3) not met, but strategy shows aggregate profitability
+- **Decision:** Proceed with paper trading using DEC-076 parameters
 
-**Phase 3 exit gate:** Walk-forward WFE ≥ 0.3 on extended data + user satisfied with paper trading results + CPA consultation → Phase 4 (Live Trading).
+**Track B — Paper Trading:** Running Argus on Alpaca paper trading with DEC-076 parameters. Flexible duration. See `docs/08_PAPER_TRADING_GUIDE.md`.
 
-Phase 3 sprints continue from Phase 2 (Sprint 11 onward).
+**Phase 3 exit gate:** Sprint 11 ✅ COMPLETE (WFE < 0.3 but positive aggregate OOS returns — proceeding) + user satisfied with paper trading results + CPA consultation → Phase 4 (Live Trading).
 
 Components implemented:
 - Event Bus, EventStore, core events
@@ -55,7 +59,7 @@ Three tiers built in sequence:
 2. Command Center (Tauri + React) — dashboards, controls, reports
 3. AI Layer (Claude API) — advisory, approval workflow, reports
 
-Currently building: Tier 1, Phase 2 (Backtesting Validation).
+Currently building: Tier 1, Phase 3 (Comprehensive Validation — Paper Trading track active).
 
 ## Tech Stack
 

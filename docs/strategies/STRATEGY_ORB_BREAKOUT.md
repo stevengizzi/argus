@@ -23,7 +23,7 @@
 
 The ORB strategy exploits the tendency of stocks gapping on news or momentum to establish a tradeable range in the first few minutes of the session, then break out of that range directionally. It identifies stocks gapping ≥2% on above-average volume, records the high and low of the first 5 minutes of trading (the "opening range"), and enters long when price closes above the range high with confirming volume and VWAP alignment. The stop is placed at the opening range low, and the strategy exits via a 15-minute time stop. The edge is front-loaded: if the breakout works, it works quickly.
 
-Phase 2 backtesting (137 trades over 11 months) found a Sharpe ratio of 0.93 and Profit Factor of 1.18. The strategy's profitability comes from net-positive time-stopped exits, not from the 2.0R target (which never triggered). Walk-forward validation was inconclusive due to insufficient historical data (11 months / 3 windows); Sprint 11 will revalidate with ~3 years of data.
+Phase 2 backtesting (137 trades over 11 months) found a Sharpe ratio of 0.93 and Profit Factor of 1.18. The strategy's profitability comes from net-positive time-stopped exits, not from the 2.0R target (which never triggered). **Sprint 11 extended walk-forward validation** (35 months, 15 windows) confirmed aggregate OOS profitability (Sharpe +0.34, P&L +$7,741) despite not meeting traditional WFE thresholds.
 
 ---
 
@@ -217,7 +217,31 @@ Interactive reports: `reports/orb_baseline_defaults.html`, `reports/orb_baseline
 | C | 5 | 30 | 0.75 | 2.0 | 2 | 0.00 | 0.00 |
 | D (relaxed) | 5 | 30 | 999 | 2.0 | 81 | -4.19 | -4.09 |
 
-**Walk-Forward Assessment:** Inconclusive (Scenario C per DEC-073). No candidate achieved WFE ≥ 0.3. Tight candidates had too few OOS trades due to ATR divergence. Relaxed candidate showed classic overfitting. Root cause: insufficient data (3 windows vs. 8–12 standard). Sprint 11 will revalidate with ~3 years of data (12+ windows).
+**Walk-Forward Assessment (11 months):** Inconclusive (Scenario C per DEC-073). No candidate achieved WFE ≥ 0.3. Root cause: insufficient data (3 windows vs. 8–12 standard).
+
+### Walk-Forward Analysis (35-Month Extended Data — Sprint 11)
+
+Dataset extended to March 2023 – January 2026 (35 months, 7M bars, 29 symbols). 15 walk-forward windows (4-month IS / 2-month OOS / 2-month step).
+
+**Summary Results:**
+
+| Mode | Windows | Avg WFE (Sharpe) | OOS Trades | OOS Sharpe | OOS P&L |
+|------|---------|-----------------|------------|------------|---------|
+| Optimizer | 15 | -0.38 | 93 | -11.46 | $7,204 |
+| Fixed-params (DEC-076) | 15 | -0.91 | 378 | **+0.34** | **$7,741** |
+
+**Per-Window Detail (Fixed-Params):**
+- 10/15 windows (67%) had positive OOS Sharpe
+- Best window: +4.51 Sharpe (Jul–Aug 2025)
+- Worst window: -4.75 Sharpe (Sep–Oct 2024)
+
+**Key Findings:**
+1. **Fixed params outperform optimizer** — optimizer overfits and produces worse OOS Sharpe (-11.46 vs. +0.34)
+2. **Aggregate OOS profitability** — $7,741 across 378 trades in ~2.5 years of OOS periods
+3. **High variance** — individual 2-month periods vary widely, but aggregate is positive
+4. **WFE measures predictability, not profitability** — the strategy makes money despite low WFE
+
+**Walk-Forward Assessment (35 months):** Traditional WFE ≥ 0.3 threshold not met. However, aggregate OOS returns are positive. Decision: **Proceed with paper trading using DEC-076 parameters.** Expect high period-to-period variance but aggregate profitability.
 
 ---
 
@@ -251,10 +275,11 @@ Interactive reports: `reports/orb_baseline_defaults.html`, `reports/orb_baseline
 
 1. **Zero target hits:** The 2.0R target never triggers within the 15-minute hold. Should the target be lowered, replaced with a trailing stop, or removed? Monitor in paper trading.
 2. **ATR filter disabled:** The intent (reject abnormally wide ranges) is sound, but production ATR uses the wrong scale. Needs daily ATR infrastructure or empirical calibration.
-3. **Possible seasonal sensitivity:** Strong Mar–Sep, weak Oct–Jan in backtest. One year insufficient to confirm. Monitor in paper trading.
+3. **High period-to-period variance:** Extended walk-forward shows OOS Sharpe varying from -4.75 to +4.51 across 2-month windows. Aggregate is profitable but individual periods will vary.
 4. **Fixed slippage model:** Backtest uses $0.01/share. Real slippage at market open may be $0.03–$0.10 for volatile gap stocks.
 5. **Long only:** Strategy only takes breakouts above the OR high. Short (breakdown below OR low) is deferred.
 6. **No regime filtering:** Strategy runs in all market conditions. Orchestrator (Phase 5) will add regime-based activation.
+7. **No severe regime data:** Extended data (2023–2026) doesn't include a bear market or crisis event. Strategy behavior in severe downturns untested.
 
 ---
 

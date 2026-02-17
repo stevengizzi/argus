@@ -111,9 +111,12 @@ If we can only get 18–20 months instead of 36, we'll have ~7–8 windows — b
 ### Step 5: Update Documentation
 
 - Update `docs/backtesting/PARAMETER_VALIDATION_REPORT.md` with extended results (new subsections or revised sections as appropriate)
+- Update `docs/strategies/STRATEGY_ORB_BREAKOUT.md` — walk-forward table, parameter sensitivity, known limitations
 - Update `docs/backtesting/DATA_INVENTORY.md` with new data range and statistics
+- Update `10_PHASE3_SPRINT_PLAN.md` — mark Sprint 11 complete with result summary
+- Update `CLAUDE.md` and `02_PROJECT_KNOWLEDGE.md` with current state
 - Add DEC entry for any parameter changes
-- Mark Sprint 11 complete in `10_PHASE3_SPRINT_PLAN.md`
+- Update `01_PROJECT_BIBLE.md` and `config/strategies/orb_breakout.yaml` only if parameters change
 
 ---
 
@@ -124,7 +127,25 @@ If we can only get 18–20 months instead of 36, we'll have ~7–8 windows — b
 3. Walk-forward validation complete with 8+ windows
 4. Walk-forward results interpreted and documented
 5. Parameter Validation Report updated with extended findings
-6. Sprint 11 marked ✅ COMPLETE
+6. `STRATEGY_ORB_BREAKOUT.md` updated with extended walk-forward results and any parameter changes
+7. `10_PHASE3_SPRINT_PLAN.md` updated: Sprint 11 marked ✅ COMPLETE with result summary
+8. All other documentation updates from "Documentation Updates Expected" section complete
+9. Sprint 11 marked ✅ COMPLETE
+
+---
+
+## Documentation Updates Expected
+
+After this sprint:
+- **`10_PHASE3_SPRINT_PLAN.md`:** Mark Sprint 11 ✅ COMPLETE. Record walk-forward result (WFE, window count, scenario classification).
+- **`docs/backtesting/PARAMETER_VALIDATION_REPORT.md`:** Add new subsections or revise Sections 2, 4, 5, 7, and 9 with extended data results. Section 2 dataset description expands. Section 5 walk-forward gets a definitive result. If parameters change, Sections 6 and 7 need revision.
+- **`docs/strategies/STRATEGY_ORB_BREAKOUT.md`:** Update the Walk-Forward Analysis table with extended results. Update Pipeline Stage if applicable. Update Parameter Sensitivity table if sweep results differ. Update Known Limitations (remove "insufficient data" items if resolved).
+- **`docs/backtesting/DATA_INVENTORY.md`:** Update date range, total bars, file count, disk usage, and any new data quality findings.
+- **`02_PROJECT_KNOWLEDGE.md` (project instructions):** Update current state if parameters change. Update Sprint 11 status in Build Phases.
+- **`CLAUDE.md`:** Update current state with Sprint 11 result.
+- **`05_DECISION_LOG.md`:** Add DEC-078+ for any parameter changes. Update DEC-076 status from "pending revalidation" to "validated" or "revised."
+- **`01_PROJECT_BIBLE.md`:** Update ORB parameter table if recommendations change.
+- **`config/strategies/orb_breakout.yaml`:** Update only if parameters change based on extended walk-forward results.
 
 ---
 

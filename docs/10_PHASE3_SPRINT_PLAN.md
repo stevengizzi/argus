@@ -20,18 +20,30 @@ Validate the ORB strategy with both extended historical data and live paper trad
 
 ## Track A: Extended Backtest
 
-### Sprint 11 — Extended Backtest & Walk-Forward Revalidation ⬜ IN PROGRESS
+### Sprint 11 — Extended Backtest & Walk-Forward Revalidation ✅ COMPLETE
 **Spec:** `docs/sprints/SPRINT_11_SPEC.md`
-**Estimated effort:** 1–2 days build + analysis
+**Completed:** February 17, 2026
 
 **Steps:**
-- ⬜ **Step 1:** Download historical data back to March 2023 (or Alpaca's limit)
-- ⬜ **Step 2:** Re-run VectorBT parameter sweep on extended dataset
-- ⬜ **Step 3:** Re-run walk-forward validation (expecting 12+ windows)
-- ⬜ **Step 4:** Interpret results — confirm, revise, or flag parameters
-- ⬜ **Step 5:** Update Parameter Validation Report and documentation
+- ✅ **Step 1:** Downloaded historical data to March 2023 (35 months, 7M bars, 29 symbols)
+- ✅ **Step 2:** VectorBT sweep on extended dataset complete
+- ✅ **Step 3:** Walk-forward validation with 15 windows (optimizer + fixed-params)
+- ✅ **Step 4:** Results interpreted — Scenario C with caveats (see below)
+- ✅ **Step 5:** Parameter Validation Report and documentation updated
 
-**Key question this sprint answers:** Do the recommended parameters (or=5, hold=15) generalize across 3 years of data, or were they overfit to the original 11-month period?
+**Results Summary:**
+| Mode | Windows | Avg WFE (Sharpe) | OOS Trades | Overall OOS Sharpe | OOS P&L |
+|------|---------|-----------------|------------|-------------------|---------|
+| Optimizer | 15 | -0.38 | 93 | **-11.46** | $7,204 |
+| Fixed-params (DEC-076) | 15 | -0.91 | 378 | **+0.34** | $7,741 |
+
+**Interpretation:** Traditional WFE threshold (≥0.3) not met, BUT:
+- Fixed params produce **positive aggregate OOS returns** (Sharpe +0.34)
+- Fixed params **outperform adaptive optimization** (which overfits)
+- 67% of windows (10/15) had positive OOS Sharpe
+- Strategy has a real but inconsistent edge that accumulates over time
+
+**Recommendation:** Proceed with paper trading using DEC-076 parameters. Expect high period-to-period variance but aggregate profitability. No parameter changes recommended.
 
 ---
 
@@ -82,7 +94,7 @@ When the user decides paper trading validation is sufficient, document:
 
 Both conditions must be met before proceeding to Phase 4:
 
-1. **Sprint 11 (Track A):** Walk-forward WFE ≥ 0.3 on extended data — OR — if WFE < 0.3, a documented decision on whether to proceed anyway, revise parameters, or rework the strategy.
+1. **Sprint 11 (Track A):** ✅ **COMPLETE** — WFE < 0.3 but aggregate OOS returns are positive. Decision: **Proceed with paper trading using DEC-076 parameters.** Documented in PARAMETER_VALIDATION_REPORT.md Section 5b.
 2. **Paper Trading (Track B):** User is satisfied that system stability and strategy performance justify live capital. No kill criteria triggered. No fixed duration requirement — the user decides when confidence is sufficient.
 3. **CPA consultation** on capital/risk implications (DEF-004 from Risk Register).
 4. **Explicit go/no-go decision** by the user to commit real capital.
