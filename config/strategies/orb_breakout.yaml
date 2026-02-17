@@ -12,7 +12,7 @@ risk_limits:
   max_concurrent_positions: 2
 
 operating_window:
-  earliest_entry: "09:45"
+  earliest_entry: "09:35"
   latest_entry: "11:30"
   force_close: "15:50"
   active_days: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
@@ -26,7 +26,8 @@ benchmarks:
 
 # Strategy-specific parameters (not validated by base StrategyConfig —
 # will be validated by OrbBreakoutConfig which extends StrategyConfig)
-# Updated 2026-02-17: Sprint 10 optimization — or=5, hold=15, atr=999 (DEC-075)
+# Updated 2026-02-17: Sprint 10 optimization — or=5, hold=15, atr=999 (DEC-076)
+# Updated 2026-02-18: earliest_entry 09:45→09:35 to match or=5 window (DEC-078)
 orb_window_minutes: 5
 stop_placement: "midpoint"
 volume_threshold_rvol: 2.0

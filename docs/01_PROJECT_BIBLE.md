@@ -82,7 +82,7 @@ Every strategy defines:
 ### 4.2 Initial Strategy Roster (US Stocks)
 
 **Strategy 1: ORB (Opening Range Breakout)**
-The foundational strategy. Identifies stocks gapping ≥2% on volume, records a 5-minute opening range, enters on confirmed breakouts with volume (≥1.5× average) and VWAP alignment. Stop at opening range low. Target at 2.0R (note: Phase 2 backtesting found zero target hits within the 15-minute hold window — all profitable exits are via time stop; see Parameter Validation Report). Time stop at 15 minutes. Operates 9:45–11:30 AM EST. Holding duration: 5–15 minutes typical.
+The foundational strategy. Identifies stocks gapping ≥2% on volume, records a 5-minute opening range (9:30–9:35), enters on confirmed breakouts with volume (≥1.5× average) and VWAP alignment. Stop at opening range midpoint. Target at 2.0R (note: Phase 2 backtesting found zero target hits within the 15-minute hold window — all profitable exits are via time stop; see Parameter Validation Report). Time stop at 15 minutes. Operates 9:35–11:30 AM EST. Holding duration: 1–15 minutes typical.
 
 **Current Parameters (DEC-076, Feb 2026):**
 
@@ -91,11 +91,11 @@ The foundational strategy. Identifies stocks gapping ≥2% on volume, records a 
 | `opening_range_minutes` | 5 | High | Shortened from 15. Monotonic shorter=better in sweep. |
 | `max_hold_minutes` | 15 | High | Shortened from 30. ORB edge is front-loaded. |
 | `min_gap_pct` | 2.0% | Medium-High | Unchanged. Preserves trade frequency for validation. |
-| `stop_buffer_pct` | 0.0% | Low | Unchanged. Stop at OR low. |
+| `stop_buffer_pct` | 0.0% | Low | Unchanged. Stop at OR midpoint. |
 | `target_r` | 2.0 | Low | Unchanged. Functionally irrelevant with 15-min hold (zero hits in backtest). |
 | `max_range_atr_ratio` | 999.0 (disabled) | N/A | Disabled (DEC-075). Production ATR uses wrong scale. |
 
-**Pipeline Stage:** Paper Trading (Phase 3). Backtest validated: 137 trades, Sharpe 0.93, PF 1.18, +$8,087 on $100K over 11 months. Walk-forward inconclusive (insufficient data) — Sprint 11 revalidation pending with ~3 years of data.
+**Pipeline Stage:** Paper Trading (Phase 3). Backtest validated: 137 trades, Sharpe 0.93, PF 1.18, +$8,087 on $100K over 11 months. Sprint 11 extended walk-forward (35 months, 15 windows): fixed-params WFE (P&L) = 0.56, OOS Sharpe = +0.34, OOS P&L = $7,741. DEC-076 parameters confirmed.
 
 **Strategy 2: ORB Scalp**
 A faster variant of ORB. Same scanner and entry criteria, but targets a quick 0.3–0.5R partial profit within the first 30–120 seconds, then exits entirely. Higher win rate, smaller gains, more trades per day. Operates 9:45–11:30 AM EST. Holding duration: 10 seconds – 5 minutes.

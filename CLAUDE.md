@@ -22,6 +22,7 @@ Phase 2 COMPLETE (February 17, 2026). Phase 3 (Comprehensive Validation) IN PROG
 - Optimizer mode: OOS Sharpe -11.46 — **overfits, performs worse than fixed params**
 - Traditional WFE threshold (≥0.3) not met, but strategy shows aggregate profitability
 - **Decision:** Proceed with paper trading using DEC-076 parameters
+**Config fix (DEC-078):** `earliest_entry` changed from 09:45 to 09:35 to match or=5 window. All backtests ran with 09:45 — paper trading results may differ.
 
 **Track B — Paper Trading:** Running Argus on Alpaca paper trading with DEC-076 parameters. Flexible duration. See `docs/08_PAPER_TRADING_GUIDE.md`.
 

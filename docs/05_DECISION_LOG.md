@@ -874,5 +874,17 @@ Each entry follows this format:
 
 ---
 
+### DEC-078 | Fix earliest_entry to Match 5-Minute Opening Range
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-18 |
+| **Decision** | Change `earliest_entry` from `"09:45"` to `"09:35"` in `config/strategies/orb_breakout.yaml`. |
+| **Rationale** | When `opening_range_minutes` was reduced from 15 to 5 (DEC-076), the operating window was not updated. With or=5, the opening range completes at 9:35 AM, creating a 10-minute dead zone (9:35–9:45) where breakouts occur but the strategy cannot enter. Combined with `chase_protection_pct: 0.005` (0.5%), any breakout during this window would be rejected by the time 9:45 arrives because price moved too far past the OR high. All Phase 2/Sprint 11 backtests ran with the 9:45 gate, so historical results are conservative — fixing this should improve forward performance. The VectorBT sweep (which identified or=5 as optimal) did not enforce earliest_entry, meaning it valued or=5 partly because of early breakouts that the production system was missing. |
+| **Alternatives Rejected** | (1) Keep 9:45 to match backtest conditions — rejected because the backtest results are already conservative, and the 10-minute gap wastes the primary edge of a shorter OR. (2) Set to 9:36 to add a 1-minute buffer — unnecessary, the OR candle closes at 9:35 and the next candle at 9:36 is the first possible breakout signal. 9:35 is correct because the strategy evaluates breakouts on candle close, so the earliest breakout signal is the 9:35–9:36 candle closing above OR high. |
+| **Implications** | (1) Paper trading will see more trades than backtesting predicted (the 9:35–9:45 breakouts were previously filtered out). (2) Backtest results (137 trades, Sharpe 0.93) are a conservative lower bound. (3) Walk-forward results similarly conservative. (4) If paper trading performance is worse than backtest despite this fix, that's a stronger negative signal. |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
 *New decisions are appended chronologically as the project progresses.*

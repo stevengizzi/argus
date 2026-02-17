@@ -83,6 +83,7 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 - **ATR filter disabled for Phase 3 (DEC-075):** `max_range_atr_ratio` set to 999.0 (disabled). Production ATR uses 1-minute bars (semantically wrong for range filter — should be daily-scale ATR). Building daily ATR infrastructure is premature until paper trading validates the filter is needed. Other 5 sweep parameters transfer cleanly and are unaffected.
 - **Phase 3 ORB parameters (DEC-076):** opening_range_minutes=5, max_hold_minutes=15, min_gap_pct=2.0, stop_buffer_pct=0.0, target_r=2.0, max_range_atr_ratio=999.0 (disabled). Walk-forward inconclusive with 11 months — Sprint 11 revalidates with ~3 years.
 - **Phase restructure (DEC-077):** Phase 3 = Comprehensive Validation (extended backtest + paper trading). Phase 4 = Live Trading. All subsequent phases shifted +1.
+- **earliest_entry fix (DEC-078):** Changed `earliest_entry` from `"09:45"` to `"09:35"` to match 5-minute opening range. Previous value created 10-minute dead zone where breakouts were missed. All backtests used 9:45, so results are conservative.
 
 ## Architecture Summary
 
@@ -102,7 +103,7 @@ Key components:
 
 ## Strategy Roster (V1 — US Stocks)
 
-1. **ORB (Opening Range Breakout)** — 9:45–11:30 AM, 5–45 min holds, tiered exit 1R/2R
+1. **ORB (Opening Range Breakout)** — 9:35–11:30 AM, 1–15 min holds, stop at OR midpoint, time stop at 15 min
 2. **ORB Scalp** — 9:45–11:30 AM, 10s–5 min holds, quick 0.3–0.5R targets
 3. **VWAP Reclaim** — 10:00 AM–12:00 PM, 5–30 min holds, mean-reversion
 4. **Afternoon Momentum** — 2:00–3:30 PM, 15–60 min holds, consolidation breakout
