@@ -11,10 +11,10 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 ## Current Project State
 
 **Phase:** Phase 2 COMPLETE (542 tests, February 17, 2026). Phase 3 (Comprehensive Validation) in progress.
-**Track A — Extended Backtest:** Sprint 11 — downloading ~3 years of historical data, re-running VectorBT sweep and walk-forward validation with 12+ windows. See `10_PHASE3_SPRINT_PLAN.md`.
-**Track B — Paper Trading:** Running Argus on Alpaca paper trading with recommended parameters (DEC-076). Flexible duration — user decides when confidence is sufficient. See `08_PAPER_TRADING_GUIDE.md`.
-**Phase 2 deliverable:** Parameter Validation Report at `docs/backtesting/PARAMETER_VALIDATION_REPORT.md`.
-**Next milestone:** Sprint 11 complete (definitive walk-forward result). Paper trading ongoing.
+**Track A — Extended Backtest:** ✅ Sprint 11 COMPLETE. 35 months of data (Mar 2023–Jan 2026), 15 walk-forward windows. Fixed-params WFE (P&L) = 0.56, OOS Sharpe = +0.34, OOS P&L = $7,741. DEC-076 parameters confirmed for paper trading.
+**Track B — Paper Trading:** Running Argus on Alpaca paper trading with DEC-076 parameters. Flexible duration — user decides when confidence is sufficient. See `08_PAPER_TRADING_GUIDE.md`.
+**Phase 2 deliverable:** Parameter Validation Report at `docs/backtesting/PARAMETER_VALIDATION_REPORT.md` (updated with Sprint 11 extended results).
+**Next milestone:** Paper trading validation. Exit gate: user satisfied with paper results + CPA consultation → Phase 4 (Live Trading).
 
 ## Key Decisions Made (Do Not Relitigate)
 
@@ -177,7 +177,7 @@ argus/
    - Sprint 9: Walk-forward validation — walk_forward.py (optimizer + fixed-params modes), cross-validation, HTML report generator with Plotly charts (542 tests)
    - Sprint 10: Analysis & Parameter Validation Report — baseline backtests, 522K-combo sweep, walk-forward (inconclusive, DEC-073), parameter recommendations (DEC-076), final validation (137 trades, Sharpe 0.93, PF 1.18). Deliverable: `docs/backtesting/PARAMETER_VALIDATION_REPORT.md`
 3. **Comprehensive Validation** (IN PROGRESS):
-   - Sprint 11: Extended backtest — download ~3 years of historical data, re-run VectorBT sweep and walk-forward with 12+ windows. See `docs/sprints/SPRINT_11_SPEC.md`
+   - Sprint 11: Extended backtest — 35 months of data (Mar 2023–Jan 2026), 15 walk-forward windows. Fixed-params WFE (P&L) = 0.56, OOS Sharpe = +0.34, OOS P&L = $7,741. DEC-076 parameters confirmed for paper trading. ✅ COMPLETE
    - Paper Trading (parallel track): Argus on Alpaca paper with DEC-076 parameters. Flexible duration, kill criteria as guardrails. See `08_PAPER_TRADING_GUIDE.md`
    - Exit gate: Walk-forward WFE ≥ 0.3 on extended data + user satisfied with paper trading + CPA consultation
    - See `10_PHASE3_SPRINT_PLAN.md` for tracking

@@ -859,7 +859,7 @@ Each entry follows this format:
 | **Decision** | ORB strategy parameters for Phase 3: `opening_range_minutes=5`, `max_hold_minutes=15`, `min_gap_pct=2.0`, `stop_buffer_pct=0.0`, `target_r=2.0`, `max_range_atr_ratio=999.0` (disabled). Two high-sensitivity parameters changed (or: 15→5, hold: 30→15). ATR filter disabled (DEC-075). Three low-sensitivity parameters unchanged. |
 | **Alternatives** | (a) Use sweep top-1 set exactly (or=5, hold=15, gap=2.0, atr=0.5, target_r=1.0, stop_buf=0.0) — rejected because ATR=0.5 is non-transferable (DEC-075) and target_r=1.0 shows no meaningful advantage over 2.0. (b) Change more parameters (raise min_gap to 3.0%) — rejected to preserve trade frequency for paper trading evaluation. (c) Keep all defaults — rejected because or=15 and hold=30 produce a break-even strategy. |
 | **Rationale** | Based on 522K-combination parameter sweep, sensitivity analysis, and final validation (137 trades, Sharpe 0.93, PF 1.18, +$8,087 on $100K over 11 months). Walk-forward inconclusive (DEC-073) due to insufficient data — Sprint 11 will revalidate with extended data. Conservative approach: only change the two parameters with high sensitivity and clear directional signal. |
-| **Status** | Active — pending revalidation in Sprint 11 |
+| **Status** | Active — validated. Sprint 11 extended walk-forward (15 windows, 35 months) showed fixed-params WFE (P&L) = 0.56, overall OOS Sharpe = +0.34, aggregate OOS P&L = $7,741 across 378 trades. WFE (Sharpe) = -0.91 but metric is inappropriate for fixed-params runs (IS Sharpe swings wildly when params aren't optimized per window). Parameters confirmed for paper trading. |
 
 ---
 
