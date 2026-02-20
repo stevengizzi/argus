@@ -10,9 +10,21 @@ Phase 1 sprint plan: @docs/07_PHASE1_SPRINT_PLAN.md
 
 ## Current State
 
-Phase 2 COMPLETE (February 17, 2026). Phase 3 (Comprehensive Validation) IN PROGRESS. Sprint 11 ✅ COMPLETE. 542 tests, 0 flaky, ruff clean.
+**Structure:** Two parallel tracks (DEC-079, February 19, 2026).
+- **Build Track:** System construction at development velocity. Sprints 1–11 complete (542 tests). Next: Sprint 12 (DatabentoDataService adapter).
+- **Validation Track:** Paper trading ACTIVE on Alpaca IEX (system stability only — DEC-081). Signal accuracy validation pending DatabentoDataService (Sprint 12). Migrates to IBKR paper after Sprint 13.
 
-**Phase 2 deliverable:** Parameter Validation Report at `docs/backtesting/PARAMETER_VALIDATION_REPORT.md`.
+Active sprint plan: `docs/10_PHASE3_SPRINT_PLAN.md` (covers both tracks).
+
+**Infrastructure decisions (Feb 20, DEC-081–087):**
+- **Market data:** Databento US Equities Standard ($199/mo). Full universe, no symbol limits. Exchange-direct proprietary feeds. `databento` Python client (official, async). DEC-082.
+- **Execution broker:** Interactive Brokers (IBKR Pro, tiered). Sole live execution broker. SmartRouting, no PFOF. `ib_async` library (asyncio-native). DEC-083.
+- **Alpaca:** Demoted to strategy incubator paper testing only. No real capital through Alpaca. DEC-086.
+- **Historical data:** Databento source, Parquet cache. Existing Alpaca Parquet files retained. DEC-085.
+- **Cost deferral:** Databento subscription activated when adapter ready for integration testing. DEC-087.
+
+**⚠️ ACTION ITEM:** Begin IBKR account application immediately (approval takes days to weeks).
+
 **Recommended ORB parameters (DEC-076):** or=5, hold=15, gap=2.0, stop_buf=0.0, target_r=2.0, atr=999.0 (disabled).
 
 **Sprint 11 Results (Extended Walk-Forward):**
@@ -20,13 +32,15 @@ Phase 2 COMPLETE (February 17, 2026). Phase 3 (Comprehensive Validation) IN PROG
 - Walk-forward: 15 windows (optimizer + fixed-params modes)
 - Fixed-params (DEC-076): OOS Sharpe +0.34, P&L +$7,741, 378 trades — **positive aggregate returns**
 - Optimizer mode: OOS Sharpe -11.46 — **overfits, performs worse than fixed params**
-- Traditional WFE threshold (≥0.3) not met, but strategy shows aggregate profitability
 - **Decision:** Proceed with paper trading using DEC-076 parameters
-**Config fix (DEC-078):** `earliest_entry` changed from 09:45 to 09:35 to match or=5 window. All backtests ran with 09:45 — paper trading results may differ.
 
-**Track B — Paper Trading:** Running Argus on Alpaca paper trading with DEC-076 parameters. Flexible duration. See `docs/08_PAPER_TRADING_GUIDE.md`.
+**Config fix (DEC-078):** `earliest_entry` changed from 09:45 to 09:35 to match or=5 window.
 
-**Phase 3 exit gate:** Sprint 11 ✅ COMPLETE (WFE < 0.3 but positive aggregate OOS returns — proceeding) + user satisfied with paper trading results + CPA consultation → Phase 4 (Live Trading).
+**Validation Track sequence:** DatabentoDataService (Sprint 12) → IBKRBroker (Sprint 13) → IBKR paper trading (2+ weeks) → CPA consultation → live trading at minimum size on IBKR.
+
+**Build Track queue:** DatabentoDataService (Sprint 12) → IBKRBroker (Sprint 13) → Command Center MVP (Sprints 14–16) → Orchestrator (17) → ORB Scalp (18) → Tier 1 News (19) → AI Layer MVP (20) → Expansion (21+)
+
+**Command Center delivery (DEC-080):** Three surfaces from single React codebase — web app + Tauri desktop + PWA mobile. All operational after Sprint 16.
 
 Components implemented:
 - Event Bus, EventStore, core events
@@ -52,27 +66,30 @@ Components implemented:
 - Walk-Forward Engine — rolling window IS/OOS optimization with WFE calculation, parameter stability analysis, cross-validation
 - Report Generator — HTML reports with equity curves, monthly tables, trade distributions, walk-forward sections (Plotly interactive charts)
 - Dependencies: alpaca-py>=0.30, python-dotenv>=1.0, aiohttp>=3.9, plotly>=6.5, matplotlib>=3.8, seaborn>=0.13 (NOT alpaca-trade-api — deprecated)
+- Research reports completed: Market Data Infrastructure (`argus_market_data_research_report.md`) and Execution Broker (`argus_execution_broker_research_report.md`)
+- Decisions DEC-081–087: Databento data backbone, IBKR live execution, Alpaca incubator-only, sprint resequencing, Parquet cache strategy, cost deferral
 
 ## Architecture
 
-Three tiers built in sequence:
-1. Trading Engine (Python, asyncio) — strategies, orchestrator, risk manager, data service, broker abstraction
-2. Command Center (Tauri + React) — dashboards, controls, reports
-3. AI Layer (Claude API) — advisory, approval workflow, reports
+Three tiers, built in parallel (DEC-079):
+1. Trading Engine (Python, asyncio) — strategies, orchestrator, risk manager, data service, broker abstraction ✅ Core complete
+2. Command Center (FastAPI + React → web + Tauri desktop + PWA mobile) — dashboards, controls, reports → Build Track Sprint 12+
+3. AI Layer (Claude API) — advisory, approval workflow, reports → Build Track Sprint 18+
 
-Currently building: Tier 1, Phase 3 (Comprehensive Validation — Paper Trading track active).
+Currently: Validation Track (paper trading) running in parallel with Build Track (Sprint 12 next).
 
 ## Tech Stack
 
 - Python 3.11+, asyncio throughout
 - FastAPI (REST + WebSocket API server)
 - SQLite (WAL mode) for trade logging and state
-- alpaca-py>=0.30 (NOT alpaca-trade-api — deprecated)
+- databento (official Python client — primary market data, DEC-082)
+- ib_async (asyncio-native IBKR integration — primary execution, DEC-083)
+- alpaca-py>=0.30 (strategy incubator paper testing only — DEC-086)
 - python-dotenv>=1.0
-- ib_insync (secondary broker, IBKR)
 - pandas, numpy, pandas-ta for data/indicators
-- VectorBT for parameter exploration (Phase 2)
-- plotly for backtest report visualization (Phase 2)
+- VectorBT for parameter exploration
+- plotly for backtest report visualization
 - APScheduler for scheduling
 - YAML for all configuration
 
@@ -85,7 +102,7 @@ argus/
 ├── data/           # Scanner, Data Service, Indicators
 ├── execution/      # Broker abstraction, Order Manager
 ├── analytics/      # Trade Logger, Strategy Reports, Portfolio Reports
-├── intelligence/   # News & catalyst intelligence (Tier 1: Phase 3, Tiers 2-3: Phase 6) [PLANNED]
+├── intelligence/   # News & catalyst intelligence (Tier 1: Sprint 17, Tiers 2-3: later) [PLANNED]
 ├── backtest/       # Data fetcher, Replay Harness, VectorBT sweeps, walk-forward, metrics, reports
 ├── db/             # DatabaseManager
 ├── notifications/  # Push, Email, Telegram/Discord handlers
@@ -154,53 +171,36 @@ docs/
 - Integration tests use SimulatedBroker and ReplayDataService
 - Aim for >90% coverage on core/ and strategies/
 
-## Documentation Update Protocol
+## Docs Update Procedure
 
-IMPORTANT: When making changes during a coding session, evaluate whether any of the following documents need to be updated. If they do, either update them directly or flag them for the user to update.
+When Steven says **"update all docs"** (or "sync docs", "docs update"), run through this checklist and directly edit every doc that needs changes:
 
-**Update docs/07_PHASE1_SPRINT_PLAN.md when:**
-- Phase 1 is complete. This document is now historical reference. No further updates expected.
+| Doc | Update If... | What to Update |
+|-----|-------------|----------------|
+| `docs/05_DECISION_LOG.md` | Any design/implementation decision was made | Add new DEC-NNN entry. **Check current highest number first** — never reuse or skip. Use the standard table format. |
+| `docs/02_PROJECT_KNOWLEDGE.md` | Decision made, sprint completed, constraint discovered, architecture changed | Add to "Key Decisions Made (Do Not Relitigate)" with DEC reference. Update "Current Project State". Update Build Track queue or Validation Track status. |
+| `docs/03_ARCHITECTURE.md` | New component, schema change, API endpoint added/changed, dependency added | Update relevant section. Add new interfaces with implementation status. |
+| `docs/01_PROJECT_BIBLE.md` | Strategy rules changed, risk parameters changed, system invariants changed | Rare — only update if a fundamental rule changed. |
+| `docs/06_RISK_REGISTER.md` | New risk identified, existing risk resolved, assumption validated/invalidated | Add new RSK-NNN or ASM-NNN, or update existing entry status. Check current highest number first. |
+| `docs/10_PHASE3_SPRINT_PLAN.md` | Sprint completed, sprint scope changed, Build Track queue reordered, Validation Track status changed | Move sprint from queue to completed table. Update test counts. Record outcomes. |
+| `CLAUDE.md` | Current state changed, new architectural rule, new command, new deferred item, project structure changed | Update "Current State" (Build Track position, Validation Track status). Add rules to "Architectural Rules". Update "Commands" with new scripts. |
 
-**Update docs/09_PHASE2_SPRINT_PLAN.md when:**
-- A sprint is confirmed complete (change status from ⬜ PENDING to ✅ COMPLETE)
-- A sprint's scope changes (components added, removed, or moved between sprints)
-- A sprint's test count target is finalized or actual count is known
-- The build order or sprint boundaries change for any reason
-- Phase 2 is complete (mark all sprints ✅, add completion date to header)
+### Rules
 
-**Update docs/DECISION_LOG.md when:**
-- A new technical decision is made (library choice, pattern choice, design tradeoff)
-- An existing decision is changed or superseded
-- Format: follow the existing DEC-XXX template exactly
+1. **Check the current highest DEC/RSK/ASM number before adding new entries.** The #1 source of doc bugs is duplicate numbers.
+2. **Draft actual content, not just "update X".** Every doc change should be directly written to the file.
+3. **Sprint numbers are the canonical identifier.** Use sprint numbers (Sprint 12, Sprint 13) in all docs. Historical phases (Phase 1, Phase 2) are referenced by name only.
+4. **Don't update docs that didn't change.** The checklist is a filter, not a mandate. Most sessions touch 2–3 docs at most.
+5. **Project Knowledge (02) is also the Claude.ai project instructions.** After updating `02_PROJECT_KNOWLEDGE.md`, remind Steven to sync the Claude.ai project instructions if changes are significant.
+6. **Commit doc updates separately:** `docs: update [list of changed docs]`
 
-**Update docs/RISK_REGISTER.md when:**
-- A new assumption is discovered during implementation
-- An existing assumption is validated or invalidated
-- A new risk is identified
-- Format: follow the existing A-XXX / R-XXX templates exactly
+### Output Format
 
-**Update docs/ARCHITECTURE.md when:**
-- A new module or interface is created that differs from the spec
-- Database schema changes
-- API endpoints change
-- New dependencies are added
-
-**Update docs/PROJECT_BIBLE.md when:**
-- Strategy rules change
-- Risk management parameters change
-- System behavior rules change
-
-**Update this file (CLAUDE.md) when:**
-- Current State changes (phase completion, new phase started)
-- Project Structure changes (new directories, renamed modules)
-- Commands change (new scripts, changed invocations)
-- New architectural rules are established
-
-At the END of every significant coding session, output a brief "Docs Status" summary:
+At the END of every significant coding session, output a brief **"Docs Status"** summary:
 - Which docs were updated and why
 - Which docs SHOULD be updated but weren't (flag for user)
 - Any decisions made during the session that should be recorded
-- Whether 07_PHASE1_SPRINT_PLAN.md needs a status update (sprint completion, scope change)
+- Whether `10_PHASE3_SPRINT_PLAN.md` needs a sprint status update
 
 ## Deferred Items
 
@@ -218,7 +218,8 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 | ~~DEF-008~~ | ~~Synthetic data e2e trade trigger test~~ | ~~Sprint 8~~ | **RESOLVED** — Root cause: timezone bug in OrbBreakout (DEC-061). After fix, harness produces 59 trades on 7 months of real data with relaxed max_range_atr_ratio. Additional fixes: fill price ($0.01 bug), trade logging (sync fill handling), data integrity (original stop, weighted exit price). 488 tests. |
 | ~~DEF-009~~ | ~~VectorBT vs Replay Harness cross-validation~~ | ~~Sprint 9 starts~~ | **DONE** — `cross_validate_single_symbol()` implemented in walk_forward.py. Compares VectorBT trade count vs Replay Harness for matching params; VectorBT >= Replay is PASS (DEC-069). |
 | ~~DEF-010~~ | ~~Remove `_simulate_trades_for_day_slow()`~~ | ~~Sprint 9 completes~~ | **DONE** — Legacy function removed from vectorbt_orb.py. Tests updated to use wrapper over vectorized functions (DEC-070). |
-```
+| DEF-011 | IQFeedDataService adapter | Forex strategy development starts OR Tier 2 news integration starts | IQFeed provides forex, Benzinga news, and breadth indicators that Databento lacks. Build when a specific feature requires it. ~$160–250/month. |
+| DEF-012 | Databento L2 depth activation | A strategy requires order book depth data for entry/exit decisions | MBP-10 schema available on Standard plan. DatabentoDataService designed for L2 from Sprint 12, but not activated until a strategy needs it. |
 
 This keeps it lightweight — no new document, no new sync burden. Items get removed (or moved to "Completed") as they're addressed. Both Claudes see the trigger column and know when to raise the flag.
 

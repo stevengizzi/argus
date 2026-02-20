@@ -34,17 +34,17 @@ A Tauri-based desktop application (with mobile web companion) that provides real
 ### Project C: The AI Layer
 Claude integration as co-captain — advisory analysis, action proposals with approval workflow, report narration, strategy development assistance, and system optimization recommendations. Connected to Claude Code for implementation workflow.
 
-**Build order is strict: A → B → C.** Each depends on the one before it. However, all three are *designed* simultaneously so that Project A's interfaces are dashboard-ready and AI-ready from day one.
+**Build and validation run in parallel.** Project A (Trading Engine) is the foundation and was built first. Projects B (Command Center) and C (AI Layer) are built incrementally alongside ongoing strategy validation. All three were *designed* simultaneously so that Project A's interfaces are dashboard-ready and AI-ready from day one. Real capital deployment gates on strategy validation confidence, but system construction proceeds at development velocity. See DEC-079.
 
 ---
 
 ## 3. Trading Philosophy
 
 ### What We Trade
-- **Phase 1:** US stocks and ETFs (NYSE, NASDAQ)
-- **Phase 2:** Cryptocurrency (via Alpaca's unified API)
-- **Phase 3:** Forex (via IBKR or OANDA)
-- **Phase 4:** Futures (via IBKR or NinjaTrader)
+- **Phase 1:** US stocks and ETFs (NYSE, NASDAQ) — data via Databento, execution via IBKR
+- **Phase 2:** Cryptocurrency — execution via IBKR (supports BTC, ETH, LTC, BCH) or Alpaca Crypto
+- **Phase 3:** Forex — execution via IBKR (complete coverage), data via IQFeed
+- **Phase 4:** Futures — execution via IBKR (CME, CBOT, NYMEX, COMEX, ICE), data via Databento CME ($179/mo + exchange fees)
 
 ### How We Trade
 - **Direction:** Primarily long. Short selling may be added for specific strategies after the long-only ecosystem is proven.
@@ -361,7 +361,7 @@ Every trade is recorded with full metadata: strategy, asset class, entry/exit pr
 | Scenario | Response |
 |----------|----------|
 | VPS crashes with open positions | Broker-side stop orders remain active. System recovery script flattens any positions without stops on restart. |
-| Broker API goes down | System enters "safe mode" — no new trades. Existing stop orders are broker-side and remain active. Alert sent immediately. |
+| Broker API goes down | System enters "safe mode" — no new trades. Existing stop orders are broker-side (IBKR) and remain active. Alert sent immediately. IB Gateway reconnection logic handles nightly resets automatically. |
 | Data feed stalls (no new ticks for >30 seconds) | System pauses all strategies. Existing positions retain their stops. Alert sent. Auto-resume when data returns. |
 | Internet connectivity loss | Same as data feed stall. Dead man's switch: if system hasn't sent heartbeat in 5 minutes, monitoring service sends alert. |
 | Flash crash / gap through stop | Accepted as a risk of trading. Position sizing ensures max loss per trade is survivable. Account-level daily loss limit provides second line of defense. |
@@ -414,16 +414,16 @@ Every trade is recorded with full metadata: strategy, asset class, entry/exit pr
 ## 14. Multi-Asset Roadmap
 
 ### Phase 1: US Stocks & ETFs
-Full implementation. All initial strategies. Alpaca + IBKR.
+Full implementation. All initial strategies. Data: Databento US Equities Standard ($199/month). Execution: IBKR Pro (tiered pricing). Incubator paper testing: Alpaca.
 
 ### Phase 2: Cryptocurrency
-Leverage Alpaca's unified API for seamless integration. Develop crypto-specific strategies (momentum strategies adapt well to crypto's 24/7 volatile markets). Add crypto-aware tax tracking. Key consideration: crypto market microstructure differs from stocks — wider spreads, different liquidity profiles, manipulation risk.
+Via IBKR (Bitcoin, Ethereum, Litecoin, Bitcoin Cash) or Alpaca crypto API (broader selection, 24/7). Develop crypto-specific strategies. Add crypto-aware tax tracking. Key consideration: crypto market microstructure differs from stocks — wider spreads, different liquidity profiles, manipulation risk.
 
 ### Phase 3: Forex
-Add OANDA or IBKR forex connection. Develop forex-specific strategies (session-based momentum, carry trade variants). Session-aware scheduling (Tokyo, London, New York). Different leverage and margin mechanics. Section 988/1256 tax election support.
+Via IBKR — complete forex coverage through same account and API. Add IQFeed supplemental data for forex ticks and market breadth. Develop forex-specific strategies (session-based momentum, carry trade variants). Session-aware scheduling (Tokyo, London, New York). Different leverage and margin mechanics. Section 988/1256 tax election support.
 
 ### Phase 4: Futures
-Add futures broker connection (IBKR, NinjaTrader, or AMP). Develop futures-specific strategies (E-mini, Micro contracts). No PDT restrictions. 60/40 tax treatment. Nearly 24-hour trading capability.
+Via IBKR — CME, CBOT, NYMEX, COMEX, ICE through same account and API. Databento CME Globex dataset (+$179/month) for futures market data. Develop futures-specific strategies (E-mini, Micro contracts). No PDT restrictions. 60/40 tax treatment. Nearly 24-hour trading capability.
 
 ---
 
@@ -476,21 +476,21 @@ This system provides context to the trading engine, not trading signals. It enha
 
 ### 18.2 Three-Tier Architecture
 
-**Tier 1 — Economic & Earnings Calendar (Phase 3)**
+**Tier 1 — Economic & Earnings Calendar (Build Track, near-term)**
 Structured calendar data ingested daily before market open. No NLP required.
-- **Economic calendar:** FOMC dates, NFP, CPI, GDP releases, Fed speeches. Source: free economic calendar API or Alpaca news.
+- **Economic calendar:** FOMC dates, NFP, CPI, GDP releases, Fed speeches. Source: free economic calendar API. Benzinga Pro (included with IQFeed when added) for richer coverage.
 - **Earnings calendar:** Which stocks report today/tomorrow. Flag any scanner candidates with pending earnings.
 - **Output:** Risk flags on scanner results ("AAPL reports earnings after close today"), regime modifier ("FOMC announcement at 2:00 PM — reduce position sizes in afternoon strategies").
 - **Integration point:** Scanner metadata and Risk Manager event-day filters.
 
-**Tier 2 — News Feed Ingestion & Classification (Phase 6)**
+**Tier 2 — News Feed Ingestion & Classification (Build Track, later)**
 Subscribe to a news API and match headlines to watchlist symbols by ticker mention. Classify into catalyst categories using keyword/regex patterns.
 - **Catalyst categories:** Earnings, Analyst Action, FDA/Regulatory, M&A, Offering/Dilution, Insider Activity, Macro/Sector, Legal/SEC, Product Launch, Guidance Change.
 - **Output:** Catalyst metadata on scanner results ("MRNA gapped +8%, catalyst: FDA approval"). Historical catalyst-to-outcome correlation data for the Learning Journal.
-- **Data sources (evaluated in priority order):** Alpaca built-in news (free, already integrated), Benzinga Pro ($50–100/month), SEC EDGAR filings (free, structured, high-value for 8-K/13F/insider transactions), NewsAPI (general news fallback).
+- **Data sources (evaluated in priority order):** Benzinga Pro (included with IQFeed subscription — DEC-082), SEC EDGAR filings (free, structured, high-value for 8-K/13F/insider transactions), NewsAPI (general news fallback). Alpaca news no longer in the primary data path (DEC-086).
 - **Integration point:** Scanner enrichment, Learning Journal, pre-market briefing.
 
-**Tier 3 — AI-Powered Sentiment & Analysis (Phase 6+)**
+**Tier 3 — AI-Powered Sentiment & Analysis (Build Track, later)**
 Feed news articles through Claude's API for nuanced analysis beyond simple classification.
 - **Capabilities:** Catalyst quality assessment ("FDA approval for blockbuster category vs. niche indication"), follow-through probability estimation, cross-reference with historical patterns.
 - **Output:** Confidence modifiers on trade signals, narrative context in daily reports, automated Learning Journal entries linking news to trade outcomes.

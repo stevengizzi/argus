@@ -884,6 +884,124 @@ Each entry follows this format:
 | **Implications** | (1) Paper trading will see more trades than backtesting predicted (the 9:35–9:45 breakouts were previously filtered out). (2) Backtest results (137 trades, Sharpe 0.93) are a conservative lower bound. (3) Walk-forward results similarly conservative. (4) If paper trading performance is worse than backtest despite this fix, that's a stronger negative signal. |
 | **Status** | Active |
 
+### DEC-079 | Parallel Development Tracks — Build vs Validation Separation
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-19 |
+| **Decision** | Restructure the project roadmap from a linear phase sequence (where each phase blocks the next) to two parallel tracks: a **Build Track** (system construction) and a **Validation Track** (strategy confidence-building). The Build Track proceeds at development velocity. The Validation Track is calendar-bound and confidence-gated. Only the deployment of real capital gates on the Validation Track. |
+| **What Changed** | Previously, the Command Center was Phase 6, the AI Layer Phase 7, and additional strategies Phase 8 — all blocked behind live trading validation (Phase 4). Now, system construction (Command Center, Orchestrator, additional strategies, AI Layer) proceeds in parallel with paper trading and live trading validation. The only true gate is: real capital requires paper trading confidence + CPA consultation. |
+| **New Structure** | **Build Track** sprints are numbered sequentially (Sprint 12+) regardless of which component they target. **Validation Track** runs continuously: paper trading → live minimum size → live full size. Build Track deliverables enhance the Validation Track (e.g., Command Center makes paper trading more productive; Orchestrator enables multi-strategy paper testing). |
+| **Alternatives Rejected** | (1) Keep linear phases — rejected because system construction doesn't depend on strategy validation; the original sequencing was overly conservative and is costing development time. (2) Build a throwaway Streamlit/Dash dashboard now, then rebuild properly later — rejected because it wastes effort; better to build the real Command Center MVP on the target stack (FastAPI + React) where everything carries forward permanently. (3) Build the full Command Center vision before anything else — rejected because the full scope (Strategy Lab, Learning Journal, accounting) is too large; MVP scoped to paper trading utility. |
+| **Rationale** | Phases 1 and 2 proved the architecture is solid and development velocity is ~10x original estimates. The two-Claude workflow enables rapid context-switching between components. The original linear sequencing conflated "building the system" with "validating the strategy" — these have different dependency graphs. Strategy validation is calendar-bound (needs market days); system construction is velocity-bound (needs development time). Running them in parallel maximizes both. Every piece of infrastructure built now makes the eventual live trading launch better: more visibility, more tools, more confidence in the system. |
+| **Risk** | Live trading could reveal architectural issues (slippage patterns, API latency, fill behavior) that require changes to code built during the Build Track. Mitigated by: (a) clean abstractions at broker/data boundaries already in place, (b) paper trading exercises the same code paths as live, (c) production discoveries are more likely parameter tweaks than architectural rewrites. See RSK-020 in Risk Register. |
+| **Status** | Active |
+
+---
+
+### DEC-080 | Command Center Delivery: Web + Desktop + Mobile from Single Codebase
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-19 |
+| **Decision** | Build the Command Center as a single React frontend that ships to three surfaces simultaneously: (1) **Web app** — accessible from any browser, primary development target. (2) **Tauri desktop app** — native shell wrapping the same React code, adds system tray, native notifications, auto-launch. (3) **PWA (Progressive Web App)** — "Add to Home Screen" on iPhone/iPad, own icon, no Safari chrome, push notification support. All three run the identical React codebase against the same FastAPI backend. |
+| **Alternatives Rejected** | (1) Desktop-first with Tauri from Sprint 12 — rejected because it adds Rust/Tauri build complexity before the React frontend is stable, and blocks mobile access until a separate effort. (2) Native iOS app (Swift) — rejected as overkill for a single-user system; PWA provides sufficient mobile experience without App Store overhead. (3) Web-only, defer desktop and mobile — rejected because the user values native app feel and mobile access during US market hours (10:30 PM+ in Taipei timezone). |
+| **Rationale** | Tauri is fundamentally a thin native shell around a web frontend — the React code is identical in both contexts. Building the React app as responsive from the start means mobile browser access is free. PWA configuration (manifest, service worker, icons) is ~30 minutes of work and gives iOS/iPad a home-screen app experience. Tauri shell addition to an existing React app is a half-day task. This approach delivers all three surfaces by the end of Sprint 14 without building anything throwaway. The user is in Taipei (UTC+8) and accesses the system at varying times from desk, couch, and mobile — all surfaces serve real use cases. |
+| **Implementation** | Sprint 12: API layer + React scaffolding. Sprint 13: Core dashboard views with responsive design (mobile-first CSS). Sprint 14: Paper trading features + PWA manifest/icons + Tauri desktop shell. After Sprint 14: desktop app, web app, and home-screen mobile app all operational. |
+| **Status** | Active |
+
+---
+
+### DEC-081 | IEX Data Feed Limitation Acknowledged
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-18 |
+| **Decision** | Alpaca's free-tier IEX data feed captures only 2–3% of US equity market volume (IEX is one exchange among 15+ US equity exchanges and 30+ ATSs). This renders live trading unreliable — most 1-minute bars are either missing or built from a tiny fraction of actual trades. A dedicated market data provider is required. |
+| **Alternatives Rejected** | (1) Ignore and keep using IEX — rejected because data quality directly determines strategy P&L; trading on 2–3% of volume produces candles that don't represent actual market conditions. (2) Upgrade Alpaca to SIP at $99/month — rejected because it's a band-aid that maintains the single-point-of-failure problem (same provider for data and execution), limited to 1,000 WebSocket symbols, and no L2/news/breadth capabilities. See DEC-082 for full provider evaluation. |
+| **Rationale** | Paper trading on February 17–18 revealed most 1-minute bars were either missing or built from a tiny fraction of actual trades. For NVDA trading millions of shares per minute at market open, the IEX feed captured only a few hundred shares. This makes all price-derived signals (breakout confirmation, VWAP, volume filters) unreliable. |
+| **Implications** | Triggers a full market data provider evaluation (see `argus_market_data_research_report.md`). Paper trading on Alpaca IEX data continues for system stability testing but price/signal accuracy is not validated until a proper data source is integrated. Historical backtesting data from Alpaca (35 months of Parquet files) was obtained via REST API which uses SIP-quality data, so backtest results remain valid. |
+| **Status** | Active — resolved by DEC-082 |
+
+---
+
+### DEC-082 | Market Data Architecture — Databento Primary, IQFeed Supplemental
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-20 |
+| **Decision** | Databento US Equities Standard ($199/month) as primary equities data backbone. IQFeed added later as supplemental provider for forex, news feeds, and breadth indicators. Alpaca retained for order execution only (subsequently superseded by DEC-083 for live execution). Data and execution fully decoupled — separate providers, separate failure domains. |
+| **Alternatives Rejected** | (1) Alpaca SIP upgrade ($99/month) — rejected as band-aid; single point of failure, no L2/news/breadth, 1,000 symbol WebSocket limit. (2) IQFeed as primary — rejected because 2,500 symbol hard cap is an architectural ceiling for the strategy research laboratory vision (30+ concurrent strategies × 100 candidates each exceeds the cap). IQFeed was the Session 1 recommendation but reversed after the "strategy research laboratory" reframe. (3) Polygon.io — rejected for documented data quality and reliability issues (stream freezes, throttling). (4) Bloomberg/Refinitiv — enterprise pricing, disproportionate to needs. (5) Direct exchange feeds — $10K–100K/month, requires C++/Rust, overkill. |
+| **Rationale** | (1) Databento has no symbol limits — subscribe to entire US equity universe in a single API call ($199/month flat). (2) Modern Python client with async support enables faster adapter development (no Wine/Docker like IQFeed). (3) Exchange-direct proprietary feeds provide richer data than SIP (odd lot quotes, full depth, auction imbalance). (4) On-demand historical API enables data-first backtesting philosophy. (5) 10-session limit manageable with Event Bus fan-out architecture. (6) IQFeed's unique capabilities (forex, Benzinga news, breadth indicators) are supplemental — added when needed, not the foundation. |
+| **Vision alignment** | ARGUS is reframed as a "strategy research laboratory that also trades live." The single most valuable property of a data provider for this use case is breadth of access — unlimited symbols, on-demand history, no artificial constraints on experimentation. Databento delivers this. |
+| **Cost** | Databento: $199/month (US equities, unlimited symbols, L0–L3). IQFeed: ~$160–250/month when added (forex + news + breadth). Total eventual: ~$360–450/month. |
+| **Architecture** | Databento → DatabentoDataService → Event Bus → All strategies (live). Databento Historical API → Parquet cache → Backtesting tools (historical). IQFeed → IQFeedDataService → Event Bus → Forex strategies + News + Breadth (future). |
+| **Known limitations** | No forex data (IQFeed supplemental covers this). No news feeds (IQFeed Benzinga Pro covers this). No breadth indicators (IQFeed covers this). VC-funded startup with ~$8M revenue (mitigated by DataService abstraction enabling provider swap in ~1 sprint). |
+| **Supersedes** | Original plan to use Alpaca for both data and execution. Extends DEC-005 (data broker-agnostic abstraction). Resolves DEC-081. |
+| **Reference** | Full analysis: `argus_market_data_research_report.md` (project file). |
+| **Status** | Active |
+
+---
+
+### DEC-083 | Execution Broker — Direct IBKR Adoption (No Phased Migration)
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-20 |
+| **Decision** | Interactive Brokers (IBKR Pro, tiered pricing) is the sole live execution broker for ARGUS. The IBKRBroker adapter is built before any live trading. No phased Alpaca → IBKR migration — IBKR from day one of live trading. Alpaca demoted to strategy incubator paper testing only. |
+| **Alternatives Rejected** | (1) Stay on Alpaca permanently — rejected because PFOF routing (Virtu/Citadel) structurally limits price improvement; 125+ outages in 9 months unacceptable for household income; no futures/forex. (2) Phased migration (Alpaca live first, IBKR later) — rejected because it means two learning curves, throwaway operational knowledge, and migration risk during live trading. With no time pressure to go live, building the right adapter first is cleaner. (3) Tradier — rejected as a middle ground that doesn't solve any actual problem better than IBKR or Alpaca. (4) TradeStation — credible but IBKR dominates on all dimensions. |
+| **Rationale** | (1) IBKR SmartRouting across 20+ venues, no PFOF, 100% price improvement rate (independently verified). (2) 9 consecutive years outperforming industry on TAG execution quality audits. (3) Complete multi-asset coverage (stocks, options, futures, forex, crypto) through single account — covers entire ARGUS roadmap. (4) 100+ order types eliminate Order Manager workarounds for bracket order limitations. (5) Publicly traded (NASDAQ: IBKR), profitable since 1978 — maximum business stability. (6) `ib_async` library provides asyncio-native Python integration compatible with ARGUS architecture. (7) Learning one broker's characteristics instead of two eliminates throwaway knowledge. |
+| **Alpaca's Permanent Role** | AlpacaBroker adapter retained in codebase for strategy incubator pipeline paper testing (where PFOF and execution quality are irrelevant). Alpaca paper trading continues until IBKRBroker adapter is built and validated, then IBKR takes over all paper and live trading. |
+| **Cost** | IBKR tiered: ~$0.0035/share commission + clearing/exchange fees. Estimated ~$43/day at full scale (100 trades × 100 shares). Offset by estimated $200/day execution quality advantage vs PFOF brokers. Net cost-positive even at half the estimated advantage. |
+| **Operational requirements** | IB Gateway process must run alongside ARGUS (Docker container recommended). Nightly reset requires reconnection logic. Initial credential setup through browser, then session maintains until logout/reset. |
+| **Action item** | Begin IBKR account application immediately — approval can take days to weeks. Paper trading account sufficient to begin adapter development. |
+| **Supersedes** | DEC-003 (amended) — IBKR no longer deferred to "Phase 3+"; it is the immediate next broker adapter. DEC-031 (IBKR timing) fully superseded. |
+| **Reference** | Full analysis: `argus_execution_broker_research_report.md` (project file). |
+| **Status** | Active |
+
+---
+
+### DEC-084 | Sprint Resequencing — Data and Broker Adapters Before Command Center
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-20 |
+| **Decision** | Insert two new sprints at the top of the Build Track queue: Sprint 12 (DatabentoDataService adapter) and Sprint 13 (IBKRBroker adapter). Command Center MVP shifts to Sprints 14–16. All subsequent sprints renumbered accordingly. |
+| **Previous order** | Sprint 12 (Command Center API), Sprint 13 (Command Center Dashboard), Sprint 14 (Command Center Multi-Surface). |
+| **Rationale** | (1) Quality market data is prerequisite for meaningful paper trading — the current IEX feed produces unreliable candles (DEC-081). DatabentoDataService unblocks high-fidelity paper trading. (2) IBKRBroker adapter must be built before live trading (DEC-083). Building it immediately after data means both infrastructure foundations are solid before UI work begins. (3) Command Center is valuable but not blocking — paper trading and live trading can proceed via logs/CLI until the dashboard exists. (4) Both adapters are estimated at 2–3 days each, so the Command Center delay is ~1 week. |
+| **New Build Track Queue** | Sprint 12: DatabentoDataService → Sprint 13: IBKRBroker → Sprint 14: Command Center API → Sprint 15: Command Center Dashboard → Sprint 16: Command Center Multi-Surface → Sprint 17: Orchestrator → Sprint 18: ORB Scalp → Sprint 19: Tier 1 News → Sprint 20: AI Layer MVP → Sprint 21+: Expansion |
+| **Implications** | Command Center MVP delivery shifts from Sprint 14 to Sprint 16. Paper trading continues on Alpaca IEX data for system stability testing during Sprint 12–13, then migrates to Databento data + IBKR paper trading. |
+| **Status** | Active |
+
+---
+
+### DEC-085 | Historical Data Strategy — Databento Source, Parquet Cache
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-20 |
+| **Decision** | Hybrid approach: Databento as the data source for new historical data fetches, Parquet as the local cache format. Existing Alpaca-sourced Parquet files (35 months, 29 symbols) retained for current ORB backtesting. The DataFetcher gains a Databento backend alongside the existing Alpaca backend. VectorBT and Replay Harness continue reading from Parquet files unchanged — they are provider-agnostic. |
+| **Rationale** | (1) Existing backtesting infrastructure (VectorBT sweeps, Replay Harness, walk-forward) reads Parquet files — no rewrite needed. (2) Parquet is provider-agnostic storage — if Databento goes away, swap the fetch source, keep everything else. (3) Databento's on-demand historical API enables the "pull data when inspiration strikes" workflow. (4) Databento Standard includes 15+ years OHLCV and 12 months L0/L1 history — plenty for new backtest data pulls. (5) Local Parquet cache avoids repeated API calls and egress costs for the same data. |
+| **Data Flow** | Live: Databento → DatabentoDataService → Event Bus (no Parquet). Historical: Databento Historical API → DataFetcher → Parquet files → VectorBT / Replay Harness. Legacy: Existing Alpaca Parquet files remain valid and usable. |
+| **Status** | Active |
+
+---
+
+### DEC-086 | Alpaca Role Reduction — Strategy Incubator Only
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-20 |
+| **Decision** | Alpaca is no longer the primary broker or data provider for ARGUS. Its permanent role is strategy incubator paper testing only — a convenient sandbox for rapid strategy prototyping where execution quality and data fidelity are irrelevant. All production data flows through Databento (DEC-082). All live execution flows through IBKR (DEC-083). |
+| **Previous role** | Primary broker for both market data (IEX feed) and order execution (paper + live). |
+| **New role** | Strategy Incubator pipeline stages 1–6 (concept through paper trading). Alpaca's excellent developer experience and simple API make it ideal for rapid strategy prototyping where execution quality and data fidelity are less critical. |
+| **What remains** | AlpacaBroker adapter (~80 tests), AlpacaDataService adapter, AlpacaScanner — all maintained in codebase. Alpaca paper trading account remains active for incubator use. |
+| **What changes** | Alpaca is removed from the live trading path entirely. No real capital flows through Alpaca. IBKR paper trading replaces Alpaca paper trading for pre-live validation once IBKRBroker adapter is built (Sprint 13). |
+| **Rationale** | Follows from DEC-081 (IEX data inadequacy), DEC-082 (Databento data), and DEC-083 (IBKR execution). Alpaca's value proposition — simplicity and free tier — remains ideal for low-stakes strategy incubation. |
+| **Status** | Active |
+
+---
+
+### DEC-087 | Databento Subscription Timing — Defer Until Adapter Ready
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-20 |
+| **Decision** | Delay activating the Databento subscription ($199/month) until the DatabentoDataService adapter (Sprint 12) is built and ready for integration testing. Sprint 12 development uses mock data and unit tests. Subscription activated only when needed for integration testing and paper trading resumption with quality data. |
+| **Rationale** | No reason to pay $199/month while the adapter doesn't exist yet. Sprint 12 can be developed and unit-tested against mock Databento responses. The subscription is activated at the end of Sprint 12 for integration testing, then continues monthly for paper trading and eventually live trading. |
+| **Status** | Active |
+
 ---
 
 *End of Decision Log v1.0*

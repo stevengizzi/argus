@@ -7,7 +7,7 @@
 
 ## 1. System Tiers
 
-Argus is built in three tiers, each depending on the one before it.
+Argus is built in three tiers. Tier 1 (Trading Engine) is the foundation. Tiers 2 and 3 are built incrementally in parallel with strategy validation, starting from MVP scope and expanding over time. See DEC-079.
 
 ### Tier 1: Trading Engine
 The autonomous core. Runs headless (no UI). Communicates via internal event bus and exposes a REST/WebSocket API for Tier 2.
@@ -27,7 +27,7 @@ All three tiers share a single database and configuration store.
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                        EXTERNAL SERVICES                            │
-│  Alpaca API    IBKR API    Polygon.io    Banks (Plaid)    Claude API│
+│  Databento    IBKR API    Alpaca API    IQFeed (future)   Claude API│
 └──────┬────────────┬────────────┬──────────────┬──────────────┬──────┘
        │            │            │              │              │
 ┌──────▼────────────▼────────────▼──────────────│──────────────│──────┐
@@ -182,9 +182,49 @@ class DataService(ABC):
 **Data Delivery:** All streaming market data flows through the Event Bus. Strategies and other components subscribe to `CandleEvent`, `TickEvent`, and `IndicatorEvent` via the Event Bus. The synchronous query methods (`get_current_price`, `get_indicator`) serve a different purpose — point-in-time lookups for position sizing and indicator checks — and do not duplicate the streaming path.
 
 **Implementations:**
-- `AlpacaDataService` — live WebSocket + REST historical
-- `IBKRDataService` — TWS API data feed
-- `ReplayDataService` — reads historical data files, drips into the system at configurable speed
+- `DatabentoDataService` — **PRIMARY (DEC-082).** Databento US Equities Standard. Live TCP streaming via `databento` Python client (official, async). Subscribes to OHLCV-1m bars and trades streams, publishes CandleEvents and TickEvents through Event Bus. Full universe (no symbol limits). L2 depth (MBP-10) designed from Sprint 12, activated when strategies require it. Single live session with Event Bus fan-out. Session reconnection with exponential backoff.
+- `IQFeedDataService` — **SUPPLEMENTAL (future).** IQFeed via Wine/Docker gateway. Forex ticks, Benzinga news, breadth indicators (TICK, TRIN, A/D). Added when forex strategies or Tier 2 news are built.
+- `AlpacaDataService` — **INCUBATOR ONLY (DEC-086).** Live WebSocket via `alpaca-py`. Retained for strategy incubator paper testing. Not used for production data (IEX feed unreliable — DEC-081).
+- `ReplayDataService` — reads historical Parquet files, drips into the system at configurable speed
+- `BacktestDataService` — step-driven DataService controlled by ReplayHarness
+
+### 3.2b Data Flow Architecture
+
+```
+Live Trading:
+  Databento US Equities ──TCP──> DatabentoDataService ──EventBus──> All Strategies
+                                        │                              │
+                                        ├── CandleEvents (1m bars)     ├── Strategy 1
+                                        ├── TickEvents (every trade)   ├── Strategy 2
+                                        ├── IndicatorEvents (VWAP,ATR) ├── ...
+                                        └── L2 Depth (when needed)     └── Strategy 30+
+
+Historical / Backtesting:
+  Databento Historical API ──REST──> DataFetcher ──> Parquet files ──> VectorBT / Replay Harness
+  (Existing Alpaca Parquet files also valid for backtesting)
+
+Order Execution:
+  Strategy → Risk Manager → Order Manager → BrokerAbstraction
+                                              ├── IBKRBroker    → IB Gateway  [live + IBKR paper]
+                                              ├── AlpacaBroker  → Alpaca API  [incubator paper]
+                                              └── SimulatedBroker             [backtesting/shadow]
+
+Future (when needed):
+  IQFeed ──TCP/Wine──> IQFeedDataService ──EventBus──> Forex Strategies
+                                        │                         News Classifier
+                                        ├── Forex ticks            Breadth Monitor
+                                        └── Benzinga news
+```
+
+**DatabentoDataService Configuration (DatabentoConfig):**
+- `api_key`: Databento API key (from environment variable, never in code)
+- `dataset`: "XNAS.ITCH" (NASDAQ) + "XNYS.PILLAR" (NYSE) or equivalent composite
+- `schema`: ["ohlcv-1m", "trades"] (default), ["mbp-10"] (optional L2)
+- `symbols`: list or "ALL_SYMBOLS" for full universe
+- `reconnect_max_retries`: 10
+- `reconnect_base_delay_seconds`: 1.0
+
+Sprint 12 scope. See DEC-082 and `argus_market_data_research_report.md` Section 14.
 
 ### 3.3 Broker Abstraction (`execution/broker.py`)
 
@@ -204,8 +244,8 @@ class Broker(ABC):
 ```
 
 **Implementations:**
-- `AlpacaBroker` — wraps `alpaca-py` SDK (REST via TradingClient + WebSocket via TradingStream)
-- `IBKRBroker` — wraps `ib_insync` / `ib_api`
+- `IBKRBroker` — **PRIMARY for live trading (DEC-083).** Wraps `ib_async` library (asyncio-native successor to `ib_insync`). Connects to IB Gateway (headless Java process, Docker containerized). SmartRouting across 20+ venues, no PFOF. 100+ order types including full bracket orders with multi-leg take-profit. Covers entire asset class roadmap (stocks, options, futures, forex, crypto) through single account.
+- `AlpacaBroker` — **INCUBATOR paper testing only (DEC-086).** Wraps `alpaca-py` SDK. Excellent developer experience for rapid strategy prototyping. No real capital flows through Alpaca.
 - `SimulatedBroker` — fills orders at historical prices (for Replay Harness and Shadow System)
 
 **Order Routing:**
@@ -218,7 +258,7 @@ class BrokerRouter:
         return self.broker_map[asset_class]
 ```
 
-**Phase 1 Scope:** `SimulatedBroker` and `AlpacaBroker` are implemented in Phase 1. `IBKRBroker` is deferred to Phase 3+ per DEC-031. A comprehensive test suite against the `Broker` ABC ensures any future adapter is drop-in compatible.
+**Implementation Status:** `SimulatedBroker` and `AlpacaBroker` implemented (Phase 1, Sprints 1–5). `IBKRBroker` is Sprint 13 (DEC-083/084) — uses `ib_async` (asyncio-native, `ib-api-reloaded` GitHub org). IB Gateway runs as a local Java process (Docker containerized for deployment). `DatabentoDataService` is Sprint 12 (DEC-082). The existing comprehensive test suite against the `Broker` ABC and `DataService` ABC ensures all adapters are drop-in compatible.
 
 ### 3.3b Clock Protocol (`core/clock.py`)
 
@@ -234,6 +274,34 @@ class Clock(Protocol):
 - `FixedClock` — test clock with `advance(**kwargs)` and `set(new_time)` for controllable time.
 
 **Injected into:** Risk Manager, BaseStrategy. Passed via constructor, defaults to `SystemClock` for backward compatibility.
+
+### 3.3c IBKRBroker (`execution/ibkr_broker.py`)
+
+Production execution broker using Interactive Brokers via `ib_async` library (DEC-083).
+
+**Architecture:**
+```
+ARGUS ──ib_async──> IB Gateway (Java) ──> IBKR Servers ──> Exchanges
+                         │
+                    Docker container (recommended)
+                    Nightly reset at ~11:45 PM ET
+                    Auto-reconnect on restart
+```
+
+**Configuration (IBKRConfig):**
+- `host`: "127.0.0.1" (IB Gateway on same machine)
+- `port`: 4001 (live) or 4002 (paper)
+- `client_id`: unique per connection (default 1)
+- `account`: IBKR account ID
+- `timeout_seconds`: 30
+
+**Operational notes:**
+- IB Gateway requires initial credential setup via browser. Session persists until manual logout or nightly reset.
+- Nightly reset (~11:45 PM ET): Gateway disconnects briefly. IBKRBroker must implement reconnection with position verification.
+- All stops placed broker-side — survive gateway disconnections.
+- Paper trading uses separate paper account linked to live account. Same API, different port.
+
+Sprint 13 scope. See DEC-083 and `argus_execution_broker_research_report.md` Section 11.
 
 ### 3.4 Base Strategy (`strategies/base_strategy.py`)
 
@@ -841,7 +909,7 @@ Generates self-contained HTML reports with:
 ### 5.6 Directory Structure
 argus/backtest/
 ├── init.py
-├── data_fetcher.py       # Historical data download from Alpaca
+├── data_fetcher.py       # Historical data download (Databento primary, Alpaca legacy) → Parquet cache
 ├── replay_harness.py     # Production code replay engine
 ├── vectorbt_orb.py       # VectorBT parameter sweeps
 ├── metrics.py            # Performance metric calculations
@@ -858,7 +926,7 @@ docs/backtesting/
 └── PARAMETER_VALIDATION_REPORT.md
 
 ### Future Module: `argus/intelligence/`
-Planned for Phase 3 (Tier 1) and Phase 6 (Tiers 2–3). Will contain:
+Planned for Build Track near-term (Tier 1, Sprint 17) and Build Track later (Tiers 2–3). Will contain:
 - `calendar.py` — Economic and earnings calendar ingestion
 - `news_feed.py` — News API subscription and symbol matching
 - `classifier.py` — Catalyst type classification (keyword → ML pipeline)
@@ -872,13 +940,14 @@ Not yet implemented. Interface will publish `CatalystEvent` to the Event Bus for
 ## 6. Command Center (Tier 2)
 
 ### 6.1 Technology Stack
-- **Framework:** Tauri v2 (Rust backend, web frontend)
-- **Frontend:** React 18+ with TypeScript
-- **Styling:** Tailwind CSS
+- **Frontend:** React 18+ with TypeScript (single codebase for all surfaces — DEC-080)
+- **Styling:** Tailwind CSS (responsive/mobile-first)
 - **State Management:** Zustand or Jotai (lightweight, performant)
 - **Charts:** Lightweight Charts (TradingView's open-source library) for price charts; Recharts for performance metrics
 - **Data Fetching:** TanStack Query for REST; native WebSocket for real-time
-- **Mobile:** Same React app served as responsive web app accessible via browser
+- **Desktop:** Tauri v2 (Rust shell wrapping the React frontend — system tray, native notifications, auto-launch)
+- **Mobile:** PWA (Progressive Web App) — home-screen install on iOS/iPad/Android, push notifications, no App Store required (DEC-080)
+- **Backend:** FastAPI (REST + WebSocket) — serves both the React frontend and the Tauri app
 
 ### 6.2 Dashboard Pages
 
@@ -903,6 +972,28 @@ Not yet implemented. Interface will publish `CatalystEvent` to the Event Bus for
 **Settings:** Notification preferences, API key management, appearance, autonomy configuration, broker connection status, bank connection status.
 
 **Claude Chat:** Conversational interface with Claude. Context-aware (Claude can see current system state). Action proposals appear inline with approve/reject buttons.
+
+### 6.3 Mobile Access (DEC-080)
+
+The Command Center is a Progressive Web App (PWA) installable on iOS, iPad, and Android devices.
+
+**PWA Configuration:**
+- `manifest.json` with app name, icons (multiple sizes), theme color, display mode (`standalone`)
+- Service worker for offline shell caching (not offline data — trading data requires live connection)
+- Apple-specific meta tags for iOS home screen appearance (`apple-mobile-web-app-capable`, status bar style)
+
+**Responsive Design:**
+- Mobile-first CSS via Tailwind breakpoints (`sm:`, `md:`, `lg:`)
+- Dashboard cards stack vertically on mobile, grid on desktop
+- Charts resize responsively (Recharts handles this natively)
+- Touch-friendly controls (larger tap targets, swipe gestures where appropriate)
+- Critical actions (emergency shutdown, position close) accessible within 2 taps from any screen
+
+**Limitations vs Desktop:**
+- No background execution (PWA suspends when not in foreground)
+- Push notifications via web push API (requires HTTPS, service worker)
+- No system tray — relies on push notifications for alerts
+- Smaller screen real estate — some advanced views (multi-chart layouts, heatmaps) may be desktop-only
 
 ---
 
@@ -1075,7 +1166,7 @@ config/
 | Data Manipulation | pandas, numpy |
 | Technical Indicators | pandas-ta or ta-lib |
 | Backtesting (fast) | VectorBT |
-| Backtesting (full) | Backtrader |
+| Backtesting (full) | Replay Harness (production code replay) |
 | Database | SQLite (production: consider PostgreSQL for scale) |
 | API Server | FastAPI (REST + WebSocket) |
 | Desktop App | Tauri v2 |

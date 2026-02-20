@@ -4,7 +4,14 @@ alpaca:
   api_key_env: "ALPACA_API_KEY"  # Env var name (not the key itself!)
   secret_key_env: "ALPACA_SECRET_KEY"  # Env var name (not the key itself!)
   paper: true  # Paper trading mode
-  data_feed: "iex"  # "iex" (free) or "sip" (paid)
+
+  # Data feed selection:
+  # - "iex": Free tier. WebSocket bars are SPARSE — only fires when IEX-exchange trades
+  #          occur. For liquid stocks (NVDA, AAPL), may receive <50% of expected bars.
+  #          REST historical works fine (aggregated differently).
+  # - "sip": Requires Algo Trader Plus ($99/mo). Full consolidated feed from all exchanges.
+  #          Recommended for production/validation. Change to "sip" after upgrading.
+  data_feed: "iex"
 
   # WebSocket reconnection
   ws_reconnect_base_seconds: 1.0

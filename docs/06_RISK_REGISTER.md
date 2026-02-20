@@ -33,15 +33,16 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 
 ---
 
-### ASM-002 — Alpaca API Reliability
+### ASM-002 — Alpaca API Reliability (SCOPE REDUCED)
 | Field | Value |
 |-------|-------|
-| **Assumption** | Alpaca API maintains >99.5% uptime during market hours; WebSocket latency remains <200ms |
-| **Confidence** | Medium-High |
-| **Basis** | Alpaca is well-funded with thousands of algorithmic traders. Strong historical uptime record. |
-| **If Wrong** | Strategy performance degrades. Scalp strategies may become unviable at >200ms latency. |
-| **Contingency** | IBKR adapter built from day one as fallback. Data stall detection (30-second timeout) triggers safe mode. All stops placed broker-side. Continuous latency monitoring. |
-| **Review Date** | After first month of live trading |
+| **Assumption** | Alpaca API is reliable enough for strategy incubator paper testing. |
+| **Confidence** | High |
+| **Basis** | Alpaca demoted to incubator-only role (DEC-086). 125+ outages in 9 months (StatusGator data) is acceptable for paper testing where missed trades are inconvenient, not catastrophic. Production reliability now depends on IBKR (ASM-013/014) and Databento (ASM-012). |
+| **Amendment (2026-02-20)** | Original assumption was that Alpaca maintains >99.5% uptime for production use. Research (DEC-083) revealed 125+ outages across ~100 components in a 9-month monitoring period. Alpaca is no longer on the production path — demoted to strategy incubator only (DEC-086). |
+| **If Wrong** | Strategy incubator paper testing is occasionally disrupted. No financial impact — incubator uses simulated capital. SimulatedBroker + ReplayDataService provide alternative incubation paths. |
+| **Contingency** | If Alpaca reliability degrades further, incubator paper testing can run on IBKR paper trading account instead. |
+| **Review Date** | Low priority — incubator only |
 
 ---
 
@@ -69,15 +70,13 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 
 ---
 
-### ASM-005 — Commission-Free Trading Sustainability
+### ASM-005 — Commission-Free Trading Sustainability (SUPERSEDED)
 | Field | Value |
 |-------|-------|
-| **Assumption** | Alpaca will continue offering commission-free trading |
-| **Confidence** | Medium |
-| **Basis** | Industry standard since 2019. Alpaca's business model is built around it. |
-| **If Wrong** | Scalp strategy profitability most affected (many trades, small gains). Longer-hold strategies less impacted. |
-| **Contingency** | IBKR Lite as commission-free alternative. System tracks hypothetical commission impact on each strategy. Commission parameter in profitability calculations (currently $0, easily adjustable). |
-| **Review Date** | Quarterly |
+| **Assumption** | ~~Commission-free trading remains available.~~ No longer relevant — IBKR Pro uses tiered commission pricing (DEC-083). |
+| **Confidence** | N/A |
+| **Basis** | IBKR Pro charges ~$0.0035/share + clearing/exchange fees. This is an explicit cost, offset by estimated $0.02/share execution quality advantage over PFOF brokers. Net cost-positive. |
+| **Status** | Superseded by DEC-083. Commission costs are explicit and budgeted. |
 
 ---
 
@@ -150,6 +149,54 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 | **If Wrong** | Tier 1 structured calendar data is reliable regardless (dates are facts). Tier 2 classification quality may degrade with poor news sources, producing noisy or late catalyst labels. |
 | **Contingency** | Start with Alpaca's built-in news + SEC EDGAR (both free). Evaluate quality during paper trading. Budget up to $200/month for premium feeds (Benzinga Pro) if free sources are insufficient. Tier 2 is only built after Tier 1 proves value, limiting wasted investment. |
 | **Review Date** | When Tier 2 implementation begins (Phase 6) |
+
+---
+
+### ASM-012 — Databento Data Quality and Business Continuity
+| Field | Value |
+|-------|-------|
+| **Assumption** | Databento US Equities Standard provides reliable, institutional-grade market data suitable for live trading decisions, and the company remains operational with current pricing/service level for the foreseeable future. |
+| **Confidence** | Medium-High (data quality), Medium (business continuity) |
+| **Basis** | Data quality: Databento's data sourced from direct exchange proprietary feeds at Equinix NY4 colocation. 99.99% uptime commitment. Community reports confirm 150K+ quotes/second throughput and professional-grade quality. Synthetic NBBO is practically equivalent to SIP NBBO for non-HFT strategies. Business continuity: VC-funded startup ($37.5M total funding, ~$8M revenue, ~38 employees). Growing institutional adoption (IBKR Campus, Tickblaze partnerships). Strong technical team (ex-trading firm engineers). But pre-profitability and dependent on continued funding. |
+| **If Wrong** | Data quality issues could produce unreliable signals (false breakouts, incorrect VWAP). Business failure would remove ARGUS's primary data source. DataService abstraction enables swap to IQFeed or Alpaca SIP in ~1 sprint. |
+| **Contingency** | (1) Circuit-breaker logic halts new trades on data stream failure. (2) IQFeed exists as proven 20-year fallback. (3) Historical data stored locally in Parquet is provider-independent. (4) Compare Databento prices vs broker fill prices to validate data quality during paper trading. (5) Monitor Databento's blog, status page, and funding news quarterly. |
+| **Review Date** | After first 2 weeks of paper trading with Databento data. Business continuity: quarterly. |
+
+---
+
+### ASM-013 — ib_async Library Production Stability
+| Field | Value |
+|-------|-------|
+| **Assumption** | The `ib_async` library (community-maintained successor to `ib_insync`) is production-stable for order management, position tracking, and account queries against IB Gateway. |
+| **Confidence** | Medium-High |
+| **Basis** | `ib_insync` was battle-tested across thousands of production trading systems since 2017. `ib_async` is maintained by the `ib-api-reloaded` GitHub organization after the original creator's passing in early 2024. Active community. Asyncio-native design aligns with ARGUS architecture. Multiple GitHub projects demonstrate sophisticated production systems built on this library. |
+| **If Wrong** | Adapter development reveals instability or missing features. Fallback: use IBKR's native TWS API directly (more complex callback-based code) or evaluate `ibapi` official SDK with asyncio wrapper. AlpacaBroker adapter remains fully functional as interim execution broker. |
+| **Contingency** | Test thoroughly during Sprint 13 development. If `ib_async` proves unstable, evaluate native TWS API or `ib_insync` (legacy, still functional). BrokerAbstraction isolates the library choice. |
+| **Review Date** | During Sprint 13 (IBKRBroker adapter development). |
+
+---
+
+### ASM-014 — IB Gateway Operational Reliability
+| Field | Value |
+|-------|-------|
+| **Assumption** | IB Gateway can run reliably in a Docker container with automated reconnection logic, surviving the known nightly reset. |
+| **Confidence** | Medium-High |
+| **Basis** | IB Gateway in Docker is a well-documented pattern in the algo trading community. Nightly reset (between 11:45 PM – 12:45 AM ET on weekdays) is a known limitation with established workaround patterns. ARGUS trades only during market hours, so the nightly reset window does not overlap with trading. |
+| **If Wrong** | Gateway disconnections during market hours would disrupt trading. Existing stops are placed broker-side and remain active even if Gateway disconnects. |
+| **Contingency** | Build robust reconnection logic with exponential backoff. Monitor gateway health via HealthMonitor. If instability persists, evaluate TWS (desktop app) as alternative to Gateway. |
+| **Review Date** | Sprint 13 + first month of IBKR paper trading |
+
+---
+
+### ASM-015 — IBKR Account Opening Timeline
+| Field | Value |
+|-------|-------|
+| **Assumption** | IBKR account (including paper trading) can be opened within 1–2 weeks, not blocking Sprint 13 significantly. |
+| **Confidence** | Medium |
+| **Basis** | IBKR typically processes individual accounts in days to weeks depending on verification requirements. Steven is applying from Taiwan which may add complexity. Paper trading account requires live account approval first. |
+| **If Wrong** | Sprint 13 development proceeds against mock Gateway responses. Integration testing delayed until account is approved. |
+| **Contingency** | Begin application immediately. Develop IBKRBroker adapter using mock/recorded responses. Integration testing happens when account is ready. Alpaca paper trading continues unaffected during the wait. |
+| **Review Date** | Upon account application submission |
 
 ---
 
@@ -369,6 +416,53 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 | **Remaining Known Divergence** | VectorBT computes ATR(14) from daily bars; BacktestDataService uses 1m bars. This causes range/ATR ratios to be higher in Replay Harness, rejecting more entries with tight filters. This is an architectural difference — VectorBT is an approximation for fast parameter sweeps, not a perfect emulator. |
 | **Status** | Closed — no longer blocks Sprint 10 |
 | **Tests** | 542 tests passing; new test `test_cross_validate_missing_params_raises` verifies param validation |
+
+---
+
+### RSK-020 — Parallel Development Context-Switching and Premature Construction
+| Field | Value |
+|-------|-------|
+| **Severity** | Medium |
+| **Likelihood** | Low-Medium |
+| **Description** | With DEC-079's parallel Build + Validation tracks, two risks emerge: (1) Context-switching between frontend (Command Center), backend (Orchestrator, strategies), and validation monitoring may reduce velocity compared to single-threaded focus. (2) Building infrastructure (Orchestrator, Command Center) before live trading validates architectural assumptions means more code to update if live trading reveals fundamental issues (e.g., execution layer changes needed). |
+| **Mitigation** | (1) Sprint structure remains single-threaded within each sprint — context switches happen between sprints, not within them. The two-Claude workflow naturally supports this (design in claude.ai, implement in Claude Code). (2) Architecture already has clean abstractions at the broker, data service, and strategy boundaries. Paper trading exercises the same code paths as live trading, so most issues will surface before live deployment. Live trading is more likely to reveal parameter adjustments than architectural problems. (3) Command Center is read-only in MVP — it adds no risk to the trading engine. Orchestrator is additive infrastructure with its own test suite. |
+| **Owner** | Project Management |
+
+---
+
+### RSK-021 — Databento Service Disruption During Market Hours
+| Field | Value |
+|-------|-------|
+| **Risk** | Databento experiences a live data outage during US market hours, preventing ARGUS from receiving real-time market data. February 2026 incidents (historical API outage, replay window reduction) demonstrate operational risk, though live streaming was not affected. |
+| **Severity** | High |
+| **Likelihood** | Low-Medium |
+| **Mitigation** | (1) Circuit-breaker logic: if data stream fails, halt new trades rather than trade blind. (2) Existing stops are placed broker-side and remain active. (3) IQFeed as eventual backup data source provides redundancy. (4) DataService abstraction enables rapid provider switching. (5) Databento commits to 99.99% uptime. |
+| **Trigger for action** | Live data stream failure during market hours. Monitor Databento status page during all trading sessions. |
+| **Status** | Open — mitigated by architecture. Circuit-breaker logic built into DatabentoDataService (Sprint 12). |
+
+---
+
+### RSK-022 — IB Gateway Nightly Reset Disruption
+| Field | Value |
+|-------|-------|
+| **Risk** | IB Gateway disconnects nightly between 11:45 PM – 12:45 AM ET for system maintenance. All API connections drop. This is a known, documented behavior — not a bug. Reconnection failures could cause missed trades or position tracking errors if they bleed into market hours. |
+| **Severity** | Low (nightly reset itself), Medium (if reconnection fails before market open) |
+| **Likelihood** | High (nightly reset is guaranteed; question is whether reconnection handles it cleanly) |
+| **Mitigation** | (1) ARGUS trades only during market hours (9:30 AM – 4:00 PM ET). The reset window does not overlap. (2) Docker containerization of IB Gateway for consistent environment. (3) Robust reconnection logic with exponential backoff built into IBKRBroker adapter. (4) All stops placed broker-side — survive gateway disconnections. (5) State reconstruction (already implemented for Alpaca) rebuilds positions and orders from IBKR on reconnect. (6) HealthMonitor detects gateway state and alerts. (7) Community has solved this problem thousands of times — well-documented patterns exist. |
+| **Trigger for action** | Reconnection failures during paper trading that result in missed trades or position tracking errors. |
+| **Status** | Open — validate during Sprint 13. Accepted risk with full mitigation plan. |
+
+---
+
+### RSK-023 — Monthly Data Infrastructure Cost
+| Field | Value |
+|-------|-------|
+| **Risk** | ARGUS now has a fixed monthly cost ($199/mo Databento) that was previously $0 on Alpaca's free tier. As the system scales to multi-asset, costs increase: CME futures (+$179/month), OPRA options (+$199/month), IQFeed supplemental (~$160–250/month). Full multi-asset data stack could reach $540–630+/month. These costs exist regardless of trading profitability. |
+| **Severity** | Low (current), Medium (at full multi-asset expansion) |
+| **Likelihood** | High (cost is certain; question is whether trading revenue exceeds it) |
+| **Mitigation** | (1) Start with US equities only ($199/month). (2) Cost deferred until adapter ready (DEC-087). (3) Add asset classes only when strategies for them are validated and paper-traded. (4) Monitor data cost as percentage of trading revenue — target <10% of gross P&L. (5) IQFeed supplemental added only when forex/news features are needed, not speculatively. (6) All subscriptions can be paused if system is taken offline. (7) $199/month is modest relative to trading capital ($25K–100K+). |
+| **Trigger for action** | Monthly data costs exceed 20% of gross trading P&L after 3 months of live trading. |
+| **Status** | Open — accepted. Monthly cost budgeted as cost of doing business. |
 
 ---
 

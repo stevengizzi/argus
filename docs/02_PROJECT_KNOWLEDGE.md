@@ -10,18 +10,32 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 
 ## Current Project State
 
-**Phase:** Phase 2 COMPLETE (542 tests, February 17, 2026). Phase 3 (Comprehensive Validation) in progress.
-**Track A — Extended Backtest:** ✅ Sprint 11 COMPLETE. 35 months of data (Mar 2023–Jan 2026), 15 walk-forward windows. Fixed-params WFE (P&L) = 0.56, OOS Sharpe = +0.34, OOS P&L = $7,741. DEC-076 parameters confirmed for paper trading.
-**Track B — Paper Trading:** Running Argus on Alpaca paper trading with DEC-076 parameters. Flexible duration — user decides when confidence is sufficient. See `08_PAPER_TRADING_GUIDE.md`.
-**Phase 2 deliverable:** Parameter Validation Report at `docs/backtesting/PARAMETER_VALIDATION_REPORT.md` (updated with Sprint 11 extended results).
-**Next milestone:** Paper trading validation. Exit gate: user satisfied with paper results + CPA consultation → Phase 4 (Live Trading).
+**Structure:** Two parallel tracks (DEC-079, February 19, 2026). Build Track (system construction) + Validation Track (strategy confidence-building).
+
+**Build Track:** 542 tests. Sprints 1–11 complete. Next: Sprint 12 (DatabentoDataService adapter).
+- Phase 1 (Core Engine): ✅ COMPLETE — 362 tests, Feb 14–16
+- Phase 2 (Backtesting): ✅ COMPLETE — 542 tests, Feb 16–17
+- Sprint 11 (Extended Backtest): ✅ COMPLETE — 35 months, 15 WF windows, WFE=0.56
+
+**Validation Track:** Paper trading ACTIVE with DEC-076 parameters on Alpaca. Validates system stability only — Alpaca IEX data captures only ~2–3% of market volume (DEC-081), so signal accuracy is not validated until Databento data is integrated (Sprint 12). See `08_PAPER_TRADING_GUIDE.md`.
+
+**Infrastructure Research (Feb 18–20):** Two deep-dive research reports completed:
+- Market Data: Databento US Equities Standard ($199/mo) selected as primary data backbone (DEC-082). IQFeed supplemental for forex/news/breadth when needed.
+- Execution Broker: Interactive Brokers (IBKR Pro, tiered) selected as sole live execution broker (DEC-083). Direct adoption — no phased Alpaca → IBKR migration.
+- Full reports: `argus_market_data_research_report.md` and `argus_execution_broker_research_report.md` in project files.
+
+**Next Build sprints:** Sprint 12 (DatabentoDataService adapter) → Sprint 13 (IBKRBroker adapter) → Sprint 14–16 (Command Center MVP).
+**Next Validation gate:** DatabentoDataService ready → resume paper trading with quality data → IBKRBroker ready → IBKR paper trading validation → CPA consultation → live trading at minimum size on IBKR.
+
+**⚠️ ACTION ITEM:** Begin IBKR account application immediately (approval takes days to weeks).
 
 ## Key Decisions Made (Do Not Relitigate)
 
 - **System name:** Argus
 - **Language:** Python 3.11+
-- **Brokerages:** Broker-agnostic abstraction layer. Alpaca (primary, free, paper+live) and Interactive Brokers (production scaling). Both implemented from day one.
-- **Data:** Alpaca's free market data API for real-time and historical. Data Service abstraction for future swap to Polygon.io or IBKR data.
+- **Brokerages:** Broker-agnostic abstraction layer. Interactive Brokers (sole live execution — DEC-083, `ib_async` library). Alpaca (strategy incubator paper testing only — DEC-086). SimulatedBroker (backtesting/shadow system). IBKR covers entire asset class roadmap (stocks, options, futures, forex, crypto) through single account.
+- **Data:** Databento US Equities Standard ($199/mo) for all live market data and new historical data (DEC-082). Full universe, no symbol limits, L0–L3 schemas, exchange-direct proprietary feeds. DataService abstraction for future provider swaps. IQFeed supplemental (forex, Benzinga news, breadth indicators) when needed. Alpaca data deprecated for production use (DEC-081/086).
+- **IBKR timing:** IBKRBroker adapter in Sprint 13. IBKR is the production execution broker from day one of live trading. No phased migration from Alpaca (DEC-083). Supersedes DEC-003/DEC-031.
 - **Backtesting:** Two-layer toolkit — VectorBT (fast parameter sweeps) and custom Replay Harness (ecosystem-level testing using production code). Backtrader dropped (DEC-046) — Replay Harness provides higher fidelity by running actual production code, and VectorBT covers fast parameter exploration.
 - **Walk-forward validation:** Mandatory for all parameter optimization. 70/30 in-sample/out-of-sample split minimum. Non-negotiable overfitting defense (DEC-047).
 - **UI Platform:** Tauri desktop app + mobile-responsive web app. Single React codebase shared between both.
@@ -84,6 +98,16 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 - **Phase 3 ORB parameters (DEC-076):** opening_range_minutes=5, max_hold_minutes=15, min_gap_pct=2.0, stop_buffer_pct=0.0, target_r=2.0, max_range_atr_ratio=999.0 (disabled). Walk-forward inconclusive with 11 months — Sprint 11 revalidates with ~3 years.
 - **Phase restructure (DEC-077):** Phase 3 = Comprehensive Validation (extended backtest + paper trading). Phase 4 = Live Trading. All subsequent phases shifted +1.
 - **earliest_entry fix (DEC-078):** Changed `earliest_entry` from `"09:45"` to `"09:35"` to match 5-minute opening range. Previous value created 10-minute dead zone where breakouts were missed. All backtests used 9:45, so results are conservative.
+- **Parallel development tracks (DEC-079):** Linear phase sequencing replaced with Build Track (system construction at development velocity) and Validation Track (strategy confidence-building at calendar speed). Command Center, Orchestrator, AI Layer, and additional strategies built in parallel with paper/live trading validation. Only real capital deployment gates on validation confidence.
+- **Command Center delivery (DEC-080):** Single React codebase ships to three surfaces: web app (any browser), Tauri desktop app (system tray, native notifications, auto-launch), and PWA mobile app (iPhone/iPad home screen install). All three operational after Sprint 14. No native iOS app needed — PWA provides sufficient mobile experience for single-user system.
+- **IEX data limitation (DEC-081):** Alpaca's free IEX feed captures only 2–3% of US equity volume. Dedicated market data provider required. Historical Alpaca Parquet data (REST/SIP-quality) remains valid for backtesting.
+- **Market data architecture (DEC-082):** Databento US Equities Standard ($199/mo) as primary equities data backbone. No symbol limits — full universe in single API call. Exchange-direct proprietary feeds (not SIP). Modern Python async client. IQFeed added later for forex, Benzinga news, breadth indicators. Alpaca retained for execution only (later superseded by DEC-083 for live).
+- **Execution broker — direct IBKR adoption (DEC-083):** Interactive Brokers (IBKR Pro, tiered pricing) is the sole live execution broker. IBKRBroker adapter built before any live trading. No phased Alpaca → IBKR migration. SmartRouting, no PFOF, 100% price improvement rate, complete multi-asset coverage, `ib_async` asyncio-native library.
+- **Sprint resequencing (DEC-084):** Data adapter (Sprint 12) and broker adapter (Sprint 13) inserted before Command Center. Quality data and production execution are prerequisites for meaningful validation. Command Center shifts to Sprints 14–16.
+- **Historical data: Databento source, Parquet cache (DEC-085):** New historical data fetched from Databento, cached locally as Parquet. Existing Alpaca Parquet files retained. VectorBT and Replay Harness continue reading Parquet — provider-agnostic.
+- **Alpaca role reduction (DEC-086):** Alpaca permanently reduced to strategy incubator paper testing. All production data via Databento. All live execution via IBKR. No real capital through Alpaca.
+- **Databento cost deferral (DEC-087):** Subscription activated when DatabentoDataService adapter is ready for integration testing, not before. Development uses mock data.
+- **System identity reframe:** ARGUS is a "strategy research laboratory that also trades live." Data infrastructure must support unlimited symbol access, on-demand historical queries, and 30+ concurrent strategies without artificial constraints. See `argus_market_data_research_report.md` Section 11.
 
 ## Architecture Summary
 
@@ -96,9 +120,9 @@ Key components:
 - **Strategies** are daily-stateful, session-stateless modular plugins implementing a base interface (state accumulates during market hours, resets between days, reconstructs from DB on restart)
 - **Orchestrator** manages capital allocation, strategy activation, performance throttling
 - **Risk Manager** gates every order at three levels: strategy, cross-strategy, account
-- **Data Service** is the single source of market data, builds candles at multiple timeframes, computes shared indicators (VWAP, ATR, RVOL), exposes pub/sub API to strategies
-- **Broker Abstraction** routes orders to correct broker+asset class handler
-- **Replay Harness** feeds historical data through production code for ecosystem-level backtesting
+- **Data Service** is the single source of market data via Event Bus. Primary: DatabentoDataService (live equities, DEC-082). Supplemental: IQFeedDataService (forex/news/breadth, future). Legacy: AlpacaDataService (incubator only, DEC-086). Backtest: ReplayDataService, BacktestDataService.
+- **Broker Abstraction** routes orders to correct broker. Live: IBKRBroker (IBKR Pro via `ib_async`, DEC-083). Incubator: AlpacaBroker. Backtest: SimulatedBroker.
+- **Replay Harness** feeds historical Parquet data through production code for ecosystem-level backtesting
 - **Shadow System** runs paper trading permanently in parallel with live trading
 
 ## Strategy Roster (V1 — US Stocks)
@@ -122,6 +146,19 @@ Concept → Exploration (VectorBT) → Validation (Replay Harness + Walk-Forward
 - Max single-stock exposure (all strategies): 5% of account
 - Max single-sector exposure: 15% of account
 - Circuit breakers are non-overridable
+
+## Monthly Cost Summary
+
+| Item | Cost | When Active | Notes |
+|------|------|-------------|-------|
+| Databento US Equities Standard | $199/mo | Sprint 12 integration testing onward (DEC-087) | Full universe, no symbol limits, L0–L3 |
+| IBKR Pro commissions | ~$43/day at scale | Live trading onward | Offset by ~$200/day execution quality gain vs PFOF |
+| IBKR account fees | $0 (waived with activity) | Account opening onward | No minimum balance required |
+| IQFeed (forex + news + breadth) | ~$160–250/mo | When forex strategies or Tier 2 news needed | Deferred until specific feature requires it |
+| Databento CME Futures | $179/mo + exchange fees | When futures strategies launch | Separate dataset subscription |
+| **Current monthly (paper trading)** | **$199/mo** | | Databento only |
+| **Projected monthly (live, equities only)** | **~$199 + commissions** | | Commissions scale with trading volume |
+| **Projected monthly (full multi-asset)** | **~$540–630 + commissions** | | Databento + IQFeed + futures exchanges |
 
 ## Market Regime Classification (V1)
 
@@ -161,33 +198,49 @@ argus/
 - Wash Sale Rule: Must be tracked automatically for tax compliance.
 - All brokerage API keys and secrets stored in encrypted secrets manager, never in code or git.
 - Every action (trade, config change, Claude proposal) is logged immutably in audit trail.
+- Monthly data infrastructure: Databento US Equities Standard $199/month. Additional datasets priced separately (CME futures +$179/month, OPRA options +$199/month). IQFeed supplemental ~$160–250/month when added. Budget monitored via RSK-023.
+- IBKR IB Gateway requires running Java process alongside ARGUS. Nightly resets require automated reconnection. Docker containerization recommended. See RSK-022.
+- Databento session limit: 10 simultaneous live sessions per dataset on Standard plan. ARGUS uses 1 session with Event Bus fan-out. Monitor if architecture changes require more sessions.
 
-## Build Phases
+## Build Phases → Parallel Tracks (DEC-079)
 
-1. **Core Engine + ORB Strategy** ✅ COMPLETE (Feb 14–16, 2026, 362 tests):
+Effective February 19, 2026, ARGUS uses two parallel tracks instead of sequential phases:
+
+### Build Track (velocity-limited, continuous)
+Sprints 12+. System construction proceeds at development speed. Each sprint targets a specific component. Order is prioritized but flexible — Validation Track needs can reprioritize.
+
+**Queue:** DatabentoDataService adapter (Sprint 12) → IBKRBroker adapter (Sprint 13) → Command Center MVP (Sprints 14–16) → Orchestrator (Sprint 17) → ORB Scalp (Sprint 18) → Tier 1 News (Sprint 19) → AI Layer MVP (Sprint 20) → Command Center expansion (Sprint 21) → Additional strategies + features (Sprint 22+)
+
+**Command Center delivery (DEC-080):** Single React codebase ships to three surfaces: web app (any browser), Tauri desktop app (system tray, native notifications), and PWA mobile app (iPhone/iPad home screen install). All three operational after Sprint 16.
+
+**Monthly infrastructure costs:** Databento US Equities Standard $199/month (Sprint 12+). IBKR commissions variable when live. IQFeed ~$160–250/month when added for forex/news (future). See RSK-023.
+
+### Validation Track (calendar-limited, confidence-gated)
+Paper trading → live minimum size → live full size. Gates based on accumulated market data and user confidence. Only real capital deployment gates on this track.
+
+**Current gate:** Paper trading ACTIVE with DEC-076 parameters on Alpaca IEX (system stability testing only — DEC-081). Migrates to Databento data after Sprint 12, then to IBKR paper trading after Sprint 13. Exit requires: Databento data integration + IBKR paper trading validation + user confidence + CPA consultation → live trading on IBKR.
+
+### Completed Work
+1. **Core Engine + ORB Strategy** ✅ (Sprints 1–5, 362 tests, Feb 14–16)
    - Sprint 1: Config system, Event Bus, data models, database, Trade Logger (52 tests)
    - Sprint 2: Broker Abstraction, SimulatedBroker, Risk Manager (112 tests)
    - Sprint 3: BaseStrategy, ORB Breakout, ReplayDataService, Scanner ABC (222 tests)
    - Sprint 4a: AlpacaDataService, AlpacaBroker, Clock injection (282 tests)
    - Sprint 4b: Order Manager, AlpacaScanner (320 tests)
    - Sprint 5: HealthMonitor, system entry point, state reconstruction, structured logging (362 tests)
-2. **Backtesting Validation** ✅ COMPLETE (Feb 16–17, 2026, 542 tests):
+2. **Backtesting Validation** ✅ (Sprints 6–10, 542 tests, Feb 16–17)
    - Sprint 6: Historical data acquisition — DataFetcher, Manifest, DataValidator. 28 symbols × 11 months, 2.2M+ bars (417 tests)
    - Sprint 7: Replay Harness — BacktestDataService, ReplayHarness, SimulatedBroker enhancements, synthetic tick generation (473 tests)
    - Sprint 8: VectorBT parameter sweeps — vectorized ORB simulation, ATR filtering, heatmap generation. Pure NumPy/Pandas (DEC-063). Gate check confirmed tooling (506 tests)
    - Sprint 9: Walk-forward validation — walk_forward.py (optimizer + fixed-params modes), cross-validation, HTML report generator with Plotly charts (542 tests)
    - Sprint 10: Analysis & Parameter Validation Report — baseline backtests, 522K-combo sweep, walk-forward (inconclusive, DEC-073), parameter recommendations (DEC-076), final validation (137 trades, Sharpe 0.93, PF 1.18). Deliverable: `docs/backtesting/PARAMETER_VALIDATION_REPORT.md`
-3. **Comprehensive Validation** (IN PROGRESS):
+3. **Extended Backtest** ✅ (Sprint 11, 35mo data, 15 WF windows, Feb 17)
    - Sprint 11: Extended backtest — 35 months of data (Mar 2023–Jan 2026), 15 walk-forward windows. Fixed-params WFE (P&L) = 0.56, OOS Sharpe = +0.34, OOS P&L = $7,741. DEC-076 parameters confirmed for paper trading. ✅ COMPLETE
    - Paper Trading (parallel track): Argus on Alpaca paper with DEC-076 parameters. Flexible duration, kill criteria as guardrails. See `08_PAPER_TRADING_GUIDE.md`
    - Exit gate: Walk-forward WFE ≥ 0.3 on extended data + user satisfied with paper trading + CPA consultation
    - See `10_PHASE3_SPRINT_PLAN.md` for tracking
-4. **Live Trading**: ORB live at minimum size with real capital, compare to backtest/paper expectations. Shadow system in parallel. Calendar-bound (20+ trading days). Includes Tier 1 News Integration (economic/earnings calendar as scanner metadata and risk filters).
-5. **Orchestrator + Second Strategy**: Orchestrator framework, ORB Scalp, cross-strategy risk management.
-6. **Command Center MVP**: Tauri app, real-time dashboard, basic controls.
-7. **AI Layer + News Intelligence**: Claude API integration, approval workflow, report generation. Tier 2–3 news.
-8. **Expand Strategies** (Ongoing): Add strategies one at a time through Incubator Pipeline.
-9. **Multi-Asset Expansion** (Future): Crypto via Alpaca, then Forex, then Futures.
+
+See `10_PHASE3_SPRINT_PLAN.md` for current sprint plan and queue.
 
 ## Reference Documents
 
@@ -200,7 +253,7 @@ argus/
 - `07_PHASE1_SPRINT_PLAN.md` — Phase 1 build order (COMPLETE). Historical reference.
 - `08_PAPER_TRADING_GUIDE.md` — Step-by-step guide for Alpaca paper trading validation.
 - `09_PHASE2_SPRINT_PLAN.md` — Canonical Phase 2 build order with sprint status tracking. **Both Claude instances must update this when sprints complete or scope changes.**
-- `10_PHASE3_SPRINT_PLAN.md` — Phase 3 build order and paper trading tracking. Active sprint plan.
+- `10_PHASE3_SPRINT_PLAN.md` — Active sprint plan. Build Track queue + Validation Track status. *Renamed from "Phase 3 Sprint Plan" per DEC-079.*
 - `docs/backtesting/PARAMETER_VALIDATION_REPORT.md` — Phase 2 deliverable. ORB parameter analysis and recommendations.
 
 ## Communication Style Notes
@@ -209,31 +262,49 @@ The user prefers thorough, detailed explanations. He appreciates when Claude pus
 
 - **Deferred items:** Tracked in CLAUDE.md under "Deferred Items" section. Surface proactively when trigger conditions are met.
 
-## Documentation Sync Protocol
+## Docs Update Procedure
 
-Argus has six living documents that are the single source of truth. They exist in three places:
-1. The git repo (`docs/` folder and `CLAUDE.md`) — authoritative source
-2. This Claude project (project instructions + uploaded files) — Claude.ai's copy
-3. Claude Code's context (reads from git repo) — Claude Code's copy
+**Trigger:** Steven says "update all docs" (or similar: "sync docs", "docs update"). Also triggered at the end of any conversation where decisions were made.
 
-Claude (this instance) is responsible for flagging when documents need updating. This is not optional.
+### The Checklist
 
-### At the End of Every Conversation Where Decisions Are Made
+For each document, ask: "Did this session change anything this doc tracks?" Skip docs where nothing changed.
 
-Output a **Docs Sync Checklist** at the end of the response. Format:
-```
-## Docs Sync Checklist
-- [ ] 02_PROJECT_KNOWLEDGE.md (project instructions): [what to update]
-- [ ] 01_PROJECT_BIBLE.md: [what to update, or "no changes needed"]
-- [ ] 03_ARCHITECTURE.md: [what to update, or "no changes needed"]
-- [ ] 05_DECISION_LOG.md: [new entries needed — list them]
-- [ ] 06_RISK_REGISTER.md: [new entries needed, or "no changes needed"]
-- [ ] 07_PHASE1_SPRINT_PLAN.md: [status updates needed, or "no changes needed"]
-- [ ] 09_PHASE2_SPRINT_PLAN.md: [status updates needed, or "no changes needed"]
-- [ ] CLAUDE.md (repo root): [what to update, or "no changes needed"]
-```
+| Document | Update If... | What to Update |
+|----------|-------------|----------------|
+| **05_DECISION_LOG.md** | Any design/implementation decision was made | Add new DEC-NNN entry (check current highest number first!). Use the standard table format. Never reuse or skip numbers. |
+| **02_PROJECT_KNOWLEDGE.md** | Decisions made, sprint completed, constraints discovered, architecture changed | Add new decisions to "Key Decisions Made" with DEC reference. Update "Current Project State" (Build Track + Validation Track). Update Build Track queue. Add new constraints. |
+| **03_ARCHITECTURE.md** | New components, schema change, new API endpoints, dependency added | Update relevant section. Mark new items as implemented. |
+| **01_PROJECT_BIBLE.md** | System invariants changed, strategy rules changed, risk parameters changed | Rare — only update if a fundamental rule changed. |
+| **06_RISK_REGISTER.md** | New risk identified, existing risk status changed, assumption validated/invalidated | Add new RSK-NNN or ASM-NNN, or update existing entry status. |
+| **10_PHASE3_SPRINT_PLAN.md** | Sprint completed, scope changed, Build Track queue reordered, Validation Track status changed | Move sprint to completed table. Update test counts. Record outcomes. |
+| **CLAUDE.md** | Current state changed, new architectural rule, new command, project structure changed | Update "Current State", "Architectural Rules", "Commands", or "Deferred Items" as needed. |
 
-Only include docs that actually need changes. Skip the checklist entirely if nothing changed (e.g., a pure Q&A conversation with no decisions).
+### Rules
+
+1. **Check the current highest DEC/RSK/ASM number before adding new entries.** The #1 source of doc bugs is duplicate numbers from not checking.
+2. **Draft actual content, not just "update X".** Every doc change should be copy-pasteable. Include the exact text to add or change.
+3. **Sprint numbers are the canonical identifier.** Use sprint numbers (Sprint 12, Sprint 13) in all docs. Historical phases referenced by name only.
+4. **Don't update docs that didn't change.** The checklist is a filter, not a mandate. Most sessions touch 2–3 docs at most.
+5. **Project Knowledge is also the Claude.ai project instructions.** After updating `02_PROJECT_KNOWLEDGE.md`, remind Steven to sync the project instructions if changes are significant.
+
+### Output Format (Claude.ai)
+
+Output a **"## Docs Sync"** section with the drafted content for each doc that needs updating, grouped by file. Include the exact text to add/change so Steven can copy-paste directly.
+
+### Output Format (Claude Code)
+
+Directly edit the files in the repo. Commit doc updates as a separate commit: `docs: update [list of changed docs]`.
+
+## Two-Claude Workflow Summary
+
+- **This Claude (claude.ai project):** Strategic work, design, decisions, document drafting, performance review. Reads from project instructions + uploaded files.
+- **Claude Code (terminal):** Implementation, coding, testing, debugging. Reads from CLAUDE.md + .claude/rules/ + docs/ in git repo.
+- **Bridge:** The docs/ folder in the git repo. Both Claudes read from it. Updates flow: decision here → draft update here → user commits to repo → Claude Code reads next session. Or: discovery in Claude Code → user brings here for discussion or commits directly.
+- **User's job:** Keep the two in sync by committing doc updates to git and re-uploading to this project when they diverge. Both Claudes will remind you.
+- **"Update all docs" shorthand:** Works in both contexts. Claude.ai drafts copy-paste content. Claude Code edits files directly.
+
+GitHub repo is connected to this project via native integration. Click 'Sync now' after pushing doc updates. Project instructions are separate and updated manually at major milestones.
 
 ### When to Flag Updates
 
