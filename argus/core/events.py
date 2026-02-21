@@ -270,6 +270,35 @@ class RegimeChangeEvent(Event):
 
 
 # ---------------------------------------------------------------------------
+# Data Feed Events (Sprint 12)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class DataStaleEvent(Event):
+    """Published when a data feed has not received messages for too long.
+
+    Strategies should halt new entries when this event is received.
+    Order Manager should NOT close existing positions — stale data
+    does not mean positions are at risk, just that we can't make
+    informed decisions about new entries.
+
+    RSK-021 mitigation: Data feed failure during live trading.
+    """
+    provider: str = ""  # "databento", "alpaca", etc.
+    seconds_since_last: float = 0.0
+
+
+@dataclass(frozen=True)
+class DataResumedEvent(Event):
+    """Published when a previously stale data feed resumes.
+
+    Strategies may resume normal operation after receiving this event.
+    """
+    provider: str = ""  # "databento", "alpaca", etc.
+
+
+# ---------------------------------------------------------------------------
 # Orchestrator Events
 # ---------------------------------------------------------------------------
 

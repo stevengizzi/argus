@@ -24,10 +24,12 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 - Execution Broker: Interactive Brokers (IBKR Pro, tiered) selected as sole live execution broker (DEC-083). Direct adoption — no phased Alpaca → IBKR migration.
 - Full reports: `argus_market_data_research_report.md` and `argus_execution_broker_research_report.md` in project files.
 
+**IBKR Account (Feb 21):** Application submitted. Account ID U24619949. Individual margin account, IBKR Pro tiered pricing. Awaiting approval — paper trading account will be enabled post-approval for Sprint 13 adapter development.
+
 **Next Build sprints:** Sprint 12 (DatabentoDataService adapter) → Sprint 13 (IBKRBroker adapter) → Sprint 14–16 (Command Center MVP).
 **Next Validation gate:** DatabentoDataService ready → resume paper trading with quality data → IBKRBroker ready → IBKR paper trading validation → CPA consultation → live trading at minimum size on IBKR.
 
-**⚠️ ACTION ITEM:** Begin IBKR account application immediately (approval takes days to weeks).
+**✅ IBKR APPLICATION SUBMITTED:** Feb 21, 2026. Account ID: U24619949. Individual margin account, IBKR Pro (tiered pricing), Georgia address. Trading permissions requested: Stocks, Options (Level 3), Futures, Currency/Forex, Cryptocurrencies, Mutual Funds. Awaiting approval (typically 1–3 business days, may take longer). Disclosures and agreements archived locally.
 
 ## Key Decisions Made (Do Not Relitigate)
 

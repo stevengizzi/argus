@@ -68,3 +68,6 @@ logs/
 # Historical data (large Parquet files)
 data/historical/
 data/backtest_runs/
+
+# Docs
+docs/IBKR-disclosures/

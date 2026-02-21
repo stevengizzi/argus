@@ -192,11 +192,11 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 | Field | Value |
 |-------|-------|
 | **Assumption** | IBKR account (including paper trading) can be opened within 1–2 weeks, not blocking Sprint 13 significantly. |
-| **Confidence** | Medium |
-| **Basis** | IBKR typically processes individual accounts in days to weeks depending on verification requirements. Steven is applying from Taiwan which may add complexity. Paper trading account requires live account approval first. |
+| **Confidence** | Medium-High |
+| **Basis** | Application submitted Feb 21, 2026. Account ID: U24619949. Individual margin account, IBKR Pro, Georgia address. Standard US citizen application — typically approved in 1–3 business days. Applying while physically in Taiwan may trigger additional verification, but IBKR is known to be accommodating of US citizens abroad. |
 | **If Wrong** | Sprint 13 development proceeds against mock Gateway responses. Integration testing delayed until account is approved. |
-| **Contingency** | Begin application immediately. Develop IBKRBroker adapter using mock/recorded responses. Integration testing happens when account is ready. Alpaca paper trading continues unaffected during the wait. |
-| **Review Date** | Upon account application submission |
+| **Contingency** | Develop IBKRBroker adapter using mock/recorded responses. Integration testing happens when account is ready. Alpaca paper trading continues unaffected during the wait. Contact newaccounts@interactivebrokers.com if no response within 5 business days. |
+| **Review Date** | Feb 26, 2026 (5 business days post-submission) |
 
 ---
 

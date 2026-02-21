@@ -9,6 +9,8 @@ from pydantic import ValidationError
 from argus.core.config import (
     AccountType,
     ArgusConfig,
+    BrokerConfig,
+    DatabentoConfig,
     DataServiceConfig,
     OrbBreakoutConfig,
     ScannerConfig,
@@ -230,5 +232,121 @@ class TestOrbBreakoutConfig:
         config = load_orb_config(Path("config/strategies/orb_breakout.yaml"))
         # Base StrategyConfig fields
         assert config.risk_limits.max_trades_per_day == 6
-        assert config.operating_window.earliest_entry == "09:45"
+        # DEC-078: earliest_entry changed from 09:45 to 09:35 to match or=5 window
+        assert config.operating_window.earliest_entry == "09:35"
         assert config.benchmarks.min_win_rate == 0.45
+
+
+class TestDatabentoConfig:
+    """Tests for Databento market data configuration (Sprint 12)."""
+
+    def test_default_config_creates_successfully(self) -> None:
+        """DatabentoConfig can be created with all defaults."""
+        config = DatabentoConfig()
+        assert config.enabled is True
+        assert config.api_key_env_var == "DATABENTO_API_KEY"
+        assert config.dataset == "XNAS.ITCH"
+        assert config.bar_schema == "ohlcv-1m"
+        assert config.trade_schema == "trades"
+        assert config.depth_schema == "mbp-10"
+        assert config.enable_depth is False
+        assert config.symbols == "ALL_SYMBOLS"
+        assert config.stype_in == "raw_symbol"
+        assert config.stale_data_timeout_seconds == 30.0
+        assert config.historical_cache_dir == "data/databento_cache"
+
+    def test_custom_dataset_validates(self) -> None:
+        """Known datasets are accepted."""
+        for dataset in ["XNAS.ITCH", "XNYS.PILLAR", "DBEQ.BASIC"]:
+            config = DatabentoConfig(dataset=dataset)
+            assert config.dataset == dataset
+
+    def test_invalid_dataset_raises_value_error(self) -> None:
+        """Unknown dataset raises ValueError."""
+        with pytest.raises(ValidationError) as exc_info:
+            DatabentoConfig(dataset="INVALID.DATASET")
+        assert "Unknown dataset" in str(exc_info.value)
+
+    def test_invalid_bar_schema_raises_value_error(self) -> None:
+        """Invalid bar schema raises ValueError."""
+        with pytest.raises(ValidationError) as exc_info:
+            DatabentoConfig(bar_schema="ohlcv-5m")
+        assert "Invalid bar_schema" in str(exc_info.value)
+
+    def test_valid_bar_schemas(self) -> None:
+        """Valid bar schemas are accepted."""
+        for schema in ["ohlcv-1s", "ohlcv-1m", "ohlcv-1h", "ohlcv-1d"]:
+            config = DatabentoConfig(bar_schema=schema)
+            assert config.bar_schema == schema
+
+    def test_invalid_stype_in_raises_value_error(self) -> None:
+        """Invalid stype_in raises ValueError."""
+        with pytest.raises(ValidationError) as exc_info:
+            DatabentoConfig(stype_in="invalid_type")
+        assert "Invalid stype_in" in str(exc_info.value)
+
+    def test_valid_stype_in_values(self) -> None:
+        """Valid stype_in values are accepted."""
+        for stype in ["raw_symbol", "instrument_id", "smart"]:
+            config = DatabentoConfig(stype_in=stype)
+            assert config.stype_in == stype
+
+    def test_symbols_as_list_works(self) -> None:
+        """Symbols can be a list of tickers."""
+        config = DatabentoConfig(symbols=["AAPL", "TSLA", "NVDA"])
+        assert config.symbols == ["AAPL", "TSLA", "NVDA"]
+
+    def test_symbols_as_all_symbols_string_works(self) -> None:
+        """Symbols can be 'ALL_SYMBOLS' for full universe."""
+        config = DatabentoConfig(symbols="ALL_SYMBOLS")
+        assert config.symbols == "ALL_SYMBOLS"
+
+    def test_reconnection_defaults_are_sane(self) -> None:
+        """Reconnection settings have reasonable defaults."""
+        config = DatabentoConfig()
+        assert config.reconnect_max_retries == 10
+        assert config.reconnect_base_delay_seconds == 1.0
+        assert config.reconnect_max_delay_seconds == 60.0
+        # Ensure max > base
+        assert config.reconnect_max_delay_seconds > config.reconnect_base_delay_seconds
+
+    def test_config_serialization_round_trip(self) -> None:
+        """Config can be serialized to dict and back."""
+        original = DatabentoConfig(
+            dataset="XNYS.PILLAR",
+            symbols=["SPY", "QQQ"],
+            enable_depth=True,
+        )
+        # Serialize to dict
+        data = original.model_dump()
+        # Deserialize back
+        restored = DatabentoConfig(**data)
+        assert restored.dataset == original.dataset
+        assert restored.symbols == original.symbols
+        assert restored.enable_depth == original.enable_depth
+
+    def test_config_integrates_into_broker_config(self) -> None:
+        """DatabentoConfig is accessible via BrokerConfig."""
+        config = BrokerConfig()
+        assert hasattr(config, "databento")
+        assert isinstance(config.databento, DatabentoConfig)
+        assert config.databento.dataset == "XNAS.ITCH"
+
+    def test_all_known_datasets_validate(self) -> None:
+        """All documented datasets pass validation."""
+        known_datasets = [
+            "XNAS.ITCH",
+            "XNAS.BASIC",
+            "XNYS.PILLAR",
+            "ARCX.PILLAR",
+            "XASE.PILLAR",
+            "DBEQ.BASIC",
+            "XBOS.ITCH",
+            "XPSX.ITCH",
+            "XCHI.PILLAR",
+            "XCIS.TRADESBBO",
+            "EQUS.SUMMARY",
+        ]
+        for dataset in known_datasets:
+            config = DatabentoConfig(dataset=dataset)
+            assert config.dataset == dataset

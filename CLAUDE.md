@@ -23,7 +23,7 @@ Active sprint plan: `docs/10_PHASE3_SPRINT_PLAN.md` (covers both tracks).
 - **Historical data:** Databento source, Parquet cache. Existing Alpaca Parquet files retained. DEC-085.
 - **Cost deferral:** Databento subscription activated when adapter ready for integration testing. DEC-087.
 
-**⚠️ ACTION ITEM:** Begin IBKR account application immediately (approval takes days to weeks).
+- IBKR account application submitted Feb 21, 2026 (Account ID: U24619949). Individual, Margin, IBKR Pro (tiered), GA address. Permissions: Stocks, Options L3, Futures, Forex, Crypto. Awaiting approval.
 
 **Recommended ORB parameters (DEC-076):** or=5, hold=15, gap=2.0, stop_buf=0.0, target_r=2.0, atr=999.0 (disabled).
 

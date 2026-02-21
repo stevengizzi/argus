@@ -138,7 +138,7 @@ per sprint velocity.
 - Error handling: map IBKR error codes to ARGUS error events
 - State reconstruction: query IBKR for open positions/orders at startup
 - Comprehensive test suite comparable to AlpacaBroker (~80 tests)
-- **Requires IBKR account (paper trading sufficient) — begin application immediately**
+**IBKR Account Status:** Application submitted Feb 21, 2026 (Account ID: U24619949). Awaiting approval. Paper trading account to be enabled immediately upon approval. Sprint 13 (IBKRBroker adapter) can begin development in parallel using mocks, but integration testing requires approved account.
 
 **Unblocks:** Paper trading migrates to IBKR. Path to live trading on production platform.
 

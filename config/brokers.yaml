@@ -24,3 +24,40 @@ alpaca:
   # Data streams
   subscribe_bars: true  # 1m bar stream
   subscribe_trades: true  # Individual trade stream
+
+# Databento market data (Sprint 12 — primary production data source)
+# See DEC-082: Databento US Equities Standard ($199/mo)
+databento:
+  enabled: true
+  api_key_env_var: "DATABENTO_API_KEY"  # Env var name (not the key itself!)
+
+  # Dataset selection — determines which exchange feeds are included
+  # - XNAS.ITCH: Nasdaq TotalView-ITCH (recommended for equities)
+  # - XNYS.PILLAR: NYSE Integrated
+  # - DBEQ.BASIC: Databento Equities Basic (free tier, limited)
+  dataset: "XNAS.ITCH"
+
+  # Schema subscriptions for live streaming
+  bar_schema: "ohlcv-1m"     # Completed 1-minute OHLCV bars → CandleEvents
+  trade_schema: "trades"     # Individual trades → TickEvents + price cache
+  depth_schema: "mbp-10"     # L2 10-level depth (when enabled)
+  enable_depth: false        # L2 depth subscription off by default (DEF-012)
+
+  # Symbol configuration
+  # Either a list of specific symbols ["AAPL", "TSLA"]
+  # or "ALL_SYMBOLS" for full universe subscription
+  symbols: "ALL_SYMBOLS"
+
+  # Symbology type for input symbols
+  stype_in: "raw_symbol"
+
+  # Session management
+  reconnect_max_retries: 10
+  reconnect_base_delay_seconds: 1.0
+  reconnect_max_delay_seconds: 60.0
+
+  # Circuit breaker — halt new trades if no data received within this window
+  stale_data_timeout_seconds: 30.0
+
+  # Historical data cache directory (DEC-085)
+  historical_cache_dir: "data/databento_cache"

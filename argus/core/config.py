@@ -139,11 +139,94 @@ class AlpacaConfig(BaseModel):
     subscribe_trades: bool = True  # Individual trade stream
 
 
+class DatabentoConfig(BaseModel):
+    """Configuration for Databento market data connectivity.
+
+    API key is read from environment variable at runtime, never stored in config.
+    Follows the same pattern as AlpacaConfig (DEC-032).
+    """
+
+    enabled: bool = True
+
+    # API key — name of the environment variable containing the key
+    api_key_env_var: str = "DATABENTO_API_KEY"
+
+    # Dataset selection — determines which exchange feeds are included
+    # XNAS.ITCH = Nasdaq TotalView-ITCH (recommended for trading firms)
+    dataset: str = "XNAS.ITCH"
+
+    # Schema subscriptions for live streaming
+    bar_schema: str = "ohlcv-1m"     # Completed 1-minute OHLCV bars → CandleEvents
+    trade_schema: str = "trades"     # Individual trades → TickEvents + price cache
+    depth_schema: str = "mbp-10"     # L2 10-level depth (when enabled)
+    enable_depth: bool = False       # L2 depth subscription off by default
+
+    # Symbol configuration
+    # Either a list of specific symbols or "ALL_SYMBOLS" for full universe
+    symbols: list[str] | str = "ALL_SYMBOLS"
+
+    # Symbology type for input symbols
+    stype_in: str = "raw_symbol"
+
+    # Session management
+    reconnect_max_retries: int = 10
+    reconnect_base_delay_seconds: float = 1.0
+    reconnect_max_delay_seconds: float = 60.0
+
+    # Circuit breaker — halt new trades if no data received within this window
+    stale_data_timeout_seconds: float = 30.0
+
+    # Historical data cache directory (DEC-085)
+    historical_cache_dir: str = "data/databento_cache"
+
+    @field_validator("dataset")
+    @classmethod
+    def validate_dataset(cls, v: str) -> str:
+        """Validate dataset is a known Databento US equities dataset."""
+        known_datasets = {
+            "XNAS.ITCH",      # Nasdaq TotalView-ITCH (primary recommendation)
+            "XNAS.BASIC",     # Nasdaq Basic with NLS Plus
+            "XNYS.PILLAR",    # NYSE Integrated
+            "ARCX.PILLAR",    # NYSE Arca Integrated
+            "XASE.PILLAR",    # NYSE American Integrated
+            "DBEQ.BASIC",     # Databento Equities Basic (free tier)
+            "XBOS.ITCH",      # Nasdaq BX TotalView-ITCH
+            "XPSX.ITCH",      # Nasdaq PSX TotalView-ITCH
+            "XCHI.PILLAR",    # NYSE Chicago Integrated
+            "XCIS.TRADESBBO", # NYSE National Trades and BBO
+            "EQUS.SUMMARY",   # Consolidated summary (delayed)
+        }
+        if v not in known_datasets:
+            raise ValueError(
+                f"Unknown dataset '{v}'. Known datasets: {sorted(known_datasets)}"
+            )
+        return v
+
+    @field_validator("bar_schema")
+    @classmethod
+    def validate_bar_schema(cls, v: str) -> str:
+        """Validate bar schema is a known OHLCV schema."""
+        valid = {"ohlcv-1s", "ohlcv-1m", "ohlcv-1h", "ohlcv-1d"}
+        if v not in valid:
+            raise ValueError(f"Invalid bar_schema '{v}'. Valid: {sorted(valid)}")
+        return v
+
+    @field_validator("stype_in")
+    @classmethod
+    def validate_stype_in(cls, v: str) -> str:
+        """Validate symbology type is valid."""
+        valid = {"raw_symbol", "instrument_id", "smart"}
+        if v not in valid:
+            raise ValueError(f"Invalid stype_in '{v}'. Valid: {sorted(valid)}")
+        return v
+
+
 class BrokerConfig(BaseModel):
     """Broker routing and connection configuration."""
 
     primary: str = "alpaca"
     alpaca: AlpacaConfig = AlpacaConfig()
+    databento: DatabentoConfig = DatabentoConfig()
 
 
 class OrchestratorConfig(BaseModel):
