@@ -93,6 +93,8 @@ class MockLiveClient:
         self.callbacks: list[Any] = []
         self.started = False
         self.stopped = False
+        self._block_for_close_should_raise: Exception | None = None
+        self._block_for_close_should_return_immediately = False
 
     def subscribe(
         self,
@@ -134,6 +136,16 @@ class MockLiveClient:
     def stop(self) -> None:
         """Stop the live session (marks stopped=True)."""
         self.stopped = True
+
+    def block_for_close(self) -> None:
+        """Block until the session is closed.
+
+        In real Databento client, this blocks until the TCP connection closes.
+        In mock, it returns immediately or raises configured exception.
+        """
+        if self._block_for_close_should_raise is not None:
+            raise self._block_for_close_should_raise
+        # Return immediately for testing
 
     def fire_callback(self, record: Any) -> None:
         """Simulate a record arriving from Databento.

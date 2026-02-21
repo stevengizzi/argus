@@ -30,6 +30,7 @@ from argus.core.clock import SystemClock
 from argus.core.config import (
     AlpacaScannerConfig,
     DataServiceConfig,
+    DataSource,
     load_config,
     load_orb_config,
     load_yaml_file,
@@ -40,6 +41,8 @@ from argus.core.logging_config import setup_logging
 from argus.core.risk_manager import RiskManager
 from argus.data.alpaca_data_service import AlpacaDataService
 from argus.data.alpaca_scanner import AlpacaScanner
+from argus.data.databento_data_service import DatabentoDataService
+from argus.data.databento_scanner import DatabentoScanner, DatabentoScannerConfig
 from argus.db.manager import DatabaseManager
 from argus.execution.alpaca_broker import AlpacaBroker
 from argus.execution.order_manager import OrderManager
@@ -48,6 +51,8 @@ from argus.strategies.orb_breakout import OrbBreakoutStrategy
 
 if TYPE_CHECKING:
     from argus.core.clock import Clock
+    from argus.data.scanner import Scanner
+    from argus.data.service import DataService
 
 logger = logging.getLogger(__name__)
 
@@ -72,8 +77,8 @@ class ArgusSystem:
         self._db: DatabaseManager | None = None
         self._trade_logger: TradeLogger | None = None
         self._broker: AlpacaBroker | None = None
-        self._data_service: AlpacaDataService | None = None
-        self._scanner: AlpacaScanner | None = None
+        self._data_service: DataService | None = None
+        self._scanner: Scanner | None = None
         self._risk_manager: RiskManager | None = None
         self._strategy: OrbBreakoutStrategy | None = None
         self._order_manager: OrderManager | None = None
@@ -155,25 +160,46 @@ class ArgusSystem:
         # --- Phase 6: Data Service ---
         logger.info("[6/10] Initializing data service...")
         data_config = DataServiceConfig()  # Use defaults
-        self._data_service = AlpacaDataService(
-            event_bus=self._event_bus,
-            config=config.broker.alpaca,
-            data_config=data_config,
-            clock=self._clock,
-            health_monitor=self._health_monitor,
-        )
+
+        if config.system.data_source == DataSource.DATABENTO:
+            logger.info("Using Databento data service")
+            self._data_service = DatabentoDataService(
+                event_bus=self._event_bus,
+                config=config.broker.databento,
+                clock=self._clock,
+                health_monitor=self._health_monitor,
+            )
+        else:
+            logger.info("Using Alpaca data service")
+            self._data_service = AlpacaDataService(
+                event_bus=self._event_bus,
+                config=config.broker.alpaca,
+                data_config=data_config,
+                clock=self._clock,
+                health_monitor=self._health_monitor,
+            )
         self._health_monitor.update_component("data_service", ComponentStatus.STARTING)
 
         # --- Phase 7: Scanner ---
         logger.info("[7/10] Running pre-market scan...")
         scanner_yaml = load_yaml_file(self._config_dir / "scanner.yaml")
-        alpaca_scanner_data = scanner_yaml.get("alpaca_scanner", {})
-        scanner_config = AlpacaScannerConfig(**alpaca_scanner_data)
 
-        self._scanner = AlpacaScanner(
-            config=scanner_config,
-            alpaca_config=config.broker.alpaca,
-        )
+        if config.system.data_source == DataSource.DATABENTO:
+            logger.info("Using Databento scanner")
+            databento_scanner_data = scanner_yaml.get("databento_scanner", {})
+            db_scanner_config = DatabentoScannerConfig(**databento_scanner_data)
+            self._scanner = DatabentoScanner(
+                config=db_scanner_config,
+                databento_config=config.broker.databento,
+            )
+        else:
+            logger.info("Using Alpaca scanner")
+            alpaca_scanner_data = scanner_yaml.get("alpaca_scanner", {})
+            scanner_config = AlpacaScannerConfig(**alpaca_scanner_data)
+            self._scanner = AlpacaScanner(
+                config=scanner_config,
+                alpaca_config=config.broker.alpaca,
+            )
         await self._scanner.start()
 
         # Scan with empty criteria list (use scanner defaults)

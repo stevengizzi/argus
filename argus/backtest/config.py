@@ -27,6 +27,13 @@ class DataFetcherConfig(BaseModel):
     adjustment: str = Field(default="split", pattern=r"^(raw|split|all)$")
     feed: str = Field(default="iex", pattern=r"^(iex|sip)$")
 
+    # Data source selection
+    source: str = Field(default="alpaca", pattern=r"^(alpaca|databento)$")
+
+    # Databento-specific settings
+    databento_dataset: str = "XNAS.ITCH"
+    databento_cache_dir: Path = Path("data/databento_cache")
+
 
 class BacktestConfig(BaseModel):
     """Configuration for the Replay Harness.

@@ -1004,5 +1004,47 @@ Each entry follows this format:
 
 ---
 
+### DEC-088 | DatabentoDataService Threading Model
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-21 |
+| **Decision** | Databento Live client callbacks run on Databento's internal reader thread. Bridge to asyncio via `loop.call_soon_threadsafe()` → `asyncio.ensure_future(event_bus.publish(...))`. Record class references stored during `start()` to avoid module imports on the hot path. |
+| **Alternatives** | (a) `async for record in live_client` iteration pattern — also valid but callback pattern is Databento's documented recommendation and gives explicit control over thread bridging. (b) Import databento in every `_dispatch_record()` call — functionally correct but unnecessary overhead on high-frequency path. |
+| **Rationale** | Callback pattern is officially documented by Databento. Storing class references avoids repeated `sys.modules` lookups on a path that processes hundreds of messages per second during market hours. Price/indicator cache updates (single-key dict operations) are GIL-protected and safe without locks. |
+| **Status** | Active |
+
+---
+
+### DEC-089 | Default Databento Dataset — XNAS.ITCH
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-21 |
+| **Decision** | XNAS.ITCH (Nasdaq TotalView-ITCH) as the default Databento dataset for live streaming. Configurable via `DatabentoConfig.dataset`. |
+| **Alternatives** | (a) DBEQ.BASIC — consolidated, but lower fidelity. (b) XNYS.PILLAR — NYSE only, misses NASDAQ-listed stocks that ORB primarily targets. (c) Multiple datasets simultaneously — adds complexity, deferred. |
+| **Rationale** | Databento's most recommended feed for trading firms. Deepest historical data availability (best backtest/live parity). Provides L2/L3 when needed. Covers the majority of high-gap NASDAQ-listed stocks that ORB targets. XNYS.PILLAR can be added later for NYSE-listed coverage if needed. |
+| **Status** | Active |
+
+---
+
+### DEC-090 | DataSource Enum for Provider Selection
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-21 |
+| **Decision** | Added `DataSource` enum to `SystemConfig` with `alpaca` and `databento` variants. `main.py` Phase 6/7 branches on this to select DataService and Scanner implementations. |
+| **Rationale** | Clean config-driven provider selection. Supports future providers without code changes to main.py beyond adding enum values and factory branches. |
+| **Status** | Active |
+
+---
+
+### DEC-091 | Shared Databento Normalization Utility
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-21 |
+| **Decision** | Extracted `normalize_databento_df()` into `argus/data/databento_utils.py`. Both `DatabentoDataService` and `DataFetcher` call this shared function instead of maintaining separate implementations. |
+| **Rationale** | Eliminates code duplication. Single source of truth for Databento → ARGUS schema conversion (ts_event → timestamp, UTC normalization, column selection, sorting). |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
 *New decisions are appended chronologically as the project progresses.*

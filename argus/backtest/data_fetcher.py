@@ -1,10 +1,11 @@
-"""Historical data fetcher for Alpaca 1-minute bars.
+"""Historical data fetcher for Alpaca and Databento 1-minute bars.
 
-Downloads historical bar data from Alpaca's StockHistoricalDataClient,
-saves as Parquet files (one per symbol per month), tracks progress in
-a manifest, and validates data quality after download.
+Downloads historical bar data from Alpaca's StockHistoricalDataClient
+or Databento's Historical API, saves as Parquet files (one per symbol
+per month), tracks progress in a manifest, and validates data quality
+after download.
 
-Usage:
+Usage (Alpaca):
     python -m argus.backtest.data_fetcher \\
         --symbols TSLA,NVDA,AAPL \\
         --start 2025-03-01 \\
@@ -14,6 +15,8 @@ Or use the backtest_universe.yaml for the full symbol list:
     python -m argus.backtest.data_fetcher \\
         --start 2025-03-01 \\
         --end 2026-02-01
+
+For Databento, use fetch_symbol_month_databento() programmatically.
 """
 
 import asyncio
@@ -37,6 +40,7 @@ from argus.backtest.manifest import (
     load_manifest,
     save_manifest,
 )
+from argus.data.databento_utils import normalize_databento_df
 
 logger = logging.getLogger(__name__)
 
@@ -167,16 +171,17 @@ def _bars_to_dataframe(bars, symbol: str) -> pd.DataFrame:
 
 
 class DataFetcher:
-    """Downloads and stores historical 1-minute bar data from Alpaca.
+    """Downloads and stores historical 1-minute bar data from Alpaca or Databento.
 
-    Uses Alpaca's StockHistoricalDataClient to fetch bars, saves them
-    as Parquet files organized by symbol and month, tracks progress in
-    a manifest for resume capability, and validates data quality.
+    Uses Alpaca's StockHistoricalDataClient or Databento's Historical API
+    to fetch bars. Saves them as Parquet files organized by symbol and month,
+    tracks progress in a manifest for resume capability, and validates data quality.
 
     Args:
         config: DataFetcherConfig with storage and rate limit settings.
         api_key: Alpaca API key (from environment).
         api_secret: Alpaca API secret (from environment).
+        databento_key: Databento API key (optional, for Databento fetches).
     """
 
     def __init__(
@@ -184,6 +189,7 @@ class DataFetcher:
         config: DataFetcherConfig,
         api_key: str | None = None,
         api_secret: str | None = None,
+        databento_key: str | None = None,
     ) -> None:
         self._config = config
         self._client = StockHistoricalDataClient(
@@ -193,10 +199,38 @@ class DataFetcher:
         self._manifest = load_manifest(config.manifest_path)
         self._request_timestamps: list[float] = []
 
+        # Databento client (lazy init)
+        self._databento_key = databento_key
+        self._databento_client = None  # Created on first use
+
     @property
     def manifest(self) -> Manifest:
         """Access the current manifest (for testing and reporting)."""
         return self._manifest
+
+    @property
+    def _db_client(self):
+        """Lazy-init Databento Historical client.
+
+        Returns:
+            Databento Historical client.
+
+        Raises:
+            RuntimeError: If Databento API key is not available.
+        """
+        if self._databento_client is None:
+            import os
+
+            import databento as db
+
+            key = self._databento_key or os.getenv("DATABENTO_API_KEY")
+            if not key:
+                raise RuntimeError(
+                    "Databento API key not available. Set DATABENTO_API_KEY environment "
+                    "variable or pass databento_key to DataFetcher constructor."
+                )
+            self._databento_client = db.Historical(key=key)
+        return self._databento_client
 
     async def _rate_limit(self) -> None:
         """Enforce rate limiting by sleeping if necessary.
@@ -399,6 +433,120 @@ class DataFetcher:
         )
         self._manifest.add_entry(entry)
         return entry
+
+    def _get_parquet_path_databento(
+        self, symbol: str, year: int, month: int
+    ) -> Path:
+        """Get the Parquet cache path for Databento data.
+
+        Uses a separate cache directory from Alpaca to avoid mixing providers.
+
+        Args:
+            symbol: Ticker symbol.
+            year: Year of data.
+            month: Month of data.
+
+        Returns:
+            Path to the Parquet file.
+        """
+        cache_dir = self._config.databento_cache_dir
+        symbol_dir = cache_dir / symbol
+        return symbol_dir / f"{symbol}_{year}-{month:02d}.parquet"
+
+    async def fetch_symbol_month_databento(
+        self,
+        symbol: str,
+        year: int,
+        month: int,
+    ) -> pd.DataFrame:
+        """Fetch one month of 1-minute bars from Databento Historical API.
+
+        Checks Parquet cache first. If not cached, fetches from Databento,
+        normalizes to standard schema, and caches as Parquet.
+
+        Args:
+            symbol: Ticker symbol (e.g., "AAPL").
+            year: Year (e.g., 2025).
+            month: Month (1-12).
+
+        Returns:
+            DataFrame with columns: timestamp, open, high, low, close, volume.
+            Same schema as fetch_symbol_month() (Alpaca version).
+        """
+        from datetime import timedelta
+
+        # Check cache
+        cache_path = self._get_parquet_path_databento(symbol, year, month)
+        if cache_path.exists():
+            logger.debug("Cache hit: %s", cache_path)
+            return pd.read_parquet(cache_path)
+
+        # Calculate date range
+        start_date = date(year, month, 1)
+        _, last_day = calendar.monthrange(year, month)
+        end_date = date(year, month, last_day)
+
+        # Rate limit
+        await self._rate_limit()
+
+        # Fetch from Databento
+        logger.info("Fetching %s %d-%02d from Databento", symbol, year, month)
+
+        data = self._db_client.timeseries.get_range(
+            dataset=self._config.databento_dataset,
+            symbols=symbol,
+            schema="ohlcv-1m",
+            start=start_date.isoformat(),
+            end=(end_date + timedelta(days=1)).isoformat(),  # Exclusive end
+            stype_in="raw_symbol",
+        )
+
+        df = data.to_df()
+
+        if df.empty:
+            logger.warning("No data returned for %s %d-%02d", symbol, year, month)
+            return pd.DataFrame(
+                columns=["timestamp", "open", "high", "low", "close", "volume"]
+            )
+
+        # Normalize to standard schema
+        result = self._normalize_databento_df(df)
+
+        # Save to cache
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        result.to_parquet(cache_path, index=False)
+        logger.info("Cached %d bars for %s %d-%02d", len(result), symbol, year, month)
+
+        # Update manifest for tracking
+        entry = SymbolMonthEntry(
+            symbol=symbol,
+            year=year,
+            month=month,
+            row_count=len(result),
+            file_path=str(cache_path),
+            downloaded_at=datetime.now(UTC).isoformat(),
+            source="databento",
+            adjustment="raw",
+            feed=self._config.databento_dataset,
+            data_quality_issues=[],
+        )
+        self._manifest.add_entry(entry)
+
+        return result
+
+    @staticmethod
+    def _normalize_databento_df(df: pd.DataFrame) -> pd.DataFrame:
+        """Normalize Databento DataFrame to ARGUS standard schema.
+
+        Delegates to shared utility function for consistency with DatabentoDataService.
+
+        Args:
+            df: DataFrame from Databento's to_df() method.
+
+        Returns:
+            Normalized DataFrame with standard schema.
+        """
+        return normalize_databento_df(df)
 
     async def fetch_all(
         self,

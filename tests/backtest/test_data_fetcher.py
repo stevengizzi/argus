@@ -351,3 +351,360 @@ class TestDataFetcher:
         df = pd.read_parquet(expected_path)
         assert len(df) == 1
         assert "timestamp" in df.columns
+
+
+# ========================================================================
+# Databento Backend Tests (Sprint 12 Component 5)
+# ========================================================================
+
+
+class MockDBNStore:
+    """Mock Databento DBNStore for testing."""
+
+    def __init__(self, df: pd.DataFrame | None = None) -> None:
+        self._df = df
+
+    def to_df(self) -> pd.DataFrame:
+        if self._df is not None:
+            return self._df
+        return pd.DataFrame(
+            columns=["ts_event", "open", "high", "low", "close", "volume"]
+        )
+
+
+class MockDatabentoTimeseries:
+    """Mock Databento timeseries API."""
+
+    def __init__(self) -> None:
+        self._data: pd.DataFrame | None = None
+
+    def get_range(self, **kwargs) -> MockDBNStore:
+        return MockDBNStore(self._data)
+
+
+class MockDatabentoHistorical:
+    """Mock Databento Historical client."""
+
+    def __init__(self, key: str = "") -> None:
+        self.key = key
+        self.timeseries = MockDatabentoTimeseries()
+
+
+class TestDataFetcherDatabentoInit:
+    """Tests for DataFetcher Databento initialization."""
+
+    @patch("argus.backtest.data_fetcher.StockHistoricalDataClient")
+    def test_constructor_accepts_databento_key(
+        self, mock_client_cls: MagicMock
+    ) -> None:
+        """Constructor accepts databento_key parameter."""
+        config = DataFetcherConfig()
+        fetcher = DataFetcher(
+            config,
+            api_key="test-alpaca-key",
+            api_secret="test-alpaca-secret",
+            databento_key="test-databento-key",
+        )
+        assert fetcher._databento_key == "test-databento-key"
+        assert fetcher._databento_client is None  # Not initialized yet
+
+    @patch("argus.backtest.data_fetcher.StockHistoricalDataClient")
+    def test_lazy_databento_client_not_created_until_first_use(
+        self, mock_client_cls: MagicMock
+    ) -> None:
+        """Databento client is not created until first use."""
+        config = DataFetcherConfig()
+        fetcher = DataFetcher(config, databento_key="test-key")
+
+        # Client should not be created yet
+        assert fetcher._databento_client is None
+
+    @patch("argus.backtest.data_fetcher.StockHistoricalDataClient")
+    def test_missing_databento_key_raises_runtime_error(
+        self, mock_client_cls: MagicMock
+    ) -> None:
+        """Missing Databento key raises RuntimeError on first use."""
+        import sys
+
+        config = DataFetcherConfig()
+        fetcher = DataFetcher(config)
+
+        # Mock databento module and clear environment variable
+        with (  # noqa: SIM117
+            patch.dict(sys.modules, {"databento": MagicMock()}),
+            patch.dict("os.environ", {}, clear=True),
+        ):
+            with pytest.raises(RuntimeError) as exc_info:
+                _ = fetcher._db_client
+            assert "Databento API key not available" in str(exc_info.value)
+
+
+class TestDataFetcherDatabentoBackend:
+    """Tests for DataFetcher Databento backend."""
+
+    @pytest.fixture
+    def tmp_path(self, tmp_path: Path) -> Path:
+        return tmp_path
+
+    @pytest.fixture
+    def config(self, tmp_path: Path) -> DataFetcherConfig:
+        return DataFetcherConfig(
+            data_dir=tmp_path / "1m",
+            manifest_path=tmp_path / "manifest.json",
+            databento_cache_dir=tmp_path / "databento_cache",
+        )
+
+    @pytest.fixture
+    def sample_databento_df(self) -> pd.DataFrame:
+        """Sample Databento-format DataFrame."""
+        return pd.DataFrame({
+            "ts_event": pd.to_datetime([
+                "2025-06-15 14:30:00+00:00",
+                "2025-06-15 14:31:00+00:00",
+                "2025-06-15 14:32:00+00:00",
+            ]),
+            "rtype": [1, 1, 1],
+            "publisher_id": [1, 1, 1],
+            "instrument_id": [100, 100, 100],
+            "open": [100.0, 101.0, 102.0],
+            "high": [101.0, 102.0, 103.0],
+            "low": [99.0, 100.0, 101.0],
+            "close": [100.5, 101.5, 102.5],
+            "volume": [1000, 2000, 3000],
+        })
+
+    @patch("argus.backtest.data_fetcher.StockHistoricalDataClient")
+    @pytest.mark.asyncio
+    async def test_fetch_symbol_month_databento_cache_hit(
+        self,
+        mock_client_cls: MagicMock,
+        config: DataFetcherConfig,
+        sample_databento_df: pd.DataFrame,
+        tmp_path: Path,
+    ) -> None:
+        """Cache hit returns cached data without API call."""
+        fetcher = DataFetcher(config, databento_key="test-key")
+
+        # Pre-populate cache
+        cache_path = config.databento_cache_dir / "AAPL" / "AAPL_2025-06.parquet"
+        cache_path.parent.mkdir(parents=True)
+
+        cached_df = pd.DataFrame({
+            "timestamp": pd.to_datetime(["2025-06-15 14:30:00+00:00"]),
+            "open": [100.0],
+            "high": [101.0],
+            "low": [99.0],
+            "close": [100.5],
+            "volume": [1000],
+        })
+        cached_df.to_parquet(cache_path)
+
+        result = await fetcher.fetch_symbol_month_databento("AAPL", 2025, 6)
+
+        assert len(result) == 1
+        assert result["close"].iloc[0] == 100.5
+        # No Databento client created (cache hit)
+        assert fetcher._databento_client is None
+
+    @patch("argus.backtest.data_fetcher.StockHistoricalDataClient")
+    @pytest.mark.asyncio
+    async def test_fetch_symbol_month_databento_cache_miss(
+        self,
+        mock_client_cls: MagicMock,
+        config: DataFetcherConfig,
+        sample_databento_df: pd.DataFrame,
+        tmp_path: Path,
+    ) -> None:
+        """Cache miss fetches from API and caches result."""
+        fetcher = DataFetcher(config, databento_key="test-key")
+
+        # Mock Databento client
+        mock_db = MockDatabentoHistorical()
+        mock_db.timeseries._data = sample_databento_df
+        fetcher._databento_client = mock_db
+
+        result = await fetcher.fetch_symbol_month_databento("AAPL", 2025, 6)
+
+        assert len(result) == 3
+        assert "timestamp" in result.columns
+        assert "open" in result.columns
+        # Result saved to cache
+        cache_path = config.databento_cache_dir / "AAPL" / "AAPL_2025-06.parquet"
+        assert cache_path.exists()
+
+    @patch("argus.backtest.data_fetcher.StockHistoricalDataClient")
+    @pytest.mark.asyncio
+    async def test_fetch_symbol_month_databento_empty_response(
+        self,
+        mock_client_cls: MagicMock,
+        config: DataFetcherConfig,
+        tmp_path: Path,
+    ) -> None:
+        """Empty API response returns empty DataFrame."""
+        fetcher = DataFetcher(config, databento_key="test-key")
+
+        # Mock empty response
+        mock_db = MockDatabentoHistorical()
+        mock_db.timeseries._data = pd.DataFrame()
+        fetcher._databento_client = mock_db
+
+        result = await fetcher.fetch_symbol_month_databento("AAPL", 2025, 6)
+
+        assert result.empty
+        assert list(result.columns) == [
+            "timestamp", "open", "high", "low", "close", "volume"
+        ]
+
+    @patch("argus.backtest.data_fetcher.StockHistoricalDataClient")
+    @pytest.mark.asyncio
+    async def test_fetch_symbol_month_databento_saves_to_cache(
+        self,
+        mock_client_cls: MagicMock,
+        config: DataFetcherConfig,
+        sample_databento_df: pd.DataFrame,
+        tmp_path: Path,
+    ) -> None:
+        """Result is saved to Parquet cache."""
+        fetcher = DataFetcher(config, databento_key="test-key")
+
+        mock_db = MockDatabentoHistorical()
+        mock_db.timeseries._data = sample_databento_df
+        fetcher._databento_client = mock_db
+
+        await fetcher.fetch_symbol_month_databento("TSLA", 2025, 3)
+
+        cache_path = config.databento_cache_dir / "TSLA" / "TSLA_2025-03.parquet"
+        assert cache_path.exists()
+
+        # Verify content
+        df = pd.read_parquet(cache_path)
+        assert len(df) == 3
+        assert "timestamp" in df.columns
+
+
+class TestNormalizeDatabentoDF:
+    """Tests for _normalize_databento_df static method."""
+
+    def test_correct_column_rename(self) -> None:
+        """ts_event is renamed to timestamp."""
+        df = pd.DataFrame({
+            "ts_event": pd.to_datetime(["2025-06-15 14:30:00+00:00"]),
+            "open": [100.0],
+            "high": [101.0],
+            "low": [99.0],
+            "close": [100.5],
+            "volume": [1000],
+        })
+
+        result = DataFetcher._normalize_databento_df(df)
+
+        assert "timestamp" in result.columns
+        assert "ts_event" not in result.columns
+
+    def test_timestamps_converted_to_utc(self) -> None:
+        """Timestamps are converted to UTC."""
+        df = pd.DataFrame({
+            "ts_event": pd.to_datetime(["2025-06-15 14:30:00"]),  # Naive
+            "open": [100.0],
+            "high": [101.0],
+            "low": [99.0],
+            "close": [100.5],
+            "volume": [1000],
+        })
+
+        result = DataFetcher._normalize_databento_df(df)
+
+        assert result["timestamp"].dt.tz is not None
+        assert str(result["timestamp"].dt.tz) == "UTC"
+
+    def test_sorted_by_timestamp(self) -> None:
+        """Result is sorted by timestamp."""
+        df = pd.DataFrame({
+            "ts_event": pd.to_datetime([
+                "2025-06-15 14:32:00+00:00",
+                "2025-06-15 14:30:00+00:00",
+                "2025-06-15 14:31:00+00:00",
+            ]),
+            "open": [102.0, 100.0, 101.0],
+            "high": [103.0, 101.0, 102.0],
+            "low": [101.0, 99.0, 100.0],
+            "close": [102.5, 100.5, 101.5],
+            "volume": [3000, 1000, 2000],
+        })
+
+        result = DataFetcher._normalize_databento_df(df)
+
+        # First row should be earliest timestamp
+        assert result["close"].iloc[0] == 100.5
+        # Last row should be latest timestamp
+        assert result["close"].iloc[2] == 102.5
+
+    def test_extra_columns_dropped(self) -> None:
+        """Extra columns (rtype, publisher_id, etc.) are dropped."""
+        df = pd.DataFrame({
+            "ts_event": pd.to_datetime(["2025-06-15 14:30:00+00:00"]),
+            "rtype": [1],
+            "publisher_id": [1],
+            "instrument_id": [100],
+            "open": [100.0],
+            "high": [101.0],
+            "low": [99.0],
+            "close": [100.5],
+            "volume": [1000],
+        })
+
+        result = DataFetcher._normalize_databento_df(df)
+
+        expected_columns = ["timestamp", "open", "high", "low", "close", "volume"]
+        assert list(result.columns) == expected_columns
+
+    def test_output_schema_matches_alpaca(self) -> None:
+        """Output schema matches Alpaca fetch output exactly."""
+        df = pd.DataFrame({
+            "ts_event": pd.to_datetime(["2025-06-15 14:30:00+00:00"]),
+            "open": [100.0],
+            "high": [101.0],
+            "low": [99.0],
+            "close": [100.5],
+            "volume": [1000],
+        })
+
+        result = DataFetcher._normalize_databento_df(df)
+
+        # Same columns as Alpaca output
+        assert list(result.columns) == [
+            "timestamp", "open", "high", "low", "close", "volume"
+        ]
+        # Correct dtypes
+        assert result["timestamp"].dtype.name == "datetime64[ns, UTC]"
+        assert result["open"].dtype == float
+        assert result["volume"].dtype in (int, "int64")
+
+    @patch("argus.backtest.data_fetcher.StockHistoricalDataClient")
+    @pytest.mark.asyncio
+    async def test_parquet_cache_directory_created(
+        self, mock_client_cls: MagicMock, tmp_path: Path
+    ) -> None:
+        """Parquet cache directory is created if missing."""
+        config = DataFetcherConfig(
+            data_dir=tmp_path / "1m",
+            databento_cache_dir=tmp_path / "new_databento_cache",
+        )
+        fetcher = DataFetcher(config, databento_key="test-key")
+
+        # Mock Databento client
+        mock_db = MockDatabentoHistorical()
+        mock_db.timeseries._data = pd.DataFrame({
+            "ts_event": pd.to_datetime(["2025-06-15 14:30:00+00:00"]),
+            "open": [100.0],
+            "high": [101.0],
+            "low": [99.0],
+            "close": [100.5],
+            "volume": [1000],
+        })
+        fetcher._databento_client = mock_db
+
+        await fetcher.fetch_symbol_month_databento("AAPL", 2025, 6)
+
+        # Directory should have been created
+        assert (tmp_path / "new_databento_cache" / "AAPL").exists()

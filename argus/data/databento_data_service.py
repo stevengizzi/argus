@@ -28,6 +28,7 @@ from argus.core.events import (
     TickEvent,
 )
 from argus.data.databento_symbol_map import DatabentoSymbolMap
+from argus.data.databento_utils import normalize_databento_df
 from argus.data.service import DataService
 
 if TYPE_CHECKING:
@@ -125,11 +126,14 @@ class DatabentoDataService(DataService):
         self._running = False
         self._loop: asyncio.AbstractEventLoop | None = None
         self._stale_monitor_task: asyncio.Task | None = None
+        self._stream_task: asyncio.Task | None = None
         self._last_message_time: float = 0.0
         self._stale_published = False
 
         # Symbols we're tracking (populated during start())
         self._active_symbols: set[str] = set()
+        self._symbols_list: list[str] = []
+        self._timeframes_list: list[str] = []
 
         # Databento record class references (stored in start() to avoid hot-path imports)
         self._OHLCVMsg: type | None = None
@@ -142,16 +146,14 @@ class DatabentoDataService(DataService):
     # ──────────────────────────────────────────────
 
     async def start(self, symbols: list[str], timeframes: list[str]) -> None:
-        """Start streaming live data from Databento.
+        """Start streaming live data from Databento with reconnection support.
 
-        1. Resolve API key from environment variable
-        2. Store reference to the running event loop (for thread bridging)
-        3. Create db.Live() client
-        4. Subscribe to ohlcv-1m and trades schemas
-        5. Register singledispatch callback handler
-        6. Fetch historical candles for indicator warm-up
-        7. Start the live stream (non-blocking — runs on internal thread)
-        8. Start stale data monitor task
+        1. Validate API key exists
+        2. Store event loop reference for thread bridging
+        3. Perform initial connection (synchronous for API compatibility)
+        4. Perform indicator warm-up
+        5. Launch reconnection wrapper task (handles subsequent reconnects)
+        6. Launch stale data monitor task
 
         Args:
             symbols: List of ticker symbols to stream. If the config has
@@ -159,19 +161,11 @@ class DatabentoDataService(DataService):
                      universe is streamed.
             timeframes: Timeframes to stream (currently only "1m" used).
         """
-        import databento as db
-
-        # Store references to record classes for _dispatch_record() (avoids hot-path imports)
-        self._OHLCVMsg = db.OHLCVMsg
-        self._TradeMsg = db.TradeMsg
-        self._SymbolMappingMsg = db.SymbolMappingMsg
-        self._ErrorMsg = db.ErrorMsg
-
         if self._running:
             logger.warning("DatabentoDataService already running")
             return
 
-        # 1. Resolve API key
+        # 1. Validate API key exists
         api_key = os.getenv(self._config.api_key_env_var)
         if not api_key:
             raise RuntimeError(
@@ -182,22 +176,130 @@ class DatabentoDataService(DataService):
         # 2. Store event loop reference for thread bridging
         self._loop = asyncio.get_running_loop()
         self._running = True
+        self._active_symbols = set(symbols)
+        self._symbols_list = symbols
+        self._timeframes_list = timeframes
 
-        # 3. Determine symbols to subscribe
+        # 3. Indicator warm-up — fetch recent historical bars
+        await self._warm_up_indicators(symbols)
+
+        # 4. Perform initial connection (synchronous for API compatibility)
+        await self._connect_live_session()
+
+        # 5. Launch reconnection wrapper as a task (handles subsequent reconnects)
+        self._stream_task = asyncio.create_task(
+            self._run_with_reconnection()
+        )
+
+        # 6. Start stale data monitor
+        self._stale_monitor_task = asyncio.create_task(
+            self._stale_data_monitor()
+        )
+
+        logger.info(
+            "DatabentoDataService started: dataset=%s, symbols=%d, schemas=[%s, %s]",
+            self._config.dataset,
+            len(symbols),
+            self._config.bar_schema,
+            self._config.trade_schema,
+        )
+
+    async def _run_with_reconnection(self) -> None:
+        """Main streaming loop with exponential backoff reconnection.
+
+        Manages the lifecycle of the Databento Live client:
+        1. Wait for close (initial connection made in start())
+        2. If unexpected disconnect, reconnect with backoff
+        3. If max retries exceeded, log critical and stop
+
+        Note: The initial connection is made synchronously in start() before
+        this task is launched. This task handles subsequent reconnections.
+        """
+        retries = 0
+        first_iteration = True
+
+        while self._running:
+            try:
+                # On first iteration, we're already connected (done in start())
+                # On subsequent iterations, we need to reconnect
+                if not first_iteration:
+                    await self._connect_live_session()
+                    # Reset retry counter on successful connection
+                    retries = 0
+
+                first_iteration = False
+
+                # Wait for the session to end
+                # Use block_for_close() in a thread since it's blocking
+                if self._live_client is not None:
+                    await asyncio.to_thread(self._live_client.block_for_close)
+
+                if not self._running:
+                    break  # Clean shutdown via stop()
+
+                # Unexpected disconnect — reconnect
+                logger.warning("Databento session ended unexpectedly")
+
+            except Exception as e:
+                logger.error("Databento stream error: %s", e)
+
+            if not self._running:
+                break
+
+            # Reconnection logic
+            retries += 1
+            if retries > self._config.reconnect_max_retries:
+                logger.critical(
+                    "Databento max reconnection retries (%d) exceeded. "
+                    "Data feed is DEAD. Manual intervention required.",
+                    self._config.reconnect_max_retries,
+                )
+                break
+
+            delay = min(
+                self._config.reconnect_base_delay_seconds * (2 ** (retries - 1)),
+                self._config.reconnect_max_delay_seconds,
+            )
+            logger.warning(
+                "Reconnecting to Databento in %.1fs (attempt %d/%d)",
+                delay, retries, self._config.reconnect_max_retries,
+            )
+            await asyncio.sleep(delay)
+
+        logger.info("Reconnection loop exited (running=%s, retries=%d)",
+                    self._running, retries)
+
+    async def _connect_live_session(self) -> None:
+        """Create a new Databento Live client and subscribe to streams.
+
+        Extracted from start() so it can be called on each reconnection attempt.
+        Sets up record class references for _dispatch_record() (DEC-088).
+        """
+        import databento as db
+
+        api_key = os.getenv(self._config.api_key_env_var)
+
+        # Clean up previous client if exists
+        if self._live_client is not None:
+            with contextlib.suppress(Exception):
+                self._live_client.stop()
+
+        # Create fresh client
+        self._live_client = db.Live(key=api_key)
+
+        # Clear symbol map — new session will send fresh mappings
+        self._symbol_map.clear()
+
+        # Determine symbols to subscribe
         subscribe_symbols: str | list[str]
         if isinstance(self._config.symbols, list):
             subscribe_symbols = self._config.symbols
         elif self._config.symbols == "ALL_SYMBOLS":
             subscribe_symbols = "ALL_SYMBOLS"
         else:
-            subscribe_symbols = symbols
+            subscribe_symbols = self._symbols_list
 
-        self._active_symbols = set(symbols)
-
-        # 4. Create Live client
-        self._live_client = db.Live(key=api_key)
-
-        # 5. Subscribe to bar stream
+        # Subscribe to bar stream
         self._live_client.subscribe(
             dataset=self._config.dataset,
             schema=self._config.bar_schema,
@@ -205,7 +307,7 @@ class DatabentoDataService(DataService):
             stype_in=self._config.stype_in,
         )
 
-        # 6. Subscribe to trades stream
+        # Subscribe to trades stream
         self._live_client.subscribe(
             dataset=self._config.dataset,
             schema=self._config.trade_schema,
@@ -213,7 +315,7 @@ class DatabentoDataService(DataService):
             stype_in=self._config.stype_in,
         )
 
-        # 7. (Optional) Subscribe to L2 depth
+        # (Optional) Subscribe to L2 depth
         if self._config.enable_depth:
             self._live_client.subscribe(
                 dataset=self._config.dataset,
@@ -222,56 +324,59 @@ class DatabentoDataService(DataService):
                 stype_in=self._config.stype_in,
             )
 
-        # 8. Register callback using dispatch pattern
+        # Register callback
         self._live_client.add_callback(self._dispatch_record)
 
-        # 9. Indicator warm-up — fetch recent historical bars
-        await self._warm_up_indicators(symbols)
+        # Store record class references for _dispatch_record() (DEC-088)
+        self._OHLCVMsg = db.OHLCVMsg
+        self._TradeMsg = db.TradeMsg
+        self._SymbolMappingMsg = db.SymbolMappingMsg
+        self._ErrorMsg = db.ErrorMsg
 
-        # 10. Start live stream (non-blocking — Databento manages its own thread)
+        # Start streaming
         self._live_client.start()
         self._last_message_time = time.monotonic()
 
-        # 11. Start stale data monitor
-        self._stale_monitor_task = asyncio.create_task(
-            self._stale_data_monitor()
-        )
-
         logger.info(
-            "DatabentoDataService started: dataset=%s, symbols=%s, schemas=[%s, %s]",
+            "Connected to Databento: dataset=%s, symbols=%s",
             self._config.dataset,
             subscribe_symbols if isinstance(subscribe_symbols, str)
             else f"{len(subscribe_symbols)} symbols",
-            self._config.bar_schema,
-            self._config.trade_schema,
         )
 
     async def stop(self) -> None:
         """Stop streaming and clean up.
 
-        1. Set running flag to False
-        2. Stop stale monitor task
-        3. Stop the Databento Live client (closes TCP connection)
-        4. Clean up state
+        1. Set running flag to False (signals reconnection loop to exit)
+        2. Stop the Databento Live client (closes TCP connection)
+        3. Cancel stream task
+        4. Cancel stale monitor task
+        5. Clean up state
         """
         if not self._running:
             return
 
         self._running = False
 
-        # Cancel stale monitor
-        if self._stale_monitor_task and not self._stale_monitor_task.done():
-            self._stale_monitor_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await self._stale_monitor_task
-
-        # Stop Databento client
+        # Stop Databento client (will cause block_for_close to return)
         if self._live_client is not None:
             try:
                 self._live_client.stop()
             except Exception as e:
                 logger.warning("Error stopping Databento live client: %s", e)
             self._live_client = None
+
+        # Cancel stream task (reconnection loop)
+        if self._stream_task and not self._stream_task.done():
+            self._stream_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._stream_task
+
+        # Cancel stale monitor
+        if self._stale_monitor_task and not self._stale_monitor_task.done():
+            self._stale_monitor_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._stale_monitor_task
 
         self._symbol_map.clear()
         logger.info("DatabentoDataService stopped")
@@ -817,22 +922,6 @@ class DatabentoDataService(DataService):
     def _normalize_historical_df(df: pd.DataFrame) -> pd.DataFrame:
         """Normalize Databento historical DataFrame to ARGUS standard schema.
 
-        Databento's to_df() returns columns like:
-            ts_event, open, high, low, close, volume, ...
-
-        ARGUS standard schema:
-            timestamp, open, high, low, close, volume
-
-        Ensures timestamps are UTC-aware. Same output as Alpaca historical
-        data for full compatibility with VectorBT and Replay Harness.
+        Delegates to shared utility function for consistency with DataFetcher.
         """
-        result = df[["ts_event", "open", "high", "low", "close", "volume"]].copy()
-        result = result.rename(columns={"ts_event": "timestamp"})
-
-        # Ensure UTC-aware timestamps
-        if result["timestamp"].dt.tz is None:
-            result["timestamp"] = result["timestamp"].dt.tz_localize("UTC")
-        elif str(result["timestamp"].dt.tz) != "UTC":
-            result["timestamp"] = result["timestamp"].dt.tz_convert("UTC")
-
-        return result.sort_values("timestamp").reset_index(drop=True)
+        return normalize_databento_df(df)

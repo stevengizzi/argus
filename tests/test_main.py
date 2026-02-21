@@ -45,6 +45,10 @@ alpaca:
   secret_key_env: "ALPACA_SECRET_KEY"
   paper: true
   data_feed: "iex"
+databento:
+  enabled: true
+  api_key_env_var: "DATABENTO_API_KEY"
+  dataset: "XNAS.ITCH"
 """)
 
     # risk_limits.yaml
@@ -72,6 +76,17 @@ alpaca_scanner:
   max_price: 500.0
   min_volume_yesterday: 1000000
   max_symbols_returned: 10
+
+databento_scanner:
+  universe_symbols:
+    - "AAPL"
+    - "MSFT"
+  min_gap_pct: 0.02
+  min_price: 10.0
+  max_price: 500.0
+  min_volume: 1000000
+  max_symbols_returned: 10
+  dataset: "XNAS.ITCH"
 """)
 
     # order_manager.yaml
@@ -374,3 +389,80 @@ class TestArgusSystemWiring:
             args = parse_args()
 
         assert args.dry_run is True
+
+
+class TestDataSourceSelection:
+    """Tests for data source selection between Alpaca and Databento."""
+
+    def test_config_data_source_defaults_to_alpaca(
+        self, mock_config_dir: Path
+    ) -> None:
+        """Default data_source config value is alpaca."""
+        from argus.core.config import DataSource, load_config
+
+        config = load_config(mock_config_dir)
+
+        assert config.system.data_source == DataSource.ALPACA
+
+    def test_config_data_source_can_be_databento(
+        self, mock_config_dir: Path
+    ) -> None:
+        """data_source can be set to databento in config."""
+        from argus.core.config import DataSource, load_config
+
+        # Update system.yaml to use Databento
+        (mock_config_dir / "system.yaml").write_text("""
+timezone: "America/New_York"
+market_open: "09:30"
+market_close: "16:00"
+log_level: "INFO"
+heartbeat_interval_seconds: 60
+data_dir: "data"
+data_source: "databento"
+
+health:
+  heartbeat_interval_seconds: 60
+  heartbeat_url_env: ""
+  alert_webhook_url_env: ""
+  daily_check_enabled: false
+  weekly_reconciliation_enabled: false
+""")
+
+        config = load_config(mock_config_dir)
+
+        assert config.system.data_source == DataSource.DATABENTO
+
+    def test_data_source_enum_values(self) -> None:
+        """DataSource enum has expected values."""
+        from argus.core.config import DataSource
+
+        assert DataSource.ALPACA.value == "alpaca"
+        assert DataSource.DATABENTO.value == "databento"
+
+    def test_scanner_yaml_has_databento_section(
+        self, mock_config_dir: Path
+    ) -> None:
+        """scanner.yaml includes databento_scanner configuration."""
+        import yaml
+
+        scanner_yaml = yaml.safe_load(
+            (mock_config_dir / "scanner.yaml").read_text()
+        )
+
+        assert "databento_scanner" in scanner_yaml
+        assert "universe_symbols" in scanner_yaml["databento_scanner"]
+        assert "min_gap_pct" in scanner_yaml["databento_scanner"]
+
+    def test_brokers_yaml_has_databento_section(
+        self, mock_config_dir: Path
+    ) -> None:
+        """brokers.yaml includes databento configuration."""
+        import yaml
+
+        brokers_yaml = yaml.safe_load(
+            (mock_config_dir / "brokers.yaml").read_text()
+        )
+
+        assert "databento" in brokers_yaml
+        assert brokers_yaml["databento"]["enabled"] is True
+        assert "api_key_env_var" in brokers_yaml["databento"]

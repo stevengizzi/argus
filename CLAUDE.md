@@ -11,7 +11,7 @@ Phase 1 sprint plan: @docs/07_PHASE1_SPRINT_PLAN.md
 ## Current State
 
 **Structure:** Two parallel tracks (DEC-079, February 19, 2026).
-- **Build Track:** System construction at development velocity. Sprints 1–11 complete (542 tests). Next: Sprint 12 (DatabentoDataService adapter).
+- **Build Track:** System construction at development velocity. Sprints 1–12 complete (658 tests). Sprint 12.5 (IndicatorEngine extraction, DEF-013) or Sprint 13 (IBKRBroker adapter) is NEXT.
 - **Validation Track:** Paper trading ACTIVE on Alpaca IEX (system stability only — DEC-081). Signal accuracy validation pending DatabentoDataService (Sprint 12). Migrates to IBKR paper after Sprint 13.
 
 Active sprint plan: `docs/10_PHASE3_SPRINT_PLAN.md` (covers both tracks).
@@ -38,7 +38,7 @@ Active sprint plan: `docs/10_PHASE3_SPRINT_PLAN.md` (covers both tracks).
 
 **Validation Track sequence:** DatabentoDataService (Sprint 12) → IBKRBroker (Sprint 13) → IBKR paper trading (2+ weeks) → CPA consultation → live trading at minimum size on IBKR.
 
-**Build Track queue:** DatabentoDataService (Sprint 12) → IBKRBroker (Sprint 13) → Command Center MVP (Sprints 14–16) → Orchestrator (17) → ORB Scalp (18) → Tier 1 News (19) → AI Layer MVP (20) → Expansion (21+)
+**Build Track queue:** IndicatorEngine extraction (Sprint 12.5, DEF-013) → IBKRBroker (Sprint 13) → Command Center MVP (Sprints 14–16) → Orchestrator (17) → ORB Scalp (18) → Tier 1 News (19) → AI Layer MVP (20) → Expansion (21+)
 
 **Command Center delivery (DEC-080):** Three surfaces from single React codebase — web app + Tauri desktop + PWA mobile. All operational after Sprint 16.
 
@@ -68,6 +68,9 @@ Components implemented:
 - Dependencies: alpaca-py>=0.30, python-dotenv>=1.0, aiohttp>=3.9, plotly>=6.5, matplotlib>=3.8, seaborn>=0.13 (NOT alpaca-trade-api — deprecated)
 - Research reports completed: Market Data Infrastructure (`argus_market_data_research_report.md`) and Execution Broker (`argus_execution_broker_research_report.md`)
 - Decisions DEC-081–087: Databento data backbone, IBKR live execution, Alpaca incubator-only, sprint resequencing, Parquet cache strategy, cost deferral
+- DatabentoConfig, DatabentoSymbolMap, DatabentoDataService (Sprint 12, partial — core streaming, indicators, stale monitor, historical cache)
+- DataStaleEvent, DataResumedEvent events
+- DatabentoDataService reconnection with exponential backoff, DataFetcher Databento backend (historical + manifest), DatabentoScanner (V1 watchlist), DataSource enum + system integration, shared databento_utils.py (DEC-090, DEC-091)
 
 ## Architecture
 
@@ -220,6 +223,9 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 | ~~DEF-010~~ | ~~Remove `_simulate_trades_for_day_slow()`~~ | ~~Sprint 9 completes~~ | **DONE** — Legacy function removed from vectorbt_orb.py. Tests updated to use wrapper over vectorized functions (DEC-070). |
 | DEF-011 | IQFeedDataService adapter | Forex strategy development starts OR Tier 2 news integration starts | IQFeed provides forex, Benzinga news, and breadth indicators that Databento lacks. Build when a specific feature requires it. ~$160–250/month. |
 | DEF-012 | Databento L2 depth activation | A strategy requires order book depth data for entry/exit decisions | MBP-10 schema available on Standard plan. DatabentoDataService designed for L2 from Sprint 12, but not activated until a strategy needs it. |
+| DEF-013 | Extract shared IndicatorEngine from DataService implementations | Sprint 12 complete OR next DataService implementation begins | Indicator computation (VWAP, ATR-14, SMA-9/20/50, RVOL) is duplicated across AlpacaDataService, DatabentoDataService, and ReplayDataService/BacktestDataService. DEC-055 mandates shared logic. Within DatabentoDataService, warm-up was deduplicated (Sprint 12 cleanup), but cross-service extraction remains. Create `argus/data/indicator_engine.py` that all DataService implementations delegate to. Target: Sprint 12.5 (standalone cleanup sprint). |
+| DEF-014 | SystemAlertEvent for dead data feed | Command Center MVP (Sprint 14–16) OR Health Monitor alerting built | `DatabentoDataService._run_with_reconnection()` logs `critical` when max retries exceeded but emits no Event Bus event. Add `SystemAlertEvent` (or similar) so Health Monitor and Command Center can react (red banner, push notification). Location: `argus/data/databento_data_service.py`. |
+| DEF-015 | DatabentoScanner full-universe scanning | Databento subscription active (DEC-087) AND paper trading validates need for broader symbol coverage | V1 DatabentoScanner uses configured watchlist. Full-universe scanning (~8K US equities) requires cost/latency analysis with live Databento subscription. Location: `argus/data/databento_scanner.py`, `scan()` and `scan_with_gap_data()`. |
 
 This keeps it lightweight — no new document, no new sync burden. Items get removed (or moved to "Completed") as they're addressed. Both Claudes see the trigger column and know when to raise the flag.
 

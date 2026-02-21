@@ -67,6 +67,12 @@ class HealthConfig(BaseModel):
         return os.environ.get(self.alert_webhook_url_env, "")
 
 
+class DataSource(StrEnum):
+    """Data service provider selection."""
+    ALPACA = "alpaca"
+    DATABENTO = "databento"
+
+
 class SystemConfig(BaseModel):
     """Global system settings."""
     timezone: str = "America/New_York"
@@ -77,6 +83,8 @@ class SystemConfig(BaseModel):
     heartbeat_interval_seconds: int = Field(default=60, ge=1)
     data_dir: str = "data"
     health: HealthConfig = Field(default_factory=HealthConfig)
+    # Data source selection (DEC-082: Databento is primary production)
+    data_source: DataSource = DataSource.ALPACA
 
     @field_validator("timezone")
     @classmethod

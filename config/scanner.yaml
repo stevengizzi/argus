@@ -30,3 +30,23 @@ alpaca_scanner:
   max_price: 500.0
   min_volume_yesterday: 1000000
   max_symbols_returned: 10
+
+# Databento scanner configuration (used when data_source = "databento")
+databento_scanner:
+  universe_symbols:
+    - "AAPL"
+    - "MSFT"
+    - "NVDA"
+    - "TSLA"
+    - "AMD"
+    - "AMZN"
+    - "META"
+    - "GOOGL"
+    - "NFLX"
+    - "SPY"
+  min_gap_pct: 0.02
+  min_price: 10.0
+  max_price: 500.0
+  min_volume: 1000000
+  max_symbols_returned: 10
+  dataset: "XNAS.ITCH"

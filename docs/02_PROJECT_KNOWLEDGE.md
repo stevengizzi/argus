@@ -12,10 +12,11 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 
 **Structure:** Two parallel tracks (DEC-079, February 19, 2026). Build Track (system construction) + Validation Track (strategy confidence-building).
 
-**Build Track:** 542 tests. Sprints 1–11 complete. Next: Sprint 12 (DatabentoDataService adapter).
+**Build Track:** 658 tests. Sprints 1–12 complete. Sprint 12.5 (IndicatorEngine extraction, DEF-013) or Sprint 13 (IBKRBroker adapter) is NEXT.
 - Phase 1 (Core Engine): ✅ COMPLETE — 362 tests, Feb 14–16
 - Phase 2 (Backtesting): ✅ COMPLETE — 542 tests, Feb 16–17
 - Sprint 11 (Extended Backtest): ✅ COMPLETE — 35 months, 15 WF windows, WFE=0.56
+- Sprint 12 (DatabentoDataService adapter): ✅ COMPLETE — 658 tests, Feb 21. DatabentoDataService (live streaming + reconnection), DataFetcher Databento backend (historical + manifest), DatabentoScanner (V1 watchlist), system integration (DataSource enum + config wiring), shared databento_utils.py (DEC-091).
 
 **Validation Track:** Paper trading ACTIVE with DEC-076 parameters on Alpaca. Validates system stability only — Alpaca IEX data captures only ~2–3% of market volume (DEC-081), so signal accuracy is not validated until Databento data is integrated (Sprint 12). See `08_PAPER_TRADING_GUIDE.md`.
 
@@ -110,6 +111,10 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 - **Alpaca role reduction (DEC-086):** Alpaca permanently reduced to strategy incubator paper testing. All production data via Databento. All live execution via IBKR. No real capital through Alpaca.
 - **Databento cost deferral (DEC-087):** Subscription activated when DatabentoDataService adapter is ready for integration testing, not before. Development uses mock data.
 - **System identity reframe:** ARGUS is a "strategy research laboratory that also trades live." Data infrastructure must support unlimited symbol access, on-demand historical queries, and 30+ concurrent strategies without artificial constraints. See `argus_market_data_research_report.md` Section 11.
+- **Databento threading model (DEC-088):** Callbacks on Databento's reader thread, bridged to asyncio via `call_soon_threadsafe()`. Record class references stored in `start()` to avoid hot-path imports.
+- **Default dataset (DEC-089):** XNAS.ITCH (Nasdaq TotalView-ITCH). Configurable. Deepest historical data, L2/L3 available, covers NASDAQ-listed stocks.
+- **DataSource enum for provider selection (DEC-090):** `DataSource` enum in `SystemConfig` with `alpaca`/`databento` variants. main.py Phase 6/7 branches on this to select DataService and Scanner. Config-driven, extensible.
+- **Shared Databento normalization utility (DEC-091):** `normalize_databento_df()` extracted to `argus/data/databento_utils.py`. Both DatabentoDataService and DataFetcher call this shared function. Eliminates duplication of ts_event→timestamp, UTC normalization, column selection, sorting.
 
 ## Architecture Summary
 
@@ -211,7 +216,7 @@ Effective February 19, 2026, ARGUS uses two parallel tracks instead of sequentia
 ### Build Track (velocity-limited, continuous)
 Sprints 12+. System construction proceeds at development speed. Each sprint targets a specific component. Order is prioritized but flexible — Validation Track needs can reprioritize.
 
-**Queue:** DatabentoDataService adapter (Sprint 12) → IBKRBroker adapter (Sprint 13) → Command Center MVP (Sprints 14–16) → Orchestrator (Sprint 17) → ORB Scalp (Sprint 18) → Tier 1 News (Sprint 19) → AI Layer MVP (Sprint 20) → Command Center expansion (Sprint 21) → Additional strategies + features (Sprint 22+)
+**Queue:** IndicatorEngine extraction (Sprint 12.5, DEF-013) → IBKRBroker adapter (Sprint 13) → Command Center MVP (Sprints 14–16) → Orchestrator (Sprint 17) → ORB Scalp (Sprint 18) → Tier 1 News (Sprint 19) → AI Layer MVP (Sprint 20) → Command Center expansion (Sprint 21) → Additional strategies + features (Sprint 22+)
 
 **Command Center delivery (DEC-080):** Single React codebase ships to three surfaces: web app (any browser), Tauri desktop app (system tray, native notifications), and PWA mobile app (iPhone/iPad home screen install). All three operational after Sprint 16.
 

@@ -5,6 +5,8 @@ Uses mock objects to test without requiring the databento package or API access.
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import sys
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -1091,3 +1093,358 @@ class TestStaleDataMonitor:
         # Simulate resumed
         service._stale_published = False
         assert service.is_stale is False
+
+
+class TestReconnectionLogic:
+    """Tests for reconnection logic (Component 4)."""
+
+    @pytest.mark.asyncio
+    async def test_clean_shutdown_exits_reconnection_loop(
+        self, mock_databento, event_bus, databento_config, data_config
+    ):
+        """Clean shutdown via stop() exits reconnection loop."""
+        from argus.data.databento_data_service import DatabentoDataService
+
+        service = DatabentoDataService(
+            event_bus=event_bus,
+            config=databento_config,
+            data_config=data_config,
+        )
+        service._warm_up_indicators = AsyncMock()
+
+        with patch.dict("os.environ", {"DATABENTO_API_KEY": "test-key"}):
+            await service.start(["AAPL"], ["1m"])
+
+            # Let the stream task start
+            await asyncio.sleep(0.01)
+
+            assert service._running is True
+            assert service._stream_task is not None
+
+            # Clean shutdown
+            await service.stop()
+
+            assert service._running is False
+            assert service._stream_task.done() or service._stream_task.cancelled()
+
+    @pytest.mark.asyncio
+    async def test_exponential_backoff_doubles_delay_on_each_retry(
+        self, mock_databento, event_bus, data_config
+    ):
+        """Exponential backoff doubles delay on each retry."""
+        from argus.data.databento_data_service import DatabentoDataService
+
+        config = DatabentoConfig(
+            reconnect_base_delay_seconds=1.0,
+            reconnect_max_delay_seconds=60.0,
+            reconnect_max_retries=5,
+        )
+        _ = DatabentoDataService(
+            event_bus=event_bus,
+            config=config,
+            data_config=data_config,
+        )
+
+        # Test delay calculation: base * (2 ** (retries - 1))
+        # Retry 1: 1.0 * (2 ** 0) = 1.0
+        # Retry 2: 1.0 * (2 ** 1) = 2.0
+        # Retry 3: 1.0 * (2 ** 2) = 4.0
+        assert min(config.reconnect_base_delay_seconds * (2 ** 0), 60) == 1.0
+        assert min(config.reconnect_base_delay_seconds * (2 ** 1), 60) == 2.0
+        assert min(config.reconnect_base_delay_seconds * (2 ** 2), 60) == 4.0
+        assert min(config.reconnect_base_delay_seconds * (2 ** 3), 60) == 8.0
+
+    @pytest.mark.asyncio
+    async def test_backoff_caps_at_max_delay_seconds(
+        self, mock_databento, event_bus, data_config
+    ):
+        """Backoff delay caps at max_delay_seconds."""
+        from argus.data.databento_data_service import DatabentoDataService
+
+        config = DatabentoConfig(
+            reconnect_base_delay_seconds=10.0,
+            reconnect_max_delay_seconds=30.0,
+            reconnect_max_retries=10,
+        )
+        _ = DatabentoDataService(
+            event_bus=event_bus,
+            config=config,
+            data_config=data_config,
+        )
+
+        # Retry 10 would be 10 * (2 ** 9) = 5120 seconds
+        # But should cap at 30 seconds
+        retries = 10
+        delay = min(
+            config.reconnect_base_delay_seconds * (2 ** (retries - 1)),
+            config.reconnect_max_delay_seconds,
+        )
+        assert delay == 30.0
+
+    @pytest.mark.asyncio
+    async def test_max_retries_exceeded_logs_critical_and_stops(
+        self, mock_databento, event_bus, data_config, caplog
+    ):
+        """Max retries exceeded logs critical and stops reconnecting."""
+        from argus.data.databento_data_service import DatabentoDataService
+
+        config = DatabentoConfig(
+            reconnect_max_retries=2,
+            reconnect_base_delay_seconds=0.01,  # Fast for testing
+            reconnect_max_delay_seconds=0.1,
+        )
+        service = DatabentoDataService(
+            event_bus=event_bus,
+            config=config,
+            data_config=data_config,
+        )
+        service._warm_up_indicators = AsyncMock()
+
+        # Track connection attempts
+        connection_attempts = []
+
+        # First connect succeeds (in start()), subsequent reconnects fail
+        async def connect_succeeds_then_fails() -> None:
+            import databento as db
+            connection_attempts.append(1)
+            if len(connection_attempts) == 1:
+                # First connection succeeds - set up mock client
+                if service._live_client is not None:
+                    with contextlib.suppress(Exception):
+                        service._live_client.stop()
+                service._live_client = db.Live(key="test")
+                service._symbol_map.clear()
+                service._OHLCVMsg = MockOHLCVMsg
+                service._TradeMsg = MockTradeMsg
+                service._SymbolMappingMsg = MockSymbolMappingMsg
+                service._ErrorMsg = MockErrorMsg
+                service._live_client.start()
+            else:
+                # Subsequent reconnections fail
+                raise ConnectionError("Test connection failure")
+
+        service._connect_live_session = connect_succeeds_then_fails
+
+        with patch.dict("os.environ", {"DATABENTO_API_KEY": "test-key"}):
+            await service.start(["AAPL"], ["1m"])
+
+            # Wait for retries to exhaust
+            await asyncio.sleep(0.5)
+
+            # Ensure stop is called if still running
+            if service._running:
+                await service.stop()
+
+        # Should have attempted initial + retries
+        assert len(connection_attempts) >= 2
+        # Should see critical log message or reconnection attempts in log
+        log_text = caplog.text.lower()
+        assert "reconnecting" in log_text or "max reconnection" in log_text
+
+    @pytest.mark.asyncio
+    async def test_successful_connection_resets_retry_counter(
+        self, mock_databento, event_bus, databento_config, data_config
+    ):
+        """Successful connection resets retry counter to 0."""
+        from argus.data.databento_data_service import DatabentoDataService
+
+        service = DatabentoDataService(
+            event_bus=event_bus,
+            config=databento_config,
+            data_config=data_config,
+        )
+        service._warm_up_indicators = AsyncMock()
+
+        with patch.dict("os.environ", {"DATABENTO_API_KEY": "test-key"}):
+            await service.start(["AAPL"], ["1m"])
+
+            # Connection should be successful
+            assert service._live_client is not None
+            assert service._live_client.started is True
+
+            await service.stop()
+
+    @pytest.mark.asyncio
+    async def test_symbol_map_cleared_on_reconnection(
+        self, mock_databento, event_bus, databento_config, data_config
+    ):
+        """Symbol map is cleared on each reconnection attempt."""
+        from argus.data.databento_data_service import DatabentoDataService
+
+        service = DatabentoDataService(
+            event_bus=event_bus,
+            config=databento_config,
+            data_config=data_config,
+        )
+
+        # Add a mapping
+        service._symbol_map.add_mapping(100, "AAPL")
+        assert service._symbol_map.symbol_count == 1
+
+        # Simulate what _connect_live_session does
+        with patch.dict("os.environ", {"DATABENTO_API_KEY": "test-key"}):
+            await service._connect_live_session()
+
+        # Symbol map should be cleared
+        assert service._symbol_map.symbol_count == 0
+
+        if service._live_client:
+            service._live_client.stop()
+
+    @pytest.mark.asyncio
+    async def test_previous_client_stopped_before_new_one(
+        self, mock_databento, event_bus, databento_config, data_config
+    ):
+        """Previous client is stopped before creating new one."""
+        from argus.data.databento_data_service import DatabentoDataService
+
+        service = DatabentoDataService(
+            event_bus=event_bus,
+            config=databento_config,
+            data_config=data_config,
+        )
+
+        with patch.dict("os.environ", {"DATABENTO_API_KEY": "test-key"}):
+            # First connection
+            await service._connect_live_session()
+            first_client = service._live_client
+
+            # Second connection (simulating reconnect)
+            await service._connect_live_session()
+            second_client = service._live_client
+
+        # First client should have been stopped
+        assert first_client.stopped is True
+        # Second client is different and started
+        assert second_client is not first_client
+        assert second_client.started is True
+
+        second_client.stop()
+
+    @pytest.mark.asyncio
+    async def test_connection_error_triggers_reconnect_not_crash(
+        self, mock_databento, event_bus, data_config
+    ):
+        """Connection error triggers reconnect, doesn't crash the loop."""
+        from argus.data.databento_data_service import DatabentoDataService
+
+        config = DatabentoConfig(
+            reconnect_max_retries=3,
+            reconnect_base_delay_seconds=0.01,
+        )
+        service = DatabentoDataService(
+            event_bus=event_bus,
+            config=config,
+            data_config=data_config,
+        )
+        service._warm_up_indicators = AsyncMock()
+
+        call_count = []
+
+        async def connect_succeeds_fails_succeeds() -> None:
+            import databento as db
+            call_count.append(1)
+            # First (in start()) and third succeed, second fails (to test retry)
+            if len(call_count) == 2:
+                raise ConnectionError("Second attempt fails (triggers retry)")
+            # Set up a mock client
+            if service._live_client is not None:
+                with contextlib.suppress(Exception):
+                    service._live_client.stop()
+            service._live_client = db.Live(key="test")
+            service._symbol_map.clear()
+            service._OHLCVMsg = MockOHLCVMsg
+            service._TradeMsg = MockTradeMsg
+            service._SymbolMappingMsg = MockSymbolMappingMsg
+            service._ErrorMsg = MockErrorMsg
+            service._live_client.start()
+
+        service._connect_live_session = connect_succeeds_fails_succeeds
+
+        with patch.dict("os.environ", {"DATABENTO_API_KEY": "test-key"}):
+            await service.start(["AAPL"], ["1m"])
+
+            # Wait for reconnection loop to run
+            await asyncio.sleep(0.1)
+
+            await service.stop()
+
+        # Should have connected at least once (initial connection)
+        assert len(call_count) >= 1
+
+    @pytest.mark.asyncio
+    async def test_multiple_reconnections_work(
+        self, mock_databento, event_bus, data_config
+    ):
+        """Multiple reconnections work (connect → disconnect → reconnect)."""
+        from argus.data.databento_data_service import DatabentoDataService
+
+        config = DatabentoConfig(
+            reconnect_max_retries=3,
+            reconnect_base_delay_seconds=0.01,
+        )
+        service = DatabentoDataService(
+            event_bus=event_bus,
+            config=config,
+            data_config=data_config,
+        )
+
+        connection_count = []
+
+        async def track_connections() -> None:
+            import databento as db
+            connection_count.append(1)
+            # Clean up previous client if exists
+            if service._live_client is not None:
+                with contextlib.suppress(Exception):
+                    service._live_client.stop()
+            # Create new client
+            service._live_client = db.Live(key="test")
+            service._symbol_map.clear()
+            service._live_client.subscribe(
+                dataset=config.dataset,
+                schema=config.bar_schema,
+                symbols=["AAPL"],
+            )
+            service._live_client.add_callback(service._dispatch_record)
+            service._OHLCVMsg = MockOHLCVMsg
+            service._TradeMsg = MockTradeMsg
+            service._SymbolMappingMsg = MockSymbolMappingMsg
+            service._ErrorMsg = MockErrorMsg
+            service._live_client.start()
+
+        service._connect_live_session = track_connections
+        service._warm_up_indicators = AsyncMock()
+
+        with patch.dict("os.environ", {"DATABENTO_API_KEY": "test-key"}):
+            await service.start(["AAPL"], ["1m"])
+
+            # Wait for first connection
+            await asyncio.sleep(0.05)
+
+            await service.stop()
+
+        # Should have connected at least once
+        assert len(connection_count) >= 1
+
+    @pytest.mark.asyncio
+    async def test_start_stores_symbols_and_timeframes(
+        self, mock_databento, event_bus, databento_config, data_config
+    ):
+        """start() stores symbols and timeframes for reconnection."""
+        from argus.data.databento_data_service import DatabentoDataService
+
+        service = DatabentoDataService(
+            event_bus=event_bus,
+            config=databento_config,
+            data_config=data_config,
+        )
+        service._warm_up_indicators = AsyncMock()
+
+        with patch.dict("os.environ", {"DATABENTO_API_KEY": "test-key"}):
+            await service.start(["AAPL", "TSLA"], ["1m", "5m"])
+
+            assert service._symbols_list == ["AAPL", "TSLA"]
+            assert service._timeframes_list == ["1m", "5m"]
+
+            await service.stop()

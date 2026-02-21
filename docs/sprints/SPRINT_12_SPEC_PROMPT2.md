@@ -15,7 +15,7 @@ Sprint 12 builds the DatabentoDataService adapter — ARGUS's primary production
 
 This prompt adds: robust reconnection logic, the DataFetcher Databento backend for historical data, and scanner + system integration.
 
-**Current test count after Prompt 1:** (will be filled in by user based on actual result)
+**Current test count after Prompt 1:** 609 (608 from Prompt 1 + 1 from cleanup)
 
 ---
 
@@ -28,6 +28,13 @@ This prompt adds: robust reconnection logic, the DataFetcher Databento backend f
 The basic `DatabentoDataService.start()` from Prompt 1 creates a single live session. If the TCP connection drops (network issue, Databento maintenance, etc.), we need automatic reconnection.
 
 **Modify `DatabentoDataService` to add a reconnection wrapper around the live session:**
+
+**Important:** The cleanup pass (post-Prompt 1) moved `import databento` out of the 
+hot-path `_dispatch_record()` and stored record class references as instance variables 
+(DEC-088). When refactoring `start()` → `_connect_live_session()`, ensure these 
+references are set inside `_connect_live_session()` since that's where `import databento 
+as db` now lives. `_dispatch_record()` uses `isinstance(record, self._OHLCVMsg)` etc. 
+— it does NOT import databento itself.
 
 ```python
 # In DatabentoDataService
@@ -162,6 +169,12 @@ async def _connect_live_session(self) -> None:
     # Register callback
     self._live_client.add_callback(self._dispatch_record)
     
+    # Store record class references for _dispatch_record() (DEC-088)
+    self._OHLCVMsg = db.OHLCVMsg
+    self._TradeMsg = db.TradeMsg
+    self._SymbolMappingMsg = db.SymbolMappingMsg
+    self._ErrorMsg = db.ErrorMsg
+
     # Start streaming
     self._live_client.start()
     self._last_message_time = time.monotonic()
@@ -171,53 +184,14 @@ async def _connect_live_session(self) -> None:
     )
 ```
 
-### 4b: Enhanced Stale Data Monitor
+### 4b: Stale Data Monitor — ALREADY IMPLEMENTED (Prompt 1)
 
-Enhance the stale data monitor from Prompt 1 to publish proper events:
+The stale data monitor with DataStaleEvent/DataResumedEvent, the _stale_published 
+dedup flag, and 4 tests are already in place from Prompt 1. No changes needed unless 
+the reconnection wrapper introduces new stale monitor requirements (e.g., resetting 
+_last_message_time on reconnection — verify this happens in _connect_live_session()).
 
-```python
-async def _stale_data_monitor(self) -> None:
-    """Monitor for data feed staleness and publish health events.
-    
-    When data goes stale:
-    - Publish DataStaleEvent → Risk Manager blocks new entries
-    - Log warning
-    
-    When data resumes:
-    - Publish DataResumedEvent → Risk Manager resumes normal operation
-    - Log info
-    """
-    while self._running:
-        await asyncio.sleep(5.0)
-        
-        if self._last_message_time == 0.0:
-            continue  # Haven't received first message yet
-        
-        elapsed = time.monotonic() - self._last_message_time
-        
-        if elapsed > self._config.stale_data_timeout_seconds:
-            if not self._stale_published:
-                logger.warning(
-                    "Data feed stale: %.1fs since last message (threshold: %.1fs)",
-                    elapsed,
-                    self._config.stale_data_timeout_seconds,
-                )
-                stale_event = DataStaleEvent(
-                    timestamp=datetime.now(timezone.utc),
-                    provider="databento",
-                    seconds_since_last=elapsed,
-                )
-                await self._event_bus.publish(stale_event)
-                self._stale_published = True
-        elif self._stale_published:
-            logger.info("Data feed resumed after %.1fs stale period", elapsed)
-            resumed_event = DataResumedEvent(
-                timestamp=datetime.now(timezone.utc),
-                provider="databento",
-            )
-            await self._event_bus.publish(resumed_event)
-            self._stale_published = False
-```
+**Skip tests 11–15 from the test list.** They already exist and pass.
 
 ### Tests for Component 4 (~15):
 
@@ -247,6 +221,17 @@ async def _stale_data_monitor(self) -> None:
 **Purpose:** Extend the existing `DataFetcher` class to support fetching historical 1-minute bars from Databento's Historical API, alongside the existing Alpaca backend.
 
 **Location:** `argus/data/data_fetcher.py` (existing file — extend, don't replace)
+
+**Note:** DatabentoDataService already has `_normalize_historical_df()` from Prompt 1 
+that performs the same normalization (ts_event → timestamp, UTC, column selection, sort). 
+Rather than duplicating, either:
+(a) Extract it as a standalone utility function in a shared location (e.g., 
+    `argus/data/databento_utils.py`) and have both DataFetcher and 
+    DatabentoDataService call it, OR
+(b) Copy it as `_normalize_databento_df()` in DataFetcher and flag as tech debt 
+    (minor — it's a pure static method with no state).
+
+Option (a) is preferred but (b) is acceptable for Sprint 12.
 
 ### Design
 
@@ -424,6 +409,9 @@ class DataFetcher:
 **Purpose:** Scanner implementation that uses Databento data for pre-market gap scanning. With Databento's full-universe access, we can scan all ~8,000 stocks instead of being limited by Alpaca's symbol constraints.
 
 **Location:** `argus/data/databento_scanner.py`
+
+**Note:** `.env.example` already includes DATABENTO_API_KEY (added in Prompt 1). 
+No additional changes needed.
 
 **Design:** For V1, the scanner follows the same ABC as existing scanners. The DatabentoScanner scans for gap candidates by querying yesterday's closing prices and today's opening prices from Databento.
 

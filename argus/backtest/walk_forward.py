@@ -1132,7 +1132,8 @@ async def run_fixed_params_walk_forward(
     save_walk_forward_results(result, config.output_dir)
 
     logger.info(
-        "Fixed-params walk-forward complete: %d windows, avg WFE=%.2f, OOS trades=%d, OOS P&L=$%.2f",
+        "Fixed-params walk-forward complete: %d windows, avg WFE=%.2f, "
+        "OOS trades=%d, OOS P&L=$%.2f",
         len(window_results),
         avg_wfe_sharpe,
         total_oos_trades,
@@ -1565,8 +1566,12 @@ def main() -> None:
         print("-" * 100)
 
         # WFE assessment
-        windows_above_03 = len([w for w in result.windows if w.error is None and w.wfe_sharpe >= 0.3])
-        windows_above_05 = len([w for w in result.windows if w.error is None and w.wfe_sharpe >= 0.5])
+        windows_above_03 = len([
+            w for w in result.windows if w.error is None and w.wfe_sharpe >= 0.3
+        ])
+        windows_above_05 = len([
+            w for w in result.windows if w.error is None and w.wfe_sharpe >= 0.5
+        ])
         valid_count = len([w for w in result.windows if w.error is None])
         print(f"\nWindows with WFE >= 0.3: {windows_above_03}/{valid_count}")
         print(f"Windows with WFE >= 0.5: {windows_above_05}/{valid_count}")

@@ -224,7 +224,8 @@ Future (when needed):
 - `reconnect_max_retries`: 10
 - `reconnect_base_delay_seconds`: 1.0
 
-Sprint 12 scope. See DEC-082 and `argus_market_data_research_report.md` Section 14.
+**Implementation Status:** Sprint 12 ✅ COMPLETE (Feb 21). DatabentoConfig, DatabentoSymbolMap, DatabentoDataService (live streaming, reconnection with exponential backoff, indicators, stale data monitor, historical/Parquet cache). DataFetcher Databento backend with manifest tracking. DatabentoScanner (V1 watchlist). DataSource enum for config-driven provider selection. Shared normalization via `argus/data/databento_utils.py` (DEC-091). Threading model: Databento reader thread → `call_soon_threadsafe()` → asyncio Event Bus (DEC-088). Default dataset: XNAS.ITCH (DEC-089). See `argus_market_data_research_report.md` Section 14.
+
 
 ### 3.3 Broker Abstraction (`execution/broker.py`)
 

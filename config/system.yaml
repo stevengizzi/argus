@@ -5,6 +5,9 @@ log_level: "INFO"
 heartbeat_interval_seconds: 60
 data_dir: "data"
 
+# Data source: "alpaca" or "databento" (DEC-082: Databento is primary production)
+data_source: "alpaca"
+
 health:
   heartbeat_interval_seconds: 60
   heartbeat_url_env: "HEALTHCHECKS_PING_URL"  # Env var name (not the URL itself!)

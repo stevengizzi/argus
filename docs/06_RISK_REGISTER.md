@@ -438,7 +438,7 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 | **Likelihood** | Low-Medium |
 | **Mitigation** | (1) Circuit-breaker logic: if data stream fails, halt new trades rather than trade blind. (2) Existing stops are placed broker-side and remain active. (3) IQFeed as eventual backup data source provides redundancy. (4) DataService abstraction enables rapid provider switching. (5) Databento commits to 99.99% uptime. |
 | **Trigger for action** | Live data stream failure during market hours. Monitor Databento status page during all trading sessions. |
-| **Status** | Open — mitigated by architecture. Circuit-breaker logic built into DatabentoDataService (Sprint 12). |
+| **Status** | Open — partially mitigated. Stale data monitor with DataStaleEvent/DataResumedEvent implemented in Sprint 12 (Components 1–3). Circuit-breaker halts new trade entries when data is stale. Reconnection with exponential backoff under review (Sprint 12 Components 4–6). Full mitigation confirmed after Sprint 12 Prompt 2 review. |
 
 ---
 

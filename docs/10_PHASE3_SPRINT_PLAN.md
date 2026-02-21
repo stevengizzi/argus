@@ -44,7 +44,7 @@ inform Build Track priorities.
 
 #### Validation Sequence
 1. ✅ Extended backtest complete (Sprint 11, WFE 0.56, OOS Sharpe +0.34)
-2. ⬜ Sprint 12: DatabentoDataService adapter built → resume paper trading with quality data
+2. ✅ Sprint 12: DatabentoDataService adapter built (Feb 21). Databento subscription activation deferred until Sprint 13 complete + IBKR approved (DEC-087).
 3. ⬜ Sprint 13: IBKRBroker adapter built → migrate paper trading to IBKR
 4. ⬜ IBKR paper trading: minimum 2 weeks with DEC-076 parameters
 5. ⬜ User satisfied with system stability and strategy performance
@@ -102,6 +102,7 @@ inform Build Track priorities.
 | 9 | Backtest | Walk-forward validation, HTML reports | 542 | Feb 17 |
 | 10 | Backtest | Analysis, Parameter Validation Report | 542 | Feb 17 |
 | 11 | Validation | Extended backtest (35mo, 15 windows, WFE=0.56) | 542 | Feb 17 |
+| 12 | Infrastructure | DatabentoDataService adapter (streaming, reconnection, historical, scanner, system integration) | 658 | Feb 21 |
 
 ### Build Track Queue
 
@@ -109,23 +110,27 @@ Sprints below are ordered by priority but can be resequenced based on what
 the Validation Track needs most. Estimates assume the demonstrated ~1 day
 per sprint velocity.
 
-#### Sprint 12 — DatabentoDataService Adapter
-**Target:** ~2–3 days
-**Scope:**
-- `DatabentoDataService` implementing the DataService abstraction
-- Uses `databento` Python client library (official, async)
-- Subscribes to OHLCV-1m bars and trades streams → publishes CandleEvents and TickEvents
-- Full-universe subscription (no symbol limits) with strategy-specific filtering
-- L2 depth integration designed from day one (MBP-10 schema), activated when a strategy requires it
-- Single live session, Event Bus fan-out to all consumers
-- Session management with reconnection logic and exponential backoff
-- Circuit-breaker: halt new trades if data stream fails (RSK-021 mitigation)
-- Historical data interface: on-demand queries to Databento historical API → Parquet cache (DEC-085)
-- DataFetcher gains Databento backend alongside existing Alpaca backend
-- Comprehensive test suite matching existing DataService test patterns
-- **Databento subscription activated at end of sprint for integration testing (DEC-087)**
+#### Sprint 12 — DatabentoDataService Adapter ✅ COMPLETE (Feb 21)
+**Delivered:**
+- DatabentoConfig, DatabentoSymbolMap, DatabentoDataService (live streaming + reconnection + stale monitor)
+- DataFetcher Databento backend (historical data + Parquet cache + manifest tracking)
+- DatabentoScanner (V1 watchlist-based gap scanning)
+- System integration: DataSource enum, provider selection in main.py
+- Shared `databento_utils.py` (normalize_databento_df) — DEC-091
+- 658 tests (96 new), ruff fully clean
+**Deferred:** SystemAlertEvent for dead data feed (DEF-014), full-universe scanning (DEF-015)
+**Note:** Databento subscription not yet activated — deferred until Sprint 13 complete + IBKR approved (DEC-087)
 
-**Unblocks:** Paper trading resumes with institutional-grade data quality.
+#### Sprint 12.5 — IndicatorEngine Extraction (DEF-013)
+**Target:** ~0.5 day (cleanup sprint)
+**Scope:**
+- Extract shared `IndicatorEngine` class to `argus/data/indicator_engine.py`
+- Encapsulates VWAP, ATR(14), SMA(9/20/50), RVOL computation and state
+- Refactor AlpacaDataService, DatabentoDataService, ReplayDataService, and BacktestDataService to delegate to IndicatorEngine
+- Eliminates indicator logic triplication (DEC-055 compliance)
+- No behavioral changes — pure refactor with existing tests as safety net
+
+**Unblocks:** Clean foundation before adding more DataService implementations (IQFeed, etc.)
 
 #### Sprint 13 — IBKRBroker Adapter + IB Gateway Integration
 **Target:** ~3–5 days
