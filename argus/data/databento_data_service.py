@@ -2,6 +2,8 @@
 
 Implements the DataService ABC using Databento's Live and Historical clients.
 Single TCP session with Event Bus fan-out to all consumers (DEC-082).
+
+Indicator computation delegated to IndicatorEngine (DEF-013).
 """
 
 from __future__ import annotations
@@ -11,7 +13,6 @@ import contextlib
 import logging
 import os
 import time
-from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -29,45 +30,13 @@ from argus.core.events import (
 )
 from argus.data.databento_symbol_map import DatabentoSymbolMap
 from argus.data.databento_utils import normalize_databento_df
+from argus.data.indicator_engine import IndicatorEngine
 from argus.data.service import DataService
 
 if TYPE_CHECKING:
     from argus.core.event_bus import EventBus
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class IndicatorState:
-    """Internal state for computing indicators for a single symbol.
-
-    Matches AlpacaDataService's indicator computation logic exactly
-    for consistency across data providers.
-    """
-
-    # VWAP state (resets daily)
-    vwap_cumulative_tp_volume: float = 0.0
-    vwap_cumulative_volume: int = 0
-    vwap_date: str = ""  # Track which date we're on for reset
-
-    # ATR state
-    atr_true_ranges: list[float] = field(default_factory=list)
-    atr_prev_close: float | None = None
-
-    # SMA state (rolling windows)
-    sma_closes: list[float] = field(default_factory=list)
-
-    # RVOL state (relative volume)
-    rvol_baseline_volume: float | None = None  # Average volume from first N candles
-    rvol_volume_samples: list[int] = field(default_factory=list)
-
-    # Cached indicator values
-    vwap: float | None = None
-    atr_14: float | None = None
-    sma_9: float | None = None
-    sma_20: float | None = None
-    sma_50: float | None = None
-    rvol: float | None = None
 
 
 class DatabentoDataService(DataService):
@@ -119,8 +88,8 @@ class DatabentoDataService(DataService):
         self._price_cache: dict[str, float] = {}
         self._indicator_cache: dict[tuple[str, str], float] = {}
 
-        # Indicator computation state per symbol
-        self._indicator_state: dict[str, IndicatorState] = {}
+        # Indicator engines per symbol (DEF-013)
+        self._indicator_engines: dict[str, IndicatorEngine] = {}
 
         # State
         self._running = False
@@ -639,122 +608,79 @@ class DatabentoDataService(DataService):
     def _update_indicators(self, symbol: str, candle: CandleEvent) -> list[IndicatorEvent]:
         """Update indicators for a symbol after receiving a new candle.
 
-        Uses the exact same indicator computation logic as AlpacaDataService
-        and BacktestDataService for consistency across data providers.
-
-        Indicators computed: VWAP, ATR(14), SMA(9), SMA(20), SMA(50), RVOL.
+        Delegates to IndicatorEngine for computation (DEF-013).
 
         Updates self._indicator_cache and returns a list of IndicatorEvent
         objects to publish.
         """
-        if symbol not in self._indicator_state:
-            self._indicator_state[symbol] = IndicatorState()
+        # Get or create indicator engine for this symbol
+        if symbol not in self._indicator_engines:
+            self._indicator_engines[symbol] = IndicatorEngine(symbol)
 
-        state = self._indicator_state[symbol]
+        engine = self._indicator_engines[symbol]
         events: list[IndicatorEvent] = []
 
-        # Get date string for VWAP reset
+        # Get date string for auto-reset detection
         candle_date = candle.timestamp.strftime("%Y-%m-%d")
 
-        # Reset VWAP on new day
-        if state.vwap_date != candle_date:
-            state.vwap_cumulative_tp_volume = 0.0
-            state.vwap_cumulative_volume = 0
-            state.vwap_date = candle_date
-            # Reset RVOL baseline on new day too
-            state.rvol_volume_samples = []
-            state.rvol_baseline_volume = None
+        # Update indicators via engine
+        values = engine.update(
+            open_=candle.open,
+            high=candle.high,
+            low=candle.low,
+            close=candle.close,
+            volume=candle.volume,
+            timestamp_date=candle_date,
+        )
 
-        # --- VWAP ---
-        typical_price = (candle.high + candle.low + candle.close) / 3
-        state.vwap_cumulative_tp_volume += typical_price * candle.volume
-        state.vwap_cumulative_volume += candle.volume
-
-        if state.vwap_cumulative_volume > 0:
-            state.vwap = state.vwap_cumulative_tp_volume / state.vwap_cumulative_volume
-            self._indicator_cache[(symbol, "vwap")] = state.vwap
+        # Update cache and build events for non-None indicators
+        if values.vwap is not None:
+            self._indicator_cache[(symbol, "vwap")] = values.vwap
             events.append(IndicatorEvent(
                 symbol=symbol,
                 indicator_name="vwap",
-                value=state.vwap,
+                value=values.vwap,
             ))
 
-        # --- ATR(14) ---
-        if state.atr_prev_close is not None:
-            true_range = max(
-                candle.high - candle.low,
-                abs(candle.high - state.atr_prev_close),
-                abs(candle.low - state.atr_prev_close),
-            )
-            state.atr_true_ranges.append(true_range)
+        if values.atr_14 is not None:
+            self._indicator_cache[(symbol, "atr_14")] = values.atr_14
+            events.append(IndicatorEvent(
+                symbol=symbol,
+                indicator_name="atr_14",
+                value=values.atr_14,
+            ))
 
-            if len(state.atr_true_ranges) >= 14:
-                # Use Wilder's smoothing (exponential moving average)
-                if state.atr_14 is None:
-                    # Initial ATR is simple average
-                    state.atr_14 = sum(state.atr_true_ranges[-14:]) / 14
-                else:
-                    # Subsequent ATR uses smoothing: ATR = ((ATR_prev * 13) + TR) / 14
-                    state.atr_14 = (state.atr_14 * 13 + true_range) / 14
-
-                self._indicator_cache[(symbol, "atr_14")] = state.atr_14
-                events.append(IndicatorEvent(
-                    symbol=symbol,
-                    indicator_name="atr_14",
-                    value=state.atr_14,
-                ))
-
-        state.atr_prev_close = candle.close
-
-        # --- SMA (9, 20, 50) ---
-        state.sma_closes.append(candle.close)
-
-        if len(state.sma_closes) >= 9:
-            state.sma_9 = sum(state.sma_closes[-9:]) / 9
-            self._indicator_cache[(symbol, "sma_9")] = state.sma_9
+        if values.sma_9 is not None:
+            self._indicator_cache[(symbol, "sma_9")] = values.sma_9
             events.append(IndicatorEvent(
                 symbol=symbol,
                 indicator_name="sma_9",
-                value=state.sma_9,
+                value=values.sma_9,
             ))
 
-        if len(state.sma_closes) >= 20:
-            state.sma_20 = sum(state.sma_closes[-20:]) / 20
-            self._indicator_cache[(symbol, "sma_20")] = state.sma_20
+        if values.sma_20 is not None:
+            self._indicator_cache[(symbol, "sma_20")] = values.sma_20
             events.append(IndicatorEvent(
                 symbol=symbol,
                 indicator_name="sma_20",
-                value=state.sma_20,
+                value=values.sma_20,
             ))
 
-        if len(state.sma_closes) >= 50:
-            state.sma_50 = sum(state.sma_closes[-50:]) / 50
-            self._indicator_cache[(symbol, "sma_50")] = state.sma_50
+        if values.sma_50 is not None:
+            self._indicator_cache[(symbol, "sma_50")] = values.sma_50
             events.append(IndicatorEvent(
                 symbol=symbol,
                 indicator_name="sma_50",
-                value=state.sma_50,
+                value=values.sma_50,
             ))
 
-        # --- RVOL (relative volume) ---
-        # Use first 20 candles as baseline
-        state.rvol_volume_samples.append(candle.volume)
-        if len(state.rvol_volume_samples) >= 20:
-            if state.rvol_baseline_volume is None:
-                # Set baseline from first 20 candles
-                state.rvol_baseline_volume = sum(state.rvol_volume_samples[:20]) / 20
-
-            if state.rvol_baseline_volume > 0:
-                # RVOL = current cumulative volume / expected cumulative volume
-                cumulative_volume = sum(state.rvol_volume_samples)
-                expected_volume = state.rvol_baseline_volume * len(state.rvol_volume_samples)
-                state.rvol = cumulative_volume / expected_volume
-                self._indicator_cache[(symbol, "rvol")] = state.rvol
-                events.append(IndicatorEvent(
-                    symbol=symbol,
-                    indicator_name="rvol",
-                    value=state.rvol,
-                ))
+        if values.rvol is not None:
+            self._indicator_cache[(symbol, "rvol")] = values.rvol
+            events.append(IndicatorEvent(
+                symbol=symbol,
+                indicator_name="rvol",
+                value=values.rvol,
+            ))
 
         return events
 
@@ -798,13 +724,15 @@ class DatabentoDataService(DataService):
                     # Update indicators — ignore returned events during warm-up
                     self._update_indicators(symbol, candle)
 
-                state = self._indicator_state.get(symbol)
+                engine = self._indicator_engines.get(symbol)
+                vwap_str = f"{engine.vwap:.2f}" if engine and engine.vwap else "N/A"
+                atr_str = f"{engine.atr_14:.2f}" if engine and engine.atr_14 else "N/A"
                 logger.debug(
                     "Warmed up %s with %d candles. VWAP: %s, ATR: %s",
                     symbol,
                     len(df),
-                    f"{state.vwap:.2f}" if state and state.vwap else "N/A",
-                    f"{state.atr_14:.2f}" if state and state.atr_14 else "N/A",
+                    vwap_str,
+                    atr_str,
                 )
 
             except Exception as e:

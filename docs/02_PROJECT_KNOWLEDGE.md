@@ -12,11 +12,12 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 
 **Structure:** Two parallel tracks (DEC-079, February 19, 2026). Build Track (system construction) + Validation Track (strategy confidence-building).
 
-**Build Track:** 658 tests. Sprints 1–12 complete. Sprint 12.5 (IndicatorEngine extraction, DEF-013) or Sprint 13 (IBKRBroker adapter) is NEXT.
+**Build Track:** 685 tests. Sprints 1–12.5 complete. Sprint 13 (IBKRBroker adapter) is NEXT.
 - Phase 1 (Core Engine): ✅ COMPLETE — 362 tests, Feb 14–16
 - Phase 2 (Backtesting): ✅ COMPLETE — 542 tests, Feb 16–17
 - Sprint 11 (Extended Backtest): ✅ COMPLETE — 35 months, 15 WF windows, WFE=0.56
 - Sprint 12 (DatabentoDataService adapter): ✅ COMPLETE — 658 tests, Feb 21. DatabentoDataService (live streaming + reconnection), DataFetcher Databento backend (historical + manifest), DatabentoScanner (V1 watchlist), system integration (DataSource enum + config wiring), shared databento_utils.py (DEC-091).
+- Sprint 12.5 (IndicatorEngine extraction): ✅ COMPLETE — 685 tests, Feb 21. IndicatorEngine class shared by all four DataService implementations. DEF-013 resolved (DEC-092).
 
 **Validation Track:** Paper trading ACTIVE with DEC-076 parameters on Alpaca. Validates system stability only — Alpaca IEX data captures only ~2–3% of market volume (DEC-081), so signal accuracy is not validated until Databento data is integrated (Sprint 12). See `08_PAPER_TRADING_GUIDE.md`.
 
@@ -27,7 +28,7 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 
 **IBKR Account (Feb 21):** Application submitted. Account ID U24619949. Individual margin account, IBKR Pro tiered pricing. Awaiting approval — paper trading account will be enabled post-approval for Sprint 13 adapter development.
 
-**Next Build sprints:** Sprint 12 (DatabentoDataService adapter) → Sprint 13 (IBKRBroker adapter) → Sprint 14–16 (Command Center MVP).
+**Next Build sprints:** Sprint 13 (IBKRBroker adapter) → Sprint 14–16 (Command Center MVP).
 **Next Validation gate:** DatabentoDataService ready → resume paper trading with quality data → IBKRBroker ready → IBKR paper trading validation → CPA consultation → live trading at minimum size on IBKR.
 
 **✅ IBKR APPLICATION SUBMITTED:** Feb 21, 2026. Account ID: U24619949. Individual margin account, IBKR Pro (tiered pricing), Georgia address. Trading permissions requested: Stocks, Options (Level 3), Futures, Currency/Forex, Cryptocurrencies, Mutual Funds. Awaiting approval (typically 1–3 business days, may take longer). Disclosures and agreements archived locally.
@@ -115,6 +116,7 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 - **Default dataset (DEC-089):** XNAS.ITCH (Nasdaq TotalView-ITCH). Configurable. Deepest historical data, L2/L3 available, covers NASDAQ-listed stocks.
 - **DataSource enum for provider selection (DEC-090):** `DataSource` enum in `SystemConfig` with `alpaca`/`databento` variants. main.py Phase 6/7 branches on this to select DataService and Scanner. Config-driven, extensible.
 - **Shared Databento normalization utility (DEC-091):** `normalize_databento_df()` extracted to `argus/data/databento_utils.py`. Both DatabentoDataService and DataFetcher call this shared function. Eliminates duplication of ts_event→timestamp, UTC normalization, column selection, sorting.
+- **IndicatorEngine extraction (DEC-092):** `IndicatorEngine` class in `argus/data/indicator_engine.py`. All four DataService implementations delegate indicator computation (VWAP, ATR-14, SMA-9/20/50, RVOL) to this shared engine. Resolves DEF-013. 27 new tests, 685 total.
 
 ## Architecture Summary
 
@@ -216,7 +218,7 @@ Effective February 19, 2026, ARGUS uses two parallel tracks instead of sequentia
 ### Build Track (velocity-limited, continuous)
 Sprints 12+. System construction proceeds at development speed. Each sprint targets a specific component. Order is prioritized but flexible — Validation Track needs can reprioritize.
 
-**Queue:** IndicatorEngine extraction (Sprint 12.5, DEF-013) → IBKRBroker adapter (Sprint 13) → Command Center MVP (Sprints 14–16) → Orchestrator (Sprint 17) → ORB Scalp (Sprint 18) → Tier 1 News (Sprint 19) → AI Layer MVP (Sprint 20) → Command Center expansion (Sprint 21) → Additional strategies + features (Sprint 22+)
+**Queue:** IBKRBroker adapter (Sprint 13) → Command Center MVP (Sprints 14–16) → Orchestrator (Sprint 17) → ORB Scalp (Sprint 18) → Tier 1 News (Sprint 19) → AI Layer MVP (Sprint 20) → Command Center expansion (Sprint 21) → Additional strategies + features (Sprint 22+)
 
 **Command Center delivery (DEC-080):** Single React codebase ships to three surfaces: web app (any browser), Tauri desktop app (system tray, native notifications), and PWA mobile app (iPhone/iPad home screen install). All three operational after Sprint 16.
 

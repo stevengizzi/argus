@@ -2,6 +2,8 @@
 
 This module provides real-time market data streaming from Alpaca via WebSocket,
 with historical data fetching for indicator warm-up via REST API.
+
+Indicator computation delegated to IndicatorEngine (DEF-013).
 """
 
 from __future__ import annotations
@@ -11,7 +13,6 @@ import contextlib
 import logging
 import os
 import random
-from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from datetime import time as dt_time
 from typing import TYPE_CHECKING, Any
@@ -29,44 +30,13 @@ from argus.core.clock import Clock, SystemClock
 from argus.core.config import AlpacaConfig, DataServiceConfig
 from argus.core.event_bus import EventBus
 from argus.core.events import CandleEvent, IndicatorEvent, TickEvent
+from argus.data.indicator_engine import IndicatorEngine
 from argus.data.service import DataService
 
 if TYPE_CHECKING:
     from argus.core.health import HealthMonitor
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class IndicatorState:
-    """Internal state for computing indicators for a single symbol.
-
-    Matches ReplayDataService's indicator computation logic exactly.
-    """
-
-    # VWAP state (resets daily)
-    vwap_cumulative_tp_volume: float = 0.0
-    vwap_cumulative_volume: int = 0
-    vwap_date: str = ""  # Track which date we're on for reset
-
-    # ATR state
-    atr_true_ranges: list[float] = field(default_factory=list)
-    atr_prev_close: float | None = None
-
-    # SMA state (rolling windows)
-    sma_closes: list[float] = field(default_factory=list)
-
-    # RVOL state (relative volume)
-    rvol_baseline_volume: float | None = None  # Average volume from first N candles
-    rvol_volume_samples: list[int] = field(default_factory=list)
-
-    # Cached indicator values
-    vwap: float | None = None
-    atr_14: float | None = None
-    sma_9: float | None = None
-    sma_20: float | None = None
-    sma_50: float | None = None
-    rvol: float | None = None
 
 
 class AlpacaDataService(DataService):
@@ -84,7 +54,7 @@ class AlpacaDataService(DataService):
         _data_stream: Alpaca WebSocket stream for bars and trades.
         _historical_client: Alpaca REST client for historical data.
         _price_cache: Latest trade price per symbol.
-        _indicator_state: IndicatorState instances per symbol.
+        _indicator_engines: IndicatorEngine instances per symbol (DEF-013).
         _last_data_time: Last data received timestamp per symbol.
         _is_stale: Flag indicating if data is stale.
         _stream_task: Asyncio task running the WebSocket stream.
@@ -122,7 +92,7 @@ class AlpacaDataService(DataService):
 
         # State
         self._price_cache: dict[str, float] = {}
-        self._indicator_state: dict[str, IndicatorState] = {}
+        self._indicator_engines: dict[str, IndicatorEngine] = {}
         self._last_data_time: dict[str, datetime] = {}
         self._is_stale = False
         self._stream_task: asyncio.Task | None = None
@@ -251,17 +221,17 @@ class AlpacaDataService(DataService):
         Raises:
             ValueError: If indicator not available for symbol.
         """
-        state = self._indicator_state.get(symbol)
-        if state is None:
+        engine = self._indicator_engines.get(symbol)
+        if engine is None:
             raise ValueError(f"No indicator state for {symbol}")
 
         indicator_map = {
-            "vwap": state.vwap,
-            "atr_14": state.atr_14,
-            "sma_9": state.sma_9,
-            "sma_20": state.sma_20,
-            "sma_50": state.sma_50,
-            "rvol": state.rvol,
+            "vwap": engine.vwap,
+            "atr_14": engine.atr_14,
+            "sma_9": engine.sma_9,
+            "sma_20": engine.sma_20,
+            "sma_50": engine.sma_50,
+            "rvol": engine.rvol,
         }
 
         value = indicator_map.get(indicator)
@@ -355,12 +325,12 @@ class AlpacaDataService(DataService):
         for symbol in symbols:
             try:
                 price = await self.get_current_price(symbol)
-                state = self._indicator_state.get(symbol)
+                engine = self._indicator_engines.get(symbol)
                 result[symbol] = {
                     "price": price,
-                    "vwap": state.vwap if state else None,
-                    "atr_14": state.atr_14 if state else None,
-                    "rvol": state.rvol if state else None,
+                    "vwap": engine.vwap if engine else None,
+                    "atr_14": engine.atr_14 if engine else None,
+                    "rvol": engine.rvol if engine else None,
                 }
             except ValueError:
                 # Symbol not in cache yet
@@ -458,6 +428,8 @@ class AlpacaDataService(DataService):
     async def _warm_up_indicators(self, symbols: list[str]) -> None:
         """Fetch historical candles and warm up indicator state.
 
+        Delegates to IndicatorEngine for computation (DEF-013).
+
         Args:
             symbols: List of ticker symbols to warm up.
         """
@@ -475,75 +447,29 @@ class AlpacaDataService(DataService):
                     logger.warning(f"No historical data for {symbol}, skipping warm-up")
                     continue
 
-                # Initialize indicator state
-                state = IndicatorState()
-                self._indicator_state[symbol] = state
+                # Initialize indicator engine
+                engine = IndicatorEngine(symbol)
+                self._indicator_engines[symbol] = engine
 
-                # Feed historical candles (do NOT publish events during warm-up)
+                # Feed historical candles through engine (do NOT publish events during warm-up)
                 for _, row in df.iterrows():
                     timestamp = row["timestamp"]
                     candle_date = timestamp.strftime("%Y-%m-%d")
 
-                    # Reset VWAP on new day
-                    if state.vwap_date != candle_date:
-                        state.vwap_cumulative_tp_volume = 0.0
-                        state.vwap_cumulative_volume = 0
-                        state.vwap_date = candle_date
-                        state.rvol_volume_samples = []
-                        state.rvol_baseline_volume = None
+                    engine.update(
+                        open_=row["open"],
+                        high=row["high"],
+                        low=row["low"],
+                        close=row["close"],
+                        volume=int(row["volume"]),
+                        timestamp_date=candle_date,
+                    )
 
-                    # Update indicators (same logic as _update_indicators but without publishing)
-                    high = row["high"]
-                    low = row["low"]
-                    close = row["close"]
-                    volume = row["volume"]
-
-                    # VWAP
-                    typical_price = (high + low + close) / 3
-                    state.vwap_cumulative_tp_volume += typical_price * volume
-                    state.vwap_cumulative_volume += volume
-                    if state.vwap_cumulative_volume > 0:
-                        state.vwap = state.vwap_cumulative_tp_volume / state.vwap_cumulative_volume
-
-                    # ATR
-                    if state.atr_prev_close is not None:
-                        true_range = max(
-                            high - low,
-                            abs(high - state.atr_prev_close),
-                            abs(low - state.atr_prev_close),
-                        )
-                        state.atr_true_ranges.append(true_range)
-                        if len(state.atr_true_ranges) >= 14:
-                            if state.atr_14 is None:
-                                state.atr_14 = sum(state.atr_true_ranges[-14:]) / 14
-                            else:
-                                state.atr_14 = (state.atr_14 * 13 + true_range) / 14
-                    state.atr_prev_close = close
-
-                    # SMA
-                    state.sma_closes.append(close)
-                    if len(state.sma_closes) >= 9:
-                        state.sma_9 = sum(state.sma_closes[-9:]) / 9
-                    if len(state.sma_closes) >= 20:
-                        state.sma_20 = sum(state.sma_closes[-20:]) / 20
-                    if len(state.sma_closes) >= 50:
-                        state.sma_50 = sum(state.sma_closes[-50:]) / 50
-
-                    # RVOL
-                    state.rvol_volume_samples.append(volume)
-                    if len(state.rvol_volume_samples) >= 20:
-                        if state.rvol_baseline_volume is None:
-                            state.rvol_baseline_volume = sum(state.rvol_volume_samples[:20]) / 20
-                        if state.rvol_baseline_volume > 0:
-                            cumulative_volume = sum(state.rvol_volume_samples)
-                            num_samples = len(state.rvol_volume_samples)
-                            expected_volume = state.rvol_baseline_volume * num_samples
-                            state.rvol = cumulative_volume / expected_volume
-
+                vwap_str = f"{engine.vwap:.2f}" if engine.vwap else "N/A"
+                atr_str = f"{engine.atr_14:.2f}" if engine.atr_14 else "N/A"
                 logger.debug(
                     f"Warmed up {symbol} with {len(df)} candles. "
-                    f"VWAP: {state.vwap:.2f if state.vwap else 'N/A'}, "
-                    f"ATR: {state.atr_14:.2f if state.atr_14 else 'N/A'}"
+                    f"VWAP: {vwap_str}, ATR: {atr_str}"
                 )
 
             except Exception as e:
@@ -570,10 +496,10 @@ class AlpacaDataService(DataService):
                 f"close={bar.close:.2f}, volume={bar.volume}"
             )
 
-        # Ensure indicator state exists
-        if symbol not in self._indicator_state:
-            # Create state if not exists (shouldn't happen if warm-up worked)
-            self._indicator_state[symbol] = IndicatorState()
+        # Ensure indicator engine exists
+        if symbol not in self._indicator_engines:
+            # Create engine if not exists (shouldn't happen if warm-up worked)
+            self._indicator_engines[symbol] = IndicatorEngine(symbol)
 
         # Update last data time (for stale detection)
         self._last_data_time[symbol] = self._clock.now()
@@ -783,86 +709,45 @@ class AlpacaDataService(DataService):
     async def _update_indicators(self, symbol: str, candle: CandleEvent) -> None:
         """Compute indicators and publish IndicatorEvents.
 
-        Uses the same logic as ReplayDataService for consistency.
+        Delegates to IndicatorEngine for computation (DEF-013).
 
         Args:
             symbol: Ticker symbol.
             candle: CandleEvent with OHLCV data.
         """
-        state = self._indicator_state[symbol]
+        engine = self._indicator_engines[symbol]
 
-        # Get date string for VWAP reset
+        # Get date string for auto-reset detection
         candle_date = candle.timestamp.strftime("%Y-%m-%d")
 
-        # Reset VWAP on new day
-        if state.vwap_date != candle_date:
-            state.vwap_cumulative_tp_volume = 0.0
-            state.vwap_cumulative_volume = 0
-            state.vwap_date = candle_date
-            # Reset RVOL baseline on new day too
-            state.rvol_volume_samples = []
-            state.rvol_baseline_volume = None
+        # Update indicators via engine
+        values = engine.update(
+            open_=candle.open,
+            high=candle.high,
+            low=candle.low,
+            close=candle.close,
+            volume=candle.volume,
+            timestamp_date=candle_date,
+        )
 
-        # --- VWAP ---
-        typical_price = (candle.high + candle.low + candle.close) / 3
-        state.vwap_cumulative_tp_volume += typical_price * candle.volume
-        state.vwap_cumulative_volume += candle.volume
+        # Publish events for non-None indicators
+        if values.vwap is not None:
+            await self._publish_indicator(symbol, "vwap", values.vwap, candle.timestamp)
 
-        if state.vwap_cumulative_volume > 0:
-            state.vwap = state.vwap_cumulative_tp_volume / state.vwap_cumulative_volume
-            await self._publish_indicator(symbol, "vwap", state.vwap, candle.timestamp)
+        if values.atr_14 is not None:
+            await self._publish_indicator(symbol, "atr_14", values.atr_14, candle.timestamp)
 
-        # --- ATR(14) ---
-        if state.atr_prev_close is not None:
-            true_range = max(
-                candle.high - candle.low,
-                abs(candle.high - state.atr_prev_close),
-                abs(candle.low - state.atr_prev_close),
-            )
-            state.atr_true_ranges.append(true_range)
+        if values.sma_9 is not None:
+            await self._publish_indicator(symbol, "sma_9", values.sma_9, candle.timestamp)
 
-            if len(state.atr_true_ranges) >= 14:
-                # Use Wilder's smoothing (exponential moving average)
-                if state.atr_14 is None:
-                    # Initial ATR is simple average
-                    state.atr_14 = sum(state.atr_true_ranges[-14:]) / 14
-                else:
-                    # Subsequent ATR uses smoothing: ATR = ((ATR_prev * 13) + TR) / 14
-                    state.atr_14 = (state.atr_14 * 13 + true_range) / 14
+        if values.sma_20 is not None:
+            await self._publish_indicator(symbol, "sma_20", values.sma_20, candle.timestamp)
 
-                await self._publish_indicator(symbol, "atr_14", state.atr_14, candle.timestamp)
+        if values.sma_50 is not None:
+            await self._publish_indicator(symbol, "sma_50", values.sma_50, candle.timestamp)
 
-        state.atr_prev_close = candle.close
-
-        # --- SMA (9, 20, 50) ---
-        state.sma_closes.append(candle.close)
-
-        if len(state.sma_closes) >= 9:
-            state.sma_9 = sum(state.sma_closes[-9:]) / 9
-            await self._publish_indicator(symbol, "sma_9", state.sma_9, candle.timestamp)
-
-        if len(state.sma_closes) >= 20:
-            state.sma_20 = sum(state.sma_closes[-20:]) / 20
-            await self._publish_indicator(symbol, "sma_20", state.sma_20, candle.timestamp)
-
-        if len(state.sma_closes) >= 50:
-            state.sma_50 = sum(state.sma_closes[-50:]) / 50
-            await self._publish_indicator(symbol, "sma_50", state.sma_50, candle.timestamp)
-
-        # --- RVOL (relative volume) ---
-        # Use first 20 candles as baseline
-        state.rvol_volume_samples.append(candle.volume)
-        if len(state.rvol_volume_samples) >= 20:
-            if state.rvol_baseline_volume is None:
-                # Set baseline from first 20 candles
-                state.rvol_baseline_volume = sum(state.rvol_volume_samples[:20]) / 20
-
-            if state.rvol_baseline_volume > 0:
-                # RVOL = current cumulative volume / expected cumulative volume
-                cumulative_volume = sum(state.rvol_volume_samples)
-                expected_volume = state.rvol_baseline_volume * len(state.rvol_volume_samples)
-                state.rvol = cumulative_volume / expected_volume
-                await self._publish_indicator(symbol, "rvol", state.rvol, candle.timestamp)
+        if values.rvol is not None:
+            await self._publish_indicator(symbol, "rvol", values.rvol, candle.timestamp)
 
     async def _publish_indicator(
         self, symbol: str, indicator: str, value: float, timestamp: datetime

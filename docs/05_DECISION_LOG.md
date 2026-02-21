@@ -1046,5 +1046,16 @@ Each entry follows this format:
 
 ---
 
+### DEC-092 | IndicatorEngine Extraction (Sprint 12.5 / DEF-013)
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-21 |
+| **Decision** | Extracted duplicated indicator computation logic into a shared `IndicatorEngine` class (`argus/data/indicator_engine.py`). All four DataService implementations (AlpacaDataService, DatabentoDataService, ReplayDataService, BacktestDataService) now delegate to IndicatorEngine instead of maintaining separate implementations. |
+| **Alternatives** | (1) Leave duplication in place (rejected — maintenance burden, bug risk), (2) Create a mixin class (rejected — inheritance complexity), (3) Create a shared module with standalone functions (rejected — less testable, state management awkward) |
+| **Rationale** | Pure refactor resolving DEF-013. Indicator state (VWAP, ATR-14, SMA-9/20/50, RVOL) was duplicated across four files. IndicatorEngine encapsulates all state and computation in a per-symbol object. Provides: single source of truth, comprehensive unit tests (27 new tests), auto-reset detection for day boundaries, warm-up support, property accessors for current values. Zero behavioral changes — existing 658 tests pass unchanged plus 27 new IndicatorEngine tests (685 total). |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
 *New decisions are appended chronologically as the project progresses.*

@@ -103,6 +103,7 @@ inform Build Track priorities.
 | 10 | Backtest | Analysis, Parameter Validation Report | 542 | Feb 17 |
 | 11 | Validation | Extended backtest (35mo, 15 windows, WFE=0.56) | 542 | Feb 17 |
 | 12 | Infrastructure | DatabentoDataService adapter (streaming, reconnection, historical, scanner, system integration) | 658 | Feb 21 |
+| 12.5 | Refactor | IndicatorEngine extraction (DEF-013, DEC-092) | 685 | Feb 21 |
 
 ### Build Track Queue
 
@@ -121,14 +122,16 @@ per sprint velocity.
 **Deferred:** SystemAlertEvent for dead data feed (DEF-014), full-universe scanning (DEF-015)
 **Note:** Databento subscription not yet activated — deferred until Sprint 13 complete + IBKR approved (DEC-087)
 
-#### Sprint 12.5 — IndicatorEngine Extraction (DEF-013)
-**Target:** ~0.5 day (cleanup sprint)
-**Scope:**
-- Extract shared `IndicatorEngine` class to `argus/data/indicator_engine.py`
-- Encapsulates VWAP, ATR(14), SMA(9/20/50), RVOL computation and state
-- Refactor AlpacaDataService, DatabentoDataService, ReplayDataService, and BacktestDataService to delegate to IndicatorEngine
-- Eliminates indicator logic triplication (DEC-055 compliance)
-- No behavioral changes — pure refactor with existing tests as safety net
+#### Sprint 12.5 — IndicatorEngine Extraction (DEF-013) ✅ COMPLETE (Feb 21)
+**Delivered:**
+- `IndicatorEngine` class in `argus/data/indicator_engine.py`
+- `IndicatorValues` dataclass for returning computed indicator values
+- Refactored all four DataServices to delegate to IndicatorEngine:
+  - AlpacaDataService, DatabentoDataService, ReplayDataService, BacktestDataService
+- Comprehensive unit tests (27 new tests for IndicatorEngine)
+- 685 tests total (27 new), ruff fully clean
+- Pure refactor — zero behavioral changes, all existing tests pass unchanged
+- DEC-092 recorded
 
 **Unblocks:** Clean foundation before adding more DataService implementations (IQFeed, etc.)
 

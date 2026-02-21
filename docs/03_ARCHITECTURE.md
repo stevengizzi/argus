@@ -188,6 +188,37 @@ class DataService(ABC):
 - `ReplayDataService` — reads historical Parquet files, drips into the system at configurable speed
 - `BacktestDataService` — step-driven DataService controlled by ReplayHarness
 
+**IndicatorEngine (DEF-013 / DEC-092):**
+
+All DataService implementations delegate indicator computation to a shared `IndicatorEngine` class (`argus/data/indicator_engine.py`). This eliminates code duplication across the four services.
+
+```python
+@dataclass
+class IndicatorValues:
+    """Return type for IndicatorEngine.update() — all computed indicators."""
+    vwap: float | None = None
+    atr_14: float | None = None
+    sma_9: float | None = None
+    sma_20: float | None = None
+    sma_50: float | None = None
+    rvol: float | None = None
+
+class IndicatorEngine:
+    """Stateful indicator computation engine, one per symbol."""
+    def __init__(self, symbol: str) -> None: ...
+    def update(self, open_, high, low, close, volume, timestamp_date=None) -> IndicatorValues: ...
+    def reset_daily(self) -> None: ...
+    def get_current_values(self) -> IndicatorValues: ...
+    def warm_up(self, bars: list[dict]) -> None: ...
+```
+
+**Indicator behaviors:**
+- **VWAP**: Resets daily. Cumulative typical_price × volume ÷ cumulative volume.
+- **ATR(14)**: Carries across days. Wilder's smoothing: `(prev × 13 + TR) / 14`.
+- **SMA(9/20/50)**: Carry across days. Simple moving averages of close prices.
+- **RVOL**: Resets daily. Uses first 20 bars of day as baseline volume.
+- **Auto-reset**: Engine detects day boundary via `timestamp_date` parameter.
+
 ### 3.2b Data Flow Architecture
 
 ```

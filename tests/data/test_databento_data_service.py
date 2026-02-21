@@ -969,10 +969,10 @@ class TestWarmUpIndicators:
         assert sma_9 is not None, "SMA-9 should be in indicator cache after warm-up"
         assert sma_9 > 0, "SMA-9 should be positive"
 
-        # Verify indicator state was created
-        assert "AAPL" in service._indicator_state
-        state = service._indicator_state["AAPL"]
-        assert state.vwap == vwap, "Indicator state vwap should match cache"
+        # Verify indicator engine was created
+        assert "AAPL" in service._indicator_engines
+        engine = service._indicator_engines["AAPL"]
+        assert engine.vwap == vwap, "Indicator engine vwap should match cache"
 
 
 class TestStaleDataMonitor:

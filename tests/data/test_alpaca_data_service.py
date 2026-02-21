@@ -12,7 +12,8 @@ from argus.core.clock import FixedClock
 from argus.core.config import AlpacaConfig, DataServiceConfig
 from argus.core.event_bus import EventBus
 from argus.core.events import CandleEvent, IndicatorEvent, TickEvent
-from argus.data.alpaca_data_service import AlpacaDataService, IndicatorState
+from argus.data.alpaca_data_service import AlpacaDataService
+from argus.data.indicator_engine import IndicatorEngine
 
 
 @pytest.fixture
@@ -106,7 +107,7 @@ class TestAlpacaDataServiceInit:
         assert service._data_stream is None
         assert service._historical_client is None
         assert service._price_cache == {}
-        assert service._indicator_state == {}
+        assert service._indicator_engines == {}
         assert service._is_stale is False
         assert service._running is False
 
@@ -256,9 +257,9 @@ class TestAlpacaDataServiceIndicators:
     @pytest.mark.asyncio
     async def test_get_indicator_raises_for_unavailable_indicator(self, data_service):
         """Test get_indicator raises ValueError if indicator not computed yet."""
-        # Create state with no data
-        state = IndicatorState()
-        data_service._indicator_state["AAPL"] = state
+        # Create engine with no data (all indicators are None)
+        engine = IndicatorEngine("AAPL")
+        data_service._indicator_engines["AAPL"] = engine
 
         with pytest.raises(ValueError, match="not available"):
             await data_service.get_indicator("AAPL", "vwap")
@@ -266,14 +267,16 @@ class TestAlpacaDataServiceIndicators:
     @pytest.mark.asyncio
     async def test_get_indicator_returns_computed_value(self, data_service):
         """Test get_indicator returns computed indicator value."""
-        # Create state and set a value
-        state = IndicatorState()
-        state.vwap = 150.25
-        data_service._indicator_state["AAPL"] = state
+        # Create engine and feed a bar to generate VWAP
+        # Bar with H=151, L=149, C=150.5, V=1000 -> TP=(151+149+150.5)/3=150.1667
+        engine = IndicatorEngine("AAPL")
+        engine.update(150.0, 151.0, 149.0, 150.5, 1000)
+        data_service._indicator_engines["AAPL"] = engine
 
         vwap = await data_service.get_indicator("AAPL", "vwap")
         assert isinstance(vwap, float)
-        assert vwap == 150.25
+        # TP = (151 + 149 + 150.5) / 3 = 150.1666...
+        assert vwap == pytest.approx(150.16666666666666)
 
 
 class TestAlpacaDataServiceHistoricalCandles:
@@ -402,13 +405,13 @@ class TestAlpacaDataServiceWarmUp:
 
         await data_service._warm_up_indicators(["AAPL"])
 
-        # Verify indicator state created
-        assert "AAPL" in data_service._indicator_state
+        # Verify indicator engine created
+        assert "AAPL" in data_service._indicator_engines
 
         # Verify VWAP computed
-        state = data_service._indicator_state["AAPL"]
-        assert state.vwap is not None
-        assert state.vwap > 0
+        engine = data_service._indicator_engines["AAPL"]
+        assert engine.vwap is not None
+        assert engine.vwap > 0
 
 
 class TestAlpacaDataServiceEventHandlers:
@@ -419,10 +422,9 @@ class TestAlpacaDataServiceEventHandlers:
         self, data_service, event_bus, fixed_clock
     ):
         """Test _on_bar handler publishes CandleEvent and IndicatorEvents."""
-        # Initialize indicator state
-        state = IndicatorState()
-        state.vwap_date = fixed_clock.now().strftime("%Y-%m-%d")
-        data_service._indicator_state["AAPL"] = state
+        # Initialize indicator engine
+        engine = IndicatorEngine("AAPL")
+        data_service._indicator_engines["AAPL"] = engine
 
         # Create mock bar
         bar = MagicMock()

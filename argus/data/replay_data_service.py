@@ -2,6 +2,8 @@
 
 Reads historical data from Parquet files and replays it through the Event Bus
 as if it were live data. Supports configurable replay speed.
+
+Indicator computation delegated to IndicatorEngine (DEF-013).
 """
 
 from __future__ import annotations
@@ -9,8 +11,6 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-from collections import defaultdict
-from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -18,38 +18,10 @@ import pandas as pd
 
 from argus.core.event_bus import EventBus
 from argus.core.events import CandleEvent, IndicatorEvent
+from argus.data.indicator_engine import IndicatorEngine
 from argus.data.service import DataService
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class IndicatorState:
-    """Internal state for computing indicators for a single symbol."""
-
-    # VWAP state (resets daily)
-    vwap_cumulative_tp_volume: float = 0.0
-    vwap_cumulative_volume: int = 0
-    vwap_date: str = ""  # Track which date we're on for reset
-
-    # ATR state
-    atr_true_ranges: list[float] = field(default_factory=list)
-    atr_prev_close: float | None = None
-
-    # SMA state (rolling windows)
-    sma_closes: list[float] = field(default_factory=list)
-
-    # RVOL state (relative volume)
-    rvol_baseline_volume: float | None = None  # Average volume from first N candles
-    rvol_volume_samples: list[int] = field(default_factory=list)
-
-    # Cached indicator values
-    vwap: float | None = None
-    atr_14: float | None = None
-    sma_9: float | None = None
-    sma_20: float | None = None
-    sma_50: float | None = None
-    rvol: float | None = None
 
 
 class ReplayDataService(DataService):
@@ -100,8 +72,8 @@ class ReplayDataService(DataService):
         # Current prices (most recent close)
         self._current_prices: dict[str, float] = {}
 
-        # Indicator state per symbol
-        self._indicator_state: dict[str, IndicatorState] = defaultdict(IndicatorState)
+        # Indicator engines per symbol (DEF-013)
+        self._indicator_engines: dict[str, IndicatorEngine] = {}
 
         # Running state
         self._running: bool = False
@@ -198,83 +170,47 @@ class ReplayDataService(DataService):
         self._running = False
 
     async def _update_indicators(self, symbol: str, candle: CandleEvent) -> None:
-        """Compute indicators and publish IndicatorEvents."""
-        state = self._indicator_state[symbol]
+        """Compute indicators and publish IndicatorEvents.
 
-        # Get date string for VWAP reset
+        Delegates to IndicatorEngine for computation (DEF-013).
+        """
+        # Get or create indicator engine for this symbol
+        if symbol not in self._indicator_engines:
+            self._indicator_engines[symbol] = IndicatorEngine(symbol)
+
+        engine = self._indicator_engines[symbol]
+
+        # Get date string for auto-reset detection
         candle_date = candle.timestamp.strftime("%Y-%m-%d")
 
-        # Reset VWAP on new day
-        if state.vwap_date != candle_date:
-            state.vwap_cumulative_tp_volume = 0.0
-            state.vwap_cumulative_volume = 0
-            state.vwap_date = candle_date
-            # Reset RVOL baseline on new day too
-            state.rvol_volume_samples = []
-            state.rvol_baseline_volume = None
+        # Update indicators via engine
+        values = engine.update(
+            open_=candle.open,
+            high=candle.high,
+            low=candle.low,
+            close=candle.close,
+            volume=candle.volume,
+            timestamp_date=candle_date,
+        )
 
-        # --- VWAP ---
-        typical_price = (candle.high + candle.low + candle.close) / 3
-        state.vwap_cumulative_tp_volume += typical_price * candle.volume
-        state.vwap_cumulative_volume += candle.volume
+        # Publish events for non-None indicators
+        if values.vwap is not None:
+            await self._publish_indicator(symbol, "vwap", values.vwap)
 
-        if state.vwap_cumulative_volume > 0:
-            state.vwap = state.vwap_cumulative_tp_volume / state.vwap_cumulative_volume
-            await self._publish_indicator(symbol, "vwap", state.vwap)
+        if values.atr_14 is not None:
+            await self._publish_indicator(symbol, "atr_14", values.atr_14)
 
-        # --- ATR(14) ---
-        if state.atr_prev_close is not None:
-            true_range = max(
-                candle.high - candle.low,
-                abs(candle.high - state.atr_prev_close),
-                abs(candle.low - state.atr_prev_close),
-            )
-            state.atr_true_ranges.append(true_range)
+        if values.sma_9 is not None:
+            await self._publish_indicator(symbol, "sma_9", values.sma_9)
 
-            if len(state.atr_true_ranges) >= 14:
-                # Use Wilder's smoothing (exponential moving average)
-                if state.atr_14 is None:
-                    # Initial ATR is simple average
-                    state.atr_14 = sum(state.atr_true_ranges[-14:]) / 14
-                else:
-                    # Subsequent ATR uses smoothing: ATR = ((ATR_prev * 13) + TR) / 14
-                    state.atr_14 = (state.atr_14 * 13 + true_range) / 14
+        if values.sma_20 is not None:
+            await self._publish_indicator(symbol, "sma_20", values.sma_20)
 
-                await self._publish_indicator(symbol, "atr_14", state.atr_14)
+        if values.sma_50 is not None:
+            await self._publish_indicator(symbol, "sma_50", values.sma_50)
 
-        state.atr_prev_close = candle.close
-
-        # --- SMA (9, 20, 50) ---
-        state.sma_closes.append(candle.close)
-
-        if len(state.sma_closes) >= 9:
-            state.sma_9 = sum(state.sma_closes[-9:]) / 9
-            await self._publish_indicator(symbol, "sma_9", state.sma_9)
-
-        if len(state.sma_closes) >= 20:
-            state.sma_20 = sum(state.sma_closes[-20:]) / 20
-            await self._publish_indicator(symbol, "sma_20", state.sma_20)
-
-        if len(state.sma_closes) >= 50:
-            state.sma_50 = sum(state.sma_closes[-50:]) / 50
-            await self._publish_indicator(symbol, "sma_50", state.sma_50)
-
-        # --- RVOL (relative volume) ---
-        # Use first 20 candles as baseline
-        state.rvol_volume_samples.append(candle.volume)
-        if len(state.rvol_volume_samples) >= 20:
-            if state.rvol_baseline_volume is None:
-                # Set baseline from first 20 candles
-                state.rvol_baseline_volume = sum(state.rvol_volume_samples[:20]) / 20
-
-            if state.rvol_baseline_volume > 0:
-                # RVOL = current cumulative volume / expected cumulative volume
-                cumulative_volume = sum(state.rvol_volume_samples)
-                expected_volume = state.rvol_baseline_volume * len(
-                    state.rvol_volume_samples
-                )
-                state.rvol = cumulative_volume / expected_volume
-                await self._publish_indicator(symbol, "rvol", state.rvol)
+        if values.rvol is not None:
+            await self._publish_indicator(symbol, "rvol", values.rvol)
 
     async def _publish_indicator(
         self, symbol: str, indicator: str, value: float
@@ -298,7 +234,7 @@ class ReplayDataService(DataService):
 
         self._data.clear()
         self._current_prices.clear()
-        self._indicator_state.clear()
+        self._indicator_engines.clear()
         logger.info("ReplayDataService stopped")
 
     async def get_current_price(self, symbol: str) -> float | None:
@@ -307,17 +243,17 @@ class ReplayDataService(DataService):
 
     async def get_indicator(self, symbol: str, indicator: str) -> float | None:
         """Return the most recent computed indicator value."""
-        state = self._indicator_state.get(symbol.upper())
-        if state is None:
+        engine = self._indicator_engines.get(symbol.upper())
+        if engine is None:
             return None
 
         indicator_map = {
-            "vwap": state.vwap,
-            "atr_14": state.atr_14,
-            "sma_9": state.sma_9,
-            "sma_20": state.sma_20,
-            "sma_50": state.sma_50,
-            "rvol": state.rvol,
+            "vwap": engine.vwap,
+            "atr_14": engine.atr_14,
+            "sma_9": engine.sma_9,
+            "sma_20": engine.sma_20,
+            "sma_50": engine.sma_50,
+            "rvol": engine.rvol,
         }
         return indicator_map.get(indicator.lower())
 

@@ -4,8 +4,7 @@ Step-by-step DataService that the ReplayHarness controls directly.
 Implements the DataService ABC so strategies can call get_indicator()
 and get_current_price() as normal.
 
-Indicator computation reuses the same logic as ReplayDataService
-(VWAP, ATR(14), SMA(9), SMA(20), SMA(50), RVOL).
+Indicator computation delegated to IndicatorEngine (DEF-013).
 
 Decision reference: DEC-055 (BacktestDataService - Step-Driven DataService)
 """
@@ -13,14 +12,13 @@ Decision reference: DEC-055 (BacktestDataService - Step-Driven DataService)
 from __future__ import annotations
 
 import logging
-from collections import defaultdict
 from datetime import datetime
 
 import pandas as pd
 
 from argus.core.event_bus import EventBus
 from argus.core.events import CandleEvent, IndicatorEvent, TickEvent
-from argus.data.replay_data_service import IndicatorState
+from argus.data.indicator_engine import IndicatorEngine
 from argus.data.service import DataService
 
 logger = logging.getLogger(__name__)
@@ -52,8 +50,8 @@ class BacktestDataService(DataService):
         # Price cache: symbol -> last known price
         self._price_cache: dict[str, float] = {}
 
-        # Indicator state per symbol - reuse from ReplayDataService
-        self._indicator_state: dict[str, IndicatorState] = defaultdict(IndicatorState)
+        # Indicator engine per symbol (DEF-013)
+        self._indicator_engines: dict[str, IndicatorEngine] = {}
 
         # Indicator cache: (symbol, indicator_name) -> value
         self._indicator_cache: dict[tuple[str, str], float] = {}
@@ -171,94 +169,55 @@ class BacktestDataService(DataService):
     async def _update_indicators(self, symbol: str, candle: CandleEvent) -> None:
         """Compute indicators and publish IndicatorEvents.
 
-        Mirrors the logic in ReplayDataService._update_indicators exactly.
+        Delegates to IndicatorEngine for computation (DEF-013).
 
         Args:
             symbol: The ticker symbol.
             candle: The candle event with OHLCV data.
         """
-        state = self._indicator_state[symbol]
+        # Get or create indicator engine for this symbol
+        if symbol not in self._indicator_engines:
+            self._indicator_engines[symbol] = IndicatorEngine(symbol)
 
-        # Get date string for VWAP reset
+        engine = self._indicator_engines[symbol]
+
+        # Get date string for auto-reset detection
         candle_date = candle.timestamp.strftime("%Y-%m-%d")
 
-        # Reset VWAP on new day
-        if state.vwap_date != candle_date:
-            state.vwap_cumulative_tp_volume = 0.0
-            state.vwap_cumulative_volume = 0
-            state.vwap_date = candle_date
-            # Reset RVOL baseline on new day too
-            state.rvol_volume_samples = []
-            state.rvol_baseline_volume = None
+        # Update indicators via engine
+        values = engine.update(
+            open_=candle.open,
+            high=candle.high,
+            low=candle.low,
+            close=candle.close,
+            volume=candle.volume,
+            timestamp_date=candle_date,
+        )
 
-        # --- VWAP ---
-        typical_price = (candle.high + candle.low + candle.close) / 3
-        state.vwap_cumulative_tp_volume += typical_price * candle.volume
-        state.vwap_cumulative_volume += candle.volume
+        # Update cache and publish events for non-None indicators
+        if values.vwap is not None:
+            self._indicator_cache[(symbol, "vwap")] = values.vwap
+            await self._publish_indicator(symbol, "vwap", values.vwap)
 
-        if state.vwap_cumulative_volume > 0:
-            state.vwap = state.vwap_cumulative_tp_volume / state.vwap_cumulative_volume
-            self._indicator_cache[(symbol, "vwap")] = state.vwap
-            await self._publish_indicator(symbol, "vwap", state.vwap)
+        if values.atr_14 is not None:
+            self._indicator_cache[(symbol, "atr_14")] = values.atr_14
+            await self._publish_indicator(symbol, "atr_14", values.atr_14)
 
-        # --- ATR(14) ---
-        if state.atr_prev_close is not None:
-            true_range = max(
-                candle.high - candle.low,
-                abs(candle.high - state.atr_prev_close),
-                abs(candle.low - state.atr_prev_close),
-            )
-            state.atr_true_ranges.append(true_range)
+        if values.sma_9 is not None:
+            self._indicator_cache[(symbol, "sma_9")] = values.sma_9
+            await self._publish_indicator(symbol, "sma_9", values.sma_9)
 
-            if len(state.atr_true_ranges) >= 14:
-                # Use Wilder's smoothing (exponential moving average)
-                if state.atr_14 is None:
-                    # Initial ATR is simple average
-                    state.atr_14 = sum(state.atr_true_ranges[-14:]) / 14
-                else:
-                    # Subsequent ATR uses smoothing: ATR = ((ATR_prev * 13) + TR) / 14
-                    state.atr_14 = (state.atr_14 * 13 + true_range) / 14
+        if values.sma_20 is not None:
+            self._indicator_cache[(symbol, "sma_20")] = values.sma_20
+            await self._publish_indicator(symbol, "sma_20", values.sma_20)
 
-                self._indicator_cache[(symbol, "atr_14")] = state.atr_14
-                await self._publish_indicator(symbol, "atr_14", state.atr_14)
+        if values.sma_50 is not None:
+            self._indicator_cache[(symbol, "sma_50")] = values.sma_50
+            await self._publish_indicator(symbol, "sma_50", values.sma_50)
 
-        state.atr_prev_close = candle.close
-
-        # --- SMA (9, 20, 50) ---
-        state.sma_closes.append(candle.close)
-
-        if len(state.sma_closes) >= 9:
-            state.sma_9 = sum(state.sma_closes[-9:]) / 9
-            self._indicator_cache[(symbol, "sma_9")] = state.sma_9
-            await self._publish_indicator(symbol, "sma_9", state.sma_9)
-
-        if len(state.sma_closes) >= 20:
-            state.sma_20 = sum(state.sma_closes[-20:]) / 20
-            self._indicator_cache[(symbol, "sma_20")] = state.sma_20
-            await self._publish_indicator(symbol, "sma_20", state.sma_20)
-
-        if len(state.sma_closes) >= 50:
-            state.sma_50 = sum(state.sma_closes[-50:]) / 50
-            self._indicator_cache[(symbol, "sma_50")] = state.sma_50
-            await self._publish_indicator(symbol, "sma_50", state.sma_50)
-
-        # --- RVOL (relative volume) ---
-        # Use first 20 candles as baseline
-        state.rvol_volume_samples.append(candle.volume)
-        if len(state.rvol_volume_samples) >= 20:
-            if state.rvol_baseline_volume is None:
-                # Set baseline from first 20 candles
-                state.rvol_baseline_volume = sum(state.rvol_volume_samples[:20]) / 20
-
-            if state.rvol_baseline_volume > 0:
-                # RVOL = current cumulative volume / expected cumulative volume
-                cumulative_volume = sum(state.rvol_volume_samples)
-                expected_volume = state.rvol_baseline_volume * len(
-                    state.rvol_volume_samples
-                )
-                state.rvol = cumulative_volume / expected_volume
-                self._indicator_cache[(symbol, "rvol")] = state.rvol
-                await self._publish_indicator(symbol, "rvol", state.rvol)
+        if values.rvol is not None:
+            self._indicator_cache[(symbol, "rvol")] = values.rvol
+            await self._publish_indicator(symbol, "rvol", values.rvol)
 
     async def _publish_indicator(
         self, symbol: str, indicator: str, value: float
@@ -310,22 +269,13 @@ class BacktestDataService(DataService):
         - ATR, SMA carry over (rolling windows)
         - RVOL resets (relative to today's baseline)
         """
-        for symbol, state in self._indicator_state.items():
-            # Reset VWAP
-            state.vwap_cumulative_tp_volume = 0.0
-            state.vwap_cumulative_volume = 0
-            state.vwap_date = ""
-            state.vwap = None
-
-            # Reset RVOL
-            state.rvol_volume_samples = []
-            state.rvol_baseline_volume = None
-            state.rvol = None
+        for symbol, engine in self._indicator_engines.items():
+            engine.reset_daily()
 
             # Clear VWAP and RVOL from cache
             self._indicator_cache.pop((symbol, "vwap"), None)
             self._indicator_cache.pop((symbol, "rvol"), None)
 
-            # ATR and SMA carry over - do not reset
+            # ATR and SMA carry over - do not reset (handled by engine)
 
         logger.debug("BacktestDataService daily state reset")
