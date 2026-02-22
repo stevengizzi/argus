@@ -15,7 +15,9 @@ interface MetricsGridProps {
 }
 
 export function MetricsGrid({ metrics, className = '' }: MetricsGridProps) {
-  const winRateTrend = metrics.win_rate > 50 ? 'up' : metrics.win_rate < 50 ? 'down' : 'neutral';
+  // win_rate from API is a proportion (0.6 = 60%), convert to percentage for display
+  const winRatePct = metrics.win_rate * 100;
+  const winRateTrend = winRatePct > 50 ? 'up' : winRatePct < 50 ? 'down' : 'neutral';
   const pfTrend = metrics.profit_factor > 1 ? 'up' : metrics.profit_factor < 1 ? 'down' : 'neutral';
   const sharpeTrend = metrics.sharpe_ratio > 0 ? 'up' : metrics.sharpe_ratio < 0 ? 'down' : 'neutral';
 
@@ -28,7 +30,7 @@ export function MetricsGrid({ metrics, className = '' }: MetricsGridProps) {
         />
         <MetricCard
           label="Win Rate"
-          value={formatPercentRaw(metrics.win_rate)}
+          value={formatPercentRaw(winRatePct)}
           trend={winRateTrend}
         />
         <MetricCard
