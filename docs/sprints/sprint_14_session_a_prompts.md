@@ -11,18 +11,18 @@ Before Prompt 1, manually do these:
 
 1. Copy the sprint spec into the repo:
    ```
-   cp <wherever>/sprint_14_spec.md docs/sprints/sprint_14_spec.md
+   cp <wherever>/SPRINT_14_SPEC.md docs/sprints/SPRINT_14_SPEC.md
    ```
 
 2. Copy the rules file:
    ```
    mkdir -p .claude/rules
-   cp <wherever>/sprint_14_rules.md .claude/rules/sprint-14.md
+   cp <wherever>/sprint_14_rules.md .claude/rules/sprint_14_rules.md
    ```
 
 3. Commit:
    ```
-   git add docs/sprints/sprint_14_spec.md .claude/rules/sprint-14.md
+   git add docs/sprints/SPRINT_14_SPEC.md .claude/rules/sprint_14_rules.md
    git commit -m "docs: add Sprint 14 spec and Claude rules"
    ```
 
@@ -33,7 +33,7 @@ Before Prompt 1, manually do these:
 ```
 Sprint 14, Prompt 1 of 6 (Session A).
 
-Read the full sprint spec at docs/sprints/sprint_14_spec.md — this is your implementation guide for the entire sprint. Also read .claude/rules/sprint-14.md for cross-cutting contracts.
+Read the full sprint spec at docs/sprints/SPRINT_14_SPEC.md — this is your implementation guide for the entire sprint. Also read .claude/rules/sprint_14_rules.md for cross-cutting contracts.
 
 This prompt: Config, dependencies, and project structure setup.
 
@@ -63,7 +63,7 @@ Do NOT implement any route handlers or server logic yet — just the foundation.
 ```
 Sprint 14, Prompt 2 of 6 (Session A).
 
-Refer to docs/sprints/sprint_14_spec.md Sections 4.2, 4.3, and 4.5 (routes/auth.py).
+Refer to docs/sprints/SPRINT_14_SPEC.md Sections 4.2, 4.3, and 4.5 (routes/auth.py).
 
 This prompt: Authentication system and setup CLI.
 
@@ -83,7 +83,7 @@ Tasks:
    
    This route file needs access to AppState for config — but AppState isn't fully built yet. For now, import get_app_state from dependencies.py and create a minimal version of that module with just the get/set functions and a placeholder AppState. We'll flesh it out in Prompt 3.
 
-4. Create tests/api/conftest.py with shared fixtures per spec Section 6.1 and .claude/rules/sprint-14.md. The conftest needs:
+4. Create tests/api/conftest.py with shared fixtures per spec Section 6.1 and .claude/rules/sprint_14_rules.md. The conftest needs:
    - api_config fixture (ApiConfig with bcrypt hash of "testpassword123")
    - jwt_secret fixture (monkeypatches ARGUS_JWT_SECRET env var)
    - auth_headers fixture (generates valid Bearer token)
@@ -101,7 +101,7 @@ All tests pass (existing 811 + ~10 new).
 ```
 Sprint 14, Prompt 3 of 6 (Session A).
 
-Refer to docs/sprints/sprint_14_spec.md Sections 4.1, 4.4, and 4.5 (routes/account.py).
+Refer to docs/sprints/SPRINT_14_SPEC.md Sections 4.1, 4.4, and 4.5 (routes/account.py).
 
 This prompt: Full AppState, server factory, and account endpoint.
 
@@ -146,7 +146,7 @@ All tests pass (existing 811 + ~20 cumulative new).
 ```
 Sprint 14, Prompt 4 of 6 (Session A).
 
-Refer to docs/sprints/sprint_14_spec.md Section 4.5 (routes/positions.py and routes/trades.py).
+Refer to docs/sprints/SPRINT_14_SPEC.md Section 4.5 (routes/positions.py and routes/trades.py).
 
 This prompt: Positions and trades endpoints with TradeLogger query methods.
 
@@ -188,12 +188,12 @@ All tests pass (existing 811 + ~38 cumulative new).
 ```
 Sprint 14, Prompt 5 of 6 (Session A).
 
-Refer to docs/sprints/sprint_14_spec.md Sections 4.8 and 4.5 (routes/performance.py).
+Refer to docs/sprints/SPRINT_14_SPEC.md Sections 4.8 and 4.5 (routes/performance.py).
 
 This prompt: Extract shared PerformanceCalculator and build performance endpoint.
 
 Tasks:
-1. Create argus/analytics/performance.py with PerformanceMetrics dataclass and compute_metrics(trades: list[dict]) function. See spec Section 4.8 and .claude/rules/sprint-14.md for the exact interface.
+1. Create argus/analytics/performance.py with PerformanceMetrics dataclass and compute_metrics(trades: list[dict]) function. See spec Section 4.8 and .claude/rules/sprint_14_rules.md for the exact interface.
 
    IMPORTANT: Look at the existing argus/backtest/metrics.py first. Extract the core computation logic (win rate, profit factor, Sharpe ratio, max drawdown, consecutive wins/losses, etc.) into the new compute_metrics() function. The formulas must be identical — this is a refactor, not a rewrite.
 
@@ -232,7 +232,7 @@ All tests pass (existing 811 + ~58 cumulative new).
 ```
 Sprint 14, Prompt 6 of 6 (Session A).
 
-Refer to docs/sprints/sprint_14_spec.md Section 4.5 (routes/health.py and routes/strategies.py).
+Refer to docs/sprints/SPRINT_14_SPEC.md Section 4.5 (routes/health.py and routes/strategies.py).
 
 This prompt: Health and strategies endpoints. Final prompt of Session A.
 
