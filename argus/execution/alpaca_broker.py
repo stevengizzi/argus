@@ -109,9 +109,7 @@ class AlpacaBroker(Broker):
             secret_key=secret_key,
             paper=self._config.paper,
         )
-        logger.info(
-            f"AlpacaBroker TradingClient initialized (paper={self._config.paper})"
-        )
+        logger.info(f"AlpacaBroker TradingClient initialized (paper={self._config.paper})")
 
         # Initialize WebSocket stream
         self._trading_stream = TradingStream(
@@ -229,8 +227,7 @@ class AlpacaBroker(Broker):
             )
             await self._event_bus.publish(event)
             logger.info(
-                f"OrderFilledEvent published: {our_order_id} "
-                f"({filled_qty} @ ${filled_price:.2f})"
+                f"OrderFilledEvent published: {our_order_id} ({filled_qty} @ ${filled_price:.2f})"
             )
 
         elif event_type in ("canceled", "expired", "rejected"):
@@ -452,7 +449,7 @@ class AlpacaBroker(Broker):
             # Additional targets (if any) are ignored in Sprint 4a
             for i in range(1, len(targets)):
                 logger.warning(
-                    f"AlpacaBroker ignoring target {i+1} (Alpaca limitation). "
+                    f"AlpacaBroker ignoring target {i + 1} (Alpaca limitation). "
                     f"Sprint 4b Order Manager will handle multiple targets."
                 )
                 target_results.append(
@@ -561,9 +558,7 @@ class AlpacaBroker(Broker):
         )
 
         try:
-            alpaca_order = self._trading_client.replace_order_by_id(
-                alpaca_order_id, request
-            )
+            alpaca_order = self._trading_client.replace_order_by_id(alpaca_order_id, request)
             new_alpaca_order_id = str(alpaca_order.id)
 
             # Update ID mapping (Alpaca assigns new order ID on replace)
@@ -610,11 +605,7 @@ class AlpacaBroker(Broker):
 
             for pos in alpaca_positions:
                 # Map Alpaca position to our Position model
-                side = (
-                    ModelOrderSide.BUY
-                    if float(pos.qty) > 0
-                    else ModelOrderSide.SELL
-                )
+                side = ModelOrderSide.BUY if float(pos.qty) > 0 else ModelOrderSide.SELL
                 shares = abs(int(pos.qty)) if pos.qty else 0
                 entry_price = float(pos.avg_entry_price) if pos.avg_entry_price else 0.0
                 current_price = float(pos.current_price) if pos.current_price else 0.0
@@ -679,8 +670,7 @@ class AlpacaBroker(Broker):
                 daily_pnl = equity - float(account.last_equity)
 
             logger.debug(
-                f"Account: equity=${equity:.2f}, cash=${cash:.2f}, "
-                f"buying_power=${buying_power:.2f}"
+                f"Account: equity=${equity:.2f}, cash=${cash:.2f}, buying_power=${buying_power:.2f}"
             )
 
             return AccountInfo(
@@ -742,9 +732,7 @@ class AlpacaBroker(Broker):
             logger.info("All pending orders cancelled")
 
             # Close all positions at market
-            close_responses = self._trading_client.close_all_positions(
-                cancel_orders=True
-            )
+            close_responses = self._trading_client.close_all_positions(cancel_orders=True)
 
             results = []
             for response in close_responses:

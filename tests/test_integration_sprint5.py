@@ -126,9 +126,7 @@ class TestFullSystemIntegration:
         self, event_bus: EventBus, clock_market_hours: FixedClock
     ) -> None:
         """CircuitBreakerEvent → alert sent."""
-        with patch.dict(
-            os.environ, {"TEST_ALERT_WEBHOOK": "https://webhook.example.com/alert"}
-        ):
+        with patch.dict(os.environ, {"TEST_ALERT_WEBHOOK": "https://webhook.example.com/alert"}):
             config = HealthConfig(
                 heartbeat_interval_seconds=60,
                 heartbeat_url_env="",
@@ -161,10 +159,12 @@ class TestFullSystemIntegration:
                 await health_monitor.start()
 
                 # Publish circuit breaker event
-                await event_bus.publish(CircuitBreakerEvent(
-                    level=CircuitBreakerLevel.ACCOUNT,
-                    reason="Daily loss limit exceeded",
-                ))
+                await event_bus.publish(
+                    CircuitBreakerEvent(
+                        level=CircuitBreakerLevel.ACCOUNT,
+                        reason="Daily loss limit exceeded",
+                    )
+                )
 
                 # Wait for handler
                 await asyncio.sleep(0.1)
@@ -280,9 +280,7 @@ class TestOrderManagerIntegration:
     """Integration tests for Order Manager reconstruction."""
 
     @pytest.mark.asyncio
-    async def test_order_manager_reconstruction_with_positions(
-        self, event_bus: EventBus
-    ) -> None:
+    async def test_order_manager_reconstruction_with_positions(self, event_bus: EventBus) -> None:
         """Order Manager recovers positions from broker on startup."""
         from argus.core.config import OrderManagerConfig
         from argus.execution.order_manager import OrderManager

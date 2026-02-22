@@ -57,18 +57,10 @@ class SweepConfig:
 
     # Parameter ranges (defaults match the grid in Sprint 8 spec)
     or_minutes_list: list[int] = field(default_factory=lambda: [5, 10, 15, 20, 30])
-    target_r_list: list[float] = field(
-        default_factory=lambda: [1.0, 1.5, 2.0, 2.5, 3.0]
-    )
-    stop_buffer_list: list[float] = field(
-        default_factory=lambda: [0.0, 0.1, 0.2, 0.5]
-    )
-    max_hold_list: list[int] = field(
-        default_factory=lambda: [15, 30, 45, 60, 90, 120]
-    )
-    min_gap_list: list[float] = field(
-        default_factory=lambda: [1.0, 1.5, 2.0, 3.0, 5.0]
-    )
+    target_r_list: list[float] = field(default_factory=lambda: [1.0, 1.5, 2.0, 2.5, 3.0])
+    stop_buffer_list: list[float] = field(default_factory=lambda: [0.0, 0.1, 0.2, 0.5])
+    max_hold_list: list[int] = field(default_factory=lambda: [15, 30, 45, 60, 90, 120])
+    min_gap_list: list[float] = field(default_factory=lambda: [1.0, 1.5, 2.0, 3.0, 5.0])
     max_range_atr_list: list[float] = field(
         default_factory=lambda: [0.3, 0.5, 0.75, 1.0, 1.5, 999.0]
     )
@@ -180,9 +172,7 @@ def load_symbol_data(
 
     # Filter by date range
     df["trading_day"] = df["timestamp_et"].dt.date
-    df = df[
-        (df["trading_day"] >= start_date) & (df["trading_day"] <= end_date)
-    ].copy()
+    df = df[(df["trading_day"] >= start_date) & (df["trading_day"] <= end_date)].copy()
 
     if df.empty:
         return pd.DataFrame()
@@ -530,9 +520,7 @@ def run_single_symbol_sweep(
     results: list[SweepResult] = []
 
     # Pre-group bars by day ONCE at the top
-    day_groups: dict[date, pd.DataFrame] = {
-        day: group for day, group in df.groupby("trading_day")
-    }
+    day_groups: dict[date, pd.DataFrame] = {day: group for day, group in df.groupby("trading_day")}
 
     # Pre-compute qualifying days for each min_gap_pct
     gap_qualifying: dict[float, set[date]] = {}
@@ -800,9 +788,7 @@ def _compute_sweep_result(
     total_return_pct = total_r * risk_per_trade / 10000.0 * 100  # As percentage
 
     # Average hold time
-    avg_hold = (
-        sum(hold_minutes_list) / len(hold_minutes_list) if hold_minutes_list else 0.0
-    )
+    avg_hold = sum(hold_minutes_list) / len(hold_minutes_list) if hold_minutes_list else 0.0
 
     # Equity curve for drawdown and Sharpe
     equity = [10000.0]  # Start with $10k
@@ -892,9 +878,7 @@ def run_sweep(config: SweepConfig) -> pd.DataFrame:
     else:
         # Scan data_dir for symbol directories
         symbols = [
-            d.name
-            for d in config.data_dir.iterdir()
-            if d.is_dir() and not d.name.startswith(".")
+            d.name for d in config.data_dir.iterdir() if d.is_dir() and not d.name.startswith(".")
         ]
 
     logger.info("Starting sweep for %d symbols", len(symbols))
@@ -905,9 +889,7 @@ def run_sweep(config: SweepConfig) -> pd.DataFrame:
         logger.info("Processing %s (%d/%d)", symbol, i + 1, len(symbols))
 
         # Load data
-        df = load_symbol_data(
-            config.data_dir, symbol, config.start_date, config.end_date
-        )
+        df = load_symbol_data(config.data_dir, symbol, config.start_date, config.end_date)
 
         if df.empty:
             logger.warning("No data for %s, skipping", symbol)
@@ -1151,9 +1133,7 @@ def _generate_single_heatmap(
             text=pivot_trades.values.astype(int),
             texttemplate="%{text}",
             hovertemplate=(
-                f"{param1}: %{{x}}<br>"
-                f"{param2}: %{{y}}<br>"
-                "Total Trades: %{z:,}<extra></extra>"
+                f"{param1}: %{{x}}<br>{param2}: %{{y}}<br>Total Trades: %{{z:,}}<extra></extra>"
             ),
             visible=False,
             name="Total Trades",

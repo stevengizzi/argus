@@ -78,15 +78,11 @@ class TestArgusConfig:
     def test_loads_from_test_fixtures(self, tmp_path: Path) -> None:
         """load_config works with a custom config directory."""
         # Copy test fixtures into a temp directory structure
-        (tmp_path / "system.yaml").write_text(
-            (FIXTURES_DIR / "test_system.yaml").read_text()
-        )
+        (tmp_path / "system.yaml").write_text((FIXTURES_DIR / "test_system.yaml").read_text())
         (tmp_path / "risk_limits.yaml").write_text(
             (FIXTURES_DIR / "test_risk_limits.yaml").read_text()
         )
-        (tmp_path / "brokers.yaml").write_text(
-            (FIXTURES_DIR / "test_brokers.yaml").read_text()
-        )
+        (tmp_path / "brokers.yaml").write_text((FIXTURES_DIR / "test_brokers.yaml").read_text())
         config = load_config(tmp_path)
         assert config.system.log_level.value == "DEBUG"
 

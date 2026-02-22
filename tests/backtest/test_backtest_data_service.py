@@ -81,9 +81,7 @@ class TestBacktestDataService:
         assert len(atr_events) > 0
 
     @pytest.mark.asyncio
-    async def test_get_current_price_after_feed(
-        self, data_service: BacktestDataService
-    ) -> None:
+    async def test_get_current_price_after_feed(self, data_service: BacktestDataService) -> None:
         """get_current_price returns the close price from the last feed_bar."""
         ts = datetime(2025, 6, 15, 9, 30, 0, tzinfo=UTC)
         await data_service.feed_bar("AAPL", ts, 100, 105, 98, 104, 50000)
@@ -103,9 +101,7 @@ class TestBacktestDataService:
         assert price == 104.0
 
     @pytest.mark.asyncio
-    async def test_get_indicator_returns_vwap(
-        self, data_service: BacktestDataService
-    ) -> None:
+    async def test_get_indicator_returns_vwap(self, data_service: BacktestDataService) -> None:
         """get_indicator returns VWAP after feeding bars."""
         ts = datetime(2025, 6, 15, 9, 30, 0, tzinfo=UTC)
 
@@ -126,9 +122,7 @@ class TestBacktestDataService:
         assert vwap > 0
 
     @pytest.mark.asyncio
-    async def test_get_indicator_returns_sma_9(
-        self, data_service: BacktestDataService
-    ) -> None:
+    async def test_get_indicator_returns_sma_9(self, data_service: BacktestDataService) -> None:
         """get_indicator returns SMA(9) after 9+ bars."""
         ts = datetime(2025, 6, 15, 9, 30, 0, tzinfo=UTC)
 
@@ -182,9 +176,7 @@ class TestBacktestDataService:
         assert received[0].price == 105.50
 
     @pytest.mark.asyncio
-    async def test_reset_daily_state_resets_vwap(
-        self, data_service: BacktestDataService
-    ) -> None:
+    async def test_reset_daily_state_resets_vwap(self, data_service: BacktestDataService) -> None:
         """reset_daily_state clears VWAP state."""
         day1_ts = datetime(2025, 6, 15, 9, 30, 0, tzinfo=UTC)
         day2_ts = datetime(2025, 6, 16, 9, 30, 0, tzinfo=UTC)
@@ -221,9 +213,7 @@ class TestBacktestDataService:
         assert abs(vwap_day2 - 200.0) < 0.1
 
     @pytest.mark.asyncio
-    async def test_reset_daily_state_preserves_sma(
-        self, data_service: BacktestDataService
-    ) -> None:
+    async def test_reset_daily_state_preserves_sma(self, data_service: BacktestDataService) -> None:
         """reset_daily_state preserves SMA state (rolling window)."""
         ts = datetime(2025, 6, 15, 9, 30, 0, tzinfo=UTC)
 
@@ -257,16 +247,12 @@ class TestBacktestDataService:
         ts = datetime(2025, 6, 15, 9, 30, 0, tzinfo=UTC)
 
         with pytest.raises(NotImplementedError) as exc_info:
-            await data_service.get_historical_candles(
-                "AAPL", "1m", ts, ts + timedelta(hours=1)
-            )
+            await data_service.get_historical_candles("AAPL", "1m", ts, ts + timedelta(hours=1))
 
         assert "Parquet files" in str(exc_info.value)
 
     @pytest.mark.asyncio
-    async def test_start_and_stop_are_noop(
-        self, data_service: BacktestDataService
-    ) -> None:
+    async def test_start_and_stop_are_noop(self, data_service: BacktestDataService) -> None:
         """start and stop methods are no-ops and don't raise."""
         await data_service.start(["AAPL", "TSLA"], ["1m"])
         await data_service.stop()

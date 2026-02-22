@@ -105,9 +105,7 @@ class TestIsConnectionError:
         non_connection_codes = [1101, 1102, 201, 202, 2104, 99999]
 
         for code in non_connection_codes:
-            assert (
-                is_connection_error(code) is False
-            ), f"Code {code} should not be connection error"
+            assert is_connection_error(code) is False, f"Code {code} should not be connection error"
 
 
 class TestCriticalSeverityCodes:

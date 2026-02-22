@@ -45,9 +45,7 @@ from argus.data.databento_utils import normalize_databento_df
 logger = logging.getLogger(__name__)
 
 
-def _generate_month_ranges(
-    start_date: date, end_date: date
-) -> list[tuple[int, int, date, date]]:
+def _generate_month_ranges(start_date: date, end_date: date) -> list[tuple[int, int, date, date]]:
     """Generate (year, month, first_day, last_day) tuples for the date range.
 
     The range is inclusive of start_date's month and exclusive of end_date's month
@@ -90,9 +88,7 @@ def _bars_to_dataframe(bars, symbol: str) -> pd.DataFrame:
         DataFrame with columns: timestamp, open, high, low, close, volume.
         Empty DataFrame if no bars.
     """
-    empty_df = pd.DataFrame(
-        columns=["timestamp", "open", "high", "low", "close", "volume"]
-    )
+    empty_df = pd.DataFrame(columns=["timestamp", "open", "high", "low", "close", "volume"])
 
     # Debug: check what we have
     logger.debug(
@@ -241,9 +237,7 @@ class DataFetcher:
         """
         now = time.monotonic()
         # Remove timestamps older than 60 seconds
-        self._request_timestamps = [
-            t for t in self._request_timestamps if now - t < 60.0
-        ]
+        self._request_timestamps = [t for t in self._request_timestamps if now - t < 60.0]
         if len(self._request_timestamps) >= self._config.max_requests_per_minute:
             sleep_time = 60.0 - (now - self._request_timestamps[0]) + 0.1
             if sleep_time > 0:
@@ -325,9 +319,7 @@ class DataFetcher:
 
         return pd.DataFrame()  # Should not reach here
 
-    def _save_parquet(
-        self, df: pd.DataFrame, symbol: str, year: int, month: int
-    ) -> Path:
+    def _save_parquet(self, df: pd.DataFrame, symbol: str, year: int, month: int) -> Path:
         """Save a DataFrame as a Parquet file in the expected directory structure.
 
         Creates directories as needed. File path:
@@ -375,27 +367,19 @@ class DataFetcher:
             SymbolMonthEntry if downloaded, None if skipped.
         """
         if not force and self._manifest.has_entry(symbol, year, month):
-            logger.debug(
-                "Skipping %s %d-%02d (already in manifest)", symbol, year, month
-            )
+            logger.debug("Skipping %s %d-%02d (already in manifest)", symbol, year, month)
             return None
 
         await self._rate_limit()
 
-        start_dt = datetime(
-            month_start.year, month_start.month, month_start.day, tzinfo=UTC
-        )
-        end_dt = datetime(
-            month_end.year, month_end.month, month_end.day, 23, 59, 59, tzinfo=UTC
-        )
+        start_dt = datetime(month_start.year, month_start.month, month_start.day, tzinfo=UTC)
+        end_dt = datetime(month_end.year, month_end.month, month_end.day, 23, 59, 59, tzinfo=UTC)
 
         logger.info("Fetching %s %d-%02d ...", symbol, year, month)
 
         # Run the synchronous Alpaca call in a thread to not block the event loop
         loop = asyncio.get_event_loop()
-        df = await loop.run_in_executor(
-            None, self._fetch_bars_sync, symbol, start_dt, end_dt
-        )
+        df = await loop.run_in_executor(None, self._fetch_bars_sync, symbol, start_dt, end_dt)
 
         if df.empty:
             logger.warning("No data returned for %s %d-%02d", symbol, year, month)
@@ -434,9 +418,7 @@ class DataFetcher:
         self._manifest.add_entry(entry)
         return entry
 
-    def _get_parquet_path_databento(
-        self, symbol: str, year: int, month: int
-    ) -> Path:
+    def _get_parquet_path_databento(self, symbol: str, year: int, month: int) -> Path:
         """Get the Parquet cache path for Databento data.
 
         Uses a separate cache directory from Alpaca to avoid mixing providers.
@@ -505,9 +487,7 @@ class DataFetcher:
 
         if df.empty:
             logger.warning("No data returned for %s %d-%02d", symbol, year, month)
-            return pd.DataFrame(
-                columns=["timestamp", "open", "high", "low", "close", "volume"]
-            )
+            return pd.DataFrame(columns=["timestamp", "open", "high", "low", "close", "volume"])
 
         # Normalize to standard schema
         result = self._normalize_databento_df(df)
@@ -729,9 +709,7 @@ def main() -> None:
     # Get API credentials from environment
     # Supports both APCA_* (alpaca-py default) and ALPACA_* (project convention)
     api_key = os.environ.get("APCA_API_KEY_ID") or os.environ.get("ALPACA_API_KEY")
-    api_secret = os.environ.get("APCA_API_SECRET_KEY") or os.environ.get(
-        "ALPACA_SECRET_KEY"
-    )
+    api_secret = os.environ.get("APCA_API_SECRET_KEY") or os.environ.get("ALPACA_SECRET_KEY")
 
     if not api_key or not api_secret:
         logger.error(
@@ -766,9 +744,7 @@ def debug_single_request() -> None:
     logging.basicConfig(level=logging.DEBUG, format="%(levelname)s: %(message)s")
 
     api_key = os.environ.get("APCA_API_KEY_ID") or os.environ.get("ALPACA_API_KEY")
-    api_secret = os.environ.get("APCA_API_SECRET_KEY") or os.environ.get(
-        "ALPACA_SECRET_KEY"
-    )
+    api_secret = os.environ.get("APCA_API_SECRET_KEY") or os.environ.get("ALPACA_SECRET_KEY")
 
     if not api_key or not api_secret:
         print("ERROR: Set ALPACA_API_KEY and ALPACA_SECRET_KEY env vars")

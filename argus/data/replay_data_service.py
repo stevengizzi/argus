@@ -104,9 +104,7 @@ class ReplayDataService(DataService):
         for symbol in symbols:
             file_path = self._data_dir / f"{symbol.upper()}.parquet"
             if not file_path.exists():
-                raise FileNotFoundError(
-                    f"Parquet file not found for {symbol}: {file_path}"
-                )
+                raise FileNotFoundError(f"Parquet file not found for {symbol}: {file_path}")
 
             df = pd.read_parquet(file_path)
             df = df.sort_values("timestamp").reset_index(drop=True)
@@ -212,9 +210,7 @@ class ReplayDataService(DataService):
         if values.rvol is not None:
             await self._publish_indicator(symbol, "rvol", values.rvol)
 
-    async def _publish_indicator(
-        self, symbol: str, indicator: str, value: float
-    ) -> None:
+    async def _publish_indicator(self, symbol: str, indicator: str, value: float) -> None:
         """Publish an IndicatorEvent to the Event Bus."""
         event = IndicatorEvent(
             symbol=symbol,

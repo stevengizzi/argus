@@ -515,9 +515,7 @@ class TestRiskManagerReconstruction:
         await trade_logger.log_trade(
             self._make_trade(
                 net_pnl=100.0,
-                entry_time=datetime.combine(
-                    test_date, datetime.min.time().replace(hour=10)
-                ),
+                entry_time=datetime.combine(test_date, datetime.min.time().replace(hour=10)),
                 exit_time=datetime.combine(
                     test_date, datetime.min.time().replace(hour=10, minute=30)
                 ),
@@ -526,9 +524,7 @@ class TestRiskManagerReconstruction:
         await trade_logger.log_trade(
             self._make_trade(
                 net_pnl=-50.0,
-                entry_time=datetime.combine(
-                    test_date, datetime.min.time().replace(hour=11)
-                ),
+                entry_time=datetime.combine(test_date, datetime.min.time().replace(hour=11)),
                 exit_time=datetime.combine(
                     test_date, datetime.min.time().replace(hour=11, minute=30)
                 ),
@@ -570,20 +566,14 @@ class TestRiskManagerReconstruction:
         await trade_logger.log_trade(
             self._make_trade(
                 net_pnl=100.0,
-                entry_time=datetime.combine(
-                    monday, datetime.min.time().replace(hour=10)
-                ),
-                exit_time=datetime.combine(
-                    monday, datetime.min.time().replace(hour=10, minute=30)
-                ),
+                entry_time=datetime.combine(monday, datetime.min.time().replace(hour=10)),
+                exit_time=datetime.combine(monday, datetime.min.time().replace(hour=10, minute=30)),
             )
         )
         await trade_logger.log_trade(
             self._make_trade(
                 net_pnl=200.0,
-                entry_time=datetime.combine(
-                    tuesday, datetime.min.time().replace(hour=10)
-                ),
+                entry_time=datetime.combine(tuesday, datetime.min.time().replace(hour=10)),
                 exit_time=datetime.combine(
                     tuesday, datetime.min.time().replace(hour=10, minute=30)
                 ),
@@ -592,9 +582,7 @@ class TestRiskManagerReconstruction:
         await trade_logger.log_trade(
             self._make_trade(
                 net_pnl=-50.0,
-                entry_time=datetime.combine(
-                    test_date, datetime.min.time().replace(hour=10)
-                ),
+                entry_time=datetime.combine(test_date, datetime.min.time().replace(hour=10)),
                 exit_time=datetime.combine(
                     test_date, datetime.min.time().replace(hour=10, minute=30)
                 ),
@@ -634,9 +622,7 @@ class TestRiskManagerReconstruction:
         await trade_logger.log_trade(
             self._make_trade(
                 net_pnl=100.0,
-                entry_time=datetime.combine(
-                    test_date, datetime.min.time().replace(hour=10)
-                ),
+                entry_time=datetime.combine(test_date, datetime.min.time().replace(hour=10)),
                 exit_time=datetime.combine(
                     test_date, datetime.min.time().replace(hour=10, minute=30)
                 ),
@@ -646,9 +632,7 @@ class TestRiskManagerReconstruction:
         await trade_logger.log_trade(
             self._make_trade(
                 net_pnl=50.0,
-                entry_time=datetime.combine(
-                    test_date, datetime.min.time().replace(hour=11)
-                ),
+                entry_time=datetime.combine(test_date, datetime.min.time().replace(hour=11)),
                 exit_time=datetime.combine(
                     test_date, datetime.min.time().replace(hour=11, minute=30)
                 ),
@@ -659,9 +643,7 @@ class TestRiskManagerReconstruction:
         await trade_logger.log_trade(
             self._make_trade(
                 net_pnl=75.0,
-                entry_time=datetime.combine(
-                    yesterday, datetime.min.time().replace(hour=15)
-                ),
+                entry_time=datetime.combine(yesterday, datetime.min.time().replace(hour=15)),
                 exit_time=datetime.combine(
                     test_date, datetime.min.time().replace(hour=9, minute=30)
                 ),

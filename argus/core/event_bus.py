@@ -104,9 +104,7 @@ class EventBus:
         handlers = self._subscribers.get(event_type, [])
 
         if not handlers:
-            logger.debug(
-                "No subscribers for %s (seq=%d)", event_type.__name__, seq
-            )
+            logger.debug("No subscribers for %s (seq=%d)", event_type.__name__, seq)
             return
 
         for handler in handlers:

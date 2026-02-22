@@ -132,8 +132,7 @@ class IBKRBroker(Broker):
             # Snapshot positions for reconnection verification
             self._last_known_positions = list(self._ib.positions())
             logger.info(
-                "Connected to IB Gateway at %s:%d "
-                "(clientId=%d, account=%s, positions=%d)",
+                "Connected to IB Gateway at %s:%d (clientId=%d, account=%s, positions=%d)",
                 self._config.host,
                 self._config.port,
                 self._config.client_id,
@@ -202,9 +201,7 @@ class IBKRBroker(Broker):
 
         if not ulid:
             # Not our order — could be pre-existing from TWS, or external
-            logger.debug(
-                "Ignoring status update for unknown IBKR order #%d", ib_order_id
-            )
+            logger.debug("Ignoring status update for unknown IBKR order #%d", ib_order_id)
             return
 
         status = trade.orderStatus.status
@@ -220,9 +217,7 @@ class IBKRBroker(Broker):
                     fill_quantity=filled_qty,
                 )
             )
-            logger.info(
-                "Order filled: %s — %d @ $%.2f", ulid, filled_qty, avg_fill_price
-            )
+            logger.info("Order filled: %s — %d @ $%.2f", ulid, filled_qty, avg_fill_price)
 
         elif status == "Cancelled":
             await self._event_bus.publish(
@@ -362,15 +357,12 @@ class IBKRBroker(Broker):
         self._reconnecting = True
 
         # Snapshot pre-disconnect positions for verification
-        pre_positions = [
-            (p.contract.symbol, int(p.position))
-            for p in self._last_known_positions
-        ]
+        pre_positions = [(p.contract.symbol, int(p.position)) for p in self._last_known_positions]
 
         for attempt in range(self._config.reconnect_max_retries):
             # Calculate delay with exponential backoff and cap
             delay = min(
-                self._config.reconnect_base_delay_seconds * (2 ** attempt),
+                self._config.reconnect_base_delay_seconds * (2**attempt),
                 self._config.reconnect_max_delay_seconds,
             )
             logger.info(
@@ -387,8 +379,7 @@ class IBKRBroker(Broker):
 
                 # Verify positions match after reconnection
                 post_positions = [
-                    (p.contract.symbol, int(p.position))
-                    for p in self._ib.positions()
+                    (p.contract.symbol, int(p.position)) for p in self._ib.positions()
                 ]
 
                 if set(pre_positions) != set(post_positions):
@@ -960,19 +951,19 @@ class IBKRBroker(Broker):
             if ulid is None:
                 ulid = f"unknown_{ib_id}"
 
-            open_orders.append({
-                "order_id": ulid,
-                "symbol": trade.contract.symbol if trade.contract else "",
-                "side": trade.order.action.lower(),
-                "quantity": int(trade.order.totalQuantity),
-                "order_type": self._map_ib_order_type(trade.order.orderType).value,
-                "status": trade.orderStatus.status.lower(),
-            })
+            open_orders.append(
+                {
+                    "order_id": ulid,
+                    "symbol": trade.contract.symbol if trade.contract else "",
+                    "side": trade.order.action.lower(),
+                    "quantity": int(trade.order.totalQuantity),
+                    "order_type": self._map_ib_order_type(trade.order.orderType).value,
+                    "status": trade.orderStatus.status.lower(),
+                }
+            )
 
         # Build positions list (filter out zero-quantity)
-        converted_positions = [
-            self._convert_position(p) for p in positions if p.position != 0
-        ]
+        converted_positions = [self._convert_position(p) for p in positions if p.position != 0]
 
         logger.info(
             "Reconstructed state: %d positions, %d open orders",

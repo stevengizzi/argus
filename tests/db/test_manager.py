@@ -11,9 +11,7 @@ class TestDatabaseManager:
     async def test_initialize_creates_tables(self, db: DatabaseManager) -> None:
         """initialize() creates all required tables."""
         # Query the sqlite_master to see what tables exist
-        rows = await db.fetch_all(
-            "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
-        )
+        rows = await db.fetch_all("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
         table_names = [row["name"] for row in rows]
 
         assert "trades" in table_names

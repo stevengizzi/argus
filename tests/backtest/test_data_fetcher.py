@@ -222,9 +222,7 @@ class TestDataFetcher:
         fetcher._client = mock_client
 
         # First download
-        await fetcher.fetch_symbol_month(
-            "AAPL", 2025, 6, date(2025, 6, 1), date(2025, 6, 30)
-        )
+        await fetcher.fetch_symbol_month("AAPL", 2025, 6, date(2025, 6, 1), date(2025, 6, 30))
         # Second download - should skip
         entry = await fetcher.fetch_symbol_month(
             "AAPL", 2025, 6, date(2025, 6, 1), date(2025, 6, 30)
@@ -249,9 +247,7 @@ class TestDataFetcher:
         fetcher = DataFetcher(config)
         fetcher._client = mock_client
 
-        await fetcher.fetch_symbol_month(
-            "AAPL", 2025, 6, date(2025, 6, 1), date(2025, 6, 30)
-        )
+        await fetcher.fetch_symbol_month("AAPL", 2025, 6, date(2025, 6, 1), date(2025, 6, 30))
         await fetcher.fetch_symbol_month(
             "AAPL", 2025, 6, date(2025, 6, 1), date(2025, 6, 30), force=True
         )
@@ -316,9 +312,7 @@ class TestDataFetcher:
         fetcher = DataFetcher(config)
         fetcher._client = mock_client
 
-        manifest = await fetcher.fetch_all(
-            ["AAPL", "TSLA"], date(2025, 6, 1), date(2025, 7, 1)
-        )
+        manifest = await fetcher.fetch_all(["AAPL", "TSLA"], date(2025, 6, 1), date(2025, 7, 1))
 
         # 2 symbols * 1 month = 2 entries
         assert manifest.total_files() == 2
@@ -340,9 +334,7 @@ class TestDataFetcher:
         fetcher = DataFetcher(config)
         fetcher._client = mock_client
 
-        await fetcher.fetch_symbol_month(
-            "NVDA", 2025, 3, date(2025, 3, 1), date(2025, 3, 31)
-        )
+        await fetcher.fetch_symbol_month("NVDA", 2025, 3, date(2025, 3, 1), date(2025, 3, 31))
 
         expected_path = tmp_path / "1m" / "NVDA" / "NVDA_2025-03.parquet"
         assert expected_path.exists()
@@ -367,9 +359,7 @@ class MockDBNStore:
     def to_df(self) -> pd.DataFrame:
         if self._df is not None:
             return self._df
-        return pd.DataFrame(
-            columns=["ts_event", "open", "high", "low", "close", "volume"]
-        )
+        return pd.DataFrame(columns=["ts_event", "open", "high", "low", "close", "volume"])
 
 
 class MockDatabentoTimeseries:
@@ -394,9 +384,7 @@ class TestDataFetcherDatabentoInit:
     """Tests for DataFetcher Databento initialization."""
 
     @patch("argus.backtest.data_fetcher.StockHistoricalDataClient")
-    def test_constructor_accepts_databento_key(
-        self, mock_client_cls: MagicMock
-    ) -> None:
+    def test_constructor_accepts_databento_key(self, mock_client_cls: MagicMock) -> None:
         """Constructor accepts databento_key parameter."""
         config = DataFetcherConfig()
         fetcher = DataFetcher(
@@ -420,9 +408,7 @@ class TestDataFetcherDatabentoInit:
         assert fetcher._databento_client is None
 
     @patch("argus.backtest.data_fetcher.StockHistoricalDataClient")
-    def test_missing_databento_key_raises_runtime_error(
-        self, mock_client_cls: MagicMock
-    ) -> None:
+    def test_missing_databento_key_raises_runtime_error(self, mock_client_cls: MagicMock) -> None:
         """Missing Databento key raises RuntimeError on first use."""
         import sys
 
@@ -457,21 +443,25 @@ class TestDataFetcherDatabentoBackend:
     @pytest.fixture
     def sample_databento_df(self) -> pd.DataFrame:
         """Sample Databento-format DataFrame."""
-        return pd.DataFrame({
-            "ts_event": pd.to_datetime([
-                "2025-06-15 14:30:00+00:00",
-                "2025-06-15 14:31:00+00:00",
-                "2025-06-15 14:32:00+00:00",
-            ]),
-            "rtype": [1, 1, 1],
-            "publisher_id": [1, 1, 1],
-            "instrument_id": [100, 100, 100],
-            "open": [100.0, 101.0, 102.0],
-            "high": [101.0, 102.0, 103.0],
-            "low": [99.0, 100.0, 101.0],
-            "close": [100.5, 101.5, 102.5],
-            "volume": [1000, 2000, 3000],
-        })
+        return pd.DataFrame(
+            {
+                "ts_event": pd.to_datetime(
+                    [
+                        "2025-06-15 14:30:00+00:00",
+                        "2025-06-15 14:31:00+00:00",
+                        "2025-06-15 14:32:00+00:00",
+                    ]
+                ),
+                "rtype": [1, 1, 1],
+                "publisher_id": [1, 1, 1],
+                "instrument_id": [100, 100, 100],
+                "open": [100.0, 101.0, 102.0],
+                "high": [101.0, 102.0, 103.0],
+                "low": [99.0, 100.0, 101.0],
+                "close": [100.5, 101.5, 102.5],
+                "volume": [1000, 2000, 3000],
+            }
+        )
 
     @patch("argus.backtest.data_fetcher.StockHistoricalDataClient")
     @pytest.mark.asyncio
@@ -489,14 +479,16 @@ class TestDataFetcherDatabentoBackend:
         cache_path = config.databento_cache_dir / "AAPL" / "AAPL_2025-06.parquet"
         cache_path.parent.mkdir(parents=True)
 
-        cached_df = pd.DataFrame({
-            "timestamp": pd.to_datetime(["2025-06-15 14:30:00+00:00"]),
-            "open": [100.0],
-            "high": [101.0],
-            "low": [99.0],
-            "close": [100.5],
-            "volume": [1000],
-        })
+        cached_df = pd.DataFrame(
+            {
+                "timestamp": pd.to_datetime(["2025-06-15 14:30:00+00:00"]),
+                "open": [100.0],
+                "high": [101.0],
+                "low": [99.0],
+                "close": [100.5],
+                "volume": [1000],
+            }
+        )
         cached_df.to_parquet(cache_path)
 
         result = await fetcher.fetch_symbol_month_databento("AAPL", 2025, 6)
@@ -551,9 +543,7 @@ class TestDataFetcherDatabentoBackend:
         result = await fetcher.fetch_symbol_month_databento("AAPL", 2025, 6)
 
         assert result.empty
-        assert list(result.columns) == [
-            "timestamp", "open", "high", "low", "close", "volume"
-        ]
+        assert list(result.columns) == ["timestamp", "open", "high", "low", "close", "volume"]
 
     @patch("argus.backtest.data_fetcher.StockHistoricalDataClient")
     @pytest.mark.asyncio
@@ -587,14 +577,16 @@ class TestNormalizeDatabentoDF:
 
     def test_correct_column_rename(self) -> None:
         """ts_event is renamed to timestamp."""
-        df = pd.DataFrame({
-            "ts_event": pd.to_datetime(["2025-06-15 14:30:00+00:00"]),
-            "open": [100.0],
-            "high": [101.0],
-            "low": [99.0],
-            "close": [100.5],
-            "volume": [1000],
-        })
+        df = pd.DataFrame(
+            {
+                "ts_event": pd.to_datetime(["2025-06-15 14:30:00+00:00"]),
+                "open": [100.0],
+                "high": [101.0],
+                "low": [99.0],
+                "close": [100.5],
+                "volume": [1000],
+            }
+        )
 
         result = DataFetcher._normalize_databento_df(df)
 
@@ -603,14 +595,16 @@ class TestNormalizeDatabentoDF:
 
     def test_timestamps_converted_to_utc(self) -> None:
         """Timestamps are converted to UTC."""
-        df = pd.DataFrame({
-            "ts_event": pd.to_datetime(["2025-06-15 14:30:00"]),  # Naive
-            "open": [100.0],
-            "high": [101.0],
-            "low": [99.0],
-            "close": [100.5],
-            "volume": [1000],
-        })
+        df = pd.DataFrame(
+            {
+                "ts_event": pd.to_datetime(["2025-06-15 14:30:00"]),  # Naive
+                "open": [100.0],
+                "high": [101.0],
+                "low": [99.0],
+                "close": [100.5],
+                "volume": [1000],
+            }
+        )
 
         result = DataFetcher._normalize_databento_df(df)
 
@@ -619,18 +613,22 @@ class TestNormalizeDatabentoDF:
 
     def test_sorted_by_timestamp(self) -> None:
         """Result is sorted by timestamp."""
-        df = pd.DataFrame({
-            "ts_event": pd.to_datetime([
-                "2025-06-15 14:32:00+00:00",
-                "2025-06-15 14:30:00+00:00",
-                "2025-06-15 14:31:00+00:00",
-            ]),
-            "open": [102.0, 100.0, 101.0],
-            "high": [103.0, 101.0, 102.0],
-            "low": [101.0, 99.0, 100.0],
-            "close": [102.5, 100.5, 101.5],
-            "volume": [3000, 1000, 2000],
-        })
+        df = pd.DataFrame(
+            {
+                "ts_event": pd.to_datetime(
+                    [
+                        "2025-06-15 14:32:00+00:00",
+                        "2025-06-15 14:30:00+00:00",
+                        "2025-06-15 14:31:00+00:00",
+                    ]
+                ),
+                "open": [102.0, 100.0, 101.0],
+                "high": [103.0, 101.0, 102.0],
+                "low": [101.0, 99.0, 100.0],
+                "close": [102.5, 100.5, 101.5],
+                "volume": [3000, 1000, 2000],
+            }
+        )
 
         result = DataFetcher._normalize_databento_df(df)
 
@@ -641,17 +639,19 @@ class TestNormalizeDatabentoDF:
 
     def test_extra_columns_dropped(self) -> None:
         """Extra columns (rtype, publisher_id, etc.) are dropped."""
-        df = pd.DataFrame({
-            "ts_event": pd.to_datetime(["2025-06-15 14:30:00+00:00"]),
-            "rtype": [1],
-            "publisher_id": [1],
-            "instrument_id": [100],
-            "open": [100.0],
-            "high": [101.0],
-            "low": [99.0],
-            "close": [100.5],
-            "volume": [1000],
-        })
+        df = pd.DataFrame(
+            {
+                "ts_event": pd.to_datetime(["2025-06-15 14:30:00+00:00"]),
+                "rtype": [1],
+                "publisher_id": [1],
+                "instrument_id": [100],
+                "open": [100.0],
+                "high": [101.0],
+                "low": [99.0],
+                "close": [100.5],
+                "volume": [1000],
+            }
+        )
 
         result = DataFetcher._normalize_databento_df(df)
 
@@ -660,21 +660,21 @@ class TestNormalizeDatabentoDF:
 
     def test_output_schema_matches_alpaca(self) -> None:
         """Output schema matches Alpaca fetch output exactly."""
-        df = pd.DataFrame({
-            "ts_event": pd.to_datetime(["2025-06-15 14:30:00+00:00"]),
-            "open": [100.0],
-            "high": [101.0],
-            "low": [99.0],
-            "close": [100.5],
-            "volume": [1000],
-        })
+        df = pd.DataFrame(
+            {
+                "ts_event": pd.to_datetime(["2025-06-15 14:30:00+00:00"]),
+                "open": [100.0],
+                "high": [101.0],
+                "low": [99.0],
+                "close": [100.5],
+                "volume": [1000],
+            }
+        )
 
         result = DataFetcher._normalize_databento_df(df)
 
         # Same columns as Alpaca output
-        assert list(result.columns) == [
-            "timestamp", "open", "high", "low", "close", "volume"
-        ]
+        assert list(result.columns) == ["timestamp", "open", "high", "low", "close", "volume"]
         # Correct dtypes
         assert result["timestamp"].dtype.name == "datetime64[ns, UTC]"
         assert result["open"].dtype == float
@@ -694,14 +694,16 @@ class TestNormalizeDatabentoDF:
 
         # Mock Databento client
         mock_db = MockDatabentoHistorical()
-        mock_db.timeseries._data = pd.DataFrame({
-            "ts_event": pd.to_datetime(["2025-06-15 14:30:00+00:00"]),
-            "open": [100.0],
-            "high": [101.0],
-            "low": [99.0],
-            "close": [100.5],
-            "volume": [1000],
-        })
+        mock_db.timeseries._data = pd.DataFrame(
+            {
+                "ts_event": pd.to_datetime(["2025-06-15 14:30:00+00:00"]),
+                "open": [100.0],
+                "high": [101.0],
+                "low": [99.0],
+                "close": [100.5],
+                "volume": [1000],
+            }
+        )
         fetcher._databento_client = mock_db
 
         await fetcher.fetch_symbol_month_databento("AAPL", 2025, 6)

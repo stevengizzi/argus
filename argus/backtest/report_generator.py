@@ -500,8 +500,7 @@ def generate_time_analysis(trades: list[dict], config: ReportConfig) -> str:
     # Hour chart
     hours = sorted(pnl_by_hour.keys())
     hour_avg_pnl = [
-        pnl_by_hour[h] / trades_by_hour[h] if trades_by_hour.get(h, 0) > 0 else 0
-        for h in hours
+        pnl_by_hour[h] / trades_by_hour[h] if trades_by_hour.get(h, 0) > 0 else 0 for h in hours
     ]
     hour_colors = ["#16a34a" if p >= 0 else "#dc2626" for p in hour_avg_pnl]
 
@@ -590,7 +589,7 @@ def generate_parameter_sensitivity(sweep_data: dict, config: ReportConfig) -> st
                 <thead><tr><th>Parameter</th><th>Value</th></tr></thead>
                 <tbody>{"".join(rows)}</tbody>
             </table>
-            <p>Sharpe: {best_row['sharpe_ratio']:.2f}, Trades: {best_row['total_trades']}</p>
+            <p>Sharpe: {best_row["sharpe_ratio"]:.2f}, Trades: {best_row["total_trades"]}</p>
             """
         )
 
@@ -664,7 +663,7 @@ def generate_walk_forward_section(wf_data: dict, config: ReportConfig) -> str:
         </div>
         <div class="metric-card">
             <strong>Overall OOS P&L</strong><br>
-            <span class="{'positive' if overall_pnl >= 0 else 'negative'}"
+            <span class="{"positive" if overall_pnl >= 0 else "negative"}"
                   style="font-size: 1.5em;">
                 ${overall_pnl:,.2f}
             </span>
@@ -682,11 +681,11 @@ def generate_walk_forward_section(wf_data: dict, config: ReportConfig) -> str:
             rows.append(
                 f"""
                 <tr>
-                    <td>{row.get('window_number', '')}</td>
-                    <td>{row.get('is_start', '')} to {row.get('is_end', '')}</td>
-                    <td>{row.get('oos_start', '')} to {row.get('oos_end', '')}</td>
-                    <td>{row.get('is_sharpe', 0.0):.2f}</td>
-                    <td>{row.get('oos_sharpe', 0.0):.2f}</td>
+                    <td>{row.get("window_number", "")}</td>
+                    <td>{row.get("is_start", "")} to {row.get("is_end", "")}</td>
+                    <td>{row.get("oos_start", "")} to {row.get("oos_end", "")}</td>
+                    <td>{row.get("is_sharpe", 0.0):.2f}</td>
+                    <td>{row.get("oos_sharpe", 0.0):.2f}</td>
                     <td class="{wfe_class}">{wfe:.2f}</td>
                 </tr>
                 """
@@ -788,13 +787,13 @@ def generate_trade_tables(trades: list[dict], n: int = 10) -> str:
             rows.append(
                 f"""
                 <tr>
-                    <td>{t.get('exit_time', '')[:16]}</td>
-                    <td>{t.get('symbol', '')}</td>
-                    <td>${t.get('entry_price', 0.0):.2f}</td>
-                    <td>${t.get('exit_price', 0.0):.2f}</td>
+                    <td>{t.get("exit_time", "")[:16]}</td>
+                    <td>{t.get("symbol", "")}</td>
+                    <td>${t.get("entry_price", 0.0):.2f}</td>
+                    <td>${t.get("exit_price", 0.0):.2f}</td>
                     <td class="{pnl_class}">${pnl:,.2f}</td>
                     <td class="{pnl_class}">{r_mult:.2f}R</td>
-                    <td>{t.get('exit_reason', '')}</td>
+                    <td>{t.get("exit_reason", "")}</td>
                 </tr>
                 """
             )
@@ -879,8 +878,8 @@ def _compute_summary_metrics(trades: list[dict]) -> dict[str, Any]:
     if len(daily_returns) >= 2:
         mean_daily = sum(daily_returns) / len(daily_returns)
         variance = sum((r - mean_daily) ** 2 for r in daily_returns) / (len(daily_returns) - 1)
-        std_daily = variance ** 0.5
-        sharpe = (mean_daily / std_daily) * (252 ** 0.5) if std_daily > 0 else 0.0
+        std_daily = variance**0.5
+        sharpe = (mean_daily / std_daily) * (252**0.5) if std_daily > 0 else 0.0
     else:
         sharpe = 0.0
 
@@ -946,11 +945,11 @@ def generate_report(config: ReportConfig) -> str:
             <h2>Executive Summary</h2>
             <div class="metric-card">
                 <strong>Total Trades</strong><br>
-                <span style="font-size: 1.5em;">{metrics['total_trades']}</span>
+                <span style="font-size: 1.5em;">{metrics["total_trades"]}</span>
             </div>
             <div class="metric-card">
                 <strong>Win Rate</strong><br>
-                <span style="font-size: 1.5em;">{metrics['win_rate']:.1%}</span>
+                <span style="font-size: 1.5em;">{metrics["win_rate"]:.1%}</span>
             </div>
             <div class="metric-card">
                 <strong>Profit Factor</strong><br>
@@ -958,16 +957,16 @@ def generate_report(config: ReportConfig) -> str:
             </div>
             <div class="metric-card">
                 <strong>Sharpe Ratio</strong><br>
-                <span style="font-size: 1.5em;">{metrics['sharpe']:.2f}</span>
+                <span style="font-size: 1.5em;">{metrics["sharpe"]:.2f}</span>
             </div>
             <div class="metric-card">
                 <strong>Max Drawdown</strong><br>
-                <span style="font-size: 1.5em;">{metrics['max_drawdown']:.1f}%</span>
+                <span style="font-size: 1.5em;">{metrics["max_drawdown"]:.1f}%</span>
             </div>
             <div class="metric-card">
                 <strong>Total P&L</strong><br>
-                <span class="{'positive' if metrics['total_pnl'] >= 0 else 'negative'}"
-                      style="font-size: 1.5em;">${metrics['total_pnl']:,.2f}</span>
+                <span class="{"positive" if metrics["total_pnl"] >= 0 else "negative"}"
+                      style="font-size: 1.5em;">${metrics["total_pnl"]:,.2f}</span>
             </div>
             <p style="margin-top: 20px;"><strong>Assessment:</strong> {assessment}</p>
         </div>

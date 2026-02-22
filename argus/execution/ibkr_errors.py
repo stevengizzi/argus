@@ -275,9 +275,7 @@ def get_critical_error_codes() -> frozenset[int]:
         Frozenset of CRITICAL severity error codes.
     """
     return frozenset(
-        code
-        for code, info in IBKR_ERROR_MAP.items()
-        if info.severity == IBKRErrorSeverity.CRITICAL
+        code for code, info in IBKR_ERROR_MAP.items() if info.severity == IBKRErrorSeverity.CRITICAL
     )
 
 
@@ -290,7 +288,5 @@ def get_info_error_codes() -> frozenset[int]:
         Frozenset of INFO severity error codes.
     """
     return frozenset(
-        code
-        for code, info in IBKR_ERROR_MAP.items()
-        if info.severity == IBKRErrorSeverity.INFO
+        code for code, info in IBKR_ERROR_MAP.items() if info.severity == IBKRErrorSeverity.INFO
     )

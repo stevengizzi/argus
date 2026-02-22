@@ -70,9 +70,7 @@ class TestComponentRegistry:
         assert status["broker"].message == "Connected"
         assert status["broker"].last_updated == clock.now()
 
-    def test_overall_status_healthy_when_all_healthy(
-        self, health_monitor: HealthMonitor
-    ) -> None:
+    def test_overall_status_healthy_when_all_healthy(self, health_monitor: HealthMonitor) -> None:
         """Overall status is HEALTHY when all components are HEALTHY."""
         health_monitor.update_component("broker", ComponentStatus.HEALTHY)
         health_monitor.update_component("data_service", ComponentStatus.HEALTHY)
@@ -80,9 +78,7 @@ class TestComponentRegistry:
 
         assert health_monitor.get_overall_status() == ComponentStatus.HEALTHY
 
-    def test_overall_status_degraded_when_any_degraded(
-        self, health_monitor: HealthMonitor
-    ) -> None:
+    def test_overall_status_degraded_when_any_degraded(self, health_monitor: HealthMonitor) -> None:
         """Overall status is DEGRADED when any component is DEGRADED."""
         health_monitor.update_component("broker", ComponentStatus.HEALTHY)
         health_monitor.update_component("data_service", ComponentStatus.DEGRADED, "Reconnecting")
@@ -106,9 +102,7 @@ class TestComponentRegistry:
 
         assert health_monitor.get_overall_status() == ComponentStatus.UNHEALTHY
 
-    def test_overall_status_starting_when_empty(
-        self, health_monitor: HealthMonitor
-    ) -> None:
+    def test_overall_status_starting_when_empty(self, health_monitor: HealthMonitor) -> None:
         """Overall status is STARTING when no components registered."""
         assert health_monitor.get_overall_status() == ComponentStatus.STARTING
 
@@ -144,9 +138,7 @@ class TestHeartbeat:
         assert received_events[0].system_status is not None
 
     @pytest.mark.asyncio
-    async def test_heartbeat_sends_http_post(
-        self, event_bus: EventBus, clock: FixedClock
-    ) -> None:
+    async def test_heartbeat_sends_http_post(self, event_bus: EventBus, clock: FixedClock) -> None:
         """Heartbeat sends HTTP POST to configured URL."""
         # Set env var for the heartbeat URL
         with patch.dict(os.environ, {"TEST_HEARTBEAT_URL": "https://hc.example.com/ping/abc123"}):
@@ -218,9 +210,7 @@ class TestAlerts:
     """Tests for alert functionality."""
 
     @pytest.mark.asyncio
-    async def test_alert_sends_discord_format(
-        self, event_bus: EventBus, clock: FixedClock
-    ) -> None:
+    async def test_alert_sends_discord_format(self, event_bus: EventBus, clock: FixedClock) -> None:
         """Discord webhook URL triggers Discord payload format."""
         with patch.dict(os.environ, {"TEST_ALERT_URL": "https://discord.com/api/webhooks/123/abc"}):
             config = HealthConfig(
@@ -246,9 +236,7 @@ class TestAlerts:
                 assert "**Test Alert**" in payload["content"]
 
     @pytest.mark.asyncio
-    async def test_alert_sends_generic_format(
-        self, event_bus: EventBus, clock: FixedClock
-    ) -> None:
+    async def test_alert_sends_generic_format(self, event_bus: EventBus, clock: FixedClock) -> None:
         """Non-Discord webhook URL triggers generic payload format."""
         with patch.dict(os.environ, {"TEST_ALERT_URL": "https://webhook.example.com/alert"}):
             config = HealthConfig(
@@ -332,10 +320,12 @@ class TestAlerts:
                 await health_monitor.start()
 
                 # Publish circuit breaker event
-                await event_bus.publish(CircuitBreakerEvent(
-                    level=CircuitBreakerLevel.ACCOUNT,
-                    reason="Daily loss limit exceeded",
-                ))
+                await event_bus.publish(
+                    CircuitBreakerEvent(
+                        level=CircuitBreakerLevel.ACCOUNT,
+                        reason="Daily loss limit exceeded",
+                    )
+                )
 
                 await asyncio.sleep(0.1)  # Let handler run
                 await health_monitor.stop()
@@ -440,9 +430,7 @@ class TestIntegrityChecks:
         await health_monitor._run_daily_integrity_check()
 
     @pytest.mark.asyncio
-    async def test_daily_check_skipped_without_broker(
-        self, health_monitor: HealthMonitor
-    ) -> None:
+    async def test_daily_check_skipped_without_broker(self, health_monitor: HealthMonitor) -> None:
         """Daily check is skipped when no broker is configured."""
         # health_monitor fixture has no broker
         # Should not raise
@@ -506,9 +494,7 @@ class TestLifecycle:
                 assert mock_session.post.call_count == 1
 
     @pytest.mark.asyncio
-    async def test_component_recovery_clears_status(
-        self, health_monitor: HealthMonitor
-    ) -> None:
+    async def test_component_recovery_clears_status(self, health_monitor: HealthMonitor) -> None:
         """Component recovering from UNHEALTHY to HEALTHY updates status."""
         health_monitor.update_component("broker", ComponentStatus.UNHEALTHY, "Error")
         assert health_monitor.get_status()["broker"].status == ComponentStatus.UNHEALTHY

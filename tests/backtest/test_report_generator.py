@@ -242,16 +242,28 @@ def test_generate_monthly_table():
     """Monthly table has correct row count, P&L values, color coding."""
     monthly_data = [
         {
-            "month": "2025-06", "trades": 10, "wins": 6,
-            "losses": 4, "net_pnl": 500.0, "win_rate": 0.6,
+            "month": "2025-06",
+            "trades": 10,
+            "wins": 6,
+            "losses": 4,
+            "net_pnl": 500.0,
+            "win_rate": 0.6,
         },
         {
-            "month": "2025-07", "trades": 8, "wins": 3,
-            "losses": 5, "net_pnl": -200.0, "win_rate": 0.375,
+            "month": "2025-07",
+            "trades": 8,
+            "wins": 3,
+            "losses": 5,
+            "net_pnl": -200.0,
+            "win_rate": 0.375,
         },
         {
-            "month": "2025-08", "trades": 12, "wins": 8,
-            "losses": 4, "net_pnl": 800.0, "win_rate": 0.667,
+            "month": "2025-08",
+            "trades": 12,
+            "wins": 8,
+            "losses": 4,
+            "net_pnl": 800.0,
+            "win_rate": 0.667,
         },
     ]
 
@@ -334,8 +346,8 @@ def test_generate_report_replay_only():
             {
                 "id": f"trade_{i}",
                 "symbol": "TSLA",
-                "entry_time": f"2025-06-{i+1:02d}T10:00:00",
-                "exit_time": f"2025-06-{i+1:02d}T11:00:00",
+                "entry_time": f"2025-06-{i + 1:02d}T10:00:00",
+                "exit_time": f"2025-06-{i + 1:02d}T11:00:00",
                 "net_pnl": 100.0 if i % 2 == 0 else -50.0,
                 "r_multiple": 1.0 if i % 2 == 0 else -0.5,
                 "exit_reason": "target" if i % 2 == 0 else "stop",
@@ -528,9 +540,15 @@ def test_report_html_valid():
 def test_trade_tables_top_bottom():
     """Worst/best 10 trades sorted correctly, P&L values match."""
     trades = [
-        {"exit_time": f"2025-06-{i+1:02d}T11:00:00", "symbol": "TSLA",
-         "entry_price": 100.0, "exit_price": 100.0 + (i - 5),
-         "net_pnl": (i - 5) * 100.0, "r_multiple": i - 5, "exit_reason": "target"}
+        {
+            "exit_time": f"2025-06-{i + 1:02d}T11:00:00",
+            "symbol": "TSLA",
+            "entry_price": 100.0,
+            "exit_price": 100.0 + (i - 5),
+            "net_pnl": (i - 5) * 100.0,
+            "r_multiple": i - 5,
+            "exit_reason": "target",
+        }
         for i in range(10)
     ]
 

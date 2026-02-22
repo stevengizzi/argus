@@ -76,9 +76,7 @@ class AlpacaScanner(Scanner):
         self._client = None
         logger.info("AlpacaScanner stopped")
 
-    async def scan(
-        self, criteria_list: list[ScannerCriteria]
-    ) -> list[WatchlistItem]:
+    async def scan(self, criteria_list: list[ScannerCriteria]) -> list[WatchlistItem]:
         """Scan universe using Alpaca snapshots, filter by criteria.
 
         Steps:
@@ -109,9 +107,7 @@ class AlpacaScanner(Scanner):
         try:
             from alpaca.data.requests import StockSnapshotRequest
 
-            request = StockSnapshotRequest(
-                symbol_or_symbols=self._config.universe_symbols
-            )
+            request = StockSnapshotRequest(symbol_or_symbols=self._config.universe_symbols)
             snapshots = self._client.get_stock_snapshot(request)
         except Exception:
             logger.exception("Failed to fetch Alpaca snapshots")
@@ -199,9 +195,7 @@ class AlpacaScanner(Scanner):
             logger.debug("Incomplete snapshot data for %s, skipping", symbol)
             return None
 
-    def _merge_criteria(
-        self, criteria_list: list[ScannerCriteria]
-    ) -> ScannerCriteria:
+    def _merge_criteria(self, criteria_list: list[ScannerCriteria]) -> ScannerCriteria:
         """Merge criteria from multiple strategies using widest ranges.
 
         Takes the minimum of all min values and maximum of all max values

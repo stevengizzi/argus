@@ -160,9 +160,7 @@ def validate_parquet_file(
         if df["timestamp"].dt.tz is None:
             result.issues.append("Timestamps are timezone-naive (expected UTC)")
         elif str(df["timestamp"].dt.tz) != "UTC":
-            result.issues.append(
-                f"Timestamps are in {df['timestamp'].dt.tz} (expected UTC)"
-            )
+            result.issues.append(f"Timestamps are in {df['timestamp'].dt.tz} (expected UTC)")
     else:
         # If stored as datetime64 without tz, it's naive
         result.issues.append("Timestamps are timezone-naive (expected UTC)")
@@ -180,8 +178,7 @@ def validate_parquet_file(
     ohlc_issues += (df["low"] > df["close"]).sum()
     if ohlc_issues > 0:
         result.issues.append(
-            f"{ohlc_issues} bars with OHLC inconsistency "
-            "(high < open/close or low > open/close)"
+            f"{ohlc_issues} bars with OHLC inconsistency (high < open/close or low > open/close)"
         )
 
     # --- Check for missing trading days ---
@@ -189,13 +186,8 @@ def validate_parquet_file(
     if expected_days:
         # Convert timestamps to dates for comparison
         try:
-            if (
-                hasattr(df["timestamp"].dtype, "tz")
-                and df["timestamp"].dt.tz is not None
-            ):
-                actual_dates = set(
-                    df["timestamp"].dt.tz_convert("America/New_York").dt.date
-                )
+            if hasattr(df["timestamp"].dtype, "tz") and df["timestamp"].dt.tz is not None:
+                actual_dates = set(df["timestamp"].dt.tz_convert("America/New_York").dt.date)
             else:
                 # Assume UTC if naive, convert
                 actual_dates = set(
@@ -218,17 +210,11 @@ def validate_parquet_file(
         if hasattr(df["timestamp"].dtype, "tz") and df["timestamp"].dt.tz is not None:
             et_times = df["timestamp"].dt.tz_convert("America/New_York")
         else:
-            et_times = pd.to_datetime(df["timestamp"], utc=True).dt.tz_convert(
-                "America/New_York"
-            )
-        market_hours = (et_times.dt.time >= MARKET_OPEN_ET) & (
-            et_times.dt.time < MARKET_CLOSE_ET
-        )
+            et_times = pd.to_datetime(df["timestamp"], utc=True).dt.tz_convert("America/New_York")
+        market_hours = (et_times.dt.time >= MARKET_OPEN_ET) & (et_times.dt.time < MARKET_CLOSE_ET)
         zero_vol_market = ((df["volume"] == 0) & market_hours).sum()
         if zero_vol_market > 0:
-            result.issues.append(
-                f"{zero_vol_market} zero-volume bar(s) during market hours"
-            )
+            result.issues.append(f"{zero_vol_market} zero-volume bar(s) during market hours")
     except Exception as e:
         result.issues.append(f"Could not check zero-volume bars: {e}")
 

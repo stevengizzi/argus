@@ -369,9 +369,7 @@ class ReplayHarness:
 
         return OrbBreakoutConfig(**config_dict)
 
-    async def _run_trading_day(
-        self, trading_day: date, watchlist: DailyWatchlist | None
-    ) -> None:
+    async def _run_trading_day(self, trading_day: date, watchlist: DailyWatchlist | None) -> None:
         """Run a single trading day through the pipeline."""
         if self._clock is None or self._data_service is None:
             return
@@ -688,15 +686,9 @@ def main() -> None:
     print(f"Profit Factor:   {pf_str}")
     print(f"Avg R-Multiple:  {result.avg_r_multiple:.2f}")
     print(f"Expectancy:      {result.expectancy:.3f}R")
-    print(
-        f"Max Drawdown:    ${result.max_drawdown_dollars:,.2f} ({result.max_drawdown_pct:.1%})"
-    )
+    print(f"Max Drawdown:    ${result.max_drawdown_dollars:,.2f} ({result.max_drawdown_pct:.1%})")
     print(f"Sharpe Ratio:    {result.sharpe_ratio:.2f}")
-    rf_str = (
-        f"{result.recovery_factor:.2f}"
-        if result.recovery_factor != float("inf")
-        else "inf"
-    )
+    rf_str = f"{result.recovery_factor:.2f}" if result.recovery_factor != float("inf") else "inf"
     print(f"Recovery Factor: {rf_str}")
     print(f"Net P&L:         ${result.final_equity - config.initial_cash:,.2f}")
     print(f"Final Equity:    ${result.final_equity:,.2f}")

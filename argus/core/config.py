@@ -17,14 +17,17 @@ from pydantic import BaseModel, Field, field_validator
 # Enums
 # ---------------------------------------------------------------------------
 
+
 class AccountType(StrEnum):
     """Brokerage account type."""
+
     MARGIN = "margin"
     CASH = "cash"
 
 
 class DuplicateStockPolicy(StrEnum):
     """Policy when multiple strategies want the same stock."""
+
     PRIORITY_BY_WIN_RATE = "priority_by_win_rate"
     FIRST_SIGNAL = "first_signal"
     BLOCK_ALL = "block_all"
@@ -32,6 +35,7 @@ class DuplicateStockPolicy(StrEnum):
 
 class LogLevel(StrEnum):
     """Logging level."""
+
     DEBUG = "DEBUG"
     INFO = "INFO"
     WARNING = "WARNING"
@@ -42,11 +46,13 @@ class LogLevel(StrEnum):
 # Config Sub-Models
 # ---------------------------------------------------------------------------
 
+
 class HealthConfig(BaseModel):
     """Health monitoring configuration."""
+
     heartbeat_interval_seconds: int = Field(default=60, ge=10, le=300)
-    heartbeat_url_env: str = ""       # Env var name for Healthchecks.io ping URL
-    alert_webhook_url_env: str = ""   # Env var name for Discord/Slack webhook
+    heartbeat_url_env: str = ""  # Env var name for Healthchecks.io ping URL
+    alert_webhook_url_env: str = ""  # Env var name for Discord/Slack webhook
     daily_check_enabled: bool = True
     weekly_reconciliation_enabled: bool = True
 
@@ -54,6 +60,7 @@ class HealthConfig(BaseModel):
     def heartbeat_url(self) -> str:
         """Resolve heartbeat URL from environment variable."""
         import os
+
         if not self.heartbeat_url_env:
             return ""
         return os.environ.get(self.heartbeat_url_env, "")
@@ -62,6 +69,7 @@ class HealthConfig(BaseModel):
     def alert_webhook_url(self) -> str:
         """Resolve alert webhook URL from environment variable."""
         import os
+
         if not self.alert_webhook_url_env:
             return ""
         return os.environ.get(self.alert_webhook_url_env, "")
@@ -69,6 +77,7 @@ class HealthConfig(BaseModel):
 
 class DataSource(StrEnum):
     """Data service provider selection."""
+
     ALPACA = "alpaca"
     DATABENTO = "databento"
 
@@ -79,6 +88,7 @@ class BrokerSource(StrEnum):
     Mirrors DataSource pattern from DEC-090.
     Used by main.py Phase 3 to select the Broker implementation.
     """
+
     ALPACA = "alpaca"
     IBKR = "ibkr"
     SIMULATED = "simulated"
@@ -86,6 +96,7 @@ class BrokerSource(StrEnum):
 
 class SystemConfig(BaseModel):
     """Global system settings."""
+
     timezone: str = "America/New_York"
     market_open: str = "09:30"
     market_close: str = "16:00"
@@ -112,6 +123,7 @@ class SystemConfig(BaseModel):
 
 class AccountRiskConfig(BaseModel):
     """Account-level risk limits."""
+
     daily_loss_limit_pct: float = Field(default=0.03, gt=0, le=0.2)
     weekly_loss_limit_pct: float = Field(default=0.05, gt=0, le=0.3)
     cash_reserve_pct: float = Field(default=0.20, ge=0, le=0.5)
@@ -121,6 +133,7 @@ class AccountRiskConfig(BaseModel):
 
 class CrossStrategyRiskConfig(BaseModel):
     """Cross-strategy risk limits."""
+
     max_single_stock_pct: float = Field(default=0.05, gt=0, le=0.5)
     max_single_sector_pct: float = Field(default=0.15, gt=0, le=0.5)
     duplicate_stock_policy: DuplicateStockPolicy = DuplicateStockPolicy.PRIORITY_BY_WIN_RATE
@@ -128,6 +141,7 @@ class CrossStrategyRiskConfig(BaseModel):
 
 class PDTConfig(BaseModel):
     """Pattern Day Trader tracking configuration."""
+
     enabled: bool = True
     account_type: AccountType = AccountType.MARGIN
     threshold_balance: float = 25000.0  # FINRA PDT threshold
@@ -135,6 +149,7 @@ class PDTConfig(BaseModel):
 
 class RiskConfig(BaseModel):
     """Complete risk management configuration."""
+
     account: AccountRiskConfig = AccountRiskConfig()
     cross_strategy: CrossStrategyRiskConfig = CrossStrategyRiskConfig()
     pdt: PDTConfig = PDTConfig()
@@ -179,10 +194,10 @@ class DatabentoConfig(BaseModel):
     dataset: str = "XNAS.ITCH"
 
     # Schema subscriptions for live streaming
-    bar_schema: str = "ohlcv-1m"     # Completed 1-minute OHLCV bars → CandleEvents
-    trade_schema: str = "trades"     # Individual trades → TickEvents + price cache
-    depth_schema: str = "mbp-10"     # L2 10-level depth (when enabled)
-    enable_depth: bool = False       # L2 depth subscription off by default
+    bar_schema: str = "ohlcv-1m"  # Completed 1-minute OHLCV bars → CandleEvents
+    trade_schema: str = "trades"  # Individual trades → TickEvents + price cache
+    depth_schema: str = "mbp-10"  # L2 10-level depth (when enabled)
+    enable_depth: bool = False  # L2 depth subscription off by default
 
     # Symbol configuration
     # Either a list of specific symbols or "ALL_SYMBOLS" for full universe
@@ -207,22 +222,20 @@ class DatabentoConfig(BaseModel):
     def validate_dataset(cls, v: str) -> str:
         """Validate dataset is a known Databento US equities dataset."""
         known_datasets = {
-            "XNAS.ITCH",      # Nasdaq TotalView-ITCH (primary recommendation)
-            "XNAS.BASIC",     # Nasdaq Basic with NLS Plus
-            "XNYS.PILLAR",    # NYSE Integrated
-            "ARCX.PILLAR",    # NYSE Arca Integrated
-            "XASE.PILLAR",    # NYSE American Integrated
-            "DBEQ.BASIC",     # Databento Equities Basic (free tier)
-            "XBOS.ITCH",      # Nasdaq BX TotalView-ITCH
-            "XPSX.ITCH",      # Nasdaq PSX TotalView-ITCH
-            "XCHI.PILLAR",    # NYSE Chicago Integrated
-            "XCIS.TRADESBBO", # NYSE National Trades and BBO
-            "EQUS.SUMMARY",   # Consolidated summary (delayed)
+            "XNAS.ITCH",  # Nasdaq TotalView-ITCH (primary recommendation)
+            "XNAS.BASIC",  # Nasdaq Basic with NLS Plus
+            "XNYS.PILLAR",  # NYSE Integrated
+            "ARCX.PILLAR",  # NYSE Arca Integrated
+            "XASE.PILLAR",  # NYSE American Integrated
+            "DBEQ.BASIC",  # Databento Equities Basic (free tier)
+            "XBOS.ITCH",  # Nasdaq BX TotalView-ITCH
+            "XPSX.ITCH",  # Nasdaq PSX TotalView-ITCH
+            "XCHI.PILLAR",  # NYSE Chicago Integrated
+            "XCIS.TRADESBBO",  # NYSE National Trades and BBO
+            "EQUS.SUMMARY",  # Consolidated summary (delayed)
         }
         if v not in known_datasets:
-            raise ValueError(
-                f"Unknown dataset '{v}'. Known datasets: {sorted(known_datasets)}"
-            )
+            raise ValueError(f"Unknown dataset '{v}'. Known datasets: {sorted(known_datasets)}")
         return v
 
     @field_validator("bar_schema")
@@ -278,6 +291,7 @@ class BrokerConfig(BaseModel):
 
 class OrchestratorConfig(BaseModel):
     """Orchestrator behavior configuration."""
+
     allocation_method: str = "equal_weight"
     max_allocation_pct: float = Field(default=0.40, gt=0, le=1.0)
     min_allocation_pct: float = Field(default=0.10, gt=0, le=1.0)
@@ -290,6 +304,7 @@ class OrchestratorConfig(BaseModel):
 
 class NotificationChannelConfig(BaseModel):
     """Configuration for a single notification channel."""
+
     enabled: bool = False
     # Specific fields vary by channel; stored as extra dict
     settings: dict[str, Any] = Field(default_factory=dict)
@@ -297,6 +312,7 @@ class NotificationChannelConfig(BaseModel):
 
 class NotificationsConfig(BaseModel):
     """Notification system configuration."""
+
     telegram: NotificationChannelConfig = NotificationChannelConfig()
     discord: NotificationChannelConfig = NotificationChannelConfig()
     email: NotificationChannelConfig = NotificationChannelConfig()
@@ -307,12 +323,14 @@ class NotificationsConfig(BaseModel):
 # Top-Level Config
 # ---------------------------------------------------------------------------
 
+
 class ArgusConfig(BaseModel):
     """Root configuration for the entire Argus system.
 
     Composed of domain-specific sub-configs. Loaded from YAML files
     via load_config().
     """
+
     system: SystemConfig = SystemConfig()
     risk: RiskConfig = RiskConfig()
     broker: BrokerConfig = BrokerConfig()
@@ -324,8 +342,10 @@ class ArgusConfig(BaseModel):
 # Strategy Config (Base — individual strategies extend this)
 # ---------------------------------------------------------------------------
 
+
 class StrategyRiskLimits(BaseModel):
     """Risk limits specific to a single strategy."""
+
     max_loss_per_trade_pct: float = Field(default=0.01, gt=0, le=0.05)
     max_daily_loss_pct: float = Field(default=0.03, gt=0, le=0.1)
     max_consecutive_losses_pause: int = Field(default=5, ge=2)
@@ -335,6 +355,7 @@ class StrategyRiskLimits(BaseModel):
 
 class OperatingWindow(BaseModel):
     """Time window when a strategy is allowed to enter trades."""
+
     earliest_entry: str = "09:45"  # HH:MM in market timezone
     latest_entry: str = "11:30"
     force_close: str = "15:50"
@@ -345,6 +366,7 @@ class OperatingWindow(BaseModel):
 
 class PerformanceBenchmarks(BaseModel):
     """Minimum performance thresholds to remain in active deployment."""
+
     min_win_rate: float = Field(default=0.40, ge=0, le=1.0)
     min_avg_r_multiple: float = Field(default=0.5)
     min_profit_factor: float = Field(default=1.2, ge=0)
@@ -355,6 +377,7 @@ class PerformanceBenchmarks(BaseModel):
 class StrategyConfig(BaseModel):
     """Base configuration for any strategy. Individual strategies
     extend this with strategy-specific parameters."""
+
     strategy_id: str
     name: str
     version: str = "1.0.0"
@@ -374,9 +397,7 @@ class DataServiceConfig(BaseModel):
     """Configuration for the Data Service."""
 
     active_timeframes: list[str] = Field(default_factory=lambda: ["1m"])
-    supported_timeframes: list[str] = Field(
-        default_factory=lambda: ["1s", "5s", "1m", "5m", "15m"]
-    )
+    supported_timeframes: list[str] = Field(default_factory=lambda: ["1s", "5s", "1m", "5m", "15m"])
     indicators: list[str] = Field(
         default_factory=lambda: ["vwap", "atr_14", "rvol", "sma_9", "sma_20", "sma_50"]
     )
@@ -466,6 +487,7 @@ class OrbBreakoutConfig(StrategyConfig):
 # ---------------------------------------------------------------------------
 # Config Loader
 # ---------------------------------------------------------------------------
+
 
 def load_yaml_file(path: Path) -> dict[str, Any]:
     """Load and parse a single YAML file.

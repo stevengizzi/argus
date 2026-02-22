@@ -318,9 +318,7 @@ class OrderManager:
                         "Stop order cancelled for %s. Resubmitting.",
                         pending.symbol,
                     )
-                    await self._submit_stop_order(
-                        pos, pos.shares_remaining, pos.stop_price
-                    )
+                    await self._submit_stop_order(pos, pos.shares_remaining, pos.stop_price)
                     break
 
     async def on_tick(self, event: TickEvent) -> None:
@@ -452,9 +450,7 @@ class OrderManager:
             t2_price,
         )
 
-    async def _handle_t1_fill(
-        self, pending: PendingManagedOrder, event: OrderFilledEvent
-    ) -> None:
+    async def _handle_t1_fill(self, pending: PendingManagedOrder, event: OrderFilledEvent) -> None:
         """T1 target hit. Move stop to breakeven for remaining shares."""
         positions = self._managed_positions.get(pending.symbol, [])
         position = self._find_position_by_t1_order(positions, event.order_id)
@@ -487,16 +483,12 @@ class OrderManager:
 
         # Submit new stop at breakeven for remaining shares
         if self._config.enable_stop_to_breakeven:
-            breakeven_price = position.entry_price * (
-                1 + self._config.breakeven_buffer_pct
-            )
+            breakeven_price = position.entry_price * (1 + self._config.breakeven_buffer_pct)
             position.stop_price = breakeven_price
         else:
             breakeven_price = position.stop_price
 
-        await self._submit_stop_order(
-            position, position.shares_remaining, breakeven_price
-        )
+        await self._submit_stop_order(position, position.shares_remaining, breakeven_price)
 
         logger.info(
             "T1 hit for %s: %d shares @ %.2f (PnL: +%.2f). "
@@ -509,9 +501,7 @@ class OrderManager:
             position.shares_remaining,
         )
 
-    async def _handle_t2_fill(
-        self, pending: PendingManagedOrder, event: OrderFilledEvent
-    ) -> None:
+    async def _handle_t2_fill(self, pending: PendingManagedOrder, event: OrderFilledEvent) -> None:
         """T2 target hit via broker-side limit order (IBKR native brackets — DEC-093).
 
         Cancel stop order and close position.
@@ -651,9 +641,7 @@ class OrderManager:
                             continue
 
                         # Time stop: position open too long
-                        elapsed_minutes = (
-                            now - position.entry_time
-                        ).total_seconds() / 60
+                        elapsed_minutes = (now - position.entry_time).total_seconds() / 60
                         if elapsed_minutes >= self._config.max_position_duration_minutes:
                             logger.info(
                                 "Time stop for %s: open %.1f min (limit=%d)",
@@ -729,7 +717,8 @@ class OrderManager:
 
             logger.info(
                 "Reconstructing %d positions and %d open orders from broker",
-                len(positions), len(orders),
+                len(positions),
+                len(orders),
             )
 
             # Build order lookup by symbol
@@ -811,7 +800,10 @@ class OrderManager:
 
                 logger.info(
                     "Reconstructed position: %s %d shares @ %.2f (stop=%.2f)",
-                    symbol, qty, avg_entry, stop_price,
+                    symbol,
+                    qty,
+                    avg_entry,
+                    stop_price,
                 )
 
             logger.info(
@@ -870,9 +862,7 @@ class OrderManager:
                         "Stop retry failed for %s. Emergency flattening.",
                         position.symbol,
                     )
-                    await self._flatten_position(
-                        position, reason="stop_order_failure"
-                    )
+                    await self._flatten_position(position, reason="stop_order_failure")
 
     async def _submit_t1_order(
         self, position: ManagedPosition, shares: int, limit_price: float
@@ -930,9 +920,7 @@ class OrderManager:
         except Exception:
             logger.exception("Failed to submit T2 order for %s", position.symbol)
 
-    async def _flatten_position(
-        self, position: ManagedPosition, reason: str
-    ) -> None:
+    async def _flatten_position(self, position: ManagedPosition, reason: str) -> None:
         """Cancel all open orders for this position and submit market sell."""
         # Cancel stop order
         if position.stop_order_id:

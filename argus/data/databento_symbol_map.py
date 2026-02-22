@@ -57,17 +57,13 @@ class DatabentoSymbolMap:
         symbol: str = msg.stype_in_symbol
 
         if not symbol or symbol == "":
-            logger.warning(
-                "Empty symbol in SymbolMappingMsg for instrument_id=%d", instrument_id
-            )
+            logger.warning("Empty symbol in SymbolMappingMsg for instrument_id=%d", instrument_id)
             return
 
         # Handle remapping (instrument_id can change for a symbol during session)
         old_symbol = self._id_to_symbol.get(instrument_id)
         if old_symbol and old_symbol != symbol:
-            logger.info(
-                "Remapping instrument_id=%d: %s → %s", instrument_id, old_symbol, symbol
-            )
+            logger.info("Remapping instrument_id=%d: %s → %s", instrument_id, old_symbol, symbol)
             del self._symbol_to_id[old_symbol]
 
         self._id_to_symbol[instrument_id] = symbol

@@ -99,9 +99,7 @@ def mock_ib() -> MagicMock:
     return ib
 
 
-def _mock_account_value(
-    tag: str, value: str, currency: str, account: str
-) -> MagicMock:
+def _mock_account_value(tag: str, value: str, currency: str, account: str) -> MagicMock:
     """Create a mock AccountValue object."""
     av = MagicMock()
     av.tag = tag
@@ -431,9 +429,7 @@ class TestIBKRBrokerOrderSubmission:
             broker = IBKRBroker(ibkr_config, event_bus)
             await broker.connect()
 
-            order = _create_order(
-                order_type="limit", quantity=50, limit_price=150.50
-            )
+            order = _create_order(order_type="limit", quantity=50, limit_price=150.50)
             result = await broker.place_order(order)
 
             assert result.status == "submitted"
@@ -451,9 +447,7 @@ class TestIBKRBrokerOrderSubmission:
             broker = IBKRBroker(ibkr_config, event_bus)
             await broker.connect()
 
-            order = _create_order(
-                side="sell", order_type="stop", quantity=75, stop_price=145.00
-            )
+            order = _create_order(side="sell", order_type="stop", quantity=75, stop_price=145.00)
             result = await broker.place_order(order)
 
             assert result.status == "submitted"
@@ -695,9 +689,7 @@ class TestIBKRBrokerBracketOrders:
             broker = IBKRBroker(ibkr_config, event_bus)
             await broker.connect()
 
-            entry, stop, targets = _create_bracket_orders(
-                t1_price=155.00, t1_quantity=50
-            )
+            entry, stop, targets = _create_bracket_orders(t1_price=155.00, t1_quantity=50)
             result = await broker.place_bracket_order(entry, stop, targets)
 
             # Should have called placeOrder 3 times: entry, stop, T1
@@ -953,9 +945,7 @@ class TestIBKRBrokerBracketOrders:
             # Stop should have transmit=True since it's the last order
             stop_call = mock_ib.placeOrder.call_args_list[1]
             stop_order = stop_call[0][1]
-            assert stop_order.transmit is True, (
-                "Stop should have transmit=True when no targets"
-            )
+            assert stop_order.transmit is True, "Stop should have transmit=True when no targets"
 
             # Entry should still have transmit=False
             entry_call = mock_ib.placeOrder.call_args_list[0]
@@ -1294,9 +1284,7 @@ class TestIBKRBrokerFillStreaming:
             ibkr_id = int(result.broker_order_id)
 
             # Simulate order rejection error
-            broker._on_error(
-                ibkr_id, 201, "Order rejected - invalid price"
-            )
+            broker._on_error(ibkr_id, 201, "Order rejected - invalid price")
 
             # Give async task time to complete
             await asyncio.sleep(0.01)
@@ -1939,9 +1927,7 @@ class TestIBKRBrokerReconnection:
         )
 
         # Always fail to connect
-        mock_ib.connectAsync = AsyncMock(
-            side_effect=ConnectionError("Connection refused")
-        )
+        mock_ib.connectAsync = AsyncMock(side_effect=ConnectionError("Connection refused"))
 
         with (
             patch("argus.execution.ibkr_broker.IB", return_value=mock_ib),
@@ -2033,9 +2019,7 @@ class TestIBKRBrokerReconnection:
             # Should have logged position mismatch warning
             warning_calls = [str(c) for c in mock_logger.warning.call_args_list]
             mismatch_logged = any("Position mismatch" in call for call in warning_calls)
-            assert mismatch_logged, (
-                f"Expected position mismatch warning. Calls: {warning_calls}"
-            )
+            assert mismatch_logged, f"Expected position mismatch warning. Calls: {warning_calls}"
 
     @pytest.mark.asyncio
     async def test_no_double_reconnect(
@@ -2079,9 +2063,7 @@ class TestIBKRBrokerReconnection:
         )
 
         # Always fail to connect so we can measure all delays
-        mock_ib.connectAsync = AsyncMock(
-            side_effect=ConnectionError("Connection refused")
-        )
+        mock_ib.connectAsync = AsyncMock(side_effect=ConnectionError("Connection refused"))
 
         recorded_delays: list[float] = []
 
@@ -2201,9 +2183,7 @@ class TestIBKRBrokerReconstruction:
 
             # Verify open orders
             assert len(result["open_orders"]) == 2
-            stop_order = next(
-                o for o in result["open_orders"] if o["order_type"] == "stop"
-            )
+            stop_order = next(o for o in result["open_orders"] if o["order_type"] == "stop")
             assert stop_order["order_id"] == "01ABC123"
             assert stop_order["symbol"] == "AAPL"
             assert stop_order["side"] == "sell"

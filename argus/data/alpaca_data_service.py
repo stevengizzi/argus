@@ -293,9 +293,7 @@ class AlpacaDataService(DataService):
 
         # Convert to DataFrame
         if symbol not in bars:
-            return pd.DataFrame(
-                columns=["timestamp", "open", "high", "low", "close", "volume"]
-            )
+            return pd.DataFrame(columns=["timestamp", "open", "high", "low", "close", "volume"])
 
         data = []
         for bar in bars[symbol]:
@@ -387,16 +385,18 @@ class AlpacaDataService(DataService):
                 )
 
                 for _, row in df.iterrows():
-                    events.append(CandleEvent(
-                        symbol=symbol,
-                        timeframe="1m",
-                        open=row["open"],
-                        high=row["high"],
-                        low=row["low"],
-                        close=row["close"],
-                        volume=row["volume"],
-                        timestamp=row["timestamp"],
-                    ))
+                    events.append(
+                        CandleEvent(
+                            symbol=symbol,
+                            timeframe="1m",
+                            open=row["open"],
+                            high=row["high"],
+                            low=row["low"],
+                            close=row["close"],
+                            volume=row["volume"],
+                            timestamp=row["timestamp"],
+                        )
+                    )
 
             except Exception as e:
                 logger.error("Failed to fetch today's bars for %s: %s", symbol, e)
@@ -468,8 +468,7 @@ class AlpacaDataService(DataService):
                 vwap_str = f"{engine.vwap:.2f}" if engine.vwap else "N/A"
                 atr_str = f"{engine.atr_14:.2f}" if engine.atr_14 else "N/A"
                 logger.debug(
-                    f"Warmed up {symbol} with {len(df)} candles. "
-                    f"VWAP: {vwap_str}, ATR: {atr_str}"
+                    f"Warmed up {symbol} with {len(df)} candles. VWAP: {vwap_str}, ATR: {atr_str}"
                 )
 
             except Exception as e:
@@ -520,9 +519,7 @@ class AlpacaDataService(DataService):
         # Update indicators and publish IndicatorEvents
         await self._update_indicators(symbol, candle_event)
 
-        logger.debug(
-            f"Published CandleEvent for {symbol} at {timestamp}, close={bar.close:.2f}"
-        )
+        logger.debug(f"Published CandleEvent for {symbol} at {timestamp}, close={bar.close:.2f}")
 
     async def _on_trade(self, trade: Trade) -> None:
         """Handler for Alpaca trade stream.
@@ -586,9 +583,7 @@ class AlpacaDataService(DataService):
 
             except Exception as e:
                 self._consecutive_failures += 1
-                logger.error(
-                    f"WebSocket stream error (failure {self._consecutive_failures}): {e}"
-                )
+                logger.error(f"WebSocket stream error (failure {self._consecutive_failures}): {e}")
 
                 # Alert after max consecutive failures
                 if (
@@ -638,8 +633,7 @@ class AlpacaDataService(DataService):
                 now = self._clock.now()
 
                 # Convert to ET for market hours check
-                now_et = (now.replace(tzinfo=et_tz) if now.tzinfo is None
-                          else now.astimezone(et_tz))
+                now_et = now.replace(tzinfo=et_tz) if now.tzinfo is None else now.astimezone(et_tz)
 
                 # Only check for stale data during market hours on weekdays
                 if now_et.weekday() >= 5:  # Saturday=5, Sunday=6
@@ -680,6 +674,7 @@ class AlpacaDataService(DataService):
                     # Update health status if monitor available
                     if self._health_monitor:
                         from argus.core.health import ComponentStatus
+
                         self._health_monitor.update_component(
                             "data_service",
                             ComponentStatus.DEGRADED,
@@ -693,6 +688,7 @@ class AlpacaDataService(DataService):
                     # Update health status if monitor available
                     if self._health_monitor:
                         from argus.core.health import ComponentStatus
+
                         self._health_monitor.update_component(
                             "data_service",
                             ComponentStatus.HEALTHY,

@@ -194,9 +194,7 @@ class IndicatorEngine:
         self._rvol_baseline_volume = None
         self._rvol_value = None
 
-    def _update_vwap(
-        self, high: float, low: float, close: float, volume: int
-    ) -> float | None:
+    def _update_vwap(self, high: float, low: float, close: float, volume: int) -> float | None:
         """Cumulative VWAP: sum(TP * vol) / sum(vol). TP = (H+L+C)/3.
 
         Args:
@@ -245,7 +243,7 @@ class IndicatorEngine:
                 if self._atr_value is None:
                     # First ATR: simple average of last 14 TRs
                     self._atr_value = (
-                        sum(self._atr_tr_history[-self._atr_period:]) / self._atr_period
+                        sum(self._atr_tr_history[-self._atr_period :]) / self._atr_period
                     )
                 else:
                     # Wilder's smoothing: ATR = ((ATR_prev * 13) + TR) / 14
@@ -293,9 +291,7 @@ class IndicatorEngine:
             if self._rvol_baseline_volume > 0:
                 # RVOL = current cumulative volume / expected cumulative volume
                 cumulative_volume = sum(self._rvol_volume_samples)
-                expected_volume = self._rvol_baseline_volume * len(
-                    self._rvol_volume_samples
-                )
+                expected_volume = self._rvol_baseline_volume * len(self._rvol_volume_samples)
                 self._rvol_value = cumulative_volume / expected_volume
                 return self._rvol_value
 

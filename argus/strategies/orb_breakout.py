@@ -138,9 +138,7 @@ class OrbBreakoutStrategy(BaseStrategy):
         """Check if candle is before latest entry time."""
         return self._get_candle_time(candle) < self._latest_entry_time
 
-    async def _finalize_opening_range(
-        self, symbol: str, state: OrbSymbolState
-    ) -> None:
+    async def _finalize_opening_range(self, symbol: str, state: OrbSymbolState) -> None:
         """Finalize the opening range and validate it."""
         if not state.or_candles:
             state.or_valid = False
@@ -171,21 +169,15 @@ class OrbBreakoutStrategy(BaseStrategy):
             if range_to_atr < self._orb_config.min_range_atr_ratio:
                 state.or_valid = False
                 state.or_rejection_reason = (
-                    f"Range too tight: {range_to_atr:.2f} < "
-                    f"{self._orb_config.min_range_atr_ratio}"
+                    f"Range too tight: {range_to_atr:.2f} < {self._orb_config.min_range_atr_ratio}"
                 )
-                logger.info(
-                    "%s: ORB rejected - %s", symbol, state.or_rejection_reason
-                )
+                logger.info("%s: ORB rejected - %s", symbol, state.or_rejection_reason)
             elif range_to_atr > self._orb_config.max_range_atr_ratio:
                 state.or_valid = False
                 state.or_rejection_reason = (
-                    f"Range too wide: {range_to_atr:.2f} > "
-                    f"{self._orb_config.max_range_atr_ratio}"
+                    f"Range too wide: {range_to_atr:.2f} > {self._orb_config.max_range_atr_ratio}"
                 )
-                logger.info(
-                    "%s: ORB rejected - %s", symbol, state.or_rejection_reason
-                )
+                logger.info("%s: ORB rejected - %s", symbol, state.or_rejection_reason)
             else:
                 state.or_valid = True
                 logger.info(
@@ -345,9 +337,7 @@ class OrbBreakoutStrategy(BaseStrategy):
                 return None
 
             # Check concurrent positions
-            active_positions = sum(
-                1 for s in self._symbol_state.values() if s.position_active
-            )
+            active_positions = sum(1 for s in self._symbol_state.values() if s.position_active)
             max_positions = self._orb_config.risk_limits.max_concurrent_positions
             if active_positions >= max_positions:
                 return None
@@ -388,10 +378,7 @@ class OrbBreakoutStrategy(BaseStrategy):
             return 0
 
         risk_per_share = entry_price - stop_price
-        risk_dollars = (
-            self._allocated_capital
-            * self._orb_config.risk_limits.max_loss_per_trade_pct
-        )
+        risk_dollars = self._allocated_capital * self._orb_config.risk_limits.max_loss_per_trade_pct
         shares = int(risk_dollars / risk_per_share)
 
         return max(0, shares)

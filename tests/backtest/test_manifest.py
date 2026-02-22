@@ -160,9 +160,7 @@ class TestManifestPersistence:
     def test_save_and_load_roundtrip(self, tmp_path: Path) -> None:
         """Manifest survives a save -> load roundtrip."""
         path = tmp_path / "manifest.json"
-        m = Manifest(
-            created_at="2026-02-16T00:00:00Z", last_updated="2026-02-16T00:00:00Z"
-        )
+        m = Manifest(created_at="2026-02-16T00:00:00Z", last_updated="2026-02-16T00:00:00Z")
         m.add_entry(
             SymbolMonthEntry(
                 symbol="AAPL",
@@ -199,9 +197,7 @@ class TestManifestPersistence:
     def test_multiple_entries_roundtrip(self, tmp_path: Path) -> None:
         """Multiple entries survive roundtrip."""
         path = tmp_path / "manifest.json"
-        m = Manifest(
-            created_at="2026-02-16T00:00:00Z", last_updated="2026-02-16T00:00:00Z"
-        )
+        m = Manifest(created_at="2026-02-16T00:00:00Z", last_updated="2026-02-16T00:00:00Z")
         for month in range(1, 7):
             m.add_entry(
                 SymbolMonthEntry(

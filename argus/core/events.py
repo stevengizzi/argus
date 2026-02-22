@@ -19,12 +19,14 @@ from typing import Any
 
 class Side(StrEnum):
     """Trade direction."""
+
     LONG = "long"
     SHORT = "short"
 
 
 class OrderType(StrEnum):
     """Order type for broker submission."""
+
     MARKET = "market"
     LIMIT = "limit"
     STOP = "stop"
@@ -33,6 +35,7 @@ class OrderType(StrEnum):
 
 class ExitReason(StrEnum):
     """Why a position was closed."""
+
     TARGET_1 = "target_1"
     TARGET_2 = "target_2"
     TARGET_3 = "target_3"
@@ -47,6 +50,7 @@ class ExitReason(StrEnum):
 
 class CircuitBreakerLevel(StrEnum):
     """Which level triggered the circuit breaker."""
+
     STRATEGY = "strategy"
     CROSS_STRATEGY = "cross_strategy"
     ACCOUNT = "account"
@@ -54,6 +58,7 @@ class CircuitBreakerLevel(StrEnum):
 
 class SystemStatus(StrEnum):
     """Overall system health status."""
+
     HEALTHY = "healthy"
     DEGRADED = "degraded"
     DOWN = "down"
@@ -74,6 +79,7 @@ class Event:
             Do not set this manually — pass 0 and the EventBus will overwrite it.
         timestamp: When the event was created (UTC).
     """
+
     sequence: int = field(default=0)
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
@@ -86,8 +92,9 @@ class Event:
 @dataclass(frozen=True)
 class CandleEvent(Event):
     """A completed candle at a specific timeframe."""
+
     symbol: str = ""
-    timeframe: str = ""      # "1s", "5s", "1m", "5m", "15m"
+    timeframe: str = ""  # "1s", "5s", "1m", "5m", "15m"
     open: float = 0.0
     high: float = 0.0
     low: float = 0.0
@@ -98,6 +105,7 @@ class CandleEvent(Event):
 @dataclass(frozen=True)
 class TickEvent(Event):
     """A single price update (trade or quote)."""
+
     symbol: str = ""
     price: float = 0.0
     volume: int = 0
@@ -106,6 +114,7 @@ class TickEvent(Event):
 @dataclass(frozen=True)
 class IndicatorEvent(Event):
     """A computed indicator value update."""
+
     symbol: str = ""
     indicator_name: str = ""  # "vwap", "atr_14", "rvol", "sma_20", etc.
     value: float = 0.0
@@ -119,6 +128,7 @@ class IndicatorEvent(Event):
 @dataclass(frozen=True)
 class WatchlistItem:
     """A single stock on the scanner watchlist with metadata."""
+
     symbol: str = ""
     gap_pct: float = 0.0
     premarket_volume: int = 0
@@ -129,6 +139,7 @@ class WatchlistItem:
 @dataclass(frozen=True)
 class WatchlistEvent(Event):
     """Pre-market scanner results — the day's watchlist."""
+
     date: str = ""  # YYYY-MM-DD
     symbols: tuple[WatchlistItem, ...] = ()
 
@@ -141,6 +152,7 @@ class WatchlistEvent(Event):
 @dataclass(frozen=True)
 class SignalEvent(Event):
     """A trade signal emitted by a strategy."""
+
     strategy_id: str = ""
     symbol: str = ""
     side: Side = Side.LONG
@@ -159,6 +171,7 @@ class SignalEvent(Event):
 @dataclass(frozen=True)
 class OrderApprovedEvent(Event):
     """Risk Manager approved a signal (possibly with modifications)."""
+
     signal: SignalEvent | None = None
     modifications: dict[str, Any] | None = None
 
@@ -166,6 +179,7 @@ class OrderApprovedEvent(Event):
 @dataclass(frozen=True)
 class OrderRejectedEvent(Event):
     """Risk Manager rejected a signal."""
+
     signal: SignalEvent | None = None
     reason: str = ""
 
@@ -178,6 +192,7 @@ class OrderRejectedEvent(Event):
 @dataclass(frozen=True)
 class OrderSubmittedEvent(Event):
     """An order has been submitted to the broker."""
+
     order_id: str = ""
     strategy_id: str = ""
     symbol: str = ""
@@ -189,6 +204,7 @@ class OrderSubmittedEvent(Event):
 @dataclass(frozen=True)
 class OrderFilledEvent(Event):
     """An order has been filled (partially or fully)."""
+
     order_id: str = ""
     fill_price: float = 0.0
     fill_quantity: int = 0
@@ -197,6 +213,7 @@ class OrderFilledEvent(Event):
 @dataclass(frozen=True)
 class OrderCancelledEvent(Event):
     """An order has been cancelled."""
+
     order_id: str = ""
     reason: str = ""
 
@@ -209,6 +226,7 @@ class OrderCancelledEvent(Event):
 @dataclass(frozen=True)
 class PositionOpenedEvent(Event):
     """A new position has been opened."""
+
     position_id: str = ""
     strategy_id: str = ""
     symbol: str = ""
@@ -221,6 +239,7 @@ class PositionOpenedEvent(Event):
 @dataclass(frozen=True)
 class PositionUpdatedEvent(Event):
     """An existing position's state has changed."""
+
     position_id: str = ""
     current_price: float = 0.0
     unrealized_pnl: float = 0.0
@@ -230,6 +249,7 @@ class PositionUpdatedEvent(Event):
 @dataclass(frozen=True)
 class PositionClosedEvent(Event):
     """A position has been fully closed."""
+
     position_id: str = ""
     exit_price: float = 0.0
     realized_pnl: float = 0.0
@@ -250,6 +270,7 @@ class PositionClosedEvent(Event):
 @dataclass(frozen=True)
 class CircuitBreakerEvent(Event):
     """A circuit breaker has been triggered."""
+
     level: CircuitBreakerLevel = CircuitBreakerLevel.ACCOUNT
     reason: str = ""
     strategies_affected: tuple[str, ...] = ()
@@ -258,12 +279,14 @@ class CircuitBreakerEvent(Event):
 @dataclass(frozen=True)
 class HeartbeatEvent(Event):
     """Periodic system health signal."""
+
     system_status: SystemStatus = SystemStatus.HEALTHY
 
 
 @dataclass(frozen=True)
 class RegimeChangeEvent(Event):
     """Market regime has changed."""
+
     old_regime: str = ""
     new_regime: str = ""
     indicators: dict[str, float] = field(default_factory=dict)
@@ -285,6 +308,7 @@ class DataStaleEvent(Event):
 
     RSK-021 mitigation: Data feed failure during live trading.
     """
+
     provider: str = ""  # "databento", "alpaca", etc.
     seconds_since_last: float = 0.0
 
@@ -295,6 +319,7 @@ class DataResumedEvent(Event):
 
     Strategies may resume normal operation after receiving this event.
     """
+
     provider: str = ""  # "databento", "alpaca", etc.
 
 
@@ -306,6 +331,7 @@ class DataResumedEvent(Event):
 @dataclass(frozen=True)
 class AllocationUpdateEvent(Event):
     """Strategy capital allocation has changed."""
+
     strategy_id: str = ""
     new_allocation_pct: float = 0.0
     reason: str = ""
@@ -314,6 +340,7 @@ class AllocationUpdateEvent(Event):
 @dataclass(frozen=True)
 class StrategyActivatedEvent(Event):
     """A strategy has been activated by the Orchestrator."""
+
     strategy_id: str = ""
     reason: str = ""
 
@@ -321,6 +348,7 @@ class StrategyActivatedEvent(Event):
 @dataclass(frozen=True)
 class StrategySuspendedEvent(Event):
     """A strategy has been suspended by the Orchestrator."""
+
     strategy_id: str = ""
     reason: str = ""
 
@@ -333,6 +361,7 @@ class StrategySuspendedEvent(Event):
 @dataclass(frozen=True)
 class ApprovalRequestedEvent(Event):
     """An action requires human approval."""
+
     action_id: str = ""
     action_type: str = ""
     description: str = ""
@@ -342,11 +371,13 @@ class ApprovalRequestedEvent(Event):
 @dataclass(frozen=True)
 class ApprovalGrantedEvent(Event):
     """Human approved an action."""
+
     action_id: str = ""
 
 
 @dataclass(frozen=True)
 class ApprovalDeniedEvent(Event):
     """Human denied an action."""
+
     action_id: str = ""
     reason: str = ""

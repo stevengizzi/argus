@@ -165,9 +165,7 @@ class TestAlpacaDataServiceStart:
                     "argus.data.alpaca_data_service.StockDataStream",
                     return_value=mock_data_stream,
                 ),
-                patch.object(
-                    data_service, "_warm_up_indicators", new_callable=AsyncMock
-                ),
+                patch.object(data_service, "_warm_up_indicators", new_callable=AsyncMock),
             ):
                 await data_service.start(["AAPL", "TSLA"], ["1m"])
 
@@ -203,14 +201,16 @@ class TestAlpacaDataServiceStop:
         os.environ["TEST_ALPACA_SECRET_KEY"] = "test_secret"
 
         try:
-            with patch(
-                "argus.data.alpaca_data_service.StockHistoricalDataClient",
-                return_value=mock_historical_client,
-            ), patch(
-                "argus.data.alpaca_data_service.StockDataStream",
-                return_value=mock_data_stream,
-            ), patch.object(
-                data_service, "_warm_up_indicators", new_callable=AsyncMock
+            with (
+                patch(
+                    "argus.data.alpaca_data_service.StockHistoricalDataClient",
+                    return_value=mock_historical_client,
+                ),
+                patch(
+                    "argus.data.alpaca_data_service.StockDataStream",
+                    return_value=mock_data_stream,
+                ),
+                patch.object(data_service, "_warm_up_indicators", new_callable=AsyncMock),
             ):
                 await data_service.start(["AAPL"], ["1m"])
 
@@ -283,9 +283,7 @@ class TestAlpacaDataServiceHistoricalCandles:
     """Test AlpacaDataService historical candle fetching."""
 
     @pytest.mark.asyncio
-    async def test_get_historical_candles_raises_if_client_not_initialized(
-        self, data_service
-    ):
+    async def test_get_historical_candles_raises_if_client_not_initialized(self, data_service):
         """Test get_historical_candles raises if client not ready."""
         start = datetime(2026, 2, 15, 9, 30, 0, tzinfo=UTC)
         end = datetime(2026, 2, 15, 10, 30, 0, tzinfo=UTC)
@@ -352,7 +350,6 @@ class TestAlpacaDataServiceHistoricalCandles:
             "close",
             "volume",
         ]
-
 
     @pytest.mark.asyncio
     async def test_get_historical_candles_passes_data_feed_parameter(
@@ -505,9 +502,7 @@ class TestAlpacaDataServiceStaleDataMonitor:
     """Test AlpacaDataService stale data monitoring."""
 
     @pytest.mark.asyncio
-    async def test_stale_data_detection(
-        self, data_service, alpaca_config, fixed_clock
-    ):
+    async def test_stale_data_detection(self, data_service, alpaca_config, fixed_clock):
         """Test stale data monitor sets flag after timeout."""
         # Set up initial state
         data_service._running = True
@@ -541,9 +536,7 @@ class TestAlpacaDataServiceStaleDataMonitor:
         # Set up stale state
         data_service._running = True
         data_service._subscribed_symbols = {"AAPL"}
-        data_service._last_data_time["AAPL"] = (
-            fixed_clock.now() - timedelta(seconds=40)
-        )
+        data_service._last_data_time["AAPL"] = fixed_clock.now() - timedelta(seconds=40)
         data_service._is_stale = True
 
         # Start monitor

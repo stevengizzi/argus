@@ -61,21 +61,11 @@ class WalkForwardConfig:
     min_trades: int = 20  # Minimum trades to qualify (DEC-066)
 
     # Parameter grid (same as VectorBT sweep)
-    or_minutes_values: list[int] = field(
-        default_factory=lambda: [5, 10, 15, 20, 30]
-    )
-    target_r_values: list[float] = field(
-        default_factory=lambda: [1.0, 1.5, 2.0, 2.5, 3.0]
-    )
-    stop_buffer_values: list[float] = field(
-        default_factory=lambda: [0.0, 0.1, 0.2, 0.5]
-    )
-    hold_minutes_values: list[int] = field(
-        default_factory=lambda: [15, 30, 45, 60, 90, 120]
-    )
-    min_gap_values: list[float] = field(
-        default_factory=lambda: [1.0, 1.5, 2.0, 3.0, 5.0]
-    )
+    or_minutes_values: list[int] = field(default_factory=lambda: [5, 10, 15, 20, 30])
+    target_r_values: list[float] = field(default_factory=lambda: [1.0, 1.5, 2.0, 2.5, 3.0])
+    stop_buffer_values: list[float] = field(default_factory=lambda: [0.0, 0.1, 0.2, 0.5])
+    hold_minutes_values: list[int] = field(default_factory=lambda: [15, 30, 45, 60, 90, 120])
+    min_gap_values: list[float] = field(default_factory=lambda: [1.0, 1.5, 2.0, 3.0, 5.0])
     max_range_atr_values: list[float] = field(
         default_factory=lambda: [0.3, 0.5, 0.75, 1.0, 1.5, 999.0]
     )
@@ -179,9 +169,7 @@ def compute_windows(
 
     while True:
         # Compute window boundaries using relativedelta for proper month arithmetic
-        is_end = (
-            is_start + relativedelta(months=config.in_sample_months) - relativedelta(days=1)
-        )
+        is_end = is_start + relativedelta(months=config.in_sample_months) - relativedelta(days=1)
         oos_start = is_end + relativedelta(days=1)
         oos_end = (
             oos_start + relativedelta(months=config.out_of_sample_months) - relativedelta(days=1)
@@ -273,8 +261,7 @@ async def optimize_in_sample(
     if qualifying.empty:
         max_trades = aggregated["total_trades"].max() if not aggregated.empty else 0
         raise NoQualifyingParamsError(
-            f"No parameter set meets min_trades={config.min_trades}. "
-            f"Max trades found: {max_trades}"
+            f"No parameter set meets min_trades={config.min_trades}. Max trades found: {max_trades}"
         )
 
     # Select best by optimization metric
@@ -416,9 +403,7 @@ def compute_parameter_stability(windows: list[WindowResult]) -> dict[str, dict[s
 
     for param in param_names:
         values = [
-            w.best_params.get(param)
-            for w in valid_windows
-            if w.best_params.get(param) is not None
+            w.best_params.get(param) for w in valid_windows if w.best_params.get(param) is not None
         ]
 
         if not values:
@@ -1535,10 +1520,14 @@ def main() -> None:
         print("\n" + "=" * 60)
         print("FIXED-PARAMS WALK-FORWARD ANALYSIS RESULTS")
         print("=" * 60)
-        print(f"Fixed Parameters:  or={args.fp_or_minutes}, target_r={args.fp_target_r}, "
-              f"max_atr={args.fp_max_atr}")
-        print(f"                   max_hold={args.fp_max_hold}, min_gap={args.fp_min_gap}, "
-              f"stop_buf={args.fp_stop_buffer}")
+        print(
+            f"Fixed Parameters:  or={args.fp_or_minutes}, target_r={args.fp_target_r}, "
+            f"max_atr={args.fp_max_atr}"
+        )
+        print(
+            f"                   max_hold={args.fp_max_hold}, min_gap={args.fp_min_gap}, "
+            f"stop_buf={args.fp_stop_buffer}"
+        )
         print("-" * 60)
         print(f"Windows Processed: {len(result.windows)}")
         print(f"Valid Windows:     {len([w for w in result.windows if w.error is None])}")
@@ -1552,8 +1541,10 @@ def main() -> None:
 
         # Per-window details
         print("\nPer-Window Results:")
-        print(f"{'Window':<8} {'IS Period':<25} {'OOS Period':<25} {'IS Sharpe':<10} "
-              f"{'OOS Sharpe':<11} {'WFE':<8} {'OOS Trades':<11}")
+        print(
+            f"{'Window':<8} {'IS Period':<25} {'OOS Period':<25} {'IS Sharpe':<10} "
+            f"{'OOS Sharpe':<11} {'WFE':<8} {'OOS Trades':<11}"
+        )
         print("-" * 100)
         for w in result.windows:
             if w.error:
@@ -1561,17 +1552,19 @@ def main() -> None:
             else:
                 is_period = f"{w.is_start} to {w.is_end}"
                 oos_period = f"{w.oos_start} to {w.oos_end}"
-                print(f"{w.window_number:<8} {is_period:<25} {oos_period:<25} {w.is_sharpe:<10.2f} "
-                      f"{w.oos_sharpe:<11.2f} {w.wfe_sharpe:<8.2f} {w.oos_total_trades:<11}")
+                print(
+                    f"{w.window_number:<8} {is_period:<25} {oos_period:<25} {w.is_sharpe:<10.2f} "
+                    f"{w.oos_sharpe:<11.2f} {w.wfe_sharpe:<8.2f} {w.oos_total_trades:<11}"
+                )
         print("-" * 100)
 
         # WFE assessment
-        windows_above_03 = len([
-            w for w in result.windows if w.error is None and w.wfe_sharpe >= 0.3
-        ])
-        windows_above_05 = len([
-            w for w in result.windows if w.error is None and w.wfe_sharpe >= 0.5
-        ])
+        windows_above_03 = len(
+            [w for w in result.windows if w.error is None and w.wfe_sharpe >= 0.3]
+        )
+        windows_above_05 = len(
+            [w for w in result.windows if w.error is None and w.wfe_sharpe >= 0.5]
+        )
         valid_count = len([w for w in result.windows if w.error is None])
         print(f"\nWindows with WFE >= 0.3: {windows_above_03}/{valid_count}")
         print(f"Windows with WFE >= 0.5: {windows_above_05}/{valid_count}")

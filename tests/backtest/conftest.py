@@ -55,14 +55,16 @@ def generate_test_bars(
         low = min(open_, close) - abs(change) * 0.3
         volume = volume_base + (i * 100)
 
-        bars.append({
-            "timestamp": timestamp,
-            "open": open_,
-            "high": high,
-            "low": low,
-            "close": close,
-            "volume": volume,
-        })
+        bars.append(
+            {
+                "timestamp": timestamp,
+                "open": open_,
+                "high": high,
+                "low": low,
+                "close": close,
+                "volume": volume,
+            }
+        )
 
         price = close
 
@@ -134,14 +136,16 @@ def generate_gap_up_bars(
             low = min(open_, close) * 0.999
             volume = 8000
 
-        bars.append({
-            "timestamp": timestamp,
-            "open": open_,
-            "high": high,
-            "low": low,
-            "close": close,
-            "volume": volume,
-        })
+        bars.append(
+            {
+                "timestamp": timestamp,
+                "open": open_,
+                "high": high,
+                "low": low,
+                "close": close,
+                "volume": volume,
+            }
+        )
 
     return bars
 

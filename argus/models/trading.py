@@ -21,6 +21,7 @@ from argus.core.ids import generate_id
 
 class AssetClass(StrEnum):
     """Supported asset classes."""
+
     US_STOCKS = "us_stocks"
     CRYPTO = "crypto"
     FOREX = "forex"
@@ -29,12 +30,14 @@ class AssetClass(StrEnum):
 
 class OrderSide(StrEnum):
     """Order direction."""
+
     BUY = "buy"
     SELL = "sell"
 
 
 class OrderType(StrEnum):
     """Order type for broker submission."""
+
     MARKET = "market"
     LIMIT = "limit"
     STOP = "stop"
@@ -43,6 +46,7 @@ class OrderType(StrEnum):
 
 class OrderStatus(StrEnum):
     """Current state of an order."""
+
     PENDING = "pending"
     SUBMITTED = "submitted"
     PARTIAL_FILL = "partial_fill"
@@ -54,12 +58,14 @@ class OrderStatus(StrEnum):
 
 class PositionStatus(StrEnum):
     """Current state of a position."""
+
     OPEN = "open"
     CLOSED = "closed"
 
 
 class TradeOutcome(StrEnum):
     """Outcome of a completed trade."""
+
     WIN = "win"
     LOSS = "loss"
     BREAKEVEN = "breakeven"
@@ -67,6 +73,7 @@ class TradeOutcome(StrEnum):
 
 class ExitReason(StrEnum):
     """Why a position was closed."""
+
     TARGET_1 = "target_1"
     TARGET_2 = "target_2"
     TARGET_3 = "target_3"
@@ -86,6 +93,7 @@ class ExitReason(StrEnum):
 
 class Order(BaseModel):
     """An order to be submitted to a broker."""
+
     id: str = Field(default_factory=generate_id)
     strategy_id: str
     symbol: str
@@ -101,6 +109,7 @@ class Order(BaseModel):
 
 class OrderResult(BaseModel):
     """Result from submitting an order to the broker."""
+
     order_id: str
     broker_order_id: str = ""
     status: OrderStatus = OrderStatus.SUBMITTED
@@ -111,6 +120,7 @@ class OrderResult(BaseModel):
 
 class BracketOrderResult(BaseModel):
     """Result from submitting a bracket order (entry + stop + targets)."""
+
     entry: OrderResult
     stop: OrderResult
     targets: list[OrderResult] = Field(default_factory=list)
@@ -126,6 +136,7 @@ class AccountInfo(BaseModel):
         positions_value: Total value of open positions.
         daily_pnl: Realized P&L for today.
     """
+
     equity: float
     cash: float
     buying_power: float
@@ -140,6 +151,7 @@ class AccountInfo(BaseModel):
 
 class Position(BaseModel):
     """A tracked trading position."""
+
     id: str = Field(default_factory=generate_id)
     strategy_id: str
     symbol: str
@@ -166,6 +178,7 @@ class Position(BaseModel):
 
 class Trade(BaseModel):
     """A completed trade record for logging and analysis."""
+
     id: str = Field(default_factory=generate_id)
     strategy_id: str
     symbol: str
@@ -221,6 +234,7 @@ class Trade(BaseModel):
 
 class DailySummary(BaseModel):
     """Daily trading summary for a strategy or the entire account."""
+
     date: str  # YYYY-MM-DD
     strategy_id: str | None = None  # None for account-wide summary
     total_trades: int = 0

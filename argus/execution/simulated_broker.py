@@ -552,9 +552,7 @@ class SimulatedBroker(Broker):
         """
         self._check_connected()
 
-        positions_value = sum(
-            pos.current_price * pos.shares for pos in self._positions.values()
-        )
+        positions_value = sum(pos.current_price * pos.shares for pos in self._positions.values())
         equity = self._cash + positions_value
 
         return AccountInfo(
@@ -639,9 +637,7 @@ class SimulatedBroker(Broker):
         """
         self._current_prices[symbol] = price
 
-    async def simulate_price_update(
-        self, symbol: str, price: float
-    ) -> list[OrderResult]:
+    async def simulate_price_update(self, symbol: str, price: float) -> list[OrderResult]:
         """Simulate a price update and trigger any matching bracket orders.
 
         This is testing infrastructure. It updates position current_price,
@@ -686,9 +682,8 @@ class SimulatedBroker(Broker):
                 continue
 
             # Stop triggers when price <= trigger; limit triggers when price >= trigger
-            triggered = (
-                (bracket.order_type == "stop" and price <= bracket.trigger_price)
-                or (bracket.order_type == "limit" and price >= bracket.trigger_price)
+            triggered = (bracket.order_type == "stop" and price <= bracket.trigger_price) or (
+                bracket.order_type == "limit" and price >= bracket.trigger_price
             )
 
             if triggered:
@@ -728,8 +723,7 @@ class SimulatedBroker(Broker):
         # If position is fully closed, cancel remaining brackets for that symbol
         if symbol not in self._positions:
             remaining_brackets = [
-                b for b in self._pending_brackets
-                if b.parent_position_symbol == symbol
+                b for b in self._pending_brackets if b.parent_position_symbol == symbol
             ]
             for b in remaining_brackets:
                 if b.order_id in self._orders:
@@ -742,8 +736,7 @@ class SimulatedBroker(Broker):
                         message="Position closed, order cancelled",
                     )
             self._pending_brackets = [
-                b for b in self._pending_brackets
-                if b.parent_position_symbol != symbol
+                b for b in self._pending_brackets if b.parent_position_symbol != symbol
             ]
 
         return triggered_results

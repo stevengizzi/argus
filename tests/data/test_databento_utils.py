@@ -11,20 +11,24 @@ class TestNormalizeDatabentoDf:
     def test_basic_normalization(self):
         """Test that ts_event is renamed to timestamp and correct columns selected."""
         # Simulate Databento to_df() output with extra columns
-        df = pd.DataFrame({
-            "ts_event": pd.to_datetime([
-                "2025-01-15 14:30:00",
-                "2025-01-15 14:31:00",
-            ]).tz_localize("UTC"),
-            "rtype": [1, 1],
-            "publisher_id": [123, 123],
-            "instrument_id": [456, 456],
-            "open": [150.0, 150.5],
-            "high": [151.0, 151.5],
-            "low": [149.5, 150.0],
-            "close": [150.5, 151.0],
-            "volume": [1000, 1500],
-        })
+        df = pd.DataFrame(
+            {
+                "ts_event": pd.to_datetime(
+                    [
+                        "2025-01-15 14:30:00",
+                        "2025-01-15 14:31:00",
+                    ]
+                ).tz_localize("UTC"),
+                "rtype": [1, 1],
+                "publisher_id": [123, 123],
+                "instrument_id": [456, 456],
+                "open": [150.0, 150.5],
+                "high": [151.0, 151.5],
+                "low": [149.5, 150.0],
+                "close": [150.5, 151.0],
+                "volume": [1000, 1500],
+            }
+        )
 
         result = normalize_databento_df(df)
 
@@ -51,17 +55,21 @@ class TestNormalizeDatabentoDf:
 
     def test_timezone_localization_naive(self):
         """Test that naive timestamps get localized to UTC."""
-        df = pd.DataFrame({
-            "ts_event": pd.to_datetime([
-                "2025-01-15 14:30:00",
-                "2025-01-15 14:31:00",
-            ]),  # Naive timestamps (no timezone)
-            "open": [150.0, 150.5],
-            "high": [151.0, 151.5],
-            "low": [149.5, 150.0],
-            "close": [150.5, 151.0],
-            "volume": [1000, 1500],
-        })
+        df = pd.DataFrame(
+            {
+                "ts_event": pd.to_datetime(
+                    [
+                        "2025-01-15 14:30:00",
+                        "2025-01-15 14:31:00",
+                    ]
+                ),  # Naive timestamps (no timezone)
+                "open": [150.0, 150.5],
+                "high": [151.0, 151.5],
+                "low": [149.5, 150.0],
+                "close": [150.5, 151.0],
+                "volume": [1000, 1500],
+            }
+        )
 
         result = normalize_databento_df(df)
 
@@ -70,17 +78,21 @@ class TestNormalizeDatabentoDf:
 
     def test_timezone_conversion_non_utc(self):
         """Test that non-UTC timestamps get converted to UTC."""
-        df = pd.DataFrame({
-            "ts_event": pd.to_datetime([
-                "2025-01-15 09:30:00",
-                "2025-01-15 09:31:00",
-            ]).tz_localize("America/New_York"),  # ET timezone
-            "open": [150.0, 150.5],
-            "high": [151.0, 151.5],
-            "low": [149.5, 150.0],
-            "close": [150.5, 151.0],
-            "volume": [1000, 1500],
-        })
+        df = pd.DataFrame(
+            {
+                "ts_event": pd.to_datetime(
+                    [
+                        "2025-01-15 09:30:00",
+                        "2025-01-15 09:31:00",
+                    ]
+                ).tz_localize("America/New_York"),  # ET timezone
+                "open": [150.0, 150.5],
+                "high": [151.0, 151.5],
+                "low": [149.5, 150.0],
+                "close": [150.5, 151.0],
+                "volume": [1000, 1500],
+            }
+        )
 
         result = normalize_databento_df(df)
 
@@ -90,18 +102,22 @@ class TestNormalizeDatabentoDf:
 
     def test_sorting_by_timestamp(self):
         """Test that output is sorted by timestamp ascending."""
-        df = pd.DataFrame({
-            "ts_event": pd.to_datetime([
-                "2025-01-15 14:32:00",  # Out of order
-                "2025-01-15 14:30:00",
-                "2025-01-15 14:31:00",
-            ]).tz_localize("UTC"),
-            "open": [150.0, 149.0, 149.5],
-            "high": [151.0, 150.0, 150.5],
-            "low": [149.5, 148.5, 149.0],
-            "close": [150.5, 149.5, 150.0],
-            "volume": [1000, 800, 900],
-        })
+        df = pd.DataFrame(
+            {
+                "ts_event": pd.to_datetime(
+                    [
+                        "2025-01-15 14:32:00",  # Out of order
+                        "2025-01-15 14:30:00",
+                        "2025-01-15 14:31:00",
+                    ]
+                ).tz_localize("UTC"),
+                "open": [150.0, 149.0, 149.5],
+                "high": [151.0, 150.0, 150.5],
+                "low": [149.5, 148.5, 149.0],
+                "close": [150.5, 149.5, 150.0],
+                "volume": [1000, 800, 900],
+            }
+        )
 
         result = normalize_databento_df(df)
 
@@ -114,17 +130,22 @@ class TestNormalizeDatabentoDf:
 
     def test_index_reset(self):
         """Test that index is reset to 0-based integers."""
-        df = pd.DataFrame({
-            "ts_event": pd.to_datetime([
-                "2025-01-15 14:30:00",
-                "2025-01-15 14:31:00",
-            ]).tz_localize("UTC"),
-            "open": [150.0, 150.5],
-            "high": [151.0, 151.5],
-            "low": [149.5, 150.0],
-            "close": [150.5, 151.0],
-            "volume": [1000, 1500],
-        }, index=[10, 20])  # Non-standard index
+        df = pd.DataFrame(
+            {
+                "ts_event": pd.to_datetime(
+                    [
+                        "2025-01-15 14:30:00",
+                        "2025-01-15 14:31:00",
+                    ]
+                ).tz_localize("UTC"),
+                "open": [150.0, 150.5],
+                "high": [151.0, 151.5],
+                "low": [149.5, 150.0],
+                "close": [150.5, 151.0],
+                "volume": [1000, 1500],
+            },
+            index=[10, 20],
+        )  # Non-standard index
 
         result = normalize_databento_df(df)
 

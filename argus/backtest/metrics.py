@@ -104,15 +104,11 @@ async def compute_metrics(
         BacktestResult with all computed metrics.
     """
     # Query all trades from the trade log for the date range
-    trades = await trade_logger.get_trades_by_date_range(
-        start_date, end_date, strategy_id
-    )
+    trades = await trade_logger.get_trades_by_date_range(start_date, end_date, strategy_id)
 
     # Handle empty trades
     if not trades:
-        return _empty_result(
-            strategy_id, start_date, end_date, initial_capital, trading_days or 0
-        )
+        return _empty_result(strategy_id, start_date, end_date, initial_capital, trading_days or 0)
 
     # Categorize trades
     winners = [t for t in trades if t.net_pnl > 0.50]

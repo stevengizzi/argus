@@ -173,9 +173,9 @@ async def test_t2_fill_cancels_stop_and_closes(
     approved = make_approved()
     await order_manager.on_approved(approved)
     entry_id = mock_broker.place_order.call_args_list[0][0][0].id
-    await order_manager.on_fill(OrderFilledEvent(
-        order_id=entry_id, fill_price=150.0, fill_quantity=100
-    ))
+    await order_manager.on_fill(
+        OrderFilledEvent(order_id=entry_id, fill_price=150.0, fill_quantity=100)
+    )
 
     # Get position and T2 order ID
     position = order_manager._managed_positions["AAPL"][0]
@@ -183,9 +183,9 @@ async def test_t2_fill_cancels_stop_and_closes(
 
     # Simulate T1 fill first (required before T2)
     t1_order_id = position.t1_order_id
-    await order_manager.on_fill(OrderFilledEvent(
-        order_id=t1_order_id, fill_price=152.0, fill_quantity=50
-    ))
+    await order_manager.on_fill(
+        OrderFilledEvent(order_id=t1_order_id, fill_price=152.0, fill_quantity=50)
+    )
 
     # After T1 fill, position has new stop order at breakeven
     stop_order_id_after_t1 = position.stop_order_id
@@ -194,9 +194,9 @@ async def test_t2_fill_cancels_stop_and_closes(
     mock_broker.cancel_order.reset_mock()
 
     # Simulate T2 fill
-    await order_manager.on_fill(OrderFilledEvent(
-        order_id=t2_order_id, fill_price=154.0, fill_quantity=50
-    ))
+    await order_manager.on_fill(
+        OrderFilledEvent(order_id=t2_order_id, fill_price=154.0, fill_quantity=50)
+    )
 
     # Stop order should be cancelled (new stop from T1 fill)
     cancel_calls = [call[0][0] for call in mock_broker.cancel_order.call_args_list]
@@ -221,26 +221,26 @@ async def test_t2_fill_records_correct_pnl(
     approved = make_approved()
     await order_manager.on_approved(approved)
     entry_id = mock_broker.place_order.call_args_list[0][0][0].id
-    await order_manager.on_fill(OrderFilledEvent(
-        order_id=entry_id, fill_price=150.0, fill_quantity=100
-    ))
+    await order_manager.on_fill(
+        OrderFilledEvent(order_id=entry_id, fill_price=150.0, fill_quantity=100)
+    )
 
     position = order_manager._managed_positions["AAPL"][0]
     t1_order_id = position.t1_order_id
     t2_order_id = position.t2_order_id
 
     # Simulate T1 fill: 50 shares * ($152 - $150) = $100
-    await order_manager.on_fill(OrderFilledEvent(
-        order_id=t1_order_id, fill_price=152.0, fill_quantity=50
-    ))
+    await order_manager.on_fill(
+        OrderFilledEvent(order_id=t1_order_id, fill_price=152.0, fill_quantity=50)
+    )
 
     # T1 P&L recorded
     assert position.realized_pnl == 100.0
 
     # Simulate T2 fill: 50 shares * ($154 - $150) = $200
-    await order_manager.on_fill(OrderFilledEvent(
-        order_id=t2_order_id, fill_price=154.0, fill_quantity=50
-    ))
+    await order_manager.on_fill(
+        OrderFilledEvent(order_id=t2_order_id, fill_price=154.0, fill_quantity=50)
+    )
 
     # Total P&L: $100 + $200 = $300
     assert position.realized_pnl == 300.0
@@ -260,17 +260,17 @@ async def test_on_tick_skips_t2_when_broker_order_exists(
     approved = make_approved()
     await order_manager.on_approved(approved)
     entry_id = mock_broker.place_order.call_args_list[0][0][0].id
-    await order_manager.on_fill(OrderFilledEvent(
-        order_id=entry_id, fill_price=150.0, fill_quantity=100
-    ))
+    await order_manager.on_fill(
+        OrderFilledEvent(order_id=entry_id, fill_price=150.0, fill_quantity=100)
+    )
 
     position = order_manager._managed_positions["AAPL"][0]
     t1_order_id = position.t1_order_id
 
     # Simulate T1 fill (required for T2 monitoring to be relevant)
-    await order_manager.on_fill(OrderFilledEvent(
-        order_id=t1_order_id, fill_price=152.0, fill_quantity=50
-    ))
+    await order_manager.on_fill(
+        OrderFilledEvent(order_id=t1_order_id, fill_price=152.0, fill_quantity=50)
+    )
 
     # Position has t2_order_id set from entry
     assert position.t2_order_id is not None
@@ -304,17 +304,17 @@ async def test_on_tick_monitors_t2_when_no_broker_order(
     approved = make_approved(signal=signal)
     await order_manager.on_approved(approved)
     entry_id = mock_broker.place_order.call_args_list[0][0][0].id
-    await order_manager.on_fill(OrderFilledEvent(
-        order_id=entry_id, fill_price=150.0, fill_quantity=100
-    ))
+    await order_manager.on_fill(
+        OrderFilledEvent(order_id=entry_id, fill_price=150.0, fill_quantity=100)
+    )
 
     position = order_manager._managed_positions["AAPL"][0]
     t1_order_id = position.t1_order_id
 
     # Simulate T1 fill
-    await order_manager.on_fill(OrderFilledEvent(
-        order_id=t1_order_id, fill_price=152.0, fill_quantity=50
-    ))
+    await order_manager.on_fill(
+        OrderFilledEvent(order_id=t1_order_id, fill_price=152.0, fill_quantity=50)
+    )
 
     # Manually clear t2_order_id to simulate Alpaca path (no broker-side T2)
     position.t2_order_id = None
@@ -347,9 +347,9 @@ async def test_stop_fill_cancels_t2_order(
     approved = make_approved()
     await order_manager.on_approved(approved)
     entry_id = mock_broker.place_order.call_args_list[0][0][0].id
-    await order_manager.on_fill(OrderFilledEvent(
-        order_id=entry_id, fill_price=150.0, fill_quantity=100
-    ))
+    await order_manager.on_fill(
+        OrderFilledEvent(order_id=entry_id, fill_price=150.0, fill_quantity=100)
+    )
 
     position = order_manager._managed_positions["AAPL"][0]
     stop_order_id = position.stop_order_id
@@ -362,9 +362,9 @@ async def test_stop_fill_cancels_t2_order(
     mock_broker.cancel_order.reset_mock()
 
     # Simulate stop fill
-    await order_manager.on_fill(OrderFilledEvent(
-        order_id=stop_order_id, fill_price=148.0, fill_quantity=100
-    ))
+    await order_manager.on_fill(
+        OrderFilledEvent(order_id=stop_order_id, fill_price=148.0, fill_quantity=100)
+    )
 
     # T2 order should be cancelled
     cancel_calls = [call[0][0] for call in mock_broker.cancel_order.call_args_list]
@@ -385,9 +385,9 @@ async def test_flatten_cancels_t2_order(
     approved = make_approved()
     await order_manager.on_approved(approved)
     entry_id = mock_broker.place_order.call_args_list[0][0][0].id
-    await order_manager.on_fill(OrderFilledEvent(
-        order_id=entry_id, fill_price=150.0, fill_quantity=100
-    ))
+    await order_manager.on_fill(
+        OrderFilledEvent(order_id=entry_id, fill_price=150.0, fill_quantity=100)
+    )
 
     position = order_manager._managed_positions["AAPL"][0]
     t2_order_id = position.t2_order_id
@@ -419,9 +419,9 @@ async def test_t2_order_not_submitted_without_t2_price(
     await order_manager.on_approved(approved)
 
     entry_id = mock_broker.place_order.call_args_list[0][0][0].id
-    await order_manager.on_fill(OrderFilledEvent(
-        order_id=entry_id, fill_price=150.0, fill_quantity=100
-    ))
+    await order_manager.on_fill(
+        OrderFilledEvent(order_id=entry_id, fill_price=150.0, fill_quantity=100)
+    )
 
     # Only 3 orders: entry, stop, T1 (no T2)
     assert mock_broker.place_order.call_count == 3

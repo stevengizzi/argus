@@ -75,9 +75,7 @@ class TestIBKRContractResolver:
         qualified_nvda = Stock("NVDA", "SMART", "USD")
         qualified_nvda.conId = 4815747  # NVDA conId
 
-        mock_ib.qualifyContractsAsync = AsyncMock(
-            return_value=[qualified_aapl, qualified_nvda]
-        )
+        mock_ib.qualifyContractsAsync = AsyncMock(return_value=[qualified_aapl, qualified_nvda])
 
         # Qualify the contracts
         result = await resolver.qualify_contracts(mock_ib, ["AAPL", "NVDA"])

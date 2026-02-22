@@ -36,16 +36,18 @@ logger = logging.getLogger(__name__)
 
 class ComponentStatus(StrEnum):
     """Health status of a system component."""
+
     STARTING = "starting"
     HEALTHY = "healthy"
-    DEGRADED = "degraded"     # Working but with issues (e.g., reconnecting)
-    UNHEALTHY = "unhealthy"   # Not functioning
+    DEGRADED = "degraded"  # Working but with issues (e.g., reconnecting)
+    UNHEALTHY = "unhealthy"  # Not functioning
     STOPPED = "stopped"
 
 
 @dataclass
 class ComponentHealth:
     """Health snapshot for a single component."""
+
     name: str
     status: ComponentStatus
     last_updated: datetime
@@ -158,13 +160,16 @@ class HealthMonitor:
         self._components[name] = health
 
         # Alert on transition to UNHEALTHY
-        if (status == ComponentStatus.UNHEALTHY
-                and (previous is None or previous.status != ComponentStatus.UNHEALTHY)):
-            asyncio.create_task(self._send_alert(
-                title=f"Component UNHEALTHY: {name}",
-                body=message,
-                severity="critical",
-            ))
+        if status == ComponentStatus.UNHEALTHY and (
+            previous is None or previous.status != ComponentStatus.UNHEALTHY
+        ):
+            asyncio.create_task(
+                self._send_alert(
+                    title=f"Component UNHEALTHY: {name}",
+                    body=message,
+                    severity="critical",
+                )
+            )
 
         logger.info("Component %s → %s: %s", name, status.value, message)
 
@@ -215,9 +220,11 @@ class HealthMonitor:
                 system_status = self._map_to_system_status(overall)
 
                 # Publish HeartbeatEvent to Event Bus
-                await self._event_bus.publish(HeartbeatEvent(
-                    system_status=system_status,
-                ))
+                await self._event_bus.publish(
+                    HeartbeatEvent(
+                        system_status=system_status,
+                    )
+                )
 
                 # Send to external monitoring
                 if self._config.heartbeat_url:
@@ -261,8 +268,7 @@ class HealthMonitor:
                     "status": status.value,
                     "timestamp": self._clock.now().isoformat(),
                     "components": {
-                        name: health.status.value
-                        for name, health in self._components.items()
+                        name: health.status.value for name, health in self._components.items()
                     },
                 }
                 async with session.post(
@@ -348,34 +354,41 @@ class HealthMonitor:
         Weekly check runs on Saturday at 9:00 AM ET.
         """
         et_tz = ZoneInfo("America/New_York")
-        daily_check_time = time(16, 15)      # 4:15 PM ET
-        weekly_check_day = 5                  # Saturday (0=Monday in weekday())
-        weekly_check_time = time(9, 0)        # 9:00 AM ET
+        daily_check_time = time(16, 15)  # 4:15 PM ET
+        weekly_check_day = 5  # Saturday (0=Monday in weekday())
+        weekly_check_time = time(9, 0)  # 9:00 AM ET
 
         while self._running:
             try:
                 now = self._clock.now()
                 # Ensure we're working in ET
-                now_et = (now.replace(tzinfo=et_tz) if now.tzinfo is None
-                          else now.astimezone(et_tz))
+                now_et = now.replace(tzinfo=et_tz) if now.tzinfo is None else now.astimezone(et_tz)
 
                 current_time = now_et.time()
                 current_date = now_et.date()
 
                 # Daily check: 4:15 PM ET, once per day
-                daily_due = (self._last_daily_check is None
-                             or self._last_daily_check.date() < current_date)
-                if (self._config.daily_check_enabled
-                        and current_time >= daily_check_time and daily_due):
+                daily_due = (
+                    self._last_daily_check is None or self._last_daily_check.date() < current_date
+                )
+                if (
+                    self._config.daily_check_enabled
+                    and current_time >= daily_check_time
+                    and daily_due
+                ):
                     await self._run_daily_integrity_check()
                     self._last_daily_check = now_et
 
                 # Weekly check: Saturday 9 AM ET
-                weekly_due = (self._last_weekly_check is None
-                              or (now_et - self._last_weekly_check).days >= 6)
-                if (self._config.weekly_reconciliation_enabled
-                        and now_et.weekday() == weekly_check_day
-                        and current_time >= weekly_check_time and weekly_due):
+                weekly_due = (
+                    self._last_weekly_check is None or (now_et - self._last_weekly_check).days >= 6
+                )
+                if (
+                    self._config.weekly_reconciliation_enabled
+                    and now_et.weekday() == weekly_check_day
+                    and current_time >= weekly_check_time
+                    and weekly_due
+                ):
                     await self._run_weekly_reconciliation()
                     self._last_weekly_check = now_et
 

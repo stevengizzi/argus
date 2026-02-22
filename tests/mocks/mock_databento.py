@@ -113,13 +113,15 @@ class MockLiveClient:
             stype_in: Input symbology type.
             **kwargs: Additional subscription parameters.
         """
-        self.subscriptions.append({
-            "dataset": dataset,
-            "schema": schema,
-            "symbols": symbols,
-            "stype_in": stype_in,
-            **kwargs,
-        })
+        self.subscriptions.append(
+            {
+                "dataset": dataset,
+                "schema": schema,
+                "symbols": symbols,
+                "stype_in": stype_in,
+                **kwargs,
+            }
+        )
 
     def add_callback(self, callback: Any) -> None:
         """Register a callback for incoming records.
@@ -226,6 +228,4 @@ class MockDBNStore:
         """
         if self._df is not None:
             return self._df
-        return pd.DataFrame(
-            columns=["ts_event", "open", "high", "low", "close", "volume"]
-        )
+        return pd.DataFrame(columns=["ts_event", "open", "high", "low", "close", "volume"])

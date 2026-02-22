@@ -39,9 +39,7 @@ class ConcreteTestStrategy(BaseStrategy):
                 entry_price=event.close,
                 stop_price=event.close * 0.98,
                 target_prices=(event.close * 1.02, event.close * 1.04),
-                share_count=self.calculate_position_size(
-                    event.close, event.close * 0.98
-                ),
+                share_count=self.calculate_position_size(event.close, event.close * 0.98),
                 rationale="Test signal",
             )
         return None
@@ -438,9 +436,7 @@ class TestReconstructState:
             self._make_trade(
                 strategy_id="test_strat",
                 net_pnl=100.0,
-                entry_time=datetime.combine(
-                    test_date, datetime.min.time().replace(hour=10)
-                ),
+                entry_time=datetime.combine(test_date, datetime.min.time().replace(hour=10)),
                 exit_time=datetime.combine(
                     test_date, datetime.min.time().replace(hour=10, minute=30)
                 ),
@@ -450,9 +446,7 @@ class TestReconstructState:
             self._make_trade(
                 strategy_id="test_strat",
                 net_pnl=-50.0,
-                entry_time=datetime.combine(
-                    test_date, datetime.min.time().replace(hour=11)
-                ),
+                entry_time=datetime.combine(test_date, datetime.min.time().replace(hour=11)),
                 exit_time=datetime.combine(
                     test_date, datetime.min.time().replace(hour=11, minute=30)
                 ),
@@ -463,9 +457,7 @@ class TestReconstructState:
             self._make_trade(
                 strategy_id="other_strat",
                 net_pnl=200.0,
-                entry_time=datetime.combine(
-                    test_date, datetime.min.time().replace(hour=12)
-                ),
+                entry_time=datetime.combine(test_date, datetime.min.time().replace(hour=12)),
                 exit_time=datetime.combine(
                     test_date, datetime.min.time().replace(hour=12, minute=30)
                 ),
@@ -473,9 +465,7 @@ class TestReconstructState:
         )
 
         # Create strategy with fixed clock and reconstruct state
-        strategy = ConcreteTestStrategy(
-            make_config(strategy_id="test_strat"), clock=clock
-        )
+        strategy = ConcreteTestStrategy(make_config(strategy_id="test_strat"), clock=clock)
         await strategy.reconstruct_state(trade_logger)
 
         # Should only count trades for this strategy

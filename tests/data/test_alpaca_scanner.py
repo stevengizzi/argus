@@ -172,12 +172,8 @@ async def test_filters_by_minimum_volume(
 ) -> None:
     """Low-volume symbols excluded."""
     mock_client.get_stock_snapshot.return_value = {
-        "AAPL": make_snapshot(
-            open_price=150.0, prev_close=145.0, prev_volume=2_000_000
-        ),
-        "LOWVOL": make_snapshot(
-            open_price=50.0, prev_close=48.0, prev_volume=500_000
-        ),  # Below min
+        "AAPL": make_snapshot(open_price=150.0, prev_close=145.0, prev_volume=2_000_000),
+        "LOWVOL": make_snapshot(open_price=50.0, prev_close=48.0, prev_volume=500_000),  # Below min
     }
 
     criteria = [ScannerCriteria()]

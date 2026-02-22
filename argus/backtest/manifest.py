@@ -79,9 +79,7 @@ class Manifest:
 
     def get_date_range(self, symbol: str) -> tuple[str, str] | None:
         """Return (earliest_month, latest_month) for a symbol, or None."""
-        months = [
-            (e.year, e.month) for e in self.entries.values() if e.symbol == symbol
-        ]
+        months = [(e.year, e.month) for e in self.entries.values() if e.symbol == symbol]
         if not months:
             return None
         months.sort()

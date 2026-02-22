@@ -156,14 +156,10 @@ class DatabentoDataService(DataService):
         await self._connect_live_session()
 
         # 5. Launch reconnection wrapper as a task (handles subsequent reconnects)
-        self._stream_task = asyncio.create_task(
-            self._run_with_reconnection()
-        )
+        self._stream_task = asyncio.create_task(self._run_with_reconnection())
 
         # 6. Start stale data monitor
-        self._stale_monitor_task = asyncio.create_task(
-            self._stale_data_monitor()
-        )
+        self._stale_monitor_task = asyncio.create_task(self._stale_data_monitor())
 
         logger.info(
             "DatabentoDataService started: dataset=%s, symbols=%d, schemas=[%s, %s]",
@@ -231,12 +227,13 @@ class DatabentoDataService(DataService):
             )
             logger.warning(
                 "Reconnecting to Databento in %.1fs (attempt %d/%d)",
-                delay, retries, self._config.reconnect_max_retries,
+                delay,
+                retries,
+                self._config.reconnect_max_retries,
             )
             await asyncio.sleep(delay)
 
-        logger.info("Reconnection loop exited (running=%s, retries=%d)",
-                    self._running, retries)
+        logger.info("Reconnection loop exited (running=%s, retries=%d)", self._running, retries)
 
     async def _connect_live_session(self) -> None:
         """Create a new Databento Live client and subscribe to streams.
@@ -309,7 +306,8 @@ class DatabentoDataService(DataService):
         logger.info(
             "Connected to Databento: dataset=%s, symbols=%s",
             self._config.dataset,
-            subscribe_symbols if isinstance(subscribe_symbols, str)
+            subscribe_symbols
+            if isinstance(subscribe_symbols, str)
             else f"{len(subscribe_symbols)} symbols",
         )
 
@@ -409,9 +407,7 @@ class DatabentoDataService(DataService):
         df = data.to_df()
 
         if df.empty:
-            return pd.DataFrame(
-                columns=["timestamp", "open", "high", "low", "close", "volume"]
-            )
+            return pd.DataFrame(columns=["timestamp", "open", "high", "low", "close", "volume"])
 
         # Normalize to our standard schema
         result = self._normalize_historical_df(df)
@@ -429,11 +425,7 @@ class DatabentoDataService(DataService):
         result: dict[str, Any] = {}
         for symbol in symbols:
             price = self._price_cache.get(symbol)
-            indicators = {
-                k[1]: v
-                for k, v in self._indicator_cache.items()
-                if k[0] == symbol
-            }
+            indicators = {k[1]: v for k, v in self._indicator_cache.items() if k[0] == symbol}
             result[symbol] = {
                 "price": price,
                 "indicators": indicators,
@@ -570,9 +562,7 @@ class DatabentoDataService(DataService):
 
         # Bridge to asyncio
         if self._loop is not None and self._loop.is_running():
-            self._loop.call_soon_threadsafe(
-                self._schedule_tick_publish, tick_event
-            )
+            self._loop.call_soon_threadsafe(self._schedule_tick_publish, tick_event)
 
     def _on_error(self, msg: Any) -> None:
         """Process ErrorMsg — log and potentially trigger alerts.
@@ -636,51 +626,63 @@ class DatabentoDataService(DataService):
         # Update cache and build events for non-None indicators
         if values.vwap is not None:
             self._indicator_cache[(symbol, "vwap")] = values.vwap
-            events.append(IndicatorEvent(
-                symbol=symbol,
-                indicator_name="vwap",
-                value=values.vwap,
-            ))
+            events.append(
+                IndicatorEvent(
+                    symbol=symbol,
+                    indicator_name="vwap",
+                    value=values.vwap,
+                )
+            )
 
         if values.atr_14 is not None:
             self._indicator_cache[(symbol, "atr_14")] = values.atr_14
-            events.append(IndicatorEvent(
-                symbol=symbol,
-                indicator_name="atr_14",
-                value=values.atr_14,
-            ))
+            events.append(
+                IndicatorEvent(
+                    symbol=symbol,
+                    indicator_name="atr_14",
+                    value=values.atr_14,
+                )
+            )
 
         if values.sma_9 is not None:
             self._indicator_cache[(symbol, "sma_9")] = values.sma_9
-            events.append(IndicatorEvent(
-                symbol=symbol,
-                indicator_name="sma_9",
-                value=values.sma_9,
-            ))
+            events.append(
+                IndicatorEvent(
+                    symbol=symbol,
+                    indicator_name="sma_9",
+                    value=values.sma_9,
+                )
+            )
 
         if values.sma_20 is not None:
             self._indicator_cache[(symbol, "sma_20")] = values.sma_20
-            events.append(IndicatorEvent(
-                symbol=symbol,
-                indicator_name="sma_20",
-                value=values.sma_20,
-            ))
+            events.append(
+                IndicatorEvent(
+                    symbol=symbol,
+                    indicator_name="sma_20",
+                    value=values.sma_20,
+                )
+            )
 
         if values.sma_50 is not None:
             self._indicator_cache[(symbol, "sma_50")] = values.sma_50
-            events.append(IndicatorEvent(
-                symbol=symbol,
-                indicator_name="sma_50",
-                value=values.sma_50,
-            ))
+            events.append(
+                IndicatorEvent(
+                    symbol=symbol,
+                    indicator_name="sma_50",
+                    value=values.sma_50,
+                )
+            )
 
         if values.rvol is not None:
             self._indicator_cache[(symbol, "rvol")] = values.rvol
-            events.append(IndicatorEvent(
-                symbol=symbol,
-                indicator_name="rvol",
-                value=values.rvol,
-            ))
+            events.append(
+                IndicatorEvent(
+                    symbol=symbol,
+                    indicator_name="rvol",
+                    value=values.rvol,
+                )
+            )
 
         return events
 
@@ -820,8 +822,7 @@ class DatabentoDataService(DataService):
         return None
 
     def _save_parquet_cache(
-        self, symbol: str, timeframe: str, start: datetime, end: datetime,
-        df: pd.DataFrame
+        self, symbol: str, timeframe: str, start: datetime, end: datetime, df: pd.DataFrame
     ) -> None:
         """Save historical data to local Parquet cache.
 

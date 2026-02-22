@@ -65,9 +65,7 @@ class BacktestDataService(DataService):
             symbols: List of symbols to track.
             timeframes: List of timeframes (only 1m supported).
         """
-        logger.info(
-            "BacktestDataService initialized for %d symbols", len(symbols)
-        )
+        logger.info("BacktestDataService initialized for %d symbols", len(symbols))
 
     async def stop(self) -> None:
         """No-op. Nothing to clean up."""
@@ -219,9 +217,7 @@ class BacktestDataService(DataService):
             self._indicator_cache[(symbol, "rvol")] = values.rvol
             await self._publish_indicator(symbol, "rvol", values.rvol)
 
-    async def _publish_indicator(
-        self, symbol: str, indicator: str, value: float
-    ) -> None:
+    async def _publish_indicator(self, symbol: str, indicator: str, value: float) -> None:
         """Publish an IndicatorEvent to the Event Bus.
 
         Args:

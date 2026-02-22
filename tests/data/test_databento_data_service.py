@@ -102,9 +102,7 @@ class TestDatabentoDataServiceInit:
         assert service._price_cache == {}
         assert service._indicator_cache == {}
 
-    def test_constructor_with_custom_config(
-        self, mock_databento, event_bus, data_config
-    ):
+    def test_constructor_with_custom_config(self, mock_databento, event_bus, data_config):
         """Constructor accepts custom configuration."""
         from argus.data.databento_data_service import DatabentoDataService
 
@@ -881,9 +879,7 @@ class TestGetWatchlistData:
 class TestIndicatorComputation:
     """Tests for indicator computation."""
 
-    def test_vwap_computation(
-        self, mock_databento, event_bus, databento_config, data_config
-    ):
+    def test_vwap_computation(self, mock_databento, event_bus, databento_config, data_config):
         """VWAP is computed correctly."""
         from argus.data.databento_data_service import DatabentoDataService
 
@@ -938,15 +934,17 @@ class TestWarmUpIndicators:
             freq="1min",
             tz="UTC",
         )
-        historical_df = pd.DataFrame({
-            "ts_event": timestamps,
-            "timestamp": timestamps,
-            "open": [100.0 + i * 0.1 for i in range(20)],
-            "high": [101.0 + i * 0.1 for i in range(20)],
-            "low": [99.0 + i * 0.1 for i in range(20)],
-            "close": [100.5 + i * 0.1 for i in range(20)],
-            "volume": [1000 + i * 10 for i in range(20)],
-        })
+        historical_df = pd.DataFrame(
+            {
+                "ts_event": timestamps,
+                "timestamp": timestamps,
+                "open": [100.0 + i * 0.1 for i in range(20)],
+                "high": [101.0 + i * 0.1 for i in range(20)],
+                "low": [99.0 + i * 0.1 for i in range(20)],
+                "close": [100.5 + i * 0.1 for i in range(20)],
+                "volume": [1000 + i * 10 for i in range(20)],
+            }
+        )
 
         # Mock get_historical_candles to return our test data
         async def mock_get_historical_candles(
@@ -1069,9 +1067,7 @@ class TestStaleDataMonitor:
             assert elapsed > config.stale_data_timeout_seconds
 
     @pytest.mark.asyncio
-    async def test_stale_resumed_transition(
-        self, mock_databento, event_bus, data_config
-    ):
+    async def test_stale_resumed_transition(self, mock_databento, event_bus, data_config):
         """Stale flag transitions correctly between stale and resumed."""
 
         from argus.data.databento_data_service import DatabentoDataService
@@ -1149,15 +1145,13 @@ class TestReconnectionLogic:
         # Retry 1: 1.0 * (2 ** 0) = 1.0
         # Retry 2: 1.0 * (2 ** 1) = 2.0
         # Retry 3: 1.0 * (2 ** 2) = 4.0
-        assert min(config.reconnect_base_delay_seconds * (2 ** 0), 60) == 1.0
-        assert min(config.reconnect_base_delay_seconds * (2 ** 1), 60) == 2.0
-        assert min(config.reconnect_base_delay_seconds * (2 ** 2), 60) == 4.0
-        assert min(config.reconnect_base_delay_seconds * (2 ** 3), 60) == 8.0
+        assert min(config.reconnect_base_delay_seconds * (2**0), 60) == 1.0
+        assert min(config.reconnect_base_delay_seconds * (2**1), 60) == 2.0
+        assert min(config.reconnect_base_delay_seconds * (2**2), 60) == 4.0
+        assert min(config.reconnect_base_delay_seconds * (2**3), 60) == 8.0
 
     @pytest.mark.asyncio
-    async def test_backoff_caps_at_max_delay_seconds(
-        self, mock_databento, event_bus, data_config
-    ):
+    async def test_backoff_caps_at_max_delay_seconds(self, mock_databento, event_bus, data_config):
         """Backoff delay caps at max_delay_seconds."""
         from argus.data.databento_data_service import DatabentoDataService
 
@@ -1206,6 +1200,7 @@ class TestReconnectionLogic:
         # First connect succeeds (in start()), subsequent reconnects fail
         async def connect_succeeds_then_fails() -> None:
             import databento as db
+
             connection_attempts.append(1)
             if len(connection_attempts) == 1:
                 # First connection succeeds - set up mock client
@@ -1343,6 +1338,7 @@ class TestReconnectionLogic:
 
         async def connect_succeeds_fails_succeeds() -> None:
             import databento as db
+
             call_count.append(1)
             # First (in start()) and third succeed, second fails (to test retry)
             if len(call_count) == 2:
@@ -1373,9 +1369,7 @@ class TestReconnectionLogic:
         assert len(call_count) >= 1
 
     @pytest.mark.asyncio
-    async def test_multiple_reconnections_work(
-        self, mock_databento, event_bus, data_config
-    ):
+    async def test_multiple_reconnections_work(self, mock_databento, event_bus, data_config):
         """Multiple reconnections work (connect → disconnect → reconnect)."""
         from argus.data.databento_data_service import DatabentoDataService
 
@@ -1393,6 +1387,7 @@ class TestReconnectionLogic:
 
         async def track_connections() -> None:
             import databento as db
+
             connection_count.append(1)
             # Clean up previous client if exists
             if service._live_client is not None:

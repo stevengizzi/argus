@@ -51,9 +51,7 @@ class TestGetExpectedTradingDays:
 class TestValidateParquetFile:
     """Tests for Parquet file validation."""
 
-    def _make_valid_parquet(
-        self, tmp_path: Path, symbol: str, year: int, month: int
-    ) -> Path:
+    def _make_valid_parquet(self, tmp_path: Path, symbol: str, year: int, month: int) -> Path:
         """Helper to create a valid Parquet file for testing."""
         # Generate bars for every trading day, every minute 9:30-16:00 ET
         days = get_expected_trading_days(year, month)
@@ -108,9 +106,7 @@ class TestValidateParquetFile:
 
     def test_empty_file(self, tmp_path: Path) -> None:
         """Empty file is flagged."""
-        df = pd.DataFrame(
-            columns=["timestamp", "open", "high", "low", "close", "volume"]
-        )
+        df = pd.DataFrame(columns=["timestamp", "open", "high", "low", "close", "volume"])
         path = tmp_path / "EMPTY" / "EMPTY_2025-06.parquet"
         path.parent.mkdir(parents=True)
         df.to_parquet(path, index=False)
@@ -143,9 +139,7 @@ class TestValidateParquetFile:
         df = pd.DataFrame(
             [
                 {
-                    "timestamp": pd.Timestamp(
-                        "2025-06-02 15:00:00", tz="UTC"
-                    ),  # 10 AM ET
+                    "timestamp": pd.Timestamp("2025-06-02 15:00:00", tz="UTC"),  # 10 AM ET
                     "open": 150.0,
                     "high": 151.0,
                     "low": 149.0,
@@ -212,9 +206,7 @@ class TestValidateParquetFile:
         df = pd.DataFrame(
             [
                 {
-                    "timestamp": pd.Timestamp(
-                        "2025-06-02 14:30:00"
-                    ),  # No tz - naive
+                    "timestamp": pd.Timestamp("2025-06-02 14:30:00"),  # No tz - naive
                     "open": 150.0,
                     "high": 151.0,
                     "low": 149.0,

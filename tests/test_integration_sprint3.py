@@ -77,36 +77,42 @@ def generate_orb_test_parquet(
 
         close = or_midpoint + (i % 3 - 1) * 0.2
 
-        candles.append({
-            "timestamp": timestamp,
-            "open": close - 0.1,
-            "high": high,
-            "low": low,
-            "close": close,
-            "volume": 100_000 + i * 1000,
-        })
+        candles.append(
+            {
+                "timestamp": timestamp,
+                "open": close - 0.1,
+                "high": high,
+                "low": low,
+                "close": close,
+                "volume": 100_000 + i * 1000,
+            }
+        )
 
     # Post-OR candle (9:45) - triggers OR finalization
     post_or_time = market_open_utc + timedelta(minutes=15)
-    candles.append({
-        "timestamp": post_or_time,
-        "open": or_midpoint,
-        "high": or_midpoint + 0.5,
-        "low": or_midpoint - 0.3,
-        "close": or_midpoint + 0.2,
-        "volume": 80_000,
-    })
+    candles.append(
+        {
+            "timestamp": post_or_time,
+            "open": or_midpoint,
+            "high": or_midpoint + 0.5,
+            "low": or_midpoint - 0.3,
+            "close": or_midpoint + 0.2,
+            "volume": 80_000,
+        }
+    )
 
     # Breakout candle (10:00)
     breakout_time = market_open_utc + timedelta(minutes=30)
-    candles.append({
-        "timestamp": breakout_time,
-        "open": or_high,
-        "high": breakout_close + 0.5,
-        "low": or_high - 0.2,
-        "close": breakout_close,
-        "volume": breakout_volume,
-    })
+    candles.append(
+        {
+            "timestamp": breakout_time,
+            "open": or_high,
+            "high": breakout_close + 0.5,
+            "low": or_high - 0.2,
+            "close": breakout_close,
+            "volume": breakout_volume,
+        }
+    )
 
     df = pd.DataFrame(candles)
     output_dir.mkdir(parents=True, exist_ok=True)

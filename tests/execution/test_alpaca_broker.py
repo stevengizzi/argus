@@ -576,7 +576,7 @@ async def test_get_account_with_positions_value(broker: AlpacaBroker) -> None:
     # Mock account with positions
     mock_account = Mock()
     mock_account.equity = "125000.0"  # Total account value
-    mock_account.cash = "75000.0"     # Cash portion
+    mock_account.cash = "75000.0"  # Cash portion
     mock_account.buying_power = "150000.0"
     mock_account.last_equity = "120000.0"
 

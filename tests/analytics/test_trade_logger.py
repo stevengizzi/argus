@@ -79,15 +79,9 @@ class TestTradeLogger:
 
     async def test_get_trades_by_date(self, trade_logger: TradeLogger) -> None:
         """get_trades_by_date filters by date."""
-        await trade_logger.log_trade(
-            make_trade(exit_time=datetime(2026, 2, 15, 10, 30, 0))
-        )
-        await trade_logger.log_trade(
-            make_trade(exit_time=datetime(2026, 2, 15, 11, 0, 0))
-        )
-        await trade_logger.log_trade(
-            make_trade(exit_time=datetime(2026, 2, 16, 10, 0, 0))
-        )
+        await trade_logger.log_trade(make_trade(exit_time=datetime(2026, 2, 15, 10, 30, 0)))
+        await trade_logger.log_trade(make_trade(exit_time=datetime(2026, 2, 15, 11, 0, 0)))
+        await trade_logger.log_trade(make_trade(exit_time=datetime(2026, 2, 16, 10, 0, 0)))
 
         feb15_trades = await trade_logger.get_trades_by_date("2026-02-15")
         assert len(feb15_trades) == 2
@@ -139,8 +133,6 @@ class TestTradeLogger:
         assert len(summary_id) == 26  # ULID
 
         # Verify it was saved
-        row = await db.fetch_one(
-            "SELECT * FROM daily_summaries WHERE date = ?", ("2026-02-15",)
-        )
+        row = await db.fetch_one("SELECT * FROM daily_summaries WHERE date = ?", ("2026-02-15",))
         assert row is not None
         assert row["total_trades"] == 2

@@ -194,9 +194,7 @@ class RiskManager:
             self._config.account.weekly_loss_limit_pct * 100,
         )
 
-    async def evaluate_signal(
-        self, signal: SignalEvent
-    ) -> OrderApprovedEvent | OrderRejectedEvent:
+    async def evaluate_signal(self, signal: SignalEvent) -> OrderApprovedEvent | OrderRejectedEvent:
         """Evaluate a trade signal against account-level risk limits.
 
         Checks performed in order (fail-fast):
@@ -250,8 +248,7 @@ class RiskManager:
                 daily_limit,
             )
             reason = (
-                f"Daily loss limit reached "
-                f"({self._daily_realized_pnl:.2f} of {daily_limit:.2f})"
+                f"Daily loss limit reached ({self._daily_realized_pnl:.2f} of {daily_limit:.2f})"
             )
             return OrderRejectedEvent(signal=signal, reason=reason)
 
@@ -333,9 +330,7 @@ class RiskManager:
 
         # 7. PDT check
         if self._config.pdt.enabled:
-            remaining = self._pdt_tracker.day_trades_remaining(
-                self._clock.today(), account.equity
-            )
+            remaining = self._pdt_tracker.day_trades_remaining(self._clock.today(), account.equity)
             if remaining <= 0:
                 logger.warning("Signal rejected: PDT limit reached")
                 return OrderRejectedEvent(
@@ -414,9 +409,7 @@ class RiskManager:
                 else event.entry_time
             )
             exit_date = (
-                event.exit_time.date()
-                if isinstance(event.exit_time, datetime)
-                else event.exit_time
+                event.exit_time.date() if isinstance(event.exit_time, datetime) else event.exit_time
             )
             if entry_date == exit_date:
                 self._pdt_tracker.record_day_trade(exit_date)
@@ -489,18 +482,14 @@ class RiskManager:
         today = self._clock.today()
         trades_today = await trade_logger.get_trades_by_date(today)
 
-        self._daily_realized_pnl = sum(
-            t.net_pnl for t in trades_today if t.net_pnl is not None
-        )
+        self._daily_realized_pnl = sum(t.net_pnl for t in trades_today if t.net_pnl is not None)
         self._trades_today = len(trades_today)
 
         # Reconstruct weekly P&L from Monday through today
         monday = self._get_monday(today)
         self._current_week_start = monday
         weekly_trades = await trade_logger.get_trades_by_date_range(monday, today)
-        self._weekly_realized_pnl = sum(
-            t.net_pnl for t in weekly_trades if t.net_pnl is not None
-        )
+        self._weekly_realized_pnl = sum(t.net_pnl for t in weekly_trades if t.net_pnl is not None)
 
         # Reconstruct PDT day trades for the rolling 5 business days window
         pdt_cutoff = PDTTracker._business_days_ago(today, 5)

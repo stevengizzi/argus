@@ -72,6 +72,7 @@ def _simulate_trades_for_day(
 
     return result
 
+
 # =============================================================================
 # Test Fixtures
 # =============================================================================
@@ -113,9 +114,9 @@ def create_synthetic_bars(
 
         # Create 390 bars (full trading day)
         for bar_num in range(390):
-            timestamp = datetime(
-                day.year, day.month, day.day, 9, 30, 0, tzinfo=UTC
-            ) + timedelta(minutes=bar_num)
+            timestamp = datetime(day.year, day.month, day.day, 9, 30, 0, tzinfo=UTC) + timedelta(
+                minutes=bar_num
+            )
 
             if bar_num < 15:
                 # Opening range bars - oscillate around open
@@ -160,14 +161,16 @@ def create_synthetic_bars(
 
                 volume = 8000
 
-            bars.append({
-                "timestamp": timestamp,
-                "open": open_,
-                "high": high,
-                "low": low,
-                "close": close,
-                "volume": volume,
-            })
+            bars.append(
+                {
+                    "timestamp": timestamp,
+                    "open": open_,
+                    "high": high,
+                    "low": low,
+                    "close": close,
+                    "volume": volume,
+                }
+            )
 
         # Update prev_close for next day
         prev_close = bars[-1]["close"]
@@ -327,14 +330,16 @@ def test_compute_atr_known_values():
         for bar_num in range(390):
             ts = datetime(day.year, day.month, day.day, 9, 30, 0, tzinfo=UTC)
             timestamp = ts + timedelta(minutes=bar_num)
-            bars.append({
-                "timestamp": timestamp,
-                "trading_day": day,
-                "open": 100.0,
-                "high": 101.0,  # Daily high will be 101
-                "low": 99.0,    # Daily low will be 99
-                "close": 100.0,
-            })
+            bars.append(
+                {
+                    "timestamp": timestamp,
+                    "trading_day": day,
+                    "open": 100.0,
+                    "high": 101.0,  # Daily high will be 101
+                    "low": 99.0,  # Daily low will be 99
+                    "close": 100.0,
+                }
+            )
 
     df = pd.DataFrame(bars)
     atr = compute_atr(df, period=14)
@@ -356,14 +361,16 @@ def test_compute_atr_insufficient_data():
         for bar_num in range(10):  # Minimal bars per day
             ts = datetime(day.year, day.month, day.day, 9, 30, 0, tzinfo=UTC)
             timestamp = ts + timedelta(minutes=bar_num)
-            bars.append({
-                "timestamp": timestamp,
-                "trading_day": day,
-                "open": 100.0,
-                "high": 101.0,
-                "low": 99.0,
-                "close": 100.0,
-            })
+            bars.append(
+                {
+                    "timestamp": timestamp,
+                    "trading_day": day,
+                    "open": 100.0,
+                    "high": 101.0,
+                    "low": 99.0,
+                    "close": 100.0,
+                }
+            )
 
     df = pd.DataFrame(bars)
     atr = compute_atr(df, period=14)
@@ -401,14 +408,16 @@ def test_qualifying_days_price_filter():
         for bar_num in range(390):
             ts = datetime(day.year, day.month, day.day, 9, 30, 0, tzinfo=UTC)
             timestamp = ts + timedelta(minutes=bar_num)
-            bars.append({
-                "timestamp": timestamp,
-                "trading_day": day,
-                "open": 3.0,  # Below $5 min price
-                "high": 3.1,
-                "low": 2.9,
-                "close": 3.0,
-            })
+            bars.append(
+                {
+                    "timestamp": timestamp,
+                    "trading_day": day,
+                    "open": 3.0,  # Below $5 min price
+                    "high": 3.1,
+                    "low": 2.9,
+                    "close": 3.0,
+                }
+            )
 
     df = pd.DataFrame(bars)
     atr = pd.Series({date(2025, 6, 16): 0.1, date(2025, 6, 17): 0.1})
@@ -425,14 +434,16 @@ def test_qualifying_days_no_previous_close():
     for bar_num in range(390):
         ts = datetime(day.year, day.month, day.day, 9, 30, 0, tzinfo=UTC)
         timestamp = ts + timedelta(minutes=bar_num)
-        bars.append({
-            "timestamp": timestamp,
-            "trading_day": day,
-            "open": 100.0,
-            "high": 101.0,
-            "low": 99.0,
-            "close": 100.0,
-        })
+        bars.append(
+            {
+                "timestamp": timestamp,
+                "trading_day": day,
+                "open": 100.0,
+                "high": 101.0,
+                "low": 99.0,
+                "close": 100.0,
+            }
+        )
 
     df = pd.DataFrame(bars)
     atr = pd.Series({date(2025, 6, 16): 2.0})
@@ -564,17 +575,19 @@ def test_or_range_atr_filter():
             else:
                 high = 101.0
                 low = 99.0
-            bars.append({
-                "timestamp": timestamp,
-                "trading_day": day,
-                "open": 100.0,
-                "high": high,
-                "low": low,
-                "close": 100.0,
-                "volume": 10000,
-                "minutes_from_open": bar_num,
-                "bar_number_in_day": bar_num,
-            })
+            bars.append(
+                {
+                    "timestamp": timestamp,
+                    "trading_day": day,
+                    "open": 100.0,
+                    "high": high,
+                    "low": low,
+                    "close": 100.0,
+                    "volume": 10000,
+                    "minutes_from_open": bar_num,
+                    "bar_number_in_day": bar_num,
+                }
+            )
 
     df = pd.DataFrame(bars)
     atr = compute_atr(df, period=14)
@@ -644,17 +657,19 @@ def test_one_trade_per_day_max():
                 high = max(open_, close) * 1.001
                 low = min(open_, close) * 0.999
 
-            bars.append({
-                "timestamp": timestamp,
-                "trading_day": d,
-                "open": open_,
-                "high": high,
-                "low": low,
-                "close": close,
-                "volume": 10000,
-                "minutes_from_open": bar_num,
-                "bar_number_in_day": bar_num,
-            })
+            bars.append(
+                {
+                    "timestamp": timestamp,
+                    "trading_day": d,
+                    "open": open_,
+                    "high": high,
+                    "low": low,
+                    "close": close,
+                    "volume": 10000,
+                    "minutes_from_open": bar_num,
+                    "bar_number_in_day": bar_num,
+                }
+            )
 
     df = pd.DataFrame(bars)
     # Create ATR Series with proper index name
@@ -855,24 +870,28 @@ def test_heatmap_no_trades_handles_gracefully(tmp_data_dir):
     # (we verify this by the test not raising an exception)
 
     # Now test with results that have zero trades but valid structure
-    results_with_zero_trades = pd.DataFrame([{
-        "symbol": "TEST",
-        "or_minutes": 15,
-        "target_r": 2.0,
-        "stop_buffer_pct": 0.0,
-        "max_hold_minutes": 60,
-        "min_gap_pct": 5.0,
-        "max_range_atr_ratio": 999.0,
-        "total_trades": 0,
-        "win_rate": 0.0,
-        "total_return_pct": 0.0,
-        "avg_r_multiple": 0.0,
-        "max_drawdown_pct": 0.0,
-        "sharpe_ratio": 0.0,
-        "profit_factor": 0.0,
-        "avg_hold_minutes": 0.0,
-        "qualifying_days": 0,
-    }])
+    results_with_zero_trades = pd.DataFrame(
+        [
+            {
+                "symbol": "TEST",
+                "or_minutes": 15,
+                "target_r": 2.0,
+                "stop_buffer_pct": 0.0,
+                "max_hold_minutes": 60,
+                "min_gap_pct": 5.0,
+                "max_range_atr_ratio": 999.0,
+                "total_trades": 0,
+                "win_rate": 0.0,
+                "total_return_pct": 0.0,
+                "avg_r_multiple": 0.0,
+                "max_drawdown_pct": 0.0,
+                "sharpe_ratio": 0.0,
+                "profit_factor": 0.0,
+                "avg_hold_minutes": 0.0,
+                "qualifying_days": 0,
+            }
+        ]
+    )
 
     # Should not crash with zero trades
     generate_heatmaps(results_with_zero_trades, output_dir)
@@ -899,17 +918,28 @@ def test_cli_runs_without_error(simple_symbol_data, monkeypatch, capsys):
     # Set up CLI args
     test_args = [
         "vectorbt_orb",
-        "--data-dir", str(data_dir),
-        "--symbols", symbol,
-        "--start", str(trading_days[0]),
-        "--end", str(trading_days[-1]),
-        "--output-dir", str(output_dir),
-        "--or-minutes", "15",
-        "--target-r", "2.0",
-        "--stop-buffer", "0.0",
-        "--max-hold", "60",
-        "--min-gap", "1.0",
-        "--max-range-atr", "999.0",
+        "--data-dir",
+        str(data_dir),
+        "--symbols",
+        symbol,
+        "--start",
+        str(trading_days[0]),
+        "--end",
+        str(trading_days[-1]),
+        "--output-dir",
+        str(output_dir),
+        "--or-minutes",
+        "15",
+        "--target-r",
+        "2.0",
+        "--stop-buffer",
+        "0.0",
+        "--max-hold",
+        "60",
+        "--min-gap",
+        "1.0",
+        "--max-range-atr",
+        "999.0",
     ]
 
     monkeypatch.setattr(sys, "argv", test_args)
@@ -962,7 +992,7 @@ def test_known_outcome_trade_values():
             open_ = 100.0
             close = 100.0
             high = 102.0 if bar_num == 5 else 100.5  # One bar hits OR high
-            low = 98.0 if bar_num == 10 else 99.5    # One bar hits OR low
+            low = 98.0 if bar_num == 10 else 99.5  # One bar hits OR low
             volume = 5000
         elif bar_num == 15:
             # First post-OR bar - stays below OR high (no breakout)
@@ -1000,20 +1030,22 @@ def test_known_outcome_trade_values():
                 open_ = 104.0
                 close = 105.0
                 high = 106.0  # Below target of 111.50
-                low = 102.5   # Above stop of 98.0
+                low = 102.5  # Above stop of 98.0
             volume = 8000
 
-        bars.append({
-            "timestamp": timestamp,
-            "trading_day": day,
-            "open": open_,
-            "high": high,
-            "low": low,
-            "close": close,
-            "volume": volume,
-            "minutes_from_open": bar_num,
-            "bar_number_in_day": bar_num,
-        })
+        bars.append(
+            {
+                "timestamp": timestamp,
+                "trading_day": day,
+                "open": open_,
+                "high": high,
+                "low": low,
+                "close": close,
+                "volume": volume,
+                "minutes_from_open": bar_num,
+                "bar_number_in_day": bar_num,
+            }
+        )
 
     day_bars = pd.DataFrame(bars)
 
@@ -1089,17 +1121,19 @@ def test_known_outcome_stop_loss():
             low = 99.5
             volume = 8000
 
-        bars.append({
-            "timestamp": timestamp,
-            "trading_day": day,
-            "open": open_,
-            "high": high,
-            "low": low,
-            "close": close,
-            "volume": volume,
-            "minutes_from_open": bar_num,
-            "bar_number_in_day": bar_num,
-        })
+        bars.append(
+            {
+                "timestamp": timestamp,
+                "trading_day": day,
+                "open": open_,
+                "high": high,
+                "low": low,
+                "close": close,
+                "volume": volume,
+                "minutes_from_open": bar_num,
+                "bar_number_in_day": bar_num,
+            }
+        )
 
     day_bars = pd.DataFrame(bars)
 
@@ -1191,20 +1225,22 @@ def test_known_outcome_time_stop():
                 open_ = 104.0
                 close = 105.0
                 high = 107.0  # Below target of 111.50
-                low = 99.0    # Above stop of 98.0
+                low = 99.0  # Above stop of 98.0
             volume = 8000
 
-        bars.append({
-            "timestamp": timestamp,
-            "trading_day": day,
-            "open": open_,
-            "high": high,
-            "low": low,
-            "close": close,
-            "volume": volume,
-            "minutes_from_open": bar_num,
-            "bar_number_in_day": bar_num,
-        })
+        bars.append(
+            {
+                "timestamp": timestamp,
+                "trading_day": day,
+                "open": open_,
+                "high": high,
+                "low": low,
+                "close": close,
+                "volume": volume,
+                "minutes_from_open": bar_num,
+                "bar_number_in_day": bar_num,
+            }
+        )
 
     day_bars = pd.DataFrame(bars)
 

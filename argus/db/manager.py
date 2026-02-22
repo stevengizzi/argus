@@ -98,9 +98,7 @@ class DatabaseManager:
         yield self._connection
 
     async def execute(
-        self,
-        sql: str,
-        parameters: tuple[object, ...] | dict[str, object] | None = None
+        self, sql: str, parameters: tuple[object, ...] | dict[str, object] | None = None
     ) -> aiosqlite.Cursor:
         """Execute a SQL statement.
 
@@ -122,9 +120,7 @@ class DatabaseManager:
         return await self._connection.execute(sql, parameters)
 
     async def execute_many(
-        self,
-        sql: str,
-        parameters: list[tuple[object, ...]]
+        self, sql: str, parameters: list[tuple[object, ...]]
     ) -> aiosqlite.Cursor:
         """Execute a SQL statement with multiple parameter sets.
 
@@ -144,9 +140,7 @@ class DatabaseManager:
         return await self._connection.executemany(sql, parameters)
 
     async def fetch_one(
-        self,
-        sql: str,
-        parameters: tuple[object, ...] | dict[str, object] | None = None
+        self, sql: str, parameters: tuple[object, ...] | dict[str, object] | None = None
     ) -> aiosqlite.Row | None:
         """Execute a query and fetch one row.
 
@@ -164,9 +158,7 @@ class DatabaseManager:
         return await cursor.fetchone()
 
     async def fetch_all(
-        self,
-        sql: str,
-        parameters: tuple[object, ...] | dict[str, object] | None = None
+        self, sql: str, parameters: tuple[object, ...] | dict[str, object] | None = None
     ) -> list[aiosqlite.Row]:
         """Execute a query and fetch all rows.
 

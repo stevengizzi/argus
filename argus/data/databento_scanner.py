@@ -103,8 +103,7 @@ class DatabentoScanner(Scanner):
             )
             if not key:
                 raise RuntimeError(
-                    "Databento API key not available. Set DATABENTO_API_KEY "
-                    "environment variable."
+                    "Databento API key not available. Set DATABENTO_API_KEY environment variable."
                 )
             self._hist_client = db.Historical(key=key)
         return self._hist_client
@@ -162,9 +161,7 @@ class DatabentoScanner(Scanner):
         logger.info("DatabentoScanner found %d candidates", len(candidates))
         return candidates
 
-    async def scan_with_gap_data(
-        self, symbols: list[str] | None = None
-    ) -> list[WatchlistItem]:
+    async def scan_with_gap_data(self, symbols: list[str] | None = None) -> list[WatchlistItem]:
         """Scan with actual gap data from Databento (full implementation).
 
         This method fetches real market data to compute gaps. Use this

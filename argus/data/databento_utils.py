@@ -35,9 +35,7 @@ def normalize_databento_df(df: pd.DataFrame) -> pd.DataFrame:
         >>> normalized = normalize_databento_df(df)
     """
     if df.empty:
-        return pd.DataFrame(
-            columns=["timestamp", "open", "high", "low", "close", "volume"]
-        )
+        return pd.DataFrame(columns=["timestamp", "open", "high", "low", "close", "volume"])
 
     result = df[["ts_event", "open", "high", "low", "close", "volume"]].copy()
     result = result.rename(columns={"ts_event": "timestamp"})

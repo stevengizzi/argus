@@ -153,6 +153,7 @@ class TestUnsubscribe:
 
     async def test_unsubscribe_unknown_handler_raises(self, bus: EventBus) -> None:
         """Unsubscribing a handler that was never subscribed raises ValueError."""
+
         async def handler(event: CandleEvent) -> None:
             pass
 
@@ -196,6 +197,7 @@ class TestUtilities:
 
     async def test_reset_clears_everything(self, bus: EventBus) -> None:
         """reset() clears subscribers and resets sequence counter."""
+
         async def handler(e: CandleEvent) -> None:
             pass
 

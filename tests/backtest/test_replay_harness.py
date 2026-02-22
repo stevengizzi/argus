@@ -94,9 +94,7 @@ class TestReplayHarness:
         assert result.initial_capital == 50000.0
 
     @pytest.mark.asyncio
-    async def test_harness_returns_empty_result_for_no_data(
-        self, tmp_parquet_dir: Path
-    ) -> None:
+    async def test_harness_returns_empty_result_for_no_data(self, tmp_parquet_dir: Path) -> None:
         """Harness returns empty result when no data matches date range."""
         # Create empty directory structure
         tmp_parquet_dir.mkdir(parents=True, exist_ok=True)
@@ -137,9 +135,7 @@ class TestReplayHarness:
         assert result.trading_days == 2
 
     @pytest.mark.asyncio
-    async def test_harness_slippage_configured(
-        self, single_day_parquet: tuple[Path, date]
-    ) -> None:
+    async def test_harness_slippage_configured(self, single_day_parquet: tuple[Path, date]) -> None:
         """Slippage configuration is applied."""
         data_dir, trading_date = single_day_parquet
 

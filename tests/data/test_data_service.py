@@ -76,14 +76,16 @@ def generate_test_parquet(
 
         price = close_price
 
-    df = pd.DataFrame({
-        "timestamp": timestamps,
-        "open": opens,
-        "high": highs,
-        "low": lows,
-        "close": closes,
-        "volume": volumes,
-    })
+    df = pd.DataFrame(
+        {
+            "timestamp": timestamps,
+            "open": opens,
+            "high": highs,
+            "low": lows,
+            "close": closes,
+            "volume": volumes,
+        }
+    )
 
     output_dir.mkdir(parents=True, exist_ok=True)
     file_path = output_dir / f"{symbol.upper()}.parquet"
@@ -191,9 +193,7 @@ class TestReplayDataService:
         await service.stop()
 
     @pytest.mark.asyncio
-    async def test_get_indicator_returns_none_before_enough_data(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_get_indicator_returns_none_before_enough_data(self, tmp_path: Path) -> None:
         """get_indicator returns None before enough candles are processed."""
         generate_test_parquet("TEST", tmp_path, num_candles=5)
 
@@ -224,24 +224,28 @@ class TestReplayDataService:
         day2_start = datetime(2026, 2, 16, 14, 30, 0, tzinfo=UTC)
 
         # Day 1 candles
-        df1 = pd.DataFrame({
-            "timestamp": [day1_start + timedelta(minutes=i) for i in range(5)],
-            "open": [100.0] * 5,
-            "high": [101.0] * 5,
-            "low": [99.0] * 5,
-            "close": [100.5] * 5,
-            "volume": [100000] * 5,
-        })
+        df1 = pd.DataFrame(
+            {
+                "timestamp": [day1_start + timedelta(minutes=i) for i in range(5)],
+                "open": [100.0] * 5,
+                "high": [101.0] * 5,
+                "low": [99.0] * 5,
+                "close": [100.5] * 5,
+                "volume": [100000] * 5,
+            }
+        )
 
         # Day 2 candles with different prices
-        df2 = pd.DataFrame({
-            "timestamp": [day2_start + timedelta(minutes=i) for i in range(5)],
-            "open": [200.0] * 5,
-            "high": [201.0] * 5,
-            "low": [199.0] * 5,
-            "close": [200.5] * 5,
-            "volume": [100000] * 5,
-        })
+        df2 = pd.DataFrame(
+            {
+                "timestamp": [day2_start + timedelta(minutes=i) for i in range(5)],
+                "open": [200.0] * 5,
+                "high": [201.0] * 5,
+                "low": [199.0] * 5,
+                "close": [200.5] * 5,
+                "volume": [100000] * 5,
+            }
+        )
 
         df = pd.concat([df1, df2], ignore_index=True)
         tmp_path.mkdir(parents=True, exist_ok=True)

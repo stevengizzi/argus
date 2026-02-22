@@ -44,10 +44,10 @@ class ConsoleFormatter(logging.Formatter):
     """Human-readable console formatter with colors."""
 
     COLORS = {
-        "DEBUG": "\033[36m",      # Cyan
-        "INFO": "\033[32m",       # Green
-        "WARNING": "\033[33m",    # Yellow
-        "ERROR": "\033[31m",      # Red
+        "DEBUG": "\033[36m",  # Cyan
+        "INFO": "\033[32m",  # Green
+        "WARNING": "\033[33m",  # Yellow
+        "ERROR": "\033[31m",  # Red
         "CRITICAL": "\033[1;31m",  # Bold Red
     }
     RESET = "\033[0m"
