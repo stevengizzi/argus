@@ -1180,5 +1180,27 @@ Each entry follows this format:
 
 ---
 
+### DEC-104 | Chart Libraries — Dual Library (Lightweight Charts + Recharts)
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-23 |
+| **Decision** | Use TradingView Lightweight Charts for all financial time-series charts (equity curves, P&L histograms, future price/candlestick charts). Use Recharts for non-time-series visualizations (distributions, heatmaps, sparklines, comparisons). Both libraries coexist in the codebase. |
+| **Alternatives Considered** | (A) Recharts only — simpler but lacks financial time-axis handling (weekend gaps, market hours). (B) Lightweight Charts only — excellent for financial data but limited for non-temporal analytics charts needed in Sprint 21+. |
+| **Rationale** | ARGUS is a trading tool — every time-series chart benefits from Lightweight Charts' native financial axis, crosshair, and zoom. Recharts fills the gap for non-financial visualizations in analytics views. Combined bundle cost is modest (~90KB gzipped). Each library does what it's best at. |
+| **Status** | Active |
+
+---
+
+### DEC-105 | Responsive Breakpoints — Three-Tier Device Targeting
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-23 |
+| **Decision** | Three responsive breakpoints: <640px (phone — iPhone 16 Pro 393px), 640–1023px (tablet — iPad Pro 11" portrait 834px), ≥1024px (desktop — iPad landscape 1194px, MacBook Pro 16" 1512px). Phone and tablet use bottom tab bar navigation; desktop uses icon sidebar. |
+| **Alternatives Considered** | Two breakpoints (<768px / ≥768px) — iPad portrait at 834px barely clears 768px threshold and would get a desktop layout too cramped for that width. |
+| **Rationale** | User's actual devices are iPhone 16 Pro, iPad Pro 11" M4, and MacBook Pro 16". iPad portrait (834px) needs its own treatment — not squeezed into phone layout, not stretched into full desktop. Three Tailwind breakpoints (sm/md/lg) add minimal implementation cost. iPad landscape (1194px) gets full desktop experience with sidebar. |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
 *New decisions are appended chronologically as the project progresses.*

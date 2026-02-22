@@ -129,6 +129,8 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 - **WebSocket event filtering (DEC-101):** Curated event list (13 types). Tick events filtered to open-position symbols only, throttled to configurable interval (default 1s).
 - **Authentication (DEC-102):** Single-user JWT with bcrypt password hash. No username. Token via Authorization header (REST) or query param (WebSocket).
 - **Monorepo structure (DEC-103):** `argus/api/` (FastAPI server) + `argus/ui/` (React frontend). Single repo, single deploy.
+- **Chart libraries (DEC-104):** TradingView Lightweight Charts for all financial time-series (equity curves, P&L histograms, price charts). Recharts for non-time-series visualizations (distributions, heatmaps, comparisons). Both coexist.
+- **Responsive breakpoints (DEC-105):** Three tiers — <640px phone (iPhone 16 Pro), 640–1023px tablet (iPad Pro 11" portrait), ≥1024px desktop (iPad landscape + MacBook Pro 16"). Bottom tab bar on phone/tablet, icon sidebar on desktop.
 
 ## Architecture Summary
 
