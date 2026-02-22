@@ -10,8 +10,10 @@ from argus.core.config import (
     AccountType,
     ArgusConfig,
     BrokerConfig,
+    BrokerSource,
     DatabentoConfig,
     DataServiceConfig,
+    IBKRConfig,
     OrbBreakoutConfig,
     ScannerConfig,
     StrategyConfig,
@@ -350,3 +352,108 @@ class TestDatabentoConfig:
         for dataset in known_datasets:
             config = DatabentoConfig(dataset=dataset)
             assert config.dataset == dataset
+
+
+class TestIBKRConfig:
+    """Tests for Interactive Brokers configuration (Sprint 13)."""
+
+    def test_default_config_creates_successfully(self) -> None:
+        """IBKRConfig can be created with all defaults."""
+        config = IBKRConfig()
+        assert config.host == "127.0.0.1"
+        assert config.port == 4002  # Paper trading port by default
+        assert config.client_id == 1
+        assert config.account == ""
+        assert config.timeout_seconds == 30.0
+        assert config.readonly is False
+        assert config.reconnect_max_retries == 10
+        assert config.reconnect_base_delay_seconds == 1.0
+        assert config.reconnect_max_delay_seconds == 60.0
+        assert config.max_order_rate_per_second == 45.0
+
+    def test_config_loads_from_system_yaml(self) -> None:
+        """IBKRConfig loads correctly from system.yaml via SystemConfig."""
+        config = load_config(Path("config"))
+        assert hasattr(config.system, "ibkr")
+        assert isinstance(config.system.ibkr, IBKRConfig)
+        # Verify values from YAML
+        assert config.system.ibkr.port == 4002
+        assert config.system.ibkr.timeout_seconds == 30.0
+        assert config.system.ibkr.max_order_rate_per_second == 45.0
+
+    def test_port_validation(self) -> None:
+        """Port must be in valid range (1-65535)."""
+        # Valid ports
+        assert IBKRConfig(port=4001).port == 4001  # Live
+        assert IBKRConfig(port=4002).port == 4002  # Paper
+        assert IBKRConfig(port=7496).port == 7496  # TWS live
+        assert IBKRConfig(port=7497).port == 7497  # TWS paper
+
+        # Invalid ports
+        with pytest.raises(ValidationError):
+            IBKRConfig(port=0)
+        with pytest.raises(ValidationError):
+            IBKRConfig(port=65536)
+
+    def test_timeout_must_be_positive(self) -> None:
+        """Timeout must be > 0."""
+        assert IBKRConfig(timeout_seconds=1.0).timeout_seconds == 1.0
+        with pytest.raises(ValidationError):
+            IBKRConfig(timeout_seconds=0)
+        with pytest.raises(ValidationError):
+            IBKRConfig(timeout_seconds=-1.0)
+
+    def test_client_id_must_be_non_negative(self) -> None:
+        """Client ID must be >= 0."""
+        assert IBKRConfig(client_id=0).client_id == 0
+        assert IBKRConfig(client_id=100).client_id == 100
+        with pytest.raises(ValidationError):
+            IBKRConfig(client_id=-1)
+
+    def test_reconnection_settings_validate(self) -> None:
+        """Reconnection settings must be positive."""
+        # Valid settings
+        config = IBKRConfig(
+            reconnect_max_retries=5,
+            reconnect_base_delay_seconds=0.5,
+            reconnect_max_delay_seconds=30.0,
+        )
+        assert config.reconnect_max_retries == 5
+        assert config.reconnect_base_delay_seconds == 0.5
+        assert config.reconnect_max_delay_seconds == 30.0
+
+        # Zero retries allowed
+        assert IBKRConfig(reconnect_max_retries=0).reconnect_max_retries == 0
+
+        # Delays must be positive
+        with pytest.raises(ValidationError):
+            IBKRConfig(reconnect_base_delay_seconds=0)
+        with pytest.raises(ValidationError):
+            IBKRConfig(reconnect_max_delay_seconds=0)
+
+    def test_max_order_rate_must_be_positive(self) -> None:
+        """Max order rate must be > 0."""
+        assert IBKRConfig(max_order_rate_per_second=50.0).max_order_rate_per_second == 50.0
+        with pytest.raises(ValidationError):
+            IBKRConfig(max_order_rate_per_second=0)
+
+
+class TestBrokerSource:
+    """Tests for BrokerSource enum (DEC-094)."""
+
+    def test_broker_source_values(self) -> None:
+        """BrokerSource has expected values."""
+        assert BrokerSource.ALPACA.value == "alpaca"
+        assert BrokerSource.IBKR.value == "ibkr"
+        assert BrokerSource.SIMULATED.value == "simulated"
+
+    def test_broker_source_loads_from_yaml(self) -> None:
+        """broker_source loads correctly from system.yaml."""
+        config = load_config(Path("config"))
+        assert hasattr(config.system, "broker_source")
+        assert config.system.broker_source == BrokerSource.SIMULATED
+
+    def test_broker_source_default_is_simulated(self) -> None:
+        """Default broker_source is simulated (safest default)."""
+        config = SystemConfig()
+        assert config.broker_source == BrokerSource.SIMULATED

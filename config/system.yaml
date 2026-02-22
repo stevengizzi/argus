@@ -8,6 +8,31 @@ data_dir: "data"
 # Data source: "alpaca" or "databento" (DEC-082: Databento is primary production)
 data_source: "alpaca"
 
+# Broker source selection (DEC-094)
+# "alpaca" — paper/incubator only
+# "ibkr" — production execution
+# "simulated" — backtesting
+broker_source: "simulated"
+
+# Interactive Brokers configuration (Sprint 13 — production execution)
+# See DEC-083: IBKR Pro for live execution, no PFOF
+ibkr:
+  # Connection settings
+  host: "127.0.0.1"
+  port: 4002  # 4001=live, 4002=paper. Default to paper for safety.
+  client_id: 1
+  account: ""  # IBKR account ID — set via environment or override
+  timeout_seconds: 30.0
+  readonly: false
+
+  # Reconnection settings
+  reconnect_max_retries: 10
+  reconnect_base_delay_seconds: 1.0
+  reconnect_max_delay_seconds: 60.0
+
+  # Operational safety — IBKR limit is 50 orders/sec, leave headroom
+  max_order_rate_per_second: 45.0
+
 health:
   heartbeat_interval_seconds: 60
   heartbeat_url_env: "HEALTHCHECKS_PING_URL"  # Env var name (not the URL itself!)

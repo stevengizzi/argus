@@ -73,6 +73,17 @@ class DataSource(StrEnum):
     DATABENTO = "databento"
 
 
+class BrokerSource(StrEnum):
+    """Broker provider selection (DEC-094).
+
+    Mirrors DataSource pattern from DEC-090.
+    Used by main.py Phase 3 to select the Broker implementation.
+    """
+    ALPACA = "alpaca"
+    IBKR = "ibkr"
+    SIMULATED = "simulated"
+
+
 class SystemConfig(BaseModel):
     """Global system settings."""
     timezone: str = "America/New_York"
@@ -85,6 +96,10 @@ class SystemConfig(BaseModel):
     health: HealthConfig = Field(default_factory=HealthConfig)
     # Data source selection (DEC-082: Databento is primary production)
     data_source: DataSource = DataSource.ALPACA
+    # Broker source selection (DEC-094: mirrors DataSource pattern)
+    broker_source: BrokerSource = BrokerSource.SIMULATED
+    # IBKR configuration (Sprint 13) — uses default_factory for forward reference
+    ibkr: IBKRConfig = Field(default_factory=lambda: IBKRConfig())
 
     @field_validator("timezone")
     @classmethod
@@ -227,6 +242,30 @@ class DatabentoConfig(BaseModel):
         if v not in valid:
             raise ValueError(f"Invalid stype_in '{v}'. Valid: {sorted(valid)}")
         return v
+
+
+class IBKRConfig(BaseModel):
+    """Interactive Brokers connection configuration (DEC-094).
+
+    Configures connection to IB Gateway/TWS via ib_async library.
+    All trading goes through IBKR once the adapter is validated.
+    """
+
+    # Connection settings
+    host: str = "127.0.0.1"
+    port: int = Field(default=4002, ge=1, le=65535)  # 4001=live, 4002=paper
+    client_id: int = Field(default=1, ge=0)
+    account: str = ""  # IBKR account ID (e.g., "U24619949")
+    timeout_seconds: float = Field(default=30.0, gt=0)
+    readonly: bool = False  # If True, no orders can be placed
+
+    # Reconnection settings (same pattern as DatabentoConfig)
+    reconnect_max_retries: int = Field(default=10, ge=0)
+    reconnect_base_delay_seconds: float = Field(default=1.0, gt=0)
+    reconnect_max_delay_seconds: float = Field(default=60.0, gt=0)
+
+    # Operational safety
+    max_order_rate_per_second: float = Field(default=45.0, gt=0)  # IBKR limit is 50/sec
 
 
 class BrokerConfig(BaseModel):
