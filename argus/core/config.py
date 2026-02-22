@@ -75,6 +75,21 @@ class HealthConfig(BaseModel):
         return os.environ.get(self.alert_webhook_url_env, "")
 
 
+class ApiConfig(BaseModel):
+    """Configuration for the Command Center API server (Sprint 14)."""
+
+    enabled: bool = True
+    host: str = "0.0.0.0"
+    port: int = Field(default=8000, ge=1, le=65535)
+    password_hash: str = ""  # bcrypt hash — use setup_password CLI to generate
+    jwt_secret_env: str = "ARGUS_JWT_SECRET"  # env var name for JWT signing key
+    jwt_expiry_hours: int = Field(default=24, ge=1)
+    cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173"])
+    ws_heartbeat_interval_seconds: int = Field(default=30, ge=5)
+    ws_tick_throttle_ms: int = Field(default=1000, ge=100)
+    static_dir: str = ""  # path to built React app; empty = don't serve static
+
+
 class DataSource(StrEnum):
     """Data service provider selection."""
 
@@ -111,6 +126,8 @@ class SystemConfig(BaseModel):
     broker_source: BrokerSource = BrokerSource.SIMULATED
     # IBKR configuration (Sprint 13) — uses default_factory for forward reference
     ibkr: IBKRConfig = Field(default_factory=lambda: IBKRConfig())
+    # Command Center API configuration (Sprint 14)
+    api: ApiConfig = Field(default_factory=lambda: ApiConfig())
 
     @field_validator("timezone")
     @classmethod

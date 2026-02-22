@@ -1,1 +1,1 @@
-"""Tests for API server."""
+"""API test package."""

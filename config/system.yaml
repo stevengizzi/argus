@@ -39,3 +39,16 @@ health:
   alert_webhook_url_env: "DISCORD_WEBHOOK_URL"  # Env var name (not the URL itself!)
   daily_check_enabled: true
   weekly_reconciliation_enabled: true
+
+# Command Center API (Sprint 14 — DEC-099)
+api:
+  enabled: true
+  host: "0.0.0.0"
+  port: 8000
+  password_hash: ""  # Run: python -m argus.api.setup_password
+  jwt_secret_env: "ARGUS_JWT_SECRET"
+  jwt_expiry_hours: 24
+  cors_origins:
+    - "http://localhost:5173"
+  ws_heartbeat_interval_seconds: 30
+  ws_tick_throttle_ms: 1000
