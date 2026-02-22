@@ -612,3 +612,351 @@ class TestIBKRBrokerOrderSubmission:
             call_args = mock_ib.placeOrder.call_args
             ib_order = call_args[0][1]
             assert ib_order.action == "SELL"
+
+
+# ---------------------------------------------------------------------------
+# Bracket Order Tests (DEC-093)
+# ---------------------------------------------------------------------------
+
+
+def _create_bracket_orders(
+    symbol: str = "AAPL",
+    entry_side: str = "buy",
+    entry_type: str = "market",
+    entry_quantity: int = 100,
+    entry_limit_price: float | None = None,
+    stop_price: float = 145.00,
+    t1_price: float = 155.00,
+    t1_quantity: int = 50,
+    t2_price: float | None = None,
+    t2_quantity: int | None = None,
+) -> tuple:
+    """Create entry, stop, and target orders for bracket testing.
+
+    Returns:
+        Tuple of (entry_order, stop_order, targets_list).
+    """
+    from argus.models.trading import Order
+
+    entry = Order(
+        strategy_id="test_strategy",
+        symbol=symbol,
+        side=entry_side,
+        order_type=entry_type,
+        quantity=entry_quantity,
+        limit_price=entry_limit_price,
+    )
+
+    stop = Order(
+        strategy_id="test_strategy",
+        symbol=symbol,
+        side="sell" if entry_side == "buy" else "buy",
+        order_type="stop",
+        quantity=entry_quantity,
+        stop_price=stop_price,
+    )
+
+    targets: list[Order] = []
+    if t1_price is not None:
+        t1 = Order(
+            strategy_id="test_strategy",
+            symbol=symbol,
+            side="sell" if entry_side == "buy" else "buy",
+            order_type="limit",
+            quantity=t1_quantity,
+            limit_price=t1_price,
+        )
+        targets.append(t1)
+
+    if t2_price is not None and t2_quantity is not None:
+        t2 = Order(
+            strategy_id="test_strategy",
+            symbol=symbol,
+            side="sell" if entry_side == "buy" else "buy",
+            order_type="limit",
+            quantity=t2_quantity,
+            limit_price=t2_price,
+        )
+        targets.append(t2)
+
+    return entry, stop, targets
+
+
+class TestIBKRBrokerBracketOrders:
+    """Tests for IBKRBroker native bracket order support (DEC-093)."""
+
+    @pytest.mark.asyncio
+    async def test_bracket_with_t1_only(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """Bracket with T1 target creates 3 orders: entry + stop + T1."""
+        with patch("argus.execution.ibkr_broker.IB", return_value=mock_ib):
+            broker = IBKRBroker(ibkr_config, event_bus)
+            await broker.connect()
+
+            entry, stop, targets = _create_bracket_orders(
+                t1_price=155.00, t1_quantity=50
+            )
+            result = await broker.place_bracket_order(entry, stop, targets)
+
+            # Should have called placeOrder 3 times: entry, stop, T1
+            assert mock_ib.placeOrder.call_count == 3
+
+            # Result structure
+            assert result.entry.status == "submitted"
+            assert result.stop.status == "submitted"
+            assert len(result.targets) == 1
+            assert result.targets[0].status == "submitted"
+
+    @pytest.mark.asyncio
+    async def test_bracket_with_t1_and_t2(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """Bracket with T1 and T2 targets creates 4 orders: entry + stop + T1 + T2."""
+        with patch("argus.execution.ibkr_broker.IB", return_value=mock_ib):
+            broker = IBKRBroker(ibkr_config, event_bus)
+            await broker.connect()
+
+            entry, stop, targets = _create_bracket_orders(
+                t1_price=155.00,
+                t1_quantity=50,
+                t2_price=160.00,
+                t2_quantity=50,
+            )
+            result = await broker.place_bracket_order(entry, stop, targets)
+
+            # Should have called placeOrder 4 times: entry, stop, T1, T2
+            assert mock_ib.placeOrder.call_count == 4
+
+            # Result structure
+            assert result.entry.status == "submitted"
+            assert result.stop.status == "submitted"
+            assert len(result.targets) == 2
+            assert result.targets[0].status == "submitted"
+            assert result.targets[1].status == "submitted"
+
+    @pytest.mark.asyncio
+    async def test_market_entry_bracket(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """Market entry bracket order creates parent as MarketOrder."""
+        with patch("argus.execution.ibkr_broker.IB", return_value=mock_ib):
+            broker = IBKRBroker(ibkr_config, event_bus)
+            await broker.connect()
+
+            entry, stop, targets = _create_bracket_orders(
+                entry_type="market", t1_price=155.00, t1_quantity=50
+            )
+            await broker.place_bracket_order(entry, stop, targets)
+
+            # First call should be the parent (entry) order
+            first_call = mock_ib.placeOrder.call_args_list[0]
+            parent_order = first_call[0][1]
+
+            # Check it's a market order
+            assert parent_order.action == "BUY"
+            assert parent_order.totalQuantity == 100
+
+    @pytest.mark.asyncio
+    async def test_limit_entry_bracket(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """Limit entry bracket order creates parent as LimitOrder."""
+        with patch("argus.execution.ibkr_broker.IB", return_value=mock_ib):
+            broker = IBKRBroker(ibkr_config, event_bus)
+            await broker.connect()
+
+            entry, stop, targets = _create_bracket_orders(
+                entry_type="limit",
+                entry_limit_price=150.00,
+                t1_price=155.00,
+                t1_quantity=50,
+            )
+            await broker.place_bracket_order(entry, stop, targets)
+
+            # First call should be the parent (entry) order
+            first_call = mock_ib.placeOrder.call_args_list[0]
+            parent_order = first_call[0][1]
+
+            # Check it's a limit order with correct price
+            assert parent_order.lmtPrice == 150.00
+            assert parent_order.action == "BUY"
+
+    @pytest.mark.asyncio
+    async def test_parent_id_set_on_all_children(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """All child orders (stop, T1, T2) have parentId set to parent order ID."""
+        with patch("argus.execution.ibkr_broker.IB", return_value=mock_ib):
+            broker = IBKRBroker(ibkr_config, event_bus)
+            await broker.connect()
+
+            entry, stop, targets = _create_bracket_orders(
+                t1_price=155.00,
+                t1_quantity=50,
+                t2_price=160.00,
+                t2_quantity=50,
+            )
+            await broker.place_bracket_order(entry, stop, targets)
+
+            # Get parent order ID from first call
+            first_call = mock_ib.placeOrder.call_args_list[0]
+            parent_order = first_call[0][1]
+            parent_id = parent_order.orderId
+
+            # Check all children have parentId set
+            for i, call in enumerate(mock_ib.placeOrder.call_args_list[1:], start=1):
+                child_order = call[0][1]
+                assert child_order.parentId == parent_id, (
+                    f"Child order {i} parentId mismatch: "
+                    f"expected {parent_id}, got {child_order.parentId}"
+                )
+
+    @pytest.mark.asyncio
+    async def test_transmit_false_on_parent_and_intermediates(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """Parent and intermediate children have transmit=False."""
+        with patch("argus.execution.ibkr_broker.IB", return_value=mock_ib):
+            broker = IBKRBroker(ibkr_config, event_bus)
+            await broker.connect()
+
+            entry, stop, targets = _create_bracket_orders(
+                t1_price=155.00,
+                t1_quantity=50,
+                t2_price=160.00,
+                t2_quantity=50,
+            )
+            await broker.place_bracket_order(entry, stop, targets)
+
+            # 4 orders: entry (0), stop (1), T1 (2), T2 (3)
+            # Entry, stop, and T1 should have transmit=False
+            calls = mock_ib.placeOrder.call_args_list
+
+            # Entry (index 0)
+            assert calls[0][0][1].transmit is False, "Entry should have transmit=False"
+            # Stop (index 1)
+            assert calls[1][0][1].transmit is False, "Stop should have transmit=False"
+            # T1 (index 2) - not the last target
+            assert calls[2][0][1].transmit is False, "T1 should have transmit=False"
+
+    @pytest.mark.asyncio
+    async def test_transmit_true_on_last_child_only(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """Only the last child order has transmit=True."""
+        with patch("argus.execution.ibkr_broker.IB", return_value=mock_ib):
+            broker = IBKRBroker(ibkr_config, event_bus)
+            await broker.connect()
+
+            entry, stop, targets = _create_bracket_orders(
+                t1_price=155.00,
+                t1_quantity=50,
+                t2_price=160.00,
+                t2_quantity=50,
+            )
+            await broker.place_bracket_order(entry, stop, targets)
+
+            # Last order (T2) should have transmit=True
+            calls = mock_ib.placeOrder.call_args_list
+            last_order = calls[-1][0][1]
+            assert last_order.transmit is True, "Last child should have transmit=True"
+
+    @pytest.mark.asyncio
+    async def test_all_ulids_mapped_bidirectionally(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """All ULIDs are registered in both _ulid_to_ibkr and _ibkr_to_ulid."""
+        with patch("argus.execution.ibkr_broker.IB", return_value=mock_ib):
+            broker = IBKRBroker(ibkr_config, event_bus)
+            await broker.connect()
+
+            entry, stop, targets = _create_bracket_orders(
+                t1_price=155.00,
+                t1_quantity=50,
+                t2_price=160.00,
+                t2_quantity=50,
+            )
+            result = await broker.place_bracket_order(entry, stop, targets)
+
+            # Collect all ULIDs from result
+            all_ulids = [
+                result.entry.order_id,
+                result.stop.order_id,
+                *[t.order_id for t in result.targets],
+            ]
+
+            # All should be in mappings
+            for ulid in all_ulids:
+                assert ulid in broker._ulid_to_ibkr, f"{ulid} not in _ulid_to_ibkr"
+                ibkr_id = broker._ulid_to_ibkr[ulid]
+                assert ibkr_id in broker._ibkr_to_ulid, f"{ibkr_id} not in _ibkr_to_ulid"
+                assert broker._ibkr_to_ulid[ibkr_id] == ulid, "Bidirectional mapping mismatch"
+
+    @pytest.mark.asyncio
+    async def test_order_ref_set_on_every_leg(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """orderRef is set to ULID on every leg for reconstruction."""
+        with patch("argus.execution.ibkr_broker.IB", return_value=mock_ib):
+            broker = IBKRBroker(ibkr_config, event_bus)
+            await broker.connect()
+
+            entry, stop, targets = _create_bracket_orders(
+                t1_price=155.00,
+                t1_quantity=50,
+                t2_price=160.00,
+                t2_quantity=50,
+            )
+            result = await broker.place_bracket_order(entry, stop, targets)
+
+            # Get all ULIDs from result
+            expected_refs = [
+                result.entry.order_id,
+                result.stop.order_id,
+                *[t.order_id for t in result.targets],
+            ]
+
+            # Check each order has orderRef set to its ULID
+            calls = mock_ib.placeOrder.call_args_list
+            for i, call in enumerate(calls):
+                order = call[0][1]
+                assert order.orderRef == expected_refs[i], (
+                    f"Order {i} orderRef mismatch: "
+                    f"expected {expected_refs[i]}, got {order.orderRef}"
+                )
+
+    @pytest.mark.asyncio
+    async def test_empty_targets_list_entry_stop_only(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """Bracket with empty targets list creates 2 orders: entry + stop."""
+        with patch("argus.execution.ibkr_broker.IB", return_value=mock_ib):
+            broker = IBKRBroker(ibkr_config, event_bus)
+            await broker.connect()
+
+            # Create bracket with no targets
+            entry, stop, _ = _create_bracket_orders()
+            targets: list = []  # Empty targets list
+
+            result = await broker.place_bracket_order(entry, stop, targets)
+
+            # Should have called placeOrder 2 times: entry + stop
+            assert mock_ib.placeOrder.call_count == 2
+
+            # Result structure
+            assert result.entry.status == "submitted"
+            assert result.stop.status == "submitted"
+            assert len(result.targets) == 0
+
+            # Stop should have transmit=True since it's the last order
+            stop_call = mock_ib.placeOrder.call_args_list[1]
+            stop_order = stop_call[0][1]
+            assert stop_order.transmit is True, (
+                "Stop should have transmit=True when no targets"
+            )
+
+            # Entry should still have transmit=False
+            entry_call = mock_ib.placeOrder.call_args_list[0]
+            entry_order = entry_call[0][1]
+            assert entry_order.transmit is False

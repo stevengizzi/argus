@@ -313,21 +313,27 @@ class IBKRBroker(Broker):
         stop: Order,
         targets: list[Order],
     ) -> BracketOrderResult:
-        """Submit a bracket order to IBKR with native multi-leg support.
+        """Submit a bracket order to IBKR with native multi-leg support (DEC-093).
 
-        Stub implementation — will be completed in Prompt 5.
+        IBKR brackets: parent (entry) + children (stop + targets) linked via parentId.
+        All children are submitted atomically. If parent is cancelled, all children
+        are auto-cancelled by IBKR.
+
+        The transmit flag pattern ensures atomic submission:
+        - parent.transmit = False
+        - stop.transmit = False (if targets exist) or True (if no targets)
+        - targets[:-1].transmit = False
+        - targets[-1].transmit = True (triggers atomic submission of entire group)
 
         Args:
             entry: Entry order (market or limit).
-            stop: Stop-loss order.
-            targets: List of take-profit orders [T1] or [T1, T2].
+            stop: Stop-loss order for total shares.
+            targets: List of take-profit orders [T1] or [T1, T2]. Can be empty.
 
         Returns:
-            BracketOrderResult with all order IDs.
+            BracketOrderResult with all order IDs (entry, stop, targets).
         """
         if not self.is_connected:
-            # BracketOrderResult requires entry/stop/targets, can't return error directly
-            # Return a rejected entry result to indicate connection error
             error_result = OrderResult(
                 order_id="",
                 status="rejected",
@@ -338,8 +344,102 @@ class IBKRBroker(Broker):
                 stop=error_result,
                 targets=[],
             )
-        # Placeholder - will be implemented in Prompt 5
-        raise NotImplementedError("place_bracket_order will be implemented in Prompt 5")
+
+        contract = self._contracts.get_stock_contract(entry.symbol)
+        action = "BUY" if entry.side.lower() == "buy" else "SELL"
+        exit_action = "SELL" if action == "BUY" else "BUY"
+
+        # --- Build parent order (entry) ---
+        parent = self._build_ib_order(entry)
+        parent.transmit = False  # Don't transmit until last child
+
+        # Generate ULID for entry
+        entry_ulid = generate_id()
+        parent.orderRef = entry_ulid
+
+        # Place parent first to get orderId
+        parent_trade = self._ib.placeOrder(contract, parent)
+        parent_id = parent_trade.order.orderId
+        self._ulid_to_ibkr[entry_ulid] = parent_id
+        self._ibkr_to_ulid[parent_id] = entry_ulid
+
+        entry_result = OrderResult(
+            order_id=entry_ulid,
+            broker_order_id=str(parent_id),
+            status="submitted",
+        )
+
+        # --- Build stop-loss child ---
+        stop_ulid = generate_id()
+        if stop.stop_price is None:
+            raise ValueError("Stop order requires stop_price")
+        stop_ib = StopOrder(exit_action, stop.quantity, stop.stop_price)
+        stop_ib.parentId = parent_id
+        stop_ib.tif = "DAY"
+        stop_ib.outsideRth = False
+        stop_ib.orderRef = stop_ulid
+
+        # Determine if stop is the last order (transmit=True) or not
+        has_targets = len(targets) > 0
+        stop_ib.transmit = not has_targets  # Transmit only if no targets follow
+
+        stop_trade = self._ib.placeOrder(contract, stop_ib)
+        stop_actual_id = stop_trade.order.orderId
+        self._ulid_to_ibkr[stop_ulid] = stop_actual_id
+        self._ibkr_to_ulid[stop_actual_id] = stop_ulid
+
+        stop_result = OrderResult(
+            order_id=stop_ulid,
+            broker_order_id=str(stop_actual_id),
+            status="submitted",
+        )
+
+        # --- Build target children (T1, optionally T2) ---
+        target_results: list[OrderResult] = []
+        for i, target in enumerate(targets):
+            t_ulid = generate_id()
+            is_last = i == len(targets) - 1
+
+            if target.limit_price is None:
+                raise ValueError("Target order requires limit_price")
+            t_ib = LimitOrder(exit_action, target.quantity, target.limit_price)
+            t_ib.parentId = parent_id
+            t_ib.tif = "DAY"
+            t_ib.outsideRth = False
+            t_ib.orderRef = t_ulid
+            t_ib.transmit = is_last  # Last child transmits the entire bracket
+
+            t_trade = self._ib.placeOrder(contract, t_ib)
+            t_actual_id = t_trade.order.orderId
+            self._ulid_to_ibkr[t_ulid] = t_actual_id
+            self._ibkr_to_ulid[t_actual_id] = t_ulid
+
+            target_results.append(
+                OrderResult(
+                    order_id=t_ulid,
+                    broker_order_id=str(t_actual_id),
+                    status="submitted",
+                )
+            )
+
+        # Build log message
+        target_ulids = [r.order_id for r in target_results]
+        logger.info(
+            "Bracket placed: entry=%s (IBKR #%d), stop=%s, targets=%s — %s %d %s",
+            entry_ulid,
+            parent_id,
+            stop_ulid,
+            target_ulids,
+            action,
+            entry.quantity,
+            entry.symbol,
+        )
+
+        return BracketOrderResult(
+            entry=entry_result,
+            stop=stop_result,
+            targets=target_results,
+        )
 
     async def cancel_order(self, order_id: str) -> bool:
         """Cancel an open order.
