@@ -106,6 +106,7 @@ inform Build Track priorities.
 | 12.5 | Refactor | IndicatorEngine extraction (DEF-013, DEC-092) | 685 | Feb 21 |
 | 13 | Infrastructure | IBKRBroker adapter (connection, orders, brackets, fills, reconnection, reconstruction, Order Manager T2, system integration) | 811 | Feb 22 |
 | 13.5 | Evaluation | DEF-016 bracket refactor evaluation → DEFERRED (DEC-095) | 811 | Feb 22 |
+| Sprint 14 | Command Center API | 926 | +115 | Feb 23 | FastAPI REST (7 endpoint groups) + WebSocket bridge + React scaffold. DEC-099–103. |
 
 ### Build Track Queue
 
@@ -157,7 +158,7 @@ per sprint velocity.
 #### Sprint 13.5 — DEF-016 Evaluation ✅ COMPLETE (Feb 22)
 **Outcome:** DEFER. Atomic bracket refactor deferred to Sprint 17+ (DEC-095).
 **Rationale:** Scope exceeds threshold — SimulatedBroker sync fill conflict, AlpacaBroker single-target limitation, full Order Manager test rewrite required (~1.5–2 days). Near-zero practical benefit for market-order ORB on IBKR. No trigger conditions met.
-**Next:** Sprint 14 (Command Center API).
+**Next:** Sprint 15 (Command Center Frontend).
 
 #### Sprint 14 — Command Center: API Layer + Project Scaffolding
 **Target:** ~1 day

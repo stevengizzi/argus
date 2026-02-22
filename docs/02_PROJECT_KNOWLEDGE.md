@@ -12,7 +12,7 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 
 **Structure:** Two parallel tracks (DEC-079, February 19, 2026). Build Track (system construction) + Validation Track (strategy confidence-building).
 
-**Build Track:** 811 tests. Sprints 1–13.5 complete. Sprint 13.5 (DEF-016 evaluation) deferred atomic bracket refactor to Sprint 17+ (DEC-095). Sprint 14 (Command Center API) is NEXT.
+**Build Track:** 926 tests. Sprints 1–14 complete. Sprint 15 (Command Center Frontend) is NEXT.
 - Phase 1 (Core Engine): ✅ COMPLETE — 362 tests, Feb 14–16
 - Phase 2 (Backtesting): ✅ COMPLETE — 542 tests, Feb 16–17
 - Sprint 11 (Extended Backtest): ✅ COMPLETE — 35 months, 15 WF windows, WFE=0.56
@@ -29,7 +29,7 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 
 **IBKR Account (Feb 21):** Application submitted. Account ID U24619949. Individual margin account, IBKR Pro tiered pricing. Awaiting approval — paper trading account will be enabled post-approval for Sprint 13 adapter development.
 
-**Next Build sprints:** CC API (Sprint 14) → CC Frontend (Sprint 15) → Desktop/PWA (Sprint 16) → Orchestrator V1 (Sprint 17) → ORB Scalp (Sprint 18) → VWAP Reclaim (Sprint 19) → Afternoon Momentum (Sprint 20) → CC Analytics & Strategy Lab (Sprint 21) → AI Layer MVP (Sprint 22). See DEC-096.
+**Next Build sprints:** CC Frontend (Sprint 15) → Desktop/PWA (Sprint 16) → Orchestrator V1 (Sprint 17) → ORB Scalp (Sprint 18) → VWAP Reclaim (Sprint 19) → Afternoon Momentum (Sprint 20) → CC Analytics & Strategy Lab (Sprint 21) → AI Layer MVP (Sprint 22). See DEC-096.
 **Next Validation gate:** Build through Sprint 21 (four strategies + analytics) using Alpaca data → activate Databento (~Sprint 19, DEC-097) → serious paper trading validation with quality data + IBKR execution → AI Layer (Sprint 22) compounds analysis during validation → CPA consultation → live trading at minimum size on IBKR.
 
 **✅ IBKR APPLICATION SUBMITTED:** Feb 21, 2026. Account ID: U24619949. Individual margin account, IBKR Pro (tiered pricing), Georgia address. Trading permissions requested: Stocks, Options (Level 3), Futures, Currency/Forex, Cryptocurrencies, Mutual Funds. Awaiting approval (typically 1–3 business days, may take longer). Disclosures and agreements archived locally.
@@ -124,6 +124,11 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 - **Sprint resequencing — empowerment MVP (DEC-096):** Orchestrator (Sprint 16) before Desktop/PWA (Sprint 18). VWAP Reclaim (Sprint 19) and Afternoon Momentum (Sprint 20) inserted. CC Analytics & Strategy Lab (Sprint 21). AI Layer MVP (Sprint 22). Tier 1 News deferred to Sprint 23+. Four strategies covering full trading day before capital deployment.
 - **Databento activation timing (DEC-097):** Subscription deferred to ~Sprint 19 when new strategies need quality data. Sprints 14–18 use Alpaca data. Saves $400–600. Amends DEC-087.
 - **AI Layer model selection (DEC-098):** Claude Opus for all API calls. Separate Anthropic API account (pay-as-you-go, ~$35–50/month). No mixed-model optimization — cost delta negligible vs. capital at risk. Independent of user's Claude Pro subscription.
+- **API server lifecycle (DEC-099):** In-process Phase 11. FastAPI + uvicorn in same asyncio loop as trading engine. Standalone `--dev` mode for frontend development.
+- **API dependency injection (DEC-100):** AppState dataclass holds all system components. FastAPI Depends() injects into routes.
+- **WebSocket event filtering (DEC-101):** Curated event list (13 types). Tick events filtered to open-position symbols only, throttled to configurable interval (default 1s).
+- **Authentication (DEC-102):** Single-user JWT with bcrypt password hash. No username. Token via Authorization header (REST) or query param (WebSocket).
+- **Monorepo structure (DEC-103):** `argus/api/` (FastAPI server) + `argus/ui/` (React frontend). Single repo, single deploy.
 
 ## Architecture Summary
 
@@ -273,6 +278,15 @@ Paper trading → live minimum size → live full size. Gates based on accumulat
 7. **DEF-016 Evaluation** ✅ (Sprint 13.5, Feb 22)
    - Atomic bracket refactor evaluated and deferred to Sprint 17+ (DEC-095)
    - Scope exceeds threshold: SimulatedBroker sync fills, AlpacaBroker single-target, full test rewrite
+8. **Command Center API** ✅ (Sprint 14, 926 tests, Feb 23)
+   - FastAPI REST API with JWT auth (bcrypt password hashing, HS256 tokens, 24h expiry)
+   - 7 endpoint groups: auth (login/refresh/me), health, account, positions, trades, strategies, performance
+   - WebSocket bridge: EventBus → WebSocket streaming with tick throttling, position filtering, heartbeat
+   - PerformanceCalculator with 17 metrics (win rate, profit factor, Sharpe, max drawdown, etc.)
+   - TradeLogger query methods (filtering, pagination, daily P&L aggregation)
+   - Dev mode with realistic mock data (`python -m argus.api --dev`)
+   - React scaffold (Vite + TypeScript + Tailwind CSS v4 + Zustand + React Router)
+   - 11-phase system startup (API server as Phase 11). DEC-099 through DEC-103.
 
 See `10_PHASE3_SPRINT_PLAN.md` for current sprint plan and queue.
 

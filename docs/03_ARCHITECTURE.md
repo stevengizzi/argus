@@ -800,52 +800,60 @@ CREATE TABLE system_health (
 
 ---
 
-## 4. API Server (`core/api_server.py`)
+## 4. Command Center API (`argus/api/`)
 
-Tier 1 exposes a REST + WebSocket API for the Command Center and AI Layer.
+Tier 1 exposes a REST + WebSocket API for the Command Center. In-process with the trading engine (Phase 11 of startup). Also runnable standalone in dev mode.
 
-### REST Endpoints
+### Implementation Status (Sprint 14)
 
+**Implemented:**
+- JWT authentication (bcrypt hash, HS256 tokens, 24h expiry)
+- Account overview endpoint
+- Open positions with computed unrealized P&L and R-multiple
+- Trade history with filtering and pagination
+- Performance metrics (17 metrics, per-strategy breakdown, daily P&L)
+- Strategy listing with config summaries
+- System health with per-component status
+- WebSocket bridge (EventBus → client streaming)
+- Dev mode with mock data
+
+**Not yet implemented (future sprints):**
+- PUT strategies (config updates)
+- POST strategies pause/resume
+- Orchestrator status
+- Risk status details
+- Emergency controls (flatten, pause, resume)
+- Approval workflow endpoints
+- Learning journal
+- Claude API integration endpoints
+
+### REST Endpoints (Implemented)
 ```
-GET    /api/v1/account              — Account info (equity, cash, buying power)
-GET    /api/v1/positions             — All open positions across strategies
-GET    /api/v1/positions/:strategy   — Open positions for a specific strategy
-GET    /api/v1/strategies            — List all strategies with status and allocation
-GET    /api/v1/strategies/:id        — Detailed strategy info + recent performance
-PUT    /api/v1/strategies/:id        — Update strategy config (requires approval if configured)
-POST   /api/v1/strategies/:id/pause  — Pause a strategy
-POST   /api/v1/strategies/:id/resume — Resume a strategy
-GET    /api/v1/orchestrator/status   — Current regime, allocations, decisions
-GET    /api/v1/risk/status           — Risk utilization (daily loss used, positions open, etc.)
-GET    /api/v1/trades                — Trade history (filterable by strategy, date, outcome)
-GET    /api/v1/trades/:id            — Single trade detail
-GET    /api/v1/performance/:period   — Performance metrics (daily/weekly/monthly/all-time)
-GET    /api/v1/approvals/pending     — Pending approval requests
-POST   /api/v1/approvals/:id/approve — Approve an action
-POST   /api/v1/approvals/:id/reject  — Reject an action
-GET    /api/v1/journal               — Learning journal entries (filterable)
-POST   /api/v1/journal               — Add a journal entry
-POST   /api/v1/emergency/shutdown    — Emergency flatten all positions
-POST   /api/v1/emergency/pause       — Pause all trading (no new entries)
-POST   /api/v1/emergency/resume      — Resume trading
-GET    /api/v1/health                — System health status
-POST   /api/v1/claude/chat           — Send a message to Claude (async response)
-GET    /api/v1/claude/proposals       — Claude's pending action proposals
+POST   /api/v1/auth/login              — Password login, returns JWT
+POST   /api/v1/auth/refresh            — Refresh valid token
+GET    /api/v1/auth/me                 — Verify token, return user info
+GET    /api/v1/account                 — Account info, P&L, market status
+GET    /api/v1/positions               — Open positions with computed fields
+GET    /api/v1/trades                  — Trade history (filterable, paginated)
+GET    /api/v1/performance/{period}    — Metrics for today/week/month/all
+GET    /api/v1/strategies              — Strategy list with status
+GET    /api/v1/health                  — System health + component status
 ```
 
-### WebSocket Streams
-
+### WebSocket
 ```
-ws://host/ws/v1/live
-  → Streams real-time events: position updates, trade executions, 
-    price ticks for open positions, system alerts, approval requests
+ws://host/ws/v1/live?token={jwt}
+  → Streams: position.opened/closed/updated, order.submitted/filled/cancelled/approved/rejected,
+    price.update (throttled, positions only), system.heartbeat, system.circuit_breaker,
+    scanner.watchlist, strategy.signal
 ```
 
 ### Authentication
-- JWT-based authentication
-- Tokens issued on login with username + password + 2FA
-- Tokens expire after configurable period (default: 24 hours)
-- All API calls require valid token in Authorization header
+- Single-user system: password-only login (no username)
+- JWT tokens (HS256) with configurable expiry (default 24h)
+- All REST endpoints require `Authorization: Bearer {token}`
+- WebSocket authenticates via `?token={jwt}` query parameter
+- Password stored as bcrypt hash in config
 
 ---
 
