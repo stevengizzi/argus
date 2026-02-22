@@ -5,14 +5,14 @@
  */
 
 import type {
-  AccountInfo,
-  DailyPnlResponse,
+  AccountResponse,
   HealthResponse,
   LoginRequest,
-  LoginResponse,
-  PerformanceMetrics,
+  PerformancePeriod,
+  PerformanceResponse,
   PositionsResponse,
   StrategiesResponse,
+  TokenResponse,
   TradesResponse,
 } from './types';
 
@@ -72,7 +72,7 @@ async function fetchWithAuth<T>(
 }
 
 // Auth endpoints
-export async function login(password: string): Promise<LoginResponse> {
+export async function login(password: string): Promise<TokenResponse> {
   const request: LoginRequest = { password };
   const response = await fetch(`${API_BASE}/auth/login`, {
     method: 'POST',
@@ -85,7 +85,7 @@ export async function login(password: string): Promise<LoginResponse> {
     throw new Error(error.detail || 'Login failed');
   }
 
-  const data: LoginResponse = await response.json();
+  const data: TokenResponse = await response.json();
   setToken(data.access_token);
   return data;
 }
@@ -95,18 +95,25 @@ export function logout(): void {
   window.location.href = '/login';
 }
 
-export async function refreshToken(): Promise<LoginResponse> {
-  return fetchWithAuth<LoginResponse>('/auth/refresh', { method: 'POST' });
+export async function refreshToken(): Promise<TokenResponse> {
+  return fetchWithAuth<TokenResponse>('/auth/refresh', { method: 'POST' });
 }
 
 // Account endpoints
-export async function getAccount(): Promise<AccountInfo> {
-  return fetchWithAuth<AccountInfo>('/account');
+export async function getAccount(): Promise<AccountResponse> {
+  return fetchWithAuth<AccountResponse>('/account');
 }
 
 // Position endpoints
-export async function getPositions(): Promise<PositionsResponse> {
-  return fetchWithAuth<PositionsResponse>('/positions');
+export async function getPositions(params?: {
+  strategy_id?: string;
+}): Promise<PositionsResponse> {
+  const searchParams = new URLSearchParams();
+  if (params?.strategy_id) {
+    searchParams.set('strategy_id', params.strategy_id);
+  }
+  const query = searchParams.toString();
+  return fetchWithAuth<PositionsResponse>(`/positions${query ? `?${query}` : ''}`);
 }
 
 // Trade endpoints
@@ -131,37 +138,10 @@ export async function getTrades(params?: {
 }
 
 // Performance endpoints
-export async function getPerformance(params?: {
-  strategy_id?: string;
-  date_from?: string;
-  date_to?: string;
-}): Promise<PerformanceMetrics> {
-  const searchParams = new URLSearchParams();
-  if (params) {
-    Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined) {
-        searchParams.set(key, String(value));
-      }
-    });
-  }
-  const query = searchParams.toString();
-  return fetchWithAuth<PerformanceMetrics>(`/performance${query ? `?${query}` : ''}`);
-}
-
-export async function getDailyPnl(params?: {
-  date_from?: string;
-  date_to?: string;
-}): Promise<DailyPnlResponse> {
-  const searchParams = new URLSearchParams();
-  if (params) {
-    Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined) {
-        searchParams.set(key, String(value));
-      }
-    });
-  }
-  const query = searchParams.toString();
-  return fetchWithAuth<DailyPnlResponse>(`/performance/daily${query ? `?${query}` : ''}`);
+export async function getPerformance(
+  period: PerformancePeriod
+): Promise<PerformanceResponse> {
+  return fetchWithAuth<PerformanceResponse>(`/performance/${period}`);
 }
 
 // Health endpoints

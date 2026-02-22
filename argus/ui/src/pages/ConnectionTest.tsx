@@ -12,7 +12,6 @@ import {
   getPositions,
   getTrades,
   getPerformance,
-  getDailyPnl,
   getHealth,
   getStrategies,
 } from '../api/client';
@@ -42,7 +41,6 @@ export function ConnectionTest() {
     { name: 'Positions', status: 'pending' },
     { name: 'Trades', status: 'pending' },
     { name: 'Performance', status: 'pending' },
-    { name: 'Daily P&L', status: 'pending' },
     { name: 'Health', status: 'pending' },
     { name: 'Strategies', status: 'pending' },
   ]);
@@ -89,10 +87,9 @@ export function ConnectionTest() {
       testEndpoint(0, 'Account', getAccount),
       testEndpoint(1, 'Positions', getPositions),
       testEndpoint(2, 'Trades', () => getTrades({ limit: 10 })),
-      testEndpoint(3, 'Performance', getPerformance),
-      testEndpoint(4, 'Daily P&L', getDailyPnl),
-      testEndpoint(5, 'Health', getHealth),
-      testEndpoint(6, 'Strategies', getStrategies),
+      testEndpoint(3, 'Performance', () => getPerformance('today')),
+      testEndpoint(4, 'Health', getHealth),
+      testEndpoint(5, 'Strategies', getStrategies),
     ]);
   };
 

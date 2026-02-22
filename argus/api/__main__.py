@@ -74,6 +74,12 @@ Examples:
     state = asyncio.run(create_dev_state())
     app = create_app(state)
 
+    # Start WebSocket bridge for event streaming
+    from argus.api.websocket import get_bridge
+
+    bridge = get_bridge()
+    bridge.start(state.event_bus, state.order_manager, state.config.api)
+
     # Run uvicorn
     uvicorn.run(app, host=args.host, port=args.port, log_level="info")
 

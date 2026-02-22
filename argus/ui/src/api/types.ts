@@ -1,5 +1,7 @@
 /**
  * TypeScript interfaces for Argus Command Center API responses.
+ *
+ * These types match the Python Pydantic models in argus/api/routes/*.py exactly.
  */
 
 // Auth
@@ -7,41 +9,46 @@ export interface LoginRequest {
   password: string;
 }
 
-export interface LoginResponse {
+export interface TokenResponse {
   access_token: string;
   token_type: string;
   expires_at: string;
-  timestamp: string;
 }
 
 // Account
-export interface AccountInfo {
+export interface AccountResponse {
   equity: number;
   cash: number;
   buying_power: number;
-  portfolio_value: number;
-  currency: string;
+  daily_pnl: number;
+  daily_pnl_pct: number;
+  open_positions_count: number;
+  daily_trades_count: number;
+  market_status: 'pre_market' | 'open' | 'closed' | 'after_hours';
+  broker_source: string;
+  data_source: string;
   timestamp: string;
 }
 
 // Positions
 export interface Position {
-  symbol: string;
+  position_id: string;
   strategy_id: string;
+  symbol: string;
+  side: string;
   entry_price: number;
   entry_time: string;
   shares_total: number;
   shares_remaining: number;
+  current_price: number;
+  unrealized_pnl: number;
+  unrealized_pnl_pct: number;
   stop_price: number;
-  original_stop_price: number;
   t1_price: number;
-  t1_filled: boolean;
   t2_price: number;
-  high_watermark: number;
-  realized_pnl: number;
-  current_price?: number;
-  unrealized_pnl?: number;
-  pnl_percent?: number;
+  t1_filled: boolean;
+  hold_duration_seconds: number;
+  r_multiple_current: number;
 }
 
 export interface PositionsResponse {
@@ -55,27 +62,22 @@ export interface Trade {
   id: string;
   strategy_id: string;
   symbol: string;
-  side: 'buy' | 'sell';
+  side: string;
   entry_price: number;
   entry_time: string;
-  exit_price: number;
-  exit_time: string;
+  exit_price: number | null;
+  exit_time: string | null;
   shares: number;
-  stop_price: number;
-  target_prices: number[];
-  exit_reason: string;
-  gross_pnl: number;
+  pnl_dollars: number | null;
+  pnl_r_multiple: number | null;
+  exit_reason: string | null;
+  hold_duration_seconds: number | null;
   commission: number;
-  net_pnl: number;
-  r_multiple: number;
-  hold_duration_seconds: number;
-  outcome: 'win' | 'loss' | 'breakeven';
-  rationale: string;
+  market_regime: string | null;
 }
 
 export interface TradesResponse {
   trades: Trade[];
-  count: number;
   total_count: number;
   limit: number;
   offset: number;
@@ -83,52 +85,60 @@ export interface TradesResponse {
 }
 
 // Performance
-export interface PerformanceMetrics {
+export interface MetricsData {
   total_trades: number;
-  wins: number;
-  losses: number;
-  breakeven: number;
   win_rate: number;
   profit_factor: number;
   net_pnl: number;
   gross_pnl: number;
   total_commissions: number;
   avg_r_multiple: number;
-  sharpe_ratio: number | null;
+  sharpe_ratio: number;
   max_drawdown_pct: number;
   avg_hold_seconds: number;
   largest_win: number;
   largest_loss: number;
   consecutive_wins_max: number;
   consecutive_losses_max: number;
-  timestamp: string;
 }
 
-export interface DailyPnl {
+export interface DailyPnlEntry {
   date: string;
   pnl: number;
-  trades_count: number;
+  trades: number;
 }
 
-export interface DailyPnlResponse {
-  daily_pnl: DailyPnl[];
-  count: number;
+export interface StrategyMetrics {
+  total_trades: number;
+  win_rate: number;
+  net_pnl: number;
+  profit_factor: number;
+}
+
+export interface PerformanceResponse {
+  period: string;
+  date_from: string;
+  date_to: string;
+  metrics: MetricsData;
+  daily_pnl: DailyPnlEntry[];
+  by_strategy: Record<string, StrategyMetrics>;
   timestamp: string;
 }
 
 // Health
-export interface ComponentHealth {
-  name: string;
-  status: 'starting' | 'healthy' | 'degraded' | 'unhealthy' | 'stopped';
-  message: string;
-  last_updated: string;
-  details?: Record<string, unknown>;
+export interface ComponentStatus {
+  status: string;
+  details: string;
 }
 
 export interface HealthResponse {
-  overall_status: string;
-  components: ComponentHealth[];
+  status: string;
   uptime_seconds: number;
+  components: Record<string, ComponentStatus>;
+  last_heartbeat: string | null;
+  last_trade: string | null;
+  last_data_received: string | null;
+  paper_mode: boolean;
   timestamp: string;
 }
 
@@ -142,8 +152,8 @@ export interface StrategyInfo {
   allocated_capital: number;
   daily_pnl: number;
   trade_count_today: number;
-  config: Record<string, unknown>;
-  timestamp: string;
+  open_positions: number;
+  config_summary: Record<string, unknown>;
 }
 
 export interface StrategiesResponse {
@@ -159,3 +169,6 @@ export interface WebSocketMessage {
   sequence: number;
   timestamp: string;
 }
+
+// Period type for performance endpoint
+export type PerformancePeriod = 'today' | 'week' | 'month' | 'all';
