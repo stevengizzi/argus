@@ -7,6 +7,7 @@ Usage:
     python -m argus.main --config /path/to  # Custom config directory
     python -m argus.main --paper            # Force paper trading (default)
     python -m argus.main --dry-run          # Start, connect, but don't trade
+    python -m argus.main --no-api           # Disable Command Center API server
 """
 
 from __future__ import annotations
@@ -14,7 +15,9 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+import os
 import signal
+import time
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -62,15 +65,19 @@ logger = logging.getLogger(__name__)
 class ArgusSystem:
     """Top-level system container. Owns all components and their lifecycle."""
 
-    def __init__(self, config_dir: Path, dry_run: bool = False) -> None:
+    def __init__(
+        self, config_dir: Path, dry_run: bool = False, enable_api: bool = True
+    ) -> None:
         """Initialize the Argus system.
 
         Args:
             config_dir: Path to configuration directory.
             dry_run: If True, connect but don't stream data or trade.
+            enable_api: If True, start the Command Center API server.
         """
         self._config_dir = config_dir
         self._dry_run = dry_run
+        self._enable_api = enable_api
         self._shutdown_event = asyncio.Event()
 
         # Components (initialized in start())
@@ -85,6 +92,8 @@ class ArgusSystem:
         self._strategy: OrbBreakoutStrategy | None = None
         self._order_manager: OrderManager | None = None
         self._health_monitor: HealthMonitor | None = None
+        self._api_task: asyncio.Task[None] | None = None
+        self._config: object | None = None  # Store config for API access
 
     async def start(self) -> None:
         """Initialize and start all components in dependency order.
@@ -99,29 +108,30 @@ class ArgusSystem:
         7. Scanner (needs config)
         8. Strategy (needs config, clock)
         9. OrderManager (needs event_bus, broker, clock, config, trade_logger)
-        10. Subscribe strategy to events
-        11. Start data service streaming
+        10. Start data service streaming
+        11. API Server (optional, needs all components)
         """
         logger.info("=" * 60)
         logger.info("ARGUS TRADING SYSTEM — STARTING")
         logger.info("=" * 60)
 
         # --- Phase 1: Foundation ---
-        logger.info("[1/10] Loading configuration...")
+        logger.info("[1/11] Loading configuration...")
         config = load_config(self._config_dir)
+        self._config = config
 
         self._clock = SystemClock()
         self._event_bus = EventBus()
 
         # --- Phase 2: Database ---
-        logger.info("[2/10] Initializing database...")
+        logger.info("[2/11] Initializing database...")
         db_path = Path(config.system.data_dir) / "argus.db"
         self._db = DatabaseManager(db_path)
         await self._db.initialize()
         self._trade_logger = TradeLogger(self._db)
 
         # --- Phase 3: Broker ---
-        logger.info("[3/10] Connecting to broker...")
+        logger.info("[3/11] Connecting to broker...")
         if config.system.broker_source == BrokerSource.IBKR:
             from argus.execution.ibkr_broker import IBKRBroker
 
@@ -148,7 +158,7 @@ class ArgusSystem:
         logger.info("Broker connected. Account equity: %s", account.equity if account else "N/A")
 
         # --- Phase 4: Health Monitor ---
-        logger.info("[4/10] Starting health monitor...")
+        logger.info("[4/11] Starting health monitor...")
         self._health_monitor = HealthMonitor(
             event_bus=self._event_bus,
             clock=self._clock,
@@ -162,7 +172,7 @@ class ArgusSystem:
         self._health_monitor.update_component("broker", ComponentStatus.HEALTHY)
 
         # --- Phase 5: Risk Manager ---
-        logger.info("[5/10] Initializing risk manager...")
+        logger.info("[5/11] Initializing risk manager...")
         self._risk_manager = RiskManager(
             config=config.risk,
             broker=self._broker,
@@ -176,7 +186,7 @@ class ArgusSystem:
         self._health_monitor.update_component("risk_manager", ComponentStatus.HEALTHY)
 
         # --- Phase 6: Data Service ---
-        logger.info("[6/10] Initializing data service...")
+        logger.info("[6/11] Initializing data service...")
         data_config = DataServiceConfig()  # Use defaults
 
         if config.system.data_source == DataSource.DATABENTO:
@@ -199,7 +209,7 @@ class ArgusSystem:
         self._health_monitor.update_component("data_service", ComponentStatus.STARTING)
 
         # --- Phase 7: Scanner ---
-        logger.info("[7/10] Running pre-market scan...")
+        logger.info("[7/11] Running pre-market scan...")
         scanner_yaml = load_yaml_file(self._config_dir / "scanner.yaml")
 
         if config.system.data_source == DataSource.DATABENTO:
@@ -240,7 +250,7 @@ class ArgusSystem:
             )
 
         # --- Phase 8: Strategy ---
-        logger.info("[8/10] Initializing strategy...")
+        logger.info("[8/11] Initializing strategy...")
         strategy_config = load_orb_config(self._config_dir / "strategies" / "orb_breakout.yaml")
         self._strategy = OrbBreakoutStrategy(
             config=strategy_config,
@@ -258,7 +268,7 @@ class ArgusSystem:
         )
 
         # --- Phase 9: Order Manager ---
-        logger.info("[9/10] Starting order manager...")
+        logger.info("[9/11] Starting order manager...")
         order_manager_yaml = load_yaml_file(self._config_dir / "order_manager.yaml")
         from argus.core.config import OrderManagerConfig
 
@@ -277,7 +287,7 @@ class ArgusSystem:
         self._health_monitor.update_component("order_manager", ComponentStatus.HEALTHY)
 
         # --- Phase 10: Start streaming ---
-        logger.info("[10/10] Starting data streams...")
+        logger.info("[10/11] Starting data streams...")
         if symbols and not self._dry_run:
             await self._data_service.start(symbols=symbols, timeframes=["1m"])
             self._health_monitor.update_component(
@@ -289,11 +299,71 @@ class ArgusSystem:
                 "data_service", ComponentStatus.DEGRADED, message="Dry run — no streaming"
             )
 
+        # --- Phase 11: API Server (optional) ---
+        logger.info("[11/11] Starting API server...")
+        if self._enable_api and config.system.api.enabled:
+            # Check for JWT secret
+            jwt_secret_env = config.system.api.jwt_secret_env
+            if not os.environ.get(jwt_secret_env):
+                logger.warning(
+                    "API disabled: JWT secret not configured (set %s env var)", jwt_secret_env
+                )
+                self._health_monitor.update_component(
+                    "api_server",
+                    ComponentStatus.DEGRADED,
+                    message="JWT secret not configured",
+                )
+            else:
+                from argus.api.dependencies import AppState
+                from argus.api.server import create_app, run_server
+                from argus.api.websocket import get_bridge
+
+                app_state = AppState(
+                    event_bus=self._event_bus,
+                    trade_logger=self._trade_logger,
+                    broker=self._broker,
+                    health_monitor=self._health_monitor,
+                    risk_manager=self._risk_manager,
+                    order_manager=self._order_manager,
+                    data_service=self._data_service,
+                    strategies={"orb_breakout": self._strategy},
+                    clock=self._clock,
+                    config=config.system,
+                    start_time=time.time(),
+                )
+                api_app = create_app(app_state)
+
+                # Start WebSocket bridge
+                ws_bridge = get_bridge()
+                ws_bridge.start(self._event_bus, self._order_manager, config.system.api)
+
+                # Start API server
+                self._api_task = await run_server(
+                    api_app, config.system.api.host, config.system.api.port
+                )
+                logger.info(
+                    "API server started on %s:%d",
+                    config.system.api.host,
+                    config.system.api.port,
+                )
+                self._health_monitor.update_component(
+                    "api_server",
+                    ComponentStatus.HEALTHY,
+                    message=f"http://{config.system.api.host}:{config.system.api.port}",
+                )
+        else:
+            logger.info("API server disabled by configuration or --no-api flag")
+            self._health_monitor.update_component(
+                "api_server", ComponentStatus.STOPPED, message="Disabled"
+            )
+
         logger.info("=" * 60)
         logger.info("ARGUS TRADING SYSTEM — RUNNING")
         if self._dry_run:
             logger.info("MODE: DRY RUN (no trades will be placed)")
         logger.info("Watching %d symbols", len(symbols))
+        if self._api_task:
+            logger.info("API: http://%s:%d", config.system.api.host, config.system.api.port)
         logger.info("=" * 60)
 
         # Send startup alert
@@ -369,7 +439,8 @@ class ArgusSystem:
         """Graceful shutdown sequence.
 
         Order matters (reverse of startup):
-        1. Stop accepting new signals (deactivate strategy)
+        0. Stop API server
+        1. Stop scanner
         2. Stop data streams
         3. Stop order manager
         4. Stop health monitor
@@ -386,6 +457,19 @@ class ArgusSystem:
                 title="Argus Shutting Down",
                 body="Graceful shutdown initiated",
             )
+
+        # 0. Stop API server
+        if self._api_task:
+            import contextlib
+
+            logger.info("Stopping API server...")
+            self._api_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._api_task
+            from argus.api.websocket import get_bridge
+
+            get_bridge().stop()
+            logger.info("API server stopped")
 
         # 1. Stop scanner
         if self._scanner:
@@ -465,6 +549,12 @@ def parse_args() -> argparse.Namespace:
         default=False,
         help="Start and connect but don't stream data or trade",
     )
+    parser.add_argument(
+        "--no-api",
+        action="store_true",
+        default=False,
+        help="Disable the Command Center API server",
+    )
     return parser.parse_args()
 
 
@@ -477,7 +567,11 @@ def main() -> None:
 
     logger.info("Argus starting with config from: %s", args.config)
 
-    system = ArgusSystem(config_dir=args.config, dry_run=args.dry_run)
+    system = ArgusSystem(
+        config_dir=args.config,
+        dry_run=args.dry_run,
+        enable_api=not args.no_api,
+    )
 
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)

@@ -71,3 +71,7 @@ data/backtest_runs/
 
 # Docs
 docs/IBKR-disclosures/
+
+# Frontend (React)
+argus/ui/node_modules/
+argus/ui/dist/

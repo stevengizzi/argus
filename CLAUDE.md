@@ -11,7 +11,7 @@ Phase 1 sprint plan: @docs/07_PHASE1_SPRINT_PLAN.md
 ## Current State
 
 **Structure:** Two parallel tracks (DEC-079, February 19, 2026).
-- **Build Track:** System construction at development velocity. Sprints 1–13.5 complete (811 tests). Sprint 14 (Command Center API) is NEXT.
+- **Build Track:** System construction at development velocity. Sprints 1–14 complete (926 tests). Sprint 15 (Command Center Frontend) is NEXT.
 - **Validation Track:** Paper trading ACTIVE on Alpaca IEX (system stability only — DEC-081). Signal accuracy validation pending Databento subscription activation (DEC-087). Migrates to IBKR paper after IBKR account approved (U24619949, submitted Feb 21).
 
 Active sprint plan: `docs/10_PHASE3_SPRINT_PLAN.md` (covers both tracks).
@@ -24,6 +24,17 @@ Active sprint plan: `docs/10_PHASE3_SPRINT_PLAN.md` (covers both tracks).
 - **Cost deferral:** Databento subscription activated when adapter ready for integration testing. DEC-087.
 
 - IBKR account application submitted Feb 21, 2026 (Account ID: U24619949). Individual, Margin, IBKR Pro (tiered), GA address. Permissions: Stocks, Options L3, Futures, Forex, Crypto. Awaiting approval.
+
+**Sprint 14 Results (Command Center API — Feb 23):**
+- FastAPI REST API with JWT authentication (bcrypt password hashing, HS256 tokens)
+- WebSocket bridge for real-time event streaming (Event Bus subscription, tick throttling, heartbeat)
+- Full endpoint coverage: auth, health, account, positions, trades, performance, strategies
+- PerformanceCalculator with 17 metrics (win rate, profit factor, Sharpe, drawdown, etc.)
+- TradeLogger query methods for filtering, pagination, and daily P&L aggregation
+- Dev mode with realistic mock data (`python -m argus.api --dev`)
+- React frontend scaffold (Vite, TypeScript, Tailwind CSS v4, Zustand, React Router)
+- 11-phase system startup (API server as Phase 11)
+- 926 tests (115 new), 10 prompts completed
 
 **Sprint 13 Results (IBKRBroker Adapter — Feb 22):**
 - IBKRBroker: full Broker abstraction via `ib_async` (connection, orders, native brackets, fills, reconnection, state reconstruction)
@@ -55,7 +66,7 @@ Components implemented:
 - AlpacaScanner — live pre-market gap scanning via Alpaca snapshots
 - HealthMonitor — component status, heartbeat, webhook alerts, daily/weekly integrity checks
 - Structured logging — JSON file output, colored console
-- System entry point (argus/main.py) — 10-phase startup, graceful shutdown, signal handlers
+- System entry point (argus/main.py) — 11-phase startup (API as Phase 11), graceful shutdown, signal handlers
 - DataFetcher — historical 1m bar download from Alpaca, Parquet storage, manifest tracking, data validation
 - ReplayHarness — high-fidelity backtesting using production components (EventBus, RiskManager, OrderManager, SimulatedBroker) with FixedClock injection
 - BacktestDataService — step-driven DataService for harness control, shares indicator logic with ReplayDataService
@@ -75,6 +86,13 @@ Components implemented:
 - IBKRContractResolver — stock contract creation with caching. IBKRErrorSeverity — error code classification and severity routing.
 - Order Manager T2 support (DEC-093) — `t2_order_id` on ManagedPosition, broker-side T2 limit orders, `_handle_t2_fill()`, tick-skip logic for IBKR path, T2 cancellation in all exit paths. Backward compatible with Alpaca tick-monitored T2.
 - Dependencies added: ib_async>=1.0.0
+- FastAPI REST API (Sprint 14) — JWT auth, health/account/positions/trades/strategies/performance endpoints
+- WebSocket bridge — real-time Event Bus streaming to clients, tick throttling, position filtering, heartbeat
+- PerformanceCalculator — 17-metric analytics (win rate, profit factor, Sharpe, drawdown, R-multiples)
+- TradeLogger query methods — `query_trades()`, `count_trades()`, `get_daily_pnl()`, `get_todays_pnl()`
+- Dev mode factory — `create_dev_state()` with mock data for frontend development
+- React frontend scaffold (argus/ui/) — Vite, TypeScript, Tailwind CSS v4, Zustand, React Router
+- Dependencies added: fastapi>=0.115, uvicorn>=0.34, python-jose[cryptography]>=3.3, passlib[bcrypt]>=1.7
 
 ## Architecture
 
@@ -83,7 +101,7 @@ Three tiers, built in parallel (DEC-079):
 2. Command Center (FastAPI + React → web + Tauri desktop + PWA mobile) — dashboards, controls, reports → Build Track Sprint 14+
 3. AI Layer (Claude API) — advisory, approval workflow, reports → Build Track Sprint 18+
 
-Currently: Validation Track (paper trading on Alpaca) running in parallel with Build Track (Sprint 13.5/14 next).
+Currently: Validation Track (paper trading on Alpaca) running in parallel with Build Track (Sprint 15 next).
 
 ## Tech Stack
 
@@ -137,6 +155,11 @@ docs/
 - `python -m argus.backtest.vectorbt_orb --data-dir data/historical/1m --symbols TSLA,NVDA --start 2025-06-01 --end 2025-12-31` — Run VectorBT parameter sweep
 - `python -m argus.backtest.report_generator --db data/backtest_runs/run_xxx.db --output reports/orb_validation.html` — Generate backtest report
 - `python -m argus.backtest.data_fetcher --start 2025-03-01 --end 2026-02-01` — Download historical data
+- `python -m argus.api --dev` — Start API server in dev mode with mock data (password: "argus")
+- `python -m argus.api.setup_password` — Generate password hash for production config
+- `cd argus/ui && npm install` — Install frontend dependencies
+- `cd argus/ui && npm run dev` — Start frontend dev server (Vite)
+- `cd argus/ui && npm run build` — Build frontend for production
 
 
 ## Code Style
