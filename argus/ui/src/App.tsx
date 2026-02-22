@@ -6,7 +6,12 @@ import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from './stores/auth';
 import { ProtectedRoute } from './components/ProtectedRoute';
+import { AppShell } from './layouts/AppShell';
 import { Login } from './pages/Login';
+import { DashboardPage } from './pages/DashboardPage';
+import { TradesPage } from './pages/TradesPage';
+import { PerformancePage } from './pages/PerformancePage';
+import { SystemPage } from './pages/SystemPage';
 import { ConnectionTest } from './pages/ConnectionTest';
 
 function App() {
@@ -23,23 +28,20 @@ function App() {
         {/* Public routes */}
         <Route path="/login" element={<Login />} />
 
-        {/* Protected routes */}
+        {/* Protected routes with AppShell layout */}
         <Route
-          path="/"
           element={
             <ProtectedRoute>
-              <ConnectionTest />
+              <AppShell />
             </ProtectedRoute>
           }
-        />
-        <Route
-          path="/dev/connection"
-          element={
-            <ProtectedRoute>
-              <ConnectionTest />
-            </ProtectedRoute>
-          }
-        />
+        >
+          <Route index element={<DashboardPage />} />
+          <Route path="trades" element={<TradesPage />} />
+          <Route path="performance" element={<PerformancePage />} />
+          <Route path="system" element={<SystemPage />} />
+          <Route path="dev/connection" element={<ConnectionTest />} />
+        </Route>
 
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />

@@ -45,7 +45,8 @@ def create_app(app_state: AppState) -> FastAPI:
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         """App lifespan handler for startup/shutdown.
 
-        Sets up the JWT secret from config and attaches AppState to app.state.
+        Sets up the JWT secret from config, attaches AppState to app.state,
+        and starts the WebSocket bridge.
         """
         # Attach app_state to app.state for dependency injection
         app.state.app_state = app_state
@@ -61,9 +62,17 @@ def create_app(app_state: AppState) -> FastAPI:
                 # In tests, the secret may be set directly
                 pass
 
+        # Start WebSocket bridge for event streaming
+        from argus.api.websocket import get_bridge
+
+        bridge = get_bridge()
+        if app_state.config and app_state.config.api:
+            bridge.start(app_state.event_bus, app_state.order_manager, app_state.config.api)
+
         yield
 
-        # Cleanup on shutdown (if needed)
+        # Cleanup on shutdown
+        bridge.stop()
 
     app = FastAPI(
         title="Argus Command Center API",
