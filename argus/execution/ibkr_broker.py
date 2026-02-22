@@ -588,77 +588,313 @@ class IBKRBroker(Broker):
         )
 
     async def cancel_order(self, order_id: str) -> bool:
-        """Cancel an open order.
+        """Cancel an open order by ARGUS ULID.
 
-        Stub implementation — will be completed in Prompt 7.
+        Looks up the IBKR order ID from the mapping, finds the Trade
+        in ib_async's cache, and submits a cancel request.
 
         Args:
             order_id: The ARGUS ULID of the order to cancel.
 
         Returns:
-            True if cancellation was submitted.
+            True if cancellation was submitted, False if order not found.
         """
-        # Placeholder - will be implemented in Prompt 7
-        raise NotImplementedError("cancel_order will be implemented in Prompt 7")
+        ib_order_id = self._ulid_to_ibkr.get(order_id)
+        if ib_order_id is None:
+            logger.warning("Cannot cancel unknown order: %s", order_id)
+            return False
+
+        trade = self._find_trade_by_order_id(ib_order_id)
+        if trade is None:
+            logger.warning("Cannot find trade for IBKR order #%d", ib_order_id)
+            return False
+
+        self._ib.cancelOrder(trade.order)
+        logger.info("Cancel requested: %s (IBKR #%d)", order_id, ib_order_id)
+        return True
 
     async def modify_order(self, order_id: str, modifications: dict) -> OrderResult:
-        """Modify an existing order.
+        """Modify an existing order (price, quantity).
 
-        Stub implementation — will be completed in Prompt 7.
+        ib_async pattern: modify the Trade.order object in-place, then re-place it.
+        For stop orders, price modifications use auxPrice. For limit orders, lmtPrice.
 
         Args:
             order_id: The ARGUS ULID of the order to modify.
-            modifications: Dict of field names to new values.
+            modifications: Dict of field names to new values. Supported keys:
+                - "price": New price (auxPrice for STP, lmtPrice for others)
+                - "quantity": New total quantity
 
         Returns:
             OrderResult reflecting the modified order state.
         """
-        # Placeholder - will be implemented in Prompt 7
-        raise NotImplementedError("modify_order will be implemented in Prompt 7")
+        ib_order_id = self._ulid_to_ibkr.get(order_id)
+        if ib_order_id is None:
+            return OrderResult(
+                order_id=order_id,
+                status="rejected",
+                message="Unknown order",
+            )
+
+        trade = self._find_trade_by_order_id(ib_order_id)
+        if trade is None:
+            return OrderResult(
+                order_id=order_id,
+                status="rejected",
+                message="Trade not found",
+            )
+
+        # Apply modifications
+        if "price" in modifications:
+            # Stop orders use auxPrice, limit orders use lmtPrice
+            if trade.order.orderType == "STP":
+                trade.order.auxPrice = modifications["price"]
+            else:
+                trade.order.lmtPrice = modifications["price"]
+
+        if "quantity" in modifications:
+            trade.order.totalQuantity = modifications["quantity"]
+
+        # Re-place to transmit modification
+        self._ib.placeOrder(trade.contract, trade.order)
+
+        logger.info("Order modified: %s — %s", order_id, modifications)
+        return OrderResult(
+            order_id=order_id,
+            status="submitted",
+            message="Order modification submitted",
+        )
 
     async def get_positions(self) -> list[Position]:
-        """Get all currently open positions.
+        """Get current positions from IBKR (auto-synced cache).
 
-        Stub implementation — will be completed in Prompt 7.
+        ib_async keeps positions updated automatically after connection.
+        Filters out zero-quantity positions (closed positions may remain
+        in cache briefly).
 
         Returns:
-            List of open Position objects.
+            List of Position objects for all non-zero positions.
         """
-        # Placeholder - will be implemented in Prompt 7
-        raise NotImplementedError("get_positions will be implemented in Prompt 7")
+        from datetime import UTC, datetime
+
+        from argus.models.trading import (
+            AssetClass,
+            PositionStatus,
+        )
+        from argus.models.trading import (
+            OrderSide as ModelOrderSide,
+        )
+
+        ib_positions = self._ib.positions()
+        positions = []
+
+        for ib_pos in ib_positions:
+            # Filter out zero-quantity positions
+            if ib_pos.position == 0:
+                continue
+
+            # Determine side from position quantity
+            side = ModelOrderSide.BUY if ib_pos.position > 0 else ModelOrderSide.SELL
+            shares = abs(int(ib_pos.position))
+
+            position = Position(
+                id=generate_id(),
+                strategy_id="",  # Unknown at broker level
+                symbol=ib_pos.contract.symbol,
+                asset_class=AssetClass.US_STOCKS,
+                side=side,
+                status=PositionStatus.OPEN,
+                entry_price=ib_pos.avgCost,
+                entry_time=datetime.now(UTC),  # Not available from IBKR position
+                shares=shares,
+                stop_price=0.0,  # Not available from position object
+                target_prices=[],
+                current_price=ib_pos.avgCost,  # Approximate, real price via market data
+                unrealized_pnl=0.0,  # Available via reqPnLSingle if needed
+            )
+            positions.append(position)
+
+        logger.info("Retrieved %d positions from IBKR", len(positions))
+        return positions
 
     async def get_account(self) -> AccountInfo:
-        """Get current account information.
+        """Get account info from IBKR (auto-synced cache).
 
-        Stub implementation — will be completed in Prompt 7.
+        ib_async keeps accountValues() updated automatically after connection.
+        Filters for USD values and extracts key account metrics.
 
         Returns:
             AccountInfo snapshot with equity, cash, buying power.
         """
-        # Placeholder - will be implemented in Prompt 7
-        raise NotImplementedError("get_account will be implemented in Prompt 7")
+        # Build a dict of USD account values
+        values: dict[str, float] = {}
+        for av in self._ib.accountValues():
+            if av.currency == "USD" and self._is_numeric(av.value):
+                values[av.tag] = float(av.value)
+
+        equity = values.get("NetLiquidation", 0.0)
+        cash = values.get("TotalCashValue", 0.0)
+        buying_power = values.get("BuyingPower", 0.0)
+
+        # Positions value = equity - cash
+        positions_value = equity - cash
+
+        logger.debug(
+            "Account: equity=$%.2f, cash=$%.2f, buying_power=$%.2f",
+            equity,
+            cash,
+            buying_power,
+        )
+
+        return AccountInfo(
+            equity=equity,
+            cash=cash,
+            buying_power=buying_power,
+            positions_value=positions_value,
+            daily_pnl=0.0,  # Available via reqPnL if needed
+        )
 
     async def get_order_status(self, order_id: str) -> OrderStatus:
         """Get the current status of a specific order.
 
-        Stub implementation — will be completed in Prompt 7.
+        Looks up the Trade in ib_async's cache and maps the IBKR status
+        to our OrderStatus enum.
 
         Args:
             order_id: The ARGUS ULID of the order to check.
 
         Returns:
-            Current OrderStatus.
+            Current OrderStatus enum value.
+
+        Raises:
+            KeyError: If the order_id is not found.
         """
-        # Placeholder - will be implemented in Prompt 7
-        raise NotImplementedError("get_order_status will be implemented in Prompt 7")
+        ib_order_id = self._ulid_to_ibkr.get(order_id)
+        if ib_order_id is None:
+            raise KeyError(f"Order {order_id} not found in ID map")
+
+        trade = self._find_trade_by_order_id(ib_order_id)
+        if trade is None:
+            raise KeyError(f"Order {order_id} not found at IBKR")
+
+        return self._map_ibkr_status_to_model(trade.orderStatus.status)
 
     async def flatten_all(self) -> list[OrderResult]:
-        """Emergency: close all open positions.
+        """Emergency: cancel all open orders, then close all positions.
 
-        Stub implementation — will be completed in Prompt 7.
+        This is the nuclear option. Used by circuit breakers and manual
+        emergency shutdown.
+
+        Order of operations:
+        1. Cancel all open orders (prevents stops from interfering)
+        2. Brief pause for cancellations to process
+        3. Submit market orders to close all positions (both long and short)
 
         Returns:
             List of OrderResults for each closing order.
         """
-        # Placeholder - will be implemented in Prompt 7
-        raise NotImplementedError("flatten_all will be implemented in Prompt 7")
+        results: list[OrderResult] = []
+
+        # Step 1: Cancel all open orders
+        self._ib.reqGlobalCancel()
+        logger.warning("Emergency flatten: all open orders cancelled")
+
+        # Brief pause for cancellations to process
+        await asyncio.sleep(0.5)
+
+        # Step 2: Close all positions
+        for ib_pos in self._ib.positions():
+            if ib_pos.position == 0:
+                continue
+
+            # Determine action: SELL to close long, BUY to close short
+            action = "SELL" if ib_pos.position > 0 else "BUY"
+            quantity = abs(int(ib_pos.position))
+
+            close_order = MarketOrder(action, quantity)
+            close_order.tif = "DAY"
+            ulid = generate_id()
+            close_order.orderRef = ulid
+
+            trade = self._ib.placeOrder(ib_pos.contract, close_order)
+
+            # Store mappings
+            self._ulid_to_ibkr[ulid] = trade.order.orderId
+            self._ibkr_to_ulid[trade.order.orderId] = ulid
+
+            results.append(
+                OrderResult(
+                    order_id=ulid,
+                    broker_order_id=str(trade.order.orderId),
+                    status="submitted",
+                    message=f"Emergency close: {action} {quantity} {ib_pos.contract.symbol}",
+                )
+            )
+            logger.warning(
+                "Emergency close: %s %d %s",
+                action,
+                quantity,
+                ib_pos.contract.symbol,
+            )
+
+        return results
+
+    # --- Helper Methods ---
+
+    def _find_trade_by_order_id(self, ib_order_id: int) -> Trade | None:
+        """Find a Trade object by IBKR order ID from ib_async's cache.
+
+        Scans all trades in ib_async's cache to find the one matching
+        the given IBKR order ID.
+
+        Args:
+            ib_order_id: The IBKR integer order ID.
+
+        Returns:
+            The Trade object if found, None otherwise.
+        """
+        for trade in self._ib.trades():
+            if trade.order.orderId == ib_order_id:
+                return trade
+        return None
+
+    @staticmethod
+    def _is_numeric(value: str) -> bool:
+        """Check if a string value can be converted to float.
+
+        Used for filtering accountValues which may contain non-numeric entries.
+
+        Args:
+            value: The string value to check.
+
+        Returns:
+            True if the value can be converted to float, False otherwise.
+        """
+        try:
+            float(value)
+            return True
+        except (ValueError, TypeError):
+            return False
+
+    @staticmethod
+    def _map_ibkr_status_to_model(ibkr_status: str) -> OrderStatus:
+        """Map IBKR order status string to our OrderStatus enum.
+
+        Args:
+            ibkr_status: IBKR status string (Submitted, Filled, Cancelled, etc.)
+
+        Returns:
+            Corresponding OrderStatus enum value.
+        """
+        status_lower = ibkr_status.lower()
+        if status_lower in ("submitted", "presubmitted", "pendingsubmit"):
+            return OrderStatus.SUBMITTED
+        elif status_lower in ("filled",):
+            return OrderStatus.FILLED
+        elif status_lower in ("cancelled", "pendingcancel"):
+            return OrderStatus.CANCELLED
+        elif status_lower in ("inactive",):
+            return OrderStatus.REJECTED
+        else:
+            # Default to submitted for unknown statuses
+            return OrderStatus.SUBMITTED

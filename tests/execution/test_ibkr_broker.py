@@ -1397,3 +1397,460 @@ class TestIBKRBrokerFillStreaming:
         event = published_events[0]
         assert event.fill_price == 0.0
         assert event.fill_quantity == 100
+
+
+# ---------------------------------------------------------------------------
+# Cancel Order Tests (Prompt 7)
+# ---------------------------------------------------------------------------
+
+
+class TestIBKRBrokerCancelOrder:
+    """Tests for IBKRBroker cancel_order method."""
+
+    @pytest.mark.asyncio
+    async def test_cancel_existing_order_succeeds(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """Cancel an existing order returns True and calls cancelOrder."""
+        with patch("argus.execution.ibkr_broker.IB", return_value=mock_ib):
+            broker = IBKRBroker(ibkr_config, event_bus)
+            await broker.connect()
+
+            # Place an order to get it registered
+            order = _create_order()
+            result = await broker.place_order(order)
+            ulid = result.order_id
+            ibkr_id = int(result.broker_order_id)
+
+            # Create a mock trade for the find method
+            mock_trade = _mock_trade(order_id=ibkr_id)
+            mock_ib.trades.return_value = [mock_trade]
+
+            # Cancel the order
+            cancelled = await broker.cancel_order(ulid)
+
+            assert cancelled is True
+            mock_ib.cancelOrder.assert_called_once_with(mock_trade.order)
+
+    @pytest.mark.asyncio
+    async def test_cancel_unknown_order_returns_false(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """Cancel an unknown order returns False without calling IBKR."""
+        with patch("argus.execution.ibkr_broker.IB", return_value=mock_ib):
+            broker = IBKRBroker(ibkr_config, event_bus)
+            await broker.connect()
+
+            # Try to cancel an order that was never placed
+            cancelled = await broker.cancel_order("unknown_ulid_12345")
+
+            assert cancelled is False
+            mock_ib.cancelOrder.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_cancel_not_found_trade_returns_false(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """Cancel returns False when order ID is known but trade not in cache."""
+        with patch("argus.execution.ibkr_broker.IB", return_value=mock_ib):
+            broker = IBKRBroker(ibkr_config, event_bus)
+            await broker.connect()
+
+            # Place an order
+            order = _create_order()
+            result = await broker.place_order(order)
+            ulid = result.order_id
+
+            # Simulate trade not being in the cache
+            mock_ib.trades.return_value = []
+
+            # Cancel should fail
+            cancelled = await broker.cancel_order(ulid)
+
+            assert cancelled is False
+            mock_ib.cancelOrder.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Modify Order Tests (Prompt 7)
+# ---------------------------------------------------------------------------
+
+
+class TestIBKRBrokerModifyOrder:
+    """Tests for IBKRBroker modify_order method."""
+
+    @pytest.mark.asyncio
+    async def test_modify_stop_price_uses_aux_price(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """Modifying a stop order price sets auxPrice."""
+        with patch("argus.execution.ibkr_broker.IB", return_value=mock_ib):
+            broker = IBKRBroker(ibkr_config, event_bus)
+            await broker.connect()
+
+            # Place an order
+            order = _create_order(order_type="stop", stop_price=145.00)
+            result = await broker.place_order(order)
+            ulid = result.order_id
+            ibkr_id = int(result.broker_order_id)
+
+            # Create a mock trade with STP order type
+            mock_trade = _mock_trade(order_id=ibkr_id, order_type="STP")
+            mock_ib.trades.return_value = [mock_trade]
+
+            # Modify the stop price
+            mod_result = await broker.modify_order(ulid, {"price": 143.00})
+
+            assert mod_result.status == "submitted"
+            assert mock_trade.order.auxPrice == 143.00
+            # placeOrder should be called to submit the modification
+            assert mock_ib.placeOrder.call_count >= 2  # Original + modification
+
+    @pytest.mark.asyncio
+    async def test_modify_limit_price_uses_lmt_price(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """Modifying a limit order price sets lmtPrice."""
+        with patch("argus.execution.ibkr_broker.IB", return_value=mock_ib):
+            broker = IBKRBroker(ibkr_config, event_bus)
+            await broker.connect()
+
+            # Place an order
+            order = _create_order(order_type="limit", limit_price=150.00)
+            result = await broker.place_order(order)
+            ulid = result.order_id
+            ibkr_id = int(result.broker_order_id)
+
+            # Create a mock trade with LMT order type
+            mock_trade = _mock_trade(order_id=ibkr_id, order_type="LMT")
+            mock_ib.trades.return_value = [mock_trade]
+
+            # Modify the limit price
+            mod_result = await broker.modify_order(ulid, {"price": 152.00})
+
+            assert mod_result.status == "submitted"
+            assert mock_trade.order.lmtPrice == 152.00
+
+    @pytest.mark.asyncio
+    async def test_modify_quantity(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """Modifying order quantity sets totalQuantity."""
+        with patch("argus.execution.ibkr_broker.IB", return_value=mock_ib):
+            broker = IBKRBroker(ibkr_config, event_bus)
+            await broker.connect()
+
+            # Place an order
+            order = _create_order(quantity=100)
+            result = await broker.place_order(order)
+            ulid = result.order_id
+            ibkr_id = int(result.broker_order_id)
+
+            # Create a mock trade
+            mock_trade = _mock_trade(order_id=ibkr_id, total_qty=100)
+            mock_ib.trades.return_value = [mock_trade]
+
+            # Modify the quantity
+            mod_result = await broker.modify_order(ulid, {"quantity": 50})
+
+            assert mod_result.status == "submitted"
+            assert mock_trade.order.totalQuantity == 50
+
+
+# ---------------------------------------------------------------------------
+# Account Query Tests (Prompt 7)
+# ---------------------------------------------------------------------------
+
+
+class TestIBKRBrokerPositions:
+    """Tests for IBKRBroker get_positions method."""
+
+    @pytest.mark.asyncio
+    async def test_positions_with_holdings(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """get_positions returns Position objects for all holdings."""
+        mock_positions = [
+            _mock_position("AAPL", 100, 150.0),
+            _mock_position("NVDA", 50, 800.0),
+        ]
+        mock_ib.positions.return_value = mock_positions
+
+        with patch("argus.execution.ibkr_broker.IB", return_value=mock_ib):
+            broker = IBKRBroker(ibkr_config, event_bus)
+            await broker.connect()
+
+            positions = await broker.get_positions()
+
+            assert len(positions) == 2
+            assert positions[0].symbol == "AAPL"
+            assert positions[0].shares == 100
+            assert positions[0].entry_price == 150.0
+            assert positions[1].symbol == "NVDA"
+            assert positions[1].shares == 50
+
+    @pytest.mark.asyncio
+    async def test_positions_empty(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """get_positions returns empty list when no positions."""
+        mock_ib.positions.return_value = []
+
+        with patch("argus.execution.ibkr_broker.IB", return_value=mock_ib):
+            broker = IBKRBroker(ibkr_config, event_bus)
+            await broker.connect()
+
+            positions = await broker.get_positions()
+
+            assert len(positions) == 0
+
+    @pytest.mark.asyncio
+    async def test_positions_filters_zero_quantity(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """get_positions filters out zero-quantity (closed) positions."""
+        mock_positions = [
+            _mock_position("AAPL", 100, 150.0),
+            _mock_position("CLOSED", 0, 100.0),  # Zero qty should be filtered
+            _mock_position("NVDA", 50, 800.0),
+        ]
+        mock_ib.positions.return_value = mock_positions
+
+        with patch("argus.execution.ibkr_broker.IB", return_value=mock_ib):
+            broker = IBKRBroker(ibkr_config, event_bus)
+            await broker.connect()
+
+            positions = await broker.get_positions()
+
+            assert len(positions) == 2
+            symbols = [p.symbol for p in positions]
+            assert "CLOSED" not in symbols
+
+
+class TestIBKRBrokerAccount:
+    """Tests for IBKRBroker get_account method."""
+
+    @pytest.mark.asyncio
+    async def test_account_info_all_fields(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """get_account returns AccountInfo with all expected fields."""
+        mock_ib.accountValues.return_value = [
+            _mock_account_value("NetLiquidation", "100000.0", "USD", "U24619949"),
+            _mock_account_value("TotalCashValue", "50000.0", "USD", "U24619949"),
+            _mock_account_value("BuyingPower", "200000.0", "USD", "U24619949"),
+        ]
+
+        with patch("argus.execution.ibkr_broker.IB", return_value=mock_ib):
+            broker = IBKRBroker(ibkr_config, event_bus)
+            await broker.connect()
+
+            account = await broker.get_account()
+
+            assert account.equity == 100000.0
+            assert account.cash == 50000.0
+            assert account.buying_power == 200000.0
+            assert account.positions_value == 50000.0  # equity - cash
+
+    @pytest.mark.asyncio
+    async def test_account_buying_power_present(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """get_account extracts BuyingPower correctly."""
+        mock_ib.accountValues.return_value = [
+            _mock_account_value("NetLiquidation", "75000.0", "USD", "U24619949"),
+            _mock_account_value("TotalCashValue", "25000.0", "USD", "U24619949"),
+            _mock_account_value("BuyingPower", "150000.0", "USD", "U24619949"),
+        ]
+
+        with patch("argus.execution.ibkr_broker.IB", return_value=mock_ib):
+            broker = IBKRBroker(ibkr_config, event_bus)
+            await broker.connect()
+
+            account = await broker.get_account()
+
+            assert account.buying_power == 150000.0
+
+    @pytest.mark.asyncio
+    async def test_account_filters_non_usd_values(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """get_account filters out non-USD account values."""
+        mock_ib.accountValues.return_value = [
+            _mock_account_value("NetLiquidation", "100000.0", "USD", "U24619949"),
+            _mock_account_value("NetLiquidation", "85000.0", "EUR", "U24619949"),  # Ignored
+            _mock_account_value("TotalCashValue", "50000.0", "USD", "U24619949"),
+            _mock_account_value("BuyingPower", "200000.0", "USD", "U24619949"),
+            _mock_account_value("BuyingPower", "170000.0", "EUR", "U24619949"),  # Ignored
+        ]
+
+        with patch("argus.execution.ibkr_broker.IB", return_value=mock_ib):
+            broker = IBKRBroker(ibkr_config, event_bus)
+            await broker.connect()
+
+            account = await broker.get_account()
+
+            # Should use the USD values, not EUR
+            assert account.equity == 100000.0
+            assert account.buying_power == 200000.0
+
+
+# ---------------------------------------------------------------------------
+# Flatten Tests (Prompt 7)
+# ---------------------------------------------------------------------------
+
+
+class TestIBKRBrokerFlatten:
+    """Tests for IBKRBroker flatten_all method."""
+
+    @pytest.mark.asyncio
+    async def test_flatten_with_long_positions(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """flatten_all closes long positions with SELL orders."""
+        mock_positions = [
+            _mock_position("AAPL", 100, 150.0),
+        ]
+        mock_ib.positions.return_value = mock_positions
+
+        with patch("argus.execution.ibkr_broker.IB", return_value=mock_ib):
+            broker = IBKRBroker(ibkr_config, event_bus)
+            await broker.connect()
+
+            results = await broker.flatten_all()
+
+            assert len(results) == 1
+            assert results[0].status == "submitted"
+            assert "SELL" in results[0].message
+            assert "100" in results[0].message
+            assert "AAPL" in results[0].message
+            mock_ib.reqGlobalCancel.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_flatten_with_short_positions(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """flatten_all closes short positions with BUY orders."""
+        mock_positions = [
+            _mock_position("TSLA", -50, 200.0),  # Short position
+        ]
+        mock_ib.positions.return_value = mock_positions
+
+        with patch("argus.execution.ibkr_broker.IB", return_value=mock_ib):
+            broker = IBKRBroker(ibkr_config, event_bus)
+            await broker.connect()
+
+            results = await broker.flatten_all()
+
+            assert len(results) == 1
+            assert results[0].status == "submitted"
+            assert "BUY" in results[0].message
+            assert "50" in results[0].message
+            assert "TSLA" in results[0].message
+
+    @pytest.mark.asyncio
+    async def test_flatten_empty_portfolio(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """flatten_all with no positions returns empty list."""
+        mock_ib.positions.return_value = []
+
+        with patch("argus.execution.ibkr_broker.IB", return_value=mock_ib):
+            broker = IBKRBroker(ibkr_config, event_bus)
+            await broker.connect()
+
+            results = await broker.flatten_all()
+
+            assert len(results) == 0
+            # Should still cancel pending orders
+            mock_ib.reqGlobalCancel.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_flatten_cancels_pending_orders_first(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """flatten_all calls reqGlobalCancel before closing positions."""
+        mock_positions = [
+            _mock_position("AAPL", 100, 150.0),
+        ]
+        mock_ib.positions.return_value = mock_positions
+
+        # Track call order
+        call_order: list[str] = []
+        original_cancel = mock_ib.reqGlobalCancel
+        original_place = mock_ib.placeOrder
+
+        def track_cancel() -> None:
+            call_order.append("reqGlobalCancel")
+            return original_cancel()
+
+        def track_place(*args, **kwargs):
+            call_order.append("placeOrder")
+            return original_place(*args, **kwargs)
+
+        mock_ib.reqGlobalCancel = MagicMock(side_effect=track_cancel)
+        mock_ib.placeOrder = MagicMock(side_effect=track_place)
+
+        with patch("argus.execution.ibkr_broker.IB", return_value=mock_ib):
+            broker = IBKRBroker(ibkr_config, event_bus)
+            await broker.connect()
+
+            await broker.flatten_all()
+
+            # reqGlobalCancel should be called before placeOrder
+            assert "reqGlobalCancel" in call_order
+            assert "placeOrder" in call_order
+            req_global_idx = call_order.index("reqGlobalCancel")
+            place_idx = call_order.index("placeOrder")
+            assert req_global_idx < place_idx
+
+
+# ---------------------------------------------------------------------------
+# Helper Method Tests (Prompt 7)
+# ---------------------------------------------------------------------------
+
+
+class TestIBKRBrokerHelpers:
+    """Tests for IBKRBroker helper methods."""
+
+    def test_is_numeric_true_for_valid_numbers(self) -> None:
+        """_is_numeric returns True for valid numeric strings."""
+        assert IBKRBroker._is_numeric("100.0") is True
+        assert IBKRBroker._is_numeric("0") is True
+        assert IBKRBroker._is_numeric("-50.5") is True
+        assert IBKRBroker._is_numeric("1e6") is True
+
+    def test_is_numeric_false_for_non_numbers(self) -> None:
+        """_is_numeric returns False for non-numeric strings."""
+        assert IBKRBroker._is_numeric("not_a_number") is False
+        assert IBKRBroker._is_numeric("") is False
+        assert IBKRBroker._is_numeric("N/A") is False
+
+    @pytest.mark.asyncio
+    async def test_find_trade_by_order_id_found(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """_find_trade_by_order_id returns trade when found."""
+        mock_trade = _mock_trade(order_id=12345)
+        mock_ib.trades.return_value = [mock_trade]
+
+        with patch("argus.execution.ibkr_broker.IB", return_value=mock_ib):
+            broker = IBKRBroker(ibkr_config, event_bus)
+
+            found = broker._find_trade_by_order_id(12345)
+
+            assert found is mock_trade
+
+    @pytest.mark.asyncio
+    async def test_find_trade_by_order_id_not_found(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """_find_trade_by_order_id returns None when not found."""
+        mock_ib.trades.return_value = []
+
+        with patch("argus.execution.ibkr_broker.IB", return_value=mock_ib):
+            broker = IBKRBroker(ibkr_config, event_bus)
+
+            found = broker._find_trade_by_order_id(99999)
+
+            assert found is None
