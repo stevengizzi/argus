@@ -1125,5 +1125,60 @@ Each entry follows this format:
 
 ---
 
+### DEC-099 | API Server Lifecycle — In-Process Phase 11
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-22 |
+| **Decision** | FastAPI API server runs in the same process as the trading engine, as Phase 11 of the 10-phase startup sequence. Uses `uvicorn.Server` programmatic API within the existing asyncio event loop. Also runnable standalone (`python -m argus.api.server --dev`) with mock data for frontend development. |
+| **Alternatives Considered** | Separate process with shared SQLite (rejected — adds IPC complexity, requires message queue bridge for WebSocket events, no benefit at single-user scale). |
+| **Rationale** | Same-process means direct Python references to EventBus, TradeLogger, Broker, HealthMonitor, etc. No serialization overhead. Dramatically simpler for a single-user system. Standalone `--dev` mode enables frontend development without running the full trading engine. |
+| **Status** | Active |
+
+---
+
+### DEC-100 | API Dependency Injection — AppState + FastAPI Depends()
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-22 |
+| **Decision** | A singleton `AppState` dataclass holds references to all trading engine components. Initialized during startup, injected into route handlers via FastAPI's `Depends()` mechanism. |
+| **Alternatives Considered** | Global module-level variables (rejected — harder to test, implicit coupling). Flask-style app.config (rejected — not idiomatic FastAPI). |
+| **Rationale** | Clean boundary between API layer and trading engine. Easy to test — inject mock `AppState` in test fixtures. No global state pollution. Idiomatic FastAPI pattern. |
+| **Status** | Active |
+
+---
+
+### DEC-101 | WebSocket Event Filtering — Curated List with Tick Throttling
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-22 |
+| **Decision** | WebSocket bridge forwards a curated list of Event Bus events (position, order, system, scanner, strategy events). TickEvents are throttled to max 1/sec/symbol and only forwarded for symbols with open positions. Clients can filter by event type via subscription messages. |
+| **Alternatives Considered** | Forward all events (rejected — TickEvents for all symbols would be thousands/second, unusable). Client-only filtering (rejected — wastes bandwidth sending events the client will discard). |
+| **Rationale** | Frontend needs position-relevant price updates and system events, not raw market data. Throttle-from-day-one prevents architectural debt when Databento's full-universe feed arrives. |
+| **Status** | Active |
+
+---
+
+### DEC-102 | Authentication — Single-User JWT with bcrypt
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-22 |
+| **Decision** | Single-user JWT authentication. Password hash (bcrypt) stored in `config/system.yaml`. CLI tool (`python -m argus.api.setup_password`) generates hash. JWT with configurable expiry (default 24h). No user table, no registration, no 2FA in V1. |
+| **Alternatives Considered** | Full user management (rejected — over-engineered for single-operator system). API key only (rejected — less secure than JWT for browser-based access). 2FA now (rejected — premature for paper trading phase, appropriate before live capital). |
+| **Rationale** | Adequate security for development and paper trading. JWT + HTTPS (production) handles connection interception risk. 2FA deferred to pre-live-trading hardening. |
+| **Status** | Active |
+
+---
+
+### DEC-103 | Monorepo Structure — argus/api/ + argus/ui/
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-22 |
+| **Decision** | React frontend lives in `argus/ui/` within the same repository. FastAPI serves the built React app (`argus/ui/dist/`) as static files in production. Development uses Vite dev server (port 5173) with proxy to FastAPI (port 8000). |
+| **Alternatives Considered** | Separate repository for frontend (rejected — adds synchronization overhead for a single-developer project). |
+| **Rationale** | Single repo keeps everything together. Vite proxy provides seamless development experience. Production serving via FastAPI StaticFiles avoids needing a separate web server. |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
 *New decisions are appended chronologically as the project progresses.*
