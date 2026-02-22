@@ -133,26 +133,35 @@ export function TradeFilters({ onFiltersChange }: TradeFiltersProps) {
           </div>
         </div>
 
-        {/* Date range - grid ensures 50/50 split on mobile */}
-        <div className="grid grid-cols-2 gap-2 md:flex md:gap-2 md:flex-1 md:min-w-0">
-          <div className="min-w-0">
+        {/* Date range - w-full constrains to parent, overflow-hidden + w-0 forces shrink */}
+        <div className="flex gap-2 w-full overflow-hidden md:flex-1">
+          <div className="w-0 grow overflow-hidden">
             <label className="block text-xs text-argus-text-dim uppercase tracking-wide mb-1">
               From
             </label>
             <input
               type="date"
               value={date_from || ''}
-              onChange={(e) => updateFilters({ date_from: e.target.value || undefined })}
+              onChange={(e) => {
+                const newFrom = e.target.value || undefined;
+                // Clear "To" if new "From" is after current "To"
+                if (newFrom && date_to && newFrom > date_to) {
+                  updateFilters({ date_from: newFrom, date_to: undefined });
+                } else {
+                  updateFilters({ date_from: newFrom });
+                }
+              }}
               className="w-full bg-argus-surface-2 border border-argus-border rounded-md px-2 py-2 text-sm text-argus-text focus:outline-none focus:ring-1 focus:ring-argus-accent"
             />
           </div>
-          <div className="min-w-0">
+          <div className="w-0 grow overflow-hidden">
             <label className="block text-xs text-argus-text-dim uppercase tracking-wide mb-1">
               To
             </label>
             <input
               type="date"
               value={date_to || ''}
+              min={date_from || ''}
               onChange={(e) => updateFilters({ date_to: e.target.value || undefined })}
               className="w-full bg-argus-surface-2 border border-argus-border rounded-md px-2 py-2 text-sm text-argus-text focus:outline-none focus:ring-1 focus:ring-argus-accent"
             />
