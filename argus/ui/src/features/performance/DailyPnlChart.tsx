@@ -49,6 +49,8 @@ export function DailyPnlChart({ dailyPnl, className = '' }: DailyPnlChartProps) 
 
     // Add histogram series (v5 API)
     const series = chart.addSeries(HistogramSeries, {
+      lastValueVisible: false, // No last value label for histogram
+      priceLineVisible: false, // No price line for histogram
       priceFormat: {
         type: 'custom',
         formatter: (price: number) => {

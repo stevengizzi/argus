@@ -57,6 +57,8 @@ export function EquityCurve({ dailyPnl, className = '' }: EquityCurveProps) {
       topColor: `${chartColors.primary}40`,
       bottomColor: `${chartColors.primary}05`,
       lineWidth: 2,
+      lastValueVisible: true,
+      priceLineVisible: false, // Remove redundant dashed line, value shown on axis
       priceFormat: {
         type: 'custom',
         formatter: (price: number) =>
