@@ -11,7 +11,7 @@ Phase 1 sprint plan: @docs/07_PHASE1_SPRINT_PLAN.md
 ## Current State
 
 **Structure:** Two parallel tracks (DEC-079, February 19, 2026).
-- **Build Track:** System construction at development velocity. Sprints 1–13 complete (811 tests). Sprint 13.5 (DEF-016 evaluation) is NEXT, then Sprint 14 (Command Center API).
+- **Build Track:** System construction at development velocity. Sprints 1–13.5 complete (811 tests). Sprint 14 (Command Center API) is NEXT.
 - **Validation Track:** Paper trading ACTIVE on Alpaca IEX (system stability only — DEC-081). Signal accuracy validation pending Databento subscription activation (DEC-087). Migrates to IBKR paper after IBKR account approved (U24619949, submitted Feb 21).
 
 Active sprint plan: `docs/10_PHASE3_SPRINT_PLAN.md` (covers both tracks).
@@ -37,7 +37,7 @@ Active sprint plan: `docs/10_PHASE3_SPRINT_PLAN.md` (covers both tracks).
 
 **Validation Track sequence:** Databento subscription activation (DEC-087) → IBKR account approval → IBKR paper trading (2+ weeks) → CPA consultation → live trading at minimum size on IBKR.
 
-**Build Track queue:** DEF-016 evaluation (Sprint 13.5) → Command Center MVP (Sprints 14–16) → Orchestrator (17) → ORB Scalp (18) → Tier 1 News (19) → AI Layer MVP (20) → Expansion (21+)
+**Build Track queue:** Command Center MVP (Sprints 14–16) → Orchestrator + DEF-016 re-eval (17) → ORB Scalp (18) → Tier 1 News (19) → AI Layer MVP (20) → Expansion (21+)
 
 **Command Center delivery (DEC-080):** Three surfaces from single React codebase — web app + Tauri desktop + PWA mobile. All operational after Sprint 16.
 
@@ -230,7 +230,7 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 | ~~DEF-013~~ | ~~Extract shared IndicatorEngine from DataService implementations~~ | ~~Sprint 12.5~~ | **DONE** — `IndicatorEngine` class created in `argus/data/indicator_engine.py`. All four DataService implementations (AlpacaDataService, DatabentoDataService, ReplayDataService, BacktestDataService) now delegate to IndicatorEngine. 27 new tests, 685 total tests passing. DEC-092. |
 | DEF-014 | SystemAlertEvent for dead data feed | Command Center MVP (Sprint 14–16) OR Health Monitor alerting built | `DatabentoDataService._run_with_reconnection()` logs `critical` when max retries exceeded but emits no Event Bus event. Add `SystemAlertEvent` (or similar) so Health Monitor and Command Center can react (red banner, push notification). Location: `argus/data/databento_data_service.py`. |
 | DEF-015 | DatabentoScanner full-universe scanning | Databento subscription active (DEC-087) AND paper trading validates need for broader symbol coverage | V1 DatabentoScanner uses configured watchlist. Full-universe scanning (~8K US equities) requires cost/latency analysis with live Databento subscription. Location: `argus/data/databento_scanner.py`, `scan()` and `scan_with_gap_data()`. |
-| DEF-016 | Order Manager `place_bracket_order()` integration | Evaluate between Sprint 13 and 14. Triggers: limit entry strategies, IBKR paper trading timing issues, or Orchestrator refactor (Sprint 17) | Order Manager submits T2 as individual `place_order()` post-fill. `IBKRBroker.place_bracket_order()` exists but is unused by Order Manager. Explicit T2 cancellation in all exit paths compensates functionally. Atomic bracket submission deferred — large scope, low risk for market-order ORB. |
+| DEF-016 | Order Manager `place_bracket_order()` integration | Sprint 17 (Orchestrator refactor) OR limit entry strategies enter pipeline OR IBKR paper trading reveals timing issues | Evaluated Sprint 13.5, deferred (DEC-095). Scope: SimulatedBroker sync fill conflict, AlpacaBroker single-target, full OM test rewrite (~1.5–2 days). Near-zero risk for market-order strategies. Re-evaluate in Sprint 17 when Orchestrator restructures signal flow, or when limit entry strategies arrive. |
 
 This keeps it lightweight — no new document, no new sync burden. Items get removed (or moved to "Completed") as they're addressed. Both Claudes see the trigger column and know when to raise the flag.
 

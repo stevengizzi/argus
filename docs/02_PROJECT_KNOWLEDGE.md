@@ -12,7 +12,7 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 
 **Structure:** Two parallel tracks (DEC-079, February 19, 2026). Build Track (system construction) + Validation Track (strategy confidence-building).
 
-**Build Track:** 811 tests. Sprints 1–13 complete. Sprint 13.5 (DEF-016 evaluation — Order Manager bracket refactor) is NEXT, then Sprint 14 (Command Center API).
+**Build Track:** 811 tests. Sprints 1–13.5 complete. Sprint 13.5 (DEF-016 evaluation) deferred atomic bracket refactor to Sprint 17+ (DEC-095). Sprint 14 (Command Center API) is NEXT.
 - Phase 1 (Core Engine): ✅ COMPLETE — 362 tests, Feb 14–16
 - Phase 2 (Backtesting): ✅ COMPLETE — 542 tests, Feb 16–17
 - Sprint 11 (Extended Backtest): ✅ COMPLETE — 35 months, 15 WF windows, WFE=0.56
@@ -29,7 +29,7 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 
 **IBKR Account (Feb 21):** Application submitted. Account ID U24619949. Individual margin account, IBKR Pro tiered pricing. Awaiting approval — paper trading account will be enabled post-approval for Sprint 13 adapter development.
 
-**Next Build sprints:** Sprint 13.5 (DEF-016 evaluation) → Sprint 14–16 (Command Center MVP).
+**Next Build sprints:** Sprint 14–16 (Command Center MVP) → Sprint 17 (Orchestrator + DEF-016 re-eval).
 **Next Validation gate:** DatabentoDataService ready → resume paper trading with quality data → IBKRBroker ready → IBKR paper trading validation → CPA consultation → live trading at minimum size on IBKR.
 
 **✅ IBKR APPLICATION SUBMITTED:** Feb 21, 2026. Account ID: U24619949. Individual margin account, IBKR Pro (tiered pricing), Georgia address. Trading permissions requested: Stocks, Options (Level 3), Futures, Currency/Forex, Cryptocurrencies, Mutual Funds. Awaiting approval (typically 1–3 business days, may take longer). Disclosures and agreements archived locally.
@@ -120,6 +120,7 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 - **IndicatorEngine extraction (DEC-092):** `IndicatorEngine` class in `argus/data/indicator_engine.py`. All four DataService implementations delegate indicator computation (VWAP, ATR-14, SMA-9/20/50, RVOL) to this shared engine. Resolves DEF-013. 27 new tests, 685 total.
 - **Native IBKR bracket orders (DEC-093):** IBKRBroker `place_bracket_order()` supports multi-target brackets (T1+T2) via `parentId` linkage and `transmit` flag. Order Manager T2 support: `t2_order_id` field, broker-side T2 limit orders, `_handle_t2_fill()`, tick-skip when broker-side T2 exists, T2 cancellation in all exit paths. Backward compatible — Alpaca path (t2_order_id=None) tick-monitors T2 unchanged. Current implementation uses individual `place_order()` calls post-fill rather than atomic bracket submission (DEF-016).
 - **BrokerSource enum and IBKRConfig (DEC-094):** `BrokerSource` enum (`alpaca`/`ibkr`/`simulated`) in `SystemConfig`. `IBKRConfig` Pydantic model for IB Gateway connection parameters. `main.py` Phase 3 branches on `broker_source`. Mirrors `DataSource` enum pattern (DEC-090).
+- **DEF-016 evaluation — defer (DEC-095):** Atomic bracket refactor deferred to Sprint 17+ or limit entry strategies. Scope balloons (SimulatedBroker, AlpacaBroker, test rewrite). Near-zero risk for market-order strategies. Evaluated Sprint 13.5.
 
 ## Architecture Summary
 
@@ -221,7 +222,7 @@ Effective February 19, 2026, ARGUS uses two parallel tracks instead of sequentia
 ### Build Track (velocity-limited, continuous)
 Sprints 12+. System construction proceeds at development speed. Each sprint targets a specific component. Order is prioritized but flexible — Validation Track needs can reprioritize.
 
-**Queue:** IBKRBroker adapter (Sprint 13) → Command Center MVP (Sprints 14–16) → Orchestrator (Sprint 17) → ORB Scalp (Sprint 18) → Tier 1 News (Sprint 19) → AI Layer MVP (Sprint 20) → Command Center expansion (Sprint 21) → Additional strategies + features (Sprint 22+)
+**Queue:** Command Center MVP (Sprints 14–16) → Orchestrator + DEF-016 re-eval (Sprint 17) → ORB Scalp (Sprint 18) → Tier 1 News (Sprint 19) → AI Layer MVP (Sprint 20) → Command Center expansion (Sprint 21) → Additional strategies + features (Sprint 22+)
 
 **Command Center delivery (DEC-080):** Single React codebase ships to three surfaces: web app (any browser), Tauri desktop app (system tray, native notifications), and PWA mobile app (iPhone/iPad home screen install). All three operational after Sprint 16.
 
@@ -251,6 +252,23 @@ Paper trading → live minimum size → live full size. Gates based on accumulat
    - Paper Trading (parallel track): Argus on Alpaca paper with DEC-076 parameters. Flexible duration, kill criteria as guardrails. See `08_PAPER_TRADING_GUIDE.md`
    - Exit gate: Walk-forward WFE ≥ 0.3 on extended data + user satisfied with paper trading + CPA consultation
    - See `10_PHASE3_SPRINT_PLAN.md` for tracking
+4. **DatabentoDataService Adapter** ✅ (Sprint 12, 658 tests, Feb 21)
+   - DatabentoConfig, DatabentoSymbolMap, DatabentoDataService (live streaming + reconnection + stale monitor)
+   - DataFetcher Databento backend (historical data + Parquet cache + manifest tracking)
+   - DatabentoScanner (V1 watchlist-based gap scanning)
+   - System integration: DataSource enum, provider selection in main.py
+   - Shared `databento_utils.py` (DEC-091). Deferred: DEF-014, DEF-015.
+5. **IndicatorEngine Extraction** ✅ (Sprint 12.5, 685 tests, Feb 21)
+   - IndicatorEngine class shared by all four DataService implementations (DEC-092, DEF-013 resolved)
+   - Pure refactor — zero behavioral changes
+6. **IBKRBroker Adapter** ✅ (Sprint 13, 811 tests, Feb 22)
+   - IBKRBroker full Broker abstraction via `ib_async` (DEC-083, DEC-093, DEC-094)
+   - Native bracket orders with T1/T2 support, fill streaming, reconnection, state reconstruction
+   - Order Manager T2 broker-side limit orders, config-driven broker selection (BrokerSource enum)
+   - System integration: main.py broker branching. Deferred: DEF-016.
+7. **DEF-016 Evaluation** ✅ (Sprint 13.5, Feb 22)
+   - Atomic bracket refactor evaluated and deferred to Sprint 17+ (DEC-095)
+   - Scope exceeds threshold: SimulatedBroker sync fills, AlpacaBroker single-target, full test rewrite
 
 See `10_PHASE3_SPRINT_PLAN.md` for current sprint plan and queue.
 

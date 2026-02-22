@@ -105,6 +105,7 @@ inform Build Track priorities.
 | 12 | Infrastructure | DatabentoDataService adapter (streaming, reconnection, historical, scanner, system integration) | 658 | Feb 21 |
 | 12.5 | Refactor | IndicatorEngine extraction (DEF-013, DEC-092) | 685 | Feb 21 |
 | 13 | Infrastructure | IBKRBroker adapter (connection, orders, brackets, fills, reconnection, reconstruction, Order Manager T2, system integration) | 811 | Feb 22 |
+| 13.5 | Evaluation | DEF-016 bracket refactor evaluation → DEFERRED (DEC-095) | 811 | Feb 22 |
 
 ### Build Track Queue
 
@@ -153,15 +154,10 @@ per sprint velocity.
 - 811 tests (126 new), ruff fully clean
 **Deferred:** DEF-016 (Order Manager `place_bracket_order()` integration — atomic bracket submission). SystemAlertEvent on max reconnect retries (DEF-014 amended).
 
-#### Sprint 13.5 — Order Manager Bracket Refactor (DEF-016 Evaluation)
-**Target:** ~0.5–1 day (evaluate scope, implement if warranted)
-**Scope:**
-- Evaluate DEF-016: refactor Order Manager to call `broker.place_bracket_order()` atomically from `on_approved()` instead of individual `place_order()` calls post-fill
-- Decision gate: If refactor scope is manageable (Order Manager changes + test updates + SimulatedBroker compatibility), implement. If scope is large relative to benefit for market-order ORB strategy, defer to Orchestrator refactor (Sprint 17).
-- Key considerations: pre-fill stop protection (millisecond gap for market orders), `parentId` cascade cancellation vs explicit cancellation, partial fill handling, SimulatedBroker synchronous fill path
-- If implemented: update Order Manager, all affected tests, integration tests. Verify 811+ tests still pass.
-- If deferred: document rationale, update DEF-016 trigger to Sprint 17.
-**Unblocks:** Clean bracket architecture before Command Center and additional strategies add complexity.
+#### Sprint 13.5 — DEF-016 Evaluation ✅ COMPLETE (Feb 22)
+**Outcome:** DEFER. Atomic bracket refactor deferred to Sprint 17+ (DEC-095).
+**Rationale:** Scope exceeds threshold — SimulatedBroker sync fill conflict, AlpacaBroker single-target limitation, full Order Manager test rewrite required (~1.5–2 days). Near-zero practical benefit for market-order ORB on IBKR. No trigger conditions met.
+**Next:** Sprint 14 (Command Center API).
 
 #### Sprint 14 — Command Center: API Layer + Project Scaffolding
 **Target:** ~1 day
@@ -220,6 +216,7 @@ per sprint velocity.
 - Strategy activation/deactivation based on regime
 - AllocationUpdateEvent, StrategyActivatedEvent, StrategySuspendedEvent on Event Bus
 - Comprehensive test suite
+- DEF-016 re-evaluation: atomic bracket submission via `broker.place_bracket_order()` in Order Manager. Deferred from Sprint 13.5 (DEC-095). Natural fit — Orchestrator will restructure signal→Order Manager flow. Evaluate alongside limit entry strategy support.
 
 #### Sprint 18 — ORB Scalp Strategy
 **Target:** ~1-2 days

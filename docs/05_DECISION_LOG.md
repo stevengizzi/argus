@@ -1079,5 +1079,16 @@ Each entry follows this format:
 
 ---
 
+### DEC-095 | DEF-016 Evaluation — Atomic Bracket Refactor Deferred
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-22 |
+| **Decision** | Defer Order Manager atomic bracket refactor (DEF-016) to Sprint 17+ (Orchestrator) or when limit entry strategies are implemented. Current post-fill individual `place_order()` submission is functionally correct and sufficient for market-order strategies. |
+| **Rationale** | (1) No trigger conditions met — no limit entries, no IBKR timing issues observed, no Orchestrator refactor yet. (2) Scope balloons: SimulatedBroker's synchronous fill model conflicts with pre-fill bracket submission, AlpacaBroker only supports single-target brackets, and nearly all Order Manager tests assume post-fill submission. Estimated 1.5–2 days — disproportionate to benefit. (3) Market orders fill in milliseconds on IBKR, making the unhedged gap between entry fill and exit leg submission negligible. (4) Explicit T2 cancellation in all exit paths provides functional correctness. (5) Command Center (Sprint 14) is higher priority for daily operations. |
+| **Alternatives Rejected** | Implement now — scope exceeds 0.5-day threshold from evaluation criteria. SimulatedBroker compatibility alone is a multi-hour change. |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
 *New decisions are appended chronologically as the project progresses.*
