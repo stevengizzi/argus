@@ -11,8 +11,8 @@ Phase 1 sprint plan: @docs/07_PHASE1_SPRINT_PLAN.md
 ## Current State
 
 **Structure:** Two parallel tracks (DEC-079, February 19, 2026).
-- **Build Track:** System construction at development velocity. Sprints 1–12.5 complete (685 tests). Sprint 13 (IBKRBroker adapter) is NEXT.
-- **Validation Track:** Paper trading ACTIVE on Alpaca IEX (system stability only — DEC-081). Signal accuracy validation pending DatabentoDataService (Sprint 12). Migrates to IBKR paper after Sprint 13.
+- **Build Track:** System construction at development velocity. Sprints 1–13 complete (811 tests). Sprint 13.5 (DEF-016 evaluation) is NEXT, then Sprint 14 (Command Center API).
+- **Validation Track:** Paper trading ACTIVE on Alpaca IEX (system stability only — DEC-081). Signal accuracy validation pending Databento subscription activation (DEC-087). Migrates to IBKR paper after IBKR account approved (U24619949, submitted Feb 21).
 
 Active sprint plan: `docs/10_PHASE3_SPRINT_PLAN.md` (covers both tracks).
 
@@ -25,27 +25,26 @@ Active sprint plan: `docs/10_PHASE3_SPRINT_PLAN.md` (covers both tracks).
 
 - IBKR account application submitted Feb 21, 2026 (Account ID: U24619949). Individual, Margin, IBKR Pro (tiered), GA address. Permissions: Stocks, Options L3, Futures, Forex, Crypto. Awaiting approval.
 
+**Sprint 13 Results (IBKRBroker Adapter — Feb 22):**
+- IBKRBroker: full Broker abstraction via `ib_async` (connection, orders, native brackets, fills, reconnection, state reconstruction)
+- IBKRConfig + BrokerSource enum for config-driven broker selection (DEC-094)
+- Native bracket orders with T1/T2 support (DEC-093). Order Manager T2 broker-side limit orders.
+- System integration: `main.py` branches on `broker_source` for IBKR/Alpaca/Simulated
+- 811 tests (126 new), 10 prompts completed
+- DEF-016 logged: Order Manager uses individual `place_order()` calls rather than atomic `place_bracket_order()`. Functionally correct, architectural refinement deferred.
+
 **Recommended ORB parameters (DEC-076):** or=5, hold=15, gap=2.0, stop_buf=0.0, target_r=2.0, atr=999.0 (disabled).
 
-**Sprint 11 Results (Extended Walk-Forward):**
-- Historical data extended to 35 months (March 2023 – January 2026), 7M bars, 29 symbols
-- Walk-forward: 15 windows (optimizer + fixed-params modes)
-- Fixed-params (DEC-076): OOS Sharpe +0.34, P&L +$7,741, 378 trades — **positive aggregate returns**
-- Optimizer mode: OOS Sharpe -11.46 — **overfits, performs worse than fixed params**
-- **Decision:** Proceed with paper trading using DEC-076 parameters
+**Validation Track sequence:** Databento subscription activation (DEC-087) → IBKR account approval → IBKR paper trading (2+ weeks) → CPA consultation → live trading at minimum size on IBKR.
 
-**Config fix (DEC-078):** `earliest_entry` changed from 09:45 to 09:35 to match or=5 window.
-
-**Validation Track sequence:** DatabentoDataService (Sprint 12) → IBKRBroker (Sprint 13) → IBKR paper trading (2+ weeks) → CPA consultation → live trading at minimum size on IBKR.
-
-**Build Track queue:** IBKRBroker (Sprint 13) → Command Center MVP (Sprints 14–16) → Orchestrator (17) → ORB Scalp (18) → Tier 1 News (19) → AI Layer MVP (20) → Expansion (21+)
+**Build Track queue:** DEF-016 evaluation (Sprint 13.5) → Command Center MVP (Sprints 14–16) → Orchestrator (17) → ORB Scalp (18) → Tier 1 News (19) → AI Layer MVP (20) → Expansion (21+)
 
 **Command Center delivery (DEC-080):** Three surfaces from single React codebase — web app + Tauri desktop + PWA mobile. All operational after Sprint 16.
 
 Components implemented:
 - Event Bus, EventStore, core events
 - Clock protocol (SystemClock, FixedClock) — injectable time provider. DEF-001 resolved.
-- Broker abstraction (SimulatedBroker, AlpacaBroker)
+- Broker abstraction (SimulatedBroker, AlpacaBroker, IBKRBroker)
 - Risk Manager with three-tier evaluation (clock-injected), state reconstruction
 - BaseStrategy ABC (clock-injected), Scanner ABC, DataService ABC
 - ReplayDataService with indicator computation (VWAP, ATR, SMA, RVOL)
@@ -72,15 +71,19 @@ Components implemented:
 - DataStaleEvent, DataResumedEvent events
 - DatabentoDataService reconnection with exponential backoff, DataFetcher Databento backend (historical + manifest), DatabentoScanner (V1 watchlist), DataSource enum + system integration, shared databento_utils.py (DEC-090, DEC-091)
 - IndicatorEngine (Sprint 12.5, DEC-092) — shared indicator computation (VWAP, ATR-14, SMA-9/20/50, RVOL) used by all four DataService implementations. DEF-013 resolved.
+- IBKRBroker (Sprint 13, DEC-083/093/094) — full Broker abstraction via `ib_async`. Native bracket orders (parent + stop + T1 + T2 via `parentId`). Fill streaming via async event bridge. Reconnection with exponential backoff + position verification. State reconstruction from `orderRef` ULID recovery. Config-driven broker selection (`BrokerSource` enum).
+- IBKRContractResolver — stock contract creation with caching. IBKRErrorSeverity — error code classification and severity routing.
+- Order Manager T2 support (DEC-093) — `t2_order_id` on ManagedPosition, broker-side T2 limit orders, `_handle_t2_fill()`, tick-skip logic for IBKR path, T2 cancellation in all exit paths. Backward compatible with Alpaca tick-monitored T2.
+- Dependencies added: ib_async>=1.0.0
 
 ## Architecture
 
 Three tiers, built in parallel (DEC-079):
 1. Trading Engine (Python, asyncio) — strategies, orchestrator, risk manager, data service, broker abstraction ✅ Core complete
-2. Command Center (FastAPI + React → web + Tauri desktop + PWA mobile) — dashboards, controls, reports → Build Track Sprint 12+
+2. Command Center (FastAPI + React → web + Tauri desktop + PWA mobile) — dashboards, controls, reports → Build Track Sprint 14+
 3. AI Layer (Claude API) — advisory, approval workflow, reports → Build Track Sprint 18+
 
-Currently: Validation Track (paper trading) running in parallel with Build Track (Sprint 12 next).
+Currently: Validation Track (paper trading on Alpaca) running in parallel with Build Track (Sprint 13.5/14 next).
 
 ## Tech Stack
 
@@ -227,6 +230,7 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 | ~~DEF-013~~ | ~~Extract shared IndicatorEngine from DataService implementations~~ | ~~Sprint 12.5~~ | **DONE** — `IndicatorEngine` class created in `argus/data/indicator_engine.py`. All four DataService implementations (AlpacaDataService, DatabentoDataService, ReplayDataService, BacktestDataService) now delegate to IndicatorEngine. 27 new tests, 685 total tests passing. DEC-092. |
 | DEF-014 | SystemAlertEvent for dead data feed | Command Center MVP (Sprint 14–16) OR Health Monitor alerting built | `DatabentoDataService._run_with_reconnection()` logs `critical` when max retries exceeded but emits no Event Bus event. Add `SystemAlertEvent` (or similar) so Health Monitor and Command Center can react (red banner, push notification). Location: `argus/data/databento_data_service.py`. |
 | DEF-015 | DatabentoScanner full-universe scanning | Databento subscription active (DEC-087) AND paper trading validates need for broader symbol coverage | V1 DatabentoScanner uses configured watchlist. Full-universe scanning (~8K US equities) requires cost/latency analysis with live Databento subscription. Location: `argus/data/databento_scanner.py`, `scan()` and `scan_with_gap_data()`. |
+| DEF-016 | Order Manager `place_bracket_order()` integration | Evaluate between Sprint 13 and 14. Triggers: limit entry strategies, IBKR paper trading timing issues, or Orchestrator refactor (Sprint 17) | Order Manager submits T2 as individual `place_order()` post-fill. `IBKRBroker.place_bracket_order()` exists but is unused by Order Manager. Explicit T2 cancellation in all exit paths compensates functionally. Atomic bracket submission deferred — large scope, low risk for market-order ORB. |
 
 This keeps it lightweight — no new document, no new sync burden. Items get removed (or moved to "Completed") as they're addressed. Both Claudes see the trigger column and know when to raise the flag.
 

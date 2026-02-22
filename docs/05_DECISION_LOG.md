@@ -1057,5 +1057,27 @@ Each entry follows this format:
 
 ---
 
+### DEC-093 | Native IBKR Bracket Orders with T1/T2 Support
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-22 |
+| **Decision** | IBKRBroker implements `place_bracket_order()` supporting multi-target brackets (T1 + T2) using IBKR's native `parentId` linkage and `transmit` flag pattern. Parent (entry) + stop + T1 + T2 submitted atomically. Order Manager receives T2 support via `t2_order_id` field on ManagedPosition, `_submit_t2_order()` method, `_handle_t2_fill()` handler, and `on_tick()` skip logic when broker-side T2 exists. |
+| **Alternatives** | (1) Single-target brackets only like Alpaca (rejected — wastes IBKR's multi-leg capability), (2) Full bracket refactor of Order Manager to call `place_bracket_order()` atomically from `on_approved()` (deferred — DEF-016, large scope change to Order Manager core flow) |
+| **Rationale** | IBKR supports unlimited bracket legs via `parentId` cascading. T2 as a broker-side limit order survives ARGUS crashes and doesn't require tick monitoring. Current implementation submits T2 as an individual `place_order()` from `_handle_entry_fill()` rather than via `place_bracket_order()` — functionally correct with explicit cancellation in all exit paths. Atomic bracket integration deferred to DEF-016. Backward compatible: Alpaca path (t2_order_id=None) continues tick-based T2 monitoring unchanged. |
+| **Status** | Active |
+
+---
+
+### DEC-094 | BrokerSource Enum and IBKRConfig
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-22 |
+| **Decision** | Added `BrokerSource` enum (`alpaca`, `ibkr`, `simulated`) to `SystemConfig` for broker selection. Added `IBKRConfig` (Pydantic BaseModel) with IB Gateway connection parameters: host, port, client_id, account, timeout, readonly, reconnection settings, rate limit. `main.py` Phase 3 branches on `config.system.broker_source` to instantiate the correct broker. |
+| **Alternatives** | (1) Separate config files per broker (rejected — already have brokers.yaml, adding enum is simpler), (2) Auto-detect from environment (rejected — explicit configuration is safer for a system managing real money) |
+| **Rationale** | Mirrors the `DataSource` enum pattern from Sprint 12 (DEC-090). Config-driven broker selection allows switching between IBKR (production), Alpaca (incubator), and SimulatedBroker (backtesting) via a single YAML field. IBKRConfig centralizes all IB Gateway connection parameters with sensible defaults (port 4002 for paper, 45 orders/sec rate limit matching IBKR's documented limit). |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
 *New decisions are appended chronologically as the project progresses.*

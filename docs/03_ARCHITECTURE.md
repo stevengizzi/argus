@@ -290,7 +290,7 @@ class BrokerRouter:
         return self.broker_map[asset_class]
 ```
 
-**Implementation Status:** `SimulatedBroker` and `AlpacaBroker` implemented (Phase 1, Sprints 1–5). `IBKRBroker` is Sprint 13 (DEC-083/084) — uses `ib_async` (asyncio-native, `ib-api-reloaded` GitHub org). IB Gateway runs as a local Java process (Docker containerized for deployment). `DatabentoDataService` is Sprint 12 (DEC-082). The existing comprehensive test suite against the `Broker` ABC and `DataService` ABC ensures all adapters are drop-in compatible.
+**Implementation Status:** `SimulatedBroker`, `AlpacaBroker`, and `IBKRBroker` all implemented. `IBKRBroker` completed Sprint 13 (Feb 22, DEC-083/093/094) — 126 new tests, full Broker abstraction via `ib_async`. Config-driven broker selection via `BrokerSource` enum in `SystemConfig`. `DatabentoDataService` completed Sprint 12 (Feb 21, DEC-082). The comprehensive test suite against the `Broker` ABC and `DataService` ABC ensures all adapters are drop-in compatible.
 
 ### 3.3b Clock Protocol (`core/clock.py`)
 
@@ -333,7 +333,7 @@ ARGUS ──ib_async──> IB Gateway (Java) ──> IBKR Servers ──> Excha
 - All stops placed broker-side — survive gateway disconnections.
 - Paper trading uses separate paper account linked to live account. Same API, different port.
 
-Sprint 13 scope. See DEC-083 and `argus_execution_broker_research_report.md` Section 11.
+Implemented in Sprint 13 (Feb 22). 78 IBKRBroker tests + 13 Order Manager T2 tests + 8 integration tests. See DEC-083, DEC-093, DEC-094, and `argus_execution_broker_research_report.md` Section 11.
 
 ### 3.4 Base Strategy (`strategies/base_strategy.py`)
 

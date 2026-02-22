@@ -45,7 +45,7 @@ inform Build Track priorities.
 #### Validation Sequence
 1. ✅ Extended backtest complete (Sprint 11, WFE 0.56, OOS Sharpe +0.34)
 2. ✅ Sprint 12: DatabentoDataService adapter built (Feb 21). Databento subscription activation deferred until Sprint 13 complete + IBKR approved (DEC-087).
-3. ⬜ Sprint 13: IBKRBroker adapter built → migrate paper trading to IBKR
+3. ✅ Sprint 13: IBKRBroker adapter built (Feb 22, 811 tests). Config-driven broker selection. Native bracket orders (DEC-093). T2 broker-side limit support. State reconstruction.
 4. ⬜ IBKR paper trading: minimum 2 weeks with DEC-076 parameters
 5. ⬜ User satisfied with system stability and strategy performance
 6. ⬜ No kill criteria triggered
@@ -104,6 +104,7 @@ inform Build Track priorities.
 | 11 | Validation | Extended backtest (35mo, 15 windows, WFE=0.56) | 542 | Feb 17 |
 | 12 | Infrastructure | DatabentoDataService adapter (streaming, reconnection, historical, scanner, system integration) | 658 | Feb 21 |
 | 12.5 | Refactor | IndicatorEngine extraction (DEF-013, DEC-092) | 685 | Feb 21 |
+| 13 | Infrastructure | IBKRBroker adapter (connection, orders, brackets, fills, reconnection, reconstruction, Order Manager T2, system integration) | 811 | Feb 22 |
 
 ### Build Track Queue
 
@@ -135,20 +136,32 @@ per sprint velocity.
 
 **Unblocks:** Clean foundation before adding more DataService implementations (IQFeed, etc.)
 
-#### Sprint 13 — IBKRBroker Adapter + IB Gateway Integration
-**Target:** ~3–5 days
-**Scope:**
-- `IBKRBroker` implementing the Broker abstraction via `ib_async` library
-- IB Gateway connection/reconnection with keep-alive logic (Docker containerized)
-- Order submission: map ARGUS order types to IBKR order types (market, limit, full bracket)
-- Fill streaming: subscribe to order status events via `ib_async` event system
-- Account queries: position, buying power, open order retrieval
-- Error handling: map IBKR error codes to ARGUS error events
-- State reconstruction: query IBKR for open positions/orders at startup
-- Comprehensive test suite comparable to AlpacaBroker (~80 tests)
-**IBKR Account Status:** Application submitted Feb 21, 2026 (Account ID: U24619949). Awaiting approval. Paper trading account to be enabled immediately upon approval. Sprint 13 (IBKRBroker adapter) can begin development in parallel using mocks, but integration testing requires approved account.
+#### Sprint 13 — IBKRBroker Adapter ✅ COMPLETE (Feb 22)
+**Delivered:**
+- `IBKRBroker` implementing full Broker abstraction via `ib_async` library (DEC-083, DEC-093)
+- `IBKRConfig` + `BrokerSource` enum for config-driven broker selection (DEC-094)
+- `IBKRContractResolver` — stock contract creation with caching
+- `IBKRErrorSeverity` classification — IBKR error code mapping with severity routing
+- Order submission: market, limit, stop, stop-limit with ULID↔IBKR ID mapping via `orderRef`
+- Native bracket orders: parent + stop + T1 + T2 via `parentId` linkage + `transmit` flag pattern
+- Fill streaming: `_on_order_status` → `asyncio.ensure_future` → `_handle_order_status` event bridge
+- Cancel, modify, account queries (`get_positions`, `get_account`, `flatten_all`)
+- Reconnection with exponential backoff, position snapshot comparison, `_reconnecting` guard
+- State reconstruction: `reconstruct_state()` recovers positions + ULID mappings from `orderRef`
+- Order Manager T2 support: `t2_order_id` field, `_submit_t2_order()`, `_handle_t2_fill()`, tick-skip logic, T2 cancellation in all exit paths
+- System integration: `main.py` broker branching, `__init__.py` exports, import cycle verification
+- 811 tests (126 new), ruff fully clean
+**Deferred:** DEF-016 (Order Manager `place_bracket_order()` integration — atomic bracket submission). SystemAlertEvent on max reconnect retries (DEF-014 amended).
 
-**Unblocks:** Paper trading migrates to IBKR. Path to live trading on production platform.
+#### Sprint 13.5 — Order Manager Bracket Refactor (DEF-016 Evaluation)
+**Target:** ~0.5–1 day (evaluate scope, implement if warranted)
+**Scope:**
+- Evaluate DEF-016: refactor Order Manager to call `broker.place_bracket_order()` atomically from `on_approved()` instead of individual `place_order()` calls post-fill
+- Decision gate: If refactor scope is manageable (Order Manager changes + test updates + SimulatedBroker compatibility), implement. If scope is large relative to benefit for market-order ORB strategy, defer to Orchestrator refactor (Sprint 17).
+- Key considerations: pre-fill stop protection (millisecond gap for market orders), `parentId` cascade cancellation vs explicit cancellation, partial fill handling, SimulatedBroker synchronous fill path
+- If implemented: update Order Manager, all affected tests, integration tests. Verify 811+ tests still pass.
+- If deferred: document rationale, update DEF-016 trigger to Sprint 17.
+**Unblocks:** Clean bracket architecture before Command Center and additional strategies add complexity.
 
 #### Sprint 14 — Command Center: API Layer + Project Scaffolding
 **Target:** ~1 day

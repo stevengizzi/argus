@@ -12,12 +12,13 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 
 **Structure:** Two parallel tracks (DEC-079, February 19, 2026). Build Track (system construction) + Validation Track (strategy confidence-building).
 
-**Build Track:** 685 tests. Sprints 1–12.5 complete. Sprint 13 (IBKRBroker adapter) is NEXT.
+**Build Track:** 811 tests. Sprints 1–13 complete. Sprint 13.5 (DEF-016 evaluation — Order Manager bracket refactor) is NEXT, then Sprint 14 (Command Center API).
 - Phase 1 (Core Engine): ✅ COMPLETE — 362 tests, Feb 14–16
 - Phase 2 (Backtesting): ✅ COMPLETE — 542 tests, Feb 16–17
 - Sprint 11 (Extended Backtest): ✅ COMPLETE — 35 months, 15 WF windows, WFE=0.56
 - Sprint 12 (DatabentoDataService adapter): ✅ COMPLETE — 658 tests, Feb 21. DatabentoDataService (live streaming + reconnection), DataFetcher Databento backend (historical + manifest), DatabentoScanner (V1 watchlist), system integration (DataSource enum + config wiring), shared databento_utils.py (DEC-091).
 - Sprint 12.5 (IndicatorEngine extraction): ✅ COMPLETE — 685 tests, Feb 21. IndicatorEngine class shared by all four DataService implementations. DEF-013 resolved (DEC-092).
+- Sprint 13 (IBKRBroker adapter): ✅ COMPLETE — 811 tests, Feb 22. IBKRBroker full Broker abstraction via `ib_async` (connection, orders, native brackets DEC-093, fills, reconnection, state reconstruction). IBKRConfig + BrokerSource enum (DEC-094). Order Manager T2 broker-side limit orders. System integration (main.py broker branching, __init__.py exports). DEF-016 logged (Order Manager bracket refactor deferred).
 
 **Validation Track:** Paper trading ACTIVE with DEC-076 parameters on Alpaca. Validates system stability only — Alpaca IEX data captures only ~2–3% of market volume (DEC-081), so signal accuracy is not validated until Databento data is integrated (Sprint 12). See `08_PAPER_TRADING_GUIDE.md`.
 
@@ -28,7 +29,7 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 
 **IBKR Account (Feb 21):** Application submitted. Account ID U24619949. Individual margin account, IBKR Pro tiered pricing. Awaiting approval — paper trading account will be enabled post-approval for Sprint 13 adapter development.
 
-**Next Build sprints:** Sprint 13 (IBKRBroker adapter) → Sprint 14–16 (Command Center MVP).
+**Next Build sprints:** Sprint 13.5 (DEF-016 evaluation) → Sprint 14–16 (Command Center MVP).
 **Next Validation gate:** DatabentoDataService ready → resume paper trading with quality data → IBKRBroker ready → IBKR paper trading validation → CPA consultation → live trading at minimum size on IBKR.
 
 **✅ IBKR APPLICATION SUBMITTED:** Feb 21, 2026. Account ID: U24619949. Individual margin account, IBKR Pro (tiered pricing), Georgia address. Trading permissions requested: Stocks, Options (Level 3), Futures, Currency/Forex, Cryptocurrencies, Mutual Funds. Awaiting approval (typically 1–3 business days, may take longer). Disclosures and agreements archived locally.
@@ -117,6 +118,8 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 - **DataSource enum for provider selection (DEC-090):** `DataSource` enum in `SystemConfig` with `alpaca`/`databento` variants. main.py Phase 6/7 branches on this to select DataService and Scanner. Config-driven, extensible.
 - **Shared Databento normalization utility (DEC-091):** `normalize_databento_df()` extracted to `argus/data/databento_utils.py`. Both DatabentoDataService and DataFetcher call this shared function. Eliminates duplication of ts_event→timestamp, UTC normalization, column selection, sorting.
 - **IndicatorEngine extraction (DEC-092):** `IndicatorEngine` class in `argus/data/indicator_engine.py`. All four DataService implementations delegate indicator computation (VWAP, ATR-14, SMA-9/20/50, RVOL) to this shared engine. Resolves DEF-013. 27 new tests, 685 total.
+- **Native IBKR bracket orders (DEC-093):** IBKRBroker `place_bracket_order()` supports multi-target brackets (T1+T2) via `parentId` linkage and `transmit` flag. Order Manager T2 support: `t2_order_id` field, broker-side T2 limit orders, `_handle_t2_fill()`, tick-skip when broker-side T2 exists, T2 cancellation in all exit paths. Backward compatible — Alpaca path (t2_order_id=None) tick-monitors T2 unchanged. Current implementation uses individual `place_order()` calls post-fill rather than atomic bracket submission (DEF-016).
+- **BrokerSource enum and IBKRConfig (DEC-094):** `BrokerSource` enum (`alpaca`/`ibkr`/`simulated`) in `SystemConfig`. `IBKRConfig` Pydantic model for IB Gateway connection parameters. `main.py` Phase 3 branches on `broker_source`. Mirrors `DataSource` enum pattern (DEC-090).
 
 ## Architecture Summary
 
