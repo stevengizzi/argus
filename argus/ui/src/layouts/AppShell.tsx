@@ -32,8 +32,8 @@ export function AppShell({ paperMode = true }: AppShellProps) {
       {/* Desktop sidebar */}
       <Sidebar paperMode={paperMode} />
 
-      {/* Main content area — offset for fixed sidebar on desktop */}
-      <main className="flex-1 overflow-y-auto p-4 md:p-5 min-[1024px]:p-6 pb-20 min-[1024px]:pb-6 min-[1024px]:ml-16">
+      {/* Main content area — offset for fixed sidebar on desktop, extra pb for mobile nav */}
+      <main className="flex-1 overflow-y-auto p-4 md:p-5 min-[1024px]:p-6 pb-24 min-[1024px]:pb-6 min-[1024px]:ml-16">
         <Outlet />
       </main>
 

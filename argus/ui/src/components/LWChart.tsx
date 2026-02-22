@@ -75,7 +75,7 @@ export function LWChart({
   return (
     <div
       ref={containerRef}
-      className={className}
+      className={`overflow-hidden ${className}`}
       style={{
         height: typeof height === 'string' ? height : `${height}px`,
       }}
