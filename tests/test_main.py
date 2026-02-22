@@ -27,6 +27,8 @@ market_close: "16:00"
 log_level: "INFO"
 heartbeat_interval_seconds: 60
 data_dir: "data"
+data_source: "alpaca"
+broker_source: "alpaca"
 
 health:
   heartbeat_interval_seconds: 60
@@ -268,9 +270,7 @@ class TestArgusSystemWiring:
             mock_db.close.assert_called()
 
     @pytest.mark.asyncio
-    async def test_signal_handlers_request_shutdown(
-        self, mock_config_dir: Path
-    ) -> None:
+    async def test_signal_handlers_request_shutdown(self, mock_config_dir: Path) -> None:
         """request_shutdown() sets shutdown event."""
         from argus.main import ArgusSystem
 
@@ -300,8 +300,15 @@ class TestArgusSystemWiring:
             patch("argus.main.OrderManager") as mock_om_class,
         ):
             # Setup mocks
-            for cls in [mock_db_class, mock_broker_class, mock_health_class,
-                        mock_risk_class, mock_data_class, mock_scanner_class, mock_om_class]:
+            for cls in [
+                mock_db_class,
+                mock_broker_class,
+                mock_health_class,
+                mock_risk_class,
+                mock_data_class,
+                mock_scanner_class,
+                mock_om_class,
+            ]:
                 instance = MagicMock()
                 instance.initialize = AsyncMock()
                 instance.start = AsyncMock()
@@ -329,6 +336,7 @@ class TestArgusSystemWiring:
         # This test verifies the static symbols fallback logic
         # by checking the config file structure we created
         import yaml
+
         scanner_yaml = yaml.safe_load((mock_config_dir / "scanner.yaml").read_text())
         static_symbols = scanner_yaml.get("static_symbols", [])
 
@@ -394,9 +402,7 @@ class TestArgusSystemWiring:
 class TestDataSourceSelection:
     """Tests for data source selection between Alpaca and Databento."""
 
-    def test_config_data_source_defaults_to_alpaca(
-        self, mock_config_dir: Path
-    ) -> None:
+    def test_config_data_source_defaults_to_alpaca(self, mock_config_dir: Path) -> None:
         """Default data_source config value is alpaca."""
         from argus.core.config import DataSource, load_config
 
@@ -404,9 +410,7 @@ class TestDataSourceSelection:
 
         assert config.system.data_source == DataSource.ALPACA
 
-    def test_config_data_source_can_be_databento(
-        self, mock_config_dir: Path
-    ) -> None:
+    def test_config_data_source_can_be_databento(self, mock_config_dir: Path) -> None:
         """data_source can be set to databento in config."""
         from argus.core.config import DataSource, load_config
 
@@ -439,29 +443,21 @@ health:
         assert DataSource.ALPACA.value == "alpaca"
         assert DataSource.DATABENTO.value == "databento"
 
-    def test_scanner_yaml_has_databento_section(
-        self, mock_config_dir: Path
-    ) -> None:
+    def test_scanner_yaml_has_databento_section(self, mock_config_dir: Path) -> None:
         """scanner.yaml includes databento_scanner configuration."""
         import yaml
 
-        scanner_yaml = yaml.safe_load(
-            (mock_config_dir / "scanner.yaml").read_text()
-        )
+        scanner_yaml = yaml.safe_load((mock_config_dir / "scanner.yaml").read_text())
 
         assert "databento_scanner" in scanner_yaml
         assert "universe_symbols" in scanner_yaml["databento_scanner"]
         assert "min_gap_pct" in scanner_yaml["databento_scanner"]
 
-    def test_brokers_yaml_has_databento_section(
-        self, mock_config_dir: Path
-    ) -> None:
+    def test_brokers_yaml_has_databento_section(self, mock_config_dir: Path) -> None:
         """brokers.yaml includes databento configuration."""
         import yaml
 
-        brokers_yaml = yaml.safe_load(
-            (mock_config_dir / "brokers.yaml").read_text()
-        )
+        brokers_yaml = yaml.safe_load((mock_config_dir / "brokers.yaml").read_text())
 
         assert "databento" in brokers_yaml
         assert brokers_yaml["databento"]["enabled"] is True

@@ -29,6 +29,7 @@ from argus.analytics.trade_logger import TradeLogger
 from argus.core.clock import SystemClock
 from argus.core.config import (
     AlpacaScannerConfig,
+    BrokerSource,
     DataServiceConfig,
     DataSource,
     load_config,
@@ -53,6 +54,7 @@ if TYPE_CHECKING:
     from argus.core.clock import Clock
     from argus.data.scanner import Scanner
     from argus.data.service import DataService
+    from argus.execution.broker import Broker
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +78,7 @@ class ArgusSystem:
         self._event_bus: EventBus | None = None
         self._db: DatabaseManager | None = None
         self._trade_logger: TradeLogger | None = None
-        self._broker: AlpacaBroker | None = None
+        self._broker: Broker | None = None
         self._data_service: DataService | None = None
         self._scanner: Scanner | None = None
         self._risk_manager: RiskManager | None = None
@@ -120,10 +122,26 @@ class ArgusSystem:
 
         # --- Phase 3: Broker ---
         logger.info("[3/10] Connecting to broker...")
-        self._broker = AlpacaBroker(
-            event_bus=self._event_bus,
-            config=config.broker.alpaca,
-        )
+        if config.system.broker_source == BrokerSource.IBKR:
+            from argus.execution.ibkr_broker import IBKRBroker
+
+            logger.info("Using IBKR broker (production execution)")
+            self._broker = IBKRBroker(
+                config=config.system.ibkr,
+                event_bus=self._event_bus,
+            )
+        elif config.system.broker_source == BrokerSource.ALPACA:
+            logger.info("Using Alpaca broker (paper/incubator)")
+            self._broker = AlpacaBroker(
+                event_bus=self._event_bus,
+                config=config.broker.alpaca,
+            )
+        else:
+            # BrokerSource.SIMULATED — default for backtesting
+            from argus.execution.simulated_broker import SimulatedBroker
+
+            logger.info("Using Simulated broker (backtesting)")
+            self._broker = SimulatedBroker()
         await self._broker.connect()
 
         account = await self._broker.get_account()
@@ -211,21 +229,19 @@ class ArgusSystem:
             symbols = scanner_yaml.get("static_symbols", [])
             logger.warning("Scanner returned no symbols. Using static list: %s", symbols)
             self._health_monitor.update_component(
-                "scanner", ComponentStatus.DEGRADED,
-                message="No symbols passed filters, using static list"
+                "scanner",
+                ComponentStatus.DEGRADED,
+                message="No symbols passed filters, using static list",
             )
         else:
             logger.info("Scanner found %d symbols: %s", len(symbols), symbols)
             self._health_monitor.update_component(
-                "scanner", ComponentStatus.HEALTHY,
-                message=f"{len(symbols)} symbols"
+                "scanner", ComponentStatus.HEALTHY, message=f"{len(symbols)} symbols"
             )
 
         # --- Phase 8: Strategy ---
         logger.info("[8/10] Initializing strategy...")
-        strategy_config = load_orb_config(
-            self._config_dir / "strategies" / "orb_breakout.yaml"
-        )
+        strategy_config = load_orb_config(self._config_dir / "strategies" / "orb_breakout.yaml")
         self._strategy = OrbBreakoutStrategy(
             config=strategy_config,
             data_service=self._data_service,
@@ -238,14 +254,14 @@ class ArgusSystem:
         # If mid-day restart, attempt state reconstruction
         await self._reconstruct_strategy_state(symbols)
         self._health_monitor.update_component(
-            "strategy", ComponentStatus.HEALTHY,
-            message="OrbBreakout active"
+            "strategy", ComponentStatus.HEALTHY, message="OrbBreakout active"
         )
 
         # --- Phase 9: Order Manager ---
         logger.info("[9/10] Starting order manager...")
         order_manager_yaml = load_yaml_file(self._config_dir / "order_manager.yaml")
         from argus.core.config import OrderManagerConfig
+
         order_manager_config = OrderManagerConfig(**order_manager_yaml)
 
         self._order_manager = OrderManager(
@@ -265,14 +281,12 @@ class ArgusSystem:
         if symbols and not self._dry_run:
             await self._data_service.start(symbols=symbols, timeframes=["1m"])
             self._health_monitor.update_component(
-                "data_service", ComponentStatus.HEALTHY,
-                message=f"Streaming {len(symbols)} symbols"
+                "data_service", ComponentStatus.HEALTHY, message=f"Streaming {len(symbols)} symbols"
             )
         elif self._dry_run:
             logger.info("DRY RUN: Data streams not started.")
             self._health_monitor.update_component(
-                "data_service", ComponentStatus.DEGRADED,
-                message="Dry run — no streaming"
+                "data_service", ComponentStatus.DEGRADED, message="Dry run — no streaming"
             )
 
         logger.info("=" * 60)
@@ -340,15 +354,14 @@ class ArgusSystem:
                 else:
                     logger.warning("No historical bars available — strategy starting fresh")
             else:
-                logger.warning(
-                    "DataService doesn't support fetch_todays_bars — skipping"
-                )
+                logger.warning("DataService doesn't support fetch_todays_bars — skipping")
 
         except Exception as e:
             logger.error("Strategy reconstruction failed: %s. Continuing anyway.", e)
             if self._health_monitor:
                 self._health_monitor.update_component(
-                    "strategy", ComponentStatus.DEGRADED,
+                    "strategy",
+                    ComponentStatus.DEGRADED,
                     message=f"Reconstruction failed: {e}",
                 )
 
@@ -435,15 +448,21 @@ def parse_args() -> argparse.Namespace:
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(description="Argus Trading System")
     parser.add_argument(
-        "--config", type=Path, default=Path("config"),
+        "--config",
+        type=Path,
+        default=Path("config"),
         help="Path to configuration directory (default: config/)",
     )
     parser.add_argument(
-        "--paper", action="store_true", default=True,
+        "--paper",
+        action="store_true",
+        default=True,
         help="Use paper trading (default: True)",
     )
     parser.add_argument(
-        "--dry-run", action="store_true", default=False,
+        "--dry-run",
+        action="store_true",
+        default=False,
         help="Start and connect but don't stream data or trade",
     )
     return parser.parse_args()
