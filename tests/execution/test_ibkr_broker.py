@@ -6,6 +6,7 @@ cancel/modify, account queries, and flatten operations.
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -960,3 +961,439 @@ class TestIBKRBrokerBracketOrders:
             entry_call = mock_ib.placeOrder.call_args_list[0]
             entry_order = entry_call[0][1]
             assert entry_order.transmit is False
+
+
+# ---------------------------------------------------------------------------
+# Fill Streaming Tests (Prompt 6)
+# ---------------------------------------------------------------------------
+
+
+def _mock_trade(
+    order_id: int = 12345,
+    status: str = "Submitted",
+    filled: int = 0,
+    remaining: int = 100,
+    avg_fill_price: float = 0.0,
+    action: str = "BUY",
+    order_type: str = "MKT",
+    total_qty: int = 100,
+    symbol: str = "AAPL",
+    order_ref: str = "",
+    why_held: str = "",
+) -> MagicMock:
+    """Create a mock Trade object for testing fill streaming."""
+    trade = MagicMock()
+    trade.order = MagicMock()
+    trade.order.orderId = order_id
+    trade.order.action = action
+    trade.order.orderType = order_type
+    trade.order.totalQuantity = total_qty
+    trade.order.orderRef = order_ref
+
+    trade.orderStatus = MagicMock()
+    trade.orderStatus.status = status
+    trade.orderStatus.filled = filled
+    trade.orderStatus.remaining = remaining
+    trade.orderStatus.avgFillPrice = avg_fill_price
+    trade.orderStatus.whyHeld = why_held
+
+    trade.contract = MagicMock()
+    trade.contract.symbol = symbol
+
+    return trade
+
+
+class TestIBKRBrokerFillStreaming:
+    """Tests for IBKRBroker fill streaming event handlers."""
+
+    @pytest.mark.asyncio
+    async def test_filled_event_published_with_correct_price_qty(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """Filled status publishes OrderFilledEvent with correct price and quantity."""
+        from argus.core.events import OrderFilledEvent
+
+        # Track published events (use async handler for EventBus)
+        published_events: list = []
+
+        async def capture_event(e: OrderFilledEvent) -> None:
+            published_events.append(e)
+
+        event_bus.subscribe(OrderFilledEvent, capture_event)
+
+        with patch("argus.execution.ibkr_broker.IB", return_value=mock_ib):
+            broker = IBKRBroker(ibkr_config, event_bus)
+            await broker.connect()
+
+            # Place an order to register the ULID mapping
+            order = _create_order()
+            result = await broker.place_order(order)
+            ulid = result.order_id
+            ibkr_id = int(result.broker_order_id)
+
+            # Simulate a fill
+            trade = _mock_trade(
+                order_id=ibkr_id,
+                status="Filled",
+                filled=100,
+                remaining=0,
+                avg_fill_price=152.75,
+            )
+
+            await broker._handle_order_status(trade)
+            await event_bus.drain()
+
+        # Verify event was published
+        assert len(published_events) == 1
+        event = published_events[0]
+        assert event.order_id == ulid
+        assert event.fill_price == 152.75
+        assert event.fill_quantity == 100
+
+    @pytest.mark.asyncio
+    async def test_cancelled_event_published(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """Cancelled status publishes OrderCancelledEvent."""
+        from argus.core.events import OrderCancelledEvent
+
+        published_events: list = []
+
+        async def capture_event(e: OrderCancelledEvent) -> None:
+            published_events.append(e)
+
+        event_bus.subscribe(OrderCancelledEvent, capture_event)
+
+        with patch("argus.execution.ibkr_broker.IB", return_value=mock_ib):
+            broker = IBKRBroker(ibkr_config, event_bus)
+            await broker.connect()
+
+            order = _create_order()
+            result = await broker.place_order(order)
+            ulid = result.order_id
+            ibkr_id = int(result.broker_order_id)
+
+            trade = _mock_trade(order_id=ibkr_id, status="Cancelled")
+
+            await broker._handle_order_status(trade)
+            await event_bus.drain()
+
+        assert len(published_events) == 1
+        event = published_events[0]
+        assert event.order_id == ulid
+        assert "Cancelled" in event.reason
+
+    @pytest.mark.asyncio
+    async def test_inactive_rejected_event_published_with_reason(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """Inactive status (IBKR rejection) publishes OrderCancelledEvent with reason."""
+        from argus.core.events import OrderCancelledEvent
+
+        published_events: list = []
+
+        async def capture_event(e: OrderCancelledEvent) -> None:
+            published_events.append(e)
+
+        event_bus.subscribe(OrderCancelledEvent, capture_event)
+
+        with patch("argus.execution.ibkr_broker.IB", return_value=mock_ib):
+            broker = IBKRBroker(ibkr_config, event_bus)
+            await broker.connect()
+
+            order = _create_order()
+            result = await broker.place_order(order)
+            ulid = result.order_id
+            ibkr_id = int(result.broker_order_id)
+
+            trade = _mock_trade(
+                order_id=ibkr_id,
+                status="Inactive",
+                why_held="insufficient margin",
+            )
+
+            await broker._handle_order_status(trade)
+            await event_bus.drain()
+
+        assert len(published_events) == 1
+        event = published_events[0]
+        assert event.order_id == ulid
+        assert "rejected" in event.reason.lower()
+        assert "insufficient margin" in event.reason
+
+    @pytest.mark.asyncio
+    async def test_submitted_event_published(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """Submitted status publishes OrderSubmittedEvent."""
+        from argus.core.events import OrderSubmittedEvent, Side
+
+        published_events: list = []
+
+        async def capture_event(e: OrderSubmittedEvent) -> None:
+            published_events.append(e)
+
+        event_bus.subscribe(OrderSubmittedEvent, capture_event)
+
+        with patch("argus.execution.ibkr_broker.IB", return_value=mock_ib):
+            broker = IBKRBroker(ibkr_config, event_bus)
+            await broker.connect()
+
+            order = _create_order()
+            result = await broker.place_order(order)
+            ulid = result.order_id
+            ibkr_id = int(result.broker_order_id)
+
+            trade = _mock_trade(
+                order_id=ibkr_id,
+                status="Submitted",
+                action="BUY",
+                order_type="MKT",
+                total_qty=100,
+                symbol="AAPL",
+            )
+
+            await broker._handle_order_status(trade)
+            await event_bus.drain()
+
+        assert len(published_events) == 1
+        event = published_events[0]
+        assert event.order_id == ulid
+        assert event.symbol == "AAPL"
+        assert event.side == Side.LONG
+        assert event.quantity == 100
+
+    @pytest.mark.asyncio
+    async def test_presubmitted_logged_only_no_event(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """PreSubmitted status is logged only, no event published."""
+        from argus.core.events import (
+            OrderCancelledEvent,
+            OrderFilledEvent,
+            OrderSubmittedEvent,
+        )
+
+        filled_events: list = []
+        cancelled_events: list = []
+        submitted_events: list = []
+
+        async def capture_filled(e: OrderFilledEvent) -> None:
+            filled_events.append(e)
+
+        async def capture_cancelled(e: OrderCancelledEvent) -> None:
+            cancelled_events.append(e)
+
+        async def capture_submitted(e: OrderSubmittedEvent) -> None:
+            submitted_events.append(e)
+
+        event_bus.subscribe(OrderFilledEvent, capture_filled)
+        event_bus.subscribe(OrderCancelledEvent, capture_cancelled)
+        event_bus.subscribe(OrderSubmittedEvent, capture_submitted)
+
+        with patch("argus.execution.ibkr_broker.IB", return_value=mock_ib):
+            broker = IBKRBroker(ibkr_config, event_bus)
+            await broker.connect()
+
+            order = _create_order()
+            result = await broker.place_order(order)
+            ibkr_id = int(result.broker_order_id)
+
+            trade = _mock_trade(order_id=ibkr_id, status="PreSubmitted")
+
+            await broker._handle_order_status(trade)
+            await event_bus.drain()
+
+        # No events should be published
+        assert len(filled_events) == 0
+        assert len(cancelled_events) == 0
+        assert len(submitted_events) == 0
+
+    @pytest.mark.asyncio
+    async def test_unknown_order_id_ignored(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """Unknown order IDs (not in mapping) are ignored with debug log."""
+        from argus.core.events import OrderFilledEvent
+
+        published_events: list = []
+
+        async def capture_event(e: OrderFilledEvent) -> None:
+            published_events.append(e)
+
+        event_bus.subscribe(OrderFilledEvent, capture_event)
+
+        with patch("argus.execution.ibkr_broker.IB", return_value=mock_ib):
+            broker = IBKRBroker(ibkr_config, event_bus)
+            await broker.connect()
+
+            # Don't place any order — ID 99999 is unknown
+            trade = _mock_trade(
+                order_id=99999,
+                status="Filled",
+                filled=100,
+                avg_fill_price=150.0,
+            )
+
+            await broker._handle_order_status(trade)
+            await event_bus.drain()
+
+        # No event should be published
+        assert len(published_events) == 0
+
+    @pytest.mark.asyncio
+    async def test_error_classification_routes_correctly(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """Error handler classifies and routes errors by severity."""
+        with patch("argus.execution.ibkr_broker.IB", return_value=mock_ib):
+            broker = IBKRBroker(ibkr_config, event_bus)
+            await broker.connect()
+
+            # INFO-level error (should be debug logged, no event)
+            with patch("argus.execution.ibkr_broker.logger") as mock_logger:
+                broker._on_error(0, 354, "Market data not subscribed")
+                mock_logger.debug.assert_called()
+                mock_logger.critical.assert_not_called()
+                mock_logger.warning.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_critical_error_logged(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """Critical errors are logged at critical level."""
+        with patch("argus.execution.ibkr_broker.IB", return_value=mock_ib):
+            broker = IBKRBroker(ibkr_config, event_bus)
+            await broker.connect()
+
+            with patch("argus.execution.ibkr_broker.logger") as mock_logger:
+                broker._on_error(0, 502, "Couldn't connect to TWS")
+                mock_logger.critical.assert_called()
+
+    @pytest.mark.asyncio
+    async def test_order_rejection_via_error_publishes_cancel(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """Order rejection via error event (code 201) publishes OrderCancelledEvent."""
+        from argus.core.events import OrderCancelledEvent
+
+        published_events: list = []
+
+        async def capture_event(e: OrderCancelledEvent) -> None:
+            published_events.append(e)
+
+        event_bus.subscribe(OrderCancelledEvent, capture_event)
+
+        with patch("argus.execution.ibkr_broker.IB", return_value=mock_ib):
+            broker = IBKRBroker(ibkr_config, event_bus)
+            await broker.connect()
+
+            order = _create_order()
+            result = await broker.place_order(order)
+            ulid = result.order_id
+            ibkr_id = int(result.broker_order_id)
+
+            # Simulate order rejection error
+            broker._on_error(
+                ibkr_id, 201, "Order rejected - invalid price"
+            )
+
+            # Give async task time to complete
+            await asyncio.sleep(0.01)
+            await event_bus.drain()
+
+        assert len(published_events) == 1
+        event = published_events[0]
+        assert event.order_id == ulid
+        assert "rejected" in event.reason.lower()
+
+    def test_order_type_mapping_all_variants(self) -> None:
+        """_map_ib_order_type correctly maps all order type variants."""
+        from argus.core.events import OrderType
+
+        assert IBKRBroker._map_ib_order_type("MKT") == OrderType.MARKET
+        assert IBKRBroker._map_ib_order_type("LMT") == OrderType.LIMIT
+        assert IBKRBroker._map_ib_order_type("STP") == OrderType.STOP
+        assert IBKRBroker._map_ib_order_type("STP LMT") == OrderType.STOP_LIMIT
+        # Unknown type defaults to MARKET
+        assert IBKRBroker._map_ib_order_type("UNKNOWN") == OrderType.MARKET
+
+    @pytest.mark.asyncio
+    async def test_partial_fill_handling(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """Partial fills (filled < total) publish OrderFilledEvent with partial qty."""
+        from argus.core.events import OrderFilledEvent
+
+        published_events: list = []
+
+        async def capture_event(e: OrderFilledEvent) -> None:
+            published_events.append(e)
+
+        event_bus.subscribe(OrderFilledEvent, capture_event)
+
+        with patch("argus.execution.ibkr_broker.IB", return_value=mock_ib):
+            broker = IBKRBroker(ibkr_config, event_bus)
+            await broker.connect()
+
+            order = _create_order(quantity=100)
+            result = await broker.place_order(order)
+            ibkr_id = int(result.broker_order_id)
+
+            # Simulate partial fill (50 of 100)
+            trade = _mock_trade(
+                order_id=ibkr_id,
+                status="Filled",
+                filled=50,
+                remaining=50,
+                total_qty=100,
+                avg_fill_price=151.25,
+            )
+
+            await broker._handle_order_status(trade)
+            await event_bus.drain()
+
+        assert len(published_events) == 1
+        event = published_events[0]
+        assert event.fill_quantity == 50
+        assert event.fill_price == 151.25
+
+    @pytest.mark.asyncio
+    async def test_fill_with_zero_avg_price_edge_case(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """Fill with zero average price (edge case) is handled without error."""
+        from argus.core.events import OrderFilledEvent
+
+        published_events: list = []
+
+        async def capture_event(e: OrderFilledEvent) -> None:
+            published_events.append(e)
+
+        event_bus.subscribe(OrderFilledEvent, capture_event)
+
+        with patch("argus.execution.ibkr_broker.IB", return_value=mock_ib):
+            broker = IBKRBroker(ibkr_config, event_bus)
+            await broker.connect()
+
+            order = _create_order()
+            result = await broker.place_order(order)
+            ibkr_id = int(result.broker_order_id)
+
+            # Simulate fill with zero price (unusual but should not crash)
+            trade = _mock_trade(
+                order_id=ibkr_id,
+                status="Filled",
+                filled=100,
+                remaining=0,
+                avg_fill_price=0.0,
+            )
+
+            await broker._handle_order_status(trade)
+            await event_bus.drain()
+
+        # Event should still be published
+        assert len(published_events) == 1
+        event = published_events[0]
+        assert event.fill_price == 0.0
+        assert event.fill_quantity == 100

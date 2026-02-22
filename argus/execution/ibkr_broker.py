@@ -10,6 +10,7 @@ All market data comes from Databento (DEC-082) — this adapter is execution-onl
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import TYPE_CHECKING
 
@@ -18,9 +19,22 @@ from ib_async import Order as IBOrder
 
 from argus.core.config import IBKRConfig
 from argus.core.event_bus import EventBus
+from argus.core.events import (
+    OrderCancelledEvent,
+    OrderFilledEvent,
+    OrderSubmittedEvent,
+    OrderType,
+    Side,
+)
 from argus.core.ids import generate_id
 from argus.execution.broker import Broker
 from argus.execution.ibkr_contracts import IBKRContractResolver
+from argus.execution.ibkr_errors import (
+    IBKRErrorSeverity,
+    classify_error,
+    is_connection_error,
+    is_order_rejection,
+)
 from argus.models.trading import (
     AccountInfo,
     BracketOrderResult,
@@ -159,13 +173,103 @@ class IBKRBroker(Broker):
         """Handle order status updates from ib_async.
 
         Called by ib_async on the asyncio event loop when order status changes.
-        This is a placeholder that will be fully implemented in Prompt 6.
+        Schedules async handler as a task to allow async Event Bus publishing.
+
+        Note: ib_async is asyncio-native (not threaded), so we can use
+        ensure_future directly without call_soon_threadsafe.
 
         Args:
             trade: The Trade object with updated status.
         """
-        # Placeholder - will be implemented in Prompt 6 (Fill Streaming)
-        logger.debug("Order status update: %s", trade.order.orderId)
+        asyncio.ensure_future(self._handle_order_status(trade))
+
+    async def _handle_order_status(self, trade: Trade) -> None:
+        """Process order status update and publish to Event Bus.
+
+        Maps IBKR order statuses to ARGUS events:
+        - "Filled" → OrderFilledEvent (with avg fill price and filled quantity)
+        - "Cancelled" → OrderCancelledEvent
+        - "Inactive" → OrderCancelledEvent (IBKR uses Inactive for rejections)
+        - "Submitted" → OrderSubmittedEvent
+        - "PreSubmitted" → debug log only (bracket children before parent fills)
+        - Other → debug log
+
+        Args:
+            trade: The Trade object with updated status.
+        """
+        ib_order_id = trade.order.orderId
+        ulid = self._ibkr_to_ulid.get(ib_order_id)
+
+        if not ulid:
+            # Not our order — could be pre-existing from TWS, or external
+            logger.debug(
+                "Ignoring status update for unknown IBKR order #%d", ib_order_id
+            )
+            return
+
+        status = trade.orderStatus.status
+
+        if status == "Filled":
+            avg_fill_price = trade.orderStatus.avgFillPrice
+            filled_qty = int(trade.orderStatus.filled)
+
+            await self._event_bus.publish(
+                OrderFilledEvent(
+                    order_id=ulid,
+                    fill_price=avg_fill_price,
+                    fill_quantity=filled_qty,
+                )
+            )
+            logger.info(
+                "Order filled: %s — %d @ $%.2f", ulid, filled_qty, avg_fill_price
+            )
+
+        elif status == "Cancelled":
+            await self._event_bus.publish(
+                OrderCancelledEvent(
+                    order_id=ulid,
+                    reason=f"Cancelled (IBKR status: {status})",
+                )
+            )
+            logger.info("Order cancelled: %s", ulid)
+
+        elif status == "Inactive":
+            # Inactive = rejected by IBKR (insufficient margin, invalid price, etc.)
+            why_held = trade.orderStatus.whyHeld or "unknown reason"
+            reason = f"Order rejected by IBKR: {why_held}"
+            await self._event_bus.publish(
+                OrderCancelledEvent(
+                    order_id=ulid,
+                    reason=reason,
+                )
+            )
+            logger.warning("Order rejected: %s — %s", ulid, reason)
+
+        elif status == "Submitted":
+            # Map IBKR order type and side
+            side_str = trade.order.action.lower()
+            side = Side.LONG if side_str == "buy" else Side.SHORT
+            order_type = self._map_ib_order_type(trade.order.orderType)
+
+            await self._event_bus.publish(
+                OrderSubmittedEvent(
+                    order_id=ulid,
+                    strategy_id="",  # Filled by Order Manager from context
+                    symbol=trade.contract.symbol if trade.contract else "",
+                    side=side,
+                    quantity=int(trade.order.totalQuantity),
+                    order_type=order_type,
+                )
+            )
+            logger.debug("Order submitted: %s (IBKR #%d)", ulid, ib_order_id)
+
+        elif status == "PreSubmitted":
+            # Bracket children before parent fills — normal, just log
+            logger.debug("Order pre-submitted: %s (IBKR #%d)", ulid, ib_order_id)
+
+        else:
+            # PendingSubmit, PendingCancel — transient states, log only
+            logger.debug("Order status: %s → %s", ulid, status)
 
     def _on_error(
         self,
@@ -176,17 +280,59 @@ class IBKRBroker(Broker):
     ) -> None:
         """Handle error events from ib_async.
 
-        Called by ib_async on the asyncio event loop when errors occur.
-        This is a placeholder that will be fully implemented in Prompt 8.
+        Classifies errors by severity and routes appropriately:
+        - CRITICAL: Log at critical level. Connection errors handled by _on_disconnected.
+        - WARNING: Log at warning level. Order rejections publish OrderCancelledEvent.
+        - INFO: Log at debug level (suppress noise from market data messages).
 
         Args:
-            req_id: Request ID associated with the error.
+            req_id: Request ID associated with the error (often IBKR order ID).
             error_code: IBKR error code.
             error_string: Human-readable error message.
             contract: Optional contract associated with the error.
         """
-        # Placeholder - will be implemented in Prompt 8 (Error Handling)
-        logger.debug("IBKR error %d: %s", error_code, error_string)
+        error_info = classify_error(error_code, error_string)
+
+        if error_info.severity == IBKRErrorSeverity.CRITICAL:
+            logger.critical("IBKR error %d: %s", error_code, error_string)
+            if is_connection_error(error_code):
+                # Connection errors trigger reconnection (handled by _on_disconnected)
+                pass
+
+        elif error_info.severity == IBKRErrorSeverity.WARNING:
+            logger.warning("IBKR error %d: %s", error_code, error_string)
+            if is_order_rejection(error_code) and req_id in self._ibkr_to_ulid:
+                ulid = self._ibkr_to_ulid[req_id]
+                asyncio.ensure_future(
+                    self._event_bus.publish(
+                        OrderCancelledEvent(
+                            order_id=ulid,
+                            reason=f"IBKR rejected: {error_string}",
+                        )
+                    )
+                )
+
+        else:
+            # INFO severity — debug log only (e.g., market data not subscribed)
+            logger.debug("IBKR info %d: %s", error_code, error_string)
+
+    @staticmethod
+    def _map_ib_order_type(ib_type: str) -> OrderType:
+        """Map IBKR order type string to ARGUS OrderType enum.
+
+        Args:
+            ib_type: IBKR order type string (MKT, LMT, STP, STP LMT).
+
+        Returns:
+            Corresponding ARGUS OrderType enum value.
+        """
+        mapping = {
+            "MKT": OrderType.MARKET,
+            "LMT": OrderType.LIMIT,
+            "STP": OrderType.STOP,
+            "STP LMT": OrderType.STOP_LIMIT,
+        }
+        return mapping.get(ib_type, OrderType.MARKET)
 
     def _on_disconnected(self) -> None:
         """Handle disconnection event from ib_async.
