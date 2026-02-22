@@ -112,16 +112,16 @@ export function TradeFilters({ onFiltersChange }: TradeFiltersProps) {
         </div>
 
         {/* Outcome toggle */}
-        <div className="flex-shrink-0">
+        <div className="w-full md:w-auto md:flex-shrink-0">
           <label className="block text-xs text-argus-text-dim uppercase tracking-wide mb-1">
             Outcome
           </label>
-          <div className="inline-flex rounded-md border border-argus-border overflow-hidden">
+          <div className="flex rounded-md border border-argus-border overflow-hidden">
             {outcomeOptions.map((opt) => (
               <button
                 key={opt.value}
                 onClick={() => updateFilters({ outcome: opt.value })}
-                className={`px-3 py-2 text-xs font-medium transition-colors ${
+                className={`flex-1 md:flex-none px-3 py-2 text-xs font-medium transition-colors ${
                   outcome === opt.value
                     ? 'bg-argus-accent text-white'
                     : 'bg-argus-surface-2 text-argus-text-dim hover:text-argus-text hover:bg-argus-surface-3'
@@ -133,9 +133,9 @@ export function TradeFilters({ onFiltersChange }: TradeFiltersProps) {
           </div>
         </div>
 
-        {/* Date range */}
-        <div className="flex gap-2 flex-1 min-w-0">
-          <div className="flex-1 min-w-0">
+        {/* Date range - grid ensures 50/50 split on mobile */}
+        <div className="grid grid-cols-2 gap-2 md:flex md:gap-2 md:flex-1 md:min-w-0">
+          <div className="min-w-0">
             <label className="block text-xs text-argus-text-dim uppercase tracking-wide mb-1">
               From
             </label>
@@ -143,10 +143,10 @@ export function TradeFilters({ onFiltersChange }: TradeFiltersProps) {
               type="date"
               value={date_from || ''}
               onChange={(e) => updateFilters({ date_from: e.target.value || undefined })}
-              className="w-full bg-argus-surface-2 border border-argus-border rounded-md px-3 py-2 text-sm text-argus-text focus:outline-none focus:ring-1 focus:ring-argus-accent"
+              className="w-full bg-argus-surface-2 border border-argus-border rounded-md px-2 py-2 text-sm text-argus-text focus:outline-none focus:ring-1 focus:ring-argus-accent"
             />
           </div>
-          <div className="flex-1 min-w-0">
+          <div className="min-w-0">
             <label className="block text-xs text-argus-text-dim uppercase tracking-wide mb-1">
               To
             </label>
@@ -154,7 +154,7 @@ export function TradeFilters({ onFiltersChange }: TradeFiltersProps) {
               type="date"
               value={date_to || ''}
               onChange={(e) => updateFilters({ date_to: e.target.value || undefined })}
-              className="w-full bg-argus-surface-2 border border-argus-border rounded-md px-3 py-2 text-sm text-argus-text focus:outline-none focus:ring-1 focus:ring-argus-accent"
+              className="w-full bg-argus-surface-2 border border-argus-border rounded-md px-2 py-2 text-sm text-argus-text focus:outline-none focus:ring-1 focus:ring-argus-accent"
             />
           </div>
         </div>
