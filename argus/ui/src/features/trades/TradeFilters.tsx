@@ -133,9 +133,9 @@ export function TradeFilters({ onFiltersChange }: TradeFiltersProps) {
           </div>
         </div>
 
-        {/* Date range - w-full constrains to parent, overflow-hidden + w-0 forces shrink */}
-        <div className="flex gap-2 w-full overflow-hidden md:flex-1">
-          <div className="w-0 grow overflow-hidden">
+        {/* Date range */}
+        <div className="flex gap-3 w-full md:flex-1">
+          <div className="flex-1 min-w-0">
             <label className="block text-xs text-argus-text-dim uppercase tracking-wide mb-1">
               From
             </label>
@@ -154,7 +154,7 @@ export function TradeFilters({ onFiltersChange }: TradeFiltersProps) {
               className="w-full bg-argus-surface-2 border border-argus-border rounded-md px-2 py-2 text-sm text-argus-text focus:outline-none focus:ring-1 focus:ring-argus-accent"
             />
           </div>
-          <div className="w-0 grow overflow-hidden">
+          <div className="flex-1 min-w-0">
             <label className="block text-xs text-argus-text-dim uppercase tracking-wide mb-1">
               To
             </label>
@@ -162,7 +162,14 @@ export function TradeFilters({ onFiltersChange }: TradeFiltersProps) {
               type="date"
               value={date_to || ''}
               min={date_from || ''}
-              onChange={(e) => updateFilters({ date_to: e.target.value || undefined })}
+              onChange={(e) => {
+                const newTo = e.target.value || undefined;
+                // Reject if To is before From (iOS Safari ignores min attribute)
+                if (newTo && date_from && newTo < date_from) {
+                  return;
+                }
+                updateFilters({ date_to: newTo });
+              }}
               className="w-full bg-argus-surface-2 border border-argus-border rounded-md px-2 py-2 text-sm text-argus-text focus:outline-none focus:ring-1 focus:ring-argus-accent"
             />
           </div>
