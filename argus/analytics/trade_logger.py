@@ -327,6 +327,152 @@ class TradeLogger:
             return 0
         return int(dict(row).get("count", 0))  # type: ignore[arg-type]
 
+    async def query_trades(
+        self,
+        strategy_id: str | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        outcome: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[dict]:
+        """Query trades with filtering and pagination.
+
+        Args:
+            strategy_id: Optional strategy ID filter.
+            date_from: Optional start date filter (ISO YYYY-MM-DD).
+            date_to: Optional end date filter (ISO YYYY-MM-DD).
+            outcome: Optional outcome filter ("win", "loss", "breakeven").
+            limit: Maximum number of trades to return (default 50).
+            offset: Number of trades to skip for pagination.
+
+        Returns:
+            List of trade dicts, ordered by entry_time DESC.
+        """
+        conditions: list[str] = []
+        params: list[object] = []
+
+        if strategy_id is not None:
+            conditions.append("strategy_id = ?")
+            params.append(strategy_id)
+
+        if date_from is not None:
+            conditions.append("date(entry_time) >= ?")
+            params.append(date_from)
+
+        if date_to is not None:
+            conditions.append("date(entry_time) <= ?")
+            params.append(date_to)
+
+        if outcome is not None:
+            if outcome == "win":
+                conditions.append("net_pnl > 0")
+            elif outcome == "loss":
+                conditions.append("net_pnl < 0")
+            elif outcome == "breakeven":
+                conditions.append("net_pnl = 0")
+
+        where_clause = " AND ".join(conditions) if conditions else "1=1"
+        sql = f"""
+            SELECT * FROM trades
+            WHERE {where_clause}
+            ORDER BY entry_time DESC
+            LIMIT ? OFFSET ?
+        """
+        params.extend([limit, offset])
+
+        rows = await self._db.fetch_all(sql, tuple(params))
+        return [dict(row) for row in rows]  # type: ignore[arg-type]
+
+    async def count_trades(
+        self,
+        strategy_id: str | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        outcome: str | None = None,
+    ) -> int:
+        """Count trades matching filters for pagination total.
+
+        Args:
+            strategy_id: Optional strategy ID filter.
+            date_from: Optional start date filter (ISO YYYY-MM-DD).
+            date_to: Optional end date filter (ISO YYYY-MM-DD).
+            outcome: Optional outcome filter ("win", "loss", "breakeven").
+
+        Returns:
+            Total number of matching trades.
+        """
+        conditions: list[str] = []
+        params: list[object] = []
+
+        if strategy_id is not None:
+            conditions.append("strategy_id = ?")
+            params.append(strategy_id)
+
+        if date_from is not None:
+            conditions.append("date(entry_time) >= ?")
+            params.append(date_from)
+
+        if date_to is not None:
+            conditions.append("date(entry_time) <= ?")
+            params.append(date_to)
+
+        if outcome is not None:
+            if outcome == "win":
+                conditions.append("net_pnl > 0")
+            elif outcome == "loss":
+                conditions.append("net_pnl < 0")
+            elif outcome == "breakeven":
+                conditions.append("net_pnl = 0")
+
+        where_clause = " AND ".join(conditions) if conditions else "1=1"
+        sql = f"SELECT COUNT(*) as count FROM trades WHERE {where_clause}"
+
+        row = await self._db.fetch_one(sql, tuple(params))
+        if row is None:
+            return 0
+        return int(dict(row).get("count", 0))  # type: ignore[arg-type]
+
+    async def get_daily_pnl(
+        self,
+        date_from: str | None = None,
+        date_to: str | None = None,
+    ) -> list[dict]:
+        """Get daily P&L aggregation.
+
+        Args:
+            date_from: Optional start date filter (ISO YYYY-MM-DD).
+            date_to: Optional end date filter (ISO YYYY-MM-DD).
+
+        Returns:
+            List of dicts with date, pnl, and trades count per day.
+        """
+        conditions: list[str] = []
+        params: list[object] = []
+
+        if date_from is not None:
+            conditions.append("date(entry_time) >= ?")
+            params.append(date_from)
+
+        if date_to is not None:
+            conditions.append("date(entry_time) <= ?")
+            params.append(date_to)
+
+        where_clause = " AND ".join(conditions) if conditions else "1=1"
+        sql = f"""
+            SELECT
+                date(entry_time) as date,
+                SUM(net_pnl) as pnl,
+                COUNT(*) as trades
+            FROM trades
+            WHERE {where_clause}
+            GROUP BY date(entry_time)
+            ORDER BY date DESC
+        """
+
+        rows = await self._db.fetch_all(sql, tuple(params))
+        return [dict(row) for row in rows]  # type: ignore[arg-type]
+
     async def save_daily_summary(self, summary: DailySummary) -> str:
         """Save a daily summary to the database.
 
