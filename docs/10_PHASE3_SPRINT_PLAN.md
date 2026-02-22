@@ -188,7 +188,7 @@ per sprint velocity.
 - **Responsive design from day one** — mobile-first CSS via Tailwind breakpoints
   (DEC-080: same views must work on iPhone/iPad in Safari)
 
-#### Sprint 16 — Command Center: Multi-Surface Delivery + Paper Trading Features
+#### Sprint 16 — Command Center: Multi-Surface Delivery (grouped with CC sprints — DEC-096)
 **Target:** ~1 day
 **Scope:**
 - **PWA configuration:** manifest.json, service worker, app icons, "Add to Home Screen"
@@ -201,12 +201,7 @@ per sprint velocity.
   manual position close), walk-forward results alongside live performance.
 - **Export:** CSV trade log download.
 
-**Deliverable:** After Sprint 16, the Command Center is accessible as:
-1. Web app (any browser, any device)
-2. Desktop app (Tauri, macOS/Windows/Linux — system tray, native notifications)
-3. Mobile app (PWA on iPhone/iPad — home screen icon, no Safari chrome)
-
-#### Sprint 17 — Orchestrator Framework
+#### Sprint 17 — Orchestrator V1 (DEC-096)
 **Target:** ~1-2 days
 **Scope:**
 - Orchestrator core: pre-market routine, regime classification, capital allocation
@@ -215,8 +210,9 @@ per sprint velocity.
 - Performance-based throttling (consecutive losses, Sharpe decay, drawdown)
 - Strategy activation/deactivation based on regime
 - AllocationUpdateEvent, StrategyActivatedEvent, StrategySuspendedEvent on Event Bus
+- Command Center integration: strategy deploy/pause/stop controls, allocation display
+- DEF-016 re-evaluation: atomic bracket submission via `broker.place_bracket_order()` in Order Manager. Natural fit — Orchestrator restructures signal→Order Manager flow.
 - Comprehensive test suite
-- DEF-016 re-evaluation: atomic bracket submission via `broker.place_bracket_order()` in Order Manager. Deferred from Sprint 13.5 (DEC-095). Natural fit — Orchestrator will restructure signal→Order Manager flow. Evaluate alongside limit entry strategy support.
 
 #### Sprint 18 — ORB Scalp Strategy
 **Target:** ~1-2 days
@@ -228,39 +224,68 @@ per sprint velocity.
 - Cross-strategy risk integration (ORB + ORB Scalp same-stock prevention)
 - Paper trading deployment alongside ORB
 
-#### Sprint 19 — Tier 1 News Integration
-**Target:** ~1 day
-**Scope:**
-- Economic calendar ingestion (FOMC, NFP, CPI, GDP, Fed speeches)
-- Earnings calendar (flag scanner candidates with pending earnings)
-- Risk Manager event-day filters (reduce positions on FOMC days, etc.)
-- Scanner metadata enrichment ("AAPL reports earnings after close")
-- CatalystEvent on Event Bus
+**Deliverable:** After Sprint 18, the Command Center is accessible as:
+1. Web app (any browser, any device)
+2. Desktop app (Tauri, macOS/Windows/Linux — system tray, native notifications)
+3. Mobile app (PWA on iPhone/iPad — home screen icon, no Safari chrome)
 
-#### Sprint 20 — AI Layer MVP
+**Note:** Databento subscription activation recommended around Sprint 19 (DEC-097).
+
+#### Sprint 19 — VWAP Reclaim Strategy (NEW — DEC-096)
 **Target:** ~1-2 days
 **Scope:**
-- Claude API integration (claude_service.py)
-- System Context Builder (assembles current state for Claude)
-- Automated end-of-day report generation
-- Paper trading analysis: Claude reviews daily/weekly performance
-- Basic approval workflow (Claude proposes → user approves in Command Center)
-- Claude chat endpoint in API + chat view in Command Center
+- VWAP Reclaim strategy implementation (mean-reversion, 10:00 AM–12:00 PM, 5–30 min holds)
+- Strategy spec sheet (04_STRATEGY_TEMPLATE.md filled in)
+- VectorBT parameter sweep (requires Databento historical data for quality validation)
+- Walk-forward validation
+- Cross-strategy risk integration (ORB + ORB Scalp + VWAP Reclaim same-stock prevention)
+- Orchestrator capital allocation for three strategies
+- Paper trading deployment
 
-#### Sprint 21 — Command Center: Strategy Lab + Controls
-**Target:** ~1 day
+#### Sprint 20 — Afternoon Momentum Strategy (NEW — DEC-096)
+**Target:** ~1-2 days
 **Scope:**
-- Strategy Lab: incubator pipeline visualization, per-strategy detail
-- Live Monitor: real-time position view with streaming P&L, price charts
-- Risk Dashboard: utilization at all three levels, sector exposure heat map
-- Approval Queue: pending approvals from Claude/Orchestrator
-- Autonomy settings configuration
+- Afternoon Momentum strategy implementation (consolidation breakout, 2:00–3:30 PM, 15–60 min holds)
+- Strategy spec sheet (04_STRATEGY_TEMPLATE.md filled in)
+- VectorBT parameter sweep
+- Walk-forward validation
+- Cross-strategy risk integration (four strategies, full-day coverage)
+- Orchestrator capital allocation for four strategies
+- Paper trading deployment
+- **Milestone:** ARGUS now covers 9:30 AM–3:30 PM with four uncorrelated signal types.
 
-#### Sprint 22+ — Additional Strategies, Expansion
-**Scope (prioritized backlog):**
-- VWAP Reclaim strategy (through full incubator pipeline)
-- Red-to-Green strategy
-- Afternoon Momentum strategy
+#### Sprint 21 — Command Center: Analytics & Strategy Lab (NEW — DEC-096)
+**Target:** ~1-2 days
+**Scope:**
+- Strategy Lab: incubator pipeline visualization, per-strategy detail views
+- Strategy correlation matrix (how do strategies move relative to each other?)
+- Regime performance heatmaps (which strategies excel in which market conditions?)
+- Trade journal with annotation support (user notes per trade)
+- Side-by-side strategy comparison views
+- Drawdown analysis and recovery time tracking
+- Calendar P&L view (daily/weekly/monthly grid with color coding)
+- Risk Dashboard: utilization at all three levels, sector exposure heat map
+- Approval Queue: pending approvals from Orchestrator
+- **Milestone:** Operator has full analytical toolkit for building conviction before live capital.
+
+#### Sprint 22 — AI Layer MVP (DEC-096, DEC-098)
+**Target:** ~1-2 days
+**Scope:**
+- Anthropic API integration (`argus/ai/claude_service.py`)
+- Model: Claude Opus for all calls (DEC-098). Prompt caching for system context.
+- System Context Builder: assembles current state (positions, regime, strategy metrics) for Claude
+- Pre-market briefing: overnight analysis, regime assessment, allocation recommendations
+- Post-trade analysis: real-time trade evaluation with context (ATR, volume, regime, historical comparison)
+- Anomaly detection: periodic system/market checks during trading hours
+- Weekly/monthly strategy performance reviews with narrative reports
+- Approval workflow: Claude proposes parameter/allocation changes → user approves in Command Center
+- Natural language chat endpoint in API + chat view in Command Center
+- API key stored in encrypted secrets manager (existing architectural rule)
+
+#### Sprint 23+ — Additional Features (Backlog)
+**Scope (prioritized):**
+- Tier 1 News Integration (economic/earnings calendar, event-day risk filters)
+- Red-to-Green strategy (through full incubator pipeline)
 - Tier 2 News (news feed + classification via IQFeed/Benzinga)
 - Accounting module (tax tracking, wash sales, P&L reports)
 - Learning Journal

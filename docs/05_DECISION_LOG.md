@@ -1090,5 +1090,40 @@ Each entry follows this format:
 
 ---
 
+### DEC-096 | Sprint Resequencing — Empowerment MVP (Sprints 14–22)
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-22 |
+| **Decision** | Resequenced Build Track queue to prioritize the interactive operator experience before live capital deployment. New order: CC API (14) → CC Frontend (15) → Desktop/PWA (16) → Orchestrator V1 (17) → ORB Scalp (18) → VWAP Reclaim (19) → Afternoon Momentum (20) → CC Analytics & Strategy Lab (21) → AI Layer MVP (22). Orchestrator moved ahead of Desktop/PWA packaging. Two new strategy sprints (VWAP Reclaim, Afternoon Momentum) inserted before AI Layer. Tier 1 News deferred to Sprint 23+. |
+| **Alternatives** | (1) Original queue: CC MVP (14–16) → Orchestrator (17) → ORB Scalp (18) → News (19) → AI (20) → CC expansion (21) — rejected because user needs to experience the system as an operator (persistent UI + orchestrator + multiple strategies) before deploying capital. (2) Keep Desktop/PWA before Orchestrator — rejected because web app alone is sufficient for all devices; packaging is quality-of-life, not blocking. |
+| **Rationale** | User insight: understanding strategies and building conviction requires a persistent visual interface with orchestration controls and real-time data — not terminal output and backtest reports. Four uncorrelated strategies covering the full trading day (morning breakouts, mid-morning mean-reversion, afternoon momentum) provide meaningful orchestration and diverse signal validation. Analytics suite enables pattern recognition across strategies and market conditions. AI Layer built during paper trading validation period so its analysis compounds as trade data accumulates. Desktop/PWA is a packaging step that doesn't unlock new capability — web app works on all devices including mobile. |
+| **Status** | Active |
+| **Supersedes** | DEC-084 (sprint resequencing — data/broker before CC) for queue ordering beyond Sprint 13. Sprint 14 scope unchanged. |
+
+---
+
+### DEC-097 | Databento Activation Timing — Post-Sprint 18
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-22 |
+| **Decision** | Defer Databento subscription activation ($199/mo) until approximately Sprint 19 (VWAP Reclaim), when new strategies require quality data for backtesting and parameter validation. Sprints 14–18 (Command Center, Orchestrator, ORB Scalp, Desktop/PWA) are UI and infrastructure work that can use Alpaca paper data. |
+| **Alternatives** | (1) Activate immediately — rejected because $200–600 would be spent during sprints that don't benefit from quality data. (2) Activate after Sprint 22 — rejected because strategy development (Sprints 19–20) needs quality data for backtesting and walk-forward validation. |
+| **Rationale** | Saves $400–600 during UI/infrastructure development sprints with zero downside. Databento data matters when building signal intuition and validating strategy parameters — not when building dashboards and orchestration logic. Alpaca paper trading data is sufficient for Command Center development and testing. Amends DEC-087 timing guidance. |
+| **Status** | Active |
+| **Amends** | DEC-087 (cost deferral — original timing was "when adapter ready for integration testing") |
+
+---
+
+### DEC-098 | AI Layer Model Selection — All Opus
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-22 |
+| **Decision** | ARGUS AI Layer uses Claude Opus (currently Opus 4.5, $5/$25 per MTok) for all API calls — pre-market briefings, post-trade analysis, anomaly detection, natural language queries, weekly reviews. No mixed-model optimization. Separate Anthropic API account (pay-as-you-go), independent of user's Claude Max subscription. |
+| **Alternatives** | (1) Mixed-model approach: Haiku for anomaly detection, Sonnet for trade analysis, Opus for complex reasoning — rejected because cost delta (~$20/month) is negligible relative to trading capital, and user prioritizes maximum intelligence for all tasks involving real money. (2) Use Claude Max subscription — not possible; Max is for interactive chat, API is separate billing. |
+| **Rationale** | Estimated all-Opus cost: $35–50/month. With prompt caching (90% savings on repeated system context), likely lower. Cost is trivial relative to Databento ($199/mo), IBKR commissions, and the $25K–100K+ trading capital at stake. Missing an anomaly or generating a weaker analysis to save $20/month is irrational risk optimization. API account setup: console.anthropic.com, credit card, API key stored in encrypted secrets manager (existing architectural rule). |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
 *New decisions are appended chronologically as the project progresses.*

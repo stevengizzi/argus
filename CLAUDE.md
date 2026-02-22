@@ -35,9 +35,9 @@ Active sprint plan: `docs/10_PHASE3_SPRINT_PLAN.md` (covers both tracks).
 
 **Recommended ORB parameters (DEC-076):** or=5, hold=15, gap=2.0, stop_buf=0.0, target_r=2.0, atr=999.0 (disabled).
 
-**Validation Track sequence:** Databento subscription activation (DEC-087) → IBKR account approval → IBKR paper trading (2+ weeks) → CPA consultation → live trading at minimum size on IBKR.
+**Validation Track sequence:** Build through Sprint 21 (four strategies + analytics) → activate Databento ~Sprint 19 (DEC-097) → serious paper trading with quality data + IBKR → AI Layer (Sprint 22) compounds analysis during validation → CPA consultation → live at minimum size on IBKR.
 
-**Build Track queue:** Command Center MVP (Sprints 14–16) → Orchestrator + DEF-016 re-eval (17) → ORB Scalp (18) → Tier 1 News (19) → AI Layer MVP (20) → Expansion (21+)
+**Build Track queue (DEC-096):** CC API (14) → CC Frontend (15) → Desktop/PWA (16) → Orchestrator V1 (17) → ORB Scalp (18) → VWAP Reclaim (19) → Afternoon Momentum (20) → CC Analytics & Strategy Lab (21) → AI Layer MVP (22) → Tier 1 News + expansion (23+)
 
 **Command Center delivery (DEC-080):** Three surfaces from single React codebase — web app + Tauri desktop + PWA mobile. All operational after Sprint 16.
 

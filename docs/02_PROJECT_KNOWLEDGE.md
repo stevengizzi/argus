@@ -29,8 +29,8 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 
 **IBKR Account (Feb 21):** Application submitted. Account ID U24619949. Individual margin account, IBKR Pro tiered pricing. Awaiting approval — paper trading account will be enabled post-approval for Sprint 13 adapter development.
 
-**Next Build sprints:** Sprint 14–16 (Command Center MVP) → Sprint 17 (Orchestrator + DEF-016 re-eval).
-**Next Validation gate:** DatabentoDataService ready → resume paper trading with quality data → IBKRBroker ready → IBKR paper trading validation → CPA consultation → live trading at minimum size on IBKR.
+**Next Build sprints:** CC API (Sprint 14) → CC Frontend (Sprint 15) → Desktop/PWA (Sprint 16) → Orchestrator V1 (Sprint 17) → ORB Scalp (Sprint 18) → VWAP Reclaim (Sprint 19) → Afternoon Momentum (Sprint 20) → CC Analytics & Strategy Lab (Sprint 21) → AI Layer MVP (Sprint 22). See DEC-096.
+**Next Validation gate:** Build through Sprint 21 (four strategies + analytics) using Alpaca data → activate Databento (~Sprint 19, DEC-097) → serious paper trading validation with quality data + IBKR execution → AI Layer (Sprint 22) compounds analysis during validation → CPA consultation → live trading at minimum size on IBKR.
 
 **✅ IBKR APPLICATION SUBMITTED:** Feb 21, 2026. Account ID: U24619949. Individual margin account, IBKR Pro (tiered pricing), Georgia address. Trading permissions requested: Stocks, Options (Level 3), Futures, Currency/Forex, Cryptocurrencies, Mutual Funds. Awaiting approval (typically 1–3 business days, may take longer). Disclosures and agreements archived locally.
 
@@ -121,6 +121,9 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 - **Native IBKR bracket orders (DEC-093):** IBKRBroker `place_bracket_order()` supports multi-target brackets (T1+T2) via `parentId` linkage and `transmit` flag. Order Manager T2 support: `t2_order_id` field, broker-side T2 limit orders, `_handle_t2_fill()`, tick-skip when broker-side T2 exists, T2 cancellation in all exit paths. Backward compatible — Alpaca path (t2_order_id=None) tick-monitors T2 unchanged. Current implementation uses individual `place_order()` calls post-fill rather than atomic bracket submission (DEF-016).
 - **BrokerSource enum and IBKRConfig (DEC-094):** `BrokerSource` enum (`alpaca`/`ibkr`/`simulated`) in `SystemConfig`. `IBKRConfig` Pydantic model for IB Gateway connection parameters. `main.py` Phase 3 branches on `broker_source`. Mirrors `DataSource` enum pattern (DEC-090).
 - **DEF-016 evaluation — defer (DEC-095):** Atomic bracket refactor deferred to Sprint 17+ or limit entry strategies. Scope balloons (SimulatedBroker, AlpacaBroker, test rewrite). Near-zero risk for market-order strategies. Evaluated Sprint 13.5.
+- **Sprint resequencing — empowerment MVP (DEC-096):** Orchestrator (Sprint 16) before Desktop/PWA (Sprint 18). VWAP Reclaim (Sprint 19) and Afternoon Momentum (Sprint 20) inserted. CC Analytics & Strategy Lab (Sprint 21). AI Layer MVP (Sprint 22). Tier 1 News deferred to Sprint 23+. Four strategies covering full trading day before capital deployment.
+- **Databento activation timing (DEC-097):** Subscription deferred to ~Sprint 19 when new strategies need quality data. Sprints 14–18 use Alpaca data. Saves $400–600. Amends DEC-087.
+- **AI Layer model selection (DEC-098):** Claude Opus for all API calls. Separate Anthropic API account (pay-as-you-go, ~$35–50/month). No mixed-model optimization — cost delta negligible vs. capital at risk. Independent of user's Claude Pro subscription.
 
 ## Architecture Summary
 
@@ -169,9 +172,10 @@ Concept → Exploration (VectorBT) → Validation (Replay Harness + Walk-Forward
 | IBKR account fees | $0 (waived with activity) | Account opening onward | No minimum balance required |
 | IQFeed (forex + news + breadth) | ~$160–250/mo | When forex strategies or Tier 2 news needed | Deferred until specific feature requires it |
 | Databento CME Futures | $179/mo + exchange fees | When futures strategies launch | Separate dataset subscription |
+| Claude API (AI Layer) | ~$35–50/mo | Sprint 22 onward (DEC-098) | All-Opus, pay-as-you-go. Prompt caching reduces effective cost. |
 | **Current monthly (paper trading)** | **$199/mo** | | Databento only |
-| **Projected monthly (live, equities only)** | **~$199 + commissions** | | Commissions scale with trading volume |
-| **Projected monthly (full multi-asset)** | **~$540–630 + commissions** | | Databento + IQFeed + futures exchanges |
+| **Projected monthly (live, equities only)** | **~$235–250 + commissions** | | Databento + Claude API + commissions |
+| **Projected monthly (full multi-asset)** | **~$575–680 + commissions** | | Databento + IQFeed + futures + Claude API + commissions |
 
 ## Market Regime Classification (V1)
 
@@ -222,7 +226,7 @@ Effective February 19, 2026, ARGUS uses two parallel tracks instead of sequentia
 ### Build Track (velocity-limited, continuous)
 Sprints 12+. System construction proceeds at development speed. Each sprint targets a specific component. Order is prioritized but flexible — Validation Track needs can reprioritize.
 
-**Queue:** Command Center MVP (Sprints 14–16) → Orchestrator + DEF-016 re-eval (Sprint 17) → ORB Scalp (Sprint 18) → Tier 1 News (Sprint 19) → AI Layer MVP (Sprint 20) → Command Center expansion (Sprint 21) → Additional strategies + features (Sprint 22+)
+**Queue (DEC-096):** CC API (Sprint 14) → CC Frontend (Sprint 15) → Orchestrator V1 (Sprint 16) → ORB Scalp (Sprint 17) → Desktop/PWA (Sprint 18) → VWAP Reclaim (Sprint 19) → Afternoon Momentum (Sprint 20) → CC Analytics & Strategy Lab (Sprint 21) → AI Layer MVP (Sprint 22) → Tier 1 News + additional strategies + features (Sprint 23+)
 
 **Command Center delivery (DEC-080):** Single React codebase ships to three surfaces: web app (any browser), Tauri desktop app (system tray, native notifications), and PWA mobile app (iPhone/iPad home screen install). All three operational after Sprint 16.
 
