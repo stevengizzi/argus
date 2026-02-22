@@ -338,10 +338,89 @@ class IBKRBroker(Broker):
         """Handle disconnection event from ib_async.
 
         Called when the connection to IB Gateway is lost.
-        This is a placeholder that will trigger reconnection in Prompt 8.
+        Sets connected flag to False and schedules reconnection if not already
+        reconnecting (double-reconnect guard).
         """
         self._connected = False
         logger.warning("IB Gateway disconnected")
+
+        # Double-reconnect guard: only schedule if not already reconnecting
+        if not self._reconnecting:
+            logger.info("Scheduling reconnection attempt")
+            asyncio.ensure_future(self._reconnect())
+
+    async def _reconnect(self) -> None:
+        """Reconnect to IB Gateway with exponential backoff.
+
+        Attempts to reconnect up to reconnect_max_retries times using
+        exponential backoff with a cap at reconnect_max_delay_seconds.
+        After successful reconnection, verifies position consistency.
+
+        If all retries are exhausted, logs CRITICAL error.
+        SystemAlertEvent deferred to DEF-014.
+        """
+        self._reconnecting = True
+
+        # Snapshot pre-disconnect positions for verification
+        pre_positions = [
+            (p.contract.symbol, int(p.position))
+            for p in self._last_known_positions
+        ]
+
+        for attempt in range(self._config.reconnect_max_retries):
+            # Calculate delay with exponential backoff and cap
+            delay = min(
+                self._config.reconnect_base_delay_seconds * (2 ** attempt),
+                self._config.reconnect_max_delay_seconds,
+            )
+            logger.info(
+                "Reconnection attempt %d/%d in %.1fs",
+                attempt + 1,
+                self._config.reconnect_max_retries,
+                delay,
+            )
+
+            await asyncio.sleep(delay)
+
+            try:
+                await self.connect()
+
+                # Verify positions match after reconnection
+                post_positions = [
+                    (p.contract.symbol, int(p.position))
+                    for p in self._ib.positions()
+                ]
+
+                if set(pre_positions) != set(post_positions):
+                    logger.warning(
+                        "Position mismatch after reconnect! Before: %s, After: %s",
+                        pre_positions,
+                        post_positions,
+                    )
+                    # Continue anyway — HealthMonitor will reconcile
+
+                self._reconnecting = False
+                logger.info(
+                    "Reconnected to IB Gateway (attempt %d)",
+                    attempt + 1,
+                )
+                return
+
+            except Exception as e:
+                logger.warning(
+                    "Reconnection attempt %d failed: %s",
+                    attempt + 1,
+                    e,
+                )
+
+        # All retries exhausted
+        self._reconnecting = False
+        logger.critical(
+            "Failed to reconnect after %d attempts. "
+            "IB Gateway unreachable. Manual intervention required.",
+            self._config.reconnect_max_retries,
+        )
+        # TODO: Publish SystemAlertEvent when available (DEF-014)
 
     # --- Order Building Helpers ---
 

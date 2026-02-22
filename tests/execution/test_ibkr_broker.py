@@ -1854,3 +1854,291 @@ class TestIBKRBrokerHelpers:
             found = broker._find_trade_by_order_id(99999)
 
             assert found is None
+
+
+# ---------------------------------------------------------------------------
+# Reconnection Tests (Prompt 8)
+# ---------------------------------------------------------------------------
+
+
+class TestIBKRBrokerReconnection:
+    """Tests for IBKRBroker reconnection logic."""
+
+    @pytest.mark.asyncio
+    async def test_successful_reconnect_first_attempt(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """Successful reconnection on first attempt sets flags correctly."""
+        with (
+            patch("argus.execution.ibkr_broker.IB", return_value=mock_ib),
+            patch("argus.execution.ibkr_broker.asyncio.sleep", new_callable=AsyncMock),
+        ):
+            broker = IBKRBroker(ibkr_config, event_bus)
+            await broker.connect()
+            assert broker._connected is True
+
+            # Simulate disconnect and call _reconnect directly (not via _on_disconnected)
+            # to avoid async timing issues with ensure_future
+            broker._connected = False
+            await broker._reconnect()
+
+            # Should be reconnected
+            assert broker._connected is True
+            assert broker._reconnecting is False
+
+    @pytest.mark.asyncio
+    async def test_successful_reconnect_after_two_failures(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """Successful reconnection after 2 failed attempts."""
+        connect_attempts = [0]
+
+        async def failing_connect(*args, **kwargs):
+            connect_attempts[0] += 1
+            if connect_attempts[0] <= 2:
+                raise ConnectionError("Connection refused")
+            # Third attempt succeeds (normal behavior from mock)
+
+        mock_ib.connectAsync = AsyncMock(side_effect=failing_connect)
+
+        with (
+            patch("argus.execution.ibkr_broker.IB", return_value=mock_ib),
+            patch("argus.execution.ibkr_broker.asyncio.sleep", new_callable=AsyncMock),
+        ):
+            broker = IBKRBroker(ibkr_config, event_bus)
+            # First connect succeeds (we're not using failing_connect yet)
+            mock_ib.connectAsync.side_effect = None
+            await broker.connect()
+
+            # Now set up failing connect for reconnection
+            connect_attempts[0] = 0
+            mock_ib.connectAsync.side_effect = failing_connect
+
+            # Simulate disconnect
+            broker._connected = False
+            await broker._reconnect()
+
+            # Should have attempted 3 times (2 failures + 1 success)
+            assert connect_attempts[0] == 3
+            assert broker._connected is True
+            assert broker._reconnecting is False
+
+    @pytest.mark.asyncio
+    async def test_max_retries_exceeded_logs_critical(
+        self, mock_ib: MagicMock, event_bus: EventBus
+    ) -> None:
+        """Max retries exceeded logs CRITICAL and sets reconnecting to False."""
+        config = IBKRConfig(
+            host="127.0.0.1",
+            port=4002,
+            client_id=1,
+            account="U24619949",
+            timeout_seconds=10.0,
+            reconnect_max_retries=3,  # Only 3 retries for faster test
+            reconnect_base_delay_seconds=0.1,
+        )
+
+        # Always fail to connect
+        mock_ib.connectAsync = AsyncMock(
+            side_effect=ConnectionError("Connection refused")
+        )
+
+        with (
+            patch("argus.execution.ibkr_broker.IB", return_value=mock_ib),
+            patch("argus.execution.ibkr_broker.asyncio.sleep", new_callable=AsyncMock),
+            patch("argus.execution.ibkr_broker.logger") as mock_logger,
+        ):
+            broker = IBKRBroker(config, event_bus)
+            broker._connected = False  # Simulate disconnected state
+
+            await broker._reconnect()
+
+            # Should have logged critical
+            mock_logger.critical.assert_called()
+            critical_msg = mock_logger.critical.call_args[0][0]
+            assert "Failed to reconnect" in critical_msg
+
+            # Reconnecting flag should be cleared
+            assert broker._reconnecting is False
+            assert broker._connected is False
+
+    @pytest.mark.asyncio
+    async def test_position_verification_passes_same_positions(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """Position verification passes when positions match before/after."""
+        initial_positions = [
+            _mock_position("AAPL", 100, 150.0),
+            _mock_position("NVDA", 50, 800.0),
+        ]
+        mock_ib.positions.return_value = initial_positions
+
+        with (
+            patch("argus.execution.ibkr_broker.IB", return_value=mock_ib),
+            patch("argus.execution.ibkr_broker.asyncio.sleep", new_callable=AsyncMock),
+            patch("argus.execution.ibkr_broker.logger") as mock_logger,
+        ):
+            broker = IBKRBroker(ibkr_config, event_bus)
+            await broker.connect()
+
+            # Simulate disconnect
+            broker._connected = False
+
+            # Reconnect with same positions
+            await broker._reconnect()
+
+            # Should NOT have logged position mismatch warning
+            for call in mock_logger.warning.call_args_list:
+                assert "Position mismatch" not in str(call)
+
+    @pytest.mark.asyncio
+    async def test_position_mismatch_logs_warning(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """Position mismatch after reconnect logs warning."""
+        initial_positions = [
+            _mock_position("AAPL", 100, 150.0),
+        ]
+
+        # After reconnect, positions are different
+        post_reconnect_positions = [
+            _mock_position("AAPL", 50, 150.0),  # Quantity changed
+        ]
+
+        positions_call_count = [0]
+
+        def get_positions():
+            positions_call_count[0] += 1
+            # First call during connect(), second during _reconnect verification
+            if positions_call_count[0] <= 1:
+                return initial_positions
+            return post_reconnect_positions
+
+        mock_ib.positions.side_effect = get_positions
+
+        with (
+            patch("argus.execution.ibkr_broker.IB", return_value=mock_ib),
+            patch("argus.execution.ibkr_broker.asyncio.sleep", new_callable=AsyncMock),
+            patch("argus.execution.ibkr_broker.logger") as mock_logger,
+        ):
+            broker = IBKRBroker(ibkr_config, event_bus)
+            await broker.connect()
+
+            # Simulate disconnect
+            broker._connected = False
+
+            # Reconnect with different positions
+            await broker._reconnect()
+
+            # Should have logged position mismatch warning
+            warning_calls = [str(c) for c in mock_logger.warning.call_args_list]
+            mismatch_logged = any("Position mismatch" in call for call in warning_calls)
+            assert mismatch_logged, (
+                f"Expected position mismatch warning. Calls: {warning_calls}"
+            )
+
+    @pytest.mark.asyncio
+    async def test_no_double_reconnect(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """Second disconnect during reconnection is ignored (no double-reconnect)."""
+        with (
+            patch("argus.execution.ibkr_broker.IB", return_value=mock_ib),
+            patch("argus.execution.ibkr_broker.asyncio.ensure_future") as mock_ensure,
+        ):
+            broker = IBKRBroker(ibkr_config, event_bus)
+            await broker.connect()
+
+            # First disconnect triggers reconnection
+            broker._on_disconnected()
+            assert mock_ensure.call_count == 1
+
+            # Manually set reconnecting flag (simulating _reconnect in progress)
+            broker._reconnecting = True
+
+            # Second disconnect while reconnecting should be ignored
+            broker._on_disconnected()
+
+            # ensure_future should have been called only once
+            assert mock_ensure.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_backoff_delay_values_correct(
+        self, mock_ib: MagicMock, event_bus: EventBus
+    ) -> None:
+        """Exponential backoff delays are calculated correctly with cap."""
+        config = IBKRConfig(
+            host="127.0.0.1",
+            port=4002,
+            client_id=1,
+            account="U24619949",
+            timeout_seconds=10.0,
+            reconnect_max_retries=6,
+            reconnect_base_delay_seconds=1.0,
+            reconnect_max_delay_seconds=8.0,  # Cap at 8 seconds
+        )
+
+        # Always fail to connect so we can measure all delays
+        mock_ib.connectAsync = AsyncMock(
+            side_effect=ConnectionError("Connection refused")
+        )
+
+        recorded_delays: list[float] = []
+
+        async def recording_sleep(delay: float) -> None:
+            recorded_delays.append(delay)
+
+        with (
+            patch("argus.execution.ibkr_broker.IB", return_value=mock_ib),
+            patch(
+                "argus.execution.ibkr_broker.asyncio.sleep",
+                side_effect=recording_sleep,
+            ),
+        ):
+            broker = IBKRBroker(config, event_bus)
+            broker._connected = False
+
+            await broker._reconnect()
+
+            # Expected delays: 1, 2, 4, 8, 8, 8 (capped at 8)
+            expected_delays = [1.0, 2.0, 4.0, 8.0, 8.0, 8.0]
+            assert recorded_delays == expected_delays
+
+    @pytest.mark.asyncio
+    async def test_on_disconnected_schedules_reconnect(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """_on_disconnected schedules _reconnect via ensure_future."""
+        with (
+            patch("argus.execution.ibkr_broker.IB", return_value=mock_ib),
+            patch("argus.execution.ibkr_broker.asyncio.ensure_future") as mock_ensure,
+        ):
+            broker = IBKRBroker(ibkr_config, event_bus)
+            await broker.connect()
+
+            # Trigger disconnect
+            broker._on_disconnected()
+
+            # ensure_future should have been called
+            mock_ensure.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_reconnecting_flag_prevents_duplicate_reconnect(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """_reconnecting flag prevents duplicate reconnection scheduling."""
+        with (
+            patch("argus.execution.ibkr_broker.IB", return_value=mock_ib),
+            patch("argus.execution.ibkr_broker.asyncio.ensure_future") as mock_ensure,
+        ):
+            broker = IBKRBroker(ibkr_config, event_bus)
+            await broker.connect()
+
+            # Set reconnecting flag manually
+            broker._reconnecting = True
+
+            # Trigger disconnect
+            broker._on_disconnected()
+
+            # ensure_future should NOT have been called
+            mock_ensure.assert_not_called()
