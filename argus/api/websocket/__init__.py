@@ -3,7 +3,18 @@
 Bridges Event Bus events to connected WebSocket clients.
 """
 
-from fastapi import APIRouter
+from argus.api.websocket.live import (
+    ClientConnection,
+    WebSocketBridge,
+    get_bridge,
+    reset_bridge,
+    ws_router,
+)
 
-# Placeholder router - WebSocket endpoints will be added in future prompts
-ws_router = APIRouter(tags=["websocket"])
+__all__ = [
+    "ClientConnection",
+    "WebSocketBridge",
+    "get_bridge",
+    "reset_bridge",
+    "ws_router",
+]
