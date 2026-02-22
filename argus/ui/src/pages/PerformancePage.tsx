@@ -8,11 +8,11 @@
 import { Component, type ReactNode } from 'react';
 import { TrendingUp } from 'lucide-react';
 import { usePerformance } from '../hooks/usePerformance';
+import { useSelectedPeriod } from '../hooks/useSelectedPeriod';
 import { LoadingState } from '../components/LoadingState';
 import { Card } from '../components/Card';
 import {
   PeriodSelector,
-  useSelectedPeriod,
   MetricsGrid,
   EquityCurve,
   DailyPnlChart,

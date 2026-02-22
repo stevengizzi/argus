@@ -67,7 +67,7 @@ export class WebSocketClient {
       this.ws = new WebSocket(wsUrl);
 
       this.ws.onopen = () => {
-        console.log('WebSocket connected');
+        if (import.meta.env.DEV) console.log('WebSocket connected');
         this.reconnectAttempts = 0;
         this.setStatus('connected');
       };
@@ -82,7 +82,7 @@ export class WebSocketClient {
       };
 
       this.ws.onclose = (event) => {
-        console.log(`WebSocket closed: code=${event.code}, reason=${event.reason}`);
+        if (import.meta.env.DEV) console.log(`WebSocket closed: code=${event.code}, reason=${event.reason}`);
         this.setStatus('disconnected');
 
         if (!this.intentionalClose) {
@@ -131,9 +131,11 @@ export class WebSocketClient {
       this.options.maxDelay
     );
 
-    console.log(
-      `WebSocket: Reconnecting in ${Math.round(delay)}ms (attempt ${this.reconnectAttempts + 1})`
-    );
+    if (import.meta.env.DEV) {
+      console.log(
+        `WebSocket: Reconnecting in ${Math.round(delay)}ms (attempt ${this.reconnectAttempts + 1})`
+      );
+    }
 
     this.reconnectTimeout = setTimeout(() => {
       this.reconnectAttempts++;

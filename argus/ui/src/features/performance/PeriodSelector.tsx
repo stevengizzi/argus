@@ -32,7 +32,7 @@ export function PeriodSelector({ className = '' }: PeriodSelectorProps) {
         <button
           key={value}
           onClick={() => handlePeriodChange(value)}
-          className={`px-3 py-1.5 text-sm font-medium rounded transition-colors ${
+          className={`px-3 min-h-[44px] text-sm font-medium rounded transition-colors ${
             currentPeriod === value
               ? 'bg-argus-accent text-white'
               : 'bg-argus-surface-2 text-argus-text-dim hover:text-argus-text hover:bg-argus-surface-3'
@@ -43,10 +43,4 @@ export function PeriodSelector({ className = '' }: PeriodSelectorProps) {
       ))}
     </div>
   );
-}
-
-/** Hook to get current period from URL */
-export function useSelectedPeriod(): PerformancePeriod {
-  const [searchParams] = useSearchParams();
-  return (searchParams.get('period') as PerformancePeriod) || 'month';
 }

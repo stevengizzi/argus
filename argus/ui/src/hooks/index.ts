@@ -8,3 +8,5 @@ export { usePerformance } from './usePerformance';
 export { usePositions } from './usePositions';
 export { useStrategies } from './useStrategies';
 export { useTrades, type UseTradesParams } from './useTrades';
+export { useSelectedPeriod } from './useSelectedPeriod';
+export { useTradeFilters, type TradeFilterValues, type OutcomeFilter } from './useTradeFilters';

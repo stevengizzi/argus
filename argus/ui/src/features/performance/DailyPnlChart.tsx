@@ -42,7 +42,11 @@ export function DailyPnlChart({ dailyPnl, className = '' }: DailyPnlChartProps) 
 
   // Store latest data in ref for use in callback
   const dataRef = useRef(histogramData);
-  dataRef.current = histogramData;
+
+  // Update ref when data changes (must be in effect, not during render)
+  useEffect(() => {
+    dataRef.current = histogramData;
+  }, [histogramData]);
 
   const handleChartReady = useCallback((chart: IChartApi) => {
     chartRef.current = chart;

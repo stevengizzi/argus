@@ -244,7 +244,7 @@ export function TradeTable({ trades, totalCount, limit, isLoading }: TradeTableP
           <button
             onClick={() => goToPage(currentPage - 1)}
             disabled={currentPage <= 1}
-            className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-md border border-argus-border bg-argus-surface hover:bg-argus-surface-3 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="flex items-center justify-center gap-1 min-w-[44px] min-h-[44px] px-3 text-sm rounded-md border border-argus-border bg-argus-surface hover:bg-argus-surface-3 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             <ChevronLeft className="w-4 h-4" />
             <span className="hidden sm:inline">Prev</span>
@@ -257,7 +257,7 @@ export function TradeTable({ trades, totalCount, limit, isLoading }: TradeTableP
           <button
             onClick={() => goToPage(currentPage + 1)}
             disabled={currentPage >= totalPages}
-            className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-md border border-argus-border bg-argus-surface hover:bg-argus-surface-3 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="flex items-center justify-center gap-1 min-w-[44px] min-h-[44px] px-3 text-sm rounded-md border border-argus-border bg-argus-surface hover:bg-argus-surface-3 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             <span className="hidden sm:inline">Next</span>
             <ChevronRight className="w-4 h-4" />

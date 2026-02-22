@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect, useCallback } from 'react';
 import { formatPnl, formatPnlPercent, formatR } from '../utils/format';
 
 interface PnlValueProps {
@@ -17,18 +17,44 @@ const sizeClasses: Record<NonNullable<PnlValueProps['size']>, string> = {
 
 export function PnlValue({ value, format = 'currency', size = 'md', flash = false }: PnlValueProps) {
   const prevValueRef = useRef<number>(value);
-  const [flashClass, setFlashClass] = useState<string>('');
+  const spanRef = useRef<HTMLSpanElement>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Cleanup timer on unmount
   useEffect(() => {
-    if (flash && prevValueRef.current !== value) {
-      const newFlashClass = value > prevValueRef.current ? 'flash-profit' : 'flash-loss';
-      setFlashClass(newFlashClass);
-      prevValueRef.current = value;
+    return () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+      }
+    };
+  }, []);
 
-      const timer = setTimeout(() => setFlashClass(''), 600);
-      return () => clearTimeout(timer);
+  // Handle flash animation via DOM manipulation to avoid setState in effect
+  const triggerFlash = useCallback(() => {
+    if (!flash || !spanRef.current) return;
+    if (prevValueRef.current === value) return;
+
+    const flashClass = value > prevValueRef.current ? 'flash-profit' : 'flash-loss';
+    prevValueRef.current = value;
+
+    // Clear any existing timer
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
     }
+
+    // Add flash class via DOM
+    spanRef.current.classList.add(flashClass);
+
+    // Remove after animation completes
+    timerRef.current = setTimeout(() => {
+      spanRef.current?.classList.remove('flash-profit', 'flash-loss');
+    }, 600);
   }, [value, flash]);
+
+  // Trigger flash on value change
+  useEffect(() => {
+    triggerFlash();
+  }, [triggerFlash]);
 
   let formatted: { text: string; className: string };
   switch (format) {
@@ -44,7 +70,8 @@ export function PnlValue({ value, format = 'currency', size = 'md', flash = fals
 
   return (
     <span
-      className={`tabular-nums font-medium ${sizeClasses[size]} ${formatted.className} ${flashClass}`}
+      ref={spanRef}
+      className={`tabular-nums font-medium ${sizeClasses[size]} ${formatted.className}`}
     >
       {formatted.text}
     </span>

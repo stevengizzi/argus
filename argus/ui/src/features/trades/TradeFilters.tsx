@@ -7,15 +7,7 @@
 
 import { useSearchParams } from 'react-router-dom';
 import { useStrategies } from '../../hooks/useStrategies';
-
-export type OutcomeFilter = 'all' | 'win' | 'loss' | 'breakeven';
-
-export interface TradeFilterValues {
-  strategy_id: string | undefined;
-  outcome: OutcomeFilter;
-  date_from: string | undefined;
-  date_to: string | undefined;
-}
+import type { OutcomeFilter, TradeFilterValues } from '../../hooks/useTradeFilters';
 
 interface TradeFiltersProps {
   onFiltersChange?: (filters: TradeFilterValues) => void;
@@ -121,7 +113,7 @@ export function TradeFilters({ onFiltersChange }: TradeFiltersProps) {
               <button
                 key={opt.value}
                 onClick={() => updateFilters({ outcome: opt.value })}
-                className={`flex-1 md:flex-none px-3 py-2 text-xs font-medium transition-colors ${
+                className={`flex-1 md:flex-none px-3 min-h-[44px] text-xs font-medium transition-colors ${
                   outcome === opt.value
                     ? 'bg-argus-accent text-white'
                     : 'bg-argus-surface-2 text-argus-text-dim hover:text-argus-text hover:bg-argus-surface-3'
@@ -177,18 +169,4 @@ export function TradeFilters({ onFiltersChange }: TradeFiltersProps) {
       </div>
     </div>
   );
-}
-
-/**
- * Hook to read filter values from URL search params.
- */
-export function useTradeFilters(): TradeFilterValues {
-  const [searchParams] = useSearchParams();
-
-  return {
-    strategy_id: searchParams.get('strategy') || undefined,
-    outcome: (searchParams.get('outcome') as OutcomeFilter) || 'all',
-    date_from: searchParams.get('from') || undefined,
-    date_to: searchParams.get('to') || undefined,
-  };
 }

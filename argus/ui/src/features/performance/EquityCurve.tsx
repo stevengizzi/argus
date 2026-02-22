@@ -34,19 +34,28 @@ export function EquityCurve({ dailyPnl, className = '' }: EquityCurveProps) {
   const equityData: AreaData<Time>[] = useMemo(() => {
     // Sort by date ascending (oldest first)
     const sorted = [...dailyPnl].sort((a, b) => a.date.localeCompare(b.date));
-    let cumulative = 0;
-    return sorted.map((entry) => {
-      cumulative += entry.pnl;
-      return {
-        time: entry.date as Time,
-        value: cumulative,
-      };
-    });
+    // Use reduce to compute cumulative values without reassigning a let variable
+    return sorted.reduce<{ data: AreaData<Time>[]; cumulative: number }>(
+      (acc, entry) => {
+        const newCumulative = acc.cumulative + entry.pnl;
+        acc.data.push({
+          time: entry.date as Time,
+          value: newCumulative,
+        });
+        acc.cumulative = newCumulative;
+        return acc;
+      },
+      { data: [], cumulative: 0 }
+    ).data;
   }, [dailyPnl]);
 
   // Store latest data in ref for use in callback
   const dataRef = useRef(equityData);
-  dataRef.current = equityData;
+
+  // Update ref when data changes (must be in effect, not during render)
+  useEffect(() => {
+    dataRef.current = equityData;
+  }, [equityData]);
 
   const handleChartReady = useCallback((chart: IChartApi) => {
     chartRef.current = chart;

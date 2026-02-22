@@ -158,10 +158,10 @@ export function EventsLog() {
               e.stopPropagation();
               clearEvents();
             }}
-            className="flex items-center gap-1 px-2 py-1 text-xs text-argus-text-dim hover:text-argus-text hover:bg-argus-surface-3 rounded transition-colors"
+            className="flex items-center justify-center gap-1.5 px-3 min-h-[44px] text-xs text-argus-text-dim hover:text-argus-text hover:bg-argus-surface-3 rounded transition-colors"
             aria-label="Clear events"
           >
-            <Trash2 className="w-3 h-3" />
+            <Trash2 className="w-3.5 h-3.5" />
             Clear
           </button>
         )}

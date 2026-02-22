@@ -28,11 +28,14 @@ export function OpenPositions() {
   const { data, isLoading, error } = usePositions();
   const priceUpdates = useLiveStore((state) => state.priceUpdates);
 
+  // Extract positions array for stable dependency
+  const positions = data?.positions;
+
   // Merge REST positions with WebSocket price updates
   const enrichedPositions = useMemo<EnrichedPosition[]>(() => {
-    if (!data?.positions) return [];
+    if (!positions) return [];
 
-    return data.positions.map((pos) => {
+    return positions.map((pos) => {
       const wsUpdate = priceUpdates[pos.symbol];
 
       // Use WebSocket price if available and newer
@@ -55,7 +58,7 @@ export function OpenPositions() {
         liveR,
       };
     });
-  }, [data?.positions, priceUpdates]);
+  }, [positions, priceUpdates]);
 
   if (isLoading) {
     return (
