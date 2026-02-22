@@ -48,7 +48,7 @@ Active sprint plan: `docs/10_PHASE3_SPRINT_PLAN.md` (covers both tracks).
 
 **Validation Track sequence:** Build through Sprint 21 (four strategies + analytics) → activate Databento ~Sprint 19 (DEC-097) → serious paper trading with quality data + IBKR → AI Layer (Sprint 22) compounds analysis during validation → CPA consultation → live at minimum size on IBKR.
 
-**Build Track queue (DEC-096):** CC API (14) → CC Frontend (15) → Desktop/PWA (16) → Orchestrator V1 (17) → ORB Scalp (18) → VWAP Reclaim (19) → Afternoon Momentum (20) → CC Analytics & Strategy Lab (21) → AI Layer MVP (22) → Tier 1 News + expansion (23+)
+**Build Track queue (DEC-096):** CC Frontend (15) → Desktop/PWA (16) → Orchestrator V1 (17) → ORB Scalp (18) → VWAP Reclaim (19) → Afternoon Momentum (20) → CC Analytics & Strategy Lab (21) → AI Layer MVP (22) → Tier 1 News + expansion (23+)
 
 **Command Center delivery (DEC-080):** Three surfaces from single React codebase — web app + Tauri desktop + PWA mobile. All operational after Sprint 16.
 
@@ -99,7 +99,7 @@ Components implemented:
 Three tiers, built in parallel (DEC-079):
 1. Trading Engine (Python, asyncio) — strategies, orchestrator, risk manager, data service, broker abstraction ✅ Core complete
 2. Command Center (FastAPI + React → web + Tauri desktop + PWA mobile) — dashboards, controls, reports → Build Track Sprint 14+
-3. AI Layer (Claude API) — advisory, approval workflow, reports → Build Track Sprint 18+
+3. AI Layer (Claude API) — advisory, approval workflow, reports → Build Track Sprint 22+
 
 Currently: Validation Track (paper trading on Alpaca) running in parallel with Build Track (Sprint 15 next).
 
@@ -127,12 +127,14 @@ argus/
 ├── data/           # Scanner, Data Service, Indicators
 ├── execution/      # Broker abstraction, Order Manager
 ├── analytics/      # Trade Logger, Strategy Reports, Portfolio Reports
-├── intelligence/   # News & catalyst intelligence (Tier 1: Sprint 17, Tiers 2-3: later) [PLANNED]
+├── intelligence/   # News & catalyst intelligence (Tier 1: Sprint 23+, Tiers 2-3: later) [PLANNED]
 ├── backtest/       # Data fetcher, Replay Harness, VectorBT sweeps, walk-forward, metrics, reports
 ├── db/             # DatabaseManager
 ├── notifications/  # Push, Email, Telegram/Discord handlers
 ├── accounting/     # Tax tracking, P&L, Wash Sale detection
 ├── api/            # FastAPI server (REST + WebSocket)
+├── ui/             # React frontend (Vite + TypeScript + Tailwind CSS v4)
+├── models/         # Data models (Trade, Strategy, etc.)
 config/             # YAML config files (strategies, risk, brokers, etc.)
 data/
 ├── historical/     # Downloaded Parquet files for backtesting (gitignored)
