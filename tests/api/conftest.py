@@ -89,9 +89,11 @@ def test_trade_logger(test_db: DatabaseManager) -> TradeLogger:
 
 
 @pytest.fixture
-def test_broker() -> SimulatedBroker:
-    """Provide a SimulatedBroker with test settings."""
-    return SimulatedBroker(initial_cash=100_000.0)
+async def test_broker() -> SimulatedBroker:
+    """Provide a connected SimulatedBroker with test settings."""
+    broker = SimulatedBroker(initial_cash=100_000.0)
+    await broker.connect()
+    return broker
 
 
 @pytest.fixture

@@ -1104,3 +1104,15 @@ class OrderManager:
             sum(1 for p in positions if not p.is_fully_closed)
             for positions in self._managed_positions.values()
         )
+
+    def get_managed_positions(self) -> list[ManagedPosition]:
+        """Return a snapshot of all managed positions (for API/UI).
+
+        Returns:
+            List of all ManagedPosition objects currently being tracked,
+            including partially closed positions.
+        """
+        result: list[ManagedPosition] = []
+        for positions in self._managed_positions.values():
+            result.extend(positions)
+        return result

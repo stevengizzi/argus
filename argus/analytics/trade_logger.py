@@ -287,6 +287,46 @@ class TradeLogger:
             profit_factor=total_wins / total_losses if total_losses > 0 else float("inf"),
         )
 
+    async def get_todays_pnl(self) -> float:
+        """Get total net P&L for today's closed trades.
+
+        Uses ET timezone for date comparison to match trading hours.
+
+        Returns:
+            Sum of net_pnl for all trades exited today.
+        """
+        from zoneinfo import ZoneInfo
+
+        et_tz = ZoneInfo("America/New_York")
+        today_et = datetime.now(et_tz).date().isoformat()
+
+        sql = "SELECT COALESCE(SUM(net_pnl), 0) as total FROM trades WHERE date(exit_time) = ?"
+        row = await self._db.fetch_one(sql, (today_et,))
+
+        if row is None:
+            return 0.0
+        return float(dict(row).get("total", 0.0))  # type: ignore[arg-type]
+
+    async def get_todays_trade_count(self) -> int:
+        """Get the count of trades closed today.
+
+        Uses ET timezone for date comparison to match trading hours.
+
+        Returns:
+            Number of trades exited today.
+        """
+        from zoneinfo import ZoneInfo
+
+        et_tz = ZoneInfo("America/New_York")
+        today_et = datetime.now(et_tz).date().isoformat()
+
+        sql = "SELECT COUNT(*) as count FROM trades WHERE date(exit_time) = ?"
+        row = await self._db.fetch_one(sql, (today_et,))
+
+        if row is None:
+            return 0
+        return int(dict(row).get("count", 0))  # type: ignore[arg-type]
+
     async def save_daily_summary(self, summary: DailySummary) -> str:
         """Save a daily summary to the database.
 

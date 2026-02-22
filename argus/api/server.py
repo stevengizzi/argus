@@ -16,7 +16,9 @@ Usage:
 
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from fastapi import FastAPI
@@ -88,4 +90,45 @@ def create_app(app_state: AppState) -> FastAPI:
 
     app.include_router(api_router, prefix="/api/v1")
 
+    # Mount WebSocket routes (no prefix)
+    from argus.api.websocket import ws_router
+
+    app.include_router(ws_router)
+
+    # Mount static files if configured
+    if app_state.config and app_state.config.api and app_state.config.api.static_dir:
+        static_path = Path(app_state.config.api.static_dir)
+        if static_path.exists() and static_path.is_dir():
+            from fastapi.staticfiles import StaticFiles
+
+            app.mount("/", StaticFiles(directory=static_path, html=True), name="static")
+
     return app
+
+
+async def run_server(app: FastAPI, host: str, port: int) -> asyncio.Task[None]:
+    """Start uvicorn programmatically in the existing event loop.
+
+    Args:
+        app: The FastAPI application instance.
+        host: Host address to bind to.
+        port: Port number to bind to.
+
+    Returns:
+        The asyncio.Task running the server, so caller can cancel on shutdown.
+    """
+    import uvicorn
+
+    config = uvicorn.Config(app, host=host, port=port, log_level="info")
+    server = uvicorn.Server(config)
+
+    # Disable uvicorn's signal handlers to avoid conflict with main.py
+    server.install_signal_handlers = lambda: None  # type: ignore[method-assign]
+
+    # Create and return the task
+    return asyncio.create_task(server.serve())
+
+
+if __name__ == "__main__":
+    print("Use --dev flag or run via argus.main for full system startup.")
+    print("Example: python -m argus.api.server --dev")
