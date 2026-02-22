@@ -3,6 +3,10 @@
 Computes standard trading metrics from a trade log database (SQLite).
 The trade log uses the same schema as the production database, so all
 metrics work on both backtest and live trade data.
+
+Core metric computation is delegated to argus.analytics.performance to ensure
+consistency between backtest and live API metrics. Backtest-specific metrics
+(capital-based Sharpe, dollar drawdown, time analysis) remain in this module.
 """
 
 from __future__ import annotations
@@ -11,6 +15,8 @@ import logging
 from dataclasses import dataclass, field
 from datetime import date
 from typing import TYPE_CHECKING
+
+from argus.analytics.performance import compute_metrics as _compute_core_metrics
 
 if TYPE_CHECKING:
     from argus.analytics.trade_logger import TradeLogger
@@ -82,6 +88,37 @@ class BacktestResult:
     monthly_pnl: dict[str, float] = field(default_factory=dict)  # "YYYY-MM" -> net P&L
 
 
+def _trades_to_dicts(trades: list[Trade]) -> list[dict]:
+    """Convert Trade objects to dicts for the shared metrics computation.
+
+    The shared compute_metrics expects dict keys:
+    - net_pnl: Net P&L in dollars
+    - r_multiple: R-multiple of the trade
+    - commission: Commission paid
+    - hold_duration_seconds: Hold duration in seconds
+    - exit_price: Exit price (None for open trades)
+    - exit_time: For sorting
+
+    Args:
+        trades: List of Trade model objects.
+
+    Returns:
+        List of dicts matching the expected interface.
+    """
+    return [
+        {
+            "net_pnl": t.net_pnl,
+            "r_multiple": t.r_multiple,
+            "commission": t.commission,
+            "hold_duration_seconds": t.hold_duration_seconds,
+            "exit_price": t.exit_price,
+            "exit_time": t.exit_time,
+            "gross_pnl": t.gross_pnl,
+        }
+        for t in trades
+    ]
+
+
 async def compute_metrics(
     trade_logger: TradeLogger,
     strategy_id: str,
@@ -91,6 +128,11 @@ async def compute_metrics(
     trading_days: int | None = None,
 ) -> BacktestResult:
     """Compute all backtest metrics from the trade log.
+
+    Core metrics (win rate, profit factor, streaks, etc.) are computed via the
+    shared argus.analytics.performance module to ensure consistency with the
+    live API. Backtest-specific metrics (capital-based Sharpe ratio, dollar
+    drawdown, time analysis) are computed here.
 
     Args:
         trade_logger: TradeLogger connected to the backtest database.
@@ -110,28 +152,13 @@ async def compute_metrics(
     if not trades:
         return _empty_result(strategy_id, start_date, end_date, initial_capital, trading_days or 0)
 
-    # Categorize trades
+    # Compute core metrics via shared module
+    trade_dicts = _trades_to_dicts(trades)
+    core = _compute_core_metrics(trade_dicts)
+
+    # Backtest-specific: R-multiple averages for winners/losers
     winners = [t for t in trades if t.net_pnl > 0.50]
     losers = [t for t in trades if t.net_pnl < -0.50]
-    breakevens = [t for t in trades if -0.50 <= t.net_pnl <= 0.50]
-
-    # Basic statistics
-    total_trades = len(trades)
-    winning_trades = len(winners)
-    losing_trades = len(losers)
-    breakeven_trades = len(breakevens)
-
-    # Win rate
-    win_rate = winning_trades / total_trades if total_trades > 0 else 0.0
-
-    # Profit factor
-    gross_wins = sum(t.net_pnl for t in winners) if winners else 0.0
-    gross_losses = abs(sum(t.net_pnl for t in losers)) if losers else 0.0
-    profit_factor = gross_wins / gross_losses if gross_losses > 0 else float("inf")
-
-    # R-multiples
-    r_multiples = [t.r_multiple for t in trades if t.r_multiple != 0]
-    avg_r_multiple = sum(r_multiples) / len(r_multiples) if r_multiples else 0.0
 
     winner_rs = [t.r_multiple for t in winners if t.r_multiple != 0]
     avg_winner_r = sum(winner_rs) / len(winner_rs) if winner_rs else 0.0
@@ -140,34 +167,32 @@ async def compute_metrics(
     avg_loser_r = sum(loser_rs) / len(loser_rs) if loser_rs else 0.0
 
     # Expectancy
-    expectancy = (win_rate * avg_winner_r) + ((1 - win_rate) * avg_loser_r)
+    expectancy = (core.win_rate * avg_winner_r) + ((1 - core.win_rate) * avg_loser_r)
 
-    # Final equity and net P&L
-    net_pnl = sum(t.net_pnl for t in trades)
-    final_equity = initial_capital + net_pnl
+    # Final equity
+    final_equity = initial_capital + core.net_pnl
 
-    # Build daily equity curve
-    daily_pnl: dict[date, float] = {}
+    # Build daily equity curve (backtest-specific: includes initial capital)
+    daily_pnl_map: dict[date, float] = {}
     for trade in trades:
         trade_date = trade.exit_time.date()
-        daily_pnl[trade_date] = daily_pnl.get(trade_date, 0.0) + trade.net_pnl
+        daily_pnl_map[trade_date] = daily_pnl_map.get(trade_date, 0.0) + trade.net_pnl
 
-    # Sort dates and compute cumulative equity
-    sorted_dates = sorted(daily_pnl.keys())
+    sorted_dates = sorted(daily_pnl_map.keys())
     daily_equity: list[tuple[date, float]] = []
     cumulative = initial_capital
     for d in sorted_dates:
-        cumulative += daily_pnl[d]
+        cumulative += daily_pnl_map[d]
         daily_equity.append((d, cumulative))
 
     # Trading days (use provided value or count from trades)
     actual_trading_days = trading_days if trading_days is not None else len(sorted_dates)
 
-    # Drawdown
+    # Drawdown (backtest-specific: returns both dollars and pct)
     equity_values = [initial_capital] + [eq for _, eq in daily_equity]
     max_dd_dollars, max_dd_pct = compute_max_drawdown(equity_values)
 
-    # Daily returns for Sharpe
+    # Daily returns for Sharpe (backtest-specific: uses % returns with capital)
     daily_returns: list[float] = []
     prev_equity = initial_capital
     for _, eq in daily_equity:
@@ -178,26 +203,20 @@ async def compute_metrics(
     sharpe_ratio = compute_sharpe_ratio(daily_returns)
 
     # Recovery factor
-    recovery_factor = net_pnl / max_dd_dollars if max_dd_dollars > 0 else float("inf")
+    recovery_factor = core.net_pnl / max_dd_dollars if max_dd_dollars > 0 else float("inf")
 
-    # Hold duration
-    hold_durations = [t.hold_duration_seconds / 60 for t in trades]
-    avg_hold_minutes = sum(hold_durations) / len(hold_durations) if hold_durations else 0.0
+    # Hold duration in minutes (core has seconds)
+    avg_hold_minutes = core.avg_hold_seconds / 60.0
 
-    # Streaks
-    max_wins, max_losses = _compute_streaks(trades)
-
-    # Extremes
-    largest_win_dollars = max((t.net_pnl for t in winners), default=0.0)
-    largest_loss_dollars = min((t.net_pnl for t in losers), default=0.0)
+    # Extremes in R-multiples (backtest-specific)
     largest_win_r = max((t.r_multiple for t in winners), default=0.0)
     largest_loss_r = min((t.r_multiple for t in losers), default=0.0)
 
-    # Time analysis
+    # Time analysis (backtest-specific)
     pnl_by_hour, trades_by_hour = _analyze_by_hour(trades)
     pnl_by_weekday, trades_by_weekday = _analyze_by_weekday(trades)
 
-    # Monthly P&L
+    # Monthly P&L (backtest-specific)
     monthly_pnl = _compute_monthly_pnl(trades)
 
     return BacktestResult(
@@ -207,13 +226,13 @@ async def compute_metrics(
         initial_capital=initial_capital,
         final_equity=final_equity,
         trading_days=actual_trading_days,
-        total_trades=total_trades,
-        winning_trades=winning_trades,
-        losing_trades=losing_trades,
-        breakeven_trades=breakeven_trades,
-        win_rate=win_rate,
-        profit_factor=profit_factor,
-        avg_r_multiple=avg_r_multiple,
+        total_trades=core.total_trades,
+        winning_trades=core.wins,
+        losing_trades=core.losses,
+        breakeven_trades=core.breakeven,
+        win_rate=core.win_rate,
+        profit_factor=core.profit_factor,
+        avg_r_multiple=core.avg_r_multiple,
         avg_winner_r=avg_winner_r,
         avg_loser_r=avg_loser_r,
         expectancy=expectancy,
@@ -222,10 +241,10 @@ async def compute_metrics(
         sharpe_ratio=sharpe_ratio,
         recovery_factor=recovery_factor,
         avg_hold_minutes=avg_hold_minutes,
-        max_consecutive_wins=max_wins,
-        max_consecutive_losses=max_losses,
-        largest_win_dollars=largest_win_dollars,
-        largest_loss_dollars=largest_loss_dollars,
+        max_consecutive_wins=core.consecutive_wins_max,
+        max_consecutive_losses=core.consecutive_losses_max,
+        largest_win_dollars=core.largest_win,
+        largest_loss_dollars=core.largest_loss,
         largest_win_r=largest_win_r,
         largest_loss_r=largest_loss_r,
         pnl_by_hour=pnl_by_hour,
@@ -274,43 +293,6 @@ def _empty_result(
         largest_win_r=0.0,
         largest_loss_r=0.0,
     )
-
-
-def _compute_streaks(trades: list[Trade]) -> tuple[int, int]:
-    """Compute max consecutive wins and losses.
-
-    Args:
-        trades: List of trades sorted by exit time.
-
-    Returns:
-        Tuple of (max_consecutive_wins, max_consecutive_losses).
-    """
-    if not trades:
-        return 0, 0
-
-    # Sort by exit time
-    sorted_trades = sorted(trades, key=lambda t: t.exit_time)
-
-    max_wins = 0
-    max_losses = 0
-    current_wins = 0
-    current_losses = 0
-
-    for trade in sorted_trades:
-        if trade.net_pnl > 0.50:
-            current_wins += 1
-            current_losses = 0
-            max_wins = max(max_wins, current_wins)
-        elif trade.net_pnl < -0.50:
-            current_losses += 1
-            current_wins = 0
-            max_losses = max(max_losses, current_losses)
-        else:
-            # Breakeven resets both streaks
-            current_wins = 0
-            current_losses = 0
-
-    return max_wins, max_losses
 
 
 def _analyze_by_hour(trades: list[Trade]) -> tuple[dict[int, float], dict[int, int]]:

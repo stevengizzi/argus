@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from argus.data.service import DataService
     from argus.execution.broker import Broker
     from argus.execution.order_manager import OrderManager
-    from argus.strategies.base import BaseStrategy
+    from argus.strategies.base_strategy import BaseStrategy
 
 
 @dataclass
