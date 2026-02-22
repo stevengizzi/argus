@@ -76,3 +76,8 @@ body {
 .slide-in {
   animation: slide-in-top 300ms ease-out;
 }
+
+/* Hide TradingView Lightweight Charts attribution (watermark disabled in config) */
+.tv-lightweight-charts a[href*="tradingview"] {
+  display: none !important;
+}
