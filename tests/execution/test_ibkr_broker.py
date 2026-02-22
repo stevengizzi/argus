@@ -360,3 +360,255 @@ class TestIBKRBrokerDisconnectEvent:
             broker._on_disconnected()
 
             assert broker._connected is False
+
+
+# ---------------------------------------------------------------------------
+# Order Submission Tests
+# ---------------------------------------------------------------------------
+
+
+def _create_order(
+    symbol: str = "AAPL",
+    side: str = "buy",
+    order_type: str = "market",
+    quantity: int = 100,
+    limit_price: float | None = None,
+    stop_price: float | None = None,
+):
+    """Create an ARGUS Order for testing.
+
+    Returns:
+        Order: An ARGUS Order instance for testing.
+    """
+    from argus.models.trading import Order
+
+    return Order(
+        strategy_id="test_strategy",
+        symbol=symbol,
+        side=side,
+        order_type=order_type,
+        quantity=quantity,
+        limit_price=limit_price,
+        stop_price=stop_price,
+    )
+
+
+class TestIBKRBrokerOrderSubmission:
+    """Tests for IBKRBroker order submission (place_order)."""
+
+    @pytest.mark.asyncio
+    async def test_market_order_placed(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """Market order is placed correctly with MarketOrder type."""
+        with patch("argus.execution.ibkr_broker.IB", return_value=mock_ib):
+            broker = IBKRBroker(ibkr_config, event_bus)
+            await broker.connect()
+
+            order = _create_order(order_type="market", quantity=100)
+            result = await broker.place_order(order)
+
+            assert result.status == "submitted"
+            assert result.order_id != ""
+            assert result.broker_order_id != ""
+            mock_ib.placeOrder.assert_called_once()
+
+            # Verify the order type
+            call_args = mock_ib.placeOrder.call_args
+            ib_order = call_args[0][1]
+            assert ib_order.action == "BUY"
+            assert ib_order.totalQuantity == 100
+            assert ib_order.tif == "DAY"
+            assert ib_order.outsideRth is False
+
+    @pytest.mark.asyncio
+    async def test_limit_order_with_price(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """Limit order is placed with correct limit price."""
+        with patch("argus.execution.ibkr_broker.IB", return_value=mock_ib):
+            broker = IBKRBroker(ibkr_config, event_bus)
+            await broker.connect()
+
+            order = _create_order(
+                order_type="limit", quantity=50, limit_price=150.50
+            )
+            result = await broker.place_order(order)
+
+            assert result.status == "submitted"
+            call_args = mock_ib.placeOrder.call_args
+            ib_order = call_args[0][1]
+            assert ib_order.lmtPrice == 150.50
+            assert ib_order.totalQuantity == 50
+
+    @pytest.mark.asyncio
+    async def test_stop_order_with_price(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """Stop order is placed with correct stop price."""
+        with patch("argus.execution.ibkr_broker.IB", return_value=mock_ib):
+            broker = IBKRBroker(ibkr_config, event_bus)
+            await broker.connect()
+
+            order = _create_order(
+                side="sell", order_type="stop", quantity=75, stop_price=145.00
+            )
+            result = await broker.place_order(order)
+
+            assert result.status == "submitted"
+            call_args = mock_ib.placeOrder.call_args
+            ib_order = call_args[0][1]
+            assert ib_order.auxPrice == 145.00
+            assert ib_order.action == "SELL"
+
+    @pytest.mark.asyncio
+    async def test_stop_limit_order_with_both_prices(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """Stop-limit order is placed with both stop and limit prices."""
+        with patch("argus.execution.ibkr_broker.IB", return_value=mock_ib):
+            broker = IBKRBroker(ibkr_config, event_bus)
+            await broker.connect()
+
+            order = _create_order(
+                order_type="stop_limit",
+                quantity=100,
+                stop_price=148.00,
+                limit_price=147.50,
+            )
+            result = await broker.place_order(order)
+
+            assert result.status == "submitted"
+            call_args = mock_ib.placeOrder.call_args
+            ib_order = call_args[0][1]
+            assert ib_order.orderType == "STP LMT"
+            assert ib_order.auxPrice == 148.00  # trigger price
+            assert ib_order.lmtPrice == 147.50  # limit price
+
+    @pytest.mark.asyncio
+    async def test_ulid_generated_and_mapped(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """ULID is generated for each order and stored in mapping."""
+        with patch("argus.execution.ibkr_broker.IB", return_value=mock_ib):
+            broker = IBKRBroker(ibkr_config, event_bus)
+            await broker.connect()
+
+            order = _create_order()
+            result = await broker.place_order(order)
+
+            # ULID should be 26 characters
+            assert len(result.order_id) == 26
+            # Should be in the mapping
+            assert result.order_id in broker._ulid_to_ibkr
+
+    @pytest.mark.asyncio
+    async def test_order_ref_set_on_ib_order(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """orderRef is set on the ib_async order for reconstruction."""
+        with patch("argus.execution.ibkr_broker.IB", return_value=mock_ib):
+            broker = IBKRBroker(ibkr_config, event_bus)
+            await broker.connect()
+
+            order = _create_order()
+            result = await broker.place_order(order)
+
+            # Get the order that was passed to placeOrder
+            call_args = mock_ib.placeOrder.call_args
+            ib_order = call_args[0][1]
+
+            # orderRef should be set to the ULID
+            assert ib_order.orderRef == result.order_id
+
+    @pytest.mark.asyncio
+    async def test_ibkr_id_mapped_bidirectionally(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """IBKR order ID is mapped bidirectionally with ULID."""
+        with patch("argus.execution.ibkr_broker.IB", return_value=mock_ib):
+            broker = IBKRBroker(ibkr_config, event_bus)
+            await broker.connect()
+
+            order = _create_order()
+            result = await broker.place_order(order)
+
+            ulid = result.order_id
+            ibkr_id = int(result.broker_order_id)
+
+            # Check both directions
+            assert broker._ulid_to_ibkr[ulid] == ibkr_id
+            assert broker._ibkr_to_ulid[ibkr_id] == ulid
+
+    @pytest.mark.asyncio
+    async def test_not_connected_returns_rejected(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """Order placement when not connected returns rejected status."""
+        with patch("argus.execution.ibkr_broker.IB", return_value=mock_ib):
+            broker = IBKRBroker(ibkr_config, event_bus)
+            # Don't connect
+
+            order = _create_order()
+            result = await broker.place_order(order)
+
+            assert result.status == "rejected"
+            assert "Not connected" in result.message
+            mock_ib.placeOrder.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_invalid_order_type_raises_value_error(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """Invalid order type raises ValueError."""
+        with patch("argus.execution.ibkr_broker.IB", return_value=mock_ib):
+            broker = IBKRBroker(ibkr_config, event_bus)
+            await broker.connect()
+
+            # Create order with invalid type by bypassing validation
+            from argus.models.trading import Order
+
+            # We need to test the _build_ib_order method directly with invalid type
+            # since Pydantic would validate the Order model
+            order = Order(
+                strategy_id="test",
+                symbol="AAPL",
+                side="buy",
+                order_type="market",  # Valid type for creation
+                quantity=100,
+            )
+            # Manually set invalid type to bypass Pydantic
+            object.__setattr__(order, "order_type", "invalid_type")
+
+            with pytest.raises(ValueError) as exc_info:
+                await broker.place_order(order)
+
+            assert "Unsupported order type" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_buy_sell_action_mapping(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """Buy and sell sides are correctly mapped to BUY/SELL actions."""
+        with patch("argus.execution.ibkr_broker.IB", return_value=mock_ib):
+            broker = IBKRBroker(ibkr_config, event_bus)
+            await broker.connect()
+
+            # Test BUY
+            buy_order = _create_order(side="buy")
+            await broker.place_order(buy_order)
+
+            call_args = mock_ib.placeOrder.call_args
+            ib_order = call_args[0][1]
+            assert ib_order.action == "BUY"
+
+            # Reset mock
+            mock_ib.placeOrder.reset_mock()
+
+            # Test SELL
+            sell_order = _create_order(side="sell")
+            await broker.place_order(sell_order)
+
+            call_args = mock_ib.placeOrder.call_args
+            ib_order = call_args[0][1]
+            assert ib_order.action == "SELL"

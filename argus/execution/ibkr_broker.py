@@ -13,10 +13,12 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from ib_async import IB
+from ib_async import IB, LimitOrder, MarketOrder, StopOrder
+from ib_async import Order as IBOrder
 
 from argus.core.config import IBKRConfig
 from argus.core.event_bus import EventBus
+from argus.core.ids import generate_id
 from argus.execution.broker import Broker
 from argus.execution.ibkr_contracts import IBKRContractResolver
 from argus.models.trading import (
@@ -195,28 +197,115 @@ class IBKRBroker(Broker):
         self._connected = False
         logger.warning("IB Gateway disconnected")
 
-    # --- Broker ABC Implementation Stubs ---
-    # These will be fully implemented in subsequent prompts
+    # --- Order Building Helpers ---
+
+    def _build_ib_order(self, order: Order) -> IBOrder:
+        """Convert ARGUS Order model to ib_async Order object.
+
+        Maps ARGUS order types to ib_async order classes:
+        - market → MarketOrder
+        - limit → LimitOrder
+        - stop → StopOrder
+        - stop_limit → IBOrder with orderType="STP LMT"
+
+        All orders have tif="DAY" and outsideRth=False for intraday strategies.
+
+        Args:
+            order: The ARGUS Order to convert.
+
+        Returns:
+            An ib_async Order object ready for submission.
+
+        Raises:
+            ValueError: If the order type is not supported.
+        """
+        action = "BUY" if order.side.lower() == "buy" else "SELL"
+        order_type = order.order_type.lower()
+
+        if order_type == "market":
+            ib_order = MarketOrder(action, order.quantity)
+        elif order_type == "limit":
+            if order.limit_price is None:
+                raise ValueError("Limit order requires limit_price")
+            ib_order = LimitOrder(action, order.quantity, order.limit_price)
+        elif order_type == "stop":
+            if order.stop_price is None:
+                raise ValueError("Stop order requires stop_price")
+            ib_order = StopOrder(action, order.quantity, order.stop_price)
+        elif order_type == "stop_limit":
+            if order.stop_price is None or order.limit_price is None:
+                raise ValueError("Stop-limit order requires both stop_price and limit_price")
+            ib_order = IBOrder(
+                action=action,
+                totalQuantity=order.quantity,
+                orderType="STP LMT",
+                auxPrice=order.stop_price,  # trigger price
+                lmtPrice=order.limit_price,  # limit price
+            )
+        else:
+            raise ValueError(f"Unsupported order type: {order.order_type}")
+
+        # Common settings for all order types
+        ib_order.tif = "DAY"  # Intraday strategies — DAY orders only
+        ib_order.outsideRth = False  # No pre/post-market trading
+
+        return ib_order
+
+    # --- Broker ABC Implementation ---
 
     async def place_order(self, order: Order) -> OrderResult:
         """Submit a single order to IBKR.
 
-        Stub implementation — will be completed in Prompt 4.
+        Maps ARGUS Order to ib_async Order, generates a ULID for tracking,
+        stores the orderRef on the IBKR side for reconstruction, and
+        maintains bidirectional ID mappings.
 
         Args:
-            order: The order to place.
+            order: The ARGUS Order to place.
 
         Returns:
-            OrderResult with submission status.
+            OrderResult with submission status and order IDs.
         """
         if not self.is_connected:
             return OrderResult(
                 order_id="",
-                status="error",
+                status="rejected",
                 message="Not connected to IB Gateway",
             )
-        # Placeholder - will be implemented in Prompt 4
-        raise NotImplementedError("place_order will be implemented in Prompt 4")
+
+        # Resolve contract for the symbol
+        contract = self._contracts.get_stock_contract(order.symbol)
+
+        # Build ib_async order
+        ib_order = self._build_ib_order(order)
+
+        # Generate ULID and store in orderRef for reconstruction
+        ulid = generate_id()
+        ib_order.orderRef = ulid
+
+        # Place order via ib_async
+        trade = self._ib.placeOrder(contract, ib_order)
+
+        # Store bidirectional mapping (ULID ↔ IBKR orderId)
+        actual_id = trade.order.orderId
+        self._ulid_to_ibkr[ulid] = actual_id
+        self._ibkr_to_ulid[actual_id] = ulid
+
+        logger.info(
+            "Order placed: %s → IBKR #%d %s %d %s %s",
+            ulid,
+            actual_id,
+            order.side.upper(),
+            order.quantity,
+            order.symbol,
+            order.order_type.upper(),
+        )
+
+        return OrderResult(
+            order_id=ulid,
+            broker_order_id=str(actual_id),
+            status="submitted",
+        )
 
     async def place_bracket_order(
         self,
@@ -237,9 +326,17 @@ class IBKRBroker(Broker):
             BracketOrderResult with all order IDs.
         """
         if not self.is_connected:
-            return BracketOrderResult(
-                status="error",
+            # BracketOrderResult requires entry/stop/targets, can't return error directly
+            # Return a rejected entry result to indicate connection error
+            error_result = OrderResult(
+                order_id="",
+                status="rejected",
                 message="Not connected to IB Gateway",
+            )
+            return BracketOrderResult(
+                entry=error_result,
+                stop=error_result,
+                targets=[],
             )
         # Placeholder - will be implemented in Prompt 5
         raise NotImplementedError("place_bracket_order will be implemented in Prompt 5")
