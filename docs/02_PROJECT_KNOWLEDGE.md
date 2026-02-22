@@ -352,7 +352,7 @@ Directly edit the files in the repo. Commit doc updates as a separate commit: `d
 - **User's job:** Keep the two in sync by committing doc updates to git and re-uploading to this project when they diverge. Both Claudes will remind you.
 - **"Update all docs" shorthand:** Works in both contexts. Claude.ai drafts copy-paste content. Claude Code edits files directly.
 
-GitHub repo is connected to this project via native integration. Click 'Sync now' after pushing doc updates. Project instructions are separate and updated manually at major milestones.
+GitHub repo is accessible at https://github.com/stevengizzi/argus.git. Project instructions are separate and updated manually at major milestones.
 
 ### When to Flag Updates
 
@@ -422,4 +422,4 @@ If a conversation happens to fall near the end of a week, remind the user:
 - **Bridge:** The docs/ folder in the git repo. Both Claudes read from it. Updates flow: decision here → draft update here → user commits to repo → Claude Code reads next session. Or: discovery in Claude Code → user brings here for discussion or commits directly.
 - **User's job:** Keep the two in sync by committing doc updates to git and re-uploading to this project when they diverge. Both Claudes will remind you.
 
-GitHub repo is connected to this project via native integration. Click 'Sync now' after pushing doc updates. Project instructions are separate and updated manually at major milestones.
+GitHub repo is accessible at https://github.com/stevengizzi/argus.git. Project instructions are separate and updated manually at major milestones.
