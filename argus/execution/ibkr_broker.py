@@ -918,6 +918,116 @@ class IBKRBroker(Broker):
 
         return results
 
+    async def reconstruct_state(self) -> dict:
+        """Rebuild internal state from IBKR after restart or reconnection.
+
+        Reads positions and open trades from ib_async's cache, recovers
+        ULID mappings from the orderRef field on each order, and returns
+        a snapshot of broker state for Order Manager reconstruction.
+
+        This method is called during mid-day restart to recover position
+        state without requiring a database query.
+
+        Returns:
+            Dict with:
+                - "positions": List of ARGUS Position objects for open positions
+                - "open_orders": List of order dicts with order_id, symbol, side,
+                  quantity, order_type, status
+        """
+        positions = self._ib.positions()
+        open_trades = self._ib.openTrades()
+
+        # Recover ULID mappings from orderRef
+        recovered = 0
+        for trade in open_trades:
+            order_ref = trade.order.orderRef
+            if order_ref and order_ref not in self._ulid_to_ibkr:
+                ib_id = trade.order.orderId
+                self._ulid_to_ibkr[order_ref] = ib_id
+                self._ibkr_to_ulid[ib_id] = order_ref
+                recovered += 1
+
+        if recovered > 0:
+            logger.info("Recovered %d ULID mappings from orderRef", recovered)
+
+        # Build open_orders list
+        open_orders = []
+        for trade in open_trades:
+            ib_id = trade.order.orderId
+            ulid = self._ibkr_to_ulid.get(ib_id)
+
+            # If no ULID found, assign an unknown_ prefix for tracking
+            if ulid is None:
+                ulid = f"unknown_{ib_id}"
+
+            open_orders.append({
+                "order_id": ulid,
+                "symbol": trade.contract.symbol if trade.contract else "",
+                "side": trade.order.action.lower(),
+                "quantity": int(trade.order.totalQuantity),
+                "order_type": self._map_ib_order_type(trade.order.orderType).value,
+                "status": trade.orderStatus.status.lower(),
+            })
+
+        # Build positions list (filter out zero-quantity)
+        converted_positions = [
+            self._convert_position(p) for p in positions if p.position != 0
+        ]
+
+        logger.info(
+            "Reconstructed state: %d positions, %d open orders",
+            len(converted_positions),
+            len(open_orders),
+        )
+
+        return {
+            "positions": converted_positions,
+            "open_orders": open_orders,
+        }
+
+    def _convert_position(self, ib_pos) -> Position:
+        """Convert ib_async position to ARGUS Position model.
+
+        Creates a minimal Position object from IBKR position data.
+        Strategy-level fields (strategy_id, stop_price, target_prices)
+        are filled in by Order Manager during reconstruction.
+
+        Args:
+            ib_pos: An ib_async Position object (from self._ib.positions()).
+
+        Returns:
+            ARGUS Position model with broker-available fields populated.
+        """
+        from datetime import UTC, datetime
+
+        from argus.models.trading import (
+            AssetClass,
+            PositionStatus,
+        )
+        from argus.models.trading import (
+            OrderSide as ModelOrderSide,
+        )
+
+        # Determine side from position quantity
+        side = ModelOrderSide.BUY if ib_pos.position > 0 else ModelOrderSide.SELL
+        shares = abs(int(ib_pos.position))
+
+        return Position(
+            id=generate_id(),
+            strategy_id="",  # Unknown at broker level — filled by Order Manager
+            symbol=ib_pos.contract.symbol,
+            asset_class=AssetClass.US_STOCKS,
+            side=side,
+            status=PositionStatus.OPEN,
+            entry_price=ib_pos.avgCost,
+            entry_time=datetime.now(UTC),  # Actual entry time not available from IBKR
+            shares=shares,
+            stop_price=0.0,  # Not available from position — filled by Order Manager
+            target_prices=[],  # Not available from position — filled by Order Manager
+            current_price=ib_pos.avgCost,  # Approximate until market data updates
+            unrealized_pnl=0.0,  # Available via reqPnLSingle if needed
+        )
+
     # --- Helper Methods ---
 
     def _find_trade_by_order_id(self, ib_order_id: int) -> Trade | None:

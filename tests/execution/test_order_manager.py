@@ -178,8 +178,8 @@ async def test_entry_fill_creates_managed_position(
     assert positions[0].shares_total == 100
     assert positions[0].shares_remaining == 100
 
-    # Verify stop + T1 orders placed (2 more calls after entry)
-    assert mock_broker.place_order.call_count == 3
+    # Verify stop + T1 + T2 orders placed (3 more calls after entry)
+    assert mock_broker.place_order.call_count == 4
 
     await order_manager.stop()
 
@@ -260,6 +260,10 @@ async def test_t2_reached_closes_remaining(
         fill_quantity=50,
     )
     await order_manager.on_fill(t1_fill)
+
+    # Clear t2_order_id to simulate Alpaca path (no broker-side T2 order)
+    # This tests the tick-based T2 monitoring fallback
+    position.t2_order_id = None
 
     # Reset mock to track new calls
     mock_broker.place_order.reset_mock()
@@ -870,8 +874,9 @@ async def test_stop_fills_before_t1_cancels_t1(
     )
     await order_manager.on_fill(stop_fill)
 
-    # Verify T1 was cancelled
-    mock_broker.cancel_order.assert_called_with(t1_order_id)
+    # Verify T1 was cancelled (T2 also cancelled now with DEC-093)
+    cancel_calls = [call[0][0] for call in mock_broker.cancel_order.call_args_list]
+    assert t1_order_id in cancel_calls
 
     await order_manager.stop()
 

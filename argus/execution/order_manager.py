@@ -75,7 +75,8 @@ class ManagedPosition:
     t2_price: float  # T2 target price (target_prices[1])
     high_watermark: float  # Highest price since entry (for trailing stop)
 
-    # Tracking for partial exit P&L
+    # Optional fields with defaults (must come after required fields)
+    t2_order_id: str | None = None  # Broker-side T2 limit order ID (IBKR native brackets)
     realized_pnl: float = 0.0  # Accumulated P&L from partial exits
 
     @property
@@ -94,7 +95,7 @@ class PendingManagedOrder:
     order_id: str
     symbol: str
     strategy_id: str
-    order_type: str  # "entry", "stop", "t1_target", "flatten"
+    order_type: str  # "entry", "stop", "t1_target", "t2", "flatten"
     shares: int  # Expected fill quantity
     signal: Any = field(default=None)  # OrderApprovedEvent (for reference)
 
@@ -279,6 +280,8 @@ class OrderManager:
             await self._handle_entry_fill(pending, event)
         elif pending.order_type == "t1_target":
             await self._handle_t1_fill(pending, event)
+        elif pending.order_type == "t2":
+            await self._handle_t2_fill(pending, event)
         elif pending.order_type == "stop":
             await self._handle_stop_fill(pending, event)
         elif pending.order_type == "flatten":
@@ -350,9 +353,11 @@ class OrderManager:
                     continue
 
             # Check T2 target (market order, don't wait for limit fill)
+            # Skip if broker has a T2 order (IBKR native brackets — DEC-093)
             if (
                 position.t1_filled
                 and position.t2_price > 0
+                and position.t2_order_id is None  # No broker-side T2 order
                 and event.price >= position.t2_price
             ):
                 await self._flatten_position(position, reason="t2_target")
@@ -417,6 +422,12 @@ class OrderManager:
         # Submit T1 limit order (partial position)
         if t1_price > 0 and t1_shares > 0:
             await self._submit_t1_order(position, t1_shares, t1_price)
+
+        # Submit T2 limit order (remaining shares after T1)
+        # This enables broker-side T2 execution for IBKR native brackets (DEC-093)
+        t2_shares = filled_shares - t1_shares
+        if t2_price > 0 and t2_shares > 0:
+            await self._submit_t2_order(position, t2_shares, t2_price)
 
         # Publish PositionOpenedEvent
         await self._event_bus.publish(
@@ -498,6 +509,44 @@ class OrderManager:
             position.shares_remaining,
         )
 
+    async def _handle_t2_fill(
+        self, pending: PendingManagedOrder, event: OrderFilledEvent
+    ) -> None:
+        """T2 target hit via broker-side limit order (IBKR native brackets — DEC-093).
+
+        Cancel stop order and close position.
+        """
+        positions = self._managed_positions.get(pending.symbol, [])
+        position = self._find_position_by_t2_order(positions, event.order_id)
+        if position is None:
+            logger.warning("T2 fill for %s but no matching position", pending.symbol)
+            return
+
+        # Record T2 exit
+        t2_pnl = (event.fill_price - position.entry_price) * event.fill_quantity
+        position.realized_pnl += t2_pnl
+        position.shares_remaining -= event.fill_quantity
+        position.t2_order_id = None
+
+        # Cancel stop order
+        if position.stop_order_id:
+            try:
+                await self._broker.cancel_order(position.stop_order_id)
+            except Exception:
+                logger.exception("Failed to cancel stop order %s", position.stop_order_id)
+            self._pending_orders.pop(position.stop_order_id, None)
+            position.stop_order_id = None
+
+        await self._close_position(position, event.fill_price, ExitReason.TARGET_2)
+
+        logger.info(
+            "T2 hit for %s: %d shares @ %.2f (PnL: +%.2f). Position closed.",
+            pending.symbol,
+            event.fill_quantity,
+            event.fill_price,
+            t2_pnl,
+        )
+
     async def _handle_stop_fill(
         self, pending: PendingManagedOrder, event: OrderFilledEvent
     ) -> None:
@@ -522,6 +571,15 @@ class OrderManager:
                 logger.exception("Failed to cancel T1 order %s", position.t1_order_id)
             self._pending_orders.pop(position.t1_order_id, None)
             position.t1_order_id = None
+
+        # Cancel T2 limit if still open (IBKR native brackets — DEC-093)
+        if position.t2_order_id:
+            try:
+                await self._broker.cancel_order(position.t2_order_id)
+            except Exception:
+                logger.exception("Failed to cancel T2 order %s", position.t2_order_id)
+            self._pending_orders.pop(position.t2_order_id, None)
+            position.t2_order_id = None
 
         await self._close_position(position, event.fill_price, ExitReason.STOP_LOSS)
 
@@ -842,6 +900,36 @@ class OrderManager:
         except Exception:
             logger.exception("Failed to submit T1 order for %s", position.symbol)
 
+    async def _submit_t2_order(
+        self, position: ManagedPosition, shares: int, limit_price: float
+    ) -> None:
+        """Submit a T2 limit sell order and track it.
+
+        This enables broker-side T2 execution for IBKR native brackets (DEC-093).
+        When T2 order ID is set, on_tick() skips client-side T2 monitoring.
+        """
+        try:
+            order = Order(
+                strategy_id=position.strategy_id,
+                symbol=position.symbol,
+                side=OrderSide.SELL,
+                order_type=TradingOrderType.LIMIT,
+                quantity=shares,
+                limit_price=limit_price,
+            )
+            result = await self._broker.place_order(order)
+            position.t2_order_id = result.order_id
+
+            self._pending_orders[result.order_id] = PendingManagedOrder(
+                order_id=result.order_id,
+                symbol=position.symbol,
+                strategy_id=position.strategy_id,
+                order_type="t2",
+                shares=shares,
+            )
+        except Exception:
+            logger.exception("Failed to submit T2 order for %s", position.symbol)
+
     async def _flatten_position(
         self, position: ManagedPosition, reason: str
     ) -> None:
@@ -863,6 +951,15 @@ class OrderManager:
                 logger.debug("Could not cancel T1 %s", position.t1_order_id)
             self._pending_orders.pop(position.t1_order_id, None)
             position.t1_order_id = None
+
+        # Cancel T2 if still open (IBKR native brackets — DEC-093)
+        if position.t2_order_id:
+            try:
+                await self._broker.cancel_order(position.t2_order_id)
+            except Exception:
+                logger.debug("Could not cancel T2 %s", position.t2_order_id)
+            self._pending_orders.pop(position.t2_order_id, None)
+            position.t2_order_id = None
 
         # Submit market sell for remaining shares
         if position.shares_remaining > 0:
@@ -985,6 +1082,15 @@ class OrderManager:
         """Find position whose stop order matches the given order_id."""
         return next(
             (p for p in positions if p.stop_order_id == order_id),
+            None,
+        )
+
+    def _find_position_by_t2_order(
+        self, positions: list[ManagedPosition], order_id: str
+    ) -> ManagedPosition | None:
+        """Find position whose T2 order matches the given order_id."""
+        return next(
+            (p for p in positions if p.t2_order_id == order_id),
             None,
         )
 

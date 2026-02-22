@@ -149,6 +149,10 @@ class TestSprint4bIntegration:
         expected_breakeven = 150.0 * (1 + 0.001)
         assert position.stop_price == pytest.approx(expected_breakeven, abs=0.01)
 
+        # Clear t2_order_id to test Alpaca path (tick-based T2 monitoring)
+        # With IBKR native brackets (DEC-093), T2 fills via broker-side order
+        position.t2_order_id = None
+
         # Set broker price for T2 fill
         broker.set_price("AAPL", 154.0)
 

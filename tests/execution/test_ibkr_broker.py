@@ -2142,3 +2142,181 @@ class TestIBKRBrokerReconnection:
 
             # ensure_future should NOT have been called
             mock_ensure.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# State Reconstruction Tests (Sprint 13.9)
+# ---------------------------------------------------------------------------
+
+
+class TestIBKRBrokerReconstruction:
+    """Tests for IBKRBroker state reconstruction after restart/reconnect."""
+
+    @pytest.mark.asyncio
+    async def test_reconstruct_with_positions_and_orders(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """reconstruct_state returns positions and open orders from broker."""
+        # Setup: 1 position and 2 open orders
+        mock_ib.positions.return_value = [
+            _mock_position("AAPL", 100, 150.25),
+            _mock_position("NVDA", -50, 875.00),  # Short position
+        ]
+        mock_ib.openTrades.return_value = [
+            _mock_trade(
+                order_id=1001,
+                symbol="AAPL",
+                action="SELL",
+                order_type="STP",
+                total_qty=100,
+                status="Submitted",
+                order_ref="01ABC123",  # Has ULID
+            ),
+            _mock_trade(
+                order_id=1002,
+                symbol="AAPL",
+                action="SELL",
+                order_type="LMT",
+                total_qty=50,
+                status="PreSubmitted",
+                order_ref="01DEF456",
+            ),
+        ]
+
+        with patch("argus.execution.ibkr_broker.IB", return_value=mock_ib):
+            broker = IBKRBroker(ibkr_config, event_bus)
+            await broker.connect()
+
+            result = await broker.reconstruct_state()
+
+            # Verify positions
+            assert len(result["positions"]) == 2
+            aapl_pos = next(p for p in result["positions"] if p.symbol == "AAPL")
+            assert aapl_pos.shares == 100
+            assert aapl_pos.entry_price == 150.25
+
+            nvda_pos = next(p for p in result["positions"] if p.symbol == "NVDA")
+            assert nvda_pos.shares == 50  # abs(position)
+            assert nvda_pos.side.value == "sell"  # Short
+
+            # Verify open orders
+            assert len(result["open_orders"]) == 2
+            stop_order = next(
+                o for o in result["open_orders"] if o["order_type"] == "stop"
+            )
+            assert stop_order["order_id"] == "01ABC123"
+            assert stop_order["symbol"] == "AAPL"
+            assert stop_order["side"] == "sell"
+
+    @pytest.mark.asyncio
+    async def test_reconstruct_empty_state(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """reconstruct_state handles empty broker state gracefully."""
+        mock_ib.positions.return_value = []
+        mock_ib.openTrades.return_value = []
+
+        with patch("argus.execution.ibkr_broker.IB", return_value=mock_ib):
+            broker = IBKRBroker(ibkr_config, event_bus)
+            await broker.connect()
+
+            result = await broker.reconstruct_state()
+
+            assert result["positions"] == []
+            assert result["open_orders"] == []
+
+    @pytest.mark.asyncio
+    async def test_ulid_recovery_from_order_ref(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """reconstruct_state recovers ULID mappings from orderRef field."""
+        ulid = "01ABCDEF123456789"
+        ib_order_id = 9999
+
+        mock_ib.positions.return_value = []
+        mock_ib.openTrades.return_value = [
+            _mock_trade(
+                order_id=ib_order_id,
+                symbol="TSLA",
+                action="BUY",
+                order_type="LMT",
+                total_qty=10,
+                order_ref=ulid,
+            ),
+        ]
+
+        with patch("argus.execution.ibkr_broker.IB", return_value=mock_ib):
+            broker = IBKRBroker(ibkr_config, event_bus)
+            await broker.connect()
+
+            # Before reconstruction, no mappings exist
+            assert ulid not in broker._ulid_to_ibkr
+            assert ib_order_id not in broker._ibkr_to_ulid
+
+            result = await broker.reconstruct_state()
+
+            # After reconstruction, mappings should exist
+            assert broker._ulid_to_ibkr[ulid] == ib_order_id
+            assert broker._ibkr_to_ulid[ib_order_id] == ulid
+            assert result["open_orders"][0]["order_id"] == ulid
+
+    @pytest.mark.asyncio
+    async def test_unknown_orders_get_prefix(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """Orders without orderRef get 'unknown_' prefix in reconstruction."""
+        ib_order_id = 8888
+
+        mock_ib.positions.return_value = []
+        mock_ib.openTrades.return_value = [
+            _mock_trade(
+                order_id=ib_order_id,
+                symbol="META",
+                action="SELL",
+                order_type="STP",
+                total_qty=25,
+                order_ref="",  # No ULID
+            ),
+        ]
+
+        with patch("argus.execution.ibkr_broker.IB", return_value=mock_ib):
+            broker = IBKRBroker(ibkr_config, event_bus)
+            await broker.connect()
+
+            result = await broker.reconstruct_state()
+
+            # Order should have unknown_ prefix
+            assert result["open_orders"][0]["order_id"] == f"unknown_{ib_order_id}"
+
+    @pytest.mark.asyncio
+    async def test_reconstruction_after_reconnect(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """reconstruct_state works correctly after reconnection."""
+        mock_ib.positions.return_value = [_mock_position("GOOG", 20, 175.50)]
+        mock_ib.openTrades.return_value = [
+            _mock_trade(
+                order_id=5555,
+                symbol="GOOG",
+                action="SELL",
+                order_type="STP",
+                total_qty=20,
+                order_ref="01RECONNECT123",
+            ),
+        ]
+
+        with patch("argus.execution.ibkr_broker.IB", return_value=mock_ib):
+            broker = IBKRBroker(ibkr_config, event_bus)
+            await broker.connect()
+
+            # Simulate reconnection clearing internal state
+            broker._ulid_to_ibkr.clear()
+            broker._ibkr_to_ulid.clear()
+
+            result = await broker.reconstruct_state()
+
+            # ULID should be recovered from orderRef
+            assert "01RECONNECT123" in broker._ulid_to_ibkr
+            assert len(result["positions"]) == 1
+            assert result["positions"][0].symbol == "GOOG"
+            assert result["open_orders"][0]["order_id"] == "01RECONNECT123"
