@@ -1,0 +1,104 @@
+/**
+ * Daily P&L histogram using TradingView Lightweight Charts HistogramSeries.
+ *
+ * Green bars for positive days, red for negative.
+ * Heights: 250px desktop, 200px tablet, 160px mobile.
+ */
+
+import { useCallback, useEffect, useRef, useMemo } from 'react';
+import { HistogramSeries, type IChartApi, type ISeriesApi, type HistogramData, type Time } from 'lightweight-charts';
+import { LWChart } from '../../components/LWChart';
+import { Card } from '../../components/Card';
+import { CardHeader } from '../../components/CardHeader';
+import { chartColors } from '../../utils/chartTheme';
+import type { DailyPnlEntry } from '../../api/types';
+
+interface DailyPnlChartProps {
+  dailyPnl: DailyPnlEntry[];
+  className?: string;
+}
+
+function useResponsiveHeight(): number {
+  if (typeof window === 'undefined') return 250;
+  if (window.innerWidth < 640) return 160;
+  if (window.innerWidth < 1024) return 200;
+  return 250;
+}
+
+export function DailyPnlChart({ dailyPnl, className = '' }: DailyPnlChartProps) {
+  const chartHeight = useResponsiveHeight();
+  const seriesRef = useRef<ISeriesApi<'Histogram'> | null>(null);
+  const chartRef = useRef<IChartApi | null>(null);
+
+  // Memoize histogram data - sort ascending by date (Lightweight Charts requirement)
+  const histogramData: HistogramData<Time>[] = useMemo(() => {
+    const sorted = [...dailyPnl].sort((a, b) => a.date.localeCompare(b.date));
+    return sorted.map((entry) => ({
+      time: entry.date as Time,
+      value: entry.pnl,
+      color: entry.pnl >= 0 ? chartColors.profit : chartColors.loss,
+    }));
+  }, [dailyPnl]);
+
+  // Store latest data in ref for use in callback
+  const dataRef = useRef(histogramData);
+  dataRef.current = histogramData;
+
+  const handleChartReady = useCallback((chart: IChartApi) => {
+    chartRef.current = chart;
+
+    // Add histogram series (v5 API)
+    const series = chart.addSeries(HistogramSeries, {
+      priceFormat: {
+        type: 'custom',
+        formatter: (price: number) => {
+          const sign = price >= 0 ? '+' : '';
+          return `${sign}$${price.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+        },
+      },
+    });
+
+    seriesRef.current = series;
+
+    // Set initial data from ref
+    if (dataRef.current.length > 0) {
+      series.setData(dataRef.current);
+      chart.timeScale().fitContent();
+    }
+  }, []);
+
+  // Update data when it changes
+  useEffect(() => {
+    if (seriesRef.current && chartRef.current && histogramData.length > 0) {
+      seriesRef.current.setData(histogramData);
+      chartRef.current.timeScale().fitContent();
+    }
+  }, [histogramData]);
+
+  if (dailyPnl.length === 0) {
+    return (
+      <Card className={className}>
+        <CardHeader title="Daily P&L" />
+        <div
+          className="flex items-center justify-center text-argus-text-dim text-sm"
+          style={{ height: chartHeight }}
+        >
+          Not enough data for this period
+        </div>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className={className} noPadding>
+      <div className="p-4 pb-0">
+        <CardHeader title="Daily P&L" />
+      </div>
+      <LWChart
+        height={chartHeight}
+        onChartReady={handleChartReady}
+        className="w-full"
+      />
+    </Card>
+  );
+}
