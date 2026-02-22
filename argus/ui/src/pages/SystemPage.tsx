@@ -1,10 +1,17 @@
 /**
  * System health and monitoring page.
  *
- * Placeholder for Session 7 implementation.
+ * Shows overall system status, component health, strategy cards,
+ * and WebSocket event log.
  */
 
 import { Activity } from 'lucide-react';
+import {
+  SystemOverview,
+  ComponentStatusList,
+  StrategyCards,
+  EventsLog,
+} from '../features/system';
 
 export function SystemPage() {
   return (
@@ -15,15 +22,22 @@ export function SystemPage() {
         <h1 className="text-xl font-semibold text-argus-text">System</h1>
       </div>
 
-      {/* Placeholder content */}
-      <div className="bg-argus-surface border border-argus-border rounded-lg p-8 text-center">
-        <p className="text-argus-text-dim">
-          System monitoring coming in Session 7.
-        </p>
-        <p className="text-argus-text-dim text-sm mt-2">
-          Component health, strategy cards, and event log.
-        </p>
+      {/* Main content grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Left column: Overview and Components */}
+        <div className="space-y-6">
+          <SystemOverview />
+          <ComponentStatusList />
+        </div>
+
+        {/* Right column: Strategies */}
+        <div>
+          <StrategyCards />
+        </div>
       </div>
+
+      {/* Events log - full width at bottom */}
+      <EventsLog />
     </div>
   );
 }

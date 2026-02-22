@@ -27,9 +27,6 @@ export const lwcDefaultOptions: DeepPartial<ChartOptions> = {
     textColor: chartColors.text,
     fontSize: 11,
   },
-  watermark: {
-    visible: false,
-  },
   grid: {
     vertLines: { color: chartColors.border },
     horzLines: { color: chartColors.border },
