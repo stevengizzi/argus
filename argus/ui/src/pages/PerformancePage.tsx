@@ -6,6 +6,7 @@
  */
 
 import { Component, type ReactNode } from 'react';
+import { motion } from 'framer-motion';
 import { TrendingUp } from 'lucide-react';
 import { usePerformance } from '../hooks/usePerformance';
 import { useSelectedPeriod } from '../hooks/useSelectedPeriod';
@@ -18,6 +19,7 @@ import {
   StrategyBreakdown,
   PerformanceSkeleton,
 } from '../features/performance';
+import { staggerContainer, staggerItem } from '../utils/motion';
 
 // Error boundary to catch chart rendering errors
 interface ErrorBoundaryProps {
@@ -106,32 +108,46 @@ export function PerformancePage() {
   }
 
   return (
-    <div className="space-y-4 md:space-y-6">
+    <motion.div
+      className="space-y-4 md:space-y-6"
+      variants={staggerContainer(0.08)}
+      initial="hidden"
+      animate="show"
+    >
       {/* Page header with period selector */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <motion.div
+        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
+        variants={staggerItem}
+      >
         <div className="flex items-center gap-3">
           <TrendingUp className="w-6 h-6 text-argus-accent" />
           <h1 className="text-xl font-semibold text-argus-text">Performance</h1>
         </div>
         <PeriodSelector />
-      </div>
+      </motion.div>
 
       {/* Metrics grid */}
-      <MetricsGrid metrics={data.metrics} />
+      <motion.div variants={staggerItem}>
+        <MetricsGrid metrics={data.metrics} />
+      </motion.div>
 
       {/* Charts - wrapped in error boundary */}
-      <div className="space-y-4 md:space-y-6">
+      <motion.div variants={staggerItem}>
         <ChartErrorBoundary fallback={<Card><div className="h-[300px] flex items-center justify-center text-argus-text-dim">Equity chart unavailable</div></Card>}>
           <EquityCurve dailyPnl={data.daily_pnl} />
         </ChartErrorBoundary>
+      </motion.div>
+      <motion.div variants={staggerItem}>
         <ChartErrorBoundary fallback={<Card><div className="h-[250px] flex items-center justify-center text-argus-text-dim">Daily P&L chart unavailable</div></Card>}>
           <DailyPnlChart dailyPnl={data.daily_pnl} />
         </ChartErrorBoundary>
-      </div>
+      </motion.div>
 
       {/* Strategy breakdown */}
-      <StrategyBreakdown byStrategy={data.by_strategy} />
-    </div>
+      <motion.div variants={staggerItem}>
+        <StrategyBreakdown byStrategy={data.by_strategy} />
+      </motion.div>
+    </motion.div>
   );
 }
 

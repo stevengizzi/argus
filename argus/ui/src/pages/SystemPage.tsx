@@ -5,6 +5,7 @@
  * and WebSocket event log.
  */
 
+import { motion } from 'framer-motion';
 import { Activity } from 'lucide-react';
 import {
   SystemOverview,
@@ -12,18 +13,24 @@ import {
   StrategyCards,
   EventsLog,
 } from '../features/system';
+import { staggerContainer, staggerItem } from '../utils/motion';
 
 export function SystemPage() {
   return (
-    <div className="space-y-6">
+    <motion.div
+      className="space-y-6"
+      variants={staggerContainer(0.08)}
+      initial="hidden"
+      animate="show"
+    >
       {/* Page header */}
-      <div className="flex items-center gap-3">
+      <motion.div className="flex items-center gap-3" variants={staggerItem}>
         <Activity className="w-6 h-6 text-argus-accent" />
         <h1 className="text-xl font-semibold text-argus-text">System</h1>
-      </div>
+      </motion.div>
 
       {/* Main content grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <motion.div className="grid grid-cols-1 lg:grid-cols-2 gap-6" variants={staggerItem}>
         {/* Left column: Overview and Components */}
         <div className="space-y-6">
           <SystemOverview />
@@ -34,10 +41,12 @@ export function SystemPage() {
         <div>
           <StrategyCards />
         </div>
-      </div>
+      </motion.div>
 
       {/* Events log - full width at bottom */}
-      <EventsLog />
-    </div>
+      <motion.div variants={staggerItem}>
+        <EventsLog />
+      </motion.div>
+    </motion.div>
   );
 }

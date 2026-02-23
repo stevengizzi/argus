@@ -4,10 +4,12 @@
  * Full trade history with strategy/outcome/date filters, summary stats, and paginated table.
  */
 
+import { motion } from 'framer-motion';
 import { ScrollText } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { TradeFilters, TradeStatsBar, TradeTable, TradeStatsBarSkeleton, TradeTableSkeleton } from '../features/trades';
 import { useTrades } from '../hooks/useTrades';
+import { staggerContainer, staggerItem } from '../utils/motion';
 
 const ITEMS_PER_PAGE = 20;
 
@@ -36,38 +38,49 @@ export function TradesPage() {
   });
 
   return (
-    <div className="space-y-4 md:space-y-6">
+    <motion.div
+      className="space-y-4 md:space-y-6"
+      variants={staggerContainer(0.08)}
+      initial="hidden"
+      animate="show"
+    >
       {/* Page header */}
-      <div className="flex items-center gap-3">
+      <motion.div className="flex items-center gap-3" variants={staggerItem}>
         <ScrollText className="w-6 h-6 text-argus-accent" />
         <h1 className="text-xl font-semibold text-argus-text">Trades</h1>
-      </div>
+      </motion.div>
 
       {/* Filters */}
-      <TradeFilters />
+      <motion.div variants={staggerItem}>
+        <TradeFilters />
+      </motion.div>
 
       {/* Stats bar */}
-      {isLoading ? (
-        <TradeStatsBarSkeleton />
-      ) : data ? (
-        <TradeStatsBar trades={data.trades} totalCount={data.total_count} />
-      ) : null}
+      <motion.div variants={staggerItem}>
+        {isLoading ? (
+          <TradeStatsBarSkeleton />
+        ) : data ? (
+          <TradeStatsBar trades={data.trades} totalCount={data.total_count} />
+        ) : null}
+      </motion.div>
 
       {/* Content area */}
-      {isLoading ? (
-        <TradeTableSkeleton />
-      ) : error ? (
-        <div className="bg-argus-surface border border-argus-border rounded-lg p-8 text-center">
-          <p className="text-argus-loss">Error loading trades: {error.message}</p>
-        </div>
-      ) : data ? (
-        <TradeTable
-          trades={data.trades}
-          totalCount={data.total_count}
-          limit={data.limit}
-          isLoading={isLoading}
-        />
-      ) : null}
-    </div>
+      <motion.div variants={staggerItem}>
+        {isLoading ? (
+          <TradeTableSkeleton />
+        ) : error ? (
+          <div className="bg-argus-surface border border-argus-border rounded-lg p-8 text-center">
+            <p className="text-argus-loss">Error loading trades: {error.message}</p>
+          </div>
+        ) : data ? (
+          <TradeTable
+            trades={data.trades}
+            totalCount={data.total_count}
+            limit={data.limit}
+            isLoading={isLoading}
+          />
+        ) : null}
+      </motion.div>
+    </motion.div>
   );
 }
