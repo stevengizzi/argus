@@ -8,7 +8,7 @@
  * Version-keyed cache ensures clean updates when the app changes.
  */
 
-const CACHE_VERSION = 'v1';
+const CACHE_VERSION = 'v3';
 const CACHE_NAME = `argus-shell-${CACHE_VERSION}`;
 
 // Files to precache for offline shell

@@ -138,18 +138,3 @@ body {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
   }
 }
-
-/* iOS PWA safe area support */
-@supports (padding-bottom: env(safe-area-inset-bottom)) {
-  .safe-area-bottom {
-    padding-bottom: env(safe-area-inset-bottom);
-  }
-}
-
-/* Fallback for iOS PWA when env() doesn't compute correctly */
-@media screen and (display-mode: standalone) {
-  .mobile-nav-safe {
-    /* Extra padding for home indicator on modern iPhones */
-    padding-bottom: max(env(safe-area-inset-bottom, 0px), 20px);
-  }
-}

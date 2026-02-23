@@ -34,6 +34,13 @@ export function Login() {
       <div className="w-full max-w-md">
         {/* Logo / Title */}
         <div className="text-center mb-8">
+          <img
+            src="/argus-logo-login.png"
+            alt="ARGUS"
+            width={80}
+            height={80}
+            className="mx-auto mb-4"
+          />
           <h1 className="text-3xl font-bold text-argus-text mb-2">ARGUS</h1>
           <p className="text-argus-text-dim">Command Center</p>
         </div>

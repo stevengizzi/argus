@@ -66,7 +66,7 @@ function NavItem({ to, icon, label, showStatusDot }: NavItemProps) {
 
 export function MobileNav() {
   return (
-    <nav className="min-[1024px]:hidden fixed bottom-0 left-0 right-0 z-50 bg-argus-surface border-t border-argus-border mobile-nav-safe">
+    <nav className="min-[1024px]:hidden fixed bottom-0 left-0 right-0 z-50 bg-argus-surface border-t border-argus-border">
       <div className="flex h-16">
         <NavItem
           to="/"
