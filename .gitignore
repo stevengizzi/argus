@@ -76,3 +76,6 @@ docs/IBKR-disclosures/
 # Frontend (React)
 argus/ui/node_modules/
 argus/ui/dist/
+
+# Asset source files (icons extracted to public/)
+argus_icon_set.zip
