@@ -18,13 +18,13 @@ type SeriesType = keyof SeriesDataItemTypeMap;
  * @param series - The Lightweight Charts series to animate
  * @param data - The full dataset to reveal progressively
  * @param chart - The chart instance (for fitting content)
- * @param durationMs - Animation duration in milliseconds (default 400ms)
+ * @param durationMs - Animation duration in milliseconds (default 800ms)
  */
 export function animateChartDrawIn<T extends SeriesType>(
   series: ISeriesApi<T>,
   data: SeriesDataItemTypeMap[T][],
   chart: IChartApi,
-  durationMs = 400
+  durationMs = 800
 ): void {
   if (data.length === 0) return;
 
