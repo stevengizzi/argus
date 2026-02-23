@@ -2,7 +2,10 @@
  * Responsive grid of key performance metrics.
  *
  * 2 cols mobile, 3 cols tablet, 5-6 cols desktop.
- * Each MetricCard animates in with a stagger effect.
+ * Each MetricCard animates in with a stagger effect on mount.
+ *
+ * Note: MetricsGrid remounts on period change (parent shows skeleton during loading),
+ * so the stagger animation naturally plays once per mount — no need for first-mount tracking.
  */
 
 import { motion } from 'framer-motion';

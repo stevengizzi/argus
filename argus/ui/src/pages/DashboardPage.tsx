@@ -16,7 +16,7 @@ import {
   RecentTrades,
   HealthMini,
 } from '../features/dashboard';
-import { staggerContainer, staggerItem } from '../utils/motion';
+import { staggerContainer, staggerItem, staggerItemWithChildren } from '../utils/motion';
 
 export function DashboardPage() {
   return (
@@ -30,31 +30,20 @@ export function DashboardPage() {
       {/* Phone: Stack vertically */}
       {/* Tablet: 2 columns with Market spanning full width below */}
       {/* Desktop: 3 equal columns */}
+      {/* Grid uses staggerItemWithChildren: sequences with page siblings AND staggers its cards L-to-R */}
       <motion.div
         className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5 lg:gap-6"
-        variants={staggerItem}
+        variants={staggerItemWithChildren(0.08)}
       >
-        {/* Inner stagger for summary cards with tighter delay */}
-        <motion.div variants={staggerContainer(0.05)} initial="hidden" animate="show">
-          <motion.div variants={staggerItem}>
-            <AccountSummary />
-          </motion.div>
+        <motion.div variants={staggerItem} className="h-full">
+          <AccountSummary />
         </motion.div>
-        <motion.div variants={staggerContainer(0.05)} initial="hidden" animate="show">
-          <motion.div variants={staggerItem}>
-            <DailyPnlCard />
-          </motion.div>
+        <motion.div variants={staggerItem} className="h-full">
+          <DailyPnlCard />
         </motion.div>
         {/* On tablet, market badge spans full width in its own row */}
-        <motion.div
-          className="md:col-span-2 lg:col-span-1 h-full"
-          variants={staggerContainer(0.05)}
-          initial="hidden"
-          animate="show"
-        >
-          <motion.div variants={staggerItem}>
-            <MarketStatusBadge />
-          </motion.div>
+        <motion.div variants={staggerItem} className="md:col-span-2 lg:col-span-1 h-full">
+          <MarketStatusBadge />
         </motion.div>
       </motion.div>
 

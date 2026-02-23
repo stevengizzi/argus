@@ -3,13 +3,14 @@
  *
  * Shows equity curve, daily P&L histogram, metrics grid, and strategy breakdown.
  * Period selector controls the time range for all data.
+ *
+ * Uses local state for period to prevent data flash during page exit animations.
  */
 
-import { Component, type ReactNode } from 'react';
+import { Component, type ReactNode, useState } from 'react';
 import { motion } from 'framer-motion';
 import { TrendingUp } from 'lucide-react';
 import { usePerformance } from '../hooks/usePerformance';
-import { useSelectedPeriod } from '../hooks/useSelectedPeriod';
 import { Card } from '../components/Card';
 import {
   PeriodSelector,
@@ -20,6 +21,7 @@ import {
   PerformanceSkeleton,
 } from '../features/performance';
 import { staggerContainer, staggerItem } from '../utils/motion';
+import type { PerformancePeriod } from '../api/types';
 
 // Error boundary to catch chart rendering errors
 interface ErrorBoundaryProps {
@@ -60,13 +62,18 @@ class ChartErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryStat
 }
 
 export function PerformancePage() {
-  const period = useSelectedPeriod();
+  // Local state initialized from URL - immune to URL changes during exit animation
+  const [period, setPeriod] = useState<PerformancePeriod>(() => {
+    const params = new URLSearchParams(window.location.search);
+    return (params.get('period') as PerformancePeriod) || 'month';
+  });
+
   const { data, isLoading, error } = usePerformance(period);
 
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <PageHeader />
+        <PageHeader selectedPeriod={period} onPeriodChange={setPeriod} />
         <PerformanceSkeleton />
       </div>
     );
@@ -75,7 +82,7 @@ export function PerformancePage() {
   if (error) {
     return (
       <div className="space-y-6">
-        <PageHeader />
+        <PageHeader selectedPeriod={period} onPeriodChange={setPeriod} />
         <Card>
           <div className="text-center py-8">
             <TrendingUp className="w-8 h-8 text-argus-loss mx-auto mb-4" />
@@ -96,7 +103,7 @@ export function PerformancePage() {
   if (!data || data.metrics.total_trades === 0) {
     return (
       <div className="space-y-6">
-        <PageHeader />
+        <PageHeader selectedPeriod={period} onPeriodChange={setPeriod} />
         <Card>
           <div className="text-center py-8">
             <TrendingUp className="w-8 h-8 text-argus-text-dim mx-auto mb-4" />
@@ -123,7 +130,7 @@ export function PerformancePage() {
           <TrendingUp className="w-6 h-6 text-argus-accent" />
           <h1 className="text-xl font-semibold text-argus-text">Performance</h1>
         </div>
-        <PeriodSelector />
+        <PeriodSelector selectedPeriod={period} onPeriodChange={setPeriod} />
       </motion.div>
 
       {/* Metrics grid */}
@@ -151,15 +158,20 @@ export function PerformancePage() {
   );
 }
 
-/** Page header without period selector (for loading/error states) */
-function PageHeader() {
+/** Page header for loading/error states */
+interface PageHeaderProps {
+  selectedPeriod: PerformancePeriod;
+  onPeriodChange: (period: PerformancePeriod) => void;
+}
+
+function PageHeader({ selectedPeriod, onPeriodChange }: PageHeaderProps) {
   return (
     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
       <div className="flex items-center gap-3">
         <TrendingUp className="w-6 h-6 text-argus-accent" />
         <h1 className="text-xl font-semibold text-argus-text">Performance</h1>
       </div>
-      <PeriodSelector />
+      <PeriodSelector selectedPeriod={selectedPeriod} onPeriodChange={onPeriodChange} />
     </div>
   );
 }

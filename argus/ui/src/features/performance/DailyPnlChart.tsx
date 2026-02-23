@@ -11,6 +11,7 @@ import { LWChart } from '../../components/LWChart';
 import { Card } from '../../components/Card';
 import { CardHeader } from '../../components/CardHeader';
 import { chartColors } from '../../utils/chartTheme';
+import { animateChartDrawIn } from '../../utils/chartAnimation';
 import type { DailyPnlEntry } from '../../api/types';
 
 interface DailyPnlChartProps {
@@ -66,10 +67,9 @@ export function DailyPnlChart({ dailyPnl, className = '' }: DailyPnlChartProps) 
 
     seriesRef.current = series;
 
-    // Set initial data from ref
+    // Animate initial data draw-in (left-to-right reveal)
     if (dataRef.current.length > 0) {
-      series.setData(dataRef.current);
-      chart.timeScale().fitContent();
+      animateChartDrawIn(series, dataRef.current, chart);
     }
   }, []);
 

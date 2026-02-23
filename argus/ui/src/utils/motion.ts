@@ -71,6 +71,23 @@ export const fadeIn: Variants = {
   },
 };
 
+// Stagger item that also acts as a container for its own children
+// Used when a grid should both sequence with siblings AND stagger its internal items
+export function staggerItemWithChildren(staggerDelay = 0.08): Variants {
+  return {
+    hidden: { opacity: 0, y: 12 },
+    show: {
+      opacity: 1,
+      y: 0,
+      transition: {
+        duration: DURATION.normal,
+        ease: EASE.out,
+        staggerChildren: staggerDelay,
+      },
+    },
+  };
+}
+
 // Card hover (desktop only - apply via whileHover)
 export const cardHover = {
   y: -1,

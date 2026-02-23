@@ -1,7 +1,8 @@
 /**
  * Period selector tab bar for performance page.
  *
- * Manages URL query param for selected period.
+ * Supports both controlled mode (via props) and uncontrolled mode (via URL).
+ * Controlled mode prevents data flash during page exit animations.
  */
 
 import { useSearchParams } from 'react-router-dom';
@@ -16,14 +17,29 @@ const periods: { value: PerformancePeriod; label: string }[] = [
 
 interface PeriodSelectorProps {
   className?: string;
+  /** Controlled mode: current period value */
+  selectedPeriod?: PerformancePeriod;
+  /** Controlled mode: callback when period changes */
+  onPeriodChange?: (period: PerformancePeriod) => void;
 }
 
-export function PeriodSelector({ className = '' }: PeriodSelectorProps) {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const currentPeriod = (searchParams.get('period') as PerformancePeriod) || 'month';
+export function PeriodSelector({
+  className = '',
+  selectedPeriod,
+  onPeriodChange,
+}: PeriodSelectorProps) {
+  const [, setSearchParams] = useSearchParams();
+
+  // Use prop if provided (controlled mode), otherwise fall back to default
+  const currentPeriod = selectedPeriod ?? 'month';
 
   const handlePeriodChange = (period: PerformancePeriod) => {
-    setSearchParams({ period });
+    // Update parent state if in controlled mode
+    if (onPeriodChange) {
+      onPeriodChange(period);
+    }
+    // Always sync to URL for bookmarking (replace to avoid history spam)
+    setSearchParams({ period }, { replace: true });
   };
 
   return (

@@ -8,7 +8,6 @@
  */
 
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { useSearchParams } from 'react-router-dom';
 import { Badge } from '../../components/Badge';
 import { EmptyState } from '../../components/EmptyState';
 import type { Trade } from '../../api/types';
@@ -26,6 +25,10 @@ interface TradeTableProps {
   totalCount: number;
   limit: number;
   isLoading?: boolean;
+  /** Current page number (1-indexed) */
+  currentPage: number;
+  /** Callback when page changes */
+  onPageChange: (page: number) => void;
 }
 
 const ITEMS_PER_PAGE = 20;
@@ -79,20 +82,15 @@ function getRowBgClass(pnl: number | null): string {
   return '';
 }
 
-export function TradeTable({ trades, totalCount, limit, isLoading }: TradeTableProps) {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const currentPage = parseInt(searchParams.get('page') || '1', 10);
+export function TradeTable({
+  trades,
+  totalCount,
+  limit,
+  isLoading,
+  currentPage,
+  onPageChange,
+}: TradeTableProps) {
   const totalPages = Math.ceil(totalCount / (limit || ITEMS_PER_PAGE));
-
-  const goToPage = (page: number) => {
-    const newParams = new URLSearchParams(searchParams);
-    if (page <= 1) {
-      newParams.delete('page');
-    } else {
-      newParams.set('page', page.toString());
-    }
-    setSearchParams(newParams, { replace: true });
-  };
 
   if (trades.length === 0 && !isLoading) {
     return <EmptyState message="No trades match your filters" />;
@@ -101,55 +99,55 @@ export function TradeTable({ trades, totalCount, limit, isLoading }: TradeTableP
   return (
     <div className="bg-argus-surface border border-argus-border rounded-lg overflow-hidden">
       <div className="overflow-x-auto">
-        <table className="w-full">
+        <table className="w-full table-fixed">
           <thead className="sticky top-0 z-10">
             <tr className="bg-argus-surface-2">
               {/* Phone: combined date/symbol column */}
-              <th className="px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-left lg:hidden">
+              <th className="lg:hidden px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-left">
                 Trade
               </th>
               {/* Desktop: separate date column */}
-              <th className="hidden lg:table-cell px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-left">
+              <th className="hidden lg:table-cell w-[100px] px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-left">
                 Date
               </th>
               {/* Desktop: separate symbol column */}
-              <th className="hidden lg:table-cell px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-left">
+              <th className="hidden lg:table-cell w-[80px] px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-left">
                 Symbol
               </th>
               {/* Desktop only: side */}
-              <th className="hidden lg:table-cell px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-left">
+              <th className="hidden lg:table-cell w-[55px] px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-left">
                 Side
               </th>
               {/* Tablet+: entry price */}
-              <th className="hidden md:table-cell px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-right">
+              <th className="hidden md:table-cell w-[85px] px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-right">
                 Entry
               </th>
               {/* Tablet+: exit price */}
-              <th className="hidden md:table-cell px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-right">
+              <th className="hidden md:table-cell w-[85px] px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-right">
                 Exit
               </th>
               {/* All: P&L */}
-              <th className="px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-right">
+              <th className="w-[90px] px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-right">
                 P&L
               </th>
               {/* Tablet+: R-multiple */}
-              <th className="hidden md:table-cell px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-right">
+              <th className="hidden md:table-cell w-[60px] px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-right">
                 R
               </th>
               {/* Desktop only: shares */}
-              <th className="hidden lg:table-cell px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-right">
+              <th className="hidden lg:table-cell w-[65px] px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-right">
                 Shares
               </th>
               {/* All: exit reason */}
-              <th className="px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-center">
+              <th className="w-[60px] px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-center">
                 Exit
               </th>
               {/* Desktop only: hold duration */}
-              <th className="hidden lg:table-cell px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-right">
+              <th className="hidden lg:table-cell w-[80px] px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-right">
                 Duration
               </th>
               {/* Desktop only: commission */}
-              <th className="hidden lg:table-cell px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-right">
+              <th className="hidden lg:table-cell w-[65px] px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-right">
                 Comm
               </th>
             </tr>
@@ -242,7 +240,7 @@ export function TradeTable({ trades, totalCount, limit, isLoading }: TradeTableP
       {totalPages > 1 && (
         <div className="flex items-center justify-between px-4 py-3 border-t border-argus-border bg-argus-surface-2">
           <button
-            onClick={() => goToPage(currentPage - 1)}
+            onClick={() => onPageChange(currentPage - 1)}
             disabled={currentPage <= 1}
             className="flex items-center justify-center gap-1 min-w-[44px] min-h-[44px] px-3 text-sm rounded-md border border-argus-border bg-argus-surface hover:bg-argus-surface-3 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
@@ -255,7 +253,7 @@ export function TradeTable({ trades, totalCount, limit, isLoading }: TradeTableP
           </span>
 
           <button
-            onClick={() => goToPage(currentPage + 1)}
+            onClick={() => onPageChange(currentPage + 1)}
             disabled={currentPage >= totalPages}
             className="flex items-center justify-center gap-1 min-w-[44px] min-h-[44px] px-3 text-sm rounded-md border border-argus-border bg-argus-surface hover:bg-argus-surface-3 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >

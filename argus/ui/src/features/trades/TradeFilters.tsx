@@ -1,78 +1,30 @@
 /**
- * Trade filters component with URL query param persistence.
+ * Trade filters component with controlled state.
  *
  * Provides: strategy dropdown, outcome toggle (wins/losses/breakeven), date range.
- * Filters persist in URL for bookmarking/sharing.
+ * Parent component controls filter state; URL sync handled by parent.
  */
 
-import { useSearchParams } from 'react-router-dom';
 import { useStrategies } from '../../hooks/useStrategies';
 import type { OutcomeFilter, TradeFilterValues } from '../../hooks/useTradeFilters';
 
-interface TradeFiltersProps {
-  onFiltersChange?: (filters: TradeFilterValues) => void;
+interface FilterState {
+  strategy_id: string | undefined;
+  outcome: OutcomeFilter;
+  date_from: string | undefined;
+  date_to: string | undefined;
+  page: number;
 }
 
-export function TradeFilters({ onFiltersChange }: TradeFiltersProps) {
-  const [searchParams, setSearchParams] = useSearchParams();
+interface TradeFiltersProps {
+  filters: FilterState;
+  onFiltersChange: (updates: Partial<TradeFilterValues>) => void;
+}
+
+export function TradeFilters({ filters, onFiltersChange }: TradeFiltersProps) {
   const { data: strategiesData } = useStrategies();
 
-  // Read current filter values from URL
-  const strategy_id = searchParams.get('strategy') || undefined;
-  const outcome = (searchParams.get('outcome') as OutcomeFilter) || 'all';
-  const date_from = searchParams.get('from') || undefined;
-  const date_to = searchParams.get('to') || undefined;
-
-  // Update URL and notify parent
-  const updateFilters = (updates: Partial<TradeFilterValues>) => {
-    const newParams = new URLSearchParams(searchParams);
-
-    if (updates.strategy_id !== undefined) {
-      if (updates.strategy_id) {
-        newParams.set('strategy', updates.strategy_id);
-      } else {
-        newParams.delete('strategy');
-      }
-    }
-
-    if (updates.outcome !== undefined) {
-      if (updates.outcome === 'all') {
-        newParams.delete('outcome');
-      } else {
-        newParams.set('outcome', updates.outcome);
-      }
-    }
-
-    if (updates.date_from !== undefined) {
-      if (updates.date_from) {
-        newParams.set('from', updates.date_from);
-      } else {
-        newParams.delete('from');
-      }
-    }
-
-    if (updates.date_to !== undefined) {
-      if (updates.date_to) {
-        newParams.set('to', updates.date_to);
-      } else {
-        newParams.delete('to');
-      }
-    }
-
-    // Reset to page 1 when filters change
-    newParams.delete('page');
-
-    setSearchParams(newParams, { replace: true });
-
-    if (onFiltersChange) {
-      onFiltersChange({
-        strategy_id: newParams.get('strategy') || undefined,
-        outcome: (newParams.get('outcome') as OutcomeFilter) || 'all',
-        date_from: newParams.get('from') || undefined,
-        date_to: newParams.get('to') || undefined,
-      });
-    }
-  };
+  const { strategy_id, outcome, date_from, date_to } = filters;
 
   const outcomeOptions: { value: OutcomeFilter; label: string }[] = [
     { value: 'all', label: 'All' },
@@ -91,7 +43,7 @@ export function TradeFilters({ onFiltersChange }: TradeFiltersProps) {
           </label>
           <select
             value={strategy_id || ''}
-            onChange={(e) => updateFilters({ strategy_id: e.target.value || undefined })}
+            onChange={(e) => onFiltersChange({ strategy_id: e.target.value || undefined })}
             className="w-full bg-argus-surface-2 border border-argus-border rounded-md px-3 py-2 text-sm text-argus-text focus:outline-none focus:ring-1 focus:ring-argus-accent"
           >
             <option value="">All Strategies</option>
@@ -112,7 +64,7 @@ export function TradeFilters({ onFiltersChange }: TradeFiltersProps) {
             {outcomeOptions.map((opt) => (
               <button
                 key={opt.value}
-                onClick={() => updateFilters({ outcome: opt.value })}
+                onClick={() => onFiltersChange({ outcome: opt.value })}
                 className={`flex-1 md:flex-none px-3 min-h-[44px] text-xs font-medium transition-colors ${
                   outcome === opt.value
                     ? 'bg-argus-accent text-white'
@@ -138,9 +90,9 @@ export function TradeFilters({ onFiltersChange }: TradeFiltersProps) {
                 const newFrom = e.target.value || undefined;
                 // Clear "To" if new "From" is after current "To"
                 if (newFrom && date_to && newFrom > date_to) {
-                  updateFilters({ date_from: newFrom, date_to: undefined });
+                  onFiltersChange({ date_from: newFrom, date_to: undefined });
                 } else {
-                  updateFilters({ date_from: newFrom });
+                  onFiltersChange({ date_from: newFrom });
                 }
               }}
               className="w-full bg-argus-surface-2 border border-argus-border rounded-md px-2 py-2 text-sm text-argus-text focus:outline-none focus:ring-1 focus:ring-argus-accent"
@@ -160,7 +112,7 @@ export function TradeFilters({ onFiltersChange }: TradeFiltersProps) {
                 if (newTo && date_from && newTo < date_from) {
                   return;
                 }
-                updateFilters({ date_to: newTo });
+                onFiltersChange({ date_to: newTo });
               }}
               className="w-full bg-argus-surface-2 border border-argus-border rounded-md px-2 py-2 text-sm text-argus-text focus:outline-none focus:ring-1 focus:ring-argus-accent"
             />

@@ -28,20 +28,25 @@ export function TradeStatsBar({ trades, totalCount }: TradeStatsBarProps) {
 
   return (
     <div className="bg-argus-surface border border-argus-border rounded-lg p-3 md:p-4">
-      <div className="flex items-center justify-around gap-4">
-        <MetricCard
-          label="Trades"
-          value={totalCount.toString()}
-          subValue={`${wins}W / ${losses}L`}
-        />
-        <div className="w-px h-8 bg-argus-border" />
-        <MetricCard
-          label="Win Rate"
-          value={formatPercentRaw(winRate)}
-          trend={winRate >= 50 ? 'up' : winRate > 0 ? 'down' : 'neutral'}
-        />
-        <div className="w-px h-8 bg-argus-border hidden sm:block" />
-        <div className="hidden sm:block">
+      {/* Fixed-width layout prevents content-driven width shifts when filtering */}
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex-1 min-w-0">
+          <MetricCard
+            label="Trades"
+            value={totalCount.toString()}
+            subValue={`${wins}W / ${losses}L`}
+          />
+        </div>
+        <div className="w-px h-8 bg-argus-border flex-shrink-0" />
+        <div className="flex-1 min-w-0">
+          <MetricCard
+            label="Win Rate"
+            value={formatPercentRaw(winRate)}
+            trend={winRate >= 50 ? 'up' : winRate > 0 ? 'down' : 'neutral'}
+          />
+        </div>
+        <div className="w-px h-8 bg-argus-border hidden sm:block flex-shrink-0" />
+        <div className="hidden sm:block flex-1 min-w-0">
           <MetricCard
             label="Net P&L"
             value={netPnl >= 0 ? formatCurrency(netPnl) : formatCurrency(netPnl)}
