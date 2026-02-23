@@ -2,9 +2,10 @@
  * TanStack Query hook for trades data.
  *
  * Fetches trade history with filtering and pagination. 30s polling.
+ * Uses keepPreviousData to maintain stable UI during filter changes.
  */
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { getTrades } from '../api/client';
 import type { TradesResponse } from '../api/types';
 
@@ -22,5 +23,6 @@ export function useTrades(params?: UseTradesParams) {
     queryKey: ['trades', params],
     queryFn: () => getTrades(params),
     refetchInterval: 30_000, // 30 seconds
+    placeholderData: keepPreviousData, // Keep previous data while fetching new
   });
 }

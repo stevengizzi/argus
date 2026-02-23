@@ -3,6 +3,7 @@
  *
  * Green bars for positive days, red for negative.
  * Heights: 250px desktop, 200px tablet, 160px mobile.
+ * Card container is stable; only chart content dims during period transitions.
  */
 
 import { useCallback, useEffect, useRef, useMemo } from 'react';
@@ -16,6 +17,7 @@ import type { DailyPnlEntry } from '../../api/types';
 
 interface DailyPnlChartProps {
   dailyPnl: DailyPnlEntry[];
+  isTransitioning?: boolean;
   className?: string;
 }
 
@@ -26,7 +28,7 @@ function useResponsiveHeight(): number {
   return 250;
 }
 
-export function DailyPnlChart({ dailyPnl, className = '' }: DailyPnlChartProps) {
+export function DailyPnlChart({ dailyPnl, isTransitioning = false, className = '' }: DailyPnlChartProps) {
   const chartHeight = useResponsiveHeight();
   const seriesRef = useRef<ISeriesApi<'Histogram'> | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -81,30 +83,30 @@ export function DailyPnlChart({ dailyPnl, className = '' }: DailyPnlChartProps) 
     }
   }, [histogramData]);
 
-  if (dailyPnl.length === 0) {
-    return (
-      <Card className={className}>
-        <CardHeader title="Daily P&L" />
-        <div
-          className="flex items-center justify-center text-argus-text-dim text-sm"
-          style={{ height: chartHeight }}
-        >
-          Not enough data for this period
-        </div>
-      </Card>
-    );
-  }
-
+  // The card container always renders (never conditionally unmounted)
   return (
     <Card className={className} noPadding>
       <div className="p-4 pb-0">
         <CardHeader title="Daily P&L" />
       </div>
-      <LWChart
-        height={chartHeight}
-        onChartReady={handleChartReady}
-        className="w-full"
-      />
+      <div
+        className={`transition-opacity duration-200 ${isTransitioning ? 'opacity-40' : 'opacity-100'}`}
+      >
+        {dailyPnl.length === 0 ? (
+          <div
+            className="flex items-center justify-center text-argus-text-dim text-sm"
+            style={{ height: chartHeight }}
+          >
+            Not enough data for this period
+          </div>
+        ) : (
+          <LWChart
+            height={chartHeight}
+            onChartReady={handleChartReady}
+            className="w-full"
+          />
+        )}
+      </div>
     </Card>
   );
 }

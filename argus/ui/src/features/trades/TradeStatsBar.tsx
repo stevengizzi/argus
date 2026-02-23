@@ -2,6 +2,7 @@
  * Trade stats bar showing summary statistics for the current filtered set.
  *
  * Displays: total trades, win rate, net P&L.
+ * Container is stable; content dims during filter transitions.
  */
 
 import { MetricCard } from '../../components/MetricCard';
@@ -11,9 +12,10 @@ import type { Trade } from '../../api/types';
 interface TradeStatsBarProps {
   trades: Trade[];
   totalCount: number;
+  isTransitioning?: boolean;
 }
 
-export function TradeStatsBar({ trades, totalCount }: TradeStatsBarProps) {
+export function TradeStatsBar({ trades, totalCount, isTransitioning = false }: TradeStatsBarProps) {
   // Calculate stats from the filtered trades
   const wins = trades.filter((t) => (t.pnl_dollars ?? 0) > 0).length;
   const losses = trades.filter((t) => (t.pnl_dollars ?? 0) < 0).length;
@@ -29,7 +31,11 @@ export function TradeStatsBar({ trades, totalCount }: TradeStatsBarProps) {
   return (
     <div className="bg-argus-surface border border-argus-border rounded-lg p-3 md:p-4">
       {/* Fixed-width layout prevents content-driven width shifts when filtering */}
-      <div className="flex items-center justify-between gap-4">
+      <div
+        className={`flex items-center justify-between gap-4 transition-opacity duration-200 ${
+          isTransitioning ? 'opacity-40' : 'opacity-100'
+        }`}
+      >
         <div className="flex-1 min-w-0">
           <MetricCard
             label="Trades"

@@ -4,11 +4,11 @@
  * Full trade history with strategy/outcome/date filters, summary stats, and paginated table.
  *
  * Uses local state for filters to prevent data flash during page exit animations.
- * AnimatePresence provides subtle crossfade when filters change.
+ * Containers and headers persist during filter changes - only data values transition.
  */
 
 import { useState, useCallback } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { ScrollText } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import {
@@ -19,7 +19,7 @@ import {
   TradeTableSkeleton,
 } from '../features/trades';
 import { useTrades } from '../hooks/useTrades';
-import { staggerContainer, staggerItem, fadeIn } from '../utils/motion';
+import { staggerContainer, staggerItem } from '../utils/motion';
 import type { OutcomeFilter, TradeFilterValues } from '../hooks/useTradeFilters';
 
 const ITEMS_PER_PAGE = 20;
@@ -134,7 +134,8 @@ export function TradesPage() {
   );
 
   // Data hook uses local state, not URL
-  const { data, isLoading, error } = useTrades({
+  // With keepPreviousData: isLoading only true on first load, isFetching true during filter changes
+  const { data, isLoading, error, isFetching } = useTrades({
     strategy_id: filters.strategy_id,
     outcome: filters.outcome === 'all' ? undefined : filters.outcome,
     date_from: filters.date_from,
@@ -142,9 +143,6 @@ export function TradesPage() {
     limit: ITEMS_PER_PAGE,
     offset: (filters.page - 1) * ITEMS_PER_PAGE,
   });
-
-  // Key for crossfade animation - changes when any filter changes
-  const filterKey = `${filters.outcome}-${filters.strategy_id ?? 'all'}-${filters.date_from ?? ''}-${filters.date_to ?? ''}`;
 
   return (
     <motion.div
@@ -161,59 +159,41 @@ export function TradesPage() {
 
       {/* Filters - controlled by local state */}
       <motion.div variants={staggerItem}>
-        <TradeFilters
-          filters={filters}
-          onFiltersChange={updateFilters}
-        />
+        <TradeFilters filters={filters} onFiltersChange={updateFilters} />
       </motion.div>
 
-      {/* Stats bar with crossfade */}
+      {/* Stats bar - container persists, content transitions */}
       <motion.div variants={staggerItem}>
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={isLoading ? 'loading' : filterKey}
-            variants={fadeIn}
-            initial="hidden"
-            animate="show"
-            exit="hidden"
-          >
-            {isLoading ? (
-              <TradeStatsBarSkeleton />
-            ) : data ? (
-              <TradeStatsBar trades={data.trades} totalCount={data.total_count} />
-            ) : null}
-          </motion.div>
-        </AnimatePresence>
+        {isLoading ? (
+          <TradeStatsBarSkeleton />
+        ) : data ? (
+          <TradeStatsBar
+            trades={data.trades}
+            totalCount={data.total_count}
+            isTransitioning={isFetching}
+          />
+        ) : null}
       </motion.div>
 
-      {/* Content area with crossfade */}
+      {/* Content area - container persists, content transitions */}
       <motion.div variants={staggerItem}>
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={isLoading ? 'loading' : filterKey}
-            variants={fadeIn}
-            initial="hidden"
-            animate="show"
-            exit="hidden"
-          >
-            {isLoading ? (
-              <TradeTableSkeleton />
-            ) : error ? (
-              <div className="bg-argus-surface border border-argus-border rounded-lg p-8 text-center">
-                <p className="text-argus-loss">Error loading trades: {error.message}</p>
-              </div>
-            ) : data ? (
-              <TradeTable
-                trades={data.trades}
-                totalCount={data.total_count}
-                limit={data.limit}
-                isLoading={isLoading}
-                currentPage={filters.page}
-                onPageChange={updatePage}
-              />
-            ) : null}
-          </motion.div>
-        </AnimatePresence>
+        {isLoading ? (
+          <TradeTableSkeleton />
+        ) : error ? (
+          <div className="bg-argus-surface border border-argus-border rounded-lg p-8 text-center">
+            <p className="text-argus-loss">Error loading trades: {error.message}</p>
+          </div>
+        ) : data ? (
+          <TradeTable
+            trades={data.trades}
+            totalCount={data.total_count}
+            limit={data.limit}
+            isLoading={isLoading}
+            isTransitioning={isFetching}
+            currentPage={filters.page}
+            onPageChange={updatePage}
+          />
+        ) : null}
       </motion.div>
     </motion.div>
   );

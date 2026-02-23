@@ -71,6 +71,19 @@ export const fadeIn: Variants = {
   },
 };
 
+// Quick crossfade for in-place content swaps (filter changes, period changes)
+// 75ms exit + 75ms enter = 150ms total with mode="wait"
+export const quickFade: Variants = {
+  hidden: {
+    opacity: 0,
+    transition: { duration: 0.075 } as Transition, // 75ms exit
+  },
+  show: {
+    opacity: 1,
+    transition: { duration: 0.075 } as Transition, // 75ms enter
+  },
+};
+
 // Stagger item that also acts as a container for its own children
 // Used when a grid should both sequence with siblings AND stagger its internal items
 export function staggerItemWithChildren(staggerDelay = 0.08): Variants {

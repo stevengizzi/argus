@@ -5,6 +5,12 @@
  * Period selector controls the time range for all data.
  *
  * Uses local state for period to prevent data flash during page exit animations.
+ * Containers/headers stay stable during period changes - only data values transition.
+ *
+ * With keepPreviousData in TanStack Query:
+ * - isLoading is only true on the very first load (no cache at all)
+ * - isFetching is true during period changes while previous data is shown
+ * - data contains placeholder (previous period's data) during transitions
  */
 
 import { Component, type ReactNode, useState } from 'react';
@@ -68,8 +74,10 @@ export function PerformancePage() {
     return (params.get('period') as PerformancePeriod) || 'month';
   });
 
-  const { data, isLoading, error } = usePerformance(period);
+  const { data, isLoading, error, isFetching } = usePerformance(period);
 
+  // First load (no cache at all) — show skeleton
+  // With keepPreviousData, isLoading is only true when there's truly no data
   if (isLoading) {
     return (
       <div className="space-y-6">
@@ -79,7 +87,7 @@ export function PerformancePage() {
     );
   }
 
-  if (error) {
+  if (error && !data) {
     return (
       <div className="space-y-6">
         <PageHeader selectedPeriod={period} onPeriodChange={setPeriod} />
@@ -114,6 +122,7 @@ export function PerformancePage() {
     );
   }
 
+  // Main render — containers are always stable, isFetching dims data during transition
   return (
     <motion.div
       className="space-y-4 md:space-y-6"
@@ -133,26 +142,42 @@ export function PerformancePage() {
         <PeriodSelector selectedPeriod={period} onPeriodChange={setPeriod} />
       </motion.div>
 
-      {/* Metrics grid */}
+      {/* Metrics grid — pass isFetching for subtle transition */}
       <motion.div variants={staggerItem}>
-        <MetricsGrid metrics={data.metrics} />
+        <MetricsGrid metrics={data.metrics} isTransitioning={isFetching} />
       </motion.div>
 
-      {/* Charts - wrapped in error boundary */}
+      {/* Charts — pass isFetching for subtle transition */}
       <motion.div variants={staggerItem}>
-        <ChartErrorBoundary fallback={<Card><div className="h-[300px] flex items-center justify-center text-argus-text-dim">Equity chart unavailable</div></Card>}>
-          <EquityCurve dailyPnl={data.daily_pnl} />
+        <ChartErrorBoundary
+          fallback={
+            <Card>
+              <div className="h-[300px] flex items-center justify-center text-argus-text-dim">
+                Equity chart unavailable
+              </div>
+            </Card>
+          }
+        >
+          <EquityCurve dailyPnl={data.daily_pnl} isTransitioning={isFetching} />
         </ChartErrorBoundary>
       </motion.div>
       <motion.div variants={staggerItem}>
-        <ChartErrorBoundary fallback={<Card><div className="h-[250px] flex items-center justify-center text-argus-text-dim">Daily P&L chart unavailable</div></Card>}>
-          <DailyPnlChart dailyPnl={data.daily_pnl} />
+        <ChartErrorBoundary
+          fallback={
+            <Card>
+              <div className="h-[250px] flex items-center justify-center text-argus-text-dim">
+                Daily P&L chart unavailable
+              </div>
+            </Card>
+          }
+        >
+          <DailyPnlChart dailyPnl={data.daily_pnl} isTransitioning={isFetching} />
         </ChartErrorBoundary>
       </motion.div>
 
       {/* Strategy breakdown */}
       <motion.div variants={staggerItem}>
-        <StrategyBreakdown byStrategy={data.by_strategy} />
+        <StrategyBreakdown byStrategy={data.by_strategy} isTransitioning={isFetching} />
       </motion.div>
     </motion.div>
   );

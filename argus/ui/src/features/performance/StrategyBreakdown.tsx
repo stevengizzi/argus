@@ -1,5 +1,6 @@
 /**
  * Strategy breakdown table showing per-strategy performance metrics.
+ * Card container is stable; only table content dims during period transitions.
  */
 
 import { Card } from '../../components/Card';
@@ -16,10 +17,11 @@ interface StrategyRow {
 
 interface StrategyBreakdownProps {
   byStrategy: Record<string, StrategyMetrics>;
+  isTransitioning?: boolean;
   className?: string;
 }
 
-export function StrategyBreakdown({ byStrategy, className = '' }: StrategyBreakdownProps) {
+export function StrategyBreakdown({ byStrategy, isTransitioning = false, className = '' }: StrategyBreakdownProps) {
   // Convert record to array for DataTable
   const data: StrategyRow[] = Object.entries(byStrategy).map(([strategyId, metrics]) => ({
     strategyId,
@@ -61,28 +63,28 @@ export function StrategyBreakdown({ byStrategy, className = '' }: StrategyBreakd
     },
   ];
 
-  if (data.length === 0) {
-    return (
-      <Card className={className}>
-        <CardHeader title="By Strategy" />
-        <div className="text-center py-6 text-argus-text-dim text-sm">
-          No strategy data available
-        </div>
-      </Card>
-    );
-  }
-
+  // Card and CardHeader always persist
   return (
     <Card className={className} noPadding>
       <div className="p-4 pb-0">
         <CardHeader title="By Strategy" />
       </div>
-      <DataTable
-        columns={columns}
-        data={data}
-        keyExtractor={(row) => row.strategyId}
-        emptyMessage="No strategy data"
-      />
+      <div
+        className={`transition-opacity duration-200 ${isTransitioning ? 'opacity-40' : 'opacity-100'}`}
+      >
+        {data.length === 0 ? (
+          <div className="text-center py-6 text-argus-text-dim text-sm p-4">
+            No strategy data available
+          </div>
+        ) : (
+          <DataTable
+            columns={columns}
+            data={data}
+            keyExtractor={(row) => row.strategyId}
+            emptyMessage="No strategy data"
+          />
+        )}
+      </div>
     </Card>
   );
 }

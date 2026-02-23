@@ -25,6 +25,7 @@ interface TradeTableProps {
   totalCount: number;
   limit: number;
   isLoading?: boolean;
+  isTransitioning?: boolean;
   /** Current page number (1-indexed) */
   currentPage: number;
   /** Callback when page changes */
@@ -87,6 +88,7 @@ export function TradeTable({
   totalCount,
   limit,
   isLoading,
+  isTransitioning = false,
   currentPage,
   onPageChange,
 }: TradeTableProps) {
@@ -152,7 +154,12 @@ export function TradeTable({
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-argus-border">
+          {/* Table body dims during filter transitions */}
+          <tbody
+            className={`divide-y divide-argus-border transition-opacity duration-200 ${
+              isTransitioning ? 'opacity-40' : 'opacity-100'
+            }`}
+          >
             {trades.map((trade) => {
               const pnlFormatted = formatPnl(trade.pnl_dollars ?? 0);
               const rFormatted = formatR(trade.pnl_r_multiple ?? 0);

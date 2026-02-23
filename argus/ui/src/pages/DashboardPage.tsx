@@ -56,12 +56,17 @@ export function DashboardPage() {
       {/* Phone: Stack vertically */}
       {/* Tablet: 2 columns */}
       {/* Desktop: 2 columns */}
+      {/* Grid uses staggerItemWithChildren: sequences with page siblings AND staggers its cards L-to-R */}
       <motion.div
         className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5 lg:gap-6"
-        variants={staggerItem}
+        variants={staggerItemWithChildren(0.08)}
       >
-        <RecentTrades />
-        <HealthMini />
+        <motion.div variants={staggerItem}>
+          <RecentTrades />
+        </motion.div>
+        <motion.div variants={staggerItem}>
+          <HealthMini />
+        </motion.div>
       </motion.div>
     </motion.div>
   );
