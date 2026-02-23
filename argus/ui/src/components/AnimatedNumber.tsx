@@ -39,11 +39,6 @@ export function AnimatedNumber({
   const startTimeRef = useRef<number | null>(null);
   const rafRef = useRef<number | null>(null);
 
-  // Keep currentValueRef in sync with displayValue without triggering effects
-  useEffect(() => {
-    currentValueRef.current = displayValue;
-  }, [displayValue]);
-
   // Handle value changes - start animation when target changes
   useEffect(() => {
     // If value hasn't changed from our target, nothing to do
@@ -72,6 +67,8 @@ export function AnimatedNumber({
 
       const current = startValue + (value - startValue) * easedProgress;
 
+      // Update ref directly alongside setState (no separate sync effect)
+      currentValueRef.current = current;
       setDisplayValue(current);
 
       if (progress < 1) {
@@ -79,6 +76,7 @@ export function AnimatedNumber({
       } else {
         rafRef.current = null;
         // Ensure final value is exact
+        currentValueRef.current = value;
         setDisplayValue(value);
       }
     };

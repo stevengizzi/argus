@@ -18,13 +18,16 @@ type SeriesType = keyof SeriesDataItemTypeMap;
  * @param series - The Lightweight Charts series to animate
  * @param data - The full dataset to reveal progressively
  * @param chart - The chart instance (for fitting content)
- * @param durationMs - Animation duration in milliseconds (default 800ms)
+ * @param durationMs - Animation duration in milliseconds (default 1600ms)
+ * @param interpolate - Whether to interpolate partial points for smooth line drawing (default true).
+ *                      Set to false for histogram series where interpolation doesn't make visual sense.
  */
 export function animateChartDrawIn<T extends SeriesType>(
   series: ISeriesApi<T>,
   data: SeriesDataItemTypeMap[T][],
   chart: IChartApi,
-  durationMs = 800
+  durationMs = 100,
+  interpolate = true
 ): void {
   if (data.length === 0) return;
 
@@ -43,11 +46,37 @@ export function animateChartDrawIn<T extends SeriesType>(
     // Ease-out cubic for natural deceleration
     const easedProgress = 1 - Math.pow(1 - progress, 3);
 
-    const targetIndex = Math.max(1, Math.ceil(easedProgress * data.length));
-    series.setData(data.slice(0, targetIndex));
+    // Calculate continuous position in the data array
+    const continuousIndex = easedProgress * (data.length - 1);
+    const wholeIndex = Math.floor(continuousIndex);
+    const fraction = continuousIndex - wholeIndex;
+
+    // Include all complete data points up to wholeIndex
+    const visibleData = data.slice(0, wholeIndex + 1);
+
+    // Add interpolated point between current and next data point (line/area charts only)
+    if (interpolate && wholeIndex < data.length - 1 && fraction > 0) {
+      const current = data[wholeIndex];
+      const next = data[wholeIndex + 1];
+
+      // Interpolate the value (works for AreaData and other value-based series)
+      const currentValue = (current as { value?: number }).value ?? 0;
+      const nextValue = (next as { value?: number }).value ?? 0;
+      const interpolatedValue = currentValue + (nextValue - currentValue) * fraction;
+
+      visibleData.push({
+        ...next,  // Use next point's time slot so chart doesn't create duplicate x
+        value: interpolatedValue,
+      } as SeriesDataItemTypeMap[T]);
+    }
+
+    series.setData(visibleData);
 
     if (progress < 1) {
       requestAnimationFrame(step);
+    } else {
+      // Ensure final frame shows exact data
+      series.setData(data);
     }
   }
 

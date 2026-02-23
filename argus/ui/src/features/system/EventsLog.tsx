@@ -128,9 +128,18 @@ export function EventsLog() {
   return (
     <Card noPadding>
       {/* Collapsible header - fixed height regardless of expanded state */}
-      <button
+      {/* Using div with role="button" to avoid nested button HTML violation */}
+      <div
+        role="button"
+        tabIndex={0}
         onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full flex items-center justify-between p-4 h-[60px] hover:bg-argus-surface-2 transition-colors"
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            setIsExpanded(!isExpanded);
+          }
+        }}
+        className="w-full flex items-center justify-between p-4 h-[60px] hover:bg-argus-surface-2 transition-colors cursor-pointer"
       >
         <div className="flex items-center gap-2">
           {/* Animated chevron */}
@@ -172,7 +181,7 @@ export function EventsLog() {
           <Trash2 className="w-3.5 h-3.5" />
           Clear
         </motion.button>
-      </button>
+      </div>
 
       {/* Animated event list */}
       <AnimatePresence initial={false}>

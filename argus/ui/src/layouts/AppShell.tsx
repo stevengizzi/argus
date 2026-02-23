@@ -41,13 +41,12 @@ export function AppShell({ paperMode = true }: AppShellProps) {
     return () => disconnect();
   }, [connect, disconnect]);
 
-  // Scroll to top when navigating to a new page
-  useEffect(() => {
-    mainRef.current?.scrollTo(0, 0);
-  }, [location.pathname]);
-
-  // Clean up old cache entries after transition to prevent memory leak
+  // Clean up old cache entries and scroll to top after exit transition completes.
+  // This creates the effect: fade to black at old scroll position → scroll to top → fade in new page.
   const handleExitComplete = useCallback(() => {
+    // Scroll to top instantly between exit and enter animations
+    mainRef.current?.scrollTo(0, 0);
+
     // Keep only current pathname in cache
     for (const key of outletCache.keys()) {
       if (key !== location.pathname) {
@@ -57,7 +56,7 @@ export function AppShell({ paperMode = true }: AppShellProps) {
   }, [location.pathname]);
 
   return (
-    <div className="flex min-h-screen bg-argus-bg">
+    <div className="flex h-dvh bg-argus-bg overflow-hidden">
       {/* Desktop sidebar */}
       <Sidebar paperMode={paperMode} />
 

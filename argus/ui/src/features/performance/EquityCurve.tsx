@@ -11,6 +11,7 @@ import { AreaSeries, type IChartApi, type ISeriesApi, type AreaData, type Time }
 import { LWChart } from '../../components/LWChart';
 import { Card } from '../../components/Card';
 import { CardHeader } from '../../components/CardHeader';
+import { useResponsiveHeight } from '../../hooks/useMediaQuery';
 import { chartColors } from '../../utils/chartTheme';
 import { animateChartDrawIn } from '../../utils/chartAnimation';
 import type { DailyPnlEntry } from '../../api/types';
@@ -21,15 +22,8 @@ interface EquityCurveProps {
   className?: string;
 }
 
-function useResponsiveHeight(): number {
-  if (typeof window === 'undefined') return 300;
-  if (window.innerWidth < 640) return 180;
-  if (window.innerWidth < 1024) return 220;
-  return 300;
-}
-
 export function EquityCurve({ dailyPnl, isTransitioning = false, className = '' }: EquityCurveProps) {
-  const chartHeight = useResponsiveHeight();
+  const chartHeight = useResponsiveHeight(300, 220, 180);
   const seriesRef = useRef<ISeriesApi<'Area'> | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
 

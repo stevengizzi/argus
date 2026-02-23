@@ -4,6 +4,7 @@
 
 export { useAccount } from './useAccount';
 export { useHealth } from './useHealth';
+export { useLiveEquity, type LiveEquityData } from './useLiveEquity';
 export { usePerformance } from './usePerformance';
 export { usePositions } from './usePositions';
 export { useSparklineData } from './useSparklineData';

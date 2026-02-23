@@ -9,6 +9,7 @@ import { Card } from '../../components/Card';
 import { CardHeader } from '../../components/CardHeader';
 import { Sparkline } from '../../components/Sparkline';
 import { useAccount } from '../../hooks/useAccount';
+import { useLiveEquity } from '../../hooks/useLiveEquity';
 import { useSparklineData } from '../../hooks/useSparklineData';
 import { formatCurrency } from '../../utils/format';
 import { AccountSummarySkeleton } from './DashboardSkeleton';
@@ -16,6 +17,7 @@ import { AccountSummarySkeleton } from './DashboardSkeleton';
 export function AccountSummary() {
   const { data, isLoading, error } = useAccount();
   const { equityTrend } = useSparklineData();
+  const liveEquity = useLiveEquity();
 
   if (isLoading) {
     return <AccountSummarySkeleton />;
@@ -34,23 +36,21 @@ export function AccountSummary() {
     <Card className="h-full">
       <CardHeader title="Account Equity" />
 
-      {/* Hero equity number with smooth count animation */}
+      {/* Hero equity number with smooth count animation — uses live WS data when available */}
       <AnimatedNumber
-        value={data.equity}
+        value={liveEquity?.equity ?? data.equity}
         format={formatCurrency}
         className="text-3xl font-semibold text-argus-text"
       />
 
-      {/* 30-day equity trend sparkline */}
+      {/* 30-day equity trend sparkline — auto-measures container width */}
       {equityTrend.length > 1 && (
-        <div className="mt-2 w-full">
+        <div className="mt-2">
           <Sparkline
             data={equityTrend}
-            width={200}
             height={32}
             color="var(--color-argus-accent)"
             fillOpacity={0.15}
-            className="w-full"
           />
         </div>
       )}

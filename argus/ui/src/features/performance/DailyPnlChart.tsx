@@ -11,6 +11,7 @@ import { HistogramSeries, type IChartApi, type ISeriesApi, type HistogramData, t
 import { LWChart } from '../../components/LWChart';
 import { Card } from '../../components/Card';
 import { CardHeader } from '../../components/CardHeader';
+import { useResponsiveHeight } from '../../hooks/useMediaQuery';
 import { chartColors } from '../../utils/chartTheme';
 import { animateChartDrawIn } from '../../utils/chartAnimation';
 import type { DailyPnlEntry } from '../../api/types';
@@ -21,15 +22,8 @@ interface DailyPnlChartProps {
   className?: string;
 }
 
-function useResponsiveHeight(): number {
-  if (typeof window === 'undefined') return 250;
-  if (window.innerWidth < 640) return 160;
-  if (window.innerWidth < 1024) return 200;
-  return 250;
-}
-
 export function DailyPnlChart({ dailyPnl, isTransitioning = false, className = '' }: DailyPnlChartProps) {
-  const chartHeight = useResponsiveHeight();
+  const chartHeight = useResponsiveHeight(250, 200, 160);
   const seriesRef = useRef<ISeriesApi<'Histogram'> | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
 
@@ -69,9 +63,9 @@ export function DailyPnlChart({ dailyPnl, isTransitioning = false, className = '
 
     seriesRef.current = series;
 
-    // Animate initial data draw-in (left-to-right reveal)
+    // Animate initial data draw-in (left-to-right reveal, no interpolation for histogram)
     if (dataRef.current.length > 0) {
-      animateChartDrawIn(series, dataRef.current, chart);
+      animateChartDrawIn(series, dataRef.current, chart, 100, false);
     }
   }, []);
 

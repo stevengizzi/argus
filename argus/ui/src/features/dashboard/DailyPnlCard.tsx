@@ -10,6 +10,7 @@ import { CardHeader } from '../../components/CardHeader';
 import { PnlValue } from '../../components/PnlValue';
 import { Sparkline } from '../../components/Sparkline';
 import { useAccount } from '../../hooks/useAccount';
+import { useLiveEquity } from '../../hooks/useLiveEquity';
 import { useSparklineData } from '../../hooks/useSparklineData';
 import { formatCurrency } from '../../utils/format';
 import { DailyPnlSkeleton } from './DashboardSkeleton';
@@ -23,6 +24,7 @@ function formatPnlWithSign(value: number): string {
 export function DailyPnlCard() {
   const { data, isLoading, error } = useAccount();
   const { pnlTrend } = useSparklineData();
+  const liveEquity = useLiveEquity();
 
   if (isLoading) {
     return <DailyPnlSkeleton />;
@@ -37,11 +39,15 @@ export function DailyPnlCard() {
     );
   }
 
+  // Use live values when available, fall back to REST
+  const dailyPnl = liveEquity?.dailyPnl ?? data.daily_pnl;
+  const dailyPnlPct = liveEquity?.dailyPnlPct ?? data.daily_pnl_pct;
+
   // Determine sparkline color based on today's P&L (updates in real-time)
   const sparklineColor =
-    data.daily_pnl > 0
+    dailyPnl > 0
       ? 'var(--color-argus-profit)'
-      : data.daily_pnl < 0
+      : dailyPnl < 0
         ? 'var(--color-argus-loss)'
         : 'var(--color-argus-text-dim)';
 
@@ -49,36 +55,34 @@ export function DailyPnlCard() {
     <Card className="h-full">
       <CardHeader title="Daily P&L" />
 
-      {/* Large P&L number with smooth count animation */}
+      {/* Large P&L number with smooth count animation — uses live WS data when available */}
       <AnimatedNumber
-        value={data.daily_pnl}
+        value={dailyPnl}
         format={formatPnlWithSign}
         className={`text-3xl font-medium transition-colors duration-300 ${
-          data.daily_pnl > 0
+          dailyPnl > 0
             ? 'text-argus-profit'
-            : data.daily_pnl < 0
+            : dailyPnl < 0
               ? 'text-argus-loss'
               : 'text-argus-text-dim'
         }`}
       />
 
-      {/* Recent daily P&L sparkline */}
+      {/* Recent daily P&L sparkline — auto-measures container width */}
       {pnlTrend.length > 1 && (
-        <div className="mt-2 w-full">
+        <div className="mt-2">
           <Sparkline
             data={pnlTrend}
-            width={200}
             height={32}
             color={sparklineColor}
             fillOpacity={0.15}
-            className="w-full"
           />
         </div>
       )}
 
-      {/* Percentage below */}
+      {/* Percentage below — uses live WS data when available */}
       <div className="mt-1">
-        <PnlValue value={data.daily_pnl_pct} format="percent" size="sm" />
+        <PnlValue value={dailyPnlPct} format="percent" size="sm" />
       </div>
 
       {/* Trade count */}
