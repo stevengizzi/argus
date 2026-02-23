@@ -44,7 +44,7 @@ export function StrategyBreakdown({ byStrategy, className = '' }: StrategyBreakd
       key: 'winRate',
       header: 'Win Rate',
       align: 'right',
-      render: (row) => formatPercentRaw(row.metrics.win_rate),
+      render: (row) => formatPercentRaw(row.metrics.win_rate * 100),
     },
     {
       key: 'pf',
