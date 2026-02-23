@@ -1202,5 +1202,63 @@ Each entry follows this format:
 
 ---
 
+### DEC-106 | UI/UX Feature Backlog Document
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-23 |
+| **Decision** | Created `docs/ui/UX_FEATURE_BACKLOG.md` as the canonical inventory of all planned UI/UX enhancements. 35 features organized across 6 sprint groupings (Sprints 16–23+) with priority tiers (P0–P3), effort estimates, and implementation notes. Derived from design research session reviewing Bybit, analytics dashboards, mobile trading apps, and data visualization references. |
+| **Rationale** | Sprint 15 established the Command Center foundation. The next question is "how do we evolve from status page to command center?" Capturing the full vision in one document prevents piecemeal design decisions and ensures future sprints have clear design targets. |
+| **Alternatives** | (a) Add features ad-hoc as sprints arise — rejected, loses the coherent vision. (b) Full design spec per feature — premature, effort estimates and priorities may shift. |
+| **Status** | Active |
+
+---
+
+### DEC-107 | Sprint 16 UX Enhancements — Motion, Sparklines, Polish
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-23 |
+| **Decision** | Sprint 16 (Desktop/PWA) scope expanded to include ~15 hours of UX polish: staggered entry animations, chart draw-in animations, page transitions, skeleton loading states, number morphing/P&L flash, hover feedback, contextual empty states, and hero sparklines on dashboard summary cards. These enhance perceived quality without new data infrastructure. |
+| **Rationale** | Low effort, high impact. Motion and micro-interactions transform the app from "functional prototype" to "premium tool." Sprint 16 is the right time because it's the packaging sprint — Tauri desktop and PWA mobile wrapping happens alongside these polish items. |
+| **Alternatives** | (a) Defer all polish to Sprint 21 — rejected, 5+ sprints of using an app without animation feels unfinished. (b) Add animation earlier in Sprint 15 — rejected, Sprint 15 was already at scope limit. |
+| **Status** | Active |
+
+---
+
+### DEC-108 | Sprint 21 Scope — CC Analytics & Strategy Lab Defined
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-23 |
+| **Decision** | Sprint 21 (CC Analytics & Strategy Lab) scope defined as ~80–100 hours covering: Individual Stock/Asset Detail Panel (slide-in), Dashboard V2 Command Center layout, trade activity heatmaps, win/loss distribution histogram, portfolio treemap, risk waterfall chart, comparative period overlay, strategy correlation matrix, trade replay mode, goal tracking, and heat strip portfolio bar. Additional chart libraries for Sprint 21+: D3 (treemaps, heatmaps, sunbursts — use sparingly) and Three.js or Plotly 3D (strategy optimization landscape in Sprint 22). These extend the DEC-104 chart stack. Full specifications in `docs/ui/UX_FEATURE_BACKLOG.md` items 21-A through 21-K. |
+| **Rationale** | Sprint 21 was previously a placeholder. Design research defined what "analytics" concretely means. The stock detail panel (21-A) is the single biggest functional gap vs. production trading platforms. Trade replay (21-I) is the highest-value learning tool. Together they transform ARGUS from a monitoring tool into a research laboratory. |
+| **Alternatives** | (a) Smaller Sprint 21 scope — likely necessary in practice; the backlog provides a prioritized menu to select from. (b) Spread analytics across Sprints 18–20 — rejected, strategy development is the priority for those sprints. |
+| **Status** | Active |
+
+---
+
+### DEC-109 | Design North Star — "Bloomberg Terminal Meets Modern Fintech"
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-23 |
+| **Decision** | Established six design principles for the Command Center: (1) Information over decoration, (2) Ambient awareness via sparklines/gauges/heatmaps, (3) Progressive disclosure (summary → detail panel → full page), (4) Motion with purpose (<500ms, never blocks interaction), (5) Mobile as primary trading surface (Taipei overnight hours), (6) Research lab aesthetics for Sprint 21+ visualizations. All future UI decisions evaluated against these principles. |
+| **Rationale** | Design research revealed the gap between current "status page" Dashboard and envisioned "command center." Codifying principles prevents drift toward either consumer-app aesthetics (gradients, glassmorphism) or bare-data terminal (no visual craft). The principles are grounded in Steven's actual usage pattern: monitoring from iPhone during overnight Taipei hours, detailed analysis on desktop during off-hours. |
+| **Alternatives** | None — these are guiding principles, not exclusive technical choices. |
+| **Status** | Active |
+
+---
+
+### DEC-110 | Animation Library — Framer Motion + CSS Transitions
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-23 |
+| **Decision** | Framer Motion for page transitions and staggered entry animations. CSS transitions for hover effects and micro-interactions. Lightweight Charts native animation for chart draw-ins. Animation budget: every animation <500ms, never blocks interaction, 60fps minimum. |
+| **Rationale** | Framer Motion integrates cleanly with React Router (AnimatePresence for page transitions) and provides stagger orchestration. CSS transitions are sufficient and more performant for simple hover/focus effects. No need for a heavier library like GSAP. |
+| **Alternatives** | (a) Pure CSS only — rejected, staggered orchestration is awkward in pure CSS. (b) React Spring — viable but Framer Motion has better React Router integration. (c) GSAP — overkill for this use case. |
+| **Status** | Active |
+
 *End of Decision Log v1.0*
 *New decisions are appended chronologically as the project progresses.*

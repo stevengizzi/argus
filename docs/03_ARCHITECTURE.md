@@ -855,6 +855,54 @@ ws://host/ws/v1/live?token={jwt}
 - WebSocket authenticates via `?token={jwt}` query parameter
 - Password stored as bcrypt hash in config
 
+## 4.1 Command Center Frontend (`argus/ui/`)
+
+### Implementation Status (Sprint 15)
+
+Four pages delivered with responsive design across four breakpoints. Single React codebase targeting web, Tauri desktop, and PWA mobile (DEC-080).
+
+### Pages
+
+**Dashboard** (`/`): Account summary cards (equity, daily P&L, open positions count, win rate), open positions table with WebSocket real-time price updates, recent trades list, system health mini-display.
+
+**Trade Log** (`/trades`): Filter bar (strategy, outcome, date range), stats summary row (total trades, win rate, net P&L), paginated trade table with color-coded exit reason badges.
+
+**Performance** (`/performance`): Period selector (Today/Week/Month/All), 12-metric grid (6 primary + 6 secondary), equity curve (Lightweight Charts area chart), daily P&L histogram (Lightweight Charts), strategy breakdown table.
+
+**System** (`/system`): System overview (uptime, mode, broker/data sources, timestamps), component health status with descriptions, strategy cards with parameters, collapsible events log.
+
+### Responsive Breakpoints
+
+| Breakpoint | Target Device | Navigation | Layout |
+|-----------|--------------|------------|--------|
+| 393px | iPhone SE/mini | Bottom tab bar | Stacked cards, compact tables |
+| 834px | iPad portrait | Icon sidebar | Adapted grid, medium tables |
+| 1194px | iPad landscape | Full sidebar | Full tables, side-by-side panels |
+| 1512px | MacBook Pro | Full sidebar | Maximum information density |
+
+### Tech Stack (Frontend)
+
+| Component | Technology |
+|-----------|-----------|
+| Framework | React 18 + TypeScript |
+| Build Tool | Vite |
+| Styling | Tailwind CSS v4 |
+| State Management | Zustand |
+| Navigation | React Router |
+| Charts (time-series) | Lightweight Charts (TradingView) |
+| Charts (standard) | Recharts (Sprint 17+, DEC-104) |
+| Charts (custom viz) | D3 (Sprint 21+, DEC-108) |
+| Animation | Framer Motion (Sprint 16, DEC-110) |
+| Server State | TanStack Query (planned) |
+
+### Planned Enhancements
+
+See `docs/ui/UX_FEATURE_BACKLOG.md` for the complete prioritized inventory (35 features, Sprints 16–23+). Key upcoming:
+- Sprint 16: Motion/animation system (Framer Motion), sparklines, skeleton loading states
+- Sprint 17: Strategy allocation donut, risk utilization gauges
+- Sprint 21: Stock detail panel, Dashboard V2, heatmaps, trade replay, portfolio visualizations
+- Sprint 22: AI insight cards, strategy optimization landscape
+
 ---
 
 ## 5. Backtesting Toolkit
@@ -1201,7 +1249,7 @@ config/
 |-----------|-----------|
 | Language | Python 3.11+ |
 | Async Runtime | asyncio |
-| Broker SDKs | alpaca-py>=0.30, ib_insync |
+| Broker SDKs | alpaca-py>=0.30, ib_async>=1.0.0 |
 | Environment | python-dotenv>=1.0 |
 | Data Manipulation | pandas, numpy |
 | Technical Indicators | pandas-ta or ta-lib |
@@ -1211,7 +1259,10 @@ config/
 | API Server | FastAPI (REST + WebSocket) |
 | Desktop App | Tauri v2 |
 | Frontend | React 18+ / TypeScript / Tailwind CSS |
-| Charts | Lightweight Charts, Recharts |
+| Charts (time-series) | Lightweight Charts (TradingView) |
+| Charts (standard) | Recharts |
+| Charts (custom viz) | D3 (sparingly — treemaps, heatmaps) |
+| Animation | Framer Motion + CSS transitions |
 | AI Integration | Anthropic Claude API |
 | Scheduling | APScheduler |
 | Notifications | Firebase/Telegram Bot API/SendGrid/Discord Webhook |

@@ -466,6 +466,17 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 
 ---
 
+### RSK-024 | Sprint 21 Scope Risk — Analytics Sprint May Exceed Single Sprint
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-23 |
+| **Description** | Sprint 21 (CC Analytics & Strategy Lab) is estimated at 80–100 hours across 11 features (21-A through 21-K). This significantly exceeds the scope of previous sprints. Risk of scope creep or quality degradation if attempted as a single sprint. |
+| **Likelihood** | High |
+| **Impact** | Medium — schedule slip, potential quality issues |
+| **Mitigation** | Plan to split into Sprint 21a (highest-priority items: stock detail panel, Dashboard V2, heatmaps) and Sprint 21b (remaining items: treemap, correlation matrix, trade replay, etc.). Use priority tiers from UX Feature Backlog to select which items ship first. The backlog is a menu, not a mandate. |
+| **Status** | Open — monitor when Sprint 21 planning begins |
+
 ## Review Schedule
 
 | Review Type | Frequency | Next Review |

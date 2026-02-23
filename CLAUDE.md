@@ -11,7 +11,7 @@ Phase 1 sprint plan: @docs/07_PHASE1_SPRINT_PLAN.md
 ## Current State
 
 **Structure:** Two parallel tracks (DEC-079, February 19, 2026).
-- **Build Track:** System construction at development velocity. Sprints 1–14 complete (926 tests). Sprint 15 (Command Center Frontend) is NEXT.
+- **Build Track:** System construction at development velocity. Sprints 1–15 complete (926 tests). Sprint 16 (Desktop/PWA + UX Polish) is NEXT.
 - **Validation Track:** Paper trading ACTIVE on Alpaca IEX (system stability only — DEC-081). Signal accuracy validation pending Databento subscription activation (DEC-087). Migrates to IBKR paper after IBKR account approved (U24619949, submitted Feb 21).
 
 Active sprint plan: `docs/10_PHASE3_SPRINT_PLAN.md` (covers both tracks).
@@ -24,6 +24,13 @@ Active sprint plan: `docs/10_PHASE3_SPRINT_PLAN.md` (covers both tracks).
 - **Cost deferral:** Databento subscription activated when adapter ready for integration testing. DEC-087.
 
 - IBKR account application submitted Feb 21, 2026 (Account ID: U24619949). Individual, Margin, IBKR Pro (tiered), GA address. Permissions: Stocks, Options L3, Futures, Forex, Crypto. Awaiting approval.
+
+**Sprint 15 Results (Command Center Frontend — Feb 23):**
+- Four pages: Dashboard (account summary, open positions with WS real-time prices, recent trades, system health mini), Trade Log (filter bar, stats summary, paginated table with exit reason badges), Performance (period selector, 12-metric grid, equity curve + daily P&L histogram via Lightweight Charts, strategy breakdown), System (overview, component health, strategy cards, collapsible events log)
+- Responsive at 4 breakpoints: 393px (iPhone SE), 834px (iPad portrait), 1194px (iPad landscape), 1512px (MacBook Pro)
+- Icon sidebar nav (desktop/tablet), bottom tab bar (mobile). Dark theme. WebSocket real-time updates.
+- 8 implementation sessions, zero build errors, clean lint, 926 tests (unchanged)
+- Code review passed. Design research → UX Feature Backlog (DEC-106–110).
 
 **Sprint 14 Results (Command Center API — Feb 23):**
 - FastAPI REST API with JWT authentication (bcrypt password hashing, HS256 tokens)
@@ -48,7 +55,7 @@ Active sprint plan: `docs/10_PHASE3_SPRINT_PLAN.md` (covers both tracks).
 
 **Validation Track sequence:** Build through Sprint 21 (four strategies + analytics) → activate Databento ~Sprint 19 (DEC-097) → serious paper trading with quality data + IBKR → AI Layer (Sprint 22) compounds analysis during validation → CPA consultation → live at minimum size on IBKR.
 
-**Build Track queue (DEC-096):** CC Frontend (15) → Desktop/PWA (16) → Orchestrator V1 (17) → ORB Scalp (18) → VWAP Reclaim (19) → Afternoon Momentum (20) → CC Analytics & Strategy Lab (21) → AI Layer MVP (22) → Tier 1 News + expansion (23+)
+**Build Track queue (DEC-096, DEC-106–110):** Desktop/PWA + UX Polish (16) → Orchestrator V1 (17) → ORB Scalp (18) → VWAP Reclaim (19) → Afternoon Momentum (20) → CC Analytics & Strategy Lab (21) → AI Layer MVP (22) → Tier 1 News + expansion (23+). UX Feature Backlog (`docs/ui/UX_FEATURE_BACKLOG.md`) provides per-sprint enhancement add-ons.
 
 **Command Center delivery (DEC-080):** Three surfaces from single React codebase — web app + Tauri desktop + PWA mobile. All operational after Sprint 16.
 
@@ -193,6 +200,15 @@ docs/
 - Every public interface MUST have corresponding tests
 - async/await everywhere — no blocking calls in the main event loop
 - All market-hours time comparisons MUST convert UTC timestamps to ET first using `timestamp.astimezone(ZoneInfo("America/New_York"))`. NEVER compare `.timestamp.time()` directly against ET constants like `time(9, 30)`. (DEC-061)
+
+## UI/UX Rules
+
+- **Design principles (DEC-109):** Information over decoration. Ambient awareness. Progressive disclosure. Motion with purpose. Mobile as primary trading surface. Research lab aesthetics.
+- **Animation library (DEC-110):** Framer Motion for page transitions + stagger. CSS transitions for hover/micro-interactions. Lightweight Charts native for chart animations. Budget: <500ms, 60fps, never blocks interaction.
+- **Chart library stack (DEC-104, DEC-108):** Lightweight Charts (time-series) + Recharts (standard charts) + D3 (custom viz, sparingly) + Three.js/Plotly 3D (Sprint 22 optimization landscape).
+- **UX Feature Backlog:** `docs/ui/UX_FEATURE_BACKLOG.md` — canonical inventory of all planned UI/UX enhancements. Reference when planning sprint UX scope. (DEC-106)
+- **Responsive breakpoints:** 393px (iPhone SE/mini), 834px (iPad portrait), 1194px (iPad landscape), 1512px (MacBook Pro).
+- **Mobile nav:** Bottom tab bar. Desktop/tablet: icon sidebar.
 
 ## Testing
 

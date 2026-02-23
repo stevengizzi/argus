@@ -12,13 +12,15 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 
 **Structure:** Two parallel tracks (DEC-079, February 19, 2026). Build Track (system construction) + Validation Track (strategy confidence-building).
 
-**Build Track:** 926 tests. Sprints 1–14 complete. Sprint 15 (Command Center Frontend) is NEXT.
+**Build Track:** 926 tests. Sprints 1–15 complete. Sprint 16 (Desktop/PWA + UX Polish) is NEXT.
 - Phase 1 (Core Engine): ✅ COMPLETE — 362 tests, Feb 14–16
 - Phase 2 (Backtesting): ✅ COMPLETE — 542 tests, Feb 16–17
 - Sprint 11 (Extended Backtest): ✅ COMPLETE — 35 months, 15 WF windows, WFE=0.56
 - Sprint 12 (DatabentoDataService adapter): ✅ COMPLETE — 658 tests, Feb 21. DatabentoDataService (live streaming + reconnection), DataFetcher Databento backend (historical + manifest), DatabentoScanner (V1 watchlist), system integration (DataSource enum + config wiring), shared databento_utils.py (DEC-091).
 - Sprint 12.5 (IndicatorEngine extraction): ✅ COMPLETE — 685 tests, Feb 21. IndicatorEngine class shared by all four DataService implementations. DEF-013 resolved (DEC-092).
 - Sprint 13 (IBKRBroker adapter): ✅ COMPLETE — 811 tests, Feb 22. IBKRBroker full Broker abstraction via `ib_async` (connection, orders, native brackets DEC-093, fills, reconnection, state reconstruction). IBKRConfig + BrokerSource enum (DEC-094). Order Manager T2 broker-side limit orders. System integration (main.py broker branching, __init__.py exports). DEF-016 logged (Order Manager bracket refactor deferred).
+- Sprint 14 (Command Center API): ✅ COMPLETE — 926 tests, Feb 23. FastAPI REST + WebSocket, JWT auth, 7 endpoint groups, PerformanceCalculator, TradeLogger queries, dev mode with mock data, React scaffold.
+- Sprint 15 (Command Center Frontend): ✅ COMPLETE — 926 tests (no new backend tests), Feb 23. Four pages: Dashboard, Trade Log, Performance, System. Responsive at 393px/834px/1194px/1512px breakpoints. Lightweight Charts for equity curve and daily P&L histogram. WebSocket real-time updates. Dark theme. Icon sidebar nav (desktop/tablet) + bottom tab bar (mobile). 8 implementation sessions. Full code review passed (DEC-106–110).
 
 **Validation Track:** Paper trading ACTIVE with DEC-076 parameters on Alpaca. Validates system stability only — Alpaca IEX data captures only ~2–3% of market volume (DEC-081), so signal accuracy is not validated until Databento data is integrated (Sprint 12). See `08_PAPER_TRADING_GUIDE.md`.
 
@@ -29,7 +31,7 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 
 **IBKR Account (Feb 21):** Application submitted. Account ID U24619949. Individual margin account, IBKR Pro tiered pricing. Awaiting approval — paper trading account will be enabled post-approval for Sprint 13 adapter development.
 
-**Next Build sprints:** CC Frontend (Sprint 15) → Desktop/PWA (Sprint 16) → Orchestrator V1 (Sprint 17) → ORB Scalp (Sprint 18) → VWAP Reclaim (Sprint 19) → Afternoon Momentum (Sprint 20) → CC Analytics & Strategy Lab (Sprint 21) → AI Layer MVP (Sprint 22). See DEC-096.
+**Next Build sprints:** Desktop/PWA + UX Polish (Sprint 16) → Orchestrator V1 (Sprint 17) → ORB Scalp (Sprint 18) → VWAP Reclaim (Sprint 19) → Afternoon Momentum (Sprint 20) → CC Analytics & Strategy Lab (Sprint 21) → AI Layer MVP (Sprint 22). See DEC-096, DEC-106–110. UX Feature Backlog (`docs/ui/UX_FEATURE_BACKLOG.md`) provides per-sprint enhancement add-ons alongside core sprint scope.
 **Next Validation gate:** Build through Sprint 21 (four strategies + analytics) using Alpaca data → activate Databento (~Sprint 19, DEC-097) → serious paper trading validation with quality data + IBKR execution → AI Layer (Sprint 22) compounds analysis during validation → CPA consultation → live trading at minimum size on IBKR.
 
 **✅ IBKR APPLICATION SUBMITTED:** Feb 21, 2026. Account ID: U24619949. Individual margin account, IBKR Pro (tiered pricing), Georgia address. Trading permissions requested: Stocks, Options (Level 3), Futures, Currency/Forex, Cryptocurrencies, Mutual Funds. Awaiting approval (typically 1–3 business days, may take longer). Disclosures and agreements archived locally.
@@ -131,6 +133,11 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 - **Monorepo structure (DEC-103):** `argus/api/` (FastAPI server) + `argus/ui/` (React frontend). Single repo, single deploy.
 - **Chart libraries (DEC-104):** TradingView Lightweight Charts for all financial time-series (equity curves, P&L histograms, price charts). Recharts for non-time-series visualizations (distributions, heatmaps, comparisons). Both coexist.
 - **Responsive breakpoints (DEC-105):** Three tiers — <640px phone (iPhone 16 Pro), 640–1023px tablet (iPad Pro 11" portrait), ≥1024px desktop (iPad landscape + MacBook Pro 16"). Bottom tab bar on phone/tablet, icon sidebar on desktop.
+- **UI/UX Feature Backlog (DEC-106):** `docs/ui/UX_FEATURE_BACKLOG.md` is the canonical inventory of all planned UI/UX enhancements. 35 features, 6 sprint groupings (Sprints 16–23+), priority tiers, effort estimates. Derived from design research reviewing Bybit, analytics dashboards, mobile apps, and data visualizations.
+- **Sprint 16 UX enhancements (DEC-107):** ~15 hours of UX polish added to Sprint 16 scope: staggered entry animations, chart draw-ins, page transitions (Framer Motion), skeleton loading, number morphing/P&L flash, hover feedback, contextual empty states, dashboard sparklines.
+- **Sprint 21 scope defined (DEC-108):** CC Analytics & Strategy Lab = ~80–100 hours. Individual stock detail panel (slide-in), Dashboard V2, trade activity heatmaps, win/loss distribution histogram, portfolio treemap, risk waterfall, trade replay mode, goal tracking. Additional chart libraries for Sprint 21+: D3 (custom viz, sparingly) + Three.js/Plotly 3D (optimization landscape, Sprint 22). Extends DEC-104. Full specs in UX Feature Backlog.
+- **Design north star (DEC-109):** "Bloomberg Terminal meets modern fintech." Six principles: information over decoration, ambient awareness, progressive disclosure, motion with purpose (<500ms, never blocks), mobile as primary trading surface, research lab aesthetics.
+- **Animation library (DEC-110):** Framer Motion for page transitions and stagger orchestration. CSS transitions for hover and micro-interactions. Lightweight Charts native for chart draw-ins. Budget: <500ms per animation, 60fps, never blocks interaction.
 
 ## Architecture Summary
 
@@ -233,7 +240,7 @@ Effective February 19, 2026, ARGUS uses two parallel tracks instead of sequentia
 ### Build Track (velocity-limited, continuous)
 Sprints 12+. System construction proceeds at development speed. Each sprint targets a specific component. Order is prioritized but flexible — Validation Track needs can reprioritize.
 
-**Queue (DEC-096):** CC Frontend (Sprint 15) → Desktop/PWA (Sprint 16) → Orchestrator V1 (Sprint 17) → ORB Scalp (Sprint 18) → VWAP Reclaim (Sprint 19) → Afternoon Momentum (Sprint 20) → CC Analytics & Strategy Lab (Sprint 21) → AI Layer MVP (Sprint 22) → Tier 1 News + additional strategies + features (Sprint 23+)
+**Queue (DEC-096, DEC-104–109):** Desktop/PWA + UX Polish (Sprint 16) → Orchestrator V1 (Sprint 17) → ORB Scalp (Sprint 18) → VWAP Reclaim (Sprint 19) → Afternoon Momentum (Sprint 20) → CC Analytics & Strategy Lab (Sprint 21) → AI Layer MVP (Sprint 22) → Tier 1 News + additional strategies + features (Sprint 23+). Each sprint includes UX enhancement add-ons from `docs/ui/UX_FEATURE_BACKLOG.md` — Sprint 16 adds motion/animation/sparklines (~15h), Sprints 17–20 add multi-strategy awareness features (~33h total), Sprint 21 is the major analytics sprint (~80–100h), Sprint 22 adds AI visualization features (~46h).
 
 **Command Center delivery (DEC-080):** Single React codebase ships to three surfaces: web app (any browser), Tauri desktop app (system tray, native notifications), and PWA mobile app (iPhone/iPad home screen install). All three operational after Sprint 16.
 
@@ -289,6 +296,12 @@ Paper trading → live minimum size → live full size. Gates based on accumulat
    - Dev mode with realistic mock data (`python -m argus.api --dev`)
    - React scaffold (Vite + TypeScript + Tailwind CSS v4 + Zustand + React Router)
    - 11-phase system startup (API server as Phase 11). DEC-099 through DEC-103.
+9. **Command Center Frontend** ✅ (Sprint 15, 926 tests unchanged, Feb 23)
+   - Four pages: Dashboard (account summary, open positions with real-time WS prices, recent trades, system health mini), Trade Log (filtered history, stats bar, paginated table with exit reason badges), Performance (period selector, 12-metric grid, equity curve via Lightweight Charts, daily P&L histogram, strategy breakdown), System (overview, component health, strategy cards, collapsible events log)
+   - Responsive design: 393px (iPhone SE), 834px (iPad portrait), 1194px (iPad landscape), 1512px (MacBook Pro). Icon sidebar nav on desktop/tablet, bottom tab bar on mobile.
+   - 8 implementation sessions. Loading/error/empty states on all pages. WebSocket reconnection. Dark theme. Touch targets ≥44px. iPhone safe area padding. Zero build errors + clean lint.
+   - Code review: all 4 pages reviewed across all 3 devices (20 screenshots). Visual consistency confirmed.
+   - Design research session conducted (DEC-106–110). UX Feature Backlog created with 35 features across 6 sprint groupings.
 
 See `10_PHASE3_SPRINT_PLAN.md` for current sprint plan and queue.
 
@@ -305,6 +318,9 @@ See `10_PHASE3_SPRINT_PLAN.md` for current sprint plan and queue.
 - `09_PHASE2_SPRINT_PLAN.md` — Canonical Phase 2 build order with sprint status tracking. **Both Claude instances must update this when sprints complete or scope changes.**
 - `10_PHASE3_SPRINT_PLAN.md` — Active sprint plan. Build Track queue + Validation Track status. *Renamed from "Phase 3 Sprint Plan" per DEC-079.*
 - `docs/backtesting/PARAMETER_VALIDATION_REPORT.md` — Phase 2 deliverable. ORB parameter analysis and recommendations.
+- `docs/research/argus_market_data_research_report.md` — Deep-dive research report on market data providers. Databento selected (DEC-082). Covers pricing, latency, API design, symbol coverage, and historical data across 8+ providers.
+- `docs/research/argus_execution_broker_research_report.md` — Deep-dive research report on execution brokers. Interactive Brokers selected (DEC-083). Covers routing quality, commission structures, API capabilities, multi-asset coverage, and PFOF analysis.
+- `docs/ui/UX_FEATURE_BACKLOG.md` — Prioritized inventory of 35 UI/UX enhancements across Sprints 16–23+. Design vision, principles, per-sprint features with effort estimates. Born from Sprint 15 code review + design research.
 
 ## Communication Style Notes
 
