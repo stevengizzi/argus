@@ -14,6 +14,7 @@ import { Badge } from '../../components/Badge';
 import { useLiveStore } from '../../stores/live';
 import { formatTime } from '../../utils/format';
 import { DURATION, EASE } from '../../utils/motion';
+import { shouldShowEmpty } from '../../utils/testMode';
 import type { WebSocketMessage } from '../../api/types';
 
 const MAX_DISPLAY_EVENTS = 20;
@@ -117,9 +118,12 @@ export function EventsLog() {
     }
   }, [recentEvents, isExpanded]);
 
-  // Get the last 20 events for display
-  const displayEvents = recentEvents.slice(0, MAX_DISPLAY_EVENTS);
-  const eventCount = recentEvents.length;
+  // Test mode: force empty state for testing
+  const forceEmpty = shouldShowEmpty('events');
+
+  // Get the last 20 events for display (or empty array in test mode)
+  const displayEvents = forceEmpty ? [] : recentEvents.slice(0, MAX_DISPLAY_EVENTS);
+  const eventCount = forceEmpty ? 0 : recentEvents.length;
 
   return (
     <Card noPadding>
@@ -185,10 +189,18 @@ export function EventsLog() {
               className="px-4 pb-4 max-h-64 overflow-y-auto"
             >
               {displayEvents.length === 0 ? (
-                <div className="text-argus-text-dim text-sm py-4 text-center">
-                  {connected
-                    ? 'No events yet — waiting for WebSocket messages'
-                    : 'WebSocket disconnected'}
+                <div className="flex flex-col items-center justify-center py-8 text-argus-text-dim text-sm">
+                  {connected ? (
+                    <>
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="w-2 h-2 rounded-full bg-argus-accent listening-dot" />
+                        <span>Listening for events...</span>
+                      </div>
+                      <span className="text-xs opacity-60">Events will appear here as they stream in</span>
+                    </>
+                  ) : (
+                    <span className="text-argus-loss">WebSocket disconnected</span>
+                  )}
                 </div>
               ) : (
                 <div className="space-y-0">

@@ -6,7 +6,7 @@
  */
 
 import { useMemo } from 'react';
-import { TrendingUp } from 'lucide-react';
+import { Clock, Moon, Radio } from 'lucide-react';
 import { Card } from '../../components/Card';
 import { CardHeader } from '../../components/CardHeader';
 import { EmptyState } from '../../components/EmptyState';
@@ -16,6 +16,8 @@ import { usePositions } from '../../hooks/usePositions';
 import { useLiveStore } from '../../stores/live';
 import { formatPrice, formatDuration } from '../../utils/format';
 import { OpenPositionsSkeleton } from './DashboardSkeleton';
+import { getMarketContext } from '../../utils/marketTime';
+import { shouldShowEmpty } from '../../utils/testMode';
 import type { Position } from '../../api/types';
 
 interface EnrichedPosition extends Position {
@@ -73,14 +75,43 @@ export function OpenPositions() {
     );
   }
 
-  if (enrichedPositions.length === 0) {
+  // Test mode: force empty state for testing
+  const forceEmpty = shouldShowEmpty('positions');
+
+  if (enrichedPositions.length === 0 || forceEmpty) {
+    const marketContext = getMarketContext();
+
+    // Select icon and message based on market status
+    let icon;
+    let message: string;
+
+    switch (marketContext.status) {
+      case 'pre_market':
+        icon = <Clock className="w-12 h-12 opacity-50" />;
+        message = `No open positions — market opens in ${marketContext.timeToOpen ?? 'soon'}`;
+        break;
+      case 'open':
+        // Animated radar icon for active scanning
+        icon = (
+          <div className="relative w-12 h-12 flex items-center justify-center">
+            <Radio className="w-8 h-8 opacity-50" />
+            <span className="absolute inset-0 rounded-full border border-argus-accent radar-pulse" />
+          </div>
+        );
+        message = 'No open positions — scanning for setups';
+        break;
+      case 'after_hours':
+      case 'closed':
+      default:
+        icon = <Moon className="w-12 h-12 opacity-50" />;
+        message = 'No open positions — market closed';
+        break;
+    }
+
     return (
       <Card>
         <CardHeader title="Open Positions" subtitle="0 positions" />
-        <EmptyState
-          icon={TrendingUp}
-          message="No open positions — system is monitoring for signals"
-        />
+        <EmptyState icon={icon} message={message} />
       </Card>
     );
   }

@@ -192,6 +192,12 @@ export function TradesPage() {
             isTransitioning={isFetching}
             currentPage={filters.page}
             onPageChange={updatePage}
+            hasFilters={Boolean(
+              filters.strategy_id ||
+                filters.outcome !== 'all' ||
+                filters.date_from ||
+                filters.date_to
+            )}
           />
         ) : null}
       </motion.div>

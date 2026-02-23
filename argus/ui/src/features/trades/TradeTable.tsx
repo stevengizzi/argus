@@ -7,7 +7,7 @@
  * - Desktop (≥1024px): Date, Symbol, Side, Entry Price, Exit Price, P&L ($), P&L (R), Shares, Exit Reason, Hold Duration, Commission
  */
 
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Filter, BarChart3 } from 'lucide-react';
 import { Badge } from '../../components/Badge';
 import { EmptyState } from '../../components/EmptyState';
 import type { Trade } from '../../api/types';
@@ -30,6 +30,8 @@ interface TradeTableProps {
   currentPage: number;
   /** Callback when page changes */
   onPageChange: (page: number) => void;
+  /** Whether any filters are currently active */
+  hasFilters?: boolean;
 }
 
 const ITEMS_PER_PAGE = 20;
@@ -91,11 +93,16 @@ export function TradeTable({
   isTransitioning = false,
   currentPage,
   onPageChange,
+  hasFilters = false,
 }: TradeTableProps) {
   const totalPages = Math.ceil(totalCount / (limit || ITEMS_PER_PAGE));
 
   if (trades.length === 0 && !isLoading) {
-    return <EmptyState message="No trades match your filters" />;
+    const icon = hasFilters ? Filter : BarChart3;
+    const message = hasFilters
+      ? 'No trades match your filters — try adjusting the date range or strategy'
+      : 'No trades recorded yet — trades appear here once the strategy takes a position';
+    return <EmptyState icon={icon} message={message} />;
   }
 
   return (

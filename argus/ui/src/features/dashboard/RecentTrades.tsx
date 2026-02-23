@@ -3,10 +3,13 @@
  *
  * Compact format with symbol, P&L, exit reason badge, and time.
  * Links to full trade log at bottom.
+ * New trades slide in with animation on WebSocket updates.
  */
 
+import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { ScrollText, ArrowRight } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { BarChart3, ArrowRight } from 'lucide-react';
 import { Card } from '../../components/Card';
 import { CardHeader } from '../../components/CardHeader';
 import { EmptyState } from '../../components/EmptyState';
@@ -15,6 +18,9 @@ import { Badge } from '../../components/Badge';
 import { useTrades } from '../../hooks/useTrades';
 import { formatTime } from '../../utils/format';
 import { RecentTradesSkeleton } from './DashboardSkeleton';
+import { isPreMarket } from '../../utils/marketTime';
+import { shouldShowEmpty } from '../../utils/testMode';
+import { DURATION, EASE } from '../../utils/motion';
 
 type ExitReason = 'target_1' | 'target_2' | 'stop_loss' | 'time_stop' | 'eod' | string;
 
@@ -42,8 +48,25 @@ function getExitReasonVariant(reason: ExitReason): 'success' | 'danger' | 'warni
   return exitReasonVariants[reason] ?? 'neutral';
 }
 
+// Animation variants for trade list items
+const tradeItemVariants = {
+  initial: { opacity: 0, y: -8 },
+  animate: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: DURATION.normal, ease: EASE.out },
+  },
+  exit: {
+    opacity: 0,
+    transition: { duration: DURATION.fast },
+  },
+};
+
 export function RecentTrades() {
   const { data, isLoading, error } = useTrades({ limit: 8 });
+
+  // Memoize trades array to avoid dependency issues
+  const trades = useMemo(() => data?.trades ?? [], [data?.trades]);
 
   if (isLoading) {
     return <RecentTradesSkeleton />;
@@ -58,13 +81,20 @@ export function RecentTrades() {
     );
   }
 
-  const trades = data?.trades ?? [];
+  // Test mode: force empty state for testing
+  const forceEmpty = shouldShowEmpty('trades');
 
-  if (trades.length === 0) {
+  if (trades.length === 0 || forceEmpty) {
+    // Contextual empty state based on market time
+    const preMarket = isPreMarket();
+    const message = preMarket
+      ? 'No trades today — first signal expected after 9:35 AM ET'
+      : 'No trades today';
+
     return (
       <Card>
         <CardHeader title="Recent Trades" />
-        <EmptyState icon={ScrollText} message="No trades yet" />
+        <EmptyState icon={BarChart3} message={message} />
       </Card>
     );
   }
@@ -75,32 +105,40 @@ export function RecentTrades() {
         <CardHeader title="Recent Trades" subtitle={`Last ${trades.length}`} />
       </div>
 
-      {/* Trade list */}
+      {/* Trade list with slide-in animation */}
       <div className="divide-y divide-argus-border">
-        {trades.map((trade) => (
-          <div
-            key={trade.id}
-            className="px-4 py-2.5 flex items-center justify-between hover:bg-argus-bg/50"
-          >
-            {/* Left: Symbol and P&L */}
-            <div className="flex items-center gap-3">
-              <span className="font-medium text-argus-text w-12">{trade.symbol}</span>
-              <PnlValue value={trade.pnl_dollars ?? 0} size="sm" />
-            </div>
+        <AnimatePresence initial={false} mode="popLayout">
+          {trades.map((trade) => (
+            <motion.div
+              key={trade.id}
+              layout
+              layoutId={trade.id}
+              variants={tradeItemVariants}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+              className="px-4 py-2.5 flex items-center justify-between hover:bg-argus-bg/50 transition-colors duration-150"
+            >
+              {/* Left: Symbol and P&L */}
+              <div className="flex items-center gap-3">
+                <span className="font-medium text-argus-text w-12">{trade.symbol}</span>
+                <PnlValue value={trade.pnl_dollars ?? 0} size="sm" />
+              </div>
 
-            {/* Right: Exit reason and time */}
-            <div className="flex items-center gap-3">
-              {trade.exit_reason && (
-                <Badge variant={getExitReasonVariant(trade.exit_reason)}>
-                  {getExitReasonLabel(trade.exit_reason)}
-                </Badge>
-              )}
-              <span className="text-xs text-argus-text-dim tabular-nums w-20 text-right">
-                {trade.exit_time ? formatTime(trade.exit_time) : '—'}
-              </span>
-            </div>
-          </div>
-        ))}
+              {/* Right: Exit reason and time */}
+              <div className="flex items-center gap-3">
+                {trade.exit_reason && (
+                  <Badge variant={getExitReasonVariant(trade.exit_reason)}>
+                    {getExitReasonLabel(trade.exit_reason)}
+                  </Badge>
+                )}
+                <span className="text-xs text-argus-text-dim tabular-nums w-20 text-right">
+                  {trade.exit_time ? formatTime(trade.exit_time) : '—'}
+                </span>
+              </div>
+            </motion.div>
+          ))}
+        </AnimatePresence>
       </div>
 
       {/* Link to full trade log */}
