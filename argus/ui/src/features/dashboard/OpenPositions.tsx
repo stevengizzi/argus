@@ -114,7 +114,7 @@ export function OpenPositions() {
           </thead>
           <tbody className="divide-y divide-argus-border">
             {enrichedPositions.map((pos) => (
-              <tr key={pos.position_id} className="hover:bg-argus-bg/50">
+              <tr key={pos.position_id} className="transition-colors duration-150 hover:bg-argus-bg/50">
                 <td className="px-4 py-3 font-medium text-argus-text">{pos.symbol}</td>
                 <td className="px-4 py-3">
                   <Badge variant={pos.side === 'long' ? 'success' : 'danger'}>
@@ -169,7 +169,7 @@ export function OpenPositions() {
           </thead>
           <tbody className="divide-y divide-argus-border">
             {enrichedPositions.map((pos) => (
-              <tr key={pos.position_id} className="hover:bg-argus-bg/50">
+              <tr key={pos.position_id} className="transition-colors duration-150 hover:bg-argus-bg/50">
                 <td className="px-4 py-3 font-medium text-argus-text">{pos.symbol}</td>
                 <td className="px-4 py-3 text-right tabular-nums">{formatPrice(pos.entry_price)}</td>
                 <td className="px-4 py-3 text-right tabular-nums">{formatPrice(pos.livePrice)}</td>
@@ -191,7 +191,7 @@ export function OpenPositions() {
       {/* Phone layout (compact cards) */}
       <div className="md:hidden divide-y divide-argus-border">
         {enrichedPositions.map((pos) => (
-          <div key={pos.position_id} className="p-4 hover:bg-argus-bg/50">
+          <div key={pos.position_id} className="p-4 transition-colors duration-150 hover:bg-argus-bg/50">
             <div className="flex items-center justify-between">
               <span className="font-medium text-argus-text">{pos.symbol}</span>
               <PnlValue value={pos.livePnl} size="sm" flash />

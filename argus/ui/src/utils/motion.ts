@@ -107,3 +107,33 @@ export const cardHover = {
   boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
   transition: { duration: DURATION.fast },
 };
+
+// Responsive stagger item - handles both multi-column and single-column layouts
+// Use isMultiColumn parameter to control behavior at runtime
+export function staggerItemResponsive(isMultiColumn: boolean, staggerDelay = 0.08): Variants {
+  if (isMultiColumn) {
+    // Multi-column: container animates itself + staggers children left-to-right
+    return {
+      hidden: { opacity: 0, y: 12 },
+      show: {
+        opacity: 1,
+        y: 0,
+        transition: {
+          duration: DURATION.normal,
+          ease: EASE.out,
+          staggerChildren: staggerDelay,
+        },
+      },
+    };
+  }
+  // Single column: container is transparent (no self-animation), just staggers children
+  // This allows cards to stagger top-to-bottom without the container itself animating
+  return {
+    hidden: {},
+    show: {
+      transition: {
+        staggerChildren: staggerDelay,
+      },
+    },
+  };
+}

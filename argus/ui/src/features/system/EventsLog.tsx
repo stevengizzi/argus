@@ -3,15 +3,17 @@
  *
  * Collapsible section showing last 20 events with colored type badges,
  * sequence numbers, timestamps, and truncated data.
- * Default collapsed on mobile, expanded on desktop.
+ * Always expanded by default (both mobile and desktop).
  */
 
 import { useState, useEffect, useRef } from 'react';
-import { ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ChevronDown, Trash2 } from 'lucide-react';
 import { Card } from '../../components/Card';
 import { Badge } from '../../components/Badge';
 import { useLiveStore } from '../../stores/live';
 import { formatTime } from '../../utils/format';
+import { DURATION, EASE } from '../../utils/motion';
 import type { WebSocketMessage } from '../../api/types';
 
 const MAX_DISPLAY_EVENTS = 20;
@@ -103,14 +105,8 @@ export function EventsLog() {
   const clearEvents = useLiveStore((state) => state.clearEvents);
   const connected = useLiveStore((state) => state.connected);
 
-  // Default expanded on desktop (lg+), collapsed on mobile
-  const [isExpanded, setIsExpanded] = useState(() => {
-    // Check if we're on desktop via matchMedia
-    if (typeof window !== 'undefined') {
-      return window.matchMedia('(min-width: 1024px)').matches;
-    }
-    return false;
-  });
+  // Always expanded by default (both mobile and desktop)
+  const [isExpanded, setIsExpanded] = useState(true);
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -127,17 +123,19 @@ export function EventsLog() {
 
   return (
     <Card noPadding>
-      {/* Collapsible header */}
+      {/* Collapsible header - fixed height regardless of expanded state */}
       <button
         onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full flex items-center justify-between p-4 hover:bg-argus-surface-2 transition-colors"
+        className="w-full flex items-center justify-between p-4 h-[60px] hover:bg-argus-surface-2 transition-colors"
       >
         <div className="flex items-center gap-2">
-          {isExpanded ? (
-            <ChevronUp className="w-4 h-4 text-argus-text-dim" />
-          ) : (
+          {/* Animated chevron */}
+          <motion.span
+            animate={{ rotate: isExpanded ? 180 : 0 }}
+            transition={{ duration: DURATION.fast, ease: EASE.out }}
+          >
             <ChevronDown className="w-4 h-4 text-argus-text-dim" />
-          )}
+          </motion.span>
           <span className="text-sm font-medium uppercase tracking-wider text-argus-text-dim">
             Recent Events
           </span>
@@ -152,42 +150,57 @@ export function EventsLog() {
           />
         </div>
 
-        {isExpanded && eventCount > 0 && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              clearEvents();
-            }}
-            className="flex items-center justify-center gap-1.5 px-3 min-h-[44px] text-xs text-argus-text-dim hover:text-argus-text hover:bg-argus-surface-3 rounded transition-colors"
-            aria-label="Clear events"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            Clear
-          </button>
-        )}
+        {/* Clear button - always rendered but visibility controlled */}
+        <motion.button
+          onClick={(e) => {
+            e.stopPropagation();
+            clearEvents();
+          }}
+          className="flex items-center justify-center gap-1.5 px-3 min-h-[44px] text-xs text-argus-text-dim hover:text-argus-text hover:bg-argus-surface-3 rounded transition-colors"
+          aria-label="Clear events"
+          initial={false}
+          animate={{
+            opacity: isExpanded && eventCount > 0 ? 1 : 0,
+            pointerEvents: isExpanded && eventCount > 0 ? 'auto' : 'none',
+          }}
+          transition={{ duration: DURATION.fast }}
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+          Clear
+        </motion.button>
       </button>
 
-      {/* Event list */}
-      {isExpanded && (
-        <div
-          ref={scrollRef}
-          className="px-4 pb-4 max-h-64 overflow-y-auto"
-        >
-          {displayEvents.length === 0 ? (
-            <div className="text-argus-text-dim text-sm py-4 text-center">
-              {connected
-                ? 'No events yet — waiting for WebSocket messages'
-                : 'WebSocket disconnected'}
+      {/* Animated event list */}
+      <AnimatePresence initial={false}>
+        {isExpanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: DURATION.normal, ease: EASE.out }}
+            className="overflow-hidden"
+          >
+            <div
+              ref={scrollRef}
+              className="px-4 pb-4 max-h-64 overflow-y-auto"
+            >
+              {displayEvents.length === 0 ? (
+                <div className="text-argus-text-dim text-sm py-4 text-center">
+                  {connected
+                    ? 'No events yet — waiting for WebSocket messages'
+                    : 'WebSocket disconnected'}
+                </div>
+              ) : (
+                <div className="space-y-0">
+                  {displayEvents.map((event, index) => (
+                    <EventRow key={`${event.sequence}-${index}`} event={event} />
+                  ))}
+                </div>
+              )}
             </div>
-          ) : (
-            <div className="space-y-0">
-              {displayEvents.map((event, index) => (
-                <EventRow key={`${event.sequence}-${index}`} event={event} />
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </Card>
   );
 }

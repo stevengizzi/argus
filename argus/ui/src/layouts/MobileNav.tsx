@@ -35,23 +35,31 @@ function NavItem({ to, icon, label, showStatusDot }: NavItemProps) {
     <NavLink
       to={to}
       className={({ isActive }) =>
-        `flex flex-col items-center justify-center flex-1 py-2 transition-colors ${
+        `flex flex-col items-center justify-center flex-1 py-2 transition-all duration-150 active:scale-95 ${
           isActive ? 'text-argus-accent' : 'text-argus-text-dim'
         }`
       }
     >
-      <div className="relative">
-        {icon}
-        {/* Status dot overlay for System tab */}
-        {showStatusDot && (
-          <div
-            className={`absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full ${getStatusColor()} ${
-              status === 'connected' ? 'pulse' : ''
-            }`}
-          />
-        )}
-      </div>
-      <span className="text-[10px] mt-1 font-medium">{label}</span>
+      {({ isActive }) => (
+        <>
+          <div className="relative">
+            {icon}
+            {/* Status dot overlay for System tab */}
+            {showStatusDot && (
+              <div
+                className={`absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full ${getStatusColor()} ${
+                  status === 'connected' ? 'pulse' : ''
+                }`}
+              />
+            )}
+          </div>
+          <span className="text-[10px] mt-1 font-medium">{label}</span>
+          {/* Active indicator dot */}
+          {isActive && (
+            <span className="w-1 h-1 mt-0.5 rounded-full bg-argus-accent" />
+          )}
+        </>
+      )}
     </NavLink>
   );
 }

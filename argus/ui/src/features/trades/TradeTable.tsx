@@ -167,7 +167,7 @@ export function TradeTable({
               return (
                 <tr
                   key={trade.id}
-                  className={`transition-colors ${getRowBgClass(trade.pnl_dollars)}`}
+                  className={`transition-colors duration-150 cursor-pointer ${getRowBgClass(trade.pnl_dollars)}`}
                 >
                   {/* Phone: combined date/symbol */}
                   <td className="px-3 py-2.5 text-sm lg:hidden">

@@ -66,7 +66,7 @@ export function DataTable<T>({
             <tr
               key={keyExtractor(item)}
               onClick={onRowClick ? () => onRowClick(item) : undefined}
-              className={`hover:bg-argus-bg/50 transition-colors ${
+              className={`hover:bg-argus-bg/50 transition-colors duration-150 ${
                 onRowClick ? 'cursor-pointer' : ''
               }`}
             >

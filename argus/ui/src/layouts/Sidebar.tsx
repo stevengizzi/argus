@@ -27,11 +27,22 @@ function NavItem({ to, icon, label }: NavItemProps) {
         }`
       }
     >
-      {icon}
-      {/* Tooltip */}
-      <span className="absolute left-full ml-2 px-2 py-1 bg-argus-surface-2 text-argus-text text-xs rounded opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity whitespace-nowrap z-50">
-        {label}
-      </span>
+      {({ isActive }) => (
+        <>
+          {/* Active indicator bar */}
+          {isActive && (
+            <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-6 bg-argus-accent rounded-r" />
+          )}
+          {/* Icon with hover scale */}
+          <span className="transition-transform duration-150 group-hover:scale-105">
+            {icon}
+          </span>
+          {/* Tooltip with 200ms delay */}
+          <span className="absolute left-full ml-2 px-2 py-1 bg-argus-surface-2 text-argus-text text-xs rounded opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity duration-150 delay-200 whitespace-nowrap z-50">
+            {label}
+          </span>
+        </>
+      )}
     </NavLink>
   );
 }
@@ -100,7 +111,7 @@ export function Sidebar({ paperMode = false }: SidebarProps) {
         {/* Status indicator */}
         <div className="group relative flex items-center justify-center">
           <div className={`w-2 h-2 rounded-full ${getStatusColor()} ${status === 'connected' ? 'pulse' : ''}`} />
-          <span className="absolute left-full ml-2 px-2 py-1 bg-argus-surface-2 text-argus-text text-xs rounded opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity whitespace-nowrap z-50">
+          <span className="absolute left-full ml-2 px-2 py-1 bg-argus-surface-2 text-argus-text text-xs rounded opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity duration-150 delay-200 whitespace-nowrap z-50">
             {status === 'connected' ? 'Connected' : status === 'connecting' ? 'Connecting...' : 'Disconnected'}
           </span>
         </div>
@@ -110,8 +121,10 @@ export function Sidebar({ paperMode = false }: SidebarProps) {
           onClick={logout}
           className="group relative flex items-center justify-center w-12 h-12 rounded-lg text-argus-text-dim hover:text-argus-loss hover:bg-argus-surface-2/50 transition-colors"
         >
-          <LogOut className="w-5 h-5" />
-          <span className="absolute left-full ml-2 px-2 py-1 bg-argus-surface-2 text-argus-text text-xs rounded opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity whitespace-nowrap z-50">
+          <span className="transition-transform duration-150 group-hover:scale-105">
+            <LogOut className="w-5 h-5" />
+          </span>
+          <span className="absolute left-full ml-2 px-2 py-1 bg-argus-surface-2 text-argus-text text-xs rounded opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity duration-150 delay-200 whitespace-nowrap z-50">
             Sign Out
           </span>
         </button>

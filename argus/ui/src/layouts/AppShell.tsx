@@ -7,7 +7,7 @@
  * - Phone (<640px): Bottom tab bar with icons
  */
 
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import { useLocation, useOutlet } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Sidebar } from './Sidebar';
@@ -28,6 +28,7 @@ export function AppShell({ paperMode = true }: AppShellProps) {
   const currentOutlet = useOutlet();
   const connect = useLiveStore((state) => state.connect);
   const disconnect = useLiveStore((state) => state.disconnect);
+  const mainRef = useRef<HTMLElement>(null);
 
   // Cache the current outlet element by its pathname.
   // When AnimatePresence clones the exiting element, retrieving from cache
@@ -39,6 +40,11 @@ export function AppShell({ paperMode = true }: AppShellProps) {
     connect();
     return () => disconnect();
   }, [connect, disconnect]);
+
+  // Scroll to top when navigating to a new page
+  useEffect(() => {
+    mainRef.current?.scrollTo(0, 0);
+  }, [location.pathname]);
 
   // Clean up old cache entries after transition to prevent memory leak
   const handleExitComplete = useCallback(() => {
@@ -57,7 +63,10 @@ export function AppShell({ paperMode = true }: AppShellProps) {
 
       {/* Main content area — offset for fixed sidebar on desktop, extra pb for mobile nav */}
       {/* min-w-0 breaks flexbox min-content propagation, overflow-x-hidden prevents horizontal scroll */}
-      <main className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden p-4 md:p-5 min-[1024px]:p-6 pb-24 min-[1024px]:pb-6 min-[1024px]:ml-16">
+      <main
+        ref={mainRef}
+        className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden p-4 md:p-5 min-[1024px]:p-6 pb-24 min-[1024px]:pb-6 min-[1024px]:ml-16"
+      >
         <AnimatePresence mode="wait" onExitComplete={handleExitComplete}>
           <motion.div
             key={location.pathname}

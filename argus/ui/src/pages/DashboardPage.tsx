@@ -5,6 +5,10 @@
  * - Phone (<640px): Single column stacked layout
  * - Tablet (640-1023px): Two-column grid
  * - Desktop (>=1024px): Full three-column layout
+ *
+ * Stagger animation is responsive:
+ * - Multi-column (tablet+): Cards in a row stagger left-to-right
+ * - Single column (phone): All cards stagger top-to-bottom linearly
  */
 
 import { motion } from 'framer-motion';
@@ -16,9 +20,12 @@ import {
   RecentTrades,
   HealthMini,
 } from '../features/dashboard';
-import { staggerContainer, staggerItem, staggerItemWithChildren } from '../utils/motion';
+import { staggerContainer, staggerItem, staggerItemResponsive } from '../utils/motion';
+import { useIsMultiColumn } from '../hooks/useMediaQuery';
 
 export function DashboardPage() {
+  const isMultiColumn = useIsMultiColumn();
+
   return (
     <motion.div
       className="space-y-4 md:space-y-5 lg:space-y-6"
@@ -30,10 +37,10 @@ export function DashboardPage() {
       {/* Phone: Stack vertically */}
       {/* Tablet: 2 columns with Market spanning full width below */}
       {/* Desktop: 3 equal columns */}
-      {/* Grid uses staggerItemWithChildren: sequences with page siblings AND staggers its cards L-to-R */}
+      {/* Grid uses responsive stagger: L-to-R on tablet+, linear on phone */}
       <motion.div
         className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5 lg:gap-6"
-        variants={staggerItemWithChildren(0.08)}
+        variants={staggerItemResponsive(isMultiColumn, 0.08)}
       >
         <motion.div variants={staggerItem} className="h-full">
           <AccountSummary />
@@ -56,10 +63,10 @@ export function DashboardPage() {
       {/* Phone: Stack vertically */}
       {/* Tablet: 2 columns */}
       {/* Desktop: 2 columns */}
-      {/* Grid uses staggerItemWithChildren: sequences with page siblings AND staggers its cards L-to-R */}
+      {/* Grid uses responsive stagger: L-to-R on tablet+, linear on phone */}
       <motion.div
         className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5 lg:gap-6"
-        variants={staggerItemWithChildren(0.08)}
+        variants={staggerItemResponsive(isMultiColumn, 0.08)}
       >
         <motion.div variants={staggerItem}>
           <RecentTrades />
