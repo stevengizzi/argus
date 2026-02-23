@@ -6,20 +6,15 @@
 
 import { Card } from '../../components/Card';
 import { CardHeader } from '../../components/CardHeader';
-import { LoadingState } from '../../components/LoadingState';
 import { useAccount } from '../../hooks/useAccount';
 import { formatCurrency } from '../../utils/format';
+import { AccountSummarySkeleton } from './DashboardSkeleton';
 
 export function AccountSummary() {
   const { data, isLoading, error } = useAccount();
 
   if (isLoading) {
-    return (
-      <Card className="h-full">
-        <CardHeader title="Account" />
-        <LoadingState message="Loading account..." />
-      </Card>
-    );
+    return <AccountSummarySkeleton />;
   }
 
   if (error || !data) {

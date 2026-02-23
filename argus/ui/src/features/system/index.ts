@@ -8,3 +8,12 @@ export { SystemOverview } from './SystemOverview';
 export { ComponentStatusList } from './ComponentStatus';
 export { StrategyCards } from './StrategyCards';
 export { EventsLog } from './EventsLog';
+
+// Skeleton exports
+export {
+  SystemSkeleton,
+  SystemOverviewSkeleton,
+  ComponentStatusListSkeleton,
+  StrategyCardsSkeleton,
+  EventsLogSkeleton,
+} from './SystemSkeleton';

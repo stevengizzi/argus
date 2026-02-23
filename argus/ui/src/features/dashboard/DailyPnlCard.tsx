@@ -6,20 +6,15 @@
 
 import { Card } from '../../components/Card';
 import { CardHeader } from '../../components/CardHeader';
-import { LoadingState } from '../../components/LoadingState';
 import { PnlValue } from '../../components/PnlValue';
 import { useAccount } from '../../hooks/useAccount';
+import { DailyPnlSkeleton } from './DashboardSkeleton';
 
 export function DailyPnlCard() {
   const { data, isLoading, error } = useAccount();
 
   if (isLoading) {
-    return (
-      <Card className="h-full">
-        <CardHeader title="Daily P&L" />
-        <LoadingState message="Loading..." />
-      </Card>
-    );
+    return <DailyPnlSkeleton />;
   }
 
   if (error || !data) {

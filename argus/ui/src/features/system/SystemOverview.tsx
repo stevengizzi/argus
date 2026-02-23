@@ -8,9 +8,9 @@
 import { Card } from '../../components/Card';
 import { StatusDot } from '../../components/StatusDot';
 import { Badge } from '../../components/Badge';
-import { LoadingState } from '../../components/LoadingState';
 import { useHealth } from '../../hooks/useHealth';
 import { formatDuration, formatTime } from '../../utils/format';
+import { SystemOverviewSkeleton } from './SystemSkeleton';
 
 type StatusLevel = 'healthy' | 'degraded' | 'error' | 'unknown';
 
@@ -62,11 +62,7 @@ export function SystemOverview() {
   const { data, isLoading, error } = useHealth();
 
   if (isLoading) {
-    return (
-      <Card>
-        <LoadingState message="Loading system status..." />
-      </Card>
-    );
+    return <SystemOverviewSkeleton />;
   }
 
   if (error || !data) {

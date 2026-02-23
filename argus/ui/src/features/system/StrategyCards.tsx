@@ -10,10 +10,10 @@ import { Card } from '../../components/Card';
 import { CardHeader } from '../../components/CardHeader';
 import { StatusDot } from '../../components/StatusDot';
 import { Badge } from '../../components/Badge';
-import { LoadingState } from '../../components/LoadingState';
 import { EmptyState } from '../../components/EmptyState';
 import { useStrategies } from '../../hooks/useStrategies';
 import { formatCurrencyCompact, formatPnl } from '../../utils/format';
+import { StrategyCardsSkeleton } from './SystemSkeleton';
 import type { StrategyInfo } from '../../api/types';
 import { Zap } from 'lucide-react';
 
@@ -129,12 +129,7 @@ export function StrategyCards() {
   const { data, isLoading, error } = useStrategies();
 
   if (isLoading) {
-    return (
-      <div>
-        <CardHeader title="Strategies" />
-        <LoadingState message="Loading strategies..." />
-      </div>
-    );
+    return <StrategyCardsSkeleton />;
   }
 
   if (error || !data) {

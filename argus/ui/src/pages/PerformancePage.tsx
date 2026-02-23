@@ -9,7 +9,6 @@ import { Component, type ReactNode } from 'react';
 import { TrendingUp } from 'lucide-react';
 import { usePerformance } from '../hooks/usePerformance';
 import { useSelectedPeriod } from '../hooks/useSelectedPeriod';
-import { LoadingState } from '../components/LoadingState';
 import { Card } from '../components/Card';
 import {
   PeriodSelector,
@@ -17,6 +16,7 @@ import {
   EquityCurve,
   DailyPnlChart,
   StrategyBreakdown,
+  PerformanceSkeleton,
 } from '../features/performance';
 
 // Error boundary to catch chart rendering errors
@@ -65,7 +65,7 @@ export function PerformancePage() {
     return (
       <div className="space-y-6">
         <PageHeader />
-        <LoadingState />
+        <PerformanceSkeleton />
       </div>
     );
   }

@@ -9,13 +9,13 @@ import { useMemo } from 'react';
 import { TrendingUp } from 'lucide-react';
 import { Card } from '../../components/Card';
 import { CardHeader } from '../../components/CardHeader';
-import { LoadingState } from '../../components/LoadingState';
 import { EmptyState } from '../../components/EmptyState';
 import { PnlValue } from '../../components/PnlValue';
 import { Badge } from '../../components/Badge';
 import { usePositions } from '../../hooks/usePositions';
 import { useLiveStore } from '../../stores/live';
 import { formatPrice, formatDuration } from '../../utils/format';
+import { OpenPositionsSkeleton } from './DashboardSkeleton';
 import type { Position } from '../../api/types';
 
 interface EnrichedPosition extends Position {
@@ -61,12 +61,7 @@ export function OpenPositions() {
   }, [positions, priceUpdates]);
 
   if (isLoading) {
-    return (
-      <Card>
-        <CardHeader title="Open Positions" />
-        <LoadingState message="Loading positions..." />
-      </Card>
-    );
+    return <OpenPositionsSkeleton />;
   }
 
   if (error) {

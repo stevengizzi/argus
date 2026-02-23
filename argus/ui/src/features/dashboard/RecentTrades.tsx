@@ -9,12 +9,12 @@ import { Link } from 'react-router-dom';
 import { ScrollText, ArrowRight } from 'lucide-react';
 import { Card } from '../../components/Card';
 import { CardHeader } from '../../components/CardHeader';
-import { LoadingState } from '../../components/LoadingState';
 import { EmptyState } from '../../components/EmptyState';
 import { PnlValue } from '../../components/PnlValue';
 import { Badge } from '../../components/Badge';
 import { useTrades } from '../../hooks/useTrades';
 import { formatTime } from '../../utils/format';
+import { RecentTradesSkeleton } from './DashboardSkeleton';
 
 type ExitReason = 'target_1' | 'target_2' | 'stop_loss' | 'time_stop' | 'eod' | string;
 
@@ -46,12 +46,7 @@ export function RecentTrades() {
   const { data, isLoading, error } = useTrades({ limit: 8 });
 
   if (isLoading) {
-    return (
-      <Card>
-        <CardHeader title="Recent Trades" />
-        <LoadingState message="Loading trades..." />
-      </Card>
-    );
+    return <RecentTradesSkeleton />;
   }
 
   if (error) {

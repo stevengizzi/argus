@@ -8,10 +8,10 @@
 import { Activity } from 'lucide-react';
 import { Card } from '../../components/Card';
 import { CardHeader } from '../../components/CardHeader';
-import { LoadingState } from '../../components/LoadingState';
 import { StatusDot } from '../../components/StatusDot';
 import { useHealth } from '../../hooks/useHealth';
 import { formatDuration } from '../../utils/format';
+import { HealthMiniSkeleton } from './DashboardSkeleton';
 
 type StatusLevel = 'healthy' | 'degraded' | 'error' | 'unknown';
 
@@ -41,12 +41,7 @@ export function HealthMini() {
   const { data, isLoading, error } = useHealth();
 
   if (isLoading) {
-    return (
-      <Card>
-        <CardHeader title="System Status" />
-        <LoadingState message="Loading status..." />
-      </Card>
-    );
+    return <HealthMiniSkeleton />;
   }
 
   if (error || !data) {

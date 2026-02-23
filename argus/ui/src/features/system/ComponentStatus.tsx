@@ -8,8 +8,8 @@
 import { Card } from '../../components/Card';
 import { CardHeader } from '../../components/CardHeader';
 import { StatusDot } from '../../components/StatusDot';
-import { LoadingState } from '../../components/LoadingState';
 import { useHealth } from '../../hooks/useHealth';
+import { ComponentStatusListSkeleton } from './SystemSkeleton';
 import type { ComponentStatus as ComponentStatusType } from '../../api/types';
 
 type StatusLevel = 'healthy' | 'degraded' | 'error' | 'unknown';
@@ -59,12 +59,7 @@ export function ComponentStatusList() {
   const { data, isLoading, error } = useHealth();
 
   if (isLoading) {
-    return (
-      <Card>
-        <CardHeader title="Components" />
-        <LoadingState message="Loading components..." />
-      </Card>
-    );
+    return <ComponentStatusListSkeleton />;
   }
 
   if (error || !data) {

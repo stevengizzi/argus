@@ -6,8 +6,7 @@
 
 import { ScrollText } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
-import { LoadingState } from '../components/LoadingState';
-import { TradeFilters, TradeStatsBar, TradeTable } from '../features/trades';
+import { TradeFilters, TradeStatsBar, TradeTable, TradeStatsBarSkeleton, TradeTableSkeleton } from '../features/trades';
 import { useTrades } from '../hooks/useTrades';
 
 const ITEMS_PER_PAGE = 20;
@@ -48,13 +47,15 @@ export function TradesPage() {
       <TradeFilters />
 
       {/* Stats bar */}
-      {data && (
+      {isLoading ? (
+        <TradeStatsBarSkeleton />
+      ) : data ? (
         <TradeStatsBar trades={data.trades} totalCount={data.total_count} />
-      )}
+      ) : null}
 
       {/* Content area */}
       {isLoading ? (
-        <LoadingState message="Loading trades..." />
+        <TradeTableSkeleton />
       ) : error ? (
         <div className="bg-argus-surface border border-argus-border rounded-lg p-8 text-center">
           <p className="text-argus-loss">Error loading trades: {error.message}</p>

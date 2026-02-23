@@ -9,10 +9,10 @@ import { Card } from '../../components/Card';
 import { CardHeader } from '../../components/CardHeader';
 import { Badge } from '../../components/Badge';
 import { StatusDot } from '../../components/StatusDot';
-import { LoadingState } from '../../components/LoadingState';
 import { useAccount } from '../../hooks/useAccount';
 import { useHealth } from '../../hooks/useHealth';
 import { formatTime } from '../../utils/format';
+import { MarketStatusSkeleton } from './DashboardSkeleton';
 
 type MarketStatus = 'pre_market' | 'open' | 'closed' | 'after_hours';
 
@@ -35,12 +35,7 @@ export function MarketStatusBadge() {
   const { data: healthData, isLoading: healthLoading } = useHealth();
 
   if (accountLoading || healthLoading) {
-    return (
-      <Card className="h-full">
-        <CardHeader title="Market" />
-        <LoadingState message="Loading..." />
-      </Card>
-    );
+    return <MarketStatusSkeleton />;
   }
 
   if (!accountData) {

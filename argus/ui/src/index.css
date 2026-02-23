@@ -77,6 +77,22 @@ body {
   animation: slide-in-top 300ms ease-out;
 }
 
+/* Skeleton loading shimmer animation */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--color-argus-surface-2) 25%,
+    var(--color-argus-surface-3) 50%,
+    var(--color-argus-surface-2) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
 /* Hide TradingView Lightweight Charts attribution (watermark disabled in config) */
 .tv-lightweight-charts a[href*="tradingview"] {
   display: none !important;
