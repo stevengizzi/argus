@@ -978,7 +978,11 @@ Each prompt below is designed to be copy-pasted directly into a fresh Claude Cod
 # ARGUS Sprint 16 — Session 1: Animation Foundation
 
 ## Context
-Sprint 16 transforms the Command Center from functional prototype to polished, premium tool. This is Session 1 of 10. Read CLAUDE.md for project state. Read docs/ui/UX_FEATURE_BACKLOG.md for design vision.
+Sprint 16 transforms the Command Center from functional prototype to polished, premium tool.
+
+Before starting, read `docs/sprints/SPRINT_16_IMPLEMENTATION.md` — this is the full Sprint 16 implementation spec. Your current session scope is Session 1 (described below), but the spec gives you the complete picture of the sprint architecture, approved design decisions, and how your session fits into the whole.
+
+Read CLAUDE.md for project state. Read docs/ui/UX_FEATURE_BACKLOG.md for design vision.
 
 ## This Session's Scope
 Install Framer Motion and create the core animation infrastructure:
@@ -1032,6 +1036,8 @@ After implementation:
 
 ## Context
 Sprint 16, Session 2 of 10. Session 1 added Framer Motion + page transitions. This session replaces loading spinners with content-shaped skeleton placeholders.
+
+Before starting, read `docs/sprints/SPRINT_16_IMPLEMENTATION.md` — this is the full Sprint 16 implementation spec. Your current session scope is Session 2 (described below), but the spec gives you the complete picture of the sprint architecture, approved design decisions, and how your session fits into the whole.
 
 Read CLAUDE.md for project state. The current LoadingState component (src/components/LoadingState.tsx) shows a spinner — we're replacing this pattern with shaped skeletons.
 
@@ -1091,6 +1097,8 @@ Skeletons should be shaped like the actual content — card outlines, table row 
 ## Context
 Sprint 16, Session 3 of 10. Sessions 1-2 added page transitions and skeleton loading. This session adds staggered entry animations so content "assembles" when navigating to each page.
 
+Before starting, read `docs/sprints/SPRINT_16_IMPLEMENTATION.md` — this is the full Sprint 16 implementation spec. Your current session scope is Session 3 (described below), but the spec gives you the complete picture of the sprint architecture, approved design decisions, and how your session fits into the whole.
+
 Read `src/utils/motion.ts` for the staggerContainer and staggerItem variants created in Session 1.
 
 ## This Session's Scope
@@ -1144,6 +1152,8 @@ Only animate on MOUNT (initial="hidden" animate="show"). When data refetches (Re
 
 ## Context
 Sprint 16, Session 4 of 10. This session makes financial numbers feel alive — hero equity counts up/down smoothly, P&L values flash with more emphasis on WebSocket updates.
+
+Before starting, read `docs/sprints/SPRINT_16_IMPLEMENTATION.md` — this is the full Sprint 16 implementation spec. Your current session scope is Session 4 (described below), but the spec gives you the complete picture of the sprint architecture, approved design decisions, and how your session fits into the whole.
 
 ## This Session's Scope
 
@@ -1201,6 +1211,8 @@ Sprint 16, Session 4 of 10. This session makes financial numbers feel alive — 
 ## Context
 Sprint 16, Session 5 of 10. This session adds tactile feedback: cards lift on hover, table rows highlight smoothly, nav items get refined states.
 
+Before starting, read `docs/sprints/SPRINT_16_IMPLEMENTATION.md` — this is the full Sprint 16 implementation spec. Your current session scope is Session 5 (described below), but the spec gives you the complete picture of the sprint architecture, approved design decisions, and how your session fits into the whole.
+
 ## This Session's Scope
 
 1. **`src/components/Card.tsx`** — Add optional hover lift:
@@ -1245,6 +1257,8 @@ Sprint 16, Session 5 of 10. This session adds tactile feedback: cards lift on ho
 
 ## Context
 Sprint 16, Session 6 of 10. This session adds chart draw-in animations and dashboard sparklines for ambient awareness.
+
+Before starting, read `docs/sprints/SPRINT_16_IMPLEMENTATION.md` — this is the full Sprint 16 implementation spec. Your current session scope is Session 6 (described below), but the spec gives you the complete picture of the sprint architecture, approved design decisions, and how your session fits into the whole.
 
 ## This Session's Scope
 
@@ -1294,6 +1308,8 @@ Sprint 16, Session 6 of 10. This session adds chart draw-in animations and dashb
 
 ## Context
 Sprint 16, Session 7 of 10. This session replaces generic "No data" messages with contextual, time-aware empty states and adds smooth trade slide-in animation.
+
+Before starting, read `docs/sprints/SPRINT_16_IMPLEMENTATION.md` — this is the full Sprint 16 implementation spec. Your current session scope is Session 7 (described below), but the spec gives you the complete picture of the sprint architecture, approved design decisions, and how your session fits into the whole.
 
 ## This Session's Scope
 
@@ -1347,6 +1363,8 @@ Sprint 16, Session 7 of 10. This session replaces generic "No data" messages wit
 
 ## Context
 Sprint 16, Session 8 of 10. This session makes ARGUS installable as a PWA on iPhone/iPad.
+
+Before starting, read `docs/sprints/SPRINT_16_IMPLEMENTATION.md` — this is the full Sprint 16 implementation spec. Your current session scope is Session 8 (described below), but the spec gives you the complete picture of the sprint architecture, approved design decisions, and how your session fits into the whole.
 
 ## This Session's Scope
 
@@ -1402,6 +1420,8 @@ Sprint 16, Session 8 of 10. This session makes ARGUS installable as a PWA on iPh
 
 ## Context
 Sprint 16, Session 9 of 10. This session adds CSV export, trade drill-down panel, and emergency controls.
+
+Before starting, read `docs/sprints/SPRINT_16_IMPLEMENTATION.md` — this is the full Sprint 16 implementation spec. Your current session scope is Session 9 (described below), but the spec gives you the complete picture of the sprint architecture, approved design decisions, and how your session fits into the whole.
 
 ## This Session's Scope
 
@@ -1484,6 +1504,8 @@ Sprint 16, Session 9 of 10. This session adds CSV export, trade drill-down panel
 
 ## Context
 Sprint 16, Session 10 of 10 (final session). This session sets up the Tauri v2 desktop shell and conducts final cross-device verification.
+
+Before starting, read `docs/sprints/SPRINT_16_IMPLEMENTATION.md` — this is the full Sprint 16 implementation spec. Your current session scope is Session 10 (described below), but the spec gives you the complete picture of the sprint architecture, approved design decisions, and how your session fits into the whole.
 
 ## This Session's Scope
 
