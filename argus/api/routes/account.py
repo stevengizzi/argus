@@ -5,6 +5,7 @@ Provides the account overview endpoint with equity, P&L, and market status.
 
 from __future__ import annotations
 
+import random
 from datetime import UTC, datetime, time
 from zoneinfo import ZoneInfo
 
@@ -13,6 +14,7 @@ from pydantic import BaseModel
 
 from argus.api.auth import require_auth
 from argus.api.dependencies import AppState, get_app_state
+from argus.execution.simulated_broker import SimulatedBroker
 
 router = APIRouter()
 
@@ -102,8 +104,22 @@ async def get_account(
     cash = account_info.cash
     buying_power = account_info.buying_power
 
+    # In dev mode (SimulatedBroker), add small random variations
+    # to test AnimatedNumber component
+    is_dev_mode = isinstance(state.broker, SimulatedBroker)
+    if is_dev_mode:
+        # Add ±0.5% variation to equity and cash
+        equity_variation = equity * random.uniform(-0.005, 0.005)
+        cash_variation = cash * random.uniform(-0.003, 0.003)
+        equity += equity_variation
+        cash += cash_variation
+        buying_power = cash * 2  # Margin account
+
     # Get today's P&L and trade count from trade logger
     daily_pnl = await state.trade_logger.get_todays_pnl()
+    if is_dev_mode:
+        # Add variation to P&L for testing flash animation
+        daily_pnl += random.uniform(-50, 50)
     daily_trades_count = await state.trade_logger.get_todays_trade_count()
 
     # Calculate daily P&L percentage

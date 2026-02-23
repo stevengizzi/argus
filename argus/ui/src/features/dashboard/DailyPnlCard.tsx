@@ -4,11 +4,19 @@
  * Flashes on WebSocket updates when value changes.
  */
 
+import { AnimatedNumber } from '../../components/AnimatedNumber';
 import { Card } from '../../components/Card';
 import { CardHeader } from '../../components/CardHeader';
 import { PnlValue } from '../../components/PnlValue';
 import { useAccount } from '../../hooks/useAccount';
+import { formatCurrency } from '../../utils/format';
 import { DailyPnlSkeleton } from './DashboardSkeleton';
+
+/** Format P&L with sign for AnimatedNumber */
+function formatPnlWithSign(value: number): string {
+  const sign = value >= 0 ? '+' : '';
+  return `${sign}${formatCurrency(value)}`;
+}
 
 export function DailyPnlCard() {
   const { data, isLoading, error } = useAccount();
@@ -30,10 +38,18 @@ export function DailyPnlCard() {
     <Card className="h-full">
       <CardHeader title="Daily P&L" />
 
-      {/* Large P&L number with flash animation */}
-      <div className="flex items-baseline gap-2">
-        <PnlValue value={data.daily_pnl} size="xl" flash />
-      </div>
+      {/* Large P&L number with smooth count animation */}
+      <AnimatedNumber
+        value={data.daily_pnl}
+        format={formatPnlWithSign}
+        className={`text-3xl font-medium transition-colors duration-300 ${
+          data.daily_pnl > 0
+            ? 'text-argus-profit'
+            : data.daily_pnl < 0
+              ? 'text-argus-loss'
+              : 'text-argus-text-dim'
+        }`}
+      />
 
       {/* Percentage below */}
       <div className="mt-1">

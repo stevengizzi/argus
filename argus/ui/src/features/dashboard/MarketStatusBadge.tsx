@@ -2,17 +2,27 @@
  * Market status and trading mode badge.
  *
  * Shows market open/closed status with color-coded indicator,
- * current time in ET, and paper mode badge.
+ * current time in ET (updates every second), and paper mode badge.
  */
 
+import { useState, useEffect } from 'react';
 import { Card } from '../../components/Card';
 import { CardHeader } from '../../components/CardHeader';
 import { Badge } from '../../components/Badge';
 import { StatusDot } from '../../components/StatusDot';
 import { useAccount } from '../../hooks/useAccount';
 import { useHealth } from '../../hooks/useHealth';
-import { formatTime } from '../../utils/format';
 import { MarketStatusSkeleton } from './DashboardSkeleton';
+
+/** Format current time in ET timezone */
+function formatCurrentTimeET(): string {
+  return new Date().toLocaleTimeString('en-US', {
+    timeZone: 'America/New_York',
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+}
 
 type MarketStatus = 'pre_market' | 'open' | 'closed' | 'after_hours';
 
@@ -33,6 +43,16 @@ const statusColors: Record<MarketStatus, 'healthy' | 'degraded' | 'unknown'> = {
 export function MarketStatusBadge() {
   const { data: accountData, isLoading: accountLoading } = useAccount();
   const { data: healthData, isLoading: healthLoading } = useHealth();
+
+  // Local clock that updates every second
+  const [currentTime, setCurrentTime] = useState(formatCurrentTimeET);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(formatCurrentTimeET());
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   if (accountLoading || healthLoading) {
     return <MarketStatusSkeleton />;
@@ -66,9 +86,9 @@ export function MarketStatusBadge() {
         </span>
       </div>
 
-      {/* Current time in ET */}
+      {/* Current time in ET (updates every second) */}
       <div className="mt-2 text-sm text-argus-text-dim tabular-nums">
-        {formatTime(accountData.timestamp)} ET
+        {currentTime} ET
       </div>
 
       {/* Paper mode badge */}

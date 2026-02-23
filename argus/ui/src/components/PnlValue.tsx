@@ -45,10 +45,10 @@ export function PnlValue({ value, format = 'currency', size = 'md', flash = fals
     // Add flash class via DOM
     spanRef.current.classList.add(flashClass);
 
-    // Remove after animation completes
+    // Remove after animation completes (800ms to match enhanced keyframes)
     timerRef.current = setTimeout(() => {
       spanRef.current?.classList.remove('flash-profit', 'flash-loss');
-    }, 600);
+    }, 800);
   }, [value, flash]);
 
   // Trigger flash on value change
@@ -71,7 +71,7 @@ export function PnlValue({ value, format = 'currency', size = 'md', flash = fals
   return (
     <span
       ref={spanRef}
-      className={`tabular-nums font-medium ${sizeClasses[size]} ${formatted.className}`}
+      className={`tabular-nums font-medium transition-colors duration-300 ${sizeClasses[size]} ${formatted.className}`}
     >
       {formatted.text}
     </span>

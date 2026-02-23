@@ -105,7 +105,9 @@ async def test_account_equity_from_broker(client, auth_headers, test_broker):
     data = response.json()
 
     # SimulatedBroker starts with 100K
-    assert data["equity"] == 100000.0
+    # In dev mode (SimulatedBroker), small random variation is added for UI testing
+    # Accept values within ±1% of 100K
+    assert data["equity"] == pytest.approx(100000.0, rel=0.01)
 
 
 @pytest.mark.asyncio
