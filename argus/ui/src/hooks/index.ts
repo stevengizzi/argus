@@ -3,6 +3,13 @@
  */
 
 export { useAccount } from './useAccount';
+export {
+  usePauseStrategy,
+  useResumeStrategy,
+  useClosePosition,
+  useEmergencyFlatten,
+  useEmergencyPauseAll,
+} from './useControls';
 export { useHealth } from './useHealth';
 export { useLiveEquity, type LiveEquityData } from './useLiveEquity';
 export { usePerformance } from './usePerformance';

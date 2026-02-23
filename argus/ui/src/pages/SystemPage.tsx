@@ -12,6 +12,7 @@ import {
   ComponentStatusList,
   StrategyCards,
   EventsLog,
+  EmergencyControls,
 } from '../features/system';
 import { staggerContainer, staggerItem } from '../utils/motion';
 
@@ -46,6 +47,11 @@ export function SystemPage() {
       {/* Events log - full width at bottom */}
       <motion.div variants={staggerItem}>
         <EventsLog />
+      </motion.div>
+
+      {/* Emergency controls */}
+      <motion.div variants={staggerItem}>
+        <EmergencyControls />
       </motion.div>
     </motion.div>
   );

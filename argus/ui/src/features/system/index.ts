@@ -8,6 +8,7 @@ export { SystemOverview } from './SystemOverview';
 export { ComponentStatusList } from './ComponentStatus';
 export { StrategyCards } from './StrategyCards';
 export { EventsLog } from './EventsLog';
+export { EmergencyControls } from './EmergencyControls';
 
 // Skeleton exports
 export {

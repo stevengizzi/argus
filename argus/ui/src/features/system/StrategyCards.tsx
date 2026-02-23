@@ -3,7 +3,7 @@
  *
  * Shows one card per strategy with: name, version, active status,
  * pipeline stage badge, allocated capital, today's P&L, trade count,
- * open positions, and config summary.
+ * open positions, config summary, and pause/resume toggle.
  */
 
 import { Card } from '../../components/Card';
@@ -12,10 +12,11 @@ import { StatusDot } from '../../components/StatusDot';
 import { Badge } from '../../components/Badge';
 import { EmptyState } from '../../components/EmptyState';
 import { useStrategies } from '../../hooks/useStrategies';
+import { usePauseStrategy, useResumeStrategy } from '../../hooks/useControls';
 import { formatCurrencyCompact, formatPnl } from '../../utils/format';
 import { StrategyCardsSkeleton } from './SystemSkeleton';
 import type { StrategyInfo } from '../../api/types';
-import { Zap } from 'lucide-react';
+import { Zap, Pause, Play } from 'lucide-react';
 
 function getPipelineBadgeVariant(stage: string): 'info' | 'success' | 'warning' | 'neutral' {
   const normalized = stage.toLowerCase();
@@ -58,9 +59,30 @@ interface StrategyCardProps {
 
 function StrategyCard({ strategy }: StrategyCardProps) {
   const pnl = formatPnl(strategy.daily_pnl);
+  const pauseMutation = usePauseStrategy();
+  const resumeMutation = useResumeStrategy();
+
+  const isPending = pauseMutation.isPending || resumeMutation.isPending;
+  const error = pauseMutation.error || resumeMutation.error;
+
+  const handleToggle = async () => {
+    // Reset any previous errors
+    pauseMutation.reset();
+    resumeMutation.reset();
+
+    try {
+      if (strategy.is_active) {
+        await pauseMutation.mutateAsync(strategy.strategy_id);
+      } else {
+        await resumeMutation.mutateAsync(strategy.strategy_id);
+      }
+    } catch {
+      // Error is captured in mutation state
+    }
+  };
 
   return (
-    <Card>
+    <Card className={!strategy.is_active ? 'border-amber-500/30' : undefined}>
       {/* Header with name and badges */}
       <div className="flex items-start justify-between mb-4">
         <div className="flex items-start gap-2.5">
@@ -79,6 +101,9 @@ function StrategyCard({ strategy }: StrategyCardProps) {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {!strategy.is_active && (
+            <Badge variant="warning">PAUSED</Badge>
+          )}
           <Badge variant={getPipelineBadgeVariant(strategy.pipeline_stage)}>
             {strategy.pipeline_stage.toUpperCase()}
           </Badge>
@@ -121,6 +146,36 @@ function StrategyCard({ strategy }: StrategyCardProps) {
           </div>
         </div>
       )}
+
+      {/* Pause/Resume toggle */}
+      <div className="pt-3 mt-3 border-t border-argus-border">
+        <button
+          onClick={handleToggle}
+          disabled={isPending}
+          className={`w-full flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+            strategy.is_active
+              ? 'bg-amber-500/10 text-amber-500 border border-amber-500/30 hover:bg-amber-500/20'
+              : 'bg-argus-profit/10 text-argus-profit border border-argus-profit/30 hover:bg-argus-profit/20'
+          }`}
+        >
+          {strategy.is_active ? (
+            <>
+              <Pause className="w-4 h-4" />
+              {isPending ? 'Pausing...' : 'Pause Strategy'}
+            </>
+          ) : (
+            <>
+              <Play className="w-4 h-4" />
+              {isPending ? 'Resuming...' : 'Resume Strategy'}
+            </>
+          )}
+        </button>
+        {error && (
+          <div className="mt-2 text-xs text-argus-loss">
+            {error instanceof Error ? error.message : 'Operation failed'}
+          </div>
+        )}
+      </div>
     </Card>
   );
 }

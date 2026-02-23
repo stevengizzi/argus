@@ -32,6 +32,8 @@ interface TradeTableProps {
   onPageChange: (page: number) => void;
   /** Whether any filters are currently active */
   hasFilters?: boolean;
+  /** Callback when a trade row is clicked */
+  onTradeClick?: (trade: Trade) => void;
 }
 
 const ITEMS_PER_PAGE = 20;
@@ -94,6 +96,7 @@ export function TradeTable({
   currentPage,
   onPageChange,
   hasFilters = false,
+  onTradeClick,
 }: TradeTableProps) {
   const totalPages = Math.ceil(totalCount / (limit || ITEMS_PER_PAGE));
 
@@ -174,6 +177,7 @@ export function TradeTable({
               return (
                 <tr
                   key={trade.id}
+                  onClick={() => onTradeClick?.(trade)}
                   className={`transition-colors duration-150 cursor-pointer ${getRowBgClass(trade.pnl_dollars)}`}
                 >
                   {/* Phone: combined date/symbol */}

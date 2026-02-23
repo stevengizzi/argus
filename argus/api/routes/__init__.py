@@ -8,6 +8,7 @@ from fastapi import APIRouter
 
 from argus.api.routes.account import router as account_router
 from argus.api.routes.auth import router as auth_router
+from argus.api.routes.controls import router as controls_router
 from argus.api.routes.health import router as health_router
 from argus.api.routes.performance import router as performance_router
 from argus.api.routes.positions import router as positions_router
@@ -25,3 +26,4 @@ api_router.include_router(trades_router, prefix="/trades", tags=["trades"])
 api_router.include_router(performance_router, prefix="/performance", tags=["performance"])
 api_router.include_router(health_router, prefix="/health", tags=["health"])
 api_router.include_router(strategies_router, prefix="/strategies", tags=["strategies"])
+api_router.include_router(controls_router, prefix="/controls", tags=["controls"])

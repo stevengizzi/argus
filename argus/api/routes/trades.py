@@ -5,10 +5,13 @@ Provides endpoints for querying trade history and details.
 
 from __future__ import annotations
 
+import csv
+import io
 from datetime import UTC, datetime
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from argus.api.auth import require_auth
@@ -127,4 +130,89 @@ async def get_trades(
         limit=limit,
         offset=offset,
         timestamp=datetime.now(UTC).isoformat(),
+    )
+
+
+@router.get("/export/csv")
+async def export_trades_csv(
+    _auth: dict = Depends(require_auth),  # noqa: B008
+    state: AppState = Depends(get_app_state),  # noqa: B008
+    strategy_id: str | None = Query(None, description="Filter by strategy ID"),
+    date_from: str | None = Query(None, description="Start date filter (YYYY-MM-DD)"),
+    date_to: str | None = Query(None, description="End date filter (YYYY-MM-DD)"),
+) -> StreamingResponse:
+    """Export trades as a CSV file.
+
+    Exports all trades matching the filters (no pagination limit).
+
+    Args:
+        strategy_id: Optional strategy filter.
+        date_from: Optional start date (ISO YYYY-MM-DD).
+        date_to: Optional end date (ISO YYYY-MM-DD).
+
+    Returns:
+        StreamingResponse with CSV content and download headers.
+    """
+    # Query ALL trades with filters (no limit/offset for export)
+    trades_data = await state.trade_logger.query_trades(
+        strategy_id=strategy_id,
+        date_from=date_from,
+        date_to=date_to,
+        limit=10000,  # High limit for export
+        offset=0,
+    )
+
+    # Create CSV in memory
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    # Write header row
+    writer.writerow([
+        "id",
+        "strategy_id",
+        "symbol",
+        "side",
+        "entry_price",
+        "entry_time",
+        "exit_price",
+        "exit_time",
+        "shares",
+        "pnl_dollars",
+        "pnl_r_multiple",
+        "exit_reason",
+        "hold_duration_seconds",
+        "commission",
+    ])
+
+    # Write data rows
+    for row in trades_data:
+        writer.writerow([
+            row["id"],
+            row["strategy_id"],
+            row["symbol"],
+            row["side"],
+            row["entry_price"],
+            row["entry_time"],
+            row.get("exit_price", ""),
+            row.get("exit_time", ""),
+            row["shares"],
+            row.get("net_pnl", ""),
+            row.get("r_multiple", ""),
+            row.get("exit_reason", ""),
+            row.get("hold_duration_seconds", ""),
+            row.get("commission", 0.0),
+        ])
+
+    # Generate filename with date
+    date_str = datetime.now(UTC).strftime("%Y-%m-%d")
+    filename = f"argus_trades_{date_str}.csv"
+
+    # Return as streaming response
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+        },
     )
