@@ -10,6 +10,7 @@
  * - Mobile: Donut full width, risk gauges in 2-column grid below
  */
 
+import { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { AllocationDonut } from '../../components/AllocationDonut';
 import { RiskGauge } from '../../components/RiskGauge';
@@ -39,33 +40,39 @@ export function RiskAllocationPanel() {
   const { data: accountData } = useAccount();
 
   const showSkeleton = orchestratorPending || performancePending;
-  const isRefreshing = orchestratorFetching || performanceFetching;
 
-  // Calculate risk consumption percentages
-  const equity = accountData?.equity ?? 100000;
-  const dailyLossLimit = equity * DAILY_LOSS_LIMIT_PCT;
-  const weeklyLossLimit = equity * WEEKLY_LOSS_LIMIT_PCT;
+  // Only show refresh dimming when we have real data being refreshed
+  const isRefreshing = orchestratorData
+    ? (orchestratorFetching || performanceFetching)
+    : performanceFetching; // Only dim for performance refresh when orchestrator is down
 
-  // Daily P&L from account (negative means loss consumed)
-  const dailyPnl = accountData?.daily_pnl ?? 0;
-  const dailyRiskConsumed = dailyPnl < 0
-    ? Math.min(100, Math.abs(dailyPnl) / dailyLossLimit * 100)
-    : 0;
+  // Memoize allocation data to prevent unnecessary child re-renders
+  const { allocations, cashReservePct } = useMemo(() => {
+    const allocs = orchestratorData?.allocations.map(alloc => ({
+      strategy_id: alloc.strategy_id,
+      allocation_pct: alloc.allocation_pct,
+      daily_pnl: 0, // Could be enriched with strategy P&L
+    })) ?? [];
+    const reserve = orchestratorData?.cash_reserve_pct ?? 0.2;
+    return { allocations: allocs, cashReservePct: reserve };
+  }, [orchestratorData]);
 
-  // Weekly P&L from performance data
-  const weeklyPnl = performanceData?.metrics.net_pnl ?? 0;
-  const weeklyRiskConsumed = weeklyPnl < 0
-    ? Math.min(100, Math.abs(weeklyPnl) / weeklyLossLimit * 100)
-    : 0;
-
-  // Build allocations for donut (from orchestrator or strategies data)
-  const allocations = orchestratorData?.allocations.map(alloc => ({
-    strategy_id: alloc.strategy_id,
-    allocation_pct: alloc.allocation_pct,
-    daily_pnl: 0, // Could be enriched with strategy P&L
-  })) ?? [];
-
-  const cashReservePct = orchestratorData?.cash_reserve_pct ?? 0.2;
+  // Memoize risk calculations to prevent unnecessary re-renders
+  const { dailyRiskConsumed, weeklyRiskConsumed } = useMemo(() => {
+    const equity = accountData?.equity ?? 100000;
+    const dailyLossLimit = equity * DAILY_LOSS_LIMIT_PCT;
+    const weeklyLossLimit = equity * WEEKLY_LOSS_LIMIT_PCT;
+    const dailyPnl = accountData?.daily_pnl ?? 0;
+    const weeklyPnl = performanceData?.metrics.net_pnl ?? 0;
+    return {
+      dailyRiskConsumed: dailyPnl < 0
+        ? Math.min(100, Math.abs(dailyPnl) / dailyLossLimit * 100)
+        : 0,
+      weeklyRiskConsumed: weeklyPnl < 0
+        ? Math.min(100, Math.abs(weeklyPnl) / weeklyLossLimit * 100)
+        : 0,
+    };
+  }, [accountData?.equity, accountData?.daily_pnl, performanceData?.metrics.net_pnl]);
 
   if (showSkeleton) {
     return <RiskAllocationSkeleton />;

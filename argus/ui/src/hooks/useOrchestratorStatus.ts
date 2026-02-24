@@ -13,7 +13,11 @@ export function useOrchestratorStatus() {
   return useQuery<OrchestratorStatusResponse, Error>({
     queryKey: ['orchestrator-status'],
     queryFn: getOrchestratorStatus,
-    refetchInterval: 10_000, // 10 seconds
+    refetchInterval: (query) => {
+      // Don't poll aggressively when orchestrator is unavailable
+      if (query.state.status === 'error') return 60_000; // Check once per minute
+      return 10_000; // Normal 10s polling when healthy
+    },
     retry: false, // Don't retry on 503 (orchestrator unavailable)
     placeholderData: (prev) => prev, // Keep previous data during refetch
   });
