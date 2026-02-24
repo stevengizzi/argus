@@ -31,6 +31,23 @@ const STRATEGY_COLORS: Record<string, string> = {
 
 const CASH_COLOR = '#52525b'; // zinc-600
 
+// Display names for strategies (distinct names for chart legend)
+const STRATEGY_DISPLAY_NAMES: Record<string, string> = {
+  orb: 'ORB',
+  orb_breakout: 'ORB Breakout',
+  scalp: 'Scalp',
+  orb_scalp: 'ORB Scalp',
+  vwap: 'VWAP',
+  vwap_reclaim: 'VWAP Reclaim',
+  momentum: 'Momentum',
+  afternoon_momentum: 'Afternoon Mom',
+};
+
+function getStrategyDisplayName(strategyId: string): string {
+  const normalized = strategyId.toLowerCase().replace(/-/g, '_');
+  return STRATEGY_DISPLAY_NAMES[normalized] || strategyId;
+}
+
 // Empty state data (full gray donut) - defined at module scope to prevent
 // new array reference on every render, which would cause Recharts to rebuild
 interface ChartDataEntry {
@@ -75,7 +92,7 @@ export function AllocationDonut({ allocations, cashReservePct: _cashReservePct }
     allocations.forEach((alloc) => {
       if (alloc.allocation_pct > 0) {
         data.push({
-          name: alloc.strategy_id.toUpperCase().slice(0, 4),
+          name: getStrategyDisplayName(alloc.strategy_id),
           value: alloc.allocation_pct * 100, // Convert to percentage
           color: getStrategyColor(alloc.strategy_id),
         });

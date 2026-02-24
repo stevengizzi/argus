@@ -116,6 +116,8 @@ interface BaseBadgeProps {
 
 interface StrategyBadgeProps {
   strategyId: string;
+  /** Use high-contrast styling for amber/yellow backgrounds */
+  onAmber?: boolean;
 }
 
 interface RegimeBadgeProps {
@@ -142,10 +144,14 @@ export function Badge({ children, variant }: BaseBadgeProps) {
 }
 
 // Strategy badge - shows strategy type with color coding
-export function StrategyBadge({ strategyId }: StrategyBadgeProps) {
+export function StrategyBadge({ strategyId, onAmber = false }: StrategyBadgeProps) {
   const normalizedId = strategyId.toLowerCase().replace(/-/g, '_') as StrategyId;
-  const colorClass = strategyColors[normalizedId] || 'text-argus-text-dim bg-argus-surface-2';
   const label = strategyLabels[normalizedId] || strategyId.toUpperCase().slice(0, 4);
+
+  // On amber backgrounds, use dark bg with white text for contrast
+  const colorClass = onAmber
+    ? 'text-white bg-slate-700'
+    : strategyColors[normalizedId] || 'text-argus-text-dim bg-argus-surface-2';
 
   return (
     <span

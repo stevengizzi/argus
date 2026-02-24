@@ -361,7 +361,7 @@ export function PositionTimeline({
                       {/* Strategy badge (only if there's room) */}
                       {width > 8 && (
                         <span className="hidden sm:inline-flex">
-                          <StrategyBadge strategyId={pos.strategyId} />
+                          <StrategyBadge strategyId={pos.strategyId} onAmber={pos.pnl === 0} />
                         </span>
                       )}
 
