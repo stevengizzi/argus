@@ -394,7 +394,7 @@ Users can rearrange, resize, add, and remove dashboard widgets. Layout persists 
 | **16** | 16-A (motion), 16-B (micro-interactions), 16-C (sparklines) | ~15h | Polish & perceived quality |
 | **17** | 17-A (donut), 17-B (tabs), 17-C (gauges), 17-D (badges) | ~11h | Multi-strategy awareness |
 | **18–20** | 18-A (position cards), 18-B (timeline), 18-C (watchlist), 18-D (session summary), 18-E (notifications) | ~22h | Multi-strategy operations |
-| **21** | 21-A through 21-L (analytics, detail panel, heatmaps, treemap, replay, goals, orchestrator panel) | ~92–116h | Analytics & Strategy Lab |
+| **21** | 21-A through 21-L (analytics, detail panel, heatmaps, treemap, replay, goals, orchestrator interaction) | ~92–116h | Analytics & Strategy Lab |
 | **22** | 22-A (AI cards), 22-B (setup quality), 22-C (optimization landscape), 22-D (projections) | ~46h | AI-enhanced visualization |
 | **23+** | 23-A through 23-F (actions, sunburst, regime, persistence, configurability) | ~38h | Customization & refinement |
 

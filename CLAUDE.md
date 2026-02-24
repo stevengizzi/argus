@@ -11,7 +11,7 @@ Phase 1 sprint plan: @docs/07_PHASE1_SPRINT_PLAN.md
 ## Current State
 
 **Structure:** Two parallel tracks (DEC-079, February 19, 2026).
-- **Build Track:** System construction at development velocity. Sprints 1–17 complete (1146 tests). Sprint 18 (ORB Scalp) is NEXT.
+- **Build Track:** System construction at development velocity. Sprints 1–17 complete (1,146 tests). Sprint 18 (ORB Scalp) is NEXT.
 - **Validation Track:** Paper trading ACTIVE on Alpaca IEX (system stability only — DEC-081). Signal accuracy validation pending Databento subscription activation (DEC-087). Migrates to IBKR paper after IBKR account approved (U24619949, submitted Feb 21).
 
 Active sprint plan: `docs/10_PHASE3_SPRINT_PLAN.md` (covers both tracks).
@@ -25,6 +25,15 @@ Active sprint plan: `docs/10_PHASE3_SPRINT_PLAN.md` (covers both tracks).
 
 - IBKR account application submitted Feb 21, 2026 (Account ID: U24619949). Individual, Margin, IBKR Pro (tiered), GA address. Permissions: Stocks, Options L3, Futures, Forex, Crypto. Awaiting approval.
 
+**Sprint 17 Results (Orchestrator V1 — Feb 24–25):**
+- Orchestrator: pre-market routine, 30-min regime monitoring (DEC-115), intraday throttle, EOD review, decision logging.
+- RegimeClassifier (SPY realized vol as VIX proxy, DEC-113). PerformanceThrottler (consecutive losses/Sharpe/drawdown). CorrelationTracker (infrastructure for V2 allocation).
+- Equal-weight allocation V1 (DEC-114). Single-strategy 40% cap accepted (DEC-119).
+- DEF-016 resolved: Order Manager atomic bracket orders via `place_bracket_order()` (DEC-117).
+- API: 3 orchestrator endpoints (status, decisions, rebalance) + 4 WebSocket event types.
+- UI: SegmentedTab, extended Badge system, AllocationDonut, RiskGauge. 12-phase main.py startup.
+- Sprint 17.5 polish: Orchestrator encapsulation properties, safe-area padding fix, donut/gauge animation-once pattern, RiskAllocationPanel stable render (no conditional skeleton swap). 1146 tests (204 new). 13+4 sessions. Code review passed.
+
 **Sprint 16 Results (Desktop/PWA + UX Polish — Feb 24):**
 - Framer Motion page transitions + stagger animations (all pages). Skeleton loading (all pages).
 - AnimatedNumber (rAF interpolation), SVG Sparklines, chart draw-in animations, P&L flash enhancements.
@@ -33,37 +42,11 @@ Active sprint plan: `docs/10_PHASE3_SPRINT_PLAN.md` (covers both tracks).
 - CSV trade export with filters. PWA (manifest, SW, icons, iOS meta). Tauri v2 desktop shell.
 - Platform detection utility (Tauri/PWA/Web). 942 tests (16 new), 10 sessions completed.
 
-**Sprint 15 Results (Command Center Frontend — Feb 23):**
-- Four pages: Dashboard (account summary, open positions with WS real-time prices, recent trades, system health mini), Trade Log (filter bar, stats summary, paginated table with exit reason badges), Performance (period selector, 12-metric grid, equity curve + daily P&L histogram via Lightweight Charts, strategy breakdown), System (overview, component health, strategy cards, collapsible events log)
-- Responsive at 4 breakpoints: 393px (iPhone SE), 834px (iPad portrait), 1194px (iPad landscape), 1512px (MacBook Pro)
-- Icon sidebar nav (desktop/tablet), bottom tab bar (mobile). Dark theme. WebSocket real-time updates.
-- 8 implementation sessions, zero build errors, clean lint, 926 tests (unchanged)
-- Code review passed. Design research → UX Feature Backlog (DEC-106–110).
-
-**Sprint 14 Results (Command Center API — Feb 23):**
-- FastAPI REST API with JWT authentication (bcrypt password hashing, HS256 tokens)
-- WebSocket bridge for real-time event streaming (Event Bus subscription, tick throttling, heartbeat)
-- Full endpoint coverage: auth, health, account, positions, trades, performance, strategies
-- PerformanceCalculator with 17 metrics (win rate, profit factor, Sharpe, drawdown, etc.)
-- TradeLogger query methods for filtering, pagination, and daily P&L aggregation
-- Dev mode with realistic mock data (`python -m argus.api --dev`)
-- React frontend scaffold (Vite, TypeScript, Tailwind CSS v4, Zustand, React Router)
-- 11-phase system startup (API server as Phase 11)
-- 926 tests (115 new), 10 prompts completed
-
-**Sprint 13 Results (IBKRBroker Adapter — Feb 22):**
-- IBKRBroker: full Broker abstraction via `ib_async` (connection, orders, native brackets, fills, reconnection, state reconstruction)
-- IBKRConfig + BrokerSource enum for config-driven broker selection (DEC-094)
-- Native bracket orders with T1/T2 support (DEC-093). Order Manager T2 broker-side limit orders.
-- System integration: `main.py` branches on `broker_source` for IBKR/Alpaca/Simulated
-- 811 tests (126 new), 10 prompts completed
-- DEF-016 logged: Order Manager uses individual `place_order()` calls rather than atomic `place_bracket_order()`. Functionally correct, architectural refinement deferred.
-
 **Recommended ORB parameters (DEC-076):** or=5, hold=15, gap=2.0, stop_buf=0.0, target_r=2.0, atr=999.0 (disabled).
 
 **Validation Track sequence:** Build through Sprint 21 (four strategies + analytics) → activate Databento ~Sprint 19 (DEC-097) → serious paper trading with quality data + IBKR → AI Layer (Sprint 22) compounds analysis during validation → CPA consultation → live at minimum size on IBKR.
 
-**Build Track queue (DEC-096, DEC-106–110):** Orchestrator V1 (17) → ORB Scalp (18) → VWAP Reclaim (19) → Afternoon Momentum (20) → CC Analytics & Strategy Lab (21) → AI Layer MVP (22) → Tier 1 News + expansion (23+). UX Feature Backlog (`docs/ui/UX_FEATURE_BACKLOG.md`) provides per-sprint enhancement add-ons.
+**Build Track queue (DEC-096, DEC-106–110):** ORB Scalp (18) → VWAP Reclaim (19) → Afternoon Momentum (20) → CC Analytics & Strategy Lab (21) → AI Layer MVP (22) → Tier 1 News + expansion (23+). UX Feature Backlog (`docs/ui/UX_FEATURE_BACKLOG.md`) provides per-sprint enhancement add-ons.
 
 **Command Center delivery (DEC-080):** Three surfaces from single React codebase — web app + Tauri desktop + PWA mobile. All operational after Sprint 16.
 
@@ -81,7 +64,7 @@ Components implemented:
 - AlpacaScanner — live pre-market gap scanning via Alpaca snapshots
 - HealthMonitor — component status, heartbeat, webhook alerts, daily/weekly integrity checks
 - Structured logging — JSON file output, colored console
-- System entry point (argus/main.py) — 11-phase startup (API as Phase 11), graceful shutdown, signal handlers
+- System entry point (argus/main.py) — 12-phase startup (Orchestrator as Phase 9, API as Phase 12), graceful shutdown, signal handlers
 - DataFetcher — historical 1m bar download from Alpaca, Parquet storage, manifest tracking, data validation
 - ReplayHarness — high-fidelity backtesting using production components (EventBus, RiskManager, OrderManager, SimulatedBroker) with FixedClock injection
 - BacktestDataService — step-driven DataService for harness control, shares indicator logic with ReplayDataService
@@ -108,6 +91,13 @@ Components implemented:
 - Dev mode factory — `create_dev_state()` with mock data for frontend development
 - React frontend scaffold (argus/ui/) — Vite, TypeScript, Tailwind CSS v4, Zustand, React Router
 - Dependencies added: fastapi>=0.115, uvicorn>=0.34, python-jose[cryptography]>=3.3, passlib[bcrypt]>=1.7
+- Orchestrator (Sprint 17) — pre-market routine, 30-min regime polling, intraday throttle checks, EOD review, decision logging. Equal-weight allocation V1 (DEC-114).
+- RegimeClassifier — SPY realized vol as VIX proxy (DEC-113), trend scoring (SMA-20/50), momentum (5d ROC). 5 regime types. Crisis override.
+- PerformanceThrottler — consecutive losses, rolling Sharpe, drawdown rules. Returns NONE/REDUCE/SUSPEND.
+- CorrelationTracker — daily P&L recording, correlation matrix computation. Infrastructure for V2 allocation (DEC-116).
+- Order Manager DEF-016 resolved — atomic bracket submission via `place_bracket_order()`. ManagedPosition tracks bracket component IDs (DEC-117).
+- API: /orchestrator/status, /orchestrator/decisions, /orchestrator/rebalance endpoints. 4 WebSocket event types (RegimeChange, AllocationUpdate, StrategyActivated, StrategySuspended).
+- UI: SegmentedTab (reusable pill tabs), Badge system (StrategyBadge, RegimeBadge, RiskBadge, ThrottleBadge), AllocationDonut (Recharts), RiskGauge (SVG radial arc).
 
 ## Architecture
 
@@ -116,7 +106,7 @@ Three tiers, built in parallel (DEC-079):
 2. Command Center (FastAPI + React → web + Tauri desktop + PWA mobile) — dashboards, controls, reports → Build Track Sprint 14+
 3. AI Layer (Claude API) — advisory, approval workflow, reports → Build Track Sprint 22+
 
-Currently: Validation Track (paper trading on Alpaca) running in parallel with Build Track (Sprint 15 next).
+Currently: Validation Track (paper trading on Alpaca) running in parallel with Build Track (Sprint 18 next).
 
 ## Tech Stack
 
@@ -279,7 +269,10 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 | ~~DEF-013~~ | ~~Extract shared IndicatorEngine from DataService implementations~~ | ~~Sprint 12.5~~ | **DONE** — `IndicatorEngine` class created in `argus/data/indicator_engine.py`. All four DataService implementations (AlpacaDataService, DatabentoDataService, ReplayDataService, BacktestDataService) now delegate to IndicatorEngine. 27 new tests, 685 total tests passing. DEC-092. |
 | DEF-014 | SystemAlertEvent for dead data feed | Command Center MVP (Sprint 14–16) OR Health Monitor alerting built | `DatabentoDataService._run_with_reconnection()` logs `critical` when max retries exceeded but emits no Event Bus event. Add `SystemAlertEvent` (or similar) so Health Monitor and Command Center can react (red banner, push notification). Location: `argus/data/databento_data_service.py`. |
 | DEF-015 | DatabentoScanner full-universe scanning | Databento subscription active (DEC-087) AND paper trading validates need for broader symbol coverage | V1 DatabentoScanner uses configured watchlist. Full-universe scanning (~8K US equities) requires cost/latency analysis with live Databento subscription. Location: `argus/data/databento_scanner.py`, `scan()` and `scan_with_gap_data()`. |
-| DEF-016 | Order Manager `place_bracket_order()` integration | ✅ RESOLVED (Sprint 17, Sessions 9–10, DEC-117) | Order Manager now uses `place_bracket_order()` for atomic entry+stop+T1+T2 submission. `on_approved()` constructs full bracket, `_handle_entry_fill()` links bracket IDs to ManagedPosition. `_submit_stop_order()`/`_submit_t1_order()`/`_submit_t2_order()` preserved for mid-position modifications (stop-to-breakeven). SimulatedBroker sync fill path validated. IBKRBroker atomic transmit flag pattern validated. Known limitation: AlpacaBroker bracket child order fills don't route correctly (DEF-018) — acceptable, Alpaca is incubator-only (DEC-086). 1146 tests passing, 8 new bracket edge case tests. |
+| ~~DEF-016~~ | ~~Order Manager `place_bracket_order()` integration~~ | ~~Sprint 17~~ | **DONE** (Sprint 17, DEC-117). Order Manager uses `place_bracket_order()` for atomic entry+stop+T1+T2. ManagedPosition tracks bracket component IDs. SimulatedBroker + IBKRBroker validated. Known limitation: AlpacaBroker bracket child order fills don't route correctly — acceptable, Alpaca is incubator-only (DEC-086). |
+| DEF-017 | Performance-weighted + correlation-adjusted allocation | 20+ days of multi-strategy live data available | V1 uses equal-weight. V2 shifts ±10% based on trailing Sharpe/drawdown. V3 adds CorrelationTracker cross-correlation penalty. CorrelationTracker infrastructure built in Sprint 17 (DEC-116). |
+| DEF-018 | Real VIX data integration | IQFeed subscription activated OR CBOE Databento dataset added | RegimeClassifier V1 uses SPY 20-day realized vol as VIX proxy (DEC-113). Replace with real-time VIX index when data source available. |
+| DEF-019 | Breadth indicator integration (advance/decline, TICK, TRIN) | IQFeed subscription activated | RegimeClassifier designed for breadth inputs but V1 uses SPY-only signals. IQFeed provides NYSE breadth data. ~$160–250/month. |
 
 This keeps it lightweight — no new document, no new sync burden. Items get removed (or moved to "Completed") as they're addressed. Both Claudes see the trigger column and know when to raise the flag.
 

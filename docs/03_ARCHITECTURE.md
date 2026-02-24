@@ -869,6 +869,9 @@ GET    /api/v1/trades                  — Trade history (filterable, paginated)
 GET    /api/v1/performance/{period}    — Metrics for today/week/month/all
 GET    /api/v1/strategies              — Strategy list with status
 GET    /api/v1/health                  — System health + component status
+GET    /api/v1/orchestrator/status     — Regime, allocations, throttle state
+GET    /api/v1/orchestrator/decisions  — Decision history (paginated)
+POST   /api/v1/orchestrator/rebalance  — Trigger manual rebalance
 ```
 
 ### WebSocket
@@ -931,7 +934,7 @@ Four pages delivered with responsive design across four breakpoints. Single Reac
 
 See `docs/ui/UX_FEATURE_BACKLOG.md` for the complete prioritized inventory (35 features, Sprints 16–23+). Key upcoming:
 - Sprint 16: ✅ Motion/animation, sparklines, skeleton loading, controls, trade detail panel, PWA, Tauri
-- Sprint 17: Strategy allocation donut, risk utilization gauges
+- Sprint 17: ✅ Strategy allocation donut, risk utilization gauges, orchestrator interaction panel
 - Sprint 21: Stock detail panel, Dashboard V2, heatmaps, trade replay, portfolio visualizations
 - Sprint 22: AI insight cards, strategy optimization landscape
 
@@ -945,6 +948,14 @@ See `docs/ui/UX_FEATURE_BACKLOG.md` for the complete prioritized inventory (35 f
 | `/controls/emergency/flatten` | POST | Emergency close all positions |
 | `/controls/emergency/pause` | POST | Emergency pause all strategies |
 | `/trades/export/csv` | GET | Export trades as CSV (with filters) |
+
+### Orchestrator Endpoints (Sprint 17)
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/orchestrator/status` | GET | Current regime, indicators, allocations, next regime check time |
+| `/orchestrator/decisions` | GET | Paginated decision history (allocation, regime, throttle, suspension) |
+| `/orchestrator/rebalance` | POST | Trigger manual allocation rebalance |
 
 ## 5. Backtesting Toolkit
 

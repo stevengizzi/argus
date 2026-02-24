@@ -108,6 +108,8 @@ inform Build Track priorities.
 | 13.5 | Evaluation | DEF-016 bracket refactor evaluation → DEFERRED (DEC-095) | 811 | Feb 22 |
 | 14 | Command Center API | FastAPI REST (7 endpoint groups) + WebSocket bridge + React scaffold. DEC-099–103. | 926 | Feb 23 |
 | 15 | Command Center Frontend | 4 pages (Dashboard, Trade Log, Performance, System). Responsive at 4 breakpoints. Lightweight Charts. WebSocket real-time. 8 sessions. Code review passed. Design research → UX Feature Backlog (DEC-106–110). | 926 | Feb 23 |
+| 16 | UX Polish | Desktop/PWA, Framer Motion, skeleton loading, sparklines, trade detail panel, emergency controls, CSV export, PWA, Tauri v2 (DEC-107, DEC-111–112) | 942 | Feb 24 |
+| 17 | Orchestrator V1 | Orchestrator, RegimeClassifier, PerformanceThrottler, CorrelationTracker, DEF-016 resolved, 3 API endpoints, 4 WS events, UI components (DEC-113–119) | 1,146 | Feb 24 |
 
 ### Build Track Queue
 
@@ -197,19 +199,26 @@ per sprint velocity.
 - **Tauri v2:** Desktop shell config, system tray icon with toggle visibility, close-to-tray behavior, platform detection utility, all required icons.
 - 10 implementation sessions. 942 tests (16 new). Code review passed (DEC-111–112).
 
-#### Sprint 17 — Orchestrator V1 (DEC-096)
-**Target:** ~1-2 days
-**Scope:**
-- Orchestrator core: pre-market routine, regime classification, capital allocation
-- Market Regime Classification V1 (SPY MAs, VIX, breadth, momentum)
-- Capital allocation engine (rules-based V1)
-- Performance-based throttling (consecutive losses, Sharpe decay, drawdown)
-- Strategy activation/deactivation based on regime
-- AllocationUpdateEvent, StrategyActivatedEvent, StrategySuspendedEvent on Event Bus
-- Command Center integration: strategy deploy/pause/stop controls, allocation display
-- DEF-016 re-evaluation: atomic bracket submission via `broker.place_bracket_order()` in Order Manager. Natural fit — Orchestrator restructures signal→Order Manager flow.
-- Comprehensive test suite
-- **UX add-ons (~11h, from UX_FEATURE_BACKLOG.md 17-A–D):** Strategy allocation donut chart, segmented controls with live counts, risk utilization gauges, extended badge system (strategy state, regime).
+#### Sprint 17 — Orchestrator V1 ✅ COMPLETE (Feb 24–25)
+**Delivered:**
+- Orchestrator core: pre-market routine, 30-min regime monitoring (DEC-115), intraday throttle checks, EOD review, decision logging to `orchestrator_decisions` table.
+- RegimeClassifier: SPY 20-day realized vol as VIX proxy (DEC-113), regime categorization (bullish/bearish/range-bound/volatile/crisis).
+- PerformanceThrottler: consecutive loss tracking, rolling Sharpe decay, drawdown monitoring. Per-strategy throttle actions (reduce allocation, suspend).
+- CorrelationTracker: infrastructure for V2 allocation (DEC-116). Rolling correlation computation, no allocation impact in V1.
+- Equal-weight allocation V1 (DEC-114). Single-strategy 40% cap accepted (DEC-119).
+- DEF-016 resolved: Order Manager atomic bracket orders via `place_bracket_order()` (DEC-117). Self-contained pre-market poll loop (DEC-118).
+- API: GET /orchestrator/status, GET /orchestrator/decisions, POST /orchestrator/rebalance. 4 WebSocket event types.
+- UI: SegmentedTab, extended Badge system (strategy state + regime), AllocationDonut (Recharts), RiskGauge (SVG arc).
+- 12-phase main.py startup. 1146 tests (204 new). 13 implementation sessions. Code review passed.
+
+#### Sprint 17.5 — Orchestrator Polish ✅ COMPLETE (Feb 25)
+**Delivered:**
+- Orchestrator encapsulation: 3 read-only properties replacing direct `_private` attribute access in API routes.
+- Safe-area padding: additive inner spacer div instead of CSS override that zeroed top padding on non-iOS.
+- Animation stability: `hasAnimated` ref pattern on AllocationDonut + RiskGauge (play once, then disabled).
+- **RiskAllocationPanel stable render:** Removed conditional skeleton swap (`if (loading) return <Skeleton />`) that caused React to tear down and remount child components every poll cycle. Panel now always renders same DOM structure; children handle empty states internally. Root cause: conditional early returns create different React element trees — switching between them destroys all component state (refs, animation flags).
+- Indentation fix in orchestrator.py. Removed `React.memo()` wrappers (broke Vite Fast Refresh in dev mode).
+- 1146 tests (unchanged — frontend-only fixes). 4 sessions.
 
 #### Sprint 18 — ORB Scalp Strategy
 **Target:** ~1-2 days
