@@ -1,18 +1,19 @@
 /**
- * Trade table with pagination, row coloring, and exit reason badges.
+ * Trade table with pagination, row coloring, strategy badges, and exit reason badges.
  *
  * Three responsive breakpoints:
- * - Phone (<640px): Date/Symbol combined, P&L, Exit Reason
- * - Tablet (640-1023px): Date, Symbol, Entry, Exit, P&L ($), R, Exit Reason
- * - Desktop (≥1024px): Date, Symbol, Side, Entry Price, Exit Price, P&L ($), P&L (R), Shares, Exit Reason, Hold Duration, Commission
+ * - Phone (<640px): Date/Symbol combined, Strategy, P&L, Exit Reason
+ * - Tablet (640-1023px): Date, Symbol, Strategy, Entry, Exit, P&L ($), R, Exit Reason
+ * - Desktop (≥1024px): Date, Symbol, Strategy, Side, Entry Price, Exit Price, P&L ($), P&L (R), Shares, Exit Reason, Hold Duration, Commission
+ *
+ * Updated with StrategyBadge (17-D).
  */
 
 import { ChevronLeft, ChevronRight, Filter, BarChart3 } from 'lucide-react';
-import { Badge } from '../../components/Badge';
+import { Badge, StrategyBadge } from '../../components/Badge';
 import { EmptyState } from '../../components/EmptyState';
 import type { Trade } from '../../api/types';
 import {
-  formatCurrency,
   formatDate,
   formatDuration,
   formatPnl,
@@ -126,6 +127,10 @@ export function TradeTable({
               <th className="hidden lg:table-cell w-[80px] px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-left">
                 Symbol
               </th>
+              {/* Tablet+: strategy */}
+              <th className="hidden md:table-cell w-[70px] px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-left">
+                Strat
+              </th>
               {/* Desktop only: side */}
               <th className="hidden lg:table-cell w-[55px] px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-left">
                 Side
@@ -158,10 +163,6 @@ export function TradeTable({
               <th className="hidden lg:table-cell w-[80px] px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-right">
                 Duration
               </th>
-              {/* Desktop only: commission */}
-              <th className="hidden lg:table-cell w-[65px] px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-right">
-                Comm
-              </th>
             </tr>
           </thead>
           {/* Table body dims during filter transitions */}
@@ -180,10 +181,13 @@ export function TradeTable({
                   onClick={() => onTradeClick?.(trade)}
                   className={`transition-colors duration-150 cursor-pointer ${getRowBgClass(trade.pnl_dollars)}`}
                 >
-                  {/* Phone: combined date/symbol */}
+                  {/* Phone: combined date/symbol with strategy badge */}
                   <td className="px-3 py-2.5 text-sm lg:hidden">
-                    <div className="flex flex-col">
-                      <span className="font-medium">{trade.symbol}</span>
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">{trade.symbol}</span>
+                        <StrategyBadge strategyId={trade.strategy_id} />
+                      </div>
                       <span className="text-xs text-argus-text-dim">
                         {formatDate(trade.entry_time)}
                       </span>
@@ -196,6 +200,10 @@ export function TradeTable({
                   {/* Desktop: symbol */}
                   <td className="hidden lg:table-cell px-3 py-2.5 text-sm font-medium">
                     {trade.symbol}
+                  </td>
+                  {/* Tablet+: strategy badge */}
+                  <td className="hidden md:table-cell px-3 py-2.5 text-sm">
+                    <StrategyBadge strategyId={trade.strategy_id} />
                   </td>
                   {/* Desktop: side */}
                   <td className="hidden lg:table-cell px-3 py-2.5 text-sm">
@@ -242,10 +250,6 @@ export function TradeTable({
                     {trade.hold_duration_seconds !== null
                       ? formatDuration(trade.hold_duration_seconds)
                       : '—'}
-                  </td>
-                  {/* Desktop: commission */}
-                  <td className="hidden lg:table-cell px-3 py-2.5 text-sm tabular-nums text-right text-argus-text-dim">
-                    {formatCurrency(trade.commission)}
                   </td>
                 </tr>
               );

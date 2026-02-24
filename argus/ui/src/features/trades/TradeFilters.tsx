@@ -3,10 +3,16 @@
  *
  * Provides: strategy dropdown, outcome toggle (wins/losses/breakeven), date range.
  * Parent component controls filter state; URL sync handled by parent.
+ *
+ * Updated with SegmentedTab for outcome filter (17-B).
  */
 
+import { useMemo } from 'react';
+import { SegmentedTab } from '../../components/SegmentedTab';
 import { useStrategies } from '../../hooks/useStrategies';
+import { useTrades } from '../../hooks/useTrades';
 import type { OutcomeFilter, TradeFilterValues } from '../../hooks/useTradeFilters';
+import type { SegmentedTabSegment } from '../../components/SegmentedTab';
 
 interface FilterState {
   strategy_id: string | undefined;
@@ -24,27 +30,60 @@ interface TradeFiltersProps {
 export function TradeFilters({ filters, onFiltersChange }: TradeFiltersProps) {
   const { data: strategiesData } = useStrategies();
 
+  // Fetch counts for each outcome (using broader filters minus outcome)
+  // Using limit: 1 since we only need total_count
+  const baseFilters = {
+    strategy_id: filters.strategy_id,
+    date_from: filters.date_from,
+    date_to: filters.date_to,
+    limit: 1,
+  };
+
+  const { data: allTradesData } = useTrades(baseFilters);
+  const { data: winsData } = useTrades({ ...baseFilters, outcome: 'win' });
+  const { data: lossesData } = useTrades({ ...baseFilters, outcome: 'loss' });
+  const { data: beData } = useTrades({ ...baseFilters, outcome: 'breakeven' });
+
   const { strategy_id, outcome, date_from, date_to } = filters;
 
-  const outcomeOptions: { value: OutcomeFilter; label: string }[] = [
-    { value: 'all', label: 'All' },
-    { value: 'win', label: 'Wins' },
-    { value: 'loss', label: 'Losses' },
-    { value: 'breakeven', label: 'BE' },
-  ];
+  // Build segments with live counts
+  const outcomeSegments: SegmentedTabSegment[] = useMemo(() => [
+    {
+      label: 'All',
+      value: 'all',
+      count: allTradesData?.total_count,
+    },
+    {
+      label: 'Wins',
+      value: 'win',
+      count: winsData?.total_count,
+      countVariant: 'success' as const,
+    },
+    {
+      label: 'Losses',
+      value: 'loss',
+      count: lossesData?.total_count,
+      countVariant: 'danger' as const,
+    },
+    {
+      label: 'BE',
+      value: 'breakeven',
+      count: beData?.total_count,
+    },
+  ], [allTradesData?.total_count, winsData?.total_count, lossesData?.total_count, beData?.total_count]);
 
   return (
     <div className="bg-argus-surface border border-argus-border rounded-lg p-3 md:p-4">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:gap-4">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:gap-4">
         {/* Strategy dropdown */}
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 lg:max-w-[200px]">
           <label className="block text-xs text-argus-text-dim uppercase tracking-wide mb-1">
             Strategy
           </label>
           <select
             value={strategy_id || ''}
             onChange={(e) => onFiltersChange({ strategy_id: e.target.value || undefined })}
-            className="w-full bg-argus-surface-2 border border-argus-border rounded-md px-3 py-2 text-sm text-argus-text focus:outline-none focus:ring-1 focus:ring-argus-accent"
+            className="w-full bg-argus-surface-2 border border-argus-border rounded-md px-3 py-2 text-sm text-argus-text focus:outline-none focus:ring-1 focus:ring-argus-accent min-h-[44px]"
           >
             <option value="">All Strategies</option>
             {strategiesData?.strategies.map((s) => (
@@ -55,30 +94,22 @@ export function TradeFilters({ filters, onFiltersChange }: TradeFiltersProps) {
           </select>
         </div>
 
-        {/* Outcome toggle */}
-        <div className="w-full md:w-auto md:flex-shrink-0">
+        {/* Outcome segmented tab */}
+        <div className="w-full lg:w-auto lg:flex-shrink-0">
           <label className="block text-xs text-argus-text-dim uppercase tracking-wide mb-1">
             Outcome
           </label>
-          <div className="flex rounded-md border border-argus-border overflow-hidden">
-            {outcomeOptions.map((opt) => (
-              <button
-                key={opt.value}
-                onClick={() => onFiltersChange({ outcome: opt.value })}
-                className={`flex-1 md:flex-none px-3 min-h-[44px] text-xs font-medium transition-colors ${
-                  outcome === opt.value
-                    ? 'bg-argus-accent text-white'
-                    : 'bg-argus-surface-2 text-argus-text-dim hover:text-argus-text hover:bg-argus-surface-3'
-                } ${opt.value !== outcomeOptions[0].value ? 'border-l border-argus-border' : ''}`}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
+          <SegmentedTab
+            segments={outcomeSegments}
+            activeValue={outcome}
+            onChange={(value) => onFiltersChange({ outcome: value as OutcomeFilter })}
+            size="sm"
+            layoutId="trade-outcome-filter"
+          />
         </div>
 
         {/* Date range */}
-        <div className="flex gap-3 w-full md:flex-1">
+        <div className="flex gap-3 w-full lg:flex-1">
           <div className="flex-1 min-w-0">
             <label className="block text-xs text-argus-text-dim uppercase tracking-wide mb-1">
               From
@@ -95,7 +126,7 @@ export function TradeFilters({ filters, onFiltersChange }: TradeFiltersProps) {
                   onFiltersChange({ date_from: newFrom });
                 }
               }}
-              className="w-full bg-argus-surface-2 border border-argus-border rounded-md px-2 py-2 text-sm text-argus-text focus:outline-none focus:ring-1 focus:ring-argus-accent"
+              className="w-full bg-argus-surface-2 border border-argus-border rounded-md px-2 py-2 text-sm text-argus-text focus:outline-none focus:ring-1 focus:ring-argus-accent min-h-[44px]"
             />
           </div>
           <div className="flex-1 min-w-0">
@@ -114,7 +145,7 @@ export function TradeFilters({ filters, onFiltersChange }: TradeFiltersProps) {
                 }
                 onFiltersChange({ date_to: newTo });
               }}
-              className="w-full bg-argus-surface-2 border border-argus-border rounded-md px-2 py-2 text-sm text-argus-text focus:outline-none focus:ring-1 focus:ring-argus-accent"
+              className="w-full bg-argus-surface-2 border border-argus-border rounded-md px-2 py-2 text-sm text-argus-text focus:outline-none focus:ring-1 focus:ring-argus-accent min-h-[44px]"
             />
           </div>
         </div>

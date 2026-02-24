@@ -1,14 +1,15 @@
 /**
- * Market status and trading mode badge.
+ * Market status, trading mode, and regime badge.
  *
  * Shows market open/closed status with color-coded indicator,
- * current time in ET (updates every second), and paper mode badge.
+ * current time in ET (updates every second), paper mode badge,
+ * and market regime badge (17-D).
  */
 
 import { useState, useEffect } from 'react';
 import { Card } from '../../components/Card';
 import { CardHeader } from '../../components/CardHeader';
-import { Badge } from '../../components/Badge';
+import { Badge, RegimeBadge } from '../../components/Badge';
 import { StatusDot } from '../../components/StatusDot';
 import { useAccount } from '../../hooks/useAccount';
 import { useHealth } from '../../hooks/useHealth';
@@ -70,6 +71,10 @@ export function MarketStatusBadge() {
   const status = accountData.market_status as MarketStatus;
   const isPaperMode = healthData?.paper_mode ?? true;
 
+  // Market regime from API (when available)
+  // Currently using a placeholder - will be populated when Risk Manager exposes regime
+  const marketRegime = (accountData as { market_regime?: string }).market_regime;
+
   return (
     <Card className="h-full">
       <CardHeader title="Market" />
@@ -91,12 +96,15 @@ export function MarketStatusBadge() {
         {currentTime} ET
       </div>
 
-      {/* Paper mode badge */}
-      {isPaperMode && (
-        <div className="mt-3">
+      {/* Badge row: Paper mode and/or regime */}
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        {isPaperMode && (
           <Badge variant="warning">PAPER</Badge>
-        </div>
-      )}
+        )}
+        {marketRegime && (
+          <RegimeBadge regime={marketRegime} />
+        )}
+      </div>
     </Card>
   );
 }

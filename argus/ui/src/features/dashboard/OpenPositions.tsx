@@ -1,24 +1,29 @@
 /**
- * Open positions table with real-time price updates via WebSocket.
+ * Positions section with Open/Closed toggle.
  *
- * Merges REST data with WebSocket price updates. Responsive columns
- * for desktop, tablet, and phone layouts. P&L values flash on change.
+ * Shows open positions with real-time price updates via WebSocket,
+ * or today's closed trades, depending on selected tab.
+ *
+ * Updated with SegmentedTab for position view filter (17-B).
  */
 
-import { useMemo } from 'react';
-import { Clock, Moon, Radio } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { Clock, Moon, Radio, BarChart3 } from 'lucide-react';
 import { Card } from '../../components/Card';
 import { CardHeader } from '../../components/CardHeader';
 import { EmptyState } from '../../components/EmptyState';
 import { PnlValue } from '../../components/PnlValue';
-import { Badge } from '../../components/Badge';
+import { Badge, StrategyBadge } from '../../components/Badge';
+import { SegmentedTab } from '../../components/SegmentedTab';
 import { usePositions } from '../../hooks/usePositions';
+import { useTrades } from '../../hooks/useTrades';
 import { useLiveStore } from '../../stores/live';
-import { formatPrice, formatDuration } from '../../utils/format';
+import { formatPrice, formatDuration, formatTime } from '../../utils/format';
 import { OpenPositionsSkeleton } from './DashboardSkeleton';
-import { getMarketContext } from '../../utils/marketTime';
+import { getMarketContext, isPreMarket } from '../../utils/marketTime';
 import { shouldShowEmpty } from '../../utils/testMode';
 import type { Position } from '../../api/types';
+import type { SegmentedTabSegment } from '../../components/SegmentedTab';
 
 interface EnrichedPosition extends Position {
   livePrice: number;
@@ -26,12 +31,44 @@ interface EnrichedPosition extends Position {
   liveR: number;
 }
 
+type ViewFilter = 'open' | 'closed';
+
+// Exit reason badge helpers
+const exitReasonLabels: Record<string, string> = {
+  target_1: 'T1',
+  target_2: 'T2',
+  stop_loss: 'SL',
+  time_stop: 'TIME',
+  eod: 'EOD',
+};
+
+const exitReasonVariants: Record<string, 'success' | 'danger' | 'warning' | 'neutral'> = {
+  target_1: 'success',
+  target_2: 'success',
+  stop_loss: 'danger',
+  time_stop: 'warning',
+  eod: 'neutral',
+};
+
+function getExitReasonLabel(reason: string | null): string {
+  if (!reason) return '—';
+  return exitReasonLabels[reason] ?? reason.toUpperCase();
+}
+
+function getExitReasonVariant(reason: string | null): 'success' | 'danger' | 'warning' | 'neutral' {
+  if (!reason) return 'neutral';
+  return exitReasonVariants[reason] ?? 'neutral';
+}
+
 export function OpenPositions() {
-  const { data, isLoading, error } = usePositions();
+  const [viewFilter, setViewFilter] = useState<ViewFilter>('open');
+  const { data: positionsData, isLoading: positionsLoading, error: positionsError } = usePositions();
+  const { data: tradesData, isLoading: tradesLoading } = useTrades({ limit: 10 });
   const priceUpdates = useLiveStore((state) => state.priceUpdates);
 
   // Extract positions array for stable dependency
-  const positions = data?.positions;
+  const positions = positionsData?.positions;
+  const trades = tradesData?.trades ?? [];
 
   // Merge REST positions with WebSocket price updates
   const enrichedPositions = useMemo<EnrichedPosition[]>(() => {
@@ -62,14 +99,31 @@ export function OpenPositions() {
     });
   }, [positions, priceUpdates]);
 
+  // Build filter segments with counts
+  const filterSegments: SegmentedTabSegment[] = useMemo(() => [
+    {
+      label: 'Open',
+      value: 'open',
+      count: enrichedPositions.length,
+      countVariant: enrichedPositions.length > 0 ? 'success' : undefined,
+    },
+    {
+      label: 'Closed',
+      value: 'closed',
+      count: trades.length,
+    },
+  ], [enrichedPositions.length, trades.length]);
+
+  const isLoading = viewFilter === 'open' ? positionsLoading : tradesLoading;
+
   if (isLoading) {
     return <OpenPositionsSkeleton />;
   }
 
-  if (error) {
+  if (positionsError) {
     return (
       <Card>
-        <CardHeader title="Open Positions" />
+        <CardHeader title="Positions" />
         <div className="text-argus-loss text-sm">Failed to load positions</div>
       </Card>
     );
@@ -78,164 +132,256 @@ export function OpenPositions() {
   // Test mode: force empty state for testing
   const forceEmpty = shouldShowEmpty('positions');
 
-  if (enrichedPositions.length === 0 || forceEmpty) {
-    const marketContext = getMarketContext();
+  // Render open positions view
+  const renderOpenPositions = () => {
+    if (enrichedPositions.length === 0 || forceEmpty) {
+      const marketContext = getMarketContext();
 
-    // Select icon and message based on market status
-    let icon;
-    let message: string;
+      // Select icon and message based on market status
+      let icon;
+      let message: string;
 
-    switch (marketContext.status) {
-      case 'pre_market':
-        icon = <Clock className="w-12 h-12 opacity-50" />;
-        message = `No open positions — market opens in ${marketContext.timeToOpen ?? 'soon'}`;
-        break;
-      case 'open':
-        // Animated radar icon for active scanning
-        icon = (
-          <div className="relative w-12 h-12 flex items-center justify-center">
-            <Radio className="w-8 h-8 opacity-50" />
-            <span className="absolute inset-0 rounded-full border border-argus-accent radar-pulse" />
-          </div>
-        );
-        message = 'No open positions — scanning for setups';
-        break;
-      case 'after_hours':
-      case 'closed':
-      default:
-        icon = <Moon className="w-12 h-12 opacity-50" />;
-        message = 'No open positions — market closed';
-        break;
+      switch (marketContext.status) {
+        case 'pre_market':
+          icon = <Clock className="w-12 h-12 opacity-50" />;
+          message = `No open positions — market opens in ${marketContext.timeToOpen ?? 'soon'}`;
+          break;
+        case 'open':
+          // Animated radar icon for active scanning
+          icon = (
+            <div className="relative w-12 h-12 flex items-center justify-center">
+              <Radio className="w-8 h-8 opacity-50" />
+              <span className="absolute inset-0 rounded-full border border-argus-accent radar-pulse" />
+            </div>
+          );
+          message = 'No open positions — scanning for setups';
+          break;
+        case 'after_hours':
+        case 'closed':
+        default:
+          icon = <Moon className="w-12 h-12 opacity-50" />;
+          message = 'No open positions — market closed';
+          break;
+      }
+
+      return <EmptyState icon={icon} message={message} />;
     }
 
     return (
-      <Card>
-        <CardHeader title="Open Positions" subtitle="0 positions" />
-        <EmptyState icon={icon} message={message} />
-      </Card>
+      <>
+        {/* Desktop table (lg and up) */}
+        <div className="hidden lg:block overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-argus-surface-2 text-argus-text-dim text-xs uppercase tracking-wider">
+                <th className="px-4 py-2 text-left font-medium">Symbol</th>
+                <th className="px-4 py-2 text-left font-medium">Strategy</th>
+                <th className="px-4 py-2 text-left font-medium">Side</th>
+                <th className="px-4 py-2 text-right font-medium">Entry</th>
+                <th className="px-4 py-2 text-right font-medium">Current</th>
+                <th className="px-4 py-2 text-right font-medium">P&L</th>
+                <th className="px-4 py-2 text-right font-medium">R</th>
+                <th className="px-4 py-2 text-right font-medium">Time</th>
+                <th className="px-4 py-2 text-right font-medium">Stop</th>
+                <th className="px-4 py-2 text-right font-medium">T1</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-argus-border">
+              {enrichedPositions.map((pos) => (
+                <tr key={pos.position_id} className="transition-colors duration-150 hover:bg-argus-bg/50">
+                  <td className="px-4 py-3 font-medium text-argus-text">{pos.symbol}</td>
+                  <td className="px-4 py-3">
+                    <StrategyBadge strategyId={pos.strategy_id} />
+                  </td>
+                  <td className="px-4 py-3">
+                    <Badge variant={pos.side === 'long' ? 'success' : 'danger'}>
+                      {pos.side.toUpperCase()}
+                    </Badge>
+                  </td>
+                  <td className="px-4 py-3 text-right tabular-nums">{formatPrice(pos.entry_price)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{formatPrice(pos.livePrice)}</td>
+                  <td className="px-4 py-3 text-right">
+                    <PnlValue value={pos.livePnl} size="sm" flash />
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <PnlValue value={pos.liveR} format="r-multiple" size="sm" flash />
+                  </td>
+                  <td className="px-4 py-3 text-right text-argus-text-dim tabular-nums">
+                    {formatDuration(pos.hold_duration_seconds)}
+                  </td>
+                  <td className="px-4 py-3 text-right tabular-nums text-argus-loss">
+                    {formatPrice(pos.stop_price)}
+                  </td>
+                  <td className="px-4 py-3 text-right tabular-nums text-argus-profit">
+                    {formatPrice(pos.t1_price)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Tablet table (md to lg) */}
+        <div className="hidden md:block lg:hidden overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-argus-surface-2 text-argus-text-dim text-xs uppercase tracking-wider">
+                <th className="px-4 py-2 text-left font-medium">Symbol</th>
+                <th className="px-4 py-2 text-right font-medium">Entry</th>
+                <th className="px-4 py-2 text-right font-medium">Current</th>
+                <th className="px-4 py-2 text-right font-medium">P&L</th>
+                <th className="px-4 py-2 text-right font-medium">R</th>
+                <th className="px-4 py-2 text-right font-medium">Time</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-argus-border">
+              {enrichedPositions.map((pos) => (
+                <tr key={pos.position_id} className="transition-colors duration-150 hover:bg-argus-bg/50">
+                  <td className="px-4 py-3 font-medium text-argus-text">{pos.symbol}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{formatPrice(pos.entry_price)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{formatPrice(pos.livePrice)}</td>
+                  <td className="px-4 py-3 text-right">
+                    <PnlValue value={pos.livePnl} size="sm" flash />
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <PnlValue value={pos.liveR} format="r-multiple" size="sm" flash />
+                  </td>
+                  <td className="px-4 py-3 text-right text-argus-text-dim tabular-nums">
+                    {formatDuration(pos.hold_duration_seconds)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Phone layout (compact cards) */}
+        <div className="md:hidden divide-y divide-argus-border">
+          {enrichedPositions.map((pos) => (
+            <div key={pos.position_id} className="p-4 transition-colors duration-150 hover:bg-argus-bg/50">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-argus-text">{pos.symbol}</span>
+                  <StrategyBadge strategyId={pos.strategy_id} />
+                </div>
+                <PnlValue value={pos.livePnl} size="sm" flash />
+              </div>
+              <div className="flex items-center justify-between mt-1 text-sm">
+                <span className="text-argus-text-dim">
+                  {pos.side.toUpperCase()} @ {formatPrice(pos.entry_price)}
+                </span>
+                <PnlValue value={pos.liveR} format="r-multiple" size="sm" flash />
+              </div>
+            </div>
+          ))}
+        </div>
+      </>
     );
-  }
+  };
+
+  // Render closed trades view
+  const renderClosedTrades = () => {
+    if (trades.length === 0) {
+      const preMarket = isPreMarket();
+      const message = preMarket
+        ? 'No trades today — first signal expected after 9:35 AM ET'
+        : 'No trades today';
+
+      return <EmptyState icon={BarChart3} message={message} />;
+    }
+
+    return (
+      <>
+        {/* Desktop/Tablet table */}
+        <div className="hidden md:block overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-argus-surface-2 text-argus-text-dim text-xs uppercase tracking-wider">
+                <th className="px-4 py-2 text-left font-medium">Symbol</th>
+                <th className="px-4 py-2 text-left font-medium">Strategy</th>
+                <th className="px-4 py-2 text-right font-medium">P&L</th>
+                <th className="px-4 py-2 text-right font-medium">R</th>
+                <th className="px-4 py-2 text-center font-medium">Exit</th>
+                <th className="px-4 py-2 text-right font-medium">Time</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-argus-border">
+              {trades.map((trade) => (
+                <tr key={trade.id} className="transition-colors duration-150 hover:bg-argus-bg/50">
+                  <td className="px-4 py-3 font-medium text-argus-text">{trade.symbol}</td>
+                  <td className="px-4 py-3">
+                    <StrategyBadge strategyId={trade.strategy_id} />
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <PnlValue value={trade.pnl_dollars ?? 0} size="sm" />
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <PnlValue value={trade.pnl_r_multiple ?? 0} format="r-multiple" size="sm" />
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    <Badge variant={getExitReasonVariant(trade.exit_reason)}>
+                      {getExitReasonLabel(trade.exit_reason)}
+                    </Badge>
+                  </td>
+                  <td className="px-4 py-3 text-right text-argus-text-dim tabular-nums">
+                    {trade.exit_time ? formatTime(trade.exit_time) : '—'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Phone layout */}
+        <div className="md:hidden divide-y divide-argus-border">
+          {trades.map((trade) => (
+            <div key={trade.id} className="p-4 transition-colors duration-150 hover:bg-argus-bg/50">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-argus-text">{trade.symbol}</span>
+                  <StrategyBadge strategyId={trade.strategy_id} />
+                </div>
+                <PnlValue value={trade.pnl_dollars ?? 0} size="sm" />
+              </div>
+              <div className="flex items-center justify-between mt-1 text-sm">
+                <Badge variant={getExitReasonVariant(trade.exit_reason)}>
+                  {getExitReasonLabel(trade.exit_reason)}
+                </Badge>
+                <span className="text-argus-text-dim tabular-nums">
+                  {trade.exit_time ? formatTime(trade.exit_time) : '—'}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </>
+    );
+  };
 
   return (
     <Card noPadding>
       <div className="p-4 pb-0">
         <CardHeader
-          title="Open Positions"
-          subtitle={`${enrichedPositions.length} position${enrichedPositions.length !== 1 ? 's' : ''}`}
+          title="Positions"
+          subtitle={viewFilter === 'open'
+            ? `${enrichedPositions.length} open`
+            : `${trades.length} today`
+          }
         />
+
+        {/* View filter */}
+        <div className="mt-3 mb-2">
+          <SegmentedTab
+            segments={filterSegments}
+            activeValue={viewFilter}
+            onChange={(value) => setViewFilter(value as ViewFilter)}
+            size="sm"
+            layoutId="positions-view-filter"
+          />
+        </div>
       </div>
 
-      {/* Desktop table (lg and up) */}
-      <div className="hidden lg:block overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-argus-surface-2 text-argus-text-dim text-xs uppercase tracking-wider">
-              <th className="px-4 py-2 text-left font-medium">Symbol</th>
-              <th className="px-4 py-2 text-left font-medium">Side</th>
-              <th className="px-4 py-2 text-right font-medium">Entry</th>
-              <th className="px-4 py-2 text-right font-medium">Current</th>
-              <th className="px-4 py-2 text-right font-medium">P&L</th>
-              <th className="px-4 py-2 text-right font-medium">R</th>
-              <th className="px-4 py-2 text-right font-medium">Time</th>
-              <th className="px-4 py-2 text-right font-medium">Stop</th>
-              <th className="px-4 py-2 text-right font-medium">T1</th>
-              <th className="px-4 py-2 text-right font-medium">T2</th>
-              <th className="px-4 py-2 text-center font-medium">T1 Hit</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-argus-border">
-            {enrichedPositions.map((pos) => (
-              <tr key={pos.position_id} className="transition-colors duration-150 hover:bg-argus-bg/50">
-                <td className="px-4 py-3 font-medium text-argus-text">{pos.symbol}</td>
-                <td className="px-4 py-3">
-                  <Badge variant={pos.side === 'long' ? 'success' : 'danger'}>
-                    {pos.side.toUpperCase()}
-                  </Badge>
-                </td>
-                <td className="px-4 py-3 text-right tabular-nums">{formatPrice(pos.entry_price)}</td>
-                <td className="px-4 py-3 text-right tabular-nums">{formatPrice(pos.livePrice)}</td>
-                <td className="px-4 py-3 text-right">
-                  <PnlValue value={pos.livePnl} size="sm" flash />
-                </td>
-                <td className="px-4 py-3 text-right">
-                  <PnlValue value={pos.liveR} format="r-multiple" size="sm" flash />
-                </td>
-                <td className="px-4 py-3 text-right text-argus-text-dim tabular-nums">
-                  {formatDuration(pos.hold_duration_seconds)}
-                </td>
-                <td className="px-4 py-3 text-right tabular-nums text-argus-loss">
-                  {formatPrice(pos.stop_price)}
-                </td>
-                <td className="px-4 py-3 text-right tabular-nums text-argus-profit">
-                  {formatPrice(pos.t1_price)}
-                </td>
-                <td className="px-4 py-3 text-right tabular-nums text-argus-profit">
-                  {formatPrice(pos.t2_price)}
-                </td>
-                <td className="px-4 py-3 text-center">
-                  {pos.t1_filled ? (
-                    <span className="text-argus-profit">Yes</span>
-                  ) : (
-                    <span className="text-argus-text-dim">—</span>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Tablet table (md to lg) */}
-      <div className="hidden md:block lg:hidden overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-argus-surface-2 text-argus-text-dim text-xs uppercase tracking-wider">
-              <th className="px-4 py-2 text-left font-medium">Symbol</th>
-              <th className="px-4 py-2 text-right font-medium">Entry</th>
-              <th className="px-4 py-2 text-right font-medium">Current</th>
-              <th className="px-4 py-2 text-right font-medium">P&L</th>
-              <th className="px-4 py-2 text-right font-medium">R</th>
-              <th className="px-4 py-2 text-right font-medium">Time</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-argus-border">
-            {enrichedPositions.map((pos) => (
-              <tr key={pos.position_id} className="transition-colors duration-150 hover:bg-argus-bg/50">
-                <td className="px-4 py-3 font-medium text-argus-text">{pos.symbol}</td>
-                <td className="px-4 py-3 text-right tabular-nums">{formatPrice(pos.entry_price)}</td>
-                <td className="px-4 py-3 text-right tabular-nums">{formatPrice(pos.livePrice)}</td>
-                <td className="px-4 py-3 text-right">
-                  <PnlValue value={pos.livePnl} size="sm" flash />
-                </td>
-                <td className="px-4 py-3 text-right">
-                  <PnlValue value={pos.liveR} format="r-multiple" size="sm" flash />
-                </td>
-                <td className="px-4 py-3 text-right text-argus-text-dim tabular-nums">
-                  {formatDuration(pos.hold_duration_seconds)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Phone layout (compact cards) */}
-      <div className="md:hidden divide-y divide-argus-border">
-        {enrichedPositions.map((pos) => (
-          <div key={pos.position_id} className="p-4 transition-colors duration-150 hover:bg-argus-bg/50">
-            <div className="flex items-center justify-between">
-              <span className="font-medium text-argus-text">{pos.symbol}</span>
-              <PnlValue value={pos.livePnl} size="sm" flash />
-            </div>
-            <div className="flex items-center justify-between mt-1 text-sm">
-              <span className="text-argus-text-dim">
-                {pos.side.toUpperCase()} @ {formatPrice(pos.entry_price)}
-              </span>
-              <PnlValue value={pos.liveR} format="r-multiple" size="sm" flash />
-            </div>
-          </div>
-        ))}
-      </div>
+      {viewFilter === 'open' ? renderOpenPositions() : renderClosedTrades()}
     </Card>
   );
 }
