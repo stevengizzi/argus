@@ -519,6 +519,69 @@ class TradeLogger:
 
         return decision_id
 
+    async def get_orchestrator_decisions(
+        self,
+        limit: int = 50,
+        offset: int = 0,
+        strategy_id: str | None = None,
+        decision_type: str | None = None,
+    ) -> tuple[list[dict], int]:
+        """Query orchestrator decisions with pagination.
+
+        Args:
+            limit: Maximum number of decisions to return (default 50).
+            offset: Number of decisions to skip for pagination.
+            strategy_id: Optional strategy ID filter.
+            decision_type: Optional decision type filter.
+
+        Returns:
+            Tuple of (list of decision dicts, total count).
+        """
+        conditions: list[str] = []
+        params: list[object] = []
+
+        if strategy_id is not None:
+            conditions.append("strategy_id = ?")
+            params.append(strategy_id)
+
+        if decision_type is not None:
+            conditions.append("decision_type = ?")
+            params.append(decision_type)
+
+        where_clause = " AND ".join(conditions) if conditions else "1=1"
+
+        # Get total count
+        count_sql = f"SELECT COUNT(*) as count FROM orchestrator_decisions WHERE {where_clause}"
+        count_row = await self._db.fetch_one(count_sql, tuple(params))
+        total = int(dict(count_row).get("count", 0)) if count_row else 0  # type: ignore[arg-type]
+
+        # Get paginated results
+        sql = f"""
+            SELECT id, date, decision_type, strategy_id, details, rationale, created_at
+            FROM orchestrator_decisions
+            WHERE {where_clause}
+            ORDER BY created_at DESC
+            LIMIT ? OFFSET ?
+        """
+        params.extend([limit, offset])
+
+        rows = await self._db.fetch_all(sql, tuple(params))
+
+        decisions = []
+        for row in rows:
+            r = dict(row)  # type: ignore[arg-type]
+            decisions.append({
+                "id": r["id"],
+                "date": r["date"],
+                "decision_type": r["decision_type"],
+                "strategy_id": r.get("strategy_id"),
+                "details": json.loads(r["details"]) if r.get("details") else None,
+                "rationale": r.get("rationale"),
+                "created_at": r["created_at"],
+            })
+
+        return decisions, total
+
     async def save_daily_summary(self, summary: DailySummary) -> str:
         """Save a daily summary to the database.
 

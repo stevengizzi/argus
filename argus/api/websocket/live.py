@@ -20,6 +20,7 @@ from jose import JWTError
 from argus.api.auth import get_jwt_secret
 from argus.api.serializers import serialize_event
 from argus.core.events import (
+    AllocationUpdateEvent,
     CircuitBreakerEvent,
     Event,
     HeartbeatEvent,
@@ -31,7 +32,10 @@ from argus.core.events import (
     PositionClosedEvent,
     PositionOpenedEvent,
     PositionUpdatedEvent,
+    RegimeChangeEvent,
     SignalEvent,
+    StrategyActivatedEvent,
+    StrategySuspendedEvent,
     TickEvent,
     WatchlistEvent,
 )
@@ -61,6 +65,11 @@ EVENT_TYPE_MAP: dict[type[Event], str] = {
     OrderApprovedEvent: "order.approved",
     OrderRejectedEvent: "order.rejected",
     TickEvent: "price.update",
+    # Orchestrator events
+    RegimeChangeEvent: "orchestrator.regime_change",
+    AllocationUpdateEvent: "orchestrator.allocation_update",
+    StrategyActivatedEvent: "orchestrator.strategy_activated",
+    StrategySuspendedEvent: "orchestrator.strategy_suspended",
 }
 
 
@@ -157,6 +166,11 @@ class WebSocketBridge:
             SignalEvent,
             OrderApprovedEvent,
             OrderRejectedEvent,
+            # Orchestrator events
+            RegimeChangeEvent,
+            AllocationUpdateEvent,
+            StrategyActivatedEvent,
+            StrategySuspendedEvent,
         ]
 
         for event_type in standard_events:
@@ -198,6 +212,11 @@ class WebSocketBridge:
                 SignalEvent,
                 OrderApprovedEvent,
                 OrderRejectedEvent,
+                # Orchestrator events
+                RegimeChangeEvent,
+                AllocationUpdateEvent,
+                StrategyActivatedEvent,
+                StrategySuspendedEvent,
             ]
 
             for event_type in standard_events:

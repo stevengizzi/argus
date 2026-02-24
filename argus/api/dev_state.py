@@ -24,13 +24,16 @@ from argus.core.config import (
     ApiConfig,
     HealthConfig,
     OrbBreakoutConfig,
+    OrchestratorConfig,
     OrderManagerConfig,
     RiskConfig,
     SystemConfig,
 )
 from argus.core.event_bus import EventBus
 from argus.core.health import ComponentStatus, HealthMonitor
+from argus.core.regime import MarketRegime, RegimeIndicators
 from argus.core.risk_manager import RiskManager
+from argus.core.throttle import StrategyAllocation, ThrottleAction
 from argus.db.manager import DatabaseManager
 from argus.execution.order_manager import ManagedPosition, OrderManager
 from argus.execution.simulated_broker import SimulatedBroker
@@ -83,6 +86,40 @@ class MockStrategy:
     def _config(self) -> OrbBreakoutConfig:
         """Compatibility with BaseStrategy._config property."""
         return self.config
+
+
+@dataclass
+class MockOrchestrator:
+    """Minimal mock orchestrator for API development.
+
+    Provides the fields and methods needed by the orchestrator API endpoint
+    without requiring the full Orchestrator implementation.
+    """
+
+    _config: OrchestratorConfig
+    _current_regime: MarketRegime
+    _current_allocations: dict[str, StrategyAllocation]
+    _current_indicators: RegimeIndicators | None
+    _last_regime_check: datetime | None
+
+    @property
+    def current_regime(self) -> MarketRegime:
+        """Get current market regime."""
+        return self._current_regime
+
+    @property
+    def current_allocations(self) -> dict[str, StrategyAllocation]:
+        """Get current strategy allocations."""
+        return self._current_allocations
+
+    @property
+    def current_indicators(self) -> RegimeIndicators | None:
+        """Get current regime indicators."""
+        return self._current_indicators
+
+    async def manual_rebalance(self) -> dict[str, StrategyAllocation]:
+        """Mock rebalance - returns current allocations unchanged."""
+        return self._current_allocations
 
 
 # ---------------------------------------------------------------------------
@@ -291,6 +328,100 @@ def _create_mock_positions(now: datetime) -> list[ManagedPosition]:
     return positions
 
 
+async def _seed_orchestrator_decisions(trade_logger: TradeLogger, now: datetime) -> None:
+    """Seed mock orchestrator decisions for dev mode."""
+    # Log some sample orchestrator decisions
+    today = now.date().isoformat()
+    yesterday = (now - timedelta(days=1)).date().isoformat()
+
+    await trade_logger.log_orchestrator_decision(
+        date=today,
+        decision_type="allocation",
+        strategy_id="orb_breakout",
+        details={
+            "allocation_pct": 0.40,
+            "allocation_dollars": 40000.0,
+            "throttle_action": "none",
+            "eligible": True,
+            "regime": "bullish_trending",
+        },
+        rationale="Active: 40% allocation",
+    )
+
+    await trade_logger.log_orchestrator_decision(
+        date=today,
+        decision_type="regime_classification",
+        strategy_id=None,
+        details={
+            "regime": "bullish_trending",
+            "spy_price": 525.50,
+            "spy_sma_20": 520.30,
+            "spy_sma_50": 515.80,
+            "spy_roc_5d": 1.25,
+            "spy_realized_vol_20d": 12.5,
+        },
+        rationale="SPY above both SMAs with positive momentum",
+    )
+
+    await trade_logger.log_orchestrator_decision(
+        date=yesterday,
+        decision_type="allocation",
+        strategy_id="orb_breakout",
+        details={
+            "allocation_pct": 0.35,
+            "allocation_dollars": 35000.0,
+            "throttle_action": "none",
+            "eligible": True,
+            "regime": "bullish_trending",
+        },
+        rationale="Active: 35% allocation",
+    )
+
+    await trade_logger.log_orchestrator_decision(
+        date=yesterday,
+        decision_type="eod_review",
+        strategy_id=None,
+        details={"regime": "bullish_trending"},
+        rationale="End of day review",
+    )
+
+
+def _create_mock_orchestrator(now: datetime) -> MockOrchestrator:
+    """Create a mock orchestrator for dev mode."""
+    config = OrchestratorConfig()
+
+    # Mock regime indicators
+    indicators = RegimeIndicators(
+        spy_price=525.50,
+        spy_sma_20=520.30,
+        spy_sma_50=515.80,
+        spy_roc_5d=1.25,
+        spy_realized_vol_20d=12.5,
+        spy_vs_vwap=0.002,
+        timestamp=now,
+    )
+
+    # Mock allocations
+    allocations = {
+        "orb_breakout": StrategyAllocation(
+            strategy_id="orb_breakout",
+            allocation_pct=0.40,
+            allocation_dollars=40000.0,
+            throttle_action=ThrottleAction.NONE,
+            eligible=True,
+            reason="Active: 40% allocation",
+        ),
+    }
+
+    return MockOrchestrator(
+        _config=config,
+        _current_regime=MarketRegime.BULLISH_TRENDING,
+        _current_allocations=allocations,
+        _current_indicators=indicators,
+        _last_regime_check=now - timedelta(minutes=30),
+    )
+
+
 # ---------------------------------------------------------------------------
 # Main factory
 # ---------------------------------------------------------------------------
@@ -333,6 +464,10 @@ async def create_dev_state() -> AppState:
     trades = _generate_mock_trades(20)
     for trade in trades:
         await trade_logger.log_trade(trade)
+
+    # Seed orchestrator decisions
+    now = datetime.now(UTC)
+    await _seed_orchestrator_decisions(trade_logger, now)
 
     # Broker with $100K
     broker = SimulatedBroker(initial_cash=100_000.0)
@@ -421,6 +556,9 @@ async def create_dev_state() -> AppState:
         config=orb_config,
     )
 
+    # Mock orchestrator
+    mock_orchestrator = _create_mock_orchestrator(now)
+
     return AppState(
         event_bus=event_bus,
         trade_logger=trade_logger,
@@ -429,6 +567,7 @@ async def create_dev_state() -> AppState:
         risk_manager=risk_manager,
         order_manager=order_manager,
         data_service=None,
+        orchestrator=mock_orchestrator,  # type: ignore[arg-type]
         strategies={"orb_breakout": mock_strategy},  # type: ignore[dict-item]
         clock=clock,
         config=system_config,
