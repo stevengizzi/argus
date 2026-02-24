@@ -115,7 +115,7 @@ async def list_strategies(
     strategies_list: list[StrategyInfo] = []
 
     # Get all managed positions for open position counting
-    all_positions = state.order_manager.get_managed_positions()
+    all_positions = state.order_manager.get_all_positions_flat()
 
     for strategy_id, strategy in state.strategies.items():
         # Count open positions for this strategy

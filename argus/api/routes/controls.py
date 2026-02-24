@@ -112,7 +112,7 @@ async def close_position(
         HTTPException: 404 if position not found.
     """
     # Get managed positions
-    positions = state.order_manager.get_managed_positions()
+    positions = state.order_manager.get_all_positions_flat()
 
     # Find position by ID (we use symbol as position_id in the API)
     target_position = None

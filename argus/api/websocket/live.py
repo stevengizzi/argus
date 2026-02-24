@@ -271,7 +271,7 @@ class WebSocketBridge:
             return
 
         # Check if we have an open position for this symbol
-        positions = self._order_manager.get_managed_positions()
+        positions = self._order_manager.get_all_positions_flat()
         position_symbols = {p.symbol for p in positions if not p.is_fully_closed}
 
         if event.symbol not in position_symbols:

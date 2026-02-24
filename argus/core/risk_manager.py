@@ -17,7 +17,7 @@ from datetime import date, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from argus.core.clock import Clock, SystemClock
-from argus.core.config import RiskConfig
+from argus.core.config import DuplicateStockPolicy, RiskConfig
 from argus.core.event_bus import EventBus
 from argus.core.events import (
     CircuitBreakerEvent,
@@ -31,6 +31,7 @@ from argus.execution.broker import Broker
 
 if TYPE_CHECKING:
     from argus.analytics.trade_logger import TradeLogger
+    from argus.execution.order_manager import OrderManager
 
 logger = logging.getLogger(__name__)
 
@@ -150,11 +151,13 @@ class RiskManager:
         broker: Broker,
         event_bus: EventBus,
         clock: Clock | None = None,
+        order_manager: OrderManager | None = None,
     ) -> None:
         self._config = config
         self._broker = broker
         self._event_bus = event_bus
         self._clock: Clock = clock if clock is not None else SystemClock()
+        self._order_manager: OrderManager | None = order_manager
 
         # Daily/weekly tracking (updated via PositionClosedEvent)
         self._daily_realized_pnl: float = 0.0
@@ -278,6 +281,17 @@ class RiskManager:
                 reason=f"Max concurrent positions ({max_pos}) reached",
             )
 
+        # 4.5. Cross-strategy risk checks (DEC-121, DEC-124)
+        cross_reason = await self._check_cross_strategy_risk(signal, account.equity)
+        if cross_reason:
+            logger.warning(
+                "Signal rejected: cross-strategy risk (%s %s) - %s",
+                signal.strategy_id,
+                signal.symbol,
+                cross_reason,
+            )
+            return OrderRejectedEvent(signal=signal, reason=cross_reason)
+
         # 5. Cash reserve enforcement (DEC-037: use start-of-day equity)
         # Fall back to live equity if start-of-day equity not yet snapshotted
         equity_for_reserve = (
@@ -390,6 +404,79 @@ class RiskManager:
         reduced_risk = reduced_shares * r_per_share
 
         return reduced_risk < 0.25 * original_r
+
+    async def _check_cross_strategy_risk(
+        self, signal: SignalEvent, equity: float
+    ) -> str | None:
+        """Check cross-strategy risk limits.
+
+        Verifies that the new position wouldn't violate:
+        1. Single-stock exposure limit (max_single_stock_pct)
+        2. Duplicate stock policy (if not ALLOW_ALL)
+
+        Args:
+            signal: The trade signal to evaluate.
+            equity: Current account equity.
+
+        Returns:
+            Rejection reason string if limit violated, None if acceptable.
+        """
+        # Skip checks if Order Manager not available
+        if self._order_manager is None:
+            return None
+
+        cross_config = self._config.cross_strategy
+
+        # Get all managed positions by symbol
+        managed = self._order_manager.get_managed_positions()
+
+        # 1. Single-stock exposure check
+        proposed_exposure = signal.entry_price * signal.share_count
+        existing_exposure = 0.0
+
+        positions_for_symbol = managed.get(signal.symbol, [])
+        for pos in positions_for_symbol:
+            if not pos.is_fully_closed:
+                existing_exposure += pos.entry_price * pos.shares_remaining
+
+        total_exposure = existing_exposure + proposed_exposure
+        max_exposure = equity * cross_config.max_single_stock_pct
+
+        if total_exposure > max_exposure:
+            return (
+                f"Single-stock exposure would exceed limit: "
+                f"${total_exposure:.2f} > ${max_exposure:.2f} "
+                f"({cross_config.max_single_stock_pct * 100:.0f}% of equity)"
+            )
+
+        # 2. Duplicate stock policy check (skip if ALLOW_ALL)
+        policy = cross_config.duplicate_stock_policy
+        if policy == DuplicateStockPolicy.ALLOW_ALL:
+            return None
+
+        # Check if another strategy already holds this symbol
+        for pos in positions_for_symbol:
+            if pos.strategy_id != signal.strategy_id and not pos.is_fully_closed:
+                # Another strategy holds this symbol
+                if policy == DuplicateStockPolicy.BLOCK_ALL:
+                    return (
+                        f"Duplicate stock blocked: {pos.strategy_id} already holds "
+                        f"{signal.symbol} (policy: BLOCK_ALL)"
+                    )
+                elif policy == DuplicateStockPolicy.FIRST_SIGNAL:
+                    return (
+                        f"Duplicate stock blocked: {pos.strategy_id} already holds "
+                        f"{signal.symbol} (policy: FIRST_SIGNAL)"
+                    )
+                elif policy == DuplicateStockPolicy.PRIORITY_BY_WIN_RATE:
+                    # V1 simplified: reject without win rate comparison
+                    # Full implementation requires win rate data from TradeLogger
+                    return (
+                        f"Duplicate stock blocked: {pos.strategy_id} already holds "
+                        f"{signal.symbol} (policy: PRIORITY_BY_WIN_RATE, V1 simplified)"
+                    )
+
+        return None
 
     async def _on_position_closed(self, event: PositionClosedEvent) -> None:
         """Track realized P&L and PDT day trades from position close events.
@@ -575,3 +662,14 @@ class RiskManager:
     def start_of_day_equity(self) -> float:
         """Start-of-day equity snapshot for cash reserve calculations."""
         return self._start_of_day_equity
+
+    def set_order_manager(self, order_manager: OrderManager) -> None:
+        """Set the Order Manager reference for cross-strategy risk checks.
+
+        This setter exists for cases where initialization order prevents
+        constructor injection (Risk Manager created before Order Manager).
+
+        Args:
+            order_manager: The Order Manager instance.
+        """
+        self._order_manager = order_manager

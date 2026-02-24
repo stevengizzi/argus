@@ -1185,8 +1185,17 @@ class OrderManager:
             for positions in self._managed_positions.values()
         )
 
-    def get_managed_positions(self) -> list[ManagedPosition]:
-        """Return a snapshot of all managed positions (for API/UI).
+    def get_managed_positions(self) -> dict[str, list[ManagedPosition]]:
+        """Return a copy of managed positions for cross-strategy queries.
+
+        Returns:
+            Dict mapping symbol to list of ManagedPosition objects.
+            Returns copies to prevent external mutation.
+        """
+        return {k: list(v) for k, v in self._managed_positions.items()}
+
+    def get_all_positions_flat(self) -> list[ManagedPosition]:
+        """Return all managed positions as a flat list (for API/UI).
 
         Returns:
             List of all ManagedPosition objects currently being tracked,

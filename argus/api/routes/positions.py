@@ -66,7 +66,7 @@ async def get_positions(
     Returns:
         List of open positions with computed fields.
     """
-    managed_positions = state.order_manager.get_managed_positions()
+    managed_positions = state.order_manager.get_all_positions_flat()
 
     # Filter by strategy if specified
     if strategy_id is not None:

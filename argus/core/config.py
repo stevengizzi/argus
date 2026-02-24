@@ -31,6 +31,7 @@ class DuplicateStockPolicy(StrEnum):
     PRIORITY_BY_WIN_RATE = "priority_by_win_rate"
     FIRST_SIGNAL = "first_signal"
     BLOCK_ALL = "block_all"
+    ALLOW_ALL = "allow_all"
 
 
 class LogLevel(StrEnum):
@@ -153,7 +154,7 @@ class CrossStrategyRiskConfig(BaseModel):
 
     max_single_stock_pct: float = Field(default=0.05, gt=0, le=0.5)
     max_single_sector_pct: float = Field(default=0.15, gt=0, le=0.5)
-    duplicate_stock_policy: DuplicateStockPolicy = DuplicateStockPolicy.PRIORITY_BY_WIN_RATE
+    duplicate_stock_policy: DuplicateStockPolicy = DuplicateStockPolicy.ALLOW_ALL
 
 
 class PDTConfig(BaseModel):

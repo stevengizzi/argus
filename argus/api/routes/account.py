@@ -126,7 +126,7 @@ async def get_account(
     daily_pnl_pct = (daily_pnl / equity * 100) if equity > 0 else 0.0
 
     # Get open positions count from order manager
-    open_positions_count = len(state.order_manager.get_managed_positions())
+    open_positions_count = len(state.order_manager.get_all_positions_flat())
 
     # Get market status using clock if available
     clock_now = state.clock.now() if state.clock else None
