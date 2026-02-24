@@ -389,6 +389,22 @@ class TestReplayDataService:
         assert len(candles) < 1000
 
 
+class TestReplayDataServiceFetchDailyBars:
+    """Tests for ReplayDataService.fetch_daily_bars()."""
+
+    @pytest.mark.asyncio
+    async def test_fetch_daily_bars_returns_none(self, tmp_path: Path) -> None:
+        """fetch_daily_bars returns None — not supported in replay mode."""
+        generate_test_parquet("TEST", tmp_path, num_candles=10)
+
+        bus = EventBus()
+        service = ReplayDataService(event_bus=bus, data_dir=tmp_path, speed=0)
+
+        result = await service.fetch_daily_bars("SPY", lookback_days=60)
+
+        assert result is None
+
+
 class TestDataServiceABC:
     """Tests for the DataService ABC interface."""
 

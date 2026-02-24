@@ -1443,3 +1443,24 @@ class TestReconnectionLogic:
             assert service._timeframes_list == ["1m", "5m"]
 
             await service.stop()
+
+
+class TestDatabentoFetchDailyBars:
+    """Tests for fetch_daily_bars() — returns None in V1."""
+
+    @pytest.mark.asyncio
+    async def test_fetch_daily_bars_returns_none(
+        self, mock_databento, event_bus, databento_config, data_config
+    ):
+        """fetch_daily_bars returns None — not implemented for Databento V1."""
+        from argus.data.databento_data_service import DatabentoDataService
+
+        service = DatabentoDataService(
+            event_bus=event_bus,
+            config=databento_config,
+            data_config=data_config,
+        )
+
+        result = await service.fetch_daily_bars("SPY", lookback_days=60)
+
+        assert result is None

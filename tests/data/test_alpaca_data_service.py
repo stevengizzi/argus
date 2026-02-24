@@ -647,3 +647,131 @@ class TestAlpacaDataServiceFetchTodaysBars:
         assert events[0].timeframe == "1m"
         assert events[0].close == 150.5
         assert events[0].volume == 1000000
+
+
+class TestAlpacaDataServiceFetchDailyBars:
+    """Test AlpacaDataService fetch_daily_bars method for regime classification."""
+
+    @pytest.mark.asyncio
+    async def test_fetch_daily_bars_success(
+        self, data_service, mock_historical_client, fixed_clock
+    ):
+        """Test fetch_daily_bars returns DataFrame with correct columns and sorting."""
+        data_service._historical_client = mock_historical_client
+
+        # Mock 3 daily bars
+        mock_bars = []
+        for i in range(3):
+            bar = MagicMock()
+            bar.timestamp = datetime(2026, 2, 14 + i, 0, 0, 0, tzinfo=UTC)
+            bar.open = 450.0 + i
+            bar.high = 455.0 + i
+            bar.low = 448.0 + i
+            bar.close = 452.0 + i
+            bar.volume = 1000000 + i * 100000
+            mock_bars.append(bar)
+
+        mock_historical_client.get_stock_bars.return_value = {"SPY": mock_bars}
+
+        df = await data_service.fetch_daily_bars("SPY", lookback_days=60)
+
+        assert df is not None
+        assert not df.empty
+        assert len(df) == 3
+        assert list(df.columns) == ["timestamp", "open", "high", "low", "close", "volume"]
+        # Verify sorted oldest-first
+        assert df.iloc[0]["timestamp"] < df.iloc[-1]["timestamp"]
+        # Verify data values
+        assert df.iloc[0]["open"] == 450.0
+        assert df.iloc[-1]["close"] == 454.0
+
+    @pytest.mark.asyncio
+    async def test_fetch_daily_bars_api_error_returns_none(
+        self, data_service, mock_historical_client
+    ):
+        """Test fetch_daily_bars returns None on API error."""
+        data_service._historical_client = mock_historical_client
+        mock_historical_client.get_stock_bars.side_effect = Exception("API Error")
+
+        df = await data_service.fetch_daily_bars("SPY", lookback_days=60)
+
+        assert df is None
+
+    @pytest.mark.asyncio
+    async def test_fetch_daily_bars_empty_response_returns_none(
+        self, data_service, mock_historical_client
+    ):
+        """Test fetch_daily_bars returns None when symbol not in response."""
+        data_service._historical_client = mock_historical_client
+        mock_historical_client.get_stock_bars.return_value = {}
+
+        df = await data_service.fetch_daily_bars("SPY", lookback_days=60)
+
+        assert df is None
+
+    @pytest.mark.asyncio
+    async def test_fetch_daily_bars_initializes_client_if_needed(
+        self, data_service, fixed_clock
+    ):
+        """Test fetch_daily_bars initializes historical client if not already done."""
+        # Client not initialized
+        assert data_service._historical_client is None
+
+        os.environ["TEST_ALPACA_API_KEY"] = "test_key"
+        os.environ["TEST_ALPACA_SECRET_KEY"] = "test_secret"
+
+        try:
+            with patch(
+                "argus.data.alpaca_data_service.StockHistoricalDataClient"
+            ) as mock_client_class:
+                mock_client = MagicMock()
+                mock_client.get_stock_bars.return_value = {}
+                mock_client_class.return_value = mock_client
+
+                df = await data_service.fetch_daily_bars("SPY", lookback_days=60)
+
+                # Client should have been initialized
+                mock_client_class.assert_called_once_with("test_key", "test_secret")
+                assert df is None  # Empty response
+        finally:
+            del os.environ["TEST_ALPACA_API_KEY"]
+            del os.environ["TEST_ALPACA_SECRET_KEY"]
+
+    @pytest.mark.asyncio
+    async def test_fetch_daily_bars_missing_api_keys_returns_none(
+        self, data_service, fixed_clock
+    ):
+        """Test fetch_daily_bars returns None if API keys missing."""
+        # Client not initialized and no API keys
+        assert data_service._historical_client is None
+
+        with patch.dict(os.environ, {}, clear=True):
+            df = await data_service.fetch_daily_bars("SPY", lookback_days=60)
+
+        assert df is None
+
+    @pytest.mark.asyncio
+    async def test_fetch_daily_bars_limits_to_lookback_days(
+        self, data_service, mock_historical_client, fixed_clock
+    ):
+        """Test fetch_daily_bars limits result to requested lookback_days."""
+        data_service._historical_client = mock_historical_client
+
+        # Mock 100 daily bars (more than requested 30)
+        mock_bars = []
+        for i in range(100):
+            bar = MagicMock()
+            bar.timestamp = datetime(2025, 11, 1, 0, 0, 0, tzinfo=UTC) + timedelta(days=i)
+            bar.open = 450.0 + i
+            bar.high = 455.0 + i
+            bar.low = 448.0 + i
+            bar.close = 452.0 + i
+            bar.volume = 1000000
+            mock_bars.append(bar)
+
+        mock_historical_client.get_stock_bars.return_value = {"SPY": mock_bars}
+
+        df = await data_service.fetch_daily_bars("SPY", lookback_days=30)
+
+        assert df is not None
+        assert len(df) == 30  # Limited to requested lookback
