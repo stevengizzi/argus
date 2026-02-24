@@ -127,6 +127,11 @@ class OrbBaseStrategy(BaseStrategy):
         or_end_minute = (30 + or_minutes) % 60
         self._or_end_time = time(or_end_hour, or_end_minute)
 
+        # Earliest entry time from config (if specified)
+        earliest_str = self._orb_config.operating_window.earliest_entry
+        eh, em = map(int, earliest_str.split(":"))
+        self._earliest_entry_time = time(eh, em)
+
         # Latest entry time from config
         latest_str = self._orb_config.operating_window.latest_entry
         h, m = map(int, latest_str.split(":"))
@@ -167,6 +172,10 @@ class OrbBaseStrategy(BaseStrategy):
     def _is_before_latest_entry(self, candle: CandleEvent) -> bool:
         """Check if candle is before latest entry time."""
         return self._get_candle_time(candle) < self._latest_entry_time
+
+    def _is_after_earliest_entry(self, candle: CandleEvent) -> bool:
+        """Check if candle is at or after earliest entry time."""
+        return self._get_candle_time(candle) >= self._earliest_entry_time
 
     # -------------------------------------------------------------------------
     # Opening Range Formation
@@ -355,7 +364,9 @@ class OrbBaseStrategy(BaseStrategy):
 
         # Phase 2: Breakout Detection
         if state.or_complete and state.or_valid and not state.breakout_triggered:
-            # Check time window
+            # Check entry window
+            if not self._is_after_earliest_entry(event):
+                return None
             if not self._is_before_latest_entry(event):
                 return None
 

@@ -754,14 +754,14 @@ class OrderManager:
                             position.time_stop_seconds is not None
                             and elapsed_seconds >= position.time_stop_seconds
                         ):
-                                logger.info(
-                                    "Time stop for %s: open %.0f sec (limit=%d sec)",
-                                    symbol,
-                                    elapsed_seconds,
-                                    position.time_stop_seconds,
-                                )
-                                await self._flatten_position(position, reason="time_stop")
-                                continue
+                            logger.info(
+                                "Time stop for %s: open %.0f sec (limit=%d sec)",
+                                symbol,
+                                elapsed_seconds,
+                                position.time_stop_seconds,
+                            )
+                            await self._flatten_position(position, reason="time_stop")
+                            continue
 
                         # Fallback: global max_position_duration_minutes
                         elapsed_minutes = elapsed_seconds / 60

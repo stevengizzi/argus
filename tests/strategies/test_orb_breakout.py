@@ -960,3 +960,69 @@ class TestTimezoneHandling:
             timestamp=datetime(2025, 6, 2, 14, 30, 0, tzinfo=UTC),
         )
         assert strategy._is_in_or_window(candle_edt) is False
+
+
+class TestEarliestEntryEnforcement:
+    """Tests for earliest_entry time enforcement.
+
+    ORB Breakout has a 15-min OR window (9:30-9:45) and default earliest_entry=09:45,
+    so the first post-OR candle is already eligible for entry. This test confirms
+    behavior is unchanged by the earliest_entry enforcement logic.
+    """
+
+    @pytest.mark.asyncio
+    async def test_first_post_or_candle_is_eligible(self) -> None:
+        """First candle at OR end (09:45 ET) is eligible since earliest_entry=09:45.
+
+        With 15-min OR window, OR ends at 09:45. Default earliest_entry is 09:45.
+        The first post-OR candle should be immediately eligible for breakout.
+        """
+        from datetime import timedelta
+
+        # Use default operating window (earliest_entry=09:45)
+        config = make_orb_config(
+            orb_window_minutes=15,
+            chase_protection_pct=0.02,
+        )
+        mock_data_service = AsyncMock()
+        mock_data_service.get_indicator.side_effect = lambda s, i: {
+            "atr_14": 2.0,
+            "vwap": 100.0,
+        }.get(i)
+
+        strategy = OrbBreakoutStrategy(config, data_service=mock_data_service)
+        strategy.allocated_capital = 100_000
+        strategy.set_watchlist(["TSLA"])
+
+        # Feed OR candles (13:30-13:44 UTC = 9:30-9:44 AM EDT in June)
+        base_time = datetime(2025, 6, 2, 13, 30, 0, tzinfo=UTC)
+        for i in range(15):
+            candle = make_candle(
+                symbol="TSLA",
+                timestamp=base_time + timedelta(minutes=i),
+                high=101.0,
+                low=99.0,
+                close=100.0,
+                volume=100_000,
+            )
+            await strategy.on_candle(candle)
+
+        # First candle after OR window (13:45 UTC = 9:45 AM EDT)
+        # This is exactly at earliest_entry=09:45, so should finalize OR
+        # but if it's also a breakout, should emit signal
+        breakout = make_candle(
+            symbol="TSLA",
+            timestamp=datetime(2025, 6, 2, 13, 45, 0, tzinfo=UTC),
+            open_price=101.0,
+            high=102.5,
+            low=100.8,
+            close=102.0,  # Above OR high (101.0)
+            volume=200_000,  # Above volume threshold
+        )
+        signal = await strategy.on_candle(breakout)
+
+        # OR should be finalized and breakout should be accepted
+        # since earliest_entry=09:45 matches OR end time
+        assert signal is not None
+        assert signal.symbol == "TSLA"
+        assert signal.entry_price == 102.0

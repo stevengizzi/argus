@@ -1713,3 +1713,158 @@ class TestOrbScalpEdgeCases:
 
         # Should not emit signal during OR formation
         assert signal is None
+
+
+class TestEarliestEntryEnforcement:
+    """Tests for earliest_entry time enforcement.
+
+    ORB Scalp has earliest_entry=09:45 with OR ending at 09:35, creating a
+    10-minute window where breakouts would fire prematurely without enforcement.
+    """
+
+    async def _setup_valid_or(
+        self,
+        strategy: OrbScalpStrategy,
+        symbol: str = "AAPL",
+        or_high: float = 101.0,
+        or_low: float = 99.0,
+    ) -> None:
+        """Helper to set up a valid opening range."""
+        strategy.set_watchlist([symbol])
+
+        or_candles = make_or_candles(symbol, num_candles=5, or_high=or_high, or_low=or_low)
+        for candle in or_candles:
+            await strategy.on_candle(candle)
+
+        # Finalize OR (9:35 AM ET = 14:35 UTC)
+        post_or = make_candle(
+            symbol=symbol,
+            timestamp=datetime(2026, 2, 15, 14, 35, 0, tzinfo=UTC),
+        )
+        await strategy.on_candle(post_or)
+
+    @pytest.mark.asyncio
+    async def test_rejects_breakout_before_earliest_entry(self) -> None:
+        """Breakout at 09:40 ET (before earliest_entry 09:45) is rejected."""
+        config = make_scalp_config(
+            earliest_entry="09:45",
+            latest_entry="11:30",
+            chase_protection_pct=0.02,
+        )
+        mock_data_service = AsyncMock()
+        mock_data_service.get_indicator.side_effect = lambda s, i: {
+            "atr_14": 2.0,
+            "vwap": 100.0,
+        }.get(i)
+
+        strategy = OrbScalpStrategy(config, data_service=mock_data_service)
+        strategy.allocated_capital = 100_000
+
+        await self._setup_valid_or(strategy, or_high=101.0, or_low=99.0)
+
+        # Breakout at 09:40 ET = 14:40 UTC (after OR, before earliest_entry)
+        breakout = make_candle(
+            symbol="AAPL",
+            timestamp=datetime(2026, 2, 15, 14, 40, 0, tzinfo=UTC),
+            close=101.5,  # Above OR high
+            volume=200_000,
+        )
+        signal = await strategy.on_candle(breakout)
+
+        # Should be rejected - before earliest_entry
+        assert signal is None
+
+    @pytest.mark.asyncio
+    async def test_accepts_breakout_at_earliest_entry(self) -> None:
+        """Breakout at exactly 09:45 ET (earliest_entry) is accepted."""
+        config = make_scalp_config(
+            earliest_entry="09:45",
+            latest_entry="11:30",
+            chase_protection_pct=0.02,
+        )
+        mock_data_service = AsyncMock()
+        mock_data_service.get_indicator.side_effect = lambda s, i: {
+            "atr_14": 2.0,
+            "vwap": 100.0,
+        }.get(i)
+
+        strategy = OrbScalpStrategy(config, data_service=mock_data_service)
+        strategy.allocated_capital = 100_000
+
+        await self._setup_valid_or(strategy, or_high=101.0, or_low=99.0)
+
+        # Breakout at exactly 09:45 ET = 14:45 UTC (at earliest_entry)
+        breakout = make_candle(
+            symbol="AAPL",
+            timestamp=datetime(2026, 2, 15, 14, 45, 0, tzinfo=UTC),
+            close=101.5,  # Above OR high
+            volume=200_000,
+        )
+        signal = await strategy.on_candle(breakout)
+
+        # Should be accepted - at earliest_entry
+        assert signal is not None
+        assert signal.symbol == "AAPL"
+
+    @pytest.mark.asyncio
+    async def test_accepts_breakout_after_earliest_entry(self) -> None:
+        """Breakout at 10:00 ET (well after earliest_entry) is accepted."""
+        config = make_scalp_config(
+            earliest_entry="09:45",
+            latest_entry="11:30",
+            chase_protection_pct=0.02,
+        )
+        mock_data_service = AsyncMock()
+        mock_data_service.get_indicator.side_effect = lambda s, i: {
+            "atr_14": 2.0,
+            "vwap": 100.0,
+        }.get(i)
+
+        strategy = OrbScalpStrategy(config, data_service=mock_data_service)
+        strategy.allocated_capital = 100_000
+
+        await self._setup_valid_or(strategy, or_high=101.0, or_low=99.0)
+
+        # Breakout at 10:00 ET = 15:00 UTC (well within window)
+        breakout = make_candle(
+            symbol="AAPL",
+            timestamp=datetime(2026, 2, 15, 15, 0, 0, tzinfo=UTC),
+            close=101.5,  # Above OR high
+            volume=200_000,
+        )
+        signal = await strategy.on_candle(breakout)
+
+        # Should be accepted - within entry window
+        assert signal is not None
+        assert signal.symbol == "AAPL"
+
+    @pytest.mark.asyncio
+    async def test_rejects_multiple_times_before_earliest_entry(self) -> None:
+        """Multiple breakout attempts before earliest_entry are all rejected."""
+        config = make_scalp_config(
+            earliest_entry="09:45",
+            latest_entry="11:30",
+            chase_protection_pct=0.02,
+        )
+        mock_data_service = AsyncMock()
+        mock_data_service.get_indicator.side_effect = lambda s, i: {
+            "atr_14": 2.0,
+            "vwap": 100.0,
+        }.get(i)
+
+        strategy = OrbScalpStrategy(config, data_service=mock_data_service)
+        strategy.allocated_capital = 100_000
+
+        await self._setup_valid_or(strategy, or_high=101.0, or_low=99.0)
+
+        # Try breakouts at 09:36, 09:40, 09:44 ET - all before earliest_entry
+        for minute_offset in [36, 40, 44]:
+            # 09:XX ET = 14:XX UTC in EST (February)
+            breakout = make_candle(
+                symbol="AAPL",
+                timestamp=datetime(2026, 2, 15, 14, minute_offset, 0, tzinfo=UTC),
+                close=101.5,
+                volume=200_000,
+            )
+            signal = await strategy.on_candle(breakout)
+            assert signal is None, f"Expected rejection at 09:{minute_offset:02d} ET"

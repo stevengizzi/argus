@@ -471,6 +471,12 @@ class RiskManager:
                 elif policy == DuplicateStockPolicy.PRIORITY_BY_WIN_RATE:
                     # V1 simplified: reject without win rate comparison
                     # Full implementation requires win rate data from TradeLogger
+                    logger.warning(
+                        "PRIORITY_BY_WIN_RATE is not fully implemented — rejecting %s for %s "
+                        "(V1 simplified: always rejects duplicates)",
+                        signal.symbol,
+                        signal.strategy_id,
+                    )
                     return (
                         f"Duplicate stock blocked: {pos.strategy_id} already holds "
                         f"{signal.symbol} (policy: PRIORITY_BY_WIN_RATE, V1 simplified)"
