@@ -13,6 +13,7 @@ import { StrategyBadge } from './Badge';
 import { PnlValue } from './PnlValue';
 import { formatPrice, formatDuration, formatTime } from '../utils/format';
 import { DURATION, EASE } from '../utils/motion';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 import type { Position, Trade } from '../api/types';
 
 // Market hours in ET (minutes from midnight)
@@ -68,13 +69,26 @@ function parseToETMinutes(isoString: string): number {
 }
 
 /**
- * Format minutes to time string (e.g., 570 → "9:30 AM").
+ * Format minutes to time string.
+ * Full format: 570 → "9:30 AM"
+ * Abbreviated: 570 → "9:30a", 600 → "10a"
  */
-function formatMinutesToTime(minutes: number): string {
+function formatMinutesToTime(minutes: number, abbreviated: boolean = false): string {
   const hours = Math.floor(minutes / 60);
   const mins = minutes % 60;
   const period = hours >= 12 ? 'PM' : 'AM';
   const displayHours = hours > 12 ? hours - 12 : hours === 0 ? 12 : hours;
+
+  if (abbreviated) {
+    // Abbreviated format: "9a", "10a", "12p", "1p"
+    // Include minutes only for non-hour times (e.g., "9:30a")
+    const periodChar = period === 'AM' ? 'a' : 'p';
+    if (mins === 0) {
+      return `${displayHours}${periodChar}`;
+    }
+    return `${displayHours}:${mins.toString().padStart(2, '0')}${periodChar}`;
+  }
+
   return `${displayHours}:${mins.toString().padStart(2, '0')} ${period}`;
 }
 
@@ -102,6 +116,11 @@ export function PositionTimeline({
   const containerRef = useRef<HTMLDivElement>(null);
   const [tooltip, setTooltip] = useState<TooltipData | null>(null);
   const [currentMinutes, setCurrentMinutes] = useState(getCurrentETMinutes());
+
+  // Detect larger screens for responsive time axis labels
+  // Below 900px: hourly labels with abbreviated format (e.g., "10a", "11a")
+  // 900px and up: 30-minute labels with full format (e.g., "10:00 AM", "10:30 AM")
+  const isWideScreen = useMediaQuery('(min-width: 900px)');
 
   // Update current time every 10 seconds for "now" marker
   useEffect(() => {
@@ -186,14 +205,19 @@ export function PositionTimeline({
     return lanes;
   }, [timelinePositions, currentMinutes]);
 
-  // Generate time axis labels (every 30 minutes)
+  // Generate time axis labels
+  // Desktop: every 30 minutes with full format
+  // Mobile: every 60 minutes (hourly) with abbreviated format
   const timeLabels = useMemo(() => {
     const labels: number[] = [];
-    for (let m = MARKET_OPEN_MINUTES; m <= MARKET_CLOSE_MINUTES; m += 30) {
+    const interval = isWideScreen ? 30 : 60;
+    // On mobile, start at 10:00 AM (first full hour after open) for cleaner labels
+    const startMinutes = isWideScreen ? MARKET_OPEN_MINUTES : 10 * 60;
+    for (let m = startMinutes; m <= MARKET_CLOSE_MINUTES; m += interval) {
       labels.push(m);
     }
     return labels;
-  }, []);
+  }, [isWideScreen]);
 
   const handleBarHover = useCallback(
     (pos: TimelinePosition, event: React.MouseEvent) => {
@@ -263,11 +287,11 @@ export function PositionTimeline({
               return (
                 <div
                   key={minutes}
-                  className="absolute transform -translate-x-1/2 text-xs text-argus-text-dim"
+                  className="absolute transform -translate-x-1/2 text-xs text-argus-text-dim whitespace-nowrap"
                   style={{ left: `${position}%` }}
                 >
                   <div className="h-2 w-px bg-argus-border mx-auto mb-0.5" />
-                  {formatMinutesToTime(minutes)}
+                  {formatMinutesToTime(minutes, !isWideScreen)}
                 </div>
               );
             })}

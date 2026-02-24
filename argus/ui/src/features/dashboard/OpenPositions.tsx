@@ -21,6 +21,7 @@ import { TradeDetailPanel } from '../trades/TradeDetailPanel';
 import { usePositions } from '../../hooks/usePositions';
 import { useTrades } from '../../hooks/useTrades';
 import { useLiveStore } from '../../stores/live';
+import { usePositionsUIStore } from '../../stores/positionsUI';
 import { formatPrice, formatDuration, formatTime } from '../../utils/format';
 import { OpenPositionsSkeleton } from './DashboardSkeleton';
 import { getMarketContext, isPreMarket } from '../../utils/marketTime';
@@ -33,9 +34,6 @@ interface EnrichedPosition extends Position {
   livePnl: number;
   liveR: number;
 }
-
-type ViewFilter = 'open' | 'closed';
-type DisplayMode = 'table' | 'timeline';
 
 // Exit reason badge helpers
 const exitReasonLabels: Record<string, string> = {
@@ -65,12 +63,16 @@ function getExitReasonVariant(reason: string | null): 'success' | 'danger' | 'wa
 }
 
 export function OpenPositions() {
-  const [viewFilter, setViewFilter] = useState<ViewFilter>('open');
-  const [displayMode, setDisplayMode] = useState<DisplayMode>('table');
   const [selectedTrade, setSelectedTrade] = useState<Trade | null>(null);
   const { data: positionsData, isLoading: positionsLoading, error: positionsError } = usePositions();
   const { data: tradesData, isLoading: tradesLoading } = useTrades({ limit: 10 });
   const priceUpdates = useLiveStore((state) => state.priceUpdates);
+
+  // UI state from Zustand store (persists across layout changes)
+  const displayMode = usePositionsUIStore((state) => state.displayMode);
+  const setDisplayMode = usePositionsUIStore((state) => state.setDisplayMode);
+  const positionFilter = usePositionsUIStore((state) => state.positionFilter);
+  const setPositionFilter = usePositionsUIStore((state) => state.setPositionFilter);
 
   // Extract positions array for stable dependency
   const positions = positionsData?.positions;
@@ -108,6 +110,11 @@ export function OpenPositions() {
   // Build filter segments with counts
   const filterSegments: SegmentedTabSegment[] = useMemo(() => [
     {
+      label: 'All',
+      value: 'all',
+      count: enrichedPositions.length + trades.length,
+    },
+    {
       label: 'Open',
       value: 'open',
       count: enrichedPositions.length,
@@ -133,7 +140,7 @@ export function OpenPositions() {
     setSelectedTrade(item);
   };
 
-  const isLoading = viewFilter === 'open' ? positionsLoading : tradesLoading;
+  const isLoading = positionFilter === 'closed' ? tradesLoading : positionsLoading;
 
   if (isLoading) {
     return <OpenPositionsSkeleton />;
@@ -150,6 +157,173 @@ export function OpenPositions() {
 
   // Test mode: force empty state for testing
   const forceEmpty = shouldShowEmpty('positions');
+
+  // Render all positions view (open + closed combined)
+  const renderAllPositions = () => {
+    const hasAny = enrichedPositions.length > 0 || trades.length > 0;
+
+    if (!hasAny || forceEmpty) {
+      const marketContext = getMarketContext();
+      const message = marketContext.status === 'open'
+        ? 'No positions today — scanning for setups'
+        : 'No positions today';
+      return <EmptyState icon={BarChart3} message={message} />;
+    }
+
+    // Timeline view - show both open and closed
+    if (displayMode === 'timeline') {
+      return (
+        <div className="p-4 pt-0">
+          <PositionTimeline
+            positions={enrichedPositions}
+            closedTrades={trades}
+            onPositionClick={handleTimelineClick}
+          />
+        </div>
+      );
+    }
+
+    // Table view - combined table with sections
+    return (
+      <>
+        {/* Desktop/Tablet combined table */}
+        <div className="hidden md:block overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-argus-surface-2 text-argus-text-dim text-xs uppercase tracking-wider">
+                <th className="px-4 py-2 text-left font-medium">Symbol</th>
+                <th className="px-4 py-2 text-left font-medium">Strategy</th>
+                <th className="px-4 py-2 text-right font-medium">P&L</th>
+                <th className="px-4 py-2 text-right font-medium">R</th>
+                <th className="px-4 py-2 text-center font-medium">Status</th>
+                <th className="px-4 py-2 text-right font-medium">Time</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-argus-border">
+              {/* Open positions section */}
+              {enrichedPositions.length > 0 && (
+                <>
+                  <tr className="bg-argus-surface-2/50">
+                    <td colSpan={6} className="px-4 py-1.5 text-xs font-medium text-argus-accent">
+                      Open Positions
+                    </td>
+                  </tr>
+                  {enrichedPositions.map((pos) => (
+                    <tr key={pos.position_id} className="transition-colors duration-150 hover:bg-argus-bg/50">
+                      <td className="px-4 py-3 font-medium text-argus-text">{pos.symbol}</td>
+                      <td className="px-4 py-3">
+                        <StrategyBadge strategyId={pos.strategy_id} />
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <PnlValue value={pos.livePnl} size="sm" flash />
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <PnlValue value={pos.liveR} format="r-multiple" size="sm" flash />
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <Badge variant="success">OPEN</Badge>
+                      </td>
+                      <td className="px-4 py-3 text-right text-argus-text-dim tabular-nums">
+                        {formatDuration(pos.hold_duration_seconds)}
+                      </td>
+                    </tr>
+                  ))}
+                </>
+              )}
+
+              {/* Closed trades section */}
+              {trades.length > 0 && (
+                <>
+                  <tr className="bg-argus-surface-2/50">
+                    <td colSpan={6} className="px-4 py-1.5 text-xs font-medium text-argus-text-dim">
+                      Closed Today
+                    </td>
+                  </tr>
+                  {trades.map((trade) => (
+                    <tr key={trade.id} className="transition-colors duration-150 hover:bg-argus-bg/50 opacity-75">
+                      <td className="px-4 py-3 font-medium text-argus-text">{trade.symbol}</td>
+                      <td className="px-4 py-3">
+                        <StrategyBadge strategyId={trade.strategy_id} />
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <PnlValue value={trade.pnl_dollars ?? 0} size="sm" />
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <PnlValue value={trade.pnl_r_multiple ?? 0} format="r-multiple" size="sm" />
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <Badge variant={getExitReasonVariant(trade.exit_reason)}>
+                          {getExitReasonLabel(trade.exit_reason)}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3 text-right text-argus-text-dim tabular-nums">
+                        {trade.exit_time ? formatTime(trade.exit_time) : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Phone layout - combined cards */}
+        <div className="md:hidden divide-y divide-argus-border">
+          {/* Open positions */}
+          {enrichedPositions.length > 0 && (
+            <>
+              <div className="px-4 py-2 bg-argus-surface-2/50">
+                <span className="text-xs font-medium text-argus-accent">Open Positions</span>
+              </div>
+              {enrichedPositions.map((pos) => (
+                <div key={pos.position_id} className="p-4 transition-colors duration-150 hover:bg-argus-bg/50">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-argus-text">{pos.symbol}</span>
+                      <StrategyBadge strategyId={pos.strategy_id} />
+                    </div>
+                    <PnlValue value={pos.livePnl} size="sm" flash />
+                  </div>
+                  <div className="flex items-center justify-between mt-1 text-sm">
+                    <Badge variant="success">OPEN</Badge>
+                    <PnlValue value={pos.liveR} format="r-multiple" size="sm" flash />
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
+
+          {/* Closed trades */}
+          {trades.length > 0 && (
+            <>
+              <div className="px-4 py-2 bg-argus-surface-2/50">
+                <span className="text-xs font-medium text-argus-text-dim">Closed Today</span>
+              </div>
+              {trades.map((trade) => (
+                <div key={trade.id} className="p-4 transition-colors duration-150 hover:bg-argus-bg/50 opacity-75">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-argus-text">{trade.symbol}</span>
+                      <StrategyBadge strategyId={trade.strategy_id} />
+                    </div>
+                    <PnlValue value={trade.pnl_dollars ?? 0} size="sm" />
+                  </div>
+                  <div className="flex items-center justify-between mt-1 text-sm">
+                    <Badge variant={getExitReasonVariant(trade.exit_reason)}>
+                      {getExitReasonLabel(trade.exit_reason)}
+                    </Badge>
+                    <span className="text-argus-text-dim tabular-nums">
+                      {trade.exit_time ? formatTime(trade.exit_time) : '—'}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+      </>
+    );
+  };
 
   // Render open positions view
   const renderOpenPositions = () => {
@@ -186,13 +360,12 @@ export function OpenPositions() {
       return <EmptyState icon={icon} message={message} />;
     }
 
-    // Timeline view
+    // Timeline view - show only open positions
     if (displayMode === 'timeline') {
       return (
         <div className="p-4 pt-0">
           <PositionTimeline
             positions={enrichedPositions}
-            closedTrades={trades}
             onPositionClick={handleTimelineClick}
           />
         </div>
@@ -323,6 +496,20 @@ export function OpenPositions() {
       return <EmptyState icon={BarChart3} message={message} />;
     }
 
+    // Timeline view - show only closed trades
+    if (displayMode === 'timeline') {
+      return (
+        <div className="p-4 pt-0">
+          <PositionTimeline
+            positions={[]}
+            closedTrades={trades}
+            onPositionClick={handleTimelineClick}
+          />
+        </div>
+      );
+    }
+
+    // Table view
     return (
       <>
         {/* Desktop/Tablet table */}
@@ -398,14 +585,17 @@ export function OpenPositions() {
           <div className="flex items-start justify-between gap-2">
             <CardHeader
               title="Positions"
-              subtitle={viewFilter === 'open'
-                ? `${enrichedPositions.length} open`
-                : `${trades.length} today`
+              subtitle={
+                positionFilter === 'all'
+                  ? `${enrichedPositions.length} open, ${trades.length} closed`
+                  : positionFilter === 'open'
+                  ? `${enrichedPositions.length} open`
+                  : `${trades.length} today`
               }
             />
 
-            {/* Display mode toggle - only show when there are positions and on tablet+ */}
-            {viewFilter === 'open' && enrichedPositions.length > 0 && (
+            {/* Display mode toggle - only show when there are positions to show */}
+            {positionFilter !== 'closed' && enrichedPositions.length > 0 && (
               <div className="flex gap-1 p-0.5 bg-argus-surface-2 rounded-md">
                 <button
                   onClick={() => setDisplayMode('table')}
@@ -439,15 +629,19 @@ export function OpenPositions() {
           <div className="mt-3 mb-2">
             <SegmentedTab
               segments={filterSegments}
-              activeValue={viewFilter}
-              onChange={(value) => setViewFilter(value as ViewFilter)}
+              activeValue={positionFilter}
+              onChange={(value) => setPositionFilter(value as 'all' | 'open' | 'closed')}
               size="sm"
               layoutId="positions-view-filter"
             />
           </div>
         </div>
 
-        {viewFilter === 'open' ? renderOpenPositions() : renderClosedTrades()}
+        {positionFilter === 'all'
+          ? renderAllPositions()
+          : positionFilter === 'open'
+          ? renderOpenPositions()
+          : renderClosedTrades()}
       </Card>
 
       {/* Trade detail panel - opens when clicking a closed trade on timeline */}
