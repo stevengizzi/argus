@@ -22,7 +22,7 @@ from argus.core.events import (
     TickEvent,
 )
 from argus.execution.order_manager import OrderManager
-from argus.models.trading import OrderResult, OrderStatus
+from argus.models.trading import BracketOrderResult, OrderResult, OrderStatus
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -37,7 +37,11 @@ def event_bus() -> EventBus:
 
 @pytest.fixture
 def mock_broker() -> MagicMock:
-    """Create a mock Broker with order tracking."""
+    """Create a mock Broker with order tracking.
+
+    Uses place_bracket_order for atomic entry+stop+targets submission (DEC-117).
+    Entry fills synchronously; stop/targets remain PENDING until market fills.
+    """
     broker = MagicMock()
     order_counter = {"count": 0}
 
@@ -49,7 +53,39 @@ def mock_broker() -> MagicMock:
             status=OrderStatus.SUBMITTED,
         )
 
+    def make_bracket_result(
+        entry: MagicMock, stop: MagicMock, targets: list[MagicMock]
+    ) -> BracketOrderResult:
+        """Simulate broker bracket order with synchronous entry fill."""
+        order_counter["count"] += 1
+        # Entry fills synchronously
+        entry_result = OrderResult(
+            order_id=entry.id,
+            broker_order_id=f"broker-entry-{order_counter['count']}",
+            status=OrderStatus.FILLED,
+            filled_quantity=entry.quantity,
+            filled_avg_price=150.0,
+        )
+        # Stop and targets remain pending
+        stop_result = OrderResult(
+            order_id=stop.id,
+            broker_order_id=f"broker-stop-{order_counter['count']}",
+            status=OrderStatus.PENDING,
+        )
+        target_results = [
+            OrderResult(
+                order_id=t.id,
+                broker_order_id=f"broker-t{i+1}-{order_counter['count']}",
+                status=OrderStatus.PENDING,
+            )
+            for i, t in enumerate(targets)
+        ]
+        return BracketOrderResult(
+            entry=entry_result, stop=stop_result, targets=target_results
+        )
+
     broker.place_order = AsyncMock(side_effect=make_order_result)
+    broker.place_bracket_order = AsyncMock(side_effect=make_bracket_result)
     broker.cancel_order = AsyncMock(return_value=True)
     return broker
 
@@ -123,39 +159,34 @@ async def test_t2_order_submitted_on_entry_fill(
     order_manager: OrderManager,
     mock_broker: MagicMock,
 ) -> None:
-    """T2 limit order submitted when entry fills with T2 target price."""
+    """T2 limit order submitted atomically via bracket order (DEC-117)."""
     await order_manager.start()
 
     # Submit signal with T1 and T2 targets
     approved = make_approved()
     await order_manager.on_approved(approved)
 
-    # Get entry order ID
-    entry_order = mock_broker.place_order.call_args_list[0][0][0]
-    entry_id = entry_order.id
+    # Verify: bracket order placed (entry+stop+T1+T2 atomic)
+    assert mock_broker.place_bracket_order.call_count == 1
+    bracket_call = mock_broker.place_bracket_order.call_args
+    target_orders = bracket_call[0][2]
 
-    # Simulate entry fill
-    fill = OrderFilledEvent(
-        order_id=entry_id,
-        fill_price=150.0,
-        fill_quantity=100,
-    )
-    await order_manager.on_fill(fill)
+    # Entry fills synchronously, position created immediately
+    positions = order_manager._managed_positions.get("AAPL", [])
+    assert len(positions) == 1
+    position = positions[0]
 
-    # Verify: 4 orders placed (entry, stop, T1, T2)
-    assert mock_broker.place_order.call_count == 4
-
-    # T2 order should be the 4th call
-    t2_order = mock_broker.place_order.call_args_list[3][0][0]
+    # T2 order should be the 2nd target in the bracket
+    assert len(target_orders) == 2
+    t2_order = target_orders[1]
     assert t2_order.symbol == "AAPL"
     assert t2_order.limit_price == 154.0  # T2 target
     assert t2_order.quantity == 50  # 50% of position (remaining after T1)
     assert str(t2_order.order_type) == "limit"
 
-    # Position should have t2_order_id set
-    positions = order_manager._managed_positions.get("AAPL", [])
-    assert len(positions) == 1
-    assert positions[0].t2_order_id is not None
+    # Position should have t2_order_id set from bracket result
+    assert position.t2_order_id is not None
+    assert position.t2_order_id == t2_order.id
 
     await order_manager.stop()
 
@@ -169,15 +200,11 @@ async def test_t2_fill_cancels_stop_and_closes(
     """T2 fill cancels stop order and closes position."""
     await order_manager.start()
 
-    # Setup position with entry fill
+    # Setup position via bracket order (entry fills synchronously)
     approved = make_approved()
     await order_manager.on_approved(approved)
-    entry_id = mock_broker.place_order.call_args_list[0][0][0].id
-    await order_manager.on_fill(
-        OrderFilledEvent(order_id=entry_id, fill_price=150.0, fill_quantity=100)
-    )
 
-    # Get position and T2 order ID
+    # Position created from bracket entry fill
     position = order_manager._managed_positions["AAPL"][0]
     t2_order_id = position.t2_order_id
 
@@ -217,14 +244,11 @@ async def test_t2_fill_records_correct_pnl(
     """T2 fill records correct P&L calculation."""
     await order_manager.start()
 
-    # Setup position
+    # Setup position via bracket order (entry fills synchronously)
     approved = make_approved()
     await order_manager.on_approved(approved)
-    entry_id = mock_broker.place_order.call_args_list[0][0][0].id
-    await order_manager.on_fill(
-        OrderFilledEvent(order_id=entry_id, fill_price=150.0, fill_quantity=100)
-    )
 
+    # Position created from bracket entry fill
     position = order_manager._managed_positions["AAPL"][0]
     t1_order_id = position.t1_order_id
     t2_order_id = position.t2_order_id
@@ -256,14 +280,11 @@ async def test_on_tick_skips_t2_when_broker_order_exists(
     """on_tick skips T2 monitoring when t2_order_id is set."""
     await order_manager.start()
 
-    # Setup position
+    # Setup position via bracket order (entry fills synchronously)
     approved = make_approved()
     await order_manager.on_approved(approved)
-    entry_id = mock_broker.place_order.call_args_list[0][0][0].id
-    await order_manager.on_fill(
-        OrderFilledEvent(order_id=entry_id, fill_price=150.0, fill_quantity=100)
-    )
 
+    # Position created from bracket entry fill
     position = order_manager._managed_positions["AAPL"][0]
     t1_order_id = position.t1_order_id
 
@@ -272,7 +293,7 @@ async def test_on_tick_skips_t2_when_broker_order_exists(
         OrderFilledEvent(order_id=t1_order_id, fill_price=152.0, fill_quantity=50)
     )
 
-    # Position has t2_order_id set from entry
+    # Position has t2_order_id set from bracket
     assert position.t2_order_id is not None
 
     # Reset mock to track new calls
@@ -299,15 +320,12 @@ async def test_on_tick_monitors_t2_when_no_broker_order(
     """on_tick monitors T2 when t2_order_id is None (Alpaca path)."""
     await order_manager.start()
 
-    # Setup position with T1+T2 targets
+    # Setup position via bracket order (entry fills synchronously)
     signal = make_signal(target_prices=(152.0, 154.0))
     approved = make_approved(signal=signal)
     await order_manager.on_approved(approved)
-    entry_id = mock_broker.place_order.call_args_list[0][0][0].id
-    await order_manager.on_fill(
-        OrderFilledEvent(order_id=entry_id, fill_price=150.0, fill_quantity=100)
-    )
 
+    # Position created from bracket entry fill
     position = order_manager._managed_positions["AAPL"][0]
     t1_order_id = position.t1_order_id
 
@@ -343,14 +361,11 @@ async def test_stop_fill_cancels_t2_order(
     """Stop fill cancels T2 order if still open."""
     await order_manager.start()
 
-    # Setup position
+    # Setup position via bracket order (entry fills synchronously)
     approved = make_approved()
     await order_manager.on_approved(approved)
-    entry_id = mock_broker.place_order.call_args_list[0][0][0].id
-    await order_manager.on_fill(
-        OrderFilledEvent(order_id=entry_id, fill_price=150.0, fill_quantity=100)
-    )
 
+    # Position created from bracket entry fill
     position = order_manager._managed_positions["AAPL"][0]
     stop_order_id = position.stop_order_id
     t2_order_id = position.t2_order_id
@@ -381,14 +396,11 @@ async def test_flatten_cancels_t2_order(
     """_flatten_position cancels T2 order."""
     await order_manager.start()
 
-    # Setup position
+    # Setup position via bracket order (entry fills synchronously)
     approved = make_approved()
     await order_manager.on_approved(approved)
-    entry_id = mock_broker.place_order.call_args_list[0][0][0].id
-    await order_manager.on_fill(
-        OrderFilledEvent(order_id=entry_id, fill_price=150.0, fill_quantity=100)
-    )
 
+    # Position created from bracket entry fill
     position = order_manager._managed_positions["AAPL"][0]
     t2_order_id = position.t2_order_id
 
@@ -410,7 +422,7 @@ async def test_t2_order_not_submitted_without_t2_price(
     order_manager: OrderManager,
     mock_broker: MagicMock,
 ) -> None:
-    """No T2 order submitted when target_prices has only T1."""
+    """No T2 order in bracket when target_prices has only T1."""
     await order_manager.start()
 
     # Signal with only T1 target
@@ -418,15 +430,13 @@ async def test_t2_order_not_submitted_without_t2_price(
     approved = make_approved(signal=signal)
     await order_manager.on_approved(approved)
 
-    entry_id = mock_broker.place_order.call_args_list[0][0][0].id
-    await order_manager.on_fill(
-        OrderFilledEvent(order_id=entry_id, fill_price=150.0, fill_quantity=100)
-    )
+    # Bracket order placed with only 1 target
+    assert mock_broker.place_bracket_order.call_count == 1
+    bracket_call = mock_broker.place_bracket_order.call_args
+    target_orders = bracket_call[0][2]
+    assert len(target_orders) == 1  # Only T1, no T2
 
-    # Only 3 orders: entry, stop, T1 (no T2)
-    assert mock_broker.place_order.call_count == 3
-
-    # Position should have no T2 order ID
+    # Position created from bracket entry fill (entry fills synchronously)
     position = order_manager._managed_positions["AAPL"][0]
     assert position.t2_order_id is None
     assert position.t2_price == 0.0

@@ -30,7 +30,7 @@ from argus.core.events import (
 from argus.execution.order_manager import (
     OrderManager,
 )
-from argus.models.trading import OrderResult, OrderStatus
+from argus.models.trading import BracketOrderResult, OrderResult, OrderStatus
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -45,9 +45,8 @@ def event_bus() -> EventBus:
 
 @pytest.fixture
 def mock_broker() -> MagicMock:
-    """Create a mock Broker."""
+    """Create a mock Broker with place_bracket_order() support (DEC-117)."""
     broker = MagicMock()
-    # Default: place_order returns a result with an order_id
     order_counter = {"count": 0}
 
     def make_order_result(order: MagicMock) -> OrderResult:
@@ -58,7 +57,45 @@ def mock_broker() -> MagicMock:
             status=OrderStatus.SUBMITTED,
         )
 
+    def make_bracket_result(
+        entry: MagicMock, stop: MagicMock, targets: list[MagicMock]
+    ) -> BracketOrderResult:
+        """Create a BracketOrderResult with order IDs for all components."""
+        order_counter["count"] += 1
+        entry_result = OrderResult(
+            order_id=entry.id,
+            broker_order_id=f"broker-entry-{order_counter['count']}",
+            status=OrderStatus.FILLED,  # SimulatedBroker fills entry synchronously
+            filled_quantity=entry.quantity,
+            filled_avg_price=150.0,  # Default fill price for tests
+        )
+
+        order_counter["count"] += 1
+        stop_result = OrderResult(
+            order_id=stop.id,
+            broker_order_id=f"broker-stop-{order_counter['count']}",
+            status=OrderStatus.PENDING,
+        )
+
+        target_results = []
+        for target in targets:
+            order_counter["count"] += 1
+            target_results.append(
+                OrderResult(
+                    order_id=target.id,
+                    broker_order_id=f"broker-target-{order_counter['count']}",
+                    status=OrderStatus.PENDING,
+                )
+            )
+
+        return BracketOrderResult(
+            entry=entry_result,
+            stop=stop_result,
+            targets=target_results,
+        )
+
     broker.place_order = AsyncMock(side_effect=make_order_result)
+    broker.place_bracket_order = AsyncMock(side_effect=make_bracket_result)
     broker.cancel_order = AsyncMock(return_value=True)
     return broker
 
@@ -128,22 +165,37 @@ def make_approved(
 
 
 @pytest.mark.asyncio
-async def test_submit_signal_places_entry_order(
+async def test_submit_signal_places_bracket_order(
     order_manager: OrderManager,
     mock_broker: MagicMock,
 ) -> None:
-    """OrderApprovedEvent → market order submitted to broker."""
+    """OrderApprovedEvent → bracket order submitted to broker (DEC-117)."""
     await order_manager.start()
 
     approved = make_approved()
     await order_manager.on_approved(approved)
 
-    # Verify broker.place_order was called
-    mock_broker.place_order.assert_called_once()
-    order = mock_broker.place_order.call_args[0][0]
-    assert order.symbol == "AAPL"
-    assert order.quantity == 100
-    assert str(order.order_type) == "market"
+    # Verify broker.place_bracket_order was called (not place_order)
+    mock_broker.place_bracket_order.assert_called_once()
+    entry, stop, targets = mock_broker.place_bracket_order.call_args[0]
+
+    # Verify entry order
+    assert entry.symbol == "AAPL"
+    assert entry.quantity == 100
+    assert str(entry.order_type) == "market"
+
+    # Verify stop order
+    assert stop.symbol == "AAPL"
+    assert stop.quantity == 100
+    assert str(stop.order_type) == "stop"
+    assert stop.stop_price == 148.0
+
+    # Verify targets (T1 and T2)
+    assert len(targets) == 2
+    assert targets[0].quantity == 50  # T1: 50% of 100
+    assert targets[0].limit_price == 152.0
+    assert targets[1].quantity == 50  # T2: remaining 50%
+    assert targets[1].limit_price == 154.0
 
     await order_manager.stop()
 
@@ -153,22 +205,14 @@ async def test_entry_fill_creates_managed_position(
     order_manager: OrderManager,
     mock_broker: MagicMock,
 ) -> None:
-    """Fill event → ManagedPosition created, stop + T1 orders placed."""
+    """Fill event → ManagedPosition created with bracket order IDs (DEC-117)."""
     await order_manager.start()
 
     approved = make_approved()
     await order_manager.on_approved(approved)
 
-    # Get the entry order ID
-    entry_order_id = mock_broker.place_order.call_args[0][0].id
-
-    # Simulate fill
-    fill_event = OrderFilledEvent(
-        order_id=entry_order_id,
-        fill_price=150.0,
-        fill_quantity=100,
-    )
-    await order_manager.on_fill(fill_event)
+    # Entry is handled synchronously via bracket_result.entry.status == FILLED
+    # Position should already be created
 
     # Verify position was created
     assert "AAPL" in order_manager._managed_positions
@@ -178,8 +222,14 @@ async def test_entry_fill_creates_managed_position(
     assert positions[0].shares_total == 100
     assert positions[0].shares_remaining == 100
 
-    # Verify stop + T1 + T2 orders placed (3 more calls after entry)
-    assert mock_broker.place_order.call_count == 4
+    # Verify bracket order IDs are set on position (DEC-117)
+    assert positions[0].stop_order_id is not None
+    assert positions[0].t1_order_id is not None
+    assert positions[0].t2_order_id is not None
+
+    # No separate place_order calls for stop/T1/T2 — they're in the bracket
+    assert mock_broker.place_order.call_count == 0
+    assert mock_broker.place_bracket_order.call_count == 1
 
     await order_manager.stop()
 
@@ -193,18 +243,11 @@ async def test_t1_fill_moves_stop_to_breakeven(
     """T1 fill → old stop cancelled, new stop at entry + buffer."""
     await order_manager.start()
 
-    # Setup position via entry fill
+    # Setup position via bracket order (DEC-117)
     approved = make_approved()
     await order_manager.on_approved(approved)
-    entry_order_id = mock_broker.place_order.call_args[0][0].id
 
-    fill_event = OrderFilledEvent(
-        order_id=entry_order_id,
-        fill_price=150.0,
-        fill_quantity=100,
-    )
-    await order_manager.on_fill(fill_event)
-
+    # Position created via synchronous fill from bracket result
     position = order_manager._managed_positions["AAPL"][0]
     t1_order_id = position.t1_order_id
 
@@ -226,6 +269,12 @@ async def test_t1_fill_moves_stop_to_breakeven(
     expected_breakeven = 150.0 * (1 + config.breakeven_buffer_pct)
     assert abs(position.stop_price - expected_breakeven) < 0.01
 
+    # Verify new stop order placed via place_order (stop-to-breakeven)
+    assert mock_broker.place_order.call_count == 1
+    new_stop_order = mock_broker.place_order.call_args[0][0]
+    assert str(new_stop_order.order_type) == "stop"
+    assert abs(new_stop_order.stop_price - expected_breakeven) < 0.01
+
     await order_manager.stop()
 
 
@@ -235,21 +284,14 @@ async def test_t2_reached_closes_remaining(
     mock_broker: MagicMock,
     event_bus: EventBus,
 ) -> None:
-    """Tick at/above T2 → remaining shares closed."""
+    """Tick at/above T2 → remaining shares closed (when no broker-side T2)."""
     await order_manager.start()
 
-    # Setup position via entry fill
+    # Setup position via bracket order (DEC-117)
     approved = make_approved()
     await order_manager.on_approved(approved)
-    entry_order_id = mock_broker.place_order.call_args[0][0].id
 
-    fill_event = OrderFilledEvent(
-        order_id=entry_order_id,
-        fill_price=150.0,
-        fill_quantity=100,
-    )
-    await order_manager.on_fill(fill_event)
-
+    # Position created via synchronous fill from bracket result
     position = order_manager._managed_positions["AAPL"][0]
     t1_order_id = position.t1_order_id
 
@@ -265,7 +307,7 @@ async def test_t2_reached_closes_remaining(
     # This tests the tick-based T2 monitoring fallback
     position.t2_order_id = None
 
-    # Reset mock to track new calls
+    # Reset mock to track new calls (place_order was called for stop-to-breakeven)
     mock_broker.place_order.reset_mock()
 
     # Simulate tick at T2 price
@@ -298,18 +340,11 @@ async def test_stop_fill_closes_position(
 
     await order_manager.start()
 
-    # Setup position
+    # Setup position via bracket order (DEC-117)
     approved = make_approved()
     await order_manager.on_approved(approved)
-    entry_order_id = mock_broker.place_order.call_args[0][0].id
 
-    fill_event = OrderFilledEvent(
-        order_id=entry_order_id,
-        fill_price=150.0,
-        fill_quantity=100,
-    )
-    await order_manager.on_fill(fill_event)
-
+    # Position created via synchronous fill from bracket result
     position = order_manager._managed_positions["AAPL"][0]
     stop_order_id = position.stop_order_id
 
@@ -344,18 +379,11 @@ async def test_full_lifecycle_t1_then_stop(
     event_bus.subscribe(PositionClosedEvent, handler)
     await order_manager.start()
 
-    # Entry
+    # Setup position via bracket order (DEC-117)
     approved = make_approved()
     await order_manager.on_approved(approved)
-    entry_order_id = mock_broker.place_order.call_args[0][0].id
 
-    fill_event = OrderFilledEvent(
-        order_id=entry_order_id,
-        fill_price=150.0,
-        fill_quantity=100,
-    )
-    await order_manager.on_fill(fill_event)
-
+    # Position created via synchronous fill from bracket result
     position = order_manager._managed_positions["AAPL"][0]
     t1_order_id = position.t1_order_id
 
@@ -404,18 +432,11 @@ async def test_full_lifecycle_t1_then_t2(
     event_bus.subscribe(PositionClosedEvent, handler)
     await order_manager.start()
 
-    # Entry
+    # Setup position via bracket order (DEC-117)
     approved = make_approved()
     await order_manager.on_approved(approved)
-    entry_order_id = mock_broker.place_order.call_args[0][0].id
 
-    fill_event = OrderFilledEvent(
-        order_id=entry_order_id,
-        fill_price=150.0,
-        fill_quantity=100,
-    )
-    await order_manager.on_fill(fill_event)
-
+    # Position created via synchronous fill from bracket result
     position = order_manager._managed_positions["AAPL"][0]
     t1_order_id = position.t1_order_id
 
@@ -426,6 +447,9 @@ async def test_full_lifecycle_t1_then_t2(
         fill_quantity=50,
     )
     await order_manager.on_fill(t1_fill)
+
+    # Clear T2 order ID to test tick-based T2 monitoring
+    position.t2_order_id = None
 
     # Tick at T2 triggers flatten
     tick = TickEvent(symbol="AAPL", price=154.0, volume=1000)
@@ -467,52 +491,103 @@ async def test_t1_shares_are_half_of_total(
     """Verify T1 limit order is for 50% of entry shares."""
     await order_manager.start()
 
+    # Setup position via bracket order (DEC-117)
     approved = make_approved()
     await order_manager.on_approved(approved)
-    entry_order_id = mock_broker.place_order.call_args[0][0].id
 
-    fill_event = OrderFilledEvent(
-        order_id=entry_order_id,
-        fill_price=150.0,
-        fill_quantity=100,
-    )
-    await order_manager.on_fill(fill_event)
-
+    # Position created via synchronous fill from bracket result
     position = order_manager._managed_positions["AAPL"][0]
 
     # T1 shares should be 50% of 100 = 50
     expected_t1_shares = int(100 * config.t1_position_pct)
     assert position.t1_shares == expected_t1_shares
 
+    # Verify T1 order in bracket has correct quantity
+    _, _, targets = mock_broker.place_bracket_order.call_args[0]
+    assert targets[0].quantity == expected_t1_shares
+
     await order_manager.stop()
 
 
 @pytest.mark.asyncio
 async def test_partial_entry_adjusts_t1_shares(
-    order_manager: OrderManager,
-    mock_broker: MagicMock,
+    event_bus: EventBus,
+    fixed_clock: FixedClock,
+    config: OrderManagerConfig,
 ) -> None:
     """80 of 100 shares fill → T1 for 40."""
-    await order_manager.start()
+    # Create a custom mock broker that returns partial fill
+    mock_broker = MagicMock()
+    order_counter = {"count": 0}
+
+    def make_order_result(order: MagicMock) -> OrderResult:
+        order_counter["count"] += 1
+        return OrderResult(
+            order_id=order.id,
+            broker_order_id=f"broker-{order_counter['count']}",
+            status=OrderStatus.SUBMITTED,
+        )
+
+    def make_partial_bracket_result(
+        entry: MagicMock, stop: MagicMock, targets: list[MagicMock]
+    ) -> BracketOrderResult:
+        """Create a BracketOrderResult with partial entry fill (80 shares)."""
+        order_counter["count"] += 1
+        entry_result = OrderResult(
+            order_id=entry.id,
+            broker_order_id=f"broker-entry-{order_counter['count']}",
+            status=OrderStatus.FILLED,
+            filled_quantity=80,  # Partial fill
+            filled_avg_price=150.0,
+        )
+
+        order_counter["count"] += 1
+        stop_result = OrderResult(
+            order_id=stop.id,
+            broker_order_id=f"broker-stop-{order_counter['count']}",
+            status=OrderStatus.PENDING,
+        )
+
+        target_results = []
+        for target in targets:
+            order_counter["count"] += 1
+            target_results.append(
+                OrderResult(
+                    order_id=target.id,
+                    broker_order_id=f"broker-target-{order_counter['count']}",
+                    status=OrderStatus.PENDING,
+                )
+            )
+
+        return BracketOrderResult(
+            entry=entry_result,
+            stop=stop_result,
+            targets=target_results,
+        )
+
+    mock_broker.place_order = AsyncMock(side_effect=make_order_result)
+    mock_broker.place_bracket_order = AsyncMock(side_effect=make_partial_bracket_result)
+    mock_broker.cancel_order = AsyncMock(return_value=True)
+
+    om = OrderManager(
+        event_bus=event_bus,
+        broker=mock_broker,
+        clock=fixed_clock,
+        config=config,
+    )
+
+    await om.start()
 
     approved = make_approved()
-    await order_manager.on_approved(approved)
-    entry_order_id = mock_broker.place_order.call_args[0][0].id
+    await om.on_approved(approved)
 
-    # Only 80 shares filled
-    fill_event = OrderFilledEvent(
-        order_id=entry_order_id,
-        fill_price=150.0,
-        fill_quantity=80,
-    )
-    await order_manager.on_fill(fill_event)
-
-    position = order_manager._managed_positions["AAPL"][0]
+    # Position created with 80 shares (partial fill)
+    position = om._managed_positions["AAPL"][0]
 
     # T1 shares should be 50% of 80 = 40
     assert position.t1_shares == 40
 
-    await order_manager.stop()
+    await om.stop()
 
 
 # ---------------------------------------------------------------------------
@@ -530,17 +605,11 @@ async def test_time_stop_closes_position(
     """Position open > max_duration → fallback_poll closes it."""
     await order_manager.start()
 
-    # Setup position
+    # Setup position via bracket order (DEC-117)
     approved = make_approved()
     await order_manager.on_approved(approved)
-    entry_order_id = mock_broker.place_order.call_args[0][0].id
 
-    fill_event = OrderFilledEvent(
-        order_id=entry_order_id,
-        fill_price=150.0,
-        fill_quantity=100,
-    )
-    await order_manager.on_fill(fill_event)
+    # Position created via synchronous fill from bracket result
 
     # Stop the poll task to manually control timing
     await order_manager.stop()
@@ -592,24 +661,19 @@ async def test_eod_flatten_closes_all_positions(
 
     await om.start()
 
-    # Setup position
+    # Setup position via bracket order (DEC-117)
     approved = make_approved()
     await om.on_approved(approved)
-    entry_order_id = mock_broker.place_order.call_args[0][0].id
 
-    fill_event = OrderFilledEvent(
-        order_id=entry_order_id,
-        fill_price=150.0,
-        fill_quantity=100,
-    )
-    await om.on_fill(fill_event)
+    # Position created via synchronous fill from bracket result
 
     # Manually trigger EOD flatten check
     await om.eod_flatten()
 
-    # Verify flatten order placed
-    # Entry + stop + T1 + flatten = 4 calls
-    assert mock_broker.place_order.call_count >= 4
+    # Verify flatten order placed via place_order (not bracket)
+    # Bracket order submitted first, then flatten order
+    assert mock_broker.place_bracket_order.call_count == 1
+    assert mock_broker.place_order.call_count >= 1  # Flatten order
 
     await om.stop()
 
@@ -646,17 +710,11 @@ async def test_emergency_flatten_closes_everything(
     """Immediate close all."""
     await order_manager.start()
 
-    # Setup position
+    # Setup position via bracket order (DEC-117)
     approved = make_approved()
     await order_manager.on_approved(approved)
-    entry_order_id = mock_broker.place_order.call_args[0][0].id
 
-    fill_event = OrderFilledEvent(
-        order_id=entry_order_id,
-        fill_price=150.0,
-        fill_quantity=100,
-    )
-    await order_manager.on_fill(fill_event)
+    # Position created via synchronous fill from bracket result
 
     mock_broker.place_order.reset_mock()
 
@@ -678,23 +736,17 @@ async def test_emergency_flatten_cancels_open_orders(
     """All pending orders cancelled first."""
     await order_manager.start()
 
-    # Setup position
+    # Setup position via bracket order (DEC-117)
     approved = make_approved()
     await order_manager.on_approved(approved)
-    entry_order_id = mock_broker.place_order.call_args[0][0].id
 
-    fill_event = OrderFilledEvent(
-        order_id=entry_order_id,
-        fill_price=150.0,
-        fill_quantity=100,
-    )
-    await order_manager.on_fill(fill_event)
+    # Position created via synchronous fill from bracket result
 
     mock_broker.cancel_order.reset_mock()
 
     await order_manager.emergency_flatten()
 
-    # Verify cancel was called for stop and T1
+    # Verify cancel was called for stop and T1 (and T2)
     assert mock_broker.cancel_order.call_count >= 1
 
     await order_manager.stop()
@@ -706,67 +758,110 @@ async def test_emergency_flatten_cancels_open_orders(
 
 
 @pytest.mark.asyncio
-async def test_stop_order_failure_retries(
+async def test_stop_to_breakeven_failure_retries(
     order_manager: OrderManager,
     mock_broker: MagicMock,
 ) -> None:
-    """If stop order fails, retry once."""
+    """If stop-to-breakeven order fails, retry once (DEC-117)."""
     await order_manager.start()
 
+    # Setup position via bracket order
     approved = make_approved()
     await order_manager.on_approved(approved)
-    entry_order_id = mock_broker.place_order.call_args[0][0].id
 
-    # Make stop order fail first, succeed second
+    # Position created via synchronous fill from bracket result
+    position = order_manager._managed_positions["AAPL"][0]
+    t1_order_id = position.t1_order_id
+
+    # Make stop order fail first, succeed second (for stop-to-breakeven)
     call_count = {"n": 0}
     original_place_order = mock_broker.place_order.side_effect
 
     async def flaky_place_order(order: MagicMock) -> OrderResult:
         call_count["n"] += 1
-        # First call is entry, second is stop (fail), third is retry
-        if call_count["n"] == 2:
+        # First call is stop-to-breakeven (fail), second is retry
+        if call_count["n"] == 1:
             raise Exception("Simulated stop order failure")
         return await original_place_order(order)
 
     mock_broker.place_order.side_effect = flaky_place_order
 
-    fill_event = OrderFilledEvent(
-        order_id=entry_order_id,
-        fill_price=150.0,
-        fill_quantity=100,
+    # T1 fill triggers stop-to-breakeven
+    t1_fill = OrderFilledEvent(
+        order_id=t1_order_id,
+        fill_price=152.0,
+        fill_quantity=50,
     )
-    await order_manager.on_fill(fill_event)
+    await order_manager.on_fill(t1_fill)
 
-    # Should have retried stop (entry, fail, retry, T1 = 4 calls)
-    assert mock_broker.place_order.call_count >= 3
+    # Should have retried stop (fail, retry = 2 calls)
+    assert mock_broker.place_order.call_count >= 2
 
     await order_manager.stop()
 
 
 @pytest.mark.asyncio
-async def test_stop_order_failure_after_retry_flattens(
+async def test_stop_to_breakeven_failure_after_retry_flattens(
     event_bus: EventBus,
     fixed_clock: FixedClock,
 ) -> None:
-    """If retry also fails, emergency flatten."""
+    """If stop-to-breakeven retry also fails, emergency flatten (DEC-117)."""
     # Create a fresh mock broker with custom behavior
     mock_broker = MagicMock()
-    call_count = {"n": 0}
+    order_counter = {"n": 0}
     placed_orders: list = []
 
+    def make_bracket_result(
+        entry: MagicMock, stop: MagicMock, targets: list[MagicMock]
+    ) -> BracketOrderResult:
+        """Create a BracketOrderResult with filled entry."""
+        order_counter["n"] += 1
+        entry_result = OrderResult(
+            order_id=entry.id,
+            broker_order_id=f"broker-entry-{order_counter['n']}",
+            status=OrderStatus.FILLED,
+            filled_quantity=entry.quantity,
+            filled_avg_price=150.0,
+        )
+
+        order_counter["n"] += 1
+        stop_result = OrderResult(
+            order_id=stop.id,
+            broker_order_id=f"broker-stop-{order_counter['n']}",
+            status=OrderStatus.PENDING,
+        )
+
+        target_results = []
+        for target in targets:
+            order_counter["n"] += 1
+            target_results.append(
+                OrderResult(
+                    order_id=target.id,
+                    broker_order_id=f"broker-target-{order_counter['n']}",
+                    status=OrderStatus.PENDING,
+                )
+            )
+
+        return BracketOrderResult(
+            entry=entry_result,
+            stop=stop_result,
+            targets=target_results,
+        )
+
     async def track_and_fail_stops(order: MagicMock) -> OrderResult:
-        call_count["n"] += 1
+        order_counter["n"] += 1
         placed_orders.append(order)
-        # Fail all stop orders
+        # Fail all stop orders (for stop-to-breakeven)
         if str(order.order_type) == "stop":
             raise Exception("Stop always fails")
-        # Success for market orders (entry, flatten)
+        # Success for market orders (flatten)
         return OrderResult(
             order_id=order.id,
-            broker_order_id=f"broker-{call_count['n']}",
+            broker_order_id=f"broker-{order_counter['n']}",
             status=OrderStatus.SUBMITTED,
         )
 
+    mock_broker.place_bracket_order = AsyncMock(side_effect=make_bracket_result)
     mock_broker.place_order = AsyncMock(side_effect=track_and_fail_stops)
     mock_broker.cancel_order = AsyncMock(return_value=True)
 
@@ -780,21 +875,26 @@ async def test_stop_order_failure_after_retry_flattens(
 
     await om.start()
 
+    # Setup position via bracket order
     approved = make_approved()
     await om.on_approved(approved)
-    entry_order_id = placed_orders[0].id
 
-    fill_event = OrderFilledEvent(
-        order_id=entry_order_id,
-        fill_price=150.0,
-        fill_quantity=100,
+    # Position created via synchronous fill from bracket result
+    position = om._managed_positions["AAPL"][0]
+    t1_order_id = position.t1_order_id
+
+    # T1 fill triggers stop-to-breakeven (which will fail)
+    t1_fill = OrderFilledEvent(
+        order_id=t1_order_id,
+        fill_price=152.0,
+        fill_quantity=50,
     )
-    await om.on_fill(fill_event)
+    await om.on_fill(t1_fill)
 
-    # After stop fails twice (initial + 1 retry), should flatten
-    # Check placed orders: entry (market), stop (fail), retry (fail), flatten (market)
+    # After stop-to-breakeven fails twice (initial + 1 retry), should flatten
+    # Check placed orders: stop (fail), retry (fail), flatten (market)
     market_orders = [o for o in placed_orders if str(o.order_type) == "market"]
-    assert len(market_orders) >= 2  # Entry + flatten
+    assert len(market_orders) >= 1  # Flatten
 
     await om.stop()
 
@@ -849,17 +949,11 @@ async def test_stop_fills_before_t1_cancels_t1(
     """Stop triggered → T1 cancelled."""
     await order_manager.start()
 
+    # Setup position via bracket order (DEC-117)
     approved = make_approved()
     await order_manager.on_approved(approved)
-    entry_order_id = mock_broker.place_order.call_args[0][0].id
 
-    fill_event = OrderFilledEvent(
-        order_id=entry_order_id,
-        fill_price=150.0,
-        fill_quantity=100,
-    )
-    await order_manager.on_fill(fill_event)
-
+    # Position created via synchronous fill from bracket result
     position = order_manager._managed_positions["AAPL"][0]
     stop_order_id = position.stop_order_id
     t1_order_id = position.t1_order_id
@@ -909,17 +1003,11 @@ async def test_position_tracking_after_full_close(
     """After close, symbol removed from managed positions."""
     await order_manager.start()
 
+    # Setup position via bracket order (DEC-117)
     approved = make_approved()
     await order_manager.on_approved(approved)
-    entry_order_id = mock_broker.place_order.call_args[0][0].id
 
-    fill_event = OrderFilledEvent(
-        order_id=entry_order_id,
-        fill_price=150.0,
-        fill_quantity=100,
-    )
-    await order_manager.on_fill(fill_event)
-
+    # Position created via synchronous fill from bracket result
     position = order_manager._managed_positions["AAPL"][0]
     stop_order_id = position.stop_order_id
 
@@ -977,18 +1065,12 @@ async def test_publishes_position_opened_event(
     event_bus.subscribe(PositionOpenedEvent, handler)
     await order_manager.start()
 
+    # Setup position via bracket order (DEC-117)
     approved = make_approved()
     await order_manager.on_approved(approved)
-    entry_order_id = mock_broker.place_order.call_args[0][0].id
-
-    fill_event = OrderFilledEvent(
-        order_id=entry_order_id,
-        fill_price=150.0,
-        fill_quantity=100,
-    )
-    await order_manager.on_fill(fill_event)
     await event_bus.drain()
 
+    # Position created via synchronous fill from bracket result
     assert len(opened_events) == 1
     assert opened_events[0].symbol == "AAPL"
     assert opened_events[0].entry_price == 150.0
@@ -1011,17 +1093,11 @@ async def test_publishes_position_closed_event(
     event_bus.subscribe(PositionClosedEvent, handler)
     await order_manager.start()
 
+    # Setup position via bracket order (DEC-117)
     approved = make_approved()
     await order_manager.on_approved(approved)
-    entry_order_id = mock_broker.place_order.call_args[0][0].id
 
-    fill_event = OrderFilledEvent(
-        order_id=entry_order_id,
-        fill_price=150.0,
-        fill_quantity=100,
-    )
-    await order_manager.on_fill(fill_event)
-
+    # Position created via synchronous fill from bracket result
     position = order_manager._managed_positions["AAPL"][0]
     stop_order_id = position.stop_order_id
 
@@ -1048,17 +1124,11 @@ async def test_circuit_breaker_triggers_emergency_flatten(
     """CircuitBreakerEvent triggers emergency flatten."""
     await order_manager.start()
 
-    # Setup position
+    # Setup position via bracket order (DEC-117)
     approved = make_approved()
     await order_manager.on_approved(approved)
-    entry_order_id = mock_broker.place_order.call_args[0][0].id
 
-    fill_event = OrderFilledEvent(
-        order_id=entry_order_id,
-        fill_price=150.0,
-        fill_quantity=100,
-    )
-    await order_manager.on_fill(fill_event)
+    # Position created via synchronous fill from bracket result
 
     mock_broker.place_order.reset_mock()
 
@@ -1200,7 +1270,7 @@ async def test_trade_record_stores_original_stop_price(
 
     await order_manager.start()
 
-    # Create signal with specific stop at 148.0
+    # Setup position via bracket order (DEC-117)
     signal = make_signal(
         entry_price=150.0,
         stop_price=148.0,  # Original stop below entry
@@ -1208,15 +1278,8 @@ async def test_trade_record_stores_original_stop_price(
     )
     approved = make_approved(signal=signal)
     await order_manager.on_approved(approved)
-    entry_order_id = mock_broker.place_order.call_args[0][0].id
 
-    fill_event = OrderFilledEvent(
-        order_id=entry_order_id,
-        fill_price=150.0,
-        fill_quantity=100,
-    )
-    await order_manager.on_fill(fill_event)
-
+    # Position created via synchronous fill from bracket result
     position = order_manager._managed_positions["AAPL"][0]
     t1_order_id = position.t1_order_id
 
@@ -1255,29 +1318,82 @@ async def test_trade_record_stores_original_stop_price(
 
 @pytest.mark.asyncio
 async def test_stop_to_breakeven_does_not_corrupt_original_stop(
-    order_manager: OrderManager,
-    mock_broker: MagicMock,
+    event_bus: EventBus,
+    fixed_clock: FixedClock,
     config: OrderManagerConfig,
 ) -> None:
     """original_stop_price field persists unchanged after stop-to-breakeven."""
-    await order_manager.start()
+    # Create a custom mock broker with stop at 95.0
+    mock_broker = MagicMock()
+    order_counter = {"n": 0}
+
+    def make_order_result(order: MagicMock) -> OrderResult:
+        order_counter["n"] += 1
+        return OrderResult(
+            order_id=order.id,
+            broker_order_id=f"broker-{order_counter['n']}",
+            status=OrderStatus.SUBMITTED,
+        )
+
+    def make_bracket_result(
+        entry: MagicMock, stop: MagicMock, targets: list[MagicMock]
+    ) -> BracketOrderResult:
+        """Create a BracketOrderResult with entry fill at 100.0."""
+        order_counter["n"] += 1
+        entry_result = OrderResult(
+            order_id=entry.id,
+            broker_order_id=f"broker-entry-{order_counter['n']}",
+            status=OrderStatus.FILLED,
+            filled_quantity=entry.quantity,
+            filled_avg_price=100.0,  # Fill at 100.0
+        )
+
+        order_counter["n"] += 1
+        stop_result = OrderResult(
+            order_id=stop.id,
+            broker_order_id=f"broker-stop-{order_counter['n']}",
+            status=OrderStatus.PENDING,
+        )
+
+        target_results = []
+        for target in targets:
+            order_counter["n"] += 1
+            target_results.append(
+                OrderResult(
+                    order_id=target.id,
+                    broker_order_id=f"broker-target-{order_counter['n']}",
+                    status=OrderStatus.PENDING,
+                )
+            )
+
+        return BracketOrderResult(
+            entry=entry_result,
+            stop=stop_result,
+            targets=target_results,
+        )
+
+    mock_broker.place_order = AsyncMock(side_effect=make_order_result)
+    mock_broker.place_bracket_order = AsyncMock(side_effect=make_bracket_result)
+    mock_broker.cancel_order = AsyncMock(return_value=True)
+
+    om = OrderManager(
+        event_bus=event_bus,
+        broker=mock_broker,
+        clock=fixed_clock,
+        config=config,
+    )
+
+    await om.start()
 
     signal = make_signal(
         entry_price=100.0,
         stop_price=95.0,  # 5% below entry
     )
     approved = make_approved(signal=signal)
-    await order_manager.on_approved(approved)
-    entry_order_id = mock_broker.place_order.call_args[0][0].id
+    await om.on_approved(approved)
 
-    fill_event = OrderFilledEvent(
-        order_id=entry_order_id,
-        fill_price=100.0,
-        fill_quantity=100,
-    )
-    await order_manager.on_fill(fill_event)
-
-    position = order_manager._managed_positions["AAPL"][0]
+    # Position created via synchronous fill from bracket result
+    position = om._managed_positions["AAPL"][0]
 
     # Before T1: both stops are original
     assert position.stop_price == 95.0
@@ -1289,14 +1405,14 @@ async def test_stop_to_breakeven_does_not_corrupt_original_stop(
         fill_price=102.0,
         fill_quantity=50,
     )
-    await order_manager.on_fill(t1_fill)
+    await om.on_fill(t1_fill)
 
     # After T1: current stop moved, original preserved
     expected_breakeven = 100.0 * (1 + config.breakeven_buffer_pct)
     assert abs(position.stop_price - expected_breakeven) < 0.01
     assert position.original_stop_price == 95.0  # Unchanged!
 
-    await order_manager.stop()
+    await om.stop()
 
 
 @pytest.mark.asyncio
@@ -1315,22 +1431,15 @@ async def test_pnl_calculation_long_trade_loss(
 
     await order_manager.start()
 
-    # Entry at 150, stop at 145
+    # Setup position via bracket order (DEC-117)
     signal = make_signal(
         entry_price=150.0,
         stop_price=145.0,
     )
     approved = make_approved(signal=signal)
     await order_manager.on_approved(approved)
-    entry_order_id = mock_broker.place_order.call_args[0][0].id
 
-    fill_event = OrderFilledEvent(
-        order_id=entry_order_id,
-        fill_price=150.0,
-        fill_quantity=100,
-    )
-    await order_manager.on_fill(fill_event)
-
+    # Position created via synchronous fill from bracket result
     position = order_manager._managed_positions["AAPL"][0]
     stop_order_id = position.stop_order_id
 
@@ -1367,6 +1476,7 @@ async def test_pnl_calculation_long_trade_win(
 
     await order_manager.start()
 
+    # Setup position via bracket order (DEC-117)
     signal = make_signal(
         entry_price=150.0,
         stop_price=145.0,
@@ -1374,15 +1484,8 @@ async def test_pnl_calculation_long_trade_win(
     )
     approved = make_approved(signal=signal)
     await order_manager.on_approved(approved)
-    entry_order_id = mock_broker.place_order.call_args[0][0].id
 
-    fill_event = OrderFilledEvent(
-        order_id=entry_order_id,
-        fill_price=150.0,
-        fill_quantity=100,
-    )
-    await order_manager.on_fill(fill_event)
-
+    # Position created via synchronous fill from bracket result
     position = order_manager._managed_positions["AAPL"][0]
     t1_order_id = position.t1_order_id
 
@@ -1417,18 +1520,78 @@ async def test_pnl_calculation_long_trade_win(
 
 @pytest.mark.asyncio
 async def test_exit_price_reflects_weighted_average_after_t1(
-    order_manager: OrderManager,
-    mock_broker: MagicMock,
     event_bus: EventBus,
+    fixed_clock: FixedClock,
+    config: OrderManagerConfig,
 ) -> None:
     """When T1 hits before stop, exit_price is weighted average, not last fill."""
+    # Create a custom mock broker with fill at 100.0
+    mock_broker = MagicMock()
+    order_counter = {"n": 0}
+
+    def make_order_result(order: MagicMock) -> OrderResult:
+        order_counter["n"] += 1
+        return OrderResult(
+            order_id=order.id,
+            broker_order_id=f"broker-{order_counter['n']}",
+            status=OrderStatus.SUBMITTED,
+        )
+
+    def make_bracket_result(
+        entry: MagicMock, stop: MagicMock, targets: list[MagicMock]
+    ) -> BracketOrderResult:
+        """Create a BracketOrderResult with entry fill at 100.0."""
+        order_counter["n"] += 1
+        entry_result = OrderResult(
+            order_id=entry.id,
+            broker_order_id=f"broker-entry-{order_counter['n']}",
+            status=OrderStatus.FILLED,
+            filled_quantity=entry.quantity,
+            filled_avg_price=100.0,  # Fill at 100.0
+        )
+
+        order_counter["n"] += 1
+        stop_result = OrderResult(
+            order_id=stop.id,
+            broker_order_id=f"broker-stop-{order_counter['n']}",
+            status=OrderStatus.PENDING,
+        )
+
+        target_results = []
+        for target in targets:
+            order_counter["n"] += 1
+            target_results.append(
+                OrderResult(
+                    order_id=target.id,
+                    broker_order_id=f"broker-target-{order_counter['n']}",
+                    status=OrderStatus.PENDING,
+                )
+            )
+
+        return BracketOrderResult(
+            entry=entry_result,
+            stop=stop_result,
+            targets=target_results,
+        )
+
+    mock_broker.place_order = AsyncMock(side_effect=make_order_result)
+    mock_broker.place_bracket_order = AsyncMock(side_effect=make_bracket_result)
+    mock_broker.cancel_order = AsyncMock(return_value=True)
+
+    om = OrderManager(
+        event_bus=event_bus,
+        broker=mock_broker,
+        clock=fixed_clock,
+        config=config,
+    )
+
     logged_trades: list = []
 
     class MockTradeLogger:
         async def log_trade(self, trade):
             logged_trades.append(trade)
 
-    order_manager._trade_logger = MockTradeLogger()
+    om._trade_logger = MockTradeLogger()
 
     closed_events: list[PositionClosedEvent] = []
 
@@ -1437,7 +1600,7 @@ async def test_exit_price_reflects_weighted_average_after_t1(
 
     event_bus.subscribe(PositionClosedEvent, handler)
 
-    await order_manager.start()
+    await om.start()
 
     signal = make_signal(
         entry_price=100.0,
@@ -1446,17 +1609,10 @@ async def test_exit_price_reflects_weighted_average_after_t1(
         share_count=100,
     )
     approved = make_approved(signal=signal)
-    await order_manager.on_approved(approved)
-    entry_order_id = mock_broker.place_order.call_args[0][0].id
+    await om.on_approved(approved)
 
-    fill_event = OrderFilledEvent(
-        order_id=entry_order_id,
-        fill_price=100.0,
-        fill_quantity=100,
-    )
-    await order_manager.on_fill(fill_event)
-
-    position = order_manager._managed_positions["AAPL"][0]
+    # Position created via synchronous fill from bracket result
+    position = om._managed_positions["AAPL"][0]
     t1_order_id = position.t1_order_id
 
     # T1 fills: 50 shares at 110
@@ -1465,7 +1621,7 @@ async def test_exit_price_reflects_weighted_average_after_t1(
         fill_price=110.0,
         fill_quantity=50,
     )
-    await order_manager.on_fill(t1_fill)
+    await om.on_fill(t1_fill)
 
     # Stop fills: 50 shares at 98 (below entry, but after T1 profit)
     new_stop_id = position.stop_order_id
@@ -1474,7 +1630,7 @@ async def test_exit_price_reflects_weighted_average_after_t1(
         fill_price=98.0,
         fill_quantity=50,
     )
-    await order_manager.on_fill(stop_fill)
+    await om.on_fill(stop_fill)
     await event_bus.drain()
 
     # Calculate expected values:
@@ -1494,4 +1650,4 @@ async def test_exit_price_reflects_weighted_average_after_t1(
     # Key test: exit_price (104) > entry (100), consistent with positive P&L
     # Previously it would show 98 (last fill) which was inconsistent with +400 P&L
 
-    await order_manager.stop()
+    await om.stop()

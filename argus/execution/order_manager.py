@@ -96,8 +96,12 @@ class PendingManagedOrder:
     symbol: str
     strategy_id: str
     order_type: str  # "entry", "stop", "t1_target", "t2", "flatten"
-    shares: int  # Expected fill quantity
+    shares: int = 0  # Expected fill quantity
     signal: Any = field(default=None)  # OrderApprovedEvent (for reference)
+    # Bracket order IDs (set when entry is part of a bracket, DEC-117)
+    bracket_stop_order_id: str | None = None
+    bracket_t1_order_id: str | None = None
+    bracket_t2_order_id: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -184,7 +188,9 @@ class OrderManager:
         """Handle an approved signal from the Risk Manager.
 
         Extracts signal data (possibly with modifications applied),
-        submits market entry order to broker, and stores as pending.
+        constructs entry + stop + target orders, and submits as atomic
+        bracket order (DEC-117). All component order IDs are tracked
+        for fill routing.
         """
         signal = event.signal
         if signal is None:
@@ -208,22 +214,68 @@ class OrderManager:
             )
             return
 
-        # Submit market entry order
-        try:
-            entry_order = Order(
+        # Calculate T1/T2 share split
+        t1_shares = int(share_count * self._config.t1_position_pct)
+        if t1_shares == 0 and share_count > 0:
+            t1_shares = 1
+        t2_shares = share_count - t1_shares
+
+        # Construct entry order
+        entry_order = Order(
+            strategy_id=signal.strategy_id,
+            symbol=signal.symbol,
+            side=OrderSide.BUY,  # Long only V1 (DEC-011)
+            order_type=TradingOrderType.MARKET,
+            quantity=share_count,
+        )
+
+        # Construct stop order (covers full position)
+        stop_order = Order(
+            strategy_id=signal.strategy_id,
+            symbol=signal.symbol,
+            side=OrderSide.SELL,
+            order_type=TradingOrderType.STOP,
+            quantity=share_count,
+            stop_price=signal.stop_price,
+        )
+
+        # Construct target orders
+        targets: list[Order] = []
+        t1_price = target_prices[0] if len(target_prices) >= 1 else 0.0
+        if t1_price > 0 and t1_shares > 0:
+            t1_order = Order(
                 strategy_id=signal.strategy_id,
                 symbol=signal.symbol,
-                side=OrderSide.BUY,  # Long only V1 (DEC-011)
-                order_type=TradingOrderType.MARKET,
-                quantity=share_count,
+                side=OrderSide.SELL,
+                order_type=TradingOrderType.LIMIT,
+                quantity=t1_shares,
+                limit_price=t1_price,
             )
-            order_result = await self._broker.place_order(entry_order)
-            entry_order_id = order_result.order_id
+            targets.append(t1_order)
+
+        t2_price = target_prices[1] if len(target_prices) >= 2 else 0.0
+        if t2_price > 0 and t2_shares > 0:
+            t2_order = Order(
+                strategy_id=signal.strategy_id,
+                symbol=signal.symbol,
+                side=OrderSide.SELL,
+                order_type=TradingOrderType.LIMIT,
+                quantity=t2_shares,
+                limit_price=t2_price,
+            )
+            targets.append(t2_order)
+
+        # Submit bracket order atomically (DEC-117)
+        try:
+            bracket_result = await self._broker.place_bracket_order(
+                entry_order, stop_order, targets
+            )
+            entry_order_id = bracket_result.entry.order_id
         except Exception:
-            logger.exception("Failed to submit entry order for %s", signal.symbol)
+            logger.exception("Failed to submit bracket order for %s", signal.symbol)
             return
 
-        # Track as pending
+        # Track entry as pending with bracket IDs
         pending = PendingManagedOrder(
             order_id=entry_order_id,
             symbol=signal.symbol,
@@ -231,8 +283,34 @@ class OrderManager:
             order_type="entry",
             shares=share_count,
             signal=event,
+            bracket_stop_order_id=bracket_result.stop.order_id,
+            bracket_t1_order_id=(
+                bracket_result.targets[0].order_id if bracket_result.targets else None
+            ),
+            bracket_t2_order_id=(
+                bracket_result.targets[1].order_id
+                if len(bracket_result.targets) > 1
+                else None
+            ),
         )
         self._pending_orders[entry_order_id] = pending
+
+        # Track stop and target orders as pending (so fill events route correctly)
+        if bracket_result.stop.order_id:
+            self._pending_orders[bracket_result.stop.order_id] = PendingManagedOrder(
+                order_id=bracket_result.stop.order_id,
+                symbol=signal.symbol,
+                strategy_id=signal.strategy_id,
+                order_type="stop",
+            )
+        for i, target_result in enumerate(bracket_result.targets):
+            order_type = "t1_target" if i == 0 else "t2"
+            self._pending_orders[target_result.order_id] = PendingManagedOrder(
+                order_id=target_result.order_id,
+                symbol=signal.symbol,
+                strategy_id=signal.strategy_id,
+                order_type=order_type,
+            )
 
         # Publish submission event
         await self._event_bus.publish(
@@ -247,18 +325,22 @@ class OrderManager:
         )
 
         logger.info(
-            "Entry order submitted: BUY %d shares of %s (order_id=%s)",
+            "Bracket order submitted: BUY %d shares of %s "
+            "(entry=%s, stop=%s, T1=%s, T2=%s)",
             share_count,
             signal.symbol,
             entry_order_id,
+            bracket_result.stop.order_id,
+            bracket_result.targets[0].order_id if bracket_result.targets else None,
+            bracket_result.targets[1].order_id if len(bracket_result.targets) > 1 else None,
         )
 
-        # Handle immediate fill (SimulatedBroker fills synchronously)
-        if order_result.status == OrderStatus.FILLED:
+        # Handle immediate fill (SimulatedBroker fills entry synchronously)
+        if bracket_result.entry.status == OrderStatus.FILLED:
             fill_event = OrderFilledEvent(
                 order_id=entry_order_id,
-                fill_price=order_result.filled_avg_price,
-                fill_quantity=order_result.filled_quantity,
+                fill_price=bracket_result.entry.filled_avg_price,
+                fill_quantity=bracket_result.entry.filled_quantity,
             )
             await self.on_fill(fill_event)
 
@@ -373,7 +455,12 @@ class OrderManager:
     async def _handle_entry_fill(
         self, pending: PendingManagedOrder, event: OrderFilledEvent
     ) -> None:
-        """Entry order filled. Create ManagedPosition, submit stop + T1."""
+        """Entry order filled. Create ManagedPosition with bracket order IDs.
+
+        DEC-117: Stop and target orders are already placed as part of the
+        atomic bracket order in on_approved(). We just need to link the
+        pre-assigned order IDs to the ManagedPosition.
+        """
         approved_event = pending.signal  # OrderApprovedEvent
         signal = approved_event.signal
 
@@ -391,6 +478,7 @@ class OrderManager:
         t1_price = target_prices[0] if len(target_prices) >= 1 else 0.0
         t2_price = target_prices[1] if len(target_prices) >= 2 else 0.0
 
+        # Use bracket order IDs from pending (DEC-117)
         position = ManagedPosition(
             symbol=pending.symbol,
             strategy_id=pending.strategy_id,
@@ -400,12 +488,13 @@ class OrderManager:
             shares_remaining=filled_shares,
             stop_price=signal.stop_price,
             original_stop_price=signal.stop_price,  # Never changes
-            stop_order_id=None,
+            stop_order_id=pending.bracket_stop_order_id,  # FROM BRACKET
             t1_price=t1_price,
-            t1_order_id=None,
+            t1_order_id=pending.bracket_t1_order_id,  # FROM BRACKET
             t1_shares=t1_shares,
             t1_filled=False,
             t2_price=t2_price,
+            t2_order_id=pending.bracket_t2_order_id,  # FROM BRACKET (DEC-093)
             high_watermark=event.fill_price,
         )
 
@@ -414,18 +503,8 @@ class OrderManager:
             self._managed_positions[pending.symbol] = []
         self._managed_positions[pending.symbol].append(position)
 
-        # Submit stop order (covers full position)
-        await self._submit_stop_order(position, filled_shares, signal.stop_price)
-
-        # Submit T1 limit order (partial position)
-        if t1_price > 0 and t1_shares > 0:
-            await self._submit_t1_order(position, t1_shares, t1_price)
-
-        # Submit T2 limit order (remaining shares after T1)
-        # This enables broker-side T2 execution for IBKR native brackets (DEC-093)
-        t2_shares = filled_shares - t1_shares
-        if t2_price > 0 and t2_shares > 0:
-            await self._submit_t2_order(position, t2_shares, t2_price)
+        # NOTE: No _submit_stop_order, _submit_t1_order, _submit_t2_order calls.
+        # Orders are already placed atomically in on_approved() via place_bracket_order().
 
         # Publish PositionOpenedEvent
         await self._event_bus.publish(
