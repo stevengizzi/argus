@@ -32,13 +32,14 @@ import pandas as pd
 
 from argus.analytics.trade_logger import TradeLogger
 from argus.backtest.backtest_data_service import BacktestDataService
-from argus.backtest.config import BacktestConfig
+from argus.backtest.config import BacktestConfig, StrategyType
 from argus.backtest.metrics import BacktestResult, compute_metrics
 from argus.backtest.scanner_simulator import DailyWatchlist, ScannerSimulator
 from argus.backtest.tick_synthesizer import synthesize_ticks
 from argus.core.clock import FixedClock
 from argus.core.config import (
     OrbBreakoutConfig,
+    OrbScalpConfig,
     OrderManagerConfig,
     RiskConfig,
     load_yaml_file,
@@ -50,7 +51,9 @@ from argus.db.manager import DatabaseManager
 from argus.execution.order_manager import OrderManager
 from argus.execution.simulated_broker import SimulatedBroker, SimulatedSlippage
 from argus.models.trading import OrderStatus
+from argus.strategies.base_strategy import BaseStrategy
 from argus.strategies.orb_breakout import OrbBreakoutStrategy
+from argus.strategies.orb_scalp import OrbScalpStrategy
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +84,7 @@ class ReplayHarness:
         self._broker: SimulatedBroker | None = None
         self._risk_manager: RiskManager | None = None
         self._order_manager: OrderManager | None = None
-        self._strategy: OrbBreakoutStrategy | None = None
+        self._strategy: BaseStrategy | None = None
         self._data_service: BacktestDataService | None = None
         self._trade_logger: TradeLogger | None = None
         self._db_manager: DatabaseManager | None = None
@@ -271,10 +274,6 @@ class ReplayHarness:
         config_dir = Path("config")
         risk_config = self._load_risk_config(config_dir)
         order_manager_config = self._load_order_manager_config(config_dir)
-        orb_config = self._load_orb_config(config_dir)
-
-        # Apply config overrides
-        orb_config = self._apply_config_overrides(orb_config)
 
         # Initialize RiskManager
         self._risk_manager = RiskManager(
@@ -295,12 +294,8 @@ class ReplayHarness:
         )
         await self._order_manager.start()
 
-        # Initialize OrbBreakout strategy
-        self._strategy = OrbBreakoutStrategy(
-            config=orb_config,
-            data_service=self._data_service,
-            clock=self._clock,
-        )
+        # Initialize strategy based on strategy_type
+        self._strategy = self._create_strategy(config_dir)
         self._strategy.allocated_capital = self._config.initial_cash
 
         # Subscribe strategy to candle events
@@ -338,24 +333,67 @@ class ReplayHarness:
             return OrderManagerConfig(**data)
         return OrderManagerConfig()
 
-    def _load_orb_config(self, config_dir: Path) -> OrbBreakoutConfig:
-        """Load ORB strategy configuration."""
+    def _create_strategy(self, config_dir: Path) -> BaseStrategy:
+        """Create strategy instance based on strategy_type.
+
+        Args:
+            config_dir: Path to config directory.
+
+        Returns:
+            Initialized strategy instance (OrbBreakoutStrategy or OrbScalpStrategy).
+        """
+        if self._config.strategy_type == StrategyType.ORB_SCALP:
+            return self._create_orb_scalp_strategy(config_dir)
+        else:
+            return self._create_orb_breakout_strategy(config_dir)
+
+    def _create_orb_breakout_strategy(self, config_dir: Path) -> OrbBreakoutStrategy:
+        """Create OrbBreakoutStrategy with config overrides applied."""
         orb_file = config_dir / "strategies" / "orb_breakout.yaml"
         if orb_file.exists():
             data = load_yaml_file(orb_file)
-            return OrbBreakoutConfig(**data)
-        # Return default config
-        return OrbBreakoutConfig(
-            strategy_id="orb_breakout",
-            name="ORB Breakout",
+            config = OrbBreakoutConfig(**data)
+        else:
+            config = OrbBreakoutConfig(
+                strategy_id="orb_breakout",
+                name="ORB Breakout",
+            )
+
+        # Apply config overrides
+        config = self._apply_orb_breakout_overrides(config)
+
+        return OrbBreakoutStrategy(
+            config=config,
+            data_service=self._data_service,
+            clock=self._clock,
         )
 
-    def _apply_config_overrides(self, config: OrbBreakoutConfig) -> OrbBreakoutConfig:
-        """Apply config overrides from BacktestConfig."""
+    def _create_orb_scalp_strategy(self, config_dir: Path) -> OrbScalpStrategy:
+        """Create OrbScalpStrategy with config overrides applied."""
+        scalp_file = config_dir / "strategies" / "orb_scalp.yaml"
+        if scalp_file.exists():
+            data = load_yaml_file(scalp_file)
+            config = OrbScalpConfig(**data)
+        else:
+            config = OrbScalpConfig(
+                strategy_id="orb_scalp",
+                name="ORB Scalp",
+            )
+
+        # Apply config overrides
+        config = self._apply_orb_scalp_overrides(config)
+
+        return OrbScalpStrategy(
+            config=config,
+            data_service=self._data_service,
+            clock=self._clock,
+        )
+
+    def _apply_orb_breakout_overrides(self, config: OrbBreakoutConfig) -> OrbBreakoutConfig:
+        """Apply config overrides for ORB Breakout."""
         if not self._config.config_overrides:
             return config
 
-        # Convert config to dict, apply overrides, reconstruct
         config_dict = config.model_dump()
 
         for key, value in self._config.config_overrides.items():
@@ -368,6 +406,24 @@ class ReplayHarness:
                 logger.info("Config override: %s = %s", field_name, value)
 
         return OrbBreakoutConfig(**config_dict)
+
+    def _apply_orb_scalp_overrides(self, config: OrbScalpConfig) -> OrbScalpConfig:
+        """Apply config overrides for ORB Scalp."""
+        if not self._config.config_overrides:
+            return config
+
+        config_dict = config.model_dump()
+
+        for key, value in self._config.config_overrides.items():
+            # Handle nested keys like "orb_scalp.scalp_target_r"
+            parts = key.split(".")
+            field_name = parts[1] if parts[0] == "orb_scalp" and len(parts) > 1 else key
+
+            if field_name in config_dict:
+                config_dict[field_name] = value
+                logger.info("Config override: %s = %s", field_name, value)
+
+        return OrbScalpConfig(**config_dict)
 
     async def _run_trading_day(self, trading_day: date, watchlist: DailyWatchlist | None) -> None:
         """Run a single trading day through the pipeline."""

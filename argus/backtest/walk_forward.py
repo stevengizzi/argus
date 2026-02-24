@@ -30,9 +30,11 @@ from typing import Any
 import pandas as pd
 from dateutil.relativedelta import relativedelta
 
-from argus.backtest.config import BacktestConfig
+from argus.backtest.config import BacktestConfig, StrategyType
 from argus.backtest.replay_harness import ReplayHarness
 from argus.backtest.vectorbt_orb import SweepConfig, run_sweep
+from argus.backtest.vectorbt_orb_scalp import ScalpSweepConfig
+from argus.backtest.vectorbt_orb_scalp import run_sweep as run_scalp_sweep
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +49,9 @@ class NoQualifyingParamsError(Exception):
 class WalkForwardConfig:
     """Configuration for walk-forward analysis."""
 
+    # Strategy selection
+    strategy: str = "orb"  # "orb" or "orb_scalp"
+
     # Window sizing
     in_sample_months: int = 4
     out_of_sample_months: int = 2
@@ -60,7 +65,7 @@ class WalkForwardConfig:
     optimization_metric: str = "sharpe"  # What to maximize in IS
     min_trades: int = 20  # Minimum trades to qualify (DEC-066)
 
-    # Parameter grid (same as VectorBT sweep)
+    # ORB Breakout parameter grid (used when strategy="orb")
     or_minutes_values: list[int] = field(default_factory=lambda: [5, 10, 15, 20, 30])
     target_r_values: list[float] = field(default_factory=lambda: [1.0, 1.5, 2.0, 2.5, 3.0])
     stop_buffer_values: list[float] = field(default_factory=lambda: [0.0, 0.1, 0.2, 0.5])
@@ -69,6 +74,12 @@ class WalkForwardConfig:
     max_range_atr_values: list[float] = field(
         default_factory=lambda: [0.3, 0.5, 0.75, 1.0, 1.5, 999.0]
     )
+
+    # ORB Scalp parameter grid (used when strategy="orb_scalp")
+    scalp_target_r_values: list[float] = field(
+        default_factory=lambda: [0.2, 0.3, 0.4, 0.5]
+    )
+    max_hold_bars_values: list[int] = field(default_factory=lambda: [1, 2, 3, 5])
 
     # Output
     output_dir: str = "data/backtest_runs/walk_forward"
@@ -194,8 +205,7 @@ async def optimize_in_sample(
 ) -> tuple[dict[str, Any], dict[str, float]]:
     """Run VectorBT sweep on IS period. Return (best_params, is_metrics).
 
-    Uses vectorbt_orb.run_sweep() with the IS date range.
-    Selects best parameter set by optimization_metric, subject to min_trades floor.
+    Dispatches to the appropriate VectorBT sweep based on config.strategy.
 
     Args:
         is_start: Start date for in-sample period.
@@ -210,7 +220,18 @@ async def optimize_in_sample(
     Raises:
         NoQualifyingParamsError: if no parameter set meets min_trades threshold.
     """
-    # Build SweepConfig from WalkForwardConfig
+    if config.strategy == "orb_scalp":
+        return await _optimize_in_sample_scalp(is_start, is_end, config)
+    else:
+        return await _optimize_in_sample_orb(is_start, is_end, config)
+
+
+async def _optimize_in_sample_orb(
+    is_start: date,
+    is_end: date,
+    config: WalkForwardConfig,
+) -> tuple[dict[str, Any], dict[str, float]]:
+    """Run VectorBT ORB sweep on IS period."""
     sweep_config = SweepConfig(
         data_dir=Path(config.data_dir),
         symbols=config.symbols or [],
@@ -225,14 +246,12 @@ async def optimize_in_sample(
         max_range_atr_list=config.max_range_atr_values,
     )
 
-    # Run sweep (this is CPU-bound, run in executor to avoid blocking)
     loop = asyncio.get_running_loop()
     results_df = await loop.run_in_executor(None, run_sweep, sweep_config)
 
     if results_df.empty:
         raise NoQualifyingParamsError("VectorBT sweep produced no results")
 
-    # Aggregate results across symbols for each parameter combination
     param_cols = [
         "or_minutes",
         "target_r",
@@ -255,7 +274,6 @@ async def optimize_in_sample(
         .reset_index()
     )
 
-    # Filter by min_trades threshold
     qualifying = aggregated[aggregated["total_trades"] >= config.min_trades]
 
     if qualifying.empty:
@@ -264,7 +282,6 @@ async def optimize_in_sample(
             f"No parameter set meets min_trades={config.min_trades}. Max trades found: {max_trades}"
         )
 
-    # Select best by optimization metric
     if config.optimization_metric == "sharpe":
         metric_col = "sharpe_ratio"
     else:
@@ -273,7 +290,73 @@ async def optimize_in_sample(
 
     best_params = {col: best_row[col] for col in param_cols}
 
-    # Convert total_return_pct (percentage) to dollar P&L for consistent units with OOS
+    total_pnl_dollars = float(best_row["total_return_pct"]) * config.initial_cash / 100.0
+
+    is_metrics = {
+        "total_trades": int(best_row["total_trades"]),
+        "sharpe": float(best_row["sharpe_ratio"]),
+        "win_rate": float(best_row["win_rate"]),
+        "profit_factor": float(best_row["profit_factor"]),
+        "total_pnl": total_pnl_dollars,
+        "max_drawdown": float(best_row["max_drawdown_pct"]),
+    }
+
+    return best_params, is_metrics
+
+
+async def _optimize_in_sample_scalp(
+    is_start: date,
+    is_end: date,
+    config: WalkForwardConfig,
+) -> tuple[dict[str, Any], dict[str, float]]:
+    """Run VectorBT ORB Scalp sweep on IS period."""
+    sweep_config = ScalpSweepConfig(
+        data_dir=Path(config.data_dir),
+        symbols=config.symbols or [],
+        start_date=is_start,
+        end_date=is_end,
+        output_dir=Path(config.output_dir) / "is_sweeps",
+        scalp_target_r_list=config.scalp_target_r_values,
+        max_hold_bars_list=config.max_hold_bars_values,
+    )
+
+    loop = asyncio.get_running_loop()
+    results_df = await loop.run_in_executor(None, run_scalp_sweep, sweep_config)
+
+    if results_df.empty:
+        raise NoQualifyingParamsError("VectorBT scalp sweep produced no results")
+
+    param_cols = ["scalp_target_r", "max_hold_bars"]
+
+    aggregated = (
+        results_df.groupby(param_cols)
+        .agg(
+            total_trades=("total_trades", "sum"),
+            sharpe_ratio=("sharpe_ratio", "mean"),
+            win_rate=("win_rate", "mean"),
+            profit_factor=("profit_factor", "mean"),
+            total_return_pct=("total_return_pct", "sum"),
+            max_drawdown_pct=("max_drawdown_pct", "max"),
+        )
+        .reset_index()
+    )
+
+    qualifying = aggregated[aggregated["total_trades"] >= config.min_trades]
+
+    if qualifying.empty:
+        max_trades = aggregated["total_trades"].max() if not aggregated.empty else 0
+        raise NoQualifyingParamsError(
+            f"No parameter set meets min_trades={config.min_trades}. Max trades found: {max_trades}"
+        )
+
+    if config.optimization_metric == "sharpe":
+        metric_col = "sharpe_ratio"
+    else:
+        metric_col = config.optimization_metric
+    best_row = qualifying.loc[qualifying[metric_col].idxmax()]
+
+    best_params = {col: best_row[col] for col in param_cols}
+
     total_pnl_dollars = float(best_row["total_return_pct"]) * config.initial_cash / 100.0
 
     is_metrics = {
@@ -296,16 +379,10 @@ async def validate_out_of_sample(
 ) -> dict[str, Any]:
     """Run Replay Harness on OOS period with the IS-optimized parameters.
 
-    This is the high-fidelity validation: actual production code (OrbBreakout strategy,
+    This is the high-fidelity validation: actual production code (strategy,
     Risk Manager, Order Manager, SimulatedBroker) processes the OOS data.
 
-    Translates VectorBT param names to production config:
-    - or_minutes → opening_range_minutes
-    - target_r → profit_target_r
-    - stop_buffer → stop_buffer_pct
-    - hold_minutes → max_hold_minutes
-    - min_gap → (scanner config)
-    - max_range_atr → max_range_atr_ratio
+    Dispatches to strategy-specific validation based on config.strategy.
 
     Args:
         oos_start: Start date for out-of-sample period.
@@ -317,7 +394,19 @@ async def validate_out_of_sample(
         Dict with: total_trades, win_rate, profit_factor, sharpe, total_pnl,
         max_drawdown, avg_r_multiple.
     """
-    # Translate VectorBT param names to production config overrides
+    if config.strategy == "orb_scalp":
+        return await _validate_oos_scalp(oos_start, oos_end, best_params, config)
+    else:
+        return await _validate_oos_orb(oos_start, oos_end, best_params, config)
+
+
+async def _validate_oos_orb(
+    oos_start: date,
+    oos_end: date,
+    best_params: dict[str, Any],
+    config: WalkForwardConfig,
+) -> dict[str, Any]:
+    """Run Replay Harness for ORB Breakout on OOS period."""
     config_overrides = {
         "orb_breakout.opening_range_minutes": int(best_params["or_minutes"]),
         "orb_breakout.profit_target_r": float(best_params["target_r"]),
@@ -326,20 +415,72 @@ async def validate_out_of_sample(
         "orb_breakout.max_range_atr_ratio": float(best_params["max_range_atr_ratio"]),
     }
 
-    # Build BacktestConfig
     backtest_config = BacktestConfig(
         data_dir=Path(config.data_dir),
         output_dir=Path(config.output_dir) / "oos_runs",
-        symbols=config.symbols,  # Pass symbols filter from WalkForwardConfig
+        symbols=config.symbols,
         start_date=oos_start,
         end_date=oos_end,
+        strategy_type=StrategyType.ORB_BREAKOUT,
         initial_cash=config.initial_cash,
         slippage_per_share=config.slippage_per_share,
-        scanner_min_gap_pct=float(best_params["min_gap_pct"]) / 100.0,  # Convert to decimal
+        scanner_min_gap_pct=float(best_params["min_gap_pct"]) / 100.0,
         config_overrides=config_overrides,
     )
 
-    # Run Replay Harness
+    harness = ReplayHarness(backtest_config)
+    result = await harness.run()
+
+    return {
+        "total_trades": result.total_trades,
+        "win_rate": result.win_rate,
+        "profit_factor": result.profit_factor if result.profit_factor != float("inf") else 0.0,
+        "sharpe": result.sharpe_ratio,
+        "total_pnl": result.final_equity - config.initial_cash,
+        "max_drawdown": result.max_drawdown_pct,
+        "avg_r_multiple": result.avg_r_multiple,
+    }
+
+
+async def _validate_oos_scalp(
+    oos_start: date,
+    oos_end: date,
+    best_params: dict[str, Any],
+    config: WalkForwardConfig,
+) -> dict[str, Any]:
+    """Run Replay Harness for ORB Scalp on OOS period.
+
+    Translates VectorBT scalp param names to production config:
+    - scalp_target_r → scalp_target_r
+    - max_hold_bars → max_hold_seconds (1 bar = 60 seconds)
+    """
+    # Convert max_hold_bars to seconds (1 bar = 60 seconds for 1m bars)
+    max_hold_seconds = int(best_params["max_hold_bars"]) * 60
+
+    config_overrides = {
+        "orb_scalp.scalp_target_r": float(best_params["scalp_target_r"]),
+        "orb_scalp.max_hold_seconds": max_hold_seconds,
+        # Use fixed scalp defaults for other params
+        "orb_scalp.orb_window_minutes": 5,
+    }
+
+    # Use default 2% gap for scalp
+    scanner_gap_pct = 0.02
+
+    backtest_config = BacktestConfig(
+        data_dir=Path(config.data_dir),
+        output_dir=Path(config.output_dir) / "oos_runs",
+        symbols=config.symbols,
+        start_date=oos_start,
+        end_date=oos_end,
+        strategy_id="strat_orb_scalp",
+        strategy_type=StrategyType.ORB_SCALP,
+        initial_cash=config.initial_cash,
+        slippage_per_share=config.slippage_per_share,
+        scanner_min_gap_pct=scanner_gap_pct,
+        config_overrides=config_overrides,
+    )
+
     harness = ReplayHarness(backtest_config)
     result = await harness.run()
 
@@ -902,6 +1043,8 @@ async def evaluate_fixed_params_on_is(
 ) -> dict[str, float]:
     """Evaluate fixed parameters on IS period using VectorBT.
 
+    Dispatches to strategy-specific evaluation based on config.strategy.
+
     Args:
         is_start: Start date for in-sample period.
         is_end: End date for in-sample period.
@@ -911,7 +1054,19 @@ async def evaluate_fixed_params_on_is(
     Returns:
         Dict with sharpe, win_rate, profit_factor, total_pnl, total_trades.
     """
-    # Build SweepConfig with single parameter combination
+    if config.strategy == "orb_scalp":
+        return await _evaluate_fixed_params_scalp(is_start, is_end, fixed_params, config)
+    else:
+        return await _evaluate_fixed_params_orb(is_start, is_end, fixed_params, config)
+
+
+async def _evaluate_fixed_params_orb(
+    is_start: date,
+    is_end: date,
+    fixed_params: dict[str, Any],
+    config: WalkForwardConfig,
+) -> dict[str, float]:
+    """Evaluate fixed ORB params on IS period using VectorBT."""
     sweep_config = SweepConfig(
         data_dir=Path(config.data_dir),
         symbols=config.symbols or [],
@@ -939,7 +1094,55 @@ async def evaluate_fixed_params_on_is(
             "max_drawdown": 0.0,
         }
 
-    # Aggregate across symbols
+    total_trades = int(results_df["total_trades"].sum())
+    avg_sharpe = float(results_df["sharpe_ratio"].mean())
+    avg_win_rate = float(results_df["win_rate"].mean())
+    avg_pf = float(results_df["profit_factor"].mean())
+    total_return = float(results_df["total_return_pct"].sum())
+    max_dd = float(results_df["max_drawdown_pct"].max())
+
+    total_pnl_dollars = total_return * config.initial_cash / 100.0
+
+    return {
+        "total_trades": total_trades,
+        "sharpe": avg_sharpe,
+        "win_rate": avg_win_rate,
+        "profit_factor": avg_pf,
+        "total_pnl": total_pnl_dollars,
+        "max_drawdown": max_dd,
+    }
+
+
+async def _evaluate_fixed_params_scalp(
+    is_start: date,
+    is_end: date,
+    fixed_params: dict[str, Any],
+    config: WalkForwardConfig,
+) -> dict[str, float]:
+    """Evaluate fixed ORB Scalp params on IS period using VectorBT."""
+    sweep_config = ScalpSweepConfig(
+        data_dir=Path(config.data_dir),
+        symbols=config.symbols or [],
+        start_date=is_start,
+        end_date=is_end,
+        output_dir=Path(config.output_dir) / "is_fixed",
+        scalp_target_r_list=[float(fixed_params["scalp_target_r"])],
+        max_hold_bars_list=[int(fixed_params["max_hold_bars"])],
+    )
+
+    loop = asyncio.get_running_loop()
+    results_df = await loop.run_in_executor(None, run_scalp_sweep, sweep_config)
+
+    if results_df.empty:
+        return {
+            "total_trades": 0,
+            "sharpe": 0.0,
+            "win_rate": 0.0,
+            "profit_factor": 0.0,
+            "total_pnl": 0.0,
+            "max_drawdown": 0.0,
+        }
+
     total_trades = int(results_df["total_trades"].sum())
     avg_sharpe = float(results_df["sharpe_ratio"].mean())
     avg_win_rate = float(results_df["win_rate"].mean())
@@ -1312,6 +1515,14 @@ def parse_args() -> argparse.Namespace:
         help="Starting capital for OOS validation",
     )
 
+    # Strategy selection
+    parser.add_argument(
+        "--strategy",
+        default="orb",
+        choices=["orb", "orb_scalp"],
+        help="Strategy to run: orb (ORB Breakout) or orb_scalp (ORB Scalp)",
+    )
+
     # Fixed-params mode
     parser.add_argument(
         "--fixed-params",
@@ -1353,6 +1564,20 @@ def parse_args() -> argparse.Namespace:
         type=float,
         default=999.0,
         help="Fixed max range ATR ratio",
+    )
+
+    # Fixed params for ORB Scalp
+    parser.add_argument(
+        "--fp-scalp-target-r",
+        type=float,
+        default=0.3,
+        help="Fixed scalp target R-multiple (for orb_scalp strategy)",
+    )
+    parser.add_argument(
+        "--fp-max-hold-bars",
+        type=int,
+        default=2,
+        help="Fixed max hold bars (for orb_scalp strategy, 1 bar = 60s)",
     )
 
     # Cross-validation mode
@@ -1494,6 +1719,7 @@ def main() -> None:
         symbols = [s.strip().upper() for s in args.symbols.split(",") if s.strip()] or None
 
         config = WalkForwardConfig(
+            strategy=args.strategy,
             data_dir=args.data_dir,
             symbols=symbols,
             in_sample_months=args.is_months,
@@ -1505,29 +1731,39 @@ def main() -> None:
             initial_cash=args.initial_cash,
         )
 
-        fixed_params = {
-            "or_minutes": args.fp_or_minutes,
-            "target_r": args.fp_target_r,
-            "stop_buffer_pct": args.fp_stop_buffer,
-            "max_hold_minutes": args.fp_max_hold,
-            "min_gap_pct": args.fp_min_gap,
-            "max_range_atr_ratio": args.fp_max_atr,
-        }
+        # Build strategy-specific fixed params
+        if args.strategy == "orb_scalp":
+            fixed_params = {
+                "scalp_target_r": args.fp_scalp_target_r,
+                "max_hold_bars": args.fp_max_hold_bars,
+            }
+            params_str = (
+                f"Fixed Parameters:  scalp_target_r={args.fp_scalp_target_r}, "
+                f"max_hold_bars={args.fp_max_hold_bars}"
+            )
+        else:
+            fixed_params = {
+                "or_minutes": args.fp_or_minutes,
+                "target_r": args.fp_target_r,
+                "stop_buffer_pct": args.fp_stop_buffer,
+                "max_hold_minutes": args.fp_max_hold,
+                "min_gap_pct": args.fp_min_gap,
+                "max_range_atr_ratio": args.fp_max_atr,
+            }
+            params_str = (
+                f"Fixed Parameters:  or={args.fp_or_minutes}, target_r={args.fp_target_r}, "
+                f"max_atr={args.fp_max_atr}\n"
+                f"                   max_hold={args.fp_max_hold}, min_gap={args.fp_min_gap}, "
+                f"stop_buf={args.fp_stop_buffer}"
+            )
 
         result = asyncio.run(run_fixed_params_walk_forward(config, fixed_params))
 
         # Print summary
         print("\n" + "=" * 60)
-        print("FIXED-PARAMS WALK-FORWARD ANALYSIS RESULTS")
+        print(f"FIXED-PARAMS WALK-FORWARD ANALYSIS RESULTS ({args.strategy.upper()})")
         print("=" * 60)
-        print(
-            f"Fixed Parameters:  or={args.fp_or_minutes}, target_r={args.fp_target_r}, "
-            f"max_atr={args.fp_max_atr}"
-        )
-        print(
-            f"                   max_hold={args.fp_max_hold}, min_gap={args.fp_min_gap}, "
-            f"stop_buf={args.fp_stop_buffer}"
-        )
+        print(params_str)
         print("-" * 60)
         print(f"Windows Processed: {len(result.windows)}")
         print(f"Valid Windows:     {len([w for w in result.windows if w.error is None])}")
@@ -1584,6 +1820,7 @@ def main() -> None:
         symbols = [s.strip().upper() for s in args.symbols.split(",") if s.strip()] or None
 
         config = WalkForwardConfig(
+            strategy=args.strategy,
             data_dir=args.data_dir,
             symbols=symbols,
             in_sample_months=args.is_months,
@@ -1599,7 +1836,7 @@ def main() -> None:
 
         # Print summary
         print("\n" + "=" * 60)
-        print("WALK-FORWARD ANALYSIS RESULTS")
+        print(f"WALK-FORWARD ANALYSIS RESULTS ({args.strategy.upper()})")
         print("=" * 60)
         print(f"Windows Processed: {len(result.windows)}")
         print(f"Valid Windows:     {len([w for w in result.windows if w.error is None])}")

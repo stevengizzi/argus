@@ -1,10 +1,18 @@
 """Configuration models for backtesting data acquisition and replay."""
 
 from datetime import date
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, Field
+
+
+class StrategyType(StrEnum):
+    """Strategy type for backtest selection."""
+
+    ORB_BREAKOUT = "orb"
+    ORB_SCALP = "orb_scalp"
 
 
 class DataFetcherConfig(BaseModel):
@@ -70,6 +78,7 @@ class BacktestConfig(BaseModel):
 
     # Strategy
     strategy_id: str = Field(default="strat_orb_breakout")
+    strategy_type: StrategyType = Field(default=StrategyType.ORB_BREAKOUT)
 
     # Slippage (DEC-054: Fixed $0.01/share)
     slippage_per_share: float = Field(default=0.01, ge=0.0)

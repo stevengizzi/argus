@@ -18,6 +18,7 @@ from argus.backtest.walk_forward import (
     compute_parameter_stability,
     compute_wfe,
     compute_windows,
+    evaluate_fixed_params_on_is,
     load_walk_forward_results,
     optimize_in_sample,
     save_walk_forward_results,
@@ -734,3 +735,227 @@ async def test_cross_validate_missing_params_raises():
             end=date(2025, 12, 31),
             params=incomplete_params,
         )
+
+
+# ---------------------------------------------------------------------------
+# Test 16: optimize_in_sample_scalp_returns_best (Sprint 18)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_optimize_in_sample_scalp_returns_best():
+    """Scalp strategy in-sample optimization selects params with highest Sharpe."""
+    config = WalkForwardConfig(
+        min_trades=10,
+        optimization_metric="sharpe",
+        strategy="orb_scalp",
+    )
+
+    # Create mock scalp sweep results - scalp only uses scalp_target_r and max_hold_bars
+    mock_results = pd.DataFrame(
+        {
+            "symbol": ["TSLA", "TSLA", "TSLA"],
+            "scalp_target_r": [0.2, 0.3, 0.4],
+            "max_hold_bars": [2, 2, 2],
+            "total_trades": [40, 50, 45],
+            "sharpe_ratio": [1.2, 1.8, 1.5],
+            "win_rate": [0.60, 0.65, 0.62],
+            "profit_factor": [1.4, 1.9, 1.6],
+            "total_return_pct": [3.0, 5.0, 4.0],
+            "max_drawdown_pct": [2.0, 1.5, 2.5],
+        }
+    )
+
+    with patch("argus.backtest.walk_forward.run_scalp_sweep", return_value=mock_results):
+        best_params, is_metrics = await optimize_in_sample(
+            is_start=date(2025, 3, 1),
+            is_end=date(2025, 6, 30),
+            config=config,
+        )
+
+    # Should select scalp_target_r=0.3 with highest Sharpe (1.8)
+    assert best_params["scalp_target_r"] == 0.3
+    assert best_params["max_hold_bars"] == 2
+    assert is_metrics["sharpe"] == 1.8
+    assert is_metrics["total_trades"] == 50
+
+
+# ---------------------------------------------------------------------------
+# Test 17: validate_oos_scalp_translates_params (Sprint 18)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_validate_oos_scalp_translates_params():
+    """Scalp VectorBT params correctly mapped to production config names."""
+    config = WalkForwardConfig(
+        data_dir="data/historical/1m",
+        initial_cash=100_000.0,
+        strategy="orb_scalp",
+    )
+
+    # Scalp params are minimal: only scalp_target_r and max_hold_bars
+    best_params = {
+        "scalp_target_r": 0.3,
+        "max_hold_bars": 2,
+    }
+
+    # Mock BacktestResult
+    mock_result = MagicMock()
+    mock_result.total_trades = 60
+    mock_result.win_rate = 0.65
+    mock_result.profit_factor = 1.5
+    mock_result.sharpe_ratio = 1.2
+    mock_result.final_equity = 102_000.0
+    mock_result.max_drawdown_pct = 2.0
+    mock_result.avg_r_multiple = 0.15
+
+    mock_harness = AsyncMock()
+    mock_harness.run.return_value = mock_result
+
+    with patch(
+        "argus.backtest.walk_forward.ReplayHarness", return_value=mock_harness
+    ) as mock_class:
+        oos_metrics = await validate_out_of_sample(
+            oos_start=date(2025, 7, 1),
+            oos_end=date(2025, 8, 31),
+            best_params=best_params,
+            config=config,
+        )
+
+    # Verify BacktestConfig was created with scalp parameter mapping
+    call_args = mock_class.call_args
+    backtest_config = call_args[0][0]
+
+    # Scalp translates: max_hold_bars -> max_hold_seconds (1 bar = 60s)
+    assert backtest_config.config_overrides["orb_scalp.scalp_target_r"] == 0.3
+    assert backtest_config.config_overrides["orb_scalp.max_hold_seconds"] == 120  # 2 bars * 60s
+    assert backtest_config.config_overrides["orb_scalp.orb_window_minutes"] == 5  # Fixed default
+    # Scalp uses default 2% gap
+    assert backtest_config.scanner_min_gap_pct == 0.02
+
+    # Verify metrics extracted correctly
+    assert oos_metrics["total_trades"] == 60
+    assert oos_metrics["total_pnl"] == 2000.0  # 102k - 100k
+
+
+# ---------------------------------------------------------------------------
+# Test 18: walk_forward_config_scalp_strategy (Sprint 18)
+# ---------------------------------------------------------------------------
+
+
+def test_walk_forward_config_scalp_strategy():
+    """WalkForwardConfig accepts strategy='orb_scalp' with scalp-specific grids."""
+    config = WalkForwardConfig(
+        strategy="orb_scalp",
+        scalp_target_r_values=[0.2, 0.3, 0.4],
+        max_hold_bars_values=[1, 2, 3],
+    )
+
+    assert config.strategy == "orb_scalp"
+    assert config.scalp_target_r_values == [0.2, 0.3, 0.4]
+    assert config.max_hold_bars_values == [1, 2, 3]
+    # Should still have ORB defaults for other params
+    assert config.or_minutes_values == [5, 10, 15, 20, 30]  # Full default grid
+
+
+# ---------------------------------------------------------------------------
+# Test 19: evaluate_fixed_params_scalp_dispatches (Sprint 18)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_evaluate_fixed_params_scalp_dispatches():
+    """evaluate_fixed_params_on_is uses scalp sweep for orb_scalp strategy."""
+    config = WalkForwardConfig(
+        strategy="orb_scalp",
+        min_trades=10,
+    )
+
+    # Scalp only needs scalp_target_r and max_hold_bars
+    fixed_params = {
+        "scalp_target_r": 0.3,
+        "max_hold_bars": 2,
+    }
+
+    mock_results = pd.DataFrame(
+        {
+            "symbol": ["TSLA"],
+            "scalp_target_r": [0.3],
+            "max_hold_bars": [2],
+            "total_trades": [80],
+            "sharpe_ratio": [1.5],
+            "win_rate": [0.65],
+            "profit_factor": [1.8],
+            "total_return_pct": [4.0],
+            "max_drawdown_pct": [1.5],
+        }
+    )
+
+    with patch(
+        "argus.backtest.walk_forward.run_scalp_sweep", return_value=mock_results
+    ) as mock_sweep:
+        metrics = await evaluate_fixed_params_on_is(
+            is_start=date(2025, 3, 1),
+            is_end=date(2025, 6, 30),
+            fixed_params=fixed_params,
+            config=config,
+        )
+
+    # Verify scalp sweep was called (not orb sweep)
+    mock_sweep.assert_called_once()
+    assert metrics["total_trades"] == 80
+    assert metrics["sharpe"] == 1.5
+
+
+# ---------------------------------------------------------------------------
+# Test 20: replay_harness_creates_scalp_strategy (Sprint 18)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_replay_harness_creates_scalp_strategy():
+    """ReplayHarness is created with StrategyType.ORB_SCALP for scalp validation."""
+    from argus.backtest.config import StrategyType
+
+    config = WalkForwardConfig(
+        data_dir="data/historical/1m",
+        initial_cash=100_000.0,
+        strategy="orb_scalp",
+    )
+
+    # Scalp params
+    best_params = {
+        "scalp_target_r": 0.3,
+        "max_hold_bars": 2,
+    }
+
+    # Mock BacktestResult
+    mock_result = MagicMock()
+    mock_result.total_trades = 60
+    mock_result.win_rate = 0.60
+    mock_result.profit_factor = 1.4
+    mock_result.sharpe_ratio = 1.0
+    mock_result.final_equity = 101_500.0
+    mock_result.max_drawdown_pct = 1.5
+    mock_result.avg_r_multiple = 0.10
+
+    mock_harness = AsyncMock()
+    mock_harness.run.return_value = mock_result
+
+    with patch(
+        "argus.backtest.walk_forward.ReplayHarness", return_value=mock_harness
+    ) as mock_class:
+        await validate_out_of_sample(
+            oos_start=date(2025, 7, 1),
+            oos_end=date(2025, 8, 31),
+            best_params=best_params,
+            config=config,
+        )
+
+    # Verify BacktestConfig has correct strategy type
+    call_args = mock_class.call_args
+    backtest_config = call_args[0][0]
+
+    assert backtest_config.strategy_type == StrategyType.ORB_SCALP
+    assert backtest_config.strategy_id == "strat_orb_scalp"
