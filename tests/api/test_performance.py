@@ -199,7 +199,7 @@ class TestByStrategyBreakdown:
         assert isinstance(data["by_strategy"], dict)
         # Seeded data has orb_breakout and orb_scalp
         if data["by_strategy"]:
-            for strategy_id, metrics in data["by_strategy"].items():
+            for _strategy_id, metrics in data["by_strategy"].items():
                 assert "total_trades" in metrics
                 assert "win_rate" in metrics
                 assert "net_pnl" in metrics

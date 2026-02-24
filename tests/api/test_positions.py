@@ -2,15 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
-
 import pytest
 from httpx import AsyncClient
-
-from argus.api.dependencies import AppState
-from argus.api.server import create_app
-from argus.execution.order_manager import ManagedPosition
-from httpx import ASGITransport
 
 
 class TestPositionsEndpoint:

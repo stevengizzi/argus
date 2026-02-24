@@ -145,10 +145,7 @@ async def get_performance(
         HTTPException 422: If period is invalid.
     """
     # Get current time in ET for date calculations
-    if state.clock is not None:
-        now_utc = state.clock.now()
-    else:
-        now_utc = datetime.now(UTC)
+    now_utc = state.clock.now() if state.clock is not None else datetime.now(UTC)
     now_et = now_utc.astimezone(ET_TZ)
 
     # Get date range

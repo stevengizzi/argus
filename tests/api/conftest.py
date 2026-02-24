@@ -31,7 +31,6 @@ from argus.db.manager import DatabaseManager
 from argus.execution.order_manager import ManagedPosition, OrderManager
 from argus.execution.simulated_broker import SimulatedBroker
 from argus.models.trading import (
-    AssetClass,
     ExitReason,
     OrderSide,
     Trade,

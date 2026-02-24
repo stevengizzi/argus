@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 from httpx import ASGITransport, AsyncClient
 
 from argus.api.dependencies import AppState
 from argus.api.server import create_app
-from argus.execution.order_manager import ManagedPosition
 
 
 class MockStrategy:

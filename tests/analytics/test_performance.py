@@ -9,7 +9,6 @@ from __future__ import annotations
 import pytest
 
 from argus.analytics.performance import (
-    PerformanceMetrics,
     compute_max_drawdown_pct,
     compute_metrics,
     compute_sharpe_ratio,
@@ -138,11 +137,15 @@ class TestComputeMetricsMixed:
         """Mixed trades compute correct win rate and profit factor."""
         trades = [
             # Wins
-            {"net_pnl": 200.0, "r_multiple": 2.0, "exit_price": 150.0, "exit_time": "2026-02-20T10:00:00"},
-            {"net_pnl": 100.0, "r_multiple": 1.0, "exit_price": 155.0, "exit_time": "2026-02-20T11:00:00"},
+            {"net_pnl": 200.0, "r_multiple": 2.0, "exit_price": 150.0,
+             "exit_time": "2026-02-20T10:00:00"},
+            {"net_pnl": 100.0, "r_multiple": 1.0, "exit_price": 155.0,
+             "exit_time": "2026-02-20T11:00:00"},
             # Losses
-            {"net_pnl": -50.0, "r_multiple": -0.5, "exit_price": 145.0, "exit_time": "2026-02-20T12:00:00"},
-            {"net_pnl": -100.0, "r_multiple": -1.0, "exit_price": 140.0, "exit_time": "2026-02-20T13:00:00"},
+            {"net_pnl": -50.0, "r_multiple": -0.5, "exit_price": 145.0,
+             "exit_time": "2026-02-20T12:00:00"},
+            {"net_pnl": -100.0, "r_multiple": -1.0, "exit_price": 140.0,
+             "exit_time": "2026-02-20T13:00:00"},
         ]
 
         result = compute_metrics(trades)
@@ -159,8 +162,8 @@ class TestComputeMetricsMixed:
         """Breakeven trades (within $0.50) are categorized separately."""
         trades = [
             {"net_pnl": 100.0, "exit_price": 150.0, "exit_time": "2026-02-20T10:00:00"},
-            {"net_pnl": 0.25, "exit_price": 150.0, "exit_time": "2026-02-20T11:00:00"},  # breakeven
-            {"net_pnl": -0.40, "exit_price": 150.0, "exit_time": "2026-02-20T12:00:00"},  # breakeven
+            {"net_pnl": 0.25, "exit_price": 150.0, "exit_time": "2026-02-20T11:00:00"},
+            {"net_pnl": -0.40, "exit_price": 150.0, "exit_time": "2026-02-20T12:00:00"},
             {"net_pnl": -100.0, "exit_price": 145.0, "exit_time": "2026-02-20T13:00:00"},
         ]
 
@@ -300,9 +303,12 @@ class TestHoldDurationAverage:
     def test_avg_hold_seconds_computed_correctly(self) -> None:
         """Average hold duration is computed from hold_duration_seconds."""
         trades = [
-            {"net_pnl": 100.0, "hold_duration_seconds": 300, "exit_price": 150.0, "exit_time": "2026-02-20"},
-            {"net_pnl": 50.0, "hold_duration_seconds": 600, "exit_price": 155.0, "exit_time": "2026-02-20"},
-            {"net_pnl": -30.0, "hold_duration_seconds": 900, "exit_price": 145.0, "exit_time": "2026-02-20"},
+            {"net_pnl": 100.0, "hold_duration_seconds": 300, "exit_price": 150.0,
+             "exit_time": "2026-02-20"},
+            {"net_pnl": 50.0, "hold_duration_seconds": 600, "exit_price": 155.0,
+             "exit_time": "2026-02-20"},
+            {"net_pnl": -30.0, "hold_duration_seconds": 900, "exit_price": 145.0,
+             "exit_time": "2026-02-20"},
         ]
 
         result = compute_metrics(trades)
@@ -328,8 +334,10 @@ class TestAlternateFieldNames:
     def test_pnl_r_multiple_field_name_works(self) -> None:
         """Alternate field name pnl_r_multiple works."""
         trades = [
-            {"net_pnl": 100.0, "pnl_r_multiple": 2.0, "exit_price": 150.0, "exit_time": "2026-02-20"},
-            {"net_pnl": 50.0, "pnl_r_multiple": 1.0, "exit_price": 155.0, "exit_time": "2026-02-20"},
+            {"net_pnl": 100.0, "pnl_r_multiple": 2.0, "exit_price": 150.0,
+             "exit_time": "2026-02-20"},
+            {"net_pnl": 50.0, "pnl_r_multiple": 1.0, "exit_price": 155.0,
+             "exit_time": "2026-02-20"},
         ]
 
         result = compute_metrics(trades)

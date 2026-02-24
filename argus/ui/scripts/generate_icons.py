@@ -12,8 +12,8 @@ Sizes generated:
 """
 
 from pathlib import Path
-from PIL import Image, ImageDraw, ImageFont
 
+from PIL import Image, ImageDraw, ImageFont
 
 # Colors
 BG_COLOR = (15, 17, 23)  # #0f1117
@@ -36,7 +36,7 @@ def get_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
         if Path(font_path).exists():
             try:
                 return ImageFont.truetype(font_path, size)
-            except (OSError, IOError):
+            except OSError:
                 continue
 
     # Fallback to default font (won't be as nice but works)
