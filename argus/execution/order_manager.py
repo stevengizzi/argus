@@ -1008,6 +1008,7 @@ class OrderManager:
         await self._event_bus.publish(
             PositionClosedEvent(
                 position_id=generate_id(),
+                strategy_id=position.strategy_id,
                 exit_price=weighted_exit_price,
                 realized_pnl=position.realized_pnl,
                 exit_reason=exit_reason,

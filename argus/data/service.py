@@ -77,3 +77,21 @@ class DataService(ABC):
         Returns:
             DataFrame with columns: open, high, low, close, volume, timestamp.
         """
+
+    @abstractmethod
+    async def fetch_daily_bars(
+        self, symbol: str, lookback_days: int = 60
+    ) -> pd.DataFrame | None:
+        """Fetch daily OHLCV bars for regime classification.
+
+        Used by the Orchestrator to compute regime indicators (SPY daily bars).
+        This is a REST fetch, not a streaming subscription.
+
+        Args:
+            symbol: Ticker symbol (e.g., "SPY").
+            lookback_days: Number of trading days to fetch (default 60).
+
+        Returns:
+            DataFrame with columns: open, high, low, close, volume, timestamp.
+            Sorted oldest-first. Returns None if data is unavailable.
+        """

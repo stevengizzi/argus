@@ -251,6 +251,7 @@ class PositionClosedEvent(Event):
     """A position has been fully closed."""
 
     position_id: str = ""
+    strategy_id: str = ""
     exit_price: float = 0.0
     realized_pnl: float = 0.0
     exit_reason: ExitReason = ExitReason.MANUAL

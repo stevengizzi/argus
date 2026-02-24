@@ -762,3 +762,75 @@ class AlpacaDataService(DataService):
             value=value,
         )
         await self._event_bus.publish(event)
+
+    async def fetch_daily_bars(
+        self, symbol: str, lookback_days: int = 60
+    ) -> pd.DataFrame | None:
+        """Fetch daily OHLCV bars for regime classification.
+
+        Uses Alpaca REST API to fetch daily bars.
+
+        Args:
+            symbol: Ticker symbol (e.g., "SPY").
+            lookback_days: Number of trading days to fetch (default 60).
+
+        Returns:
+            DataFrame with columns: open, high, low, close, volume, timestamp.
+            Sorted oldest-first. Returns None if data is unavailable.
+        """
+        if not self._historical_client:
+            # Initialize client if not already done
+            api_key = os.getenv(self._alpaca_config.api_key_env)
+            secret_key = os.getenv(self._alpaca_config.secret_key_env)
+            if not api_key or not secret_key:
+                logger.error("Cannot fetch daily bars: API keys not configured")
+                return None
+            self._historical_client = StockHistoricalDataClient(api_key, secret_key)
+
+        try:
+            # Calculate date range — go back extra days to account for weekends/holidays
+            end = self._clock.now()
+            # Approximate: ~1.4x lookback to account for non-trading days
+            calendar_days = int(lookback_days * 1.5) + 10
+            start = end - timedelta(days=calendar_days)
+
+            request = StockBarsRequest(
+                symbol_or_symbols=symbol,
+                timeframe=TimeFrame.Day,
+                start=start,
+                end=end,
+                feed=DataFeed.SIP,  # Use SIP for daily data (more reliable than IEX)
+            )
+
+            bars = self._historical_client.get_stock_bars(request)
+
+            if symbol not in bars:
+                logger.warning("No daily bar data for %s", symbol)
+                return None
+
+            data = []
+            for bar in bars[symbol]:
+                data.append(
+                    {
+                        "timestamp": bar.timestamp,
+                        "open": float(bar.open),
+                        "high": float(bar.high),
+                        "low": float(bar.low),
+                        "close": float(bar.close),
+                        "volume": int(bar.volume),
+                    }
+                )
+
+            df = pd.DataFrame(data)
+            # Sort oldest-first
+            df = df.sort_values("timestamp").reset_index(drop=True)
+            # Limit to requested lookback
+            if len(df) > lookback_days:
+                df = df.tail(lookback_days).reset_index(drop=True)
+
+            logger.debug("Fetched %d daily bars for %s", len(df), symbol)
+            return df
+
+        except Exception as e:
+            logger.error("Failed to fetch daily bars for %s: %s", symbol, e)
+            return None

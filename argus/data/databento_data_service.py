@@ -854,3 +854,22 @@ class DatabentoDataService(DataService):
         Delegates to shared utility function for consistency with DataFetcher.
         """
         return normalize_databento_df(df)
+
+    async def fetch_daily_bars(
+        self, symbol: str, lookback_days: int = 60
+    ) -> pd.DataFrame | None:
+        """Fetch daily OHLCV bars for regime classification.
+
+        DatabentoDataService does not support daily bar fetching in V1.
+        Returns None. The Orchestrator should handle None by using a fallback regime.
+
+        Future: When Databento subscription is active, implement via Historical API.
+
+        Args:
+            symbol: Ticker symbol (e.g., "SPY").
+            lookback_days: Number of trading days to fetch.
+
+        Returns:
+            None — daily bars not yet implemented for Databento.
+        """
+        return None

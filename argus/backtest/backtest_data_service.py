@@ -275,3 +275,20 @@ class BacktestDataService(DataService):
             # ATR and SMA carry over - do not reset (handled by engine)
 
         logger.debug("BacktestDataService daily state reset")
+
+    async def fetch_daily_bars(
+        self, symbol: str, lookback_days: int = 60
+    ) -> pd.DataFrame | None:
+        """Fetch daily OHLCV bars for regime classification.
+
+        BacktestDataService does not support daily bar fetching.
+        Returns None. The Orchestrator should handle None by using a fallback regime.
+
+        Args:
+            symbol: Ticker symbol (e.g., "SPY").
+            lookback_days: Number of trading days to fetch.
+
+        Returns:
+            None — daily bars not supported in backtest mode.
+        """
+        return None
