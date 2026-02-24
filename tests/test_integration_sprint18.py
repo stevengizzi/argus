@@ -43,8 +43,10 @@ from argus.core.events import (
 )
 from argus.core.orchestrator import Orchestrator
 from argus.core.risk_manager import RiskManager
+from argus.core.throttle import ThrottleAction
 from argus.execution.order_manager import OrderManager
 from argus.execution.simulated_broker import SimulatedBroker
+from argus.models.trading import Trade
 from argus.strategies.orb_breakout import OrbBreakoutStrategy
 from argus.strategies.orb_scalp import OrbScalpStrategy
 
@@ -838,3 +840,283 @@ class TestMidDayReconstruction:
 
         assert scalp_state is not None
         assert scalp_state.or_complete is True
+
+
+class TestIntegrationGaps:
+    """Integration tests for multi-strategy edge cases."""
+
+    @pytest.mark.asyncio
+    async def test_same_symbol_collision_blocked(self) -> None:
+        """When ORB has an open position in AAPL, ORB Scalp's signal for AAPL
+        should be blocked by cross-strategy single-stock exposure limit."""
+        event_bus = EventBus()
+        clock = FixedClock(datetime(2026, 2, 25, 15, 0, 0, tzinfo=UTC))
+        broker = SimulatedBroker(initial_cash=100_000)
+        await broker.connect()
+
+        # Use tight single-stock limit (5%) so a second position in same stock is blocked
+        risk_config = RiskConfig(
+            account=AccountRiskConfig(
+                daily_loss_limit_pct=0.03,
+                max_concurrent_positions=10,
+            ),
+            cross_strategy=CrossStrategyRiskConfig(
+                duplicate_stock_policy=DuplicateStockPolicy.ALLOW_ALL,
+                max_single_stock_pct=0.05,  # 5% of $100K = $5,000 max per stock
+            ),
+        )
+
+        order_config = OrderManagerConfig()
+        order_manager = OrderManager(
+            event_bus=event_bus,
+            broker=broker,
+            clock=clock,
+            config=order_config,
+        )
+        await order_manager.start()
+
+        risk_manager = RiskManager(
+            config=risk_config,
+            broker=broker,
+            event_bus=event_bus,
+            clock=clock,
+            order_manager=order_manager,
+        )
+        await risk_manager.initialize()
+        await risk_manager.reset_daily_state()
+
+        broker.set_price("AAPL", 150.0)
+
+        # ORB takes a position worth $4,500 (30 shares × $150)
+        orb_signal = SignalEvent(
+            strategy_id="strat_orb_breakout",
+            symbol="AAPL",
+            side=Side.LONG,
+            entry_price=150.0,
+            stop_price=148.0,
+            target_prices=(152.0, 154.0),
+            share_count=30,
+            rationale="ORB Breakout",
+            time_stop_seconds=900,
+        )
+
+        orb_result = await risk_manager.evaluate_signal(orb_signal)
+        assert isinstance(orb_result, OrderApprovedEvent)
+
+        # Process the ORB order through order manager
+        await order_manager.on_approved(orb_result)
+        await asyncio.sleep(0.05)
+
+        # Now ORB Scalp tries the SAME symbol — should be blocked by exposure limit
+        # 30 shares @ $150 = $4,500 existing + 20 shares @ $150 = $3,000 proposed = $7,500 > $5,000 limit
+        scalp_signal = SignalEvent(
+            strategy_id="strat_orb_scalp",
+            symbol="AAPL",
+            side=Side.LONG,
+            entry_price=150.0,
+            stop_price=149.0,
+            target_prices=(150.45,),  # 0.3R scalp target
+            share_count=20,
+            rationale="ORB Scalp breakout",
+            time_stop_seconds=120,
+        )
+
+        scalp_result = await risk_manager.evaluate_signal(scalp_signal)
+
+        # Should be rejected due to single-stock exposure
+        assert isinstance(scalp_result, OrderRejectedEvent)
+        assert "exposure" in scalp_result.reason.lower() or "exceed" in scalp_result.reason.lower()
+
+        await order_manager.stop()
+
+    @pytest.mark.asyncio
+    async def test_partial_allocation_exhaustion(self) -> None:
+        """When ORB uses 35% of its 40% allocation cap, it should only have
+        5% remaining for new positions. ORB Scalp's allocation is independent."""
+        event_bus = EventBus()
+        clock = FixedClock(datetime(2026, 2, 25, 10, 0, 0, tzinfo=UTC))
+        broker = SimulatedBroker(initial_cash=100_000)
+        await broker.connect()
+
+        trade_logger = MagicMock()
+        trade_logger.get_todays_pnl = AsyncMock(return_value=0.0)
+        trade_logger.query_trades = AsyncMock(return_value=[])
+        trade_logger.get_trades_by_strategy = AsyncMock(return_value=[])
+        trade_logger.get_daily_pnl = AsyncMock(return_value=[])
+        trade_logger.get_trades_by_date = AsyncMock(return_value=[])
+        trade_logger.log_orchestrator_decision = AsyncMock()
+
+        data_service = MagicMock()
+        data_service.get_daily_bars = AsyncMock(return_value=None)
+        data_service.fetch_daily_bars = AsyncMock(return_value=None)
+
+        # Configure orchestrator with 40% max allocation per strategy
+        config = OrchestratorConfig(
+            max_allocation_pct=0.40,
+            min_allocation_pct=0.10,
+            cash_reserve_pct=0.20,
+        )
+
+        orchestrator = Orchestrator(
+            config=config,
+            event_bus=event_bus,
+            clock=clock,
+            trade_logger=trade_logger,
+            broker=broker,
+            data_service=data_service,
+        )
+
+        orb_config = make_orb_breakout_config()
+        scalp_config = make_orb_scalp_config()
+
+        orb_strategy = OrbBreakoutStrategy(config=orb_config, clock=clock)
+        scalp_strategy = OrbScalpStrategy(config=scalp_config, clock=clock)
+
+        orchestrator.register_strategy(orb_strategy)
+        orchestrator.register_strategy(scalp_strategy)
+
+        # Run pre-market to compute allocations
+        await orchestrator.run_pre_market()
+
+        # Both strategies should have been allocated capital
+        allocations = orchestrator.current_allocations
+
+        assert "strat_orb_breakout" in allocations
+        assert "strat_orb_scalp" in allocations
+
+        orb_alloc = allocations["strat_orb_breakout"]
+        scalp_alloc = allocations["strat_orb_scalp"]
+
+        # With 2 strategies and 40% max, each gets 40% (capped at max)
+        # or 50% each (equal weight), whichever is lower
+        # min(1/2, 0.40) = 0.40 for each
+        assert orb_alloc.allocation_pct == 0.40
+        assert scalp_alloc.allocation_pct == 0.40
+
+        # Verify dollar amounts (deployable = $100K * 0.80 = $80K)
+        # Each strategy gets 40% of deployable = $32,000
+        deployable = 100_000 * (1.0 - config.cash_reserve_pct)
+        expected_dollars = deployable * 0.40
+        assert abs(orb_alloc.allocation_dollars - expected_dollars) < 1.0
+        assert abs(scalp_alloc.allocation_dollars - expected_dollars) < 1.0
+
+        # Verify strategies are marked active
+        assert orb_strategy.is_active is True
+        assert scalp_strategy.is_active is True
+
+        # Verify allocations are independent — each strategy has its own capital
+        assert orb_strategy.allocated_capital == orb_alloc.allocation_dollars
+        assert scalp_strategy.allocated_capital == scalp_alloc.allocation_dollars
+
+    @pytest.mark.asyncio
+    async def test_throttle_isolation_between_strategies(self) -> None:
+        """When ORB Scalp is throttled due to consecutive losses, ORB Breakout
+        should remain active and unaffected. Throttled strategy's capital stays idle."""
+        event_bus = EventBus()
+        clock = FixedClock(datetime(2026, 2, 25, 10, 0, 0, tzinfo=UTC))
+        broker = SimulatedBroker(initial_cash=100_000)
+        await broker.connect()
+
+        # Create mock trades for scalp strategy showing 5 consecutive losses
+        from argus.models.trading import ExitReason as TradeExitReason, OrderSide, TradeOutcome
+
+        scalp_losing_trades = [
+            Trade(
+                strategy_id="strat_orb_scalp",
+                symbol="AAPL",
+                side=OrderSide.BUY,
+                entry_price=150.0,
+                exit_price=149.0,
+                stop_price=148.0,
+                shares=10,
+                entry_time=datetime(2026, 2, 24, 10, i, 0, tzinfo=UTC),
+                exit_time=datetime(2026, 2, 24, 10, i + 5, 0, tzinfo=UTC),
+                exit_reason=TradeExitReason.STOP_LOSS,
+                commission=1.0,
+                gross_pnl=-10.0,
+                net_pnl=-11.0,  # Negative P&L = loss
+                outcome=TradeOutcome.LOSS,
+            )
+            for i in range(5)
+        ]
+
+        trade_logger = MagicMock()
+        trade_logger.get_todays_pnl = AsyncMock(return_value=0.0)
+        trade_logger.query_trades = AsyncMock(return_value=[])
+        trade_logger.get_trades_by_date = AsyncMock(return_value=[])
+        trade_logger.log_orchestrator_decision = AsyncMock()
+
+        # Return losing trades for scalp, empty for orb
+        async def mock_get_trades_by_strategy(
+            strategy_id: str, limit: int = 200
+        ) -> list[Trade]:
+            if strategy_id == "strat_orb_scalp":
+                return scalp_losing_trades
+            return []
+
+        trade_logger.get_trades_by_strategy = AsyncMock(side_effect=mock_get_trades_by_strategy)
+        trade_logger.get_daily_pnl = AsyncMock(return_value=[])
+
+        data_service = MagicMock()
+        data_service.get_daily_bars = AsyncMock(return_value=None)
+        data_service.fetch_daily_bars = AsyncMock(return_value=None)
+
+        # Configure orchestrator with 5 consecutive losses triggering throttle
+        config = OrchestratorConfig(
+            max_allocation_pct=0.40,
+            min_allocation_pct=0.10,
+            cash_reserve_pct=0.20,
+            consecutive_loss_throttle=5,
+        )
+
+        orchestrator = Orchestrator(
+            config=config,
+            event_bus=event_bus,
+            clock=clock,
+            trade_logger=trade_logger,
+            broker=broker,
+            data_service=data_service,
+        )
+
+        orb_config = make_orb_breakout_config()
+        scalp_config = make_orb_scalp_config()
+
+        orb_strategy = OrbBreakoutStrategy(config=orb_config, clock=clock)
+        scalp_strategy = OrbScalpStrategy(config=scalp_config, clock=clock)
+
+        orchestrator.register_strategy(orb_strategy)
+        orchestrator.register_strategy(scalp_strategy)
+
+        # Run pre-market to trigger throttle check
+        await orchestrator.run_pre_market()
+
+        allocations = orchestrator.current_allocations
+
+        # ORB Breakout should be active with full allocation
+        orb_alloc = allocations["strat_orb_breakout"]
+        assert orb_alloc.eligible is True
+        assert orb_alloc.allocation_pct == 0.40  # Full allocation
+        assert orb_strategy.is_active is True
+
+        # ORB Scalp should be throttled (REDUCE) due to consecutive losses
+        scalp_alloc = allocations["strat_orb_scalp"]
+        assert scalp_alloc.eligible is True  # Still eligible by regime
+        assert scalp_alloc.throttle_action == ThrottleAction.REDUCE
+        # REDUCE gives minimum allocation
+        assert scalp_alloc.allocation_pct == config.min_allocation_pct
+        # Strategy is still active (REDUCE doesn't suspend)
+        assert scalp_strategy.is_active is True
+
+        # Verify total deployed capital is reduced — throttled strategy gets min allocation
+        # ORB gets 40%, Scalp gets 10% (min), total = 50% vs 80% if both were full
+        total_deployed_pct = orb_alloc.allocation_pct + scalp_alloc.allocation_pct
+        assert total_deployed_pct == 0.50  # 40% + 10%
+
+        # Verify idle capital stays idle (DEC-119)
+        # Deployable = 80% of $100K = $80K
+        # ORB: 40% of $80K = $32K, Scalp: 10% of $80K = $8K
+        # Total deployed = $32K + $8K = $40K, idle = $80K - $40K = $40K
+        deployable = 100_000 * (1.0 - config.cash_reserve_pct)
+        total_allocated = orb_alloc.allocation_dollars + scalp_alloc.allocation_dollars
+        idle_capital = deployable - total_allocated
+        assert idle_capital == 40_000.0  # $80K - $40K = $40K idle
