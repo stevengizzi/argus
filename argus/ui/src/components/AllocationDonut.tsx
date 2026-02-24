@@ -10,7 +10,7 @@
  * - Responsive: 200px on mobile, 250px on desktop
  */
 
-import { useRef, useEffect, useMemo, memo } from 'react';
+import { useRef, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { Card } from './Card';
@@ -60,7 +60,7 @@ function getStrategyColor(strategyId: string): string {
   return STRATEGY_COLORS[normalized] || '#71717a'; // zinc-500 fallback
 }
 
-export const AllocationDonut = memo(function AllocationDonut({ allocations, cashReservePct: _cashReservePct }: AllocationDonutProps) {
+export function AllocationDonut({ allocations, cashReservePct: _cashReservePct }: AllocationDonutProps) {
   // Track if initial animation has played
   const hasAnimated = useRef(false);
   useEffect(() => {
@@ -171,4 +171,4 @@ export const AllocationDonut = memo(function AllocationDonut({ allocations, cash
       )}
     </Card>
   );
-});
+}

@@ -11,7 +11,7 @@
  * - Pulse animation when >90%
  */
 
-import { useRef, useEffect, memo } from 'react';
+import { useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { DURATION, EASE } from '../utils/motion';
 
@@ -56,7 +56,7 @@ function polarToCartesian(
   };
 }
 
-export const RiskGauge = memo(function RiskGauge({ label, value, maxLabel, size = 'md' }: RiskGaugeProps) {
+export function RiskGauge({ label, value, maxLabel, size = 'md' }: RiskGaugeProps) {
   // Track if initial animation has played
   const hasAnimated = useRef(false);
   useEffect(() => {
@@ -160,4 +160,4 @@ export const RiskGauge = memo(function RiskGauge({ label, value, maxLabel, size 
       )}
     </div>
   );
-});
+}

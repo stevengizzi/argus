@@ -4,6 +4,11 @@
  * Combines AllocationDonut (17-A) and RiskGauge (17-C) with data fetching.
  * Handles orchestrator unavailability gracefully (dev mode, system starting).
  *
+ * IMPORTANT: This component always renders the same DOM structure.
+ * It never conditionally swaps between skeleton and content, because
+ * doing so tears down child components (losing refs, replaying animations).
+ * Children handle empty/loading states internally.
+ *
  * Layout:
  * - Desktop: Donut and risk gauges in a horizontal row
  * - Tablet: Same row, slightly smaller
@@ -16,7 +21,6 @@ import { AllocationDonut } from '../../components/AllocationDonut';
 import { RiskGauge } from '../../components/RiskGauge';
 import { Card } from '../../components/Card';
 import { CardHeader } from '../../components/CardHeader';
-import { Skeleton } from '../../components/Skeleton';
 import { useOrchestratorStatus, usePerformance, useAccount } from '../../hooks';
 import { staggerItem } from '../../utils/motion';
 import { useIsMultiColumn } from '../../hooks/useMediaQuery';
@@ -27,24 +31,22 @@ const WEEKLY_LOSS_LIMIT_PCT = 0.05; // 5%
 
 export function RiskAllocationPanel() {
   const isMultiColumn = useIsMultiColumn();
-  const { data: orchestratorData, isPending: orchestratorPending } = useOrchestratorStatus();
-  const { data: performanceData, isPending: performancePending } = usePerformance('week');
+  const { data: orchestratorData } = useOrchestratorStatus();
+  const { data: performanceData } = usePerformance('week');
   const { data: accountData } = useAccount();
-
-  const showSkeleton = orchestratorPending || performancePending;
 
   // Memoize allocation data to prevent unnecessary child re-renders
   const { allocations, cashReservePct } = useMemo(() => {
     const allocs = orchestratorData?.allocations.map(alloc => ({
       strategy_id: alloc.strategy_id,
       allocation_pct: alloc.allocation_pct,
-      daily_pnl: 0, // Could be enriched with strategy P&L
+      daily_pnl: 0,
     })) ?? [];
     const reserve = orchestratorData?.cash_reserve_pct ?? 0.2;
     return { allocations: allocs, cashReservePct: reserve };
   }, [orchestratorData]);
 
-  // Memoize risk calculations to prevent unnecessary re-renders
+  // Memoize risk calculations
   const { dailyRiskConsumed, weeklyRiskConsumed } = useMemo(() => {
     const equity = accountData?.equity ?? 100000;
     const dailyLossLimit = equity * DAILY_LOSS_LIMIT_PCT;
@@ -60,10 +62,6 @@ export function RiskAllocationPanel() {
         : 0,
     };
   }, [accountData?.equity, accountData?.daily_pnl, performanceData?.metrics.net_pnl]);
-
-  if (showSkeleton) {
-    return <RiskAllocationSkeleton />;
-  }
 
   if (isMultiColumn) {
     // Desktop/Tablet: horizontal layout
@@ -134,25 +132,5 @@ export function RiskAllocationPanel() {
         </Card>
       </motion.div>
     </>
-  );
-}
-
-function RiskAllocationSkeleton() {
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-5 lg:gap-6">
-      <Card>
-        <CardHeader title="Capital Allocation" />
-        <div className="flex justify-center py-4">
-          <Skeleton className="w-[200px] h-[200px] rounded-full" />
-        </div>
-      </Card>
-      <Card className="md:col-span-2">
-        <CardHeader title="Risk Budget" />
-        <div className="flex justify-around py-4">
-          <Skeleton className="w-[100px] h-[100px] rounded-full" />
-          <Skeleton className="w-[100px] h-[100px] rounded-full" />
-        </div>
-      </Card>
-    </div>
   );
 }
