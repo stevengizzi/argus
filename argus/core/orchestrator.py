@@ -487,9 +487,7 @@ class Orchestrator:
             self._last_date = today_str
 
             # Pre-market trigger
-            pre_market_time = datetime.strptime(
-                self._config.pre_market_time, "%H:%M"
-            ).time()
+            pre_market_time = datetime.strptime(self._config.pre_market_time, "%H:%M").time()
             if not self._pre_market_done_today and now_et.time() >= pre_market_time:
                 try:
                     await self.run_pre_market()

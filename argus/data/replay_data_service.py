@@ -278,9 +278,7 @@ class ReplayDataService(DataService):
         if self._replay_task is not None:
             await self._replay_task
 
-    async def fetch_daily_bars(
-        self, symbol: str, lookback_days: int = 60
-    ) -> pd.DataFrame | None:
+    async def fetch_daily_bars(self, symbol: str, lookback_days: int = 60) -> pd.DataFrame | None:
         """Fetch daily OHLCV bars for regime classification.
 
         ReplayDataService does not support daily bar fetching. Returns None.

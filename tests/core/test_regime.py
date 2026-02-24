@@ -64,14 +64,16 @@ def make_daily_bars(
     lows = closes * (1 - np.abs(np.random.normal(0, volatility, num_bars)))
     opens = (closes.shift(1).fillna(closes.iloc[0]) + closes) / 2
 
-    return pd.DataFrame({
-        "timestamp": timestamps,
-        "open": opens.values,
-        "high": highs.values,
-        "low": lows.values,
-        "close": closes.values,
-        "volume": [1_000_000] * num_bars,
-    })
+    return pd.DataFrame(
+        {
+            "timestamp": timestamps,
+            "open": opens.values,
+            "high": highs.values,
+            "low": lows.values,
+            "close": closes.values,
+            "volume": [1_000_000] * num_bars,
+        }
+    )
 
 
 def make_indicators(
@@ -720,9 +722,7 @@ class TestTrendScore:
         """Price above both SMAs → +2."""
         config = make_config()
         classifier = RegimeClassifier(config)
-        indicators = make_indicators(
-            spy_price=450.0, spy_sma_20=445.0, spy_sma_50=440.0
-        )
+        indicators = make_indicators(spy_price=450.0, spy_sma_20=445.0, spy_sma_50=440.0)
 
         score = classifier._compute_trend_score(indicators)
 
@@ -732,9 +732,7 @@ class TestTrendScore:
         """Price below both SMAs → -2."""
         config = make_config()
         classifier = RegimeClassifier(config)
-        indicators = make_indicators(
-            spy_price=430.0, spy_sma_20=445.0, spy_sma_50=450.0
-        )
+        indicators = make_indicators(spy_price=430.0, spy_sma_20=445.0, spy_sma_50=450.0)
 
         score = classifier._compute_trend_score(indicators)
 
@@ -744,9 +742,7 @@ class TestTrendScore:
         """Price above SMA-20 but below SMA-50 → 0 (mixed)."""
         config = make_config()
         classifier = RegimeClassifier(config)
-        indicators = make_indicators(
-            spy_price=447.0, spy_sma_20=445.0, spy_sma_50=450.0
-        )
+        indicators = make_indicators(spy_price=447.0, spy_sma_20=445.0, spy_sma_50=450.0)
 
         score = classifier._compute_trend_score(indicators)
 
@@ -756,9 +752,7 @@ class TestTrendScore:
         """Price below SMA-20 but above SMA-50 → 0 (mixed)."""
         config = make_config()
         classifier = RegimeClassifier(config)
-        indicators = make_indicators(
-            spy_price=447.0, spy_sma_20=450.0, spy_sma_50=445.0
-        )
+        indicators = make_indicators(spy_price=447.0, spy_sma_20=450.0, spy_sma_50=445.0)
 
         score = classifier._compute_trend_score(indicators)
 

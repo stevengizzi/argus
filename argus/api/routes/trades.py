@@ -167,41 +167,45 @@ async def export_trades_csv(
     writer = csv.writer(output)
 
     # Write header row
-    writer.writerow([
-        "id",
-        "strategy_id",
-        "symbol",
-        "side",
-        "entry_price",
-        "entry_time",
-        "exit_price",
-        "exit_time",
-        "shares",
-        "pnl_dollars",
-        "pnl_r_multiple",
-        "exit_reason",
-        "hold_duration_seconds",
-        "commission",
-    ])
+    writer.writerow(
+        [
+            "id",
+            "strategy_id",
+            "symbol",
+            "side",
+            "entry_price",
+            "entry_time",
+            "exit_price",
+            "exit_time",
+            "shares",
+            "pnl_dollars",
+            "pnl_r_multiple",
+            "exit_reason",
+            "hold_duration_seconds",
+            "commission",
+        ]
+    )
 
     # Write data rows
     for row in trades_data:
-        writer.writerow([
-            row["id"],
-            row["strategy_id"],
-            row["symbol"],
-            row["side"],
-            row["entry_price"],
-            row["entry_time"],
-            row.get("exit_price", ""),
-            row.get("exit_time", ""),
-            row["shares"],
-            row.get("net_pnl", ""),
-            row.get("r_multiple", ""),
-            row.get("exit_reason", ""),
-            row.get("hold_duration_seconds", ""),
-            row.get("commission", 0.0),
-        ])
+        writer.writerow(
+            [
+                row["id"],
+                row["strategy_id"],
+                row["symbol"],
+                row["side"],
+                row["entry_price"],
+                row["entry_time"],
+                row.get("exit_price", ""),
+                row.get("exit_time", ""),
+                row["shares"],
+                row.get("net_pnl", ""),
+                row.get("r_multiple", ""),
+                row.get("exit_reason", ""),
+                row.get("hold_duration_seconds", ""),
+                row.get("commission", 0.0),
+            ]
+        )
 
     # Generate filename with date
     date_str = datetime.now(UTC).strftime("%Y-%m-%d")

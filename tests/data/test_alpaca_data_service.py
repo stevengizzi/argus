@@ -710,9 +710,7 @@ class TestAlpacaDataServiceFetchDailyBars:
         assert df is None
 
     @pytest.mark.asyncio
-    async def test_fetch_daily_bars_initializes_client_if_needed(
-        self, data_service, fixed_clock
-    ):
+    async def test_fetch_daily_bars_initializes_client_if_needed(self, data_service, fixed_clock):
         """Test fetch_daily_bars initializes historical client if not already done."""
         # Client not initialized
         assert data_service._historical_client is None
@@ -738,9 +736,7 @@ class TestAlpacaDataServiceFetchDailyBars:
             del os.environ["TEST_ALPACA_SECRET_KEY"]
 
     @pytest.mark.asyncio
-    async def test_fetch_daily_bars_missing_api_keys_returns_none(
-        self, data_service, fixed_clock
-    ):
+    async def test_fetch_daily_bars_missing_api_keys_returns_none(self, data_service, fixed_clock):
         """Test fetch_daily_bars returns None if API keys missing."""
         # Client not initialized and no API keys
         assert data_service._historical_client is None

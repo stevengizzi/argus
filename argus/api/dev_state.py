@@ -24,6 +24,7 @@ from argus.core.config import (
     ApiConfig,
     HealthConfig,
     OrbBreakoutConfig,
+    OrbScalpConfig,
     OrchestratorConfig,
     OrderManagerConfig,
     RiskConfig,
@@ -405,11 +406,19 @@ def _create_mock_orchestrator(now: datetime) -> MockOrchestrator:
     allocations = {
         "orb_breakout": StrategyAllocation(
             strategy_id="orb_breakout",
-            allocation_pct=0.40,
-            allocation_dollars=40000.0,
+            allocation_pct=0.30,
+            allocation_dollars=30000.0,
             throttle_action=ThrottleAction.NONE,
             eligible=True,
-            reason="Active: 40% allocation",
+            reason="Active: 30% allocation",
+        ),
+        "orb_scalp": StrategyAllocation(
+            strategy_id="orb_scalp",
+            allocation_pct=0.30,
+            allocation_dollars=30000.0,
+            throttle_action=ThrottleAction.NONE,
+            eligible=True,
+            reason="Active: 30% allocation",
         ),
     }
 
@@ -499,15 +508,11 @@ async def create_dev_state() -> AppState:
     health_monitor.update_component(
         "data_service", ComponentStatus.HEALTHY, "Mock data service active"
     )
-    health_monitor.update_component(
-        "order_manager", ComponentStatus.HEALTHY, "Processing orders"
-    )
+    health_monitor.update_component("order_manager", ComponentStatus.HEALTHY, "Processing orders")
     health_monitor.update_component(
         "risk_manager", ComponentStatus.HEALTHY, "Risk evaluation active"
     )
-    health_monitor.update_component(
-        "strategy_orb", ComponentStatus.HEALTHY, "ORB Breakout running"
-    )
+    health_monitor.update_component("strategy_orb", ComponentStatus.HEALTHY, "ORB Breakout running")
 
     # Risk manager
     risk_config = RiskConfig()
@@ -538,22 +543,39 @@ async def create_dev_state() -> AppState:
             order_manager._managed_positions[pos.symbol] = []
         order_manager._managed_positions[pos.symbol].append(pos)
 
-    # Mock strategy
+    # Mock strategies
     orb_config = OrbBreakoutConfig(
         strategy_id="orb_breakout",
         name="ORB Breakout",
         version="1.0.0",
     )
-    mock_strategy = MockStrategy(
+    mock_orb_breakout = MockStrategy(
         strategy_id="orb_breakout",
         name="ORB Breakout",
         version="1.0.0",
         is_active=True,
         pipeline_stage="paper",
-        allocated_capital=100_000.0,
-        daily_pnl=sum(t.net_pnl for t in trades if t.exit_time.date() == now.date()),
-        trade_count_today=sum(1 for t in trades if t.exit_time.date() == now.date()),
+        allocated_capital=50_000.0,
+        daily_pnl=sum(t.net_pnl for t in trades if t.exit_time.date() == now.date()) * 0.6,
+        trade_count_today=sum(1 for t in trades if t.exit_time.date() == now.date()) // 2,
         config=orb_config,
+    )
+
+    scalp_config = OrbScalpConfig(
+        strategy_id="orb_scalp",
+        name="ORB Scalp",
+        version="1.0.0",
+    )
+    mock_orb_scalp = MockStrategy(
+        strategy_id="orb_scalp",
+        name="ORB Scalp",
+        version="1.0.0",
+        is_active=True,
+        pipeline_stage="paper",
+        allocated_capital=50_000.0,
+        daily_pnl=sum(t.net_pnl for t in trades if t.exit_time.date() == now.date()) * 0.4,
+        trade_count_today=sum(1 for t in trades if t.exit_time.date() == now.date()) // 2,
+        config=scalp_config,
     )
 
     # Mock orchestrator
@@ -568,7 +590,10 @@ async def create_dev_state() -> AppState:
         order_manager=order_manager,
         data_service=None,
         orchestrator=mock_orchestrator,  # type: ignore[arg-type]
-        strategies={"orb_breakout": mock_strategy},  # type: ignore[dict-item]
+        strategies={
+            "orb_breakout": mock_orb_breakout,  # type: ignore[dict-item]
+            "orb_scalp": mock_orb_scalp,  # type: ignore[dict-item]
+        },
         clock=clock,
         config=system_config,
         start_time=time.time(),

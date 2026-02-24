@@ -130,8 +130,7 @@ class OrbScalpStrategy(OrbBaseStrategy):
         state.position_active = True
 
         logger.info(
-            "%s: ORB scalp signal - entry=%.2f, stop=%.2f, target=%.2f, shares=%d, "
-            "time_stop=%ds",
+            "%s: ORB scalp signal - entry=%.2f, stop=%.2f, target=%.2f, shares=%d, time_stop=%ds",
             symbol,
             entry_price,
             stop_price,

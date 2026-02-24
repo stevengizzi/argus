@@ -330,9 +330,7 @@ class WebSocketBridge:
                 try:
                     client.send_queue.put_nowait(message)
                 except asyncio.QueueFull:
-                    logger.warning(
-                        "WebSocket send queue full for client, dropping message"
-                    )
+                    logger.warning("WebSocket send queue full for client, dropping message")
 
     async def _heartbeat_loop(self) -> None:
         """Send periodic heartbeat messages to all clients."""
@@ -439,10 +437,12 @@ async def websocket_endpoint(
 
             if action == "ping":
                 # Send pong response
-                await websocket.send_json({
-                    "type": "pong",
-                    "timestamp": datetime.now(UTC).isoformat(),
-                })
+                await websocket.send_json(
+                    {
+                        "type": "pong",
+                        "timestamp": datetime.now(UTC).isoformat(),
+                    }
+                )
 
             elif action == "subscribe":
                 # Set subscribed types

@@ -195,9 +195,7 @@ async def get_performance(
             win_rate=strat_metrics.win_rate,
             net_pnl=strat_metrics.net_pnl,
             profit_factor=(
-                strat_metrics.profit_factor
-                if strat_metrics.profit_factor != float("inf")
-                else 0.0
+                strat_metrics.profit_factor if strat_metrics.profit_factor != float("inf") else 0.0
             ),
         )
 

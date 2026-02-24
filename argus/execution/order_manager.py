@@ -294,9 +294,7 @@ class OrderManager:
                 bracket_result.targets[0].order_id if bracket_result.targets else None
             ),
             bracket_t2_order_id=(
-                bracket_result.targets[1].order_id
-                if len(bracket_result.targets) > 1
-                else None
+                bracket_result.targets[1].order_id if len(bracket_result.targets) > 1 else None
             ),
         )
         self._pending_orders[entry_order_id] = pending
@@ -331,8 +329,7 @@ class OrderManager:
         )
 
         logger.info(
-            "Bracket order submitted: BUY %d shares of %s "
-            "(entry=%s, stop=%s, T1=%s, T2=%s)",
+            "Bracket order submitted: BUY %d shares of %s (entry=%s, stop=%s, T1=%s, T2=%s)",
             share_count,
             signal.symbol,
             entry_order_id,

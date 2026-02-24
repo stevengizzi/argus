@@ -570,15 +570,17 @@ class TradeLogger:
         decisions = []
         for row in rows:
             r = dict(row)  # type: ignore[arg-type]
-            decisions.append({
-                "id": r["id"],
-                "date": r["date"],
-                "decision_type": r["decision_type"],
-                "strategy_id": r.get("strategy_id"),
-                "details": json.loads(r["details"]) if r.get("details") else None,
-                "rationale": r.get("rationale"),
-                "created_at": r["created_at"],
-            })
+            decisions.append(
+                {
+                    "id": r["id"],
+                    "date": r["date"],
+                    "decision_type": r["decision_type"],
+                    "strategy_id": r.get("strategy_id"),
+                    "details": json.loads(r["details"]) if r.get("details") else None,
+                    "rationale": r.get("rationale"),
+                    "created_at": r["created_at"],
+                }
+            )
 
         return decisions, total
 

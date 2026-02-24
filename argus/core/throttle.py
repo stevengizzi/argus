@@ -96,13 +96,8 @@ class PerformanceThrottler:
             actions.append(ThrottleAction.REDUCE)
 
         # Check rolling Sharpe → SUSPEND
-        rolling_sharpe = self.get_rolling_sharpe(
-            daily_pnl, self._config.performance_lookback_days
-        )
-        if (
-            rolling_sharpe is not None
-            and rolling_sharpe < self._config.suspension_sharpe_threshold
-        ):
+        rolling_sharpe = self.get_rolling_sharpe(daily_pnl, self._config.performance_lookback_days)
+        if rolling_sharpe is not None and rolling_sharpe < self._config.suspension_sharpe_threshold:
             actions.append(ThrottleAction.SUSPEND)
 
         # Check drawdown → SUSPEND
@@ -142,9 +137,7 @@ class PerformanceThrottler:
 
         return count
 
-    def get_rolling_sharpe(
-        self, daily_pnl: list[dict], lookback_days: int
-    ) -> float | None:
+    def get_rolling_sharpe(self, daily_pnl: list[dict], lookback_days: int) -> float | None:
         """Compute rolling Sharpe ratio from daily P&L data.
 
         Uses compute_sharpe_ratio() from analytics/performance.py.

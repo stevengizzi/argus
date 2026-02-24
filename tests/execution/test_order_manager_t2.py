@@ -75,14 +75,12 @@ def mock_broker() -> MagicMock:
         target_results = [
             OrderResult(
                 order_id=t.id,
-                broker_order_id=f"broker-t{i+1}-{order_counter['count']}",
+                broker_order_id=f"broker-t{i + 1}-{order_counter['count']}",
                 status=OrderStatus.PENDING,
             )
             for i, t in enumerate(targets)
         ]
-        return BracketOrderResult(
-            entry=entry_result, stop=stop_result, targets=target_results
-        )
+        return BracketOrderResult(entry=entry_result, stop=stop_result, targets=target_results)
 
     broker.place_order = AsyncMock(side_effect=make_order_result)
     broker.place_bracket_order = AsyncMock(side_effect=make_bracket_result)

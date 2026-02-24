@@ -281,9 +281,7 @@ class TestAuthRoutes:
         assert "Invalid credentials" in response.json()["detail"]
 
     @pytest.mark.asyncio
-    async def test_protected_endpoint_with_valid_token(
-        self, client, auth_headers
-    ) -> None:
+    async def test_protected_endpoint_with_valid_token(self, client, auth_headers) -> None:
         """Protected endpoint with valid token returns 200."""
         response = await client.get(
             "/api/v1/auth/me",

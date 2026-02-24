@@ -70,9 +70,7 @@ async def get_positions(
 
     # Filter by strategy if specified
     if strategy_id is not None:
-        managed_positions = [
-            p for p in managed_positions if p.strategy_id == strategy_id
-        ]
+        managed_positions = [p for p in managed_positions if p.strategy_id == strategy_id]
 
     positions: list[PositionResponse] = []
     clock_now = state.clock.now() if state.clock else datetime.now(UTC)

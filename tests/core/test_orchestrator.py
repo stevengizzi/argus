@@ -104,14 +104,16 @@ def create_spy_bars_bullish(days: int = 60) -> pd.DataFrame:
 
     for i in range(days):
         price = base_price + i * 0.5  # Uptrend
-        data.append({
-            "timestamp": datetime(2026, 1, 1, tzinfo=UTC) + timedelta(days=i),
-            "open": price - 1,
-            "high": price + 1,
-            "low": price - 2,
-            "close": price,
-            "volume": 100000000,
-        })
+        data.append(
+            {
+                "timestamp": datetime(2026, 1, 1, tzinfo=UTC) + timedelta(days=i),
+                "open": price - 1,
+                "high": price + 1,
+                "low": price - 2,
+                "close": price,
+                "volume": 100000000,
+            }
+        )
 
     return pd.DataFrame(data)
 
@@ -125,14 +127,16 @@ def create_spy_bars_crisis(days: int = 60) -> pd.DataFrame:
         # High daily swings for high realized volatility
         swing = 20 if i % 2 == 0 else -20
         price = base_price + swing
-        data.append({
-            "timestamp": datetime(2026, 1, 1, tzinfo=UTC) + timedelta(days=i),
-            "open": price - 10,
-            "high": price + 15,
-            "low": price - 15,
-            "close": price,
-            "volume": 200000000,
-        })
+        data.append(
+            {
+                "timestamp": datetime(2026, 1, 1, tzinfo=UTC) + timedelta(days=i),
+                "open": price - 10,
+                "high": price + 15,
+                "low": price - 15,
+                "close": price,
+                "volume": 200000000,
+            }
+        )
 
     return pd.DataFrame(data)
 
@@ -483,9 +487,7 @@ async def test_allocation_cash_reserve(
     await orchestrator.run_pre_market()
 
     # Total allocated should be at most 80% of equity (80% deployable * allocations)
-    total_dollars = sum(
-        a.allocation_dollars for a in orchestrator.current_allocations.values()
-    )
+    total_dollars = sum(a.allocation_dollars for a in orchestrator.current_allocations.values())
     max_deployable = 100000 * (1 - 0.20)  # 80k
     assert total_dollars <= max_deployable
 
@@ -668,29 +670,19 @@ async def test_intraday_no_throttle_with_wins(
 
     # Simulate losses interrupted by win
     await orchestrator._on_position_closed(
-        PositionClosedEvent(
-            position_id="pos_1", strategy_id="orb_breakout", realized_pnl=-100
-        )
+        PositionClosedEvent(position_id="pos_1", strategy_id="orb_breakout", realized_pnl=-100)
     )
     await orchestrator._on_position_closed(
-        PositionClosedEvent(
-            position_id="pos_2", strategy_id="orb_breakout", realized_pnl=-100
-        )
+        PositionClosedEvent(position_id="pos_2", strategy_id="orb_breakout", realized_pnl=-100)
     )
     await orchestrator._on_position_closed(
-        PositionClosedEvent(
-            position_id="pos_3", strategy_id="orb_breakout", realized_pnl=200
-        )
+        PositionClosedEvent(position_id="pos_3", strategy_id="orb_breakout", realized_pnl=200)
     )  # WIN
     await orchestrator._on_position_closed(
-        PositionClosedEvent(
-            position_id="pos_4", strategy_id="orb_breakout", realized_pnl=-100
-        )
+        PositionClosedEvent(position_id="pos_4", strategy_id="orb_breakout", realized_pnl=-100)
     )
     await orchestrator._on_position_closed(
-        PositionClosedEvent(
-            position_id="pos_5", strategy_id="orb_breakout", realized_pnl=-100
-        )
+        PositionClosedEvent(position_id="pos_5", strategy_id="orb_breakout", realized_pnl=-100)
     )
 
     # Strategy should still be active (only 2 consecutive at end)
@@ -724,16 +716,16 @@ async def test_regime_recheck_triggers_deactivation(
 
     # Now regime changes to range-bound
     # Create 60 days of flat price action across Jan-Feb 2026
-    mock_data_service.fetch_daily_bars.return_value = pd.DataFrame({
-        "timestamp": [
-            datetime(2026, 1, 1, tzinfo=UTC) + timedelta(days=i) for i in range(60)
-        ],
-        "open": [500.0] * 60,
-        "high": [501.0] * 60,
-        "low": [499.0] * 60,
-        "close": [500.0] * 60,  # Flat - range bound
-        "volume": [100000000] * 60,
-    })
+    mock_data_service.fetch_daily_bars.return_value = pd.DataFrame(
+        {
+            "timestamp": [datetime(2026, 1, 1, tzinfo=UTC) + timedelta(days=i) for i in range(60)],
+            "open": [500.0] * 60,
+            "high": [501.0] * 60,
+            "low": [499.0] * 60,
+            "close": [500.0] * 60,  # Flat - range bound
+            "volume": [100000000] * 60,
+        }
+    )
 
     await orchestrator._run_regime_recheck()
     await event_bus.drain()
@@ -1350,10 +1342,12 @@ async def test_regime_recheck_insufficient_data(
     initial_regime = orchestrator.current_regime
 
     # Now return insufficient data
-    mock_data_service.fetch_daily_bars.return_value = pd.DataFrame({
-        "timestamp": [datetime(2026, 2, 24, tzinfo=UTC)],
-        "close": [500.0],
-    })
+    mock_data_service.fetch_daily_bars.return_value = pd.DataFrame(
+        {
+            "timestamp": [datetime(2026, 2, 24, tzinfo=UTC)],
+            "close": [500.0],
+        }
+    )
 
     # Advance clock
     fixed_clock.advance(minutes=30)

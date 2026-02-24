@@ -147,9 +147,7 @@ async def get_orchestrator_status(
         regime=orchestrator.current_regime.value,
         regime_indicators=indicators,
         regime_updated_at=(
-            orchestrator.last_regime_check.isoformat()
-            if orchestrator.last_regime_check
-            else None
+            orchestrator.last_regime_check.isoformat() if orchestrator.last_regime_check else None
         ),
         allocations=allocations,
         cash_reserve_pct=orchestrator.cash_reserve_pct,

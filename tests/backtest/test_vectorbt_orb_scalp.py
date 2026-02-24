@@ -565,17 +565,19 @@ def test_single_symbol_single_combo_produces_correct_trade_count():
                 high = close * 1.002
                 low = open_ * 0.998
 
-            bars.append({
-                "timestamp": timestamp,
-                "trading_day": day,
-                "open": open_,
-                "high": high,
-                "low": low,
-                "close": close,
-                "volume": 10000,
-                "minutes_from_open": bar_num,
-                "bar_number_in_day": bar_num,
-            })
+            bars.append(
+                {
+                    "timestamp": timestamp,
+                    "trading_day": day,
+                    "open": open_,
+                    "high": high,
+                    "low": low,
+                    "close": close,
+                    "volume": 10000,
+                    "minutes_from_open": bar_num,
+                    "bar_number_in_day": bar_num,
+                }
+            )
 
         prev_close = bars[-1]["close"]
 

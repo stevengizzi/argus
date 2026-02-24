@@ -1121,9 +1121,7 @@ max_hold_seconds: 120
 
             # Verify CandleEvent subscription was made
             subscribe_calls = event_bus_mock.subscribe.call_args_list
-            candle_subscribed = any(
-                args[0] == CandleEvent for args, _ in subscribe_calls
-            )
+            candle_subscribed = any(args[0] == CandleEvent for args, _ in subscribe_calls)
             assert candle_subscribed, "CandleEvent routing not subscribed"
 
     @pytest.mark.asyncio

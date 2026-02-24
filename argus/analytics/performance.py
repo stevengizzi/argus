@@ -57,10 +57,7 @@ def compute_metrics(trades: list[dict]) -> PerformanceMetrics:
         PerformanceMetrics with computed values.
     """
     # Filter to closed trades only
-    closed_trades = [
-        t for t in trades
-        if t.get("exit_price") is not None
-    ]
+    closed_trades = [t for t in trades if t.get("exit_price") is not None]
 
     if not closed_trades:
         return PerformanceMetrics()
@@ -100,10 +97,7 @@ def compute_metrics(trades: list[dict]) -> PerformanceMetrics:
     avg_r_multiple = sum(r_multiples) / len(r_multiples) if r_multiples else 0.0
 
     # Hold duration
-    hold_durations = [
-        t.get("hold_duration_seconds", 0) or 0
-        for t in closed_trades
-    ]
+    hold_durations = [t.get("hold_duration_seconds", 0) or 0 for t in closed_trades]
     avg_hold_seconds = sum(hold_durations) / len(hold_durations) if hold_durations else 0.0
 
     # Extremes
@@ -252,7 +246,7 @@ def compute_sharpe_ratio(
 
     # Variance using sample std dev (n-1)
     variance = sum((p - mean_pnl) ** 2 for p in daily_pnl) / (len(daily_pnl) - 1)
-    std_dev = variance ** 0.5
+    std_dev = variance**0.5
 
     # Use tolerance check for near-zero std dev (floating-point precision)
     if std_dev < 1e-10:
@@ -260,7 +254,7 @@ def compute_sharpe_ratio(
 
     # Since we're using raw P&L not percentage returns, skip risk-free adjustment
     # This makes the Sharpe comparable within the system but not to external benchmarks
-    return (mean_pnl / std_dev) * (trading_days_per_year ** 0.5)
+    return (mean_pnl / std_dev) * (trading_days_per_year**0.5)
 
 
 def compute_max_drawdown_pct(daily_pnl: list[float]) -> float:

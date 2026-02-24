@@ -244,18 +244,10 @@ class RegimeClassifier:
         price = indicators.spy_price
 
         # Compare to available SMAs
-        above_sma_20 = (
-            price > indicators.spy_sma_20 if indicators.spy_sma_20 is not None else None
-        )
-        above_sma_50 = (
-            price > indicators.spy_sma_50 if indicators.spy_sma_50 is not None else None
-        )
-        below_sma_20 = (
-            price < indicators.spy_sma_20 if indicators.spy_sma_20 is not None else None
-        )
-        below_sma_50 = (
-            price < indicators.spy_sma_50 if indicators.spy_sma_50 is not None else None
-        )
+        above_sma_20 = price > indicators.spy_sma_20 if indicators.spy_sma_20 is not None else None
+        above_sma_50 = price > indicators.spy_sma_50 if indicators.spy_sma_50 is not None else None
+        below_sma_20 = price < indicators.spy_sma_20 if indicators.spy_sma_20 is not None else None
+        below_sma_50 = price < indicators.spy_sma_50 if indicators.spy_sma_50 is not None else None
 
         # Both SMAs available
         if above_sma_20 is not None and above_sma_50 is not None:

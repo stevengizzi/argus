@@ -275,9 +275,7 @@ class TestBacktestDataService:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_fetch_daily_bars_returns_none(
-        self, data_service: BacktestDataService
-    ) -> None:
+    async def test_fetch_daily_bars_returns_none(self, data_service: BacktestDataService) -> None:
         """fetch_daily_bars returns None — not supported in backtest mode."""
         result = await data_service.fetch_daily_bars("SPY", lookback_days=60)
         assert result is None

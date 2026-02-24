@@ -70,9 +70,7 @@ logger = logging.getLogger(__name__)
 class ArgusSystem:
     """Top-level system container. Owns all components and their lifecycle."""
 
-    def __init__(
-        self, config_dir: Path, dry_run: bool = False, enable_api: bool = True
-    ) -> None:
+    def __init__(self, config_dir: Path, dry_run: bool = False, enable_api: bool = True) -> None:
         """Initialize the Argus system.
 
         Args:

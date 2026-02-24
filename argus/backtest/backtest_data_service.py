@@ -276,9 +276,7 @@ class BacktestDataService(DataService):
 
         logger.debug("BacktestDataService daily state reset")
 
-    async def fetch_daily_bars(
-        self, symbol: str, lookback_days: int = 60
-    ) -> pd.DataFrame | None:
+    async def fetch_daily_bars(self, symbol: str, lookback_days: int = 60) -> pd.DataFrame | None:
         """Fetch daily OHLCV bars for regime classification.
 
         BacktestDataService does not support daily bar fetching.

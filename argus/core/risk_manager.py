@@ -405,9 +405,7 @@ class RiskManager:
 
         return reduced_risk < 0.25 * original_r
 
-    async def _check_cross_strategy_risk(
-        self, signal: SignalEvent, equity: float
-    ) -> str | None:
+    async def _check_cross_strategy_risk(self, signal: SignalEvent, equity: float) -> str | None:
         """Check cross-strategy risk limits.
 
         Verifies that the new position wouldn't violate:

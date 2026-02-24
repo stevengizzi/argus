@@ -120,8 +120,7 @@ async def list_strategies(
     for strategy_id, strategy in state.strategies.items():
         # Count open positions for this strategy
         open_positions = sum(
-            1 for pos in all_positions
-            if pos.strategy_id == strategy_id and not pos.is_fully_closed
+            1 for pos in all_positions if pos.strategy_id == strategy_id and not pos.is_fully_closed
         )
 
         # Determine pipeline stage

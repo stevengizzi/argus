@@ -55,9 +55,7 @@ class ScalpSweepConfig:
     output_dir: Path
 
     # Parameter ranges (only two parameters for scalp)
-    scalp_target_r_list: list[float] = field(
-        default_factory=lambda: [0.2, 0.3, 0.4, 0.5]
-    )
+    scalp_target_r_list: list[float] = field(default_factory=lambda: [0.2, 0.3, 0.4, 0.5])
     max_hold_bars_list: list[int] = field(default_factory=lambda: [1, 2, 3, 5])
 
     # Fixed parameters (not swept)
@@ -465,9 +463,7 @@ def run_single_symbol_sweep(
     results: list[ScalpSweepResult] = []
 
     # Pre-group bars by day
-    day_groups: dict[date, pd.DataFrame] = {
-        day: group for day, group in df.groupby("trading_day")
-    }
+    day_groups: dict[date, pd.DataFrame] = {day: group for day, group in df.groupby("trading_day")}
 
     # Compute qualifying days (gap filter)
     qualifying_days = compute_qualifying_days(
@@ -482,9 +478,7 @@ def run_single_symbol_sweep(
         for target_r, max_hold_bars in product(
             config.scalp_target_r_list, config.max_hold_bars_list
         ):
-            results.append(
-                _empty_scalp_result(symbol, target_r, max_hold_bars, 0)
-            )
+            results.append(_empty_scalp_result(symbol, target_r, max_hold_bars, 0))
         return results
 
     # Filter OR to gap-qualifying days
@@ -496,9 +490,7 @@ def run_single_symbol_sweep(
         for target_r, max_hold_bars in product(
             config.scalp_target_r_list, config.max_hold_bars_list
         ):
-            results.append(
-                _empty_scalp_result(symbol, target_r, max_hold_bars, 0)
-            )
+            results.append(_empty_scalp_result(symbol, target_r, max_hold_bars, 0))
         return results
 
     # Pre-compute entries for all qualifying days
@@ -525,9 +517,7 @@ def run_single_symbol_sweep(
     total_combos = len(config.scalp_target_r_list) * len(config.max_hold_bars_list)
     combo_count = 0
 
-    for target_r, max_hold_bars in product(
-        config.scalp_target_r_list, config.max_hold_bars_list
-    ):
+    for target_r, max_hold_bars in product(config.scalp_target_r_list, config.max_hold_bars_list):
         combo_count += 1
         if combo_count % 4 == 0:
             logger.debug(
@@ -538,9 +528,7 @@ def run_single_symbol_sweep(
             )
 
         if not day_entries:
-            results.append(
-                _empty_scalp_result(symbol, target_r, max_hold_bars, valid_days_count)
-            )
+            results.append(_empty_scalp_result(symbol, target_r, max_hold_bars, valid_days_count))
             continue
 
         # Vectorized exit detection for all days
@@ -569,9 +557,7 @@ def run_single_symbol_sweep(
                 trades.append(trade)
 
         # Compute metrics
-        result = _compute_scalp_result(
-            symbol, target_r, max_hold_bars, trades, valid_days_count
-        )
+        result = _compute_scalp_result(symbol, target_r, max_hold_bars, trades, valid_days_count)
         results.append(result)
 
     return results
@@ -797,15 +783,9 @@ def generate_heatmap(
     )
 
     # Pivot for heatmap
-    pivot_sharpe = agg.pivot(
-        index="max_hold_bars", columns="scalp_target_r", values="sharpe_ratio"
-    )
-    pivot_trades = agg.pivot(
-        index="max_hold_bars", columns="scalp_target_r", values="total_trades"
-    )
-    pivot_win_rate = agg.pivot(
-        index="max_hold_bars", columns="scalp_target_r", values="win_rate"
-    )
+    pivot_sharpe = agg.pivot(index="max_hold_bars", columns="scalp_target_r", values="sharpe_ratio")
+    pivot_trades = agg.pivot(index="max_hold_bars", columns="scalp_target_r", values="total_trades")
+    pivot_win_rate = agg.pivot(index="max_hold_bars", columns="scalp_target_r", values="win_rate")
     pivot_profit_factor = agg.pivot(
         index="max_hold_bars", columns="scalp_target_r", values="profit_factor"
     )
@@ -885,9 +865,7 @@ def generate_heatmap(
             text=pivot_trades.values.astype(int),
             texttemplate="%{text}",
             hovertemplate=(
-                "Target R: %{x}<br>"
-                "Max Hold Bars: %{y}<br>"
-                "Total Trades: %{z:,}<extra></extra>"
+                "Target R: %{x}<br>Max Hold Bars: %{y}<br>Total Trades: %{z:,}<extra></extra>"
             ),
             visible=False,
             name="Total Trades",
@@ -1054,9 +1032,11 @@ def main() -> None:
 
         # Best parameter combo
         best = results_with_trades.loc[results_with_trades["sharpe_ratio"].idxmax()]
-        print(f"\nBest by Sharpe: target_r={best['scalp_target_r']}, "
-              f"max_hold_bars={best['max_hold_bars']}, "
-              f"sharpe={best['sharpe_ratio']:.2f}")
+        print(
+            f"\nBest by Sharpe: target_r={best['scalp_target_r']}, "
+            f"max_hold_bars={best['max_hold_bars']}, "
+            f"sharpe={best['sharpe_ratio']:.2f}"
+        )
     else:
         print("No trades generated across any parameter combination.")
 

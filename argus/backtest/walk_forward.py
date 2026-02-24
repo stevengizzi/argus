@@ -76,9 +76,7 @@ class WalkForwardConfig:
     )
 
     # ORB Scalp parameter grid (used when strategy="orb_scalp")
-    scalp_target_r_values: list[float] = field(
-        default_factory=lambda: [0.2, 0.3, 0.4, 0.5]
-    )
+    scalp_target_r_values: list[float] = field(default_factory=lambda: [0.2, 0.3, 0.4, 0.5])
     max_hold_bars_values: list[int] = field(default_factory=lambda: [1, 2, 3, 5])
 
     # Output

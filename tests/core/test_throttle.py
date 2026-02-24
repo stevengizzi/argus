@@ -77,11 +77,13 @@ def make_daily_pnl(pnl_values: list[float]) -> list[dict]:
     result = []
     for i, pnl in enumerate(reversed(pnl_values)):
         date = base_date - timedelta(days=i)
-        result.append({
-            "date": date.date().isoformat(),
-            "pnl": pnl,
-            "trades": 1,
-        })
+        result.append(
+            {
+                "date": date.date().isoformat(),
+                "pnl": pnl,
+                "trades": 1,
+            }
+        )
     return result
 
 
@@ -155,56 +157,42 @@ class TestPerformanceThrottlerInit:
 class TestGetConsecutiveLosses:
     """Tests for get_consecutive_losses method."""
 
-    def test_consecutive_losses_empty_trades(
-        self, throttler: PerformanceThrottler
-    ) -> None:
+    def test_consecutive_losses_empty_trades(self, throttler: PerformanceThrottler) -> None:
         """Empty trades list returns 0 consecutive losses."""
         result = throttler.get_consecutive_losses([])
         assert result == 0
 
-    def test_consecutive_losses_single_loss(
-        self, throttler: PerformanceThrottler
-    ) -> None:
+    def test_consecutive_losses_single_loss(self, throttler: PerformanceThrottler) -> None:
         """Single losing trade returns 1."""
         trades = [make_trade(net_pnl=-50.0)]
         result = throttler.get_consecutive_losses(trades)
         assert result == 1
 
-    def test_consecutive_losses_single_win(
-        self, throttler: PerformanceThrottler
-    ) -> None:
+    def test_consecutive_losses_single_win(self, throttler: PerformanceThrottler) -> None:
         """Single winning trade returns 0."""
         trades = [make_trade(net_pnl=100.0)]
         result = throttler.get_consecutive_losses(trades)
         assert result == 0
 
-    def test_consecutive_losses_five_losses(
-        self, throttler: PerformanceThrottler
-    ) -> None:
+    def test_consecutive_losses_five_losses(self, throttler: PerformanceThrottler) -> None:
         """Five consecutive losses returns 5."""
         trades = [make_trade(net_pnl=-50.0) for _ in range(5)]
         result = throttler.get_consecutive_losses(trades)
         assert result == 5
 
-    def test_consecutive_losses_six_losses(
-        self, throttler: PerformanceThrottler
-    ) -> None:
+    def test_consecutive_losses_six_losses(self, throttler: PerformanceThrottler) -> None:
         """Six consecutive losses returns 6."""
         trades = [make_trade(net_pnl=-50.0) for _ in range(6)]
         result = throttler.get_consecutive_losses(trades)
         assert result == 6
 
-    def test_consecutive_losses_four_losses(
-        self, throttler: PerformanceThrottler
-    ) -> None:
+    def test_consecutive_losses_four_losses(self, throttler: PerformanceThrottler) -> None:
         """Four consecutive losses returns 4."""
         trades = [make_trade(net_pnl=-50.0) for _ in range(4)]
         result = throttler.get_consecutive_losses(trades)
         assert result == 4
 
-    def test_consecutive_losses_win_breaks_streak(
-        self, throttler: PerformanceThrottler
-    ) -> None:
+    def test_consecutive_losses_win_breaks_streak(self, throttler: PerformanceThrottler) -> None:
         """Win in the middle breaks the loss streak."""
         # Most recent first: Loss, Loss, Win, Loss, Loss
         trades = [
@@ -233,9 +221,7 @@ class TestGetConsecutiveLosses:
         result = throttler.get_consecutive_losses(trades)
         assert result == 2  # Only the most recent 2 losses
 
-    def test_consecutive_losses_starts_with_win(
-        self, throttler: PerformanceThrottler
-    ) -> None:
+    def test_consecutive_losses_starts_with_win(self, throttler: PerformanceThrottler) -> None:
         """Most recent trade being a win returns 0."""
         trades = [
             make_trade(net_pnl=100.0),
@@ -254,26 +240,20 @@ class TestGetConsecutiveLosses:
 class TestGetRollingSharpe:
     """Tests for get_rolling_sharpe method."""
 
-    def test_rolling_sharpe_insufficient_data(
-        self, throttler: PerformanceThrottler
-    ) -> None:
+    def test_rolling_sharpe_insufficient_data(self, throttler: PerformanceThrottler) -> None:
         """Returns None with fewer than 5 days of data."""
         daily_pnl = make_daily_pnl([100.0, 50.0, 75.0, 25.0])  # 4 days
         result = throttler.get_rolling_sharpe(daily_pnl, lookback_days=20)
         assert result is None
 
-    def test_rolling_sharpe_exactly_five_days(
-        self, throttler: PerformanceThrottler
-    ) -> None:
+    def test_rolling_sharpe_exactly_five_days(self, throttler: PerformanceThrottler) -> None:
         """Returns a value with exactly 5 days of data."""
         daily_pnl = make_daily_pnl([100.0, 50.0, 75.0, 25.0, 100.0])  # 5 days
         result = throttler.get_rolling_sharpe(daily_pnl, lookback_days=20)
         assert result is not None
         assert isinstance(result, float)
 
-    def test_rolling_sharpe_positive_performance(
-        self, throttler: PerformanceThrottler
-    ) -> None:
+    def test_rolling_sharpe_positive_performance(self, throttler: PerformanceThrottler) -> None:
         """Positive consistent gains yield positive Sharpe."""
         # 10 days of consistent positive P&L
         daily_pnl = make_daily_pnl([100.0] * 10)
@@ -282,27 +262,21 @@ class TestGetRollingSharpe:
         # Actually with all identical values, std dev is 0, so Sharpe returns 0
         assert result == 0.0  # Zero variance case
 
-    def test_rolling_sharpe_positive_with_variance(
-        self, throttler: PerformanceThrottler
-    ) -> None:
+    def test_rolling_sharpe_positive_with_variance(self, throttler: PerformanceThrottler) -> None:
         """Positive gains with some variance yield positive Sharpe."""
         daily_pnl = make_daily_pnl([100.0, 80.0, 120.0, 90.0, 110.0, 95.0, 105.0])
         result = throttler.get_rolling_sharpe(daily_pnl, lookback_days=20)
         assert result is not None
         assert result > 0  # Positive mean with some variance
 
-    def test_rolling_sharpe_negative_performance(
-        self, throttler: PerformanceThrottler
-    ) -> None:
+    def test_rolling_sharpe_negative_performance(self, throttler: PerformanceThrottler) -> None:
         """Negative consistent losses yield negative Sharpe."""
         daily_pnl = make_daily_pnl([-100.0, -80.0, -120.0, -90.0, -110.0, -95.0, -105.0])
         result = throttler.get_rolling_sharpe(daily_pnl, lookback_days=20)
         assert result is not None
         assert result < 0  # Negative mean
 
-    def test_rolling_sharpe_uses_lookback_limit(
-        self, throttler: PerformanceThrottler
-    ) -> None:
+    def test_rolling_sharpe_uses_lookback_limit(self, throttler: PerformanceThrottler) -> None:
         """Only uses the most recent lookback_days entries."""
         # 30 days of data: first 10 very positive, last 20 slightly negative
         old_data = [500.0] * 10  # These should be excluded
@@ -315,9 +289,7 @@ class TestGetRollingSharpe:
         # But all values are identical (-10), so variance is 0 → Sharpe = 0
         assert result == 0.0
 
-    def test_rolling_sharpe_empty_data(
-        self, throttler: PerformanceThrottler
-    ) -> None:
+    def test_rolling_sharpe_empty_data(self, throttler: PerformanceThrottler) -> None:
         """Returns None with empty data."""
         result = throttler.get_rolling_sharpe([], lookback_days=20)
         assert result is None
@@ -331,25 +303,19 @@ class TestGetRollingSharpe:
 class TestGetDrawdownFromPeak:
     """Tests for get_drawdown_from_peak method."""
 
-    def test_drawdown_empty_data(
-        self, throttler: PerformanceThrottler
-    ) -> None:
+    def test_drawdown_empty_data(self, throttler: PerformanceThrottler) -> None:
         """Returns 0.0 with empty data."""
         result = throttler.get_drawdown_from_peak([])
         assert result == 0.0
 
-    def test_drawdown_at_peak(
-        self, throttler: PerformanceThrottler
-    ) -> None:
+    def test_drawdown_at_peak(self, throttler: PerformanceThrottler) -> None:
         """Returns 0.0 when equity is at peak."""
         # Monotonically increasing equity
         daily_pnl = make_daily_pnl([100.0, 100.0, 100.0, 100.0, 100.0])
         result = throttler.get_drawdown_from_peak(daily_pnl)
         assert result == 0.0
 
-    def test_drawdown_from_peak_calculation(
-        self, throttler: PerformanceThrottler
-    ) -> None:
+    def test_drawdown_from_peak_calculation(self, throttler: PerformanceThrottler) -> None:
         """Correctly calculates drawdown percentage."""
         # Equity curve: 100, 200, 300, 200, 100
         # Peak = 300, Current = 100, Drawdown = (300-100)/300 = 0.667
@@ -364,9 +330,7 @@ class TestGetDrawdownFromPeak:
         # Peak = 300, Current = 100, Drawdown = 200/300 = 0.6667
         assert abs(result - (200.0 / 300.0)) < 0.001
 
-    def test_drawdown_exactly_15_percent(
-        self, throttler: PerformanceThrottler
-    ) -> None:
+    def test_drawdown_exactly_15_percent(self, throttler: PerformanceThrottler) -> None:
         """Correctly identifies 15% drawdown."""
         # Build equity to 1000, then drop by 150 (15%)
         # Days of +100 each to reach 1000, then -150
@@ -375,9 +339,7 @@ class TestGetDrawdownFromPeak:
         # Peak = 1000, Current = 850, Drawdown = 150/1000 = 0.15
         assert abs(result - 0.15) < 0.001
 
-    def test_drawdown_exceeds_15_percent(
-        self, throttler: PerformanceThrottler
-    ) -> None:
+    def test_drawdown_exceeds_15_percent(self, throttler: PerformanceThrottler) -> None:
         """Correctly identifies drawdown exceeding 15%."""
         # Build equity to 1000, then drop by 200 (20%)
         daily_pnl = make_daily_pnl([100.0] * 10 + [-200.0])
@@ -385,9 +347,7 @@ class TestGetDrawdownFromPeak:
         # Peak = 1000, Current = 800, Drawdown = 200/1000 = 0.20
         assert abs(result - 0.20) < 0.001
 
-    def test_drawdown_all_negative_pnl(
-        self, throttler: PerformanceThrottler
-    ) -> None:
+    def test_drawdown_all_negative_pnl(self, throttler: PerformanceThrottler) -> None:
         """Returns 0.0 when peak is zero or negative."""
         # All negative P&L means peak never goes positive
         daily_pnl = make_daily_pnl([-100.0, -50.0, -75.0])
@@ -395,9 +355,7 @@ class TestGetDrawdownFromPeak:
         # Peak = 0 (never positive), so return 0.0
         assert result == 0.0
 
-    def test_drawdown_recovery_to_new_peak(
-        self, throttler: PerformanceThrottler
-    ) -> None:
+    def test_drawdown_recovery_to_new_peak(self, throttler: PerformanceThrottler) -> None:
         """Drawdown is 0 after recovery to new peak."""
         # 100 → 200 → 150 → 250 (new peak)
         daily_pnl = make_daily_pnl([100.0, 100.0, -50.0, 100.0])
@@ -414,9 +372,7 @@ class TestGetDrawdownFromPeak:
 class TestPerformanceThrottlerCheck:
     """Tests for the main check() method."""
 
-    def test_check_healthy_strategy_returns_none(
-        self, throttler: PerformanceThrottler
-    ) -> None:
+    def test_check_healthy_strategy_returns_none(self, throttler: PerformanceThrottler) -> None:
         """Healthy strategy with good performance returns NONE."""
         # 10 trades with alternating wins (no consecutive losses)
         trades = []
@@ -429,9 +385,7 @@ class TestPerformanceThrottlerCheck:
         result = throttler.check("test_strategy", trades, daily_pnl)
         assert result == ThrottleAction.NONE
 
-    def test_check_reduce_on_consecutive_losses(
-        self, throttler: PerformanceThrottler
-    ) -> None:
+    def test_check_reduce_on_consecutive_losses(self, throttler: PerformanceThrottler) -> None:
         """Exactly 5 consecutive losses triggers REDUCE."""
         trades = [make_trade(net_pnl=-50.0) for _ in range(5)]
         daily_pnl = make_daily_pnl([50.0, 75.0, 100.0, 60.0, 80.0, 90.0, 70.0])
@@ -439,9 +393,7 @@ class TestPerformanceThrottlerCheck:
         result = throttler.check("test_strategy", trades, daily_pnl)
         assert result == ThrottleAction.REDUCE
 
-    def test_check_no_reduce_on_4_losses(
-        self, throttler: PerformanceThrottler
-    ) -> None:
+    def test_check_no_reduce_on_4_losses(self, throttler: PerformanceThrottler) -> None:
         """4 consecutive losses does not trigger REDUCE."""
         trades = [make_trade(net_pnl=-50.0) for _ in range(4)]
         daily_pnl = make_daily_pnl([50.0, 75.0, 100.0, 60.0, 80.0, 90.0, 70.0])
@@ -449,9 +401,7 @@ class TestPerformanceThrottlerCheck:
         result = throttler.check("test_strategy", trades, daily_pnl)
         assert result == ThrottleAction.NONE
 
-    def test_check_reduce_on_6_losses(
-        self, throttler: PerformanceThrottler
-    ) -> None:
+    def test_check_reduce_on_6_losses(self, throttler: PerformanceThrottler) -> None:
         """6 consecutive losses triggers REDUCE (not SUSPEND without other conditions)."""
         trades = [make_trade(net_pnl=-50.0) for _ in range(6)]
         # Positive daily P&L (no negative Sharpe or drawdown)
@@ -460,16 +410,12 @@ class TestPerformanceThrottlerCheck:
         result = throttler.check("test_strategy", trades, daily_pnl)
         assert result == ThrottleAction.REDUCE
 
-    def test_check_suspend_on_negative_sharpe(
-        self, throttler: PerformanceThrottler
-    ) -> None:
+    def test_check_suspend_on_negative_sharpe(self, throttler: PerformanceThrottler) -> None:
         """Negative 20-day rolling Sharpe triggers SUSPEND."""
         trades = [make_trade(net_pnl=100.0)]  # Single winning trade
 
         # Negative P&L causing negative Sharpe
-        daily_pnl = make_daily_pnl(
-            [-100.0, -80.0, -120.0, -90.0, -110.0, -95.0, -105.0]
-        )
+        daily_pnl = make_daily_pnl([-100.0, -80.0, -120.0, -90.0, -110.0, -95.0, -105.0])
 
         result = throttler.check("test_strategy", trades, daily_pnl)
         assert result == ThrottleAction.SUSPEND
@@ -486,17 +432,13 @@ class TestPerformanceThrottlerCheck:
         result = throttler.check("test_strategy", trades, daily_pnl)
         assert result == ThrottleAction.SUSPEND
 
-    def test_check_suspend_overrides_reduce(
-        self, throttler: PerformanceThrottler
-    ) -> None:
+    def test_check_suspend_overrides_reduce(self, throttler: PerformanceThrottler) -> None:
         """SUSPEND takes precedence over REDUCE."""
         # 5 consecutive losses → REDUCE
         trades = [make_trade(net_pnl=-50.0) for _ in range(5)]
 
         # Negative Sharpe → SUSPEND
-        daily_pnl = make_daily_pnl(
-            [-100.0, -80.0, -120.0, -90.0, -110.0, -95.0, -105.0]
-        )
+        daily_pnl = make_daily_pnl([-100.0, -80.0, -120.0, -90.0, -110.0, -95.0, -105.0])
 
         result = throttler.check("test_strategy", trades, daily_pnl)
         assert result == ThrottleAction.SUSPEND
@@ -510,9 +452,7 @@ class TestPerformanceThrottlerCheck:
         result = throttler.check("test_strategy", [], daily_pnl)
         assert result == ThrottleAction.NONE
 
-    def test_check_with_empty_daily_pnl(
-        self, throttler: PerformanceThrottler
-    ) -> None:
+    def test_check_with_empty_daily_pnl(self, throttler: PerformanceThrottler) -> None:
         """Empty daily P&L (no Sharpe/drawdown check) with losses."""
         # 5 consecutive losses → REDUCE
         trades = [make_trade(net_pnl=-50.0) for _ in range(5)]
@@ -520,9 +460,7 @@ class TestPerformanceThrottlerCheck:
         result = throttler.check("test_strategy", trades, [])
         assert result == ThrottleAction.REDUCE
 
-    def test_check_with_all_conditions_healthy(
-        self, throttler: PerformanceThrottler
-    ) -> None:
+    def test_check_with_all_conditions_healthy(self, throttler: PerformanceThrottler) -> None:
         """All conditions healthy returns NONE."""
         # 3 wins, 2 losses (not consecutive)
         trades = [
@@ -549,16 +487,12 @@ class TestPerformanceThrottlerCheck:
 
         # Both negative Sharpe (losses) and significant drawdown
         # Start positive then heavy losses
-        daily_pnl = make_daily_pnl(
-            [100.0, 100.0, 100.0, 100.0, 100.0, -200.0, -100.0, -100.0]
-        )
+        daily_pnl = make_daily_pnl([100.0, 100.0, 100.0, 100.0, 100.0, -200.0, -100.0, -100.0])
 
         result = throttler.check("test_strategy", trades, daily_pnl)
         assert result == ThrottleAction.SUSPEND
 
-    def test_check_insufficient_daily_pnl_for_sharpe(
-        self, throttler: PerformanceThrottler
-    ) -> None:
+    def test_check_insufficient_daily_pnl_for_sharpe(self, throttler: PerformanceThrottler) -> None:
         """Insufficient daily P&L data (< 5 days) skips Sharpe check."""
         # 5 consecutive losses → REDUCE
         trades = [make_trade(net_pnl=-50.0) for _ in range(5)]
