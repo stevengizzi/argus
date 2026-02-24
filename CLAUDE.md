@@ -11,7 +11,7 @@ Phase 1 sprint plan: @docs/07_PHASE1_SPRINT_PLAN.md
 ## Current State
 
 **Structure:** Two parallel tracks (DEC-079, February 19, 2026).
-- **Build Track:** System construction at development velocity. Sprints 1–15 complete (926 tests). Sprint 16 (Desktop/PWA + UX Polish) is NEXT.
+- **Build Track:** System construction at development velocity. Sprints 1–16 complete (942 tests). Sprint 17 (Orchestrator V1) is NEXT.
 - **Validation Track:** Paper trading ACTIVE on Alpaca IEX (system stability only — DEC-081). Signal accuracy validation pending Databento subscription activation (DEC-087). Migrates to IBKR paper after IBKR account approved (U24619949, submitted Feb 21).
 
 Active sprint plan: `docs/10_PHASE3_SPRINT_PLAN.md` (covers both tracks).
@@ -24,6 +24,14 @@ Active sprint plan: `docs/10_PHASE3_SPRINT_PLAN.md` (covers both tracks).
 - **Cost deferral:** Databento subscription activated when adapter ready for integration testing. DEC-087.
 
 - IBKR account application submitted Feb 21, 2026 (Account ID: U24619949). Individual, Margin, IBKR Pro (tiered), GA address. Permissions: Stocks, Options L3, Futures, Forex, Crypto. Awaiting approval.
+
+**Sprint 16 Results (Desktop/PWA + UX Polish — Feb 24):**
+- Framer Motion page transitions + stagger animations (all pages). Skeleton loading (all pages).
+- AnimatedNumber (rAF interpolation), SVG Sparklines, chart draw-in animations, P&L flash enhancements.
+- Trade detail slide-in panel (desktop: right 40%, mobile: bottom full-screen).
+- Emergency controls: flatten all, pause all (with confirmation modals). Strategy pause/resume. Position close.
+- CSV trade export with filters. PWA (manifest, SW, icons, iOS meta). Tauri v2 desktop shell.
+- Platform detection utility (Tauri/PWA/Web). 942 tests (16 new), 10 sessions completed.
 
 **Sprint 15 Results (Command Center Frontend — Feb 23):**
 - Four pages: Dashboard (account summary, open positions with WS real-time prices, recent trades, system health mini), Trade Log (filter bar, stats summary, paginated table with exit reason badges), Performance (period selector, 12-metric grid, equity curve + daily P&L histogram via Lightweight Charts, strategy breakdown), System (overview, component health, strategy cards, collapsible events log)
@@ -55,7 +63,7 @@ Active sprint plan: `docs/10_PHASE3_SPRINT_PLAN.md` (covers both tracks).
 
 **Validation Track sequence:** Build through Sprint 21 (four strategies + analytics) → activate Databento ~Sprint 19 (DEC-097) → serious paper trading with quality data + IBKR → AI Layer (Sprint 22) compounds analysis during validation → CPA consultation → live at minimum size on IBKR.
 
-**Build Track queue (DEC-096, DEC-106–110):** Desktop/PWA + UX Polish (16) → Orchestrator V1 (17) → ORB Scalp (18) → VWAP Reclaim (19) → Afternoon Momentum (20) → CC Analytics & Strategy Lab (21) → AI Layer MVP (22) → Tier 1 News + expansion (23+). UX Feature Backlog (`docs/ui/UX_FEATURE_BACKLOG.md`) provides per-sprint enhancement add-ons.
+**Build Track queue (DEC-096, DEC-106–110):** Orchestrator V1 (17) → ORB Scalp (18) → VWAP Reclaim (19) → Afternoon Momentum (20) → CC Analytics & Strategy Lab (21) → AI Layer MVP (22) → Tier 1 News + expansion (23+). UX Feature Backlog (`docs/ui/UX_FEATURE_BACKLOG.md`) provides per-sprint enhancement add-ons.
 
 **Command Center delivery (DEC-080):** Three surfaces from single React codebase — web app + Tauri desktop + PWA mobile. All operational after Sprint 16.
 

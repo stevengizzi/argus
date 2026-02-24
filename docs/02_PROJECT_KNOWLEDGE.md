@@ -12,7 +12,7 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 
 **Structure:** Two parallel tracks (DEC-079, February 19, 2026). Build Track (system construction) + Validation Track (strategy confidence-building).
 
-**Build Track:** 926 tests. Sprints 1–15 complete. Sprint 16 (Desktop/PWA + UX Polish) is NEXT.
+**Build Track:** 926 tests. Sprints 1–16 complete. Sprint 17 (Orchestrator V1) is NEXT.
 - Phase 1 (Core Engine): ✅ COMPLETE — 362 tests, Feb 14–16
 - Phase 2 (Backtesting): ✅ COMPLETE — 542 tests, Feb 16–17
 - Sprint 11 (Extended Backtest): ✅ COMPLETE — 35 months, 15 WF windows, WFE=0.56
@@ -21,6 +21,8 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 - Sprint 13 (IBKRBroker adapter): ✅ COMPLETE — 811 tests, Feb 22. IBKRBroker full Broker abstraction via `ib_async` (connection, orders, native brackets DEC-093, fills, reconnection, state reconstruction). IBKRConfig + BrokerSource enum (DEC-094). Order Manager T2 broker-side limit orders. System integration (main.py broker branching, __init__.py exports). DEF-016 logged (Order Manager bracket refactor deferred).
 - Sprint 14 (Command Center API): ✅ COMPLETE — 926 tests, Feb 23. FastAPI REST + WebSocket, JWT auth, 7 endpoint groups, PerformanceCalculator, TradeLogger queries, dev mode with mock data, React scaffold.
 - Sprint 15 (Command Center Frontend): ✅ COMPLETE — 926 tests (no new backend tests), Feb 23. Four pages: Dashboard, Trade Log, Performance, System. Responsive at 393px/834px/1194px/1512px breakpoints. Lightweight Charts for equity curve and daily P&L histogram. WebSocket real-time updates. Dark theme. Icon sidebar nav (desktop/tablet) + bottom tab bar (mobile). 8 implementation sessions. Full code review passed (DEC-106–110).
+- Sprint 16 (Desktop/PWA + UX Polish): ✅ COMPLETE — 942 tests (16 new), Feb 24. Framer Motion page transitions + stagger animations. Skeleton loading (all pages). AnimatedNumber + P&L flash enhancements. SVG Sparklines on dashboard. Chart draw-in animations. Hover feedback (desktop-only). Contextual empty states. Trade detail slide-in panel. PWA (manifest, service worker, icons, iOS meta). CSV trade export. Emergency controls (flatten all, pause all). Strategy pause/resume. Tauri v2 desktop shell. Platform detection utility. 10 implementation sessions. Code review passed (DEC-111–112). Known issue: safe-area-inset padding incomplete on PWA (fix queued).
+
 
 **Validation Track:** Paper trading ACTIVE with DEC-076 parameters on Alpaca. Validates system stability only — Alpaca IEX data captures only ~2–3% of market volume (DEC-081), so signal accuracy is not validated until Databento data is integrated (Sprint 12). See `08_PAPER_TRADING_GUIDE.md`.
 
@@ -31,7 +33,7 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 
 **IBKR Account (Feb 21):** Application submitted. Account ID U24619949. Individual margin account, IBKR Pro tiered pricing. Awaiting approval — paper trading account will be enabled post-approval for Sprint 13 adapter development.
 
-**Next Build sprints:** Desktop/PWA + UX Polish (Sprint 16) → Orchestrator V1 (Sprint 17) → ORB Scalp (Sprint 18) → VWAP Reclaim (Sprint 19) → Afternoon Momentum (Sprint 20) → CC Analytics & Strategy Lab (Sprint 21) → AI Layer MVP (Sprint 22). See DEC-096, DEC-106–110. UX Feature Backlog (`docs/ui/UX_FEATURE_BACKLOG.md`) provides per-sprint enhancement add-ons alongside core sprint scope.
+**Next Build sprints:** Orchestrator V1 (Sprint 17) → ORB Scalp (Sprint 18) → VWAP Reclaim (Sprint 19) → Afternoon Momentum (Sprint 20) → CC Analytics & Strategy Lab (Sprint 21) → AI Layer MVP (Sprint 22). See DEC-096, DEC-106–110. UX Feature Backlog (`docs/ui/UX_FEATURE_BACKLOG.md`) provides per-sprint enhancement add-ons alongside core sprint scope.
 **Next Validation gate:** Build through Sprint 21 (four strategies + analytics) using Alpaca data → activate Databento (~Sprint 19, DEC-097) → serious paper trading validation with quality data + IBKR execution → AI Layer (Sprint 22) compounds analysis during validation → CPA consultation → live trading at minimum size on IBKR.
 
 **✅ IBKR APPLICATION SUBMITTED:** Feb 21, 2026. Account ID: U24619949. Individual margin account, IBKR Pro (tiered pricing), Georgia address. Trading permissions requested: Stocks, Options (Level 3), Futures, Currency/Forex, Cryptocurrencies, Mutual Funds. Awaiting approval (typically 1–3 business days, may take longer). Disclosures and agreements archived locally.
@@ -154,6 +156,9 @@ Key components:
 - **Broker Abstraction** routes orders to correct broker. Live: IBKRBroker (IBKR Pro via `ib_async`, DEC-083). Incubator: AlpacaBroker. Backtest: SimulatedBroker.
 - **Replay Harness** feeds historical Parquet data through production code for ecosystem-level backtesting
 - **Shadow System** runs paper trading permanently in parallel with live trading
+- **Control endpoints (DEC-111):** Strategy pause/resume, position close, emergency flatten all, emergency pause all. JWT-gated. Confirmation modals for emergency actions.
+- **CSV trade export (DEC-112):** GET /trades/export/csv with filters. StreamingResponse, date-stamped filename. 10K row limit.
+
 
 ## Strategy Roster (V1 — US Stocks)
 

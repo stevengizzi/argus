@@ -187,27 +187,15 @@ per sprint velocity.
 - Code review: all 4 pages across 3 device classes (20 screenshots). Visual consistency confirmed.
 - Design research session → UX Feature Backlog created (`docs/ui/UX_FEATURE_BACKLOG.md`, 35 features, DEC-106–110).
 
-#### Sprint 16 — Desktop/PWA + UX Polish (DEC-096, DEC-107)
-**Target:** ~1–2 days
-**Scope:**
-- **PWA configuration:** manifest.json, service worker, app icons, "Add to Home Screen"
-  support for iOS/iPad (DEC-080). Push notification registration.
-- **Tauri desktop shell:** Wrap existing React app in Tauri v2. System tray icon with
-  status indicator (green/yellow/red), native OS notifications, auto-launch on startup.
-  Minimal Rust — just the shell config, no custom backend logic.
-- **UX Polish (DEC-107, ~15h):** Staggered entry animations, chart draw-in animations,
-  page transitions (Framer Motion — DEC-110), skeleton loading states, number morphing/P&L
-  flash, hover feedback on cards and table rows, contextual empty states, hero sparklines on
-  dashboard summary cards.
-- **Paper trading features:** Backtest vs. paper comparison view (overlay expected vs. actual),
-  trade drill-down with entry/exit rationale, alert history, controls (emergency pause/resume,
-  manual position close), walk-forward results alongside live performance.
-- **Export:** CSV trade log download.
-
-**Deliverable:** After Sprint 16, the Command Center is accessible as:
-1. Web app (any browser, any device)
-2. Desktop app (Tauri, macOS/Windows/Linux — system tray, native notifications)
-3. Mobile app (PWA on iPhone/iPad — home screen icon, no Safari chrome)
+#### Sprint 16 — Desktop/PWA + UX Polish ✅ COMPLETE (Feb 24)
+**Delivered:**
+- **UX Polish (DEC-107):** Framer Motion page transitions + stagger entry animations (all pages), skeleton loading states (all pages), AnimatedNumber (hero equity countup), enhanced P&L flash with scale pulse, card hover lift + table row transitions (desktop-only), SVG sparklines on dashboard cards, chart draw-in animations (equity curve, P&L histogram), contextual empty states (time-aware).
+- **Trade detail panel:** Slide-in (desktop: right 40%, mobile: full-screen bottom 90vh). P&L summary, entry/exit, exit reason explanations, hold duration, commission. Close via Escape/backdrop/X.
+- **Controls:** Emergency flatten all positions, emergency pause all strategies (with confirmation modals). Per-strategy pause/resume toggle. Individual position close.
+- **CSV export:** Trade log download with strategy/date filters. Date-stamped filename.
+- **PWA:** manifest.json, service worker (cache-first shell, network-only API/WS), app icons (192/512/maskable/apple-touch), iOS meta tags, production-only SW registration.
+- **Tauri v2:** Desktop shell config, system tray icon with toggle visibility, close-to-tray behavior, platform detection utility, all required icons.
+- 10 implementation sessions. 942 tests (16 new). Code review passed (DEC-111–112).
 
 #### Sprint 17 — Orchestrator V1 (DEC-096)
 **Target:** ~1-2 days

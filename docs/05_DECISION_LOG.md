@@ -1260,5 +1260,28 @@ Each entry follows this format:
 | **Alternatives** | (a) Pure CSS only — rejected, staggered orchestration is awkward in pure CSS. (b) React Spring — viable but Framer Motion has better React Router integration. (c) GSAP — overkill for this use case. |
 | **Status** | Active |
 
+---
+
+### DEC-111 | Control Endpoints & Emergency Controls
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-24 |
+| **Decision** | Backend control endpoints: strategy pause/resume, position close, emergency flatten all, emergency pause all. All gated by JWT auth. Frontend confirmation modals for emergency actions. |
+| **Rationale** | Operator needs real-time control during trading sessions. Emergency flatten is critical safety mechanism. Confirmation modals prevent accidental activation. Single-position close uses broker flatten_all(symbols=[symbol]) — acceptable for V1 single-strategy; revisit for multi-strategy. |
+| **Alternatives** | WebSocket-based commands (rejected — REST is simpler, stateless, easier to test). Strategy-scoped position close (deferred — requires Order Manager changes). |
+| **Status** | Active |
+
+---
+
+### DEC-112 | CSV Trade Export
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-24 |
+| **Decision** | CSV export endpoint at GET /trades/export/csv with strategy_id, date_from, date_to filters. StreamingResponse with date-stamped filename. 10,000 row limit. |
+| **Rationale** | Enables trade data portability for tax prep, external analysis, and record-keeping. Filters match the trades query endpoint for consistency. Frontend downloads via blob URL. |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
 *New decisions are appended chronologically as the project progresses.*

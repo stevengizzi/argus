@@ -857,9 +857,9 @@ ws://host/ws/v1/live?token={jwt}
 
 ## 4.1 Command Center Frontend (`argus/ui/`)
 
-### Implementation Status (Sprint 15)
+### Implementation Status (Sprint 16)
 
-Four pages delivered with responsive design across four breakpoints. Single React codebase targeting web, Tauri desktop, and PWA mobile (DEC-080).
+Four pages delivered with responsive design across four breakpoints. Single React codebase targeting web, Tauri desktop (v2), and PWA mobile (DEC-080). Full animation system (Framer Motion), skeleton loading, emergency controls, trade detail panel, CSV export.
 
 ### Pages
 
@@ -892,18 +892,28 @@ Four pages delivered with responsive design across four breakpoints. Single Reac
 | Charts (time-series) | Lightweight Charts (TradingView) |
 | Charts (standard) | Recharts (Sprint 17+, DEC-104) |
 | Charts (custom viz) | D3 (Sprint 21+, DEC-108) |
-| Animation | Framer Motion (Sprint 16, DEC-110) |
-| Server State | TanStack Query (planned) |
+| Animation | Framer Motion (DEC-110) |
+| Server State | TanStack Query |
+| Desktop | Tauri v2 |
 
 ### Planned Enhancements
 
 See `docs/ui/UX_FEATURE_BACKLOG.md` for the complete prioritized inventory (35 features, Sprints 16–23+). Key upcoming:
-- Sprint 16: Motion/animation system (Framer Motion), sparklines, skeleton loading states
+- Sprint 16: ✅ Motion/animation, sparklines, skeleton loading, controls, trade detail panel, PWA, Tauri
 - Sprint 17: Strategy allocation donut, risk utilization gauges
 - Sprint 21: Stock detail panel, Dashboard V2, heatmaps, trade replay, portfolio visualizations
 - Sprint 22: AI insight cards, strategy optimization landscape
 
----
+### Control Endpoints (Sprint 16, DEC-111)
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/controls/strategies/{id}/pause` | POST | Pause strategy signal generation |
+| `/controls/strategies/{id}/resume` | POST | Resume paused strategy |
+| `/controls/positions/{id}/close` | POST | Close specific position at market |
+| `/controls/emergency/flatten` | POST | Emergency close all positions |
+| `/controls/emergency/pause` | POST | Emergency pause all strategies |
+| `/trades/export/csv` | GET | Export trades as CSV (with filters) |
 
 ## 5. Backtesting Toolkit
 
