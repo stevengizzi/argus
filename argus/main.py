@@ -38,9 +38,11 @@ from argus.core.config import (
     OrchestratorConfig,
     load_config,
     load_orb_config,
+    load_orb_scalp_config,
     load_yaml_file,
 )
 from argus.core.event_bus import EventBus
+from argus.core.events import CandleEvent
 from argus.core.health import ComponentStatus, HealthMonitor
 from argus.core.logging_config import setup_logging
 from argus.core.orchestrator import Orchestrator
@@ -53,6 +55,7 @@ from argus.db.manager import DatabaseManager
 from argus.execution.alpaca_broker import AlpacaBroker
 from argus.execution.order_manager import OrderManager
 from argus.strategies.orb_breakout import OrbBreakoutStrategy
+from argus.strategies.orb_scalp import OrbScalpStrategy
 # fmt: on
 
 if TYPE_CHECKING:
@@ -91,7 +94,6 @@ class ArgusSystem:
         self._data_service: DataService | None = None
         self._scanner: Scanner | None = None
         self._risk_manager: RiskManager | None = None
-        self._strategy: OrbBreakoutStrategy | None = None
         self._order_manager: OrderManager | None = None
         self._health_monitor: HealthMonitor | None = None
         self._orchestrator: Orchestrator | None = None
@@ -253,18 +255,39 @@ class ArgusSystem:
                 "scanner", ComponentStatus.HEALTHY, message=f"{len(symbols)} symbols"
             )
 
-        # --- Phase 8: Strategy ---
+        # --- Phase 8: Strategy Instances ---
         # Create strategy instances but do NOT activate (Orchestrator handles activation)
         logger.info("[8/12] Creating strategy instances...")
-        strategy_config = load_orb_config(self._config_dir / "strategies" / "orb_breakout.yaml")
-        self._strategy = OrbBreakoutStrategy(
-            config=strategy_config,
+        strategies_created: list[str] = []
+
+        # ORB Breakout
+        orb_config = load_orb_config(self._config_dir / "strategies" / "orb_breakout.yaml")
+        orb_strategy = OrbBreakoutStrategy(
+            config=orb_config,
             data_service=self._data_service,
             clock=self._clock,
         )
+        orb_strategy.set_watchlist(symbols)
+        strategies_created.append("OrbBreakout")
+
+        # ORB Scalp (optional — only if config file exists)
+        scalp_strategy: OrbScalpStrategy | None = None
+        scalp_yaml = self._config_dir / "strategies" / "orb_scalp.yaml"
+        if scalp_yaml.exists():
+            scalp_config = load_orb_scalp_config(scalp_yaml)
+            scalp_strategy = OrbScalpStrategy(
+                config=scalp_config,
+                data_service=self._data_service,
+                clock=self._clock,
+            )
+            scalp_strategy.set_watchlist(symbols)
+            strategies_created.append("OrbScalp")
+
         # Note: is_active and allocated_capital set by Orchestrator in Phase 9
         self._health_monitor.update_component(
-            "strategy", ComponentStatus.STARTING, message="OrbBreakout created"
+            "strategy",
+            ComponentStatus.STARTING,
+            message=f"{len(strategies_created)} strategies created",
         )
 
         # --- Phase 9: Orchestrator ---
@@ -279,17 +302,27 @@ class ArgusSystem:
             broker=self._broker,
             data_service=self._data_service,
         )
-        self._orchestrator.register_strategy(self._strategy)
+
+        # Register all strategies
+        self._orchestrator.register_strategy(orb_strategy)
+        if scalp_strategy is not None:
+            self._orchestrator.register_strategy(scalp_strategy)
+
         await self._orchestrator.start()
 
         # Run pre-market routine (sets regime, allocations, activates strategies)
         # If mid-day restart, strategies reconstruct their own state
         await self._orchestrator.run_pre_market()
         self._health_monitor.update_component("orchestrator", ComponentStatus.HEALTHY)
+
+        # Update health status based on multi-strategy state
+        strategies = self._orchestrator.get_strategies()
+        active_count = sum(1 for s in strategies.values() if s.is_active)
+        total_count = len(strategies)
         self._health_monitor.update_component(
             "strategy",
-            ComponentStatus.HEALTHY if self._strategy.is_active else ComponentStatus.DEGRADED,
-            message="OrbBreakout active" if self._strategy.is_active else "OrbBreakout inactive",
+            ComponentStatus.HEALTHY if active_count > 0 else ComponentStatus.DEGRADED,
+            message=f"{active_count}/{total_count} strategies active",
         )
 
         # --- Phase 10: Order Manager ---
@@ -310,6 +343,13 @@ class ArgusSystem:
         # Reconstruct open positions from broker
         await self._order_manager.reconstruct_from_broker()
         self._health_monitor.update_component("order_manager", ComponentStatus.HEALTHY)
+
+        # Wire Risk Manager to Order Manager for cross-strategy checks
+        self._risk_manager.set_order_manager(self._order_manager)
+
+        # --- Phase 10.5: CandleEvent Routing ---
+        # Subscribe to CandleEvents and route to active strategies (DEC-125)
+        self._event_bus.subscribe(CandleEvent, self._on_candle_for_strategies)
 
         # --- Phase 11: Start streaming ---
         logger.info("[11/12] Starting data streams...")
@@ -399,12 +439,39 @@ class ArgusSystem:
             body=f"Watching {len(symbols)} symbols. Mode: {mode}",
         )
 
+    async def _on_candle_for_strategies(self, event: CandleEvent) -> None:
+        """Route CandleEvents to active strategies (DEC-125).
+
+        Called for every CandleEvent. Routes to strategies that are:
+        1. Active (is_active = True)
+        2. Tracking the symbol (symbol in watchlist)
+
+        If a strategy emits a SignalEvent, it's sent through the Risk Manager
+        for approval and the result is published to the Event Bus.
+
+        Args:
+            event: The candle event to route.
+        """
+        if self._orchestrator is None or self._risk_manager is None:
+            return
+
+        for strategy in self._orchestrator.get_strategies().values():
+            if not strategy.is_active:
+                continue
+            if event.symbol not in strategy.watchlist:
+                continue
+
+            signal = await strategy.on_candle(event)
+            if signal is not None:
+                result = await self._risk_manager.evaluate_signal(signal)
+                await self._event_bus.publish(result)
+
     async def _reconstruct_strategy_state(self, symbols: list[str]) -> None:
         """Reconstruct strategy state if restarting mid-day.
 
         1. Check if we're within market hours.
         2. If yes, fetch today's historical 1m bars for all symbols.
-        3. Replay them through the strategy to rebuild opening range.
+        3. Replay them through all strategies to rebuild opening ranges.
         4. If fetch fails, log warning and continue.
 
         Args:
@@ -413,7 +480,11 @@ class ArgusSystem:
         from datetime import time as dt_time
         from zoneinfo import ZoneInfo
 
-        if not self._clock or not self._data_service or not self._strategy:
+        if not self._clock or not self._data_service or not self._orchestrator:
+            return
+
+        strategies = self._orchestrator.get_strategies()
+        if not strategies:
             return
 
         et_tz = ZoneInfo("America/New_York")
@@ -432,23 +503,25 @@ class ArgusSystem:
             logger.info("Before OR window ends — no reconstruction needed")
             return
 
-        logger.info("Mid-day start detected. Reconstructing strategy state...")
+        logger.info("Mid-day start detected. Reconstructing %d strategies...", len(strategies))
 
         try:
             if hasattr(self._data_service, "fetch_todays_bars"):
                 todays_bars = await self._data_service.fetch_todays_bars(symbols)
 
                 if todays_bars:
-                    # Replay bars through strategy
+                    # Replay bars through all strategies
                     for bar in todays_bars:
-                        await self._strategy.on_candle(bar)
+                        for strategy in strategies.values():
+                            await strategy.on_candle(bar)
 
                     logger.info(
-                        "Strategy state reconstructed from %d historical bars",
+                        "Strategy state reconstructed from %d historical bars for %d strategies",
                         len(todays_bars),
+                        len(strategies),
                     )
                 else:
-                    logger.warning("No historical bars available — strategy starting fresh")
+                    logger.warning("No historical bars available — strategies starting fresh")
             else:
                 logger.warning("DataService doesn't support fetch_todays_bars — skipping")
 

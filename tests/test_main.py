@@ -862,3 +862,519 @@ api:
             assert captured_app_state is not None
             assert captured_app_state.strategies == orchestrator_strategies
             mock_orchestrator.get_strategies.assert_called()
+
+
+class TestMultiStrategyWiring:
+    """Tests for Sprint 18 Session 6 — multi-strategy wiring in main.py."""
+
+    @pytest.mark.asyncio
+    async def test_both_strategies_created(
+        self, mock_config_dir: Path, mock_env_vars: None
+    ) -> None:
+        """Verify both OrbBreakout and OrbScalp strategies are created."""
+        from argus.main import ArgusSystem
+
+        # Add orb_scalp.yaml to config
+        (mock_config_dir / "strategies" / "orb_scalp.yaml").write_text("""
+strategy_id: "orb_scalp"
+name: "ORB Scalp"
+version: "1.0.0"
+enabled: true
+orb_window_minutes: 5
+scalp_target_r: 0.3
+max_hold_seconds: 120
+""")
+
+        system = ArgusSystem(config_dir=mock_config_dir, dry_run=True)
+        strategies_created: list[str] = []
+
+        with (
+            patch("argus.main.DatabaseManager") as mock_db_class,
+            patch("argus.main.AlpacaBroker") as mock_broker_class,
+            patch("argus.main.HealthMonitor") as mock_health_class,
+            patch("argus.main.RiskManager") as mock_risk_class,
+            patch("argus.main.AlpacaDataService") as mock_data_class,
+            patch("argus.main.AlpacaScanner") as mock_scanner_class,
+            patch("argus.main.OrbBreakoutStrategy") as mock_orb_class,
+            patch("argus.main.OrbScalpStrategy") as mock_scalp_class,
+            patch("argus.main.Orchestrator") as mock_orchestrator_class,
+            patch("argus.main.OrderManager") as mock_om_class,
+        ):
+            # Setup all mocks
+            for cls in [
+                mock_db_class,
+                mock_broker_class,
+                mock_health_class,
+                mock_risk_class,
+                mock_data_class,
+                mock_scanner_class,
+                mock_om_class,
+            ]:
+                instance = MagicMock()
+                instance.initialize = AsyncMock()
+                instance.start = AsyncMock()
+                instance.connect = AsyncMock()
+                instance.stop = AsyncMock()
+                instance.close = AsyncMock()
+                instance.get_account = AsyncMock(return_value=MagicMock(equity=100000))
+                instance.scan = AsyncMock(return_value=[])
+                instance.reconstruct_from_broker = AsyncMock()
+                instance.reconstruct_state = AsyncMock()
+                instance.update_component = MagicMock()
+                instance.send_warning_alert = AsyncMock()
+                instance.set_order_manager = MagicMock()
+                cls.return_value = instance
+
+            # Track strategy creation
+            def orb_created(*a, **kw):
+                strategies_created.append("OrbBreakout")
+                mock = MagicMock()
+                mock.set_watchlist = MagicMock()
+                mock.strategy_id = "orb_breakout"
+                mock.is_active = True
+                return mock
+
+            def scalp_created(*a, **kw):
+                strategies_created.append("OrbScalp")
+                mock = MagicMock()
+                mock.set_watchlist = MagicMock()
+                mock.strategy_id = "orb_scalp"
+                mock.is_active = True
+                return mock
+
+            mock_orb_class.side_effect = orb_created
+            mock_scalp_class.side_effect = scalp_created
+
+            # Setup orchestrator mock
+            mock_orchestrator = MagicMock()
+            mock_orchestrator.start = AsyncMock()
+            mock_orchestrator.stop = AsyncMock()
+            mock_orchestrator.run_pre_market = AsyncMock()
+            mock_orchestrator.register_strategy = MagicMock()
+            mock_orchestrator.get_strategies = MagicMock(return_value={})
+            mock_orchestrator_class.return_value = mock_orchestrator
+
+            with contextlib.suppress(Exception):
+                await system.start()
+
+            # Verify both strategies were created
+            assert "OrbBreakout" in strategies_created
+            assert "OrbScalp" in strategies_created
+            assert len(strategies_created) == 2
+
+    @pytest.mark.asyncio
+    async def test_multiple_strategies_registered_with_orchestrator(
+        self, mock_config_dir: Path, mock_env_vars: None
+    ) -> None:
+        """Verify both strategies are registered with the Orchestrator."""
+        from argus.main import ArgusSystem
+
+        # Add orb_scalp.yaml to config
+        (mock_config_dir / "strategies" / "orb_scalp.yaml").write_text("""
+strategy_id: "orb_scalp"
+name: "ORB Scalp"
+version: "1.0.0"
+enabled: true
+orb_window_minutes: 5
+scalp_target_r: 0.3
+max_hold_seconds: 120
+""")
+
+        system = ArgusSystem(config_dir=mock_config_dir, dry_run=True)
+
+        with (
+            patch("argus.main.DatabaseManager") as mock_db_class,
+            patch("argus.main.AlpacaBroker") as mock_broker_class,
+            patch("argus.main.HealthMonitor") as mock_health_class,
+            patch("argus.main.RiskManager") as mock_risk_class,
+            patch("argus.main.AlpacaDataService") as mock_data_class,
+            patch("argus.main.AlpacaScanner") as mock_scanner_class,
+            patch("argus.main.OrbBreakoutStrategy") as mock_orb_class,
+            patch("argus.main.OrbScalpStrategy") as mock_scalp_class,
+            patch("argus.main.Orchestrator") as mock_orchestrator_class,
+            patch("argus.main.OrderManager") as mock_om_class,
+        ):
+            # Setup all mocks
+            for cls in [
+                mock_db_class,
+                mock_broker_class,
+                mock_health_class,
+                mock_risk_class,
+                mock_data_class,
+                mock_scanner_class,
+                mock_om_class,
+            ]:
+                instance = MagicMock()
+                instance.initialize = AsyncMock()
+                instance.start = AsyncMock()
+                instance.connect = AsyncMock()
+                instance.stop = AsyncMock()
+                instance.close = AsyncMock()
+                instance.get_account = AsyncMock(return_value=MagicMock(equity=100000))
+                instance.scan = AsyncMock(return_value=[])
+                instance.reconstruct_from_broker = AsyncMock()
+                instance.reconstruct_state = AsyncMock()
+                instance.update_component = MagicMock()
+                instance.send_warning_alert = AsyncMock()
+                instance.set_order_manager = MagicMock()
+                cls.return_value = instance
+
+            # Create strategy mocks
+            orb_strategy = MagicMock()
+            orb_strategy.set_watchlist = MagicMock()
+            orb_strategy.strategy_id = "orb_breakout"
+            orb_strategy.is_active = True
+            mock_orb_class.return_value = orb_strategy
+
+            scalp_strategy = MagicMock()
+            scalp_strategy.set_watchlist = MagicMock()
+            scalp_strategy.strategy_id = "orb_scalp"
+            scalp_strategy.is_active = True
+            mock_scalp_class.return_value = scalp_strategy
+
+            # Setup orchestrator mock
+            mock_orchestrator = MagicMock()
+            mock_orchestrator.start = AsyncMock()
+            mock_orchestrator.stop = AsyncMock()
+            mock_orchestrator.run_pre_market = AsyncMock()
+            mock_orchestrator.register_strategy = MagicMock()
+            mock_orchestrator.get_strategies = MagicMock(
+                return_value={"orb_breakout": orb_strategy, "orb_scalp": scalp_strategy}
+            )
+            mock_orchestrator_class.return_value = mock_orchestrator
+
+            with contextlib.suppress(Exception):
+                await system.start()
+
+            # Verify both strategies were registered
+            calls = mock_orchestrator.register_strategy.call_args_list
+            assert len(calls) == 2
+
+    @pytest.mark.asyncio
+    async def test_candle_event_routing_subscribed(
+        self, mock_config_dir: Path, mock_env_vars: None
+    ) -> None:
+        """Verify CandleEvent routing is subscribed after Order Manager starts."""
+        from argus.core.events import CandleEvent
+        from argus.main import ArgusSystem
+
+        system = ArgusSystem(config_dir=mock_config_dir, dry_run=True)
+        event_bus_mock = MagicMock()
+        event_bus_mock.subscribe = MagicMock()
+        event_bus_mock.publish = AsyncMock()
+
+        with (
+            patch("argus.main.DatabaseManager") as mock_db_class,
+            patch("argus.main.AlpacaBroker") as mock_broker_class,
+            patch("argus.main.HealthMonitor") as mock_health_class,
+            patch("argus.main.RiskManager") as mock_risk_class,
+            patch("argus.main.AlpacaDataService") as mock_data_class,
+            patch("argus.main.AlpacaScanner") as mock_scanner_class,
+            patch("argus.main.OrbBreakoutStrategy") as mock_orb_class,
+            patch("argus.main.Orchestrator") as mock_orchestrator_class,
+            patch("argus.main.OrderManager") as mock_om_class,
+            patch("argus.main.EventBus", return_value=event_bus_mock),
+        ):
+            # Setup all mocks
+            for cls in [
+                mock_db_class,
+                mock_broker_class,
+                mock_health_class,
+                mock_risk_class,
+                mock_data_class,
+                mock_scanner_class,
+                mock_om_class,
+            ]:
+                instance = MagicMock()
+                instance.initialize = AsyncMock()
+                instance.start = AsyncMock()
+                instance.connect = AsyncMock()
+                instance.stop = AsyncMock()
+                instance.close = AsyncMock()
+                instance.get_account = AsyncMock(return_value=MagicMock(equity=100000))
+                instance.scan = AsyncMock(return_value=[])
+                instance.reconstruct_from_broker = AsyncMock()
+                instance.reconstruct_state = AsyncMock()
+                instance.update_component = MagicMock()
+                instance.send_warning_alert = AsyncMock()
+                instance.set_order_manager = MagicMock()
+                cls.return_value = instance
+
+            orb_strategy = MagicMock()
+            orb_strategy.set_watchlist = MagicMock()
+            orb_strategy.strategy_id = "orb_breakout"
+            orb_strategy.is_active = True
+            mock_orb_class.return_value = orb_strategy
+
+            mock_orchestrator = MagicMock()
+            mock_orchestrator.start = AsyncMock()
+            mock_orchestrator.stop = AsyncMock()
+            mock_orchestrator.run_pre_market = AsyncMock()
+            mock_orchestrator.register_strategy = MagicMock()
+            mock_orchestrator.get_strategies = MagicMock(
+                return_value={"orb_breakout": orb_strategy}
+            )
+            mock_orchestrator_class.return_value = mock_orchestrator
+
+            with contextlib.suppress(Exception):
+                await system.start()
+
+            # Verify CandleEvent subscription was made
+            subscribe_calls = event_bus_mock.subscribe.call_args_list
+            candle_subscribed = any(
+                args[0] == CandleEvent for args, _ in subscribe_calls
+            )
+            assert candle_subscribed, "CandleEvent routing not subscribed"
+
+    @pytest.mark.asyncio
+    async def test_risk_manager_wired_to_order_manager(
+        self, mock_config_dir: Path, mock_env_vars: None
+    ) -> None:
+        """Verify Risk Manager has set_order_manager called."""
+        from argus.main import ArgusSystem
+
+        system = ArgusSystem(config_dir=mock_config_dir, dry_run=True)
+
+        with (
+            patch("argus.main.DatabaseManager") as mock_db_class,
+            patch("argus.main.AlpacaBroker") as mock_broker_class,
+            patch("argus.main.HealthMonitor") as mock_health_class,
+            patch("argus.main.RiskManager") as mock_risk_class,
+            patch("argus.main.AlpacaDataService") as mock_data_class,
+            patch("argus.main.AlpacaScanner") as mock_scanner_class,
+            patch("argus.main.OrbBreakoutStrategy") as mock_orb_class,
+            patch("argus.main.Orchestrator") as mock_orchestrator_class,
+            patch("argus.main.OrderManager") as mock_om_class,
+        ):
+            # Setup all mocks
+            for cls in [
+                mock_db_class,
+                mock_broker_class,
+                mock_health_class,
+                mock_data_class,
+                mock_scanner_class,
+            ]:
+                instance = MagicMock()
+                instance.initialize = AsyncMock()
+                instance.start = AsyncMock()
+                instance.connect = AsyncMock()
+                instance.stop = AsyncMock()
+                instance.close = AsyncMock()
+                instance.get_account = AsyncMock(return_value=MagicMock(equity=100000))
+                instance.scan = AsyncMock(return_value=[])
+                instance.reconstruct_from_broker = AsyncMock()
+                instance.reconstruct_state = AsyncMock()
+                instance.update_component = MagicMock()
+                instance.send_warning_alert = AsyncMock()
+                cls.return_value = instance
+
+            # Setup risk manager mock with set_order_manager
+            mock_risk = MagicMock()
+            mock_risk.initialize = AsyncMock()
+            mock_risk.reconstruct_state = AsyncMock()
+            mock_risk.set_order_manager = MagicMock()
+            mock_risk_class.return_value = mock_risk
+
+            # Setup order manager mock
+            mock_om = MagicMock()
+            mock_om.start = AsyncMock()
+            mock_om.reconstruct_from_broker = AsyncMock()
+            mock_om_class.return_value = mock_om
+
+            orb_strategy = MagicMock()
+            orb_strategy.set_watchlist = MagicMock()
+            orb_strategy.strategy_id = "orb_breakout"
+            orb_strategy.is_active = True
+            mock_orb_class.return_value = orb_strategy
+
+            mock_orchestrator = MagicMock()
+            mock_orchestrator.start = AsyncMock()
+            mock_orchestrator.stop = AsyncMock()
+            mock_orchestrator.run_pre_market = AsyncMock()
+            mock_orchestrator.register_strategy = MagicMock()
+            mock_orchestrator.get_strategies = MagicMock(
+                return_value={"orb_breakout": orb_strategy}
+            )
+            mock_orchestrator_class.return_value = mock_orchestrator
+
+            with contextlib.suppress(Exception):
+                await system.start()
+
+            # Verify set_order_manager was called on risk manager
+            mock_risk.set_order_manager.assert_called_once_with(mock_om)
+
+    @pytest.mark.asyncio
+    async def test_multi_strategy_health_status(
+        self, mock_config_dir: Path, mock_env_vars: None
+    ) -> None:
+        """Verify health monitor reports multi-strategy status."""
+        from argus.main import ArgusSystem
+
+        # Add orb_scalp.yaml to config
+        (mock_config_dir / "strategies" / "orb_scalp.yaml").write_text("""
+strategy_id: "orb_scalp"
+name: "ORB Scalp"
+version: "1.0.0"
+enabled: true
+orb_window_minutes: 5
+scalp_target_r: 0.3
+max_hold_seconds: 120
+""")
+
+        system = ArgusSystem(config_dir=mock_config_dir, dry_run=True)
+        health_update_calls: list[tuple[str, str]] = []
+
+        with (
+            patch("argus.main.DatabaseManager") as mock_db_class,
+            patch("argus.main.AlpacaBroker") as mock_broker_class,
+            patch("argus.main.HealthMonitor") as mock_health_class,
+            patch("argus.main.RiskManager") as mock_risk_class,
+            patch("argus.main.AlpacaDataService") as mock_data_class,
+            patch("argus.main.AlpacaScanner") as mock_scanner_class,
+            patch("argus.main.OrbBreakoutStrategy") as mock_orb_class,
+            patch("argus.main.OrbScalpStrategy") as mock_scalp_class,
+            patch("argus.main.Orchestrator") as mock_orchestrator_class,
+            patch("argus.main.OrderManager") as mock_om_class,
+        ):
+            # Setup mocks
+            for cls in [
+                mock_db_class,
+                mock_broker_class,
+                mock_risk_class,
+                mock_data_class,
+                mock_scanner_class,
+                mock_om_class,
+            ]:
+                instance = MagicMock()
+                instance.initialize = AsyncMock()
+                instance.start = AsyncMock()
+                instance.connect = AsyncMock()
+                instance.stop = AsyncMock()
+                instance.close = AsyncMock()
+                instance.get_account = AsyncMock(return_value=MagicMock(equity=100000))
+                instance.scan = AsyncMock(return_value=[])
+                instance.reconstruct_from_broker = AsyncMock()
+                instance.reconstruct_state = AsyncMock()
+                instance.update_component = MagicMock()
+                instance.send_warning_alert = AsyncMock()
+                instance.set_order_manager = MagicMock()
+                cls.return_value = instance
+
+            # Setup health monitor to capture calls
+            mock_health = MagicMock()
+            mock_health.start = AsyncMock()
+            mock_health.stop = AsyncMock()
+            mock_health.send_warning_alert = AsyncMock()
+
+            def capture_update(component, status, message=""):
+                health_update_calls.append((component, message))
+
+            mock_health.update_component = capture_update
+            mock_health_class.return_value = mock_health
+
+            # Create strategy mocks
+            orb_strategy = MagicMock()
+            orb_strategy.set_watchlist = MagicMock()
+            orb_strategy.strategy_id = "orb_breakout"
+            orb_strategy.is_active = True
+            mock_orb_class.return_value = orb_strategy
+
+            scalp_strategy = MagicMock()
+            scalp_strategy.set_watchlist = MagicMock()
+            scalp_strategy.strategy_id = "orb_scalp"
+            scalp_strategy.is_active = True
+            mock_scalp_class.return_value = scalp_strategy
+
+            mock_orchestrator = MagicMock()
+            mock_orchestrator.start = AsyncMock()
+            mock_orchestrator.stop = AsyncMock()
+            mock_orchestrator.run_pre_market = AsyncMock()
+            mock_orchestrator.register_strategy = MagicMock()
+            mock_orchestrator.get_strategies = MagicMock(
+                return_value={"orb_breakout": orb_strategy, "orb_scalp": scalp_strategy}
+            )
+            mock_orchestrator_class.return_value = mock_orchestrator
+
+            with contextlib.suppress(Exception):
+                await system.start()
+
+            # Verify multi-strategy health status
+            strategy_updates = [msg for comp, msg in health_update_calls if comp == "strategy"]
+            assert any("2/2 strategies active" in msg for msg in strategy_updates), (
+                f"Multi-strategy health status not found in: {strategy_updates}"
+            )
+
+    @pytest.mark.asyncio
+    async def test_strategies_receive_watchlist(
+        self, mock_config_dir: Path, mock_env_vars: None
+    ) -> None:
+        """Verify strategies have set_watchlist called with scanner results."""
+        from argus.main import ArgusSystem
+
+        system = ArgusSystem(config_dir=mock_config_dir, dry_run=True)
+
+        with (
+            patch("argus.main.DatabaseManager") as mock_db_class,
+            patch("argus.main.AlpacaBroker") as mock_broker_class,
+            patch("argus.main.HealthMonitor") as mock_health_class,
+            patch("argus.main.RiskManager") as mock_risk_class,
+            patch("argus.main.AlpacaDataService") as mock_data_class,
+            patch("argus.main.AlpacaScanner") as mock_scanner_class,
+            patch("argus.main.OrbBreakoutStrategy") as mock_orb_class,
+            patch("argus.main.Orchestrator") as mock_orchestrator_class,
+            patch("argus.main.OrderManager") as mock_om_class,
+        ):
+            # Setup all mocks
+            for cls in [
+                mock_db_class,
+                mock_broker_class,
+                mock_health_class,
+                mock_risk_class,
+                mock_data_class,
+                mock_om_class,
+            ]:
+                instance = MagicMock()
+                instance.initialize = AsyncMock()
+                instance.start = AsyncMock()
+                instance.connect = AsyncMock()
+                instance.stop = AsyncMock()
+                instance.close = AsyncMock()
+                instance.get_account = AsyncMock(return_value=MagicMock(equity=100000))
+                instance.reconstruct_from_broker = AsyncMock()
+                instance.reconstruct_state = AsyncMock()
+                instance.update_component = MagicMock()
+                instance.send_warning_alert = AsyncMock()
+                instance.set_order_manager = MagicMock()
+                cls.return_value = instance
+
+            # Setup scanner to return symbols
+            mock_scanner = MagicMock()
+            mock_scanner.start = AsyncMock()
+            mock_scanner.scan = AsyncMock(return_value=[])  # Empty, use static fallback
+            mock_scanner_class.return_value = mock_scanner
+
+            # Create strategy mock that tracks set_watchlist calls
+            orb_strategy = MagicMock()
+            orb_strategy.set_watchlist = MagicMock()
+            orb_strategy.strategy_id = "orb_breakout"
+            orb_strategy.is_active = True
+            mock_orb_class.return_value = orb_strategy
+
+            mock_orchestrator = MagicMock()
+            mock_orchestrator.start = AsyncMock()
+            mock_orchestrator.stop = AsyncMock()
+            mock_orchestrator.run_pre_market = AsyncMock()
+            mock_orchestrator.register_strategy = MagicMock()
+            mock_orchestrator.get_strategies = MagicMock(
+                return_value={"orb_breakout": orb_strategy}
+            )
+            mock_orchestrator_class.return_value = mock_orchestrator
+
+            with contextlib.suppress(Exception):
+                await system.start()
+
+            # Verify set_watchlist was called (using static fallback AAPL, MSFT)
+            orb_strategy.set_watchlist.assert_called_once()
+            call_args = orb_strategy.set_watchlist.call_args[0][0]
+            assert "AAPL" in call_args
+            assert "MSFT" in call_args
