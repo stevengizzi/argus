@@ -1283,5 +1283,61 @@ Each entry follows this format:
 
 ---
 
+### DEC-113: Regime Classification V1 Data Source
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-24 |
+| **Decision:** | Fetch SPY daily bars via REST at pre-market time through DataService. Use SPY 20-day realized volatility as VIX proxy. Skip breadth (advance/decline) in V1. |
+| **Rationale:** | SPY is a market barometer, not a traded symbol — shouldn't pollute the real-time data stream. Daily bars are sufficient for MA, momentum, and volatility computation. Alpaca REST provides reliable daily bars (IEX accuracy issues only affect intraday data). VIX requires a separate CBOE dataset subscription even on Databento. Breadth requires IQFeed ($160–250/mo) — not justified for V1 with one strategy. Architecture supports adding real VIX and breadth later with zero Orchestrator code changes. |
+
+---
+
+### DEC-114: Orchestrator Allocation Method — Equal Weight V1
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-24 |
+| **Decision:** | Equal-weight allocation for V1. `allocation_method: "equal_weight"` in config. Performance-weighted allocation deferred to post-Sprint 21 when sufficient multi-strategy trade data exists. |
+| **Rationale:** | Performance-weighted allocation requires statistically meaningful trade history across multiple strategies. With one strategy and limited paper trading, the data doesn't exist yet. The allocation engine interface supports future methods via config-driven dispatch. |
+| **Future:** | `performance_weighted` method (±10% shift based on trailing 20-day Sharpe/profit factor, per Bible Section 5.2), Kelly criterion, ML-based allocation. Tracked as DEF-017. |
+
+---
+
+### DEC-115: Continuous Regime Monitoring
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-24 |
+| **Decision:** | Orchestrator re-evaluates market regime every 30 minutes during market hours (configurable). If regime shifts, Orchestrator adjusts strategy activation immediately (prevents new signals, does not flatten existing positions). |
+| **Rationale:** | Surprise market events (Fed announcements, tariff news, flash crashes) can invalidate the morning's regime classification. Without intraday re-evaluation, strategies continue trading in conditions they're not designed for. The RegimeClassifier is already callable on-demand; adding periodic re-evaluation is minimal scope. |
+
+---
+
+### DEC-116: Strategy Correlation Tracker — Infrastructure Now, Allocation Later
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-24 |
+| **Decision:** | Build `CorrelationTracker` class that records daily P&L per strategy and computes pairwise correlation matrix. Wire it into the allocation engine as an optional modifier. Correlation-adjusted allocation is not active in V1 — tracker collects data silently. Can be seeded from backtested returns when Sprints 18–20 produce strategy backtests. |
+| **Rationale:** | 4 strategies coming online within the week (Sprints 18–20). Correlation computation requires 20–30 days of parallel daily returns — infrastructure must exist before data accumulates. Backtested returns can bootstrap initial estimates. Correlation-adjusted allocation activates when sufficient data exists (configurable minimum days threshold). |
+| **Future:** | Active correlation-adjusted allocation when `min_correlation_days` threshold is met. Tracked as part of DEF-017. |
+
+---
+
+### DEC-117: DEF-016 Resolution — Atomic Bracket Orders in Order Manager
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-24 |
+| **Decision:** | Refactor Order Manager to use `place_bracket_order()` for entry+stop+T1+T2 submission. All three broker implementations already support `place_bracket_order()`. The refactor is scoped to Order Manager's `on_approved()` and `_handle_entry_fill()` methods plus test updates. |
+| **Rationale:** | Eliminates the unprotected window between entry fill and stop/target placement. For a system managing family income, "near-zero risk" is not the right standard — zero risk is. SimulatedBroker already has working `place_bracket_order()`. IBKRBroker uses native IBKR bracket linkage. AlpacaBroker supports single-target brackets (acceptable for incubator use). |
+
+---
+
+### DEC-118: Pre-Market Scheduling — Self-Contained Poll Loop
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-24 |
+| **Decision:** | Orchestrator runs its own background polling loop (like Order Manager's fallback poll). Checks clock every 30 seconds. Fires pre-market routine at configured time (default 9:25 AM ET), regime re-evaluation every N minutes during market hours, and EOD review at configured time (default 4:05 PM ET). No APScheduler dependency. |
+| **Rationale:** | Consistent with Order Manager's time-based trigger pattern. Self-contained, no new dependencies. Handles mid-day restarts gracefully (detects market hours, runs abbreviated pre-market). |
+
+---
+
 *End of Decision Log v1.0*
 *New decisions are appended chronologically as the project progresses.*
