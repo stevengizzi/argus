@@ -98,7 +98,18 @@ The foundational strategy. Identifies stocks gapping ≥2% on volume, records a 
 **Pipeline Stage:** Paper Trading (Phase 3). Backtest validated: 137 trades, Sharpe 0.93, PF 1.18, +$8,087 on $100K over 11 months. Sprint 11 extended walk-forward (35 months, 15 windows): fixed-params WFE (P&L) = 0.56, OOS Sharpe = +0.34, OOS P&L = $7,741. DEC-076 parameters confirmed.
 
 **Strategy 2: ORB Scalp**
-A faster variant of ORB. Same scanner and entry criteria, but targets a quick 0.3–0.5R partial profit within the first 30–120 seconds, then exits entirely. Higher win rate, smaller gains, more trades per day. Operates 9:45–11:30 AM EST. Holding duration: 10 seconds – 5 minutes.
+A faster variant of ORB sharing the same OrbBaseStrategy base class (DEC-120). Same scanner and entry criteria, but targets a quick 0.3R profit within the first 120 seconds, then exits entirely (DEC-123). Single T1 target, no T2 split. Per-signal time stop via `time_stop_seconds` field (DEC-122). Higher win rate, smaller gains, more trades per day. Operates 9:45–11:30 AM EST. Holding duration: 10 seconds – 5 minutes.
+
+| Parameter | Value | Source |
+|-----------|-------|--------|
+| `scalp_target_r` | 0.3 | Strategy thesis |
+| `max_hold_seconds` | 120 | Strategy thesis |
+| `opening_range_minutes` | 5 | Inherited from ORB (DEC-076) |
+| `min_gap_pct` | 2.0% | Inherited from ORB (DEC-076) |
+| `stop_buffer_pct` | 0.0% | Inherited from ORB (DEC-076) |
+| `max_range_atr_ratio` | 999.0 (disabled) | Inherited from ORB (DEC-075) |
+
+**Pipeline Stage:** Exploration. VectorBT sweep (20,880 trades, 35 months): all aggregate Sharpes negative — 1-minute bar resolution insufficient for scalp validation (DEC-127, RSK-026). Parameters set from strategy thesis, not backtest optimization. Real validation requires Databento tick-level data (DEC-132).
 
 **Strategy 3: VWAP Reclaim**
 Mean-reversion strategy. Buys stocks that pulled back below VWAP on low volume, then reclaim VWAP on increasing volume. Works well mid-morning when breakout momentum fades. Operates 10:00 AM – 12:00 PM EST. Holding duration: 5–30 minutes.

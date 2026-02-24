@@ -1426,5 +1426,70 @@ Each entry follows this format:
 
 ---
 
+### DEC-127 | ORB Scalp VectorBT Sweep — Directional Guidance Only
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-25 |
+| **Decision** | ORB Scalp VectorBT sweep (16 combos × 29 symbols = 20,880 trades) produces directional guidance only, not actionable parameter optimization. All aggregate Sharpe ratios are negative. Default parameters (scalp_target_r=0.3, max_hold_seconds=120) are thesis-driven, not backtest-optimized. |
+| **Rationale** | 1-minute bar resolution cannot meaningfully simulate 30–300 second holds. Synthetic ticks (4/bar) approximate intra-bar price paths but cannot determine whether a 0.3R target was hit before or after a stop. This is a fundamental resolution limitation (RSK-026), not a strategy deficiency. VectorBT infrastructure is correctly built and will produce actionable results when Databento tick-level data is available. |
+| **Alternatives** | (A) Attempt sub-bar interpolation — inaccurate without real tick data. (B) Skip sweep entirely — loses directional signal about parameter landscape shape. |
+| **Status** | Active |
+
+---
+
+### DEC-128 | Three-Way Position Filter (All / Open / Closed)
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-25 |
+| **Decision** | Dashboard positions section uses a three-way filter: All / Open / Closed. Works identically in both Table and Timeline views. "All" shows open positions bright and closed positions at reduced opacity (timeline) or combined list with section headers (table). Default: "Open" during market hours, "All" after hours. |
+| **Rationale** | Two-way toggle (Open/Closed) felt incomplete — the timeline's value is showing the full session narrative. "All" preserves this while letting users focus during active trading. Default follows natural workflow: monitor live positions during hours, review full session after close. |
+| **Alternatives** | Keep two-way toggle — loses the "full session" view. Different filters for table vs timeline — confusing. |
+| **Status** | Active |
+
+---
+
+### DEC-129 | Positions UI State in Zustand Store
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-25 |
+| **Decision** | Display mode (table/timeline) and position filter (all/open/closed) managed in a dedicated Zustand store (`stores/positionsUI.ts`). Session-level persistence — survives responsive layout re-mounts but resets on full page reload. No localStorage. |
+| **Rationale** | Component-level React state was resetting when window resize crossed responsive breakpoints (sidebar ↔ bottom tab bar transition re-mounts parent components). Zustand store lives outside the React tree, so state persists regardless of mount/unmount cycles. localStorage unnecessary for ephemeral view preferences. |
+| **Alternatives** | Lift state to a never-remounting ancestor — fragile, depends on layout structure. localStorage — overkill for view toggles. |
+| **Status** | Active |
+
+---
+
+### DEC-130 | Frontend Testing — Vitest
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-25 |
+| **Decision** | Vitest adopted for React component testing. First tests: 7 tests for PositionTimeline. Config: `vitest.config.ts`, setup: `src/test/setup.ts`. Test scripts added to `package.json`. |
+| **Rationale** | Vitest integrates natively with Vite (already the build tool), provides Jest-compatible API, and runs significantly faster than Jest for Vite projects. Establishes the pattern for future frontend testing. |
+| **Alternatives** | Jest — requires additional babel/transform config for Vite projects. Playwright — for E2E, not unit/component tests. |
+| **Status** | Active |
+
+---
+
+### DEC-131 | Session Summary Card — Dev Mode Override
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-25 |
+| **Decision** | In `--dev` mode, SessionSummaryCard bypasses the market status gate so it's always visible for testing. Production behavior unchanged: card shows only when market is `after_hours` or `closed` AND trades exist for the current session. |
+| **Rationale** | The card is untestable during market hours without a dev-mode override. Market status in dev mode was hardcoded to `open`, preventing the card from ever appearing. Dev-mode overrides follow the same pattern as existing mock data. |
+| **Alternatives** | Manual market status override via URL param — acceptable but less discoverable. |
+| **Status** | Active |
+
+---
+
+### DEC-132 | Pre-Databento Backtests Require Re-Validation
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-25 |
+| **Decision** | All parameter optimization performed pre-Databento (ORB Breakout DEC-076, ORB Scalp DEC-127) was run against Alpaca historical data at 1-minute bar resolution. Parameters are provisional. When Databento activates (~Sprint 19), a dedicated re-validation pass will re-run VectorBT sweeps, walk-forward analysis, and cross-validation for all strategies with exchange-direct data. ORB Scalp additionally requires sub-minute data for meaningful backtesting. |
+| **Rationale** | Alpaca historical data is SIP-quality but was fetched via REST (not the limited IEX stream). Databento provides exchange-direct proprietary feeds which may show different price dynamics, particularly at the open when ORB signals concentrate. The backtesting *infrastructure* and *methodology* are validated — only the parameter *values* are provisional. |
+| **Status** | Active — trigger: Databento subscription activation |
+
+---
+
 *End of Decision Log v1.0*
 *New decisions are appended chronologically as the project progresses.*

@@ -46,7 +46,8 @@ from argus.core.risk_manager import RiskManager
 from argus.core.throttle import ThrottleAction
 from argus.execution.order_manager import OrderManager
 from argus.execution.simulated_broker import SimulatedBroker
-from argus.models.trading import Trade
+from argus.models.trading import ExitReason as TradeExitReason
+from argus.models.trading import OrderSide, Trade, TradeOutcome
 from argus.strategies.orb_breakout import OrbBreakoutStrategy
 from argus.strategies.orb_scalp import OrbScalpStrategy
 
@@ -908,7 +909,7 @@ class TestIntegrationGaps:
         await asyncio.sleep(0.05)
 
         # Now ORB Scalp tries the SAME symbol — should be blocked by exposure limit
-        # 30 shares @ $150 = $4,500 existing + 20 shares @ $150 = $3,000 proposed = $7,500 > $5,000 limit
+        # 30 shares @ $150 = $4,500 existing + 20 @ $150 = $3,000 = $7,500 > $5,000 limit
         scalp_signal = SignalEvent(
             strategy_id="strat_orb_scalp",
             symbol="AAPL",
@@ -1018,7 +1019,6 @@ class TestIntegrationGaps:
         await broker.connect()
 
         # Create mock trades for scalp strategy showing 5 consecutive losses
-        from argus.models.trading import ExitReason as TradeExitReason, OrderSide, TradeOutcome
 
         scalp_losing_trades = [
             Trade(

@@ -397,6 +397,19 @@ class BaseStrategy(ABC):
         Queries today's trades and open positions from the Trade Logger."""
 ```
 
+### 3.4.1 ORB Strategy Family
+
+The ORB strategy family uses a shared abstract base class for common logic:
+```
+OrbBaseStrategy (ABC)          ← shared: scanner criteria, gap filtering, OR tracking, breakout detection
+├── OrbBreakoutStrategy        ← 2.0R target, 15min hold, T1/T2 split
+└── OrbScalpStrategy           ← 0.3R single target, 120s hold, no T2
+```
+
+**OrbBaseStrategy** (`strategies/orb_base.py`): Provides shared opening range formation tracking, breakout detection with volume/VWAP confirmation, and scanner criteria. Subclasses override `_build_signal()` for target construction and `_get_time_stop_seconds()` for hold duration.
+
+**OrbScalpStrategy** (`strategies/orb_scalp.py`): Fast ORB variant. Single T1 target at 0.3R, 120-second max hold via per-signal `time_stop_seconds` field (DEC-122). No T2 split — trades too fast for partial exits (DEC-123). Uses same entry criteria as OrbBreakout but diverges entirely on exit management.
+
 ### 3.5 Risk Manager (`core/risk_manager.py`)
 
 Every order passes through the Risk Manager before reaching the broker.
@@ -872,6 +885,7 @@ GET    /api/v1/health                  — System health + component status
 GET    /api/v1/orchestrator/status     — Regime, allocations, throttle state
 GET    /api/v1/orchestrator/decisions  — Decision history (paginated)
 POST   /api/v1/orchestrator/rebalance  — Trigger manual rebalance
+GET    /api/v1/session-summary         — Session recap (P&L, wins/losses, best/worst trade, regime, strategies). Query: ?date=YYYY-MM-DD
 ```
 
 ### WebSocket
@@ -897,7 +911,7 @@ Four pages delivered with responsive design across four breakpoints. Single Reac
 
 ### Pages
 
-**Dashboard** (`/`): Account summary cards (equity, daily P&L, open positions count, win rate), open positions table with WebSocket real-time price updates, recent trades list, system health mini-display.
+**Dashboard** (`/`): Account summary cards (equity, daily P&L, open positions count, win rate), positions panel with table/timeline toggle (DEC-125) and three-way filter All/Open/Closed (DEC-128), recent trades list, system health mini-display. SessionSummaryCard appears after market close when trades exist (DEC-131 dev-mode override). View state persisted in Zustand store (DEC-129).
 
 **Trade Log** (`/trades`): Filter bar (strategy, outcome, date range), stats summary row (total trades, win rate, net P&L), paginated trade table with color-coded exit reason badges.
 
@@ -929,12 +943,14 @@ Four pages delivered with responsive design across four breakpoints. Single Reac
 | Animation | Framer Motion (DEC-110) |
 | Server State | TanStack Query |
 | Desktop | Tauri v2 |
+| Testing | Vitest (DEC-130) |
 
 ### Planned Enhancements
 
 See `docs/ui/UX_FEATURE_BACKLOG.md` for the complete prioritized inventory (35 features, Sprints 16–23+). Key upcoming:
 - Sprint 16: ✅ Motion/animation, sparklines, skeleton loading, controls, trade detail panel, PWA, Tauri
 - Sprint 17: ✅ Strategy allocation donut, risk utilization gauges, orchestrator interaction panel
+- Sprint 18: ✅ SessionSummaryCard (after-hours recap), PositionTimeline (Gantt), three-way position filter, Zustand UI state persistence
 - Sprint 21: Stock detail panel, Dashboard V2, heatmaps, trade replay, portfolio visualizations
 - Sprint 22: AI insight cards, strategy optimization landscape
 
@@ -984,6 +1000,10 @@ results = sweep_orb_parameters(data, orb_windows, target_r, stop_buffers, max_ho
 # Output: DataFrame of metrics per parameter combination
 # Visualize as 2D heatmaps to identify stable vs fragile regions
 ```
+
+### 5.1.1 VectorBT ORB Scalp Layer (`backtest/vectorbt_orb_scalp.py`)
+
+Scalp-specific sweep with a reduced 2-parameter grid: `scalp_target_r` (0.2, 0.3, 0.4, 0.5) × `max_hold_bars` (1, 2, 3, 5). Entry parameters inherited from ORB Breakout (DEC-076), not re-swept. Results are directional guidance only due to 1-minute bar resolution (DEC-127, RSK-026).
 
 ### 5.2 Replay Harness (`backtest/replay_harness.py`)
 

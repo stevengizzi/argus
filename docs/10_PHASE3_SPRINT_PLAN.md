@@ -220,33 +220,31 @@ per sprint velocity.
 - Indentation fix in orchestrator.py. Removed `React.memo()` wrappers (broke Vite Fast Refresh in dev mode).
 - 1146 tests (unchanged — frontend-only fixes). 4 sessions.
 
-#### Sprint 18 — ORB Scalp Strategy ← ACTIVE
-**Target:** ~3 days (12 implementation sessions + 2 code reviews)
-**Scope:**
-- OrbBaseStrategy extraction (DEC-120) — shared OR formation + breakout detection
-- OrbScalpStrategy (DEC-123) — single-target exit, 0.3R, 120s hold, per-signal time stop (DEC-122)
-- OrbScalpConfig + orb_scalp.yaml
-- Cross-strategy risk integration (DEC-121, DEC-124): ALLOW_ALL policy, single-stock exposure cap, Risk Manager ↔ Order Manager reference
-- CandleEvent routing in main.py (DEC-125) — multi-strategy generalization
-- Per-signal time stops in Order Manager (DEC-122)
-- Single-target bracket orders (len(target_prices)==1)
-- VectorBT parameter sweep (scalp_target_r × max_hold_bars)
-- Walk-forward validation (35-month dataset, generalized pipeline)
-- Replay Harness cross-validation
-- Strategy spec sheet (STRATEGY_ORB_SCALP.md)
-- Multi-strategy integration tests
-- **UX add-ons:** Session Summary Card (18-D, ~3h), Position Timeline (18-B, ~4h)
-- Deferred: sector exposure check (DEF-020), sub-bar precision (DEF-021)
+#### Sprint 18 — ORB Scalp Strategy ✅ COMPLETE (Feb 25)
+**Delivered:**
+- OrbBaseStrategy ABC extraction (DEC-120) — shared OR formation, breakout detection, scanner criteria
+- OrbScalpStrategy (DEC-123) — single-target 0.3R exit, 120s hold, per-signal time stop (DEC-122)
+- Cross-strategy risk: ALLOW_ALL duplicate stock policy (DEC-121), Risk Manager ↔ Order Manager reference (DEC-124), CandleEvent routing (DEC-125). Sector exposure deferred (DEC-126, DEF-020).
+- VectorBT Scalp sweep: 20,880 trades across 29 symbols × 16 param combos. All aggregate Sharpes negative — 1-min bar resolution insufficient for scalp validation (DEC-127, RSK-026). Directional guidance only.
+- Walk-forward infrastructure generalized for multi-strategy (`--strategy orb_scalp`).
+- Strategy spec sheet: `docs/strategies/STRATEGY_ORB_SCALP.md`
+- 14 multi-strategy integration tests (Orchestrator, allocation, risk, throttle, reconstruction).
+- UX: SessionSummaryCard (after-hours recap, dismissable), PositionTimeline (horizontal Gantt, strategy badges, time stops, click-to-detail).
+- Vitest frontend testing setup (DEC-130): 7 component tests.
+- Session summary API endpoint. Dev mode mock data for both strategies.
+- 1299 tests (153 new). 12 implementation sessions. Code review passed. DEC-120–127.
 
-**Session Plan:**
-- Sessions 1–6: Core infrastructure (ORBBase, Scalp, cross-strategy risk, time stops, main.py)
-- Code Review A after Session 6
-- Sessions 7–9: Backtesting (VectorBT, walk-forward, Replay Harness, integration tests)
-- Sessions 10–11: UX (Session Summary Card, Position Timeline)
-- Session 12: Polish
-- Code Review B after Session 12
-
-**Note:** Databento subscription activation recommended around Sprint 19 (DEC-097).
+#### Sprint 18.5 — Post-Review Polish ✅ COMPLETE (Feb 25)
+**Delivered:**
+- ORB Scalp mock data in dev mode (open positions, closed trades, system status, strategy cards, performance breakdown, allocation donut)
+- SessionSummaryCard dev-mode override — bypasses market status gate for testability (DEC-131)
+- Mobile timeline label density: hourly labels at <640px to prevent cramping
+- Three-way position filter: All / Open / Closed in both Table and Timeline views (DEC-128). Default: Open during hours, All after hours.
+- View toggle persistence: Zustand store (`stores/positionsUI.ts`) survives responsive re-mounts (DEC-129)
+- 3 integration test gap fills: same-symbol collision blocked by exposure cap, partial allocation exhaustion per-strategy, throttle isolation between strategies
+- AllocationDonut legend: expanded width for full strategy names + display name mapping
+- Badge contrast: dark slate badges on amber/yellow timeline bars
+- 1313 tests (pytest, 14 new) + 7 (Vitest). 7 sessions.
 
 #### Sprint 19 — VWAP Reclaim Strategy (NEW — DEC-096)
 **Target:** ~1-2 days

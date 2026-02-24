@@ -11,8 +11,8 @@ Phase 1 sprint plan: @docs/07_PHASE1_SPRINT_PLAN.md
 ## Current State
 
 **Structure:** Two parallel tracks (DEC-079, February 19, 2026).
-- **Build Track:** System construction at development velocity. Sprints 1–17 complete (1,146 tests). Sprint 18 (ORB Scalp) is NEXT.
-- **Validation Track:** Paper trading ACTIVE on Alpaca IEX (system stability only — DEC-081). Signal accuracy validation pending Databento subscription activation (DEC-087). Migrates to IBKR paper after IBKR account approved (U24619949, submitted Feb 21).
+- **Build Track:** System construction at development velocity. Sprints 1–18 complete (1,313 pytest tests + 7 Vitest). Sprint 19 (VWAP Reclaim) is NEXT.
+- **Validation Track:** Paper trading ACTIVE on Alpaca IEX (system stability only — DEC-081). Signal accuracy validation pending Databento subscription activation (DEC-087). All pre-Databento backtests require re-validation with quality data (DEC-132). Migrates to IBKR paper after IBKR account approved (U24619949, submitted Feb 21).
 
 Active sprint plan: `docs/10_PHASE3_SPRINT_PLAN.md` (covers both tracks).
 
@@ -24,6 +24,14 @@ Active sprint plan: `docs/10_PHASE3_SPRINT_PLAN.md` (covers both tracks).
 - **Cost deferral:** Databento subscription activated when adapter ready for integration testing. DEC-087.
 
 - IBKR account application submitted Feb 21, 2026 (Account ID: U24619949). Individual, Margin, IBKR Pro (tiered), GA address. Permissions: Stocks, Options L3, Futures, Forex, Crypto. Awaiting approval.
+
+**Sprint 18 + 18.5 Results (ORB Scalp — Feb 25):**
+- OrbBaseStrategy ABC (DEC-120) — shared base for ORB family strategies. OrbScalpStrategy (DEC-123): 0.3R single target, 120s hold.
+- Cross-strategy risk: ALLOW_ALL same-symbol policy (DEC-121), per-signal time stops (DEC-122), CandleEvent routing via EventBus (DEC-125).
+- VectorBT Scalp sweep: directional guidance only at 1-min resolution (DEC-127). Params thesis-driven.
+- UX: SessionSummaryCard, PositionTimeline (Gantt), three-way position filter (DEC-128), Zustand UI persistence (DEC-129).
+- Vitest frontend testing (DEC-130). 14+3 multi-strategy integration tests.
+- 1313 tests (pytest) + 7 (Vitest). Sprint 18: 12 sessions. Sprint 18.5: 7 sessions. Code review passed.
 
 **Sprint 17 Results (Orchestrator V1 — Feb 24–25):**
 - Orchestrator: pre-market routine, 30-min regime monitoring (DEC-115), intraday throttle, EOD review, decision logging.
@@ -46,7 +54,7 @@ Active sprint plan: `docs/10_PHASE3_SPRINT_PLAN.md` (covers both tracks).
 
 **Validation Track sequence:** Build through Sprint 21 (four strategies + analytics) → activate Databento ~Sprint 19 (DEC-097) → serious paper trading with quality data + IBKR → AI Layer (Sprint 22) compounds analysis during validation → CPA consultation → live at minimum size on IBKR.
 
-**Build Track queue (DEC-096, DEC-106–110):** ORB Scalp (18) → VWAP Reclaim (19) → Afternoon Momentum (20) → CC Analytics & Strategy Lab (21) → AI Layer MVP (22) → Tier 1 News + expansion (23+). UX Feature Backlog (`docs/ui/UX_FEATURE_BACKLOG.md`) provides per-sprint enhancement add-ons.
+**Build Track queue (DEC-096, DEC-106–110):** VWAP Reclaim (19) → Afternoon Momentum (20) → CC Analytics & Strategy Lab (21) → AI Layer MVP (22) → Tier 1 News + expansion (23+). UX Feature Backlog (`docs/ui/UX_FEATURE_BACKLOG.md`) provides per-sprint enhancement add-ons. Databento activation ~Sprint 19 (DEC-097). Pre-Databento re-validation required (DEC-132).
 
 **Command Center delivery (DEC-080):** Three surfaces from single React codebase — web app + Tauri desktop + PWA mobile. All operational after Sprint 16.
 
@@ -98,6 +106,13 @@ Components implemented:
 - Order Manager DEF-016 resolved — atomic bracket submission via `place_bracket_order()`. ManagedPosition tracks bracket component IDs (DEC-117).
 - API: /orchestrator/status, /orchestrator/decisions, /orchestrator/rebalance endpoints. 4 WebSocket event types (RegimeChange, AllocationUpdate, StrategyActivated, StrategySuspended).
 - UI: SegmentedTab (reusable pill tabs), Badge system (StrategyBadge, RegimeBadge, RiskBadge, ThrottleBadge), AllocationDonut (Recharts), RiskGauge (SVG radial arc).
+- OrbBaseStrategy ABC — shared base for ORB-family strategies (DEC-120)
+- OrbScalpStrategy — fast ORB variant, 0.3R single target, 120s hold (DEC-123)
+- Per-signal time stops on SignalEvent → ManagedPosition (DEC-122)
+- CandleEvent multi-strategy routing via Orchestrator registry (DEC-125)
+- SessionSummaryCard — after-hours session recap (API + React component)
+- PositionTimeline — horizontal Gantt chart of positions (React + Vitest tests)
+- Zustand positionsUI store — view mode + filter persistence across re-mounts (DEC-129)
 
 ## Architecture
 
@@ -207,6 +222,8 @@ docs/
 - **UX Feature Backlog:** `docs/ui/UX_FEATURE_BACKLOG.md` — canonical inventory of all planned UI/UX enhancements. Reference when planning sprint UX scope. (DEC-106)
 - **Responsive breakpoints:** 393px (iPhone SE/mini), 834px (iPad portrait), 1194px (iPad landscape), 1512px (MacBook Pro).
 - **Mobile nav:** Bottom tab bar. Desktop/tablet: icon sidebar.
+- **Frontend testing (DEC-130):** Vitest for React component tests. Config: `vitest.config.ts`. Pattern: `ComponentName.test.tsx` alongside component. Setup: `src/test/setup.ts`.
+- **Positions UI state (DEC-129):** Display mode (table/timeline) and filter (all/open/closed) managed in Zustand store (`stores/positionsUI.ts`). Session-level — no localStorage.
 
 ## Testing
 

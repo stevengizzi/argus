@@ -505,6 +505,17 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 
 ---
 
+### RSK-027 | Pre-Databento Backtests Require Re-Validation
+| Field | Value |
+|-------|-------|
+| **Date Identified** | 2026-02-25 |
+| **Category** | Validation |
+| **Description** | All parameter optimization (ORB Breakout DEC-076, ORB Scalp DEC-127) was performed on Alpaca historical data at 1-minute bar resolution. Databento exchange-direct data may produce different price dynamics, particularly at market open when ORB signals concentrate. Parameters are provisional until re-validated. ORB Scalp additionally requires sub-minute bar data for meaningful backtesting. |
+| **Likelihood** | High (different data source will produce different results) |
+| **Impact** | Medium (parameters may shift; methodology and infrastructure are validated) |
+| **Mitigation** | Schedule a re-validation sprint when Databento subscription activates (~Sprint 19). Re-run VectorBT sweeps, walk-forward, and cross-validation for all strategies. Compare results to Alpaca-based analysis to quantify divergence. |
+| **Status** | Open — trigger: Databento activation |
+
 ## Review Schedule
 
 | Review Type | Frequency | Next Review |
