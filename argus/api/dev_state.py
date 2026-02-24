@@ -28,6 +28,7 @@ from argus.core.config import (
     OrchestratorConfig,
     OrderManagerConfig,
     RiskConfig,
+    StrategyConfig,
     SystemConfig,
 )
 from argus.core.event_bus import EventBus
@@ -61,7 +62,7 @@ class MockStrategy:
     allocated_capital: float
     daily_pnl: float
     trade_count_today: int
-    config: OrbBreakoutConfig
+    config: StrategyConfig
 
     @property
     def _is_active(self) -> bool:
@@ -84,7 +85,7 @@ class MockStrategy:
         return self.trade_count_today
 
     @property
-    def _config(self) -> OrbBreakoutConfig:
+    def _config(self) -> StrategyConfig:
         """Compatibility with BaseStrategy._config property."""
         return self.config
 
@@ -118,6 +119,21 @@ class MockOrchestrator:
         """Get current regime indicators."""
         return self._current_indicators
 
+    @property
+    def last_regime_check(self) -> datetime | None:
+        """Get last regime check timestamp."""
+        return self._last_regime_check
+
+    @property
+    def regime_check_interval_minutes(self) -> int:
+        """Get regime check interval in minutes."""
+        return self._config.regime_check_interval_minutes
+
+    @property
+    def cash_reserve_pct(self) -> float:
+        """Get cash reserve percentage."""
+        return self._config.cash_reserve_pct
+
     async def manual_rebalance(self) -> dict[str, StrategyAllocation]:
         """Mock rebalance - returns current allocations unchanged."""
         return self._current_allocations
@@ -128,7 +144,7 @@ class MockOrchestrator:
 # ---------------------------------------------------------------------------
 
 
-def _generate_mock_trades(count: int = 20) -> list[Trade]:
+def _generate_mock_trades(orb_count: int = 15, scalp_count: int = 8) -> list[Trade]:
     """Generate realistic mock trades for seeding the database.
 
     Creates a mix of:
@@ -136,21 +152,37 @@ def _generate_mock_trades(count: int = 20) -> list[Trade]:
     - ~40% losses
     - ~5% breakeven
 
-    With exit reasons: target_1, stop_loss, time_stop, eod
+    For ORB Breakout: 5-120 min holds, 1R/2R targets
+    For ORB Scalp: 30-120s holds, 0.3R targets, smaller P&L
     """
-    symbols = ["TSLA", "NVDA", "AAPL", "AMD", "META"]
+    # ORB Breakout uses these symbols
+    orb_symbols = ["NVDA", "AAPL", "AMD", "META"]
+    # ORB Scalp uses these symbols (distinct from ORB positions)
+    scalp_symbols = ["TSLA", "GOOG", "AMZN", "MSFT"]
+
     symbol_prices = {
         "TSLA": (180.0, 250.0),
         "NVDA": (700.0, 950.0),
         "AAPL": (170.0, 195.0),
         "AMD": (120.0, 180.0),
         "META": (450.0, 550.0),
+        "GOOG": (150.0, 180.0),
+        "AMZN": (180.0, 220.0),
+        "MSFT": (400.0, 450.0),
     }
 
     trades: list[Trade] = []
     now = datetime.now(UTC)
 
-    for _i in range(count):
+    def generate_trade(
+        strategy_id: str,
+        symbols: list[str],
+        target_r: float,
+        min_hold_seconds: int,
+        max_hold_seconds: int,
+        rationale: str,
+    ) -> Trade:
+        """Generate a single trade with strategy-specific parameters."""
         # Spread trades over the last 30 days
         days_ago = random.randint(0, 29)
         trade_date = now - timedelta(days=days_ago)
@@ -186,16 +218,19 @@ def _generate_mock_trades(count: int = 20) -> list[Trade]:
         stop_distance = round(entry_price * risk_pct, 2)
         stop_price = round(entry_price - stop_distance, 2)
 
-        # Position sizing based on $1000-$3000 risk per trade
-        risk_amount = random.uniform(1000, 3000)
+        # Position sizing based on $1000-$3000 risk per trade (scalp uses smaller)
+        if strategy_id == "orb_scalp":
+            risk_amount = random.uniform(500, 1500)
+        else:
+            risk_amount = random.uniform(1000, 3000)
         shares = max(10, int(risk_amount / stop_distance))
 
         # Calculate exit based on outcome
         if outcome == TradeOutcome.WIN:
-            # Win: hit T1 (1R) or T2 (2R)
-            r_multiple = random.choice([1.0, 1.5, 2.0])
+            # Win: hit target
+            r_multiple = target_r
             exit_price = round(entry_price + (stop_distance * r_multiple), 2)
-            exit_reason = ExitReason.TARGET_1 if r_multiple <= 1.0 else ExitReason.TARGET_2
+            exit_reason = ExitReason.TARGET_1
             gross_pnl = round(shares * (exit_price - entry_price), 2)
         elif outcome == TradeOutcome.LOSS:
             # Loss: stopped out or time stop
@@ -219,15 +254,15 @@ def _generate_mock_trades(count: int = 20) -> list[Trade]:
             else:
                 r_multiple = 0.0
 
-        # Hold duration: 5 minutes to 2 hours
-        hold_minutes = random.randint(5, 120)
-        exit_time = entry_time + timedelta(minutes=hold_minutes)
+        # Hold duration based on strategy
+        hold_seconds = random.randint(min_hold_seconds, max_hold_seconds)
+        exit_time = entry_time + timedelta(seconds=hold_seconds)
 
         # Commission: $1 per 100 shares (minimum $1)
         commission = max(1.0, round(shares / 100, 2))
 
-        trade = Trade(
-            strategy_id="orb_breakout",
+        return Trade(
+            strategy_id=strategy_id,
             symbol=symbol,
             asset_class=AssetClass.US_STOCKS,
             side=OrderSide.BUY,
@@ -237,25 +272,51 @@ def _generate_mock_trades(count: int = 20) -> list[Trade]:
             exit_time=exit_time,
             shares=shares,
             stop_price=stop_price,
-            target_prices=[
-                round(entry_price + stop_distance, 2),
-                round(entry_price + stop_distance * 2, 2),
-            ],
+            target_prices=[round(entry_price + stop_distance * target_r, 2)],
             exit_reason=exit_reason,
             gross_pnl=gross_pnl,
             commission=commission,
             r_multiple=r_multiple,
-            rationale="ORB breakout with volume confirmation",
+            rationale=rationale,
         )
 
+    # Generate ORB Breakout trades (5-120 min holds, 2R targets)
+    for _ in range(orb_count):
+        trade = generate_trade(
+            strategy_id="orb_breakout",
+            symbols=orb_symbols,
+            target_r=random.choice([1.0, 1.5, 2.0]),
+            min_hold_seconds=5 * 60,  # 5 minutes
+            max_hold_seconds=120 * 60,  # 2 hours
+            rationale="ORB breakout with volume confirmation",
+        )
+        trades.append(trade)
+
+    # Generate ORB Scalp trades (30-120s holds, 0.3R targets)
+    for _ in range(scalp_count):
+        trade = generate_trade(
+            strategy_id="orb_scalp",
+            symbols=scalp_symbols,
+            target_r=0.3,
+            min_hold_seconds=30,  # 30 seconds
+            max_hold_seconds=120,  # 2 minutes
+            rationale="ORB scalp quick momentum capture",
+        )
         trades.append(trade)
 
     return trades
 
 
 def _create_mock_positions(now: datetime) -> list[ManagedPosition]:
-    """Create 2-3 mock managed positions for dev mode."""
+    """Create mock managed positions for dev mode.
+
+    Creates:
+    - 3 ORB Breakout positions (5-30 min holds)
+    - 2 ORB Scalp positions (30-90s holds, different symbols)
+    """
     positions = []
+
+    # --- ORB Breakout Positions ---
 
     # Position 1: NVDA - entered 30 minutes ago, T1 hit, stop at breakeven
     entry_time_1 = now - timedelta(minutes=30)
@@ -280,25 +341,25 @@ def _create_mock_positions(now: datetime) -> list[ManagedPosition]:
         )
     )
 
-    # Position 2: TSLA - entered 15 minutes ago, still waiting for T1
+    # Position 2: AAPL - entered 15 minutes ago, still waiting for T1
     entry_time_2 = now - timedelta(minutes=15)
     positions.append(
         ManagedPosition(
-            symbol="TSLA",
+            symbol="AAPL",
             strategy_id="orb_breakout",
-            entry_price=225.80,
+            entry_price=185.80,
             entry_time=entry_time_2,
             shares_total=150,
             shares_remaining=150,
-            stop_price=222.50,
-            original_stop_price=222.50,
-            stop_order_id="stop_tsla_001",
-            t1_price=229.10,
-            t1_order_id="t1_tsla_001",
+            stop_price=183.50,
+            original_stop_price=183.50,
+            stop_order_id="stop_aapl_001",
+            t1_price=188.10,
+            t1_order_id="t1_aapl_001",
             t1_shares=75,
             t1_filled=False,
-            t2_price=232.40,
-            high_watermark=226.90,
+            t2_price=190.40,
+            high_watermark=186.90,
             realized_pnl=0.0,
         )
     )
@@ -326,6 +387,54 @@ def _create_mock_positions(now: datetime) -> list[ManagedPosition]:
         )
     )
 
+    # --- ORB Scalp Positions (shorter holds, different symbols) ---
+
+    # Position 4: TSLA - scalp entered 45 seconds ago, waiting for target
+    entry_time_4 = now - timedelta(seconds=45)
+    positions.append(
+        ManagedPosition(
+            symbol="TSLA",
+            strategy_id="orb_scalp",
+            entry_price=225.80,
+            entry_time=entry_time_4,
+            shares_total=80,
+            shares_remaining=80,
+            stop_price=224.65,  # Tighter stop for scalp (midpoint placement)
+            original_stop_price=224.65,
+            stop_order_id="stop_tsla_scalp_001",
+            t1_price=226.15,  # 0.3R target
+            t1_order_id="t1_tsla_scalp_001",
+            t1_shares=80,  # Scalp exits 100% at T1
+            t1_filled=False,
+            t2_price=0.0,  # No T2 for scalp (0.0 = disabled)
+            high_watermark=225.95,
+            realized_pnl=0.0,
+        )
+    )
+
+    # Position 5: GOOG - scalp entered 90 seconds ago, approaching target
+    entry_time_5 = now - timedelta(seconds=90)
+    positions.append(
+        ManagedPosition(
+            symbol="GOOG",
+            strategy_id="orb_scalp",
+            entry_price=165.40,
+            entry_time=entry_time_5,
+            shares_total=100,
+            shares_remaining=100,
+            stop_price=164.55,  # Tighter stop for scalp
+            original_stop_price=164.55,
+            stop_order_id="stop_goog_scalp_001",
+            t1_price=165.66,  # 0.3R target (~$0.26 gain on ~$0.85 risk)
+            t1_order_id="t1_goog_scalp_001",
+            t1_shares=100,  # Scalp exits 100% at T1
+            t1_filled=False,
+            t2_price=0.0,  # No T2 for scalp (0.0 = disabled)
+            high_watermark=165.58,
+            realized_pnl=0.0,
+        )
+    )
+
     return positions
 
 
@@ -335,18 +444,34 @@ async def _seed_orchestrator_decisions(trade_logger: TradeLogger, now: datetime)
     today = now.date().isoformat()
     yesterday = (now - timedelta(days=1)).date().isoformat()
 
+    # Today's ORB Breakout allocation
     await trade_logger.log_orchestrator_decision(
         date=today,
         decision_type="allocation",
         strategy_id="orb_breakout",
         details={
-            "allocation_pct": 0.40,
-            "allocation_dollars": 40000.0,
+            "allocation_pct": 0.30,
+            "allocation_dollars": 30000.0,
             "throttle_action": "none",
             "eligible": True,
             "regime": "bullish_trending",
         },
-        rationale="Active: 40% allocation",
+        rationale="Active: 30% allocation",
+    )
+
+    # Today's ORB Scalp allocation
+    await trade_logger.log_orchestrator_decision(
+        date=today,
+        decision_type="allocation",
+        strategy_id="orb_scalp",
+        details={
+            "allocation_pct": 0.30,
+            "allocation_dollars": 30000.0,
+            "throttle_action": "none",
+            "eligible": True,
+            "regime": "bullish_trending",
+        },
+        rationale="Active: 30% allocation",
     )
 
     await trade_logger.log_orchestrator_decision(
@@ -364,18 +489,34 @@ async def _seed_orchestrator_decisions(trade_logger: TradeLogger, now: datetime)
         rationale="SPY above both SMAs with positive momentum",
     )
 
+    # Yesterday's ORB Breakout allocation
     await trade_logger.log_orchestrator_decision(
         date=yesterday,
         decision_type="allocation",
         strategy_id="orb_breakout",
         details={
-            "allocation_pct": 0.35,
-            "allocation_dollars": 35000.0,
+            "allocation_pct": 0.30,
+            "allocation_dollars": 30000.0,
             "throttle_action": "none",
             "eligible": True,
             "regime": "bullish_trending",
         },
-        rationale="Active: 35% allocation",
+        rationale="Active: 30% allocation",
+    )
+
+    # Yesterday's ORB Scalp allocation
+    await trade_logger.log_orchestrator_decision(
+        date=yesterday,
+        decision_type="allocation",
+        strategy_id="orb_scalp",
+        details={
+            "allocation_pct": 0.30,
+            "allocation_dollars": 30000.0,
+            "throttle_action": "none",
+            "eligible": True,
+            "regime": "bullish_trending",
+        },
+        rationale="Active: 30% allocation",
     )
 
     await trade_logger.log_orchestrator_decision(
@@ -469,8 +610,8 @@ async def create_dev_state() -> AppState:
     clock = SystemClock()
     trade_logger = TradeLogger(db)
 
-    # Seed trades
-    trades = _generate_mock_trades(20)
+    # Seed trades (15 ORB Breakout + 8 ORB Scalp)
+    trades = _generate_mock_trades()
     for trade in trades:
         await trade_logger.log_trade(trade)
 
@@ -513,6 +654,9 @@ async def create_dev_state() -> AppState:
         "risk_manager", ComponentStatus.HEALTHY, "Risk evaluation active"
     )
     health_monitor.update_component("strategy_orb", ComponentStatus.HEALTHY, "ORB Breakout running")
+    health_monitor.update_component(
+        "strategy_orb_scalp", ComponentStatus.HEALTHY, "ORB Scalp running"
+    )
 
     # Risk manager
     risk_config = RiskConfig()
@@ -549,6 +693,16 @@ async def create_dev_state() -> AppState:
         name="ORB Breakout",
         version="1.0.0",
     )
+    # Calculate daily P&L and trade counts by strategy
+    orb_todays_trades = [
+        t for t in trades
+        if t.exit_time.date() == now.date() and t.strategy_id == "orb_breakout"
+    ]
+    scalp_todays_trades = [
+        t for t in trades
+        if t.exit_time.date() == now.date() and t.strategy_id == "orb_scalp"
+    ]
+
     mock_orb_breakout = MockStrategy(
         strategy_id="orb_breakout",
         name="ORB Breakout",
@@ -556,8 +710,8 @@ async def create_dev_state() -> AppState:
         is_active=True,
         pipeline_stage="paper",
         allocated_capital=50_000.0,
-        daily_pnl=sum(t.net_pnl for t in trades if t.exit_time.date() == now.date()) * 0.6,
-        trade_count_today=sum(1 for t in trades if t.exit_time.date() == now.date()) // 2,
+        daily_pnl=sum(t.net_pnl for t in orb_todays_trades),
+        trade_count_today=len(orb_todays_trades),
         config=orb_config,
     )
 
@@ -573,8 +727,8 @@ async def create_dev_state() -> AppState:
         is_active=True,
         pipeline_stage="paper",
         allocated_capital=50_000.0,
-        daily_pnl=sum(t.net_pnl for t in trades if t.exit_time.date() == now.date()) * 0.4,
-        trade_count_today=sum(1 for t in trades if t.exit_time.date() == now.date()) // 2,
+        daily_pnl=sum(t.net_pnl for t in scalp_todays_trades),
+        trade_count_today=len(scalp_todays_trades),
         config=scalp_config,
     )
 
