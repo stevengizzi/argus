@@ -307,16 +307,42 @@ class BrokerConfig(BaseModel):
 
 
 class OrchestratorConfig(BaseModel):
-    """Orchestrator behavior configuration."""
+    """Orchestrator behavior configuration.
 
-    allocation_method: str = "equal_weight"
+    Controls capital allocation across strategies, regime detection,
+    performance-based throttling, and correlation limits.
+    """
+
+    # Allocation settings
+    allocation_method: str = "equal_weight"  # "equal_weight" or "performance_weighted"
     max_allocation_pct: float = Field(default=0.40, gt=0, le=1.0)
     min_allocation_pct: float = Field(default=0.10, gt=0, le=1.0)
     cash_reserve_pct: float = Field(default=0.20, ge=0, le=0.5)
+
+    # Performance evaluation
     performance_lookback_days: int = Field(default=20, ge=5)
     consecutive_loss_throttle: int = Field(default=5, ge=2)
     suspension_sharpe_threshold: float = 0.0
     suspension_drawdown_pct: float = Field(default=0.15, gt=0, le=0.5)
+    recovery_days_required: int = Field(default=10, ge=1)
+
+    # Regime detection
+    regime_check_interval_minutes: int | None = Field(default=30, ge=1)
+    spy_symbol: str = "SPY"
+    vol_low_threshold: float = Field(default=0.08, ge=0)
+    vol_normal_threshold: float = Field(default=0.16, ge=0)
+    vol_high_threshold: float = Field(default=0.25, ge=0)
+    vol_crisis_threshold: float = Field(default=0.35, ge=0)
+
+    # Scheduling
+    pre_market_time: str = "09:25"  # HH:MM in market timezone
+    eod_review_time: str = "16:05"  # HH:MM in market timezone
+    poll_interval_seconds: int = Field(default=30, ge=1)
+
+    # Correlation limits
+    correlation_enabled: bool = True
+    min_correlation_days: int = Field(default=20, ge=5)
+    max_combined_correlated_allocation: float = Field(default=0.60, gt=0, le=1.0)
 
 
 class NotificationChannelConfig(BaseModel):

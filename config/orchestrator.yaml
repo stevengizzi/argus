@@ -1,8 +1,79 @@
+# Orchestrator Configuration
+# Controls capital allocation, regime detection, and strategy management
+
+# ---------------------------------------------------------------------------
+# Allocation Settings
+# ---------------------------------------------------------------------------
+
+# Allocation method: "equal_weight" or "performance_weighted"
 allocation_method: "equal_weight"
+
+# Maximum allocation to any single strategy (0.0 to 1.0)
 max_allocation_pct: 0.40
+
+# Minimum allocation floor for active strategies (0.0 to 1.0)
 min_allocation_pct: 0.10
+
+# Cash reserve percentage (kept out of all strategies)
 cash_reserve_pct: 0.20
+
+# ---------------------------------------------------------------------------
+# Performance Evaluation
+# ---------------------------------------------------------------------------
+
+# Number of trading days to consider for performance metrics
 performance_lookback_days: 20
+
+# Consecutive losing trades before throttling allocation
 consecutive_loss_throttle: 5
+
+# Sharpe ratio below which strategy is suspended
 suspension_sharpe_threshold: 0.0
+
+# Maximum drawdown percentage before suspension
 suspension_drawdown_pct: 0.15
+
+# Days of positive performance required before reactivating suspended strategy
+recovery_days_required: 10
+
+# ---------------------------------------------------------------------------
+# Regime Detection
+# ---------------------------------------------------------------------------
+
+# How often to check market regime (minutes, null to disable)
+regime_check_interval_minutes: 30
+
+# Symbol used for regime detection
+spy_symbol: "SPY"
+
+# Volatility thresholds (annualized realized vol)
+vol_low_threshold: 0.08     # Below = low vol / trending
+vol_normal_threshold: 0.16  # Normal trading conditions
+vol_high_threshold: 0.25    # High vol, consider reducing size
+vol_crisis_threshold: 0.35  # Crisis mode, suspend most strategies
+
+# ---------------------------------------------------------------------------
+# Scheduling
+# ---------------------------------------------------------------------------
+
+# Pre-market allocation review time (HH:MM in market timezone)
+pre_market_time: "09:25"
+
+# End-of-day performance review time (HH:MM in market timezone)
+eod_review_time: "16:05"
+
+# Polling interval for strategy health checks (seconds)
+poll_interval_seconds: 30
+
+# ---------------------------------------------------------------------------
+# Correlation Limits
+# ---------------------------------------------------------------------------
+
+# Enable correlation-based allocation limits
+correlation_enabled: true
+
+# Minimum days of overlapping data required for correlation calculation
+min_correlation_days: 20
+
+# Maximum combined allocation to highly correlated strategies (correlation > 0.7)
+max_combined_correlated_allocation: 0.60

@@ -15,6 +15,7 @@ from argus.core.config import (
     DataServiceConfig,
     IBKRConfig,
     OrbBreakoutConfig,
+    OrchestratorConfig,
     ScannerConfig,
     StrategyConfig,
     SystemConfig,
@@ -453,3 +454,112 @@ class TestBrokerSource:
         """Default broker_source is simulated (safest default)."""
         config = SystemConfig()
         assert config.broker_source == BrokerSource.SIMULATED
+
+
+class TestOrchestratorConfig:
+    """Tests for Orchestrator configuration (Sprint 17)."""
+
+    def test_default_config_creates_successfully(self) -> None:
+        """OrchestratorConfig can be created with all defaults."""
+        config = OrchestratorConfig()
+        assert config.allocation_method == "equal_weight"
+        assert config.max_allocation_pct == 0.40
+        assert config.min_allocation_pct == 0.10
+        assert config.cash_reserve_pct == 0.20
+        assert config.performance_lookback_days == 20
+        assert config.consecutive_loss_throttle == 5
+        assert config.suspension_sharpe_threshold == 0.0
+        assert config.suspension_drawdown_pct == 0.15
+        assert config.recovery_days_required == 10
+        assert config.regime_check_interval_minutes == 30
+        assert config.spy_symbol == "SPY"
+        assert config.vol_low_threshold == 0.08
+        assert config.vol_normal_threshold == 0.16
+        assert config.vol_high_threshold == 0.25
+        assert config.vol_crisis_threshold == 0.35
+        assert config.pre_market_time == "09:25"
+        assert config.eod_review_time == "16:05"
+        assert config.poll_interval_seconds == 30
+        assert config.correlation_enabled is True
+        assert config.min_correlation_days == 20
+        assert config.max_combined_correlated_allocation == 0.60
+
+    def test_config_loads_from_yaml(self) -> None:
+        """OrchestratorConfig loads correctly from orchestrator.yaml."""
+        config = load_config(Path("config"))
+        assert hasattr(config, "orchestrator")
+        assert isinstance(config.orchestrator, OrchestratorConfig)
+        assert config.orchestrator.allocation_method == "equal_weight"
+        assert config.orchestrator.max_allocation_pct == 0.40
+        assert config.orchestrator.correlation_enabled is True
+
+    def test_max_allocation_pct_must_be_in_range(self) -> None:
+        """max_allocation_pct must be between 0 and 1."""
+        assert OrchestratorConfig(max_allocation_pct=0.50).max_allocation_pct == 0.50
+        assert OrchestratorConfig(max_allocation_pct=1.0).max_allocation_pct == 1.0
+        with pytest.raises(ValidationError):
+            OrchestratorConfig(max_allocation_pct=0)
+        with pytest.raises(ValidationError):
+            OrchestratorConfig(max_allocation_pct=1.1)
+
+    def test_min_allocation_pct_must_be_in_range(self) -> None:
+        """min_allocation_pct must be between 0 and 1."""
+        assert OrchestratorConfig(min_allocation_pct=0.05).min_allocation_pct == 0.05
+        with pytest.raises(ValidationError):
+            OrchestratorConfig(min_allocation_pct=0)
+        with pytest.raises(ValidationError):
+            OrchestratorConfig(min_allocation_pct=1.1)
+
+    def test_cash_reserve_pct_must_be_in_range(self) -> None:
+        """cash_reserve_pct must be between 0 and 0.5."""
+        assert OrchestratorConfig(cash_reserve_pct=0.0).cash_reserve_pct == 0.0
+        assert OrchestratorConfig(cash_reserve_pct=0.5).cash_reserve_pct == 0.5
+        with pytest.raises(ValidationError):
+            OrchestratorConfig(cash_reserve_pct=-0.1)
+        with pytest.raises(ValidationError):
+            OrchestratorConfig(cash_reserve_pct=0.6)
+
+    def test_performance_lookback_days_must_be_at_least_5(self) -> None:
+        """performance_lookback_days must be >= 5."""
+        assert OrchestratorConfig(performance_lookback_days=5).performance_lookback_days == 5
+        assert OrchestratorConfig(performance_lookback_days=60).performance_lookback_days == 60
+        with pytest.raises(ValidationError):
+            OrchestratorConfig(performance_lookback_days=4)
+
+    def test_consecutive_loss_throttle_must_be_at_least_2(self) -> None:
+        """consecutive_loss_throttle must be >= 2."""
+        assert OrchestratorConfig(consecutive_loss_throttle=2).consecutive_loss_throttle == 2
+        with pytest.raises(ValidationError):
+            OrchestratorConfig(consecutive_loss_throttle=1)
+
+    def test_recovery_days_required_must_be_positive(self) -> None:
+        """recovery_days_required must be >= 1."""
+        assert OrchestratorConfig(recovery_days_required=1).recovery_days_required == 1
+        with pytest.raises(ValidationError):
+            OrchestratorConfig(recovery_days_required=0)
+
+    def test_regime_check_interval_can_be_none(self) -> None:
+        """regime_check_interval_minutes can be None to disable."""
+        config = OrchestratorConfig(regime_check_interval_minutes=None)
+        assert config.regime_check_interval_minutes is None
+
+    def test_poll_interval_must_be_positive(self) -> None:
+        """poll_interval_seconds must be >= 1."""
+        assert OrchestratorConfig(poll_interval_seconds=1).poll_interval_seconds == 1
+        with pytest.raises(ValidationError):
+            OrchestratorConfig(poll_interval_seconds=0)
+
+    def test_min_correlation_days_must_be_at_least_5(self) -> None:
+        """min_correlation_days must be >= 5."""
+        assert OrchestratorConfig(min_correlation_days=5).min_correlation_days == 5
+        with pytest.raises(ValidationError):
+            OrchestratorConfig(min_correlation_days=4)
+
+    def test_max_combined_correlated_allocation_must_be_in_range(self) -> None:
+        """max_combined_correlated_allocation must be between 0 and 1."""
+        config = OrchestratorConfig(max_combined_correlated_allocation=0.80)
+        assert config.max_combined_correlated_allocation == 0.80
+        with pytest.raises(ValidationError):
+            OrchestratorConfig(max_combined_correlated_allocation=0)
+        with pytest.raises(ValidationError):
+            OrchestratorConfig(max_combined_correlated_allocation=1.1)
