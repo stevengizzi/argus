@@ -1,6 +1,6 @@
 # ARGUS — Project Knowledge (Claude Context)
 
-> *Paste this into Claude's project instructions. Keep updated as the project evolves. Last updated: Feb 17, 2026.*
+> *Paste this into Claude's project instructions. Keep updated as the project evolves. Last updated: Feb 24, 2026.*
 
 ---
 
