@@ -1350,5 +1350,81 @@ Each entry follows this format:
 
 ---
 
+### DEC-120 | ORBBase Strategy Extraction
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-25 |
+| **Decision** | Extract shared opening range formation and breakout detection logic into `OrbBaseStrategy` base class. Both `OrbBreakoutStrategy` and `OrbScalpStrategy` inherit from it. |
+| **Rationale** | ORB Scalp shares ~70% of ORB's code (OR formation, breakout detection, position sizing, scanner criteria). Extracting to a base class eliminates duplication and ensures future ORB variants slot in cleanly. Subclasses override only signal construction and exit rules. |
+| **Alternatives** | (A) Subclass ORB directly — messy override of trade management. (B) Copy code — duplication risk. |
+| **Status** | Active |
+
+---
+
+### DEC-121 | ALLOW_ALL Duplicate Stock Policy
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-25 |
+| **Decision** | Add `ALLOW_ALL` to `DuplicateStockPolicy` enum and set it as the default. ORB and ORB Scalp can trade the same symbol simultaneously, subject to `max_single_stock_pct` (5%) exposure cap. |
+| **Rationale** | ORB targets 2R over 15 minutes. Scalp targets 0.3R over 30–120 seconds. They exploit different phases of the same momentum event and have independent risk profiles. Combined exposure is already gated by the single-stock cap. Blocking same-stock trades across strategies would eliminate valid diversified signals. |
+| **Alternatives** | BLOCK_ALL — too restrictive. FIRST_SIGNAL — arbitrary winner. PRIORITY_BY_WIN_RATE — requires win rate data not yet available in real-time. |
+| **Status** | Active |
+
+---
+
+### DEC-122 | Per-Signal Time Stop
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-25 |
+| **Decision** | Add `time_stop_seconds: int | None` field to `SignalEvent`. Carried to `ManagedPosition`. Order Manager checks per-position time stop before falling back to global `max_position_duration_minutes`. |
+| **Rationale** | ORB Scalp needs time stops in seconds (30–300s), not minutes. Different strategies have fundamentally different hold durations. A per-signal mechanism is cleaner than per-strategy config on the Order Manager. The global config becomes a safety backstop. |
+| **Alternatives** | Per-strategy config on Order Manager — breaks encapsulation, requires OM to know about strategies. |
+| **Status** | Active |
+
+---
+
+### DEC-123 | ORB Scalp Trade Management
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-25 |
+| **Decision** | ORB Scalp uses single-target exit (no T1/T2 split), defaulting to 0.3R target, 120s max hold, OR midpoint stop. Sends `target_prices=(target,)` with one element. |
+| **Rationale** | Scalp trades are too fast for partial exits. The entire position exits at the single target or gets stopped/timed out. 0.3R keeps the expected win rate high (>55%) while generating enough P&L per trade. 120s hold aligns with the "capture initial momentum burst" thesis. |
+| **Alternatives** | T1/T2 split like ORB — unnecessary complexity for sub-5-minute trades. Higher R target — would reduce win rate below the scalp thesis. |
+| **Status** | Active |
+
+---
+
+### DEC-124 | Risk Manager ↔ Order Manager Reference
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-25 |
+| **Decision** | Risk Manager receives an Order Manager reference (via setter) for cross-strategy position queries. `get_managed_positions()` public method added to Order Manager. |
+| **Rationale** | Cross-strategy risk checks need to know what positions are currently open *per strategy*. `broker.get_positions()` returns raw broker positions without strategy attribution. The Order Manager's `ManagedPosition` objects have `strategy_id`, making them the correct source for cross-strategy queries. |
+| **Alternatives** | Query broker + match by symbol — loses strategy attribution. Shared position tracker — unnecessary abstraction for V1. |
+| **Status** | Active |
+
+---
+
+### DEC-125 | CandleEvent Routing via EventBus
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-25 |
+| **Decision** | main.py subscribes to CandleEvent on the EventBus and routes candles to all active strategies via `_on_candle_for_strategies()`. Replaces the single-strategy `self._strategy` singleton. Strategies are accessed through `orchestrator.get_strategies()`. |
+| **Rationale** | The live system had no CandleEvent → strategy routing (only existed in Replay Harness). With multiple strategies, a centralized router that checks `is_active` and watchlist membership before calling `on_candle()` is the cleanest pattern. Using the Orchestrator's registry as the source of truth keeps strategy lifecycle management in one place. |
+| **Alternatives** | Each strategy subscribes to CandleEvent directly — would bypass active/watchlist checks and require strategies to self-filter. |
+| **Status** | Active |
+
+---
+
+### DEC-126 | Sector Exposure Check Deferred
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-25 |
+| **Decision** | Cross-strategy sector exposure check (`max_single_sector_pct`) deferred. No sector classification data available. Logged as DEF-020. |
+| **Rationale** | Implementing the exposure cap requires mapping symbols to sectors (SIC codes, GICS, or similar). No data source currently provides this. Building a static mapping is fragile. IQFeed or Databento fundamentals could provide this when integrated. The single-stock cap (5%) provides sufficient concentration protection for V1. |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
 *New decisions are appended chronologically as the project progresses.*

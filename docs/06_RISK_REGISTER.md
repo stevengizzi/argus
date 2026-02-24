@@ -477,6 +477,34 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 | **Mitigation** | Plan to split into Sprint 21a (highest-priority items: stock detail panel, Dashboard V2, heatmaps) and Sprint 21b (remaining items: treemap, correlation matrix, trade replay, etc.). Use priority tiers from UX Feature Backlog to select which items ship first. The backlog is a menu, not a mandate. |
 | **Status** | Open — monitor when Sprint 21 planning begins |
 
+---
+
+### RSK-025 | Multi-Strategy Same-Symbol Execution Risk
+| Field | Value |
+|-------|-------|
+| **Date Identified** | 2026-02-25 |
+| **Category** | Execution |
+| **Description** | With ALLOW_ALL duplicate stock policy, ORB and ORB Scalp can hold simultaneous positions in the same stock. If both are active and the stock gaps against both positions, the combined loss from one symbol could be significant even if individual positions are within risk limits. |
+| **Likelihood** | Medium |
+| **Impact** | Medium |
+| **Mitigation** | `max_single_stock_pct` (5% of account) caps combined exposure. Circuit breaker triggers on total daily loss regardless of per-stock allocation. Monitor correlation between ORB and Scalp P&L during paper trading. |
+| **Status** | Open — monitoring during paper trading |
+
+---
+
+### RSK-026 | Sub-Bar Backtesting Precision for Scalp
+| Field | Value |
+|-------|-------|
+| **Date Identified** | 2026-02-25 |
+| **Category** | Validation |
+| **Description** | ORB Scalp targets 30–120 second holds, but backtesting uses 1-minute bars. Synthetic ticks give ~15s granularity (4 per bar). Time stops shorter than 60s resolve at the nearest bar boundary, and intra-bar price dynamics (which determine whether the target or stop is hit first) are approximated by O→L→H→C ordering. |
+| **Likelihood** | High (guaranteed imprecision) |
+| **Impact** | Low-Medium (backtesting results are approximations, not exact) |
+| **Mitigation** | Document limitation. Use backtesting for directional guidance, not exact P&L projection. Validate with live paper trading where actual tick data is available. Consider Databento tick-level replay in future if precision needed. |
+| **Status** | Accepted — DEF-018 logged |
+
+---
+
 ## Review Schedule
 
 | Review Type | Frequency | Next Review |

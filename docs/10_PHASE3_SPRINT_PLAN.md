@@ -220,21 +220,31 @@ per sprint velocity.
 - Indentation fix in orchestrator.py. Removed `React.memo()` wrappers (broke Vite Fast Refresh in dev mode).
 - 1146 tests (unchanged — frontend-only fixes). 4 sessions.
 
-#### Sprint 18 — ORB Scalp Strategy
-**Target:** ~1-2 days
+#### Sprint 18 — ORB Scalp Strategy ← ACTIVE
+**Target:** ~3 days (12 implementation sessions + 2 code reviews)
 **Scope:**
-- ORB Scalp strategy implementation (faster variant: 0.3-0.5R quick targets)
-- Strategy spec sheet (04_STRATEGY_TEMPLATE.md filled in)
-- VectorBT parameter sweep for ORB Scalp
-- Walk-forward validation
-- Cross-strategy risk integration (ORB + ORB Scalp same-stock prevention)
-- Paper trading deployment alongside ORB
-- **UX add-ons (from UX_FEATURE_BACKLOG.md 18-A–E, shared across Sprints 18–20, ~22h total):** Position cards with mini-charts, position timeline (horizontal Gantt), watchlist sidebar, session summary card, notification center.
+- OrbBaseStrategy extraction (DEC-120) — shared OR formation + breakout detection
+- OrbScalpStrategy (DEC-123) — single-target exit, 0.3R, 120s hold, per-signal time stop (DEC-122)
+- OrbScalpConfig + orb_scalp.yaml
+- Cross-strategy risk integration (DEC-121, DEC-124): ALLOW_ALL policy, single-stock exposure cap, Risk Manager ↔ Order Manager reference
+- CandleEvent routing in main.py (DEC-125) — multi-strategy generalization
+- Per-signal time stops in Order Manager (DEC-122)
+- Single-target bracket orders (len(target_prices)==1)
+- VectorBT parameter sweep (scalp_target_r × max_hold_bars)
+- Walk-forward validation (35-month dataset, generalized pipeline)
+- Replay Harness cross-validation
+- Strategy spec sheet (STRATEGY_ORB_SCALP.md)
+- Multi-strategy integration tests
+- **UX add-ons:** Session Summary Card (18-D, ~3h), Position Timeline (18-B, ~4h)
+- Deferred: sector exposure check (DEF-020), sub-bar precision (DEF-021)
 
-**Deliverable:** After Sprint 18, the Command Center is accessible as:
-1. Web app (any browser, any device)
-2. Desktop app (Tauri, macOS/Windows/Linux — system tray, native notifications)
-3. Mobile app (PWA on iPhone/iPad — home screen icon, no Safari chrome)
+**Session Plan:**
+- Sessions 1–6: Core infrastructure (ORBBase, Scalp, cross-strategy risk, time stops, main.py)
+- Code Review A after Session 6
+- Sessions 7–9: Backtesting (VectorBT, walk-forward, Replay Harness, integration tests)
+- Sessions 10–11: UX (Session Summary Card, Position Timeline)
+- Session 12: Polish
+- Code Review B after Session 12
 
 **Note:** Databento subscription activation recommended around Sprint 19 (DEC-097).
 
