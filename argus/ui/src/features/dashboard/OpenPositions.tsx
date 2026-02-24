@@ -1,20 +1,23 @@
 /**
- * Positions section with Open/Closed toggle.
+ * Positions section with Open/Closed toggle and Table/Timeline view switch.
  *
  * Shows open positions with real-time price updates via WebSocket,
  * or today's closed trades, depending on selected tab.
  *
  * Updated with SegmentedTab for position view filter (17-B).
+ * Added Timeline view for visualizing position durations (18-B).
  */
 
 import { useState, useMemo } from 'react';
-import { Clock, Moon, Radio, BarChart3 } from 'lucide-react';
+import { Clock, Moon, Radio, BarChart3, List, GanttChart } from 'lucide-react';
 import { Card } from '../../components/Card';
 import { CardHeader } from '../../components/CardHeader';
 import { EmptyState } from '../../components/EmptyState';
 import { PnlValue } from '../../components/PnlValue';
 import { Badge, StrategyBadge } from '../../components/Badge';
 import { SegmentedTab } from '../../components/SegmentedTab';
+import { PositionTimeline } from '../../components/PositionTimeline';
+import { TradeDetailPanel } from '../trades/TradeDetailPanel';
 import { usePositions } from '../../hooks/usePositions';
 import { useTrades } from '../../hooks/useTrades';
 import { useLiveStore } from '../../stores/live';
@@ -22,7 +25,7 @@ import { formatPrice, formatDuration, formatTime } from '../../utils/format';
 import { OpenPositionsSkeleton } from './DashboardSkeleton';
 import { getMarketContext, isPreMarket } from '../../utils/marketTime';
 import { shouldShowEmpty } from '../../utils/testMode';
-import type { Position } from '../../api/types';
+import type { Position, Trade } from '../../api/types';
 import type { SegmentedTabSegment } from '../../components/SegmentedTab';
 
 interface EnrichedPosition extends Position {
@@ -32,6 +35,7 @@ interface EnrichedPosition extends Position {
 }
 
 type ViewFilter = 'open' | 'closed';
+type DisplayMode = 'table' | 'timeline';
 
 // Exit reason badge helpers
 const exitReasonLabels: Record<string, string> = {
@@ -62,6 +66,8 @@ function getExitReasonVariant(reason: string | null): 'success' | 'danger' | 'wa
 
 export function OpenPositions() {
   const [viewFilter, setViewFilter] = useState<ViewFilter>('open');
+  const [displayMode, setDisplayMode] = useState<DisplayMode>('table');
+  const [selectedTrade, setSelectedTrade] = useState<Trade | null>(null);
   const { data: positionsData, isLoading: positionsLoading, error: positionsError } = usePositions();
   const { data: tradesData, isLoading: tradesLoading } = useTrades({ limit: 10 });
   const priceUpdates = useLiveStore((state) => state.priceUpdates);
@@ -113,6 +119,19 @@ export function OpenPositions() {
       count: trades.length,
     },
   ], [enrichedPositions.length, trades.length]);
+
+  // Handle timeline position/trade click - opens detail panel
+  const handleTimelineClick = (item: Position | Trade) => {
+    // Convert Position to Trade format for the panel
+    // The panel expects a Trade, so we create a minimal trade-like object
+    if ('position_id' in item) {
+      // It's a Position - we can't open the detail panel for open positions yet
+      // TODO: Create a PositionDetailPanel for open positions
+      return;
+    }
+    // It's a Trade
+    setSelectedTrade(item);
+  };
 
   const isLoading = viewFilter === 'open' ? positionsLoading : tradesLoading;
 
@@ -167,6 +186,20 @@ export function OpenPositions() {
       return <EmptyState icon={icon} message={message} />;
     }
 
+    // Timeline view
+    if (displayMode === 'timeline') {
+      return (
+        <div className="p-4 pt-0">
+          <PositionTimeline
+            positions={enrichedPositions}
+            closedTrades={trades}
+            onPositionClick={handleTimelineClick}
+          />
+        </div>
+      );
+    }
+
+    // Table view (default)
     return (
       <>
         {/* Desktop table (lg and up) */}
@@ -359,29 +392,69 @@ export function OpenPositions() {
   };
 
   return (
-    <Card noPadding>
-      <div className="p-4 pb-0">
-        <CardHeader
-          title="Positions"
-          subtitle={viewFilter === 'open'
-            ? `${enrichedPositions.length} open`
-            : `${trades.length} today`
-          }
-        />
+    <>
+      <Card noPadding>
+        <div className="p-4 pb-0">
+          <div className="flex items-start justify-between gap-2">
+            <CardHeader
+              title="Positions"
+              subtitle={viewFilter === 'open'
+                ? `${enrichedPositions.length} open`
+                : `${trades.length} today`
+              }
+            />
 
-        {/* View filter */}
-        <div className="mt-3 mb-2">
-          <SegmentedTab
-            segments={filterSegments}
-            activeValue={viewFilter}
-            onChange={(value) => setViewFilter(value as ViewFilter)}
-            size="sm"
-            layoutId="positions-view-filter"
-          />
+            {/* Display mode toggle - only show when there are positions and on tablet+ */}
+            {viewFilter === 'open' && enrichedPositions.length > 0 && (
+              <div className="flex gap-1 p-0.5 bg-argus-surface-2 rounded-md">
+                <button
+                  onClick={() => setDisplayMode('table')}
+                  className={`p-1.5 rounded transition-colors ${
+                    displayMode === 'table'
+                      ? 'bg-argus-surface text-argus-accent'
+                      : 'text-argus-text-dim hover:text-argus-text'
+                  }`}
+                  aria-label="Table view"
+                  title="Table view"
+                >
+                  <List className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setDisplayMode('timeline')}
+                  className={`p-1.5 rounded transition-colors ${
+                    displayMode === 'timeline'
+                      ? 'bg-argus-surface text-argus-accent'
+                      : 'text-argus-text-dim hover:text-argus-text'
+                  }`}
+                  aria-label="Timeline view"
+                  title="Timeline view"
+                >
+                  <GanttChart className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* View filter */}
+          <div className="mt-3 mb-2">
+            <SegmentedTab
+              segments={filterSegments}
+              activeValue={viewFilter}
+              onChange={(value) => setViewFilter(value as ViewFilter)}
+              size="sm"
+              layoutId="positions-view-filter"
+            />
+          </div>
         </div>
-      </div>
 
-      {viewFilter === 'open' ? renderOpenPositions() : renderClosedTrades()}
-    </Card>
+        {viewFilter === 'open' ? renderOpenPositions() : renderClosedTrades()}
+      </Card>
+
+      {/* Trade detail panel - opens when clicking a closed trade on timeline */}
+      <TradeDetailPanel
+        trade={selectedTrade}
+        onClose={() => setSelectedTrade(null)}
+      />
+    </>
   );
 }
