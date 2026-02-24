@@ -525,7 +525,7 @@ Sessions 1–3: ORBBase + Scalp strategy + tests
 Sessions 4–5: Cross-strategy risk + per-signal time stops
 Session 6: main.py multi-strategy wiring
 
-### Phase B: Backtesting (Sessions 7–9, Review after Session 9)
+### Phase B: Backtesting (Sessions 7–9)
 Session 7: VectorBT Scalp sweep
 Session 8: Walk-forward generalization + validation run
 Session 9: Replay Harness integration + strategy spec + integration tests
