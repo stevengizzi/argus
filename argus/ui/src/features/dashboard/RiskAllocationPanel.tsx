@@ -27,24 +27,11 @@ const WEEKLY_LOSS_LIMIT_PCT = 0.05; // 5%
 
 export function RiskAllocationPanel() {
   const isMultiColumn = useIsMultiColumn();
-  const {
-    data: orchestratorData,
-    isPending: orchestratorPending,
-    isFetching: orchestratorFetching,
-  } = useOrchestratorStatus();
-  const {
-    data: performanceData,
-    isPending: performancePending,
-    isFetching: performanceFetching,
-  } = usePerformance('week');
+  const { data: orchestratorData, isPending: orchestratorPending } = useOrchestratorStatus();
+  const { data: performanceData, isPending: performancePending } = usePerformance('week');
   const { data: accountData } = useAccount();
 
   const showSkeleton = orchestratorPending || performancePending;
-
-  // Only show refresh dimming when we have real data being refreshed
-  const isRefreshing = orchestratorData
-    ? (orchestratorFetching || performanceFetching)
-    : performanceFetching; // Only dim for performance refresh when orchestrator is down
 
   // Memoize allocation data to prevent unnecessary child re-renders
   const { allocations, cashReservePct } = useMemo(() => {
@@ -78,26 +65,19 @@ export function RiskAllocationPanel() {
     return <RiskAllocationSkeleton />;
   }
 
-  // Check if orchestrator is unavailable (error or no data)
-  const orchestratorUnavailable = !orchestratorData;
-
   if (isMultiColumn) {
     // Desktop/Tablet: horizontal layout
     return (
       <motion.div
-        className={`grid grid-cols-3 gap-4 md:gap-5 lg:gap-6 transition-opacity duration-300 ${isRefreshing ? 'opacity-80' : ''}`}
+        className="grid grid-cols-3 gap-4 md:gap-5 lg:gap-6"
         variants={staggerItem}
       >
         {/* Allocation Donut */}
         <div className="col-span-1">
-          {orchestratorUnavailable ? (
-            <AllocationDonut allocations={[]} cashReservePct={0.2} />
-          ) : (
-            <AllocationDonut
-              allocations={allocations}
-              cashReservePct={cashReservePct}
-            />
-          )}
+          <AllocationDonut
+            allocations={allocations}
+            cashReservePct={cashReservePct}
+          />
         </div>
 
         {/* Risk Gauges */}
@@ -127,24 +107,14 @@ export function RiskAllocationPanel() {
   // Mobile: stacked layout
   return (
     <>
-      <motion.div
-        className={`transition-opacity duration-300 ${isRefreshing ? 'opacity-80' : ''}`}
-        variants={staggerItem}
-      >
-        {orchestratorUnavailable ? (
-          <AllocationDonut allocations={[]} cashReservePct={0.2} />
-        ) : (
-          <AllocationDonut
-            allocations={allocations}
-            cashReservePct={cashReservePct}
-          />
-        )}
+      <motion.div variants={staggerItem}>
+        <AllocationDonut
+          allocations={allocations}
+          cashReservePct={cashReservePct}
+        />
       </motion.div>
 
-      <motion.div
-        className={`transition-opacity duration-300 ${isRefreshing ? 'opacity-80' : ''}`}
-        variants={staggerItem}
-      >
+      <motion.div variants={staggerItem}>
         <Card>
           <CardHeader title="Risk Budget" />
           <div className="grid grid-cols-2 gap-4 pt-2">

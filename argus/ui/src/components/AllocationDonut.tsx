@@ -10,7 +10,7 @@
  * - Responsive: 200px on mobile, 250px on desktop
  */
 
-import { useRef, useEffect, useMemo } from 'react';
+import { useRef, useEffect, useMemo, memo } from 'react';
 import { motion } from 'framer-motion';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { Card } from './Card';
@@ -31,6 +31,19 @@ const STRATEGY_COLORS: Record<string, string> = {
 
 const CASH_COLOR = '#52525b'; // zinc-600
 
+// Empty state data (full gray donut) - defined at module scope to prevent
+// new array reference on every render, which would cause Recharts to rebuild
+interface ChartDataEntry {
+  name: string;
+  value: number;
+  color: string;
+  isCash?: boolean;
+}
+
+const EMPTY_DATA: ChartDataEntry[] = [
+  { name: 'Empty', value: 100, color: CASH_COLOR, isCash: true },
+];
+
 interface Allocation {
   strategy_id: string;
   allocation_pct: number;
@@ -42,19 +55,12 @@ interface AllocationDonutProps {
   cashReservePct: number;
 }
 
-interface ChartDataEntry {
-  name: string;
-  value: number;
-  color: string;
-  isCash?: boolean;
-}
-
 function getStrategyColor(strategyId: string): string {
   const normalized = strategyId.toLowerCase().replace(/-/g, '_');
   return STRATEGY_COLORS[normalized] || '#71717a'; // zinc-500 fallback
 }
 
-export function AllocationDonut({ allocations, cashReservePct: _cashReservePct }: AllocationDonutProps) {
+export const AllocationDonut = memo(function AllocationDonut({ allocations, cashReservePct: _cashReservePct }: AllocationDonutProps) {
   // Track if initial animation has played
   const hasAnimated = useRef(false);
   useEffect(() => {
@@ -94,11 +100,6 @@ export function AllocationDonut({ allocations, cashReservePct: _cashReservePct }
   const deployedPct = Math.round(chartData.totalDeployed * 100);
   const isEmpty = allocations.length === 0;
 
-  // Empty state data (full gray donut)
-  const emptyData: ChartDataEntry[] = [
-    { name: 'Empty', value: 100, color: CASH_COLOR, isCash: true },
-  ];
-
   return (
     <Card className="h-full">
       <CardHeader title="Capital Allocation" />
@@ -113,7 +114,7 @@ export function AllocationDonut({ allocations, cashReservePct: _cashReservePct }
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie
-              data={isEmpty ? emptyData : chartData.data}
+              data={isEmpty ? EMPTY_DATA : chartData.data}
               cx="50%"
               cy="50%"
               innerRadius="60%"
@@ -125,7 +126,7 @@ export function AllocationDonut({ allocations, cashReservePct: _cashReservePct }
               animationEasing="ease-out"
               isAnimationActive={!hasAnimated.current}
             >
-              {(isEmpty ? emptyData : chartData.data).map((entry, index) => (
+              {(isEmpty ? EMPTY_DATA : chartData.data).map((entry, index) => (
                 <Cell
                   key={`cell-${index}`}
                   fill={entry.color}
@@ -170,4 +171,4 @@ export function AllocationDonut({ allocations, cashReservePct: _cashReservePct }
       )}
     </Card>
   );
-}
+});

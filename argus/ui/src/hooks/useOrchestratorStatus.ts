@@ -19,6 +19,5 @@ export function useOrchestratorStatus() {
       return 10_000; // Normal 10s polling when healthy
     },
     retry: false, // Don't retry on 503 (orchestrator unavailable)
-    placeholderData: (prev) => prev, // Keep previous data during refetch
   });
 }
