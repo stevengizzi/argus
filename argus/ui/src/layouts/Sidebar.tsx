@@ -69,7 +69,9 @@ export function Sidebar({ paperMode = false }: SidebarProps) {
   };
 
   return (
-    <aside className="hidden min-[1024px]:flex fixed left-0 top-0 flex-col w-16 h-dvh bg-argus-surface border-r border-argus-border z-40 safe-top">
+    <aside className="hidden min-[1024px]:flex fixed left-0 top-0 flex-col w-16 h-dvh bg-argus-surface border-r border-argus-border z-40">
+      {/* Safe area spacer for PWA/iOS */}
+      <div className="safe-top" />
       {/* Logo */}
       <div className="flex items-center justify-center h-16 border-b border-argus-border">
         <img

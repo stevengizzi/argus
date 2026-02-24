@@ -128,7 +128,7 @@ body {
 }
 
 /* Safe area insets for PWA standalone mode (notch, Dynamic Island, home indicator) */
-.safe-top { padding-top: env(safe-area-inset-top); }
+.safe-top { padding-top: env(safe-area-inset-top, 0px); }
 .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
 
 /* Desktop-only hover effects — prevents hover from sticking on touch devices */

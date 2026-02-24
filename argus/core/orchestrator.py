@@ -183,6 +183,21 @@ class Orchestrator:
         """Get the correlation tracker instance."""
         return self._correlation_tracker
 
+    @property
+    def last_regime_check(self) -> datetime | None:
+        """When the last regime re-check occurred."""
+        return self._last_regime_check
+
+    @property
+    def regime_check_interval_minutes(self) -> int:
+        """Minutes between regime re-checks."""
+        return self._config.regime_check_interval_minutes
+
+    @property
+    def cash_reserve_pct(self) -> float:
+        """Cash reserve percentage from config."""
+        return self._config.cash_reserve_pct
+
     # -------------------------------------------------------------------------
     # Pre-Market Routine
     # -------------------------------------------------------------------------
@@ -494,10 +509,10 @@ class Orchestrator:
                     market_open <= now_et.time() <= market_close
                     and elapsed >= self._config.regime_check_interval_minutes
                 ):
-                        try:
-                            await self._run_regime_recheck()
-                        except Exception:
-                            logger.exception("Regime re-check failed")
+                    try:
+                        await self._run_regime_recheck()
+                    except Exception:
+                        logger.exception("Regime re-check failed")
 
             # EOD review trigger
             eod_time = datetime.strptime(self._config.eod_review_time, "%H:%M").time()

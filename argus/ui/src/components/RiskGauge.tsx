@@ -11,6 +11,7 @@
  * - Pulse animation when >90%
  */
 
+import { useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { DURATION, EASE } from '../utils/motion';
 
@@ -56,6 +57,12 @@ function polarToCartesian(
 }
 
 export function RiskGauge({ label, value, maxLabel, size = 'md' }: RiskGaugeProps) {
+  // Track if initial animation has played
+  const hasAnimated = useRef(false);
+  useEffect(() => {
+    hasAnimated.current = true;
+  }, []);
+
   const clampedValue = Math.max(0, Math.min(100, value));
   const color = getGaugeColor(clampedValue);
   const isPulsing = clampedValue >= 90;
@@ -85,11 +92,11 @@ export function RiskGauge({ label, value, maxLabel, size = 'md' }: RiskGaugeProp
   return (
     <div className="flex flex-col items-center">
       <motion.div
-        initial={{ opacity: 0, scale: 0.8 }}
+        initial={hasAnimated.current ? false : { opacity: 0, scale: 0.8 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: DURATION.normal, ease: EASE.out }}
         className="relative"
-        style={{ width: dimensions.width, height: dimensions.height }}
+        style={{ width: dimensions.width, height: dimensions.height, willChange: 'transform' }}
       >
         <svg
           width={dimensions.width}
@@ -113,13 +120,15 @@ export function RiskGauge({ label, value, maxLabel, size = 'md' }: RiskGaugeProp
               stroke={color}
               strokeWidth={strokeWidth}
               strokeLinecap="round"
-              initial={{ pathLength: 0 }}
+              initial={hasAnimated.current ? false : { pathLength: 0 }}
               animate={{
                 pathLength: 1,
                 opacity: isPulsing ? [1, 0.6, 1] : 1,
               }}
               transition={{
-                pathLength: { duration: 0.5, ease: 'easeOut' },
+                pathLength: hasAnimated.current
+                  ? { duration: 0 }
+                  : { duration: 0.5, ease: 'easeOut' },
                 opacity: isPulsing
                   ? { duration: 1.5, repeat: Infinity, ease: 'easeInOut' }
                   : { duration: 0 },

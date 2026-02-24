@@ -135,11 +135,11 @@ async def get_orchestrator_status(
 
     # Determine next regime check time
     next_check: str | None = None
-    if orchestrator._last_regime_check and orchestrator._config.regime_check_interval_minutes:
+    if orchestrator.last_regime_check and orchestrator.regime_check_interval_minutes:
         from datetime import timedelta
 
-        next_dt = orchestrator._last_regime_check + timedelta(
-            minutes=orchestrator._config.regime_check_interval_minutes
+        next_dt = orchestrator.last_regime_check + timedelta(
+            minutes=orchestrator.regime_check_interval_minutes
         )
         next_check = next_dt.isoformat()
 
@@ -147,12 +147,12 @@ async def get_orchestrator_status(
         regime=orchestrator.current_regime.value,
         regime_indicators=indicators,
         regime_updated_at=(
-            orchestrator._last_regime_check.isoformat()
-            if orchestrator._last_regime_check
+            orchestrator.last_regime_check.isoformat()
+            if orchestrator.last_regime_check
             else None
         ),
         allocations=allocations,
-        cash_reserve_pct=orchestrator._config.cash_reserve_pct,
+        cash_reserve_pct=orchestrator.cash_reserve_pct,
         total_deployed_pct=total_deployed,
         next_regime_check=next_check,
         timestamp=datetime.now(UTC).isoformat(),

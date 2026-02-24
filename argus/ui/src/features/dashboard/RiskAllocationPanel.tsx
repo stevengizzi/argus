@@ -26,11 +26,20 @@ const WEEKLY_LOSS_LIMIT_PCT = 0.05; // 5%
 
 export function RiskAllocationPanel() {
   const isMultiColumn = useIsMultiColumn();
-  const { data: orchestratorData, isLoading: orchestratorLoading } = useOrchestratorStatus();
-  const { data: performanceData, isLoading: performanceLoading } = usePerformance('week');
+  const {
+    data: orchestratorData,
+    isPending: orchestratorPending,
+    isFetching: orchestratorFetching,
+  } = useOrchestratorStatus();
+  const {
+    data: performanceData,
+    isPending: performancePending,
+    isFetching: performanceFetching,
+  } = usePerformance('week');
   const { data: accountData } = useAccount();
 
-  const isLoading = orchestratorLoading || performanceLoading;
+  const showSkeleton = orchestratorPending || performancePending;
+  const isRefreshing = orchestratorFetching || performanceFetching;
 
   // Calculate risk consumption percentages
   const equity = accountData?.equity ?? 100000;
@@ -58,7 +67,7 @@ export function RiskAllocationPanel() {
 
   const cashReservePct = orchestratorData?.cash_reserve_pct ?? 0.2;
 
-  if (isLoading) {
+  if (showSkeleton) {
     return <RiskAllocationSkeleton />;
   }
 
@@ -69,7 +78,7 @@ export function RiskAllocationPanel() {
     // Desktop/Tablet: horizontal layout
     return (
       <motion.div
-        className="grid grid-cols-3 gap-4 md:gap-5 lg:gap-6"
+        className={`grid grid-cols-3 gap-4 md:gap-5 lg:gap-6 ${isRefreshing ? 'opacity-80 transition-opacity' : ''}`}
         variants={staggerItem}
       >
         {/* Allocation Donut */}
@@ -111,7 +120,10 @@ export function RiskAllocationPanel() {
   // Mobile: stacked layout
   return (
     <>
-      <motion.div variants={staggerItem}>
+      <motion.div
+        className={isRefreshing ? 'opacity-80 transition-opacity' : ''}
+        variants={staggerItem}
+      >
         {orchestratorUnavailable ? (
           <AllocationDonut allocations={[]} cashReservePct={0.2} />
         ) : (
@@ -122,7 +134,10 @@ export function RiskAllocationPanel() {
         )}
       </motion.div>
 
-      <motion.div variants={staggerItem}>
+      <motion.div
+        className={isRefreshing ? 'opacity-80 transition-opacity' : ''}
+        variants={staggerItem}
+      >
         <Card>
           <CardHeader title="Risk Budget" />
           <div className="grid grid-cols-2 gap-4 pt-2">

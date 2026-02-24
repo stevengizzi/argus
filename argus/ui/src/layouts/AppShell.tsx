@@ -64,8 +64,10 @@ export function AppShell({ paperMode = true }: AppShellProps) {
       {/* min-w-0 breaks flexbox min-content propagation, overflow-x-hidden prevents horizontal scroll */}
       <main
         ref={mainRef}
-        className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden p-4 md:p-5 min-[1024px]:p-6 pb-24 min-[1024px]:pb-6 min-[1024px]:ml-16 safe-top min-[1024px]:pt-6"
+        className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden p-4 md:p-5 min-[1024px]:p-6 pb-24 min-[1024px]:pb-6 min-[1024px]:ml-16 min-[1024px]:pt-6"
       >
+        {/* Safe area spacer for PWA/iOS — adds to, not replaces, base padding */}
+        <div className="safe-top min-[1024px]:hidden" />
         <AnimatePresence mode="wait" onExitComplete={handleExitComplete}>
           <motion.div
             key={location.pathname}

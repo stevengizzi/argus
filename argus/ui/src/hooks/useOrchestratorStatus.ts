@@ -15,5 +15,6 @@ export function useOrchestratorStatus() {
     queryFn: getOrchestratorStatus,
     refetchInterval: 10_000, // 10 seconds
     retry: false, // Don't retry on 503 (orchestrator unavailable)
+    placeholderData: (prev) => prev, // Keep previous data during refetch
   });
 }

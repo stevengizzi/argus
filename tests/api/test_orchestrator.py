@@ -61,6 +61,21 @@ class MockOrchestrator:
         """Get current regime indicators."""
         return self._current_indicators
 
+    @property
+    def last_regime_check(self) -> datetime | None:
+        """When the last regime re-check occurred."""
+        return self._last_regime_check
+
+    @property
+    def regime_check_interval_minutes(self) -> int:
+        """Minutes between regime re-checks."""
+        return self._config.regime_check_interval_minutes
+
+    @property
+    def cash_reserve_pct(self) -> float:
+        """Cash reserve percentage from config."""
+        return self._config.cash_reserve_pct
+
     async def manual_rebalance(self) -> dict[str, StrategyAllocation]:
         """Mock rebalance - returns current allocations."""
         self._rebalance_called = True

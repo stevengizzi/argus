@@ -10,6 +10,7 @@
  * - Responsive: 200px on mobile, 250px on desktop
  */
 
+import { useRef, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { Card } from './Card';
@@ -54,33 +55,43 @@ function getStrategyColor(strategyId: string): string {
 }
 
 export function AllocationDonut({ allocations, cashReservePct: _cashReservePct }: AllocationDonutProps) {
-  // Build chart data
-  const chartData: ChartDataEntry[] = [];
-  let totalDeployed = 0;
+  // Track if initial animation has played
+  const hasAnimated = useRef(false);
+  useEffect(() => {
+    hasAnimated.current = true;
+  }, []);
 
-  allocations.forEach((alloc) => {
-    if (alloc.allocation_pct > 0) {
-      chartData.push({
-        name: alloc.strategy_id.toUpperCase().slice(0, 4),
-        value: alloc.allocation_pct * 100, // Convert to percentage
-        color: getStrategyColor(alloc.strategy_id),
-      });
-      totalDeployed += alloc.allocation_pct;
-    }
-  });
+  // Memoize chart data to prevent unnecessary re-renders
+  const chartData = useMemo(() => {
+    const data: ChartDataEntry[] = [];
+    let deployed = 0;
 
-  // Add cash reserve segment
-  const cashPct = Math.max(0, 1 - totalDeployed);
-  if (cashPct > 0) {
-    chartData.push({
-      name: 'Cash',
-      value: cashPct * 100,
-      color: CASH_COLOR,
-      isCash: true,
+    allocations.forEach((alloc) => {
+      if (alloc.allocation_pct > 0) {
+        data.push({
+          name: alloc.strategy_id.toUpperCase().slice(0, 4),
+          value: alloc.allocation_pct * 100, // Convert to percentage
+          color: getStrategyColor(alloc.strategy_id),
+        });
+        deployed += alloc.allocation_pct;
+      }
     });
-  }
 
-  const deployedPct = Math.round(totalDeployed * 100);
+    // Add cash reserve segment
+    const cashPct = Math.max(0, 1 - deployed);
+    if (cashPct > 0) {
+      data.push({
+        name: 'Cash',
+        value: cashPct * 100,
+        color: CASH_COLOR,
+        isCash: true,
+      });
+    }
+
+    return { data, totalDeployed: deployed };
+  }, [JSON.stringify(allocations.map(a => `${a.strategy_id}:${a.allocation_pct}`))]);
+
+  const deployedPct = Math.round(chartData.totalDeployed * 100);
   const isEmpty = allocations.length === 0;
 
   // Empty state data (full gray donut)
@@ -93,15 +104,16 @@ export function AllocationDonut({ allocations, cashReservePct: _cashReservePct }
       <CardHeader title="Capital Allocation" />
 
       <motion.div
-        initial={{ opacity: 0, scale: 0.9 }}
+        initial={hasAnimated.current ? false : { opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: DURATION.normal, ease: EASE.out }}
         className="relative aspect-square w-full max-w-[200px] md:max-w-[250px] mx-auto"
+        style={{ willChange: 'transform' }}
       >
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie
-              data={isEmpty ? emptyData : chartData}
+              data={isEmpty ? emptyData : chartData.data}
               cx="50%"
               cy="50%"
               innerRadius="60%"
@@ -109,10 +121,11 @@ export function AllocationDonut({ allocations, cashReservePct: _cashReservePct }
               paddingAngle={isEmpty ? 0 : 2}
               dataKey="value"
               animationBegin={0}
-              animationDuration={500}
+              animationDuration={hasAnimated.current ? 0 : 500}
               animationEasing="ease-out"
+              isAnimationActive={!hasAnimated.current}
             >
-              {(isEmpty ? emptyData : chartData).map((entry, index) => (
+              {(isEmpty ? emptyData : chartData.data).map((entry, index) => (
                 <Cell
                   key={`cell-${index}`}
                   fill={entry.color}
@@ -144,7 +157,7 @@ export function AllocationDonut({ allocations, cashReservePct: _cashReservePct }
       {/* Legend */}
       {!isEmpty && (
         <div className="mt-3 flex flex-wrap gap-2 justify-center text-xs">
-          {chartData.map((entry) => (
+          {chartData.data.map((entry) => (
             <div key={entry.name} className="flex items-center gap-1">
               <span
                 className="w-2 h-2 rounded-full"

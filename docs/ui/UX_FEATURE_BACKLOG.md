@@ -288,6 +288,21 @@ Small indicator (top bar or dashboard widget): "Target: $5,000/month. Current: $
 Horizontal bar divided into segments for each position. Width = capital allocation, color = P&L performance (green gradient to red gradient). One glance tells you portfolio health. Sits at top of Dashboard or Positions section.
 *Effort: ~2 hours. Simple SVG/div component.*
 
+### 21-L. Orchestrator Interaction Panel [P1]
+
+**Decision cockpit for understanding and overriding the Orchestrator.**
+Dedicated tab within Strategy Lab (or standalone page) showing the Orchestrator's decision-making in real time:
+
+1. **Decision timeline:** Chronological log of all allocation, regime change, throttle, and suspension decisions with full rationale text. Powered by existing `/orchestrator/decisions` endpoint. Filterable by decision type and strategy.
+2. **Regime dashboard:** Current regime badge + indicator gauges (SPY vs SMA-20/50, realized vol/VIX proxy, 5d ROC). Historical regime chart showing transitions over time.
+3. **Throttle status:** Per-strategy cards showing consecutive loss count, rolling Sharpe, drawdown from peak, and current throttle action (NONE / REDUCE / SUSPEND). Color-coded severity.
+4. **Manual overrides:** Force-activate or force-suspend individual strategies. Trigger manual rebalance (existing `/orchestrator/rebalance` endpoint). Temporarily override allocation percentages (with auto-revert timer). All overrides logged as decisions.
+5. **Allocation history:** Line chart showing how capital allocation per strategy has evolved over time (from daily CorrelationTracker data).
+
+This gives the operator a "take over the controls" cockpit for understanding and intervening in Orchestrator decisions without cluttering the day-to-day Dashboard.
+
+*Effort: ~12–16 hours. Multiple new API consumers, decision timeline component, regime chart, override forms with confirmation modals.*
+
 ---
 
 ## Sprint 22 — AI Layer MVP (Add-ons)
@@ -379,7 +394,7 @@ Users can rearrange, resize, add, and remove dashboard widgets. Layout persists 
 | **16** | 16-A (motion), 16-B (micro-interactions), 16-C (sparklines) | ~15h | Polish & perceived quality |
 | **17** | 17-A (donut), 17-B (tabs), 17-C (gauges), 17-D (badges) | ~11h | Multi-strategy awareness |
 | **18–20** | 18-A (position cards), 18-B (timeline), 18-C (watchlist), 18-D (session summary), 18-E (notifications) | ~22h | Multi-strategy operations |
-| **21** | 21-A through 21-K (analytics, detail panel, heatmaps, treemap, replay, goals) | ~80–100h | Analytics & Strategy Lab |
+| **21** | 21-A through 21-L (analytics, detail panel, heatmaps, treemap, replay, goals, orchestrator panel) | ~92–116h | Analytics & Strategy Lab |
 | **22** | 22-A (AI cards), 22-B (setup quality), 22-C (optimization landscape), 22-D (projections) | ~46h | AI-enhanced visualization |
 | **23+** | 23-A through 23-F (actions, sunburst, regime, persistence, configurability) | ~38h | Customization & refinement |
 
