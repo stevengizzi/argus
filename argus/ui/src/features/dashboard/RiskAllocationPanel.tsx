@@ -78,7 +78,7 @@ export function RiskAllocationPanel() {
     // Desktop/Tablet: horizontal layout
     return (
       <motion.div
-        className={`grid grid-cols-3 gap-4 md:gap-5 lg:gap-6 ${isRefreshing ? 'opacity-80 transition-opacity' : ''}`}
+        className={`grid grid-cols-3 gap-4 md:gap-5 lg:gap-6 transition-opacity duration-300 ${isRefreshing ? 'opacity-80' : ''}`}
         variants={staggerItem}
       >
         {/* Allocation Donut */}
@@ -121,7 +121,7 @@ export function RiskAllocationPanel() {
   return (
     <>
       <motion.div
-        className={isRefreshing ? 'opacity-80 transition-opacity' : ''}
+        className={`transition-opacity duration-300 ${isRefreshing ? 'opacity-80' : ''}`}
         variants={staggerItem}
       >
         {orchestratorUnavailable ? (
@@ -135,7 +135,7 @@ export function RiskAllocationPanel() {
       </motion.div>
 
       <motion.div
-        className={isRefreshing ? 'opacity-80 transition-opacity' : ''}
+        className={`transition-opacity duration-300 ${isRefreshing ? 'opacity-80' : ''}`}
         variants={staggerItem}
       >
         <Card>
