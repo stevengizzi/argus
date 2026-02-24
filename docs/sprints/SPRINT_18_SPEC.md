@@ -661,6 +661,12 @@ strategy class and its configuration.
 ## Decisions
 - DEC-123: Single target exit (no T1/T2), 0.3R default, 120s hold, midpoint stop
 
+## Important: Timezone Pattern (RSK-017)
+OrbBaseStrategy inherits the DEC-061 ET conversion pattern from the ORB fix.
+Verify this works correctly for Scalp's time windows (09:45–11:30 ET) with
+explicit regression tests. The ORB timezone bug was silent — zero trades, no
+errors. Don't assume inheritance handles it; test it.
+
 ## Task
 
 ### Step 1: Add OrbScalpConfig to `argus/core/config.py`
@@ -819,6 +825,12 @@ Use the same helper functions pattern: `make_scalp_config()`, `make_candle()`, `
 - allocated_capital property
 - Multiple symbols can fire independently
 - Reconstruct state from trade logger
+
+**Timezone Regression (RSK-017, ~4 tests):**
+- Candle with UTC timestamp: OR window detection uses ET conversion (DEC-061 pattern)
+- Entry at 09:45 ET boundary: signal generated (not rejected)
+- Entry at 11:31 ET: signal rejected (past latest_entry)
+- OR formation with mixed UTC timestamps: correct ET grouping
 
 **Exit Rules + Market Conditions (~5):**
 - get_exit_rules returns single target at 100%
