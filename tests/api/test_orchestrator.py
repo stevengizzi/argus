@@ -28,6 +28,7 @@ if TYPE_CHECKING:
     from httpx import AsyncClient
 
     from argus.api.dependencies import AppState
+    from argus.execution.order_manager import ManagedPosition
 
 
 # ---------------------------------------------------------------------------
@@ -528,3 +529,189 @@ async def test_get_decisions_empty(
     data = response.json()
     assert data["total"] == 0
     assert data["decisions"] == []
+
+
+# ---------------------------------------------------------------------------
+# Deployment State Tests (Sprint 18.75)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def mock_orchestrator_with_throttle() -> MockOrchestrator:
+    """Create a mock orchestrator with one throttled strategy."""
+    config = OrchestratorConfig()
+    indicators = RegimeIndicators(
+        spy_price=525.50,
+        spy_sma_20=520.30,
+        spy_sma_50=515.80,
+        spy_roc_5d=1.25,
+        spy_realized_vol_20d=12.5,
+        spy_vs_vwap=0.002,
+        timestamp=datetime.now(UTC),
+    )
+    allocations = {
+        "orb_breakout": StrategyAllocation(
+            strategy_id="orb_breakout",
+            allocation_pct=0.40,
+            allocation_dollars=40000.0,
+            throttle_action=ThrottleAction.NONE,
+            eligible=True,
+            reason="Active: 40% allocation",
+        ),
+        "orb_scalp": StrategyAllocation(
+            strategy_id="orb_scalp",
+            allocation_pct=0.0,
+            allocation_dollars=0.0,
+            throttle_action=ThrottleAction.SUSPEND,
+            eligible=False,
+            reason="Suspended: 5 consecutive losses",
+        ),
+    }
+    return MockOrchestrator(
+        _config=config,
+        _current_regime=MarketRegime.BULLISH_TRENDING,
+        _current_allocations=allocations,
+        _current_indicators=indicators,
+        _last_regime_check=datetime.now(UTC) - timedelta(minutes=30),
+    )
+
+
+@pytest.fixture
+async def app_state_with_orchestrator_and_positions(
+    app_state: AppState,
+    mock_orchestrator_with_throttle: MockOrchestrator,
+    sample_managed_positions: list["ManagedPosition"],
+) -> AppState:
+    """Provide AppState with orchestrator and managed positions."""
+    app_state.orchestrator = mock_orchestrator_with_throttle  # type: ignore[assignment]
+    # Inject positions from sample_managed_positions fixture
+    for pos in sample_managed_positions:
+        if pos.symbol not in app_state.order_manager._managed_positions:
+            app_state.order_manager._managed_positions[pos.symbol] = []
+        app_state.order_manager._managed_positions[pos.symbol].append(pos)
+    return app_state
+
+
+@pytest.fixture
+async def client_with_deployment_data(
+    app_state_with_orchestrator_and_positions: AppState,
+    jwt_secret: str,
+) -> AsyncGenerator[AsyncClient, None]:
+    """Provide client with AppState containing orchestrator and positions."""
+    from httpx import ASGITransport, AsyncClient
+
+    app = create_app(app_state_with_orchestrator_and_positions)
+    app.state.app_state = app_state_with_orchestrator_and_positions
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+    ) as client:
+        yield client
+
+
+@pytest.mark.asyncio
+async def test_get_status_includes_deployed_capital(
+    client_with_deployment_data: AsyncClient,
+    auth_headers: dict[str, str],
+    sample_managed_positions: list["ManagedPosition"],
+) -> None:
+    """GET /orchestrator/status includes deployed_capital per strategy."""
+    response = await client_with_deployment_data.get(
+        "/api/v1/orchestrator/status",
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+
+    # Check top-level deployment fields
+    assert "total_deployed_capital" in data
+    assert "total_equity" in data
+    assert data["total_equity"] == 100_000.0  # SimulatedBroker initial_cash
+
+    # Calculate expected deployed capital per strategy
+    # sample_managed_positions has:
+    # - AAPL (orb_breakout): entry=185.00, shares_remaining=50 -> 9250.0
+    # - NVDA (orb_breakout): entry=750.00, shares_remaining=50 -> 37500.0
+    # - TSLA (orb_scalp): entry=200.00, shares_remaining=75 -> 15000.0
+    expected_orb_breakout = 185.00 * 50 + 750.00 * 50  # 9250 + 37500 = 46750
+    expected_orb_scalp = 200.00 * 75  # 15000
+
+    # Find allocations by strategy
+    allocs_by_id = {a["strategy_id"]: a for a in data["allocations"]}
+
+    assert allocs_by_id["orb_breakout"]["deployed_capital"] == expected_orb_breakout
+    assert allocs_by_id["orb_scalp"]["deployed_capital"] == expected_orb_scalp
+
+    # Check deployed_pct
+    assert allocs_by_id["orb_breakout"]["deployed_pct"] == pytest.approx(
+        expected_orb_breakout / 100_000.0
+    )
+
+    # Total deployed capital
+    assert data["total_deployed_capital"] == expected_orb_breakout + expected_orb_scalp
+
+
+@pytest.mark.asyncio
+async def test_get_status_shows_zero_deployed_for_inactive_strategy(
+    client_with_orchestrator: AsyncClient,
+    auth_headers: dict[str, str],
+) -> None:
+    """GET /orchestrator/status shows deployed_capital=0 for strategy with no positions."""
+    response = await client_with_orchestrator.get(
+        "/api/v1/orchestrator/status",
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+
+    # The mock orchestrator has orb_breakout but no positions injected
+    alloc = data["allocations"][0]
+    assert alloc["strategy_id"] == "orb_breakout"
+    assert alloc["deployed_capital"] == 0.0
+    assert alloc["deployed_pct"] == 0.0
+
+
+@pytest.mark.asyncio
+async def test_get_status_is_throttled_reflects_suspend_action(
+    client_with_deployment_data: AsyncClient,
+    auth_headers: dict[str, str],
+) -> None:
+    """GET /orchestrator/status sets is_throttled=True only for SUSPEND action."""
+    response = await client_with_deployment_data.get(
+        "/api/v1/orchestrator/status",
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+
+    allocs_by_id = {a["strategy_id"]: a for a in data["allocations"]}
+
+    # orb_breakout has ThrottleAction.NONE -> is_throttled=False
+    assert allocs_by_id["orb_breakout"]["is_throttled"] is False
+    assert allocs_by_id["orb_breakout"]["throttle_action"] == "none"
+
+    # orb_scalp has ThrottleAction.SUSPEND -> is_throttled=True
+    assert allocs_by_id["orb_scalp"]["is_throttled"] is True
+    assert allocs_by_id["orb_scalp"]["throttle_action"] == "suspend"
+
+
+@pytest.mark.asyncio
+async def test_get_status_total_equity_from_broker(
+    client_with_orchestrator: AsyncClient,
+    auth_headers: dict[str, str],
+) -> None:
+    """GET /orchestrator/status includes total_equity from broker account."""
+    response = await client_with_orchestrator.get(
+        "/api/v1/orchestrator/status",
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+
+    # SimulatedBroker defaults to $100K
+    assert data["total_equity"] == 100_000.0
+    assert data["total_deployed_capital"] == 0.0  # No positions

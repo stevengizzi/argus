@@ -1,7 +1,7 @@
 /**
  * Risk and Allocation panel for Dashboard.
  *
- * Combines AllocationDonut (17-A) and RiskGauge (17-C) with data fetching.
+ * Combines CapitalAllocation (17-A, 18.75) and RiskGauge (17-C) with data fetching.
  * Handles orchestrator unavailability gracefully (dev mode, system starting).
  *
  * IMPORTANT: This component always renders the same DOM structure.
@@ -17,7 +17,7 @@
 
 import { useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { AllocationDonut } from '../../components/AllocationDonut';
+import { CapitalAllocation } from '../../components/CapitalAllocation';
 import { RiskGauge } from '../../components/RiskGauge';
 import { Card } from '../../components/Card';
 import { CardHeader } from '../../components/CardHeader';
@@ -36,14 +36,23 @@ export function RiskAllocationPanel() {
   const { data: accountData } = useAccount();
 
   // Memoize allocation data to prevent unnecessary child re-renders
-  const { allocations, cashReservePct } = useMemo(() => {
+  const { allocations, cashReservePct, totalDeployedPct, totalDeployedCapital, totalEquity } = useMemo(() => {
     const allocs = orchestratorData?.allocations.map(alloc => ({
       strategy_id: alloc.strategy_id,
       allocation_pct: alloc.allocation_pct,
-      daily_pnl: 0,
+      allocation_dollars: alloc.allocation_dollars,
+      deployed_pct: alloc.deployed_pct,
+      deployed_capital: alloc.deployed_capital,
+      is_throttled: alloc.is_throttled,
     })) ?? [];
     const reserve = orchestratorData?.cash_reserve_pct ?? 0.2;
-    return { allocations: allocs, cashReservePct: reserve };
+    return {
+      allocations: allocs,
+      cashReservePct: reserve,
+      totalDeployedPct: orchestratorData?.total_deployed_pct,
+      totalDeployedCapital: orchestratorData?.total_deployed_capital,
+      totalEquity: orchestratorData?.total_equity,
+    };
   }, [orchestratorData]);
 
   // Memoize risk calculations
@@ -70,11 +79,14 @@ export function RiskAllocationPanel() {
         className="grid grid-cols-3 gap-4 md:gap-5 lg:gap-6"
         variants={staggerItem}
       >
-        {/* Allocation Donut */}
+        {/* Capital Allocation */}
         <div className="col-span-1">
-          <AllocationDonut
+          <CapitalAllocation
             allocations={allocations}
             cashReservePct={cashReservePct}
+            totalDeployedPct={totalDeployedPct}
+            totalDeployedCapital={totalDeployedCapital}
+            totalEquity={totalEquity}
           />
         </div>
 
@@ -106,9 +118,12 @@ export function RiskAllocationPanel() {
   return (
     <>
       <motion.div variants={staggerItem}>
-        <AllocationDonut
+        <CapitalAllocation
           allocations={allocations}
           cashReservePct={cashReservePct}
+          totalDeployedPct={totalDeployedPct}
+          totalDeployedCapital={totalDeployedCapital}
+          totalEquity={totalEquity}
         />
       </motion.div>
 

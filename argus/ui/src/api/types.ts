@@ -205,6 +205,10 @@ export interface AllocationInfo {
   throttle_action: string;
   eligible: boolean;
   reason: string;
+  // Deployment state (Sprint 18.75)
+  deployed_capital: number;
+  deployed_pct: number;
+  is_throttled: boolean;
 }
 
 export interface OrchestratorStatusResponse {
@@ -215,5 +219,8 @@ export interface OrchestratorStatusResponse {
   cash_reserve_pct: number;
   total_deployed_pct: number;
   next_regime_check: string | null;
+  // Deployment state (Sprint 18.75)
+  total_deployed_capital: number;
+  total_equity: number;
   timestamp: string;
 }

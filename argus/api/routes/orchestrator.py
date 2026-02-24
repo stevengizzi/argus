@@ -32,6 +32,10 @@ class AllocationInfo(BaseModel):
     throttle_action: str
     eligible: bool
     reason: str
+    # Deployment state (Sprint 18.75)
+    deployed_capital: float
+    deployed_pct: float
+    is_throttled: bool
 
 
 class OrchestratorStatusResponse(BaseModel):
@@ -44,6 +48,9 @@ class OrchestratorStatusResponse(BaseModel):
     cash_reserve_pct: float
     total_deployed_pct: float
     next_regime_check: str | None
+    # Deployment state (Sprint 18.75)
+    total_deployed_capital: float
+    total_equity: float
     timestamp: str
 
 
@@ -92,7 +99,7 @@ async def get_orchestrator_status(
     """Get current orchestrator status including regime, indicators, and allocations.
 
     Returns:
-        OrchestratorStatusResponse with current state.
+        OrchestratorStatusResponse with current state including deployment data.
 
     Raises:
         HTTPException: 503 if orchestrator is not available.
@@ -105,11 +112,32 @@ async def get_orchestrator_status(
 
     orchestrator = state.orchestrator
 
-    # Build allocations list
+    # Get total equity from broker
+    account_info = await state.broker.get_account()
+    total_equity = account_info.equity
+
+    # Compute deployed capital per strategy from open positions
+    deployed_by_strategy: dict[str, float] = {}
+    if state.order_manager is not None:
+        all_positions = state.order_manager.get_all_positions_flat()
+        for pos in all_positions:
+            if not pos.is_fully_closed:
+                capital = pos.entry_price * pos.shares_remaining
+                deployed_by_strategy[pos.strategy_id] = (
+                    deployed_by_strategy.get(pos.strategy_id, 0.0) + capital
+                )
+
+    total_deployed_capital = sum(deployed_by_strategy.values())
+
+    # Build allocations list with deployment data
     allocations: list[AllocationInfo] = []
-    total_deployed = 0.0
+    total_deployed_pct = 0.0
 
     for strategy_id, alloc in orchestrator.current_allocations.items():
+        deployed_capital = deployed_by_strategy.get(strategy_id, 0.0)
+        deployed_pct = deployed_capital / total_equity if total_equity > 0 else 0.0
+        is_throttled = alloc.throttle_action.value == "suspend"
+
         allocations.append(
             AllocationInfo(
                 strategy_id=strategy_id,
@@ -118,9 +146,12 @@ async def get_orchestrator_status(
                 throttle_action=alloc.throttle_action.value,
                 eligible=alloc.eligible,
                 reason=alloc.reason,
+                deployed_capital=deployed_capital,
+                deployed_pct=deployed_pct,
+                is_throttled=is_throttled,
             )
         )
-        total_deployed += alloc.allocation_pct
+        total_deployed_pct += alloc.allocation_pct
 
     # Get regime indicators
     indicators: dict[str, float] = {}
@@ -151,8 +182,10 @@ async def get_orchestrator_status(
         ),
         allocations=allocations,
         cash_reserve_pct=orchestrator.cash_reserve_pct,
-        total_deployed_pct=total_deployed,
+        total_deployed_pct=total_deployed_pct,
         next_regime_check=next_check,
+        total_deployed_capital=total_deployed_capital,
+        total_equity=total_equity,
         timestamp=datetime.now(UTC).isoformat(),
     )
 
@@ -230,6 +263,21 @@ async def trigger_rebalance(
             detail=f"Rebalance failed: {e}",
         ) from e
 
+    # Get total equity from broker
+    account_info = await state.broker.get_account()
+    total_equity = account_info.equity
+
+    # Compute deployed capital per strategy from open positions
+    deployed_by_strategy: dict[str, float] = {}
+    if state.order_manager is not None:
+        all_positions = state.order_manager.get_all_positions_flat()
+        for pos in all_positions:
+            if not pos.is_fully_closed:
+                capital = pos.entry_price * pos.shares_remaining
+                deployed_by_strategy[pos.strategy_id] = (
+                    deployed_by_strategy.get(pos.strategy_id, 0.0) + capital
+                )
+
     allocations = [
         AllocationInfo(
             strategy_id=alloc.strategy_id,
@@ -238,6 +286,13 @@ async def trigger_rebalance(
             throttle_action=alloc.throttle_action.value,
             eligible=alloc.eligible,
             reason=alloc.reason,
+            deployed_capital=deployed_by_strategy.get(alloc.strategy_id, 0.0),
+            deployed_pct=(
+                deployed_by_strategy.get(alloc.strategy_id, 0.0) / total_equity
+                if total_equity > 0
+                else 0.0
+            ),
+            is_throttled=alloc.throttle_action.value == "suspend",
         )
         for alloc in new_allocations.values()
     ]
