@@ -12,7 +12,7 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 
 **Structure:** Two parallel tracks (DEC-079, February 19, 2026). Build Track (system construction) + Validation Track (strategy confidence-building).
 
-**Build Track:** 1125 tests. Sprints 1–16 complete. Sprint 17 (Orchestrator V1) IN PROGRESS — Checkpoint 1 (backend) complete, Sessions 8-13 remaining (API layer, DEF-016 bracket refactor, frontend integration).
+**Build Track:** 1146 tests. Sprints 1–17 complete. Sprint 18 (ORB Scalp) NEXT.
 - Phase 1 (Core Engine): ✅ COMPLETE — 362 tests, Feb 14–16
 - Phase 2 (Backtesting): ✅ COMPLETE — 542 tests, Feb 16–17
 - Sprint 11 (Extended Backtest): ✅ COMPLETE — 35 months, 15 WF windows, WFE=0.56
@@ -22,7 +22,7 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 - Sprint 14 (Command Center API): ✅ COMPLETE — 926 tests, Feb 23. FastAPI REST + WebSocket, JWT auth, 7 endpoint groups, PerformanceCalculator, TradeLogger queries, dev mode with mock data, React scaffold.
 - Sprint 15 (Command Center Frontend): ✅ COMPLETE — 926 tests (no new backend tests), Feb 23. Four pages: Dashboard, Trade Log, Performance, System. Responsive at 393px/834px/1194px/1512px breakpoints. Lightweight Charts for equity curve and daily P&L histogram. WebSocket real-time updates. Dark theme. Icon sidebar nav (desktop/tablet) + bottom tab bar (mobile). 8 implementation sessions. Full code review passed (DEC-106–110).
 - Sprint 16 (Desktop/PWA + UX Polish): ✅ COMPLETE — 942 tests (16 new), Feb 24. Framer Motion page transitions + stagger animations. Skeleton loading (all pages). AnimatedNumber + P&L flash enhancements. SVG Sparklines on dashboard. Chart draw-in animations. Hover feedback (desktop-only). Contextual empty states. Trade detail slide-in panel. PWA (manifest, service worker, icons, iOS meta). CSV trade export. Emergency controls (flatten all, pause all). Strategy pause/resume. Tauri v2 desktop shell. Platform detection utility. 10 implementation sessions. Code review passed (DEC-111–112). Known issue: safe-area-inset padding incomplete on PWA (fix queued).
-- Sprint 17 (Orchestrator V1): 🔧 IN PROGRESS — 1125 tests (183 new), Feb 24. Checkpoint 1 (backend) complete: RegimeClassifier (SPY realized vol as VIX proxy, DEC-113), PerformanceThrottler (consecutive losses/Sharpe/drawdown), CorrelationTracker (infrastructure for V2 allocation), Orchestrator (pre-market routine, 30-min regime monitoring DEC-115, intraday throttle, EOD review, decision logging). Equal-weight allocation V1 (DEC-114). Single-strategy 40% cap accepted (DEC-119). 12-phase main.py startup. Code review passed — per-strategy P&L bug fixed, TradeLogger encapsulation fixed. Sessions 8-13 remaining.
+- Sprint 17 (Orchestrator V1): ✅ COMPLETE — 1146 tests (204 new), Feb 24. Orchestrator (pre-market routine, 30-min regime monitoring, intraday throttle, EOD review, decision logging). RegimeClassifier (SPY realized vol as VIX proxy, DEC-113). PerformanceThrottler (consecutive losses/Sharpe/drawdown). CorrelationTracker (infrastructure for V2). Equal-weight allocation V1 (DEC-114). Single-strategy 40% cap (DEC-119). DEF-016 resolved — Order Manager atomic bracket orders (DEC-117). API: 3 orchestrator endpoints + 4 WebSocket event types. UI: SegmentedTab, extended Badge system, AllocationDonut, RiskGauge. 12-phase main.py startup. 13 implementation sessions. Code review passed. Known issues: donut/gauge re-render animation on poll, top padding regression from safe-area CSS.
 
 **Validation Track:** Paper trading ACTIVE with DEC-076 parameters on Alpaca. Validates system stability only — Alpaca IEX data captures only ~2–3% of market volume (DEC-081), so signal accuracy is not validated until Databento data is integrated (Sprint 12). See `08_PAPER_TRADING_GUIDE.md`.
 
@@ -33,7 +33,7 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 
 **IBKR Account (Feb 21):** Application submitted. Account ID U24619949. Individual margin account, IBKR Pro tiered pricing. Awaiting approval — paper trading account will be enabled post-approval for Sprint 13 adapter development.
 
-**Next Build sprints:** ORB Scalp (Sprint 18) → VWAP Reclaim (Sprint 19) → Afternoon Momentum (Sprint 20) → CC Analytics & Strategy Lab (Sprint 21) → AI Layer MVP (Sprint 22). See DEC-096, DEC-106–110. UX Feature Backlog (`docs/ui/UX_FEATURE_BACKLOG.md`) provides per-sprint enhancement add-ons alongside core sprint scope.
+**Next Build sprints:** ORB Scalp (Sprint 18) → VWAP Reclaim (Sprint 19) → Afternoon Momentum (Sprint 20) → CC Analytics & Strategy Lab (Sprint 21) → AI Layer MVP (Sprint 22). See DEC-096, DEC-106–110. UX Feature Backlog (`docs/ui/UX_FEATURE_BACKLOG.md`) provides per-sprint enhancement add-ons alongside core sprint scope. Orchestrator interaction UI planned for Sprint 21 (Strategy Lab).
 
 **Next Validation gate:** Build through Sprint 21 (four strategies + analytics) using Alpaca data → activate Databento (~Sprint 19, DEC-097) → serious paper trading validation with quality data + IBKR execution → AI Layer (Sprint 22) compounds analysis during validation → CPA consultation → live trading at minimum size on IBKR.
 
