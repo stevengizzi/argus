@@ -161,6 +161,7 @@ class SignalEvent(Event):
     target_prices: tuple[float, ...] = ()
     share_count: int = 0
     rationale: str = ""
+    time_stop_seconds: int | None = None
 
 
 # ---------------------------------------------------------------------------

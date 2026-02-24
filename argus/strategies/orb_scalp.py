@@ -1,17 +1,20 @@
-"""ORB (Opening Range Breakout) Strategy implementation.
+"""ORB Scalp Strategy implementation.
 
-The ORB strategy trades breakouts from the opening range of the trading day.
-It forms an opening range during the first N minutes (configurable), then
-waits for price to break out above the range with volume confirmation.
+The ORB Scalp strategy is a fast-paced variant of the Opening Range Breakout
+strategy, designed for quick momentum captures with tight targets and short
+hold times.
 
-Entry criteria:
-- Price closes above the opening range high
-- Breakout candle volume > threshold × average OR volume
-- Price is above VWAP
-- Chase protection: price hasn't moved too far from OR high
+Key differences from ORB Breakout:
+- Single target at 0.3R (instead of T1/T2 at 1R/2R)
+- Maximum hold time of 120 seconds (instead of minutes)
+- Higher trade frequency (12/day vs 6/day)
+- Higher win rate requirement (55% vs 45%)
 
-Stop loss: Midpoint of opening range (DEC-012)
-Targets: 1R and 2R (configurable)
+Entry criteria: Same as ORB Breakout (inherited from OrbBaseStrategy)
+Stop loss: Midpoint of opening range (same as ORB)
+Target: Single target at scalp_target_r (default 0.3R)
+
+DEC-123: Single target exit, 0.3R default, 120s hold, midpoint stop
 """
 
 from __future__ import annotations
@@ -20,7 +23,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from argus.core.clock import Clock
-from argus.core.config import OrbBreakoutConfig
+from argus.core.config import OrbScalpConfig
 from argus.core.events import CandleEvent, Side, SignalEvent
 from argus.models.strategy import (
     ExitRules,
@@ -35,35 +38,36 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class OrbBreakoutStrategy(OrbBaseStrategy):
-    """ORB (Opening Range Breakout) Strategy.
+class OrbScalpStrategy(OrbBaseStrategy):
+    """ORB Scalp Strategy.
 
-    Trades breakouts from the opening range of the trading day with
-    swing-style targets (1R and 2R).
+    Fast-paced ORB variant optimized for quick momentum captures with
+    single target exits and short hold times.
 
     Lifecycle:
-    1. Formation phase: Accumulate candles during orb_window_minutes
+    1. Formation phase: Accumulate candles during orb_window_minutes (default 5)
     2. Validation: Check range size against ATR bounds
     3. Monitoring: Watch for breakouts with volume/VWAP confirmation
-    4. Signal: Emit SignalEvent when all criteria met
+    4. Signal: Emit SignalEvent with single scalp target
+    5. Exit: Target at scalp_target_r or max_hold_seconds time stop
     """
 
     def __init__(
         self,
-        config: OrbBreakoutConfig,
+        config: OrbScalpConfig,
         data_service: DataService | None = None,
         clock: Clock | None = None,
     ) -> None:
-        """Initialize the ORB Breakout strategy.
+        """Initialize the ORB Scalp strategy.
 
         Args:
-            config: OrbBreakoutConfig with strategy parameters.
+            config: OrbScalpConfig with scalp-specific parameters.
             data_service: DataService for indicator queries (VWAP, ATR).
             clock: Clock for time access. Defaults to SystemClock() if not provided.
         """
         super().__init__(config, data_service=data_service, clock=clock)
-        # Keep a typed reference to access ORB-specific fields like target_1_r
-        self._breakout_config = config
+        # Keep a typed reference to access scalp-specific fields
+        self._scalp_config = config
 
     async def _build_breakout_signal(
         self,
@@ -72,7 +76,7 @@ class OrbBreakoutStrategy(OrbBaseStrategy):
         state: OrbSymbolState,
         volume_threshold: float,
     ) -> SignalEvent | None:
-        """Build a SignalEvent with swing-style T1/T2 targets.
+        """Build a SignalEvent with single scalp target.
 
         Args:
             symbol: The symbol that triggered the breakout.
@@ -81,7 +85,7 @@ class OrbBreakoutStrategy(OrbBaseStrategy):
             volume_threshold: The volume threshold that was exceeded.
 
         Returns:
-            SignalEvent with T1 (1R) and T2 (2R) targets.
+            SignalEvent with single target at scalp_target_r.
         """
         if state.or_high is None or state.or_midpoint is None:
             return None
@@ -90,9 +94,8 @@ class OrbBreakoutStrategy(OrbBaseStrategy):
         stop_price = state.or_midpoint
         risk_per_share = entry_price - stop_price
 
-        # Calculate targets
-        target_1 = entry_price + risk_per_share * self._breakout_config.target_1_r
-        target_2 = entry_price + risk_per_share * self._breakout_config.target_2_r
+        # Calculate single scalp target
+        target = entry_price + risk_per_share * self._scalp_config.scalp_target_r
 
         # Calculate position size
         shares = self.calculate_position_size(entry_price, stop_price)
@@ -113,13 +116,13 @@ class OrbBreakoutStrategy(OrbBaseStrategy):
             side=Side.LONG,
             entry_price=entry_price,
             stop_price=stop_price,
-            target_prices=(target_1, target_2),
+            target_prices=(target,),  # Single target
             share_count=shares,
             rationale=(
-                f"ORB breakout: {symbol} closed above OR high {state.or_high:.2f}, "
+                f"ORB scalp: {symbol} closed above OR high {state.or_high:.2f}, "
                 f"volume {candle.volume} > {volume_threshold:.0f}, VWAP {vwap_str}"
             ),
-            time_stop_seconds=self._breakout_config.time_stop_minutes * 60,
+            time_stop_seconds=self._scalp_config.max_hold_seconds,
         )
 
         # Mark breakout as triggered
@@ -127,37 +130,38 @@ class OrbBreakoutStrategy(OrbBaseStrategy):
         state.position_active = True
 
         logger.info(
-            "%s: ORB breakout signal - entry=%.2f, stop=%.2f, targets=(%.2f, %.2f), shares=%d",
+            "%s: ORB scalp signal - entry=%.2f, stop=%.2f, target=%.2f, shares=%d, "
+            "time_stop=%ds",
             symbol,
             entry_price,
             stop_price,
-            target_1,
-            target_2,
+            target,
             shares,
+            self._scalp_config.max_hold_seconds,
         )
 
         return signal
 
     def get_exit_rules(self) -> ExitRules:
-        """Return ORB exit rules (targets, stop, time stop)."""
+        """Return ORB Scalp exit rules (single target, short time stop)."""
         return ExitRules(
             stop_type="fixed",
             stop_price_func="midpoint",
             targets=[
                 ProfitTarget(
-                    r_multiple=self._breakout_config.target_1_r,
-                    position_pct=0.5,
-                ),
-                ProfitTarget(
-                    r_multiple=self._breakout_config.target_2_r,
-                    position_pct=0.5,
+                    r_multiple=self._scalp_config.scalp_target_r,
+                    position_pct=1.0,  # Exit 100% at target
                 ),
             ],
-            time_stop_minutes=self._breakout_config.time_stop_minutes,
+            time_stop_minutes=self._scalp_config.max_hold_seconds // 60,
         )
 
     def get_market_conditions_filter(self) -> MarketConditionsFilter:
-        """Return market conditions for ORB activation."""
+        """Return market conditions for ORB Scalp activation.
+
+        Same regimes as ORB Breakout - works well in trending and volatile
+        conditions where momentum is present.
+        """
         return MarketConditionsFilter(
             allowed_regimes=["bullish_trending", "range_bound", "high_volatility"],
             max_vix=35.0,

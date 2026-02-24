@@ -7,5 +7,13 @@ session-stateless model.
 
 from argus.strategies.base_strategy import BaseStrategy
 from argus.strategies.orb_base import OrbBaseStrategy, OrbSymbolState
+from argus.strategies.orb_breakout import OrbBreakoutStrategy
+from argus.strategies.orb_scalp import OrbScalpStrategy
 
-__all__ = ["BaseStrategy", "OrbBaseStrategy", "OrbSymbolState"]
+__all__ = [
+    "BaseStrategy",
+    "OrbBaseStrategy",
+    "OrbBreakoutStrategy",
+    "OrbScalpStrategy",
+    "OrbSymbolState",
+]

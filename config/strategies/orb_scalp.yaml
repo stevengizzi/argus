@@ -1,0 +1,36 @@
+strategy_id: "strat_orb_scalp"
+name: "ORB Scalp"
+version: "1.0.0"
+enabled: true
+asset_class: "us_stocks"
+
+risk_limits:
+  max_loss_per_trade_pct: 0.01
+  max_daily_loss_pct: 0.03
+  max_consecutive_losses_pause: 5
+  max_trades_per_day: 12
+  max_concurrent_positions: 3
+
+operating_window:
+  earliest_entry: "09:45"  # 10 min after ORB (5-min OR window)
+  latest_entry: "11:30"
+  force_close: "15:50"
+  active_days: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+
+benchmarks:
+  min_win_rate: 0.55  # Higher win rate target for scalping
+  min_avg_r_multiple: 0.25  # Lower R (0.3R target)
+  min_profit_factor: 1.2
+  min_sharpe_ratio: 0.3
+  max_drawdown_pct: 0.15
+
+# Strategy-specific parameters (DEC-123)
+orb_window_minutes: 5
+scalp_target_r: 0.3
+max_hold_seconds: 120
+stop_placement: "midpoint"
+min_range_atr_ratio: 0.5
+max_range_atr_ratio: 999.0
+chase_protection_pct: 0.005
+breakout_volume_multiplier: 1.5
+volume_threshold_rvol: 2.0

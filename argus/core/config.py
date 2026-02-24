@@ -527,6 +527,24 @@ class OrbBreakoutConfig(StrategyConfig):
     breakout_volume_multiplier: float = Field(default=1.5, gt=0)
 
 
+class OrbScalpConfig(StrategyConfig):
+    """ORB Scalp strategy configuration (DEC-123).
+
+    Scalp variant of ORB with single target, shorter hold times, and
+    tighter risk parameters optimized for quick momentum captures.
+    """
+
+    orb_window_minutes: int = Field(default=5, ge=1, le=60)
+    scalp_target_r: float = Field(default=0.3, gt=0, le=2.0)
+    max_hold_seconds: int = Field(default=120, ge=10, le=600)
+    stop_placement: str = "midpoint"  # "midpoint" or "bottom"
+    min_range_atr_ratio: float = Field(default=0.5, gt=0)
+    max_range_atr_ratio: float = Field(default=999.0, gt=0)
+    chase_protection_pct: float = Field(default=0.005, ge=0, le=0.05)
+    breakout_volume_multiplier: float = Field(default=1.5, gt=0)
+    volume_threshold_rvol: float = Field(default=2.0, gt=0)
+
+
 # ---------------------------------------------------------------------------
 # Config Loader
 # ---------------------------------------------------------------------------
@@ -627,6 +645,23 @@ def load_orb_config(path: Path) -> OrbBreakoutConfig:
     """
     data = load_yaml_file(path)
     return OrbBreakoutConfig(**data)
+
+
+def load_orb_scalp_config(path: Path) -> OrbScalpConfig:
+    """Load ORB Scalp strategy configuration from a YAML file.
+
+    Args:
+        path: Path to the ORB Scalp strategy YAML file.
+
+    Returns:
+        Validated OrbScalpConfig instance.
+
+    Raises:
+        FileNotFoundError: If the file does not exist.
+        pydantic.ValidationError: If validation fails.
+    """
+    data = load_yaml_file(path)
+    return OrbScalpConfig(**data)
 
 
 def load_scanner_config(path: Path) -> ScannerConfig:
