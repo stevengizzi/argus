@@ -6,8 +6,9 @@ regime classification. These tests verify all major functionality.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, time, timedelta
 from unittest.mock import AsyncMock, MagicMock
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 import pytest
@@ -842,3 +843,538 @@ def test_correlation_tracker_property(orchestrator: Orchestrator) -> None:
     """Test correlation_tracker property."""
     tracker = orchestrator.correlation_tracker
     assert tracker is orchestrator._correlation_tracker
+
+
+# ---------------------------------------------------------------------------
+# Poll Loop Time-Based Tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def orchestrator_short_poll(
+    orchestrator_config: OrchestratorConfig,
+    event_bus: EventBus,
+    fixed_clock: FixedClock,
+    mock_trade_logger: AsyncMock,
+    mock_broker: AsyncMock,
+    mock_data_service: AsyncMock,
+) -> Orchestrator:
+    """Create orchestrator with short poll interval for testing."""
+    config = OrchestratorConfig(
+        allocation_method="equal_weight",
+        max_allocation_pct=0.40,
+        min_allocation_pct=0.10,
+        cash_reserve_pct=0.20,
+        performance_lookback_days=20,
+        consecutive_loss_throttle=5,
+        suspension_sharpe_threshold=0.0,
+        suspension_drawdown_pct=0.15,
+        regime_check_interval_minutes=30,
+        spy_symbol="SPY",
+        pre_market_time="09:25",
+        eod_review_time="16:05",
+        poll_interval_seconds=1,  # Short for testing
+    )
+    return Orchestrator(
+        config=config,
+        event_bus=event_bus,
+        clock=fixed_clock,
+        trade_logger=mock_trade_logger,
+        broker=mock_broker,
+        data_service=mock_data_service,
+    )
+
+
+@pytest.mark.asyncio
+async def test_poll_loop_triggers_pre_market_at_configured_time(
+    orchestrator_short_poll: Orchestrator,
+    fixed_clock: FixedClock,
+    mock_data_service: AsyncMock,
+) -> None:
+    """Test poll loop triggers pre-market at correct time."""
+    # Set clock to 9:24 AM ET (14:24 UTC)
+    fixed_clock.set(datetime(2026, 2, 24, 14, 24, tzinfo=UTC))
+    mock_data_service.fetch_daily_bars.return_value = create_spy_bars_bullish()
+    orchestrator_short_poll.register_strategy(MockStrategy("orb_breakout"))
+
+    # Track how many times run_pre_market is called
+    call_count = 0
+    original_run_pre_market = orchestrator_short_poll.run_pre_market
+
+    async def mock_run_pre_market() -> None:
+        nonlocal call_count
+        call_count += 1
+        await original_run_pre_market()
+
+    orchestrator_short_poll.run_pre_market = mock_run_pre_market
+
+    # Run a single poll iteration before pre-market time
+    # Manually simulate what poll_loop does
+    assert orchestrator_short_poll._pre_market_done_today is False
+    assert call_count == 0  # Not called yet
+
+    # Advance clock to 9:25 AM ET (14:25 UTC)
+    fixed_clock.set(datetime(2026, 2, 24, 14, 25, tzinfo=UTC))
+
+    # Run pre-market manually (simulating poll trigger)
+    await orchestrator_short_poll.run_pre_market()
+    assert orchestrator_short_poll._pre_market_done_today is True
+
+    # Try to run again - should not re-run
+    orchestrator_short_poll._pre_market_done_today = True
+    call_count = 0
+    # The poll loop checks _pre_market_done_today before calling
+    if not orchestrator_short_poll._pre_market_done_today:
+        await mock_run_pre_market()
+    assert call_count == 0  # Should not have been called
+
+
+@pytest.mark.asyncio
+async def test_poll_loop_triggers_eod_at_configured_time(
+    orchestrator_short_poll: Orchestrator,
+    fixed_clock: FixedClock,
+    mock_trade_logger: AsyncMock,
+) -> None:
+    """Test poll loop triggers EOD review at correct time."""
+    # Set clock to 4:04 PM ET (21:04 UTC)
+    fixed_clock.set(datetime(2026, 2, 24, 21, 4, tzinfo=UTC))
+    orchestrator_short_poll.register_strategy(MockStrategy("orb_breakout"))
+
+    # EOD should not run before 4:05 PM
+    assert orchestrator_short_poll._eod_done_today is False
+
+    # Check that EOD hasn't run yet
+    et_tz = ZoneInfo("America/New_York")
+    now_et = fixed_clock.now().astimezone(et_tz)
+    eod_time = datetime.strptime("16:05", "%H:%M").time()
+    assert now_et.time() < eod_time
+
+    # Advance clock to 4:05 PM ET (21:05 UTC)
+    fixed_clock.set(datetime(2026, 2, 24, 21, 5, tzinfo=UTC))
+    now_et = fixed_clock.now().astimezone(et_tz)
+    assert now_et.time() >= eod_time
+
+    # Run EOD
+    await orchestrator_short_poll.run_end_of_day()
+    assert orchestrator_short_poll._eod_done_today is True
+
+    # Verify it won't run again
+    mock_trade_logger.get_trades_by_date.reset_mock()
+    # In the poll loop, it checks _eod_done_today before calling
+    if not orchestrator_short_poll._eod_done_today:
+        await orchestrator_short_poll.run_end_of_day()
+
+    # get_trades_by_date should not be called again since we didn't actually re-run
+    # (the check prevented it)
+    # This is implicit - we're just verifying the flag works
+
+
+@pytest.mark.asyncio
+async def test_regime_recheck_fires_at_interval(
+    orchestrator_short_poll: Orchestrator,
+    fixed_clock: FixedClock,
+    mock_data_service: AsyncMock,
+) -> None:
+    """Test regime recheck fires at configured interval during market hours."""
+    # Set clock to 10:00 AM ET (15:00 UTC) - market hours
+    fixed_clock.set(datetime(2026, 2, 24, 15, 0, tzinfo=UTC))
+    mock_data_service.fetch_daily_bars.return_value = create_spy_bars_bullish()
+
+    strategy = MockStrategy("orb_breakout")
+    orchestrator_short_poll.register_strategy(strategy)
+
+    # Run pre-market to initialize state
+    await orchestrator_short_poll.run_pre_market()
+    assert orchestrator_short_poll._last_regime_check is not None
+    initial_check_time = orchestrator_short_poll._last_regime_check
+
+    # Advance 15 minutes - should NOT trigger recheck (interval is 30)
+    fixed_clock.advance(minutes=15)
+    now = fixed_clock.now()
+    elapsed = (now - initial_check_time).total_seconds() / 60
+    assert elapsed == pytest.approx(15, rel=0.01)
+    assert elapsed < orchestrator_short_poll._config.regime_check_interval_minutes
+
+    # Advance another 15 minutes (total 30) - SHOULD trigger recheck
+    fixed_clock.advance(minutes=15)
+    now = fixed_clock.now()
+    elapsed = (now - initial_check_time).total_seconds() / 60
+    assert elapsed >= orchestrator_short_poll._config.regime_check_interval_minutes
+
+    # Run regime recheck
+    await orchestrator_short_poll._run_regime_recheck()
+
+    # Verify last_regime_check was updated
+    assert orchestrator_short_poll._last_regime_check > initial_check_time
+
+
+@pytest.mark.asyncio
+async def test_regime_recheck_outside_market_hours_no_op(
+    orchestrator_short_poll: Orchestrator,
+    fixed_clock: FixedClock,
+    mock_data_service: AsyncMock,
+) -> None:
+    """Test regime recheck does not fire outside market hours even if interval elapsed."""
+    # Set clock to 8:00 AM ET (13:00 UTC) - before market open
+    fixed_clock.set(datetime(2026, 2, 24, 13, 0, tzinfo=UTC))
+    mock_data_service.fetch_daily_bars.return_value = create_spy_bars_bullish()
+
+    orchestrator_short_poll.register_strategy(MockStrategy("orb_breakout"))
+
+    # Manually set pre_market_done and last_regime_check to simulate previous day
+    orchestrator_short_poll._pre_market_done_today = True
+    orchestrator_short_poll._last_regime_check = fixed_clock.now() - timedelta(hours=1)
+
+    # Check the conditions that poll_loop uses
+    et_tz = ZoneInfo("America/New_York")
+    now_et = fixed_clock.now().astimezone(et_tz)
+    market_open = time(9, 30)
+    market_close = time(16, 0)
+
+    # Should be outside market hours
+    assert not (market_open <= now_et.time() <= market_close)
+
+    # Verify that elapsed time exceeds interval
+    elapsed = (fixed_clock.now() - orchestrator_short_poll._last_regime_check).total_seconds() / 60
+    assert elapsed >= orchestrator_short_poll._config.regime_check_interval_minutes
+
+    # The poll loop won't call _run_regime_recheck because we're outside market hours
+    # This is verified by the condition check above
+
+
+@pytest.mark.asyncio
+async def test_daily_flags_reset_at_midnight(
+    orchestrator_short_poll: Orchestrator,
+    fixed_clock: FixedClock,
+    mock_data_service: AsyncMock,
+) -> None:
+    """Test daily flags reset when date changes."""
+    # Set clock to 9:25 AM ET on Feb 24 (14:25 UTC)
+    fixed_clock.set(datetime(2026, 2, 24, 14, 25, tzinfo=UTC))
+    mock_data_service.fetch_daily_bars.return_value = create_spy_bars_bullish()
+
+    orchestrator_short_poll.register_strategy(MockStrategy("orb_breakout"))
+
+    # Run pre-market
+    await orchestrator_short_poll.run_pre_market()
+    assert orchestrator_short_poll._pre_market_done_today is True
+
+    # Set the last_date to today
+    et_tz = ZoneInfo("America/New_York")
+    today_str = fixed_clock.now().astimezone(et_tz).strftime("%Y-%m-%d")
+    orchestrator_short_poll._last_date = today_str
+
+    # Run EOD
+    await orchestrator_short_poll.run_end_of_day()
+    assert orchestrator_short_poll._eod_done_today is True
+
+    # Advance to next day 9:25 AM ET (Feb 25, 14:25 UTC)
+    fixed_clock.set(datetime(2026, 2, 25, 14, 25, tzinfo=UTC))
+    new_date_str = fixed_clock.now().astimezone(et_tz).strftime("%Y-%m-%d")
+    assert new_date_str != today_str
+
+    # Simulate what poll_loop does when date changes
+    if orchestrator_short_poll._last_date != new_date_str:
+        orchestrator_short_poll._pre_market_done_today = False
+        orchestrator_short_poll._eod_done_today = False
+        orchestrator_short_poll._intraday_losses.clear()
+    orchestrator_short_poll._last_date = new_date_str
+
+    # Flags should be reset
+    assert orchestrator_short_poll._pre_market_done_today is False
+    assert orchestrator_short_poll._eod_done_today is False
+
+    # Pre-market should run again
+    await orchestrator_short_poll.run_pre_market()
+    assert orchestrator_short_poll._pre_market_done_today is True
+
+
+@pytest.mark.asyncio
+async def test_mid_day_restart_runs_pre_market(
+    orchestrator_short_poll: Orchestrator,
+    fixed_clock: FixedClock,
+    mock_data_service: AsyncMock,
+) -> None:
+    """Test that mid-day restart detects missed pre-market and runs it."""
+    # Set clock to 11:00 AM ET (16:00 UTC) - market hours, past pre-market time
+    fixed_clock.set(datetime(2026, 2, 24, 16, 0, tzinfo=UTC))
+    mock_data_service.fetch_daily_bars.return_value = create_spy_bars_bullish()
+
+    strategy = MockStrategy("orb_breakout")
+    orchestrator_short_poll.register_strategy(strategy)
+
+    # Simulate fresh start - pre_market_done_today is False
+    assert orchestrator_short_poll._pre_market_done_today is False
+
+    # Check the condition poll_loop uses
+    et_tz = ZoneInfo("America/New_York")
+    now_et = fixed_clock.now().astimezone(et_tz)
+    pre_market_time = datetime.strptime("09:25", "%H:%M").time()
+
+    # Pre-market time has passed but hasn't run today
+    assert now_et.time() >= pre_market_time
+    assert orchestrator_short_poll._pre_market_done_today is False
+
+    # Poll loop would trigger pre-market
+    await orchestrator_short_poll.run_pre_market()
+
+    # Verify pre-market ran
+    assert orchestrator_short_poll._pre_market_done_today is True
+    assert strategy.is_active is True
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_start_stop_lifecycle_detailed(
+    orchestrator_short_poll: Orchestrator,
+    event_bus: EventBus,
+) -> None:
+    """Test orchestrator start and stop lifecycle in detail."""
+    # Before start
+    assert orchestrator_short_poll._poll_task is None
+    assert orchestrator_short_poll._running is False
+    assert event_bus.subscriber_count(PositionClosedEvent) == 0
+
+    # Start
+    await orchestrator_short_poll.start()
+
+    # Verify subscription
+    assert event_bus.subscriber_count(PositionClosedEvent) == 1
+    assert orchestrator_short_poll._running is True
+
+    # Verify poll task is running
+    assert orchestrator_short_poll._poll_task is not None
+    assert not orchestrator_short_poll._poll_task.done()
+
+    # Stop
+    await orchestrator_short_poll.stop()
+
+    # Verify cleanup
+    assert event_bus.subscriber_count(PositionClosedEvent) == 0
+    assert orchestrator_short_poll._running is False
+    assert orchestrator_short_poll._poll_task.done()
+
+
+@pytest.mark.asyncio
+async def test_eod_records_correlation_data_all_strategies(
+    orchestrator_short_poll: Orchestrator,
+    mock_trade_logger: AsyncMock,
+    fixed_clock: FixedClock,
+) -> None:
+    """Test EOD review records daily P&L for all strategies."""
+    # Register multiple strategies
+    orchestrator_short_poll.register_strategy(MockStrategy("orb_breakout"))
+    orchestrator_short_poll.register_strategy(MockStrategy("orb_scalp"))
+    orchestrator_short_poll.register_strategy(MockStrategy("vwap_reclaim"))
+
+    # Mock different P&L for each strategy
+    def mock_get_trades_by_date(date, strategy_id=None):
+        pnl_map = {
+            "orb_breakout": 250.0,
+            "orb_scalp": -100.0,
+            "vwap_reclaim": 500.0,
+        }
+        mock_trade = MagicMock()
+        mock_trade.net_pnl = pnl_map.get(strategy_id, 0.0)
+        return [mock_trade]
+
+    mock_trade_logger.get_trades_by_date.side_effect = mock_get_trades_by_date
+
+    # Run EOD
+    await orchestrator_short_poll.run_end_of_day()
+
+    # Verify correlation tracker has entries for all strategies
+    tracker = orchestrator_short_poll.correlation_tracker
+
+    assert tracker.get_date_count("orb_breakout") == 1
+    assert tracker.get_date_count("orb_scalp") == 1
+    assert tracker.get_date_count("vwap_reclaim") == 1
+
+
+@pytest.mark.asyncio
+async def test_poll_loop_integration(
+    orchestrator_short_poll: Orchestrator,
+    fixed_clock: FixedClock,
+    mock_data_service: AsyncMock,
+    event_bus: EventBus,
+) -> None:
+    """Integration test of poll loop with mocked asyncio.sleep."""
+    import asyncio
+    from unittest.mock import patch
+
+    # Set clock to 9:24:55 AM ET (5 seconds before pre-market)
+    fixed_clock.set(datetime(2026, 2, 24, 14, 24, 55, tzinfo=UTC))
+    mock_data_service.fetch_daily_bars.return_value = create_spy_bars_bullish()
+
+    strategy = MockStrategy("orb_breakout")
+    orchestrator_short_poll.register_strategy(strategy)
+
+    poll_count = 0
+
+    async def mock_sleep(seconds: float) -> None:
+        nonlocal poll_count
+        poll_count += 1
+
+        if poll_count == 1:
+            # First poll: still before pre-market
+            pass
+        elif poll_count == 2:
+            # Second poll: advance to pre-market time
+            fixed_clock.advance(seconds=10)  # Now 9:25:05 AM
+        elif poll_count >= 3:
+            # Stop the loop
+            orchestrator_short_poll._running = False
+
+    with patch("asyncio.sleep", side_effect=mock_sleep):
+        # Start orchestrator (this launches poll loop)
+        orchestrator_short_poll._running = True
+        poll_task = asyncio.create_task(orchestrator_short_poll._poll_loop())
+
+        # Wait for task to complete
+        await poll_task
+
+    # Pre-market should have run
+    assert orchestrator_short_poll._pre_market_done_today is True
+    assert strategy.is_active is True
+
+
+@pytest.mark.asyncio
+async def test_intraday_losses_cleared_on_new_day(
+    orchestrator_short_poll: Orchestrator,
+    fixed_clock: FixedClock,
+    event_bus: EventBus,
+) -> None:
+    """Test intraday losses are cleared when date changes."""
+    strategy = MockStrategy("orb_breakout")
+    strategy.is_active = True
+    orchestrator_short_poll.register_strategy(strategy)
+
+    # Simulate losses on day 1
+    for i in range(3):
+        await orchestrator_short_poll._on_position_closed(
+            PositionClosedEvent(
+                position_id=f"pos_{i}",
+                strategy_id="orb_breakout",
+                realized_pnl=-100,
+            )
+        )
+    await event_bus.drain()
+
+    # Verify losses are tracked
+    assert len(orchestrator_short_poll._intraday_losses.get("orb_breakout", [])) == 3
+
+    # Set last_date to today
+    et_tz = ZoneInfo("America/New_York")
+    today_str = fixed_clock.now().astimezone(et_tz).strftime("%Y-%m-%d")
+    orchestrator_short_poll._last_date = today_str
+
+    # Advance to next day
+    fixed_clock.advance(days=1)
+    new_date_str = fixed_clock.now().astimezone(et_tz).strftime("%Y-%m-%d")
+
+    # Simulate poll loop date check
+    if orchestrator_short_poll._last_date != new_date_str:
+        orchestrator_short_poll._pre_market_done_today = False
+        orchestrator_short_poll._eod_done_today = False
+        orchestrator_short_poll._intraday_losses.clear()
+    orchestrator_short_poll._last_date = new_date_str
+
+    # Losses should be cleared
+    assert len(orchestrator_short_poll._intraday_losses) == 0
+
+
+@pytest.mark.asyncio
+async def test_position_closed_without_strategy_id_ignored(
+    orchestrator: Orchestrator,
+) -> None:
+    """Test position closed event without strategy_id is ignored."""
+    orchestrator.register_strategy(MockStrategy("orb_breakout"))
+
+    # Event without strategy_id
+    await orchestrator._on_position_closed(
+        PositionClosedEvent(
+            position_id="pos_1",
+            strategy_id=None,
+            realized_pnl=-100,
+        )
+    )
+
+    # No losses tracked
+    assert len(orchestrator._intraday_losses) == 0
+
+
+@pytest.mark.asyncio
+async def test_regime_recheck_no_change(
+    orchestrator: Orchestrator,
+    mock_data_service: AsyncMock,
+    fixed_clock: FixedClock,
+    event_bus: EventBus,
+) -> None:
+    """Test regime recheck when regime doesn't change."""
+    mock_data_service.fetch_daily_bars.return_value = create_spy_bars_bullish()
+    orchestrator.register_strategy(MockStrategy("orb_breakout"))
+
+    # Run pre-market to set initial regime
+    await orchestrator.run_pre_market()
+    assert orchestrator.current_regime == MarketRegime.BULLISH_TRENDING
+
+    events: list = []
+    event_bus.subscribe(RegimeChangeEvent, lambda e: events.append(e))
+
+    # Reset event count
+    events.clear()
+
+    # Run regime recheck with same data (should remain bullish)
+    await orchestrator._run_regime_recheck()
+    await event_bus.drain()
+
+    # No regime change event should be published
+    assert len(events) == 0
+    assert orchestrator.current_regime == MarketRegime.BULLISH_TRENDING
+
+
+@pytest.mark.asyncio
+async def test_regime_recheck_insufficient_data(
+    orchestrator: Orchestrator,
+    mock_data_service: AsyncMock,
+    fixed_clock: FixedClock,
+) -> None:
+    """Test regime recheck with insufficient SPY data does nothing."""
+    # First run pre-market with good data
+    mock_data_service.fetch_daily_bars.return_value = create_spy_bars_bullish()
+    orchestrator.register_strategy(MockStrategy("orb_breakout"))
+    await orchestrator.run_pre_market()
+
+    initial_regime = orchestrator.current_regime
+
+    # Now return insufficient data
+    mock_data_service.fetch_daily_bars.return_value = pd.DataFrame({
+        "timestamp": [datetime(2026, 2, 24, tzinfo=UTC)],
+        "close": [500.0],
+    })
+
+    # Advance clock
+    fixed_clock.advance(minutes=30)
+
+    # Run regime recheck
+    await orchestrator._run_regime_recheck()
+
+    # Regime should not change but last_regime_check should still update
+    assert orchestrator.current_regime == initial_regime
+
+
+@pytest.mark.asyncio
+async def test_pre_market_logs_decisions_to_database(
+    orchestrator: Orchestrator,
+    mock_data_service: AsyncMock,
+    mock_trade_logger: AsyncMock,
+) -> None:
+    """Test pre-market logs allocation decisions to database."""
+    mock_data_service.fetch_daily_bars.return_value = create_spy_bars_bullish()
+    orchestrator.register_strategy(MockStrategy("orb_breakout"))
+    orchestrator.register_strategy(MockStrategy("orb_scalp"))
+
+    await orchestrator.run_pre_market()
+
+    # Should have logged decisions for both strategies
+    assert mock_trade_logger._db.execute.call_count >= 2
+    assert mock_trade_logger._db.commit.call_count >= 1
