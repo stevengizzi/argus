@@ -173,6 +173,30 @@ export interface WebSocketMessage {
 // Period type for performance endpoint
 export type PerformancePeriod = 'today' | 'week' | 'month' | 'all';
 
+// Session Summary
+export interface TradeHighlight {
+  symbol: string;
+  r_multiple: number;
+  pnl_dollars: number;
+  strategy_id: string;
+}
+
+export interface SessionSummaryResponse {
+  date: string;
+  trade_count: number;
+  wins: number;
+  losses: number;
+  breakeven: number;
+  net_pnl: number;
+  win_rate: number;
+  best_trade: TradeHighlight | null;
+  worst_trade: TradeHighlight | null;
+  fill_rate: number;
+  regime: string | null;
+  active_strategies: string[];
+  timestamp: string;
+}
+
 // Orchestrator
 export interface AllocationInfo {
   strategy_id: string;

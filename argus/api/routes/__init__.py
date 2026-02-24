@@ -13,6 +13,7 @@ from argus.api.routes.health import router as health_router
 from argus.api.routes.orchestrator import router as orchestrator_router
 from argus.api.routes.performance import router as performance_router
 from argus.api.routes.positions import router as positions_router
+from argus.api.routes.session import router as session_router
 from argus.api.routes.strategies import router as strategies_router
 from argus.api.routes.trades import router as trades_router
 
@@ -29,3 +30,4 @@ api_router.include_router(health_router, prefix="/health", tags=["health"])
 api_router.include_router(strategies_router, prefix="/strategies", tags=["strategies"])
 api_router.include_router(controls_router, prefix="/controls", tags=["controls"])
 api_router.include_router(orchestrator_router, prefix="/orchestrator", tags=["orchestrator"])
+api_router.include_router(session_router, tags=["session"])

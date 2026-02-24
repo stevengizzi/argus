@@ -20,6 +20,7 @@ import {
   RecentTrades,
   HealthMini,
   RiskAllocationPanel,
+  SessionSummaryCard,
 } from '../features/dashboard';
 import { staggerContainer, staggerItem, staggerItemWithChildren } from '../utils/motion';
 import { useIsMultiColumn } from '../hooks/useMediaQuery';
@@ -38,6 +39,8 @@ export function DashboardPage() {
         initial="hidden"
         animate="show"
       >
+        {/* Session summary card - shows after market close with trades */}
+        <SessionSummaryCard />
         <motion.div variants={staggerItem}><AccountSummary /></motion.div>
         <motion.div variants={staggerItem}><DailyPnlCard /></motion.div>
         <motion.div variants={staggerItem}><MarketStatusBadge /></motion.div>
@@ -59,6 +62,9 @@ export function DashboardPage() {
       initial="hidden"
       animate="show"
     >
+      {/* Session summary card - shows after market close with trades */}
+      <SessionSummaryCard />
+
       {/* Top row: 2-col tablet, 3-col desktop */}
       <motion.div
         className="grid grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5 lg:gap-6"

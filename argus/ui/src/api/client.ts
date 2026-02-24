@@ -12,6 +12,7 @@ import type {
   PerformancePeriod,
   PerformanceResponse,
   PositionsResponse,
+  SessionSummaryResponse,
   StrategiesResponse,
   TokenResponse,
   TradesResponse,
@@ -158,4 +159,12 @@ export async function getStrategies(): Promise<StrategiesResponse> {
 // Orchestrator endpoints
 export async function getOrchestratorStatus(): Promise<OrchestratorStatusResponse> {
   return fetchWithAuth<OrchestratorStatusResponse>('/orchestrator/status');
+}
+
+// Session summary endpoints
+export async function getSessionSummary(
+  date?: string
+): Promise<SessionSummaryResponse> {
+  const query = date ? `?date=${date}` : '';
+  return fetchWithAuth<SessionSummaryResponse>(`/session-summary${query}`);
 }
