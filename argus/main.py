@@ -35,6 +35,7 @@ from argus.core.config import (
     BrokerSource,
     DataServiceConfig,
     DataSource,
+    OrchestratorConfig,
     load_config,
     load_orb_config,
     load_yaml_file,
@@ -42,6 +43,7 @@ from argus.core.config import (
 from argus.core.event_bus import EventBus
 from argus.core.health import ComponentStatus, HealthMonitor
 from argus.core.logging_config import setup_logging
+from argus.core.orchestrator import Orchestrator
 from argus.core.risk_manager import RiskManager
 from argus.data.alpaca_data_service import AlpacaDataService
 from argus.data.alpaca_scanner import AlpacaScanner
@@ -92,6 +94,7 @@ class ArgusSystem:
         self._strategy: OrbBreakoutStrategy | None = None
         self._order_manager: OrderManager | None = None
         self._health_monitor: HealthMonitor | None = None
+        self._orchestrator: Orchestrator | None = None
         self._api_task: asyncio.Task[None] | None = None
         self._config: object | None = None  # Store config for API access
 
@@ -106,17 +109,18 @@ class ArgusSystem:
         5. RiskManager (needs event_bus, clock, config, broker)
         6. DataService (needs config, event_bus, clock)
         7. Scanner (needs config)
-        8. Strategy (needs config, clock)
-        9. OrderManager (needs event_bus, broker, clock, config, trade_logger)
-        10. Start data service streaming
-        11. API Server (optional, needs all components)
+        8. Strategy (needs config, clock) — instance created, NOT activated
+        9. Orchestrator (needs event_bus, clock, trade_logger, broker, data_service)
+        10. OrderManager (needs event_bus, broker, clock, config, trade_logger)
+        11. Start data service streaming
+        12. API Server (optional, needs all components)
         """
         logger.info("=" * 60)
         logger.info("ARGUS TRADING SYSTEM — STARTING")
         logger.info("=" * 60)
 
         # --- Phase 1: Foundation ---
-        logger.info("[1/11] Loading configuration...")
+        logger.info("[1/12] Loading configuration...")
         config = load_config(self._config_dir)
         self._config = config
 
@@ -124,14 +128,14 @@ class ArgusSystem:
         self._event_bus = EventBus()
 
         # --- Phase 2: Database ---
-        logger.info("[2/11] Initializing database...")
+        logger.info("[2/12] Initializing database...")
         db_path = Path(config.system.data_dir) / "argus.db"
         self._db = DatabaseManager(db_path)
         await self._db.initialize()
         self._trade_logger = TradeLogger(self._db)
 
         # --- Phase 3: Broker ---
-        logger.info("[3/11] Connecting to broker...")
+        logger.info("[3/12] Connecting to broker...")
         if config.system.broker_source == BrokerSource.IBKR:
             from argus.execution.ibkr_broker import IBKRBroker
 
@@ -158,7 +162,7 @@ class ArgusSystem:
         logger.info("Broker connected. Account equity: %s", account.equity if account else "N/A")
 
         # --- Phase 4: Health Monitor ---
-        logger.info("[4/11] Starting health monitor...")
+        logger.info("[4/12] Starting health monitor...")
         self._health_monitor = HealthMonitor(
             event_bus=self._event_bus,
             clock=self._clock,
@@ -172,7 +176,7 @@ class ArgusSystem:
         self._health_monitor.update_component("broker", ComponentStatus.HEALTHY)
 
         # --- Phase 5: Risk Manager ---
-        logger.info("[5/11] Initializing risk manager...")
+        logger.info("[5/12] Initializing risk manager...")
         self._risk_manager = RiskManager(
             config=config.risk,
             broker=self._broker,
@@ -186,7 +190,7 @@ class ArgusSystem:
         self._health_monitor.update_component("risk_manager", ComponentStatus.HEALTHY)
 
         # --- Phase 6: Data Service ---
-        logger.info("[6/11] Initializing data service...")
+        logger.info("[6/12] Initializing data service...")
         data_config = DataServiceConfig()  # Use defaults
 
         if config.system.data_source == DataSource.DATABENTO:
@@ -209,7 +213,7 @@ class ArgusSystem:
         self._health_monitor.update_component("data_service", ComponentStatus.STARTING)
 
         # --- Phase 7: Scanner ---
-        logger.info("[7/11] Running pre-market scan...")
+        logger.info("[7/12] Running pre-market scan...")
         scanner_yaml = load_yaml_file(self._config_dir / "scanner.yaml")
 
         if config.system.data_source == DataSource.DATABENTO:
@@ -250,25 +254,46 @@ class ArgusSystem:
             )
 
         # --- Phase 8: Strategy ---
-        logger.info("[8/11] Initializing strategy...")
+        # Create strategy instances but do NOT activate (Orchestrator handles activation)
+        logger.info("[8/12] Creating strategy instances...")
         strategy_config = load_orb_config(self._config_dir / "strategies" / "orb_breakout.yaml")
         self._strategy = OrbBreakoutStrategy(
             config=strategy_config,
             data_service=self._data_service,
             clock=self._clock,
         )
-
-        # Subscribe strategy to candle events
-        # (Strategy handles its own event subscriptions via data_service)
-
-        # If mid-day restart, attempt state reconstruction
-        await self._reconstruct_strategy_state(symbols)
+        # Note: is_active and allocated_capital set by Orchestrator in Phase 9
         self._health_monitor.update_component(
-            "strategy", ComponentStatus.HEALTHY, message="OrbBreakout active"
+            "strategy", ComponentStatus.STARTING, message="OrbBreakout created"
         )
 
-        # --- Phase 9: Order Manager ---
-        logger.info("[9/11] Starting order manager...")
+        # --- Phase 9: Orchestrator ---
+        logger.info("[9/12] Initializing orchestrator...")
+        orchestrator_yaml = load_yaml_file(self._config_dir / "orchestrator.yaml")
+        orchestrator_config = OrchestratorConfig(**orchestrator_yaml)
+        self._orchestrator = Orchestrator(
+            config=orchestrator_config,
+            event_bus=self._event_bus,
+            clock=self._clock,
+            trade_logger=self._trade_logger,
+            broker=self._broker,
+            data_service=self._data_service,
+        )
+        self._orchestrator.register_strategy(self._strategy)
+        await self._orchestrator.start()
+
+        # Run pre-market routine (sets regime, allocations, activates strategies)
+        # If mid-day restart, strategies reconstruct their own state
+        await self._orchestrator.run_pre_market()
+        self._health_monitor.update_component("orchestrator", ComponentStatus.HEALTHY)
+        self._health_monitor.update_component(
+            "strategy",
+            ComponentStatus.HEALTHY if self._strategy.is_active else ComponentStatus.DEGRADED,
+            message="OrbBreakout active" if self._strategy.is_active else "OrbBreakout inactive",
+        )
+
+        # --- Phase 10: Order Manager ---
+        logger.info("[10/12] Starting order manager...")
         order_manager_yaml = load_yaml_file(self._config_dir / "order_manager.yaml")
         from argus.core.config import OrderManagerConfig
 
@@ -286,8 +311,8 @@ class ArgusSystem:
         await self._order_manager.reconstruct_from_broker()
         self._health_monitor.update_component("order_manager", ComponentStatus.HEALTHY)
 
-        # --- Phase 10: Start streaming ---
-        logger.info("[10/11] Starting data streams...")
+        # --- Phase 11: Start streaming ---
+        logger.info("[11/12] Starting data streams...")
         if symbols and not self._dry_run:
             await self._data_service.start(symbols=symbols, timeframes=["1m"])
             self._health_monitor.update_component(
@@ -299,8 +324,8 @@ class ArgusSystem:
                 "data_service", ComponentStatus.DEGRADED, message="Dry run — no streaming"
             )
 
-        # --- Phase 11: API Server (optional) ---
-        logger.info("[11/11] Starting API server...")
+        # --- Phase 12: API Server (optional) ---
+        logger.info("[12/12] Starting API server...")
         if self._enable_api and config.system.api.enabled:
             # Check for JWT secret
             jwt_secret_env = config.system.api.jwt_secret_env
@@ -326,7 +351,8 @@ class ArgusSystem:
                     risk_manager=self._risk_manager,
                     order_manager=self._order_manager,
                     data_service=self._data_service,
-                    strategies={"orb_breakout": self._strategy},
+                    orchestrator=self._orchestrator,
+                    strategies=self._orchestrator.get_strategies(),
                     clock=self._clock,
                     config=config.system,
                     start_time=time.time(),
@@ -443,9 +469,10 @@ class ArgusSystem:
         1. Stop scanner
         2. Stop data streams
         3. Stop order manager
-        4. Stop health monitor
-        5. Close database
-        6. Close broker connection
+        4. Stop orchestrator
+        5. Stop health monitor
+        6. Close database
+        7. Close broker connection
         """
         logger.info("=" * 60)
         logger.info("ARGUS TRADING SYSTEM — SHUTTING DOWN")
@@ -486,17 +513,22 @@ class ArgusSystem:
             logger.info("Stopping order manager...")
             await self._order_manager.stop()
 
-        # 4. Stop health monitor
+        # 4. Stop orchestrator
+        if self._orchestrator:
+            logger.info("Stopping orchestrator...")
+            await self._orchestrator.stop()
+
+        # 5. Stop health monitor
         if self._health_monitor:
             logger.info("Stopping health monitor...")
             await self._health_monitor.stop()
 
-        # 5. Close database
+        # 6. Close database
         if self._db:
             logger.info("Closing database...")
             await self._db.close()
 
-        # 6. Close broker
+        # 7. Close broker
         if self._broker:
             logger.info("Disconnecting broker...")
             if hasattr(self._broker, "disconnect"):

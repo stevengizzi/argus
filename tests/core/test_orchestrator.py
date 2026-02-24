@@ -161,6 +161,10 @@ class MockStrategy:
     def get_market_conditions_filter(self) -> MarketConditionsFilter:
         return MarketConditionsFilter(allowed_regimes=self._allowed_regimes)
 
+    async def reconstruct_state(self, trade_logger: object) -> None:
+        """Mock reconstruct_state for testing."""
+        pass
+
 
 @pytest.fixture
 def orchestrator(

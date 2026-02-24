@@ -192,6 +192,10 @@ class Orchestrator:
         """Full pre-market sequence. Called at configured time or on mid-day restart."""
         logger.info("Running pre-market routine")
 
+        # 0. Reconstruct strategy state (trade counts, daily P&L) from trade log
+        for strategy in self._strategies.values():
+            await strategy.reconstruct_state(self._trade_logger)
+
         # 1. Fetch SPY daily bars
         spy_bars = await self._data_service.fetch_daily_bars(
             self._config.spy_symbol, lookback_days=60

@@ -462,3 +462,403 @@ health:
         assert "databento" in brokers_yaml
         assert brokers_yaml["databento"]["enabled"] is True
         assert "api_key_env_var" in brokers_yaml["databento"]
+
+
+class TestOrchestratorIntegration:
+    """Tests for Orchestrator integration into main.py startup."""
+
+    @pytest.mark.asyncio
+    async def test_12_phase_startup_creates_orchestrator(
+        self, mock_config_dir: Path, mock_env_vars: None
+    ) -> None:
+        """Verify start() creates and starts the Orchestrator in Phase 9."""
+        from argus.main import ArgusSystem
+
+        system = ArgusSystem(config_dir=mock_config_dir, dry_run=True)
+
+        with (
+            patch("argus.main.DatabaseManager") as mock_db_class,
+            patch("argus.main.AlpacaBroker") as mock_broker_class,
+            patch("argus.main.HealthMonitor") as mock_health_class,
+            patch("argus.main.RiskManager") as mock_risk_class,
+            patch("argus.main.AlpacaDataService") as mock_data_class,
+            patch("argus.main.AlpacaScanner") as mock_scanner_class,
+            patch("argus.main.OrbBreakoutStrategy") as mock_strategy_class,
+            patch("argus.main.Orchestrator") as mock_orchestrator_class,
+            patch("argus.main.OrderManager") as mock_om_class,
+        ):
+            # Setup all mocks with all necessary async methods
+            for cls in [
+                mock_db_class,
+                mock_broker_class,
+                mock_health_class,
+                mock_risk_class,
+                mock_data_class,
+                mock_scanner_class,
+                mock_strategy_class,
+                mock_om_class,
+            ]:
+                instance = MagicMock()
+                instance.initialize = AsyncMock()
+                instance.start = AsyncMock()
+                instance.connect = AsyncMock()
+                instance.stop = AsyncMock()
+                instance.close = AsyncMock()
+                instance.get_account = AsyncMock(return_value=MagicMock(equity=100000))
+                instance.scan = AsyncMock(return_value=[])
+                instance.reconstruct_from_broker = AsyncMock()
+                instance.reconstruct_state = AsyncMock()  # For RiskManager and Strategy
+                instance.update_component = MagicMock()
+                instance.send_warning_alert = AsyncMock()
+                instance.is_active = False  # Strategy starts inactive
+                cls.return_value = instance
+
+            # Setup orchestrator mock
+            mock_orchestrator = MagicMock()
+            mock_orchestrator.start = AsyncMock()
+            mock_orchestrator.stop = AsyncMock()
+            mock_orchestrator.run_pre_market = AsyncMock()
+            mock_orchestrator.register_strategy = MagicMock()
+            mock_orchestrator.get_strategies = MagicMock(return_value={})
+            mock_orchestrator_class.return_value = mock_orchestrator
+
+            with contextlib.suppress(Exception):
+                await system.start()
+
+            # Verify Orchestrator was created with correct dependencies
+            mock_orchestrator_class.assert_called_once()
+            call_kwargs = mock_orchestrator_class.call_args[1]
+            assert "config" in call_kwargs
+            assert "event_bus" in call_kwargs
+            assert "clock" in call_kwargs
+            assert "trade_logger" in call_kwargs
+            assert "broker" in call_kwargs
+            assert "data_service" in call_kwargs
+
+            # Verify Orchestrator lifecycle methods were called
+            mock_orchestrator.register_strategy.assert_called_once()
+            mock_orchestrator.start.assert_called_once()
+            mock_orchestrator.run_pre_market.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_strategy_activated_by_orchestrator(
+        self, mock_config_dir: Path, mock_env_vars: None
+    ) -> None:
+        """Verify strategy.is_active is NOT set directly by main.py, but by Orchestrator."""
+        from argus.main import ArgusSystem
+
+        system = ArgusSystem(config_dir=mock_config_dir, dry_run=True)
+
+        strategy_instance = MagicMock()
+        strategy_instance.is_active = False  # Start inactive
+        strategy_instance.strategy_id = "orb_breakout"
+        strategy_instance.reconstruct_state = AsyncMock()
+
+        with (
+            patch("argus.main.DatabaseManager") as mock_db_class,
+            patch("argus.main.AlpacaBroker") as mock_broker_class,
+            patch("argus.main.HealthMonitor") as mock_health_class,
+            patch("argus.main.RiskManager") as mock_risk_class,
+            patch("argus.main.AlpacaDataService") as mock_data_class,
+            patch("argus.main.AlpacaScanner") as mock_scanner_class,
+            patch("argus.main.OrbBreakoutStrategy") as mock_strategy_class,
+            patch("argus.main.Orchestrator") as mock_orchestrator_class,
+            patch("argus.main.OrderManager") as mock_om_class,
+        ):
+            # Setup all mocks with all necessary async methods
+            for cls in [
+                mock_db_class,
+                mock_broker_class,
+                mock_health_class,
+                mock_risk_class,
+                mock_data_class,
+                mock_scanner_class,
+                mock_om_class,
+            ]:
+                instance = MagicMock()
+                instance.initialize = AsyncMock()
+                instance.start = AsyncMock()
+                instance.connect = AsyncMock()
+                instance.stop = AsyncMock()
+                instance.close = AsyncMock()
+                instance.get_account = AsyncMock(return_value=MagicMock(equity=100000))
+                instance.scan = AsyncMock(return_value=[])
+                instance.reconstruct_from_broker = AsyncMock()
+                instance.reconstruct_state = AsyncMock()  # For RiskManager
+                instance.update_component = MagicMock()
+                instance.send_warning_alert = AsyncMock()
+                cls.return_value = instance
+
+            mock_strategy_class.return_value = strategy_instance
+
+            # Setup orchestrator mock
+            mock_orchestrator = MagicMock()
+            mock_orchestrator.start = AsyncMock()
+            mock_orchestrator.stop = AsyncMock()
+            mock_orchestrator.run_pre_market = AsyncMock()
+            mock_orchestrator.register_strategy = MagicMock()
+            mock_orchestrator.get_strategies = MagicMock(
+                return_value={"orb_breakout": strategy_instance}
+            )
+            mock_orchestrator_class.return_value = mock_orchestrator
+
+            with contextlib.suppress(Exception):
+                await system.start()
+
+            # Verify strategy.is_active was NOT set to True directly
+            # (it should still be False because run_pre_market is mocked)
+            # This confirms main.py doesn't hardcode is_active = True
+            assert strategy_instance.is_active is False
+
+    @pytest.mark.asyncio
+    async def test_orchestrator_in_app_state(
+        self, mock_config_dir: Path, mock_env_vars: None, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Verify AppState includes the Orchestrator when API is enabled."""
+        from argus.main import ArgusSystem
+
+        # Set JWT secret so API starts
+        monkeypatch.setenv("ARGUS_JWT_SECRET", "test_secret")
+
+        # Update system.yaml to enable API
+        (mock_config_dir / "system.yaml").write_text("""
+timezone: "America/New_York"
+market_open: "09:30"
+market_close: "16:00"
+log_level: "INFO"
+heartbeat_interval_seconds: 60
+data_dir: "data"
+data_source: "alpaca"
+broker_source: "alpaca"
+
+health:
+  heartbeat_interval_seconds: 60
+  heartbeat_url: ""
+  alert_webhook_url: ""
+  daily_check_enabled: false
+  weekly_reconciliation_enabled: false
+
+api:
+  enabled: true
+  host: "127.0.0.1"
+  port: 8000
+  jwt_secret_env: "ARGUS_JWT_SECRET"
+""")
+
+        system = ArgusSystem(config_dir=mock_config_dir, dry_run=True, enable_api=True)
+        captured_app_state = None
+
+        with (
+            patch("argus.main.DatabaseManager") as mock_db_class,
+            patch("argus.main.AlpacaBroker") as mock_broker_class,
+            patch("argus.main.HealthMonitor") as mock_health_class,
+            patch("argus.main.RiskManager") as mock_risk_class,
+            patch("argus.main.AlpacaDataService") as mock_data_class,
+            patch("argus.main.AlpacaScanner") as mock_scanner_class,
+            patch("argus.main.OrbBreakoutStrategy") as mock_strategy_class,
+            patch("argus.main.Orchestrator") as mock_orchestrator_class,
+            patch("argus.main.OrderManager") as mock_om_class,
+            patch("argus.api.server.create_app") as mock_create_app,
+            patch("argus.api.server.run_server") as mock_run_server,
+            patch("argus.api.websocket.get_bridge") as mock_get_bridge,
+        ):
+            # Setup all mocks with all necessary async methods
+            for cls in [
+                mock_db_class,
+                mock_broker_class,
+                mock_health_class,
+                mock_risk_class,
+                mock_data_class,
+                mock_scanner_class,
+                mock_strategy_class,
+                mock_om_class,
+            ]:
+                instance = MagicMock()
+                instance.initialize = AsyncMock()
+                instance.start = AsyncMock()
+                instance.connect = AsyncMock()
+                instance.stop = AsyncMock()
+                instance.close = AsyncMock()
+                instance.get_account = AsyncMock(return_value=MagicMock(equity=100000))
+                instance.scan = AsyncMock(return_value=[])
+                instance.reconstruct_from_broker = AsyncMock()
+                instance.reconstruct_state = AsyncMock()  # For RiskManager and Strategy
+                instance.update_component = MagicMock()
+                instance.send_warning_alert = AsyncMock()
+                instance.is_active = True
+                cls.return_value = instance
+
+            # Setup orchestrator mock
+            mock_orchestrator = MagicMock()
+            mock_orchestrator.start = AsyncMock()
+            mock_orchestrator.stop = AsyncMock()
+            mock_orchestrator.run_pre_market = AsyncMock()
+            mock_orchestrator.register_strategy = MagicMock()
+            mock_orchestrator.get_strategies = MagicMock(return_value={"orb_breakout": MagicMock()})
+            mock_orchestrator_class.return_value = mock_orchestrator
+
+            # Capture AppState when create_app is called
+            def capture_app_state(app_state):
+                nonlocal captured_app_state
+                captured_app_state = app_state
+                return MagicMock()
+
+            mock_create_app.side_effect = capture_app_state
+            mock_run_server.return_value = AsyncMock()
+            mock_get_bridge.return_value = MagicMock()
+
+            with contextlib.suppress(Exception):
+                await system.start()
+
+            # Verify AppState was created with orchestrator
+            assert captured_app_state is not None
+            assert captured_app_state.orchestrator is mock_orchestrator
+
+    @pytest.mark.asyncio
+    async def test_orchestrator_shutdown_called(
+        self, mock_config_dir: Path, mock_env_vars: None
+    ) -> None:
+        """Verify Orchestrator.stop() is called during shutdown."""
+        from argus.main import ArgusSystem
+
+        system = ArgusSystem(config_dir=mock_config_dir, dry_run=True)
+
+        # Manually set mocked components
+        mock_orchestrator = MagicMock()
+        mock_orchestrator.stop = AsyncMock()
+        system._orchestrator = mock_orchestrator
+
+        system._scanner = MagicMock()
+        system._scanner.stop = AsyncMock()
+
+        system._data_service = MagicMock()
+        system._data_service.stop = AsyncMock()
+
+        system._order_manager = MagicMock()
+        system._order_manager.stop = AsyncMock()
+
+        system._health_monitor = MagicMock()
+        system._health_monitor.stop = AsyncMock()
+        system._health_monitor.send_warning_alert = AsyncMock()
+
+        system._db = MagicMock()
+        system._db.close = AsyncMock()
+
+        system._broker = MagicMock()
+        system._broker.disconnect = AsyncMock()
+
+        await system.shutdown()
+
+        # Verify orchestrator.stop was called
+        mock_orchestrator.stop.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_orchestrator_uses_strategies_from_registry(
+        self, mock_config_dir: Path, mock_env_vars: None, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Verify AppState.strategies comes from orchestrator.get_strategies()."""
+        from argus.main import ArgusSystem
+
+        monkeypatch.setenv("ARGUS_JWT_SECRET", "test_secret")
+
+        # Update system.yaml to enable API
+        (mock_config_dir / "system.yaml").write_text("""
+timezone: "America/New_York"
+market_open: "09:30"
+market_close: "16:00"
+log_level: "INFO"
+heartbeat_interval_seconds: 60
+data_dir: "data"
+data_source: "alpaca"
+broker_source: "alpaca"
+
+health:
+  heartbeat_interval_seconds: 60
+  heartbeat_url: ""
+  alert_webhook_url: ""
+  daily_check_enabled: false
+  weekly_reconciliation_enabled: false
+
+api:
+  enabled: true
+  host: "127.0.0.1"
+  port: 8000
+  jwt_secret_env: "ARGUS_JWT_SECRET"
+""")
+
+        system = ArgusSystem(config_dir=mock_config_dir, dry_run=True, enable_api=True)
+        captured_app_state = None
+
+        # Create distinct strategy mocks
+        strategy_1 = MagicMock()
+        strategy_1.strategy_id = "strategy_1"
+        strategy_2 = MagicMock()
+        strategy_2.strategy_id = "strategy_2"
+        orchestrator_strategies = {"strategy_1": strategy_1, "strategy_2": strategy_2}
+
+        with (
+            patch("argus.main.DatabaseManager") as mock_db_class,
+            patch("argus.main.AlpacaBroker") as mock_broker_class,
+            patch("argus.main.HealthMonitor") as mock_health_class,
+            patch("argus.main.RiskManager") as mock_risk_class,
+            patch("argus.main.AlpacaDataService") as mock_data_class,
+            patch("argus.main.AlpacaScanner") as mock_scanner_class,
+            patch("argus.main.OrbBreakoutStrategy") as mock_strategy_class,
+            patch("argus.main.Orchestrator") as mock_orchestrator_class,
+            patch("argus.main.OrderManager") as mock_om_class,
+            patch("argus.api.server.create_app") as mock_create_app,
+            patch("argus.api.server.run_server") as mock_run_server,
+            patch("argus.api.websocket.get_bridge") as mock_get_bridge,
+        ):
+            # Setup all mocks with all necessary async methods
+            for cls in [
+                mock_db_class,
+                mock_broker_class,
+                mock_health_class,
+                mock_risk_class,
+                mock_data_class,
+                mock_scanner_class,
+                mock_strategy_class,
+                mock_om_class,
+            ]:
+                instance = MagicMock()
+                instance.initialize = AsyncMock()
+                instance.start = AsyncMock()
+                instance.connect = AsyncMock()
+                instance.stop = AsyncMock()
+                instance.close = AsyncMock()
+                instance.get_account = AsyncMock(return_value=MagicMock(equity=100000))
+                instance.scan = AsyncMock(return_value=[])
+                instance.reconstruct_from_broker = AsyncMock()
+                instance.reconstruct_state = AsyncMock()  # For RiskManager and Strategy
+                instance.update_component = MagicMock()
+                instance.send_warning_alert = AsyncMock()
+                instance.is_active = True
+                cls.return_value = instance
+
+            # Setup orchestrator mock
+            mock_orchestrator = MagicMock()
+            mock_orchestrator.start = AsyncMock()
+            mock_orchestrator.stop = AsyncMock()
+            mock_orchestrator.run_pre_market = AsyncMock()
+            mock_orchestrator.register_strategy = MagicMock()
+            mock_orchestrator.get_strategies = MagicMock(return_value=orchestrator_strategies)
+            mock_orchestrator_class.return_value = mock_orchestrator
+
+            # Capture AppState
+            def capture_app_state(app_state):
+                nonlocal captured_app_state
+                captured_app_state = app_state
+                return MagicMock()
+
+            mock_create_app.side_effect = capture_app_state
+            mock_run_server.return_value = AsyncMock()
+            mock_get_bridge.return_value = MagicMock()
+
+            with contextlib.suppress(Exception):
+                await system.start()
+
+            # Verify strategies come from orchestrator
+            assert captured_app_state is not None
+            assert captured_app_state.strategies == orchestrator_strategies
+            mock_orchestrator.get_strategies.assert_called()

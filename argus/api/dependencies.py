@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from argus.core.config import SystemConfig
     from argus.core.event_bus import EventBus
     from argus.core.health import HealthMonitor
+    from argus.core.orchestrator import Orchestrator
     from argus.core.risk_manager import RiskManager
     from argus.data.service import DataService
     from argus.execution.broker import Broker
@@ -39,6 +40,7 @@ class AppState:
         risk_manager: Risk evaluation gate for signals.
         order_manager: Position lifecycle management.
         data_service: Market data provider.
+        orchestrator: Strategy lifecycle and capital allocation manager.
         strategies: Dict of strategy_id -> BaseStrategy instances.
         clock: Time provider (SystemClock or FixedClock for tests).
         config: System configuration.
@@ -52,6 +54,7 @@ class AppState:
     risk_manager: RiskManager
     order_manager: OrderManager
     data_service: DataService | None = None
+    orchestrator: Orchestrator | None = None
     strategies: dict[str, BaseStrategy] = field(default_factory=dict)
     clock: Clock | None = None
     config: SystemConfig | None = None
