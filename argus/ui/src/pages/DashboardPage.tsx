@@ -19,6 +19,7 @@ import {
   OpenPositions,
   RecentTrades,
   HealthMini,
+  RiskAllocationPanel,
 } from '../features/dashboard';
 import { staggerContainer, staggerItem, staggerItemWithChildren } from '../utils/motion';
 import { useIsMultiColumn } from '../hooks/useMediaQuery';
@@ -40,6 +41,7 @@ export function DashboardPage() {
         <motion.div variants={staggerItem}><AccountSummary /></motion.div>
         <motion.div variants={staggerItem}><DailyPnlCard /></motion.div>
         <motion.div variants={staggerItem}><MarketStatusBadge /></motion.div>
+        <RiskAllocationPanel />
         <motion.div variants={staggerItem}><OpenPositions /></motion.div>
         <motion.div variants={staggerItem}><RecentTrades /></motion.div>
         <motion.div variants={staggerItem}><HealthMini /></motion.div>
@@ -72,6 +74,9 @@ export function DashboardPage() {
           <MarketStatusBadge />
         </motion.div>
       </motion.div>
+
+      {/* Risk allocation row: Donut + Risk Gauges */}
+      <RiskAllocationPanel />
 
       {/* Open positions - full width */}
       <motion.div variants={staggerItem}>

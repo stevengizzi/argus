@@ -8,6 +8,7 @@ export { MarketStatusBadge } from './MarketStatusBadge';
 export { OpenPositions } from './OpenPositions';
 export { RecentTrades } from './RecentTrades';
 export { HealthMini } from './HealthMini';
+export { RiskAllocationPanel } from './RiskAllocationPanel';
 
 // Skeleton exports
 export {

@@ -172,3 +172,24 @@ export interface WebSocketMessage {
 
 // Period type for performance endpoint
 export type PerformancePeriod = 'today' | 'week' | 'month' | 'all';
+
+// Orchestrator
+export interface AllocationInfo {
+  strategy_id: string;
+  allocation_pct: number;
+  allocation_dollars: number;
+  throttle_action: string;
+  eligible: boolean;
+  reason: string;
+}
+
+export interface OrchestratorStatusResponse {
+  regime: string;
+  regime_indicators: Record<string, number>;
+  regime_updated_at: string | null;
+  allocations: AllocationInfo[];
+  cash_reserve_pct: number;
+  total_deployed_pct: number;
+  next_regime_check: string | null;
+  timestamp: string;
+}

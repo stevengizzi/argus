@@ -8,6 +8,7 @@ import type {
   AccountResponse,
   HealthResponse,
   LoginRequest,
+  OrchestratorStatusResponse,
   PerformancePeriod,
   PerformanceResponse,
   PositionsResponse,
@@ -152,4 +153,9 @@ export async function getHealth(): Promise<HealthResponse> {
 // Strategy endpoints
 export async function getStrategies(): Promise<StrategiesResponse> {
   return fetchWithAuth<StrategiesResponse>('/strategies');
+}
+
+// Orchestrator endpoints
+export async function getOrchestratorStatus(): Promise<OrchestratorStatusResponse> {
+  return fetchWithAuth<OrchestratorStatusResponse>('/orchestrator/status');
 }

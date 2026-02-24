@@ -12,6 +12,7 @@ export {
 } from './useControls';
 export { useHealth } from './useHealth';
 export { useLiveEquity, type LiveEquityData } from './useLiveEquity';
+export { useOrchestratorStatus } from './useOrchestratorStatus';
 export { usePerformance } from './usePerformance';
 export { usePositions } from './usePositions';
 export { useSparklineData } from './useSparklineData';
