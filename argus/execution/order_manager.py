@@ -78,6 +78,7 @@ class ManagedPosition:
     # Optional fields with defaults (must come after required fields)
     t2_order_id: str | None = None  # Broker-side T2 limit order ID (IBKR native brackets)
     realized_pnl: float = 0.0  # Accumulated P&L from partial exits
+    time_stop_seconds: int | None = None  # Per-position time stop from signal (DEC-122)
 
     @property
     def is_fully_closed(self) -> bool:
@@ -215,10 +216,15 @@ class OrderManager:
             return
 
         # Calculate T1/T2 share split
-        t1_shares = int(share_count * self._config.t1_position_pct)
-        if t1_shares == 0 and share_count > 0:
-            t1_shares = 1
-        t2_shares = share_count - t1_shares
+        # Single-target signals: 100% exit at T1 (ORB Scalp pattern — DEC-122)
+        if len(target_prices) == 1:
+            t1_shares = share_count
+            t2_shares = 0
+        else:
+            t1_shares = int(share_count * self._config.t1_position_pct)
+            if t1_shares == 0 and share_count > 0:
+                t1_shares = 1
+            t2_shares = share_count - t1_shares
 
         # Construct entry order
         entry_order = Order(
@@ -465,15 +471,20 @@ class OrderManager:
         signal = approved_event.signal
 
         filled_shares = event.fill_quantity
-        t1_shares = int(filled_shares * self._config.t1_position_pct)
-        # Ensure at least 1 share for T1 if we have shares
-        if t1_shares == 0 and filled_shares > 0:
-            t1_shares = 1
 
         # Extract target prices - handle both tuple and list
         target_prices = signal.target_prices
         if approved_event.modifications and "target_prices" in approved_event.modifications:
             target_prices = approved_event.modifications["target_prices"]
+
+        # Calculate T1 shares — single-target = 100% exit at T1 (DEC-122)
+        if len(target_prices) == 1:
+            t1_shares = filled_shares
+        else:
+            t1_shares = int(filled_shares * self._config.t1_position_pct)
+            # Ensure at least 1 share for T1 if we have shares
+            if t1_shares == 0 and filled_shares > 0:
+                t1_shares = 1
 
         t1_price = target_prices[0] if len(target_prices) >= 1 else 0.0
         t2_price = target_prices[1] if len(target_prices) >= 2 else 0.0
@@ -496,6 +507,7 @@ class OrderManager:
             t2_price=t2_price,
             t2_order_id=pending.bracket_t2_order_id,  # FROM BRACKET (DEC-093)
             high_watermark=event.fill_price,
+            time_stop_seconds=signal.time_stop_seconds,  # Per-position time stop (DEC-122)
         )
 
         # Add to managed positions
@@ -544,8 +556,24 @@ class OrderManager:
         position.t1_filled = True
         position.t1_order_id = None
 
-        # If position fully closed by T1 (all shares were T1), we're done
+        # If position fully closed by T1 (single-target — DEC-122), cancel stop and close
         if position.is_fully_closed:
+            # Cancel stop order (no longer needed)
+            if position.stop_order_id:
+                try:
+                    await self._broker.cancel_order(position.stop_order_id)
+                except Exception:
+                    logger.debug("Could not cancel stop %s", position.stop_order_id)
+                self._pending_orders.pop(position.stop_order_id, None)
+                position.stop_order_id = None
+
+            logger.info(
+                "T1 hit for %s: %d shares @ %.2f (PnL: +%.2f). Position fully closed.",
+                pending.symbol,
+                event.fill_quantity,
+                event.fill_price,
+                t1_pnl,
+            )
             await self._close_position(position, event.fill_price, ExitReason.TARGET_1)
             return
 
@@ -719,11 +747,27 @@ class OrderManager:
                         if position.is_fully_closed:
                             continue
 
-                        # Time stop: position open too long
-                        elapsed_minutes = (now - position.entry_time).total_seconds() / 60
+                        elapsed_seconds = (now - position.entry_time).total_seconds()
+
+                        # Per-position time stop from signal (DEC-122)
+                        if (
+                            position.time_stop_seconds is not None
+                            and elapsed_seconds >= position.time_stop_seconds
+                        ):
+                                logger.info(
+                                    "Time stop for %s: open %.0f sec (limit=%d sec)",
+                                    symbol,
+                                    elapsed_seconds,
+                                    position.time_stop_seconds,
+                                )
+                                await self._flatten_position(position, reason="time_stop")
+                                continue
+
+                        # Fallback: global max_position_duration_minutes
+                        elapsed_minutes = elapsed_seconds / 60
                         if elapsed_minutes >= self._config.max_position_duration_minutes:
                             logger.info(
-                                "Time stop for %s: open %.1f min (limit=%d)",
+                                "Time stop for %s: open %.1f min (limit=%d min)",
                                 symbol,
                                 elapsed_minutes,
                                 self._config.max_position_duration_minutes,

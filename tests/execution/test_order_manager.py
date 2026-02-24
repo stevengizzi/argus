@@ -2010,3 +2010,1220 @@ async def test_bracket_flatten_cancels_bracket_orders(
     assert mock_broker.place_order.called
 
     await order_manager.stop()
+
+
+# ---------------------------------------------------------------------------
+# Per-Signal Time Stop Tests (DEC-122) (5)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_per_signal_time_stop_120_seconds(
+    order_manager: OrderManager,
+    mock_broker: MagicMock,
+    fixed_clock: FixedClock,
+    event_bus: EventBus,
+) -> None:
+    """Position with time_stop_seconds=120 flattened after 120s (DEC-122)."""
+    closed_events: list[PositionClosedEvent] = []
+
+    async def handler(event: PositionClosedEvent) -> None:
+        closed_events.append(event)
+
+    event_bus.subscribe(PositionClosedEvent, handler)
+
+    await order_manager.start()
+
+    # Create signal with 120 second time stop
+    signal = SignalEvent(
+        strategy_id="orb_scalp",
+        symbol="AAPL",
+        side=Side.LONG,
+        entry_price=150.0,
+        stop_price=148.0,
+        target_prices=(152.0, 154.0),
+        share_count=100,
+        rationale="Scalp signal",
+        time_stop_seconds=120,
+    )
+    approved = make_approved(signal=signal)
+    await order_manager.on_approved(approved)
+
+    # Position created
+    position = order_manager._managed_positions["AAPL"][0]
+    assert position.time_stop_seconds == 120
+
+    # Stop the poll task to manually control timing
+    await order_manager.stop()
+
+    # Advance clock by 120 seconds
+    fixed_clock.advance(seconds=120)
+
+    # Reset mock and manually trigger time stop check
+    mock_broker.place_order.reset_mock()
+    order_manager._running = True
+
+    # Simulate poll check
+    now = fixed_clock.now()
+    for _symbol, positions in list(order_manager._managed_positions.items()):
+        for pos in positions:
+            if pos.is_fully_closed:
+                continue
+            elapsed_seconds = (now - pos.entry_time).total_seconds()
+            if pos.time_stop_seconds is not None and elapsed_seconds >= pos.time_stop_seconds:
+                await order_manager._flatten_position(pos, reason="time_stop")
+
+    # Verify flatten order placed
+    assert mock_broker.place_order.called
+
+
+@pytest.mark.asyncio
+async def test_per_signal_time_stop_30_seconds(
+    event_bus: EventBus,
+    config: OrderManagerConfig,
+) -> None:
+    """Position with time_stop_seconds=30 flattened after 30s (DEC-122)."""
+    fixed_clock = FixedClock(datetime(2026, 2, 16, 15, 0, 0, tzinfo=UTC))
+    mock_broker = MagicMock()
+    order_counter = {"n": 0}
+
+    def make_bracket_result(
+        entry: MagicMock, stop: MagicMock, targets: list[MagicMock]
+    ) -> BracketOrderResult:
+        order_counter["n"] += 1
+        entry_result = OrderResult(
+            order_id=entry.id,
+            broker_order_id=f"broker-entry-{order_counter['n']}",
+            status=OrderStatus.FILLED,
+            filled_quantity=entry.quantity,
+            filled_avg_price=150.0,
+        )
+        order_counter["n"] += 1
+        stop_result = OrderResult(
+            order_id=stop.id,
+            broker_order_id=f"broker-stop-{order_counter['n']}",
+            status=OrderStatus.PENDING,
+        )
+        target_results = [
+            OrderResult(
+                order_id=t.id,
+                broker_order_id=f"broker-target-{order_counter['n'] + i}",
+                status=OrderStatus.PENDING,
+            )
+            for i, t in enumerate(targets)
+        ]
+        return BracketOrderResult(entry=entry_result, stop=stop_result, targets=target_results)
+
+    mock_broker.place_bracket_order = AsyncMock(side_effect=make_bracket_result)
+    mock_broker.place_order = AsyncMock(
+        return_value=OrderResult(order_id="test", broker_order_id="b", status=OrderStatus.SUBMITTED)
+    )
+    mock_broker.cancel_order = AsyncMock(return_value=True)
+
+    om = OrderManager(
+        event_bus=event_bus,
+        broker=mock_broker,
+        clock=fixed_clock,
+        config=config,
+    )
+
+    await om.start()
+
+    # Create signal with 30 second time stop
+    signal = SignalEvent(
+        strategy_id="orb_scalp",
+        symbol="AAPL",
+        side=Side.LONG,
+        entry_price=150.0,
+        stop_price=148.0,
+        target_prices=(152.0,),
+        share_count=100,
+        rationale="Scalp signal",
+        time_stop_seconds=30,
+    )
+    approved = make_approved(signal=signal)
+    await om.on_approved(approved)
+
+    position = om._managed_positions["AAPL"][0]
+    assert position.time_stop_seconds == 30
+
+    await om.stop()
+
+    # Advance clock by 30 seconds
+    fixed_clock.advance(seconds=30)
+
+    # Manually trigger time stop check
+    mock_broker.place_order.reset_mock()
+    om._running = True
+
+    now = fixed_clock.now()
+    for _symbol, positions in list(om._managed_positions.items()):
+        for pos in positions:
+            if pos.is_fully_closed:
+                continue
+            elapsed_seconds = (now - pos.entry_time).total_seconds()
+            if pos.time_stop_seconds is not None and elapsed_seconds >= pos.time_stop_seconds:
+                await om._flatten_position(pos, reason="time_stop")
+
+    # Verify flatten order placed
+    assert mock_broker.place_order.called
+
+
+@pytest.mark.asyncio
+async def test_no_per_signal_time_stop_uses_global(
+    order_manager: OrderManager,
+    mock_broker: MagicMock,
+    fixed_clock: FixedClock,
+) -> None:
+    """Position without time_stop_seconds uses global max_position_duration_minutes."""
+    await order_manager.start()
+
+    # Create signal WITHOUT time_stop_seconds
+    signal = make_signal()
+    approved = make_approved(signal=signal)
+    await order_manager.on_approved(approved)
+
+    position = order_manager._managed_positions["AAPL"][0]
+    assert position.time_stop_seconds is None
+
+    await order_manager.stop()
+
+    # Advance clock by 30 seconds (less than global 120 min)
+    fixed_clock.advance(seconds=30)
+    mock_broker.place_order.reset_mock()
+    order_manager._running = True
+
+    # Verify time stop NOT triggered (30s < 120min)
+    now = fixed_clock.now()
+    triggered = False
+    for _symbol, positions in list(order_manager._managed_positions.items()):
+        for pos in positions:
+            elapsed_seconds = (now - pos.entry_time).total_seconds()
+            elapsed_minutes = elapsed_seconds / 60
+            if pos.time_stop_seconds is not None:
+                if elapsed_seconds >= pos.time_stop_seconds:
+                    triggered = True
+            elif elapsed_minutes >= order_manager._config.max_position_duration_minutes:
+                triggered = True
+
+    assert not triggered
+
+    # Now advance to 125 minutes (past global limit)
+    fixed_clock.advance(minutes=124)  # 124 + (30s) > 120 min
+    now = fixed_clock.now()
+    for _symbol, positions in list(order_manager._managed_positions.items()):
+        for pos in positions:
+            elapsed_seconds = (now - pos.entry_time).total_seconds()
+            elapsed_minutes = elapsed_seconds / 60
+            if (
+                pos.time_stop_seconds is None
+                and elapsed_minutes >= order_manager._config.max_position_duration_minutes
+            ):
+                await order_manager._flatten_position(pos, reason="time_stop")
+
+    # Now flatten should have been called
+    assert mock_broker.place_order.called
+
+
+@pytest.mark.asyncio
+async def test_per_signal_time_stop_fires_before_t1(
+    event_bus: EventBus,
+    config: OrderManagerConfig,
+) -> None:
+    """Time stop fires before T1 is hit (DEC-122)."""
+    fixed_clock = FixedClock(datetime(2026, 2, 16, 15, 0, 0, tzinfo=UTC))
+    mock_broker = MagicMock()
+    order_counter = {"n": 0}
+
+    def make_bracket_result(
+        entry: MagicMock, stop: MagicMock, targets: list[MagicMock]
+    ) -> BracketOrderResult:
+        order_counter["n"] += 1
+        return BracketOrderResult(
+            entry=OrderResult(
+                order_id=entry.id,
+                broker_order_id=f"broker-entry-{order_counter['n']}",
+                status=OrderStatus.FILLED,
+                filled_quantity=entry.quantity,
+                filled_avg_price=150.0,
+            ),
+            stop=OrderResult(
+                order_id=stop.id,
+                broker_order_id=f"broker-stop-{order_counter['n']}",
+                status=OrderStatus.PENDING,
+            ),
+            targets=[
+                OrderResult(
+                    order_id=t.id,
+                    broker_order_id=f"broker-target-{order_counter['n'] + i}",
+                    status=OrderStatus.PENDING,
+                )
+                for i, t in enumerate(targets)
+            ],
+        )
+
+    mock_broker.place_bracket_order = AsyncMock(side_effect=make_bracket_result)
+    mock_broker.place_order = AsyncMock(
+        return_value=OrderResult(order_id="test", broker_order_id="b", status=OrderStatus.SUBMITTED)
+    )
+    mock_broker.cancel_order = AsyncMock(return_value=True)
+
+    closed_events: list[PositionClosedEvent] = []
+
+    async def handler(event: PositionClosedEvent) -> None:
+        closed_events.append(event)
+
+    event_bus.subscribe(PositionClosedEvent, handler)
+
+    om = OrderManager(
+        event_bus=event_bus,
+        broker=mock_broker,
+        clock=fixed_clock,
+        config=config,
+    )
+
+    await om.start()
+
+    # Create signal with 60 second time stop
+    signal = SignalEvent(
+        strategy_id="orb_scalp",
+        symbol="AAPL",
+        side=Side.LONG,
+        entry_price=150.0,
+        stop_price=148.0,
+        target_prices=(152.0, 154.0),
+        share_count=100,
+        rationale="Scalp signal",
+        time_stop_seconds=60,
+    )
+    approved = make_approved(signal=signal)
+    await om.on_approved(approved)
+
+    position = om._managed_positions["AAPL"][0]
+    assert not position.t1_filled
+
+    await om.stop()
+
+    # Advance clock by 60 seconds (time stop triggers before T1)
+    fixed_clock.advance(seconds=60)
+
+    # Trigger time stop
+    now = fixed_clock.now()
+    for _symbol, positions in list(om._managed_positions.items()):
+        for pos in positions:
+            if pos.time_stop_seconds is not None:
+                elapsed_seconds = (now - pos.entry_time).total_seconds()
+                if elapsed_seconds >= pos.time_stop_seconds:
+                    await om._flatten_position(pos, reason="time_stop")
+
+    # Verify T1 was NOT filled
+    assert not position.t1_filled
+
+    # Verify flatten order placed
+    assert mock_broker.place_order.called
+
+
+@pytest.mark.asyncio
+async def test_t1_hit_before_time_stop(
+    event_bus: EventBus,
+    config: OrderManagerConfig,
+) -> None:
+    """T1 hit before time stop fires (DEC-122)."""
+    fixed_clock = FixedClock(datetime(2026, 2, 16, 15, 0, 0, tzinfo=UTC))
+    mock_broker = MagicMock()
+    order_counter = {"n": 0}
+
+    def make_bracket_result(
+        entry: MagicMock, stop: MagicMock, targets: list[MagicMock]
+    ) -> BracketOrderResult:
+        order_counter["n"] += 1
+        return BracketOrderResult(
+            entry=OrderResult(
+                order_id=entry.id,
+                broker_order_id=f"broker-entry-{order_counter['n']}",
+                status=OrderStatus.FILLED,
+                filled_quantity=entry.quantity,
+                filled_avg_price=150.0,
+            ),
+            stop=OrderResult(
+                order_id=stop.id,
+                broker_order_id=f"broker-stop-{order_counter['n']}",
+                status=OrderStatus.PENDING,
+            ),
+            targets=[
+                OrderResult(
+                    order_id=t.id,
+                    broker_order_id=f"broker-target-{order_counter['n'] + i}",
+                    status=OrderStatus.PENDING,
+                )
+                for i, t in enumerate(targets)
+            ],
+        )
+
+    def make_order_result(order: MagicMock) -> OrderResult:
+        order_counter["n"] += 1
+        return OrderResult(
+            order_id=order.id,
+            broker_order_id=f"broker-{order_counter['n']}",
+            status=OrderStatus.SUBMITTED,
+        )
+
+    mock_broker.place_bracket_order = AsyncMock(side_effect=make_bracket_result)
+    mock_broker.place_order = AsyncMock(side_effect=make_order_result)
+    mock_broker.cancel_order = AsyncMock(return_value=True)
+
+    om = OrderManager(
+        event_bus=event_bus,
+        broker=mock_broker,
+        clock=fixed_clock,
+        config=config,
+    )
+
+    await om.start()
+
+    # Create signal with 120 second time stop
+    signal = SignalEvent(
+        strategy_id="orb_scalp",
+        symbol="AAPL",
+        side=Side.LONG,
+        entry_price=150.0,
+        stop_price=148.0,
+        target_prices=(152.0, 154.0),
+        share_count=100,
+        rationale="Scalp signal",
+        time_stop_seconds=120,
+    )
+    approved = make_approved(signal=signal)
+    await om.on_approved(approved)
+
+    position = om._managed_positions["AAPL"][0]
+    t1_order_id = position.t1_order_id
+
+    # Advance clock by 30 seconds (before time stop)
+    fixed_clock.advance(seconds=30)
+
+    # T1 fills
+    t1_fill = OrderFilledEvent(
+        order_id=t1_order_id,
+        fill_price=152.0,
+        fill_quantity=50,
+    )
+    await om.on_fill(t1_fill)
+
+    # Verify T1 was filled
+    assert position.t1_filled
+
+    # Time stop would be at 120s, but T1 already hit at 30s
+    # Verify position still open (remaining 50 shares)
+    assert position.shares_remaining == 50
+    assert not position.is_fully_closed
+
+    await om.stop()
+
+
+# ---------------------------------------------------------------------------
+# Single-Target Bracket Tests (DEC-122) (10)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_single_target_bracket_has_one_limit(
+    event_bus: EventBus,
+    fixed_clock: FixedClock,
+    config: OrderManagerConfig,
+) -> None:
+    """Signal with 1 target → bracket has stop + 1 limit only (DEC-122)."""
+    mock_broker = MagicMock()
+    order_counter = {"n": 0}
+
+    def make_bracket_result(
+        entry: MagicMock, stop: MagicMock, targets: list[MagicMock]
+    ) -> BracketOrderResult:
+        order_counter["n"] += 1
+        return BracketOrderResult(
+            entry=OrderResult(
+                order_id=entry.id,
+                broker_order_id=f"broker-entry-{order_counter['n']}",
+                status=OrderStatus.FILLED,
+                filled_quantity=entry.quantity,
+                filled_avg_price=150.0,
+            ),
+            stop=OrderResult(
+                order_id=stop.id,
+                broker_order_id=f"broker-stop-{order_counter['n']}",
+                status=OrderStatus.PENDING,
+            ),
+            targets=[
+                OrderResult(
+                    order_id=t.id,
+                    broker_order_id=f"broker-target-{order_counter['n'] + i}",
+                    status=OrderStatus.PENDING,
+                )
+                for i, t in enumerate(targets)
+            ],
+        )
+
+    mock_broker.place_bracket_order = AsyncMock(side_effect=make_bracket_result)
+    mock_broker.place_order = AsyncMock()
+    mock_broker.cancel_order = AsyncMock(return_value=True)
+
+    om = OrderManager(
+        event_bus=event_bus,
+        broker=mock_broker,
+        clock=fixed_clock,
+        config=config,
+    )
+
+    await om.start()
+
+    # Single target signal
+    signal = SignalEvent(
+        strategy_id="orb_scalp",
+        symbol="AAPL",
+        side=Side.LONG,
+        entry_price=150.0,
+        stop_price=148.0,
+        target_prices=(152.0,),  # Single target
+        share_count=100,
+        rationale="Scalp signal",
+    )
+    approved = make_approved(signal=signal)
+    await om.on_approved(approved)
+
+    # Verify bracket call had 1 target only
+    _, _, targets = mock_broker.place_bracket_order.call_args[0]
+    assert len(targets) == 1
+    assert targets[0].quantity == 100  # All shares to T1
+    assert targets[0].limit_price == 152.0
+
+    await om.stop()
+
+
+@pytest.mark.asyncio
+async def test_single_target_t1_closes_100_percent(
+    event_bus: EventBus,
+    fixed_clock: FixedClock,
+    config: OrderManagerConfig,
+) -> None:
+    """T1 fill on single-target closes 100% of position (DEC-122)."""
+    mock_broker = MagicMock()
+    order_counter = {"n": 0}
+
+    def make_bracket_result(
+        entry: MagicMock, stop: MagicMock, targets: list[MagicMock]
+    ) -> BracketOrderResult:
+        order_counter["n"] += 1
+        return BracketOrderResult(
+            entry=OrderResult(
+                order_id=entry.id,
+                broker_order_id=f"broker-entry-{order_counter['n']}",
+                status=OrderStatus.FILLED,
+                filled_quantity=entry.quantity,
+                filled_avg_price=150.0,
+            ),
+            stop=OrderResult(
+                order_id=stop.id,
+                broker_order_id=f"broker-stop-{order_counter['n']}",
+                status=OrderStatus.PENDING,
+            ),
+            targets=[
+                OrderResult(
+                    order_id=t.id,
+                    broker_order_id=f"broker-target-{order_counter['n'] + i}",
+                    status=OrderStatus.PENDING,
+                )
+                for i, t in enumerate(targets)
+            ],
+        )
+
+    mock_broker.place_bracket_order = AsyncMock(side_effect=make_bracket_result)
+    mock_broker.place_order = AsyncMock()
+    mock_broker.cancel_order = AsyncMock(return_value=True)
+
+    closed_events: list[PositionClosedEvent] = []
+
+    async def handler(event: PositionClosedEvent) -> None:
+        closed_events.append(event)
+
+    event_bus.subscribe(PositionClosedEvent, handler)
+
+    om = OrderManager(
+        event_bus=event_bus,
+        broker=mock_broker,
+        clock=fixed_clock,
+        config=config,
+    )
+
+    await om.start()
+
+    # Single target signal
+    signal = SignalEvent(
+        strategy_id="orb_scalp",
+        symbol="AAPL",
+        side=Side.LONG,
+        entry_price=150.0,
+        stop_price=148.0,
+        target_prices=(152.0,),
+        share_count=100,
+        rationale="Scalp signal",
+    )
+    approved = make_approved(signal=signal)
+    await om.on_approved(approved)
+
+    position = om._managed_positions["AAPL"][0]
+    t1_order_id = position.t1_order_id
+
+    # Verify T1 has all shares
+    assert position.t1_shares == 100
+
+    # T1 fill for all 100 shares
+    t1_fill = OrderFilledEvent(
+        order_id=t1_order_id,
+        fill_price=152.0,
+        fill_quantity=100,
+    )
+    await om.on_fill(t1_fill)
+    await event_bus.drain()
+
+    # Verify position fully closed
+    assert len(closed_events) == 1
+    assert closed_events[0].exit_reason == ExitReason.TARGET_1
+    # P&L = (152 - 150) * 100 = 200
+    assert closed_events[0].realized_pnl == pytest.approx(200.0)
+
+    # Verify position removed
+    assert "AAPL" not in om._managed_positions
+
+    await om.stop()
+
+
+@pytest.mark.asyncio
+async def test_single_target_no_t2_monitoring(
+    event_bus: EventBus,
+    fixed_clock: FixedClock,
+    config: OrderManagerConfig,
+) -> None:
+    """Single-target positions skip T2 monitoring in on_tick (DEC-122)."""
+    mock_broker = MagicMock()
+    order_counter = {"n": 0}
+
+    def make_bracket_result(
+        entry: MagicMock, stop: MagicMock, targets: list[MagicMock]
+    ) -> BracketOrderResult:
+        order_counter["n"] += 1
+        return BracketOrderResult(
+            entry=OrderResult(
+                order_id=entry.id,
+                broker_order_id=f"broker-entry-{order_counter['n']}",
+                status=OrderStatus.FILLED,
+                filled_quantity=entry.quantity,
+                filled_avg_price=150.0,
+            ),
+            stop=OrderResult(
+                order_id=stop.id,
+                broker_order_id=f"broker-stop-{order_counter['n']}",
+                status=OrderStatus.PENDING,
+            ),
+            targets=[
+                OrderResult(
+                    order_id=t.id,
+                    broker_order_id=f"broker-target-{order_counter['n'] + i}",
+                    status=OrderStatus.PENDING,
+                )
+                for i, t in enumerate(targets)
+            ],
+        )
+
+    mock_broker.place_bracket_order = AsyncMock(side_effect=make_bracket_result)
+    mock_broker.place_order = AsyncMock()
+    mock_broker.cancel_order = AsyncMock(return_value=True)
+
+    om = OrderManager(
+        event_bus=event_bus,
+        broker=mock_broker,
+        clock=fixed_clock,
+        config=config,
+    )
+
+    await om.start()
+
+    # Single target signal
+    signal = SignalEvent(
+        strategy_id="orb_scalp",
+        symbol="AAPL",
+        side=Side.LONG,
+        entry_price=150.0,
+        stop_price=148.0,
+        target_prices=(152.0,),
+        share_count=100,
+        rationale="Scalp signal",
+    )
+    approved = make_approved(signal=signal)
+    await om.on_approved(approved)
+
+    position = om._managed_positions["AAPL"][0]
+
+    # Verify no T2 price
+    assert position.t2_price == 0.0
+    assert position.t2_order_id is None
+
+    # Send tick at some price — no T2 flatten should happen
+    mock_broker.place_order.reset_mock()
+    tick = TickEvent(symbol="AAPL", price=160.0, volume=1000)
+    await om.on_tick(tick)
+
+    # No flatten order should be placed (T2 check skipped when t2_price == 0)
+    # Note: trailing stop might trigger if enabled, but not T2
+    # Since t1_filled is False, trailing stop also won't trigger
+    # Only high_watermark update should happen
+    assert position.high_watermark == 160.0
+
+    await om.stop()
+
+
+@pytest.mark.asyncio
+async def test_single_target_no_stop_to_breakeven(
+    event_bus: EventBus,
+    fixed_clock: FixedClock,
+    config: OrderManagerConfig,
+) -> None:
+    """Single-target positions don't need stop-to-breakeven (T1 = 100%) (DEC-122)."""
+    mock_broker = MagicMock()
+    order_counter = {"n": 0}
+
+    def make_bracket_result(
+        entry: MagicMock, stop: MagicMock, targets: list[MagicMock]
+    ) -> BracketOrderResult:
+        order_counter["n"] += 1
+        return BracketOrderResult(
+            entry=OrderResult(
+                order_id=entry.id,
+                broker_order_id=f"broker-entry-{order_counter['n']}",
+                status=OrderStatus.FILLED,
+                filled_quantity=entry.quantity,
+                filled_avg_price=150.0,
+            ),
+            stop=OrderResult(
+                order_id=stop.id,
+                broker_order_id=f"broker-stop-{order_counter['n']}",
+                status=OrderStatus.PENDING,
+            ),
+            targets=[
+                OrderResult(
+                    order_id=t.id,
+                    broker_order_id=f"broker-target-{order_counter['n'] + i}",
+                    status=OrderStatus.PENDING,
+                )
+                for i, t in enumerate(targets)
+            ],
+        )
+
+    mock_broker.place_bracket_order = AsyncMock(side_effect=make_bracket_result)
+    mock_broker.place_order = AsyncMock()
+    mock_broker.cancel_order = AsyncMock(return_value=True)
+
+    om = OrderManager(
+        event_bus=event_bus,
+        broker=mock_broker,
+        clock=fixed_clock,
+        config=config,
+    )
+
+    await om.start()
+
+    # Single target signal
+    signal = SignalEvent(
+        strategy_id="orb_scalp",
+        symbol="AAPL",
+        side=Side.LONG,
+        entry_price=150.0,
+        stop_price=148.0,
+        target_prices=(152.0,),
+        share_count=100,
+        rationale="Scalp signal",
+    )
+    approved = make_approved(signal=signal)
+    await om.on_approved(approved)
+
+    position = om._managed_positions["AAPL"][0]
+    t1_order_id = position.t1_order_id
+    original_stop_id = position.stop_order_id
+
+    # Reset mock to track new calls
+    mock_broker.place_order.reset_mock()
+
+    # T1 fill for all 100 shares
+    t1_fill = OrderFilledEvent(
+        order_id=t1_order_id,
+        fill_price=152.0,
+        fill_quantity=100,
+    )
+    await om.on_fill(t1_fill)
+
+    # Verify NO new stop order placed (no stop-to-breakeven needed)
+    # Only cancel calls should happen
+    mock_broker.place_order.assert_not_called()
+
+    # Verify original stop was cancelled
+    cancel_calls = [call[0][0] for call in mock_broker.cancel_order.call_args_list]
+    assert original_stop_id in cancel_calls
+
+    await om.stop()
+
+
+@pytest.mark.asyncio
+async def test_single_target_position_t1_shares_equals_total(
+    event_bus: EventBus,
+    fixed_clock: FixedClock,
+    config: OrderManagerConfig,
+) -> None:
+    """Single-target position has t1_shares == shares_total (DEC-122)."""
+    mock_broker = MagicMock()
+    order_counter = {"n": 0}
+
+    def make_bracket_result(
+        entry: MagicMock, stop: MagicMock, targets: list[MagicMock]
+    ) -> BracketOrderResult:
+        order_counter["n"] += 1
+        return BracketOrderResult(
+            entry=OrderResult(
+                order_id=entry.id,
+                broker_order_id=f"broker-entry-{order_counter['n']}",
+                status=OrderStatus.FILLED,
+                filled_quantity=entry.quantity,
+                filled_avg_price=150.0,
+            ),
+            stop=OrderResult(
+                order_id=stop.id,
+                broker_order_id=f"broker-stop-{order_counter['n']}",
+                status=OrderStatus.PENDING,
+            ),
+            targets=[
+                OrderResult(
+                    order_id=t.id,
+                    broker_order_id=f"broker-target-{order_counter['n'] + i}",
+                    status=OrderStatus.PENDING,
+                )
+                for i, t in enumerate(targets)
+            ],
+        )
+
+    mock_broker.place_bracket_order = AsyncMock(side_effect=make_bracket_result)
+    mock_broker.place_order = AsyncMock()
+    mock_broker.cancel_order = AsyncMock(return_value=True)
+
+    om = OrderManager(
+        event_bus=event_bus,
+        broker=mock_broker,
+        clock=fixed_clock,
+        config=config,
+    )
+
+    await om.start()
+
+    # Single target signal
+    signal = SignalEvent(
+        strategy_id="orb_scalp",
+        symbol="AAPL",
+        side=Side.LONG,
+        entry_price=150.0,
+        stop_price=148.0,
+        target_prices=(152.0,),
+        share_count=100,
+        rationale="Scalp signal",
+    )
+    approved = make_approved(signal=signal)
+    await om.on_approved(approved)
+
+    position = om._managed_positions["AAPL"][0]
+
+    # Verify T1 shares equals total
+    assert position.t1_shares == position.shares_total == 100
+
+    await om.stop()
+
+
+@pytest.mark.asyncio
+async def test_single_target_pnl_calculation(
+    event_bus: EventBus,
+    fixed_clock: FixedClock,
+    config: OrderManagerConfig,
+) -> None:
+    """Single-target P&L is (exit - entry) * 100% shares (DEC-122)."""
+    mock_broker = MagicMock()
+    order_counter = {"n": 0}
+
+    def make_bracket_result(
+        entry: MagicMock, stop: MagicMock, targets: list[MagicMock]
+    ) -> BracketOrderResult:
+        order_counter["n"] += 1
+        return BracketOrderResult(
+            entry=OrderResult(
+                order_id=entry.id,
+                broker_order_id=f"broker-entry-{order_counter['n']}",
+                status=OrderStatus.FILLED,
+                filled_quantity=entry.quantity,
+                filled_avg_price=150.0,
+            ),
+            stop=OrderResult(
+                order_id=stop.id,
+                broker_order_id=f"broker-stop-{order_counter['n']}",
+                status=OrderStatus.PENDING,
+            ),
+            targets=[
+                OrderResult(
+                    order_id=t.id,
+                    broker_order_id=f"broker-target-{order_counter['n'] + i}",
+                    status=OrderStatus.PENDING,
+                )
+                for i, t in enumerate(targets)
+            ],
+        )
+
+    mock_broker.place_bracket_order = AsyncMock(side_effect=make_bracket_result)
+    mock_broker.place_order = AsyncMock()
+    mock_broker.cancel_order = AsyncMock(return_value=True)
+
+    closed_events: list[PositionClosedEvent] = []
+
+    async def handler(event: PositionClosedEvent) -> None:
+        closed_events.append(event)
+
+    event_bus.subscribe(PositionClosedEvent, handler)
+
+    om = OrderManager(
+        event_bus=event_bus,
+        broker=mock_broker,
+        clock=fixed_clock,
+        config=config,
+    )
+
+    await om.start()
+
+    # Single target signal
+    signal = SignalEvent(
+        strategy_id="orb_scalp",
+        symbol="AAPL",
+        side=Side.LONG,
+        entry_price=150.0,
+        stop_price=148.0,
+        target_prices=(153.0,),  # $3 profit target
+        share_count=100,
+        rationale="Scalp signal",
+    )
+    approved = make_approved(signal=signal)
+    await om.on_approved(approved)
+
+    position = om._managed_positions["AAPL"][0]
+    t1_order_id = position.t1_order_id
+
+    # T1 fill at $153
+    t1_fill = OrderFilledEvent(
+        order_id=t1_order_id,
+        fill_price=153.0,
+        fill_quantity=100,
+    )
+    await om.on_fill(t1_fill)
+    await event_bus.drain()
+
+    # Verify P&L = (153 - 150) * 100 = 300
+    assert len(closed_events) == 1
+    assert closed_events[0].realized_pnl == pytest.approx(300.0)
+    assert closed_events[0].exit_price == pytest.approx(153.0)
+
+    await om.stop()
+
+
+@pytest.mark.asyncio
+async def test_single_target_stop_hit_closes_position(
+    event_bus: EventBus,
+    fixed_clock: FixedClock,
+    config: OrderManagerConfig,
+) -> None:
+    """Single-target position stop hit closes 100% of position (DEC-122)."""
+    mock_broker = MagicMock()
+    order_counter = {"n": 0}
+
+    def make_bracket_result(
+        entry: MagicMock, stop: MagicMock, targets: list[MagicMock]
+    ) -> BracketOrderResult:
+        order_counter["n"] += 1
+        return BracketOrderResult(
+            entry=OrderResult(
+                order_id=entry.id,
+                broker_order_id=f"broker-entry-{order_counter['n']}",
+                status=OrderStatus.FILLED,
+                filled_quantity=entry.quantity,
+                filled_avg_price=150.0,
+            ),
+            stop=OrderResult(
+                order_id=stop.id,
+                broker_order_id=f"broker-stop-{order_counter['n']}",
+                status=OrderStatus.PENDING,
+            ),
+            targets=[
+                OrderResult(
+                    order_id=t.id,
+                    broker_order_id=f"broker-target-{order_counter['n'] + i}",
+                    status=OrderStatus.PENDING,
+                )
+                for i, t in enumerate(targets)
+            ],
+        )
+
+    mock_broker.place_bracket_order = AsyncMock(side_effect=make_bracket_result)
+    mock_broker.place_order = AsyncMock()
+    mock_broker.cancel_order = AsyncMock(return_value=True)
+
+    closed_events: list[PositionClosedEvent] = []
+
+    async def handler(event: PositionClosedEvent) -> None:
+        closed_events.append(event)
+
+    event_bus.subscribe(PositionClosedEvent, handler)
+
+    om = OrderManager(
+        event_bus=event_bus,
+        broker=mock_broker,
+        clock=fixed_clock,
+        config=config,
+    )
+
+    await om.start()
+
+    # Single target signal
+    signal = SignalEvent(
+        strategy_id="orb_scalp",
+        symbol="AAPL",
+        side=Side.LONG,
+        entry_price=150.0,
+        stop_price=148.0,
+        target_prices=(152.0,),
+        share_count=100,
+        rationale="Scalp signal",
+    )
+    approved = make_approved(signal=signal)
+    await om.on_approved(approved)
+
+    position = om._managed_positions["AAPL"][0]
+    stop_order_id = position.stop_order_id
+
+    # Stop hit at 148
+    stop_fill = OrderFilledEvent(
+        order_id=stop_order_id,
+        fill_price=148.0,
+        fill_quantity=100,
+    )
+    await om.on_fill(stop_fill)
+    await event_bus.drain()
+
+    # Verify position closed
+    assert len(closed_events) == 1
+    assert closed_events[0].exit_reason == ExitReason.STOP_LOSS
+    # P&L = (148 - 150) * 100 = -200
+    assert closed_events[0].realized_pnl == pytest.approx(-200.0)
+
+    await om.stop()
+
+
+@pytest.mark.asyncio
+async def test_single_target_time_stop_closes_position(
+    event_bus: EventBus,
+    config: OrderManagerConfig,
+) -> None:
+    """Single-target position time stop closes 100% of position (DEC-122)."""
+    fixed_clock = FixedClock(datetime(2026, 2, 16, 15, 0, 0, tzinfo=UTC))
+    mock_broker = MagicMock()
+    order_counter = {"n": 0}
+
+    def make_bracket_result(
+        entry: MagicMock, stop: MagicMock, targets: list[MagicMock]
+    ) -> BracketOrderResult:
+        order_counter["n"] += 1
+        return BracketOrderResult(
+            entry=OrderResult(
+                order_id=entry.id,
+                broker_order_id=f"broker-entry-{order_counter['n']}",
+                status=OrderStatus.FILLED,
+                filled_quantity=entry.quantity,
+                filled_avg_price=150.0,
+            ),
+            stop=OrderResult(
+                order_id=stop.id,
+                broker_order_id=f"broker-stop-{order_counter['n']}",
+                status=OrderStatus.PENDING,
+            ),
+            targets=[
+                OrderResult(
+                    order_id=t.id,
+                    broker_order_id=f"broker-target-{order_counter['n'] + i}",
+                    status=OrderStatus.PENDING,
+                )
+                for i, t in enumerate(targets)
+            ],
+        )
+
+    mock_broker.place_bracket_order = AsyncMock(side_effect=make_bracket_result)
+    mock_broker.place_order = AsyncMock(
+        return_value=OrderResult(order_id="test", broker_order_id="b", status=OrderStatus.SUBMITTED)
+    )
+    mock_broker.cancel_order = AsyncMock(return_value=True)
+
+    om = OrderManager(
+        event_bus=event_bus,
+        broker=mock_broker,
+        clock=fixed_clock,
+        config=config,
+    )
+
+    await om.start()
+
+    # Single target signal with 60 second time stop
+    signal = SignalEvent(
+        strategy_id="orb_scalp",
+        symbol="AAPL",
+        side=Side.LONG,
+        entry_price=150.0,
+        stop_price=148.0,
+        target_prices=(152.0,),
+        share_count=100,
+        rationale="Scalp signal",
+        time_stop_seconds=60,
+    )
+    approved = make_approved(signal=signal)
+    await om.on_approved(approved)
+
+    position = om._managed_positions["AAPL"][0]
+    assert position.time_stop_seconds == 60
+
+    await om.stop()
+
+    # Advance clock by 60 seconds
+    fixed_clock.advance(seconds=60)
+
+    # Trigger time stop
+    mock_broker.place_order.reset_mock()
+    now = fixed_clock.now()
+    for _symbol, positions in list(om._managed_positions.items()):
+        for pos in positions:
+            if pos.time_stop_seconds is not None:
+                elapsed_seconds = (now - pos.entry_time).total_seconds()
+                if elapsed_seconds >= pos.time_stop_seconds:
+                    await om._flatten_position(pos, reason="time_stop")
+
+    # Verify flatten order placed for 100 shares
+    assert mock_broker.place_order.called
+    flatten_order = mock_broker.place_order.call_args[0][0]
+    assert flatten_order.quantity == 100
+    assert str(flatten_order.order_type) == "market"
+
+
+@pytest.mark.asyncio
+async def test_dual_target_still_works_normally(
+    order_manager: OrderManager,
+    mock_broker: MagicMock,
+    event_bus: EventBus,
+) -> None:
+    """Dual-target signals still work as before (regression test for DEC-122)."""
+    await order_manager.start()
+
+    # Standard dual-target signal
+    signal = make_signal(
+        entry_price=150.0,
+        stop_price=148.0,
+        target_prices=(152.0, 154.0),
+        share_count=100,
+    )
+    approved = make_approved(signal=signal)
+    await order_manager.on_approved(approved)
+
+    position = order_manager._managed_positions["AAPL"][0]
+
+    # Verify dual-target behavior unchanged
+    assert position.t1_shares == 50  # 50% of 100
+    assert position.t1_price == 152.0
+    assert position.t2_price == 154.0
+    assert position.t2_order_id is not None
+
+    # Verify bracket had 2 targets
+    _, _, targets = mock_broker.place_bracket_order.call_args[0]
+    assert len(targets) == 2
+
+    await order_manager.stop()
+
+
+@pytest.mark.asyncio
+async def test_single_target_with_odd_share_count(
+    event_bus: EventBus,
+    fixed_clock: FixedClock,
+    config: OrderManagerConfig,
+) -> None:
+    """Single-target with odd share count still works (DEC-122)."""
+    mock_broker = MagicMock()
+    order_counter = {"n": 0}
+
+    def make_bracket_result(
+        entry: MagicMock, stop: MagicMock, targets: list[MagicMock]
+    ) -> BracketOrderResult:
+        order_counter["n"] += 1
+        return BracketOrderResult(
+            entry=OrderResult(
+                order_id=entry.id,
+                broker_order_id=f"broker-entry-{order_counter['n']}",
+                status=OrderStatus.FILLED,
+                filled_quantity=entry.quantity,
+                filled_avg_price=150.0,
+            ),
+            stop=OrderResult(
+                order_id=stop.id,
+                broker_order_id=f"broker-stop-{order_counter['n']}",
+                status=OrderStatus.PENDING,
+            ),
+            targets=[
+                OrderResult(
+                    order_id=t.id,
+                    broker_order_id=f"broker-target-{order_counter['n'] + i}",
+                    status=OrderStatus.PENDING,
+                )
+                for i, t in enumerate(targets)
+            ],
+        )
+
+    mock_broker.place_bracket_order = AsyncMock(side_effect=make_bracket_result)
+    mock_broker.place_order = AsyncMock()
+    mock_broker.cancel_order = AsyncMock(return_value=True)
+
+    om = OrderManager(
+        event_bus=event_bus,
+        broker=mock_broker,
+        clock=fixed_clock,
+        config=config,
+    )
+
+    await om.start()
+
+    # Single target signal with odd share count
+    signal = SignalEvent(
+        strategy_id="orb_scalp",
+        symbol="AAPL",
+        side=Side.LONG,
+        entry_price=150.0,
+        stop_price=148.0,
+        target_prices=(152.0,),
+        share_count=77,  # Odd number
+        rationale="Scalp signal",
+    )
+    approved = make_approved(signal=signal)
+    await om.on_approved(approved)
+
+    position = om._managed_positions["AAPL"][0]
+
+    # Verify all 77 shares go to T1
+    assert position.t1_shares == 77
+
+    # Verify bracket T1 order has all 77 shares
+    _, _, targets = mock_broker.place_bracket_order.call_args[0]
+    assert len(targets) == 1
+    assert targets[0].quantity == 77
+
+    await om.stop()
