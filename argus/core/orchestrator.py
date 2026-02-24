@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import json
 import logging
 from datetime import datetime, time
 from typing import TYPE_CHECKING
@@ -297,7 +296,7 @@ class Orchestrator:
         throttle_results: dict[str, ThrottleAction] = {}
         for sid in eligible_ids:
             trades = await self._trade_logger.get_trades_by_strategy(sid, limit=200)
-            daily_pnl = await self._trade_logger.get_daily_pnl()
+            daily_pnl = await self._trade_logger.get_daily_pnl(strategy_id=sid)
             throttle_results[sid] = self._throttler.check(sid, trades, daily_pnl)
 
         active_ids = [
@@ -607,18 +606,14 @@ class Orchestrator:
             details: Dict with decision details.
             rationale: Human-readable explanation.
         """
-        from argus.core.ids import generate_id
-
-        decision_id = generate_id()
         today = self._clock.today().isoformat()
-        sql = """INSERT INTO orchestrator_decisions
-                 (id, date, decision_type, strategy_id, details, rationale)
-                 VALUES (?, ?, ?, ?, ?, ?)"""
-
-        await self._trade_logger._db.execute(
-            sql, (decision_id, today, decision_type, strategy_id, json.dumps(details), rationale)
+        await self._trade_logger.log_orchestrator_decision(
+            date=today,
+            decision_type=decision_type,
+            strategy_id=strategy_id,
+            details=details,
+            rationale=rationale,
         )
-        await self._trade_logger._db.commit()
 
     async def _log_decisions(
         self, allocations: list[StrategyAllocation], regime: MarketRegime

@@ -169,9 +169,9 @@ class RegimeClassifier:
         Scoring system:
         1. Trend score (-2 to +2):
            - SPY > SMA-20 AND > SMA-50 → +2 (strong bull)
-           - SPY > SMA-20 OR > SMA-50 → +1 (mild bull)
            - SPY < SMA-20 AND < SMA-50 → -2 (strong bear)
-           - SPY < SMA-20 OR < SMA-50 → -1 (mild bear)
+           - Mixed (above one, below other) → 0 (range-bound)
+           - Only one SMA available: above → +1, below → -1
            - SMA data missing → 0
 
         2. Volatility bucket:

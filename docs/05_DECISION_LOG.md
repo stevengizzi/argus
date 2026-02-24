@@ -1339,5 +1339,16 @@ Each entry follows this format:
 
 ---
 
+### DEC-119: Single-Strategy Allocation Cap
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-24 |
+| **Decision:** | With fewer than 3 active strategies, the `max_allocation_pct` cap (default 40%) leaves deployable capital idle. This is accepted as intentional risk reduction during the early validation phase. No special-casing for N=1. The cap becomes naturally irrelevant at N≥3 (Sprint 19+). Performance-weighted allocation (Bible §5.2 ±10% shift) deferred until sufficient multi-strategy performance history exists. |
+| **Rationale:** | The single-strategy period (Sprints 17-18) is the highest-risk phase for discovering issues the backtest missed. Idle capital acts as a built-in safety buffer that automatically loosens as validated strategies are added. Adding a `single_strategy_full_allocation` config flag would create temporary complexity for a transitional state. |
+| **Alternatives:** | (a) Allow 100% of deployable capital to single strategy — rejected as too aggressive for unproven live performance. (b) Add config toggle — rejected as unnecessary complexity for a 2-sprint transitional period. |
+| **Status:** | Active |
+
+---
+
 *End of Decision Log v1.0*
 *New decisions are appended chronologically as the project progresses.*

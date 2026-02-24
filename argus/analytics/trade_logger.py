@@ -437,12 +437,15 @@ class TradeLogger:
         self,
         date_from: str | None = None,
         date_to: str | None = None,
+        strategy_id: str | None = None,
     ) -> list[dict]:
         """Get daily P&L aggregation.
 
         Args:
             date_from: Optional start date filter (ISO YYYY-MM-DD).
             date_to: Optional end date filter (ISO YYYY-MM-DD).
+            strategy_id: Optional strategy ID filter. If provided, returns P&L
+                        for that strategy only. If None, returns account-wide P&L.
 
         Returns:
             List of dicts with date, pnl, and trades count per day.
@@ -458,6 +461,10 @@ class TradeLogger:
             conditions.append("date(entry_time) <= ?")
             params.append(date_to)
 
+        if strategy_id is not None:
+            conditions.append("strategy_id = ?")
+            params.append(strategy_id)
+
         where_clause = " AND ".join(conditions) if conditions else "1=1"
         sql = f"""
             SELECT
@@ -472,6 +479,45 @@ class TradeLogger:
 
         rows = await self._db.fetch_all(sql, tuple(params))
         return [dict(row) for row in rows]  # type: ignore[arg-type]
+
+    async def log_orchestrator_decision(
+        self,
+        date: str,
+        decision_type: str,
+        strategy_id: str | None,
+        details: dict,
+        rationale: str,
+    ) -> str:
+        """Log an orchestrator decision to the database.
+
+        Args:
+            date: Date of the decision (ISO YYYY-MM-DD format).
+            decision_type: Type of decision (allocation, activation, etc.).
+            strategy_id: Strategy ID if applicable, None for system-wide decisions.
+            details: Dict with decision details (will be JSON-serialized).
+            rationale: Human-readable explanation.
+
+        Returns:
+            The generated decision ID.
+        """
+        decision_id = generate_id()
+        sql = """INSERT INTO orchestrator_decisions
+                 (id, date, decision_type, strategy_id, details, rationale)
+                 VALUES (?, ?, ?, ?, ?, ?)"""
+
+        await self._db.execute(
+            sql, (decision_id, date, decision_type, strategy_id, json.dumps(details), rationale)
+        )
+        await self._db.commit()
+
+        logger.debug(
+            "Logged orchestrator decision %s: %s for %s",
+            decision_id[:8],
+            decision_type,
+            strategy_id or "system",
+        )
+
+        return decision_id
 
     async def save_daily_summary(self, summary: DailySummary) -> str:
         """Save a daily summary to the database.

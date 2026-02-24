@@ -617,9 +617,8 @@ async def test_decision_logging(
 
     await orchestrator.run_pre_market()
 
-    # Verify database insert was called
-    assert mock_trade_logger._db.execute.called
-    assert mock_trade_logger._db.commit.called
+    # Verify log_orchestrator_decision was called (encapsulated DB access)
+    assert mock_trade_logger.log_orchestrator_decision.called
 
 
 # ---------------------------------------------------------------------------
@@ -1379,6 +1378,5 @@ async def test_pre_market_logs_decisions_to_database(
 
     await orchestrator.run_pre_market()
 
-    # Should have logged decisions for both strategies
-    assert mock_trade_logger._db.execute.call_count >= 2
-    assert mock_trade_logger._db.commit.call_count >= 1
+    # Should have logged decisions for both strategies (encapsulated DB access)
+    assert mock_trade_logger.log_orchestrator_decision.call_count >= 2
