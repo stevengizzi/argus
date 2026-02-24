@@ -461,30 +461,61 @@ pdt:
 
 ### 3.6 Orchestrator (`core/orchestrator.py`)
 
+Central coordinator for strategy lifecycle, capital allocation, and market regime classification. V1 is rules-based; designed for AI enhancement in V2+ (Sprint 22).
+
+**Constructor:**
 ```python
 class Orchestrator:
-    async def pre_market_routine(self) -> None:
-        """
-        Runs daily before market open:
-        1. Classify current market regime
-        2. Determine which strategies are eligible (regime filter)
-        3. Calculate capital allocation per strategy
-        4. Activate/deactivate strategies
-        5. Publish AllocationUpdateEvents
-        """
-
-    async def evaluate_regime(self) -> MarketRegime:
-        """Assess current market conditions using V1 indicator set."""
-
-    async def calculate_allocations(self, active_strategies: list[BaseStrategy]) -> dict[str, float]:
-        """Determine capital allocation percentages based on performance and regime."""
-
-    async def check_throttling(self, strategy: BaseStrategy) -> ThrottleAction:
-        """Check if strategy should be throttled or suspended based on performance."""
-
-    async def end_of_day_review(self) -> None:
-        """Review day's performance, update rolling metrics, log orchestrator decisions."""
+    def __init__(
+        self,
+        config: OrchestratorConfig,
+        event_bus: EventBus,
+        clock: Clock,
+        trade_logger: TradeLogger,
+        broker: Broker,
+        data_service: DataService,
+    ) -> None
 ```
+
+**Supporting Components:**
+- `RegimeClassifier` (`core/regime.py`): Rules-based SPY regime classification. Computes SMA-20/50, 5-day ROC, 20-day realized vol (VIX proxy, DEC-113). Classifies into 5 regimes: BULLISH_TRENDING, BEARISH_TRENDING, RANGE_BOUND, HIGH_VOLATILITY, CRISIS.
+- `PerformanceThrottler` (`core/throttle.py`): Evaluates per-strategy performance using per-strategy daily P&L from `TradeLogger.get_daily_pnl(strategy_id=...)`. Three rules: 5 consecutive losses → REDUCE, negative 20-day Sharpe → SUSPEND, >15% drawdown → SUSPEND. Worst action wins.
+- `CorrelationTracker` (`core/correlation.py`): Records daily P&L per strategy, computes pairwise Pearson correlation. Infrastructure for V2 correlation-adjusted allocation (DEC-116). Not yet wired into allocation math.
+
+**Lifecycle:**
+```python
+class Orchestrator:
+    async def start(self) -> None:
+        """Subscribe to PositionClosedEvent, launch background poll loop."""
+
+    async def stop(self) -> None:
+        """Cancel poll loop, unsubscribe from events."""
+
+    async def run_pre_market(self) -> None:
+        """Full pre-market sequence:
+        1. Reconstruct strategy state from trade log
+        2. Fetch SPY daily bars, classify regime
+        3. Get account equity from broker
+        4. Calculate per-strategy allocations (equal-weight V1, DEC-114)
+        5. Apply allocations, activate/deactivate strategies
+        6. Log decisions to orchestrator_decisions table
+        """
+
+    async def run_end_of_day(self) -> None:
+        """Post-close: record daily P&L per strategy to CorrelationTracker, log EOD decision."""
+```
+
+**Background Poll Loop (DEC-118):** Self-contained asyncio loop (no APScheduler). Triggers pre-market at configured time (default 09:25 ET), regime recheck every 30 minutes during market hours (DEC-115), EOD review at 16:05 ET. Daily flags reset at midnight.
+
+**Intraday Monitoring:** Subscribes to `PositionClosedEvent`. Tracks per-strategy consecutive losses in-memory. Suspends strategy if intraday consecutive losses exceed threshold. Independent from pre-market throttle checks (which use full historical trade log).
+
+**Allocation Math (V1):** Equal-weight across eligible active strategies. Deployable = equity × (1 - cash_reserve_pct). Per-strategy = min(1/N, max_allocation_pct) × deployable. REDUCE strategies get min_allocation_pct. Single-strategy cap at 40% accepted (DEC-119).
+
+**Event Subscriptions:** PositionClosedEvent
+
+**Events Published:** RegimeChangeEvent, AllocationUpdateEvent, StrategyActivatedEvent, StrategySuspendedEvent
+
+**Decision Logging:** All allocation decisions persisted via `TradeLogger.log_orchestrator_decision()` to `orchestrator_decisions` table.
 
 ### 3.7 Order Manager (`execution/order_manager.py`)
 
