@@ -40,6 +40,7 @@ from argus.core.throttle import StrategyAllocation, ThrottleAction
 from argus.db.manager import DatabaseManager
 from argus.execution.order_manager import ManagedPosition, OrderManager
 from argus.execution.simulated_broker import SimulatedBroker
+from argus.api.routes.watchlist import SparklinePoint, VwapState, WatchlistItem
 from argus.models.trading import AssetClass, ExitReason, OrderSide, Trade, TradeOutcome
 
 # ---------------------------------------------------------------------------
@@ -683,6 +684,133 @@ def _create_mock_orchestrator(now: datetime) -> MockOrchestrator:
     )
 
 
+def _create_mock_watchlist(now: datetime) -> list[WatchlistItem]:
+    """Create mock watchlist data for dev mode.
+
+    Creates a realistic watchlist with symbols from the scanner:
+    - Mix of strategy assignments (ORB, Scalp, VWAP Reclaim)
+    - Various VWAP states
+    - Realistic sparkline data
+    """
+    # Watchlist symbols with their base prices and characteristics
+    watchlist_data = [
+        # High-momentum gappers - all strategies watching
+        {
+            "symbol": "NVDA",
+            "base_price": 875.50,
+            "gap_pct": 3.2,
+            "strategies": ["orb", "scalp", "vwap_reclaim"],
+            "vwap_state": VwapState.ABOVE_VWAP,
+        },
+        {
+            "symbol": "TSLA",
+            "base_price": 225.80,
+            "gap_pct": 2.8,
+            "strategies": ["orb", "scalp"],
+            "vwap_state": VwapState.WATCHING,
+        },
+        {
+            "symbol": "AMD",
+            "base_price": 165.30,
+            "gap_pct": 4.1,
+            "strategies": ["orb", "scalp", "vwap_reclaim"],
+            "vwap_state": VwapState.ENTERED,  # Already in a VWAP Reclaim position
+        },
+        # Mid-cap momentum - VWAP Reclaim focus
+        {
+            "symbol": "PLTR",
+            "base_price": 32.50,
+            "gap_pct": 5.5,
+            "strategies": ["vwap_reclaim"],
+            "vwap_state": VwapState.ENTERED,
+        },
+        {
+            "symbol": "SOFI",
+            "base_price": 15.20,
+            "gap_pct": 6.2,
+            "strategies": ["vwap_reclaim"],
+            "vwap_state": VwapState.BELOW_VWAP,
+        },
+        {
+            "symbol": "HOOD",
+            "base_price": 22.40,
+            "gap_pct": 3.8,
+            "strategies": ["vwap_reclaim"],
+            "vwap_state": VwapState.ABOVE_VWAP,
+        },
+        # Large cap ORB candidates
+        {
+            "symbol": "AAPL",
+            "base_price": 185.80,
+            "gap_pct": 1.5,
+            "strategies": ["orb"],
+            "vwap_state": VwapState.WATCHING,
+        },
+        {
+            "symbol": "META",
+            "base_price": 525.60,
+            "gap_pct": 2.1,
+            "strategies": ["orb", "scalp"],
+            "vwap_state": VwapState.ABOVE_VWAP,
+        },
+        # Scalp-only candidates (high volume, tight range)
+        {
+            "symbol": "GOOG",
+            "base_price": 165.40,
+            "gap_pct": 1.2,
+            "strategies": ["scalp"],
+            "vwap_state": VwapState.WATCHING,
+        },
+        {
+            "symbol": "AMZN",
+            "base_price": 195.30,
+            "gap_pct": 1.8,
+            "strategies": ["scalp"],
+            "vwap_state": VwapState.WATCHING,
+        },
+    ]
+
+    watchlist_items: list[WatchlistItem] = []
+
+    for data in watchlist_data:
+        # Generate sparkline data (last 30 1-minute bars)
+        sparkline: list[SparklinePoint] = []
+        base_price = data["base_price"]
+
+        for i in range(30):
+            bar_time = now - timedelta(minutes=30 - i)
+            # Add some realistic price movement
+            noise = random.uniform(-0.005, 0.005) * base_price
+            trend = (i / 30) * random.uniform(-0.01, 0.02) * base_price  # Slight trend
+            price = base_price + noise + trend
+
+            sparkline.append(
+                SparklinePoint(
+                    timestamp=bar_time.isoformat(),
+                    price=round(price, 2),
+                )
+            )
+
+        # Current price is the last sparkline point
+        current_price = sparkline[-1].price if sparkline else base_price
+
+        watchlist_items.append(
+            WatchlistItem(
+                symbol=data["symbol"],
+                current_price=current_price,
+                gap_pct=data["gap_pct"],
+                strategies=data["strategies"],
+                vwap_state=data["vwap_state"],
+                sparkline=sparkline,
+            )
+        )
+
+    # Sort by gap percentage descending (highest movers first)
+    watchlist_items.sort(key=lambda x: x.gap_pct, reverse=True)
+
+    return watchlist_items
+
+
 # ---------------------------------------------------------------------------
 # Main factory
 # ---------------------------------------------------------------------------
@@ -870,7 +998,10 @@ async def create_dev_state() -> AppState:
     # Mock orchestrator
     mock_orchestrator = _create_mock_orchestrator(now)
 
-    return AppState(
+    # Mock watchlist
+    mock_watchlist = _create_mock_watchlist(now)
+
+    app_state = AppState(
         event_bus=event_bus,
         trade_logger=trade_logger,
         broker=broker,
@@ -888,3 +1019,8 @@ async def create_dev_state() -> AppState:
         config=system_config,
         start_time=time.time(),
     )
+
+    # Inject mock watchlist for dev mode
+    app_state._mock_watchlist = mock_watchlist  # type: ignore[attr-defined]
+
+    return app_state

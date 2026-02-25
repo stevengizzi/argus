@@ -197,6 +197,29 @@ export interface SessionSummaryResponse {
   timestamp: string;
 }
 
+// Watchlist
+export type VwapState = 'watching' | 'above_vwap' | 'below_vwap' | 'entered';
+
+export interface SparklinePoint {
+  timestamp: string;
+  price: number;
+}
+
+export interface WatchlistItem {
+  symbol: string;
+  current_price: number;
+  gap_pct: number;
+  strategies: string[];  // ["orb", "scalp", "vwap_reclaim"]
+  vwap_state: VwapState;
+  sparkline: SparklinePoint[];
+}
+
+export interface WatchlistResponse {
+  symbols: WatchlistItem[];
+  count: number;
+  timestamp: string;
+}
+
 // Orchestrator
 export interface AllocationInfo {
   strategy_id: string;

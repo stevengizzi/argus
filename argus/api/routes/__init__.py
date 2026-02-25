@@ -16,6 +16,7 @@ from argus.api.routes.positions import router as positions_router
 from argus.api.routes.session import router as session_router
 from argus.api.routes.strategies import router as strategies_router
 from argus.api.routes.trades import router as trades_router
+from argus.api.routes.watchlist import router as watchlist_router
 
 # Main API router that aggregates all route modules
 api_router = APIRouter()
@@ -31,3 +32,4 @@ api_router.include_router(strategies_router, prefix="/strategies", tags=["strate
 api_router.include_router(controls_router, prefix="/controls", tags=["controls"])
 api_router.include_router(orchestrator_router, prefix="/orchestrator", tags=["orchestrator"])
 api_router.include_router(session_router, tags=["session"])
+api_router.include_router(watchlist_router, prefix="/watchlist", tags=["watchlist"])

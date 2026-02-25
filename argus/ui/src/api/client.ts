@@ -16,6 +16,7 @@ import type {
   StrategiesResponse,
   TokenResponse,
   TradesResponse,
+  WatchlistResponse,
 } from './types';
 
 const API_BASE = '/api/v1';
@@ -167,4 +168,9 @@ export async function getSessionSummary(
 ): Promise<SessionSummaryResponse> {
   const query = date ? `?date=${date}` : '';
   return fetchWithAuth<SessionSummaryResponse>(`/session-summary${query}`);
+}
+
+// Watchlist endpoints
+export async function getWatchlist(): Promise<WatchlistResponse> {
+  return fetchWithAuth<WatchlistResponse>('/watchlist');
 }
