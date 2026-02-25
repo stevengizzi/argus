@@ -158,11 +158,14 @@ describe('WatchlistItem', () => {
     expect(container).toHaveClass('border-l-argus-profit');
   });
 
-  it('does not show left border for non-entered states', () => {
+  it('has transparent left border for non-entered states (alignment)', () => {
     render(<WatchlistItem item={mockItem} />);
 
     const container = screen.getByRole('button');
-    expect(container).not.toHaveClass('border-l-[3px]');
+    // All items have the border width for alignment, but non-entered are transparent
+    expect(container).toHaveClass('border-l-[3px]');
+    expect(container).toHaveClass('border-l-transparent');
+    expect(container).not.toHaveClass('border-l-argus-profit');
   });
 
   it('calls onClick when clicked', () => {

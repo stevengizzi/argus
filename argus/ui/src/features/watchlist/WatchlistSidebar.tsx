@@ -57,7 +57,6 @@ export function WatchlistSidebar({ className = '', onSymbolClick }: WatchlistSid
   }, [isDesktop, isMobileOpen, setMobileOpen]);
 
   const symbols = data?.symbols ?? [];
-  const timestamp = data?.timestamp ?? null;
 
   // Sort symbols based on current sort mode
   const sortedSymbols = useMemo(() => {
@@ -87,7 +86,7 @@ export function WatchlistSidebar({ className = '', onSymbolClick }: WatchlistSid
         className={`relative flex flex-col bg-argus-surface border-l border-argus-border transition-all duration-300 ${className}`}
         style={{ width: isCollapsed ? 48 : SIDEBAR_WIDTH }}
       >
-        {/* Collapse toggle button */}
+        {/* Collapse toggle button - outside overflow-hidden area */}
         <button
           onClick={toggleCollapsed}
           className="absolute -left-3 top-4 z-10 w-6 h-6 bg-argus-surface-2 border border-argus-border rounded-full flex items-center justify-center hover:bg-argus-surface-3 transition-colors"
@@ -100,23 +99,41 @@ export function WatchlistSidebar({ className = '', onSymbolClick }: WatchlistSid
           )}
         </button>
 
-        {isCollapsed ? (
-          // Collapsed state: show icon only
-          <div className="flex flex-col items-center pt-12">
-            <List className="w-5 h-5 text-argus-text-dim" />
-            <span className="mt-2 text-xs text-argus-text-dim [writing-mode:vertical-rl] rotate-180">
-              Watchlist
-            </span>
-          </div>
-        ) : (
-          // Expanded state: full content
-          <WatchlistContent
-            symbols={sortedSymbols}
-            isLoading={isLoading}
-            timestamp={timestamp}
-            onSymbolClick={onSymbolClick}
-          />
-        )}
+        {/* Content area with overflow hidden for clean transitions */}
+        <div className="flex-1 overflow-hidden">
+          <AnimatePresence mode="wait">
+            {isCollapsed ? (
+              <motion.div
+                key="collapsed"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.15 }}
+                className="flex flex-col items-center pt-12"
+              >
+                <List className="w-5 h-5 text-argus-text-dim" />
+                <span className="mt-2 text-xs text-argus-text-dim [writing-mode:vertical-rl] rotate-180">
+                  Watchlist
+                </span>
+              </motion.div>
+            ) : (
+              <motion.div
+                key="expanded"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.15 }}
+                className="flex flex-col h-full"
+              >
+                <WatchlistContent
+                  symbols={sortedSymbols}
+                  isLoading={isLoading}
+                  onSymbolClick={onSymbolClick}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
       </aside>
     );
   }
@@ -182,7 +199,6 @@ export function WatchlistSidebar({ className = '', onSymbolClick }: WatchlistSid
               <WatchlistContent
                 symbols={sortedSymbols}
                 isLoading={isLoading}
-                timestamp={timestamp}
                 onSymbolClick={(symbol) => {
                   onSymbolClick?.(symbol);
                   setMobileOpen(false); // Close panel after clicking
@@ -199,11 +215,10 @@ export function WatchlistSidebar({ className = '', onSymbolClick }: WatchlistSid
 interface WatchlistContentProps {
   symbols: WatchlistItemType[];
   isLoading: boolean;
-  timestamp: string | null;
   onSymbolClick?: (symbol: string) => void;
 }
 
-function WatchlistContent({ symbols, isLoading, timestamp, onSymbolClick }: WatchlistContentProps) {
+function WatchlistContent({ symbols, isLoading, onSymbolClick }: WatchlistContentProps) {
   const sortMode = useWatchlistUIStore((s) => s.sortMode);
   const setSortMode = useWatchlistUIStore((s) => s.setSortMode);
 
@@ -236,23 +251,16 @@ function WatchlistContent({ symbols, isLoading, timestamp, onSymbolClick }: Watc
 
   return (
     <>
-      {/* Header with sort control and scan time */}
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-argus-border">
-        <TrendingUp className="w-4 h-4 text-argus-accent shrink-0" />
-        <span className="text-sm font-medium text-argus-text">Watchlist</span>
-        <span className="text-xs text-argus-text-dim">({symbols.length})</span>
-
-        {/* Scan time */}
-        {timestamp && (
-          <span className="text-xs text-argus-text-dim">
-            · {formatRelativeTime(timestamp)}
-          </span>
-        )}
+      {/* Header with sort control */}
+      <div className="flex items-center justify-between px-3 py-2 border-b border-argus-border">
+        <div className="flex items-center gap-2">
+          <TrendingUp className="w-4 h-4 text-argus-accent shrink-0" />
+          <span className="text-sm font-medium text-argus-text">Watchlist</span>
+          <span className="text-xs text-argus-text-dim">({symbols.length})</span>
+        </div>
 
         {/* Sort dropdown */}
-        <div className="ml-auto relative">
-          <SortDropdown value={sortMode} onChange={setSortMode} />
-        </div>
+        <SortDropdown value={sortMode} onChange={setSortMode} />
       </div>
 
       {/* Symbol list */}
@@ -320,24 +328,4 @@ function WatchlistItemSkeleton() {
       </div>
     </div>
   );
-}
-
-/**
- * Format timestamp as relative time (e.g., "2m ago", "30s ago")
- */
-function formatRelativeTime(isoTimestamp: string): string {
-  const now = new Date();
-  const then = new Date(isoTimestamp);
-  const diffMs = now.getTime() - then.getTime();
-  const diffSeconds = Math.floor(diffMs / 1000);
-
-  if (diffSeconds < 60) {
-    return `${diffSeconds}s ago`;
-  }
-  const diffMinutes = Math.floor(diffSeconds / 60);
-  if (diffMinutes < 60) {
-    return `${diffMinutes}m ago`;
-  }
-  const diffHours = Math.floor(diffMinutes / 60);
-  return `${diffHours}h ago`;
 }

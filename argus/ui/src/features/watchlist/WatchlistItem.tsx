@@ -58,8 +58,8 @@ export function WatchlistItem({ item, onClick }: WatchlistItemProps) {
 
   return (
     <div
-      className={`py-1.5 px-2 border-b border-argus-border/50 hover:bg-argus-surface-2/50 transition-colors cursor-pointer ${
-        isEntered ? 'border-l-[3px] border-l-argus-profit' : ''
+      className={`py-1.5 pl-2 pr-3 border-b border-argus-border/50 hover:bg-argus-surface-2/50 transition-colors cursor-pointer border-l-[3px] ${
+        isEntered ? 'border-l-argus-profit' : 'border-l-transparent'
       }`}
       onClick={handleClick}
       role="button"
