@@ -9,6 +9,7 @@ from argus.strategies.base_strategy import BaseStrategy
 from argus.strategies.orb_base import OrbBaseStrategy, OrbSymbolState
 from argus.strategies.orb_breakout import OrbBreakoutStrategy
 from argus.strategies.orb_scalp import OrbScalpStrategy
+from argus.strategies.vwap_reclaim import VwapReclaimStrategy, VwapSymbolState
 
 __all__ = [
     "BaseStrategy",
@@ -16,4 +17,6 @@ __all__ = [
     "OrbBreakoutStrategy",
     "OrbScalpStrategy",
     "OrbSymbolState",
+    "VwapReclaimStrategy",
+    "VwapSymbolState",
 ]

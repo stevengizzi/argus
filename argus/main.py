@@ -39,6 +39,7 @@ from argus.core.config import (
     load_config,
     load_orb_config,
     load_orb_scalp_config,
+    load_vwap_reclaim_config,
     load_yaml_file,
 )
 from argus.core.event_bus import EventBus
@@ -56,6 +57,7 @@ from argus.execution.alpaca_broker import AlpacaBroker
 from argus.execution.order_manager import OrderManager
 from argus.strategies.orb_breakout import OrbBreakoutStrategy
 from argus.strategies.orb_scalp import OrbScalpStrategy
+from argus.strategies.vwap_reclaim import VwapReclaimStrategy
 # fmt: on
 
 if TYPE_CHECKING:
@@ -281,6 +283,19 @@ class ArgusSystem:
             scalp_strategy.set_watchlist(symbols)
             strategies_created.append("OrbScalp")
 
+        # VWAP Reclaim (optional — only if config file exists)
+        vwap_reclaim_strategy: VwapReclaimStrategy | None = None
+        vwap_yaml = self._config_dir / "strategies" / "vwap_reclaim.yaml"
+        if vwap_yaml.exists():
+            vwap_config = load_vwap_reclaim_config(vwap_yaml)
+            vwap_reclaim_strategy = VwapReclaimStrategy(
+                config=vwap_config,
+                data_service=self._data_service,
+                clock=self._clock,
+            )
+            vwap_reclaim_strategy.set_watchlist(symbols)
+            strategies_created.append("VwapReclaim")
+
         # Note: is_active and allocated_capital set by Orchestrator in Phase 9
         self._health_monitor.update_component(
             "strategy",
@@ -305,6 +320,8 @@ class ArgusSystem:
         self._orchestrator.register_strategy(orb_strategy)
         if scalp_strategy is not None:
             self._orchestrator.register_strategy(scalp_strategy)
+        if vwap_reclaim_strategy is not None:
+            self._orchestrator.register_strategy(vwap_reclaim_strategy)
 
         await self._orchestrator.start()
 
@@ -322,6 +339,12 @@ class ArgusSystem:
             ComponentStatus.HEALTHY if active_count > 0 else ComponentStatus.DEGRADED,
             message=f"{active_count}/{total_count} strategies active",
         )
+
+        # Per-strategy health components
+        if vwap_reclaim_strategy is not None:
+            self._health_monitor.update_component(
+                "strategy_vwap_reclaim", ComponentStatus.HEALTHY, "VWAP Reclaim running"
+            )
 
         # --- Phase 10: Order Manager ---
         logger.info("[10/12] Starting order manager...")
