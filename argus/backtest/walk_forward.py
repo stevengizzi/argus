@@ -35,6 +35,8 @@ from argus.backtest.replay_harness import ReplayHarness
 from argus.backtest.vectorbt_orb import SweepConfig, run_sweep
 from argus.backtest.vectorbt_orb_scalp import ScalpSweepConfig
 from argus.backtest.vectorbt_orb_scalp import run_sweep as run_scalp_sweep
+from argus.backtest.vectorbt_vwap_reclaim import VwapReclaimSweepConfig
+from argus.backtest.vectorbt_vwap_reclaim import run_sweep as run_vwap_reclaim_sweep
 
 logger = logging.getLogger(__name__)
 
@@ -78,6 +80,23 @@ class WalkForwardConfig:
     # ORB Scalp parameter grid (used when strategy="orb_scalp")
     scalp_target_r_values: list[float] = field(default_factory=lambda: [0.2, 0.3, 0.4, 0.5])
     max_hold_bars_values: list[int] = field(default_factory=lambda: [1, 2, 3, 5])
+
+    # VWAP Reclaim parameter grid (used when strategy="vwap_reclaim")
+    vwap_min_pullback_pct_list: list[float] = field(
+        default_factory=lambda: [0.001, 0.002, 0.003, 0.005]
+    )
+    vwap_min_pullback_bars_list: list[int] = field(
+        default_factory=lambda: [2, 3, 5, 8]
+    )
+    vwap_volume_multiplier_list: list[float] = field(
+        default_factory=lambda: [1.0, 1.2, 1.5, 2.0]
+    )
+    vwap_target_r_list: list[float] = field(
+        default_factory=lambda: [0.5, 1.0, 1.5]
+    )
+    vwap_time_stop_bars_list: list[int] = field(
+        default_factory=lambda: [10, 15, 20, 30]
+    )
 
     # Output
     output_dir: str = "data/backtest_runs/walk_forward"
@@ -220,6 +239,8 @@ async def optimize_in_sample(
     """
     if config.strategy == "orb_scalp":
         return await _optimize_in_sample_scalp(is_start, is_end, config)
+    elif config.strategy == "vwap_reclaim":
+        return await _optimize_in_sample_vwap_reclaim(is_start, is_end, config)
     else:
         return await _optimize_in_sample_orb(is_start, is_end, config)
 
@@ -369,6 +390,82 @@ async def _optimize_in_sample_scalp(
     return best_params, is_metrics
 
 
+async def _optimize_in_sample_vwap_reclaim(
+    is_start: date,
+    is_end: date,
+    config: WalkForwardConfig,
+) -> tuple[dict[str, Any], dict[str, float]]:
+    """Run VectorBT VWAP Reclaim sweep on IS period."""
+    sweep_config = VwapReclaimSweepConfig(
+        data_dir=Path(config.data_dir),
+        symbols=config.symbols or [],
+        start_date=is_start,
+        end_date=is_end,
+        output_dir=Path(config.output_dir) / "is_sweeps",
+        min_pullback_pct_list=config.vwap_min_pullback_pct_list,
+        min_pullback_bars_list=config.vwap_min_pullback_bars_list,
+        volume_multiplier_list=config.vwap_volume_multiplier_list,
+        target_r_list=config.vwap_target_r_list,
+        time_stop_bars_list=config.vwap_time_stop_bars_list,
+    )
+
+    loop = asyncio.get_running_loop()
+    results_df = await loop.run_in_executor(None, run_vwap_reclaim_sweep, sweep_config)
+
+    if results_df.empty:
+        raise NoQualifyingParamsError("VectorBT VWAP Reclaim sweep produced no results")
+
+    param_cols = [
+        "min_pullback_pct",
+        "min_pullback_bars",
+        "volume_multiplier",
+        "target_r",
+        "time_stop_bars",
+    ]
+
+    aggregated = (
+        results_df.groupby(param_cols)
+        .agg(
+            total_trades=("total_trades", "sum"),
+            sharpe_ratio=("sharpe_ratio", "mean"),
+            win_rate=("win_rate", "mean"),
+            profit_factor=("profit_factor", "mean"),
+            total_return_pct=("total_return_pct", "sum"),
+            max_drawdown_pct=("max_drawdown_pct", "max"),
+        )
+        .reset_index()
+    )
+
+    qualifying = aggregated[aggregated["total_trades"] >= config.min_trades]
+
+    if qualifying.empty:
+        max_trades = aggregated["total_trades"].max() if not aggregated.empty else 0
+        raise NoQualifyingParamsError(
+            f"No parameter set meets min_trades={config.min_trades}. Max trades found: {max_trades}"
+        )
+
+    if config.optimization_metric == "sharpe":
+        metric_col = "sharpe_ratio"
+    else:
+        metric_col = config.optimization_metric
+    best_row = qualifying.loc[qualifying[metric_col].idxmax()]
+
+    best_params = {col: best_row[col] for col in param_cols}
+
+    total_pnl_dollars = float(best_row["total_return_pct"]) * config.initial_cash / 100.0
+
+    is_metrics = {
+        "total_trades": int(best_row["total_trades"]),
+        "sharpe": float(best_row["sharpe_ratio"]),
+        "win_rate": float(best_row["win_rate"]),
+        "profit_factor": float(best_row["profit_factor"]),
+        "total_pnl": total_pnl_dollars,
+        "max_drawdown": float(best_row["max_drawdown_pct"]),
+    }
+
+    return best_params, is_metrics
+
+
 async def validate_out_of_sample(
     oos_start: date,
     oos_end: date,
@@ -394,6 +491,8 @@ async def validate_out_of_sample(
     """
     if config.strategy == "orb_scalp":
         return await _validate_oos_scalp(oos_start, oos_end, best_params, config)
+    elif config.strategy == "vwap_reclaim":
+        return await _validate_oos_vwap_reclaim(oos_start, oos_end, best_params, config)
     else:
         return await _validate_oos_orb(oos_start, oos_end, best_params, config)
 
@@ -477,6 +576,69 @@ async def _validate_oos_scalp(
         slippage_per_share=config.slippage_per_share,
         scanner_min_gap_pct=scanner_gap_pct,
         config_overrides=config_overrides,
+    )
+
+    harness = ReplayHarness(backtest_config)
+    result = await harness.run()
+
+    return {
+        "total_trades": result.total_trades,
+        "win_rate": result.win_rate,
+        "profit_factor": result.profit_factor if result.profit_factor != float("inf") else 0.0,
+        "sharpe": result.sharpe_ratio,
+        "total_pnl": result.final_equity - config.initial_cash,
+        "max_drawdown": result.max_drawdown_pct,
+        "avg_r_multiple": result.avg_r_multiple,
+    }
+
+
+async def _validate_oos_vwap_reclaim(
+    oos_start: date,
+    oos_end: date,
+    best_params: dict[str, Any],
+    config: WalkForwardConfig,
+) -> dict[str, Any]:
+    """Run Replay Harness for VWAP Reclaim on OOS period.
+
+    Translates VectorBT VWAP Reclaim param names to production config:
+    - min_pullback_pct → vwap_reclaim.min_pullback_pct
+    - min_pullback_bars → vwap_reclaim.min_pullback_bars
+    - volume_multiplier → vwap_reclaim.volume_confirmation_multiplier
+    - target_r → vwap_reclaim.target_1_r
+    - time_stop_bars → vwap_reclaim.time_stop_minutes
+    """
+    # Convert time_stop_bars to minutes (1 bar = 1 minute for 1m bars)
+    time_stop_minutes = int(best_params["time_stop_bars"])
+
+    config_overrides = {
+        "vwap_reclaim.min_pullback_pct": float(best_params["min_pullback_pct"]),
+        "vwap_reclaim.min_pullback_bars": int(best_params["min_pullback_bars"]),
+        "vwap_reclaim.volume_confirmation_multiplier": float(best_params["volume_multiplier"]),
+        "vwap_reclaim.target_1_r": float(best_params["target_r"]),
+        "vwap_reclaim.time_stop_minutes": time_stop_minutes,
+    }
+
+    # Use default 2% gap for VWAP Reclaim
+    scanner_gap_pct = 0.02
+
+    backtest_config = BacktestConfig(
+        data_dir=Path(config.data_dir),
+        output_dir=Path(config.output_dir) / "oos_runs",
+        symbols=config.symbols,
+        start_date=oos_start,
+        end_date=oos_end,
+        strategy_id="strat_vwap_reclaim",
+        strategy_type=StrategyType.VWAP_RECLAIM,
+        initial_cash=config.initial_cash,
+        slippage_per_share=config.slippage_per_share,
+        scanner_min_gap_pct=scanner_gap_pct,
+        config_overrides=config_overrides,
+        # Pass VWAP-specific params for Replay Harness
+        vwap_min_pullback_pct=float(best_params["min_pullback_pct"]),
+        vwap_min_pullback_bars=int(best_params["min_pullback_bars"]),
+        vwap_volume_multiplier=float(best_params["volume_multiplier"]),
+        vwap_target_1_r=float(best_params["target_r"]),
+        vwap_time_stop_minutes=time_stop_minutes,
     )
 
     harness = ReplayHarness(backtest_config)
@@ -1054,6 +1216,8 @@ async def evaluate_fixed_params_on_is(
     """
     if config.strategy == "orb_scalp":
         return await _evaluate_fixed_params_scalp(is_start, is_end, fixed_params, config)
+    elif config.strategy == "vwap_reclaim":
+        return await _evaluate_fixed_params_vwap_reclaim(is_start, is_end, fixed_params, config)
     else:
         return await _evaluate_fixed_params_orb(is_start, is_end, fixed_params, config)
 
@@ -1130,6 +1294,58 @@ async def _evaluate_fixed_params_scalp(
 
     loop = asyncio.get_running_loop()
     results_df = await loop.run_in_executor(None, run_scalp_sweep, sweep_config)
+
+    if results_df.empty:
+        return {
+            "total_trades": 0,
+            "sharpe": 0.0,
+            "win_rate": 0.0,
+            "profit_factor": 0.0,
+            "total_pnl": 0.0,
+            "max_drawdown": 0.0,
+        }
+
+    total_trades = int(results_df["total_trades"].sum())
+    avg_sharpe = float(results_df["sharpe_ratio"].mean())
+    avg_win_rate = float(results_df["win_rate"].mean())
+    avg_pf = float(results_df["profit_factor"].mean())
+    total_return = float(results_df["total_return_pct"].sum())
+    max_dd = float(results_df["max_drawdown_pct"].max())
+
+    total_pnl_dollars = total_return * config.initial_cash / 100.0
+
+    return {
+        "total_trades": total_trades,
+        "sharpe": avg_sharpe,
+        "win_rate": avg_win_rate,
+        "profit_factor": avg_pf,
+        "total_pnl": total_pnl_dollars,
+        "max_drawdown": max_dd,
+    }
+
+
+async def _evaluate_fixed_params_vwap_reclaim(
+    is_start: date,
+    is_end: date,
+    fixed_params: dict[str, Any],
+    config: WalkForwardConfig,
+) -> dict[str, float]:
+    """Evaluate fixed VWAP Reclaim params on IS period using VectorBT."""
+    sweep_config = VwapReclaimSweepConfig(
+        data_dir=Path(config.data_dir),
+        symbols=config.symbols or [],
+        start_date=is_start,
+        end_date=is_end,
+        output_dir=Path(config.output_dir) / "is_fixed",
+        min_pullback_pct_list=[float(fixed_params["min_pullback_pct"])],
+        min_pullback_bars_list=[int(fixed_params["min_pullback_bars"])],
+        volume_multiplier_list=[float(fixed_params["volume_multiplier"])],
+        target_r_list=[float(fixed_params["target_r"])],
+        time_stop_bars_list=[int(fixed_params["time_stop_bars"])],
+    )
+
+    loop = asyncio.get_running_loop()
+    results_df = await loop.run_in_executor(None, run_vwap_reclaim_sweep, sweep_config)
 
     if results_df.empty:
         return {
@@ -1517,8 +1733,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--strategy",
         default="orb",
-        choices=["orb", "orb_scalp"],
-        help="Strategy to run: orb (ORB Breakout) or orb_scalp (ORB Scalp)",
+        choices=["orb", "orb_scalp", "vwap_reclaim"],
+        help="Strategy to run: orb (ORB Breakout), orb_scalp (ORB Scalp), or vwap_reclaim (VWAP Reclaim)",
     )
 
     # Fixed-params mode
@@ -1576,6 +1792,38 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=2,
         help="Fixed max hold bars (for orb_scalp strategy, 1 bar = 60s)",
+    )
+
+    # Fixed params for VWAP Reclaim
+    parser.add_argument(
+        "--fp-vwap-min-pullback-pct",
+        type=float,
+        default=0.002,
+        help="Fixed min pullback pct (for vwap_reclaim strategy)",
+    )
+    parser.add_argument(
+        "--fp-vwap-min-pullback-bars",
+        type=int,
+        default=3,
+        help="Fixed min pullback bars (for vwap_reclaim strategy)",
+    )
+    parser.add_argument(
+        "--fp-vwap-volume-multiplier",
+        type=float,
+        default=1.2,
+        help="Fixed volume multiplier (for vwap_reclaim strategy)",
+    )
+    parser.add_argument(
+        "--fp-vwap-target-r",
+        type=float,
+        default=1.0,
+        help="Fixed target R (for vwap_reclaim strategy)",
+    )
+    parser.add_argument(
+        "--fp-vwap-time-stop-bars",
+        type=int,
+        default=15,
+        help="Fixed time stop bars (for vwap_reclaim strategy)",
     )
 
     # Cross-validation mode
@@ -1738,6 +1986,20 @@ def main() -> None:
             params_str = (
                 f"Fixed Parameters:  scalp_target_r={args.fp_scalp_target_r}, "
                 f"max_hold_bars={args.fp_max_hold_bars}"
+            )
+        elif args.strategy == "vwap_reclaim":
+            fixed_params = {
+                "min_pullback_pct": args.fp_vwap_min_pullback_pct,
+                "min_pullback_bars": args.fp_vwap_min_pullback_bars,
+                "volume_multiplier": args.fp_vwap_volume_multiplier,
+                "target_r": args.fp_vwap_target_r,
+                "time_stop_bars": args.fp_vwap_time_stop_bars,
+            }
+            params_str = (
+                f"Fixed Parameters:  min_pullback_pct={args.fp_vwap_min_pullback_pct}, "
+                f"min_pullback_bars={args.fp_vwap_min_pullback_bars}\n"
+                f"                   volume_mult={args.fp_vwap_volume_multiplier}, "
+                f"target_r={args.fp_vwap_target_r}, time_stop_bars={args.fp_vwap_time_stop_bars}"
             )
         else:
             fixed_params = {

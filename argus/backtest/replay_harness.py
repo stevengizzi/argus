@@ -38,10 +38,13 @@ from argus.backtest.scanner_simulator import DailyWatchlist, ScannerSimulator
 from argus.backtest.tick_synthesizer import synthesize_ticks
 from argus.core.clock import FixedClock
 from argus.core.config import (
+    OperatingWindow,
     OrbBreakoutConfig,
     OrbScalpConfig,
     OrderManagerConfig,
     RiskConfig,
+    StrategyRiskLimits,
+    VwapReclaimConfig,
     load_yaml_file,
 )
 from argus.core.event_bus import EventBus
@@ -54,6 +57,7 @@ from argus.models.trading import OrderStatus
 from argus.strategies.base_strategy import BaseStrategy
 from argus.strategies.orb_breakout import OrbBreakoutStrategy
 from argus.strategies.orb_scalp import OrbScalpStrategy
+from argus.strategies.vwap_reclaim import VwapReclaimStrategy
 
 logger = logging.getLogger(__name__)
 
@@ -340,10 +344,12 @@ class ReplayHarness:
             config_dir: Path to config directory.
 
         Returns:
-            Initialized strategy instance (OrbBreakoutStrategy or OrbScalpStrategy).
+            Initialized strategy instance.
         """
         if self._config.strategy_type == StrategyType.ORB_SCALP:
             return self._create_orb_scalp_strategy(config_dir)
+        elif self._config.strategy_type == StrategyType.VWAP_RECLAIM:
+            return self._create_vwap_reclaim_strategy(config_dir)
         else:
             return self._create_orb_breakout_strategy(config_dir)
 
@@ -389,6 +395,45 @@ class ReplayHarness:
             clock=self._clock,
         )
 
+    def _create_vwap_reclaim_strategy(self, config_dir: Path) -> VwapReclaimStrategy:
+        """Create VwapReclaimStrategy with config overrides applied."""
+        vwap_file = config_dir / "strategies" / "vwap_reclaim.yaml"
+        if vwap_file.exists():
+            data = load_yaml_file(vwap_file)
+            config = VwapReclaimConfig(**data)
+        else:
+            # Build from BacktestConfig params or use defaults
+            config = VwapReclaimConfig(
+                strategy_id=self._config.strategy_id or "strat_vwap_reclaim",
+                name="VWAP Reclaim",
+                min_pullback_pct=self._config.vwap_min_pullback_pct or 0.002,
+                min_pullback_bars=self._config.vwap_min_pullback_bars or 3,
+                volume_confirmation_multiplier=self._config.vwap_volume_multiplier or 1.2,
+                target_1_r=self._config.vwap_target_1_r or 1.0,
+                target_2_r=self._config.vwap_target_2_r or 2.0,
+                time_stop_minutes=self._config.vwap_time_stop_minutes or 30,
+                stop_buffer_pct=self._config.vwap_stop_buffer_pct or 0.001,
+                max_pullback_pct=self._config.vwap_max_pullback_pct or 0.02,
+                max_chase_above_vwap_pct=self._config.vwap_max_chase_pct or 0.003,
+                operating_window=OperatingWindow(
+                    earliest_entry="10:00", latest_entry="12:00"
+                ),
+                risk_limits=StrategyRiskLimits(
+                    max_loss_per_trade_pct=0.01,
+                    max_trades_per_day=8,
+                    max_concurrent_positions=3,
+                ),
+            )
+
+        # Apply config overrides
+        config = self._apply_vwap_reclaim_overrides(config)
+
+        return VwapReclaimStrategy(
+            config=config,
+            data_service=self._data_service,
+            clock=self._clock,
+        )
+
     def _apply_orb_breakout_overrides(self, config: OrbBreakoutConfig) -> OrbBreakoutConfig:
         """Apply config overrides for ORB Breakout."""
         if not self._config.config_overrides:
@@ -424,6 +469,24 @@ class ReplayHarness:
                 logger.info("Config override: %s = %s", field_name, value)
 
         return OrbScalpConfig(**config_dict)
+
+    def _apply_vwap_reclaim_overrides(self, config: VwapReclaimConfig) -> VwapReclaimConfig:
+        """Apply config overrides for VWAP Reclaim."""
+        if not self._config.config_overrides:
+            return config
+
+        config_dict = config.model_dump()
+
+        for key, value in self._config.config_overrides.items():
+            # Handle nested keys like "vwap_reclaim.min_pullback_pct"
+            parts = key.split(".")
+            field_name = parts[1] if parts[0] == "vwap_reclaim" and len(parts) > 1 else key
+
+            if field_name in config_dict:
+                config_dict[field_name] = value
+                logger.info("Config override: %s = %s", field_name, value)
+
+        return VwapReclaimConfig(**config_dict)
 
     async def _run_trading_day(self, trading_day: date, watchlist: DailyWatchlist | None) -> None:
         """Run a single trading day through the pipeline."""

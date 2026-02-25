@@ -100,3 +100,14 @@ class BacktestConfig(BaseModel):
     # Config overrides (applied on top of YAML config)
     # Keys are dot-separated paths: {"orb_breakout.opening_range_minutes": 15}
     config_overrides: dict[str, Any] = Field(default_factory=dict)
+
+    # VWAP Reclaim params (used when strategy_type=VWAP_RECLAIM)
+    vwap_min_pullback_pct: float | None = None
+    vwap_min_pullback_bars: int | None = None
+    vwap_volume_multiplier: float | None = None
+    vwap_target_1_r: float | None = None
+    vwap_target_2_r: float | None = None
+    vwap_time_stop_minutes: int | None = None
+    vwap_stop_buffer_pct: float | None = None
+    vwap_max_pullback_pct: float | None = None
+    vwap_max_chase_pct: float | None = None
