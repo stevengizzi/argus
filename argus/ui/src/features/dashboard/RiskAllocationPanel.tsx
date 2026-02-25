@@ -1,18 +1,18 @@
 /**
  * Risk and Allocation panel for Dashboard.
  *
- * Combines CapitalAllocation (17-A, 18.75) and RiskGauge (17-C) with data fetching.
- * Handles orchestrator unavailability gracefully (dev mode, system starting).
+ * Combines CapitalAllocation (17-A, 18.75), RiskGauge (17-C), and MarketRegimeCard
+ * with data fetching. Handles orchestrator unavailability gracefully (dev mode,
+ * system starting).
  *
  * IMPORTANT: This component always renders the same DOM structure.
  * It never conditionally swaps between skeleton and content, because
  * doing so tears down child components (losing refs, replaying animations).
  * Children handle empty/loading states internally.
  *
- * Layout:
- * - Desktop: Donut and risk gauges in a horizontal row
- * - Tablet: Same row, slightly smaller
- * - Mobile: Donut full width, risk gauges in 2-column grid below
+ * Layout (Sprint 18.75 Fix A):
+ * - Desktop/Tablet: 3-card equal-width grid (Capital, Risk, Regime)
+ * - Mobile: All 3 cards stacked vertically, full width each
  */
 
 import { useMemo } from 'react';
@@ -21,6 +21,7 @@ import { CapitalAllocation } from '../../components/CapitalAllocation';
 import { RiskGauge } from '../../components/RiskGauge';
 import { Card } from '../../components/Card';
 import { CardHeader } from '../../components/CardHeader';
+import { MarketRegimeCard } from './MarketRegimeCard';
 import { useOrchestratorStatus, usePerformance, useAccount } from '../../hooks';
 import { staggerItem } from '../../utils/motion';
 import { useIsMultiColumn } from '../../hooks/useMediaQuery';
@@ -73,48 +74,47 @@ export function RiskAllocationPanel() {
   }, [accountData?.equity, accountData?.daily_pnl, performanceData?.metrics.net_pnl]);
 
   if (isMultiColumn) {
-    // Desktop/Tablet: horizontal layout
+    // Desktop/Tablet: 3-card equal-width grid
     return (
       <motion.div
         className="grid grid-cols-3 gap-4 md:gap-5 lg:gap-6"
         variants={staggerItem}
       >
-        {/* Capital Allocation */}
-        <div className="col-span-1">
-          <CapitalAllocation
-            allocations={allocations}
-            cashReservePct={cashReservePct}
-            totalDeployedPct={totalDeployedPct}
-            totalDeployedCapital={totalDeployedCapital}
-            totalEquity={totalEquity}
-          />
-        </div>
+        {/* Capital Allocation (1/3) */}
+        <CapitalAllocation
+          allocations={allocations}
+          cashReservePct={cashReservePct}
+          totalDeployedPct={totalDeployedPct}
+          totalDeployedCapital={totalDeployedCapital}
+          totalEquity={totalEquity}
+        />
 
-        {/* Risk Gauges */}
-        <div className="col-span-2">
-          <Card className="h-full">
-            <CardHeader title="Risk Budget" />
-            <div className="flex justify-around items-center h-full pt-2">
-              <RiskGauge
-                label="Daily Risk"
-                value={dailyRiskConsumed}
-                maxLabel={`${(DAILY_LOSS_LIMIT_PCT * 100).toFixed(0)}% limit`}
-                size="md"
-              />
-              <RiskGauge
-                label="Weekly Risk"
-                value={weeklyRiskConsumed}
-                maxLabel={`${(WEEKLY_LOSS_LIMIT_PCT * 100).toFixed(0)}% limit`}
-                size="md"
-              />
-            </div>
-          </Card>
-        </div>
+        {/* Risk Budget (1/3) */}
+        <Card className="h-full">
+          <CardHeader title="Risk Budget" />
+          <div className="flex justify-around items-center py-4 min-h-[160px]">
+            <RiskGauge
+              label="Daily Risk"
+              value={dailyRiskConsumed}
+              maxLabel={`${(DAILY_LOSS_LIMIT_PCT * 100).toFixed(0)}% limit`}
+              size="md"
+            />
+            <RiskGauge
+              label="Weekly Risk"
+              value={weeklyRiskConsumed}
+              maxLabel={`${(WEEKLY_LOSS_LIMIT_PCT * 100).toFixed(0)}% limit`}
+              size="md"
+            />
+          </div>
+        </Card>
+
+        {/* Market Regime (1/3) */}
+        <MarketRegimeCard />
       </motion.div>
     );
   }
 
-  // Mobile: stacked layout
+  // Mobile: stacked layout (all 3 cards full width)
   return (
     <>
       <motion.div variants={staggerItem}>
@@ -130,7 +130,7 @@ export function RiskAllocationPanel() {
       <motion.div variants={staggerItem}>
         <Card>
           <CardHeader title="Risk Budget" />
-          <div className="grid grid-cols-2 gap-4 pt-2">
+          <div className="grid grid-cols-2 gap-4 py-4">
             <RiskGauge
               label="Daily Risk"
               value={dailyRiskConsumed}
@@ -145,6 +145,10 @@ export function RiskAllocationPanel() {
             />
           </div>
         </Card>
+      </motion.div>
+
+      <motion.div variants={staggerItem}>
+        <MarketRegimeCard />
       </motion.div>
     </>
   );

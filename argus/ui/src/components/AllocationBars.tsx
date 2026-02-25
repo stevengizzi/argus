@@ -1,10 +1,10 @@
 /**
  * Horizontal stacked bars visualization for capital allocation.
  *
- * Sprint 18.75 Session 3:
+ * Sprint 18.75 Session 3, Fix Session A:
  * - One bar per strategy + reserve
  * - Each bar shows: deployed (solid), available (desaturated), throttled (gray)
- * - Responsive: labels stacked on mobile, side-by-side on desktop
+ * - Consistent layout at all breakpoints: label above, bar full width, values below
  * - Hover tooltips on desktop
  * - Staggered animation on mount
  */
@@ -181,11 +181,6 @@ export function AllocationBars({
     return bars;
   }, [allocations, cashReservePct, totalEquity]);
 
-  // Calculate max allocation for scaling (so widest bar = 100%)
-  const maxAllocationPct = useMemo(() => {
-    if (barData.length === 0) return 100;
-    return Math.max(...barData.map((b) => b.allocationPct));
-  }, [barData]);
 
   const handleSegmentHover = useCallback(
     (
@@ -245,118 +240,80 @@ export function AllocationBars({
           <motion.div
             key={bar.id}
             variants={staggerItem}
-            className="space-y-1"
+            className="space-y-1.5"
           >
-            {/* Mobile: Labels above bar */}
-            <div className="flex items-center justify-between sm:hidden">
-              <div className="flex items-center gap-2">
-                <span
-                  className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                  style={{ backgroundColor: bar.color }}
-                />
-                <span className="text-sm font-medium text-argus-text truncate">
-                  {bar.name}
+            {/* Strategy name above bar (all breakpoints) */}
+            <div className="flex items-center gap-2">
+              <span
+                className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                style={{ backgroundColor: bar.color }}
+              />
+              <span className="text-sm font-medium text-argus-text truncate">
+                {bar.name}
+              </span>
+              {bar.isThrottled && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-argus-warning/20 text-argus-warning font-medium">
+                  Paused
                 </span>
-                {bar.isThrottled && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-argus-warning/20 text-argus-warning font-medium">
-                    Paused
-                  </span>
-                )}
-              </div>
+              )}
             </div>
 
-            {/* Desktop: Full row layout */}
-            <div className="flex items-center gap-3">
-              {/* Strategy name (desktop only, hidden on mobile) */}
-              <div className="hidden sm:flex items-center gap-2 w-32 flex-shrink-0">
-                <span
-                  className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+            {/* Bar (full width, all breakpoints) */}
+            <div
+              className="h-6 rounded overflow-hidden flex"
+              style={{
+                width: '100%',
+              }}
+            >
+              {/* Deployed segment */}
+              {bar.deployedPct > 0 && (
+                <motion.div
+                  className="h-full cursor-default"
                   style={{ backgroundColor: bar.color }}
-                />
-                <span className="text-sm font-medium text-argus-text truncate">
-                  {bar.name}
-                </span>
-                {bar.isThrottled && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-argus-warning/20 text-argus-warning font-medium">
-                    Paused
-                  </span>
-                )}
-              </div>
-
-              {/* Bar container */}
-              <div className="flex-1 min-w-0">
-                <div
-                  className="h-6 rounded overflow-hidden flex"
-                  style={{
-                    width: `${(bar.allocationPct / maxAllocationPct) * 100}%`,
-                    minWidth: '48px',
+                  initial={hasAnimated ? false : { width: 0 }}
+                  animate={{ width: `${bar.deployedPct}%` }}
+                  transition={{
+                    duration: hasAnimated ? DURATION.normal : DURATION.slow,
+                    ease: EASE.out,
                   }}
-                >
-                  {/* Deployed segment */}
-                  {bar.deployedPct > 0 && (
-                    <motion.div
-                      className="h-full cursor-default"
-                      style={{ backgroundColor: bar.color }}
-                      initial={hasAnimated ? false : { width: 0 }}
-                      animate={{ width: `${bar.deployedPct}%` }}
-                      transition={{
-                        duration: hasAnimated ? DURATION.normal : DURATION.slow,
-                        ease: EASE.out,
-                      }}
-                      onMouseEnter={(e) => handleSegmentHover(bar, 'deployed', e)}
-                      onMouseLeave={handleMouseLeave}
-                    />
-                  )}
+                  onMouseEnter={(e) => handleSegmentHover(bar, 'deployed', e)}
+                  onMouseLeave={handleMouseLeave}
+                />
+              )}
 
-                  {/* Available or Throttled segment */}
-                  {bar.deployedPct < 100 && (
-                    <motion.div
-                      className="h-full cursor-default"
-                      style={{
-                        backgroundColor: bar.isReserve
-                          ? getAvailableColor(CASH_COLOR)
-                          : bar.isThrottled
-                            ? THROTTLED_COLOR
-                            : getAvailableColor(bar.color),
-                      }}
-                      initial={hasAnimated ? false : { width: 0 }}
-                      animate={{ width: `${100 - bar.deployedPct}%` }}
-                      transition={{
-                        duration: hasAnimated ? DURATION.normal : DURATION.slow,
-                        ease: EASE.out,
-                        delay: hasAnimated ? 0 : 0.1,
-                      }}
-                      onMouseEnter={(e) =>
-                        handleSegmentHover(bar, bar.isReserve ? 'reserve' : 'available', e)
-                      }
-                      onMouseLeave={handleMouseLeave}
-                    />
-                  )}
-                </div>
-              </div>
-
-              {/* Values (desktop: inline, mobile: below) */}
-              <div className="hidden sm:flex items-center gap-2 text-xs text-right flex-shrink-0 w-28">
-                <span className="text-argus-text tabular-nums">
-                  {formatDollars(bar.deployedDollars)}
-                </span>
-                <span className="text-argus-text-dim">/</span>
-                <span className="text-argus-text-dim tabular-nums">
-                  {formatDollars(bar.allocationDollars)}
-                </span>
-                <span className="text-argus-text-dim w-8 text-right tabular-nums">
-                  {Math.round(bar.deployedPct)}%
-                </span>
-              </div>
+              {/* Available or Throttled segment */}
+              {bar.deployedPct < 100 && (
+                <motion.div
+                  className="h-full cursor-default"
+                  style={{
+                    backgroundColor: bar.isReserve
+                      ? getAvailableColor(CASH_COLOR)
+                      : bar.isThrottled
+                        ? THROTTLED_COLOR
+                        : getAvailableColor(bar.color),
+                  }}
+                  initial={hasAnimated ? false : { width: 0 }}
+                  animate={{ width: `${100 - bar.deployedPct}%` }}
+                  transition={{
+                    duration: hasAnimated ? DURATION.normal : DURATION.slow,
+                    ease: EASE.out,
+                    delay: hasAnimated ? 0 : 0.1,
+                  }}
+                  onMouseEnter={(e) =>
+                    handleSegmentHover(bar, bar.isReserve ? 'reserve' : 'available', e)
+                  }
+                  onMouseLeave={handleMouseLeave}
+                />
+              )}
             </div>
 
-            {/* Mobile: Values below bar */}
-            <div className="flex items-center justify-between text-xs sm:hidden">
-              <span className="text-argus-text-dim">
-                {formatDollars(bar.deployedDollars)} / {formatDollars(bar.allocationDollars)}
+            {/* Values below bar (all breakpoints) */}
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-argus-text-dim tabular-nums">
+                {formatDollars(bar.deployedDollars)} / {formatDollars(bar.allocationDollars)} deployed
               </span>
               <span className="text-argus-text tabular-nums font-medium">
-                {Math.round(bar.deployedPct)}% deployed
+                {Math.round(bar.deployedPct)}%
               </span>
             </div>
           </motion.div>

@@ -277,8 +277,10 @@ export function CapitalAllocation({
         />
       </div>
 
-      <AnimatePresence mode="wait">
-        {viewMode === 'donut' ? (
+      {/* Content area with consistent min-height to prevent card size changes on toggle */}
+      <div className="min-h-[280px] md:min-h-[320px]">
+        <AnimatePresence mode="wait">
+          {viewMode === 'donut' ? (
           <motion.div
             key="donut-view"
             variants={quickFade}
@@ -403,7 +405,8 @@ export function CapitalAllocation({
             />
           </motion.div>
         )}
-      </AnimatePresence>
+        </AnimatePresence>
+      </div>
     </Card>
   );
 }
