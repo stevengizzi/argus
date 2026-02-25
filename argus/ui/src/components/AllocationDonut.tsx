@@ -1,17 +1,16 @@
 /**
- * Custom SVG donut visualization for capital allocation with fill levels.
+ * Custom SVG donut visualization for capital allocation with track + fill design.
  *
- * Sprint 18.75 Fix Session B:
- * - Single ring with one segment per allocation (strategies + cash reserve)
- * - Each segment has two layers: background (full thickness, desaturated) and
- *   foreground (partial thickness from inner edge, solid) showing deployment level
- * - Sweep animation on mount with staggered segments
- * - Hover tooltips on desktop
+ * Sprint 18.75 Fix Sessions E + F + G:
+ * - Track + fill approach inspired by Apple Watch activity rings
+ * - Layer 1: Color-tinted track segments (each tinted with its strategy color)
+ * - Layer 2: Bright colored fill arcs for deployed capital (strategies only)
+ * - Clear visual hierarchy: each fill arc has a matching colored "container"
  *
- * Design:
- * - Angular width = allocation % of total equity
- * - Fill level = deployed capital as % of allocation (fills from inside-out)
- * - Throttled strategies show gray unfilled portion instead of desaturated color
+ * Design principles:
+ * - Primary reading (instant): bright arcs on tinted track = deployment level per strategy
+ * - Secondary reading: gaps in track = allocation boundaries
+ * - Tertiary reading: center text = exact percentages
  */
 
 import { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
@@ -32,9 +31,13 @@ const STRATEGY_COLORS: Record<string, string> = {
   afternoon_momentum: '#fbbf24',
 };
 
-const CASH_COLOR = '#71717a'; // zinc-500 (brighter for visibility)
-const CASH_DESAT_COLOR = 'rgba(148, 163, 184, 0.35)'; // slate-400 at 35% for visible reserve arc
-const THROTTLED_COLOR = '#71717a'; // zinc-500
+const RESERVE_COLOR = '#71717a'; // zinc-500 (legend dot)
+const CASH_COLOR = '#52525b'; // zinc-600 (matches AllocationBars)
+
+// Get available/unfilled color - matches AllocationBars pattern
+function getAvailableColor(color: string): string {
+  return `${color}33`; // ~20% opacity (hex suffix)
+}
 
 // Display names for strategies
 const STRATEGY_DISPLAY_NAMES: Record<string, string> = {
@@ -56,11 +59,6 @@ function getStrategyDisplayName(strategyId: string): string {
 function getStrategyColor(strategyId: string): string {
   const normalized = strategyId.toLowerCase().replace(/-/g, '_');
   return STRATEGY_COLORS[normalized] || '#71717a';
-}
-
-// Creates a desaturated version of a color for unfilled portions
-function getDesaturatedColor(color: string, opacity = 0.18): string {
-  return `${color}${Math.round(opacity * 255).toString(16).padStart(2, '0')}`;
 }
 
 // SVG arc path helper - creates an arc path segment
@@ -104,6 +102,7 @@ interface SegmentData {
   id: string;
   name: string;
   color: string;
+  trackColor: string; // Precomputed tinted track color
   startAngle: number;
   endAngle: number;
   deployedPct: number; // 0-1, portion of this segment's allocation that is deployed
@@ -151,7 +150,8 @@ const CX = SIZE / 2;
 const CY = SIZE / 2;
 const OUTER_RADIUS = 90;
 const INNER_RADIUS = 60;
-const GAP_DEGREES = 3; // Gap between segments
+const GAP_DEGREES = 2.5; // Small gap between segments on track
+
 
 // Custom comparator for React.memo - only re-render if allocation data changes
 function arePropsEqual(
@@ -193,8 +193,12 @@ export const AllocationDonut = memo(function AllocationDonut({
 }: AllocationDonutProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const hasAnimatedRef = useRef(false);
-  const [animationProgress, setAnimationProgress] = useState(shouldAnimate ? 0 : 1);
+
+  // Animation state
+  const [trackOpacity, setTrackOpacity] = useState(shouldAnimate ? 0 : 1);
+  const [fillProgress, setFillProgress] = useState(shouldAnimate ? 0 : 1);
   const [centerOpacity, setCenterOpacity] = useState(shouldAnimate ? 0 : 1);
+
   const [hoveredSegment, setHoveredSegment] = useState<string | null>(null);
   const [tooltip, setTooltip] = useState<TooltipData | null>(null);
 
@@ -202,7 +206,6 @@ export const AllocationDonut = memo(function AllocationDonut({
   const canHover = useMediaQuery('(hover: hover)');
 
   // Calculate segment data from allocations with normalization
-  // This ensures segments always fill exactly 360° even if allocations don't sum to 1.0
   const segments = useMemo(() => {
     const segs: SegmentData[] = [];
 
@@ -251,7 +254,7 @@ export const AllocationDonut = memo(function AllocationDonut({
       rawSegments.push({
         id: 'reserve',
         name: 'Reserve',
-        color: CASH_COLOR,
+        color: RESERVE_COLOR,
         allocationPct: cashReservePct,
         allocationDollars: reserveDollars,
         deployedDollars: 0,
@@ -278,10 +281,16 @@ export const AllocationDonut = memo(function AllocationDonut({
 
       if (angularSpan <= 0) return;
 
+      // Precompute track color - matches AllocationBars "available" colors
+      const trackColor = raw.isReserve
+        ? getAvailableColor(CASH_COLOR)
+        : getAvailableColor(raw.color);
+
       segs.push({
         id: raw.id,
         name: raw.name,
         color: raw.color,
+        trackColor,
         startAngle: currentAngle,
         endAngle: currentAngle + angularSpan,
         deployedPct: raw.deployedOfAllocation,
@@ -315,41 +324,50 @@ export const AllocationDonut = memo(function AllocationDonut({
     return `$${value.toFixed(0)}`;
   };
 
-  // Sweep animation - segments and center text animate concurrently
+  // Animation sequence: track → fills → marks → center
   useEffect(() => {
     if (!shouldAnimate || hasAnimatedRef.current) return;
     hasAnimatedRef.current = true;
 
-    // Animate segment progress from 0 to 1
-    const progressControl = animate(0, 1, {
-      duration: 0.7,
-      ease: [0.0, 0.0, 0.2, 1.0], // ease-out
-      onUpdate: setAnimationProgress,
-      onComplete: onAnimationComplete,
+    // Phase 1: Track fades in (200ms)
+    const trackControl = animate(0, 1, {
+      duration: 0.2,
+      ease: 'easeOut',
+      onUpdate: setTrackOpacity,
     });
 
-    // Start center text fade-in concurrently with a slight delay
-    // This lets segments get a head start before the text appears
-    const centerTextDelay = setTimeout(() => {
+    // Phase 2: After 150ms, fill arcs sweep (400ms with stagger handled in render)
+    const fillDelay = setTimeout(() => {
       animate(0, 1, {
         duration: 0.4,
-        ease: [0.0, 0.0, 0.2, 1.0],
-        onUpdate: setCenterOpacity,
+        ease: [0.0, 0.0, 0.2, 1.0], // ease-out
+        onUpdate: setFillProgress,
       });
-    }, 250); // 250ms delay
+    }, 150);
+
+    // Phase 3: Center text fades in last (150ms)
+    const centerDelay = setTimeout(() => {
+      animate(0, 1, {
+        duration: 0.15,
+        ease: 'easeOut',
+        onUpdate: setCenterOpacity,
+        onComplete: onAnimationComplete,
+      });
+    }, 550);
 
     return () => {
-      progressControl.stop();
-      clearTimeout(centerTextDelay);
+      trackControl.stop();
+      clearTimeout(fillDelay);
+      clearTimeout(centerDelay);
     };
   }, [shouldAnimate, onAnimationComplete]);
 
-  // Snap to final state on window resize to prevent broken mid-animation states
+  // Snap to final state on window resize
   useEffect(() => {
     const handleResize = () => {
-      // If animation is in progress (not complete), snap to final state
-      if (animationProgress < 1) {
-        setAnimationProgress(1);
+      if (trackOpacity < 1 || fillProgress < 1) {
+        setTrackOpacity(1);
+        setFillProgress(1);
         setCenterOpacity(1);
         hasAnimatedRef.current = true;
       }
@@ -357,7 +375,7 @@ export const AllocationDonut = memo(function AllocationDonut({
 
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [animationProgress]);
+  }, [trackOpacity, fillProgress]);
 
   // Handle hover - track mouse position for tooltip
   const handleMouseMove = useCallback((e: React.MouseEvent, segment: SegmentData) => {
@@ -365,7 +383,6 @@ export const AllocationDonut = memo(function AllocationDonut({
 
     setHoveredSegment(segment.id);
 
-    // Use mouse position directly with offset
     const x = e.clientX;
     const y = e.clientY;
 
@@ -412,84 +429,92 @@ export const AllocationDonut = memo(function AllocationDonut({
           className="w-full h-full"
           style={{ overflow: 'visible' }}
         >
-          {segments.map((segment, index) => {
-            // Calculate segment-specific animation progress
-            // Each segment starts slightly after the previous one
+          {/* Layer 1: Color-tinted track segments with gaps */}
+          <g style={{ opacity: trackOpacity }}>
+            {segments.map((segment) => (
+              <path
+                key={`track-${segment.id}`}
+                d={describeArc(
+                  CX,
+                  CY,
+                  INNER_RADIUS,
+                  OUTER_RADIUS,
+                  segment.startAngle,
+                  segment.endAngle
+                )}
+                fill={segment.trackColor}
+              />
+            ))}
+          </g>
+
+          {/* Layer 2: Colored Fill Arcs (strategies only, not reserve) */}
+          {segments.filter(s => !s.isReserve && s.deployedPct > 0).map((segment, index) => {
+            // Calculate segment-specific animation with stagger
             const segmentDelay = index * 0.08;
             const segmentProgress = Math.max(0, Math.min(1,
-              (animationProgress - segmentDelay) / (1 - segmentDelay * segments.length / (segments.length - 1 || 1))
+              (fillProgress - segmentDelay) / (1 - segmentDelay)
             ));
 
-            // Animated end angle
-            const animatedEndAngle = segment.startAngle +
-              (segment.endAngle - segment.startAngle) * Math.min(1, segmentProgress * 1.2);
+            // Fill arc sweeps from startAngle to deployed portion
+            const fillAngularSpan = (segment.endAngle - segment.startAngle) * segment.deployedPct;
+            const animatedFillEnd = segment.startAngle + fillAngularSpan * segmentProgress;
 
-            // Fill animation starts after segment sweep is ~60% complete
-            const fillProgress = Math.max(0, Math.min(1, (segmentProgress - 0.6) / 0.4));
-
-            // Calculate fill end angle (deployed portion sweeps clockwise along the arc)
-            // Fill uses full ring thickness but only covers portion of the angular span
-            const segmentAngularSpan = animatedEndAngle - segment.startAngle;
-            const fillEndAngle = segment.startAngle + segmentAngularSpan * segment.deployedPct * fillProgress;
-
-            // Unfilled color: gray for throttled, desaturated strategy color otherwise
-            const unfilledColor = segment.isReserve
-              ? CASH_DESAT_COLOR
-              : segment.isThrottled
-                ? THROTTLED_COLOR
-                : getDesaturatedColor(segment.color, 0.18);
+            // Don't render if no progress or no deployment
+            if (segmentProgress <= 0 || animatedFillEnd <= segment.startAngle) return null;
 
             // Hover effect
             const isHovered = hoveredSegment === segment.id;
-            const scale = isHovered ? 1.02 : 1;
-            const opacity = isHovered ? 1 : (hoveredSegment ? 0.7 : 1);
+            const scale = isHovered ? 1.03 : 1;
+            const filterBrightness = isHovered ? 'brightness(1.15)' : 'brightness(1)';
 
             return (
               <g
-                key={segment.id}
+                key={`fill-${segment.id}`}
                 style={{
                   transform: `scale(${scale})`,
                   transformOrigin: `${CX}px ${CY}px`,
-                  transition: 'transform 0.15s ease-out, opacity 0.15s ease-out',
-                  opacity,
+                  transition: 'transform 0.15s ease-out, filter 0.15s ease-out',
+                  filter: filterBrightness,
                   cursor: canHover ? 'pointer' : 'default',
                 }}
                 onMouseEnter={() => handleMouseEnter(segment)}
                 onMouseMove={(e) => handleMouseMove(e, segment)}
                 onMouseLeave={handleMouseLeave}
               >
-                {/* Background arc (unfilled portion - full ring thickness) */}
-                {animatedEndAngle > segment.startAngle && (
-                  <path
-                    d={describeArc(
-                      CX,
-                      CY,
-                      INNER_RADIUS,
-                      OUTER_RADIUS,
-                      segment.startAngle,
-                      animatedEndAngle
-                    )}
-                    fill={unfilledColor}
-                  />
-                )}
-
-                {/* Foreground arc (deployed portion - sweeps clockwise along arc) */}
-                {fillProgress > 0 && segment.deployedPct > 0 && fillEndAngle > segment.startAngle && (
-                  <path
-                    d={describeArc(
-                      CX,
-                      CY,
-                      INNER_RADIUS,
-                      OUTER_RADIUS,
-                      segment.startAngle,
-                      fillEndAngle
-                    )}
-                    fill={segment.color}
-                  />
-                )}
+                <path
+                  d={describeArc(
+                    CX,
+                    CY,
+                    INNER_RADIUS,
+                    OUTER_RADIUS,
+                    segment.startAngle,
+                    animatedFillEnd
+                  )}
+                  fill={segment.color}
+                />
               </g>
             );
           })}
+
+          {/* Invisible hover targets for all segments (including reserve and unfilled portions) */}
+          {segments.map((segment) => (
+            <path
+              key={`hover-${segment.id}`}
+              d={describeArc(
+                CX,
+                CY,
+                INNER_RADIUS,
+                OUTER_RADIUS,
+                segment.startAngle,
+                segment.endAngle
+              )}
+              fill="transparent"
+              style={{ cursor: canHover ? 'pointer' : 'default' }}
+              onMouseEnter={() => handleMouseEnter(segment)}
+              onMouseMove={(e) => handleMouseMove(e, segment)}
+              onMouseLeave={handleMouseLeave}
+            />
+          ))}
         </svg>
 
         {/* Center text */}
@@ -526,7 +551,6 @@ export const AllocationDonut = memo(function AllocationDonut({
       </div>
 
       {/* Tooltip - rendered via Portal to escape parent transforms */}
-      {/* Parent motion.div has scale transform which breaks position:fixed */}
       {tooltip && canHover && createPortal(
         <AnimatePresence>
           <motion.div
