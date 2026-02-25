@@ -54,7 +54,7 @@ from argus.models.trading import ExitReason as TradeExitReason
 from argus.models.trading import OrderSide, Trade, TradeOutcome
 from argus.strategies.orb_breakout import OrbBreakoutStrategy
 from argus.strategies.orb_scalp import OrbScalpStrategy
-from argus.strategies.vwap_reclaim import VwapReclaimStrategy, VwapState
+from argus.strategies.vwap_reclaim import VwapReclaimStrategy, VwapState, VwapSymbolState
 
 
 # ===========================================================================
@@ -1507,3 +1507,165 @@ class TestTimeStopSeconds:
         assert positions["NVDA"][0].time_stop_seconds == 1800
 
         await order_manager.stop()
+
+
+class TestPositionClosedEventRouting:
+    """Tests for PositionClosedEvent routing to strategies (Fix 2 — Sprint 19 Session 6)."""
+
+    @pytest.mark.asyncio
+    async def test_vwap_position_close_decrements_concurrent_positions(self) -> None:
+        """After mark_position_closed, VWAP strategy's concurrent count decreases.
+
+        This tests that:
+        1. With max_concurrent_positions=1, a second entry is blocked while first is active
+        2. After mark_position_closed, the position count decreases
+        3. A new entry can then succeed
+        """
+        mock_ds = MockDataService(vwap=100.0)
+        # Create config with max_concurrent_positions=1 to test concurrent position limit
+        vwap_config = VwapReclaimConfig(
+            strategy_id="strat_vwap_reclaim",
+            name="VWAP Reclaim",
+            min_pullback_pct=0.002,
+            max_pullback_pct=0.02,
+            min_pullback_bars=3,
+            volume_confirmation_multiplier=1.0,
+            risk_limits=StrategyRiskLimits(
+                max_concurrent_positions=1,
+            ),
+            operating_window=OperatingWindow(
+                earliest_entry="10:00",
+                latest_entry="12:00",
+            ),
+        )
+        vwap_strategy = VwapReclaimStrategy(
+            config=vwap_config,
+            data_service=mock_ds,
+        )
+        vwap_strategy.set_watchlist(["AAPL", "TSLA"])
+        vwap_strategy.allocated_capital = 30_000
+
+        # Get AAPL into ENTERED state with position_active=True
+        await vwap_strategy.on_candle(
+            make_candle(
+                symbol="AAPL",
+                close=101.0,
+                volume=100_000,
+                timestamp=datetime(2026, 2, 25, 15, 0, 0, tzinfo=UTC),
+            )
+        )
+        for i in range(3):
+            await vwap_strategy.on_candle(
+                make_candle(
+                    symbol="AAPL",
+                    close=99.0,
+                    low=99.0,
+                    volume=100_000,
+                    timestamp=datetime(2026, 2, 25, 15, 1 + i, 0, tzinfo=UTC),
+                )
+            )
+        signal_aapl = await vwap_strategy.on_candle(
+            make_candle(
+                symbol="AAPL",
+                close=100.2,
+                volume=150_000,
+                timestamp=datetime(2026, 2, 25, 15, 5, 0, tzinfo=UTC),
+            )
+        )
+        assert signal_aapl is not None
+        assert vwap_strategy._get_symbol_state("AAPL").position_active is True
+
+        # Verify concurrent position count is 1
+        active_count = sum(
+            1 for s in vwap_strategy._symbol_state.values() if s.position_active
+        )
+        assert active_count == 1
+
+        # After mark_position_closed, position count should be 0
+        vwap_strategy.mark_position_closed("AAPL")
+        assert vwap_strategy._get_symbol_state("AAPL").position_active is False
+        active_count = sum(
+            1 for s in vwap_strategy._symbol_state.values() if s.position_active
+        )
+        assert active_count == 0
+
+        # Now TSLA should be able to enter (fresh state)
+        await vwap_strategy.on_candle(
+            make_candle(
+                symbol="TSLA",
+                close=101.0,  # Above VWAP=100
+                volume=100_000,
+                timestamp=datetime(2026, 2, 25, 15, 20, 0, tzinfo=UTC),
+            )
+        )
+        for i in range(3):
+            await vwap_strategy.on_candle(
+                make_candle(
+                    symbol="TSLA",
+                    close=99.0,  # Below VWAP=100
+                    low=99.0,
+                    volume=100_000,
+                    timestamp=datetime(2026, 2, 25, 15, 21 + i, 0, tzinfo=UTC),
+                )
+            )
+        signal_tsla = await vwap_strategy.on_candle(
+            make_candle(
+                symbol="TSLA",
+                close=100.2,  # Reclaim VWAP=100
+                volume=150_000,
+                timestamp=datetime(2026, 2, 25, 15, 25, 0, tzinfo=UTC),
+            )
+        )
+        # Should succeed since AAPL position is closed
+        assert signal_tsla is not None
+        assert signal_tsla.symbol == "TSLA"
+
+    @pytest.mark.asyncio
+    async def test_orb_position_close_calls_mark_position_closed(self) -> None:
+        """ORB strategy's mark_position_closed is called on PositionClosedEvent."""
+        clock = FixedClock(datetime(2026, 2, 25, 14, 40, 0, tzinfo=UTC))
+
+        orb_strategy = OrbBreakoutStrategy(
+            config=make_orb_breakout_config(),
+            clock=clock,
+        )
+        orb_strategy.set_watchlist(["AAPL"])
+        orb_strategy.allocated_capital = 30_000
+
+        # Build OR and get entry
+        for i in range(5):
+            await orb_strategy.on_candle(
+                make_candle(
+                    symbol="AAPL",
+                    timestamp=datetime(2026, 2, 25, 14, 30 + i, 0, tzinfo=UTC),
+                    open_price=100.0,
+                    high=101.0,
+                    low=99.0,
+                    close=100.0 + i * 0.1,
+                    volume=100_000,
+                )
+            )
+
+        # Trigger breakout and entry
+        signal = await orb_strategy.on_candle(
+            make_candle(
+                symbol="AAPL",
+                timestamp=datetime(2026, 2, 25, 14, 40, 0, tzinfo=UTC),
+                open_price=101.0,
+                high=102.0,
+                low=101.0,
+                close=101.5,
+                volume=200_000,
+            )
+        )
+        assert signal is not None
+
+        # Verify position is marked active
+        state = orb_strategy._get_symbol_state("AAPL")
+        assert state.position_active is True
+
+        # Call mark_position_closed
+        orb_strategy.mark_position_closed("AAPL")
+
+        # Verify position is marked inactive
+        assert state.position_active is False

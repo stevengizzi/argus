@@ -286,8 +286,8 @@ class VwapReclaimStrategy(BaseStrategy):
             )
             return None
 
-        if close < vwap:
-            # Still below VWAP, increment bar count
+        if close <= vwap:
+            # Still at or below VWAP, increment bar count
             state.bars_below_vwap += 1
             return None
 

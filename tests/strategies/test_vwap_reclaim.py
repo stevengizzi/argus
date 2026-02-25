@@ -149,7 +149,8 @@ class TestVwapReclaimConfig:
         config = make_vwap_reclaim_config(min_pullback_pct=0.0)
         assert config.min_pullback_pct == 0.0
 
-        config = make_vwap_reclaim_config(min_pullback_pct=0.05)
+        # Need to also increase max_pullback_pct to satisfy cross-field validation
+        config = make_vwap_reclaim_config(min_pullback_pct=0.05, max_pullback_pct=0.10)
         assert config.min_pullback_pct == 0.05
 
         with pytest.raises(ValueError):
@@ -201,6 +202,19 @@ class TestVwapReclaimConfig:
 
         with pytest.raises(ValueError):
             make_vwap_reclaim_config(time_stop_minutes=0)
+
+    def test_cross_field_validation_pullback_range(self) -> None:
+        """min_pullback_pct must be less than max_pullback_pct."""
+        # Valid: min < max
+        config = make_vwap_reclaim_config(min_pullback_pct=0.002, max_pullback_pct=0.02)
+        assert config.min_pullback_pct < config.max_pullback_pct
+
+        # Invalid: min >= max
+        with pytest.raises(ValueError, match="must be less than"):
+            make_vwap_reclaim_config(min_pullback_pct=0.02, max_pullback_pct=0.02)
+
+        with pytest.raises(ValueError, match="must be less than"):
+            make_vwap_reclaim_config(min_pullback_pct=0.03, max_pullback_pct=0.02)
 
     def test_load_from_yaml(self, tmp_path: Path) -> None:
         """Test loading VwapReclaimConfig from YAML file."""
@@ -685,6 +699,79 @@ class TestStateMachineTransitions:
 
         state = strategy._get_symbol_state("AAPL")
         assert state.pullback_low == 98.8  # Minimum of all lows
+
+    @pytest.mark.asyncio
+    async def test_close_equals_vwap_in_below_vwap_increments_counter(self) -> None:
+        """Candle with close == VWAP in BELOW_VWAP state increments bars_below_vwap.
+
+        When close exactly equals VWAP while in BELOW_VWAP state, it should:
+        - Increment bars_below_vwap
+        - Update pullback_low if candle.low is lower
+        - NOT trigger a reclaim (reclaim requires close > VWAP)
+        """
+        config = make_vwap_reclaim_config(
+            min_pullback_pct=0.002,
+            min_pullback_bars=5,  # Need 5 bars for entry
+            volume_confirmation_multiplier=1.0,
+        )
+        mock_ds = MockDataService(vwap=100.0)
+        strategy = VwapReclaimStrategy(config, data_service=mock_ds)
+        strategy.allocated_capital = 100_000
+        strategy.set_watchlist(["AAPL"])
+
+        # Go above VWAP
+        await strategy.on_candle(
+            make_candle(
+                symbol="AAPL",
+                close=101.0,
+                timestamp=datetime(2026, 2, 15, 15, 30, 0, tzinfo=UTC),
+            )
+        )
+
+        # First bar below VWAP (transitions to BELOW_VWAP)
+        await strategy.on_candle(
+            make_candle(
+                symbol="AAPL",
+                close=99.5,
+                low=99.0,
+                timestamp=datetime(2026, 2, 15, 15, 31, 0, tzinfo=UTC),
+            )
+        )
+        state = strategy._get_symbol_state("AAPL")
+        assert state.state == VwapState.BELOW_VWAP
+        assert state.bars_below_vwap == 1
+        assert state.pullback_low == 99.0
+
+        # Second bar: close exactly at VWAP (100.0)
+        signal = await strategy.on_candle(
+            make_candle(
+                symbol="AAPL",
+                close=100.0,  # Exactly at VWAP
+                low=98.5,  # New low
+                timestamp=datetime(2026, 2, 15, 15, 32, 0, tzinfo=UTC),
+            )
+        )
+
+        # Should NOT trigger reclaim
+        assert signal is None
+        # Should increment bar count
+        assert state.bars_below_vwap == 2
+        # Should update pullback_low
+        assert state.pullback_low == 98.5
+        # Should still be in BELOW_VWAP state
+        assert state.state == VwapState.BELOW_VWAP
+
+        # Third bar: still at VWAP
+        await strategy.on_candle(
+            make_candle(
+                symbol="AAPL",
+                close=100.0,  # Exactly at VWAP again
+                low=98.5,
+                timestamp=datetime(2026, 2, 15, 15, 33, 0, tzinfo=UTC),
+            )
+        )
+        assert state.bars_below_vwap == 3
+        assert state.state == VwapState.BELOW_VWAP
 
 
 class TestEntryConditionRejections:

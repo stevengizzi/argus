@@ -43,7 +43,7 @@ from argus.core.config import (
     load_yaml_file,
 )
 from argus.core.event_bus import EventBus
-from argus.core.events import CandleEvent
+from argus.core.events import CandleEvent, PositionClosedEvent
 from argus.core.health import ComponentStatus, HealthMonitor
 from argus.core.logging_config import setup_logging
 from argus.core.orchestrator import Orchestrator
@@ -368,9 +368,11 @@ class ArgusSystem:
         # Wire Risk Manager to Order Manager for cross-strategy checks
         self._risk_manager.set_order_manager(self._order_manager)
 
-        # --- Phase 10.5: CandleEvent Routing ---
+        # --- Phase 10.5: Event Routing ---
         # Subscribe to CandleEvents and route to active strategies (DEC-125)
         self._event_bus.subscribe(CandleEvent, self._on_candle_for_strategies)
+        # Subscribe to PositionClosedEvents to update strategy position tracking
+        self._event_bus.subscribe(PositionClosedEvent, self._on_position_closed_for_strategies)
 
         # --- Phase 11: Start streaming ---
         logger.info("[11/12] Starting data streams...")
@@ -486,6 +488,28 @@ class ArgusSystem:
             if signal is not None:
                 result = await self._risk_manager.evaluate_signal(signal)
                 await self._event_bus.publish(result)
+
+    async def _on_position_closed_for_strategies(self, event: PositionClosedEvent) -> None:
+        """Route PositionClosedEvents to originating strategy.
+
+        Updates strategy position tracking so concurrent position counters
+        are decremented when positions close.
+
+        Args:
+            event: The position closed event to route.
+        """
+        if self._orchestrator is None:
+            return
+
+        strategies = self._orchestrator.get_strategies()
+        strategy = strategies.get(event.strategy_id)
+        if strategy is not None and hasattr(strategy, "mark_position_closed"):
+            strategy.mark_position_closed(event.symbol)
+            logger.debug(
+                "Position closed for %s on %s, notified strategy",
+                event.symbol,
+                event.strategy_id,
+            )
 
     async def _reconstruct_strategy_state(self, symbols: list[str]) -> None:
         """Reconstruct strategy state if restarting mid-day.

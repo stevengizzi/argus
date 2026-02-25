@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 # ---------------------------------------------------------------------------
 # Enums
@@ -569,6 +569,16 @@ class VwapReclaimConfig(StrategyConfig):
     target_2_r: float = Field(default=2.0, gt=0)
     time_stop_minutes: int = Field(default=30, ge=1)
     stop_buffer_pct: float = Field(default=0.001, ge=0, le=0.05)
+
+    @model_validator(mode="after")
+    def validate_pullback_range(self) -> "VwapReclaimConfig":
+        """Ensure min_pullback_pct is less than max_pullback_pct."""
+        if self.min_pullback_pct >= self.max_pullback_pct:
+            raise ValueError(
+                f"min_pullback_pct ({self.min_pullback_pct}) must be less than "
+                f"max_pullback_pct ({self.max_pullback_pct})"
+            )
+        return self
 
 
 # ---------------------------------------------------------------------------
