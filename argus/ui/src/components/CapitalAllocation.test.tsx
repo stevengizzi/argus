@@ -1,10 +1,10 @@
 /**
  * CapitalAllocation component tests.
  *
- * Sprint 18.75 Session 3.
+ * Sprint 18.75 Fix Session B: Updated for custom SVG donut implementation.
  */
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { CapitalAllocation } from './CapitalAllocation';
 
@@ -14,6 +14,12 @@ vi.mock('framer-motion', async () => {
   return {
     ...actual,
     AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+    animate: vi.fn((from: number, to: number, options: { onUpdate?: (v: number) => void; onComplete?: () => void }) => {
+      // Immediately complete animation
+      if (options.onUpdate) options.onUpdate(to);
+      if (options.onComplete) setTimeout(options.onComplete, 0);
+      return { stop: vi.fn() };
+    }),
     motion: {
       div: ({
         children,
@@ -25,37 +31,37 @@ vi.mock('framer-motion', async () => {
         exit: _exit,
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         variants: _variants,
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        transition: _transition,
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        whileHover: _whileHover,
         ...props
       }: React.HTMLAttributes<HTMLDivElement> & {
         initial?: unknown;
         animate?: unknown;
         exit?: unknown;
         variants?: unknown;
+        transition?: unknown;
+        whileHover?: unknown;
       }) => <div {...props}>{children}</div>,
     },
   };
 });
 
-// Mock Recharts to avoid SVG rendering issues
-vi.mock('recharts', () => ({
-  PieChart: ({ children }: { children: React.ReactNode }) => (
-    <div data-testid="pie-chart">{children}</div>
-  ),
-  Pie: () => null,
-  Cell: () => null,
-  ResponsiveContainer: ({ children }: { children: React.ReactNode }) => (
-    <div data-testid="responsive-container">{children}</div>
-  ),
-}));
-
 // Mock Zustand store
+let mockViewMode = 'donut';
 vi.mock('../stores/capitalAllocationUI', () => ({
   useCapitalAllocationUIStore: vi.fn((selector) =>
     selector({
-      viewMode: 'donut',
-      setViewMode: vi.fn(),
+      viewMode: mockViewMode,
+      setViewMode: vi.fn((mode: string) => { mockViewMode = mode; }),
     })
   ),
+}));
+
+// Mock media query hook
+vi.mock('../hooks/useMediaQuery', () => ({
+  useMediaQuery: vi.fn(() => false),
 }));
 
 const mockAllocations = [
@@ -78,6 +84,11 @@ const mockAllocations = [
 ];
 
 describe('CapitalAllocation', () => {
+  beforeEach(() => {
+    mockViewMode = 'donut';
+    vi.clearAllMocks();
+  });
+
   it('renders without crashing', () => {
     render(
       <CapitalAllocation
@@ -99,8 +110,9 @@ describe('CapitalAllocation', () => {
       />
     );
 
-    // Donut view shows the pie chart
-    expect(screen.getByTestId('pie-chart')).toBeInTheDocument();
+    // Donut view shows the SVG element
+    const svg = document.querySelector('svg');
+    expect(svg).toBeInTheDocument();
   });
 
   it('shows segmented tab toggle', () => {
@@ -128,7 +140,7 @@ describe('CapitalAllocation', () => {
     expect(screen.getByText('No strategies active')).toBeInTheDocument();
   });
 
-  it('shows legend items for strategies', () => {
+  it('shows legend items for strategies in donut view', () => {
     render(
       <CapitalAllocation
         allocations={mockAllocations}
@@ -142,11 +154,30 @@ describe('CapitalAllocation', () => {
     expect(screen.getByText('ORB Scalp')).toBeInTheDocument();
     expect(screen.getByText('Reserve')).toBeInTheDocument();
   });
+
+  it('shows center text with deployed percentage', () => {
+    render(
+      <CapitalAllocation
+        allocations={mockAllocations}
+        cashReservePct={0.2}
+        totalEquity={100000}
+        totalDeployedPct={0.15}
+      />
+    );
+
+    // Center should show deployed percentage
+    expect(screen.getByText('15%')).toBeInTheDocument();
+    expect(screen.getByText('Deployed')).toBeInTheDocument();
+  });
 });
 
 describe('CapitalAllocation - Bars view', () => {
+  beforeEach(() => {
+    mockViewMode = 'bars';
+    vi.clearAllMocks();
+  });
+
   it('renders bars view when viewMode is bars', async () => {
-    // Reset the mock to return 'bars' view
     const { useCapitalAllocationUIStore } = await import('../stores/capitalAllocationUI');
     vi.mocked(useCapitalAllocationUIStore).mockImplementation((selector) =>
       selector({
@@ -163,7 +194,7 @@ describe('CapitalAllocation - Bars view', () => {
       />
     );
 
-    // Bars view shows strategy names with bars (renders twice for mobile/desktop)
+    // Bars view shows strategy names with bars
     expect(screen.getAllByText('ORB Breakout').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Reserve').length).toBeGreaterThan(0);
 
