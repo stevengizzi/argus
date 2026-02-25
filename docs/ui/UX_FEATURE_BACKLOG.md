@@ -125,11 +125,12 @@ Uses Lightweight Charts or a simple SVG sparkline component. Data comes from exi
 
 Orchestrator introduces multi-strategy coordination, which unlocks several new visualization needs.
 
-### 17-A. Strategy Allocation Donut [P1]
+### 17-A. Strategy Allocation Donut [P1] — ✅ ENHANCED (Sprint 18.75)
 
 **Capital allocation visualization**
 Donut chart on Dashboard showing capital distributed across strategies, colored by each strategy's P&L contribution. Click a segment to filter the dashboard to that strategy. Becomes meaningful once Orchestrator is allocating capital to 2+ strategies.
-*Effort: ~4 hours. Recharts or D3 donut component.*
+*Effort: ~4 hours original estimate. Actual: ~12 hours across Sprint 17 + 18.75 (8 fix sessions).*
+*Sprint 18.75 enhancements: Renamed AllocationDonut → CapitalAllocation. Track-and-fill donut design (custom SVG). Horizontal stacked bars alternate view. SegmentedTab toggle with Zustand persistence. Per-strategy deployment state from enriched API. MarketRegimeCard added as companion card. Click-to-filter deferred to Sprint 21.*
 
 ### 17-B. Segmented Controls with Live Counts [P0]
 

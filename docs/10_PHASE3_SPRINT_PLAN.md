@@ -246,6 +246,15 @@ per sprint velocity.
 - Badge contrast: dark slate badges on amber/yellow timeline bars
 - 1313 tests (pytest, 14 new) + 7 (Vitest). 7 sessions.
 
+#### Sprint 18.75 — CapitalAllocation + Dashboard Polish ✅ COMPLETE (Feb 25)
+**Delivered:**
+- **CapitalAllocation component (DEC-133):** AllocationDonut renamed to CapitalAllocation. Two views via SegmentedTab toggle: (1) Track-and-fill donut — custom SVG with color-tinted track arcs at low opacity, bright clockwise fill arcs proportional to deployment %, sweep animation on mount/toggle, center stat showing total deployed %. (2) Horizontal stacked bars — one per strategy + reserve, deployed/available/throttled segments, labels above/below bars at all breakpoints. Zustand view persistence.
+- **MarketRegimeCard (DEC-134):** New dashboard card showing current regime (RegimeClassifier data) with color-coded badge and description. Uses orchestrator status API.
+- **Dashboard grid restructure (DEC-134):** Second row from 2 cards to 3 equal-width cards (CapitalAllocation, Risk Budget, Market Regime). Responsive: Market + Market Regime pair at tablet/phone breakpoints (always 2-col).
+- **API enrichment (DEC-135):** Orchestrator status endpoint enriched with per-strategy deployed_capital, deployed_pct, is_throttled, plus total_deployed_capital and total_equity.
+- **Dev mode mock data:** Strategy allocations corrected to 40%/40%/20% = 100%. Position sizes scaled to realistic values relative to allocations.
+- 4 new orchestrator pytest tests (deployment state), 7 new Vitest component tests (CapitalAllocation). 1317 pytest + 14 Vitest total. 8 fix sessions. Code review passed.
+
 #### Sprint 19 — VWAP Reclaim Strategy (NEW — DEC-096)
 **Target:** ~1-2 days
 **Scope:**

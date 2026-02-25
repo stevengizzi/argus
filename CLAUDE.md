@@ -11,7 +11,7 @@ Phase 1 sprint plan: @docs/07_PHASE1_SPRINT_PLAN.md
 ## Current State
 
 **Structure:** Two parallel tracks (DEC-079, February 19, 2026).
-- **Build Track:** System construction at development velocity. Sprints 1–18 complete (1,313 pytest tests + 7 Vitest). Sprint 19 (VWAP Reclaim) is NEXT.
+- **Build Track:** System construction at development velocity. Sprints 1–18.75 complete (1,317 pytest tests + 14 Vitest). Sprint 19 (VWAP Reclaim) is NEXT.
 - **Validation Track:** Paper trading ACTIVE on Alpaca IEX (system stability only — DEC-081). Signal accuracy validation pending Databento subscription activation (DEC-087). All pre-Databento backtests require re-validation with quality data (DEC-132). Migrates to IBKR paper after IBKR account approved (U24619949, submitted Feb 21).
 
 Active sprint plan: `docs/10_PHASE3_SPRINT_PLAN.md` (covers both tracks).
@@ -32,6 +32,12 @@ Active sprint plan: `docs/10_PHASE3_SPRINT_PLAN.md` (covers both tracks).
 - UX: SessionSummaryCard, PositionTimeline (Gantt), three-way position filter (DEC-128), Zustand UI persistence (DEC-129).
 - Vitest frontend testing (DEC-130). 14+3 multi-strategy integration tests.
 - 1313 tests (pytest) + 7 (Vitest). Sprint 18: 12 sessions. Sprint 18.5: 7 sessions. Code review passed.
+
+**Sprint 18.75 Results (CapitalAllocation + Dashboard Polish — Feb 25):**
+- CapitalAllocation component (DEC-133): track-and-fill donut (custom SVG, color-tinted track arcs, clockwise fill arcs, sweep animation) + horizontal stacked bars with toggle. Zustand persistence.
+- MarketRegimeCard (DEC-134): dashboard card showing current regime with color-coded badge. Dashboard grid restructured to 3-card equal row. Market + Market Regime paired at tablet/phone.
+- Orchestrator status API enriched with deployment state (DEC-135): deployed_capital, deployed_pct, is_throttled per strategy.
+- 4 new pytest + 7 new Vitest tests. 8 fix sessions.
 
 **Sprint 17 Results (Orchestrator V1 — Feb 24–25):**
 - Orchestrator: pre-market routine, 30-min regime monitoring (DEC-115), intraday throttle, EOD review, decision logging.

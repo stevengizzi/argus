@@ -1491,5 +1491,34 @@ Each entry follows this format:
 
 ---
 
+### DEC-133 | CapitalAllocation Component — Track + Fill Donut with Bars Toggle
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-25 |
+| **Decision** | Renamed AllocationDonut → CapitalAllocation. Two visualization modes toggled via SegmentedTab: (1) Track-and-fill donut — custom SVG with per-segment color-tinted track arcs at low opacity plus bright clockwise fill arcs proportional to deployment %, center stat shows total deployed %. (2) Horizontal stacked bars — one bar per strategy + reserve, labels above/below, deployed/available/throttled segments. Zustand store persists view preference (DEC-129 pattern). |
+| **Rationale** | Original nested two-ring donut (outer = allocation, inner = deployment) created visual clutter — 6 competing elements at similar weight. Track-and-fill approach creates clear figure/ground: bright fills are the primary reading, tinted tracks are secondary context. Bars view provides precise per-strategy comparison. Toggle lets user pick preferred reading mode. |
+| **Alternatives Rejected** | (1) Nested two-ring donut — too visually noisy. (2) Single donut + center stat only — loses per-strategy deployment detail. (3) Single donut with inside-to-outside fill levels — directionally confusing (fills should sweep clockwise like segments). |
+| **Status** | Active |
+
+---
+
+### DEC-134 | Dashboard Grid — Three-Card Second Row + Market Regime Card
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-25 |
+| **Decision** | Dashboard second row restructured from 2 cards (CapitalAllocation + Risk Budget at 1/3 + 2/3) to 3 equal-width cards (CapitalAllocation + Risk Budget + Market Regime). MarketRegimeCard shows current regime (RegimeClassifier data) with color-coded badge + description. At tablet/phone breakpoints, Market and Market Regime cards pair into an always-2-column row; they never stack to single column. |
+| **Rationale** | Risk Budget card had excessive dead space at 2/3 width. Market Regime data already computed by Orchestrator (Sprint 17) — surfacing it adds genuine situational awareness. Market + Market Regime pairing at narrow widths keeps related status info together and avoids excessive vertical stacking on mobile. |
+| **Status** | Active |
+
+---
+
+### DEC-135 | Orchestrator Status API — Deployment State Enrichment
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-25 |
+| **Decision** | Enriched `GET /api/v1/orchestrator/status` response with per-strategy deployment state: `deployed_capital` (sum of entry_price × shares_remaining for open positions), `deployed_pct` (deployed_capital / total_equity), `is_throttled` (derived from throttle_action). Added top-level `total_deployed_capital` and `total_equity` fields. Computed from Order Manager open positions and broker account data. |
+| **Rationale** | CapitalAllocation visualization requires deployment state to show how much of each strategy's allocation is currently in open positions. Computing server-side ensures consistency between donut and bars views. |
+| **Status** | Active |
+
 *End of Decision Log v1.0*
 *New decisions are appended chronologically as the project progresses.*

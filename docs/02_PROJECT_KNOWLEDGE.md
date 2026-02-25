@@ -1,6 +1,6 @@
 # ARGUS — Project Knowledge (Claude Context)
 
-> *Paste this into Claude's project instructions. Keep updated as the project evolves. Last updated: Feb 24, 2026.*
+> *Paste this into Claude's project instructions. Keep updated as the project evolves. Last updated: Feb 25, 2026.*
 
 ---
 
@@ -12,7 +12,7 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 
 **Structure:** Two parallel tracks (DEC-079, February 19, 2026). Build Track (system construction) + Validation Track (strategy confidence-building).
 
-**Build Track:** 1313 tests (pytest) + 7 (Vitest). Sprints 1–18 complete. Sprint 19 (VWAP Reclaim) NEXT.
+**Build Track:** 1317 tests (pytest) + 14 (Vitest). Sprints 1–18.75 complete. Sprint 19 (VWAP Reclaim) NEXT.
 - Phase 1 (Core Engine): ✅ COMPLETE — 362 tests, Feb 14–16
 - Phase 2 (Backtesting): ✅ COMPLETE — 542 tests, Feb 16–17
 - Sprint 11 (Extended Backtest): ✅ COMPLETE — 35 months, 15 WF windows, WFE=0.56
@@ -25,6 +25,7 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 - Sprint 17 (Orchestrator V1): ✅ COMPLETE — 1146 tests (204 new), Feb 24–25. Orchestrator (pre-market routine, 30-min regime monitoring, intraday throttle, EOD review, decision logging). RegimeClassifier (SPY realized vol as VIX proxy, DEC-113). PerformanceThrottler (consecutive losses/Sharpe/drawdown). CorrelationTracker (infrastructure for V2). Equal-weight allocation V1 (DEC-114). Single-strategy 40% cap (DEC-119). DEF-016 resolved — Order Manager atomic bracket orders (DEC-117). API: 3 orchestrator endpoints + 4 WebSocket event types. UI: SegmentedTab, extended Badge system, AllocationDonut, RiskGauge. 12-phase main.py startup. 13 implementation sessions + Sprint 17.5 polish (4 sessions: encapsulation properties, safe-area padding, animation-once pattern, stable render without conditional skeleton swap). Code review passed.
 - Sprint 18 (ORB Scalp Strategy): ✅ COMPLETE — 1299 tests (153 new), Feb 25. OrbBaseStrategy ABC extracted (DEC-120) — shared scanner, gap filter, OR tracking, breakout detection. OrbScalpStrategy (DEC-123): single-target 0.3R exit, 120s hold, per-signal time stop (DEC-122). Cross-strategy risk: ALLOW_ALL duplicate stock policy (DEC-121), Risk Manager ↔ Order Manager reference (DEC-124), CandleEvent routing via EventBus (DEC-125). Sector exposure deferred (DEC-126, DEF-020). VectorBT Scalp sweep: 20,880 trades, all aggregate Sharpes negative — bar resolution insufficient (DEC-127, RSK-026). Walk-forward infrastructure wired for multi-strategy. Strategy spec: `docs/strategies/STRATEGY_ORB_SCALP.md`. 14 multi-strategy integration tests. UX: SessionSummaryCard (after-hours recap), PositionTimeline (Gantt viz with strategy badges). Vitest frontend testing (DEC-130). 12 implementation sessions. Code review passed (DEC-120–127).
 - Sprint 18.5 (Post-Review Polish): ✅ COMPLETE — 1313 tests (pytest) + 7 (Vitest), Feb 25. ORB Scalp mock data in dev mode (positions, trades, system status, strategy cards). SessionSummaryCard dev-mode override (DEC-131). Mobile timeline label density fix. Three-way position filter All/Open/Closed (DEC-128). View toggle persistence via Zustand store (DEC-129). 3 integration test gap fills (same-symbol collision, partial allocation exhaustion, throttle isolation). Donut chart legend width fix. Badge contrast fix on amber timeline bars. 7 sessions.
+- Sprint 18.75 (CapitalAllocation + Dashboard Polish): ✅ COMPLETE — 1317 tests (pytest) + 14 (Vitest), Feb 25. AllocationDonut renamed to CapitalAllocation (DEC-133). Two views: track-and-fill donut (custom SVG, color-tinted track segments, clockwise fill arcs, sweep animation) and horizontal stacked bars (deployed/available/throttled segments, labels above/below). SegmentedTab toggle with Zustand persistence. MarketRegimeCard added to dashboard (DEC-134). Dashboard second row → 3-card equal grid. Responsive: Market + Market Regime always paired at tablet/phone widths. API enrichment: orchestrator status includes per-strategy deployed_capital, deployed_pct, is_throttled, plus total_deployed_capital and total_equity (DEC-135). Dev mode mock data scaled to realistic positions vs allocations. 4 new orchestrator pytest tests, 7 new Vitest component tests. 8 fix sessions. Code review passed (DEC-133–135).
 
 **Validation Track:** Paper trading ACTIVE with DEC-076 parameters on Alpaca. Validates system stability only — Alpaca IEX data captures only ~2–3% of market volume (DEC-081), so signal accuracy is not validated until Databento data is integrated (Sprint 12). See `08_PAPER_TRADING_GUIDE.md`.
 
@@ -159,6 +160,9 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 - **Vitest frontend testing (DEC-130):** React component tests via Vitest. 7 PositionTimeline tests. Establishes frontend testing pattern.
 - **SessionSummaryCard dev override (DEC-131):** Dev mode bypasses market status gate for testability.
 - **Pre-Databento re-validation milestone (DEC-132):** All parameter optimization is provisional until re-validated with Databento exchange-direct data.
+- **CapitalAllocation visual design (DEC-133):** Track-and-fill donut (custom SVG with color-tinted track arcs + bright clockwise fill arcs) plus horizontal stacked bars, toggled via SegmentedTab. Zustand view persistence. Replaces nested two-ring donut (too visually noisy).
+- **Dashboard 3-card second row (DEC-134):** CapitalAllocation + Risk Budget + Market Regime at equal widths. Market and Market Regime cards pair at tablet/phone breakpoints (always 2-column, never stack to single).
+- **Orchestrator deployment state API (DEC-135):** `GET /api/v1/orchestrator/status` enriched with per-strategy deployed_capital, deployed_pct, is_throttled, plus total_deployed_capital and total_equity.
 
 ## Architecture Summary
 

@@ -882,7 +882,7 @@ GET    /api/v1/trades                  — Trade history (filterable, paginated)
 GET    /api/v1/performance/{period}    — Metrics for today/week/month/all
 GET    /api/v1/strategies              — Strategy list with status
 GET    /api/v1/health                  — System health + component status
-GET    /api/v1/orchestrator/status     — Regime, allocations, throttle state
+GET    /api/v1/orchestrator/status     — Regime, allocations, throttle state, per-strategy deployment (DEC-135)
 GET    /api/v1/orchestrator/decisions  — Decision history (paginated)
 POST   /api/v1/orchestrator/rebalance  — Trigger manual rebalance
 GET    /api/v1/session-summary         — Session recap (P&L, wins/losses, best/worst trade, regime, strategies). Query: ?date=YYYY-MM-DD
@@ -911,7 +911,7 @@ Four pages delivered with responsive design across four breakpoints. Single Reac
 
 ### Pages
 
-**Dashboard** (`/`): Account summary cards (equity, daily P&L, open positions count, win rate), positions panel with table/timeline toggle (DEC-125) and three-way filter All/Open/Closed (DEC-128), recent trades list, system health mini-display. SessionSummaryCard appears after market close when trades exist (DEC-131 dev-mode override). View state persisted in Zustand store (DEC-129).
+**Dashboard** (`/`): Account summary cards (equity, daily P&L, open positions count, win rate). Three-card analytics row: CapitalAllocation (track-and-fill donut + horizontal bars toggle, DEC-133), Risk Budget (daily/weekly risk gauges), Market Regime (regime badge + description, DEC-134). Market and Market Regime cards pair at tablet/phone widths. Positions panel with table/timeline toggle (DEC-125) and three-way filter All/Open/Closed (DEC-128), recent trades list, system health mini-display. SessionSummaryCard appears after market close when trades exist (DEC-131 dev-mode override). View state persisted in Zustand store (DEC-129).
 
 **Trade Log** (`/trades`): Filter bar (strategy, outcome, date range), stats summary row (total trades, win rate, net P&L), paginated trade table with color-coded exit reason badges.
 
