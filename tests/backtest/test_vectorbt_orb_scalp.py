@@ -690,6 +690,7 @@ def test_multi_symbol_aggregation(tmp_data_dir):
 
 def test_heatmap_html_created(simple_symbol_data):
     """Run sweep → call generate_heatmap → HTML file exists."""
+    pytest.importorskip("plotly")
     data_dir, symbol, trading_days = simple_symbol_data
 
     output_dir = data_dir.parent / "sweeps"
@@ -710,6 +711,7 @@ def test_heatmap_html_created(simple_symbol_data):
 
 def test_heatmap_empty_results_handles_gracefully(tmp_data_dir):
     """Empty results don't crash heatmap generation."""
+    pytest.importorskip("plotly")
     output_dir = tmp_data_dir.parent / "sweeps"
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -726,6 +728,7 @@ def test_heatmap_empty_results_handles_gracefully(tmp_data_dir):
 
 def test_cli_runs_without_error(simple_symbol_data, monkeypatch, capsys):
     """Call main() with small synthetic dataset and minimal params."""
+    pytest.importorskip("plotly")
     import sys
 
     from argus.backtest.vectorbt_orb_scalp import main

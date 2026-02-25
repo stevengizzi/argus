@@ -799,6 +799,7 @@ def test_sweep_results_deterministic(simple_symbol_data):
 
 def test_heatmap_png_created(simple_symbol_data):
     """Run sweep → call generate_heatmaps → PNG files exist."""
+    pytest.importorskip("plotly")
     data_dir, symbol, trading_days = simple_symbol_data
 
     output_dir = data_dir.parent / "sweeps"
@@ -828,6 +829,7 @@ def test_heatmap_png_created(simple_symbol_data):
 
 def test_heatmap_html_created(simple_symbol_data):
     """Run sweep → call generate_heatmaps → HTML files exist."""
+    pytest.importorskip("plotly")
     data_dir, symbol, trading_days = simple_symbol_data
 
     output_dir = data_dir.parent / "sweeps"
@@ -857,6 +859,7 @@ def test_heatmap_html_created(simple_symbol_data):
 
 def test_heatmap_no_trades_handles_gracefully(tmp_data_dir):
     """Parameter combo with zero trades → heatmap handles gracefully."""
+    pytest.importorskip("plotly")
     output_dir = tmp_data_dir.parent / "sweeps"
 
     # Create an empty DataFrame that mimics the sweep results structure
@@ -908,6 +911,7 @@ def test_heatmap_no_trades_handles_gracefully(tmp_data_dir):
 
 def test_cli_runs_without_error(simple_symbol_data, monkeypatch, capsys):
     """Call main() with small synthetic dataset and minimal params."""
+    pytest.importorskip("plotly")
     import sys
 
     from argus.backtest.vectorbt_orb import main
