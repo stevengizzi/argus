@@ -11,7 +11,7 @@ Phase 1 sprint plan: @docs/07_PHASE1_SPRINT_PLAN.md
 ## Current State
 
 **Structure:** Two parallel tracks (DEC-079, February 19, 2026).
-- **Build Track:** System construction at development velocity. Sprints 1–18.75 complete (1,317 pytest tests + 14 Vitest). Sprint 19 (VWAP Reclaim) is IN PROGRESS.
+- **Build Track:** System construction at development velocity. Sprints 1–19 complete (1,410 pytest tests + 40 Vitest). Sprint 20 (Afternoon Momentum) is NEXT.
 - **Validation Track:** Paper trading ACTIVE on Alpaca IEX (system stability only — DEC-081). Signal accuracy validation pending Databento subscription activation (DEC-087). All pre-Databento backtests require re-validation with quality data (DEC-132). Migrates to IBKR paper after IBKR account approved (U24619949, submitted Feb 21).
 
 Active sprint plan: `docs/10_PHASE3_SPRINT_PLAN.md` (covers both tracks).
@@ -24,6 +24,15 @@ Active sprint plan: `docs/10_PHASE3_SPRINT_PLAN.md` (covers both tracks).
 - **Cost deferral:** Databento subscription activated when adapter ready for integration testing. DEC-087.
 
 - IBKR account application submitted Feb 21, 2026 (Account ID: U24619949). Individual, Margin, IBKR Pro (tiered), GA address. Permissions: Stocks, Options L3, Futures, Forex, Crypto. Awaiting approval.
+
+**Sprint 19 Results (VWAP Reclaim — Feb 25–26):**
+- VwapReclaimStrategy: standalone from BaseStrategy (DEC-136), 5-state machine (DEC-138), pullback swing-low stop (DEC-139). T1=1.0R/T2=2.0R, 30-min time stop.
+- Scanner reuse (DEC-137), position sizing with risk floor (DEC-140), ALLOW_ALL cross-strategy (DEC-141).
+- VectorBT sweep: 59,556 trades, 768 combos, avg Sharpe 3.89, WF OOS Sharpe 1.49, P&L $15,820 (DEC-146). Provisional per DEC-132. Precompute+vectorize architecture mandated (DEC-149).
+- Watchlist Sidebar: responsive layout (desktop inline/tablet slide-out/mobile overlay), compact badges, VWAP distance, sort, edge-mounted collapse pill (DEC-142, DEC-147, DEC-150).
+- Keyboard shortcuts: 1–4 navigation, w watchlist toggle (DEC-151).
+- Dev mode three-strategy mock data. Databento activation deferred to Sprint 20 (DEC-143).
+- 1410 tests (pytest) + 40 (Vitest). 14 sessions + 2 code reviews. Code review passed.
 
 **Sprint 18 + 18.5 Results (ORB Scalp — Feb 25):**
 - OrbBaseStrategy ABC (DEC-120) — shared base for ORB family strategies. OrbScalpStrategy (DEC-123): 0.3R single target, 120s hold.

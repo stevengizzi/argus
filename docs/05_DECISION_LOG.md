@@ -1666,5 +1666,26 @@ Each entry follows this format:
 | **Rationale** | The naive per-combination loop pattern (vectorbt_vwap_reclaim.py original implementation) was ~500x slower. Codifying the precompute+vectorize pattern as a rule prevents regression in Sprint 20 (Afternoon Momentum) and future strategies. Exit priority rules (stop > target > time_stop > EOD with worst-case stop price) also documented to ensure conservative backtest assumptions. |
 | **Status** | Active |
 
+---
+
+### DEC-150 | Watchlist UX Polish — Sparkline Removal + VWAP Distance
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-26 |
+| **Decision** | Removed sparklines from watchlist items. Added `vwap_distance_pct` metric and compact single-letter strategy badges (O/S/V). Three rounds of iteration: v1 (density + sort), v2 (sparkline removal + VWAP distance), v3 (alignment + header + collapse button redesign as edge-mounted pill). |
+| **Rationale** | Sparklines need 80–100px to be readable; at sidebar width (~280px minus padding) they were visual texture without actionable information. VWAP distance (e.g., "Below ↓0.3%") is the most actionable metric for the 10:00–12:00 VWAP Reclaim window — tells the operator instantly how close a symbol is to reclaim entry. Compact single-letter badges (fixed 20px width) replaced full-word badges for horizontal space savings. Green 3px left border on `entered` state items provides instant position identification without consuming layout space. Collapse button moved from circular overlay to slim vertical pill flush with sidebar edge — eliminates header icon collision. |
+| **Alternatives** | Keep sparklines at reduced size (too noisy), show VWAP distance as separate column (too wide), use icons instead of letter badges (less scannable). |
+| **Status** | Active |
+
+---
+
+### DEC-151 | Keyboard Shortcuts — Navigation + Watchlist Toggle
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-26 |
+| **Decision** | Global keyboard shortcuts: `1`–`4` for page navigation (Dashboard, Trades, Performance, System), `w` for watchlist sidebar toggle. Implemented via `keydown` event listeners in Sidebar.tsx and WatchlistSidebar.tsx. Shortcuts suppressed when focus is in input/textarea elements. |
+| **Rationale** | Power-user efficiency for single-operator system. Number keys match sidebar icon order. `w` is mnemonic for "watchlist." During overnight trading sessions (10:30 PM–5:00 AM Taipei time), quick keyboard navigation reduces friction. |
+| **Status** | Active |
+
 *End of Decision Log v1.0*
 *New decisions are appended chronologically as the project progresses.*
