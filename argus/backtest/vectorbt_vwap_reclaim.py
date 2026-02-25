@@ -435,8 +435,10 @@ def _precompute_reclaim_entries_for_day(
             pullback_low = np.inf
             bars_below = 0
 
-            # For VWAP Reclaim, typically only one entry per day matters
-            # Break here for single-entry-per-day semantics
+            # Single entry per day for sweep. The live strategy can retry after
+            # failed entry conditions (resets to ABOVE_VWAP), so it may find
+            # later reclaims that this sweep misses. This makes the backtest
+            # slightly more conservative (fewer entries). See DEC-148.
             break
 
     return entries
@@ -499,8 +501,13 @@ def _find_exit_vectorized(
         reason = "eod"
         exit_price = float(post_entry_closes[exit_idx])
     elif exit_idx == eod_idx and eod_hit[exit_idx]:
-        reason = "eod"
-        exit_price = float(post_entry_closes[exit_idx])
+        # Check if stop also hit on this bar (stop takes priority — worst case for longs)
+        if stop_idx == exit_idx and stop_hit[exit_idx]:
+            reason = "stop"
+            exit_price = stop_price
+        else:
+            reason = "eod"
+            exit_price = float(post_entry_closes[exit_idx])
     elif exit_idx == time_idx and time_stop_hit[exit_idx]:
         # Check if stop also hit on this bar (stop takes priority)
         if stop_idx == exit_idx and stop_hit[exit_idx]:

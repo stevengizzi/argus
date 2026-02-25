@@ -19,6 +19,7 @@ from datetime import UTC, datetime, timedelta
 from argus.analytics.trade_logger import TradeLogger
 from argus.api.auth import hash_password, set_jwt_secret
 from argus.api.dependencies import AppState
+from argus.api.routes.watchlist import SparklinePoint, VwapState, WatchlistItem
 from argus.core.clock import SystemClock
 from argus.core.config import (
     ApiConfig,
@@ -40,7 +41,6 @@ from argus.core.throttle import StrategyAllocation, ThrottleAction
 from argus.db.manager import DatabaseManager
 from argus.execution.order_manager import ManagedPosition, OrderManager
 from argus.execution.simulated_broker import SimulatedBroker
-from argus.api.routes.watchlist import SparklinePoint, VwapState, WatchlistItem
 from argus.models.trading import AssetClass, ExitReason, OrderSide, Trade, TradeOutcome
 
 # ---------------------------------------------------------------------------

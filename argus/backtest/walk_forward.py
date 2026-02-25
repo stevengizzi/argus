@@ -1734,7 +1734,7 @@ def parse_args() -> argparse.Namespace:
         "--strategy",
         default="orb",
         choices=["orb", "orb_scalp", "vwap_reclaim"],
-        help="Strategy to run: orb (ORB Breakout), orb_scalp (ORB Scalp), or vwap_reclaim (VWAP Reclaim)",
+        help="Strategy: orb, orb_scalp, or vwap_reclaim",
     )
 
     # Fixed-params mode

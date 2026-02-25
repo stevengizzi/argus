@@ -229,7 +229,10 @@ class VwapReclaimStrategy(BaseStrategy):
             return None
 
         if state.state == VwapState.ABOVE_VWAP:
-            if close < vwap:
+            # Note: Uses <= (not <) to match VectorBT sweep behavior.
+            # When close == VWAP exactly, we begin pullback tracking.
+            # See DEC-148.
+            if close <= vwap:
                 # Start tracking pullback
                 state.state = VwapState.BELOW_VWAP
                 state.pullback_low = candle.low

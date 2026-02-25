@@ -6,7 +6,7 @@ Provides endpoint for viewing scanner candidates and their status across strateg
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
@@ -17,7 +17,7 @@ from argus.api.dependencies import AppState, get_app_state
 router = APIRouter()
 
 
-class VwapState(str, Enum):
+class VwapState(StrEnum):
     """VWAP Reclaim state indicator for a symbol."""
 
     WATCHING = "watching"  # On watchlist but no VWAP position yet

@@ -571,7 +571,7 @@ class VwapReclaimConfig(StrategyConfig):
     stop_buffer_pct: float = Field(default=0.001, ge=0, le=0.05)
 
     @model_validator(mode="after")
-    def validate_pullback_range(self) -> "VwapReclaimConfig":
+    def validate_pullback_range(self) -> VwapReclaimConfig:
         """Ensure min_pullback_pct is less than max_pullback_pct."""
         if self.min_pullback_pct >= self.max_pullback_pct:
             raise ValueError(
