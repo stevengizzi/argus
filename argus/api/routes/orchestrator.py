@@ -151,7 +151,7 @@ async def get_orchestrator_status(
                 is_throttled=is_throttled,
             )
         )
-        total_deployed_pct += alloc.allocation_pct
+        total_deployed_pct += deployed_pct
 
     # Get regime indicators
     indicators: dict[str, float] = {}

@@ -74,8 +74,8 @@ export function RiskAllocationPanel() {
   }, [accountData?.equity, accountData?.daily_pnl, performanceData?.metrics.net_pnl]);
 
   if (isMultiColumn) {
-    // Desktop: 3-card equal-width grid
-    // Tablet: 2-column grid with Market Regime spanning full width below
+    // Desktop (lg+): 3-card equal-width grid (Capital, Risk, MarketRegime)
+    // Tablet: 2-card grid (Capital, Risk) — MarketRegime shown in paired row above
     return (
       <motion.div
         className="grid grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5 lg:gap-6"
@@ -109,15 +109,17 @@ export function RiskAllocationPanel() {
           </div>
         </Card>
 
-        {/* Market Regime - spans 2 cols on tablet, 1 col on desktop */}
-        <div className="col-span-2 lg:col-span-1">
+        {/* Market Regime - visible only on desktop (lg+), hidden on tablet */}
+        {/* On tablet, MarketRegime is shown paired with MarketStatus in DashboardPage */}
+        <div className="hidden lg:block">
           <MarketRegimeCard />
         </div>
       </motion.div>
     );
   }
 
-  // Mobile: stacked layout (all 3 cards full width)
+  // Mobile: stacked layout (Capital + Risk only)
+  // MarketRegimeCard is shown in the paired row with MarketStatus in DashboardPage
   return (
     <>
       <motion.div variants={staggerItem}>
@@ -148,10 +150,6 @@ export function RiskAllocationPanel() {
             />
           </div>
         </Card>
-      </motion.div>
-
-      <motion.div variants={staggerItem}>
-        <MarketRegimeCard />
       </motion.div>
     </>
   );

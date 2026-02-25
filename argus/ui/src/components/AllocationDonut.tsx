@@ -14,7 +14,8 @@
  * - Throttled strategies show gray unfilled portion instead of desaturated color
  */
 
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, animate, AnimatePresence } from 'framer-motion';
 import { DURATION } from '../utils/motion';
 import { useMediaQuery } from '../hooks/useMediaQuery';
@@ -152,7 +153,36 @@ const OUTER_RADIUS = 90;
 const INNER_RADIUS = 60;
 const GAP_DEGREES = 3; // Gap between segments
 
-export function AllocationDonut({
+// Custom comparator for React.memo - only re-render if allocation data changes
+function arePropsEqual(
+  prevProps: AllocationDonutProps,
+  nextProps: AllocationDonutProps
+): boolean {
+  // Compare allocations array by strategy_id and key values
+  if (prevProps.allocations.length !== nextProps.allocations.length) return false;
+  for (let i = 0; i < prevProps.allocations.length; i++) {
+    const prev = prevProps.allocations[i];
+    const next = nextProps.allocations[i];
+    if (
+      prev.strategy_id !== next.strategy_id ||
+      prev.allocation_pct !== next.allocation_pct ||
+      prev.deployed_pct !== next.deployed_pct ||
+      prev.is_throttled !== next.is_throttled
+    ) {
+      return false;
+    }
+  }
+  // Compare scalar props
+  return (
+    prevProps.cashReservePct === nextProps.cashReservePct &&
+    prevProps.totalDeployedPct === nextProps.totalDeployedPct &&
+    prevProps.totalDeployedCapital === nextProps.totalDeployedCapital &&
+    prevProps.totalEquity === nextProps.totalEquity &&
+    prevProps.shouldAnimate === nextProps.shouldAnimate
+  );
+}
+
+export const AllocationDonut = memo(function AllocationDonut({
   allocations,
   cashReservePct,
   totalDeployedPct,
@@ -171,10 +201,23 @@ export function AllocationDonut({
   // Detect hover capability (desktop only)
   const canHover = useMediaQuery('(hover: hover)');
 
-  // Calculate segment data from allocations
+  // Calculate segment data from allocations with normalization
+  // This ensures segments always fill exactly 360° even if allocations don't sum to 1.0
   const segments = useMemo(() => {
     const segs: SegmentData[] = [];
-    let currentAngle = 0;
+
+    // Collect all segments with their raw allocation percentages
+    const rawSegments: Array<{
+      id: string;
+      name: string;
+      color: string;
+      allocationPct: number;
+      allocationDollars: number;
+      deployedDollars: number;
+      deployedOfAllocation: number;
+      isThrottled: boolean;
+      isReserve: boolean;
+    }> = [];
 
     // Strategy segments
     allocations.forEach((alloc) => {
@@ -184,52 +227,74 @@ export function AllocationDonut({
       const allocationDollars = alloc.allocation_dollars ?? totalEquity * alloc.allocation_pct;
       const deployedDollars = alloc.deployed_capital ?? totalEquity * alloc.deployed_pct;
 
-      // Calculate angular span (with gap)
-      const angularSpan = alloc.allocation_pct * 360 - GAP_DEGREES;
-      if (angularSpan <= 0) return;
-
       // Calculate deployed % relative to this segment's allocation
       const deployedOfAllocation = alloc.allocation_pct > 0
         ? Math.min(1, alloc.deployed_pct / alloc.allocation_pct)
         : 0;
 
-      segs.push({
+      rawSegments.push({
         id: alloc.strategy_id,
         name: getStrategyDisplayName(alloc.strategy_id),
         color,
-        startAngle: currentAngle,
-        endAngle: currentAngle + angularSpan,
-        deployedPct: deployedOfAllocation,
-        isThrottled: alloc.is_throttled,
-        isReserve: false,
         allocationPct: alloc.allocation_pct,
         allocationDollars,
         deployedDollars,
+        deployedOfAllocation,
+        isThrottled: alloc.is_throttled,
+        isReserve: false,
       });
-
-      currentAngle += alloc.allocation_pct * 360;
     });
 
     // Reserve segment
     if (cashReservePct > 0) {
-      const angularSpan = cashReservePct * 360 - GAP_DEGREES;
-      if (angularSpan > 0) {
-        const reserveDollars = totalEquity * cashReservePct;
-        segs.push({
-          id: 'reserve',
-          name: 'Reserve',
-          color: CASH_COLOR,
-          startAngle: currentAngle,
-          endAngle: currentAngle + angularSpan,
-          deployedPct: 0,
-          isThrottled: false,
-          isReserve: true,
-          allocationPct: cashReservePct,
-          allocationDollars: reserveDollars,
-          deployedDollars: 0,
-        });
-      }
+      const reserveDollars = totalEquity * cashReservePct;
+      rawSegments.push({
+        id: 'reserve',
+        name: 'Reserve',
+        color: CASH_COLOR,
+        allocationPct: cashReservePct,
+        allocationDollars: reserveDollars,
+        deployedDollars: 0,
+        deployedOfAllocation: 0,
+        isThrottled: false,
+        isReserve: true,
+      });
     }
+
+    // Calculate total allocation for normalization
+    const totalAllocationPct = rawSegments.reduce((sum, s) => sum + s.allocationPct, 0);
+    if (totalAllocationPct === 0) return segs;
+
+    // Total gap space needed
+    const totalGapDegrees = rawSegments.length * GAP_DEGREES;
+    const availableDegrees = 360 - totalGapDegrees;
+
+    // Build segments with normalized angles
+    let currentAngle = 0;
+    rawSegments.forEach((raw) => {
+      // Normalize: each segment gets its share of 360° (minus gaps) proportional to its allocation
+      const normalizedPct = raw.allocationPct / totalAllocationPct;
+      const angularSpan = normalizedPct * availableDegrees;
+
+      if (angularSpan <= 0) return;
+
+      segs.push({
+        id: raw.id,
+        name: raw.name,
+        color: raw.color,
+        startAngle: currentAngle,
+        endAngle: currentAngle + angularSpan,
+        deployedPct: raw.deployedOfAllocation,
+        isThrottled: raw.isThrottled,
+        isReserve: raw.isReserve,
+        allocationPct: raw.allocationPct,
+        allocationDollars: raw.allocationDollars,
+        deployedDollars: raw.deployedDollars,
+      });
+
+      // Advance by angular span plus gap
+      currentAngle += angularSpan + GAP_DEGREES;
+    });
 
     return segs;
   }, [allocations, cashReservePct, totalEquity]);
@@ -250,28 +315,33 @@ export function AllocationDonut({
     return `$${value.toFixed(0)}`;
   };
 
-  // Sweep animation
+  // Sweep animation - segments and center text animate concurrently
   useEffect(() => {
     if (!shouldAnimate || hasAnimatedRef.current) return;
     hasAnimatedRef.current = true;
 
-    // Animate progress from 0 to 1
+    // Animate segment progress from 0 to 1
     const progressControl = animate(0, 1, {
       duration: 0.7,
       ease: [0.0, 0.0, 0.2, 1.0], // ease-out
       onUpdate: setAnimationProgress,
-      onComplete: () => {
-        // Fade in center text after segments complete
-        animate(0, 1, {
-          duration: DURATION.normal,
-          ease: [0.0, 0.0, 0.2, 1.0],
-          onUpdate: setCenterOpacity,
-          onComplete: onAnimationComplete,
-        });
-      },
+      onComplete: onAnimationComplete,
     });
 
-    return () => progressControl.stop();
+    // Start center text fade-in concurrently with a slight delay
+    // This lets segments get a head start before the text appears
+    const centerTextDelay = setTimeout(() => {
+      animate(0, 1, {
+        duration: 0.4,
+        ease: [0.0, 0.0, 0.2, 1.0],
+        onUpdate: setCenterOpacity,
+      });
+    }, 250); // 250ms delay
+
+    return () => {
+      progressControl.stop();
+      clearTimeout(centerTextDelay);
+    };
   }, [shouldAnimate, onAnimationComplete]);
 
   // Snap to final state on window resize to prevent broken mid-animation states
@@ -455,9 +525,10 @@ export function AllocationDonut({
         ))}
       </div>
 
-      {/* Tooltip - follows cursor with offset */}
-      <AnimatePresence>
-        {tooltip && canHover && (
+      {/* Tooltip - rendered via Portal to escape parent transforms */}
+      {/* Parent motion.div has scale transform which breaks position:fixed */}
+      {tooltip && canHover && createPortal(
+        <AnimatePresence>
           <motion.div
             className="fixed z-50 bg-argus-surface border border-argus-border rounded-lg shadow-xl p-2.5 pointer-events-none"
             style={{
@@ -495,8 +566,9 @@ export function AllocationDonut({
               </div>
             </div>
           </motion.div>
-        )}
-      </AnimatePresence>
+        </AnimatePresence>,
+        document.body
+      )}
     </div>
   );
-}
+}, arePropsEqual);

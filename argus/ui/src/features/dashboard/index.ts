@@ -10,6 +10,7 @@ export { RecentTrades } from './RecentTrades';
 export { HealthMini } from './HealthMini';
 export { RiskAllocationPanel } from './RiskAllocationPanel';
 export { SessionSummaryCard } from './SessionSummaryCard';
+export { MarketRegimeCard } from './MarketRegimeCard';
 
 // Skeleton exports
 export {

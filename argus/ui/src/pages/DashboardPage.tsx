@@ -16,6 +16,7 @@ import {
   AccountSummary,
   DailyPnlCard,
   MarketStatusBadge,
+  MarketRegimeCard,
   OpenPositions,
   RecentTrades,
   HealthMini,
@@ -43,7 +44,16 @@ export function DashboardPage() {
         <SessionSummaryCard />
         <motion.div variants={staggerItem}><AccountSummary /></motion.div>
         <motion.div variants={staggerItem}><DailyPnlCard /></motion.div>
-        <motion.div variants={staggerItem}><MarketStatusBadge /></motion.div>
+
+        {/* Market pair: always 2-col even on phone */}
+        <motion.div
+          className="grid grid-cols-2 gap-4"
+          variants={staggerItem}
+        >
+          <MarketStatusBadge />
+          <MarketRegimeCard />
+        </motion.div>
+
         <RiskAllocationPanel />
         <motion.div variants={staggerItem}><OpenPositions /></motion.div>
         <motion.div variants={staggerItem}><RecentTrades /></motion.div>
@@ -76,12 +86,23 @@ export function DashboardPage() {
         <motion.div variants={staggerItem} className="h-full">
           <DailyPnlCard />
         </motion.div>
-        <motion.div variants={staggerItem} className="md:col-span-2 lg:col-span-1 h-full">
+        {/* MarketStatusBadge: visible only on desktop (lg+), hidden on tablet */}
+        <motion.div variants={staggerItem} className="hidden lg:block h-full">
           <MarketStatusBadge />
         </motion.div>
       </motion.div>
 
-      {/* Risk allocation row: Donut + Risk Gauges */}
+      {/* Market pair row: visible on tablet, hidden on desktop (lg+) */}
+      {/* These two cards stay paired in 2-col layout at tablet breakpoint */}
+      <motion.div
+        className="grid grid-cols-2 gap-4 md:gap-5 lg:hidden"
+        variants={staggerItem}
+      >
+        <MarketStatusBadge />
+        <MarketRegimeCard />
+      </motion.div>
+
+      {/* Risk allocation row: Donut + Risk Gauges (+ MarketRegime on desktop) */}
       <RiskAllocationPanel />
 
       {/* Open positions - full width */}

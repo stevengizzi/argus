@@ -237,7 +237,9 @@ async def test_get_status_returns_regime_and_allocations(
 
     # Check other fields
     assert data["cash_reserve_pct"] == 0.20  # Default from OrchestratorConfig
-    assert data["total_deployed_pct"] == 0.40
+    # total_deployed_pct is the sum of actual deployed capital percentages (not allocations)
+    # Since this test has no open positions, deployed should be 0.0
+    assert data["total_deployed_pct"] == 0.0
     assert "regime_updated_at" in data
     assert "next_regime_check" in data
     assert "timestamp" in data
