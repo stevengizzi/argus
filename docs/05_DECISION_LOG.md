@@ -1687,5 +1687,107 @@ Each entry follows this format:
 | **Rationale** | Power-user efficiency for single-operator system. Number keys match sidebar icon order. `w` is mnemonic for "watchlist." During overnight trading sessions (10:30 PM–5:00 AM Taipei time), quick keyboard navigation reduces friction. |
 | **Status** | Active |
 
+---
+
+### DEC-152 | Afternoon Momentum — Standalone from BaseStrategy
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-26 |
+| **Decision** | AfternoonMomentumStrategy inherits from BaseStrategy directly, not from OrbBaseStrategy or any shared consolidation base. |
+| **Rationale** | Despite structural similarity to ORB (range → breakout), the range formation is fundamentally different. ORB: predefined time window. Afternoon Momentum: organically formed midday consolidation. Follows VWAP Reclaim precedent (DEC-136). Shared base extracted later if needed (DEF-022 pattern). |
+| **Status** | Active |
+
+---
+
+### DEC-153 | Consolidation Detection — High/Low Channel + ATR Filter
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-26 |
+| **Decision** | Consolidation identified by tracking high/low of midday bars (12:00–2:00 PM), confirmed by midday_range / ATR-14 < threshold (default 0.75). |
+| **Rationale** | Simple, testable, vectorizable. ATR filter confirms range is genuinely tight vs. just a low-volatility stock. Bollinger Bands require new indicator computation. Moving average convergence too indirect. |
+| **Status** | Active |
+
+---
+
+### DEC-154 | Afternoon Momentum Scanner — Gap Watchlist Reuse
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-26 |
+| **Decision** | Afternoon Momentum reuses the same gap scanner criteria as ORB and VWAP Reclaim (min_gap=2%, min_price=$10, max_price=$200, min_volume=1M, min_rvol=2.0). |
+| **Rationale** | Gap watchlist identifies institutional-quality stocks with catalysts — natural candidates for midday consolidation and afternoon breakout. Consolidation detection is the second filter. Matches DEC-137 scanner reuse pattern. |
+| **Status** | Active |
+
+---
+
+### DEC-155 | Afternoon Momentum State Machine — 5 States
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-26 |
+| **Decision** | 5-state machine: WATCHING (before 12:00 PM), ACCUMULATING (tracking midday range), CONSOLIDATED (range confirmed tight), ENTERED (position taken, terminal), REJECTED (range too wide, terminal). |
+| **Rationale** | ACCUMULATING → CONSOLIDATED split prevents false entries on insufficient data. min_consolidation_bars gate ensures meaningful range measurement. CONSOLIDATED continues updating range, so widening can still reject. Parallels VWAP Reclaim 5-state pattern (DEC-138). |
+| **Status** | Active |
+
+---
+
+### DEC-156 | Afternoon Momentum Entry Conditions — 8 Simultaneous Requirements
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-26 |
+| **Decision** | Entry requires ALL: (1) CONSOLIDATED state, (2) time 2:00–3:30 PM, (3) candle close > consolidation_high, (4) volume ≥ multiplier × avg, (5) chase protection, (6) risk > 0, (7) internal risk limits pass, (8) position count limit. |
+| **Rationale** | Same comprehensive gating pattern as ORB and VWAP Reclaim. Close-based confirmation (not intra-bar) is consistent across all strategies. |
+| **Status** | Active |
+
+---
+
+### DEC-157 | Afternoon Momentum Stop and Target Design
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-26 |
+| **Decision** | Stop below consolidation_low with buffer (0.1%). T1=1.0R (50%), T2=2.0R (50%). Dynamic time stop: min(max_hold_minutes, seconds_until_3:45_PM). |
+| **Rationale** | Same T1/T2 pattern proven across three strategies. Dynamic time stop handles EOD proximity — a 3:25 PM entry gets 20-min time stop, not 60-min. Trailing stop deferred (DEC-158). |
+| **Status** | Active |
+
+---
+
+### DEC-158 | Trailing Stop — Deferred to V2
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-26 |
+| **Decision** | No trailing stop mechanism in V1 of Afternoon Momentum. |
+| **Rationale** | Trailing stops touch Order Manager, Risk Manager, backtesting, and VectorBT sweep architecture — cross-cutting complexity. T1/T2 fixed targets are proven. If walk-forward shows afternoon moves routinely exceed T2, trailing stop becomes a future sprint item. |
+| **Status** | Active |
+
+---
+
+### DEC-159 | Afternoon Momentum EOD Handling
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-26 |
+| **Decision** | Last entry 3:30 PM. Force close 3:45 PM. Time stop at signal creation = min(max_hold_minutes × 60, seconds_until_3:45_PM). Order Manager EOD flatten is safety net. |
+| **Rationale** | Dynamic time stop calculation ensures no position is targeted for closure after the hard cutoff. Earliest-exit-wins logic in Order Manager already handles overlap between time stop and EOD flatten. |
+| **Status** | Active |
+
+---
+
+### DEC-160 | Cross-Strategy Interaction — ALLOW_ALL, Time-Separated
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-26 |
+| **Decision** | Same ALLOW_ALL duplicate stock policy (DEC-121) for Afternoon Momentum. No additional cross-strategy restrictions. |
+| **Rationale** | Time windows are well-separated: ORB/Scalp done by ~10:15 AM, VWAP Reclaim done by ~12:30 PM, Afternoon Momentum starts at 2:00 PM. Cross-strategy collisions effectively impossible. 5% max_single_stock_pct cap remains as safety net. |
+| **Status** | Active |
+
+---
+
+### DEC-161 | Databento Activation — Deferred to Sprint 21
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-26 |
+| **Decision** | Databento subscription not activated for Sprint 20. Defer to Sprint 21 (analytics sprint). |
+| **Rationale** | Saves $199/month. Sprint 20 uses Alpaca Parquet data like all other strategies. All results provisional per DEC-132. Databento most valuable when four strategies are built AND analytics toolkit is ready for serious validation. Amends DEC-143. |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
 *New decisions are appended chronologically as the project progresses.*

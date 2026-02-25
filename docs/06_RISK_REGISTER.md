@@ -542,6 +542,34 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 | **Mitigation** | (1) DEC-132 mandates Databento re-validation for all strategies before live deployment. (2) Paper trading on Alpaca provides initial reality check. (3) Conservative parameter selection (not the highest-Sharpe combo) reduces overfit risk. (4) Start at minimum size even after validation passes. |
 | **Status** | Open — addressed by Databento re-validation + paper trading |
 
+---
+
+### RSK-030 | Low Afternoon Trade Counts in Alpaca IEX Data
+| Field | Value |
+|-------|-------|
+| **Date Identified** | 2026-02-26 |
+| **Category** | Data Quality |
+| **Description** | Afternoon Momentum consolidation detection and breakout confirmation are volume-sensitive. Alpaca's IEX data captures only ~2-3% of market volume (DEC-081). VectorBT sweep may produce very few qualifying trades, making statistical analysis unreliable. |
+| **Likelihood** | High |
+| **Impact** | Medium — sweep results are directional guidance only, not statistically validated. |
+| **Mitigation** | All results provisional per DEC-132. True validation requires Databento exchange-direct data. Low trade counts don't invalidate the strategy thesis — they indicate data limitations. |
+| **Status** | Open |
+| **Owner** | Steven |
+
+---
+
+### RSK-031 | EOD Time Stop Compression for Late Afternoon Entries
+| Field | Value |
+|-------|-------|
+| **Date Identified** | 2026-02-26 |
+| **Category** | Strategy Risk |
+| **Description** | Entries after 3:15 PM have ≤30 minutes effective hold time due to 3:45 PM force close. If the strategy consistently enters late, most exits will be time stops rather than targets, degrading profitability. |
+| **Likelihood** | Medium |
+| **Impact** | Low — time stop exits at close price, not stop price. Late entries still capture the power hour move direction. |
+| **Mitigation** | Monitor time-of-entry distribution in sweep results. If >60% of entries occur after 3:15 PM, consider tightening latest_entry to 3:15 PM. |
+| **Status** | Open |
+| **Owner** | Steven |
+
 ## Review Schedule
 
 | Review Type | Frequency | Next Review |
