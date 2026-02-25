@@ -30,6 +30,7 @@ from argus.core.config import (
     RiskConfig,
     StrategyConfig,
     SystemConfig,
+    VwapReclaimConfig,
 )
 from argus.core.event_bus import EventBus
 from argus.core.health import ComponentStatus, HealthMonitor
@@ -144,7 +145,11 @@ class MockOrchestrator:
 # ---------------------------------------------------------------------------
 
 
-def _generate_mock_trades(orb_count: int = 15, scalp_count: int = 8) -> list[Trade]:
+def _generate_mock_trades(
+    orb_count: int = 12,
+    scalp_count: int = 6,
+    vwap_reclaim_count: int = 8,
+) -> list[Trade]:
     """Generate realistic mock trades for seeding the database.
 
     Creates a mix of:
@@ -154,11 +159,14 @@ def _generate_mock_trades(orb_count: int = 15, scalp_count: int = 8) -> list[Tra
 
     For ORB Breakout: 5-120 min holds, 1R/2R targets
     For ORB Scalp: 30-120s holds, 0.3R targets, smaller P&L
+    For VWAP Reclaim: 5-30 min holds, 1.5R/2R targets, mid-morning entries
     """
     # ORB Breakout uses these symbols
     orb_symbols = ["NVDA", "AAPL", "AMD", "META"]
     # ORB Scalp uses these symbols (distinct from ORB positions)
     scalp_symbols = ["TSLA", "GOOG", "AMZN", "MSFT"]
+    # VWAP Reclaim uses mid-cap momentum names
+    vwap_reclaim_symbols = ["SOFI", "PLTR", "HOOD", "RIVN"]
 
     symbol_prices = {
         "TSLA": (180.0, 250.0),
@@ -169,6 +177,10 @@ def _generate_mock_trades(orb_count: int = 15, scalp_count: int = 8) -> list[Tra
         "GOOG": (150.0, 180.0),
         "AMZN": (180.0, 220.0),
         "MSFT": (400.0, 450.0),
+        "SOFI": (12.0, 18.0),
+        "PLTR": (25.0, 40.0),
+        "HOOD": (18.0, 28.0),
+        "RIVN": (14.0, 22.0),
     }
 
     trades: list[Trade] = []
@@ -181,16 +193,23 @@ def _generate_mock_trades(orb_count: int = 15, scalp_count: int = 8) -> list[Tra
         min_hold_seconds: int,
         max_hold_seconds: int,
         rationale: str,
+        entry_hour_range: tuple[int, int] | None = None,
     ) -> Trade:
         """Generate a single trade with strategy-specific parameters."""
         # Spread trades over the last 30 days
         days_ago = random.randint(0, 29)
         trade_date = now - timedelta(days=days_ago)
-        # Set entry time to market hours (9:45 AM - 3:30 PM ET)
-        hour = random.randint(9, 14)
-        minute = random.randint(0, 59)
-        if hour == 9:
-            minute = random.randint(45, 59)
+        # Set entry time to market hours
+        if entry_hour_range:
+            # Use specific hour range (for VWAP Reclaim: 10-12 ET)
+            hour = random.randint(entry_hour_range[0], entry_hour_range[1])
+            minute = random.randint(0, 59)
+        else:
+            # Default: 9:45 AM - 3:30 PM ET
+            hour = random.randint(9, 14)
+            minute = random.randint(0, 59)
+            if hour == 9:
+                minute = random.randint(45, 59)
 
         entry_time = trade_date.replace(
             hour=hour + 5,  # Convert to UTC (ET + 5 in winter)
@@ -218,9 +237,12 @@ def _generate_mock_trades(orb_count: int = 15, scalp_count: int = 8) -> list[Tra
         stop_distance = round(entry_price * risk_pct, 2)
         stop_price = round(entry_price - stop_distance, 2)
 
-        # Position sizing based on $1000-$3000 risk per trade (scalp uses smaller)
+        # Position sizing based on $1000-$3000 risk per trade
+        # Scalp uses smaller risk, VWAP Reclaim is medium
         if strategy_id == "orb_scalp":
             risk_amount = random.uniform(500, 1500)
+        elif strategy_id == "vwap_reclaim":
+            risk_amount = random.uniform(800, 2000)
         else:
             risk_amount = random.uniform(1000, 3000)
         shares = max(10, int(risk_amount / stop_distance))
@@ -304,6 +326,19 @@ def _generate_mock_trades(orb_count: int = 15, scalp_count: int = 8) -> list[Tra
         )
         trades.append(trade)
 
+    # Generate VWAP Reclaim trades (5-30 min holds, 1.5-2R targets, mid-morning)
+    for _ in range(vwap_reclaim_count):
+        trade = generate_trade(
+            strategy_id="vwap_reclaim",
+            symbols=vwap_reclaim_symbols,
+            target_r=random.choice([1.5, 2.0]),
+            min_hold_seconds=5 * 60,  # 5 minutes
+            max_hold_seconds=30 * 60,  # 30 minutes
+            rationale="VWAP reclaim after pullback with volume confirmation",
+            entry_hour_range=(10, 11),  # 10:00 AM - 11:59 AM ET
+        )
+        trades.append(trade)
+
     return trades
 
 
@@ -311,14 +346,16 @@ def _create_mock_positions(now: datetime) -> list[ManagedPosition]:
     """Create mock managed positions for dev mode.
 
     Creates:
-    - 3 ORB Breakout positions (~$28k total notional, within $40k allocation)
-    - 2 ORB Scalp positions (~$25k total notional, within $40k allocation)
+    - 2 ORB Breakout positions (~$18k total notional, within $26.7k allocation)
+    - 2 ORB Scalp positions (~$20k total notional, within $26.7k allocation)
+    - 2 VWAP Reclaim positions (~$18k total notional, within $26.7k allocation)
 
-    Position sizes are realistic for a $100k account with 40% allocation per strategy.
+    Position sizes are realistic for a $100k account with 26.67% allocation per strategy
+    (three strategies + 20% cash reserve).
     """
     positions = []
 
-    # --- ORB Breakout Positions (total ~$28k = 70% of $40k allocation) ---
+    # --- ORB Breakout Positions (total ~$18k = 68% of $26.7k allocation) ---
 
     # Position 1: NVDA - entered 30 minutes ago, T1 hit, stop at breakeven
     # 12 shares × $875.50 = $10,506 notional
@@ -345,7 +382,7 @@ def _create_mock_positions(now: datetime) -> list[ManagedPosition]:
     )
 
     # Position 2: AAPL - entered 15 minutes ago, still waiting for T1
-    # 50 shares × $185.80 = $9,290 notional
+    # 45 shares × $185.80 = $8,361 notional
     entry_time_2 = now - timedelta(minutes=15)
     positions.append(
         ManagedPosition(
@@ -353,14 +390,14 @@ def _create_mock_positions(now: datetime) -> list[ManagedPosition]:
             strategy_id="orb_breakout",
             entry_price=185.80,
             entry_time=entry_time_2,
-            shares_total=50,
-            shares_remaining=50,
+            shares_total=45,
+            shares_remaining=45,
             stop_price=183.50,
             original_stop_price=183.50,
             stop_order_id="stop_aapl_001",
             t1_price=188.10,
             t1_order_id="t1_aapl_001",
-            t1_shares=25,
+            t1_shares=23,
             t1_filled=False,
             t2_price=190.40,
             high_watermark=186.90,
@@ -368,49 +405,25 @@ def _create_mock_positions(now: datetime) -> list[ManagedPosition]:
         )
     )
 
-    # Position 3: AMD - just entered, all targets pending
-    # 55 shares × $155.25 = $8,539 notional
-    entry_time_3 = now - timedelta(minutes=5)
-    positions.append(
-        ManagedPosition(
-            symbol="AMD",
-            strategy_id="orb_breakout",
-            entry_price=155.25,
-            entry_time=entry_time_3,
-            shares_total=55,
-            shares_remaining=55,
-            stop_price=152.75,
-            original_stop_price=152.75,
-            stop_order_id="stop_amd_001",
-            t1_price=157.75,
-            t1_order_id="t1_amd_001",
-            t1_shares=28,
-            t1_filled=False,
-            t2_price=160.25,
-            high_watermark=155.60,
-            realized_pnl=0.0,
-        )
-    )
+    # --- ORB Scalp Positions (~$20k total = 75% of $26.7k allocation) ---
 
-    # --- ORB Scalp Positions (~$25k total = 63% of $40k allocation) ---
-
-    # Position 4: TSLA - scalp entered 45 seconds ago, waiting for target
-    # 60 shares × $225.80 = $13,548 notional
-    entry_time_4 = now - timedelta(seconds=45)
+    # Position 3: TSLA - scalp entered 45 seconds ago, waiting for target
+    # 50 shares × $225.80 = $11,290 notional
+    entry_time_3 = now - timedelta(seconds=45)
     positions.append(
         ManagedPosition(
             symbol="TSLA",
             strategy_id="orb_scalp",
             entry_price=225.80,
-            entry_time=entry_time_4,
-            shares_total=60,
-            shares_remaining=60,
+            entry_time=entry_time_3,
+            shares_total=50,
+            shares_remaining=50,
             stop_price=224.65,  # Tighter stop for scalp
             original_stop_price=224.65,
             stop_order_id="stop_tsla_scalp_001",
             t1_price=226.15,  # 0.3R target
             t1_order_id="t1_tsla_scalp_001",
-            t1_shares=60,  # Scalp exits 100% at T1
+            t1_shares=50,  # Scalp exits 100% at T1
             t1_filled=False,
             t2_price=0.0,  # No T2 for scalp
             high_watermark=225.95,
@@ -418,26 +431,78 @@ def _create_mock_positions(now: datetime) -> list[ManagedPosition]:
         )
     )
 
-    # Position 5: GOOG - scalp entered 90 seconds ago, approaching target
-    # 70 shares × $165.40 = $11,578 notional
-    entry_time_5 = now - timedelta(seconds=90)
+    # Position 4: GOOG - scalp entered 90 seconds ago, approaching target
+    # 55 shares × $165.40 = $9,097 notional
+    entry_time_4 = now - timedelta(seconds=90)
     positions.append(
         ManagedPosition(
             symbol="GOOG",
             strategy_id="orb_scalp",
             entry_price=165.40,
-            entry_time=entry_time_5,
-            shares_total=70,
-            shares_remaining=70,
+            entry_time=entry_time_4,
+            shares_total=55,
+            shares_remaining=55,
             stop_price=164.55,  # Tighter stop for scalp
             original_stop_price=164.55,
             stop_order_id="stop_goog_scalp_001",
             t1_price=165.66,  # 0.3R target
             t1_order_id="t1_goog_scalp_001",
-            t1_shares=70,  # Scalp exits 100% at T1
+            t1_shares=55,  # Scalp exits 100% at T1
             t1_filled=False,
             t2_price=0.0,  # No T2 for scalp
             high_watermark=165.58,
+            realized_pnl=0.0,
+        )
+    )
+
+    # --- VWAP Reclaim Positions (~$18k total = 68% of $26.7k allocation) ---
+    # Mid-morning entries (10:15 AM, 10:45 AM ET pattern)
+
+    # Position 5: PLTR - entered at 10:15 AM (mid-morning), T1 partially filled
+    # 300 shares × $32.50 = $9,750 notional
+    entry_time_5 = now - timedelta(minutes=25)
+    positions.append(
+        ManagedPosition(
+            symbol="PLTR",
+            strategy_id="vwap_reclaim",
+            entry_price=32.50,
+            entry_time=entry_time_5,
+            shares_total=300,
+            shares_remaining=150,  # T1 took half
+            stop_price=32.50,  # Moved to breakeven after T1
+            original_stop_price=31.85,
+            stop_order_id="stop_pltr_vwap_001",
+            t1_price=33.15,
+            t1_order_id=None,  # T1 filled
+            t1_shares=150,
+            t1_filled=True,
+            t2_price=33.80,
+            t2_order_id="t2_pltr_vwap_001",
+            high_watermark=33.45,
+            realized_pnl=97.50,  # 150 × $0.65
+        )
+    )
+
+    # Position 6: SOFI - entered at 10:45 AM (mid-morning), waiting for T1
+    # 500 shares × $15.20 = $7,600 notional
+    entry_time_6 = now - timedelta(minutes=12)
+    positions.append(
+        ManagedPosition(
+            symbol="SOFI",
+            strategy_id="vwap_reclaim",
+            entry_price=15.20,
+            entry_time=entry_time_6,
+            shares_total=500,
+            shares_remaining=500,
+            stop_price=14.90,
+            original_stop_price=14.90,
+            stop_order_id="stop_sofi_vwap_001",
+            t1_price=15.65,
+            t1_order_id="t1_sofi_vwap_001",
+            t1_shares=250,
+            t1_filled=False,
+            t2_price=16.10,
+            high_watermark=15.42,
             realized_pnl=0.0,
         )
     )
@@ -451,34 +516,49 @@ async def _seed_orchestrator_decisions(trade_logger: TradeLogger, now: datetime)
     today = now.date().isoformat()
     yesterday = (now - timedelta(days=1)).date().isoformat()
 
-    # Today's ORB Breakout allocation (40%)
+    # Today's ORB Breakout allocation (26.67%)
     await trade_logger.log_orchestrator_decision(
         date=today,
         decision_type="allocation",
         strategy_id="orb_breakout",
         details={
-            "allocation_pct": 0.40,
-            "allocation_dollars": 40000.0,
+            "allocation_pct": 0.2667,
+            "allocation_dollars": 26670.0,
             "throttle_action": "none",
             "eligible": True,
             "regime": "bullish_trending",
         },
-        rationale="Active: 40% allocation",
+        rationale="Active: 26.67% allocation (equal-weight, 3 strategies)",
     )
 
-    # Today's ORB Scalp allocation (40%)
+    # Today's ORB Scalp allocation (26.67%)
     await trade_logger.log_orchestrator_decision(
         date=today,
         decision_type="allocation",
         strategy_id="orb_scalp",
         details={
-            "allocation_pct": 0.40,
-            "allocation_dollars": 40000.0,
+            "allocation_pct": 0.2667,
+            "allocation_dollars": 26670.0,
             "throttle_action": "none",
             "eligible": True,
             "regime": "bullish_trending",
         },
-        rationale="Active: 40% allocation",
+        rationale="Active: 26.67% allocation (equal-weight, 3 strategies)",
+    )
+
+    # Today's VWAP Reclaim allocation (26.67%)
+    await trade_logger.log_orchestrator_decision(
+        date=today,
+        decision_type="allocation",
+        strategy_id="vwap_reclaim",
+        details={
+            "allocation_pct": 0.2667,
+            "allocation_dollars": 26670.0,
+            "throttle_action": "none",
+            "eligible": True,
+            "regime": "bullish_trending",
+        },
+        rationale="Active: 26.67% allocation (equal-weight, 3 strategies)",
     )
 
     await trade_logger.log_orchestrator_decision(
@@ -496,34 +576,49 @@ async def _seed_orchestrator_decisions(trade_logger: TradeLogger, now: datetime)
         rationale="SPY above both SMAs with positive momentum",
     )
 
-    # Yesterday's ORB Breakout allocation (40%)
+    # Yesterday's ORB Breakout allocation (26.67%)
     await trade_logger.log_orchestrator_decision(
         date=yesterday,
         decision_type="allocation",
         strategy_id="orb_breakout",
         details={
-            "allocation_pct": 0.40,
-            "allocation_dollars": 40000.0,
+            "allocation_pct": 0.2667,
+            "allocation_dollars": 26670.0,
             "throttle_action": "none",
             "eligible": True,
             "regime": "bullish_trending",
         },
-        rationale="Active: 40% allocation",
+        rationale="Active: 26.67% allocation (equal-weight, 3 strategies)",
     )
 
-    # Yesterday's ORB Scalp allocation (40%)
+    # Yesterday's ORB Scalp allocation (26.67%)
     await trade_logger.log_orchestrator_decision(
         date=yesterday,
         decision_type="allocation",
         strategy_id="orb_scalp",
         details={
-            "allocation_pct": 0.40,
-            "allocation_dollars": 40000.0,
+            "allocation_pct": 0.2667,
+            "allocation_dollars": 26670.0,
             "throttle_action": "none",
             "eligible": True,
             "regime": "bullish_trending",
         },
-        rationale="Active: 40% allocation",
+        rationale="Active: 26.67% allocation (equal-weight, 3 strategies)",
+    )
+
+    # Yesterday's VWAP Reclaim allocation (26.67%)
+    await trade_logger.log_orchestrator_decision(
+        date=yesterday,
+        decision_type="allocation",
+        strategy_id="vwap_reclaim",
+        details={
+            "allocation_pct": 0.2667,
+            "allocation_dollars": 26670.0,
+            "throttle_action": "none",
+            "eligible": True,
+            "regime": "bullish_trending",
+        },
+        rationale="Active: 26.67% allocation (equal-weight, 3 strategies)",
     )
 
     await trade_logger.log_orchestrator_decision(
@@ -550,24 +645,32 @@ def _create_mock_orchestrator(now: datetime) -> MockOrchestrator:
         timestamp=now,
     )
 
-    # Mock allocations: 40% each strategy + 20% reserve = 100%
-    # With 2 strategies and equal weight: (100% - 20% reserve) / 2 = 40% each
+    # Mock allocations: 26.67% each strategy + 20% reserve = 100%
+    # With 3 strategies and equal weight: (100% - 20% reserve) / 3 = 26.67% each
     allocations = {
         "orb_breakout": StrategyAllocation(
             strategy_id="orb_breakout",
-            allocation_pct=0.40,
-            allocation_dollars=40000.0,
+            allocation_pct=0.2667,
+            allocation_dollars=26670.0,
             throttle_action=ThrottleAction.NONE,
             eligible=True,
-            reason="Active: 40% allocation",
+            reason="Active: 26.67% allocation (equal-weight, 3 strategies)",
         ),
         "orb_scalp": StrategyAllocation(
             strategy_id="orb_scalp",
-            allocation_pct=0.40,
-            allocation_dollars=40000.0,
+            allocation_pct=0.2667,
+            allocation_dollars=26670.0,
             throttle_action=ThrottleAction.NONE,
             eligible=True,
-            reason="Active: 40% allocation",
+            reason="Active: 26.67% allocation (equal-weight, 3 strategies)",
+        ),
+        "vwap_reclaim": StrategyAllocation(
+            strategy_id="vwap_reclaim",
+            allocation_pct=0.2667,
+            allocation_dollars=26670.0,
+            throttle_action=ThrottleAction.NONE,
+            eligible=True,
+            reason="Active: 26.67% allocation (equal-weight, 3 strategies)",
         ),
     }
 
@@ -618,7 +721,7 @@ async def create_dev_state() -> AppState:
     clock = SystemClock()
     trade_logger = TradeLogger(db)
 
-    # Seed trades (15 ORB Breakout + 8 ORB Scalp)
+    # Seed trades (12 ORB Breakout + 6 ORB Scalp + 8 VWAP Reclaim)
     trades = _generate_mock_trades()
     for trade in trades:
         await trade_logger.log_trade(trade)
@@ -665,6 +768,9 @@ async def create_dev_state() -> AppState:
     health_monitor.update_component(
         "strategy_orb_scalp", ComponentStatus.HEALTHY, "ORB Scalp running"
     )
+    health_monitor.update_component(
+        "strategy_vwap_reclaim", ComponentStatus.HEALTHY, "VWAP Reclaim running"
+    )
 
     # Risk manager
     risk_config = RiskConfig()
@@ -710,6 +816,10 @@ async def create_dev_state() -> AppState:
         t for t in trades
         if t.exit_time.date() == now.date() and t.strategy_id == "orb_scalp"
     ]
+    vwap_todays_trades = [
+        t for t in trades
+        if t.exit_time.date() == now.date() and t.strategy_id == "vwap_reclaim"
+    ]
 
     mock_orb_breakout = MockStrategy(
         strategy_id="orb_breakout",
@@ -717,7 +827,7 @@ async def create_dev_state() -> AppState:
         version="1.0.0",
         is_active=True,
         pipeline_stage="paper",
-        allocated_capital=40_000.0,  # 40% of $100k
+        allocated_capital=26_670.0,  # 26.67% of $100k (3 strategies + 20% reserve)
         daily_pnl=sum(t.net_pnl for t in orb_todays_trades),
         trade_count_today=len(orb_todays_trades),
         config=orb_config,
@@ -734,10 +844,27 @@ async def create_dev_state() -> AppState:
         version="1.0.0",
         is_active=True,
         pipeline_stage="paper",
-        allocated_capital=40_000.0,  # 40% of $100k
+        allocated_capital=26_670.0,  # 26.67% of $100k (3 strategies + 20% reserve)
         daily_pnl=sum(t.net_pnl for t in scalp_todays_trades),
         trade_count_today=len(scalp_todays_trades),
         config=scalp_config,
+    )
+
+    vwap_config = VwapReclaimConfig(
+        strategy_id="vwap_reclaim",
+        name="VWAP Reclaim",
+        version="1.0.0",
+    )
+    mock_vwap_reclaim = MockStrategy(
+        strategy_id="vwap_reclaim",
+        name="VWAP Reclaim",
+        version="1.0.0",
+        is_active=True,
+        pipeline_stage="paper",
+        allocated_capital=26_670.0,  # 26.67% of $100k (3 strategies + 20% reserve)
+        daily_pnl=sum(t.net_pnl for t in vwap_todays_trades),
+        trade_count_today=len(vwap_todays_trades),
+        config=vwap_config,
     )
 
     # Mock orchestrator
@@ -755,6 +882,7 @@ async def create_dev_state() -> AppState:
         strategies={
             "orb_breakout": mock_orb_breakout,  # type: ignore[dict-item]
             "orb_scalp": mock_orb_scalp,  # type: ignore[dict-item]
+            "vwap_reclaim": mock_vwap_reclaim,  # type: ignore[dict-item]
         },
         clock=clock,
         config=system_config,
