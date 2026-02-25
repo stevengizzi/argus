@@ -11,7 +11,7 @@
  * - Pulse animation when >90%
  */
 
-import { useRef, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { DURATION, EASE } from '../utils/motion';
 
@@ -57,10 +57,11 @@ function polarToCartesian(
 }
 
 export function RiskGauge({ label, value, maxLabel, size = 'md' }: RiskGaugeProps) {
-  // Track if initial animation has played
-  const hasAnimated = useRef(false);
+  // Track if initial animation has played (use state with timeout to avoid lint errors)
+  const [hasAnimated, setHasAnimated] = useState(false);
   useEffect(() => {
-    hasAnimated.current = true;
+    const timer = setTimeout(() => setHasAnimated(true), 600);
+    return () => clearTimeout(timer);
   }, []);
 
   const clampedValue = Math.max(0, Math.min(100, value));
@@ -92,7 +93,7 @@ export function RiskGauge({ label, value, maxLabel, size = 'md' }: RiskGaugeProp
   return (
     <div className="flex flex-col items-center">
       <motion.div
-        initial={hasAnimated.current ? false : { opacity: 0, scale: 0.8 }}
+        initial={hasAnimated ? false : { opacity: 0, scale: 0.8 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: DURATION.normal, ease: EASE.out }}
         className="relative"
@@ -120,13 +121,13 @@ export function RiskGauge({ label, value, maxLabel, size = 'md' }: RiskGaugeProp
               stroke={color}
               strokeWidth={strokeWidth}
               strokeLinecap="round"
-              initial={hasAnimated.current ? false : { pathLength: 0 }}
+              initial={hasAnimated ? false : { pathLength: 0 }}
               animate={{
                 pathLength: 1,
                 opacity: isPulsing ? [1, 0.6, 1] : 1,
               }}
               transition={{
-                pathLength: hasAnimated.current
+                pathLength: hasAnimated
                   ? { duration: 0 }
                   : { duration: 0.5, ease: 'easeOut' },
                 opacity: isPulsing

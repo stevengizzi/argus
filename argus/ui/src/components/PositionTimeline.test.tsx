@@ -77,9 +77,10 @@ describe('PositionTimeline', () => {
   it('renders time axis labels', () => {
     render(<PositionTimeline positions={[mockPosition]} />);
 
-    // Should have time labels
-    expect(screen.getByText('9:30 AM')).toBeInTheDocument();
-    expect(screen.getByText('4:00 PM')).toBeInTheDocument();
+    // Should have time labels (abbreviated format in test env since useMediaQuery returns false)
+    // Mobile format starts at 10:00 AM and uses abbreviated labels like "10a", "11a"
+    expect(screen.getByText('10a')).toBeInTheDocument();
+    expect(screen.getByText('4p')).toBeInTheDocument();
   });
 
   it('calls onPositionClick when position bar is clicked', () => {

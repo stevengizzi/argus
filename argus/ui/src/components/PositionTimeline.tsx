@@ -116,11 +116,24 @@ export function PositionTimeline({
   const containerRef = useRef<HTMLDivElement>(null);
   const [tooltip, setTooltip] = useState<TooltipData | null>(null);
   const [currentMinutes, setCurrentMinutes] = useState(getCurrentETMinutes());
+  const [containerWidth, setContainerWidth] = useState(1000);
 
   // Detect larger screens for responsive time axis labels
   // Below 900px: hourly labels with abbreviated format (e.g., "10a", "11a")
   // 900px and up: 30-minute labels with full format (e.g., "10:00 AM", "10:30 AM")
   const isWideScreen = useMediaQuery('(min-width: 900px)');
+
+  // Track container width for tooltip positioning (avoid ref access during render)
+  useEffect(() => {
+    const updateWidth = () => {
+      if (containerRef.current) {
+        setContainerWidth(containerRef.current.clientWidth);
+      }
+    };
+    updateWidth();
+    window.addEventListener('resize', updateWidth);
+    return () => window.removeEventListener('resize', updateWidth);
+  }, []);
 
   // Update current time every 10 seconds for "now" marker
   useEffect(() => {
@@ -395,7 +408,7 @@ export function PositionTimeline({
           <motion.div
             className="absolute z-30 bg-argus-surface border border-argus-border rounded-lg shadow-xl p-3 pointer-events-none min-w-[180px]"
             style={{
-              left: `${Math.min(Math.max(tooltip.x, 90), containerRef.current?.clientWidth ? containerRef.current.clientWidth - 90 : 1000)}px`,
+              left: `${Math.min(Math.max(tooltip.x, 90), containerWidth - 90)}px`,
               top: `${tooltip.y - 8}px`,
               transform: 'translate(-50%, -100%)',
             }}

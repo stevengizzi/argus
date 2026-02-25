@@ -1,10 +1,10 @@
 /**
- * Capital Allocation visualization with nested two-ring donut chart.
+ * Capital Allocation visualization with nested two-ring donut and stacked bars.
  *
- * Sprint 18.75 Session 2:
- * - Outer ring: Allocation policy (strategy allocations + cash reserve)
- * - Inner ring: Deployment state (deployed vs available capital per strategy)
- * - SegmentedTab toggle between Donut and Bars views
+ * Sprint 18.75 Session 2-3:
+ * - Donut view: Outer ring (allocation policy), inner ring (deployment state)
+ * - Bars view: Horizontal stacked bars with deployed/available/throttled segments
+ * - SegmentedTab toggle between views with AnimatePresence crossfade
  * - Zustand persistence for view preference
  *
  * Design principles:
@@ -14,12 +14,13 @@
  */
 
 import { useState, useEffect, useMemo } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { Card } from './Card';
 import { CardHeader } from './CardHeader';
 import { SegmentedTab } from './SegmentedTab';
-import { DURATION, EASE } from '../utils/motion';
+import { AllocationBars } from './AllocationBars';
+import { DURATION, EASE, quickFade } from '../utils/motion';
 import { useCapitalAllocationUIStore } from '../stores/capitalAllocationUI';
 
 // Strategy color mapping (matches Badge component strategy colors)
@@ -276,116 +277,133 @@ export function CapitalAllocation({
         />
       </div>
 
-      {viewMode === 'donut' ? (
-        <>
+      <AnimatePresence mode="wait">
+        {viewMode === 'donut' ? (
           <motion.div
-            initial={hasAnimated ? false : { opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: DURATION.normal, ease: EASE.out }}
-            className="relative aspect-square w-full max-w-[200px] md:max-w-[250px] mx-auto"
-            style={{ willChange: 'transform' }}
+            key="donut-view"
+            variants={quickFade}
+            initial="hidden"
+            animate="show"
+            exit="hidden"
           >
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                {/* Outer ring - Allocation Policy */}
-                <Pie
-                  data={isEmpty ? EMPTY_OUTER_DATA : outerRingData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius="58%"
-                  outerRadius="100%"
-                  paddingAngle={isEmpty ? 0 : 2}
-                  dataKey="value"
-                  animationBegin={0}
-                  animationDuration={hasAnimated ? 0 : 500}
-                  animationEasing="ease-out"
-                  isAnimationActive={!hasAnimated}
-                >
-                  {(isEmpty ? EMPTY_OUTER_DATA : outerRingData).map((entry, index) => (
-                    <Cell
-                      key={`outer-${index}`}
-                      fill={entry.color}
-                      stroke="transparent"
-                      style={{ cursor: entry.isCash ? 'default' : 'pointer' }}
-                    />
-                  ))}
-                </Pie>
+            <motion.div
+              initial={hasAnimated ? false : { opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: DURATION.normal, ease: EASE.out }}
+              className="relative aspect-square w-full max-w-[200px] md:max-w-[250px] mx-auto"
+              style={{ willChange: 'transform' }}
+            >
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  {/* Outer ring - Allocation Policy */}
+                  <Pie
+                    data={isEmpty ? EMPTY_OUTER_DATA : outerRingData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius="58%"
+                    outerRadius="100%"
+                    paddingAngle={isEmpty ? 0 : 2}
+                    dataKey="value"
+                    animationBegin={0}
+                    animationDuration={hasAnimated ? 0 : 500}
+                    animationEasing="ease-out"
+                    isAnimationActive={!hasAnimated}
+                  >
+                    {(isEmpty ? EMPTY_OUTER_DATA : outerRingData).map((entry, index) => (
+                      <Cell
+                        key={`outer-${index}`}
+                        fill={entry.color}
+                        stroke="transparent"
+                        style={{ cursor: entry.isCash ? 'default' : 'pointer' }}
+                      />
+                    ))}
+                  </Pie>
 
-                {/* Inner ring - Deployment State */}
-                <Pie
-                  data={isEmpty ? EMPTY_INNER_DATA : innerRingData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius="38%"
-                  outerRadius="52%"
-                  paddingAngle={0}
-                  dataKey="value"
-                  animationBegin={hasAnimated ? 0 : 100}
-                  animationDuration={hasAnimated ? 0 : 500}
-                  animationEasing="ease-out"
-                  isAnimationActive={!hasAnimated}
-                >
-                  {(isEmpty ? EMPTY_INNER_DATA : innerRingData).map((entry, index) => (
-                    <Cell
-                      key={`inner-${index}`}
-                      fill={entry.color}
-                      stroke="transparent"
-                    />
-                  ))}
-                </Pie>
-              </PieChart>
-            </ResponsiveContainer>
+                  {/* Inner ring - Deployment State */}
+                  <Pie
+                    data={isEmpty ? EMPTY_INNER_DATA : innerRingData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius="38%"
+                    outerRadius="52%"
+                    paddingAngle={0}
+                    dataKey="value"
+                    animationBegin={hasAnimated ? 0 : 100}
+                    animationDuration={hasAnimated ? 0 : 500}
+                    animationEasing="ease-out"
+                    isAnimationActive={!hasAnimated}
+                  >
+                    {(isEmpty ? EMPTY_INNER_DATA : innerRingData).map((entry, index) => (
+                      <Cell
+                        key={`inner-${index}`}
+                        fill={entry.color}
+                        stroke="transparent"
+                      />
+                    ))}
+                  </Pie>
+                </PieChart>
+              </ResponsiveContainer>
 
-            {/* Center text */}
-            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-              {isEmpty ? (
-                <span className="text-sm text-argus-text-dim text-center px-4">
-                  {centerDisplay.secondary}
-                </span>
-              ) : (
-                <>
-                  <span className="text-3xl font-bold text-argus-text">
-                    {centerDisplay.primary}
-                  </span>
-                  <span className="text-xs text-argus-text-dim">
+              {/* Center text */}
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                {isEmpty ? (
+                  <span className="text-sm text-argus-text-dim text-center px-4">
                     {centerDisplay.secondary}
                   </span>
-                </>
-              )}
-            </div>
-          </motion.div>
-
-          {/* Legend */}
-          {!isEmpty && (
-            <div className="mt-3 flex flex-wrap gap-2 justify-center text-xs">
-              {outerRingData
-                .filter((entry) => !entry.isCash && entry.strategyId)
-                .map((entry) => (
-                  <div key={entry.name} className="flex items-center gap-1">
-                    <span
-                      className="w-2 h-2 rounded-full"
-                      style={{ backgroundColor: entry.color }}
-                    />
-                    <span className="text-argus-text-dim">{entry.name}</span>
-                  </div>
-                ))}
-              {/* Cash/Reserve legend item */}
-              <div className="flex items-center gap-1">
-                <span
-                  className="w-2 h-2 rounded-full"
-                  style={{ backgroundColor: CASH_COLOR }}
-                />
-                <span className="text-argus-text-dim">Reserve</span>
+                ) : (
+                  <>
+                    <span className="text-3xl font-bold text-argus-text">
+                      {centerDisplay.primary}
+                    </span>
+                    <span className="text-xs text-argus-text-dim">
+                      {centerDisplay.secondary}
+                    </span>
+                  </>
+                )}
               </div>
-            </div>
-          )}
-        </>
-      ) : (
-        /* Bars view placeholder - Session 3 */
-        <div className="flex items-center justify-center h-[200px] md:h-[250px] text-argus-text-dim text-sm">
-          Bars view — Session 3
-        </div>
-      )}
+            </motion.div>
+
+            {/* Legend */}
+            {!isEmpty && (
+              <div className="mt-3 flex flex-wrap gap-2 justify-center text-xs">
+                {outerRingData
+                  .filter((entry) => !entry.isCash && entry.strategyId)
+                  .map((entry) => (
+                    <div key={entry.name} className="flex items-center gap-1">
+                      <span
+                        className="w-2 h-2 rounded-full"
+                        style={{ backgroundColor: entry.color }}
+                      />
+                      <span className="text-argus-text-dim">{entry.name}</span>
+                    </div>
+                  ))}
+                {/* Cash/Reserve legend item */}
+                <div className="flex items-center gap-1">
+                  <span
+                    className="w-2 h-2 rounded-full"
+                    style={{ backgroundColor: CASH_COLOR }}
+                  />
+                  <span className="text-argus-text-dim">Reserve</span>
+                </div>
+              </div>
+            )}
+          </motion.div>
+        ) : (
+          <motion.div
+            key="bars-view"
+            variants={quickFade}
+            initial="hidden"
+            animate="show"
+            exit="hidden"
+          >
+            <AllocationBars
+              allocations={allocations}
+              cashReservePct={cashReservePct}
+              totalEquity={totalEquity}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </Card>
   );
 }
