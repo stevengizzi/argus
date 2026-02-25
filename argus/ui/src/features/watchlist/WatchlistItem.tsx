@@ -1,12 +1,11 @@
 /**
  * WatchlistItem - Single item in the watchlist sidebar.
  *
- * Shows:
- * - Symbol name + current price
- * - Gap % badge
- * - Mini sparkline (SVG, 50×20px)
- * - Strategy badges (ORB, SCALP, VWAP)
- * - VWAP state indicator (colored dot)
+ * Redesigned layout (Sprint 19, Session 11):
+ * - Row 1: Symbol, price, sparkline (right), gap badge
+ * - Row 2: Strategy badges + VWAP state dot (tooltip on hover)
+ * - Active position (entered) has 3px left border accent
+ * - Clickable: opens Trade Detail panel
  */
 
 import type { WatchlistItem as WatchlistItemType, VwapState } from '../../api/types';
@@ -15,6 +14,7 @@ import { formatPrice } from '../../utils/format';
 
 interface WatchlistItemProps {
   item: WatchlistItemType;
+  onClick?: (symbol: string) => void;
 }
 
 // VWAP state indicator colors
@@ -25,21 +25,44 @@ const vwapStateColors: Record<VwapState, { dot: string; label: string }> = {
   entered: { dot: 'bg-argus-profit', label: 'Entered' },
 };
 
-export function WatchlistItem({ item }: WatchlistItemProps) {
+export function WatchlistItem({ item, onClick }: WatchlistItemProps) {
   const { symbol, current_price, gap_pct, strategies, vwap_state, sparkline } = item;
   const vwapConfig = vwapStateColors[vwap_state];
   const isPositiveGap = gap_pct > 0;
+  const isEntered = vwap_state === 'entered';
+
+  const handleClick = () => {
+    onClick?.(symbol);
+  };
 
   return (
-    <div className="p-2 border-b border-argus-border/50 hover:bg-argus-surface-2/50 transition-colors">
-      {/* Row 1: Symbol, price, gap badge */}
-      <div className="flex items-center justify-between mb-1.5">
-        <div className="flex items-center gap-2">
-          <span className="font-semibold text-argus-text">{symbol}</span>
-          <span className="text-sm text-argus-text-dim">{formatPrice(current_price)}</span>
+    <div
+      className={`py-1.5 px-2 border-b border-argus-border/50 hover:bg-argus-surface-2/50 transition-colors cursor-pointer ${
+        isEntered ? 'border-l-[3px] border-l-argus-profit' : ''
+      }`}
+      onClick={handleClick}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => e.key === 'Enter' && handleClick()}
+    >
+      {/* Row 1: Symbol, price, sparkline (right), gap badge */}
+      <div className="flex items-center gap-2">
+        <span className="font-semibold text-argus-text text-sm">{symbol}</span>
+        <span className="text-xs text-argus-text-dim">{formatPrice(current_price)}</span>
+
+        {/* Sparkline - reduced visual weight */}
+        <div className="flex-1 min-w-0">
+          <MiniSparkline
+            data={sparkline.map((p) => p.price)}
+            width={50}
+            height={16}
+            className="ml-auto"
+          />
         </div>
+
+        {/* Gap badge */}
         <span
-          className={`text-xs font-medium px-1.5 py-0.5 rounded ${
+          className={`text-xs font-medium px-1.5 py-0.5 rounded shrink-0 ${
             isPositiveGap
               ? 'text-argus-profit bg-argus-profit-dim'
               : 'text-argus-loss bg-argus-loss-dim'
@@ -49,29 +72,21 @@ export function WatchlistItem({ item }: WatchlistItemProps) {
         </span>
       </div>
 
-      {/* Row 2: Sparkline */}
-      <div className="mb-1.5">
-        <MiniSparkline
-          data={sparkline.map((p) => p.price)}
-          width={50}
-          height={20}
-          className="w-full"
-        />
-      </div>
-
-      {/* Row 3: Strategy badges + VWAP indicator */}
-      <div className="flex items-center justify-between">
+      {/* Row 2: Strategy badges + VWAP indicator (dot only, tooltip for label) */}
+      <div className="flex items-center justify-between mt-1">
         <div className="flex flex-wrap gap-1">
           {strategies.map((strategyId) => (
             <StrategyBadge key={strategyId} strategyId={strategyId} />
           ))}
         </div>
 
-        {/* VWAP state indicator */}
+        {/* VWAP state indicator - dot only with tooltip */}
         {strategies.includes('vwap_reclaim') && (
-          <div className="flex items-center gap-1" title={vwapConfig.label}>
+          <div
+            className="flex items-center"
+            title={vwapConfig.label}
+          >
             <span className={`w-2 h-2 rounded-full ${vwapConfig.dot}`} />
-            <span className="text-xs text-argus-text-dim">{vwapConfig.label}</span>
           </div>
         )}
       </div>
@@ -89,8 +104,9 @@ interface MiniSparklineProps {
 /**
  * Simple SVG sparkline for mini price visualization.
  * Shows a polyline of the price data scaled to fit the viewport.
+ * Reduced visual weight: thinner stroke, slight opacity.
  */
-function MiniSparkline({ data, width = 50, height = 20, className = '' }: MiniSparklineProps) {
+export function MiniSparkline({ data, width = 50, height = 16, className = '' }: MiniSparklineProps) {
   if (data.length < 2) {
     return <div style={{ width, height }} className={className} />;
   }
@@ -117,14 +133,14 @@ function MiniSparkline({ data, width = 50, height = 20, className = '' }: MiniSp
     <svg
       viewBox={`0 0 ${width} ${height}`}
       className={className}
-      style={{ width: '100%', height: height }}
+      style={{ width: '100%', height: height, opacity: 0.7 }}
       preserveAspectRatio="none"
     >
       <polyline
         points={points}
         fill="none"
         stroke={strokeColor}
-        strokeWidth="1.5"
+        strokeWidth="1"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
