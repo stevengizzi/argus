@@ -1,6 +1,6 @@
 # Sprint 19 — VWAP Reclaim Strategy — Implementation Spec
 
-> Paste into Claude Code Session 1. Read CLAUDE.md first. 1313 pytest + 7 Vitest tests must pass before and after every session.
+> Paste into Claude Code Session 1. Read CLAUDE.md first. 1317 pytest + 7 Vitest tests must pass before and after every session.
 
 ---
 
@@ -113,7 +113,7 @@ class StrategyType(StrEnum):
 
 Add VwapReclaimConfig and load_vwap_reclaim_config to appropriate `__init__.py` exports.
 
-**Checkpoint:** All 1313 tests pass. New config loads from YAML without error.
+**Checkpoint:** All 1317 tests pass. New config loads from YAML without error.
 
 ---
 
@@ -294,7 +294,7 @@ async def on_candle(self, event: CandleEvent) -> SignalEvent | None:
 - Use `FixedClock` for time control
 - Create CandleEvents with specific OHLCV to trigger state transitions
 
-**Checkpoint:** All new tests pass. All 1313 existing tests still pass.
+**Checkpoint:** All new tests pass. All 1317 existing tests still pass.
 
 ---
 

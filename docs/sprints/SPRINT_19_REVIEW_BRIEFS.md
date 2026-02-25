@@ -78,7 +78,7 @@ CROSS-STRATEGY:
 8. `argus/strategies/orb_base.py` — comparison (VWAP Reclaim should NOT look like this)
 9. `argus/data/indicator_engine.py` — VWAP computation (already exists)
 
-**Test count:** Should be ~1380+ pytest (1313 prior + ~65-75 new). Report actual count.
+**Test count:** Should be ~1380+ pytest (1317 prior + ~65-75 new). Report actual count.
 
 **Output format:**
 1. List of issues found (Critical / Important / Minor)

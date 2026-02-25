@@ -88,7 +88,7 @@ Session 12: Docs Update ──────────────── (final)
 ```
 # Sprint 19, Session 1: Config + Models
 
-Read CLAUDE.md first. Current state: 1313 pytest + 7 Vitest tests passing. Sprint 18.5 complete.
+Read CLAUDE.md first. Current state: 1317 pytest + 7 Vitest tests passing. Sprint 18.5 complete.
 
 ## Context
 Sprint 19 adds VWAP Reclaim — ARGUS's first mean-reversion strategy. This session creates the configuration infrastructure only. No strategy logic yet.
@@ -185,7 +185,7 @@ VWAP_RECLAIM = "vwap_reclaim"
 Add VwapReclaimConfig and load_vwap_reclaim_config to the config exports.
 
 ## Verification
-- All 1313 existing tests pass
+- All 1317 existing tests pass
 - New config loads: `python -c "from argus.core.config import load_vwap_reclaim_config; print('OK')"`
 - YAML loads without error: `python -c "from argus.core.config import load_vwap_reclaim_config; from pathlib import Path; c = load_vwap_reclaim_config(Path('config/strategies/vwap_reclaim.yaml')); print(c.strategy_id, c.min_pullback_pct)"`
 
@@ -287,7 +287,7 @@ SignalEvent(
 - `argus/core/events.py` — SignalEvent, CandleEvent, TickEvent, Side
 
 ## Verification
-- All 1313 existing tests pass
+- All 1317 existing tests pass
 - Strategy class imports cleanly: `python -c "from argus.strategies.vwap_reclaim import VwapReclaimStrategy; print('OK')"`
 - No new tests in this session (Session 3 handles tests)
 
@@ -398,7 +398,7 @@ def make_candle(symbol, timestamp, open_, high, low, close, volume):
 
 ## Verification
 - All new tests pass
-- All 1313 existing tests still pass
+- All 1317 existing tests still pass
 - Run: `python -m pytest tests/strategies/test_vwap_reclaim.py -v`
 
 Commit message: `test: add VwapReclaimStrategy unit tests (Sprint 19, Session 3)`
@@ -465,7 +465,7 @@ Ensure VwapReclaimStrategy is exported from the strategies module.
 The existing `_route_candle_to_strategies()` should already iterate over all Orchestrator strategies. Verify by reading the code — no changes should be needed.
 
 ## Verification
-- All existing tests pass (1313 + new strategy tests)
+- All existing tests pass (1317 + new strategy tests)
 - New integration: `python -c "from argus.main import ArgusSystem; print('imports OK')"`
 - Quick smoke test of main.py structure (no runtime test needed — integration tests in Session 5)
 

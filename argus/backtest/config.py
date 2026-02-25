@@ -13,6 +13,7 @@ class StrategyType(StrEnum):
 
     ORB_BREAKOUT = "orb"
     ORB_SCALP = "orb_scalp"
+    VWAP_RECLAIM = "vwap_reclaim"
 
 
 class DataFetcherConfig(BaseModel):

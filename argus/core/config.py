@@ -546,6 +546,31 @@ class OrbScalpConfig(StrategyConfig):
     volume_threshold_rvol: float = Field(default=2.0, gt=0)
 
 
+class VwapReclaimConfig(StrategyConfig):
+    """VWAP Reclaim strategy configuration.
+
+    Mean-reversion strategy that buys stocks reclaiming VWAP after
+    a pullback. Operates 10:00 AM – 12:00 PM ET.
+
+    State machine: WATCHING → ABOVE_VWAP → BELOW_VWAP → entry (or EXHAUSTED)
+    """
+
+    # Pullback parameters
+    min_pullback_pct: float = Field(default=0.002, ge=0, le=0.05)
+    max_pullback_pct: float = Field(default=0.02, ge=0, le=0.10)
+    min_pullback_bars: int = Field(default=3, ge=1, le=30)
+
+    # Reclaim confirmation
+    volume_confirmation_multiplier: float = Field(default=1.2, gt=0, le=5.0)
+    max_chase_above_vwap_pct: float = Field(default=0.003, ge=0, le=0.02)
+
+    # Targets and stops
+    target_1_r: float = Field(default=1.0, gt=0)
+    target_2_r: float = Field(default=2.0, gt=0)
+    time_stop_minutes: int = Field(default=30, ge=1)
+    stop_buffer_pct: float = Field(default=0.001, ge=0, le=0.05)
+
+
 # ---------------------------------------------------------------------------
 # Config Loader
 # ---------------------------------------------------------------------------
@@ -663,6 +688,23 @@ def load_orb_scalp_config(path: Path) -> OrbScalpConfig:
     """
     data = load_yaml_file(path)
     return OrbScalpConfig(**data)
+
+
+def load_vwap_reclaim_config(path: Path) -> VwapReclaimConfig:
+    """Load VWAP Reclaim strategy configuration from a YAML file.
+
+    Args:
+        path: Path to the VWAP Reclaim strategy YAML file.
+
+    Returns:
+        Validated VwapReclaimConfig instance.
+
+    Raises:
+        FileNotFoundError: If the file does not exist.
+        pydantic.ValidationError: If validation fails.
+    """
+    data = load_yaml_file(path)
+    return VwapReclaimConfig(**data)
 
 
 def load_scanner_config(path: Path) -> ScannerConfig:

@@ -1,0 +1,32 @@
+strategy_id: "strat_vwap_reclaim"
+name: "VWAP Reclaim"
+version: "1.0.0"
+enabled: true
+asset_class: "us_stocks"
+
+operating_window:
+  earliest_entry: "10:00"
+  latest_entry: "12:00"
+  force_close: "15:50"
+
+min_pullback_pct: 0.002
+max_pullback_pct: 0.02
+min_pullback_bars: 3
+volume_confirmation_multiplier: 1.2
+max_chase_above_vwap_pct: 0.003
+target_1_r: 1.0
+target_2_r: 2.0
+time_stop_minutes: 30
+stop_buffer_pct: 0.001
+
+risk_limits:
+  max_loss_per_trade_pct: 0.01
+  max_daily_loss_pct: 0.03
+  max_trades_per_day: 8
+  max_concurrent_positions: 3
+
+benchmarks:
+  min_win_rate: 0.45
+  min_profit_factor: 1.1
+  min_sharpe: 0.3
+  max_drawdown_pct: 0.12
