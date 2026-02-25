@@ -255,16 +255,24 @@ per sprint velocity.
 - **Dev mode mock data:** Strategy allocations corrected to 40%/40%/20% = 100%. Position sizes scaled to realistic values relative to allocations.
 - 4 new orchestrator pytest tests (deployment state), 7 new Vitest component tests (CapitalAllocation). 1317 pytest + 14 Vitest total. 8 fix sessions. Code review passed.
 
-#### Sprint 19 — VWAP Reclaim Strategy (NEW — DEC-096)
-**Target:** ~1-2 days
+#### Sprint 19 — VWAP Reclaim Strategy (DEC-096, DEC-136–143)
+**Target:** ~2 days (12 implementation sessions + 2 code review checkpoints)
 **Scope:**
-- VWAP Reclaim strategy implementation (mean-reversion, 10:00 AM–12:00 PM, 5–30 min holds)
-- Strategy spec sheet (04_STRATEGY_TEMPLATE.md filled in)
-- VectorBT parameter sweep (requires Databento historical data for quality validation)
-- Walk-forward validation
-- Cross-strategy risk integration (ORB + ORB Scalp + VWAP Reclaim same-stock prevention)
-- Orchestrator capital allocation for three strategies
-- Paper trading deployment
+- VwapReclaimStrategy: standalone from BaseStrategy (DEC-136), 5-state machine (DEC-138)
+- VwapReclaimConfig + YAML, StrategyType.VWAP_RECLAIM enum
+- Scanner reuse: shared gap watchlist (DEC-137)
+- Stop at pullback swing low (DEC-139), T1=1.0R/T2=2.0R, 30min time stop
+- Position sizing with minimum risk floor (DEC-140)
+- Cross-strategy ALLOW_ALL policy extended (DEC-141)
+- System integration: main.py wiring, Orchestrator registration, health monitoring
+- VectorBT parameter sweep (768 combinations)
+- Walk-forward validation (15 windows, 35 months)
+- Replay Harness integration (strategy factory)
+- Dev mode mock data (three-strategy allocation, positions, trades)
+- Watchlist Sidebar — UX Feature 18-C (DEC-142)
+- Strategy spec: docs/strategies/STRATEGY_VWAP_RECLAIM.md
+- Integration tests: three-strategy scenarios
+- Databento activation deferred to Sprint 20 (DEC-143)
 
 #### Sprint 20 — Afternoon Momentum Strategy (NEW — DEC-096)
 **Target:** ~1-2 days

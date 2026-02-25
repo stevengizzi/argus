@@ -1520,5 +1520,85 @@ Each entry follows this format:
 | **Rationale** | CapitalAllocation visualization requires deployment state to show how much of each strategy's allocation is currently in open positions. Computing server-side ensures consistency between donut and bars views. |
 | **Status** | Active |
 
+---
+
+### DEC-136 | VwapReclaimStrategy — Standalone from BaseStrategy
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-25 |
+| **Decision** | VwapReclaimStrategy inherits directly from BaseStrategy, NOT from OrbBaseStrategy. No shared base class with ORB family. If a second VWAP-based strategy (e.g., VWAP Fade) is built later, a VwapBaseStrategy ABC can be extracted at that point. |
+| **Rationale** | Zero shared logic between VWAP Reclaim and ORB. ORB uses opening range formation, breakout detection, and OR state tracking. VWAP Reclaim uses a VWAP crossover state machine with pullback tracking. Premature extraction would create an abstraction with no concrete shared behavior. Follow the ORB pattern: extract after the second variant exists (DEC-120 extracted OrbBase after Scalp was designed). |
+| **Status** | Active |
+
+---
+
+### DEC-137 | VWAP Reclaim Scanner — Reuse ORB Gap Watchlist
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-25 |
+| **Decision** | VWAP Reclaim reuses the same gap scanner watchlist as the ORB family. No independent scanner run. The strategy receives symbols via `set_watchlist()` from the Orchestrator (same as ORB/Scalp) and filters candidates through its internal state machine. |
+| **Rationale** | Stocks that gap up strongly are the natural universe for VWAP pullback-and-reclaim patterns. The gap scanner already identifies stocks with institutional interest and elevated volume. A second scanner would duplicate effort and potentially create a different watchlist that misses the cross-strategy synergy (ORB trades the breakout, VWAP Reclaim trades the pullback on the same stocks). If VWAP Reclaim later needs non-gap stocks, a dedicated scanner can be added. |
+| **Status** | Active |
+
+---
+
+### DEC-138 | VWAP Reclaim State Machine Design
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-25 |
+| **Decision** | Per-symbol 5-state machine: WATCHING → ABOVE_VWAP → BELOW_VWAP → ENTERED / EXHAUSTED. BELOW_VWAP loops back to ABOVE_VWAP when a reclaim occurs without meeting all entry conditions (e.g., volume not confirmed), allowing multiple pullback attempts per symbol per day. EXHAUSTED is terminal — triggered when pullback depth exceeds `max_pullback_pct`. Entry requires candle CLOSE above VWAP (not intra-bar cross), consistent with ORB's breakout confirmation pattern. |
+| **Rationale** | The loop-back from BELOW_VWAP → ABOVE_VWAP is critical — stocks often touch VWAP multiple times before the confirmed reclaim with volume. A single-attempt model would miss the highest-quality entries. EXHAUSTED state prevents chasing stocks in genuine sell-offs. Candle close confirmation reduces false signals and works correctly at 1-minute bar resolution. |
+| **Status** | Active |
+
+---
+
+### DEC-139 | VWAP Reclaim Stop Placement — Pullback Swing Low
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-25 |
+| **Decision** | Stop placed below the pullback swing low (lowest low during the below-VWAP period) with a small buffer (`stop_buffer_pct`, default 0.1%). Not VWAP-based. |
+| **Rationale** | Three alternatives considered: (a) Stop below VWAP — rejected because VWAP moves intraday, creating a moving stop target; VWAP could also be very close to entry price, making risk per share tiny and position size enormous. (b) Fixed ATR-based stop — rejected because it doesn't relate to the trade's thesis. (c) Pullback swing low — chosen because it's a fixed reference point (known at entry time), represents natural support, and directly relates to the trade thesis (if the stock breaks below where the pullback bottomed, the mean-reversion has failed). |
+| **Status** | Active |
+
+---
+
+### DEC-140 | VWAP Reclaim Position Sizing — Minimum Risk Floor
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-25 |
+| **Decision** | Position sizing uses `effective_risk = max(risk_per_share, entry_price × 0.003)` as the denominator, capping position size when the stop is very close to entry. Prevents enormous positions from shallow pullbacks where the pullback low is near VWAP. |
+| **Rationale** | Mean-reversion entries can have very tight stops. If a stock pulls back 0.2% below VWAP and reclaims, risk per share on a $100 stock is only $0.20, producing a 5,000-share position on $1,000 risk. The 0.3% floor caps this to ~333 shares. The Risk Manager's `max_single_stock_pct` (5%) provides account-level protection, but the strategy should self-limit to avoid sending oversized signals that Risk Manager must modify. |
+| **Status** | Active |
+
+---
+
+### DEC-141 | VWAP Reclaim Cross-Strategy Policy — ALLOW_ALL
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-25 |
+| **Decision** | ALLOW_ALL duplicate stock policy (DEC-121) extends to VWAP Reclaim. ORB, ORB Scalp, and VWAP Reclaim can hold positions in the same symbol simultaneously, subject to `max_single_stock_pct` (5%) cross-strategy exposure cap. |
+| **Rationale** | The strategies target different phases of the same momentum event: ORB catches the initial breakout (9:35–10:00), VWAP Reclaim catches the pullback recovery (10:00–12:00). Same-symbol positions across strategies represent intentional diversification across time and thesis, not redundant concentration. The 5% cap prevents excessive single-stock exposure regardless. |
+| **Status** | Active |
+
+---
+
+### DEC-142 | Watchlist Sidebar (UX Feature 18-C) in Sprint 19
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-25 |
+| **Decision** | UX Feature 18-C (Watchlist Sidebar) included in Sprint 19 scope. 18-A (Position Cards with Mini-Charts) and 18-E (Notification Center) deferred to Sprint 20+. |
+| **Rationale** | With three strategies sharing a watchlist, visibility into which symbols each strategy is tracking becomes operationally important. The sidebar also provides a natural home for VWAP Reclaim's per-symbol state machine status (WATCHING/ABOVE/BELOW/ENTERED), which is unique visual feedback not available elsewhere in the UI. 18-A and 18-E are valuable but less directly relevant to the three-strategy watchlist management need. |
+| **Status** | Active |
+
+---
+
+### DEC-143 | Databento Activation Deferred to Sprint 20
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-25 |
+| **Decision** | Databento subscription activation deferred from Sprint 19 to Sprint 20, amending DEC-097. Sprint 19 uses Alpaca historical data for backtesting and Alpaca paper trading for validation. |
+| **Rationale** | VWAP Reclaim's 5–30 minute hold duration is well within 1-minute bar resolution — unlike ORB Scalp (DEC-127), bar resolution is not a limitation. Backtesting with Alpaca data produces directional results (subject to DEC-132 re-validation). Activating Databento with four strategies (after Sprint 20) gives more validation value per $199/month. No urgent data quality need for Sprint 19 specifically. |
+| **Status** | Active — supersedes DEC-097 timing |
+
 *End of Decision Log v1.0*
 *New decisions are appended chronologically as the project progresses.*

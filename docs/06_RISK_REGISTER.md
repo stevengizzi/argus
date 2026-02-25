@@ -516,6 +516,19 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 | **Mitigation** | Schedule a re-validation sprint when Databento subscription activates (~Sprint 19). Re-run VectorBT sweeps, walk-forward, and cross-validation for all strategies. Compare results to Alpaca-based analysis to quantify divergence. |
 | **Status** | Open — trigger: Databento activation |
 
+---
+
+### RSK-028 | Mean-Reversion Strategy Tail Risk During Market Selloffs
+| Field | Value |
+|-------|-------|
+| **Date Identified** | 2026-02-25 |
+| **Category** | Strategy Risk |
+| **Description** | VWAP Reclaim is a mean-reversion strategy that buys pullbacks. During genuine market sell-offs, what looks like a "pullback below VWAP" may be the start of a larger decline. The strategy's `max_pullback_pct` (2%) provides some protection, and the EXHAUSTED state prevents chasing deep pullbacks. However, a stock can gap up, break down through VWAP with a "healthy-looking" 1.5% pullback, reclaim VWAP briefly, trigger an entry, and then continue selling off. |
+| **Likelihood** | Medium |
+| **Impact** | Medium — limited by 1% per-trade risk, 30-minute time stop, and stop-loss at pullback low. Account-level circuit breakers provide additional protection. |
+| **Mitigation** | (1) Regime filtering excludes Crisis mode. (2) max_pullback_pct caps pullback depth. (3) Volume confirmation requires increasing volume on reclaim. (4) Per-trade risk limited to 1%. (5) Time stop at 30 minutes caps exposure. (6) Walk-forward validation will identify if parameters overfit to pullback patterns that don't generalize. |
+| **Status** | Active — monitor during paper trading validation |
+
 ## Review Schedule
 
 | Review Type | Frequency | Next Review |
