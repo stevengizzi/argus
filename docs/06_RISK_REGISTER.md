@@ -529,6 +529,19 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 | **Mitigation** | (1) Regime filtering excludes Crisis mode. (2) max_pullback_pct caps pullback depth. (3) Volume confirmation requires increasing volume on reclaim. (4) Per-trade risk limited to 1%. (5) Time stop at 30 minutes caps exposure. (6) Walk-forward validation will identify if parameters overfit to pullback patterns that don't generalize. |
 | **Status** | Active — monitor during paper trading validation |
 
+---
+
+### RSK-029 | VWAP Reclaim Backtest Over-Optimism
+| Field | Value |
+|-------|-------|
+| **Date Identified** | 2026-02-26 |
+| **Category** | Validation |
+| **Description** | VWAP Reclaim VectorBT sweep shows avg Sharpe 3.89 across 22K combinations with 59K+ trades. Walk-forward OOS Sharpe of 1.49 is still unusually high for a mean-reversion intraday strategy. Results are on Alpaca SIP data (consolidated feed), not exchange-direct. The 35-month backtest period (2022-07 to 2025-06) includes both bull and bear regimes, but the strategy may be overfit to this specific data quality. |
+| **Likelihood** | Medium |
+| **Impact** | Medium — paper trading validation will surface performance divergence before live capital is risked |
+| **Mitigation** | (1) DEC-132 mandates Databento re-validation for all strategies before live deployment. (2) Paper trading on Alpaca provides initial reality check. (3) Conservative parameter selection (not the highest-Sharpe combo) reduces overfit risk. (4) Start at minimum size even after validation passes. |
+| **Status** | Open — addressed by Databento re-validation + paper trading |
+
 ## Review Schedule
 
 | Review Type | Frequency | Next Review |

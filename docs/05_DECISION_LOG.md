@@ -1600,5 +1600,71 @@ Each entry follows this format:
 | **Rationale** | VWAP Reclaim's 5–30 minute hold duration is well within 1-minute bar resolution — unlike ORB Scalp (DEC-127), bar resolution is not a limitation. Backtesting with Alpaca data produces directional results (subject to DEC-132 re-validation). Activating Databento with four strategies (after Sprint 20) gives more validation value per $199/month. No urgent data quality need for Sprint 19 specifically. |
 | **Status** | Active — supersedes DEC-097 timing |
 
+---
+
+### DEC-144 | VectorBT VWAP Reclaim Sweep Architecture
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-25 |
+| **Decision** | VectorBT VWAP Reclaim sweep uses precompute+vectorize architecture: precompute entry candidates per day ONCE, filter by parameters at runtime, vectorized NumPy exit detection. |
+| **Alternatives** | (1) Naive per-combination Python loops with DataFrame operations — rejected: ~500x slower. (2) Full vectorization across days — complexity not justified given single-entry-per-day semantics. |
+| **Rationale** | Matches the performance pattern established in vectorbt_orb.py. Original naive implementation was prohibitively slow for the 768-combo × 29-symbol × 700-day grid. Precomputing entries per day (parameter-independent) and vectorizing exits achieves 29-symbol sweep in ~27 seconds. |
+| **Status** | Active |
+
+---
+
+### DEC-145 | Walk-Forward Pipeline — VWAP Reclaim Dispatch
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-25 |
+| **Decision** | Walk-forward pipeline extended with `--strategy vwap_reclaim` dispatch. In-sample: VectorBT sweep. Out-of-sample: Replay Harness. Parameter mapping: volume_multiplier → volume_confirmation_multiplier, target_r → target_1_r, time_stop_bars → time_stop_minutes. |
+| **Alternatives** | Separate walk-forward scripts per strategy — rejected for code duplication. |
+| **Rationale** | Unified walk-forward entry point (`walk_forward.py`) with strategy dispatch maintains single interface for all strategies. Parameter name mapping handles sweep-to-config translation. Fixed-params mode supported for comparison runs. |
+| **Status** | Active |
+
+---
+
+### DEC-146 | VWAP Reclaim Backtest Results — Provisional
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-25 |
+| **Decision** | VWAP Reclaim backtest results accepted as provisional guidance, subject to Databento re-validation per DEC-132. Results: 35mo/29sym/768 combos: 59,556 trades, avg Sharpe 3.89, best 6.39. Walk-forward OOS Sharpe 1.49, P&L $15,820. |
+| **Alternatives** | Wait for Databento data before any parameter selection — rejected: delays Sprint 19 completion. |
+| **Rationale** | Results on Alpaca SIP data provide directional parameter guidance. Recommended params (pullback=0.001–0.003, bars=2–3, vol=1.0, target_r=1.5, time_stop=30) are thesis-consistent and stable across walk-forward windows. Re-validation with exchange-direct data mandatory before live capital deployment. |
+| **Status** | Active — provisional per DEC-132 |
+
+---
+
+### DEC-147 | Watchlist Sidebar Responsive Architecture
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-25 |
+| **Decision** | Watchlist Sidebar uses three-tier responsive layout: Desktop (≥1024px) = 280px collapsible inline sidebar. Tablet (640–1023px) = slide-out panel from right edge. Mobile (<640px) = full-screen overlay with FAB toggle. |
+| **Alternatives** | (1) Single collapsible sidebar all breakpoints — rejected: mobile usability. (2) Bottom sheet for mobile — rejected: conflicts with bottom nav. |
+| **Rationale** | Follows established Command Center responsive patterns. Inline sidebar on desktop preserves dashboard context. Slide-out panel on tablet balances space efficiency and accessibility. Full-screen overlay on mobile maximizes usable space for watchlist interaction. Zustand store manages state across breakpoints. TanStack Query 10s polling for live updates. |
+| **Status** | Active |
+
+---
+
+### DEC-148 | VectorBT ↔ Live State Machine Divergences
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-26 |
+| **Decision** | Two divergences between VectorBT sweep and live strategy identified and addressed: (1) ABOVE_VWAP → BELOW_VWAP transition: VectorBT uses `close <= vwap`, live originally used `close < vwap` — harmonized to `<=` in Session 11. (2) VectorBT uses single entry per day, live allows retry after failed conditions — documented, kept divergent (conservative direction for backtest). |
+| **Alternatives** | (1) Keep both divergences undocumented — rejected: creates confusion when comparing backtest to live. (2) Make live single-entry-per-day — rejected: retry behavior is valuable for live trading. |
+| **Rationale** | The `<=` vs `<` divergence could cause VectorBT to start pullback tracking while live doesn't on close==VWAP bars. Harmonizing to `<=` aligns the state machines. The single-entry divergence is acceptable because it makes backtest conservative (fewer entries than live could produce). |
+| **Status** | Resolved (Session 11) |
+
+---
+
+### DEC-149 | VectorBT Performance Rule
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-26 |
+| **Decision** | `.claude/rules/backtesting.md` created mandating precompute+vectorize architecture for all future VectorBT sweeps. Performance benchmark: 29-symbol 35-month sweep must complete in <30 seconds. |
+| **Alternatives** | Ad-hoc optimization per sweep — rejected: leads to repeated naive implementations. |
+| **Rationale** | The naive per-combination loop pattern (vectorbt_vwap_reclaim.py original implementation) was ~500x slower. Codifying the precompute+vectorize pattern as a rule prevents regression in Sprint 20 (Afternoon Momentum) and future strategies. Exit priority rules (stop > target > time_stop > EOD with worst-case stop price) also documented to ensure conservative backtest assumptions. |
+| **Status** | Active |
+
 *End of Decision Log v1.0*
 *New decisions are appended chronologically as the project progresses.*

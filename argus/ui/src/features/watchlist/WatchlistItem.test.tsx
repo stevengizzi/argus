@@ -7,7 +7,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { WatchlistItem, MiniSparkline } from './WatchlistItem';
-import type { WatchlistItem as WatchlistItemType, VwapState } from '../../api/types';
+import type { WatchlistItem as WatchlistItemType } from '../../api/types';
 
 // Mock watchlist item data
 const mockItem: WatchlistItemType = {
