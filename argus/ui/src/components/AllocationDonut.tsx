@@ -1,11 +1,17 @@
 /**
  * Custom SVG donut visualization for capital allocation with track + fill design.
  *
- * Sprint 18.75 Fix Sessions E + F + G:
+ * Sprint 18.75 Fix Sessions E + F + G + H:
  * - Track + fill approach inspired by Apple Watch activity rings
  * - Layer 1: Color-tinted track segments (each tinted with its strategy color)
  * - Layer 2: Bright colored fill arcs for deployed capital (strategies only)
  * - Clear visual hierarchy: each fill arc has a matching colored "container"
+ *
+ * Fix Session H (Animation Performance):
+ * - Track segments: instant render with CSS opacity transition (no per-frame updates)
+ * - Fill arcs: stroke-dashoffset animation via Framer Motion (GPU composited, 60fps)
+ * - No state updates during animation (no React re-renders per frame)
+ * - Dev mode fix: reset hasAnimatedRef in cleanup for StrictMode compatibility
  *
  * Design principles:
  * - Primary reading (instant): bright arcs on tinted track = deployment level per strategy
@@ -15,7 +21,7 @@
 
 import { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
 import { createPortal } from 'react-dom';
-import { motion, animate, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { DURATION } from '../utils/motion';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 
@@ -61,7 +67,7 @@ function getStrategyColor(strategyId: string): string {
   return STRATEGY_COLORS[normalized] || '#71717a';
 }
 
-// SVG arc path helper - creates an arc path segment
+// SVG arc path helper - creates an arc path segment (for track segments)
 function describeArc(
   cx: number,
   cy: number,
@@ -97,6 +103,27 @@ function describeArc(
   ].join(' ');
 }
 
+// Create a stroke-based arc path for fill animation (more performant than filled path)
+function describeStrokeArc(
+  cx: number,
+  cy: number,
+  radius: number,
+  startAngle: number,
+  endAngle: number
+): string {
+  const startRad = ((startAngle - 90) * Math.PI) / 180;
+  const endRad = ((endAngle - 90) * Math.PI) / 180;
+
+  const startX = cx + radius * Math.cos(startRad);
+  const startY = cy + radius * Math.sin(startRad);
+  const endX = cx + radius * Math.cos(endRad);
+  const endY = cy + radius * Math.sin(endRad);
+
+  const largeArcFlag = endAngle - startAngle > 180 ? 1 : 0;
+
+  return `M ${startX} ${startY} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${endX} ${endY}`;
+}
+
 // Segment data interface
 interface SegmentData {
   id: string;
@@ -111,6 +138,8 @@ interface SegmentData {
   allocationPct: number; // 0-1, portion of total equity
   allocationDollars: number;
   deployedDollars: number;
+  arcLength: number; // For stroke-dasharray animation
+  deployedArcLength: number; // Portion of arc that should be filled
 }
 
 interface TooltipData {
@@ -151,6 +180,8 @@ const CY = SIZE / 2;
 const OUTER_RADIUS = 90;
 const INNER_RADIUS = 60;
 const GAP_DEGREES = 2.5; // Small gap between segments on track
+const MID_RADIUS = (OUTER_RADIUS + INNER_RADIUS) / 2; // Center of ring for stroke
+const RING_THICKNESS = OUTER_RADIUS - INNER_RADIUS; // Stroke width
 
 
 // Custom comparator for React.memo - only re-render if allocation data changes
@@ -194,10 +225,8 @@ export const AllocationDonut = memo(function AllocationDonut({
   const svgRef = useRef<SVGSVGElement>(null);
   const hasAnimatedRef = useRef(false);
 
-  // Animation state
-  const [trackOpacity, setTrackOpacity] = useState(shouldAnimate ? 0 : 1);
-  const [fillProgress, setFillProgress] = useState(shouldAnimate ? 0 : 1);
-  const [centerOpacity, setCenterOpacity] = useState(shouldAnimate ? 0 : 1);
+  // Simple animation trigger - when true, CSS transitions and Framer animate to final state
+  const [isAnimating, setIsAnimating] = useState(!shouldAnimate);
 
   const [hoveredSegment, setHoveredSegment] = useState<string | null>(null);
   const [tooltip, setTooltip] = useState<TooltipData | null>(null);
@@ -286,6 +315,11 @@ export const AllocationDonut = memo(function AllocationDonut({
         ? getAvailableColor(CASH_COLOR)
         : getAvailableColor(raw.color);
 
+      // Calculate arc length for stroke-dasharray animation
+      const arcAngleRadians = (angularSpan * Math.PI) / 180;
+      const arcLength = MID_RADIUS * arcAngleRadians;
+      const deployedArcLength = arcLength * raw.deployedOfAllocation;
+
       segs.push({
         id: raw.id,
         name: raw.name,
@@ -299,6 +333,8 @@ export const AllocationDonut = memo(function AllocationDonut({
         allocationPct: raw.allocationPct,
         allocationDollars: raw.allocationDollars,
         deployedDollars: raw.deployedDollars,
+        arcLength,
+        deployedArcLength,
       });
 
       // Advance by angular span plus gap
@@ -324,58 +360,31 @@ export const AllocationDonut = memo(function AllocationDonut({
     return `$${value.toFixed(0)}`;
   };
 
-  // Animation sequence: track → fills → marks → center
+  // Trigger animation on mount (single state change, no per-frame updates)
   useEffect(() => {
-    if (!shouldAnimate || hasAnimatedRef.current) return;
-    hasAnimatedRef.current = true;
+    // Use requestAnimationFrame for all cases to avoid sync setState warning
+    const skipAnimation = !shouldAnimate || hasAnimatedRef.current;
 
-    // Phase 1: Track fades in (200ms)
-    const trackControl = animate(0, 1, {
-      duration: 0.2,
-      ease: 'easeOut',
-      onUpdate: setTrackOpacity,
+    const timer = requestAnimationFrame(() => {
+      setIsAnimating(true);
     });
 
-    // Phase 2: After 150ms, fill arcs sweep (400ms with stagger handled in render)
-    const fillDelay = setTimeout(() => {
-      animate(0, 1, {
-        duration: 0.4,
-        ease: [0.0, 0.0, 0.2, 1.0], // ease-out
-        onUpdate: setFillProgress,
-      });
-    }, 150);
-
-    // Phase 3: Center text fades in last (150ms)
-    const centerDelay = setTimeout(() => {
-      animate(0, 1, {
-        duration: 0.15,
-        ease: 'easeOut',
-        onUpdate: setCenterOpacity,
-        onComplete: onAnimationComplete,
-      });
-    }, 550);
+    // Only set up completion callback if actually animating
+    let completionTimer: ReturnType<typeof setTimeout> | undefined;
+    if (!skipAnimation) {
+      hasAnimatedRef.current = true;
+      completionTimer = setTimeout(() => {
+        onAnimationComplete?.();
+      }, 600); // Total animation duration
+    }
 
     return () => {
-      trackControl.stop();
-      clearTimeout(fillDelay);
-      clearTimeout(centerDelay);
+      cancelAnimationFrame(timer);
+      if (completionTimer) clearTimeout(completionTimer);
+      // Reset for StrictMode double-mount (dev mode fix)
+      hasAnimatedRef.current = false;
     };
   }, [shouldAnimate, onAnimationComplete]);
-
-  // Snap to final state on window resize
-  useEffect(() => {
-    const handleResize = () => {
-      if (trackOpacity < 1 || fillProgress < 1) {
-        setTrackOpacity(1);
-        setFillProgress(1);
-        setCenterOpacity(1);
-        hasAnimatedRef.current = true;
-      }
-    };
-
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, [trackOpacity, fillProgress]);
 
   // Handle hover - track mouse position for tooltip
   const handleMouseMove = useCallback((e: React.MouseEvent, segment: SegmentData) => {
@@ -430,7 +439,13 @@ export const AllocationDonut = memo(function AllocationDonut({
           style={{ overflow: 'visible' }}
         >
           {/* Layer 1: Color-tinted track segments with gaps */}
-          <g style={{ opacity: trackOpacity }}>
+          {/* Uses CSS transition for opacity - no per-frame React updates */}
+          <g
+            style={{
+              opacity: isAnimating ? 1 : 0,
+              transition: 'opacity 200ms ease-out',
+            }}
+          >
             {segments.map((segment) => (
               <path
                 key={`track-${segment.id}`}
@@ -448,49 +463,48 @@ export const AllocationDonut = memo(function AllocationDonut({
           </g>
 
           {/* Layer 2: Colored Fill Arcs (strategies only, not reserve) */}
+          {/* Uses stroke-dashoffset animation via Framer Motion - GPU composited */}
           {segments.filter(s => !s.isReserve && s.deployedPct > 0).map((segment, index) => {
-            // Calculate segment-specific animation with stagger
-            const segmentDelay = index * 0.08;
-            const segmentProgress = Math.max(0, Math.min(1,
-              (fillProgress - segmentDelay) / (1 - segmentDelay)
-            ));
-
-            // Fill arc sweeps from startAngle to deployed portion
-            const fillAngularSpan = (segment.endAngle - segment.startAngle) * segment.deployedPct;
-            const animatedFillEnd = segment.startAngle + fillAngularSpan * segmentProgress;
-
-            // Don't render if no progress or no deployment
-            if (segmentProgress <= 0 || animatedFillEnd <= segment.startAngle) return null;
-
-            // Hover effect
             const isHovered = hoveredSegment === segment.id;
-            const scale = isHovered ? 1.03 : 1;
-            const filterBrightness = isHovered ? 'brightness(1.15)' : 'brightness(1)';
 
             return (
               <g
                 key={`fill-${segment.id}`}
                 style={{
-                  transform: `scale(${scale})`,
+                  transform: isHovered ? 'scale(1.03)' : 'scale(1)',
                   transformOrigin: `${CX}px ${CY}px`,
-                  transition: 'transform 0.15s ease-out, filter 0.15s ease-out',
-                  filter: filterBrightness,
+                  transition: 'transform 150ms ease-out, filter 150ms ease-out',
+                  filter: isHovered ? 'brightness(1.15)' : 'brightness(1)',
                   cursor: canHover ? 'pointer' : 'default',
                 }}
                 onMouseEnter={() => handleMouseEnter(segment)}
                 onMouseMove={(e) => handleMouseMove(e, segment)}
                 onMouseLeave={handleMouseLeave}
               >
-                <path
-                  d={describeArc(
+                <motion.path
+                  d={describeStrokeArc(
                     CX,
                     CY,
-                    INNER_RADIUS,
-                    OUTER_RADIUS,
+                    MID_RADIUS,
                     segment.startAngle,
-                    animatedFillEnd
+                    segment.endAngle
                   )}
-                  fill={segment.color}
+                  fill="none"
+                  stroke={segment.color}
+                  strokeWidth={RING_THICKNESS}
+                  strokeLinecap="butt"
+                  strokeDasharray={segment.arcLength}
+                  initial={{ strokeDashoffset: segment.arcLength }}
+                  animate={{
+                    strokeDashoffset: isAnimating
+                      ? segment.arcLength - segment.deployedArcLength
+                      : segment.arcLength,
+                  }}
+                  transition={{
+                    duration: 0.4,
+                    ease: [0.0, 0.0, 0.2, 1.0],
+                    delay: 0.15 + index * 0.08, // Stagger after track fade-in
+                  }}
                 />
               </g>
             );
@@ -517,10 +531,13 @@ export const AllocationDonut = memo(function AllocationDonut({
           ))}
         </svg>
 
-        {/* Center text */}
+        {/* Center text - CSS transition for opacity */}
         <div
           className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none"
-          style={{ opacity: centerOpacity }}
+          style={{
+            opacity: isAnimating ? 1 : 0,
+            transition: 'opacity 150ms ease-out 450ms', // Delay until fills mostly done
+          }}
         >
           <span className="text-3xl font-bold text-argus-text">
             {deployedPctDisplay}%

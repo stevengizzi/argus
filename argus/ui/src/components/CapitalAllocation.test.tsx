@@ -14,12 +14,6 @@ vi.mock('framer-motion', async () => {
   return {
     ...actual,
     AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-    animate: vi.fn((from: number, to: number, options: { onUpdate?: (v: number) => void; onComplete?: () => void }) => {
-      // Immediately complete animation
-      if (options.onUpdate) options.onUpdate(to);
-      if (options.onComplete) setTimeout(options.onComplete, 0);
-      return { stop: vi.fn() };
-    }),
     motion: {
       div: ({
         children,
@@ -44,6 +38,20 @@ vi.mock('framer-motion', async () => {
         transition?: unknown;
         whileHover?: unknown;
       }) => <div {...props}>{children}</div>,
+      // Mock motion.path for AllocationDonut fill arcs
+      path: ({
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        initial: _initial,
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        animate: _animate,
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        transition: _transition,
+        ...props
+      }: React.SVGAttributes<SVGPathElement> & {
+        initial?: unknown;
+        animate?: unknown;
+        transition?: unknown;
+      }) => <path {...props} />,
     },
   };
 });
