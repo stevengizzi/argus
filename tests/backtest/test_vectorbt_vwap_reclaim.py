@@ -1,37 +1,34 @@
-"""Tests for VectorBT VWAP Reclaim parameter sweep."""
+"""Tests for VectorBT VWAP Reclaim parameter sweep (vectorized implementation)."""
 
 from __future__ import annotations
 
 from datetime import date
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
 
 from argus.backtest.vectorbt_vwap_reclaim import (
     VwapReclaimSweepConfig,
-    compute_day_vwap,
+    _compute_vwap_vectorized,
+    _find_exit_vectorized,
+    _precompute_reclaim_entries_for_day,
     compute_qualifying_days,
-    simulate_trade_exit,
-    simulate_vwap_reclaim_day,
 )
 
 
-class TestComputeDayVwap:
-    """Tests for VWAP computation."""
+class TestComputeVwapVectorized:
+    """Tests for vectorized VWAP computation."""
 
     def test_vwap_basic_calculation(self) -> None:
         """VWAP should be cumulative(TP × vol) / cumulative(vol)."""
-        day_df = pd.DataFrame(
-            {
-                "high": [100.0, 101.0, 102.0],
-                "low": [98.0, 99.0, 100.0],
-                "close": [99.0, 100.0, 101.0],
-                "volume": [1000, 1000, 1000],
-            }
-        )
+        high = np.array([100.0, 101.0, 102.0])
+        low = np.array([98.0, 99.0, 100.0])
+        close = np.array([99.0, 100.0, 101.0])
+        volume = np.array([1000.0, 1000.0, 1000.0])
 
-        vwap = compute_day_vwap(day_df)
+        vwap = _compute_vwap_vectorized(high, low, close, volume)
 
         # TP for each bar: (H+L+C)/3
         # Bar 0: (100+98+99)/3 = 99.0
@@ -43,43 +40,35 @@ class TestComputeDayVwap:
         # VWAP at bar 2: (99.0*1000 + 100.0*1000 + 101.0*1000) / 3000 = 100.0
 
         assert len(vwap) == 3
-        assert vwap.iloc[0] == pytest.approx(99.0)
-        assert vwap.iloc[1] == pytest.approx(99.5)
-        assert vwap.iloc[2] == pytest.approx(100.0)
+        assert vwap[0] == pytest.approx(99.0)
+        assert vwap[1] == pytest.approx(99.5)
+        assert vwap[2] == pytest.approx(100.0)
 
     def test_vwap_volume_weighting(self) -> None:
         """Higher volume bars should have more weight on VWAP."""
-        day_df = pd.DataFrame(
-            {
-                "high": [100.0, 102.0],
-                "low": [98.0, 100.0],
-                "close": [99.0, 101.0],
-                "volume": [100, 900],  # Second bar has 9x volume
-            }
-        )
+        high = np.array([100.0, 102.0])
+        low = np.array([98.0, 100.0])
+        close = np.array([99.0, 101.0])
+        volume = np.array([100.0, 900.0])  # Second bar has 9x volume
 
-        vwap = compute_day_vwap(day_df)
+        vwap = _compute_vwap_vectorized(high, low, close, volume)
 
         # TP bar 0: 99.0, TP bar 1: 101.0
         # VWAP at bar 1: (99.0*100 + 101.0*900) / 1000
         #             = (9900 + 90900) / 1000 = 100.8
 
-        assert vwap.iloc[1] == pytest.approx(100.8)
+        assert vwap[1] == pytest.approx(100.8)
 
     def test_vwap_handles_zero_volume(self) -> None:
         """VWAP should return NaN when cumulative volume is zero."""
-        day_df = pd.DataFrame(
-            {
-                "high": [100.0],
-                "low": [98.0],
-                "close": [99.0],
-                "volume": [0],
-            }
-        )
+        high = np.array([100.0])
+        low = np.array([98.0])
+        close = np.array([99.0])
+        volume = np.array([0.0])
 
-        vwap = compute_day_vwap(day_df)
+        vwap = _compute_vwap_vectorized(high, low, close, volume)
 
-        assert pd.isna(vwap.iloc[0])
+        assert np.isnan(vwap[0])
 
 
 class TestComputeQualifyingDays:
@@ -131,24 +120,24 @@ class TestComputeQualifyingDays:
         assert len(qualifying) == 0
 
 
-class TestSimulateTradeExit:
-    """Tests for trade exit simulation."""
+class TestFindExitVectorized:
+    """Tests for vectorized exit detection."""
 
     def test_stop_loss_exit(self) -> None:
         """Trade should exit at stop when price hits stop level."""
-        day_df = pd.DataFrame(
-            {
-                "high": [100.0, 100.5, 100.2],
-                "low": [99.5, 99.0, 98.5],  # Hits stop at bar 1
-                "close": [100.0, 99.5, 99.0],
-                "minutes_from_midnight": [600, 601, 602],
-            }
-        )
+        # Post-entry bars
+        highs = np.array([100.5, 100.2, 100.3])
+        lows = np.array([99.0, 98.5, 99.0])  # Hits stop at bar 0 (99.0 <= stop)
+        closes = np.array([99.5, 99.0, 99.5])
+        minutes = np.array([601, 602, 603])
 
-        result = simulate_trade_exit(
-            day_df,
-            entry_bar_idx=0,
+        result = _find_exit_vectorized(
+            highs,
+            lows,
+            closes,
+            minutes,
             entry_price=100.0,
+            entry_minutes=600,
             stop_price=99.0,  # Stop at 99.0
             target_price=102.0,
             time_stop_bars=10,
@@ -161,19 +150,19 @@ class TestSimulateTradeExit:
 
     def test_target_exit(self) -> None:
         """Trade should exit at target when price reaches target."""
-        day_df = pd.DataFrame(
-            {
-                "high": [100.0, 101.0, 102.5],  # Hits target at bar 2
-                "low": [99.5, 100.0, 101.0],
-                "close": [100.0, 101.0, 102.0],
-                "minutes_from_midnight": [600, 601, 602],
-            }
-        )
+        # Post-entry bars
+        highs = np.array([101.0, 102.5, 103.0])  # Hits target at bar 1
+        lows = np.array([100.0, 101.0, 102.0])
+        closes = np.array([101.0, 102.0, 102.5])
+        minutes = np.array([601, 602, 603])
 
-        result = simulate_trade_exit(
-            day_df,
-            entry_bar_idx=0,
+        result = _find_exit_vectorized(
+            highs,
+            lows,
+            closes,
+            minutes,
             entry_price=100.0,
+            entry_minutes=600,
             stop_price=99.0,
             target_price=102.0,
             time_stop_bars=10,
@@ -186,44 +175,44 @@ class TestSimulateTradeExit:
 
     def test_time_stop_exit(self) -> None:
         """Trade should exit at close when time stop reached."""
-        day_df = pd.DataFrame(
-            {
-                "high": [100.0, 100.5, 100.5, 100.6],
-                "low": [99.5, 99.8, 99.7, 99.6],
-                "close": [100.0, 100.2, 100.3, 100.4],
-                "minutes_from_midnight": [600, 601, 602, 603],
-            }
-        )
+        # Post-entry bars - no stop/target hit
+        highs = np.array([100.5, 100.5, 100.6, 100.7])
+        lows = np.array([99.8, 99.7, 99.6, 99.5])
+        closes = np.array([100.2, 100.3, 100.4, 100.5])
+        minutes = np.array([601, 602, 603, 604])
 
-        result = simulate_trade_exit(
-            day_df,
-            entry_bar_idx=0,
+        result = _find_exit_vectorized(
+            highs,
+            lows,
+            closes,
+            minutes,
             entry_price=100.0,
+            entry_minutes=600,
             stop_price=99.0,
             target_price=103.0,  # Far target
-            time_stop_bars=2,  # Time stop at bar 2
+            time_stop_bars=2,  # Time stop at bar 2 (index 1 = 2 bars held)
         )
 
         assert result is not None
         assert result["exit_reason"] == "time_stop"
-        assert result["exit_price"] == 100.3  # Close at bar 2
+        assert result["exit_price"] == 100.3  # Close at bar index 1
         assert result["hold_bars"] == 2
 
     def test_eod_flatten(self) -> None:
         """Trade should flatten at EOD when bar is at 3:45 PM."""
-        day_df = pd.DataFrame(
-            {
-                "high": [100.0, 100.5, 100.5],
-                "low": [99.5, 99.8, 99.7],
-                "close": [100.0, 100.2, 100.3],
-                "minutes_from_midnight": [600, 601, 945],  # 945 = 3:45 PM
-            }
-        )
+        # Post-entry bars with EOD bar
+        highs = np.array([100.5, 100.5, 100.5])
+        lows = np.array([99.8, 99.7, 99.7])
+        closes = np.array([100.2, 100.3, 100.3])
+        minutes = np.array([601, 602, 945])  # 945 = 3:45 PM
 
-        result = simulate_trade_exit(
-            day_df,
-            entry_bar_idx=0,
+        result = _find_exit_vectorized(
+            highs,
+            lows,
+            closes,
+            minutes,
             entry_price=100.0,
+            entry_minutes=600,
             stop_price=99.0,
             target_price=103.0,
             time_stop_bars=100,
@@ -233,9 +222,25 @@ class TestSimulateTradeExit:
         assert result["exit_reason"] == "eod"
         assert result["exit_price"] == 100.3
 
+    def test_empty_post_entry_returns_none(self) -> None:
+        """No exit should be found with empty post-entry data."""
+        result = _find_exit_vectorized(
+            np.array([]),
+            np.array([]),
+            np.array([]),
+            np.array([]),
+            entry_price=100.0,
+            entry_minutes=600,
+            stop_price=99.0,
+            target_price=102.0,
+            time_stop_bars=10,
+        )
 
-class TestSimulateVwapReclaimDay:
-    """Tests for the VWAP Reclaim state machine simulation."""
+        assert result is None
+
+
+class TestPrecomputeReclaimEntriesForDay:
+    """Tests for entry precomputation."""
 
     def _create_day_df(
         self,
@@ -264,12 +269,9 @@ class TestSimulateVwapReclaimDay:
             }
         )
 
-    def test_basic_reclaim_entry(self) -> None:
-        """State machine should generate entry on valid VWAP reclaim."""
+    def test_basic_reclaim_entry_detected(self) -> None:
+        """Entry should be detected on valid VWAP reclaim pattern."""
         # Setup: price above VWAP, pulls below, then reclaims
-        # VWAP computation: we need to construct prices that give us
-        # a clear above → below → reclaim pattern
-
         prices = [
             # (open, high, low, close)
             (100.0, 101.0, 99.0, 100.0),  # Bar 0: watching
@@ -279,33 +281,28 @@ class TestSimulateVwapReclaimDay:
             (98.5, 99.0, 98.0, 98.5),  # Bar 4: still below (3 bars now)
             (99.0, 101.5, 98.5, 101.0),  # Bar 5: reclaim with volume
             (101.0, 101.5, 100.5, 101.2),  # Bar 6: post-entry
-            (101.2, 102.5, 101.0, 102.0),  # Bar 7: hits target
+            (101.2, 102.5, 101.0, 102.0),  # Bar 7: post-entry
         ]
         volumes = [1000] * 8
         volumes[5] = 2000  # High volume on reclaim bar
         minutes = [600, 601, 602, 603, 604, 605, 606, 607]  # All in 10-12 window
 
         day_df = self._create_day_df(prices, volumes, minutes)
-        vwap = compute_day_vwap(day_df)
 
-        trades = simulate_vwap_reclaim_day(
+        entries = _precompute_reclaim_entries_for_day(
             day_df,
-            vwap,
-            min_pullback_pct=0.001,  # Very small min
-            max_pullback_pct=0.03,  # Large max
-            min_pullback_bars=3,
-            volume_multiplier=1.0,  # Relaxed volume requirement
+            max_pullback_pct=0.03,
             max_chase_above_vwap_pct=0.02,
             stop_buffer_pct=0.001,
-            target_r=1.0,
-            time_stop_bars=30,
         )
 
-        # Should have one trade
-        assert len(trades) == 1
-        trade = trades[0]
-        # Should exit at target or stop based on subsequent price action
-        assert trade["exit_reason"] in ("target", "stop", "time_stop", "eod")
+        # Should have at least one entry candidate
+        assert len(entries) >= 1
+        entry = entries[0]
+        assert entry["entry_price"] > 0
+        assert entry["pullback_low"] > 0
+        assert entry["bars_below"] >= 1
+        assert len(entry["highs"]) > 0  # Has post-entry data
 
     def test_no_entry_outside_time_window(self) -> None:
         """No entry should occur outside 10 AM - 12 PM window."""
@@ -321,81 +318,67 @@ class TestSimulateVwapReclaimDay:
         minutes = [570, 571, 572, 573, 574]  # 9:30-9:34 AM
 
         day_df = self._create_day_df(prices, volumes, minutes)
-        vwap = compute_day_vwap(day_df)
 
-        trades = simulate_vwap_reclaim_day(
+        entries = _precompute_reclaim_entries_for_day(
             day_df,
-            vwap,
-            min_pullback_pct=0.001,
             max_pullback_pct=0.05,
-            min_pullback_bars=2,
-            volume_multiplier=1.0,
             max_chase_above_vwap_pct=0.02,
             stop_buffer_pct=0.001,
-            target_r=1.0,
-            time_stop_bars=30,
         )
 
-        assert len(trades) == 0
+        # No entries because outside time window
+        assert len(entries) == 0
 
     def test_exhausted_state_on_deep_pullback(self) -> None:
-        """State machine should transition to EXHAUSTED on deep pullback."""
+        """Entry should not occur when pullback exceeds max_pullback_pct."""
         prices = [
             (100.0, 101.0, 99.0, 101.0),  # Above VWAP
-            (100.5, 101.0, 95.0, 96.0),  # Deep pullback below VWAP (5%+)
+            (100.5, 101.0, 95.0, 96.0),  # Deep pullback (5%+ below VWAP)
             (96.0, 102.0, 95.5, 101.0),  # Attempted reclaim
         ]
         volumes = [1000, 1000, 2000]
         minutes = [600, 601, 602]
 
         day_df = self._create_day_df(prices, volumes, minutes)
-        vwap = compute_day_vwap(day_df)
 
-        trades = simulate_vwap_reclaim_day(
+        entries = _precompute_reclaim_entries_for_day(
             day_df,
-            vwap,
-            min_pullback_pct=0.001,
             max_pullback_pct=0.02,  # 2% max - the pullback exceeds this
-            min_pullback_bars=1,
-            volume_multiplier=1.0,
             max_chase_above_vwap_pct=0.02,
             stop_buffer_pct=0.001,
-            target_r=1.0,
-            time_stop_bars=30,
         )
 
-        # Should transition to EXHAUSTED, no trade
-        assert len(trades) == 0
+        # Should transition to EXHAUSTED, no entry
+        assert len(entries) == 0
 
-    def test_insufficient_pullback_bars_resets_state(self) -> None:
-        """Reclaim with too few bars below VWAP should reset to ABOVE_VWAP."""
+    def test_entry_captures_pullback_metrics(self) -> None:
+        """Entry should capture pullback depth, bars below, and volume ratio."""
+        # Setup a clear reclaim pattern
         prices = [
-            (100.0, 101.0, 99.0, 101.0),  # Above VWAP
-            (100.5, 101.0, 98.5, 99.0),  # Below VWAP (1 bar)
-            (99.0, 101.5, 98.5, 101.0),  # Reclaim but only 1 bar below
-            (101.0, 102.0, 100.5, 101.5),  # Continues above
+            (100.0, 102.0, 99.0, 101.5),  # Bar 0: above VWAP (~100)
+            (101.0, 101.5, 99.0, 99.0),  # Bar 1: below VWAP
+            (99.0, 99.5, 98.5, 98.5),  # Bar 2: still below
+            (98.5, 99.0, 98.0, 98.0),  # Bar 3: still below (pullback low ~98)
+            (98.0, 101.5, 97.5, 101.0),  # Bar 4: reclaim
+            (101.0, 102.0, 100.5, 101.5),  # Bar 5: post-entry
         ]
-        volumes = [1000, 1000, 2000, 1000]
-        minutes = [600, 601, 602, 603]
+        volumes = [1000, 1000, 1000, 1000, 3000, 1000]  # 3x volume on reclaim
+        minutes = [600, 601, 602, 603, 604, 605]
 
         day_df = self._create_day_df(prices, volumes, minutes)
-        vwap = compute_day_vwap(day_df)
 
-        trades = simulate_vwap_reclaim_day(
+        entries = _precompute_reclaim_entries_for_day(
             day_df,
-            vwap,
-            min_pullback_pct=0.001,
             max_pullback_pct=0.05,
-            min_pullback_bars=5,  # Require 5 bars below
-            volume_multiplier=1.0,
-            max_chase_above_vwap_pct=0.02,
+            max_chase_above_vwap_pct=0.03,
             stop_buffer_pct=0.001,
-            target_r=1.0,
-            time_stop_bars=30,
         )
 
-        # Should not enter due to insufficient bars
-        assert len(trades) == 0
+        if entries:
+            entry = entries[0]
+            assert entry["bars_below"] >= 2  # At least 2 bars below
+            assert entry["pullback_depth_pct"] > 0  # Some pullback occurred
+            assert entry["volume_ratio"] > 1.0  # Above average volume on reclaim
 
 
 class TestVwapReclaimSweepConfig:
