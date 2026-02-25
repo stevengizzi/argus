@@ -30,11 +30,10 @@ Session 3: Strategy Tests ───┤── CODE REVIEW CHECKPOINT 1 (after Ses
 Session 4: System Integration┤
 Session 5: Integration Tests ┘
 
-Session 6: VectorBT Sweep ───┐
-Session 7: Walk-Forward ──────┤── CODE REVIEW CHECKPOINT 2 (after Session 10)
-Session 8: Run Backtests ─────┘  (backtests analyzed in review)
-
-Session 9: Dev Mock Data ────┐
+Session 6: VectorBT Sweep ────┐
+Session 7: Walk-Forward ──────┤
+Session 8: Run Backtests ─────┤── CODE REVIEW CHECKPOINT 2 (after Session 10)
+Session 9: Dev Mock Data ─────┤   (backtests analyzed in review)
 Session 10: Watchlist Sidebar ┘
 
 Session 11: Strategy Spec + Polish ──── (incorporates review feedback)
