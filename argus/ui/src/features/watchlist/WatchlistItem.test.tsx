@@ -1,15 +1,20 @@
 /**
  * Tests for WatchlistItem component.
  *
- * Sprint 19, Session 11.
+ * Sprint 19, Session 12 — Updated for v3 layout:
+ * - Removed sparklines from display (component still exists)
+ * - Compact single-letter strategy badges
+ * - VWAP distance display with arrows
+ * - Short state labels (Above, Below, Entered)
  */
 
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { WatchlistItem, MiniSparkline } from './WatchlistItem';
+import { CompactStrategyBadge } from '../../components/Badge';
 import type { WatchlistItem as WatchlistItemType } from '../../api/types';
 
-// Mock watchlist item data
+// Mock watchlist item data with VWAP tracking
 const mockItem: WatchlistItemType = {
   symbol: 'TSLA',
   current_price: 250.50,
@@ -21,6 +26,7 @@ const mockItem: WatchlistItemType = {
     { timestamp: '2026-02-26T14:31:00Z', price: 249.00 },
     { timestamp: '2026-02-26T14:32:00Z', price: 250.50 },
   ],
+  vwap_distance_pct: 0.0045, // 0.45% above VWAP
 };
 
 describe('WatchlistItem', () => {
@@ -54,60 +60,96 @@ describe('WatchlistItem', () => {
     expect(gapBadge).toHaveClass('text-argus-loss');
   });
 
-  it('renders strategy badges', () => {
+  it('renders compact strategy badges', () => {
     render(<WatchlistItem item={mockItem} />);
 
-    // StrategyBadge component should render for each strategy
-    // Note: The actual badge text depends on StrategyBadge implementation
-    const container = screen.getByRole('button');
-    expect(container).toBeInTheDocument();
+    // Should render compact badges (single letters with titles)
+    // ORB shows as "O", VWAP shows as "V"
+    expect(screen.getByTitle('ORB')).toBeInTheDocument();
+    expect(screen.getByTitle('VWAP')).toBeInTheDocument();
   });
 
-  it('renders VWAP state dot for watching state', () => {
-    const watchingItem: WatchlistItemType = {
-      ...mockItem,
-      vwap_state: 'watching',
-    };
-    render(<WatchlistItem item={watchingItem} />);
-
-    // Should have a gray dot with tooltip
-    const dotContainer = screen.getByTitle('Watching');
-    expect(dotContainer).toBeInTheDocument();
-  });
-
-  it('renders VWAP state dot for above_vwap state', () => {
+  it('shows VWAP state label for above_vwap state', () => {
     render(<WatchlistItem item={mockItem} />);
 
-    const dotContainer = screen.getByTitle('Above VWAP');
-    expect(dotContainer).toBeInTheDocument();
+    // Short label "Above" should be visible
+    expect(screen.getByText('Above')).toBeInTheDocument();
   });
 
-  it('renders VWAP state dot for below_vwap state', () => {
+  it('shows VWAP state label for below_vwap state', () => {
     const belowItem: WatchlistItemType = {
       ...mockItem,
       vwap_state: 'below_vwap',
+      vwap_distance_pct: -0.0055,
     };
     render(<WatchlistItem item={belowItem} />);
 
-    const dotContainer = screen.getByTitle('Below VWAP');
-    expect(dotContainer).toBeInTheDocument();
+    expect(screen.getByText('Below')).toBeInTheDocument();
   });
 
-  it('renders VWAP state dot for entered state', () => {
+  it('shows VWAP state label for entered state', () => {
     const enteredItem: WatchlistItemType = {
       ...mockItem,
       vwap_state: 'entered',
+      vwap_distance_pct: 0.0032,
     };
     render(<WatchlistItem item={enteredItem} />);
 
-    const dotContainer = screen.getByTitle('Entered');
-    expect(dotContainer).toBeInTheDocument();
+    expect(screen.getByText('Entered')).toBeInTheDocument();
+  });
+
+  it('does not show VWAP state for watching state', () => {
+    const watchingItem: WatchlistItemType = {
+      ...mockItem,
+      vwap_state: 'watching',
+      vwap_distance_pct: null,
+    };
+    render(<WatchlistItem item={watchingItem} />);
+
+    // "Watching" label should not appear (show: false in config)
+    expect(screen.queryByText('Watching')).not.toBeInTheDocument();
+  });
+
+  it('shows VWAP distance with up arrow for positive distance', () => {
+    render(<WatchlistItem item={mockItem} />);
+
+    // 0.0045 = 0.45% → "0.4%"
+    // Check that up arrow exists
+    expect(screen.getByText('↑', { exact: false })).toBeInTheDocument();
+    expect(screen.getByText('0.4%', { exact: false })).toBeInTheDocument();
+  });
+
+  it('shows VWAP distance with down arrow for negative distance', () => {
+    const belowItem: WatchlistItemType = {
+      ...mockItem,
+      vwap_state: 'below_vwap',
+      vwap_distance_pct: -0.0055,
+    };
+    render(<WatchlistItem item={belowItem} />);
+
+    // -0.0055 = -0.55% → "0.5%" (JS floating point: 0.55.toFixed(1) = "0.5")
+    expect(screen.getByText('↓', { exact: false })).toBeInTheDocument();
+    expect(screen.getByText('0.5%', { exact: false })).toBeInTheDocument();
+  });
+
+  it('does not show VWAP distance when null', () => {
+    const noDistanceItem: WatchlistItemType = {
+      ...mockItem,
+      vwap_state: 'watching',
+      vwap_distance_pct: null,
+    };
+    render(<WatchlistItem item={noDistanceItem} />);
+
+    // No arrows should appear
+    expect(screen.queryByText(/↑/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/↓/)).not.toBeInTheDocument();
   });
 
   it('shows left border accent for entered state', () => {
     const enteredItem: WatchlistItemType = {
       ...mockItem,
       vwap_state: 'entered',
+      vwap_distance_pct: 0.0032,
     };
     render(<WatchlistItem item={enteredItem} />);
 
@@ -147,15 +189,64 @@ describe('WatchlistItem', () => {
     const nonVwapItem: WatchlistItemType = {
       ...mockItem,
       strategies: ['orb_breakout'],
+      vwap_distance_pct: null,
     };
     render(<WatchlistItem item={nonVwapItem} />);
 
     // Should not have VWAP state indicator
-    expect(screen.queryByTitle('Above VWAP')).not.toBeInTheDocument();
+    expect(screen.queryByText('Above')).not.toBeInTheDocument();
+    expect(screen.queryByText('Below')).not.toBeInTheDocument();
+    expect(screen.queryByText('Entered')).not.toBeInTheDocument();
+  });
+});
+
+describe('CompactStrategyBadge', () => {
+  it('renders single letter for ORB strategy', () => {
+    render(<CompactStrategyBadge strategyId="orb_breakout" />);
+
+    const badge = screen.getByTitle('ORB');
+    expect(badge).toBeInTheDocument();
+    expect(badge).toHaveTextContent('O');
+  });
+
+  it('renders single letter for Scalp strategy', () => {
+    render(<CompactStrategyBadge strategyId="orb_scalp" />);
+
+    const badge = screen.getByTitle('SCALP');
+    expect(badge).toBeInTheDocument();
+    expect(badge).toHaveTextContent('S');
+  });
+
+  it('renders single letter for VWAP strategy', () => {
+    render(<CompactStrategyBadge strategyId="vwap_reclaim" />);
+
+    const badge = screen.getByTitle('VWAP');
+    expect(badge).toBeInTheDocument();
+    expect(badge).toHaveTextContent('V');
+  });
+
+  it('renders single letter for Momentum strategy', () => {
+    render(<CompactStrategyBadge strategyId="afternoon_momentum" />);
+
+    const badge = screen.getByTitle('MOM');
+    expect(badge).toBeInTheDocument();
+    expect(badge).toHaveTextContent('A');
+  });
+
+  it('has correct compact sizing', () => {
+    render(<CompactStrategyBadge strategyId="orb" />);
+
+    const badge = screen.getByTitle('ORB');
+    expect(badge).toHaveClass('w-5');
+    expect(badge).toHaveClass('h-[18px]');
+    expect(badge).toHaveClass('rounded-full');
   });
 });
 
 describe('MiniSparkline', () => {
+  // MiniSparkline is still exported but not used in watchlist display
+  // Keep tests for future use (detail panel, etc.)
+
   it('renders SVG polyline for valid data', () => {
     const data = [100, 105, 102, 108, 110];
     const { container } = render(<MiniSparkline data={data} />);

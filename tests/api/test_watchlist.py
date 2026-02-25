@@ -37,8 +37,8 @@ class TestWatchlistEndpoint:
 
         assert response.status_code == 200
         data = response.json()
-        assert data["count"] == 3
-        assert len(data["symbols"]) == 3
+        assert data["count"] == 4
+        assert len(data["symbols"]) == 4
 
         # Check required fields exist in each item
         for item in data["symbols"]:
@@ -48,6 +48,7 @@ class TestWatchlistEndpoint:
             assert "strategies" in item
             assert "vwap_state" in item
             assert "sparkline" in item
+            assert "vwap_distance_pct" in item
 
             # Verify strategies is a list
             assert isinstance(item["strategies"], list)
@@ -58,6 +59,10 @@ class TestWatchlistEndpoint:
                 point = item["sparkline"][0]
                 assert "timestamp" in point
                 assert "price" in point
+
+            # Verify vwap_distance_pct is float or null
+            vwap_dist = item["vwap_distance_pct"]
+            assert vwap_dist is None or isinstance(vwap_dist, (int, float))
 
     @pytest.mark.asyncio
     async def test_watchlist_vwap_states(
@@ -74,6 +79,42 @@ class TestWatchlistEndpoint:
         valid_states = {"watching", "above_vwap", "below_vwap", "entered"}
         for item in data["symbols"]:
             assert item["vwap_state"] in valid_states
+
+    @pytest.mark.asyncio
+    async def test_watchlist_vwap_distance_values(
+        self,
+        client_with_watchlist: AsyncClient,
+        auth_headers: dict[str, str],
+    ) -> None:
+        """VWAP distance values match state expectations."""
+        response = await client_with_watchlist.get("/api/v1/watchlist", headers=auth_headers)
+
+        assert response.status_code == 200
+        data = response.json()
+
+        for item in data["symbols"]:
+            has_vwap = "vwap_reclaim" in item["strategies"]
+            vwap_dist = item["vwap_distance_pct"]
+            state = item["vwap_state"]
+
+            if not has_vwap:
+                # Non-VWAP symbols should have null distance
+                assert vwap_dist is None
+            elif state == "watching":
+                # Watching state has null distance (VWAP not yet relevant)
+                assert vwap_dist is None
+            elif state == "above_vwap":
+                # Above VWAP should have positive distance
+                assert vwap_dist is not None
+                assert vwap_dist > 0
+            elif state == "below_vwap":
+                # Below VWAP should have negative distance
+                assert vwap_dist is not None
+                assert vwap_dist < 0
+            elif state == "entered":
+                # Entered (reclaimed) should have positive distance
+                assert vwap_dist is not None
+                assert vwap_dist > 0
 
     @pytest.mark.asyncio
     async def test_watchlist_strategies_format(
@@ -168,6 +209,7 @@ async def app_state_with_watchlist(app_state):
             strategies=["orb", "scalp", "vwap_reclaim"],
             vwap_state=VwapState.ABOVE_VWAP,
             sparkline=create_sparkline(875.50),
+            vwap_distance_pct=0.0045,  # Above VWAP: positive
         ),
         WatchlistItem(
             symbol="TSLA",
@@ -176,6 +218,7 @@ async def app_state_with_watchlist(app_state):
             strategies=["orb", "scalp"],
             vwap_state=VwapState.WATCHING,
             sparkline=create_sparkline(225.80),
+            vwap_distance_pct=None,  # No VWAP strategy
         ),
         WatchlistItem(
             symbol="PLTR",
@@ -184,6 +227,16 @@ async def app_state_with_watchlist(app_state):
             strategies=["vwap_reclaim"],
             vwap_state=VwapState.ENTERED,
             sparkline=create_sparkline(32.50),
+            vwap_distance_pct=0.0032,  # Entered: positive
+        ),
+        WatchlistItem(
+            symbol="SOFI",
+            current_price=15.20,
+            gap_pct=6.2,
+            strategies=["vwap_reclaim"],
+            vwap_state=VwapState.BELOW_VWAP,
+            sparkline=create_sparkline(15.20),
+            vwap_distance_pct=-0.0055,  # Below VWAP: negative
         ),
     ]
 

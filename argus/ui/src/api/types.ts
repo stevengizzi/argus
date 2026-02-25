@@ -212,6 +212,7 @@ export interface WatchlistItem {
   strategies: string[];  // ["orb", "scalp", "vwap_reclaim"]
   vwap_state: VwapState;
   sparkline: SparklinePoint[];
+  vwap_distance_pct: number | null;  // (current_price - vwap) / vwap, signed. Null if VWAP not tracked.
 }
 
 export interface WatchlistResponse {

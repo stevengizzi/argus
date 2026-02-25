@@ -42,6 +42,7 @@ class WatchlistItem(BaseModel):
     strategies: list[str]  # Which strategies are watching: ["orb", "scalp", "vwap_reclaim"]
     vwap_state: VwapState
     sparkline: list[SparklinePoint]  # Last 30 data points for mini chart
+    vwap_distance_pct: float | None = None  # (price - vwap) / vwap, signed. None if no VWAP.
 
 
 class WatchlistResponse(BaseModel):

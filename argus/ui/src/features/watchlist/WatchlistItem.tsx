@@ -1,15 +1,15 @@
 /**
  * WatchlistItem - Single item in the watchlist sidebar.
  *
- * Redesigned layout (Sprint 19, Session 11):
- * - Row 1: Symbol, price, sparkline (right), gap badge
- * - Row 2: Strategy badges + VWAP state dot (tooltip on hover)
+ * Redesigned layout (Sprint 19, Session 12):
+ * - Row 1: Symbol (bold), price (dim), gap badge (right-aligned)
+ * - Row 2: Compact strategy pills + VWAP state indicator with short label and distance
  * - Active position (entered) has 3px left border accent
  * - Clickable: opens Trade Detail panel
  */
 
 import type { WatchlistItem as WatchlistItemType, VwapState } from '../../api/types';
-import { StrategyBadge } from '../../components/Badge';
+import { CompactStrategyBadge } from '../../components/Badge';
 import { formatPrice } from '../../utils/format';
 
 interface WatchlistItemProps {
@@ -17,23 +17,44 @@ interface WatchlistItemProps {
   onClick?: (symbol: string) => void;
 }
 
-// VWAP state indicator colors
-const vwapStateColors: Record<VwapState, { dot: string; label: string }> = {
-  watching: { dot: 'bg-gray-400', label: 'Watching' },
-  above_vwap: { dot: 'bg-blue-400', label: 'Above VWAP' },
-  below_vwap: { dot: 'bg-amber-400', label: 'Below VWAP' },
-  entered: { dot: 'bg-argus-profit', label: 'Entered' },
+// VWAP state indicator config
+const vwapStateConfig: Record<VwapState, { dot: string; label: string; show: boolean }> = {
+  watching: { dot: 'bg-gray-400', label: 'Watching', show: false }, // Don't show for watching state
+  above_vwap: { dot: 'bg-blue-400', label: 'Above', show: true },
+  below_vwap: { dot: 'bg-amber-400', label: 'Below', show: true },
+  entered: { dot: 'bg-argus-profit', label: 'Entered', show: true },
 };
 
 export function WatchlistItem({ item, onClick }: WatchlistItemProps) {
-  const { symbol, current_price, gap_pct, strategies, vwap_state, sparkline } = item;
-  const vwapConfig = vwapStateColors[vwap_state];
+  const { symbol, current_price, gap_pct, strategies, vwap_state, vwap_distance_pct } = item;
+  const vwapConfig = vwapStateConfig[vwap_state];
   const isPositiveGap = gap_pct > 0;
   const isEntered = vwap_state === 'entered';
+  const isVwapTracked = strategies.includes('vwap_reclaim');
+  const showVwapIndicator = isVwapTracked && vwapConfig.show;
 
   const handleClick = () => {
     onClick?.(symbol);
   };
+
+  // Format VWAP distance display
+  const formatVwapDistance = (distance: number | null): { arrow: string; text: string; color: string } | null => {
+    if (distance === null || distance === undefined) return null;
+
+    const isAbove = distance > 0;
+    const arrow = isAbove ? '↑' : '↓';
+    const text = `${(Math.abs(distance) * 100).toFixed(1)}%`;
+
+    // Use same color as the state dot
+    let color = 'text-argus-text-dim';
+    if (vwap_state === 'above_vwap') color = 'text-blue-400';
+    else if (vwap_state === 'below_vwap') color = 'text-amber-400';
+    else if (vwap_state === 'entered') color = 'text-argus-profit';
+
+    return { arrow, text, color };
+  };
+
+  const vwapDistance = formatVwapDistance(vwap_distance_pct);
 
   return (
     <div
@@ -45,19 +66,11 @@ export function WatchlistItem({ item, onClick }: WatchlistItemProps) {
       tabIndex={0}
       onKeyDown={(e) => e.key === 'Enter' && handleClick()}
     >
-      {/* Row 1: Symbol, price, sparkline (right), gap badge */}
-      <div className="flex items-center gap-2">
-        <span className="font-semibold text-argus-text text-sm">{symbol}</span>
-        <span className="text-xs text-argus-text-dim">{formatPrice(current_price)}</span>
-
-        {/* Sparkline - reduced visual weight */}
-        <div className="flex-1 min-w-0">
-          <MiniSparkline
-            data={sparkline.map((p) => p.price)}
-            width={50}
-            height={16}
-            className="ml-auto"
-          />
+      {/* Row 1: Symbol, price, gap badge */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="font-semibold text-argus-text text-sm">{symbol}</span>
+          <span className="text-xs text-argus-text-dim">{formatPrice(current_price)}</span>
         </div>
 
         {/* Gap badge */}
@@ -72,21 +85,25 @@ export function WatchlistItem({ item, onClick }: WatchlistItemProps) {
         </span>
       </div>
 
-      {/* Row 2: Strategy badges + VWAP indicator (dot only, tooltip for label) */}
+      {/* Row 2: Compact strategy badges + VWAP state with distance */}
       <div className="flex items-center justify-between mt-1">
-        <div className="flex flex-wrap gap-1">
+        {/* Strategy badges */}
+        <div className="flex gap-0.5">
           {strategies.map((strategyId) => (
-            <StrategyBadge key={strategyId} strategyId={strategyId} />
+            <CompactStrategyBadge key={strategyId} strategyId={strategyId} />
           ))}
         </div>
 
-        {/* VWAP state indicator - dot only with tooltip */}
-        {strategies.includes('vwap_reclaim') && (
-          <div
-            className="flex items-center"
-            title={vwapConfig.label}
-          >
+        {/* VWAP state indicator with label and distance */}
+        {showVwapIndicator && (
+          <div className="flex items-center gap-1 text-xs">
             <span className={`w-2 h-2 rounded-full ${vwapConfig.dot}`} />
+            <span className="text-argus-text-dim">{vwapConfig.label}</span>
+            {vwapDistance && (
+              <span className={vwapDistance.color}>
+                {vwapDistance.arrow}{vwapDistance.text}
+              </span>
+            )}
           </div>
         )}
       </div>
@@ -94,6 +111,7 @@ export function WatchlistItem({ item, onClick }: WatchlistItemProps) {
   );
 }
 
+// Keep MiniSparkline export for potential future use (detail panel, etc.)
 interface MiniSparklineProps {
   data: number[];
   width?: number;
@@ -104,7 +122,7 @@ interface MiniSparklineProps {
 /**
  * Simple SVG sparkline for mini price visualization.
  * Shows a polyline of the price data scaled to fit the viewport.
- * Reduced visual weight: thinner stroke, slight opacity.
+ * Currently not used in watchlist, but available for detail views.
  */
 export function MiniSparkline({ data, width = 50, height = 16, className = '' }: MiniSparklineProps) {
   if (data.length < 2) {

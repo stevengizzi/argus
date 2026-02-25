@@ -692,6 +692,21 @@ def _create_mock_watchlist(now: datetime) -> list[WatchlistItem]:
     - Various VWAP states
     - Realistic sparkline data
     """
+    # Helper to generate realistic VWAP distance based on state
+    def get_vwap_distance(state: VwapState, has_vwap_strategy: bool) -> float | None:
+        """Generate realistic VWAP distance based on state."""
+        if not has_vwap_strategy:
+            return None
+        if state == VwapState.WATCHING:
+            return None  # VWAP not yet relevant
+        if state == VwapState.ABOVE_VWAP:
+            return random.uniform(0.001, 0.008)  # Small positive
+        if state == VwapState.BELOW_VWAP:
+            return random.uniform(-0.010, -0.001)  # Small negative
+        if state == VwapState.ENTERED:
+            return random.uniform(0.001, 0.005)  # Reclaimed and holding above
+        return None
+
     # Watchlist symbols with their base prices and characteristics
     watchlist_data = [
         # High-momentum gappers - all strategies watching
@@ -794,6 +809,10 @@ def _create_mock_watchlist(now: datetime) -> list[WatchlistItem]:
         # Current price is the last sparkline point
         current_price = sparkline[-1].price if sparkline else base_price
 
+        # Calculate VWAP distance based on state and strategy
+        has_vwap = "vwap_reclaim" in data["strategies"]
+        vwap_distance = get_vwap_distance(data["vwap_state"], has_vwap)
+
         watchlist_items.append(
             WatchlistItem(
                 symbol=data["symbol"],
@@ -802,6 +821,7 @@ def _create_mock_watchlist(now: datetime) -> list[WatchlistItem]:
                 strategies=data["strategies"],
                 vwap_state=data["vwap_state"],
                 sparkline=sparkline,
+                vwap_distance_pct=vwap_distance,
             )
         )
 

@@ -83,6 +83,18 @@ const strategyLabels: Record<string, string> = {
   afternoon_momentum: 'MOM',
 };
 
+// Single-letter labels for compact badges
+const strategyLetters: Record<string, string> = {
+  orb: 'O',
+  orb_breakout: 'O',
+  scalp: 'S',
+  orb_scalp: 'S',
+  vwap: 'V',
+  vwap_reclaim: 'V',
+  momentum: 'A', // Afternoon Momentum → A
+  afternoon_momentum: 'A',
+};
+
 // Display labels for regimes
 const regimeLabels: Record<string, string> = {
   bullish: 'Bullish',
@@ -158,6 +170,22 @@ export function StrategyBadge({ strategyId, onAmber = false }: StrategyBadgeProp
       className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${colorClass}`}
     >
       {label}
+    </span>
+  );
+}
+
+// Compact strategy badge - single-letter pill for dense layouts (watchlist sidebar)
+export function CompactStrategyBadge({ strategyId }: { strategyId: string }) {
+  const normalizedId = strategyId.toLowerCase().replace(/-/g, '_') as StrategyId;
+  const letter = strategyLetters[normalizedId] || strategyId.charAt(0).toUpperCase();
+  const colorClass = strategyColors[normalizedId] || 'text-argus-text-dim bg-argus-surface-2';
+
+  return (
+    <span
+      className={`inline-flex items-center justify-center w-5 h-[18px] rounded-full text-xs font-semibold ${colorClass}`}
+      title={strategyLabels[normalizedId] || strategyId}
+    >
+      {letter}
     </span>
   );
 }
