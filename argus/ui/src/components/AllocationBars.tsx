@@ -143,9 +143,11 @@ export function AllocationBars({
       const availableDollars = allocationDollars - deployedDollars;
 
       // Calculate deployed % relative to this strategy's allocation
+      // Cap at 100% for display (margin usage can exceed allocation)
       const deployedOfAllocation = alloc.allocation_pct > 0
         ? Math.min(1, alloc.deployed_pct / alloc.allocation_pct)
         : 0;
+      const displayDeployedPct = Math.min(deployedOfAllocation * 100, 100);
 
       bars.push({
         id: alloc.strategy_id,
@@ -153,7 +155,7 @@ export function AllocationBars({
         color,
         allocationPct: alloc.allocation_pct * 100,
         allocationDollars,
-        deployedPct: deployedOfAllocation * 100,
+        deployedPct: displayDeployedPct,  // Capped at 100% for bar display
         deployedDollars,
         availableDollars: Math.max(0, availableDollars),
         isThrottled: alloc.is_throttled,

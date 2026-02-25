@@ -74,13 +74,14 @@ export function RiskAllocationPanel() {
   }, [accountData?.equity, accountData?.daily_pnl, performanceData?.metrics.net_pnl]);
 
   if (isMultiColumn) {
-    // Desktop/Tablet: 3-card equal-width grid
+    // Desktop: 3-card equal-width grid
+    // Tablet: 2-column grid with Market Regime spanning full width below
     return (
       <motion.div
-        className="grid grid-cols-3 gap-4 md:gap-5 lg:gap-6"
+        className="grid grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5 lg:gap-6"
         variants={staggerItem}
       >
-        {/* Capital Allocation (1/3) */}
+        {/* Capital Allocation */}
         <CapitalAllocation
           allocations={allocations}
           cashReservePct={cashReservePct}
@@ -89,7 +90,7 @@ export function RiskAllocationPanel() {
           totalEquity={totalEquity}
         />
 
-        {/* Risk Budget (1/3) */}
+        {/* Risk Budget */}
         <Card className="h-full">
           <CardHeader title="Risk Budget" />
           <div className="flex justify-around items-center py-4 min-h-[160px]">
@@ -108,8 +109,10 @@ export function RiskAllocationPanel() {
           </div>
         </Card>
 
-        {/* Market Regime (1/3) */}
-        <MarketRegimeCard />
+        {/* Market Regime - spans 2 cols on tablet, 1 col on desktop */}
+        <div className="col-span-2 lg:col-span-1">
+          <MarketRegimeCard />
+        </div>
       </motion.div>
     );
   }

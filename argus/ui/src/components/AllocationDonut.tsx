@@ -31,7 +31,8 @@ const STRATEGY_COLORS: Record<string, string> = {
   afternoon_momentum: '#fbbf24',
 };
 
-const CASH_COLOR = '#52525b'; // zinc-600
+const CASH_COLOR = '#71717a'; // zinc-500 (brighter for visibility)
+const CASH_DESAT_COLOR = 'rgba(148, 163, 184, 0.35)'; // slate-400 at 35% for visible reserve arc
 const THROTTLED_COLOR = '#71717a'; // zinc-500
 
 // Display names for strategies
@@ -273,27 +274,30 @@ export function AllocationDonut({
     return () => progressControl.stop();
   }, [shouldAnimate, onAnimationComplete]);
 
-  // Handle hover
-  const handleMouseEnter = useCallback((segment: SegmentData) => {
+  // Snap to final state on window resize to prevent broken mid-animation states
+  useEffect(() => {
+    const handleResize = () => {
+      // If animation is in progress (not complete), snap to final state
+      if (animationProgress < 1) {
+        setAnimationProgress(1);
+        setCenterOpacity(1);
+        hasAnimatedRef.current = true;
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [animationProgress]);
+
+  // Handle hover - track mouse position for tooltip
+  const handleMouseMove = useCallback((e: React.MouseEvent, segment: SegmentData) => {
     if (!canHover) return;
 
     setHoveredSegment(segment.id);
 
-    const rect = svgRef.current?.getBoundingClientRect();
-    if (!rect) return;
-
-    // Calculate tooltip position (center of segment arc)
-    const midAngle = (segment.startAngle + segment.endAngle) / 2;
-    const midRad = ((midAngle - 90) * Math.PI) / 180;
-    const tooltipRadius = (INNER_RADIUS + OUTER_RADIUS) / 2;
-    const tooltipX = CX + tooltipRadius * Math.cos(midRad);
-    const tooltipY = CY + tooltipRadius * Math.sin(midRad);
-
-    // Convert SVG coordinates to screen coordinates
-    const scaleX = rect.width / SIZE;
-    const scaleY = rect.height / SIZE;
-    const screenX = rect.left + tooltipX * scaleX;
-    const screenY = rect.top + tooltipY * scaleY;
+    // Use mouse position directly with offset
+    const x = e.clientX;
+    const y = e.clientY;
 
     setTooltip({
       name: segment.name,
@@ -303,9 +307,14 @@ export function AllocationDonut({
       deployedPct: segment.deployedPct,
       isThrottled: segment.isThrottled,
       isReserve: segment.isReserve,
-      x: screenX,
-      y: screenY,
+      x,
+      y,
     });
+  }, [canHover]);
+
+  const handleMouseEnter = useCallback((segment: SegmentData) => {
+    if (!canHover) return;
+    setHoveredSegment(segment.id);
   }, [canHover]);
 
   const handleMouseLeave = useCallback(() => {
@@ -348,13 +357,14 @@ export function AllocationDonut({
             // Fill animation starts after segment sweep is ~60% complete
             const fillProgress = Math.max(0, Math.min(1, (segmentProgress - 0.6) / 0.4));
 
-            // Calculate fill radius (deployed portion fills from inside-out)
-            const thickness = OUTER_RADIUS - INNER_RADIUS;
-            const fillOuterRadius = INNER_RADIUS + thickness * segment.deployedPct * fillProgress;
+            // Calculate fill end angle (deployed portion sweeps clockwise along the arc)
+            // Fill uses full ring thickness but only covers portion of the angular span
+            const segmentAngularSpan = animatedEndAngle - segment.startAngle;
+            const fillEndAngle = segment.startAngle + segmentAngularSpan * segment.deployedPct * fillProgress;
 
             // Unfilled color: gray for throttled, desaturated strategy color otherwise
             const unfilledColor = segment.isReserve
-              ? getDesaturatedColor(CASH_COLOR, 0.25)
+              ? CASH_DESAT_COLOR
               : segment.isThrottled
                 ? THROTTLED_COLOR
                 : getDesaturatedColor(segment.color, 0.18);
@@ -375,6 +385,7 @@ export function AllocationDonut({
                   cursor: canHover ? 'pointer' : 'default',
                 }}
                 onMouseEnter={() => handleMouseEnter(segment)}
+                onMouseMove={(e) => handleMouseMove(e, segment)}
                 onMouseLeave={handleMouseLeave}
               >
                 {/* Background arc (unfilled portion - full ring thickness) */}
@@ -392,16 +403,16 @@ export function AllocationDonut({
                   />
                 )}
 
-                {/* Foreground arc (deployed portion - partial thickness from inside) */}
-                {fillProgress > 0 && segment.deployedPct > 0 && animatedEndAngle > segment.startAngle && (
+                {/* Foreground arc (deployed portion - sweeps clockwise along arc) */}
+                {fillProgress > 0 && segment.deployedPct > 0 && fillEndAngle > segment.startAngle && (
                   <path
                     d={describeArc(
                       CX,
                       CY,
                       INNER_RADIUS,
-                      fillOuterRadius,
+                      OUTER_RADIUS,
                       segment.startAngle,
-                      animatedEndAngle
+                      fillEndAngle
                     )}
                     fill={segment.color}
                   />
@@ -444,19 +455,18 @@ export function AllocationDonut({
         ))}
       </div>
 
-      {/* Tooltip */}
+      {/* Tooltip - follows cursor with offset */}
       <AnimatePresence>
         {tooltip && canHover && (
           <motion.div
             className="fixed z-50 bg-argus-surface border border-argus-border rounded-lg shadow-xl p-2.5 pointer-events-none"
             style={{
-              left: tooltip.x,
-              top: tooltip.y,
-              transform: 'translate(-50%, -120%)',
+              left: Math.min(tooltip.x + 12, window.innerWidth - 160),
+              top: Math.max(tooltip.y - 12, 8),
             }}
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 4 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
             transition={{ duration: DURATION.fast }}
           >
             <div className="text-xs space-y-1.5 min-w-[140px]">

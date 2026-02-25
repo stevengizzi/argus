@@ -311,14 +311,17 @@ def _create_mock_positions(now: datetime) -> list[ManagedPosition]:
     """Create mock managed positions for dev mode.
 
     Creates:
-    - 3 ORB Breakout positions (5-30 min holds)
-    - 2 ORB Scalp positions (30-90s holds, different symbols)
+    - 3 ORB Breakout positions (~$28k total notional, within $40k allocation)
+    - 2 ORB Scalp positions (~$25k total notional, within $40k allocation)
+
+    Position sizes are realistic for a $100k account with 40% allocation per strategy.
     """
     positions = []
 
-    # --- ORB Breakout Positions ---
+    # --- ORB Breakout Positions (total ~$28k = 70% of $40k allocation) ---
 
     # Position 1: NVDA - entered 30 minutes ago, T1 hit, stop at breakeven
+    # 12 shares × $875.50 = $10,506 notional
     entry_time_1 = now - timedelta(minutes=30)
     positions.append(
         ManagedPosition(
@@ -326,22 +329,23 @@ def _create_mock_positions(now: datetime) -> list[ManagedPosition]:
             strategy_id="orb_breakout",
             entry_price=875.50,
             entry_time=entry_time_1,
-            shares_total=100,
-            shares_remaining=50,  # T1 took 50 shares
+            shares_total=12,
+            shares_remaining=6,  # T1 took 6 shares
             stop_price=875.50,  # Moved to breakeven
             original_stop_price=868.00,
             stop_order_id="stop_nvda_001",
             t1_price=883.00,
             t1_order_id=None,  # T1 filled
-            t1_shares=50,
+            t1_shares=6,
             t1_filled=True,
             t2_price=890.50,
             high_watermark=886.25,
-            realized_pnl=375.0,  # 50 * 7.50
+            realized_pnl=45.0,  # 6 × $7.50
         )
     )
 
     # Position 2: AAPL - entered 15 minutes ago, still waiting for T1
+    # 50 shares × $185.80 = $9,290 notional
     entry_time_2 = now - timedelta(minutes=15)
     positions.append(
         ManagedPosition(
@@ -349,14 +353,14 @@ def _create_mock_positions(now: datetime) -> list[ManagedPosition]:
             strategy_id="orb_breakout",
             entry_price=185.80,
             entry_time=entry_time_2,
-            shares_total=150,
-            shares_remaining=150,
+            shares_total=50,
+            shares_remaining=50,
             stop_price=183.50,
             original_stop_price=183.50,
             stop_order_id="stop_aapl_001",
             t1_price=188.10,
             t1_order_id="t1_aapl_001",
-            t1_shares=75,
+            t1_shares=25,
             t1_filled=False,
             t2_price=190.40,
             high_watermark=186.90,
@@ -365,6 +369,7 @@ def _create_mock_positions(now: datetime) -> list[ManagedPosition]:
     )
 
     # Position 3: AMD - just entered, all targets pending
+    # 55 shares × $155.25 = $8,539 notional
     entry_time_3 = now - timedelta(minutes=5)
     positions.append(
         ManagedPosition(
@@ -372,14 +377,14 @@ def _create_mock_positions(now: datetime) -> list[ManagedPosition]:
             strategy_id="orb_breakout",
             entry_price=155.25,
             entry_time=entry_time_3,
-            shares_total=200,
-            shares_remaining=200,
+            shares_total=55,
+            shares_remaining=55,
             stop_price=152.75,
             original_stop_price=152.75,
             stop_order_id="stop_amd_001",
             t1_price=157.75,
             t1_order_id="t1_amd_001",
-            t1_shares=100,
+            t1_shares=28,
             t1_filled=False,
             t2_price=160.25,
             high_watermark=155.60,
@@ -387,9 +392,10 @@ def _create_mock_positions(now: datetime) -> list[ManagedPosition]:
         )
     )
 
-    # --- ORB Scalp Positions (shorter holds, different symbols) ---
+    # --- ORB Scalp Positions (~$25k total = 63% of $40k allocation) ---
 
     # Position 4: TSLA - scalp entered 45 seconds ago, waiting for target
+    # 60 shares × $225.80 = $13,548 notional
     entry_time_4 = now - timedelta(seconds=45)
     positions.append(
         ManagedPosition(
@@ -397,22 +403,23 @@ def _create_mock_positions(now: datetime) -> list[ManagedPosition]:
             strategy_id="orb_scalp",
             entry_price=225.80,
             entry_time=entry_time_4,
-            shares_total=80,
-            shares_remaining=80,
-            stop_price=224.65,  # Tighter stop for scalp (midpoint placement)
+            shares_total=60,
+            shares_remaining=60,
+            stop_price=224.65,  # Tighter stop for scalp
             original_stop_price=224.65,
             stop_order_id="stop_tsla_scalp_001",
             t1_price=226.15,  # 0.3R target
             t1_order_id="t1_tsla_scalp_001",
-            t1_shares=80,  # Scalp exits 100% at T1
+            t1_shares=60,  # Scalp exits 100% at T1
             t1_filled=False,
-            t2_price=0.0,  # No T2 for scalp (0.0 = disabled)
+            t2_price=0.0,  # No T2 for scalp
             high_watermark=225.95,
             realized_pnl=0.0,
         )
     )
 
     # Position 5: GOOG - scalp entered 90 seconds ago, approaching target
+    # 70 shares × $165.40 = $11,578 notional
     entry_time_5 = now - timedelta(seconds=90)
     positions.append(
         ManagedPosition(
@@ -420,16 +427,16 @@ def _create_mock_positions(now: datetime) -> list[ManagedPosition]:
             strategy_id="orb_scalp",
             entry_price=165.40,
             entry_time=entry_time_5,
-            shares_total=100,
-            shares_remaining=100,
+            shares_total=70,
+            shares_remaining=70,
             stop_price=164.55,  # Tighter stop for scalp
             original_stop_price=164.55,
             stop_order_id="stop_goog_scalp_001",
-            t1_price=165.66,  # 0.3R target (~$0.26 gain on ~$0.85 risk)
+            t1_price=165.66,  # 0.3R target
             t1_order_id="t1_goog_scalp_001",
-            t1_shares=100,  # Scalp exits 100% at T1
+            t1_shares=70,  # Scalp exits 100% at T1
             t1_filled=False,
-            t2_price=0.0,  # No T2 for scalp (0.0 = disabled)
+            t2_price=0.0,  # No T2 for scalp
             high_watermark=165.58,
             realized_pnl=0.0,
         )
@@ -444,34 +451,34 @@ async def _seed_orchestrator_decisions(trade_logger: TradeLogger, now: datetime)
     today = now.date().isoformat()
     yesterday = (now - timedelta(days=1)).date().isoformat()
 
-    # Today's ORB Breakout allocation
+    # Today's ORB Breakout allocation (40%)
     await trade_logger.log_orchestrator_decision(
         date=today,
         decision_type="allocation",
         strategy_id="orb_breakout",
         details={
-            "allocation_pct": 0.30,
-            "allocation_dollars": 30000.0,
+            "allocation_pct": 0.40,
+            "allocation_dollars": 40000.0,
             "throttle_action": "none",
             "eligible": True,
             "regime": "bullish_trending",
         },
-        rationale="Active: 30% allocation",
+        rationale="Active: 40% allocation",
     )
 
-    # Today's ORB Scalp allocation
+    # Today's ORB Scalp allocation (40%)
     await trade_logger.log_orchestrator_decision(
         date=today,
         decision_type="allocation",
         strategy_id="orb_scalp",
         details={
-            "allocation_pct": 0.30,
-            "allocation_dollars": 30000.0,
+            "allocation_pct": 0.40,
+            "allocation_dollars": 40000.0,
             "throttle_action": "none",
             "eligible": True,
             "regime": "bullish_trending",
         },
-        rationale="Active: 30% allocation",
+        rationale="Active: 40% allocation",
     )
 
     await trade_logger.log_orchestrator_decision(
@@ -489,34 +496,34 @@ async def _seed_orchestrator_decisions(trade_logger: TradeLogger, now: datetime)
         rationale="SPY above both SMAs with positive momentum",
     )
 
-    # Yesterday's ORB Breakout allocation
+    # Yesterday's ORB Breakout allocation (40%)
     await trade_logger.log_orchestrator_decision(
         date=yesterday,
         decision_type="allocation",
         strategy_id="orb_breakout",
         details={
-            "allocation_pct": 0.30,
-            "allocation_dollars": 30000.0,
+            "allocation_pct": 0.40,
+            "allocation_dollars": 40000.0,
             "throttle_action": "none",
             "eligible": True,
             "regime": "bullish_trending",
         },
-        rationale="Active: 30% allocation",
+        rationale="Active: 40% allocation",
     )
 
-    # Yesterday's ORB Scalp allocation
+    # Yesterday's ORB Scalp allocation (40%)
     await trade_logger.log_orchestrator_decision(
         date=yesterday,
         decision_type="allocation",
         strategy_id="orb_scalp",
         details={
-            "allocation_pct": 0.30,
-            "allocation_dollars": 30000.0,
+            "allocation_pct": 0.40,
+            "allocation_dollars": 40000.0,
             "throttle_action": "none",
             "eligible": True,
             "regime": "bullish_trending",
         },
-        rationale="Active: 30% allocation",
+        rationale="Active: 40% allocation",
     )
 
     await trade_logger.log_orchestrator_decision(
@@ -543,23 +550,24 @@ def _create_mock_orchestrator(now: datetime) -> MockOrchestrator:
         timestamp=now,
     )
 
-    # Mock allocations
+    # Mock allocations: 40% each strategy + 20% reserve = 100%
+    # With 2 strategies and equal weight: (100% - 20% reserve) / 2 = 40% each
     allocations = {
         "orb_breakout": StrategyAllocation(
             strategy_id="orb_breakout",
-            allocation_pct=0.30,
-            allocation_dollars=30000.0,
+            allocation_pct=0.40,
+            allocation_dollars=40000.0,
             throttle_action=ThrottleAction.NONE,
             eligible=True,
-            reason="Active: 30% allocation",
+            reason="Active: 40% allocation",
         ),
         "orb_scalp": StrategyAllocation(
             strategy_id="orb_scalp",
-            allocation_pct=0.30,
-            allocation_dollars=30000.0,
+            allocation_pct=0.40,
+            allocation_dollars=40000.0,
             throttle_action=ThrottleAction.NONE,
             eligible=True,
-            reason="Active: 30% allocation",
+            reason="Active: 40% allocation",
         ),
     }
 
@@ -709,7 +717,7 @@ async def create_dev_state() -> AppState:
         version="1.0.0",
         is_active=True,
         pipeline_stage="paper",
-        allocated_capital=50_000.0,
+        allocated_capital=40_000.0,  # 40% of $100k
         daily_pnl=sum(t.net_pnl for t in orb_todays_trades),
         trade_count_today=len(orb_todays_trades),
         config=orb_config,
@@ -726,7 +734,7 @@ async def create_dev_state() -> AppState:
         version="1.0.0",
         is_active=True,
         pipeline_stage="paper",
-        allocated_capital=50_000.0,
+        allocated_capital=40_000.0,  # 40% of $100k
         daily_pnl=sum(t.net_pnl for t in scalp_todays_trades),
         trade_count_today=len(scalp_todays_trades),
         config=scalp_config,
