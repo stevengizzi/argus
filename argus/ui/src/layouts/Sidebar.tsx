@@ -4,10 +4,19 @@
  * Shows 4 navigation items, paper mode badge, status indicator, and logout.
  */
 
-import { NavLink } from 'react-router-dom';
+import { useEffect } from 'react';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { LayoutDashboard, ScrollText, TrendingUp, Activity, LogOut } from 'lucide-react';
 import { useAuthStore } from '../stores/auth';
 import { useLiveStore } from '../stores/live';
+
+// Navigation items in sidebar order - keyboard shortcuts use this order (1, 2, 3, 4)
+const NAV_ITEMS = [
+  { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
+  { to: '/trades', icon: ScrollText, label: 'Trades' },
+  { to: '/performance', icon: TrendingUp, label: 'Performance' },
+  { to: '/system', icon: Activity, label: 'System' },
+] as const;
 
 interface NavItemProps {
   to: string;
@@ -54,6 +63,26 @@ interface SidebarProps {
 export function Sidebar({ paperMode = false }: SidebarProps) {
   const logout = useAuthStore((state) => state.logout);
   const status = useLiveStore((state) => state.status);
+  const navigate = useNavigate();
+
+  // Keyboard shortcuts: 1-4 for navigation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if typing in an input or textarea
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+        return;
+      }
+
+      const keyNum = parseInt(e.key, 10);
+      if (keyNum >= 1 && keyNum <= NAV_ITEMS.length) {
+        navigate(NAV_ITEMS[keyNum - 1].to);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [navigate]);
 
   const getStatusColor = () => {
     switch (status) {
@@ -83,28 +112,16 @@ export function Sidebar({ paperMode = false }: SidebarProps) {
         />
       </div>
 
-      {/* Navigation */}
+      {/* Navigation - items are numbered 1-4 for keyboard shortcuts */}
       <nav className="flex-1 flex flex-col items-center py-4 space-y-2">
-        <NavItem
-          to="/"
-          icon={<LayoutDashboard className="w-5 h-5" />}
-          label="Dashboard"
-        />
-        <NavItem
-          to="/trades"
-          icon={<ScrollText className="w-5 h-5" />}
-          label="Trades"
-        />
-        <NavItem
-          to="/performance"
-          icon={<TrendingUp className="w-5 h-5" />}
-          label="Performance"
-        />
-        <NavItem
-          to="/system"
-          icon={<Activity className="w-5 h-5" />}
-          label="System"
-        />
+        {NAV_ITEMS.map((item) => (
+          <NavItem
+            key={item.to}
+            to={item.to}
+            icon={<item.icon className="w-5 h-5" />}
+            label={item.label}
+          />
+        ))}
       </nav>
 
       {/* Bottom section */}

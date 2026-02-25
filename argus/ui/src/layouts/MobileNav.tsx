@@ -8,6 +8,19 @@ import { NavLink } from 'react-router-dom';
 import { LayoutDashboard, ScrollText, TrendingUp, Activity } from 'lucide-react';
 import { useLiveStore } from '../stores/live';
 
+// Navigation items in order - must match Sidebar.tsx for consistent keyboard shortcuts (1-4)
+const NAV_ITEMS: Array<{
+  to: string;
+  icon: typeof LayoutDashboard;
+  label: string;
+  showStatusDot?: boolean;
+}> = [
+  { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
+  { to: '/trades', icon: ScrollText, label: 'Trades' },
+  { to: '/performance', icon: TrendingUp, label: 'Performance' },
+  { to: '/system', icon: Activity, label: 'System', showStatusDot: true },
+];
+
 interface NavItemProps {
   to: string;
   icon: React.ReactNode;
@@ -68,27 +81,15 @@ export function MobileNav() {
   return (
     <nav className="min-[1024px]:hidden fixed bottom-0 left-0 right-0 z-50 bg-argus-surface border-t border-argus-border pb-3">
       <div className="flex h-16">
-        <NavItem
-          to="/"
-          icon={<LayoutDashboard className="w-5 h-5" />}
-          label="Dashboard"
-        />
-        <NavItem
-          to="/trades"
-          icon={<ScrollText className="w-5 h-5" />}
-          label="Trades"
-        />
-        <NavItem
-          to="/performance"
-          icon={<TrendingUp className="w-5 h-5" />}
-          label="Performance"
-        />
-        <NavItem
-          to="/system"
-          icon={<Activity className="w-5 h-5" />}
-          label="System"
-          showStatusDot
-        />
+        {NAV_ITEMS.map((item) => (
+          <NavItem
+            key={item.to}
+            to={item.to}
+            icon={<item.icon className="w-5 h-5" />}
+            label={item.label}
+            showStatusDot={item.showStatusDot}
+          />
+        ))}
       </div>
     </nav>
   );

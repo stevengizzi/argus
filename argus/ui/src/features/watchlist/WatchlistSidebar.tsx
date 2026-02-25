@@ -56,6 +56,28 @@ export function WatchlistSidebar({ className = '', onSymbolClick }: WatchlistSid
     }
   }, [isDesktop, isMobileOpen, setMobileOpen]);
 
+  // Keyboard shortcut: "w" to toggle watchlist
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if typing in an input or textarea
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+        return;
+      }
+
+      if (e.key.toLowerCase() === 'w') {
+        if (isDesktop) {
+          toggleCollapsed();
+        } else {
+          setMobileOpen(!isMobileOpen);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isDesktop, toggleCollapsed, setMobileOpen, isMobileOpen]);
+
   const symbols = data?.symbols ?? [];
 
   // Sort symbols based on current sort mode
@@ -83,19 +105,19 @@ export function WatchlistSidebar({ className = '', onSymbolClick }: WatchlistSid
   if (isDesktop) {
     return (
       <aside
-        className={`relative flex flex-col bg-argus-surface border-l border-argus-border transition-all duration-300 ${className}`}
+        className={`relative flex flex-col bg-argus-surface border-l border-argus-border rounded-l-lg transition-all duration-300 ${className}`}
         style={{ width: isCollapsed ? 48 : SIDEBAR_WIDTH }}
       >
-        {/* Collapse toggle button - outside overflow-hidden area */}
+        {/* Collapse toggle button - edge-mounted pill extending left from sidebar border */}
         <button
           onClick={toggleCollapsed}
-          className="absolute -left-3 top-4 z-10 w-6 h-6 bg-argus-surface-2 border border-argus-border rounded-full flex items-center justify-center hover:bg-argus-surface-3 transition-colors"
+          className="absolute -left-3 top-1/2 -translate-y-1/2 z-10 w-3 h-16 bg-argus-surface-3 border border-argus-border rounded-l-md flex items-center justify-center hover:bg-argus-border transition-colors"
           aria-label={isCollapsed ? 'Expand watchlist' : 'Collapse watchlist'}
         >
           {isCollapsed ? (
-            <ChevronLeft className="w-4 h-4 text-argus-text-dim" />
+            <ChevronLeft className="w-3 h-3 text-argus-text-dim" />
           ) : (
-            <ChevronRight className="w-4 h-4 text-argus-text-dim" />
+            <ChevronRight className="w-3 h-3 text-argus-text-dim" />
           )}
         </button>
 
