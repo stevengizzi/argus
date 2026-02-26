@@ -356,6 +356,10 @@ class AfternoonMomentumStrategy(BaseStrategy):
         Continues updating range (can transition to REJECTED if range widens).
         Checks for breakout entry after 2:00 PM.
         """
+        # Save consolidation high BEFORE updating with this bar
+        # The breakout check uses the PRIOR consolidation high
+        consolidation_high_before = state.midday_high
+
         # Continue updating range even in CONSOLIDATED state
         if state.midday_high is None:
             state.midday_high = candle.high
@@ -388,9 +392,11 @@ class AfternoonMomentumStrategy(BaseStrategy):
             # Not yet in entry window, keep watching
             return None
 
-        # Check for breakout: close > consolidation_high
-        if candle.close > state.midday_high:
-            return await self._check_breakout_entry(symbol, candle, state)
+        # Check for breakout: close > consolidation_high (value BEFORE this bar)
+        if consolidation_high_before is not None and candle.close > consolidation_high_before:
+            return await self._check_breakout_entry(
+                symbol, candle, state, consolidation_high_before
+            )
 
         return None
 
@@ -399,6 +405,7 @@ class AfternoonMomentumStrategy(BaseStrategy):
         symbol: str,
         candle: CandleEvent,
         state: ConsolidationSymbolState,
+        consolidation_high: float,
     ) -> SignalEvent | None:
         """Check if breakout entry conditions are met.
 
@@ -406,16 +413,15 @@ class AfternoonMomentumStrategy(BaseStrategy):
             symbol: The symbol being processed.
             candle: The breakout candle.
             state: The symbol's state.
+            consolidation_high: The consolidation high BEFORE this bar (for chase check).
 
         Returns:
             SignalEvent if all conditions pass, None otherwise.
         """
         close = candle.close
 
-        if state.midday_high is None or state.midday_low is None:
+        if state.midday_low is None:
             return None
-
-        consolidation_high = state.midday_high
 
         # 1. Internal risk limits check
         if not self.check_internal_risk_limits():
@@ -468,13 +474,14 @@ class AfternoonMomentumStrategy(BaseStrategy):
             return None
 
         # All conditions pass — build signal
-        return self._build_signal(symbol, candle, state)
+        return self._build_signal(symbol, candle, state, consolidation_high)
 
     def _build_signal(
         self,
         symbol: str,
         candle: CandleEvent,
         state: ConsolidationSymbolState,
+        consolidation_high: float,
     ) -> SignalEvent | None:
         """Build a SignalEvent for afternoon breakout entry.
 
@@ -482,11 +489,12 @@ class AfternoonMomentumStrategy(BaseStrategy):
             symbol: The symbol to trade.
             candle: The breakout candle.
             state: The symbol's state (contains consolidation range).
+            consolidation_high: The consolidation high BEFORE the breakout bar.
 
         Returns:
             SignalEvent with T1/T2 targets, or None if position size is 0.
         """
-        if state.midday_high is None or state.midday_low is None:
+        if state.midday_low is None:
             return None
 
         entry_price = candle.close
@@ -506,7 +514,7 @@ class AfternoonMomentumStrategy(BaseStrategy):
         # Compute dynamic time stop
         time_stop_seconds = self._compute_effective_time_stop(candle)
 
-        # Build signal
+        # Build signal (use consolidation_high for the rationale, not updated midday_high)
         signal = SignalEvent(
             strategy_id=self.strategy_id,
             symbol=symbol,
@@ -517,7 +525,7 @@ class AfternoonMomentumStrategy(BaseStrategy):
             share_count=shares,
             rationale=(
                 f"Afternoon Momentum: {symbol} broke above consolidation high "
-                f"{state.midday_high:.2f} (range: {state.midday_low:.2f}-{state.midday_high:.2f}, "
+                f"{consolidation_high:.2f} (range: {state.midday_low:.2f}-{consolidation_high:.2f}, "
                 f"{state.consolidation_bars} bars)"
             ),
             time_stop_seconds=time_stop_seconds,
