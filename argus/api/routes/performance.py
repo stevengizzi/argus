@@ -9,7 +9,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Literal
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from argus.analytics.performance import PerformanceMetrics, compute_metrics
@@ -124,6 +124,7 @@ def _get_date_range(
 @router.get("/{period}", response_model=PerformanceResponse)
 async def get_performance(
     period: Literal["today", "week", "month", "all"],
+    strategy_id: str | None = Query(default=None, description="Filter by strategy ID"),
     _auth: dict = Depends(require_auth),  # noqa: B008
     state: AppState = Depends(get_app_state),  # noqa: B008
 ) -> PerformanceResponse:
@@ -137,6 +138,7 @@ async def get_performance(
             - "week": Monday to today
             - "month": 1st of month to today
             - "all": All-time (no date filter)
+        strategy_id: Optional filter to get metrics for a specific strategy only.
 
     Returns:
         PerformanceResponse with metrics, daily P&L, and per-strategy breakdown.
@@ -156,6 +158,7 @@ async def get_performance(
 
     # Fetch trades for the period (use high limit to get all)
     trades = await state.trade_logger.query_trades(
+        strategy_id=strategy_id,
         date_from=date_from,
         date_to=date_to,
         limit=10000,
@@ -169,6 +172,7 @@ async def get_performance(
     daily_pnl_data = await state.trade_logger.get_daily_pnl(
         date_from=date_from,
         date_to=date_to,
+        strategy_id=strategy_id,
     )
     daily_pnl = [
         DailyPnlEntry(
@@ -182,15 +186,15 @@ async def get_performance(
     # Build per-strategy breakdown
     strategy_trades: dict[str, list[dict]] = {}
     for trade in trades:
-        strategy_id = trade.get("strategy_id", "unknown")
-        if strategy_id not in strategy_trades:
-            strategy_trades[strategy_id] = []
-        strategy_trades[strategy_id].append(trade)
+        strat_id = trade.get("strategy_id", "unknown")
+        if strat_id not in strategy_trades:
+            strategy_trades[strat_id] = []
+        strategy_trades[strat_id].append(trade)
 
     by_strategy: dict[str, StrategyMetrics] = {}
-    for strategy_id, strat_trades in strategy_trades.items():
+    for strat_id, strat_trades in strategy_trades.items():
         strat_metrics = compute_metrics(strat_trades)
-        by_strategy[strategy_id] = StrategyMetrics(
+        by_strategy[strat_id] = StrategyMetrics(
             total_trades=strat_metrics.total_trades,
             win_rate=strat_metrics.win_rate,
             net_pnl=strat_metrics.net_pnl,

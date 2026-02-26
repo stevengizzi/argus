@@ -10,6 +10,7 @@ from argus.api.routes.account import router as account_router
 from argus.api.routes.auth import router as auth_router
 from argus.api.routes.controls import router as controls_router
 from argus.api.routes.health import router as health_router
+from argus.api.routes.market import router as market_router
 from argus.api.routes.orchestrator import router as orchestrator_router
 from argus.api.routes.performance import router as performance_router
 from argus.api.routes.positions import router as positions_router
@@ -33,3 +34,4 @@ api_router.include_router(controls_router, prefix="/controls", tags=["controls"]
 api_router.include_router(orchestrator_router, prefix="/orchestrator", tags=["orchestrator"])
 api_router.include_router(session_router, tags=["session"])
 api_router.include_router(watchlist_router, prefix="/watchlist", tags=["watchlist"])
+api_router.include_router(market_router, prefix="/market", tags=["market"])

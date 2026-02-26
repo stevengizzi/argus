@@ -3,6 +3,10 @@ name: "VWAP Reclaim"
 version: "1.0.0"
 enabled: true
 asset_class: "us_stocks"
+pipeline_stage: "paper_trading"
+family: "mean_reversion"
+description_short: "Enters long when a gapping stock pulls back below VWAP, then reclaims above on volume."
+time_window_display: "10:00 AM–12:00 PM"
 
 operating_window:
   earliest_entry: "10:00"
@@ -30,3 +34,11 @@ benchmarks:
   min_profit_factor: 1.1
   min_sharpe: 0.3
   max_drawdown_pct: 0.12
+
+backtest_summary:
+  status: "walk_forward_complete"
+  wfe_pnl: null
+  oos_sharpe: 1.49
+  total_trades: 59556
+  data_months: 35
+  last_run: "2026-02-26"

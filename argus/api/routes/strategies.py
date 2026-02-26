@@ -6,15 +6,37 @@ Provides endpoints for viewing and managing trading strategies.
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from argus.api.auth import require_auth
 from argus.api.dependencies import AppState, get_app_state
 
 router = APIRouter()
+
+
+class PerformanceSummary(BaseModel):
+    """Summary of a strategy's live trading performance."""
+
+    trade_count: int
+    win_rate: float
+    net_pnl: float
+    avg_r: float
+    profit_factor: float
+
+
+class BacktestSummary(BaseModel):
+    """Summary of a strategy's backtest validation status."""
+
+    status: str
+    wfe_pnl: float | None = None
+    oos_sharpe: float | None = None
+    total_trades: int | None = None
+    data_months: int | None = None
+    last_run: str | None = None
 
 
 class StrategyInfo(BaseModel):
@@ -30,6 +52,11 @@ class StrategyInfo(BaseModel):
     trade_count_today: int
     open_positions: int
     config_summary: dict[str, Any]
+    time_window: str = ""
+    family: str = "uncategorized"
+    description_short: str = ""
+    performance_summary: PerformanceSummary | None = None
+    backtest_summary: BacktestSummary | None = None
 
 
 class StrategiesResponse(BaseModel):
@@ -111,7 +138,12 @@ async def list_strategies(
     - Capital and P&L
     - Open position count
     - Key configuration parameters
+    - Time window, family, short description
+    - Performance summary (if trades exist)
+    - Backtest summary (from config)
     """
+    from argus.analytics.performance import compute_metrics
+
     strategies_list: list[StrategyInfo] = []
 
     # Get all managed positions for open position counting
@@ -136,6 +168,52 @@ async def list_strategies(
         # Extract config summary
         config_summary = extract_config_summary(strategy.config)
 
+        # Extract new fields from config
+        time_window = getattr(strategy.config, "time_window_display", "")
+        family = getattr(strategy.config, "family", "uncategorized")
+        description_short = getattr(strategy.config, "description_short", "")
+
+        # Extract backtest summary from config
+        backtest_summary: BacktestSummary | None = None
+        if hasattr(strategy.config, "backtest_summary"):
+            bs = strategy.config.backtest_summary
+            if hasattr(bs, "status"):
+                backtest_summary = BacktestSummary(
+                    status=bs.status,
+                    wfe_pnl=bs.wfe_pnl,
+                    oos_sharpe=bs.oos_sharpe,
+                    total_trades=bs.total_trades,
+                    data_months=bs.data_months,
+                    last_run=bs.last_run,
+                )
+
+        # Build performance summary from trade history
+        performance_summary: PerformanceSummary | None = None
+        trades = await state.trade_logger.get_trades_by_strategy(strategy_id)
+        if trades:
+            # Convert Trade objects to dicts for compute_metrics
+            trade_dicts = [
+                {
+                    "net_pnl": t.net_pnl,
+                    "gross_pnl": t.gross_pnl,
+                    "commission": t.commission,
+                    "r_multiple": t.r_multiple,
+                    "hold_duration_seconds": t.hold_duration_seconds,
+                    "entry_time": t.entry_time.isoformat(),
+                    "exit_time": t.exit_time.isoformat(),
+                }
+                for t in trades
+            ]
+            metrics = compute_metrics(trade_dicts)
+            pf = metrics.profit_factor if metrics.profit_factor != float("inf") else 0.0
+            performance_summary = PerformanceSummary(
+                trade_count=metrics.total_trades,
+                win_rate=metrics.win_rate,
+                net_pnl=metrics.net_pnl,
+                avg_r=metrics.avg_r_multiple,
+                profit_factor=pf,
+            )
+
         strategies_list.append(
             StrategyInfo(
                 strategy_id=strategy.strategy_id,
@@ -148,6 +226,11 @@ async def list_strategies(
                 trade_count_today=strategy.trade_count_today,
                 open_positions=open_positions,
                 config_summary=config_summary,
+                time_window=time_window,
+                family=family,
+                description_short=description_short,
+                performance_summary=performance_summary,
+                backtest_summary=backtest_summary,
             )
         )
 
@@ -156,3 +239,58 @@ async def list_strategies(
         count=len(strategies_list),
         timestamp=datetime.now(UTC).isoformat(),
     )
+
+
+class StrategySpecResponse(BaseModel):
+    """Response containing the strategy spec sheet content."""
+
+    strategy_id: str
+    content: str
+    format: str = "markdown"
+
+
+# Mapping of strategy IDs to their spec sheet filenames
+STRATEGY_SPEC_MAP = {
+    "strat_orb_breakout": "STRATEGY_ORB_BREAKOUT.md",
+    "strat_orb_scalp": "STRATEGY_ORB_SCALP.md",
+    "strat_vwap_reclaim": "STRATEGY_VWAP_RECLAIM.md",
+    "strat_afternoon_momentum": "STRATEGY_AFTERNOON_MOMENTUM.md",
+}
+
+
+@router.get("/{strategy_id}/spec", response_model=StrategySpecResponse)
+async def get_strategy_spec(
+    strategy_id: str,
+    _auth: dict = Depends(require_auth),  # noqa: B008
+    state: AppState = Depends(get_app_state),  # noqa: B008
+) -> StrategySpecResponse:
+    """Get the spec sheet (markdown) for a strategy.
+
+    Returns the full strategy specification document containing:
+    - Strategy overview and rationale
+    - Entry/exit rules
+    - Risk parameters
+    - Backtest results
+
+    Args:
+        strategy_id: The strategy ID (e.g., "strat_orb_breakout").
+
+    Returns:
+        StrategySpecResponse with markdown content.
+
+    Raises:
+        HTTPException 404: If no spec sheet exists for the strategy.
+    """
+    filename = STRATEGY_SPEC_MAP.get(strategy_id)
+    if not filename:
+        raise HTTPException(status_code=404, detail=f"No spec sheet for strategy {strategy_id}")
+
+    # Navigate from argus/api/routes/ up to project root, then into docs/strategies/
+    spec_dir = Path(__file__).resolve().parent.parent.parent.parent / "docs" / "strategies"
+    spec_path = spec_dir / filename
+
+    if not spec_path.exists():
+        raise HTTPException(status_code=404, detail=f"Spec sheet file not found: {filename}")
+
+    content = spec_path.read_text(encoding="utf-8")
+    return StrategySpecResponse(strategy_id=strategy_id, content=content)

@@ -3,6 +3,10 @@ name: "Afternoon Momentum"
 version: "1.0.0"
 enabled: true
 asset_class: "us_stocks"
+pipeline_stage: "paper_trading"
+family: "momentum"
+description_short: "Catches afternoon consolidation breakouts in gapping stocks between 2:00–3:30 PM."
+time_window_display: "2:00–3:30 PM"
 
 operating_window:
   earliest_entry: "14:00"
@@ -32,3 +36,11 @@ benchmarks:
   min_profit_factor: 1.1
   min_sharpe: 0.3
   max_drawdown_pct: 0.12
+
+backtest_summary:
+  status: "sweep_complete"
+  wfe_pnl: null
+  oos_sharpe: null
+  total_trades: null
+  data_months: 35
+  last_run: "2026-02-26"

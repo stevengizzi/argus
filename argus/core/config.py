@@ -418,6 +418,21 @@ class PerformanceBenchmarks(BaseModel):
     max_drawdown_pct: float = Field(default=0.15, gt=0, le=1.0)
 
 
+class BacktestSummaryConfig(BaseModel):
+    """Backtest validation summary for a strategy (Sprint 21a).
+
+    Tracks the validation status and key metrics from parameter sweeps
+    and walk-forward analysis.
+    """
+
+    status: str = "not_validated"
+    wfe_pnl: float | None = None
+    oos_sharpe: float | None = None
+    total_trades: int | None = None
+    data_months: int | None = None
+    last_run: str | None = None
+
+
 class StrategyConfig(BaseModel):
     """Base configuration for any strategy. Individual strategies
     extend this with strategy-specific parameters."""
@@ -427,6 +442,10 @@ class StrategyConfig(BaseModel):
     version: str = "1.0.0"
     enabled: bool = True
     asset_class: str = "us_stocks"
+    pipeline_stage: str = "concept"
+    family: str = "uncategorized"
+    description_short: str = ""
+    time_window_display: str = ""
     risk_limits: StrategyRiskLimits = StrategyRiskLimits()
     operating_window: OperatingWindow = OperatingWindow()
     benchmarks: PerformanceBenchmarks = PerformanceBenchmarks()
@@ -526,6 +545,7 @@ class OrbBreakoutConfig(StrategyConfig):
     max_range_atr_ratio: float = Field(default=2.0, gt=0)
     chase_protection_pct: float = Field(default=0.005, ge=0, le=0.05)
     breakout_volume_multiplier: float = Field(default=1.5, gt=0)
+    backtest_summary: BacktestSummaryConfig = Field(default_factory=BacktestSummaryConfig)
 
 
 class OrbScalpConfig(StrategyConfig):
@@ -544,6 +564,7 @@ class OrbScalpConfig(StrategyConfig):
     chase_protection_pct: float = Field(default=0.005, ge=0, le=0.05)
     breakout_volume_multiplier: float = Field(default=1.5, gt=0)
     volume_threshold_rvol: float = Field(default=2.0, gt=0)
+    backtest_summary: BacktestSummaryConfig = Field(default_factory=BacktestSummaryConfig)
 
 
 class VwapReclaimConfig(StrategyConfig):
@@ -569,6 +590,9 @@ class VwapReclaimConfig(StrategyConfig):
     target_2_r: float = Field(default=2.0, gt=0)
     time_stop_minutes: int = Field(default=30, ge=1)
     stop_buffer_pct: float = Field(default=0.001, ge=0, le=0.05)
+
+    # Backtest summary
+    backtest_summary: BacktestSummaryConfig = Field(default_factory=BacktestSummaryConfig)
 
     @model_validator(mode="after")
     def validate_pullback_range(self) -> VwapReclaimConfig:
@@ -608,6 +632,9 @@ class AfternoonMomentumConfig(StrategyConfig):
     max_hold_minutes: int = Field(default=60, ge=5, le=120)
     stop_buffer_pct: float = Field(default=0.001, ge=0, le=0.05)
     force_close_time: str = "15:45"
+
+    # Backtest summary
+    backtest_summary: BacktestSummaryConfig = Field(default_factory=BacktestSummaryConfig)
 
     @model_validator(mode="after")
     def validate_atr_ratios(self) -> AfternoonMomentumConfig:
