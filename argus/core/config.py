@@ -581,6 +581,45 @@ class VwapReclaimConfig(StrategyConfig):
         return self
 
 
+class AfternoonMomentumConfig(StrategyConfig):
+    """Afternoon Momentum strategy configuration (DEC-152).
+
+    Consolidation breakout strategy that identifies stocks consolidating
+    during midday (12:00–2:00 PM) and entering on breakouts after 2:00 PM.
+
+    State machine: WATCHING → ACCUMULATING → CONSOLIDATED → entry (or REJECTED)
+    """
+
+    # Consolidation window
+    consolidation_start_time: str = "12:00"
+
+    # Consolidation parameters
+    consolidation_atr_ratio: float = Field(default=0.75, gt=0, le=5.0)
+    max_consolidation_atr_ratio: float = Field(default=2.0, gt=0, le=10.0)
+    min_consolidation_bars: int = Field(default=30, ge=5, le=120)
+
+    # Breakout confirmation
+    volume_multiplier: float = Field(default=1.2, gt=0, le=5.0)
+    max_chase_pct: float = Field(default=0.005, ge=0, le=0.03)
+
+    # Targets and stops
+    target_1_r: float = Field(default=1.0, gt=0)
+    target_2_r: float = Field(default=2.0, gt=0)
+    max_hold_minutes: int = Field(default=60, ge=5, le=120)
+    stop_buffer_pct: float = Field(default=0.001, ge=0, le=0.05)
+    force_close_time: str = "15:45"
+
+    @model_validator(mode="after")
+    def validate_atr_ratios(self) -> AfternoonMomentumConfig:
+        """Ensure consolidation_atr_ratio is less than max_consolidation_atr_ratio."""
+        if self.consolidation_atr_ratio >= self.max_consolidation_atr_ratio:
+            raise ValueError(
+                f"consolidation_atr_ratio ({self.consolidation_atr_ratio}) must be less than "
+                f"max_consolidation_atr_ratio ({self.max_consolidation_atr_ratio})"
+            )
+        return self
+
+
 # ---------------------------------------------------------------------------
 # Config Loader
 # ---------------------------------------------------------------------------
@@ -715,6 +754,23 @@ def load_vwap_reclaim_config(path: Path) -> VwapReclaimConfig:
     """
     data = load_yaml_file(path)
     return VwapReclaimConfig(**data)
+
+
+def load_afternoon_momentum_config(path: Path) -> AfternoonMomentumConfig:
+    """Load Afternoon Momentum strategy configuration from a YAML file.
+
+    Args:
+        path: Path to the Afternoon Momentum strategy YAML file.
+
+    Returns:
+        Validated AfternoonMomentumConfig instance.
+
+    Raises:
+        FileNotFoundError: If the file does not exist.
+        pydantic.ValidationError: If validation fails.
+    """
+    data = load_yaml_file(path)
+    return AfternoonMomentumConfig(**data)
 
 
 def load_scanner_config(path: Path) -> ScannerConfig:

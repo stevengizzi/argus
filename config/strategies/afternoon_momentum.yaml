@@ -1,0 +1,34 @@
+strategy_id: "strat_afternoon_momentum"
+name: "Afternoon Momentum"
+version: "1.0.0"
+enabled: true
+asset_class: "us_stocks"
+
+operating_window:
+  earliest_entry: "14:00"
+  latest_entry: "15:30"
+  force_close: "15:45"
+
+consolidation_start_time: "12:00"
+consolidation_atr_ratio: 0.75
+max_consolidation_atr_ratio: 2.0
+min_consolidation_bars: 30
+volume_multiplier: 1.2
+max_chase_pct: 0.005
+target_1_r: 1.0
+target_2_r: 2.0
+max_hold_minutes: 60
+stop_buffer_pct: 0.001
+force_close_time: "15:45"
+
+risk_limits:
+  max_loss_per_trade_pct: 0.01
+  max_daily_loss_pct: 0.03
+  max_trades_per_day: 6
+  max_concurrent_positions: 3
+
+benchmarks:
+  min_win_rate: 0.45
+  min_profit_factor: 1.1
+  min_sharpe: 0.3
+  max_drawdown_pct: 0.12
