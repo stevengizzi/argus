@@ -22,6 +22,7 @@ import { usePositions } from '../../hooks/usePositions';
 import { useTrades } from '../../hooks/useTrades';
 import { useLiveStore } from '../../stores/live';
 import { usePositionsUIStore } from '../../stores/positionsUI';
+import { useSymbolDetailUI } from '../../stores/symbolDetailUI';
 import { formatPrice, formatDuration, formatTime } from '../../utils/format';
 import { OpenPositionsSkeleton } from './DashboardSkeleton';
 import { getMarketContext, isPreMarket } from '../../utils/marketTime';
@@ -73,6 +74,7 @@ export function OpenPositions() {
   const setDisplayMode = usePositionsUIStore((state) => state.setDisplayMode);
   const positionFilter = usePositionsUIStore((state) => state.positionFilter);
   const setPositionFilter = usePositionsUIStore((state) => state.setPositionFilter);
+  const openSymbolDetail = useSymbolDetailUI((state) => state.open);
 
   // Extract positions array for stable dependency
   const positions = positionsData?.positions;
@@ -210,7 +212,14 @@ export function OpenPositions() {
                   </tr>
                   {enrichedPositions.map((pos) => (
                     <tr key={pos.position_id} className="transition-colors duration-150 hover:bg-argus-bg/50">
-                      <td className="px-4 py-3 font-medium text-argus-text">{pos.symbol}</td>
+                      <td className="px-4 py-3 font-medium text-argus-text">
+                        <button
+                          onClick={() => openSymbolDetail(pos.symbol)}
+                          className="hover:text-argus-accent hover:underline transition-colors cursor-pointer"
+                        >
+                          {pos.symbol}
+                        </button>
+                      </td>
                       <td className="px-4 py-3">
                         <StrategyBadge strategyId={pos.strategy_id} />
                       </td>
@@ -241,7 +250,14 @@ export function OpenPositions() {
                   </tr>
                   {trades.map((trade) => (
                     <tr key={trade.id} className="transition-colors duration-150 hover:bg-argus-bg/50 opacity-75">
-                      <td className="px-4 py-3 font-medium text-argus-text">{trade.symbol}</td>
+                      <td className="px-4 py-3 font-medium text-argus-text">
+                        <button
+                          onClick={() => openSymbolDetail(trade.symbol)}
+                          className="hover:text-argus-accent hover:underline transition-colors cursor-pointer"
+                        >
+                          {trade.symbol}
+                        </button>
+                      </td>
                       <td className="px-4 py-3">
                         <StrategyBadge strategyId={trade.strategy_id} />
                       </td>
@@ -279,7 +295,12 @@ export function OpenPositions() {
                 <div key={pos.position_id} className="p-4 transition-colors duration-150 hover:bg-argus-bg/50">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <span className="font-medium text-argus-text">{pos.symbol}</span>
+                      <button
+                        onClick={() => openSymbolDetail(pos.symbol)}
+                        className="font-medium text-argus-text hover:text-argus-accent hover:underline transition-colors cursor-pointer"
+                      >
+                        {pos.symbol}
+                      </button>
                       <StrategyBadge strategyId={pos.strategy_id} />
                     </div>
                     <PnlValue value={pos.livePnl} size="sm" flash />
@@ -303,7 +324,12 @@ export function OpenPositions() {
                 <div key={trade.id} className="p-4 transition-colors duration-150 hover:bg-argus-bg/50 opacity-75">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <span className="font-medium text-argus-text">{trade.symbol}</span>
+                      <button
+                        onClick={() => openSymbolDetail(trade.symbol)}
+                        className="font-medium text-argus-text hover:text-argus-accent hover:underline transition-colors cursor-pointer"
+                      >
+                        {trade.symbol}
+                      </button>
                       <StrategyBadge strategyId={trade.strategy_id} />
                     </div>
                     <PnlValue value={trade.pnl_dollars ?? 0} size="sm" />
@@ -395,7 +421,14 @@ export function OpenPositions() {
             <tbody className="divide-y divide-argus-border">
               {enrichedPositions.map((pos) => (
                 <tr key={pos.position_id} className="transition-colors duration-150 hover:bg-argus-bg/50">
-                  <td className="px-4 py-3 font-medium text-argus-text">{pos.symbol}</td>
+                  <td className="px-4 py-3 font-medium text-argus-text">
+                    <button
+                      onClick={() => openSymbolDetail(pos.symbol)}
+                      className="hover:text-argus-accent hover:underline transition-colors cursor-pointer"
+                    >
+                      {pos.symbol}
+                    </button>
+                  </td>
                   <td className="px-4 py-3">
                     <StrategyBadge strategyId={pos.strategy_id} />
                   </td>
@@ -443,7 +476,14 @@ export function OpenPositions() {
             <tbody className="divide-y divide-argus-border">
               {enrichedPositions.map((pos) => (
                 <tr key={pos.position_id} className="transition-colors duration-150 hover:bg-argus-bg/50">
-                  <td className="px-4 py-3 font-medium text-argus-text">{pos.symbol}</td>
+                  <td className="px-4 py-3 font-medium text-argus-text">
+                    <button
+                      onClick={() => openSymbolDetail(pos.symbol)}
+                      className="hover:text-argus-accent hover:underline transition-colors cursor-pointer"
+                    >
+                      {pos.symbol}
+                    </button>
+                  </td>
                   <td className="px-4 py-3 text-right tabular-nums">{formatPrice(pos.entry_price)}</td>
                   <td className="px-4 py-3 text-right tabular-nums">{formatPrice(pos.livePrice)}</td>
                   <td className="px-4 py-3 text-right">
@@ -467,7 +507,12 @@ export function OpenPositions() {
             <div key={pos.position_id} className="p-4 transition-colors duration-150 hover:bg-argus-bg/50">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <span className="font-medium text-argus-text">{pos.symbol}</span>
+                  <button
+                    onClick={() => openSymbolDetail(pos.symbol)}
+                    className="font-medium text-argus-text hover:text-argus-accent hover:underline transition-colors cursor-pointer"
+                  >
+                    {pos.symbol}
+                  </button>
                   <StrategyBadge strategyId={pos.strategy_id} />
                 </div>
                 <PnlValue value={pos.livePnl} size="sm" flash />
@@ -528,7 +573,14 @@ export function OpenPositions() {
             <tbody className="divide-y divide-argus-border">
               {trades.map((trade) => (
                 <tr key={trade.id} className="transition-colors duration-150 hover:bg-argus-bg/50">
-                  <td className="px-4 py-3 font-medium text-argus-text">{trade.symbol}</td>
+                  <td className="px-4 py-3 font-medium text-argus-text">
+                    <button
+                      onClick={() => openSymbolDetail(trade.symbol)}
+                      className="hover:text-argus-accent hover:underline transition-colors cursor-pointer"
+                    >
+                      {trade.symbol}
+                    </button>
+                  </td>
                   <td className="px-4 py-3">
                     <StrategyBadge strategyId={trade.strategy_id} />
                   </td>
@@ -558,7 +610,12 @@ export function OpenPositions() {
             <div key={trade.id} className="p-4 transition-colors duration-150 hover:bg-argus-bg/50">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <span className="font-medium text-argus-text">{trade.symbol}</span>
+                  <button
+                    onClick={() => openSymbolDetail(trade.symbol)}
+                    className="font-medium text-argus-text hover:text-argus-accent hover:underline transition-colors cursor-pointer"
+                  >
+                    {trade.symbol}
+                  </button>
                   <StrategyBadge strategyId={trade.strategy_id} />
                 </div>
                 <PnlValue value={trade.pnl_dollars ?? 0} size="sm" />

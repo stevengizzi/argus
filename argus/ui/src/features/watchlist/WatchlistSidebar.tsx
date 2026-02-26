@@ -13,11 +13,12 @@
  * - Click-through to Trade Detail panel
  */
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronRight, ChevronLeft, X, List, TrendingUp, ChevronDown } from 'lucide-react';
 import { useWatchlist } from '../../hooks/useWatchlist';
 import { useWatchlistUIStore, type WatchlistSortMode } from '../../stores/watchlistUI';
+import { useSymbolDetailUI } from '../../stores/symbolDetailUI';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { Skeleton } from '../../components/Skeleton';
 import { WatchlistItem } from './WatchlistItem';
@@ -48,6 +49,13 @@ export function WatchlistSidebar({ className = '', onSymbolClick }: WatchlistSid
   const isMobileOpen = useWatchlistUIStore((s) => s.isMobileOpen);
   const setMobileOpen = useWatchlistUIStore((s) => s.setMobileOpen);
   const sortMode = useWatchlistUIStore((s) => s.sortMode);
+  const openSymbolDetail = useSymbolDetailUI((s) => s.open);
+
+  // Handle symbol click - opens SymbolDetailPanel and calls external handler if provided
+  const handleSymbolClick = useCallback((symbol: string) => {
+    openSymbolDetail(symbol);
+    onSymbolClick?.(symbol);
+  }, [openSymbolDetail, onSymbolClick]);
 
   // Close mobile overlay when switching to desktop
   useEffect(() => {
@@ -150,7 +158,7 @@ export function WatchlistSidebar({ className = '', onSymbolClick }: WatchlistSid
                 <WatchlistContent
                   symbols={sortedSymbols}
                   isLoading={isLoading}
-                  onSymbolClick={onSymbolClick}
+                  onSymbolClick={handleSymbolClick}
                 />
               </motion.div>
             )}
@@ -222,7 +230,7 @@ export function WatchlistSidebar({ className = '', onSymbolClick }: WatchlistSid
                 symbols={sortedSymbols}
                 isLoading={isLoading}
                 onSymbolClick={(symbol) => {
-                  onSymbolClick?.(symbol);
+                  handleSymbolClick(symbol);
                   setMobileOpen(false); // Close panel after clicking
                 }}
               />

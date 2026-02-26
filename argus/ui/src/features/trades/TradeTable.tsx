@@ -12,6 +12,7 @@
 import { ChevronLeft, ChevronRight, Filter, BarChart3 } from 'lucide-react';
 import { Badge, StrategyBadge } from '../../components/Badge';
 import { EmptyState } from '../../components/EmptyState';
+import { useSymbolDetailUI } from '../../stores/symbolDetailUI';
 import type { Trade } from '../../api/types';
 import {
   formatDate,
@@ -99,7 +100,14 @@ export function TradeTable({
   hasFilters = false,
   onTradeClick,
 }: TradeTableProps) {
+  const openSymbolDetail = useSymbolDetailUI((state) => state.open);
   const totalPages = Math.ceil(totalCount / (limit || ITEMS_PER_PAGE));
+
+  // Handle symbol click - opens SymbolDetailPanel without triggering row click
+  const handleSymbolClick = (e: React.MouseEvent, symbol: string) => {
+    e.stopPropagation();
+    openSymbolDetail(symbol);
+  };
 
   if (trades.length === 0 && !isLoading) {
     const icon = hasFilters ? Filter : BarChart3;
@@ -185,7 +193,12 @@ export function TradeTable({
                   <td className="px-3 py-2.5 text-sm lg:hidden">
                     <div className="flex flex-col gap-1">
                       <div className="flex items-center gap-2">
-                        <span className="font-medium">{trade.symbol}</span>
+                        <button
+                          onClick={(e) => handleSymbolClick(e, trade.symbol)}
+                          className="font-medium hover:text-argus-accent hover:underline transition-colors cursor-pointer"
+                        >
+                          {trade.symbol}
+                        </button>
                         <StrategyBadge strategyId={trade.strategy_id} />
                       </div>
                       <span className="text-xs text-argus-text-dim">
@@ -199,7 +212,12 @@ export function TradeTable({
                   </td>
                   {/* Desktop: symbol */}
                   <td className="hidden lg:table-cell px-3 py-2.5 text-sm font-medium">
-                    {trade.symbol}
+                    <button
+                      onClick={(e) => handleSymbolClick(e, trade.symbol)}
+                      className="hover:text-argus-accent hover:underline transition-colors cursor-pointer"
+                    >
+                      {trade.symbol}
+                    </button>
                   </td>
                   {/* Tablet+: strategy badge */}
                   <td className="hidden md:table-cell px-3 py-2.5 text-sm">
