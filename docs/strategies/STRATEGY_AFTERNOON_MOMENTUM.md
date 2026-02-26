@@ -21,7 +21,7 @@
 
 ## Description
 
-Consolidation breakout strategy that identifies stocks consolidating during midday (12:00–2:00 PM) and enters on breakouts after 2:00 PM ET. This strategy capitalizes on the common intraday pattern where stocks that gapped up and ran in the morning often consolidate during the lunch lull, then resume their trend in the afternoon session. The tight midday consolidation provides a clear risk reference (the consolidation low) and the afternoon breakout confirms renewed institutional interest.
+Consolidation breakout strategy that identifies stocks from the morning gap watchlist that traded in a tight range during the midday lull (12:00–2:00 PM), then enters on breakout above the consolidation range during the afternoon session (2:00–3:30 PM). Thesis: institutional rebalancing and mutual fund flows during "power hour" drive strong moves in stocks that have consolidated after strong mornings. The midday consolidation filters out stocks that faded (not coming back) and stocks that never paused (already ran without you). This strategy is complementary to ORB and VWAP Reclaim — it catches the afternoon continuation on the same universe of gap stocks during the period when earlier strategies have completed their operating windows.
 
 ---
 
@@ -34,7 +34,7 @@ Consolidation breakout strategy that identifies stocks consolidating during midd
 | SPY Trend | Not in Crisis mode |
 | Other | None |
 
-Rationale: Momentum strategies thrive in trending markets where directional moves follow through. Afternoon breakouts work best when there's enough volatility for continuation but not so much that stocks reverse sharply.
+Rationale: Momentum breakouts thrive in trending conditions and moderate-to-high volatility where afternoon moves have follow-through. Excluded during Crisis regime where afternoon reversals are common and institutional flows are unpredictable.
 
 ---
 
@@ -42,18 +42,19 @@ Rationale: Momentum strategies thrive in trending markets where directional move
 
 | Parameter | Value |
 |-----------|-------|
+| **Consolidation Tracking Start** | 12:00 PM ET |
 | **Earliest Entry Time** | 2:00 PM ET |
 | **Latest Entry Time** | 3:30 PM ET |
 | **Force Close Time** | 3:45 PM ET |
 | **Active Days** | Mon–Fri, excluding FOMC days and half-days |
 
-Rationale: The 2:00–3:30 PM window captures afternoon momentum after the midday consolidation period (12:00–2:00 PM). This gives stocks 2–3 hours to establish a clear consolidation range before we look for breakouts. Force close at 3:45 PM ensures positions are flattened before the final 15 minutes when liquidity can thin.
+Rationale: The 12:00–2:00 PM window is the "lunch lull" when volume typically dries up and stocks consolidate. The 2:00–3:30 PM entry window captures the afternoon momentum phase when institutional rebalancing and mutual fund flows accelerate. Force close at 3:45 PM provides 15 minutes of buffer before market close.
 
 ---
 
 ## Scanner Criteria
 
-Afternoon Momentum reuses the same gap scanner as the ORB strategy family. Stocks that gapped up strongly are the natural candidates for midday consolidation and afternoon breakout patterns.
+Afternoon Momentum reuses the same gap scanner as the ORB strategy family (DEC-154). Stocks that gapped up strongly are the natural candidates for midday consolidation and afternoon breakout patterns.
 
 | Filter | Criteria | Rationale |
 |--------|----------|-----------|
@@ -68,16 +69,59 @@ Afternoon Momentum reuses the same gap scanner as the ORB strategy family. Stock
 
 ## Entry Criteria
 
-ALL of the following must be TRUE simultaneously for a trade to be taken. No exceptions.
+ALL of the following must be TRUE simultaneously for a trade to be taken. No exceptions (DEC-156).
 
-1. **CONSOLIDATED state:** Stock has confirmed tight consolidation during midday window (range/ATR < `consolidation_atr_ratio`, default 0.75)
-2. **Within entry window:** Current time is 2:00 PM ET – 3:30 PM ET
-3. **Breakout confirmation:** Current candle CLOSES above the consolidation high (using the high value BEFORE the current bar)
+1. **State is CONSOLIDATED:** Symbol has completed the consolidation phase (midday range confirmed tight)
+2. **Within entry window:** Current time ≥ 2:00 PM ET and < 3:30 PM ET
+3. **Breakout confirmation:** Candle CLOSES above the consolidation high (not just wicks above)
 4. **Volume confirmation:** Breakout candle volume ≥ `volume_multiplier` × average bar volume (default 1.2×)
-5. **Chase protection:** Close is not more than `max_chase_pct` (default 0.5%) above consolidation high
-6. **Valid risk:** Entry price > stop price (ensures positive risk per share)
-7. **Internal risk limits pass:** Daily loss and trade count limits not exceeded
-8. **Position count limit:** Current concurrent positions < `max_concurrent_positions` (default 3)
+5. **Chase protection:** Candle close ≤ consolidation_high × (1 + `max_chase_pct`) (default 0.5%)
+6. **Valid risk:** Risk per share > 0 (entry price > stop price)
+7. **Internal risk limits:** Daily loss, trade count, and position count limits not exceeded
+8. **Position count:** Current positions < `max_concurrent_positions` (default 3)
+
+**Chase Protection:** If the breakout candle closes more than `max_chase_pct` (default 0.5%) above the consolidation high, skip the entry — the move has already happened.
+
+---
+
+## State Machine
+
+Afternoon Momentum uses a 5-state machine to track each symbol's progression through the trading day (DEC-155):
+
+```
+                    ┌──────────────────────────────────────────────────────┐
+                    │                                                      │
+                    ▼                                                      │
+┌─────────┐     ┌───────────────┐     ┌──────────────┐     ┌─────────┐    │
+│WATCHING │────▶│ ACCUMULATING  │────▶│ CONSOLIDATED │────▶│ ENTERED │    │
+│         │     │               │     │              │     │         │    │
+│(before  │     │(tracking      │     │(range        │     │(terminal│    │
+│ 12:00)  │     │ midday range) │     │ confirmed)   │     │ state)  │    │
+└─────────┘     └───────┬───────┘     └──────┬───────┘     └─────────┘    │
+                        │                    │                            │
+                        │   range too wide   │   range widens             │
+                        │                    │                            │
+                        ▼                    ▼                            │
+                   ┌─────────┐          ┌─────────┐                       │
+                   │REJECTED │          │REJECTED │───────────────────────┘
+                   │         │          │         │
+                   │(terminal│          │(terminal│
+                   │ state)  │          │ state)  │
+                   └─────────┘          └─────────┘
+```
+
+| State | Description | Transitions |
+|-------|-------------|-------------|
+| **WATCHING** | Before 12:00 PM. Ignore all candles, no range tracking. | → ACCUMULATING at 12:00 PM |
+| **ACCUMULATING** | 12:00 PM onward. Track midday_high/midday_low. Check consolidation criteria each bar. | → CONSOLIDATED if range/ATR < threshold AND bars ≥ min_consolidation_bars. → REJECTED if range/ATR > max threshold. |
+| **CONSOLIDATED** | Range confirmed tight. Continue updating range (can still reject if widens). Watch for breakout after 2:00 PM. | → ENTERED on valid breakout. → REJECTED if range widens past max threshold. |
+| **ENTERED** | Position taken. Terminal state for the day. | None (terminal) |
+| **REJECTED** | Midday range too wide. Terminal state for the day. | None (terminal) |
+
+**Consolidation Criteria (DEC-153):**
+- Range = midday_high - midday_low
+- Consolidation confirmed when: `range / ATR-14 < consolidation_atr_ratio` (default 0.75) AND `consolidation_bars >= min_consolidation_bars` (default 30)
+- Rejected when: `range / ATR-14 > max_consolidation_atr_ratio` (default 2.0)
 
 ---
 
@@ -86,11 +130,11 @@ ALL of the following must be TRUE simultaneously for a trade to be taken. No exc
 ### Stop Loss
 | Parameter | Value |
 |-----------|-------|
-| **Placement** | Below consolidation_low (lowest low seen from noon through breakout) |
+| **Placement** | Below the consolidation low (lowest low during 12:00–2:00 PM period) |
 | **Type** | Hard stop (stop-market) |
-| **Initial Distance** | consolidation_low × (1 − stop_buffer_pct), buffer default 0.1% |
+| **Initial Distance** | consolidation_low × (1 - stop_buffer_pct), buffer default 0.1% |
 
-Rationale: The consolidation low is the natural support level. If price breaks below it after the breakout, the consolidation thesis has failed.
+Rationale: The consolidation low is the natural support level established during the midday lull. If the stock breaks below this level after the breakout, the thesis has failed.
 
 ### Profit Targets
 | Target | Trigger | Action | Position Affected |
@@ -104,14 +148,16 @@ Rationale: The consolidation low is the natural support level. If price breaks b
 | T1 hit | Move stop to breakeven (entry price + small buffer) |
 | T2 hit | Position fully closed |
 
-### Time Stop
+### Time Stop (DEC-157)
 | Parameter | Value |
 |-----------|-------|
-| **Max Time in Trade** | min(60 minutes, seconds until 3:45 PM ET) |
+| **Max Time in Trade** | min(60 minutes, seconds until 3:45 PM) |
 | **Action if Hit** | Close entire remaining position at market |
 
-### End of Day
-All positions closed at market by 3:45 PM ET.
+Rationale: Dynamic time stop calculation ensures late entries (e.g., 3:25 PM) get appropriately short time stops (20 minutes) rather than the full 60 minutes. Earliest-exit-wins logic in Order Manager handles overlap between time stop and T1/T2.
+
+### End of Day (DEC-159)
+All positions closed at market by 3:45 PM ET. Order Manager EOD flatten is the safety net.
 
 ---
 
@@ -124,7 +170,9 @@ All positions closed at market by 3:45 PM ET.
 | **Share Calculation** | risk_dollars / effective_risk_per_share |
 | **Max Concurrent Positions** | 3 |
 | **Buying Power Check** | shares × entry_price ≤ available_buying_power |
-| **Minimum Risk Floor** | max(risk_per_share, entry_price × 0.003) — prevents oversizing on very tight consolidation ranges |
+| **Minimum Risk Floor** | max(risk_per_share, entry_price × 0.003) — prevents oversizing on very tight consolidations |
+
+Rationale: The minimum risk floor (0.3% of entry price) prevents enormous positions when the consolidation range is very tight and the stop is very close to entry. This is the same pattern used in VWAP Reclaim (DEC-140).
 
 ---
 
@@ -133,7 +181,7 @@ All positions closed at market by 3:45 PM ET.
 | Parameter | Value |
 |-----------|-------|
 | **Expected Minimum** | 5 minutes |
-| **Expected Maximum** | 60 minutes (time stop) |
+| **Expected Maximum** | 60 minutes (time stop) or until 3:45 PM |
 | **Average (from backtest)** | TBD after VectorBT sweep |
 
 ---
@@ -163,9 +211,23 @@ All positions closed at market by 3:45 PM ET.
 
 ## Backtest Results
 
-*TBD after Sprint 20 VectorBT sweep and walk-forward analysis.*
+*To be filled after Sprint 20 VectorBT sweep and walk-forward analysis.*
 
 ### VectorBT Parameter Exploration
+
+**Parameter Grid (768 combinations):**
+
+| Parameter | Values | Count |
+|-----------|--------|-------|
+| consolidation_atr_ratio | 0.5, 0.75, 1.0, 1.25 | 4 |
+| min_consolidation_bars | 20, 30, 45, 60 | 4 |
+| volume_multiplier | 1.0, 1.2, 1.5 | 3 |
+| max_chase_pct | 0.003, 0.005, 0.01 | 3 |
+| target_1_r | 0.75, 1.0, 1.5 | 3 |
+| target_2_r | 1.5, 2.0, 2.5 | 3 (filtered: T2 > T1 + 0.25) |
+
+**Total combinations:** 4 × 4 × 3 × 3 × ~5.3 (filtered T2) ≈ 768
+
 | Parameter Set | Win Rate | Avg R | Profit Factor | Max DD | Sharpe | Notes |
 |---------------|----------|-------|---------------|--------|--------|-------|
 | TBD | | | | | | |
@@ -190,13 +252,13 @@ All positions closed at market by 3:45 PM ET.
 
 ## Paper Trading Results
 
-*TBD during Validation Track.*
+*To be filled during Validation Track.*
 
 ---
 
 ## Live Trading Results
 
-*TBD after promotion to live.*
+*To be filled after promotion to live.*
 
 ---
 
@@ -204,11 +266,52 @@ All positions closed at market by 3:45 PM ET.
 
 | Aspect | Behavior |
 |--------|----------|
-| **Duplicate stock policy** | ALLOW_ALL (DEC-121) — same symbol can be held by ORB and Afternoon Momentum simultaneously |
-| **Intended flow** | ORB trades morning breakout → consolidation during midday → Afternoon Momentum enters PM breakout |
-| **Shared watchlist** | Uses same scanner results as ORB family |
+| **Duplicate stock policy** | ALLOW_ALL (DEC-141) — same symbol can be held by multiple strategies simultaneously |
+| **Intended flow** | ORB trades morning breakout → VWAP Reclaim catches mid-morning pullback → Afternoon Momentum catches afternoon continuation |
+| **Shared watchlist** | Uses same scanner results as ORB family (DEC-154) |
 | **Cross-strategy risk** | max_single_stock_pct (5%) enforced across all strategies |
-| **Time separation** | ORB: 9:35–11:30 entry window, Afternoon Momentum: 2:00–3:30 PM entry window — no overlap |
+| **Time coverage** | ORB: 9:35–11:30, VWAP Reclaim: 10:00–12:00, Afternoon Momentum: 2:00–3:30 — fills the afternoon gap |
+
+**Complementary Strategy Design:**
+
+```
+Market Hours:  9:30 ─────────────────────────────────────────────────── 4:00
+                 │                                                      │
+ORB Breakout:    ├─────────────────┤
+                 9:35            11:30
+
+VWAP Reclaim:        ├───────────────┤
+                   10:00          12:00
+
+Afternoon Momentum:                           ├─────────────────┤
+                                            2:00              3:30
+
+Coverage:        │▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓│░░░░░░░░░░│▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓│
+                 │  Morning        │  Midday  │   Afternoon   │
+                 │  (ORB + VWAP)   │  (lull)  │  (Momentum)   │
+```
+
+---
+
+## Parameter Reference
+
+| Parameter | Config Key | Default | Min | Max | Rationale |
+|-----------|-----------|---------|-----|-----|-----------|
+| Consolidation Start | `consolidation_start_time` | "12:00" | — | — | Start of midday tracking window |
+| Consolidation ATR Ratio | `consolidation_atr_ratio` | 0.75 | 0.3 | 1.5 | Range/ATR threshold for "tight" consolidation |
+| Max Consolidation ATR Ratio | `max_consolidation_atr_ratio` | 2.0 | 1.0 | 3.0 | Range/ATR rejection threshold |
+| Min Consolidation Bars | `min_consolidation_bars` | 30 | 15 | 90 | Minimum bars to confirm consolidation |
+| Volume Multiplier | `volume_multiplier` | 1.2 | 1.0 | 2.0 | Breakout volume confirmation threshold |
+| Max Chase % | `max_chase_pct` | 0.005 | 0.002 | 0.02 | Chase protection threshold (0.5% default) |
+| Target 1 R | `target_1_r` | 1.0 | 0.5 | 2.0 | First target R-multiple |
+| Target 2 R | `target_2_r` | 2.0 | 1.0 | 3.0 | Second target R-multiple |
+| Max Hold Minutes | `max_hold_minutes` | 60 | 15 | 120 | Time stop (dynamic with EOD) |
+| Stop Buffer % | `stop_buffer_pct` | 0.001 | 0.0 | 0.01 | Buffer below consolidation_low (0.1% default) |
+| Force Close Time | `force_close_time` | "15:45" | — | — | Hard EOD cutoff |
+| Max Loss Per Trade | `risk_limits.max_loss_per_trade_pct` | 0.01 | 0.005 | 0.02 | 1% of allocated capital |
+| Max Daily Loss | `risk_limits.max_daily_loss_pct` | 0.03 | 0.02 | 0.05 | 3% of allocated capital |
+| Max Trades Per Day | `risk_limits.max_trades_per_day` | 6 | 3 | 12 | Daily trade limit |
+| Max Concurrent Positions | `risk_limits.max_concurrent_positions` | 3 | 1 | 5 | Position count limit |
 
 ---
 
@@ -236,11 +339,15 @@ Differences between VectorBT backtest and production implementation:
 
 ## Notes
 
-- Uses existing IndicatorEngine VWAP and ATR-14 indicators (Sprint 12.5, DEC-092). No new indicator infrastructure needed.
+- Inherits directly from BaseStrategy (DEC-152), not from a shared consolidation base class. Extraction deferred (DEF-025) until a second consolidation-based strategy is designed.
+- ATR-14 is already computed by IndicatorEngine (Sprint 12.5, DEC-092). No new indicator infrastructure needed.
+- This is ARGUS's fourth strategy and the first targeting afternoon sessions exclusively.
+- Dynamic time stop calculation (DEC-157) ensures late-session entries have appropriately short time stops.
+- Trailing stop deferred to V2 (DEC-158, DEF-024) — T1/T2 fixed targets are proven across all four strategies.
+- All backtest results are provisional until re-validated with Databento exchange-direct data (DEC-132).
+- 1-minute bar resolution is adequate for this strategy's 5–60 minute hold duration.
 - State machine has 5 states: WATCHING → ACCUMULATING → CONSOLIDATED → ENTERED (terminal) or REJECTED (terminal).
 - Consolidation range updates continuously through CONSOLIDATED state — if range widens beyond `max_consolidation_atr_ratio` (default 2.0), transitions to REJECTED.
-- 1-minute bar resolution is adequate for this strategy's 5–60 minute hold duration.
-- Time stop is dynamically compressed near EOD — entry at 3:25 PM gets a 20-minute time stop (until 3:45 PM), not the full 60 minutes.
 - Minimum risk floor (0.3% of entry price) prevents enormous positions from very tight consolidation where the stop is extremely close to entry.
 
 ---
