@@ -357,10 +357,10 @@ export function PositionTimeline({
                         x: 0,
                         width: `max(${width}%, 48px)`,
                       }}
-                      exit={{ opacity: 0, transition: { duration: DURATION.slow } }}
+                      exit={{ opacity: 0, transition: { duration: DURATION.normal } }}
                       transition={{
                         layout: { type: 'spring', stiffness: 300, damping: 30 },
-                        opacity: { duration: pos.isOpen ? DURATION.normal : 2 },
+                        opacity: { duration: pos.isOpen ? DURATION.fast : 1 },
                       }}
                       onMouseEnter={(e) => handleBarHover(pos, e)}
                       onMouseLeave={handleBarLeave}
