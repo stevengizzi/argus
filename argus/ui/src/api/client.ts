@@ -145,9 +145,15 @@ export async function getTrades(params?: {
 
 // Performance endpoints
 export async function getPerformance(
-  period: PerformancePeriod
+  period: PerformancePeriod,
+  strategyId?: string
 ): Promise<PerformanceResponse> {
-  return fetchWithAuth<PerformanceResponse>(`/performance/${period}`);
+  const searchParams = new URLSearchParams();
+  if (strategyId) {
+    searchParams.set('strategy_id', strategyId);
+  }
+  const query = searchParams.toString();
+  return fetchWithAuth<PerformanceResponse>(`/performance/${period}${query ? `?${query}` : ''}`);
 }
 
 // Health endpoints
