@@ -18,6 +18,7 @@ The name comes from Argus Panoptes — the all-seeing guardian of Greek mytholog
 3. **Transparency over cleverness.** Every decision the system makes must be explainable. No black boxes in V1. If you can't articulate why a trade was taken, the system has a bug.
 4. **Continuous improvement through data.** Every trade, every decision, every market observation feeds a learning loop. The system gets smarter over time — not through guesswork, but through evidence.
 5. **Design for the future, build for today.** Architecture supports multi-asset, AI-driven orchestration, and sophisticated regime detection. Implementation starts simple and earns complexity through proven need.
+6. **Intelligence compounds.** Every trade the system takes generates data that makes the next trade smarter. The system learns which setups are highest quality, which catalysts drive the strongest moves, and which market conditions favor which patterns — and it applies that learning automatically.
 
 ---
 
@@ -32,7 +33,7 @@ The core autonomous trading system. Strategies, orchestrator, risk manager, data
 A Tauri-based desktop application (with mobile web companion) that provides real-time monitoring, human-in-the-loop controls, performance dashboards, accounting tools, report generation, and the strategy incubator interface.
 
 ### Project C: The AI Layer
-Claude integration as co-captain — advisory analysis, action proposals with approval workflow, report narration, strategy development assistance, and system optimization recommendations. Connected to Claude Code for implementation workflow.
+Claude integration as the intelligence brain — real-time setup quality scoring, catalyst analysis, pre-market briefing generation, post-trade evaluation, learning loop model updates, and natural language copilot accessible from every page of the Command Center (DEC-170). The AI Layer is not an add-on; it is the central intelligence that grades every setup, sizes every position, and continuously refines the system's edge. Claude also handles approval workflow for system changes, report generation, and strategy development assistance. Connected to Claude Code for implementation workflow.
 
 **Build and validation run in parallel.** Project A (Trading Engine) is the foundation and was built first. Projects B (Command Center) and C (AI Layer) are built incrementally alongside ongoing strategy validation. All three were *designed* simultaneously so that Project A's interfaces are dashboard-ready and AI-ready from day one. Real capital deployment gates on strategy validation confidence, but system construction proceeds at development velocity. See DEC-079.
 
@@ -57,6 +58,10 @@ Claude integration as co-captain — advisory analysis, action proposals with ap
 - No single strategy works in all market conditions. A diversified ecosystem of uncorrelated strategies is more resilient than any single approach.
 - Backtesting is necessary but not sufficient. Paper trading and small-size live trading are mandatory validation stages.
 - The system should be designed for $50K–$100K+ in active trading capital, even if it launches with less.
+- The highest-value skill in momentum trading is setup quality grading — distinguishing A+ setups from C- setups. This can be quantified and automated through composite scoring of pattern strength, catalyst quality, order flow signals, volume profile, historical match, and regime alignment.
+- Dynamic position sizing (risking more on high-confidence setups, less on marginal ones) is the primary profit lever beyond strategy count.
+- Order flow data (Level 2 depth, tape speed, bid/ask dynamics) provides entry confidence that price/volume candles alone cannot.
+- The system's AI copilot should be contextually present everywhere — not siloed in a separate page — so the operator never breaks flow to consult their co-captain.
 
 ---
 
@@ -79,48 +84,31 @@ Every strategy defines:
 - **Risk Parameters:** Max loss per trade, max concurrent positions, max daily loss for this strategy
 - **Performance Benchmarks:** Minimum win rate, profit factor, and Sharpe ratio to remain active
 
-### 4.2 Initial Strategy Roster (US Stocks)
+### 4.2 Strategy Roster (Expanded — DEC-163)
 
-**Strategy 1: ORB (Opening Range Breakout)**
-The foundational strategy. Identifies stocks gapping ≥2% on volume, records a 5-minute opening range (9:30–9:35), enters on confirmed breakouts with volume (≥1.5× average) and VWAP alignment. Stop at opening range midpoint. Target at 2.0R (note: Phase 2 backtesting found zero target hits within the 15-minute hold window — all profitable exits are via time stop; see Parameter Validation Report). Time stop at 15 minutes. Operates 9:35–11:30 AM EST. Holding duration: 1–15 minutes typical.
+**Phase 1 — Built:**
+1. **ORB** — 9:35–11:30 AM, 1–15 min holds. Paper Trading stage.
+2. **ORB Scalp** — 9:45–11:30 AM, 10s–5 min holds. Exploration stage.
+3. **VWAP Reclaim** — 10:00 AM–12:00 PM, 5–30 min holds. Exploration stage.
+4. **Afternoon Momentum** — 2:00–3:30 PM, 15–60 min holds. Exploration stage.
 
-**Current Parameters (DEC-076, Feb 2026):**
+**Phase 2 — Planned (Sprints 26–32, DEC-167):**
+5. Red-to-Green — 9:45–11:00 AM, gap-down reversal
+6. Bull Flag — All day, consolidation breakout after sharp move
+7. Flat-Top Breakout — All day, multiple rejections then clean break
+8. Dip-and-Rip — 9:45–11:30 AM, sharp dip then aggressive bounce
+9. HOD Break — All day, new high-of-day with volume
+10. Pre-Market High Break — 9:30–10:30 AM
+11. Gap-and-Go — 9:30–10:00 AM, immediate gap continuation
+12. ABCD Reversal — 10:00 AM–2:00 PM, four-point reversal
+13. Sympathy Play — 9:45–11:30 AM, secondary sector mover
+14. Parabolic Short — 10:00 AM–3:00 PM (first short strategy, DEC-166)
+15. Power Hour Reversal — 3:00–3:45 PM
+16. Earnings Gap Continuation — 9:30–11:30 AM, day 2+ continuation
+17. Volume Shelf Bounce — All day, bounce off VPOC
+18. Micro Float Runner — 9:30–11:30 AM, ultra-low float extreme RVOL
 
-| Parameter | Value | Sensitivity | Notes |
-|-----------|-------|-------------|-------|
-| `opening_range_minutes` | 5 | High | Shortened from 15. Monotonic shorter=better in sweep. |
-| `max_hold_minutes` | 15 | High | Shortened from 30. ORB edge is front-loaded. |
-| `min_gap_pct` | 2.0% | Medium-High | Unchanged. Preserves trade frequency for validation. |
-| `stop_buffer_pct` | 0.0% | Low | Unchanged. Stop at OR midpoint. |
-| `target_r` | 2.0 | Low | Unchanged. Functionally irrelevant with 15-min hold (zero hits in backtest). |
-| `max_range_atr_ratio` | 999.0 (disabled) | N/A | Disabled (DEC-075). Production ATR uses wrong scale. |
-
-**Pipeline Stage:** Paper Trading (Phase 3). Backtest validated: 137 trades, Sharpe 0.93, PF 1.18, +$8,087 on $100K over 11 months. Sprint 11 extended walk-forward (35 months, 15 windows): fixed-params WFE (P&L) = 0.56, OOS Sharpe = +0.34, OOS P&L = $7,741. DEC-076 parameters confirmed.
-
-**Strategy 2: ORB Scalp**
-A faster variant of ORB sharing the same OrbBaseStrategy base class (DEC-120). Same scanner and entry criteria, but targets a quick 0.3R profit within the first 120 seconds, then exits entirely (DEC-123). Single T1 target, no T2 split. Per-signal time stop via `time_stop_seconds` field (DEC-122). Higher win rate, smaller gains, more trades per day. Operates 9:45–11:30 AM EST. Holding duration: 10 seconds – 5 minutes.
-
-| Parameter | Value | Source |
-|-----------|-------|--------|
-| `scalp_target_r` | 0.3 | Strategy thesis |
-| `max_hold_seconds` | 120 | Strategy thesis |
-| `opening_range_minutes` | 5 | Inherited from ORB (DEC-076) |
-| `min_gap_pct` | 2.0% | Inherited from ORB (DEC-076) |
-| `stop_buffer_pct` | 0.0% | Inherited from ORB (DEC-076) |
-| `max_range_atr_ratio` | 999.0 (disabled) | Inherited from ORB (DEC-075) |
-
-**Pipeline Stage:** Exploration. VectorBT sweep (20,880 trades, 35 months): all aggregate Sharpes negative — 1-minute bar resolution insufficient for scalp validation (DEC-127, RSK-026). Parameters set from strategy thesis, not backtest optimization. Real validation requires Databento tick-level data (DEC-132).
-
-**Strategy 3: VWAP Reclaim**
-Mean-reversion strategy. Buys stocks that pulled back below VWAP on low volume, then reclaim VWAP on increasing volume. Works well mid-morning when breakout momentum fades. Operates 10:00 AM – 12:00 PM EST. Holding duration: 5–30 minutes.
-
-**Strategy 4: Afternoon Momentum**
-Identifies stocks from the morning watchlist that consolidate midday (12:00–2:00 PM), then break out of the consolidation range in the afternoon. Operates 2:00–3:30 PM EST. Holding duration: 15–60 minutes.
-
-**Strategy 5: Red-to-Green**
-Stocks that gap down at open but reverse and cross from negative to positive on the day. A specific reversal pattern with high reliability when filtered for catalyst + volume. Operates 9:45–11:00 AM EST. Holding duration: 10–45 minutes.
-
-Additional strategies will be developed over time and documented in individual Strategy Spec Sheets following the standardized template.
+Not all Phase 2 patterns will prove to have a backtestable edge. Each goes through the full Incubator Pipeline. The goal is 10–12 validated patterns running simultaneously.
 
 ### 4.3 Strategy Incubator Pipeline
 
@@ -138,6 +126,12 @@ Every strategy follows a formalized lifecycle:
 10. **Retired** — Permanently deactivated; archived for reference
 
 The Strategy Lab section of the Command Center dashboard tracks every strategy's position in this pipeline.
+
+### 4.4 Pattern Library
+
+Beyond the initial strategies, ARGUS recognizes an expanded set of momentum patterns through a shared PatternLibrary interface. Each pattern module implements BaseStrategy and goes through the full Incubator Pipeline (§4.3). Pattern modules contribute a "pattern strength" score to the Setup Quality Engine (§19).
+
+Patterns are built in batches of 3–4 per sprint (DEC-167). Not all will prove viable — the Incubator Pipeline filters are designed to identify and retire patterns that don't earn their keep. Quality over quantity.
 
 ---
 
@@ -159,10 +153,12 @@ Each trading day, before market open, the Orchestrator reviews each active strat
 - Unallocated capital remains in cash reserve
 - Minimum 20% of total account value is always held in cash reserve (never deployed)
 
-**V2+ Vision (AI-Enhanced):**
-- Machine learning model trained on historical allocation decisions and outcomes
-- Dynamic allocation that responds to intraday performance, not just daily reviews
-- Correlation-aware allocation that reduces aggregate risk
+**V2 Vision (AI-Enhanced, Sprint 31+):**
+- Quality-weighted allocation: strategies producing more A+ setups receive more capital
+- Intraday dynamic allocation responding to performance and regime shifts
+- Correlation-aware allocation reducing aggregate risk
+- AI advisor (Claude) proposes allocation changes through approval workflow
+- Opportunity cost tracking: log A+ setups skipped due to capital constraints
 
 ### 5.3 Activation / Deactivation
 
@@ -288,35 +284,52 @@ The dashboard provides manual controls for:
 
 ### 9.1 Role Definition
 
-Claude serves as a continuous expert advisor embedded in the system. Claude can analyze, recommend, and — with approval — take actions on the system.
+Claude serves as a contextual AI copilot embedded in every page of the Command Center (DEC-170). Claude can analyze, recommend, score setups, generate reports, and — with approval — take actions on the system. Claude is not a separate application; it is present wherever the operator is working, pre-loaded with the context of what they're looking at.
 
-### 9.2 Capabilities
+### 9.2 Access Model
+
+Claude is accessible via a persistent slide-out chat panel triggered from any page. When opened, Claude automatically receives:
+- **Page context:** What page the user is on and what data is displayed
+- **Selected entity:** If a trade, strategy, position, or report is selected/open
+- **System state:** Current positions, regime, risk utilization, recent decisions
+- **Historical context:** Previous chat messages, Learning Journal entries
+
+Chat history persists in The Debrief's Learning Journal, building institutional memory.
+
+### 9.3 Capabilities
+
+**Real-Time Intelligence:**
+- Score setup quality for any watchlist symbol (pattern + catalyst + order flow + volume + history + regime)
+- Evaluate pre-market catalysts and generate quality ratings
+- Produce pre-market briefings and EOD reports (saved to The Debrief)
+- Detect anomalies in system behavior or market conditions during trading hours
 
 **Analysis & Advisory:**
-- Review daily/weekly/monthly performance and provide narrative analysis
-- Identify patterns in trading data (e.g., "your win rate drops on Mondays")
-- Answer questions about system behavior ("why didn't Strategy 3 trade today?")
-- Research market conditions and provide context for regime changes
+- Review performance and provide narrative analysis at any granularity
+- Identify patterns in trading data ("your win rate drops on Mondays")
+- Answer questions about system behavior ("why did we skip this setup?")
+- Research market conditions and provide regime change context
 - Suggest parameter adjustments based on performance data
 
 **Action Proposals (Require Approval):**
 - Adjust strategy parameters (stop distances, targets, filters)
+- Override capital allocation percentages
 - Activate or suspend strategies
-- Modify Orchestrator allocation rules
 - Propose new strategy ideas (generates Strategy Spec Sheet)
 - Implement code changes (via Claude Code integration)
 
-**Report Generation:**
-- Generate narrative sections of performance reports
+**Knowledge Generation:**
+- Generate narrative report sections saved to The Debrief
 - Create strategy reviews with data-backed analysis
-- Produce the pre-market briefing and end-of-day summary
+- Annotate trades with analysis (saved to Learning Journal)
+- Produce weekly "What I Learned" digests
 
-### 9.3 Boundaries
+### 9.4 Boundaries
 
+- Claude never executes trades directly — all proposals go through Risk Manager gates and approval workflow
 - Claude never bypasses the approval system
-- Claude never has direct access to execute trades without going through the standard pipeline
-- Claude's action proposals go through the same Risk Manager gates as any other action
-- All Claude interactions and proposals are logged in the audit trail
+- All interactions and proposals are logged in the audit trail
+- Chat is not "god mode" — it works within the existing control framework
 
 ---
 
@@ -522,7 +535,55 @@ Feed news articles through Claude's API for nuanced analysis beyond simple class
 
 ---
 
-## 19. Glossary
+## 19. Setup Quality Engine
+
+### 19.1 Purpose
+The core innovation transforming ARGUS from binary pass/fail filtering to intelligence-driven trading. Grades every potential trade 0–100 across six dimensions.
+
+### 19.2 Scoring Dimensions
+| Dimension | Weight | Source |
+|-----------|--------|--------|
+| Pattern Strength | 25% | Strategy module |
+| Catalyst Quality | 20% | NLP Catalyst Pipeline |
+| Order Flow | 20% | Order Flow Model (L2) |
+| Volume Profile | 15% | Databento L1 |
+| Historical Match | 10% | Learning Loop |
+| Regime Alignment | 10% | RegimeClassifier |
+
+### 19.3 Quality Grades and Risk Tiers
+| Grade | Score | Risk % | Behavior |
+|-------|-------|--------|----------|
+| A+ | 90–100 | 2.0–3.0% | Maximum conviction |
+| A | 80–89 | 1.5–2.0% | High confidence |
+| A- | 70–79 | 1.0–1.5% | Standard-plus |
+| B+ | 60–69 | 0.75–1.0% | Standard |
+| B | 50–59 | 0.5–0.75% | Conservative |
+| B- | 40–49 | 0.25–0.5% | Minimum |
+| C+ | 30–39 | 0.25% min | Barely passes |
+| C/C- | 0–29 | SKIP | Do not trade |
+
+Account-level limits override. Circuit breakers non-overridable.
+
+### 19.4 Learning Loop
+Every trade generates feedback. Weekly batch retraining refines weights. V1: statistical lookup tables (pattern × catalyst × regime → performance). V2 (Sprint 33+): ML model (LightGBM).
+
+---
+
+## 20. Order Flow Intelligence
+
+### 20.1 Purpose
+Reveals intent behind price movement: real buying pressure vs spoofing, hidden orders, momentum absorption.
+
+### 20.2 Data Source
+Databento L2 (MBP-10, 10 depth levels) for V1. L3 (individual order events) for V2. Both included in Standard plan.
+
+### 20.3 Signals
+V1: bid/ask imbalance, ask thinning rate, tape speed, bid stacking.
+V2: iceberg detection, spoofing detection, momentum absorption.
+
+---
+
+## 21. Glossary
 
 | Term | Definition |
 |------|-----------|

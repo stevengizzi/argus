@@ -6,7 +6,7 @@
 
 ## What Is Argus
 
-Argus is a fully automated multi-strategy day trading ecosystem with an AI co-captain (Claude), a desktop/mobile Command Center, and multi-asset support. The user is building this to generate income for his family. He can code in Python. He has trading experience but no prior systematic/algorithmic trading system.
+Argus is a fully automated, AI-enhanced multi-strategy trading intelligence platform with 15+ concurrent pattern types, a contextual AI copilot (Claude), a 7-page desktop/mobile Command Center, and multi-asset support. The system combines rules-based strategy execution with AI-powered setup quality grading, order flow intelligence, NLP catalyst analysis, and dynamic position sizing to achieve performance comparable to top discretionary momentum traders. The user is building this to generate income for his family. He can code in Python. He has trading experience but no prior systematic/algorithmic trading system.
 
 ## Current Project State
 
@@ -29,6 +29,8 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 - Sprint 19 (VWAP Reclaim Strategy): ✅ COMPLETE — 1410 tests (pytest, 93 new) + 40 (Vitest, 26 new), Feb 25–26. VwapReclaimStrategy standalone from BaseStrategy (DEC-136), 5-state machine (DEC-138), pullback swing-low stop (DEC-139), T1=1.0R/T2=2.0R, 30-min time stop. Scanner reuse (DEC-137), position sizing with risk floor (DEC-140), ALLOW_ALL cross-strategy (DEC-141). VectorBT parameter sweep: 59,556 trades, 768 combos, avg Sharpe 3.89, WF OOS Sharpe 1.49, P&L $15,820 (DEC-146, provisional per DEC-132). Precompute+vectorize architecture mandated for all sweeps (DEC-149, `.claude/rules/backtesting.md`). VectorBT ↔ live state machine divergences harmonized (DEC-148). Walk-forward pipeline dispatch for VWAP Reclaim (DEC-145). Watchlist Sidebar: responsive (desktop inline 280px / tablet slide-out / mobile overlay), compact single-letter strategy badges, VWAP distance metric, sort controls, edge-mounted collapse pill (DEC-142, DEC-147, DEC-150). Keyboard shortcuts: 1–4 navigation, w watchlist toggle (DEC-151). Dev mode three-strategy mock data. Strategy spec: `docs/strategies/STRATEGY_VWAP_RECLAIM.md`. 14 implementation sessions + 2 code review checkpoints. Code review passed (DEC-144–151).
 - Sprint 20 (Afternoon Momentum): ✅ COMPLETE — 1522 tests (pytest, 112 new) + 48 (Vitest, 8 new), Feb 26. AfternoonMomentumStrategy standalone from BaseStrategy (DEC-152), 5-state machine (DEC-155), consolidation high/low channel + ATR filter (DEC-153), 8 simultaneous entry conditions (DEC-156). Gap watchlist reuse (DEC-154). T1=1.0R/T2=2.0R, dynamic time stop compressed to force_close (DEC-157). Trailing stop deferred (DEC-158, DEF-024). EOD handling (DEC-159). Cross-strategy ALLOW_ALL, time-separated coverage (DEC-160). VectorBT sweep: 1,152 combos, precompute+vectorize (DEC-162). Walk-forward pipeline dispatch. System integration: main.py wiring, Orchestrator registration, per-strategy health components (all 4 strategies). Dev mode four-strategy mock data. 16 four-strategy integration tests. Strategy spec: `docs/strategies/STRATEGY_AFTERNOON_MOMENTUM.md`. Databento activation deferred to Sprint 21 (DEC-161). 10 implementation sessions + 2 code review checkpoints. Code review passed (DEC-152–162).
 
+**Expanded Vision (DEC-163, February 26, 2026):** ARGUS scope expanded from 5-strategy rules-based to 15+ pattern AI-enhanced trading intelligence platform. Core new components: Setup Quality Engine (composite 0–100 scoring), Order Flow Model (Databento L2/L3, DEC-165), NLP Catalyst Pipeline (free sources: SEC EDGAR + Finnhub + FMP + Claude API classification, DEC-164), Dynamic Position Sizer, expanded Pattern Library (15+ types, batch-built DEC-167), Learning Loop, Pre-Market Intelligence Engine. Contextual AI Copilot accessible from every page (DEC-170). Command Center expanded from 4 to 7 pages: Dashboard, Trade Log, Performance, Orchestrator, Pattern Library, The Debrief, System (DEC-169). Sprint 21 split into 21a–21d to establish page architecture (DEC-171). See `docs/research/ARGUS_Expanded_Roadmap.md`.
+
 **Validation Track:** Paper trading ACTIVE with DEC-076 parameters on Alpaca. Validates system stability only — Alpaca IEX data captures only ~2–3% of market volume (DEC-081), so signal accuracy is not validated until Databento data is integrated (Sprint 12). See `08_PAPER_TRADING_GUIDE.md`.
 
 **Infrastructure Research (Feb 18–20):** Two deep-dive research reports completed:
@@ -38,9 +40,9 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 
 **IBKR Account (Feb 21):** Application submitted. Account ID U24619949. Individual margin account, IBKR Pro tiered pricing. Awaiting approval — paper trading account will be enabled post-approval for Sprint 13 adapter development.
 
-**Next Build sprints:** CC Analytics & Strategy Lab (Sprint 21) → AI Layer MVP (Sprint 22). See DEC-096, DEC-106–110. UX Feature Backlog (`docs/ui/UX_FEATURE_BACKLOG.md`) provides per-sprint enhancement add-ons alongside core sprint scope. Orchestrator interaction UI planned for Sprint 21 (21-L in UX Feature Backlog). Note: Databento subscription activation recommended around Sprint 21 (DEC-161). All pre-Databento backtests require re-validation with quality data (DEC-132). **Milestone:** ARGUS now covers 9:30 AM–3:30 PM with four strategies.
+**Next Build sprints:** Sprint 21a (Pattern Library page) → Sprint 21b (Orchestrator page) → Sprint 21c (The Debrief page) → Sprint 21d (Dashboard refinement + Performance analytics + System cleanup + AI Copilot shell + nav restructure) → AI Layer MVP (Sprint 22) → NLP Catalyst Pipeline + Pre-Market Engine (Sprint 23) → Order Flow Model V1 (Sprint 24) → Setup Quality Engine + Dynamic Position Sizer (Sprint 25) → Red-to-Green + Pattern Library Foundation (Sprint 26) → Pattern Expansion I (Sprint 27) → Order Flow V2 + Short Selling (Sprint 28) → Pattern Expansion II (Sprint 29) → Learning Loop V1 (Sprint 30) → Orchestrator V2 AI-Enhanced (Sprint 31) → Pattern Expansion III + Volume Profile (Sprint 32) → Learning Loop V2 ML (Sprint 33) → Advanced Regime Engine (Sprint 34) → Crypto Expansion (Sprint 35). See `docs/research/ARGUS_Expanded_Roadmap.md`. UX Feature Backlog (`docs/ui/UX_FEATURE_BACKLOG.md`) + DEC-168 (intelligence UI integration) provide per-sprint enhancement add-ons. Databento subscription activation recommended around Sprint 21 (DEC-161). All pre-Databento backtests require re-validation with quality data (DEC-132).
 
-**Next Validation gate:** Build through Sprint 21 (four strategies + analytics) using Alpaca data → activate Databento (~Sprint 19, DEC-097) → serious paper trading validation with quality data + IBKR execution → AI Layer (Sprint 22) compounds analysis during validation → CPA consultation → live trading at minimum size on IBKR.
+**Validation Track sequence:** Build through Sprint 21 (7-page architecture + analytics) → activate Databento → IBKR paper trading (Gate 2, 20+ days) → Build through Sprint 26 (intelligence infrastructure) → AI-enhanced paper trading with quality scoring (Gate 3, 30+ days) → Build through Sprint 32 (full pattern library + learning loop) → Full system paper trading (Gate 4, 50+ cumulative days, system Sharpe > 2.0) → CPA consultation → live at minimum size on IBKR (Gate 5).
 
 **✅ IBKR APPLICATION SUBMITTED:** Feb 21, 2026. Account ID: U24619949. Individual margin account, IBKR Pro (tiered pricing), Georgia address. Trading permissions requested: Stocks, Options (Level 3), Futures, Currency/Forex, Cryptocurrencies, Mutual Funds. Awaiting approval (typically 1–3 business days, may take longer). Disclosures and agreements archived locally.
 
@@ -184,6 +186,15 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 - **Cross-strategy interaction — ALLOW_ALL, time-separated (DEC-160):** ORB 9:35–11:30, VWAP 10:00–12:00, Afternoon 2:00–3:30. Same symbol can be held by multiple strategies simultaneously. max_single_stock_pct (5%) enforced across all strategies.
 - **Databento activation deferred to Sprint 21 (DEC-161):** Saves one additional month. Amends DEC-143.
 - **VectorBT Afternoon Momentum divergences harmonized (DEC-162):** Precompute+vectorize architecture. ATR method divergence documented (SMA vs Wilder's). Single entry per day in VectorBT vs live retry (conservative).
+- **Expanded vision — AI-enhanced platform (DEC-163):** ARGUS expanded from 5-strategy rules-based to 15+ pattern AI-enhanced. Setup Quality Engine, Order Flow Model, NLP Catalyst Pipeline, Dynamic Position Sizer, Pattern Library, Learning Loop, Pre-Market Intelligence Engine. Target 5–10%+ monthly returns at $100K–$500K scale.
+- **Catalyst data — free sources first (DEC-164):** SEC EDGAR + Finnhub + FMP for V1. Claude API classifies/scores catalysts. Benzinga Pro deferred until free sources prove insufficient (>30% unclassified rate over 20 days).
+- **L2 data for all watchlist symbols (DEC-165):** Databento MBP-10 for full daily watchlist. L2 included in Standard plan. Single session with Event Bus fan-out.
+- **Short selling in Sprint 28 (DEC-166):** Long-only proven first. Parabolic Short first short strategy. Locate/borrow tracking, inverted risk logic.
+- **Pattern library batch build (DEC-167):** 3–4 patterns per sprint, stages 1–3 within sprint, paper validation in parallel.
+- **UI/UX integration principle (DEC-168):** Intelligence features enrich existing pages, not siloed. Progressive disclosure: badge → breakdown → deep dive.
+- **Seven-page architecture (DEC-169):** Dashboard (ambient), Trade Log (history), Performance (analytics), Orchestrator (operations/controls), Pattern Library (strategy encyclopedia), The Debrief (knowledge/research), System (infrastructure health). Desktop icon sidebar grouped by concern. Mobile 5-tab + More.
+- **Contextual AI Copilot (DEC-170):** Claude accessible from every page via persistent slide-out chat panel. Context-aware: automatically receives page context, selected entities, visible data. Chat history lives in The Debrief. Can propose actions through approval workflow. Keyboard shortcut `c`.
+- **Sprint 21 split (DEC-171):** Four sub-sprints: 21a (Pattern Library page), 21b (Orchestrator page), 21c (The Debrief), 21d (Dashboard + Performance + System + Copilot shell + nav).
 
 ## Architecture Summary
 
@@ -202,15 +213,39 @@ Key components:
 - **Shadow System** runs paper trading permanently in parallel with live trading
 - **Control endpoints (DEC-111):** Strategy pause/resume, position close, emergency flatten all, emergency pause all. JWT-gated. Confirmation modals for emergency actions.
 - **CSV trade export (DEC-112):** GET /trades/export/csv with filters. StreamingResponse, date-stamped filename. 10K row limit.
+- **Setup Quality Engine** scores every potential trade 0–100 on six dimensions (pattern strength, catalyst quality, order flow, volume profile, historical match, regime alignment). Outputs quality grade (A+ through C-) driving dynamic position sizing.
+- **Order Flow Model** processes Databento L2 (MBP-10) depth data: bid/ask imbalance, ask thinning, tape speed, bid stacking signals for entry confidence.
+- **NLP Catalyst Pipeline** ingests SEC EDGAR filings, Finnhub news, FMP calendars; classifies and scores catalyst quality via Claude API (DEC-164).
+- **Dynamic Position Sizer** maps quality grades to risk tiers: A+ = 2–3% risk, B = 0.5–0.75%, C- = skip. Replaces fixed risk_per_trade_pct.
+- **Pre-Market Intelligence Engine** runs automated 4:00 AM → 9:25 AM pipeline: gap scanning, catalyst research, watchlist ranking, quality pre-scoring, briefing delivery.
+- **Learning Loop** correlates quality scores with trade outcomes, refining scoring weights weekly (V1 statistical, V2 ML).
+- **Pattern Library** provides 15+ pattern recognition modules each implementing BaseStrategy.
+- **AI Copilot** (DEC-170) provides contextual Claude chat from every page via slide-out panel. Context-aware with page state injection. Actions go through approval workflow.
 
 
-## Strategy Roster (V1 — US Stocks)
+## Strategy Roster
 
-1. **ORB (Opening Range Breakout)** — 9:35–11:30 AM, 1–15 min holds, stop at OR midpoint, time stop at 15 min
-2. **ORB Scalp** — 9:45–11:30 AM, 10s–5 min holds, quick 0.3–0.5R targets
+### Phase 1 — Built (US Stocks, Sprints 3–20)
+1. **ORB (Opening Range Breakout)** — 9:35–11:30 AM, 1–15 min holds, stop at OR midpoint
+2. **ORB Scalp** — 9:45–11:30 AM, 10s–5 min holds, quick 0.3R targets
 3. **VWAP Reclaim** — 10:00 AM–12:00 PM, 5–30 min holds, mean-reversion
 4. **Afternoon Momentum** — 2:00–3:30 PM, 15–60 min holds, consolidation breakout
-5. **Red-to-Green** — 9:45–11:00 AM, 10–45 min holds, gap-down reversal
+
+### Phase 2 — Planned (Sprints 26–32, DEC-163/DEC-167)
+5. **Red-to-Green** — 9:45–11:00 AM, gap-down reversal
+6. **Bull Flag** — All day, consolidation breakout after sharp move
+7. **Flat-Top Breakout** — All day, multiple rejections at same level then clean break
+8. **Dip-and-Rip** — 9:45–11:30 AM, sharp dip on low vol, aggressive bounce
+9. **HOD Break** — All day, new high-of-day breakout with volume
+10. **Pre-Market High Break** — 9:30–10:30 AM, break above pre-market high
+11. **Gap-and-Go** — 9:30–10:00 AM, immediate gap continuation without pullback
+12. **ABCD Reversal** — 10:00 AM–2:00 PM, four-point reversal at support
+13. **Sympathy Play** — 9:45–11:30 AM, secondary mover in leading sector
+14. **Parabolic Short** — 10:00 AM–3:00 PM, overextended reversal (first short, DEC-166)
+15. **Power Hour Reversal** — 3:00–3:45 PM, failed breakdown reversal
+16. **Earnings Gap Continuation** — 9:30–11:30 AM, day 2+ continuation
+17. **Volume Shelf Bounce** — All day, bounce off high-volume VPOC
+18. **Micro Float Runner** — 9:30–11:30 AM, ultra-low float with extreme RVOL
 
 ## Strategy Incubator Pipeline (10 Stages)
 
@@ -239,6 +274,8 @@ Concept → Exploration (VectorBT) → Validation (Replay Harness + Walk-Forward
 | **Current monthly (paper trading)** | **$199/mo** | | Databento only |
 | **Projected monthly (live, equities only)** | **~$235–250 + commissions** | | Databento + Claude API + commissions |
 | **Projected monthly (full multi-asset)** | **~$575–680 + commissions** | | Databento + IQFeed + futures + Claude API + commissions |
+| **Projected monthly (full AI-enhanced, equities only)** | **~$449–499 + commissions** | Phase C+ | Databento + Claude API (increased) + commissions |
+| Free news sources (Finnhub/FMP/EDGAR) | $0 | Sprint 23+ | Paid Benzinga upgrade (~$200/mo) only if needed (DEC-164) |
 
 ## Market Regime Classification (V1)
 
@@ -257,6 +294,7 @@ argus/
 ├── backtest/       # VectorBT helpers, Backtrader configs, Replay Harness
 ├── ui/             # Tauri app + React frontend
 ├── ai/             # Claude API integration, Approval Workflow
+├── intelligence/   # Setup Quality Engine, Order Flow, Catalyst, Position Sizer, Learning Loop, Pre-Market Engine
 ├── notifications/  # Push, Email, Telegram/Discord handlers
 ├── accounting/     # Tax tracking, P&L, Wash Sale detection
 ├── config/         # YAML config files (strategies, risk limits, etc.)

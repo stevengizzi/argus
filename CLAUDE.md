@@ -10,9 +10,9 @@ Phase 1 sprint plan: @docs/07_PHASE1_SPRINT_PLAN.md
 
 ## Current State
 
-**Structure:** Two parallel tracks (DEC-079, February 19, 2026).
-- **Build Track:** System construction at development velocity. Sprints 1–20 complete (1,522 pytest tests + 48 Vitest). Sprint 21 (CC Analytics & Strategy Lab) is NEXT.
-- **Validation Track:** Paper trading ACTIVE on Alpaca IEX (system stability only — DEC-081). Signal accuracy validation pending Databento subscription activation (DEC-087). All pre-Databento backtests require re-validation with quality data (DEC-132). Migrates to IBKR paper after IBKR account approved (U24619949, submitted Feb 21).
+**Structure:** Two parallel tracks (DEC-079, February 19, 2026). Expanded to AI-enhanced platform (DEC-163, February 26, 2026).
+- **Build Track:** System construction at development velocity. Sprints 1–20 complete (1,522 pytest tests + 48 Vitest). Sprint 21a (Pattern Library page) is NEXT.
+- **Validation Track:** Paper trading ACTIVE on Alpaca IEX (system stability only — DEC-081). Signal accuracy validation pending Databento activation. All pre-Databento backtests require re-validation (DEC-132). Migrates to IBKR paper after IBKR account approved (U24619949, submitted Feb 21).
 
 Active sprint plan: `docs/10_PHASE3_SPRINT_PLAN.md` (covers both tracks).
 
@@ -24,6 +24,14 @@ Active sprint plan: `docs/10_PHASE3_SPRINT_PLAN.md` (covers both tracks).
 - **Cost deferral:** Databento subscription activated when adapter ready for integration testing. DEC-087.
 
 - IBKR account application submitted Feb 21, 2026 (Account ID: U24619949). Individual, Margin, IBKR Pro (tiered), GA address. Permissions: Stocks, Options L3, Futures, Forex, Crypto. Awaiting approval.
+
+**Expanded Vision (DEC-163, February 26, 2026):**
+- ARGUS expanded to AI-enhanced trading intelligence platform (15+ patterns, Setup Quality Engine, Order Flow Model, NLP Catalyst Pipeline, Dynamic Position Sizer, Learning Loop, Pre-Market Engine).
+- Seven-page Command Center (DEC-169): Dashboard, Trade Log, Performance, Orchestrator (NEW), Pattern Library (NEW), The Debrief (NEW), System.
+- Contextual AI Copilot (DEC-170): Claude accessible from every page via slide-out chat panel. Context-aware. Actions through approval workflow.
+- Sprint 21 split into 21a–21d (DEC-171): 21a Pattern Library page, 21b Orchestrator page, 21c The Debrief page, 21d Dashboard+Performance+System+nav+Copilot shell.
+- Free catalyst sources first (DEC-164): SEC EDGAR + Finnhub + FMP. Benzinga deferred.
+- Full roadmap: `docs/research/ARGUS_Expanded_Roadmap.md`.
 
 **Sprint 20 Results (Afternoon Momentum — Feb 26):**
 - AfternoonMomentumStrategy: standalone from BaseStrategy (DEC-152), 5-state machine (DEC-155), consolidation high/low channel + ATR filter (DEC-153). T1=1.0R/T2=2.0R, dynamic time stop compressed to force_close (DEC-157).
@@ -77,9 +85,9 @@ Active sprint plan: `docs/10_PHASE3_SPRINT_PLAN.md` (covers both tracks).
 
 **Recommended ORB parameters (DEC-076):** or=5, hold=15, gap=2.0, stop_buf=0.0, target_r=2.0, atr=999.0 (disabled).
 
-**Validation Track sequence:** Build through Sprint 21 (four strategies + analytics) → activate Databento ~Sprint 19 (DEC-097) → serious paper trading with quality data + IBKR → AI Layer (Sprint 22) compounds analysis during validation → CPA consultation → live at minimum size on IBKR.
+**Validation Track sequence:** Build through Sprint 21d (7-page architecture) → activate Databento → IBKR paper (Gate 2, 20+ days) → Build through Sprint 26 → AI-enhanced paper with quality scoring (Gate 3, 30+ days) → Build through Sprint 32 → Full system paper (Gate 4, 50+ cumulative, Sharpe > 2.0) → CPA → live at minimum size on IBKR (Gate 5).
 
-**Build Track queue (DEC-096, DEC-106–110):** CC Analytics & Strategy Lab (21) → AI Layer MVP (22) → Tier 1 News + expansion (23+). UX Feature Backlog (`docs/ui/UX_FEATURE_BACKLOG.md`) provides per-sprint enhancement add-ons. Databento activation ~Sprint 21 (DEC-161). Pre-Databento re-validation required (DEC-132). **Milestone reached:** ARGUS now covers 9:30 AM–3:30 PM with four strategies (ORB, Scalp, VWAP Reclaim, Afternoon Momentum).
+**Build Track queue:** Pattern Library page (21a) → Orchestrator page (21b) → The Debrief (21c) → Dashboard+Performance+System+Nav+Copilot shell (21d) → AI Layer MVP + Copilot activation (22) → NLP Catalyst + Pre-Market (23) → Order Flow V1 (24) → Quality Engine + Dynamic Sizer (25) → Red-to-Green + Patterns (26) → Pattern Expansion I (27) → Order Flow V2 + Short Selling (28) → Pattern Expansion II (29) → Learning Loop V1 (30) → Orchestrator V2 (31) → Pattern Expansion III (32) → ML/Advanced (33+).
 
 **Command Center delivery (DEC-080):** Three surfaces from single React codebase — web app + Tauri desktop + PWA mobile. All operational after Sprint 16.
 

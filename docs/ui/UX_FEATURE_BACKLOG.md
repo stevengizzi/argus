@@ -1,59 +1,73 @@
 # ARGUS — UI/UX Feature Backlog
 
-> Comprehensive inventory of UI/UX enhancements extracted from design research (Feb 23, 2026).
-> Organized by recommended sprint/phase based on dependencies, effort, and impact.
-> Reference images: Bybit exchange (images 1–4), analytics dashboards (5–6), mobile trading apps (7–9), desktop dashboards (10–11), data visualizations (12–14).
-> Referenced by: `02_PROJECT_KNOWLEDGE.md`, `10_PHASE3_SPRINT_PLAN.md`
+> Comprehensive inventory of UI/UX enhancements for the ARGUS Command Center.
+> Originally extracted from design research (Feb 23, 2026). Major revision Feb 26, 2026: expanded from 4 to 7 pages (DEC-169), AI Copilot added (DEC-170), Sprint 21 split into 21a–21d (DEC-171), intelligence layer UI integration (DEC-168).
+> Organized by sprint based on dependencies, effort, and impact.
+> Referenced by: `02_PROJECT_KNOWLEDGE.md`, `10_PHASE3_SPRINT_PLAN.md`, `docs/research/ARGUS_Expanded_Roadmap.md`
 
 ---
 
 ## Design Vision & Principles
 
-This document was born from the Sprint 15 code review, where all 4 Command Center pages (Dashboard, Trade Log, Performance, System) were reviewed across 3 devices (MacBook, iPad, iPhone — 20 screenshots total). The review confirmed that the foundation is solid, visually consistent, and responsive. The question shifted from "does it work?" to "how do we make it feel like a premium, crafted tool that puts Steven in flow state during trading sessions?"
+### The Vision: Seven-Page Command Center + AI Copilot
 
-### The Gap: Status Page → Command Center
+ARGUS's Command Center is a 7-page application (DEC-169) with a contextual AI Copilot (DEC-170) accessible from every page. Each page has a focused purpose:
 
-The current Dashboard reads as a **status page** — you observe the system. The vision is a **command center** — you make decisions from it. The Bybit Home screen (image 4) exemplifies this: portfolio, watchlist with sparklines, P&L breakdown, activity heatmap, positions, risk overview, platform health — all on one screen, all actionable.
+| Page | Purpose | Primary User Question |
+|------|---------|----------------------|
+| **Dashboard** | Ambient awareness | "How am I doing right now?" |
+| **Trade Log** | Trade history | "What trades happened and why?" |
+| **Performance** | Quantitative analytics | "How have I been performing, and where are the patterns?" |
+| **Orchestrator** | Operational control | "What is the system doing, why, and how do I change it?" |
+| **Pattern Library** | Strategy encyclopedia | "How does each strategy work, and how has it performed?" |
+| **The Debrief** | Knowledge accumulation | "What have I learned, and what should I review?" |
+| **System** | Infrastructure health | "Is everything running correctly?" |
+
+The **AI Copilot** is a persistent slide-out chat panel (desktop: right 35%, mobile: full-screen overlay) triggered by a floating button or `c` keyboard shortcut. Context-aware — automatically receives page context, selected entities, and system state.
 
 ### Design North Star
 
-**"Bloomberg Terminal meets modern fintech app."** Information density of a professional trading terminal, with the visual craft and motion design of a consumer-grade app. Every pixel earns its place. Every animation serves an information purpose. The system should feel alive during market hours — prices updating, charts drawing, P&L flashing — and calm during review sessions.
+**"Bloomberg Terminal meets modern fintech app."** Information density of a professional trading terminal, with the visual craft and motion design of a consumer-grade app. Every pixel earns its place. Every animation serves an information purpose. The system should feel alive during market hours and calm during review sessions.
 
 ### Key Design Principles
 
-1. **Information over decoration.** Every visual element communicates data. Gradients and glassmorphism are rejected in favor of clear data hierarchy. Color is semantic: green = positive/healthy, red = negative/loss, amber = warning/paper, blue = active/interactive.
-2. **Ambient awareness.** Sparklines, gauges, and heatmaps provide trend information at a glance — you shouldn't need to navigate to a detail page to know if things are going well. The Dashboard should answer "how am I doing?" in under 2 seconds.
-3. **Progressive disclosure.** Summary → detail → deep dive. Dashboard gives the overview. Click to open a detail panel (slide-in, not full navigation). Click again for full-page analysis. Never force the user to leave context.
-4. **Motion with purpose.** Staggered entry animations make the app feel assembled. Chart draw-ins direct attention. P&L flash confirms real-time data flow. But every animation completes in <500ms and never blocks interaction.
-5. **Mobile as primary trading surface.** Steven trades US markets from Taipei during overnight hours (10:30 PM – 5:00 AM local). The iPhone PWA is the primary monitoring interface during market hours. Every feature must have a mobile adaptation that doesn't lose critical information.
-6. **Research lab aesthetics.** ARGUS is a "strategy research laboratory that also trades live." Sprint 21+ visualizations (optimization landscapes, heatmaps, correlation matrices) should feel like scientific tools, not consumer dashboards. Think academic paper figures with interactive capabilities.
+1. **Information over decoration.** Every visual element communicates data. Color is semantic: green = positive/healthy, red = negative/loss, amber = warning/paper, blue = active/interactive.
+2. **Ambient awareness.** Sparklines, gauges, and heatmaps provide trend information at a glance — the Dashboard should answer its question in under 2 seconds.
+3. **Progressive disclosure.** Summary → detail → deep dive. Never force the user to leave context. Intelligence features enrich existing views (DEC-168) — quality scores appear as badges, not separate pages.
+4. **Motion with purpose.** Every animation completes in <500ms and never blocks interaction. Staggered entries feel assembled. P&L flash confirms real-time data.
+5. **Mobile as primary trading surface.** Steven trades US markets from Taipei during overnight hours (10:30 PM – 5:00 AM local). The iPhone PWA is the primary monitoring interface during market hours.
+6. **Research lab aesthetics.** ARGUS is a "strategy research laboratory that also trades live." Advanced visualizations (optimization landscapes, heatmaps, correlation matrices) feel like scientific tools.
+7. **AI everywhere, not siloed (DEC-170).** The Copilot is contextual — it knows what page you're on and what you're looking at. No separate "AI page" exists.
+
+### Navigation Structure (DEC-169)
+
+**Desktop (icon sidebar):** Grouped by concern with subtle dividers.
+- **Monitor:** Dashboard 📊 | Trades 📋 | Performance 📈
+- **Operate:** Orchestrator 🎯 | Patterns 🧩
+- **Learn:** Debrief 📚
+- **Maintain:** System ⚙️
+
+Keyboard shortcuts: `1`–`7` page navigation, `c` copilot, `w` watchlist toggle.
+
+**Mobile (bottom tab bar):** 5 primary tabs + More menu.
+- Tabs: Dashboard | Trades | Orchestrator | Patterns | More
+- More menu: Performance | Debrief | System
+
+Copilot floating button on all surfaces, positioned above tab bar on mobile.
 
 ### Design Research Sources
 
-The following reference materials informed this backlog. The images are stored locally and referenced by number throughout this document:
-
-- **Images 1–4:** Bybit crypto exchange (Orders, Portfolio, Trade, Home). Production trading platform with high information density, dark theme, position management, and multi-panel layouts.
-- **Image 5:** Analytics dashboard with gradient bar chart and period selector. Consumer-oriented aesthetic — rejected for core UI but period selector pattern noted.
-- **Image 6:** Dark purple real-time dashboard. Donut progress indicators noted as a pattern for risk utilization gauges.
-- **Image 7:** Mobile market view with candlestick chart and data grid. Relevant for future symbol detail view on mobile.
-- **Image 8:** Portfolio with card-as-hero pattern and embedded sparkline chart. Applicable to position cards.
-- **Image 9:** Gradient wallet with per-asset sparklines. Inline sparkline pattern noted; gradient aesthetic rejected.
-- **Image 10:** Tradix desktop dashboard with three-column layout. Right-side detail panel pattern noted.
-- **Image 11:** Mount climbing metrics dashboard. Mixed visualization types in consistent card grid. Inspiration for Strategy Optimization Landscape ("climbing the mountain toward max profit").
-- **Image 12:** Information design / streaming services comparison. Data-art — not directly applicable.
-- **Image 13:** Time-series heatmap with dot matrix. Inspiration for trade activity heatmaps (time-of-day × day-of-week).
-- **Image 14:** Energy dashboard with multi-line flowing data and vertical checkpoints. Inspiration for multi-line outcome projections (projected vs actual equity curves with milestone markers).
-
-### Sprint 15 Baseline (What Exists Today)
-
-As of Sprint 15 completion (Feb 23, 2026), the Command Center has:
-
-- **Dashboard:** Account equity, daily P&L, market status, open positions table (real-time WS prices), recent trades list, system health mini-display.
-- **Trade Log:** Filtered trade history (strategy, outcome, date range), stats bar (trades/win rate/net P&L), paginated table with exit reason badges (T2/SL/TIME/EOD).
-- **Performance:** Period selector (Today/Week/Month/All), 12-metric grid, equity curve (Lightweight Charts area), daily P&L histogram (Lightweight Charts), strategy breakdown table.
-- **System:** System overview (uptime, mode, sources), component health status, strategy cards with parameters, collapsible events log.
-- **Cross-cutting:** Dark theme, icon sidebar nav (desktop/tablet), bottom tab bar (mobile), responsive at 393px/834px/1194px/1512px breakpoints, WebSocket real-time updates, JWT auth, dev mode with mock data.
-- **Known defect:** Win rate in Performance → "By Strategy" table displays raw decimal (0.62%) instead of percentage (62%). Fix pending.
+Reference images from Sprint 15 design session (stored locally, referenced by number):
+- **Images 1–4:** Bybit crypto exchange. Production trading, dark theme, multi-panel layouts.
+- **Image 5:** Analytics dashboard with gradient bar chart and period selector.
+- **Image 6:** Dark purple real-time dashboard. Donut progress indicators.
+- **Image 7:** Mobile market view with candlestick chart and data grid.
+- **Image 8:** Portfolio with card-as-hero pattern and embedded sparkline chart.
+- **Image 9:** Gradient wallet with per-asset sparklines.
+- **Image 10:** Tradix desktop dashboard with three-column layout.
+- **Image 11:** Mount climbing metrics dashboard. Inspiration for Strategy Optimization Landscape.
+- **Image 13:** Time-series heatmap with dot matrix. Inspiration for trade activity heatmaps.
+- **Image 14:** Energy dashboard with multi-line flowing data. Inspiration for outcome projections.
 
 ---
 
@@ -68,360 +82,575 @@ As of Sprint 15 completion (Feb 23, 2026), the Command Center has:
 
 ---
 
-## Sprint 16 — Desktop/PWA (Add-ons)
+## Current Baseline (Sprint 20 Complete)
 
-These are low-effort enhancements that improve perceived quality without new data or infrastructure. They enhance what Sprint 15 already built.
+As of Sprint 20 completion (Feb 26, 2026), the Command Center has 4 pages:
 
-### 16-A. Motion & Animation System [P0]
-
-**Staggered entry animations**
-Each card/section fades in with a subtle upward translate (12–20px), staggered by 50–80ms per element. Dashboard loads top-to-bottom, left-to-right. Makes the app feel assembled rather than stamped.
-*Effort: ~2 hours. CSS keyframes + stagger delays on existing components.*
-
-**Chart draw-in animations**
-Equity curve line draws left-to-right on page load (~500ms). Daily P&L histogram bars grow upward from zero line. Only fires on initial page load, not on live data updates.
-*Effort: ~1 hour. Lightweight Charts supports animation options natively.*
-
-**Page transitions**
-Subtle cross-fade (150–200ms) between pages. Outgoing page fades slightly, incoming page fades in with a small slide. Framer Motion or CSS transitions on React Router outlets.
-*Effort: ~2 hours. Wrap route outlet in AnimatePresence.*
-
-**Skeleton loading states**
-Gray placeholder shapes matching actual layout (card outlines, chart rectangle, table rows) with a subtle shimmer pulse. Real data fades in on top when API responds.
-*Effort: ~3 hours. One Skeleton component, applied to each page.*
-
-**Number morphing / P&L flash**
-When a price or P&L value updates via WebSocket, the number briefly flashes green (up) or red (down) and then settles. Key metrics like Account Equity can do a digit-rolling animation.
-*Effort: ~2 hours. CSS transition on color + brief scale pulse.*
-
-### 16-B. Micro-Interaction Polish [P0]
-
-**Hover feedback on cards**
-Cards lift slightly on hover (1px translate-y + subtle box-shadow increase). Table rows highlight smoothly. Nav items animate underline/background.
-*Effort: ~1 hour. Tailwind + transition utilities.*
-
-**New trade slide-in**
-When a new trade appears in the Recent Trades list (via WebSocket), it slides in from the top with a brief highlight glow, then settles.
-*Effort: ~1 hour. CSS animation on list insert.*
-
-**Contextual empty states**
-Replace generic "No data" with helpful messages: "No open positions — market opens in 6h 23m", "No trades today — opening range forms at 9:35 AM ET", "No losing trades this week ✓". Adds personality without adding data dependencies.
-*Effort: ~2 hours. Conditional rendering in each section's empty state.*
-
-### 16-C. Hero Sparklines on Summary Cards [P1]
-
-**Dashboard summary cards with inline sparklines**
-Each top-level card gets a tiny sparkline:
-- Account Equity → 30-day equity trend
-- Daily P&L → intraday P&L curve
-- Market Status → SPY intraday movement (placeholder until real data)
-
-Uses Lightweight Charts or a simple SVG sparkline component. Data comes from existing API endpoints (equity curve data, daily P&L).
-*Effort: ~4 hours. New SparklineChart component + API data wiring.*
+- **Dashboard:** Account equity, daily P&L, market status, open positions (real-time WS), recent trades, system health mini, CapitalAllocation (donut+bars), RiskGauge, MarketRegimeCard, Orchestrator Status strip, emergency controls (flatten/pause), SessionSummaryCard.
+- **Trade Log:** Filtered trade history (strategy, outcome, date range), stats bar, paginated table, exit reason badges, trade detail slide-in panel.
+- **Performance:** Period selector, 12-metric grid, equity curve (Lightweight Charts), daily P&L histogram, strategy breakdown.
+- **System:** System overview, component health, strategy cards with parameters, per-strategy health (4 strategies), collapsible events log.
+- **Cross-cutting:** Dark theme, icon sidebar (4 items, desktop/tablet), bottom tab bar (mobile), responsive at 393px/834px/1194px/1512px breakpoints, WebSocket real-time, JWT auth, dev mode with 4-strategy mock data, Framer Motion animations, skeleton loading, sparklines, CSV export, PWA, Tauri desktop shell.
+- **Watchlist Sidebar:** Desktop inline 280px, tablet slide-out, mobile overlay. Single-letter strategy badges. VWAP distance metric. Sort controls.
 
 ---
 
-## Sprint 17 — Orchestrator V1 (Add-ons)
+## Completed Sprints (Historical Reference)
 
-Orchestrator introduces multi-strategy coordination, which unlocks several new visualization needs.
+### Sprint 16 — Desktop/PWA + UX Polish ✅ COMPLETE
 
-### 17-A. Strategy Allocation Donut [P1] — ✅ ENHANCED (Sprint 18.75)
+| ID | Feature | Priority | Status |
+|----|---------|----------|--------|
+| 16-A | Motion & Animation System (Framer Motion page transitions, stagger, chart draw-in, skeleton, number morph, P&L flash) | P0 | ✅ |
+| 16-B | Micro-Interaction Polish (hover feedback, new trade slide-in, contextual empty states) | P0 | ✅ |
+| 16-C | Hero Sparklines on Summary Cards (equity trend, intraday P&L, SPY movement) | P1 | ✅ |
 
-**Capital allocation visualization**
-Donut chart on Dashboard showing capital distributed across strategies, colored by each strategy's P&L contribution. Click a segment to filter the dashboard to that strategy. Becomes meaningful once Orchestrator is allocating capital to 2+ strategies.
-*Effort: ~4 hours original estimate. Actual: ~12 hours across Sprint 17 + 18.75 (8 fix sessions).*
-*Sprint 18.75 enhancements: Renamed AllocationDonut → CapitalAllocation. Track-and-fill donut design (custom SVG). Horizontal stacked bars alternate view. SegmentedTab toggle with Zustand persistence. Per-strategy deployment state from enriched API. MarketRegimeCard added as companion card. Click-to-filter deferred to Sprint 21.*
+### Sprint 17 — Orchestrator V1 ✅ COMPLETE
 
-### 17-B. Segmented Controls with Live Counts [P0]
+| ID | Feature | Priority | Status |
+|----|---------|----------|--------|
+| 17-A | Strategy Allocation Donut → CapitalAllocation (track-and-fill donut + stacked bars, SegmentedTab, Zustand, MarketRegimeCard) | P1 | ✅ Enhanced in Sprint 18.75 |
+| 17-B | Segmented Controls with Live Counts (positions, trade log, system components) | P0 | ✅ |
+| 17-C | Risk Utilization Gauge (daily/weekly loss budget, concentration) | P1 | ✅ |
+| 17-D | Color-Coded Badge System (strategy, regime, risk, exit reason) | P0 | ✅ |
 
-**Tab badges pattern**
-Bybit-style "Positions 4 | Open orders 13" segmented tabs. Apply to:
-- Dashboard positions: "Open 3 | Closed 17"
-- Trade Log outcomes: "Wins 12 | Losses 8 | BE 0" (counts update with filters)
-- System components: "Healthy 5 | Degraded 0 | Down 0"
-*Effort: ~2 hours. Reusable SegmentedTab component.*
+### Sprint 18–20 — New Strategies ✅ COMPLETE
 
-### 17-C. Risk Utilization Gauge [P1]
-
-**Radial/donut progress indicator**
-Shows how much of daily risk budget has been consumed. If daily loss limit is 3% and you've lost 1.2%, gauge shows 40% filled. Color transitions from green → yellow → red as utilization increases.
-Secondary gauges for: weekly loss limit, single-stock concentration (approaching 5% limit), margin utilization.
-*Effort: ~3 hours. Reusable RadialGauge component. Data from Risk Manager via API.*
-
-### 17-D. Color-Coded Badge System [P0]
-
-**Extended badge vocabulary**
-Expand beyond exit reason badges to include:
-- Strategy badges on trades (ORB = blue, Scalp = purple, VWAP = teal, etc.)
-- Market regime badges on dashboard (Bullish Trending = green, Range-Bound = yellow, etc.)
-- Risk level badges on positions (Normal = green, Approaching Limit = yellow, At Limit = red)
-- Leverage/sizing indicators if applicable
-*Effort: ~2 hours. Badge component variants + color mapping config.*
+| ID | Feature | Priority | Status |
+|----|---------|----------|--------|
+| 18-A | Positions as Cards with Mini-Charts | P1 | Deferred — table+timeline preferred |
+| 18-B | Position Timeline (horizontal Gantt, strategy badges, time stops) | P1 | ✅ Sprint 18 |
+| 18-C | Watchlist Sidebar (responsive, badges, VWAP distance, sort, collapse pill) | P1 | ✅ Sprint 19 (DEC-142, 147, 150) |
+| 18-D | Session Summary Card (after-hours recap, dismissable) | P0 | ✅ Sprint 18 |
+| 18-E | Notification Center (bell icon, alert history) | P1 | Deferred to Sprint 23+ |
 
 ---
 
-## Sprint 18–20 — New Strategies (Add-ons)
+## Sprint 21a — Pattern Library Page (NEW — DEC-169, DEC-171)
 
-As ORB Scalp, VWAP Reclaim, and Afternoon Momentum come online, the UI needs to support multi-strategy awareness.
+### 21a-A. Pattern Library Master-Detail Layout [P1]
 
-### 18-A. Positions as Cards with Mini-Charts [P1]
+**Strategy encyclopedia page.**
+Left panel (35%): Strategy card grid. Each card shows: name, pipeline stage badge (color-coded: green=Active, blue=Paper, amber=Suspended, gray=Retired), operating time window, trade count (lifetime), win rate, net P&L, quality grade distribution mini-bar (appears when Quality Engine active, Sprint 25+).
 
-**Portfolio card view (alternative to table)**
-Each open position rendered as a card showing: symbol, strategy badge, entry price, current price, P&L, R-multiple, and a mini candlestick chart from entry to now with stop/T1/T2 as horizontal lines. Toggle between table view (current) and card view.
-On mobile, cards stack vertically and are more informative than compressed table rows.
-*Effort: ~6 hours. PositionCard component with embedded mini-chart.*
+Filterable by: pipeline stage (Active / Paper / Suspended / Retired / All), time window (Morning / Midday / Afternoon / All Day), pattern family (ORB family / Momentum / Reversal / Mean-Reversion).
 
-### 18-B. Position Timeline [P1]
+Sortable by: name, P&L, win rate, trade count, most recent trade.
 
-**Horizontal timeline of active positions**
-Shows when each position was entered, current elapsed time, and projected hold time (based on max_hold_minutes). Positions approaching their time stop get visually distinct (pulsing border or color change). Especially useful during market hours when managing multiple positions across multiple strategies.
-*Effort: ~4 hours. Custom timeline component with time-based layout.*
+Right panel (65%): Tabbed strategy detail view with 5 tabs:
+1. **Overview:** Strategy description, thesis, operating window, entry criteria checklist, exit rules, parameter table. Parameters editable via manual override (changes go through approval workflow when AI Layer active). Essentially the Strategy Spec Sheet rendered as an interactive UI panel.
+2. **Performance:** Strategy-specific equity curve, P&L histogram, key metrics (Sharpe, PF, win rate, avg R), monthly P&L grid, performance by quality grade (Sprint 25+), performance by catalyst type (Sprint 23+). Comparative overlay with other strategies.
+3. **Backtest:** Walk-forward results summary, VectorBT sweep heatmaps (interactive — hover for parameter combos), OOS vs IS comparison, walk-forward efficiency score. Link to full backtest report in The Debrief.
+4. **Trades:** All trades taken by this strategy, sortable/filterable. Click opens Trade Detail slide-in panel.
+5. **Intelligence (Sprint 25+):** Pattern strength scoring logic, how this pattern feeds Setup Quality Engine, historical win rate by quality grade for this pattern, Learning Loop insights specific to this pattern.
 
-### 18-C. Watchlist Sidebar [P1]
+*Effort: ~14 hours. Master-detail layout, card grid, 5-tab system, multiple data source integrations.*
 
-**Symbol watchlist with sparklines and change %**
-Right sidebar (desktop) or dedicated section (mobile) showing tracked symbols: name, last price, change %, tiny sparkline. Sourced from scanner candidates across all active strategies. Clicking a symbol opens the detail panel (see 21-A).
-*Effort: ~4 hours. Watchlist component + API endpoint for scanner candidates.*
+### 21a-B. Incubator Pipeline Visualization [P0]
 
-### 18-D. Session Summary Card [P0]
+**Strategy pipeline health at a glance.**
+Horizontal pipeline at top of Pattern Library page showing all 10 incubator stages with dot/count indicators showing how many strategies are at each stage. Visual health check. Click a stage to filter the card grid below.
 
-**End-of-day debrief**
-When you open the app after market close (or at session end), a summary card appears: "Today: 3 trades, 2 wins, +$1,847. Best trade: AMD +2.0R. Strategy fill rate: 4/4 signals (100%). Market regime: Bullish Trending." Dismissable. Stored for historical review.
-*Effort: ~3 hours. SessionSummary component + API endpoint aggregating daily data.*
+*Effort: ~3 hours. SVG pipeline component.*
 
-### 18-E. Notification Center [P1]
+### 21a-C. Stock/Asset Detail Panel [P1]
 
-**Bell icon with notification history**
-Collects all alerts, trade executions, system warnings, and (eventually) AI recommendations. Badge count for unread items. Slide-down panel or drawer. Essential as system complexity grows with multiple strategies.
-*Effort: ~5 hours. NotificationCenter component + notification event collection.*
+**Universal symbol deep-dive.**
+Clicking any symbol anywhere in the app opens a slide-in panel (desktop: right 40%, mobile: full-screen bottom 90vh). Contains:
 
----
-
-## Sprint 21 — CC Analytics & Strategy Lab
-
-This is where the advanced data visualization ideas land. Sprint 21 is already scoped for analytics — these features define what "analytics" means.
-
-### 21-A. Individual Stock/Asset Detail Panel [P1]
-
-**Slide-in detail panel**
-Clicking any symbol anywhere in the app opens a right-side panel (desktop, ~40% width) or full-screen modal (mobile). Contains:
-
-1. **Price & chart section:** Current price, change, interactive candlestick chart (1m/5m/15m/1h/1D), volume bars, VWAP/SMA overlays, opening range as shaded rectangle, entry/exit points plotted as markers.
-2. **Your trading history on this symbol:** All trades taken, win rate, avg R, total P&L, best/worst trade. Answers "how do I perform on this stock?"
-3. **Position detail (if open):** Current P&L, R-multiple, time in trade, stop/T1/T2 levels on chart, projected P&L at target vs stop.
+1. **Price & chart:** Current price, change, interactive candlestick chart (1m/5m/15m/1h/1D via Lightweight Charts), volume bars, VWAP/SMA overlays, opening range as shaded rectangle, entry/exit points as markers.
+2. **Your trading history:** All trades on this symbol, win rate, avg R, total P&L, best/worst trade.
+3. **Position detail (if open):** Current P&L, R-multiple, time in trade, stop/T1/T2 on chart.
 4. **Fundamental context:** Market cap, sector, avg volume, relative volume, float, short interest.
-5. **News/catalysts (when Tier 2 news available):** Recent headlines, earnings date, upcoming catalysts.
-6. **Quick actions (future):** Close position, adjust stops, add to watchlist, flag for review.
+5. **Quality score (Sprint 25+):** Full breakdown radar chart, grade badge, "Why this size?" section.
+6. **Order flow (Sprint 24+):** L2 depth heatmap, flow quality indicator, tape speed.
+7. **Catalyst (Sprint 23+):** Headlines, category badge, quality score, source link.
+8. **Quick actions (future):** Close position, adjust stops, add to watchlist, flag for review.
 
-*Effort: ~12–16 hours. Major new component with chart integration and multiple data sources.*
+*Effort: ~14 hours. Major component with chart integration and multiple progressive-disclosure sections.*
 
-### 21-B. Dashboard V2 — Command Center Layout [P2]
+---
 
-**Comprehensive dashboard redesign**
-Evolve from "status page" to "command center" inspired by Bybit Home (image 4) and Mount (image 11). Single screen showing:
+## Sprint 21b — Orchestrator Page (NEW — DEC-169, DEC-171)
 
-- Hero metrics with sparklines (from 16-C)
-- Compact equity curve widget (~200px tall)
-- Risk utilization gauges (from 17-C)
-- Strategy allocation donut (from 17-A)
-- Activity heatmap (GitHub contribution style — trade count or P&L by day)
-- Open positions (table or card view toggle)
-- Watchlist sidebar (from 18-C)
-- P&L breakdown widget (realized gains, losses, unrealized, fees, net)
-- Recent trades (compact)
-- System health mini
+### 21b-A. Three-Column Orchestrator Layout [P1]
 
-Layout: Configurable grid. User can rearrange/resize widgets. Desktop gets the full density. Tablet shows 2-column subset. Mobile stacks priority widgets vertically.
+**Desktop:** Capital & Allocation (30%) | Decision Stream (40%) | Risk & Controls (30%).
+**Tablet:** Two columns (Allocation + Risk merged | Decisions).
+**Mobile:** Single column, tabbed (Allocation | Decisions | Risk). Emergency controls pinned at bottom.
 
-*Effort: ~20–30 hours. Grid layout system, multiple new widgets, responsive configurations.*
+*Effort: ~4 hours. Responsive layout shell with tab navigation on mobile.*
 
-### 21-C. Trade Activity Heatmap [P1]
+### 21b-B. Decision Stream [P1]
 
-**Time-of-day × day-of-week heatmap**
-Color intensity maps to average R-multiple or net P&L per cell. Reveals patterns: "I make money between 9:35–10:15 on Tues/Wed" or "Friday afternoons are consistently negative." Clickable cells filter the trade log to that time/day combination.
-*Effort: ~6 hours. Custom heatmap component (D3 or canvas) + aggregation API endpoint.*
+**The Orchestrator's thought process, made visible.**
+Live chronological feed of every Orchestrator decision: strategy activations/deactivations, throttle events, allocation changes, regime transitions, AI recommendations (Sprint 22+).
 
-### 21-D. Win/Loss Distribution Histogram [P1]
+Each decision card: timestamp, action type icon, what happened, why (rationale text from Orchestrator decision logging), affected strategy, impact summary (e.g., "ORB allocation reduced 25% → 15% due to 3 consecutive losses").
 
-**R-multiple distribution chart**
-Vertical histogram showing the distribution of your trade outcomes by R-multiple. Ideal shape: hard cutoff at -1R (stop discipline), slight positive skew, long right tail (winners running). Compare across strategies, time periods, or market regimes. Evolution over time shows whether discipline is improving.
-*Effort: ~4 hours. Recharts histogram + API aggregation.*
+Filterable by: decision type (allocation, throttle, regime, suspension, AI recommendation), strategy, time range.
 
-### 21-E. Portfolio Treemap [P2]
+AI recommendation cards (Sprint 22+) visually distinct — Claude icon, approve/reject/modify buttons inline.
 
-**Capital allocation treemap**
-Each position as a rectangle, sized by capital allocated, colored by P&L (green gradient for winners, red for losers). Instantly shows "where is my money and how is it doing?" Hover for detail tooltip. Click to open detail panel. Complements the positions table/card views.
-*Effort: ~6 hours. D3 treemap or Recharts treemap.*
+Pre-market decisions highlighted: "Pre-market routine completed. 4 strategies activated. Regime: Bullish Trending. Allocation: ORB 25%, Scalp 25%, VWAP 25%, Afternoon 25%."
 
-### 21-F. Risk Waterfall Chart [P1]
+*Effort: ~8 hours. Decision card component, filter controls, existing API consumption (`/orchestrator/decisions`).*
 
-**"If all stops hit" scenario visualization**
-Waterfall chart showing the damage by position if every stop loss triggers simultaneously. Each bar represents one position's potential loss. Running total shows worst-case drawdown. Makes risk management tangible rather than abstract.
-*Effort: ~4 hours. Custom waterfall chart component.*
+### 21b-C. Capital Allocation Controls [P1]
 
-### 21-G. Comparative Period Overlay [P1]
+**See and override the Orchestrator's capital decisions.**
+CapitalAllocation visualization migrated from Dashboard (donut + bars). Plus NEW manual override controls:
 
-**Previous period ghost line on equity curve**
-Toggle overlay showing the prior period's equity curve as a faded line behind the current period. "Am I doing better this month than last month?" answered instantly. Works on Performance page equity curve.
-*Effort: ~3 hours. Second data series on existing Lightweight Charts instance.*
+- Default shows Orchestrator's calculated allocation per strategy.
+- "Manual Override" toggle reveals per-strategy sliders (0–100% range).
+- Diff display when overridden: "Orchestrator: 25% → You: 35%."
+- Auto-revert timer option ("Reset to Orchestrator recommendations in 1 hour").
+- Quality-weighted allocation breakdown (Sprint 25+): how much capital went to A+ vs B setups today.
+- Opportunity cost log (Sprint 25+): A+ setups skipped due to capital constraints.
 
-### 21-H. Strategy Correlation Matrix [P2]
+*Effort: ~8 hours. Migration + slider controls + diff display + override persistence.*
 
-**Multi-strategy return correlation**
-Color-coded matrix showing correlation between strategy returns. Low correlation = good diversification. High correlation = doubling down on same risk. Directly informs Orchestrator capital allocation decisions. Only meaningful with 3+ strategies active.
-*Effort: ~6 hours. Custom matrix heatmap + correlation calculation API.*
+### 21b-D. Risk & Controls Column [P1]
 
-### 21-I. Trade Replay Mode [P2]
+**Risk visibility and emergency controls in one place.**
+- **RiskGauge** (migrated from Dashboard): account daily/weekly loss consumed.
+- **Risk waterfall chart:** Stacked bar showing risk budget consumption across tiers (strategy-level, cross-strategy, account-level). "If all stops hit" worst-case scenario.
+- **Emergency controls** (migrated from Dashboard): Flatten All, Pause All (confirmation modals). Per-strategy pause/resume toggles. All controls JWT-gated.
+- **Regime detail:** Current classification badge + component indicator gauges (SPY vs SMA-20/50, realized vol proxy, 5d ROC). Regime history timeline (last 5 trading days as color-coded strip).
+- **Correlation matrix mini** (meaningful with 3+ strategies): pairwise return correlation heatmap.
+- **Strategy Optimization Landscape placeholder** (activates Sprint 22 with AI Layer): 3D parameter surface.
 
-**Animated trade walkthrough**
-Click any closed trade in the trade log → animated candlestick chart plays through the trade from entry to exit. Shows where your stop, T1, T2 were relative to price action in real time. Speed controls (1x, 2x, 5x). Entry and exit moments highlighted. The single most powerful learning tool for building intuition about strategy behavior.
-*Effort: ~12–16 hours. Replay engine, animated chart with timeline scrubber, historical data fetching.*
+*Effort: ~10 hours. Migration + risk waterfall + regime detail + correlation matrix.*
 
-### 21-J. Goal Tracking Indicator [P0]
+---
 
-**Persistent progress toward defined target**
-Small indicator (top bar or dashboard widget): "Target: $5,000/month. Current: $3,200 (64%). 8 trading days remaining." Configurable goal (monthly P&L, win rate, number of trades). Keeps the mission front and center. Motivational without being preachy.
-*Effort: ~3 hours. GoalTracker component + settings config.*
+## Sprint 21c — The Debrief Page (NEW — DEC-169, DEC-171)
 
-### 21-K. Heat Strip (Portfolio Health Bar) [P0]
+### 21c-A. Daily Briefings Section [P1]
 
-**Single-line portfolio summary**
-Horizontal bar divided into segments for each position. Width = capital allocation, color = P&L performance (green gradient to red gradient). One glance tells you portfolio health. Sits at top of Dashboard or Positions section.
+**Pre-market and post-market reports, accumulated over time.**
+Reverse-chronological list of all briefing documents. Each briefing is a timestamped, readable document card:
+
+- **Pre-Market Briefing (Sprint 22+ auto-generated):** Regime forecast, ranked watchlist, catalyst summaries, key levels, AI commentary, suggested sizing.
+- **EOD Report (Sprint 22+ auto-generated):** Trades taken (with quality grades), P&L, notable events, regime behavior, AI analysis of what went well/poorly, suggestions for tomorrow.
+- **Manual entries:** User can add notes at any time (free-form markdown).
+
+Structure: Date-grouped list. Expandable inline or full-view. Search by content. Filter by date range, type (Pre-Market / EOD / Weekly / Monthly / Manual).
+
+Initially populated with placeholder content. AI Layer (Sprint 22) begins generating real briefings.
+
+*Effort: ~8 hours. Document list, markdown viewer, CRUD, date grouping, search.*
+
+### 21c-B. Research Library Section [P1]
+
+**All ARGUS knowledge artifacts in one place.**
+Document browser for all project research, reports, and analysis:
+
+- Market data research report
+- Execution broker research report
+- Parameter validation reports
+- Strategy spec sheets (linked from Pattern Library)
+- Expanded roadmap
+- Backtest result reports with interactive charts
+- AI-generated analysis reports (Sprint 22+)
+
+Each document rendered as a readable panel with markdown support. Taggable (Research / Analysis / Report / Strategy Spec / Backtest / Roadmap). Searchable. Filterable by type and date.
+
+Import existing `docs/research/` and `docs/strategies/` files as seed content.
+
+New documents can be generated on-demand via Copilot: "Analyze ORB performance for last 30 days" → saved here permanently.
+
+*Effort: ~8 hours. Document management, markdown renderer, tag/filter system, seed import.*
+
+### 21c-C. Learning Journal Section [P1]
+
+**The qualitative knowledge base (Bible §16).**
+Free-form entries with tags and entity links:
+
+- **Manual observations:** "ORB seems to fail on ex-dividend dates."
+- **AI-generated insights (Sprint 30+):** "Win rate drops 12% when VIX > 25."
+- **Trade annotations:** Per-trade notes (linked to trade IDs). Can be added from Trade Detail panel or Copilot.
+- **Pattern observations:** "Bull Flag + FDA catalyst = 80% win rate this month."
+- **Weekly digest (Sprint 22+):** Claude-generated "What I Learned" summary.
+
+Each entry: date, content (markdown), tags, linked entities (trade IDs, strategy IDs, symbols). Quick-add via Copilot from any page ("Remember that TSLA ORB entries are better after 10 AM").
+
+*Effort: ~6 hours. Journal CRUD, entity linking, tag system, search.*
+
+---
+
+## Sprint 21d — Dashboard + Performance + System + Nav + Copilot Shell (DEC-169, DEC-171)
+
+### 21d-A. Dashboard Scope Refinement [P0]
+
+**Narrow to pure ambient awareness.**
+Remove components migrated to Orchestrator:
+- CapitalAllocation donut/bars → Orchestrator page
+- Emergency controls (flatten all, pause all) → Orchestrator page
+- Per-strategy pause/resume → Orchestrator page
+- RiskGauge → Orchestrator page (keep compact risk budget % in Orchestrator Status strip)
+
+Add:
+- **Orchestrator Status strip** (top of page, single line): "4 strategies active | $24,500 deployed (24.5%) | Risk: 12% of daily budget | Regime: Bullish Trending". Click navigates to Orchestrator.
+- **Pre-market mode:** Before 9:30 AM ET, Dashboard layout transforms to show pre-market content — ranked watchlist placeholder, regime forecast, catalyst summary area. Populated with real data when Pre-Market Engine (Sprint 23) and AI Layer (Sprint 22) are active.
+- **Goal tracking indicator (21-J from original backlog):** Persistent widget: "Target: $5,000/month. Current: $3,200 (64%). 8 trading days remaining." Configurable. Motivational.
+- **Weekly insight card (Sprint 30+):** One headline finding from Learning Loop.
+
+*Effort: ~6 hours. Removal + strip + pre-market shell + goal tracker.*
+
+### 21d-B. Performance Page Analytics [P1]
+
+**Expanded analytics toolkit.**
+All items from the original Sprint 21 UX Backlog that belong on Performance:
+
+- **Trade Activity Heatmap (21-C):** Time-of-day × day-of-week D3 heatmap. Color by avg R-multiple or net P&L. Clickable cells filter trade log. Reveals patterns: "I make money 9:35–10:15 on Tues/Wed."
+  *Effort: ~6 hours.*
+- **Win/Loss Distribution Histogram (21-D):** R-multiple distribution (Recharts). Ideal: cutoff at -1R, positive skew, long right tail. Compare across strategies/periods/regimes.
+  *Effort: ~4 hours.*
+- **Portfolio Treemap (21-E):** D3 treemap — rectangles sized by capital, colored by P&L. Hover for tooltip, click for detail panel.
+  *Effort: ~6 hours.*
+- **Risk Waterfall Chart (21-F):** "If all stops hit" worst-case by position. Running total shows max drawdown scenario. (Also shown on Orchestrator page.)
+  *Effort: ~4 hours.*
+- **Comparative Period Overlay (21-G):** Ghost line on equity curve showing prior period. "Am I doing better this month than last?"
+  *Effort: ~3 hours.*
+- **Strategy Correlation Matrix (21-H):** Color-coded matrix of pairwise strategy return correlations. Low = good diversification. (Also shown mini on Orchestrator.)
+  *Effort: ~6 hours.*
+- **Trade Replay Mode (21-I):** Click any closed trade → animated candlestick walkthrough from entry to exit. Speed controls (1x/2x/5x). Stop/T1/T2 shown. The most powerful learning tool for building strategy intuition.
+  *Effort: ~14 hours.*
+- **Calendar P&L View:** Daily/weekly/monthly grid with color coding. Click a day to filter trade log.
+  *Effort: ~4 hours.*
+- **Performance by quality grade (Sprint 25+):** Are A+ setups outperforming? Chart + table.
+- **Performance by catalyst type (Sprint 23+):** Which catalysts drive best results?
+- **Performance by pattern type:** Which patterns earn most?
+- **Quality calibration chart (Sprint 30+):** Predicted vs actual win rate by grade. From Learning Loop.
+
+*Total effort for 21d-B: ~47 hours. This is the largest sub-component.*
+
+### 21d-C. System Page Cleanup [P0]
+
+**Narrow to infrastructure health only.**
+Remove components migrated elsewhere:
+- Strategy cards (parameters, status) → Pattern Library
+- Strategy pause/resume controls → Orchestrator
+- Strategy activation/deactivation → Orchestrator
+
+Add placeholder health cards for future intelligence components (show "Not Yet Active" until respective sprint):
+- Pre-Market Engine health (Sprint 23)
+- Order Flow Analyzer health (Sprint 24)
+- Catalyst Service health (Sprint 23)
+- Learning Loop status (Sprint 30)
+
+Keep: System overview (uptime, mode, data/broker sources), component health grid, Databento/IBKR connection health, collapsible events log.
+
+*Effort: ~3 hours. Removal + placeholder cards.*
+
+### 21d-D. Seven-Page Nav Restructure [P0]
+
+**Desktop:** Icon sidebar expands from 4 to 7 items with group dividers (Monitor | Operate | Learn | Maintain). Active page indicator. Subtle group labels or divider lines.
+
+**Mobile:** Bottom tab bar changes from 4 tabs to 5 + More menu. Dashboard | Trades | Orchestrator | Patterns | More (→ Performance, Debrief, System). More menu as bottom sheet or dropdown.
+
+Keyboard shortcuts extended: `1`–`7` for pages, `c` for copilot, `w` for watchlist (unchanged).
+
+Watchlist sidebar position unchanged — available on all pages via `w` toggle.
+
+React Router updates: 7 routes, lazy-loaded page components.
+
+*Effort: ~5 hours. Nav refactor, More menu, routing, active indicators.*
+
+### 21d-E. AI Copilot Shell [P1]
+
+**Chat panel ready for Sprint 22 activation.**
+- **Floating button:** Bottom-right corner on desktop, above tab bar on mobile. Subtle pulse animation on first visit. Keyboard shortcut `c`.
+- **Slide-out panel:** Desktop: right side, 35% width, overlays content. Mobile: full-screen overlay from bottom.
+- **Panel structure:** Header (context indicator showing current page name + selected entity if any), scrollable message area, text input with send button.
+- **Placeholder state:** "AI Copilot activating in Sprint 22. Soon you'll be able to chat with Claude here — contextual, page-aware, with full system knowledge."
+- **Panel remembers open/closed state** within session (Zustand).
+- **Keyboard shortcut `c`** toggles panel (suppressed in input/textarea).
+
+*Effort: ~5 hours. Panel shell, floating button, slide-out animation, context indicator.*
+
+### 21d-F. Heat Strip Portfolio Bar [P0]
+
+**Single-line portfolio health indicator.**
+Horizontal bar at top of Dashboard (below Orchestrator Status strip) divided into segments for each open position. Width = capital allocation, color = P&L (green gradient to red). One glance = portfolio health. Hover for tooltip. Click opens position detail.
+
 *Effort: ~2 hours. Simple SVG/div component.*
 
-### 21-L. Orchestrator Interaction Panel [P1]
-
-**Decision cockpit for understanding and overriding the Orchestrator.**
-Dedicated tab within Strategy Lab (or standalone page) showing the Orchestrator's decision-making in real time:
-
-1. **Decision timeline:** Chronological log of all allocation, regime change, throttle, and suspension decisions with full rationale text. Powered by existing `/orchestrator/decisions` endpoint. Filterable by decision type and strategy.
-2. **Regime dashboard:** Current regime badge + indicator gauges (SPY vs SMA-20/50, realized vol/VIX proxy, 5d ROC). Historical regime chart showing transitions over time.
-3. **Throttle status:** Per-strategy cards showing consecutive loss count, rolling Sharpe, drawdown from peak, and current throttle action (NONE / REDUCE / SUSPEND). Color-coded severity.
-4. **Manual overrides:** Force-activate or force-suspend individual strategies. Trigger manual rebalance (existing `/orchestrator/rebalance` endpoint). Temporarily override allocation percentages (with auto-revert timer). All overrides logged as decisions.
-5. **Allocation history:** Line chart showing how capital allocation per strategy has evolved over time (from daily CorrelationTracker data).
-
-This gives the operator a "take over the controls" cockpit for understanding and intervening in Orchestrator decisions without cluttering the day-to-day Dashboard.
-
-*Effort: ~12–16 hours. Multiple new API consumers, decision timeline component, regime chart, override forms with confirmation modals.*
-
 ---
 
-## Sprint 22 — AI Layer MVP (Add-ons)
+## Sprint 22 — AI Layer MVP + Copilot Activation (DEC-096, DEC-098, DEC-170)
 
-AI integration unlocks intelligent features that build on the visualization infrastructure.
+### 22-A. AI Copilot Full Activation [P1]
 
-### 22-A. AI Insight Cards [P1]
+**Claude comes alive in the chat panel.**
+- Full chat functionality: message send/receive with streaming responses.
+- Context injection per page: Dashboard → positions/P&L/regime. Orchestrator → allocation/decisions/risk. Pattern Library → selected strategy. The Debrief → current document. Trade Detail → full trade data.
+- Message history persistence (stored in Debrief Learning Journal database).
+- Action proposals appear as special message types with approve/reject/modify buttons.
+- Claude can: answer questions about any system data, generate reports (saved to Debrief), propose parameter changes, propose allocation overrides, annotate trades, explain Orchestrator decisions.
 
-**Claude-generated analysis embedded in UI**
-Cards that appear on the Dashboard or Performance page with AI-generated observations: "Your win rate on AMD is 75% (6/8) — significantly above your overall 60%. Consider increasing allocation." or "Last 3 losses were all TIME exits on Fridays — consider reducing position size on Fridays or tightening time stops."
-*Effort: ~6 hours (UI component). API integration handled by Sprint 22 core scope.*
+*Effort: ~8 hours (UI). Backend API handled by Sprint 22 core scope.*
 
-### 22-B. Setup Quality Overlay [P2]
+### 22-B. AI Insight Cards [P1]
 
-**AI confidence indicator on scanner candidates**
-When viewing watchlist symbols or scanner output, Claude rates each setup on a 1–5 scale with brief rationale. Visual overlay on the symbol's chart showing AI confidence zones.
-*Effort: ~8 hours. Requires Claude API integration + overlay rendering.*
+**Claude-generated observations embedded in Dashboard.**
+Cards that appear on Dashboard with AI analysis: "Your win rate on AMD is 75% — significantly above 60% average. Consider increasing allocation." or "Last 3 losses were all TIME exits on Fridays — consider tightening time stops on Fridays."
 
-### 22-C. Strategy Optimization Landscape [P3]
+Dismissable. Can be pinned to Learning Journal via one click.
 
-**"Climbing the mountain" visualization (image 11 inspired)**
-Topographic visualization where X/Y axes = two strategy parameters (e.g., opening_range_minutes, target_r) and elevation/color = Sharpe ratio from walk-forward results. Current parameter set plotted as a marker. Shows whether you're near the peak, whether the peak is broad (robust) or narrow (fragile), and what parameter space is unexplored.
+*Effort: ~6 hours.*
 
-For multi-strategy optimization: "which combination of strategies with what capital allocations produces the best risk-adjusted return?" Multiple paths up the mountain, each representing a different strategy mix.
+### 22-C. Pre-Market Briefing Generation [P1]
 
-AI Layer can annotate the landscape with recommendations: "Moving from 2R to 2.5R target improves Sharpe by 15% with minimal trade count reduction."
+**Automated briefing populates Dashboard pre-market mode and The Debrief.**
+Claude generates pre-market briefing from overnight data: regime assessment, ranked watchlist with catalyst summaries, key levels, suggested position sizes. Delivered at configurable time (default 8:00 AM ET / 9:00 PM Taipei). Push notification to mobile.
 
-*Effort: ~20+ hours. 3D visualization (Three.js or Plotly 3D surface), parameter sweep data pipeline, AI annotation layer. This is a showpiece feature.*
+Briefing appears in: Dashboard pre-market mode (live), The Debrief briefings section (stored permanently).
 
-### 22-D. Multi-Line Outcome Projections [P2]
+*Effort: ~4 hours (UI). Generation logic in Sprint 22 backend.*
 
-**Projected vs actual equity curves (image 14 inspired)**
-Chart showing multiple projected equity curves:
+### 22-D. EOD Report Generation [P1]
+
+**Claude analyzes the trading day.**
+End-of-day report: trades taken (with quality grades when available), P&L summary, notable events, regime behavior, what went well/poorly, suggestions for tomorrow. Auto-generated after market close. Stored in The Debrief.
+
+*Effort: ~4 hours (UI).*
+
+### 22-E. Strategy Optimization Landscape [P3]
+
+**"Climbing the mountain" visualization (image 11 inspired).**
+3D topographic surface on Orchestrator page: X/Y = two strategy parameters, elevation/color = Sharpe ratio from walk-forward. Current parameter set as a marker. Shows if you're near the peak, if the peak is broad (robust) or narrow (fragile).
+
+AI Layer annotates with recommendations: "Moving from 2R to 2.5R target improves Sharpe by 15%."
+
+*Effort: ~20+ hours. Three.js or Plotly 3D surface. Showpiece feature.*
+
+### 22-F. Multi-Line Outcome Projections [P2]
+
+**Projected vs actual equity curves (image 14 inspired).**
+On Performance page:
 - Current trajectory (extrapolated)
-- Best case (optimized parameters)
-- Worst case (historical max drawdown applied)
+- Best/worst case scenarios
 - Monte Carlo confidence bands (10th/50th/90th percentile)
+- Vertical milestone markers ("100 trades", "6 months live")
+- Actual equity draws itself over time against projections
 
-Vertical milestone markers: "100 trades," "6 months live," "first drawdown recovery," "strategy diversification." Actual realized equity curve draws itself over time against projections. Powerful for emotional discipline — see that current drawdown is within expected range.
-
-*Effort: ~12 hours. Monte Carlo simulation, multi-series chart, milestone markers.*
+*Effort: ~12 hours. Monte Carlo simulation, multi-series chart.*
 
 ---
 
-## Sprint 23+ — Future Enhancements
+## Sprint 23 — Catalyst Pipeline UI (DEC-164, DEC-168)
 
-### 23-A. Floating Action Context [P1]
+### 23-A. Dashboard Pre-Market Mode — Live Data [P1]
 
-**Contextual action toolbar**
-When hovering over or selecting a position/trade, a subtle floating toolbar appears with relevant quick actions: close position, view chart, copy symbol, add to watchlist, open detail panel. More discoverable than right-click menus.
-*Effort: ~4 hours. Floating toolbar component with position-aware placement.*
+**Pre-market layout populated with real data.**
+Dashboard pre-market mode (shell from 21d) now shows live ranked watchlist from PreMarketEngine, catalyst summaries from CatalystService, regime forecast from RegimeClassifier. Push notification with 3-line summary.
 
-### 23-B. Allocation Sunburst [P2]
+*Effort: ~4 hours. Data wiring to existing pre-market shell.*
 
-**Concentric ring allocation chart**
-Outer ring = strategy allocation. Inner ring = positions within each strategy. Color-coded by performance. Shows both macro allocation and position-level detail in a single visualization.
-*Effort: ~6 hours. D3 sunburst chart.*
+### 23-B. Watchlist Catalyst Badges [P0]
 
-### 23-C. Market Regime Timeline [P1]
+**Catalyst type icons on watchlist items.**
+Each watchlist symbol gains a compact catalyst badge: FDA 💊, ERN 📊, UPG ⬆️, M&A 🤝, INS 👤, etc. Hover/tap shows headline. Progressive disclosure: badge → tooltip → stock detail panel catalyst section.
 
-**Historical regime classification visualization**
-Horizontal timeline showing market regime changes over time (Bullish Trending, Range-Bound, High Vol, etc.) with your equity curve overlaid. Reveals which regimes your strategies perform best/worst in. Informs regime-based allocation decisions.
-*Effort: ~6 hours. Dual-axis timeline chart + regime classification data.*
+*Effort: ~3 hours. Badge component + CatalystService data wiring.*
 
-### 23-D. Collapsible Sections with Memory [P0]
+### 23-C. Trade Detail Panel — Catalyst Section [P1]
 
-**Persistent UI state**
-Sections remember collapsed/expanded state across sessions (localStorage). Filter settings persist on Trades page. Dashboard widget arrangement saves. Users customize their view once and it sticks.
-*Effort: ~3 hours. useLocalStorage hook applied to relevant components.*
+**Catalyst context in trade deep-dive.**
+New section in Stock/Asset Detail Panel: catalyst headline, category, quality score (1–10), source link, timestamp. Shows what news drove the setup.
 
-### 23-E. Symbol Performance Heatmap [P1]
+*Effort: ~3 hours. New section in existing panel.*
 
-**Symbol × time period performance matrix**
-Grid showing P&L by symbol across weeks/months. Color intensity = magnitude. Reveals which symbols consistently work and which to avoid. Clickable to drill into specific symbol/period combination.
-*Effort: ~4 hours. Heatmap grid component + aggregation API.*
+### 23-D. Performance — By Catalyst Type [P1]
 
-### 23-F. Configurable Dashboard Grid [P3]
+**Which catalysts produce the best trades?**
+New chart on Performance page: win rate, avg R, total P&L broken down by catalyst category (FDA, Earnings, Analyst, etc.). Table + bar chart.
 
-**Drag-and-drop dashboard customization**
-Users can rearrange, resize, add, and remove dashboard widgets. Layout persists across sessions. Presets for different use cases: "Market Hours" (positions-heavy), "Review Mode" (analytics-heavy), "Mobile Quick Check" (just P&L and status). React-grid-layout or similar library.
-*Effort: ~15+ hours. Grid layout system, widget registration, state persistence.*
+*Effort: ~4 hours. New chart + API aggregation.*
+
+### 23-E. Floating Action Context [P1]
+
+**Contextual action toolbar.**
+When hovering/selecting a position or trade, a floating toolbar appears: close position, view chart, copy symbol, add to watchlist, open detail, add annotation. More discoverable than right-click.
+
+*Effort: ~4 hours. Floating toolbar with position-aware placement.*
+
+### 23-F. Collapsible Sections with Memory [P0]
+
+**Persistent UI state.**
+Sections remember collapsed/expanded state across sessions (Zustand persist). Filter settings persist on Trades page. Dashboard widget arrangement saves.
+
+*Effort: ~3 hours. Zustand persist integration.*
+
+---
+
+## Sprint 24 — Order Flow UI (DEC-165, DEC-168)
+
+### 24-A. Watchlist Flow Indicator [P0]
+
+**Order flow quality at a glance.**
+Each watchlist item gains a small dot indicator: green (strong buy flow), yellow (neutral), red (sell pressure). Derived from OrderFlowAnalyzer composite score.
+
+*Effort: ~2 hours. Dot component + OrderFlowEvent subscription.*
+
+### 24-B. Stock Detail Panel — L2 Depth Heatmap [P1]
+
+**Order flow visualization in symbol deep-dive.**
+New section in Stock/Asset Detail Panel: L2 depth heatmap showing bid/ask size at each price level. Color intensity = size. Updates in real-time. Plus: imbalance ratio gauge, tape speed indicator, flow score.
+
+*Effort: ~8 hours. Custom heatmap component + real-time data subscription.*
+
+### 24-C. Trade Detail — Entry Flow Snapshot [P1]
+
+**What did order flow look like at entry?**
+Snapshot of L2 state at trade entry time, stored with trade data. Shows in Trade Detail panel. Helps post-trade analysis: "Was there real buying pressure, or did I enter into absorption?"
+
+*Effort: ~4 hours. Snapshot capture + storage + panel section.*
+
+---
+
+## Sprint 25 — Quality Engine UI (DEC-163, DEC-168)
+
+### 25-A. Quality Grade Badges Everywhere [P0]
+
+**Setup quality visible at every level.**
+Compact grade badges (A+/A/B+/B/C in color) appear on:
+- Watchlist items (pre-scored quality from Pre-Market Engine)
+- Open positions (current quality grade)
+- Trade Log (new column, filterable)
+- Dashboard (quality distribution mini-card: today's A+/A/B/C counts)
+
+*Effort: ~4 hours. Badge variant + 4 integration points.*
+
+### 25-B. Trade Detail Panel — Quality Breakdown [P1]
+
+**Full transparency into scoring.**
+New section in Trade Detail panel:
+- Radar chart showing 6 component scores (pattern strength, catalyst quality, order flow, volume, historical match, regime alignment)
+- Overall grade + score
+- "Why this size?" section: grade → risk tier → % risk → share count calculation
+- Rationale text from SetupQualityEngine
+
+*Effort: ~8 hours. Radar chart (Recharts), breakdown layout, sizer explanation.*
+
+### 25-C. Performance — By Quality Grade [P1]
+
+**Are A+ setups actually outperforming?**
+Critical validation chart on Performance page:
+- Win rate by grade
+- Average R by grade
+- Total P&L by grade
+- Sample size by grade
+
+Must show clear gradient (A+ > A > B+ > B) for quality scoring to be validated (ASM-016).
+
+*Effort: ~4 hours. New chart + API aggregation.*
+
+### 25-D. Orchestrator — Quality-Weighted Allocation [P1]
+
+**Capital deployment by quality tier.**
+New sub-section in Orchestrator allocation column: how much capital was deployed to A+ setups vs B setups today. Historical trend. Ties allocation decisions to setup quality.
+
+*Effort: ~3 hours. New widget in existing column.*
+
+---
+
+## Sprint 30 — Learning Loop UI (DEC-163, DEC-168)
+
+### 30-A. Performance — Quality Calibration Chart [P1]
+
+**Predicted vs actual win rate by grade.**
+The single most important Learning Loop output. Two-line chart: what the model predicted (grade-based expected win rate) vs what actually happened. If lines converge, scoring is well-calibrated. If they diverge, model needs adjustment.
+
+*Effort: ~4 hours. Two-line chart + calibration API.*
+
+### 30-B. Dashboard — Weekly Insight Card [P0]
+
+**One headline finding from the Learning Loop.**
+Small card on Dashboard: "This week's top finding: VWAP Reclaim win rate improves 18% when VIX < 20." Links to full insights in The Debrief Learning Journal.
+
+*Effort: ~2 hours. Insight card + API endpoint.*
+
+### 30-C. System — Learning Loop Health [P0]
+
+**Model monitoring.**
+New health card on System page: last retrain date, model version, convergence status, next retrain scheduled. Replaces "Not Yet Active" placeholder from Sprint 21d.
+
+*Effort: ~2 hours. Health card + API.*
+
+---
+
+## Sprint 23+ — Future Enhancements (Backlog)
+
+### Allocation Sunburst [P2]
+Concentric ring chart: outer = strategy allocation, inner = positions within each strategy. Color by P&L. D3 sunburst.
+*Effort: ~6 hours.*
+
+### Market Regime Timeline [P1]
+Historical regime changes as horizontal color-coded strip with equity curve overlay. Which regimes favor which strategies?
+*Effort: ~6 hours.*
+
+### Symbol Performance Heatmap [P1]
+Symbol × time period matrix. Color = P&L magnitude. Reveals consistent winners and losers.
+*Effort: ~4 hours.*
+
+### Configurable Dashboard Grid [P3]
+Drag-and-drop dashboard widget arrangement. Layout presets (Market Hours, Review Mode, Mobile). React-grid-layout.
+*Effort: ~15+ hours.*
+
+### Notification Center [P1]
+Bell icon with alert history. Collects trade executions, system warnings, AI recommendations. Badge for unread. Slide-down panel.
+*Effort: ~5 hours.*
 
 ---
 
 ## Summary by Sprint
 
-| Sprint | Items | Total Est. Hours | Theme |
-|--------|-------|-----------------|-------|
-| **16** | 16-A (motion), 16-B (micro-interactions), 16-C (sparklines) | ~15h | Polish & perceived quality |
-| **17** | 17-A (donut), 17-B (tabs), 17-C (gauges), 17-D (badges) | ~11h | Multi-strategy awareness |
-| **18–20** | 18-A (position cards), 18-B (timeline), 18-C (watchlist), 18-D (session summary), 18-E (notifications) | ~22h | Multi-strategy operations |
-| **21** | 21-A through 21-L (analytics, detail panel, heatmaps, treemap, replay, goals, orchestrator interaction) | ~92–116h | Analytics & Strategy Lab |
-| **22** | 22-A (AI cards), 22-B (setup quality), 22-C (optimization landscape), 22-D (projections) | ~46h | AI-enhanced visualization |
-| **23+** | 23-A through 23-F (actions, sunburst, regime, persistence, configurability) | ~38h | Customization & refinement |
+| Sprint | Items | Est. Hours | Theme |
+|--------|-------|-----------|-------|
+| **16** ✅ | Motion, micro-interactions, sparklines | ~15h | Polish & perceived quality |
+| **17** ✅ | Donut/bars, tabs, gauges, badges | ~11h | Multi-strategy awareness |
+| **18–20** ✅ | Timeline, watchlist, session summary | ~11h | Multi-strategy operations |
+| **21a** | Pattern Library page (master-detail, pipeline, stock detail panel) | ~31h | Strategy encyclopedia |
+| **21b** | Orchestrator page (3-column, decisions, allocation, risk) | ~30h | Operational command center |
+| **21c** | The Debrief page (briefings, research, journal) | ~22h | Knowledge accumulation |
+| **21d** | Dashboard + Performance analytics + System + Nav + Copilot shell | ~68h | Architecture + analytics |
+| **22** | Copilot activation, AI insight cards, briefings, EOD, optimization landscape, projections | ~54h | AI-enhanced visualization |
+| **23** | Catalyst badges, pre-market live data, floating actions, persistent state | ~21h | Catalyst intelligence UI |
+| **24** | Flow indicator, L2 heatmap, entry snapshot | ~14h | Order flow UI |
+| **25** | Quality badges, breakdown radar, performance by grade, allocation by quality | ~19h | Quality scoring UI |
+| **30** | Calibration chart, weekly insight, learning loop health | ~8h | Learning loop UI |
+| **23+** | Sunburst, regime timeline, symbol heatmap, configurable grid, notifications | ~36h | Refinement & customization |
 
 ---
 
 ## Implementation Notes
 
-### Animation Library Recommendation
-Framer Motion for page transitions and staggered entry animations. CSS transitions for hover effects and micro-interactions. Lightweight Charts native animation for chart draw-ins. Keep the animation budget minimal — every animation should complete in <500ms and serve an information purpose.
+### Animation Library Stack
+- **Framer Motion:** Page transitions, stagger orchestration, panel slide-in/out.
+- **CSS transitions:** Hover effects, micro-interactions, badge animations.
+- **Lightweight Charts native:** Chart draw-ins, candlestick animations.
+- Budget: <500ms per animation, 60fps, never blocks interaction.
 
 ### Chart Library Stack
-- **Lightweight Charts** (already integrated): Equity curves, candlestick charts, area charts, histograms.
-- **Recharts**: Donut charts, bar charts, simple histograms. Good React integration.
-- **D3**: Treemaps, heatmaps, sunbursts, complex custom visualizations. Use sparingly — only for things Recharts can't do.
-- **Three.js or Plotly 3D**: Strategy optimization landscape (22-C). Single use case, high impact.
+- **Lightweight Charts** (integrated): Equity curves, candlestick, area, histograms.
+- **Recharts** (integrated): Donut/bar charts, radar charts, simple histograms.
+- **D3** (Sprint 21d+): Treemaps, heatmaps, correlation matrices, sunbursts. Use sparingly.
+- **Three.js or Plotly 3D** (Sprint 22): Strategy optimization landscape. Single showpiece.
 
-### Mobile-First Considerations
-Every feature should have a mobile adaptation plan. Common patterns:
+### Mobile-First Patterns
 - Detail panels → full-screen modals on mobile
-- Side-by-side layouts → stacked vertical
+- Side-by-side → stacked vertical
 - Complex charts → simplified with tap-to-expand
 - Hover interactions → long-press or tap
 - Floating toolbars → bottom sheet actions
+- More menu for pages 6–7
 
 ### Performance Budgets
-- Dashboard should render interactive in <1 second on LAN
-- Animations should never drop below 60fps
-- Charts with >1000 data points should use canvas rendering (not SVG)
-- WebSocket updates should batch UI re-renders (requestAnimationFrame)
+- Dashboard renders interactive in <1 second on LAN
+- Animations never drop below 60fps
+- Charts with >1000 data points use canvas (not SVG)
+- WebSocket updates batch via requestAnimationFrame
+- AI Copilot streams partial responses immediately

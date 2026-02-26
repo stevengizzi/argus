@@ -28,38 +28,66 @@ inform Build Track priorities.
 
 ## Validation Track
 
-### Paper Trading — System Stability (ACTIVE on Alpaca IEX)
+### Gate 1: System Stability (ACTIVE on Alpaca IEX)
 - **Parameters:** DEC-076 (or=5, hold=15, gap=2.0, stop_buf=0.0, target_r=2.0, atr=999.0)
 - **Account:** Alpaca paper ($100K simulated)
 - **Data:** Alpaca IEX feed (~2–3% market volume — validates system stability only, not signal accuracy)
-- **Status:** Running. Continues until Sprint 12 delivers Databento data. Signal accuracy validation requires Databento.
+- **Status:** Running. System stability testing. Signal accuracy validation requires Databento.
 - **Guide:** `docs/08_PAPER_TRADING_GUIDE.md`
 
-### Paper Trading — Signal Validation (PENDING Sprints 12–13)
+### Gate 2: Quality Data Validation (PENDING — Databento + IBKR)
 - **Parameters:** DEC-076 (same)
 - **Data:** Databento US Equities Standard (institutional-grade, full market volume)
 - **Execution:** IBKR paper trading account
-- **Status:** Begins after Sprint 12 (DatabentoDataService) and Sprint 13 (IBKRBroker) complete. This is the meaningful validation phase — system stability + signal accuracy + execution quality.
-- **Duration:** Flexible — user decides when confidence is sufficient.
+- **Begins after:** Databento subscription activated + IBKR account approved (U24619949, submitted Feb 21)
+- **Duration:** Minimum 20 trading days
+- **Key metrics:** System stability + signal accuracy + execution quality
+- **Exit criteria:** No kill criteria triggered, user satisfied, strategy behavior matches backtest expectations
 
-#### Validation Sequence
+### Gate 3: AI-Enhanced Paper Trading (PENDING — After Sprint 26)
+- **Prerequisites:** Setup Quality Engine scoring every trade, NLP Catalyst Pipeline enriching watchlist, Order Flow V1 contributing to entries, Dynamic Position Sizing in paper mode
+- **Strategies:** 7 active (4 Phase 1 + Red-to-Green + 2 pattern modules)
+- **Duration:** Minimum 30 trading days
+- **Key metric:** Quality-score-to-outcome correlation — A+ setups must outperform B setups. If not, fall back to uniform sizing.
+- **Exit criteria:** Quality calibration passes, no kill criteria triggered, intelligence layer demonstrably improving trade selection
+
+### Gate 4: Full System Paper Trading (PENDING — After Sprint 32)
+- **Prerequisites:** 18 patterns active, Learning Loop V1 refining scores weekly, Orchestrator V2 managing allocation with AI advisor
+- **Duration:** Minimum 20 more trading days (50+ cumulative across Gates 2–4)
+- **Key metric:** System-level Sharpe > 2.0 over rolling 30-day windows
+- **Exit criteria:** Pattern library stable, learning loop converging, correlation-aware allocation proven, no kill criteria triggered
+
+### Gate 5: Live Trading (User-Gated)
+- **Prerequisites:** CPA consultation complete (DEF-004). Explicit go/no-go decision.
+- **Start:** Minimum size ($25K, 10-share positions) on IBKR
+- **Shadow system:** Paper trading runs permanently in parallel
+- **Ramp:** Minimum → Intermediate → Model-calculated → Full (see schedule below)
+- **Duration:** Minimum 20 trading days per ramp stage before scaling
+
+#### Validation Sequence (Checklist)
 1. ✅ Extended backtest complete (Sprint 11, WFE 0.56, OOS Sharpe +0.34)
-2. ✅ Sprint 12: DatabentoDataService adapter built (Feb 21). Databento subscription activation deferred until Sprint 13 complete + IBKR approved (DEC-087).
-3. ✅ Sprint 13: IBKRBroker adapter built (Feb 22, 811 tests). Config-driven broker selection. Native bracket orders (DEC-093). T2 broker-side limit support. State reconstruction.
-4. ⬜ IBKR paper trading: minimum 2 weeks with DEC-076 parameters
-5. ⬜ User satisfied with system stability and strategy performance
-6. ⬜ No kill criteria triggered
-7. ⬜ CPA consultation on capital/risk/tax implications (DEF-004)
-8. ⬜ Explicit go/no-go decision by user → live trading on IBKR at minimum size
+2. ✅ Sprint 12: DatabentoDataService adapter built (Feb 21)
+3. ✅ Sprint 13: IBKRBroker adapter built (Feb 22, 811 tests)
+4. ✅ Sprint 20: Four strategies covering 9:30 AM–3:30 PM
+5. ⬜ Sprint 21: 7-page Command Center with full analytics
+6. ⬜ Databento subscription activated + IBKR paper account enabled
+7. ⬜ Gate 2: IBKR paper trading (20+ days, DEC-076 parameters, quality data)
+8. ⬜ Sprint 26: Intelligence infrastructure operational (Quality Engine, Order Flow, Catalysts)
+9. ⬜ Gate 3: AI-enhanced paper trading (30+ days, quality scoring active)
+10. ⬜ Sprint 32: Full pattern library + Learning Loop + Orchestrator V2
+11. ⬜ Gate 4: Full system paper trading (20+ days, system Sharpe > 2.0)
+12. ⬜ CPA consultation on capital/risk/tax implications (DEF-004)
+13. ⬜ Gate 5: Explicit go/no-go → live trading on IBKR at minimum size
 
 #### Ramp Schedule (Advisory)
 | Stage | Position Size | Purpose |
 |-------|--------------|---------|
 | Initial | 10 shares/trade | Verify fills, slippage, system stability |
 | Intermediate | 25 shares/trade | Increased size, still minimal risk |
-| Full | Model-calculated | Transition to algorithmic sizing |
+| Model-Calculated | Quality-driven | Dynamic sizing based on quality grades |
+| Full | Full model | Transition to full algorithmic sizing |
 
-#### Kill Criteria (Hard Stops)
+#### Kill Criteria (Hard Stops — Apply at All Gates)
 1. Account drawdown exceeds 15%
 2. Profit Factor below 0.7 after 50+ trades
 3. Win rate below 25% over any 30-trade window
@@ -70,17 +98,20 @@ inform Build Track priorities.
 - Target hit rate (backtest showed 0% — does this persist?)
 - Time stop profitability (net P&L of time-stopped trades)
 - Slippage vs. backtest assumption ($0.01/share)
-- Trade frequency (~12–14 trades/month expected)
+- Trade frequency (~12–14 trades/month expected for ORB alone)
 - Monthly P&L pattern (seasonal sensitivity)
 - System uptime and health alerts
 - Databento data quality (compare candles vs external reference)
 - IBKR fill quality (compare vs Alpaca paper fills)
+- Quality score calibration (predicted vs actual win rate by grade — Gate 3+)
+- Learning Loop convergence (are weekly retrains improving? — Gate 4+)
 
-### Live Trading (FUTURE)
-- ORB at minimum position size with real capital on IBKR
-- Shadow system (paper) runs in parallel
-- Minimum 20 trading days before scaling
+### Live Trading (FUTURE — Gate 5+)
+- All strategies at minimum position size with real capital on IBKR
+- Shadow system (paper) runs in parallel permanently
+- Minimum 20 trading days per ramp stage before scaling
 - Compare live vs. paper vs. backtest expectations
+- Gradual scale based on confidence: minimum → intermediate → model-calculated → full
 
 ---
 
@@ -289,51 +320,133 @@ per sprint velocity.
 - 1522 tests (pytest, 112 new) + 48 (Vitest, 8 new). 10 implementation sessions + 2 code review checkpoints. Code review passed. DEC-152–162.
 - **Milestone:** ARGUS now covers 9:30 AM–3:30 PM with four strategies (ORB, Scalp, VWAP Reclaim, Afternoon Momentum).
 
-#### Sprint 21 — Command Center: Analytics & Strategy Lab (NEW — DEC-096)
-**Target:** ~2–4 days (may split into 21a/21b — see RSK-025)
-**Scope (DEC-108, ~80–100h):**
-- **Stock/Asset Detail Panel (21-A):** Slide-in panel from position/trade clicks — intraday chart with entry/stop/target overlays, order book snapshot, key stats, strategy context, related trades
-- **Dashboard V2 Command Center (21-B):** Resizable grid layout, quick-command palette, session P&L waterfall, regime badge with tooltip
-- **Trade Activity Heatmap (21-C):** Calendar-style D3 heatmap (daily P&L), click to drill down
-- **Win/Loss Distribution Histogram (21-D):** Recharts histogram of R-multiples with bell curve overlay
-- **Portfolio Treemap (21-E):** D3 treemap showing position sizes, color by P&L
-- **Risk Waterfall Chart (21-F):** Stacked bar showing risk budget consumption across tiers
-- **Comparative Period Overlay (21-G):** Side-by-side or overlay metrics for two time periods
-- **Strategy Correlation Matrix (21-H):** D3 heatmap of pairwise strategy return correlations
-- **Trade Replay Mode (21-I):** Step through historical trades tick-by-tick with chart playback
-- **Goal Tracking (21-J):** Target vs actual P&L with progress indicators
-- **Heat Strip Portfolio Bar (21-K):** Horizontal bar with colored segments per position
-- Strategy Lab: incubator pipeline visualization, per-strategy detail views
-- Trade journal with annotation support (user notes per trade)
-- Side-by-side strategy comparison views
-- Calendar P&L view (daily/weekly/monthly grid with color coding)
-- **Milestone:** Operator has full analytical toolkit for building conviction before live capital.
-
-#### Sprint 22 — AI Layer MVP (DEC-096, DEC-098)
-**Target:** ~1-2 days
+#### Sprint 21a — Pattern Library Page (DEC-169, DEC-171)
+**Target:** ~1–2 days
 **Scope:**
-- Anthropic API integration (`argus/ai/claude_service.py`)
-- Model: Claude Opus for all calls (DEC-098). Prompt caching for system context.
-- System Context Builder: assembles current state (positions, regime, strategy metrics) for Claude
-- Pre-market briefing: overnight analysis, regime assessment, allocation recommendations
-- Post-trade analysis: real-time trade evaluation with context (ATR, volume, regime, historical comparison)
-- Anomaly detection: periodic system/market checks during trading hours
-- Weekly/monthly strategy performance reviews with narrative reports
-- Approval workflow: Claude proposes parameter/allocation changes → user approves in Command Center
-- Natural language chat endpoint in API + chat view in Command Center
-- API key stored in encrypted secrets manager (existing architectural rule)
-- **UX add-ons (~46h, from UX_FEATURE_BACKLOG.md 22-A–D):** AI insight cards (inline analysis in dashboard), setup quality overlay (Claude confidence gauge on positions), strategy optimization landscape ("climbing the mountain" 3D surface via Three.js/Plotly), multi-line outcome projections (Monte Carlo fan chart).
+- **Pattern Library page** (NEW — 5th page): Master-detail layout. Left panel: strategy cards grid with pipeline stage badges, operating windows, key metrics, filters (stage, time window, pattern family), sort controls. Right panel: tabbed strategy detail (Overview, Performance, Backtest, Trades, Intelligence). Overview tab renders strategy spec as interactive UI (parameters editable via approval workflow).
+- **Stock/Asset Detail Panel (21-A from UX Backlog):** Slide-in panel from any symbol click — intraday chart with entry/stop/target overlays, trading history on symbol, position detail, fundamental context, quick actions.
+- **Incubator Pipeline visualization:** Horizontal pipeline showing 10 stages with dot indicators for strategy distribution.
+- Migrate strategy cards and strategy detail views from System page → Pattern Library.
+- **Tests:** Vitest component tests for PatternLibrary, StrategyDetail, StockDetailPanel.
 
-#### Sprint 23+ — Additional Features (Backlog)
-**Scope (prioritized):**
-- Tier 1 News Integration (economic/earnings calendar, event-day risk filters)
-- Red-to-Green strategy (through full incubator pipeline)
-- Tier 2 News (news feed + classification via IQFeed/Benzinga)
-- Accounting module (tax tracking, wash sales, P&L reports)
-- Learning Journal
-- Tier 3 News (Claude sentiment analysis)
-- Multi-asset: crypto via IBKR
-- IQFeedDataService adapter (when forex or Tier 2 news needed)
+#### Sprint 21b — Orchestrator Page (DEC-169, DEC-171)
+**Target:** ~1–2 days
+**Scope:**
+- **Orchestrator page** (NEW — 4th page): Three-column desktop layout (Capital & Allocation | Decision Stream | Risk & Controls). Capital column: CapitalAllocation viz (migrated from Dashboard), manual allocation override sliders with Orchestrator diff display, quality-weighted allocation breakdown, opportunity cost log. Decision column: chronological feed of all Orchestrator decisions with rationale, filterable, AI recommendation cards with approve/reject/modify buttons. Risk column: RiskGauge (migrated), risk waterfall chart, emergency controls (migrated from Dashboard), regime detail with indicator gauges and transition timeline, correlation matrix mini.
+- Migrate from Dashboard: CapitalAllocation donut, emergency controls (flatten/pause), per-strategy pause/resume.
+- Migrate from System: strategy activation/deactivation controls.
+- Strategy Optimization Landscape placeholder (activates in Sprint 22 with AI Layer).
+- API: no new backend endpoints needed — consumes existing orchestrator/status, orchestrator/decisions, orchestrator/rebalance.
+- **Mobile:** Single column, tabbed (Allocation | Decisions | Risk). Emergency controls pinned at bottom.
+- **Tests:** Vitest component tests for Orchestrator page sections.
+
+#### Sprint 21c — The Debrief Page (DEC-169, DEC-171)
+**Target:** ~1–2 days
+**Scope:**
+- **The Debrief page** (NEW — 6th page): Three sections via in-page tabs. Section A — Daily Briefings: reverse-chronological list of pre-market and EOD report placeholders (structure now, AI Layer populates in Sprint 22). Manual entry support. Section B — Research Library: document browser for all project research (market data report, broker report, parameter validation, strategy specs, expanded roadmap). Documents rendered as readable panels with markdown support. Taggable, searchable, filterable by type. Section C — Learning Journal: manual observations, trade annotations (linked to trade IDs), pattern observations. Free-form entries with tags and date.
+- Import existing research documents as initial Research Library content.
+- API: `/api/v1/debrief/briefings` (CRUD), `/api/v1/debrief/documents` (read + metadata), `/api/v1/debrief/journal` (CRUD with tags/links).
+- **Mobile:** Tab-based. Briefings default view. Document viewer optimized for phone reading.
+- **Tests:** Vitest component tests, pytest for new API endpoints.
+
+#### Sprint 21d — Dashboard Refinement + Performance Analytics + System Cleanup + Nav Restructure (DEC-169, DEC-171)
+**Target:** ~2–3 days
+**Scope:**
+- **Dashboard refinement:** Narrow scope to pure ambient awareness. Remove controls and detailed panels migrated to Orchestrator/Pattern Library. Add: compact "Orchestrator Status" strip (strategies active, deployed capital, risk budget, regime badge — click navigates to Orchestrator). Pre-market mode: before 9:30 AM, Dashboard shows Pre-Market layout (ranked watchlist, regime forecast — placeholder until Sprint 23 populates with real data). Goal tracking indicator (21-J from UX Backlog).
+- **Performance page analytics (from UX Backlog DEC-108):** Trade activity heatmap (21-C, D3 calendar heatmap), win/loss R-multiple histogram (21-D, Recharts), portfolio treemap (21-E, D3), risk waterfall chart (21-F), comparative period overlay (21-G), strategy correlation matrix (21-H). Calendar P&L view. Side-by-side strategy comparison.
+- **System page cleanup:** Narrow to infrastructure health only. Strategy cards and controls already migrated. Add health cards for future intelligence components (Pre-Market Engine, Order Flow, Catalyst Service, Learning Loop — show "Not Yet Active" until respective sprints).
+- **AI Copilot shell (DEC-170):** Floating chat button (bottom-right, keyboard shortcut `c`). Slide-out panel (desktop: right 35%, mobile: full-screen overlay). Shows placeholder: "AI Copilot activating in Sprint 22. Chat with Claude will be available here — contextual, page-aware, with full system knowledge." Panel structure: message history area, input field, context indicator showing current page name.
+- **Nav restructure:** Desktop icon sidebar with 7 items grouped: Monitor (Dashboard 📊, Trades 📋, Performance 📈) | Operate (Orchestrator 🎯, Patterns 🧩) | Learn (Debrief 📚) | Maintain (System ⚙️). Keyboard shortcuts 1–7, `c` for copilot, `w` for watchlist. Mobile: 5 bottom tabs (Dashboard, Trades, Orchestrator, Patterns, More → Performance, Debrief, System). Copilot button floats above tab bar.
+- **Trade Replay Mode (21-I from UX Backlog):** Animated trade walkthrough from Trade Log or Pattern Library Trades tab.
+- **Tests:** Vitest for new dashboard components, heatmap, histogram, treemap, nav, copilot shell.
+- **Milestone:** 7-page Command Center architecture established. All intelligence sprints (23+) add features to the correct pages.
+
+#### Sprint 22 — AI Layer MVP + Copilot Activation (DEC-096, DEC-098, DEC-170)
+**Target:** ~2–3 days
+**Scope:**
+- Anthropic API integration (`argus/ai/claude_service.py`). Model: Claude Opus for all calls (DEC-098). Prompt caching for system context.
+- **System Context Builder** (`argus/ai/context_builder.py`): Assembles current state for Claude — positions, regime, strategy metrics, quality scores, recent decisions, recent trades. Page-specific context payloads for Copilot (DEC-170).
+- **AI Copilot activation (DEC-170):** Full chat functionality in the slide-out panel. Context injection per page. Message history persistence (stored in Debrief Learning Journal DB). Claude can: answer questions about any system data, generate reports (saved to Debrief), propose parameter changes (approval workflow), propose allocation overrides (approval workflow), annotate trades (saved to Learning Journal), explain any Orchestrator decision.
+- **Pre-market briefing generation:** Claude produces daily briefing from regime data + scanner results + any available catalyst info. Saved to The Debrief automatically.
+- **EOD report generation:** Claude analyzes day's trades, regime, notable events. Saved to The Debrief.
+- **Post-trade analysis:** Real-time trade evaluation with context.
+- **Anomaly detection:** Periodic system/market checks during trading hours.
+- **Weekly/monthly reviews:** Claude generates narrative performance reports.
+- **Approval workflow:** Claude proposes changes → approval card appears in Orchestrator decision stream AND as Copilot message → user approves/rejects/modifies.
+- API: `/api/v1/ai/chat` (WebSocket), `/api/v1/ai/briefing/generate`, `/api/v1/ai/report/generate`, `/api/v1/ai/analyze/trade/{trade_id}`.
+- **UX (from Backlog):** AI insight cards on Dashboard (22-A). Strategy optimization landscape in Orchestrator (22-C, Three.js/Plotly 3D). Multi-line outcome projections on Performance (22-D, Monte Carlo fan chart).
+
+#### Sprint 23 — NLP Catalyst Pipeline + Pre-Market Engine (DEC-163, DEC-164)
+**Target:** ~2–3 days
+**Scope:**
+- **CatalystService** (`argus/intelligence/catalyst_service.py`): Symbol-matched news from Finnhub (company news API, free tier) + SEC EDGAR (8-K, Form 4) + FMP (earnings calendar, press releases).
+- **CatalystClassifier** (`argus/intelligence/catalyst_classifier.py`): Claude API for catalyst quality scoring (1–10) and category assignment (FDA, Earnings, Analyst, M&A, Offering, Insider, Macro, Legal, Product, Guidance).
+- **PreMarketEngine** (`argus/intelligence/premarket_engine.py`): Automated 4:00 AM → 9:25 AM pipeline. Populates Dashboard pre-market mode with real ranked watchlist + catalyst data. Generates pre-market briefing via AI Layer (saved to Debrief).
+- **CatalystEvent** on Event Bus. Scanner enrichment with catalyst metadata.
+- **UI:** Dashboard pre-market mode now populated with live data. Watchlist sidebar gains catalyst type badges. Trade Detail Panel gains catalyst context section. The Debrief gains real pre-market briefings.
+- **Tests:** ~80 new.
+
+#### Sprint 24 — Order Flow Model V1 (DEC-163, DEC-165)
+**Target:** ~2–3 days
+**Scope:**
+- Databento L2 (MBP-10) subscription for all watchlist symbols. DatabentoDataService extension.
+- **OrderFlowAnalyzer** (`argus/intelligence/order_flow.py`): bid/ask imbalance, ask thinning, tape speed, bid stacking. Throttled 100ms updates.
+- **OrderFlowEvent** on Event Bus. OrderFlowSnapshot for strategy queries.
+- **UI:** Watchlist gains flow quality dot (green/yellow/red). Trade Detail Panel gains L2 depth heatmap + entry flow snapshot.
+- **Deferred:** L3, iceberg/spoofing detection → Sprint 28.
+- **Tests:** ~60 new.
+
+#### Sprint 25 — Setup Quality Engine + Dynamic Position Sizer (DEC-163)
+**Target:** ~3–4 days
+**Scope:**
+- **SetupQualityEngine** (`argus/intelligence/quality_engine.py`): Composite 0–100 scoring from 6 weighted inputs. Configurable weights via YAML.
+- **DynamicPositionSizer** (`argus/intelligence/position_sizer.py`): Grade → risk tier → share count. A+=2–3%, B=0.5–0.75%, C-=SKIP. Replaces fixed risk_per_trade_pct. Risk Manager limits still enforced.
+- SignalEvent enrichment: quality_score, quality_grade, risk_tier fields.
+- Quality History DB table for Learning Loop.
+- **UI:** Dashboard gains quality distribution mini-card. Watchlist/positions/trade log gain quality grade badges. Trade Detail gains radar chart + "Why this size?" breakdown. Performance gains "by quality grade" chart.
+- **Tests:** ~100 new.
+
+#### Sprint 26 — Red-to-Green + Pattern Library Foundation (DEC-163, DEC-167)
+**Target:** ~2 days
+- RedToGreenStrategy through Incubator stages 1–3.
+- PatternLibrary ABC interface. Bull Flag + Flat-Top Breakout modules.
+- Pattern modules feed "pattern strength" to Quality Engine.
+- **7 strategies/patterns active.** Tests: ~80 new.
+
+#### Sprint 27 — Pattern Expansion I (DEC-167)
+**Target:** ~2–3 days
+- Dip-and-Rip, HOD Break, Pre-Market High Break, Gap-and-Go modules. Each stages 1–3.
+- **11 strategies/patterns active.** Tests: ~60 new.
+
+#### Sprint 28 — Order Flow V2 + Short Selling (DEC-166)
+**Target:** ~2–3 days
+- Databento L3 integration. Iceberg/spoofing/absorption detection.
+- Short selling infrastructure. Parabolic Short module.
+- **12 strategies/patterns active.** Tests: ~80 new.
+
+#### Sprint 29 — Pattern Expansion II (DEC-167)
+**Target:** ~2–3 days
+- ABCD Reversal, Sympathy Play, Power Hour Reversal, Earnings Gap Continuation modules.
+- **16 strategies/patterns active.** Tests: ~60 new.
+
+#### Sprint 30 — Learning Loop V1 (DEC-163)
+**Target:** ~2–3 days
+- LearningDatabase, PostTradeAnalyzer, weekly batch retraining, quality calibration.
+- **UI:** Performance gains calibration chart. Dashboard gains weekly insight card. System gains Learning Loop health.
+- Tests: ~60 new.
+
+#### Sprint 31 — Orchestrator V2 AI-Enhanced (DEC-163)
+**Target:** ~2–3 days
+- Intraday dynamic allocation. AI allocation advisor. Correlation-aware allocation. Quality-weighted replaces equal-weight. Opportunity cost tracking.
+- Tests: ~60 new.
+
+#### Sprint 32 — Pattern Expansion III + Volume Profile (DEC-163)
+**Target:** ~2–3 days
+- Volume Shelf Bounce, Micro Float Runner modules. Volume Profile (VPOC/value area).
+- **18 strategies/patterns — full V1 library.** Tests: ~60 new.
+
+#### Sprint 33+ — Optimization & Expansion (Backlog)
+- Learning Loop V2 (ML — LightGBM). Advanced Regime Engine. Crypto expansion via IBKR. Monte Carlo simulation. Tax optimization. Strategy breeding.
 
 ---
 

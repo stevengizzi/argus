@@ -200,6 +200,28 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 
 ---
 
+### ASM-016 — Quality Scoring Improves Returns
+| Field | Value |
+|-------|-------|
+| **Assumption** | Composite quality scoring produces meaningful differentiation, with higher-scored setups outperforming lower-scored consistently |
+| **Confidence** | Medium |
+| **Basis** | Discretionary traders demonstrably outperform when they grade quality. Each component has independent empirical basis. Combined scoring unvalidated for ARGUS. |
+| **If Wrong** | Fall back to uniform sizing. No worse than current. Intelligence still valuable for research and pre-market preparation. |
+| **Review Date** | After 30+ days paper trading with quality scoring (Gate 3) |
+
+---
+
+### ASM-017 — Free News Sources Provide Adequate Catalyst Coverage
+| Field | Value |
+|-------|-------|
+| **Assumption** | SEC EDGAR + Finnhub + FMP cover 70%+ of catalysts for gapping stocks in ARGUS's target universe |
+| **Confidence** | Medium |
+| **Basis** | SEC filings cover material corporate events (most reliable). Finnhub aggregates news from multiple sources. FMP provides earnings/calendar data. The combination should cover earnings, FDA, analyst, M&A, and filings. May miss: press releases from smaller companies, some analyst initiations, pre-market color. |
+| **If Wrong** | Upgrade to Benzinga Pro via IQFeed (~$200/mo). DEC-164 defines trigger: >30% unclassified rate over 20 days. |
+| **Review Date** | After 20 trading days with Catalyst Pipeline active (Sprint 23) |
+
+---
+
 ## Risks
 
 ### RSK-001 — Strategy Overfitting
@@ -569,6 +591,65 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 | **Mitigation** | Monitor time-of-entry distribution in sweep results. If >60% of entries occur after 3:15 PM, consider tightening latest_entry to 3:15 PM. |
 | **Status** | Open |
 | **Owner** | Steven |
+
+---
+
+### RSK-032 — Setup Quality Model Overfitting
+| Field | Value |
+|-------|-------|
+| **Risk** | Quality Engine composite scoring overfits to historical patterns, producing high grades on setups that underperform live |
+| **Severity** | High |
+| **Likelihood** | Medium |
+| **Mitigation** | Walk-forward validation on quality scores. Out-of-sample calibration mandatory. Learning Loop V1 provides continuous recalibration. Gate 3 requires A+ to outperform B in paper trading. |
+| **Detection** | Quality Calibration chart (Performance page). Weekly predicted vs actual review. |
+| **Contingency** | Fall back to uniform sizing (current system). Intelligence infrastructure still provides value for research. |
+| **Status** | Open |
+
+---
+
+### RSK-033 — Dynamic Sizing Amplifies Losses
+| Field | Value |
+|-------|-------|
+| **Risk** | Dynamic sizing (up to 3% on A+) amplifies losses when quality model misidentifies grade |
+| **Severity** | Medium |
+| **Likelihood** | Medium |
+| **Mitigation** | Account-level daily/weekly limits unchanged. Single-trade max 3%. Circuit breakers non-overridable. Three-tier Risk Manager gates every order. Gradual ramp: paper-prove correlation before live. |
+| **Status** | Open |
+
+---
+
+### RSK-034 — Pattern Library Complexity Explosion
+| Field | Value |
+|-------|-------|
+| **Risk** | 15+ concurrent patterns create interaction complexity, correlated signals, maintenance burden |
+| **Severity** | Medium |
+| **Likelihood** | Medium |
+| **Mitigation** | Each pattern must pass walk-forward (DEC-047). Retire underperformers. CorrelationTracker flags high-correlation pairs. Max active patterns configurable. Quality > quantity. |
+| **Status** | Open |
+
+---
+
+### RSK-035 — Free News Source Insufficiency
+| Field | Value |
+|-------|-------|
+| **Risk** | Free news sources miss catalysts that paid services catch, reducing quality scoring accuracy |
+| **Severity** | Low-Medium |
+| **Likelihood** | Medium |
+| **Mitigation** | Track "unclassified catalyst" rate. Trigger: >30% over 20 days → evaluate Benzinga Pro. Manual catalyst notes as fallback. Architecture supports hot-swap. |
+| **Status** | Open |
+
+---
+
+### RSK-036 — AI Copilot Latency During Market Hours
+| Field | Value |
+|-------|-------|
+| **Risk** | Claude API response latency (2–10s) during market hours disrupts operational flow when user needs quick answers |
+| **Severity** | Low |
+| **Likelihood** | Medium |
+| **Mitigation** | Copilot is advisory, not in the execution path. Trades execute regardless of chat state. Pre-compute common contexts (positions, regime, quality scores) so Claude responses can reference cached data. Streaming responses show partial text immediately. |
+| **Status** | Open |
+
+---
 
 ## Review Schedule
 

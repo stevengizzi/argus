@@ -139,6 +139,12 @@ StrategySuspendedEvent(strategy_id, reason)
 ApprovalRequestedEvent(action_id, action_type, description, risk_level)
 ApprovalGrantedEvent(action_id)
 ApprovalDeniedEvent(action_id, reason)
+
+# Intelligence events
+CatalystEvent(symbol, category, quality_score, headline, source, timestamp)
+OrderFlowEvent(symbol, imbalance_ratio, ask_thin_rate, tape_speed, bid_stack_score, composite_score, timestamp)
+QualitySignalEvent(symbol, score, grade, risk_tier, components, rationale)
+LearningInsightEvent(insight_type, finding, confidence, period)
 ```
 
 ### 3.2 Data Service (`data/service.py`)
@@ -862,6 +868,81 @@ CREATE TABLE system_health (
 );
 ```
 
+### 3.11 Intelligence Layer (`argus/intelligence/`)
+
+New module directory housing all AI-enhanced trading intelligence components. These are distinct from core trading engine modules — they enrich the trading pipeline with quality signals but the engine functions without them (graceful degradation).
+
+#### SetupQualityEngine (`intelligence/quality_engine.py`)
+Composite scorer grading every potential trade 0–100 on six weighted dimensions.
+
+Interface:
+- `score_setup(symbol, pattern_type, pattern_strength, catalyst, order_flow, volume_profile, regime) -> SetupQuality`
+- `get_historical_match(pattern_type, catalyst_category, regime) -> HistoricalPerformance`
+
+Events published: `QualitySignalEvent(symbol, score, grade, risk_tier, components, rationale)`
+Config: `config/quality_engine.yaml` (weights, thresholds, tier mappings)
+
+#### OrderFlowAnalyzer (`intelligence/order_flow.py`)
+Processes Databento L2/L3 depth data into actionable signals.
+
+Interface:
+- `start(symbols: list[str]) -> None` — begin L2 analysis
+- `get_snapshot(symbol) -> OrderFlowSnapshot` — current state
+- `stop() -> None`
+
+Events published: `OrderFlowEvent(symbol, imbalance_ratio, ask_thin_rate, tape_speed, bid_stack_score, composite_score, timestamp)`
+Throttling: configurable interval (default 100ms)
+
+#### CatalystService (`intelligence/catalyst_service.py`)
+Ingests and classifies news/filing data from free sources (DEC-164).
+
+Sources: SEC EDGAR (8-K, Form 4), Finnhub (news, calendars), FMP (earnings, press releases)
+Interface:
+- `fetch_catalysts(symbol) -> list[CatalystEvent]`
+- `classify_catalyst(headline, symbol) -> CatalystClassification` (uses Claude API)
+- `get_calendar_events(date) -> list[CalendarEvent]`
+
+Events published: `CatalystEvent(symbol, category, quality_score, headline, source, timestamp)`
+
+#### PreMarketEngine (`intelligence/premarket_engine.py`)
+Automated 4:00 AM → 9:25 AM pipeline.
+
+Interface:
+- `start() -> None` — begin pre-market scanning
+- `generate_briefing() -> PreMarketBriefing`
+- `lock_watchlist() -> Watchlist` — lock at 9:25 AM
+
+#### DynamicPositionSizer (`intelligence/position_sizer.py`)
+Maps quality grades to risk allocations. Replaces fixed risk_per_trade_pct.
+
+Interface:
+- `calculate_shares(quality, entry_price, stop_price, allocated_capital, buying_power) -> int`
+
+#### LearningLoop (`intelligence/learning_loop.py`)
+Post-trade analysis and model refinement.
+
+Interface:
+- `record_outcome(trade_id, quality, outcome) -> None`
+- `retrain() -> ModelUpdate` — weekly batch
+- `get_calibration() -> CalibrationReport`
+- `get_insights(period_days) -> list[Insight]`
+
+### 3.Y AI Copilot (`argus/ai/`)
+
+#### ClaudeService (`ai/claude_service.py`)
+Anthropic API integration. All calls use Claude Opus (DEC-098). Prompt caching for system context.
+
+#### ContextBuilder (`ai/context_builder.py`)
+Assembles system state for Claude. Page-specific context payloads for Copilot.
+
+Interface:
+- `build_context(page: str, selected_entity: dict | None) -> SystemContext`
+- `build_trade_context(trade_id: str) -> TradeContext`
+- `build_strategy_context(strategy_id: str) -> StrategyContext`
+
+#### CopilotRouter (`ai/copilot_router.py`)
+Handles chat messages with context injection. Manages conversation history. Routes action proposals through approval workflow.
+
 ---
 
 ## 4. Command Center API (`argus/api/`)
@@ -906,6 +987,28 @@ GET    /api/v1/orchestrator/status     — Regime, allocations, throttle state, 
 GET    /api/v1/orchestrator/decisions  — Decision history (paginated)
 POST   /api/v1/orchestrator/rebalance  — Trigger manual rebalance
 GET    /api/v1/session-summary         — Session recap (P&L, wins/losses, best/worst trade, regime, strategies). Query: ?date=YYYY-MM-DD
+
+# Intelligence endpoints (Sprint 23–30)
+GET  /api/v1/catalysts/{symbol}          # Catalysts for a symbol
+GET  /api/v1/premarket/briefing          # Current pre-market briefing
+GET  /api/v1/premarket/watchlist         # Ranked pre-market watchlist
+GET  /api/v1/orderflow/{symbol}          # Current order flow state + 1-min history
+GET  /api/v1/quality/{symbol}            # Current quality score
+GET  /api/v1/quality/history             # Quality score history
+GET  /api/v1/quality/distribution        # Today's grade distribution
+GET  /api/v1/learning/calibration        # Predicted vs actual by grade
+GET  /api/v1/learning/insights           # Top recent findings
+
+# AI Copilot endpoints (Sprint 22)
+WS   /api/v1/ai/chat                    # Copilot chat (WebSocket)
+POST /api/v1/ai/briefing/generate       # Generate pre-market briefing
+POST /api/v1/ai/report/generate         # Generate analysis report
+POST /api/v1/ai/analyze/trade/{id}      # Analyze specific trade
+
+# Debrief endpoints (Sprint 21c)
+GET/POST /api/v1/debrief/briefings      # Briefing CRUD
+GET      /api/v1/debrief/documents      # Research library (read + metadata)
+GET/POST /api/v1/debrief/journal        # Learning journal CRUD
 ```
 
 ### WebSocket
