@@ -594,8 +594,12 @@ export function OpenPositions() {
               }
             />
 
-            {/* Display mode toggle - only show when there are positions to show */}
-            {positionFilter !== 'closed' && enrichedPositions.length > 0 && (
+            {/* Display mode toggle - show when there's data in the current filter view */}
+            {(positionFilter === 'all'
+              ? enrichedPositions.length > 0 || trades.length > 0
+              : positionFilter === 'open'
+              ? enrichedPositions.length > 0
+              : trades.length > 0) && (
               <div className="flex gap-1 p-0.5 bg-argus-surface-2 rounded-md">
                 <button
                   onClick={() => setDisplayMode('table')}
