@@ -14,6 +14,7 @@ class StrategyType(StrEnum):
     ORB_BREAKOUT = "orb"
     ORB_SCALP = "orb_scalp"
     VWAP_RECLAIM = "vwap_reclaim"
+    AFTERNOON_MOMENTUM = "afternoon_momentum"
 
 
 class DataFetcherConfig(BaseModel):
@@ -111,3 +112,11 @@ class BacktestConfig(BaseModel):
     vwap_stop_buffer_pct: float | None = None
     vwap_max_pullback_pct: float | None = None
     vwap_max_chase_pct: float | None = None
+
+    # Afternoon Momentum params (used when strategy_type=AFTERNOON_MOMENTUM)
+    consolidation_atr_ratio: float = 0.75
+    min_consolidation_bars: int = 30
+    afternoon_volume_multiplier: float = 1.2
+    afternoon_max_hold_minutes: int = 60
+    afternoon_target_1_r: float = 1.0
+    afternoon_target_2_r: float = 2.0

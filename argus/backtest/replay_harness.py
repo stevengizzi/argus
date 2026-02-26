@@ -38,6 +38,7 @@ from argus.backtest.scanner_simulator import DailyWatchlist, ScannerSimulator
 from argus.backtest.tick_synthesizer import synthesize_ticks
 from argus.core.clock import FixedClock
 from argus.core.config import (
+    AfternoonMomentumConfig,
     OperatingWindow,
     OrbBreakoutConfig,
     OrbScalpConfig,
@@ -54,6 +55,7 @@ from argus.db.manager import DatabaseManager
 from argus.execution.order_manager import OrderManager
 from argus.execution.simulated_broker import SimulatedBroker, SimulatedSlippage
 from argus.models.trading import OrderStatus
+from argus.strategies.afternoon_momentum import AfternoonMomentumStrategy
 from argus.strategies.base_strategy import BaseStrategy
 from argus.strategies.orb_breakout import OrbBreakoutStrategy
 from argus.strategies.orb_scalp import OrbScalpStrategy
@@ -350,6 +352,8 @@ class ReplayHarness:
             return self._create_orb_scalp_strategy(config_dir)
         elif self._config.strategy_type == StrategyType.VWAP_RECLAIM:
             return self._create_vwap_reclaim_strategy(config_dir)
+        elif self._config.strategy_type == StrategyType.AFTERNOON_MOMENTUM:
+            return self._create_afternoon_momentum_strategy(config_dir)
         else:
             return self._create_orb_breakout_strategy(config_dir)
 
@@ -434,6 +438,46 @@ class ReplayHarness:
             clock=self._clock,
         )
 
+    def _create_afternoon_momentum_strategy(
+        self, config_dir: Path
+    ) -> AfternoonMomentumStrategy:
+        """Create AfternoonMomentumStrategy with config overrides applied."""
+        afternoon_file = config_dir / "strategies" / "afternoon_momentum.yaml"
+        if afternoon_file.exists():
+            data = load_yaml_file(afternoon_file)
+            config = AfternoonMomentumConfig(**data)
+        else:
+            # Build from BacktestConfig params or use defaults
+            config = AfternoonMomentumConfig(
+                strategy_id=self._config.strategy_id or "strat_afternoon_momentum",
+                name="Afternoon Momentum",
+                consolidation_atr_ratio=self._config.consolidation_atr_ratio,
+                min_consolidation_bars=self._config.min_consolidation_bars,
+                volume_multiplier=self._config.afternoon_volume_multiplier,
+                max_hold_minutes=self._config.afternoon_max_hold_minutes,
+                target_1_r=self._config.afternoon_target_1_r,
+                target_2_r=self._config.afternoon_target_2_r,
+                operating_window=OperatingWindow(
+                    earliest_entry="14:00",
+                    latest_entry="15:30",
+                    force_close="15:45",
+                ),
+                risk_limits=StrategyRiskLimits(
+                    max_loss_per_trade_pct=0.01,
+                    max_trades_per_day=8,
+                    max_concurrent_positions=3,
+                ),
+            )
+
+        # Apply config overrides
+        config = self._apply_afternoon_momentum_overrides(config)
+
+        return AfternoonMomentumStrategy(
+            config=config,
+            data_service=self._data_service,
+            clock=self._clock,
+        )
+
     def _apply_orb_breakout_overrides(self, config: OrbBreakoutConfig) -> OrbBreakoutConfig:
         """Apply config overrides for ORB Breakout."""
         if not self._config.config_overrides:
@@ -487,6 +531,28 @@ class ReplayHarness:
                 logger.info("Config override: %s = %s", field_name, value)
 
         return VwapReclaimConfig(**config_dict)
+
+    def _apply_afternoon_momentum_overrides(
+        self, config: AfternoonMomentumConfig
+    ) -> AfternoonMomentumConfig:
+        """Apply config overrides for Afternoon Momentum."""
+        if not self._config.config_overrides:
+            return config
+
+        config_dict = config.model_dump()
+
+        for key, value in self._config.config_overrides.items():
+            # Handle nested keys like "afternoon_momentum.consolidation_atr_ratio"
+            parts = key.split(".")
+            field_name = (
+                parts[1] if parts[0] == "afternoon_momentum" and len(parts) > 1 else key
+            )
+
+            if field_name in config_dict:
+                config_dict[field_name] = value
+                logger.info("Config override: %s = %s", field_name, value)
+
+        return AfternoonMomentumConfig(**config_dict)
 
     async def _run_trading_day(self, trading_day: date, watchlist: DailyWatchlist | None) -> None:
         """Run a single trading day through the pipeline."""

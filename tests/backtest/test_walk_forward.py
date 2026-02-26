@@ -959,3 +959,213 @@ async def test_replay_harness_creates_scalp_strategy():
 
     assert backtest_config.strategy_type == StrategyType.ORB_SCALP
     assert backtest_config.strategy_id == "strat_orb_scalp"
+
+
+# ---------------------------------------------------------------------------
+# Test 21: walk_forward_config_afternoon_momentum_strategy (Sprint 20)
+# ---------------------------------------------------------------------------
+
+
+def test_walk_forward_config_afternoon_momentum_strategy():
+    """WalkForwardConfig accepts strategy='afternoon_momentum' with afternoon-specific grids."""
+    config = WalkForwardConfig(
+        strategy="afternoon_momentum",
+        afternoon_consolidation_atr_ratio_list=[0.5, 0.75, 1.0],
+        afternoon_min_consolidation_bars_list=[15, 30, 45],
+        afternoon_volume_multiplier_list=[1.0, 1.2],
+        afternoon_target_r_list=[1.0, 1.5, 2.0],
+        afternoon_time_stop_bars_list=[15, 30, 45],
+    )
+
+    assert config.strategy == "afternoon_momentum"
+    assert config.afternoon_consolidation_atr_ratio_list == [0.5, 0.75, 1.0]
+    assert config.afternoon_min_consolidation_bars_list == [15, 30, 45]
+    assert config.afternoon_volume_multiplier_list == [1.0, 1.2]
+    assert config.afternoon_target_r_list == [1.0, 1.5, 2.0]
+    assert config.afternoon_time_stop_bars_list == [15, 30, 45]
+
+
+# ---------------------------------------------------------------------------
+# Test 22: optimize_in_sample_afternoon_momentum_returns_best (Sprint 20)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_optimize_in_sample_afternoon_momentum_returns_best():
+    """Afternoon momentum strategy in-sample optimization selects params with highest Sharpe."""
+    from dataclasses import dataclass
+
+    @dataclass
+    class MockSweepResult:
+        """Mock of AfternoonSweepResult for testing."""
+
+        symbol: str
+        consolidation_atr_ratio: float
+        min_consolidation_bars: int
+        volume_multiplier: float
+        target_r: float
+        time_stop_bars: int
+        total_trades: int
+        win_rate: float
+        total_return_pct: float
+        avg_r_multiple: float
+        max_drawdown_pct: float
+        sharpe_ratio: float
+        profit_factor: float
+        avg_hold_bars: float
+        qualifying_days: int
+
+    config = WalkForwardConfig(
+        min_trades=10,
+        optimization_metric="sharpe",
+        strategy="afternoon_momentum",
+        symbols=["TSLA"],  # Explicit symbol list to avoid directory scan
+    )
+
+    # Create mock sweep results as list of dataclass objects
+    mock_results = [
+        MockSweepResult(
+            symbol="TSLA",
+            consolidation_atr_ratio=0.5,
+            min_consolidation_bars=30,
+            volume_multiplier=1.2,
+            target_r=1.0,
+            time_stop_bars=30,
+            total_trades=20,
+            sharpe_ratio=1.2,
+            win_rate=0.55,
+            profit_factor=1.4,
+            total_return_pct=4.0,
+            max_drawdown_pct=3.0,
+            avg_r_multiple=0.3,
+            avg_hold_bars=25.0,
+            qualifying_days=50,
+        ),
+        MockSweepResult(
+            symbol="TSLA",
+            consolidation_atr_ratio=0.75,
+            min_consolidation_bars=30,
+            volume_multiplier=1.2,
+            target_r=1.5,
+            time_stop_bars=30,
+            total_trades=35,
+            sharpe_ratio=2.1,
+            win_rate=0.62,
+            profit_factor=2.2,
+            total_return_pct=8.0,
+            max_drawdown_pct=2.5,
+            avg_r_multiple=0.5,
+            avg_hold_bars=20.0,
+            qualifying_days=50,
+        ),
+        MockSweepResult(
+            symbol="TSLA",
+            consolidation_atr_ratio=1.0,
+            min_consolidation_bars=30,
+            volume_multiplier=1.2,
+            target_r=2.0,
+            time_stop_bars=30,
+            total_trades=25,
+            sharpe_ratio=1.6,
+            win_rate=0.58,
+            profit_factor=1.7,
+            total_return_pct=5.5,
+            max_drawdown_pct=3.5,
+            avg_r_multiple=0.4,
+            avg_hold_bars=22.0,
+            qualifying_days=50,
+        ),
+    ]
+
+    # Mock load_symbol_data to return a non-empty DataFrame
+    mock_df = pd.DataFrame({"timestamp": [1, 2, 3], "close": [100.0, 101.0, 102.0]})
+
+    with (
+        patch(
+            "argus.backtest.vectorbt_afternoon_momentum.load_symbol_data",
+            return_value=mock_df,
+        ),
+        patch(
+            "argus.backtest.vectorbt_afternoon_momentum.compute_qualifying_days",
+            return_value={date(2025, 3, 15)},
+        ),
+        patch(
+            "argus.backtest.vectorbt_afternoon_momentum.run_single_symbol_sweep",
+            return_value=mock_results,
+        ),
+    ):
+        best_params, is_metrics = await optimize_in_sample(
+            is_start=date(2025, 3, 1),
+            is_end=date(2025, 6, 30),
+            config=config,
+        )
+
+    # Should select consolidation_atr_ratio=0.75 with highest Sharpe (2.1)
+    assert best_params["consolidation_atr_ratio"] == 0.75
+    assert best_params["target_r"] == 1.5
+    assert is_metrics["sharpe"] == 2.1
+    assert is_metrics["total_trades"] == 35
+
+
+# ---------------------------------------------------------------------------
+# Test 23: replay_harness_creates_afternoon_momentum_strategy (Sprint 20)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_replay_harness_creates_afternoon_momentum_strategy():
+    """ReplayHarness is created with StrategyType.AFTERNOON_MOMENTUM for afternoon validation."""
+    from argus.backtest.config import StrategyType
+
+    config = WalkForwardConfig(
+        data_dir="data/historical/1m",
+        initial_cash=100_000.0,
+        strategy="afternoon_momentum",
+    )
+
+    # Afternoon momentum params (VectorBT names)
+    best_params = {
+        "consolidation_atr_ratio": 0.75,
+        "min_consolidation_bars": 30,
+        "volume_multiplier": 1.2,
+        "target_r": 1.5,
+        "time_stop_bars": 45,
+    }
+
+    # Mock BacktestResult
+    mock_result = MagicMock()
+    mock_result.total_trades = 40
+    mock_result.win_rate = 0.58
+    mock_result.profit_factor = 1.9
+    mock_result.sharpe_ratio = 1.8
+    mock_result.final_equity = 107_000.0
+    mock_result.max_drawdown_pct = 4.0
+    mock_result.avg_r_multiple = 0.35
+
+    mock_harness = AsyncMock()
+    mock_harness.run.return_value = mock_result
+
+    with patch(
+        "argus.backtest.walk_forward.ReplayHarness", return_value=mock_harness
+    ) as mock_class:
+        await validate_out_of_sample(
+            oos_start=date(2025, 7, 1),
+            oos_end=date(2025, 8, 31),
+            best_params=best_params,
+            config=config,
+        )
+
+    # Verify BacktestConfig has correct strategy type
+    call_args = mock_class.call_args
+    backtest_config = call_args[0][0]
+
+    assert backtest_config.strategy_type == StrategyType.AFTERNOON_MOMENTUM
+    assert backtest_config.strategy_id == "strat_afternoon_momentum"
+
+    # Verify params mapped correctly
+    assert backtest_config.consolidation_atr_ratio == 0.75
+    assert backtest_config.min_consolidation_bars == 30
+    assert backtest_config.afternoon_volume_multiplier == 1.2
+    assert backtest_config.afternoon_target_1_r == 1.5
+    # time_stop_bars -> afternoon_max_hold_minutes
+    assert backtest_config.afternoon_max_hold_minutes == 45

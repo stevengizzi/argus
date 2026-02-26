@@ -37,6 +37,8 @@ from argus.backtest.vectorbt_orb_scalp import ScalpSweepConfig
 from argus.backtest.vectorbt_orb_scalp import run_sweep as run_scalp_sweep
 from argus.backtest.vectorbt_vwap_reclaim import VwapReclaimSweepConfig
 from argus.backtest.vectorbt_vwap_reclaim import run_sweep as run_vwap_reclaim_sweep
+from argus.backtest.vectorbt_afternoon_momentum import AfternoonSweepConfig
+from argus.backtest.vectorbt_afternoon_momentum import run_single_symbol_sweep as run_afternoon_sweep
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +98,23 @@ class WalkForwardConfig:
     )
     vwap_time_stop_bars_list: list[int] = field(
         default_factory=lambda: [10, 15, 20, 30]
+    )
+
+    # Afternoon Momentum parameter grid (used when strategy="afternoon_momentum")
+    afternoon_consolidation_atr_ratio_list: list[float] = field(
+        default_factory=lambda: [0.5, 0.75, 1.0, 1.5]
+    )
+    afternoon_min_consolidation_bars_list: list[int] = field(
+        default_factory=lambda: [15, 30, 45, 60]
+    )
+    afternoon_volume_multiplier_list: list[float] = field(
+        default_factory=lambda: [1.0, 1.2, 1.5]
+    )
+    afternoon_target_r_list: list[float] = field(
+        default_factory=lambda: [1.0, 1.5, 2.0, 3.0]
+    )
+    afternoon_time_stop_bars_list: list[int] = field(
+        default_factory=lambda: [15, 30, 45, 60]
     )
 
     # Output
@@ -241,6 +260,8 @@ async def optimize_in_sample(
         return await _optimize_in_sample_scalp(is_start, is_end, config)
     elif config.strategy == "vwap_reclaim":
         return await _optimize_in_sample_vwap_reclaim(is_start, is_end, config)
+    elif config.strategy == "afternoon_momentum":
+        return await _optimize_in_sample_afternoon_momentum(is_start, is_end, config)
     else:
         return await _optimize_in_sample_orb(is_start, is_end, config)
 
@@ -466,6 +487,108 @@ async def _optimize_in_sample_vwap_reclaim(
     return best_params, is_metrics
 
 
+async def _optimize_in_sample_afternoon_momentum(
+    is_start: date,
+    is_end: date,
+    config: WalkForwardConfig,
+) -> tuple[dict[str, Any], dict[str, float]]:
+    """Run VectorBT Afternoon Momentum sweep on IS period."""
+    from argus.backtest.vectorbt_afternoon_momentum import (
+        AfternoonSweepConfig,
+        load_symbol_data,
+        compute_qualifying_days,
+        run_single_symbol_sweep,
+    )
+
+    sweep_config = AfternoonSweepConfig(
+        data_dir=Path(config.data_dir),
+        symbols=config.symbols or [],
+        start_date=is_start,
+        end_date=is_end,
+        output_dir=Path(config.output_dir) / "is_sweeps",
+        consolidation_atr_ratio_list=config.afternoon_consolidation_atr_ratio_list,
+        min_consolidation_bars_list=config.afternoon_min_consolidation_bars_list,
+        volume_multiplier_list=config.afternoon_volume_multiplier_list,
+        target_r_list=config.afternoon_target_r_list,
+        time_stop_bars_list=config.afternoon_time_stop_bars_list,
+    )
+
+    # Run sweep across all symbols
+    all_results = []
+    symbols = config.symbols or []
+    if not symbols:
+        symbols = [
+            d.name
+            for d in Path(config.data_dir).iterdir()
+            if d.is_dir() and not d.name.startswith(".")
+        ]
+
+    for symbol in symbols:
+        df = load_symbol_data(sweep_config.data_dir, symbol, is_start, is_end)
+        if df.empty:
+            continue
+        qualifying_days = compute_qualifying_days(
+            df, sweep_config.min_gap_pct, sweep_config.min_price, sweep_config.max_price
+        )
+        symbol_results = run_single_symbol_sweep(symbol, df, qualifying_days, sweep_config)
+        all_results.extend(symbol_results)
+
+    if not all_results:
+        raise NoQualifyingParamsError("VectorBT Afternoon Momentum sweep produced no results")
+
+    results_df = pd.DataFrame([vars(r) for r in all_results])
+
+    param_cols = [
+        "consolidation_atr_ratio",
+        "min_consolidation_bars",
+        "volume_multiplier",
+        "target_r",
+        "time_stop_bars",
+    ]
+
+    aggregated = (
+        results_df.groupby(param_cols)
+        .agg(
+            total_trades=("total_trades", "sum"),
+            sharpe_ratio=("sharpe_ratio", "mean"),
+            win_rate=("win_rate", "mean"),
+            profit_factor=("profit_factor", "mean"),
+            total_return_pct=("total_return_pct", "sum"),
+            max_drawdown_pct=("max_drawdown_pct", "max"),
+        )
+        .reset_index()
+    )
+
+    qualifying = aggregated[aggregated["total_trades"] >= config.min_trades]
+
+    if qualifying.empty:
+        max_trades = aggregated["total_trades"].max() if not aggregated.empty else 0
+        raise NoQualifyingParamsError(
+            f"No parameter set meets min_trades={config.min_trades}. Max trades found: {max_trades}"
+        )
+
+    if config.optimization_metric == "sharpe":
+        metric_col = "sharpe_ratio"
+    else:
+        metric_col = config.optimization_metric
+    best_row = qualifying.loc[qualifying[metric_col].idxmax()]
+
+    best_params = {col: best_row[col] for col in param_cols}
+
+    total_pnl_dollars = float(best_row["total_return_pct"]) * config.initial_cash / 100.0
+
+    is_metrics = {
+        "total_trades": int(best_row["total_trades"]),
+        "sharpe": float(best_row["sharpe_ratio"]),
+        "win_rate": float(best_row["win_rate"]),
+        "profit_factor": float(best_row["profit_factor"]),
+        "total_pnl": total_pnl_dollars,
+        "max_drawdown": float(best_row["max_drawdown_pct"]),
+    }
+
+    return best_params, is_metrics
+
+
 async def validate_out_of_sample(
     oos_start: date,
     oos_end: date,
@@ -493,6 +616,8 @@ async def validate_out_of_sample(
         return await _validate_oos_scalp(oos_start, oos_end, best_params, config)
     elif config.strategy == "vwap_reclaim":
         return await _validate_oos_vwap_reclaim(oos_start, oos_end, best_params, config)
+    elif config.strategy == "afternoon_momentum":
+        return await _validate_oos_afternoon_momentum(oos_start, oos_end, best_params, config)
     else:
         return await _validate_oos_orb(oos_start, oos_end, best_params, config)
 
@@ -639,6 +764,71 @@ async def _validate_oos_vwap_reclaim(
         vwap_volume_multiplier=float(best_params["volume_multiplier"]),
         vwap_target_1_r=float(best_params["target_r"]),
         vwap_time_stop_minutes=time_stop_minutes,
+    )
+
+    harness = ReplayHarness(backtest_config)
+    result = await harness.run()
+
+    return {
+        "total_trades": result.total_trades,
+        "win_rate": result.win_rate,
+        "profit_factor": result.profit_factor if result.profit_factor != float("inf") else 0.0,
+        "sharpe": result.sharpe_ratio,
+        "total_pnl": result.final_equity - config.initial_cash,
+        "max_drawdown": result.max_drawdown_pct,
+        "avg_r_multiple": result.avg_r_multiple,
+    }
+
+
+async def _validate_oos_afternoon_momentum(
+    oos_start: date,
+    oos_end: date,
+    best_params: dict[str, Any],
+    config: WalkForwardConfig,
+) -> dict[str, Any]:
+    """Run Replay Harness for Afternoon Momentum on OOS period.
+
+    Translates VectorBT Afternoon Momentum param names to production config:
+    - consolidation_atr_ratio → afternoon_momentum.consolidation_atr_ratio
+    - min_consolidation_bars → afternoon_momentum.min_consolidation_bars
+    - volume_multiplier → afternoon_momentum.volume_multiplier
+    - target_r → afternoon_momentum.target_1_r
+    - time_stop_bars → afternoon_momentum.max_hold_minutes
+    """
+    # Convert time_stop_bars to minutes (1 bar = 1 minute for 1m bars)
+    max_hold_minutes = int(best_params["time_stop_bars"])
+
+    config_overrides = {
+        "afternoon_momentum.consolidation_atr_ratio": float(
+            best_params["consolidation_atr_ratio"]
+        ),
+        "afternoon_momentum.min_consolidation_bars": int(best_params["min_consolidation_bars"]),
+        "afternoon_momentum.volume_multiplier": float(best_params["volume_multiplier"]),
+        "afternoon_momentum.target_1_r": float(best_params["target_r"]),
+        "afternoon_momentum.max_hold_minutes": max_hold_minutes,
+    }
+
+    # Use default 2% gap for Afternoon Momentum
+    scanner_gap_pct = 0.02
+
+    backtest_config = BacktestConfig(
+        data_dir=Path(config.data_dir),
+        output_dir=Path(config.output_dir) / "oos_runs",
+        symbols=config.symbols,
+        start_date=oos_start,
+        end_date=oos_end,
+        strategy_id="strat_afternoon_momentum",
+        strategy_type=StrategyType.AFTERNOON_MOMENTUM,
+        initial_cash=config.initial_cash,
+        slippage_per_share=config.slippage_per_share,
+        scanner_min_gap_pct=scanner_gap_pct,
+        config_overrides=config_overrides,
+        # Pass Afternoon Momentum-specific params for Replay Harness
+        consolidation_atr_ratio=float(best_params["consolidation_atr_ratio"]),
+        min_consolidation_bars=int(best_params["min_consolidation_bars"]),
+        afternoon_volume_multiplier=float(best_params["volume_multiplier"]),
+        afternoon_max_hold_minutes=max_hold_minutes,
+        afternoon_target_1_r=float(best_params["target_r"]),
     )
 
     harness = ReplayHarness(backtest_config)
@@ -1218,6 +1408,10 @@ async def evaluate_fixed_params_on_is(
         return await _evaluate_fixed_params_scalp(is_start, is_end, fixed_params, config)
     elif config.strategy == "vwap_reclaim":
         return await _evaluate_fixed_params_vwap_reclaim(is_start, is_end, fixed_params, config)
+    elif config.strategy == "afternoon_momentum":
+        return await _evaluate_fixed_params_afternoon_momentum(
+            is_start, is_end, fixed_params, config
+        )
     else:
         return await _evaluate_fixed_params_orb(is_start, is_end, fixed_params, config)
 
@@ -1356,6 +1550,84 @@ async def _evaluate_fixed_params_vwap_reclaim(
             "total_pnl": 0.0,
             "max_drawdown": 0.0,
         }
+
+    total_trades = int(results_df["total_trades"].sum())
+    avg_sharpe = float(results_df["sharpe_ratio"].mean())
+    avg_win_rate = float(results_df["win_rate"].mean())
+    avg_pf = float(results_df["profit_factor"].mean())
+    total_return = float(results_df["total_return_pct"].sum())
+    max_dd = float(results_df["max_drawdown_pct"].max())
+
+    total_pnl_dollars = total_return * config.initial_cash / 100.0
+
+    return {
+        "total_trades": total_trades,
+        "sharpe": avg_sharpe,
+        "win_rate": avg_win_rate,
+        "profit_factor": avg_pf,
+        "total_pnl": total_pnl_dollars,
+        "max_drawdown": max_dd,
+    }
+
+
+async def _evaluate_fixed_params_afternoon_momentum(
+    is_start: date,
+    is_end: date,
+    fixed_params: dict[str, Any],
+    config: WalkForwardConfig,
+) -> dict[str, float]:
+    """Evaluate fixed Afternoon Momentum params on IS period using VectorBT."""
+    from argus.backtest.vectorbt_afternoon_momentum import (
+        AfternoonSweepConfig,
+        load_symbol_data,
+        compute_qualifying_days,
+        run_single_symbol_sweep,
+    )
+
+    sweep_config = AfternoonSweepConfig(
+        data_dir=Path(config.data_dir),
+        symbols=config.symbols or [],
+        start_date=is_start,
+        end_date=is_end,
+        output_dir=Path(config.output_dir) / "is_fixed",
+        consolidation_atr_ratio_list=[float(fixed_params["consolidation_atr_ratio"])],
+        min_consolidation_bars_list=[int(fixed_params["min_consolidation_bars"])],
+        volume_multiplier_list=[float(fixed_params["volume_multiplier"])],
+        target_r_list=[float(fixed_params["target_r"])],
+        time_stop_bars_list=[int(fixed_params["time_stop_bars"])],
+    )
+
+    # Run sweep across all symbols
+    all_results = []
+    symbols = config.symbols or []
+    if not symbols:
+        symbols = [
+            d.name
+            for d in Path(config.data_dir).iterdir()
+            if d.is_dir() and not d.name.startswith(".")
+        ]
+
+    for symbol in symbols:
+        df = load_symbol_data(sweep_config.data_dir, symbol, is_start, is_end)
+        if df.empty:
+            continue
+        qualifying_days = compute_qualifying_days(
+            df, sweep_config.min_gap_pct, sweep_config.min_price, sweep_config.max_price
+        )
+        symbol_results = run_single_symbol_sweep(symbol, df, qualifying_days, sweep_config)
+        all_results.extend(symbol_results)
+
+    if not all_results:
+        return {
+            "total_trades": 0,
+            "sharpe": 0.0,
+            "win_rate": 0.0,
+            "profit_factor": 0.0,
+            "total_pnl": 0.0,
+            "max_drawdown": 0.0,
+        }
+
+    results_df = pd.DataFrame([vars(r) for r in all_results])
 
     total_trades = int(results_df["total_trades"].sum())
     avg_sharpe = float(results_df["sharpe_ratio"].mean())
@@ -1733,8 +2005,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--strategy",
         default="orb",
-        choices=["orb", "orb_scalp", "vwap_reclaim"],
-        help="Strategy: orb, orb_scalp, or vwap_reclaim",
+        choices=["orb", "orb_scalp", "vwap_reclaim", "afternoon_momentum"],
+        help="Strategy: orb, orb_scalp, vwap_reclaim, or afternoon_momentum",
     )
 
     # Fixed-params mode
