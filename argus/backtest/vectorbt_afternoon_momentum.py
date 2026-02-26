@@ -710,3 +710,588 @@ def _compute_sharpe_from_r_multiples(
         return 0.0
 
     return (mean_r / std_r) * (annualization_factor**0.5)
+
+
+def run_single_symbol_sweep(
+    symbol: str,
+    df: pd.DataFrame,
+    qualifying_days: set[date],
+    config: AfternoonSweepConfig,
+) -> list[AfternoonSweepResult]:
+    """Run parameter sweep for a single symbol (VECTORIZED VERSION).
+
+    Uses pre-computed entries and vectorized exit detection to avoid
+    iterrows() calls in the inner loop.
+
+    Architecture:
+    1. Pre-group data by day ONCE
+    2. Pre-compute ATR and ALL potential breakout entries per day ONCE
+    3. Filter entries by (consolidation_ratio, bars, volume) at runtime
+    4. Compute exits vectorized for each (target_r, time_stop_bars) combination
+
+    Args:
+        symbol: Ticker symbol.
+        df: DataFrame with all bar data for the symbol.
+        qualifying_days: Set of dates that pass gap/price filters.
+        config: Sweep configuration with parameter ranges.
+
+    Returns:
+        List of AfternoonSweepResult objects (one per parameter combination).
+    """
+    from itertools import product
+
+    results: list[AfternoonSweepResult] = []
+    valid_days_count = len(qualifying_days)
+
+    # Pre-group bars by day ONCE
+    day_groups: dict[date, pd.DataFrame] = {
+        day: group.reset_index(drop=True) for day, group in df.groupby("trading_day")
+    }
+
+    # Pre-compute ALL potential afternoon entries for each qualifying day ONCE
+    all_day_entries: dict[date, list[AfternoonEntryInfo]] = {}
+    for day in qualifying_days:
+        day_df = day_groups.get(day)
+        if day_df is None or day_df.empty:
+            continue
+
+        # Compute ATR for the day
+        atr_value = _compute_atr_for_day(day_df)
+        if atr_value is None or atr_value <= 0:
+            continue
+
+        entries = _precompute_afternoon_entries_for_day(
+            day_df,
+            atr_value,
+            config.max_chase_pct,
+            config.stop_buffer_pct,
+        )
+        if entries:
+            all_day_entries[day] = entries
+
+    if not all_day_entries:
+        # No entry candidates - return empty results for all param combos
+        for params in product(
+            config.consolidation_atr_ratio_list,
+            config.min_consolidation_bars_list,
+            config.volume_multiplier_list,
+            config.target_r_list,
+            config.time_stop_bars_list,
+        ):
+            results.append(
+                _empty_afternoon_result(symbol, *params, qualifying_days=valid_days_count)
+            )
+        return results
+
+    # Flatten all entries across days for easier filtering
+    all_entries: list[tuple[date, AfternoonEntryInfo]] = [
+        (day, entry)
+        for day, entries in all_day_entries.items()
+        for entry in entries
+    ]
+
+    # Nested parameter loop - but entry detection is already done
+    total_combos = (
+        len(config.consolidation_atr_ratio_list)
+        * len(config.min_consolidation_bars_list)
+        * len(config.volume_multiplier_list)
+        * len(config.target_r_list)
+        * len(config.time_stop_bars_list)
+    )
+    combo_count = 0
+
+    for consolidation_ratio in config.consolidation_atr_ratio_list:
+        for min_bars in config.min_consolidation_bars_list:
+            for volume_mult in config.volume_multiplier_list:
+                # Filter entries by these three parameters ONCE
+                filtered_entries = [
+                    (day, entry)
+                    for day, entry in all_entries
+                    if (
+                        entry["consolidation_ratio"] < consolidation_ratio
+                        and entry["consolidation_bars"] >= min_bars
+                        and entry["volume_ratio"] >= volume_mult
+                    )
+                ]
+
+                for target_r in config.target_r_list:
+                    for time_stop_bars in config.time_stop_bars_list:
+                        combo_count += 1
+                        if combo_count % 100 == 0:
+                            logger.debug(
+                                "%s: processed %d/%d combinations",
+                                symbol,
+                                combo_count,
+                                total_combos,
+                            )
+
+                        if not filtered_entries:
+                            results.append(
+                                _empty_afternoon_result(
+                                    symbol,
+                                    consolidation_ratio,
+                                    min_bars,
+                                    volume_mult,
+                                    target_r,
+                                    time_stop_bars,
+                                    valid_days_count,
+                                )
+                            )
+                            continue
+
+                        # Compute trades using vectorized exit detection
+                        trades: list[dict] = []
+                        for _day, entry in filtered_entries:
+                            stop_price = entry["consolidation_low"] * (
+                                1 - config.stop_buffer_pct
+                            )
+                            risk = entry["entry_price"] - stop_price
+                            if risk <= 0:
+                                continue
+                            target_price = entry["entry_price"] + risk * target_r
+
+                            trade = _find_exit_vectorized(
+                                entry["highs"],
+                                entry["lows"],
+                                entry["closes"],
+                                entry["minutes"],
+                                entry["entry_price"],
+                                entry["entry_minutes"],
+                                stop_price,
+                                target_price,
+                                time_stop_bars,
+                            )
+                            if trade is not None:
+                                trades.append(trade)
+
+                        # Compute metrics
+                        result = _compute_afternoon_result(
+                            symbol,
+                            consolidation_ratio,
+                            min_bars,
+                            volume_mult,
+                            target_r,
+                            time_stop_bars,
+                            trades,
+                            valid_days_count,
+                        )
+                        results.append(result)
+
+    return results
+
+
+def run_sweep(config: AfternoonSweepConfig) -> pd.DataFrame:
+    """Run parameter sweep for all symbols.
+
+    Args:
+        config: Sweep configuration.
+
+    Returns:
+        DataFrame with all AfternoonSweepResult data.
+    """
+    config.output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Discover symbols
+    if config.symbols:
+        symbols = config.symbols
+    else:
+        symbols = [
+            d.name
+            for d in config.data_dir.iterdir()
+            if d.is_dir() and not d.name.startswith(".")
+        ]
+
+    logger.info("Starting Afternoon Momentum sweep for %d symbols", len(symbols))
+
+    total_combos = (
+        len(config.consolidation_atr_ratio_list)
+        * len(config.min_consolidation_bars_list)
+        * len(config.volume_multiplier_list)
+        * len(config.target_r_list)
+        * len(config.time_stop_bars_list)
+    )
+    logger.info("Parameter combinations: %d", total_combos)
+
+    all_results: list[AfternoonSweepResult] = []
+
+    for i, symbol in enumerate(symbols):
+        logger.info("Processing %s (%d/%d)", symbol, i + 1, len(symbols))
+
+        df = load_symbol_data(config.data_dir, symbol, config.start_date, config.end_date)
+
+        if df.empty:
+            logger.warning("No data for %s, skipping", symbol)
+            continue
+
+        # Compute qualifying days once per symbol
+        qualifying_days = compute_qualifying_days(
+            df, config.min_gap_pct, config.min_price, config.max_price
+        )
+
+        symbol_results = run_single_symbol_sweep(symbol, df, qualifying_days, config)
+
+        if symbol_results:
+            all_results.extend(symbol_results)
+
+            # Save per-symbol results
+            symbol_df = pd.DataFrame([vars(r) for r in symbol_results])
+            symbol_path = config.output_dir / f"afternoon_sweep_{symbol}.parquet"
+            symbol_df.to_parquet(symbol_path, index=False)
+            logger.debug("Saved %d results to %s", len(symbol_results), symbol_path)
+
+    if not all_results:
+        logger.warning("No results generated from sweep")
+        return pd.DataFrame()
+
+    results_df = pd.DataFrame([vars(r) for r in all_results])
+
+    # Save cross-symbol summary
+    summary_path = config.output_dir / "afternoon_sweep_summary.parquet"
+    results_df.to_parquet(summary_path, index=False)
+    logger.info("Saved summary with %d results to %s", len(results_df), summary_path)
+
+    # Also save as CSV for easy viewing
+    csv_path = config.output_dir / "afternoon_sweep_summary.csv"
+    results_df.to_csv(csv_path, index=False)
+    logger.info("Saved CSV summary to %s", csv_path)
+
+    return results_df
+
+
+def generate_heatmaps(
+    results_df: pd.DataFrame,
+    output_dir: Path,
+) -> None:
+    """Generate 2D heatmaps for key parameter pairs.
+
+    Creates heatmaps for:
+    - consolidation_atr_ratio × min_consolidation_bars
+    - target_r × time_stop_bars
+    - volume_multiplier × target_r
+
+    Args:
+        results_df: DataFrame with sweep results.
+        output_dir: Directory to save heatmap files.
+    """
+    if results_df.empty:
+        logger.warning("No results to generate heatmaps from")
+        return
+
+    # Import plotly inside function to avoid test environment issues
+    import plotly.graph_objects as go
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Aggregate across all symbols
+    agg = (
+        results_df.groupby(
+            [
+                "consolidation_atr_ratio",
+                "min_consolidation_bars",
+                "volume_multiplier",
+                "target_r",
+                "time_stop_bars",
+            ]
+        )
+        .agg(
+            sharpe_ratio=("sharpe_ratio", "mean"),
+            total_trades=("total_trades", "sum"),
+            win_rate=("win_rate", "mean"),
+            profit_factor=("profit_factor", "mean"),
+            avg_r_multiple=("avg_r_multiple", "mean"),
+        )
+        .reset_index()
+    )
+
+    # Heatmap 1: consolidation_atr_ratio × min_consolidation_bars
+    heatmap1_agg = (
+        agg.groupby(["consolidation_atr_ratio", "min_consolidation_bars"])
+        .agg(sharpe_ratio=("sharpe_ratio", "mean"), total_trades=("total_trades", "sum"))
+        .reset_index()
+    )
+    pivot1 = heatmap1_agg.pivot(
+        index="min_consolidation_bars",
+        columns="consolidation_atr_ratio",
+        values="sharpe_ratio",
+    )
+    pivot1_trades = heatmap1_agg.pivot(
+        index="min_consolidation_bars",
+        columns="consolidation_atr_ratio",
+        values="total_trades",
+    )
+
+    fig1 = go.Figure(
+        go.Heatmap(
+            z=pivot1.values,
+            x=[f"{x:.2f}" for x in pivot1.columns],
+            y=pivot1.index.tolist(),
+            colorscale="RdYlGn",
+            zmid=0,
+            text=pivot1_trades.values.astype(int),
+            texttemplate="%{text}",
+            hovertemplate=(
+                "Consolidation ATR Ratio: %{x}<br>"
+                "Min Consolidation Bars: %{y}<br>"
+                "Sharpe: %{z:.2f}<br>"
+                "Trades: %{text}<extra></extra>"
+            ),
+        )
+    )
+    fig1.update_layout(
+        title="Afternoon Momentum: Consolidation Ratio × Min Bars (Sharpe)",
+        xaxis_title="Consolidation ATR Ratio (max)",
+        yaxis_title="Min Consolidation Bars",
+    )
+    fig1.write_html(str(output_dir / "afternoon_heatmap_consolidation.html"))
+    logger.info("Saved consolidation heatmap")
+
+    # Heatmap 2: target_r × time_stop_bars
+    heatmap2_agg = (
+        agg.groupby(["target_r", "time_stop_bars"])
+        .agg(sharpe_ratio=("sharpe_ratio", "mean"), total_trades=("total_trades", "sum"))
+        .reset_index()
+    )
+    pivot2 = heatmap2_agg.pivot(
+        index="time_stop_bars", columns="target_r", values="sharpe_ratio"
+    )
+    pivot2_trades = heatmap2_agg.pivot(
+        index="time_stop_bars", columns="target_r", values="total_trades"
+    )
+
+    fig2 = go.Figure(
+        go.Heatmap(
+            z=pivot2.values,
+            x=pivot2.columns.tolist(),
+            y=pivot2.index.tolist(),
+            colorscale="RdYlGn",
+            zmid=0,
+            text=pivot2_trades.values.astype(int),
+            texttemplate="%{text}",
+            hovertemplate=(
+                "Target R: %{x}<br>"
+                "Time Stop Bars: %{y}<br>"
+                "Sharpe: %{z:.2f}<br>"
+                "Trades: %{text}<extra></extra>"
+            ),
+        )
+    )
+    fig2.update_layout(
+        title="Afternoon Momentum: Target R × Time Stop Bars (Sharpe)",
+        xaxis_title="Target R",
+        yaxis_title="Time Stop Bars",
+    )
+    fig2.write_html(str(output_dir / "afternoon_heatmap_target_time.html"))
+    logger.info("Saved target/time heatmap")
+
+    # Heatmap 3: volume_multiplier × target_r
+    heatmap3_agg = (
+        agg.groupby(["volume_multiplier", "target_r"])
+        .agg(sharpe_ratio=("sharpe_ratio", "mean"), total_trades=("total_trades", "sum"))
+        .reset_index()
+    )
+    pivot3 = heatmap3_agg.pivot(
+        index="volume_multiplier", columns="target_r", values="sharpe_ratio"
+    )
+    pivot3_trades = heatmap3_agg.pivot(
+        index="volume_multiplier", columns="target_r", values="total_trades"
+    )
+
+    fig3 = go.Figure(
+        go.Heatmap(
+            z=pivot3.values,
+            x=pivot3.columns.tolist(),
+            y=pivot3.index.tolist(),
+            colorscale="RdYlGn",
+            zmid=0,
+            text=pivot3_trades.values.astype(int),
+            texttemplate="%{text}",
+            hovertemplate=(
+                "Target R: %{x}<br>"
+                "Volume Mult: %{y}<br>"
+                "Sharpe: %{z:.2f}<br>"
+                "Trades: %{text}<extra></extra>"
+            ),
+        )
+    )
+    fig3.update_layout(
+        title="Afternoon Momentum: Volume Multiplier × Target R (Sharpe)",
+        xaxis_title="Target R",
+        yaxis_title="Volume Multiplier",
+    )
+    fig3.write_html(str(output_dir / "afternoon_heatmap_volume_target.html"))
+    logger.info("Saved volume/target heatmap")
+
+
+def main() -> None:
+    """CLI entry point for VectorBT Afternoon Momentum parameter sweep."""
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="VectorBT Afternoon Momentum parameter sweep",
+        prog="python -m argus.backtest.vectorbt_afternoon_momentum",
+    )
+    parser.add_argument(
+        "--data-dir",
+        type=Path,
+        required=True,
+        help="Directory containing historical Parquet files",
+    )
+    parser.add_argument(
+        "--symbols",
+        type=str,
+        default="",
+        help="Comma-separated symbols. Empty = all in data-dir",
+    )
+    parser.add_argument(
+        "--start",
+        type=str,
+        required=True,
+        help="Start date (YYYY-MM-DD)",
+    )
+    parser.add_argument(
+        "--end",
+        type=str,
+        required=True,
+        help="End date (YYYY-MM-DD)",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("data/backtest_runs/afternoon_sweeps"),
+        help="Output directory for results",
+    )
+    # Optional parameter overrides
+    parser.add_argument(
+        "--consolidation-ratio",
+        type=str,
+        default=None,
+        help="Override: comma-separated consolidation ATR ratio values",
+    )
+    parser.add_argument(
+        "--min-consolidation-bars",
+        type=str,
+        default=None,
+        help="Override: comma-separated min consolidation bars values",
+    )
+    parser.add_argument(
+        "--volume-mult",
+        type=str,
+        default=None,
+        help="Override: comma-separated volume multiplier values",
+    )
+    parser.add_argument(
+        "--target-r",
+        type=str,
+        default=None,
+        help="Override: comma-separated target R values",
+    )
+    parser.add_argument(
+        "--time-stop-bars",
+        type=str,
+        default=None,
+        help="Override: comma-separated time stop bars values",
+    )
+    parser.add_argument(
+        "--min-gap",
+        type=float,
+        default=None,
+        help="Override: minimum gap percentage (default: 2.0)",
+    )
+
+    args = parser.parse_args()
+
+    # Setup logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
+
+    # Build config
+    symbols = [s.strip().upper() for s in args.symbols.split(",") if s.strip()]
+
+    config = AfternoonSweepConfig(
+        data_dir=args.data_dir,
+        symbols=symbols,
+        start_date=date.fromisoformat(args.start),
+        end_date=date.fromisoformat(args.end),
+        output_dir=args.output_dir,
+    )
+
+    # Apply parameter overrides
+    if args.consolidation_ratio:
+        config.consolidation_atr_ratio_list = [
+            float(x) for x in args.consolidation_ratio.split(",")
+        ]
+    if args.min_consolidation_bars:
+        config.min_consolidation_bars_list = [
+            int(x) for x in args.min_consolidation_bars.split(",")
+        ]
+    if args.volume_mult:
+        config.volume_multiplier_list = [float(x) for x in args.volume_mult.split(",")]
+    if args.target_r:
+        config.target_r_list = [float(x) for x in args.target_r.split(",")]
+    if args.time_stop_bars:
+        config.time_stop_bars_list = [int(x) for x in args.time_stop_bars.split(",")]
+    if args.min_gap:
+        config.min_gap_pct = args.min_gap
+
+    # Run sweep
+    results = run_sweep(config)
+
+    if results.empty:
+        logger.warning("No results generated. Check data availability.")
+        return
+
+    # Generate heatmaps
+    generate_heatmaps(results, config.output_dir)
+
+    print(f"\nSweep complete: {len(results)} combinations evaluated")
+    print(f"Results saved to {config.output_dir}")
+
+    # Print summary statistics
+    total_trades = results["total_trades"].sum()
+    results_with_trades = results[results["total_trades"] > 0]
+    if not results_with_trades.empty:
+        avg_sharpe = results_with_trades["sharpe_ratio"].mean()
+        avg_win_rate = results_with_trades["win_rate"].mean()
+        print(f"Total trades across all combinations: {total_trades:,}")
+        print(f"Average Sharpe (where trades > 0): {avg_sharpe:.2f}")
+        print(f"Average Win Rate (where trades > 0): {avg_win_rate:.1%}")
+
+        # Best parameter combo by Sharpe (with min 20 trades)
+        min_trades_results = results_with_trades[results_with_trades["total_trades"] >= 20]
+        if not min_trades_results.empty:
+            best = min_trades_results.loc[min_trades_results["sharpe_ratio"].idxmax()]
+            print(
+                f"\nBest by Sharpe (min 20 trades): "
+                f"consolidation_ratio={best['consolidation_atr_ratio']:.2f}, "
+                f"min_bars={int(best['min_consolidation_bars'])}, "
+                f"volume_mult={best['volume_multiplier']:.1f}, "
+                f"target_r={best['target_r']:.1f}, "
+                f"time_stop_bars={int(best['time_stop_bars'])}, "
+                f"sharpe={best['sharpe_ratio']:.2f}, "
+                f"trades={int(best['total_trades'])}"
+            )
+
+            # Top 5 combos
+            print("\nTop 5 combinations by Sharpe (min 20 trades):")
+            top5 = min_trades_results.nlargest(5, "sharpe_ratio")
+            for j, (_, row) in enumerate(top5.iterrows(), 1):
+                print(
+                    f"  {j}. sharpe={row['sharpe_ratio']:.2f}, "
+                    f"trades={int(row['total_trades'])}, "
+                    f"win_rate={row['win_rate']:.1%}, "
+                    f"consol_ratio={row['consolidation_atr_ratio']:.2f}, "
+                    f"bars={int(row['min_consolidation_bars'])}, "
+                    f"vol={row['volume_multiplier']:.1f}, "
+                    f"target_r={row['target_r']:.1f}, "
+                    f"time_stop={int(row['time_stop_bars'])}"
+                )
+        else:
+            print("\nNo combinations with >= 20 trades found.")
+    else:
+        print("No trades generated across any parameter combination.")
+
+
+if __name__ == "__main__":
+    main()
