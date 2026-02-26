@@ -410,6 +410,26 @@ OrbBaseStrategy (ABC)          ← shared: scanner criteria, gap filtering, OR t
 
 **OrbScalpStrategy** (`strategies/orb_scalp.py`): Fast ORB variant. Single T1 target at 0.3R, 120-second max hold via per-signal `time_stop_seconds` field (DEC-122). No T2 split — trades too fast for partial exits (DEC-123). Uses same entry criteria as OrbBreakout but diverges entirely on exit management.
 
+### 3.4.2 VWAP Reclaim Strategy (`strategies/vwap_reclaim.py`)
+
+Mean-reversion strategy entering long when a stock reclaims VWAP after a pullback. Standalone from BaseStrategy (DEC-136).
+
+**State Machine (DEC-138):** 5 states — WATCHING → ABOVE_VWAP → BELOW_VWAP → ENTERED (terminal) or REJECTED (terminal). Tracks pullback swing-low for stop placement (DEC-139).
+
+**Key parameters:** `min_pullback_pct` (0.2%), `max_pullback_pct` (2%), `min_pullback_bars` (3), `volume_confirmation_multiplier` (1.2×), `max_chase_above_vwap_pct` (0.3%), `target_1_r` (1.0), `target_2_r` (2.0), `time_stop_minutes` (30).
+
+**Operating window:** 10:00 AM – 12:00 PM ET. Position sizing with minimum risk floor (DEC-140) prevents oversizing on tight pullbacks. Cross-strategy ALLOW_ALL (DEC-141).
+
+### 3.4.3 Afternoon Momentum Strategy (`strategies/afternoon_momentum.py`)
+
+Consolidation breakout strategy entering on breakouts from midday tight ranges during afternoon session. Standalone from BaseStrategy (DEC-152).
+
+**State Machine (DEC-155):** 5 states — WATCHING → ACCUMULATING → CONSOLIDATED → ENTERED (terminal) or REJECTED (terminal). Consolidation detected via high/low channel with ATR filter (DEC-153). Range updates continuously through CONSOLIDATED state — can still reject if range widens.
+
+**Key parameters:** `consolidation_start_time` (12:00), `consolidation_atr_ratio` (0.75), `max_consolidation_atr_ratio` (2.0), `min_consolidation_bars` (30), `volume_multiplier` (1.2×), `max_chase_pct` (0.5%), `target_1_r` (1.0), `target_2_r` (2.0), `max_hold_minutes` (60), `stop_buffer_pct` (0.1%), `force_close_time` (15:45).
+
+**Operating window:** Consolidation tracking from 12:00 PM, entries 2:00–3:30 PM, force close 3:45 PM ET. 8 simultaneous entry conditions (DEC-156). Dynamic time stop = min(max_hold_minutes, seconds until force_close) (DEC-157). Scanner reuses ORB gap watchlist (DEC-154).
+
 ### 3.5 Risk Manager (`core/risk_manager.py`)
 
 Every order passes through the Risk Manager before reaching the broker.
@@ -1004,6 +1024,28 @@ results = sweep_orb_parameters(data, orb_windows, target_r, stop_buffers, max_ho
 ### 5.1.1 VectorBT ORB Scalp Layer (`backtest/vectorbt_orb_scalp.py`)
 
 Scalp-specific sweep with a reduced 2-parameter grid: `scalp_target_r` (0.2, 0.3, 0.4, 0.5) × `max_hold_bars` (1, 2, 3, 5). Entry parameters inherited from ORB Breakout (DEC-076), not re-swept. Results are directional guidance only due to 1-minute bar resolution (DEC-127, RSK-026).
+
+### 5.1.2 VectorBT VWAP Reclaim Layer (`backtest/vectorbt_vwap_reclaim.py`)
+
+Precompute+vectorize architecture (DEC-144, ~500x speedup). Precomputes per-day entries from VWAP crossover patterns, vectorized exit detection for T1/T2/time-stop. Walk-forward dispatch: IS=VectorBT sweep, OOS=Replay Harness (DEC-145). Results provisional per DEC-132.
+
+### 5.1.3 VectorBT Afternoon Momentum Layer (`backtest/vectorbt_afternoon_momentum.py`)
+
+Precompute+vectorize architecture (DEC-162). Consolidation detection from midday bars (12:00–2:00 PM), breakout simulation during 2:00–3:30 PM window. ATR method divergence documented: VectorBT uses SMA(14), production uses Wilder's EMA — thresholds may not transfer exactly. Single entry per day (conservative vs live retry). Walk-forward pipeline dispatch. Results provisional per DEC-132.
+```
+
+**Change C — Update directory structure in section 5.6 (replace the backtest file list):**
+
+Replace:
+```
+├── vectorbt_orb.py       # VectorBT parameter sweeps
+```
+With:
+```
+├── vectorbt_orb.py                # VectorBT ORB parameter sweeps
+├── vectorbt_orb_scalp.py          # VectorBT ORB Scalp sweeps
+├── vectorbt_vwap_reclaim.py       # VectorBT VWAP Reclaim sweeps (DEC-144)
+├── vectorbt_afternoon_momentum.py # VectorBT Afternoon Momentum sweeps (DEC-162)
 
 ### 5.2 Replay Harness (`backtest/replay_harness.py`)
 

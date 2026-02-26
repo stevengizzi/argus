@@ -1,6 +1,6 @@
 # ARGUS — Project Knowledge (Claude Context)
 
-> *Paste this into Claude's project instructions. Keep updated as the project evolves. Last updated: Feb 25, 2026.*
+> *Paste this into Claude's project instructions. Keep updated as the project evolves. Last updated: Feb 26, 2026.*
 
 ---
 
@@ -12,7 +12,7 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 
 **Structure:** Two parallel tracks (DEC-079, February 19, 2026). Build Track (system construction) + Validation Track (strategy confidence-building).
 
-**Build Track:** 1410 tests (pytest) + 40 (Vitest). Sprints 1–19 complete. Sprint 20 (Afternoon Momentum) NEXT.
+**Build Track:** 1522 tests (pytest) + 48 (Vitest). Sprints 1–20 complete. Sprint 21 (CC Analytics & Strategy Lab) NEXT.
 - Phase 1 (Core Engine): ✅ COMPLETE — 362 tests, Feb 14–16
 - Phase 2 (Backtesting): ✅ COMPLETE — 542 tests, Feb 16–17
 - Sprint 11 (Extended Backtest): ✅ COMPLETE — 35 months, 15 WF windows, WFE=0.56
@@ -27,6 +27,7 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 - Sprint 18.5 (Post-Review Polish): ✅ COMPLETE — 1313 tests (pytest) + 7 (Vitest), Feb 25. ORB Scalp mock data in dev mode (positions, trades, system status, strategy cards). SessionSummaryCard dev-mode override (DEC-131). Mobile timeline label density fix. Three-way position filter All/Open/Closed (DEC-128). View toggle persistence via Zustand store (DEC-129). 3 integration test gap fills (same-symbol collision, partial allocation exhaustion, throttle isolation). Donut chart legend width fix. Badge contrast fix on amber timeline bars. 7 sessions.
 - Sprint 18.75 (CapitalAllocation + Dashboard Polish): ✅ COMPLETE — 1317 tests (pytest) + 14 (Vitest), Feb 25. AllocationDonut renamed to CapitalAllocation (DEC-133). Two views: track-and-fill donut (custom SVG, color-tinted track segments, clockwise fill arcs, sweep animation) and horizontal stacked bars (deployed/available/throttled segments, labels above/below). SegmentedTab toggle with Zustand persistence. MarketRegimeCard added to dashboard (DEC-134). Dashboard second row → 3-card equal grid. Responsive: Market + Market Regime always paired at tablet/phone widths. API enrichment: orchestrator status includes per-strategy deployed_capital, deployed_pct, is_throttled, plus total_deployed_capital and total_equity (DEC-135). Dev mode mock data scaled to realistic positions vs allocations. 4 new orchestrator pytest tests, 7 new Vitest component tests. 8 fix sessions. Code review passed (DEC-133–135).
 - Sprint 19 (VWAP Reclaim Strategy): ✅ COMPLETE — 1410 tests (pytest, 93 new) + 40 (Vitest, 26 new), Feb 25–26. VwapReclaimStrategy standalone from BaseStrategy (DEC-136), 5-state machine (DEC-138), pullback swing-low stop (DEC-139), T1=1.0R/T2=2.0R, 30-min time stop. Scanner reuse (DEC-137), position sizing with risk floor (DEC-140), ALLOW_ALL cross-strategy (DEC-141). VectorBT parameter sweep: 59,556 trades, 768 combos, avg Sharpe 3.89, WF OOS Sharpe 1.49, P&L $15,820 (DEC-146, provisional per DEC-132). Precompute+vectorize architecture mandated for all sweeps (DEC-149, `.claude/rules/backtesting.md`). VectorBT ↔ live state machine divergences harmonized (DEC-148). Walk-forward pipeline dispatch for VWAP Reclaim (DEC-145). Watchlist Sidebar: responsive (desktop inline 280px / tablet slide-out / mobile overlay), compact single-letter strategy badges, VWAP distance metric, sort controls, edge-mounted collapse pill (DEC-142, DEC-147, DEC-150). Keyboard shortcuts: 1–4 navigation, w watchlist toggle (DEC-151). Dev mode three-strategy mock data. Strategy spec: `docs/strategies/STRATEGY_VWAP_RECLAIM.md`. 14 implementation sessions + 2 code review checkpoints. Code review passed (DEC-144–151).
+- Sprint 20 (Afternoon Momentum): ✅ COMPLETE — 1522 tests (pytest, 112 new) + 48 (Vitest, 8 new), Feb 26. AfternoonMomentumStrategy standalone from BaseStrategy (DEC-152), 5-state machine (DEC-155), consolidation high/low channel + ATR filter (DEC-153), 8 simultaneous entry conditions (DEC-156). Gap watchlist reuse (DEC-154). T1=1.0R/T2=2.0R, dynamic time stop compressed to force_close (DEC-157). Trailing stop deferred (DEC-158, DEF-024). EOD handling (DEC-159). Cross-strategy ALLOW_ALL, time-separated coverage (DEC-160). VectorBT sweep: 1,152 combos, precompute+vectorize (DEC-162). Walk-forward pipeline dispatch. System integration: main.py wiring, Orchestrator registration, per-strategy health components (all 4 strategies). Dev mode four-strategy mock data. 16 four-strategy integration tests. Strategy spec: `docs/strategies/STRATEGY_AFTERNOON_MOMENTUM.md`. Databento activation deferred to Sprint 21 (DEC-161). 10 implementation sessions + 2 code review checkpoints. Code review passed (DEC-152–162).
 
 **Validation Track:** Paper trading ACTIVE with DEC-076 parameters on Alpaca. Validates system stability only — Alpaca IEX data captures only ~2–3% of market volume (DEC-081), so signal accuracy is not validated until Databento data is integrated (Sprint 12). See `08_PAPER_TRADING_GUIDE.md`.
 
@@ -37,7 +38,7 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 
 **IBKR Account (Feb 21):** Application submitted. Account ID U24619949. Individual margin account, IBKR Pro tiered pricing. Awaiting approval — paper trading account will be enabled post-approval for Sprint 13 adapter development.
 
-**Next Build sprints:** Afternoon Momentum (Sprint 20) → CC Analytics & Strategy Lab (Sprint 21) → AI Layer MVP (Sprint 22). See DEC-096, DEC-106–110. UX Feature Backlog (`docs/ui/UX_FEATURE_BACKLOG.md`) provides per-sprint enhancement add-ons alongside core sprint scope. Orchestrator interaction UI planned for Sprint 21 (21-L in UX Feature Backlog). Note: Databento subscription activation recommended around Sprint 20 (DEC-143). All pre-Databento backtests require re-validation with quality data (DEC-132).
+**Next Build sprints:** CC Analytics & Strategy Lab (Sprint 21) → AI Layer MVP (Sprint 22). See DEC-096, DEC-106–110. UX Feature Backlog (`docs/ui/UX_FEATURE_BACKLOG.md`) provides per-sprint enhancement add-ons alongside core sprint scope. Orchestrator interaction UI planned for Sprint 21 (21-L in UX Feature Backlog). Note: Databento subscription activation recommended around Sprint 21 (DEC-161). All pre-Databento backtests require re-validation with quality data (DEC-132). **Milestone:** ARGUS now covers 9:30 AM–3:30 PM with four strategies.
 
 **Next Validation gate:** Build through Sprint 21 (four strategies + analytics) using Alpaca data → activate Databento (~Sprint 19, DEC-097) → serious paper trading validation with quality data + IBKR execution → AI Layer (Sprint 22) compounds analysis during validation → CPA consultation → live trading at minimum size on IBKR.
 
@@ -172,6 +173,17 @@ Argus is a fully automated multi-strategy day trading ecosystem with an AI co-ca
 - **VWAP Reclaim backtest results provisional (DEC-146):** 59,556 trades, avg Sharpe 3.89, WF OOS Sharpe 1.49. Provisional per DEC-132 (Alpaca SIP data, not Databento exchange-direct).
 - **Watchlist Sidebar responsive architecture (DEC-147):** Desktop ≥1024px: 280px collapsible inline sidebar. Tablet 640–1023px: slide-out panel. Mobile <640px: full-screen overlay. Zustand state, 10s TanStack Query polling.
 - **VectorBT ↔ live state machine divergences (DEC-148):** ABOVE→BELOW transition harmonized to `<=` in both VectorBT and live strategy. VectorBT single entry per day vs live retry documented (conservative direction).
+- **Afternoon Momentum — standalone from BaseStrategy (DEC-152):** Inherits directly from BaseStrategy, not from a shared consolidation base class. Extraction deferred (DEF-025) until a second consolidation-based strategy is designed.
+- **Consolidation detection — high/low channel + ATR filter (DEC-153):** Range = midday_high - midday_low. Consolidation confirmed when range/ATR-14 < consolidation_atr_ratio (default 0.75) AND bars >= min_consolidation_bars (default 30). Rejected when range/ATR-14 > max_consolidation_atr_ratio (default 2.0).
+- **Afternoon Momentum scanner — gap watchlist reuse (DEC-154):** Shares the same gap scanner as ORB family. No separate scanner needed.
+- **Afternoon Momentum state machine — 5 states (DEC-155):** WATCHING → ACCUMULATING → CONSOLIDATED → ENTERED (terminal) or REJECTED (terminal). Range continues updating through CONSOLIDATED state.
+- **Afternoon Momentum entry conditions — 8 simultaneous requirements (DEC-156):** State=CONSOLIDATED, within 2:00–3:30 PM, candle close > consolidation_high, volume >= multiplier × avg, chase protection, valid risk, internal limits, position count.
+- **Afternoon Momentum stop and target design (DEC-157):** Stop at consolidation_low × (1 - stop_buffer_pct). T1=1.0R (50%), T2=2.0R (50%). Dynamic time stop = min(max_hold_minutes, seconds until force_close_time). Stop-to-breakeven after T1.
+- **Trailing stop deferred to V2 (DEC-158):** T1/T2 fixed targets proven across all four strategies. Trailing stop adds complexity only if data shows clear benefit. DEF-024.
+- **Afternoon Momentum EOD handling (DEC-159):** Force close at 3:45 PM ET. Order Manager EOD flatten is safety net.
+- **Cross-strategy interaction — ALLOW_ALL, time-separated (DEC-160):** ORB 9:35–11:30, VWAP 10:00–12:00, Afternoon 2:00–3:30. Same symbol can be held by multiple strategies simultaneously. max_single_stock_pct (5%) enforced across all strategies.
+- **Databento activation deferred to Sprint 21 (DEC-161):** Saves one additional month. Amends DEC-143.
+- **VectorBT Afternoon Momentum divergences harmonized (DEC-162):** Precompute+vectorize architecture. ATR method divergence documented (SMA vs Wilder's). Single entry per day in VectorBT vs live retry (conservative).
 
 ## Architecture Summary
 
@@ -277,7 +289,7 @@ Effective February 19, 2026, ARGUS uses two parallel tracks instead of sequentia
 ### Build Track (velocity-limited, continuous)
 Sprints 12+. System construction proceeds at development speed. Each sprint targets a specific component. Order is prioritized but flexible — Validation Track needs can reprioritize.
 
-**Queue (DEC-096, DEC-104–109):** Desktop/PWA + UX Polish (Sprint 16) → Orchestrator V1 (Sprint 17) → ORB Scalp (Sprint 18) → VWAP Reclaim (Sprint 19) → Afternoon Momentum (Sprint 20) → CC Analytics & Strategy Lab (Sprint 21) → AI Layer MVP (Sprint 22) → Tier 1 News + additional strategies + features (Sprint 23+). Each sprint includes UX enhancement add-ons from `docs/ui/UX_FEATURE_BACKLOG.md` — Sprint 16 adds motion/animation/sparklines (~15h), Sprints 17–20 add multi-strategy awareness features (~33h total), Sprint 21 is the major analytics sprint (~80–100h), Sprint 22 adds AI visualization features (~46h).
+**Queue (DEC-096, DEC-104–109):** CC Analytics & Strategy Lab (Sprint 21) → AI Layer MVP (Sprint 22) → Tier 1 News + additional strategies + features (Sprint 23+). Sprint 21 is the major analytics sprint (~80–100h), Sprint 22 adds AI visualization features (~46h). `docs/ui/UX_FEATURE_BACKLOG.md` provides per-sprint enhancement add-ons.
 
 **Command Center delivery (DEC-080):** Single React codebase ships to three surfaces: web app (any browser), Tauri desktop app (system tray, native notifications), and PWA mobile app (iPhone/iPad home screen install). All three operational after Sprint 16.
 

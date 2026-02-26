@@ -11,7 +11,7 @@ Phase 1 sprint plan: @docs/07_PHASE1_SPRINT_PLAN.md
 ## Current State
 
 **Structure:** Two parallel tracks (DEC-079, February 19, 2026).
-- **Build Track:** System construction at development velocity. Sprints 1–19 complete (1,410 pytest tests + 40 Vitest). Sprint 20 (Afternoon Momentum) is NEXT.
+- **Build Track:** System construction at development velocity. Sprints 1–20 complete (1,522 pytest tests + 48 Vitest). Sprint 21 (CC Analytics & Strategy Lab) is NEXT.
 - **Validation Track:** Paper trading ACTIVE on Alpaca IEX (system stability only — DEC-081). Signal accuracy validation pending Databento subscription activation (DEC-087). All pre-Databento backtests require re-validation with quality data (DEC-132). Migrates to IBKR paper after IBKR account approved (U24619949, submitted Feb 21).
 
 Active sprint plan: `docs/10_PHASE3_SPRINT_PLAN.md` (covers both tracks).
@@ -24,6 +24,16 @@ Active sprint plan: `docs/10_PHASE3_SPRINT_PLAN.md` (covers both tracks).
 - **Cost deferral:** Databento subscription activated when adapter ready for integration testing. DEC-087.
 
 - IBKR account application submitted Feb 21, 2026 (Account ID: U24619949). Individual, Margin, IBKR Pro (tiered), GA address. Permissions: Stocks, Options L3, Futures, Forex, Crypto. Awaiting approval.
+
+**Sprint 20 Results (Afternoon Momentum — Feb 26):**
+- AfternoonMomentumStrategy: standalone from BaseStrategy (DEC-152), 5-state machine (DEC-155), consolidation high/low channel + ATR filter (DEC-153). T1=1.0R/T2=2.0R, dynamic time stop compressed to force_close (DEC-157).
+- Gap watchlist reuse from ORB family (DEC-154). 8 simultaneous entry conditions (DEC-156). Minimum risk floor. ALLOW_ALL cross-strategy (DEC-160).
+- VectorBT sweep: 1,152 combos, precompute+vectorize architecture (DEC-162). Walk-forward pipeline dispatch. Provisional per DEC-132.
+- System integration: main.py wiring, Orchestrator registration, per-strategy health components for all 4 strategies. CandleEvent routing via existing Orchestrator registry.
+- Dev mode four-strategy mock data (positions, trades, allocations, orchestrator decisions, watchlist, strategy cards, session summary).
+- 16 four-strategy integration tests (registration, sequential flows, cross-strategy risk, state machine, throttling, daily reset, allocation caps).
+- Strategy spec: `docs/strategies/STRATEGY_AFTERNOON_MOMENTUM.md`. Databento activation deferred to Sprint 21 (DEC-161).
+- 1522 tests (pytest, 112 new) + 48 (Vitest, 8 new). 10 implementation sessions + 2 code review checkpoints. Code review passed (DEC-152–162).
 
 **Sprint 19 Results (VWAP Reclaim — Feb 25–26):**
 - VwapReclaimStrategy: standalone from BaseStrategy (DEC-136), 5-state machine (DEC-138), pullback swing-low stop (DEC-139). T1=1.0R/T2=2.0R, 30-min time stop.
@@ -69,7 +79,7 @@ Active sprint plan: `docs/10_PHASE3_SPRINT_PLAN.md` (covers both tracks).
 
 **Validation Track sequence:** Build through Sprint 21 (four strategies + analytics) → activate Databento ~Sprint 19 (DEC-097) → serious paper trading with quality data + IBKR → AI Layer (Sprint 22) compounds analysis during validation → CPA consultation → live at minimum size on IBKR.
 
-**Build Track queue (DEC-096, DEC-106–110):** VWAP Reclaim (19) → Afternoon Momentum (20) → CC Analytics & Strategy Lab (21) → AI Layer MVP (22) → Tier 1 News + expansion (23+). UX Feature Backlog (`docs/ui/UX_FEATURE_BACKLOG.md`) provides per-sprint enhancement add-ons. Databento activation ~Sprint 19 (DEC-097). Pre-Databento re-validation required (DEC-132).
+**Build Track queue (DEC-096, DEC-106–110):** CC Analytics & Strategy Lab (21) → AI Layer MVP (22) → Tier 1 News + expansion (23+). UX Feature Backlog (`docs/ui/UX_FEATURE_BACKLOG.md`) provides per-sprint enhancement add-ons. Databento activation ~Sprint 21 (DEC-161). Pre-Databento re-validation required (DEC-132). **Milestone reached:** ARGUS now covers 9:30 AM–3:30 PM with four strategies (ORB, Scalp, VWAP Reclaim, Afternoon Momentum).
 
 **Command Center delivery (DEC-080):** Three surfaces from single React codebase — web app + Tauri desktop + PWA mobile. All operational after Sprint 16.
 
@@ -128,6 +138,12 @@ Components implemented:
 - SessionSummaryCard — after-hours session recap (API + React component)
 - PositionTimeline — horizontal Gantt chart of positions (React + Vitest tests)
 - Zustand positionsUI store — view mode + filter persistence across re-mounts (DEC-129)
+- VwapReclaimStrategy (Sprint 19, DEC-136) — 5-state machine (WATCHING → ABOVE_VWAP → BELOW_VWAP → ENTERED/REJECTED), pullback swing-low stop, VWAP distance metric
+- AfternoonMomentumStrategy (Sprint 20, DEC-152) — 5-state machine (WATCHING → ACCUMULATING → CONSOLIDATED → ENTERED/REJECTED), consolidation channel, dynamic time stop
+- VectorBT VWAP Reclaim sweeps (`backtest/vectorbt_vwap_reclaim.py`) — precompute+vectorize architecture (DEC-144)
+- VectorBT Afternoon Momentum sweeps (`backtest/vectorbt_afternoon_momentum.py`) — consolidation detection + breakout simulation (DEC-162)
+- Watchlist Sidebar (DEC-142) — responsive layout (desktop inline/tablet slide-out/mobile overlay), VWAP distance, compact badges, sort controls
+- Keyboard shortcuts (DEC-151) — 1–4 navigation, w watchlist toggle
 
 ## Architecture
 
@@ -136,7 +152,7 @@ Three tiers, built in parallel (DEC-079):
 2. Command Center (FastAPI + React → web + Tauri desktop + PWA mobile) — dashboards, controls, reports → Build Track Sprint 14+
 3. AI Layer (Claude API) — advisory, approval workflow, reports → Build Track Sprint 22+
 
-Currently: Validation Track (paper trading on Alpaca) running in parallel with Build Track (Sprint 18 next).
+Currently: Validation Track (paper trading on Alpaca) running in parallel with Build Track (Sprint 21 next).
 
 ## Tech Stack
 

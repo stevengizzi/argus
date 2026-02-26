@@ -272,17 +272,22 @@ per sprint velocity.
 - Databento activation deferred to Sprint 20 (DEC-143)
 - 1410 tests (pytest, 93 new) + 40 (Vitest, 26 new). 14 implementation sessions + 2 code review checkpoints. Code review passed. DEC-136–151.
 
-#### Sprint 20 — Afternoon Momentum Strategy (NEW — DEC-096)
-**Target:** ~1-2 days
-**Scope:**
-- Afternoon Momentum strategy implementation (consolidation breakout, 2:00–3:30 PM, 15–60 min holds)
-- Strategy spec sheet (04_STRATEGY_TEMPLATE.md filled in)
-- VectorBT parameter sweep
-- Walk-forward validation
-- Cross-strategy risk integration (four strategies, full-day coverage)
-- Orchestrator capital allocation for four strategies
-- Paper trading deployment
-- **Milestone:** ARGUS now covers 9:30 AM–3:30 PM with four uncorrelated signal types.
+#### Sprint 20 — Afternoon Momentum Strategy ✅ COMPLETE (Feb 26)
+**Delivered:**
+- AfternoonMomentumStrategy: standalone from BaseStrategy (DEC-152), 5-state machine (DEC-155), consolidation high/low channel + ATR filter (DEC-153), 8 simultaneous entry conditions (DEC-156)
+- AfternoonMomentumConfig + YAML, gap watchlist reuse from ORB family (DEC-154)
+- T1=1.0R/T2=2.0R, dynamic time stop compressed to force_close (DEC-157). Trailing stop deferred (DEC-158, DEF-024). EOD force close at 3:45 PM (DEC-159).
+- Cross-strategy: ALLOW_ALL time-separated coverage (DEC-160). Minimum risk floor. Position sizing with consolidation-low stop.
+- VectorBT parameter sweep: 1,152 combos, precompute+vectorize architecture (DEC-162). Walk-forward pipeline dispatch. Results provisional per DEC-132.
+- Replay Harness integration (strategy factory for afternoon_momentum)
+- System integration: main.py Phase 8 creation + Phase 9 Orchestrator registration + Phase 10 per-strategy health (all 4 strategies now have health components)
+- Dev mode four-strategy mock data (positions, trades, allocations, orchestrator decisions, watchlist, strategy cards, session summary). 20/20/20/20 allocation split.
+- 16 four-strategy integration tests (registration, sequential flows, cross-strategy risk, state machine, volume filter, time stops, EOD flatten, throttling, daily reset, allocation caps)
+- Strategy spec: `docs/strategies/STRATEGY_AFTERNOON_MOMENTUM.md`
+- Vitest: StrategyCards tests (6 new) + CapitalAllocation 4-strategy tests (2 new)
+- Databento activation deferred to Sprint 21 (DEC-161)
+- 1522 tests (pytest, 112 new) + 48 (Vitest, 8 new). 10 implementation sessions + 2 code review checkpoints. Code review passed. DEC-152–162.
+- **Milestone:** ARGUS now covers 9:30 AM–3:30 PM with four strategies (ORB, Scalp, VWAP Reclaim, Afternoon Momentum).
 
 #### Sprint 21 — Command Center: Analytics & Strategy Lab (NEW — DEC-096)
 **Target:** ~2–4 days (may split into 21a/21b — see RSK-025)
