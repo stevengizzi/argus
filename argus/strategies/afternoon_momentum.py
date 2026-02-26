@@ -134,6 +134,11 @@ class AfternoonMomentumStrategy(BaseStrategy):
         lh, lm = map(int, latest_str.split(":"))
         self._latest_entry_time = time(lh, lm)
 
+        # Parse force_close_time once (used in time stop calculation)
+        fc_str = config.force_close_time
+        fch, fcm = map(int, fc_str.split(":"))
+        self._force_close_time = time(fch, fcm)
+
     # -------------------------------------------------------------------------
     # Symbol State Management
     # -------------------------------------------------------------------------
@@ -182,12 +187,13 @@ class AfternoonMomentumStrategy(BaseStrategy):
         """
         configured_seconds = self._pm_config.max_hold_minutes * 60
 
-        # Parse force_close_time
-        fc_parts = self._pm_config.force_close_time.split(":")
-        fc_h, fc_m = int(fc_parts[0]), int(fc_parts[1])
-
         candle_dt = candle.timestamp.astimezone(ET)
-        force_close_dt = candle_dt.replace(hour=fc_h, minute=fc_m, second=0, microsecond=0)
+        force_close_dt = candle_dt.replace(
+            hour=self._force_close_time.hour,
+            minute=self._force_close_time.minute,
+            second=0,
+            microsecond=0,
+        )
 
         seconds_until_close = max(0, int((force_close_dt - candle_dt).total_seconds()))
 

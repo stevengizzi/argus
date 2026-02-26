@@ -172,8 +172,8 @@ class TestPrecomputeAfternoonEntriesForDay:
         assert entry["consolidation_low"] > 0
         assert len(entry["highs"]) > 0
 
-    def test_precompute_rejects_wide_range(self) -> None:
-        """No entry when consolidation range is too wide."""
+    def test_precompute_captures_high_consolidation_ratio(self) -> None:
+        """Wide consolidation range is captured in entry info for parameter-time filtering."""
         prices = []
         volumes = []
         minutes = []
@@ -196,17 +196,21 @@ class TestPrecomputeAfternoonEntriesForDay:
         minutes.append(841)
 
         day_df = self._create_day_df(prices, volumes, minutes)
-        atr = 1.0  # Consolidation range (6.0) > ATR ratio threshold
+        atr = 1.0  # Consolidation range (6.0) / ATR (1.0) = 6.0
 
         entries = _precompute_afternoon_entries_for_day(
             day_df, atr, max_chase_pct=0.01, stop_buffer_pct=0.001
         )
 
-        # Wide consolidation means higher risk, but entry still possible
+        # Wide consolidation is captured for parameter-time filtering
         # The ratio filtering happens at sweep time, not precompute
-        # So entries may exist with high consolidation_ratio
+        # So entries exist with high consolidation_ratio captured
         for entry in entries:
-            assert entry["consolidation_ratio"] > 3.0  # Wide ratio captured
+            # Range = 103 - 97 = 6, ATR = 1.0, ratio = 6.0
+            assert entry["consolidation_ratio"] == pytest.approx(6.0, rel=0.1)
+            # max_consolidation_ratio must be >= consolidation_ratio
+            assert "max_consolidation_ratio" in entry
+            assert entry["max_consolidation_ratio"] >= entry["consolidation_ratio"]
 
     def test_precompute_captures_consolidation_ratio(self) -> None:
         """Verify consolidation ratio is correctly stored."""
@@ -643,8 +647,8 @@ class TestGenerateHeatmaps:
 class TestAfternoonSweepConfig:
     """Tests for sweep configuration."""
 
-    def test_default_config_has_960_combinations(self) -> None:
-        """Default config should produce 960 parameter combinations."""
+    def test_default_config_has_768_combinations(self) -> None:
+        """Default config should produce 768 parameter combinations."""
         config = AfternoonSweepConfig(
             data_dir=Path("/tmp"),
             symbols=[],
@@ -661,8 +665,7 @@ class TestAfternoonSweepConfig:
             * len(config.time_stop_bars_list)
         )
 
-        # 4 × 4 × 3 × 4 × 5 = 960
-        # Wait, let's check: [0.5, 0.75, 1.0, 1.5] = 4, [15, 30, 45, 60] = 4
+        # [0.5, 0.75, 1.0, 1.5] = 4, [15, 30, 45, 60] = 4
         # [1.0, 1.2, 1.5] = 3, [1.0, 1.5, 2.0, 3.0] = 4, [15, 30, 45, 60] = 4
         # 4 × 4 × 3 × 4 × 4 = 768
         assert total == 768

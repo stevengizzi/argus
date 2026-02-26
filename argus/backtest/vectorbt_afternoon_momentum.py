@@ -83,6 +83,7 @@ class AfternoonSweepConfig:
     max_chase_pct: float = 0.005  # 0.5% max above consolidation_high
     stop_buffer_pct: float = 0.001  # 0.1% below consolidation_low
     min_gap_pct: float = 2.0  # 2% gap minimum
+    max_consolidation_atr_ratio: float = 2.0  # Max ratio before rejection
 
     # Scanner filters
     min_price: float = 5.0
@@ -119,8 +120,9 @@ class AfternoonEntryInfo(TypedDict):
     entry_price: float
     entry_minutes: int  # Minutes from midnight ET
     consolidation_high: float  # Midday high BEFORE the breakout bar
-    consolidation_low: float  # Midday low (for stop placement)
-    consolidation_ratio: float  # midday_range / ATR
+    consolidation_low: float  # Running midday low through breakout bar (for stop placement)
+    consolidation_ratio: float  # midday_range / ATR at 2:00 PM
+    max_consolidation_ratio: float  # Max range/ATR seen through afternoon (for rejection filtering)
     consolidation_bars: int  # Number of bars in consolidation window
     volume_ratio: float  # Entry bar volume / avg volume up to that point
     # NumPy arrays for post-entry bars (for vectorized exit detection)
@@ -327,7 +329,7 @@ def _precompute_afternoon_entries_for_day(
     so they can be filtered at runtime by different parameter values.
 
     IMPORTANT: Uses the consolidation_high value from BEFORE the breakout bar
-    for the breakout check, matching the live strategy behavior (DEC-XXX).
+    for the breakout check, matching the live strategy behavior (DEC-162).
 
     Args:
         day_df: DataFrame with bar data for one trading day.
@@ -389,13 +391,21 @@ def _precompute_afternoon_entries_for_day(
     # This tracks cumulative high up to and including each afternoon bar
     running_consolidation_high = midday_high
 
+    # Track running midday low through afternoon bars (live strategy updates this
+    # continuously in CONSOLIDATED state — DEC-162)
+    running_midday_low = midday_low
+
+    # Track max consolidation ratio through afternoon for rejection filtering
+    running_max_ratio = consolidation_ratio
+
     entries: list[AfternoonEntryInfo] = []
 
-    for i, (idx, bar_close, bar_high, bar_volume, bar_minutes) in enumerate(
+    for i, (idx, bar_close, bar_high, bar_low, bar_volume, bar_minutes) in enumerate(
         zip(
             afternoon_indices,
             afternoon_closes,
             afternoon_highs,
+            afternoon_lows,
             afternoon_volumes,
             afternoon_minutes,
         )
@@ -408,15 +418,21 @@ def _precompute_afternoon_entries_for_day(
             # Chase protection: not too far above consolidation_high
             chase_limit = consolidation_high_before_bar * (1 + max_chase_pct)
             if bar_close > chase_limit:
-                # Update running high and continue (may find later entry)
+                # Update running values and continue (may find later entry)
                 running_consolidation_high = max(running_consolidation_high, bar_high)
+                running_midday_low = min(running_midday_low, bar_low)
+                current_range = running_consolidation_high - running_midday_low
+                running_max_ratio = max(running_max_ratio, current_range / atr_value)
                 continue
 
             # Check risk > 0 (valid stop placement)
-            stop_price = midday_low * (1 - stop_buffer_pct)
+            stop_price = running_midday_low * (1 - stop_buffer_pct)
             risk = bar_close - stop_price
             if risk <= 0:
                 running_consolidation_high = max(running_consolidation_high, bar_high)
+                running_midday_low = min(running_midday_low, bar_low)
+                current_range = running_consolidation_high - running_midday_low
+                running_max_ratio = max(running_max_ratio, current_range / atr_value)
                 continue
 
             # Compute volume ratio
@@ -432,6 +448,9 @@ def _precompute_afternoon_entries_for_day(
             if not post_entry_mask.any():
                 # No bars after entry (edge case near EOD)
                 running_consolidation_high = max(running_consolidation_high, bar_high)
+                running_midday_low = min(running_midday_low, bar_low)
+                current_range = running_consolidation_high - running_midday_low
+                running_max_ratio = max(running_max_ratio, current_range / atr_value)
                 continue
 
             entry_info = AfternoonEntryInfo(
@@ -439,8 +458,9 @@ def _precompute_afternoon_entries_for_day(
                 entry_price=float(bar_close),
                 entry_minutes=int(bar_minutes),
                 consolidation_high=consolidation_high_before_bar,
-                consolidation_low=midday_low,
+                consolidation_low=running_midday_low,
                 consolidation_ratio=consolidation_ratio,
+                max_consolidation_ratio=running_max_ratio,
                 consolidation_bars=consolidation_bars,
                 volume_ratio=volume_ratio,
                 highs=high[post_entry_mask].copy(),
@@ -453,8 +473,11 @@ def _precompute_afternoon_entries_for_day(
             # Single entry per day for sweep (matches live strategy behavior)
             break
 
-        # Update running high to include this bar for next iteration
+        # Update running values to include this bar for next iteration
         running_consolidation_high = max(running_consolidation_high, bar_high)
+        running_midday_low = min(running_midday_low, bar_low)
+        current_range = running_consolidation_high - running_midday_low
+        running_max_ratio = max(running_max_ratio, current_range / atr_value)
 
     return entries
 
@@ -804,11 +827,16 @@ def run_single_symbol_sweep(
         for min_bars in config.min_consolidation_bars_list:
             for volume_mult in config.volume_multiplier_list:
                 # Filter entries by these three parameters ONCE
+                # Also filter by max_consolidation_ratio to reject entries where
+                # the range widened beyond the rejection threshold during the
+                # afternoon (matching live strategy CONSOLIDATED→REJECTED, DEC-162)
                 filtered_entries = [
                     (day, entry)
                     for day, entry in all_entries
                     if (
                         entry["consolidation_ratio"] < consolidation_ratio
+                        and entry["max_consolidation_ratio"]
+                        <= config.max_consolidation_atr_ratio
                         and entry["consolidation_bars"] >= min_bars
                         and entry["volume_ratio"] >= volume_mult
                     )
