@@ -797,7 +797,7 @@ def _create_mock_watchlist(now: datetime) -> list[WatchlistItem]:
     """Create mock watchlist data for dev mode.
 
     Creates a realistic watchlist with symbols from the scanner:
-    - Mix of strategy assignments (ORB, Scalp, VWAP Reclaim)
+    - Mix of strategy assignments (ORB, Scalp, VWAP Reclaim, Afternoon Momentum)
     - Various VWAP states
     - Realistic sparkline data
     """

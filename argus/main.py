@@ -358,6 +358,13 @@ class ArgusSystem:
         )
 
         # Per-strategy health components
+        self._health_monitor.update_component(
+            "strategy_orb_breakout", ComponentStatus.HEALTHY, "ORB Breakout running"
+        )
+        if scalp_strategy is not None:
+            self._health_monitor.update_component(
+                "strategy_orb_scalp", ComponentStatus.HEALTHY, "ORB Scalp running"
+            )
         if vwap_reclaim_strategy is not None:
             self._health_monitor.update_component(
                 "strategy_vwap_reclaim", ComponentStatus.HEALTHY, "VWAP Reclaim running"

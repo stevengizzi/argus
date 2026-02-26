@@ -215,7 +215,7 @@ Rationale: The minimum risk floor (0.3% of entry price) prevents enormous positi
 
 ### VectorBT Parameter Exploration
 
-**Parameter Grid (768 combinations):**
+**Parameter Grid (1,152 combinations):**
 
 | Parameter | Values | Count |
 |-----------|--------|-------|
@@ -224,9 +224,9 @@ Rationale: The minimum risk floor (0.3% of entry price) prevents enormous positi
 | volume_multiplier | 1.0, 1.2, 1.5 | 3 |
 | max_chase_pct | 0.003, 0.005, 0.01 | 3 |
 | target_1_r | 0.75, 1.0, 1.5 | 3 |
-| target_2_r | 1.5, 2.0, 2.5 | 3 (filtered: T2 > T1 + 0.25) |
+| target_2_r | 1.5, 2.0, 2.5 | 3 values, 8 valid T1×T2 pairs after filter |
 
-**Total combinations:** 4 × 4 × 3 × 3 × ~5.3 (filtered T2) ≈ 768
+**Total combinations:** 4 × 4 × 3 × 3 × 8 (filtered T1/T2 pairs where T2 > T1 + 0.25) = 1,152
 
 | Parameter Set | Win Rate | Avg R | Profit Factor | Max DD | Sharpe | Notes |
 |---------------|----------|-------|---------------|--------|--------|-------|
@@ -295,8 +295,8 @@ Coverage:        │▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓│░░░
 
 ## Parameter Reference
 
-| Parameter | Config Key | Default | Min | Max | Rationale |
-|-----------|-----------|---------|-----|-----|-----------|
+| Parameter | Config Key | Default | Sweep Min | Sweep Max | Rationale |
+|-----------|-----------|---------|-----------|-----------|-----------|
 | Consolidation Start | `consolidation_start_time` | "12:00" | — | — | Start of midday tracking window |
 | Consolidation ATR Ratio | `consolidation_atr_ratio` | 0.75 | 0.3 | 1.5 | Range/ATR threshold for "tight" consolidation |
 | Max Consolidation ATR Ratio | `max_consolidation_atr_ratio` | 2.0 | 1.0 | 3.0 | Range/ATR rejection threshold |
@@ -312,6 +312,8 @@ Coverage:        │▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓│░░░
 | Max Daily Loss | `risk_limits.max_daily_loss_pct` | 0.03 | 0.02 | 0.05 | 3% of allocated capital |
 | Max Trades Per Day | `risk_limits.max_trades_per_day` | 6 | 3 | 12 | Daily trade limit |
 | Max Concurrent Positions | `risk_limits.max_concurrent_positions` | 3 | 1 | 5 | Position count limit |
+
+> **Note:** Sweep Min/Max are recommended operating ranges for VectorBT parameter exploration. Code validation bounds (Pydantic) may be wider — see `AfternoonMomentumConfig` in `argus/core/config.py` for enforced limits.
 
 ---
 
