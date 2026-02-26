@@ -11,6 +11,7 @@ import type { TradesResponse } from '../api/types';
 
 export interface UseTradesParams {
   strategy_id?: string;
+  symbol?: string;
   date_from?: string;
   date_to?: string;
   outcome?: 'win' | 'loss' | 'breakeven';

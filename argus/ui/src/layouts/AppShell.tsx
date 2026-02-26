@@ -13,6 +13,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Sidebar } from './Sidebar';
 import { MobileNav } from './MobileNav';
 import { useLiveStore } from '../stores/live';
+import { SymbolDetailPanel } from '../features/symbol';
 import { pageVariants } from '../utils/motion';
 
 interface AppShellProps {
@@ -83,6 +84,9 @@ export function AppShell({ paperMode = true }: AppShellProps) {
 
       {/* Mobile/tablet bottom navigation */}
       <MobileNav />
+
+      {/* Global symbol detail panel */}
+      <SymbolDetailPanel />
     </div>
   );
 }
