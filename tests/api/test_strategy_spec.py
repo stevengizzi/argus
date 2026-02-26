@@ -19,7 +19,7 @@ class TestStrategySpecEndpoint:
         client: AsyncClient,
         auth_headers: dict[str, str],
     ) -> None:
-        """GET /strategies/{strategy_id}/spec returns markdown for valid strategy."""
+        """GET /strategies/{strategy_id}/spec returns documents for valid strategy."""
         response = await client.get(
             "/api/v1/strategies/strat_orb_breakout/spec",
             headers=auth_headers,
@@ -29,9 +29,14 @@ class TestStrategySpecEndpoint:
         data = response.json()
 
         assert data["strategy_id"] == "strat_orb_breakout"
-        assert data["format"] == "markdown"
-        assert "content" in data
-        assert len(data["content"]) > 0
+        assert "documents" in data
+        assert len(data["documents"]) > 0
+        # Check document metadata
+        doc = data["documents"][0]
+        assert doc["doc_id"] == "strategy_spec"
+        assert len(doc["content"]) > 0
+        assert doc["word_count"] > 0
+        assert doc["reading_time_min"] >= 1
 
     async def test_returns_404_for_unknown_strategy(
         self,
@@ -47,7 +52,7 @@ class TestStrategySpecEndpoint:
         assert response.status_code == 404
         data = response.json()
         assert "detail" in data
-        assert "No spec sheet" in data["detail"]
+        assert "No documents found" in data["detail"]
 
     async def test_content_contains_expected_heading(
         self,
@@ -63,10 +68,12 @@ class TestStrategySpecEndpoint:
         assert response.status_code == 200
         data = response.json()
 
+        # Get content from first document
+        content = data["documents"][0]["content"]
         # The ORB Breakout spec should contain the strategy name
-        assert "ORB" in data["content"]
+        assert "ORB" in content
         # Should be a markdown document
-        assert "#" in data["content"]  # Contains headings
+        assert "#" in content  # Contains headings
 
 
 class TestOtherStrategySpecs:
@@ -77,7 +84,7 @@ class TestOtherStrategySpecs:
         client: AsyncClient,
         auth_headers: dict[str, str],
     ) -> None:
-        """GET /strategies/strat_orb_scalp/spec returns content."""
+        """GET /strategies/strat_orb_scalp/spec returns documents."""
         response = await client.get(
             "/api/v1/strategies/strat_orb_scalp/spec",
             headers=auth_headers,
@@ -86,14 +93,15 @@ class TestOtherStrategySpecs:
         assert response.status_code == 200
         data = response.json()
         assert data["strategy_id"] == "strat_orb_scalp"
-        assert len(data["content"]) > 0
+        assert len(data["documents"]) > 0
+        assert len(data["documents"][0]["content"]) > 0
 
     async def test_vwap_reclaim_spec_exists(
         self,
         client: AsyncClient,
         auth_headers: dict[str, str],
     ) -> None:
-        """GET /strategies/strat_vwap_reclaim/spec returns content."""
+        """GET /strategies/strat_vwap_reclaim/spec returns documents."""
         response = await client.get(
             "/api/v1/strategies/strat_vwap_reclaim/spec",
             headers=auth_headers,
@@ -102,14 +110,15 @@ class TestOtherStrategySpecs:
         assert response.status_code == 200
         data = response.json()
         assert data["strategy_id"] == "strat_vwap_reclaim"
-        assert len(data["content"]) > 0
+        assert len(data["documents"]) > 0
+        assert len(data["documents"][0]["content"]) > 0
 
     async def test_afternoon_momentum_spec_exists(
         self,
         client: AsyncClient,
         auth_headers: dict[str, str],
     ) -> None:
-        """GET /strategies/strat_afternoon_momentum/spec returns content."""
+        """GET /strategies/strat_afternoon_momentum/spec returns documents."""
         response = await client.get(
             "/api/v1/strategies/strat_afternoon_momentum/spec",
             headers=auth_headers,
@@ -118,7 +127,8 @@ class TestOtherStrategySpecs:
         assert response.status_code == 200
         data = response.json()
         assert data["strategy_id"] == "strat_afternoon_momentum"
-        assert len(data["content"]) > 0
+        assert len(data["documents"]) > 0
+        assert len(data["documents"][0]["content"]) > 0
 
 
 class TestUnauthenticated:

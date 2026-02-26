@@ -4,9 +4,13 @@
  * Compact format with symbol, P&L, exit reason badge, and time.
  * Links to full trade log at bottom.
  * New trades slide in with animation on WebSocket updates.
+ *
+ * Interactions:
+ * - Click row: opens trade detail slide-in panel
+ * - Click symbol: opens symbol detail panel (stops propagation)
  */
 
-import { useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { BarChart3, ArrowRight } from 'lucide-react';
@@ -15,12 +19,15 @@ import { CardHeader } from '../../components/CardHeader';
 import { EmptyState } from '../../components/EmptyState';
 import { PnlValue } from '../../components/PnlValue';
 import { Badge } from '../../components/Badge';
+import { TradeDetailPanel } from '../trades/TradeDetailPanel';
 import { useTrades } from '../../hooks/useTrades';
+import { useSymbolDetailUI } from '../../stores/symbolDetailUI';
 import { formatTime } from '../../utils/format';
 import { RecentTradesSkeleton } from './DashboardSkeleton';
 import { isPreMarket } from '../../utils/marketTime';
 import { shouldShowEmpty } from '../../utils/testMode';
 import { DURATION, EASE } from '../../utils/motion';
+import type { Trade } from '../../api/types';
 
 type ExitReason = 'target_1' | 'target_2' | 'stop_loss' | 'time_stop' | 'eod' | string;
 
@@ -64,9 +71,17 @@ const tradeItemVariants = {
 
 export function RecentTrades() {
   const { data, isLoading, error } = useTrades({ limit: 8 });
+  const [selectedTrade, setSelectedTrade] = useState<Trade | null>(null);
+  const openSymbolDetail = useSymbolDetailUI((state) => state.open);
 
   // Memoize trades array to avoid dependency issues
   const trades = useMemo(() => data?.trades ?? [], [data?.trades]);
+
+  // Handle symbol click - opens symbol detail panel
+  const handleSymbolClick = (e: React.MouseEvent, symbol: string) => {
+    e.stopPropagation(); // Prevent row click from firing
+    openSymbolDetail(symbol);
+  };
 
   if (isLoading) {
     return <RecentTradesSkeleton />;
@@ -117,11 +132,17 @@ export function RecentTrades() {
               initial="initial"
               animate="animate"
               exit="exit"
-              className="px-4 py-2.5 flex items-center justify-between hover:bg-argus-bg/50 transition-colors duration-150"
+              onClick={() => setSelectedTrade(trade)}
+              className="px-4 py-2.5 flex items-center justify-between hover:bg-argus-bg/50 transition-colors duration-150 cursor-pointer"
             >
               {/* Left: Symbol and P&L */}
               <div className="flex items-center gap-3">
-                <span className="font-medium text-argus-text w-12">{trade.symbol}</span>
+                <button
+                  onClick={(e) => handleSymbolClick(e, trade.symbol)}
+                  className="font-medium text-argus-text w-12 text-left hover:text-argus-accent hover:underline transition-colors"
+                >
+                  {trade.symbol}
+                </button>
                 <PnlValue value={trade.pnl_dollars ?? 0} size="sm" />
               </div>
 
@@ -151,6 +172,9 @@ export function RecentTrades() {
           <ArrowRight className="w-4 h-4" />
         </Link>
       </div>
+
+      {/* Trade detail panel */}
+      <TradeDetailPanel trade={selectedTrade} onClose={() => setSelectedTrade(null)} />
     </Card>
   );
 }

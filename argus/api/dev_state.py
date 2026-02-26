@@ -1113,7 +1113,7 @@ async def create_dev_state() -> AppState:
         name="ORB Breakout",
         version="1.0.0",
         is_active=True,
-        pipeline_stage="paper",
+        pipeline_stage="paper_trading",
         allocated_capital=20_000.0,  # 20% of $100k (4 strategies + 20% reserve)
         daily_pnl=sum(t.net_pnl for t in orb_todays_trades),
         trade_count_today=len(orb_todays_trades),
@@ -1145,7 +1145,7 @@ async def create_dev_state() -> AppState:
         name="ORB Scalp",
         version="1.0.0",
         is_active=True,
-        pipeline_stage="paper",
+        pipeline_stage="paper_trading",
         allocated_capital=20_000.0,  # 20% of $100k (4 strategies + 20% reserve)
         daily_pnl=sum(t.net_pnl for t in scalp_todays_trades),
         trade_count_today=len(scalp_todays_trades),
@@ -1177,7 +1177,7 @@ async def create_dev_state() -> AppState:
         name="VWAP Reclaim",
         version="1.0.0",
         is_active=True,
-        pipeline_stage="paper",
+        pipeline_stage="paper_trading",
         allocated_capital=20_000.0,  # 20% of $100k (4 strategies + 20% reserve)
         daily_pnl=sum(t.net_pnl for t in vwap_todays_trades),
         trade_count_today=len(vwap_todays_trades),
@@ -1209,7 +1209,7 @@ async def create_dev_state() -> AppState:
         name="Afternoon Momentum",
         version="1.0.0",
         is_active=True,
-        pipeline_stage="paper",
+        pipeline_stage="paper_trading",
         allocated_capital=20_000.0,  # 20% of $100k (4 strategies + 20% reserve)
         daily_pnl=sum(t.net_pnl for t in afternoon_todays_trades),
         trade_count_today=len(afternoon_todays_trades),

@@ -45,12 +45,21 @@ const mockStrategy: StrategyInfo = {
 
 describe('OverviewTab', () => {
   it('renders parameter table with config data', () => {
-    // Mock successful spec load
+    // Mock successful spec load with new documents format
     mockedUseStrategySpec.mockReturnValue({
       data: {
         strategy_id: 'orb_breakout',
-        content: '# Strategy Spec\n\nThis is the spec.',
-        format: 'markdown',
+        documents: [
+          {
+            doc_id: 'strategy_spec',
+            title: 'ORB Breakout Strategy',
+            filename: 'STRATEGY_ORB_BREAKOUT.md',
+            word_count: 500,
+            reading_time_min: 3,
+            last_modified: '2026-02-25T10:00:00Z',
+            content: '# Strategy Spec\n\nThis is the spec.',
+          },
+        ],
       },
       isLoading: false,
       isError: false,

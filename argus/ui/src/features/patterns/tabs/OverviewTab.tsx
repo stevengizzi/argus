@@ -3,14 +3,16 @@
  *
  * Shows:
  * - Current strategy parameters (view-only)
- * - Strategy documentation (markdown spec sheet)
+ * - Strategy documentation list (clickable to open modal)
  */
 
+import { useState } from 'react';
+import { FileText, ChevronRight } from 'lucide-react';
 import { Card } from '../../../components/Card';
 import { Skeleton } from '../../../components/Skeleton';
-import { MarkdownRenderer } from '../../../components/MarkdownRenderer';
+import { DocumentModal } from '../../../components/DocumentModal';
 import { useStrategySpec } from '../../../hooks/useStrategySpec';
-import type { StrategyInfo } from '../../../api/types';
+import type { StrategyInfo, StrategyDocument } from '../../../api/types';
 
 interface OverviewTabProps {
   strategy: StrategyInfo;
@@ -92,8 +94,21 @@ function formatParamValue(value: unknown): string {
   return JSON.stringify(value);
 }
 
+/**
+ * Format ISO date string to readable format (MMM DD, YYYY).
+ */
+function formatDate(isoDate: string): string {
+  const date = new Date(isoDate);
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
 export function OverviewTab({ strategy }: OverviewTabProps) {
   const { data: specData, isLoading: isLoadingSpec, isError } = useStrategySpec(strategy.strategy_id);
+  const [selectedDocument, setSelectedDocument] = useState<StrategyDocument | null>(null);
 
   const configEntries = Object.entries(strategy.config_summary || {}).filter(
     ([, value]) => value !== null && value !== undefined
@@ -138,29 +153,52 @@ export function OverviewTab({ strategy }: OverviewTabProps) {
         )}
       </Card>
 
-      {/* Section 2: Strategy Spec Sheet */}
+      {/* Section 2: Strategy Documentation List */}
       <Card>
         <h3 className="text-base font-medium text-argus-text mb-4">Strategy Documentation</h3>
 
         {isLoadingSpec && (
           <div className="space-y-3" data-testid="spec-loading">
-            <Skeleton className="h-4 w-3/4" />
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-4 w-5/6" />
-            <Skeleton className="h-4 w-2/3" />
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-4 w-4/5" />
+            <Skeleton className="h-14" />
           </div>
         )}
 
-        {isError && (
+        {!isLoadingSpec && isError && (
           <p className="text-sm text-argus-text-dim">Unable to load strategy documentation.</p>
         )}
 
-        {specData && !isLoadingSpec && !isError && (
-          <MarkdownRenderer content={specData.content} />
+        {!isLoadingSpec && !isError && specData?.documents && specData.documents.length > 0 && (
+          <div className="space-y-2">
+            {specData.documents.map((doc) => (
+              <button
+                key={doc.doc_id}
+                onClick={() => setSelectedDocument(doc)}
+                className="w-full flex items-center gap-3 p-3 rounded-lg bg-argus-surface-2 hover:bg-argus-surface-3 transition-colors text-left"
+              >
+                <FileText className="w-5 h-5 text-argus-text-dim flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-argus-text truncate">{doc.title}</div>
+                  <div className="text-xs text-argus-text-dim">
+                    {doc.word_count.toLocaleString()} words · {doc.reading_time_min} min read · Updated {formatDate(doc.last_modified)}
+                  </div>
+                </div>
+                <ChevronRight className="w-4 h-4 text-argus-text-dim flex-shrink-0" />
+              </button>
+            ))}
+          </div>
+        )}
+
+        {!isLoadingSpec && !isError && (!specData?.documents || specData.documents.length === 0) && (
+          <p className="text-sm text-argus-text-dim">No documentation available for this strategy.</p>
         )}
       </Card>
+
+      {/* Document Modal */}
+      <DocumentModal
+        document={selectedDocument}
+        isOpen={selectedDocument !== null}
+        onClose={() => setSelectedDocument(null)}
+      />
     </div>
   );
 }

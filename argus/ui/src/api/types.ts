@@ -185,10 +185,19 @@ export interface StrategiesResponse {
 }
 
 // Strategy Spec (Pattern Library)
+export interface StrategyDocument {
+  doc_id: string;
+  title: string;
+  filename: string;
+  word_count: number;
+  reading_time_min: number;
+  last_modified: string;
+  content: string;
+}
+
 export interface StrategySpecResponse {
   strategy_id: string;
-  content: string;
-  format: string;
+  documents: StrategyDocument[];
 }
 
 // Market Data

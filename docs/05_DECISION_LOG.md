@@ -2035,5 +2035,25 @@ Each entry follows this format:
 
 ---
 
+### DEC-184 | Document Modal Reader Pattern
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-27 |
+| **Decision** | Strategy documentation rendered as document index with metadata (title, word count, reading time, last modified) plus full-screen modal reader. Replaces inline markdown rendering. |
+| **Rationale** | Strategy specs are 500+ words. Inline rendering consumes too much vertical space and makes the Overview tab unwieldy. Modal provides focused reading experience with escape/backdrop dismiss. Metadata helps users gauge document length before opening. |
+| **Status** | Active |
+
+---
+
+### DEC-185 | Arrow Key Navigation in Pattern Library
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-27 |
+| **Decision** | Pattern Library supports arrow key navigation: ↑/↓ to navigate cards, ←/→ to switch tabs (when detail panel open), Escape to clear selection. Selection auto-scrolls into view. |
+| **Rationale** | Accessible keyboard navigation without interfering with text input. Combined with existing 1–5 page navigation (DEC-180), enables full keyboard-only operation. Vim-style j/k/h/l removed to avoid conflicts. |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
 *New decisions are appended chronologically as the project progresses.*

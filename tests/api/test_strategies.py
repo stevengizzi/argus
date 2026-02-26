@@ -257,9 +257,16 @@ async def test_strategy_spec_auto_discovery(
     assert response.status_code == 200
     data = response.json()
     assert data["strategy_id"] == strategy_id
-    assert data["format"] == "markdown"
-    # Content should not be empty
-    assert len(data["content"]) > 0
+    # Response has documents list with metadata
+    assert "documents" in data
+    assert len(data["documents"]) > 0
+    # Primary document should have expected fields
+    doc = data["documents"][0]
+    assert doc["doc_id"] == "strategy_spec"
+    assert doc["filename"] == expected_filename
+    assert len(doc["content"]) > 0
+    assert doc["word_count"] > 0
+    assert doc["reading_time_min"] >= 1
 
 
 @pytest.mark.asyncio
@@ -275,4 +282,4 @@ async def test_strategy_spec_returns_404_for_nonexistent_strategy(
 
     assert response.status_code == 404
     data = response.json()
-    assert "No spec sheet" in data["detail"]
+    assert "No documents found" in data["detail"]

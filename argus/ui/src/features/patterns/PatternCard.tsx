@@ -71,11 +71,16 @@ export function PatternCard({ strategy, isSelected, onSelect }: PatternCardProps
   const perf = strategy.performance_summary;
 
   return (
-    <Card
-      interactive
-      className={`cursor-pointer ${isSelected ? 'ring-2 ring-argus-accent' : ''}`}
-    >
-      <div onClick={() => onSelect(strategy.strategy_id)} className="space-y-2">
+    <div data-strategy-id={strategy.strategy_id}>
+      <Card
+        interactive={!isSelected}
+        className={`cursor-pointer ${
+          isSelected
+            ? 'border-argus-accent bg-argus-accent/10 ring-2 ring-argus-accent/40'
+            : 'border-argus-border hover:border-argus-text-dim hover:bg-argus-surface-2'
+        }`}
+      >
+        <div onClick={() => onSelect(strategy.strategy_id)} className="space-y-2">
         {/* Top row: Name + Pipeline stage badge */}
         <div className="flex items-center justify-between gap-2">
           <span className="font-medium text-argus-text truncate">{strategy.name}</span>
@@ -103,7 +108,8 @@ export function PatternCard({ strategy, isSelected, onSelect }: PatternCardProps
           />
         </div>
       </div>
-    </Card>
+      </Card>
+    </div>
   );
 }
 

@@ -85,28 +85,35 @@ interface PipelineViewProps {
 function DesktopPipeline({ stages, activeStage, onClick }: PipelineViewProps) {
   return (
     <div className="flex items-center gap-1 flex-wrap">
-      {stages.map((stage, index) => (
-        <div key={stage.key} className="flex items-center">
-          <button
-            onClick={() => onClick(stage.key)}
-            className={`
-              px-3 py-1.5 rounded-full text-xs font-medium transition-colors
-              ${stage.count > 0 ? 'text-argus-text' : 'text-argus-text-dim'}
-              ${stage.count > 0 ? 'bg-argus-surface-2' : 'bg-transparent'}
-              ${activeStage === stage.key ? 'ring-2 ring-argus-accent ring-offset-1 ring-offset-argus-surface' : ''}
-              hover:bg-argus-surface-3
-            `}
-          >
-            {stage.label}
-            {stage.count > 0 && (
-              <span className="ml-1.5 text-argus-text-dim">({stage.count})</span>
+      {stages.map((stage, index) => {
+        const isActive = activeStage === stage.key;
+        return (
+          <div key={stage.key} className="flex items-center">
+            <button
+              onClick={() => onClick(stage.key)}
+              className={`
+                px-3 py-1.5 rounded-full text-xs font-medium transition-colors
+                ${isActive
+                  ? 'bg-argus-accent text-white'
+                  : stage.count > 0
+                    ? 'text-argus-text bg-argus-surface-2 hover:bg-argus-surface-3'
+                    : 'text-argus-text-dim bg-transparent hover:bg-argus-surface-3'
+                }
+              `}
+            >
+              {stage.label}
+              {stage.count > 0 && (
+                <span className={isActive ? 'ml-1.5 text-white/70' : 'ml-1.5 text-argus-text-dim'}>
+                  ({stage.count})
+                </span>
+              )}
+            </button>
+            {index < stages.length - 1 && (
+              <ChevronRight className="w-4 h-4 text-argus-text-dim mx-0.5 flex-shrink-0" />
             )}
-          </button>
-          {index < stages.length - 1 && (
-            <ChevronRight className="w-4 h-4 text-argus-text-dim mx-0.5 flex-shrink-0" />
-          )}
-        </div>
-      ))}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -114,19 +121,27 @@ function DesktopPipeline({ stages, activeStage, onClick }: PipelineViewProps) {
 function MobilePipeline({ stages, activeStage, onClick }: PipelineViewProps) {
   return (
     <div className="flex gap-2 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide">
-      {stages.map((stage) => (
-        <button
-          key={stage.key}
-          onClick={() => onClick(stage.key)}
-          className={`
-            flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-colors whitespace-nowrap
-            ${stage.count > 0 ? 'text-argus-text bg-argus-surface-2' : 'text-argus-text-dim bg-transparent'}
-            ${activeStage === stage.key ? 'ring-2 ring-argus-accent' : ''}
-          `}
-        >
-          {stage.label} ({stage.count})
-        </button>
-      ))}
+      {stages.map((stage) => {
+        const isActive = activeStage === stage.key;
+        return (
+          <button
+            key={stage.key}
+            onClick={() => onClick(stage.key)}
+            className={`
+              flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-colors whitespace-nowrap
+              ${isActive
+                ? 'bg-argus-accent text-white'
+                : stage.count > 0
+                  ? 'text-argus-text bg-argus-surface-2'
+                  : 'text-argus-text-dim bg-transparent'
+              }
+            `}
+          >
+            {stage.label}{' '}
+            <span className={isActive ? 'text-white/70' : ''}>({stage.count})</span>
+          </button>
+        );
+      })}
     </div>
   );
 }

@@ -5,9 +5,10 @@
  * Uses the shared SlideInPanel component for consistent slide-in behavior.
  */
 
-import { TrendingUp, TrendingDown, Target, Shield, Clock } from 'lucide-react';
+import { TrendingUp, TrendingDown, Target, Shield, Clock, ExternalLink } from 'lucide-react';
 import { SlideInPanel } from '../../components/SlideInPanel';
 import { Badge } from '../../components/Badge';
+import { useSymbolDetailUI } from '../../stores/symbolDetailUI';
 import type { Trade } from '../../api/types';
 import {
   formatCurrency,
@@ -94,6 +95,14 @@ function getExitExplanation(exitReason: string | null): string {
 
 export function TradeDetailPanel({ trade, onClose }: TradeDetailPanelProps) {
   const isOpen = trade !== null;
+  const { open: openSymbolDetail } = useSymbolDetailUI();
+
+  const handleSymbolClick = () => {
+    if (trade) {
+      openSymbolDetail(trade.symbol);
+      onClose(); // Close trade panel when opening symbol panel
+    }
+  };
 
   // Calculate P&L percentage if we have the data
   const pnlPercent =
@@ -110,6 +119,15 @@ export function TradeDetailPanel({ trade, onClose }: TradeDetailPanelProps) {
     >
       {trade && (
         <div className="space-y-6">
+          {/* Clickable symbol link */}
+          <button
+            onClick={handleSymbolClick}
+            className="flex items-center gap-1.5 text-lg font-semibold text-argus-accent hover:underline transition-colors"
+          >
+            {trade.symbol}
+            <ExternalLink className="w-4 h-4" />
+          </button>
+
           {/* Strategy badge */}
           <div className="flex items-center gap-2">
             <Badge variant="info">{trade.strategy_id}</Badge>

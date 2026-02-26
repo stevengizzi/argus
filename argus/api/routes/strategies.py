@@ -5,12 +5,17 @@ Provides endpoints for viewing and managing trading strategies.
 
 from __future__ import annotations
 
+import logging
+import os
+import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+
+logger = logging.getLogger(__name__)
 
 from argus.analytics.performance import compute_metrics
 from argus.api.auth import require_auth
@@ -237,12 +242,23 @@ async def list_strategies(
     )
 
 
+class StrategyDocument(BaseModel):
+    """Document metadata and content for a strategy."""
+
+    doc_id: str
+    title: str
+    filename: str
+    word_count: int
+    reading_time_min: int
+    last_modified: str
+    content: str
+
+
 class StrategySpecResponse(BaseModel):
-    """Response containing the strategy spec sheet content."""
+    """Response containing strategy documents with metadata."""
 
     strategy_id: str
-    content: str
-    format: str = "markdown"
+    documents: list[StrategyDocument]
 
 
 def _resolve_spec_path(strategy_id: str) -> Path | None:
@@ -266,32 +282,94 @@ def _resolve_spec_path(strategy_id: str) -> Path | None:
     return path if path.exists() else None
 
 
+def _extract_title(content: str) -> str:
+    """Extract title from first # heading in markdown content."""
+    for line in content.split("\n"):
+        if line.startswith("# "):
+            return line[2:].strip()
+    return "Untitled Document"
+
+
+def _get_git_last_modified(path: Path) -> str | None:
+    """Get last modified date from git log for a file."""
+    try:
+        result = subprocess.run(
+            ["git", "log", "-1", "--format=%aI", "--", str(path)],
+            capture_output=True,
+            text=True,
+            cwd=path.parent,
+            timeout=5,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        pass
+    return None
+
+
+def _get_file_last_modified(path: Path) -> str:
+    """Get last modified date from file mtime as fallback."""
+    mtime = os.path.getmtime(path)
+    return datetime.fromtimestamp(mtime, tz=UTC).isoformat()
+
+
+def _build_document(path: Path, doc_id: str) -> StrategyDocument:
+    """Build a StrategyDocument from a file path."""
+    content = path.read_text(encoding="utf-8")
+    title = _extract_title(content)
+    word_count = len(content.split())
+    reading_time_min = max(1, round(word_count / 200))
+
+    # Try git first, fall back to file mtime
+    last_modified = _get_git_last_modified(path) or _get_file_last_modified(path)
+
+    return StrategyDocument(
+        doc_id=doc_id,
+        title=title,
+        filename=path.name,
+        word_count=word_count,
+        reading_time_min=reading_time_min,
+        last_modified=last_modified,
+        content=content,
+    )
+
+
 @router.get("/{strategy_id}/spec", response_model=StrategySpecResponse)
 async def get_strategy_spec(
     strategy_id: str,
     _auth: dict = Depends(require_auth),  # noqa: B008
     state: AppState = Depends(get_app_state),  # noqa: B008
 ) -> StrategySpecResponse:
-    """Get the spec sheet (markdown) for a strategy.
+    """Get strategy documents with metadata.
 
-    Returns the full strategy specification document containing:
-    - Strategy overview and rationale
-    - Entry/exit rules
-    - Risk parameters
-    - Backtest results
+    Returns documents associated with the strategy, each including:
+    - doc_id: Document identifier
+    - title: Extracted from first # heading
+    - filename: Original filename
+    - word_count: Total word count
+    - reading_time_min: Estimated reading time (words / 200, rounded up)
+    - last_modified: ISO date from git log or file mtime
+    - content: Full markdown content
 
     Args:
-        strategy_id: The strategy ID (e.g., "strat_orb_breakout").
+        strategy_id: The strategy ID (e.g., "orb_breakout").
 
     Returns:
-        StrategySpecResponse with markdown content.
+        StrategySpecResponse with list of documents.
 
     Raises:
-        HTTPException 404: If no spec sheet exists for the strategy.
+        HTTPException 404: If no documents exist for the strategy.
     """
-    spec_path = _resolve_spec_path(strategy_id)
-    if not spec_path:
-        raise HTTPException(status_code=404, detail=f"No spec sheet for strategy {strategy_id}")
+    documents: list[StrategyDocument] = []
 
-    content = spec_path.read_text(encoding="utf-8")
-    return StrategySpecResponse(strategy_id=strategy_id, content=content)
+    # Strategy spec sheet (primary document)
+    spec_path = _resolve_spec_path(strategy_id)
+    if spec_path:
+        documents.append(_build_document(spec_path, "strategy_spec"))
+
+    if not documents:
+        raise HTTPException(
+            status_code=404, detail=f"No documents found for strategy {strategy_id}"
+        )
+
+    return StrategySpecResponse(strategy_id=strategy_id, documents=documents)
