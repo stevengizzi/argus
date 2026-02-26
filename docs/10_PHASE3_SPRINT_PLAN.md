@@ -337,16 +337,17 @@ per sprint velocity.
 - **Dependencies added:** react-markdown, remark-gfm
 - 1558 tests (pytest, 36 new) + 70 (Vitest, 22 new). 9 implementation sessions. Code review passed. DEC-172–183.
 
-#### Sprint 21b — Orchestrator Page (DEC-169, DEC-171)
-**Target:** ~1–2 days
+#### Sprint 21b — Orchestrator Page (DEC-169, DEC-171, DEC-186–191)
+**Status:** IN PROGRESS
+**Target:** ~8 sessions, ~1578 pytest + ~78 Vitest
 **Scope:**
-- **Orchestrator page** (NEW — 4th page): Three-column desktop layout (Capital & Allocation | Decision Stream | Risk & Controls). Capital column: CapitalAllocation viz (migrated from Dashboard), manual allocation override sliders with Orchestrator diff display, quality-weighted allocation breakdown, opportunity cost log. Decision column: chronological feed of all Orchestrator decisions with rationale, filterable, AI recommendation cards with approve/reject/modify buttons. Risk column: RiskGauge (migrated), risk waterfall chart, emergency controls (migrated from Dashboard), regime detail with indicator gauges and transition timeline, correlation matrix mini.
-- Migrate from Dashboard: CapitalAllocation donut, emergency controls (flatten/pause), per-strategy pause/resume.
-- Migrate from System: strategy activation/deactivation controls.
-- Strategy Optimization Landscape placeholder (activates in Sprint 22 with AI Layer).
-- API: no new backend endpoints needed — consumes existing orchestrator/status, orchestrator/decisions, orchestrator/rebalance.
-- **Mobile:** Single column, tabbed (Allocation | Decisions | Risk). Emergency controls pinned at bottom.
-- **Tests:** Vitest component tests for Orchestrator page sections.
+- **Orchestrator page** (6th page): Real-time operational nerve center. Vertical flow layout (DEC-186). Sections: RegimePanel (session phase, regime badge, indicator breakdown DEC-190/191), StrategyCoverageTimeline (custom SVG DEC-188), CapitalAllocation (reuse), StrategyOperationsGrid (per-strategy cards with allocation, throttle detail, controls), DecisionTimeline (chronological decision log), GlobalControls (rebalance, emergency flatten/pause).
+- Throttle override: duration + reason + confirmation, in-memory _override_until, logged to decision log (DEC-187).
+- API extensions: session_phase, pre_market_complete, per-strategy operating_window, throttle metrics (consecutive_losses, rolling_sharpe, drawdown_pct), override status. Date filter on decisions endpoint. New POST override endpoint.
+- Dev mode: ORB Scalp throttled (REDUCE), ~15 decision entries, operating windows, session phase.
+- Nav: 6 pages, abbreviated mobile labels (DEC-189). Keyboard shortcuts 1–6.
+- Tests: ~20 new pytest, ~8 new Vitest.
+- **Deferred to 21d:** PreMarketCard/EodSummaryCard as dedicated components, multi-day regime history, decision filtering, "More" menu for mobile nav.
 
 #### Sprint 21c — The Debrief Page (DEC-169, DEC-171)
 **Target:** ~1–2 days

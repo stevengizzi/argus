@@ -2055,5 +2055,71 @@ Each entry follows this format:
 
 ---
 
+### DEC-186 | Orchestrator Page Layout — Vertical Flow
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-27 |
+| **Decision** | Orchestrator page uses full-width vertical flow layout (no master-detail). Sections top-to-bottom: RegimePanel, StrategyCoverageTimeline, CapitalAllocation, StrategyOperationsGrid, DecisionTimeline, GlobalControls. |
+| **Alternatives Considered** | (A) Three-column layout (Capital | Decisions | Risk) — original 21b spec in sprint plan. (B) Master-detail with strategy list + detail panel. (C) Tab-based sections. |
+| **Rationale** | Vertical flow matches the "progressive disclosure" principle (DEC-109): ambient summary at top, operational detail in middle, controls at bottom. Master-detail would hide the coverage timeline and decision log behind clicks. Three-column was too dense on tablet. The operator reads this page top-to-bottom during market hours — the layout should match that flow. |
+| **Status** | Active |
+
+---
+
+### DEC-187 | Throttle Override Design
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-27 |
+| **Decision** | Throttle override requires duration selection (30 min / 1 hour / rest of day) + written reason + confirmation dialog. Override stored in-memory as `_override_until` dict on Orchestrator. Logged as `throttle_override` decision for audit trail. Override checked in `_calculate_allocations` — active override converts REDUCE/SUSPEND to NONE. |
+| **Alternatives Considered** | (A) One-click instant override lasting until next poll cycle. (B) Persistent override stored in DB surviving restarts. (C) No override — only manual resume via pause/resume. |
+| **Rationale** | This is overriding risk controls protecting capital. The UI must feel appropriately weighty — not a casual toggle. Duration prevents "forgot to un-override" scenarios. Reason creates accountability in the decision log. In-memory storage is acceptable because overrides are inherently session-scoped (a restart should re-evaluate from scratch). |
+| **Status** | Active |
+
+---
+
+### DEC-188 | Strategy Coverage Timeline — Custom SVG
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-27 |
+| **Decision** | Strategy coverage timeline uses custom SVG with fixed 9:30–16:00 time axis. Per-strategy colored bars from earliest_entry to latest_entry. "Now" marker as red dashed vertical line. Throttled/paused strategies at reduced opacity. Strategy colors match Badge system (ORB=blue, Scalp=purple, VWAP=teal, Momentum=amber). |
+| **Alternatives Considered** | (A) D3.js time-scale visualization. (B) CSS Grid with percentage widths. (C) Recharts bar chart. |
+| **Rationale** | The visualization is simple: fixed time axis, 4–18 bars, one moving marker. D3 adds a large dependency for something achievable in ~100 lines of SVG math. CSS Grid can't easily do the "now" marker overlay. Custom SVG follows the proven pattern from CapitalAllocation donut (DEC-133). Time-to-pixel mapping is trivial: `(minuteOfDay - 570) / 390 * width`. |
+| **Status** | Active |
+
+---
+
+### DEC-189 | Mobile Navigation with 6 Pages
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-27 |
+| **Decision** | Mobile bottom nav expanded from 5 to 6 items with abbreviated labels ("Dash", "Trades", "Perf", "Patterns", "Orch", "System") at 9px text. All 6 items visible — no "More" menu. |
+| **Alternatives Considered** | (A) 5 items + "More" menu hiding Orchestrator and/or System. (B) Keep full labels and allow horizontal scroll. (C) Context-dependent nav showing different items per page. |
+| **Rationale** | All 6 pages are frequently accessed — hiding any behind "More" adds friction during trading hours. Abbreviated labels at 9px fit within the 393px iPhone width. "More" menu restructure deferred to Sprint 21d when the 7th page (The Debrief) is added — at 7 pages, "More" becomes necessary. |
+| **Status** | Active |
+
+---
+
+### DEC-190 | Session Phase Computation
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-27 |
+| **Decision** | Session phase computed server-side from current ET time. Six phases: pre_market (before 9:30), market_open (9:30–11:30), midday (11:30–14:00), power_hour (14:00–16:00), after_hours (16:00–20:00), market_closed (after 20:00 or weekends). Included in orchestrator status response. |
+| **Alternatives Considered** | (A) Client-side computation. (B) Phase derived from strategy activity. (C) Manual phase selection. |
+| **Rationale** | Server-side ensures consistency — all clients see the same phase. Time-based is deterministic and requires no state. Phase boundaries align with trading conventions: market_open covers the highest-activity morning period, power_hour captures the afternoon surge. |
+| **Status** | Active |
+
+---
+
+### DEC-191 | Regime Input Display — Client-Side Scoring
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-27 |
+| **Decision** | RegimeInputBreakdown component computes trend score, volatility bucket, and momentum confirmation client-side from the raw indicator values already in the orchestrator status response. Displays each factor with its directional assessment (bullish/bearish/neutral). |
+| **Alternatives Considered** | (A) Backend computes and returns scoring breakdown as separate fields. (B) Display only raw values without interpretation. (C) Full diagnostic with all thresholds and intermediate calculations. |
+| **Rationale** | The raw indicator values (spy_price, spy_sma_20, spy_sma_50, spy_roc_5d, spy_realized_vol_20d) are already in the API response. The scoring logic is simple and deterministic (trend: compare price vs SMAs; vol: compare to fixed thresholds; momentum: compare ROC to ±1%). Computing client-side avoids API schema changes and keeps the scoring visible/debuggable in the UI code. Option (B) would show numbers without "so what?" context. Option (C) is too noisy for an at-a-glance display. |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
 *New decisions are appended chronologically as the project progresses.*
