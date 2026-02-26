@@ -1789,5 +1789,15 @@ Each entry follows this format:
 
 ---
 
+### DEC-162 | VectorBT Afternoon Momentum Divergences Harmonized
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-26 |
+| **Decision** | VectorBT Afternoon Momentum sweep updated to track running midday_low and max_consolidation_ratio through afternoon bars, matching live strategy's CONSOLIDATED state behavior. Remaining divergence: VectorBT single entry per day vs live retry. ATR calculation uses SMA(14) vs production Wilder's EMA (same class as DEC-074). |
+| **Rationale** | Aligns backtest fidelity with live behavior for stop placement and rejection logic. Single-entry-per-day is conservative (VectorBT produces fewer trades than live might). ATR method difference acceptable — consolidation ratio thresholds will be recalibrated with Databento data (DEC-132). |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
 *New decisions are appended chronologically as the project progresses.*
