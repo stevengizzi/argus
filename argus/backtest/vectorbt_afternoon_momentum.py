@@ -31,10 +31,10 @@ from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
 from typing import TypedDict
+from zoneinfo import ZoneInfo
 
 import numpy as np
 import pandas as pd
-from zoneinfo import ZoneInfo
 
 logger = logging.getLogger(__name__)
 
@@ -400,7 +400,7 @@ def _precompute_afternoon_entries_for_day(
 
     entries: list[AfternoonEntryInfo] = []
 
-    for i, (idx, bar_close, bar_high, bar_low, bar_volume, bar_minutes) in enumerate(
+    for _, (idx, bar_close, bar_high, bar_low, bar_volume, bar_minutes) in enumerate(
         zip(
             afternoon_indices,
             afternoon_closes,
@@ -408,6 +408,7 @@ def _precompute_afternoon_entries_for_day(
             afternoon_lows,
             afternoon_volumes,
             afternoon_minutes,
+            strict=False,
         )
     ):
         # The consolidation_high used for breakout check is the high BEFORE this bar

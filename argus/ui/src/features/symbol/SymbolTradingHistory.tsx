@@ -22,11 +22,12 @@ interface SymbolTradingHistoryProps {
 export function SymbolTradingHistory({ symbol }: SymbolTradingHistoryProps) {
   const { data, isLoading } = useTrades({ symbol, limit: 10 });
 
-  // Calculate summary stats from trades
+  // Calculate summary stats from the fetched trades array only
+  // Note: Stats are computed from visible trades (max 10), not all historical trades
   const trades = data?.trades ?? [];
-  const totalTrades = data?.total_count ?? 0;
+  const totalTrades = data?.total_count ?? 0; // Total trades in DB (for display)
   const wins = trades.filter((t) => (t.pnl_dollars ?? 0) > 0).length;
-  const winRate = totalTrades > 0 ? wins / totalTrades : 0;
+  const winRate = trades.length > 0 ? wins / trades.length : 0;
   const avgR =
     trades.length > 0
       ? trades.reduce((sum, t) => sum + (t.pnl_r_multiple ?? 0), 0) / trades.length
@@ -63,14 +64,15 @@ export function SymbolTradingHistory({ symbol }: SymbolTradingHistoryProps) {
   return (
     <div className="space-y-3">
       <h3 className="text-sm font-medium text-argus-text-dim uppercase tracking-wider">
-        Your Trading History
+        Your Trading History (Last {trades.length})
       </h3>
 
       {/* Summary stats row */}
       <div className="grid grid-cols-4 gap-3 text-center">
         <div className="bg-argus-surface-2 rounded-lg px-3 py-2">
-          <div className="text-xs text-argus-text-dim">Trades</div>
-          <div className="text-lg font-semibold tabular-nums">{totalTrades}</div>
+          <div className="text-xs text-argus-text-dim">Recent</div>
+          <div className="text-lg font-semibold tabular-nums">{trades.length}</div>
+          <div className="text-xs text-argus-text-dim">of {totalTrades} total</div>
         </div>
         <div className="bg-argus-surface-2 rounded-lg px-3 py-2">
           <div className="text-xs text-argus-text-dim">Win %</div>

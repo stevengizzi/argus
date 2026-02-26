@@ -226,3 +226,53 @@ async def test_strategies_unauthenticated(client):
     response = await client.get("/api/v1/strategies")
 
     assert response.status_code == 401
+
+
+# --- Strategy Spec Sheet Auto-Discovery Tests ---
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "strategy_id,expected_filename",
+    [
+        ("strat_orb_breakout", "STRATEGY_ORB_BREAKOUT.md"),
+        ("strat_orb_scalp", "STRATEGY_ORB_SCALP.md"),
+        ("strat_vwap_reclaim", "STRATEGY_VWAP_RECLAIM.md"),
+        ("strat_afternoon_momentum", "STRATEGY_AFTERNOON_MOMENTUM.md"),
+    ],
+)
+async def test_strategy_spec_auto_discovery(
+    client_with_strategies,
+    auth_headers,
+    strategy_id: str,
+    expected_filename: str,
+):
+    """GET /strategies/{id}/spec resolves all 4 current strategies correctly."""
+    response = await client_with_strategies.get(
+        f"/api/v1/strategies/{strategy_id}/spec",
+        headers=auth_headers,
+    )
+
+    # All 4 strategy spec files should exist and resolve
+    assert response.status_code == 200
+    data = response.json()
+    assert data["strategy_id"] == strategy_id
+    assert data["format"] == "markdown"
+    # Content should not be empty
+    assert len(data["content"]) > 0
+
+
+@pytest.mark.asyncio
+async def test_strategy_spec_returns_404_for_nonexistent_strategy(
+    client_with_strategies,
+    auth_headers,
+):
+    """GET /strategies/{id}/spec returns 404 for non-existent strategy."""
+    response = await client_with_strategies.get(
+        "/api/v1/strategies/strat_does_not_exist/spec",
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 404
+    data = response.json()
+    assert "No spec sheet" in data["detail"]

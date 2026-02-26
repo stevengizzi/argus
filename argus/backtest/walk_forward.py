@@ -32,13 +32,12 @@ from dateutil.relativedelta import relativedelta
 
 from argus.backtest.config import BacktestConfig, StrategyType
 from argus.backtest.replay_harness import ReplayHarness
+from argus.backtest.vectorbt_afternoon_momentum import AfternoonSweepConfig
 from argus.backtest.vectorbt_orb import SweepConfig, run_sweep
 from argus.backtest.vectorbt_orb_scalp import ScalpSweepConfig
 from argus.backtest.vectorbt_orb_scalp import run_sweep as run_scalp_sweep
 from argus.backtest.vectorbt_vwap_reclaim import VwapReclaimSweepConfig
 from argus.backtest.vectorbt_vwap_reclaim import run_sweep as run_vwap_reclaim_sweep
-from argus.backtest.vectorbt_afternoon_momentum import AfternoonSweepConfig
-from argus.backtest.vectorbt_afternoon_momentum import run_single_symbol_sweep as run_afternoon_sweep
 
 logger = logging.getLogger(__name__)
 
@@ -494,9 +493,8 @@ async def _optimize_in_sample_afternoon_momentum(
 ) -> tuple[dict[str, Any], dict[str, float]]:
     """Run VectorBT Afternoon Momentum sweep on IS period."""
     from argus.backtest.vectorbt_afternoon_momentum import (
-        AfternoonSweepConfig,
-        load_symbol_data,
         compute_qualifying_days,
+        load_symbol_data,
         run_single_symbol_sweep,
     )
 
@@ -1578,9 +1576,8 @@ async def _evaluate_fixed_params_afternoon_momentum(
 ) -> dict[str, float]:
     """Evaluate fixed Afternoon Momentum params on IS period using VectorBT."""
     from argus.backtest.vectorbt_afternoon_momentum import (
-        AfternoonSweepConfig,
-        load_symbol_data,
         compute_qualifying_days,
+        load_symbol_data,
         run_single_symbol_sweep,
     )
 

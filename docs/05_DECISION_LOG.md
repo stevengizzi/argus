@@ -1993,5 +1993,47 @@ Each entry follows this format:
 
 ---
 
+### DEC-180 | Keyboard Shortcuts Extended to 1–5
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-27 |
+| **Decision** | Keyboard shortcuts dynamically mapped to `NAV_ITEMS.length`. With Pattern Library as 5th page, shortcuts are now 1–5 (Dashboard, Trades, Performance, Patterns, System). `w` for watchlist unchanged. |
+| **Rationale** | Implementation already dynamic. Doc-only update to match reality. |
+| **Amends** | DEC-151 (was 1–4). |
+| **Status** | Active |
+
+---
+
+### DEC-181 | Auto-Discover Strategy Spec Sheets
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-27 |
+| **Decision** | Strategy spec sheet resolution uses naming convention (`strat_X` → `STRATEGY_X.md`) instead of hardcoded map. New strategies only need to place a spec file following the convention. |
+| **Rationale** | With 15+ strategies planned (DEC-163), a hardcoded map becomes a maintenance burden. Convention-based discovery scales without code changes. |
+| **Amends** | DEC-175 (spec sheet serving approach unchanged, discovery mechanism updated). |
+| **Status** | Active |
+
+---
+
+### DEC-182 | Z-Index Layering Hierarchy
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-27 |
+| **Decision** | Explicit z-index hierarchy: MobileNav/EmergencyControls z-50, SlideInPanel z-50/z-40 (panel/backdrop), Sidebar z-40, WatchlistSidebar mobile z-40 (demoted from z-50). SlideInPanel always renders above WatchlistSidebar. |
+| **Rationale** | Prevents unpredictable stacking when both panels open on mobile. SlideInPanel is a focused inspection tool that should always be on top. |
+| **Status** | Active |
+
+---
+
+### DEC-183 | Compact Chart Prop Pattern
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-27 |
+| **Decision** | EquityCurve and DailyPnlChart accept `compact` boolean prop for reduced padding and height. Used in PerformanceTab (Pattern Library detail) to fit charts in constrained space. Replaces fragile CSS override pattern. |
+| **Rationale** | CSS child selector overrides (`[&_.p-4]:p-3`) are brittle. Explicit prop is self-documenting and won't break silently on refactor. |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
 *New decisions are appended chronologically as the project progresses.*

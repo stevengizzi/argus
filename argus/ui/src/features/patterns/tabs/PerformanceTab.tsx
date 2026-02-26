@@ -124,13 +124,13 @@ export function PerformanceTab({ strategyId }: PerformanceTabProps) {
       {isLoading ? (
         <Card>
           <Skeleton className="h-4 w-24 mb-4" />
-          <Skeleton className="h-[180px] w-full" />
+          <Skeleton className="h-[160px] w-full" />
         </Card>
       ) : (
         <EquityCurve
           dailyPnl={dailyPnl}
           isTransitioning={isTransitioning}
-          className="[&_.p-4]:p-3 [&_.p-4]:pb-0"
+          compact
         />
       )}
 
@@ -138,13 +138,13 @@ export function PerformanceTab({ strategyId }: PerformanceTabProps) {
       {isLoading ? (
         <Card>
           <Skeleton className="h-4 w-20 mb-4" />
-          <Skeleton className="h-[160px] w-full" />
+          <Skeleton className="h-[140px] w-full" />
         </Card>
       ) : (
         <DailyPnlChart
           dailyPnl={dailyPnl}
           isTransitioning={isTransitioning}
-          className="[&_.p-4]:p-3 [&_.p-4]:pb-0"
+          compact
         />
       )}
 

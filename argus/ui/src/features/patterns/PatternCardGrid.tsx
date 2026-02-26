@@ -21,17 +21,27 @@ interface PatternCardGridProps {
 
 /**
  * Classify a time window string as 'morning' or 'afternoon'.
- * Morning: contains AM and not PM (e.g., "9:30 AM – 10:00 AM")
- * Afternoon: contains PM or no AM (e.g., "1:00 PM – 3:55 PM", "12:00 – 3:55")
+ *
+ * Logic: Check START time first (before dash), then fall back to END time if needed.
+ * - "9:35–11:30 AM"    → start="9:35" (no AM/PM), end="11:30 AM" (AM) → morning
+ * - "10:00 AM–12:00 PM" → start="10:00 AM" (AM) → morning
+ * - "2:00–3:30 PM"      → start="2:00" (no AM/PM), end="3:30 PM" (PM) → afternoon
  */
 function classifyTimeWindow(timeWindow: string): 'morning' | 'afternoon' | 'all_day' {
-  const upper = timeWindow.toUpperCase();
-  const hasAM = upper.includes('AM');
-  const hasPM = upper.includes('PM');
+  // Split on dash, en-dash, or em-dash
+  const parts = timeWindow.split(/[–—-]/);
+  const startPart = (parts[0] ?? '').trim().toUpperCase();
+  const endPart = (parts[1] ?? '').trim().toUpperCase();
 
-  if (hasAM && !hasPM) return 'morning';
-  if (hasPM && !hasAM) return 'afternoon';
-  // Both AM and PM or neither — treat as all day
+  // Check start time first
+  if (startPart.includes('AM')) return 'morning';
+  if (startPart.includes('PM')) return 'afternoon';
+
+  // Start has no AM/PM indicator, fall back to end time
+  if (endPart.includes('AM')) return 'morning';
+  if (endPart.includes('PM')) return 'afternoon';
+
+  // Neither part has AM/PM — treat as all day
   return 'all_day';
 }
 

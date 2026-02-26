@@ -20,10 +20,19 @@ interface DailyPnlChartProps {
   dailyPnl: DailyPnlEntry[];
   isTransitioning?: boolean;
   className?: string;
+  /** When true, uses reduced padding and height for constrained spaces */
+  compact?: boolean;
 }
 
-export function DailyPnlChart({ dailyPnl, isTransitioning = false, className = '' }: DailyPnlChartProps) {
-  const chartHeight = useResponsiveHeight(250, 200, 160);
+export function DailyPnlChart({
+  dailyPnl,
+  isTransitioning = false,
+  className = '',
+  compact = false,
+}: DailyPnlChartProps) {
+  // Compact mode uses smaller heights: 140px vs 250/200/160 normal
+  const normalHeight = useResponsiveHeight(250, 200, 160);
+  const chartHeight = compact ? 140 : normalHeight;
   const seriesRef = useRef<ISeriesApi<'Histogram'> | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
 
@@ -80,7 +89,7 @@ export function DailyPnlChart({ dailyPnl, isTransitioning = false, className = '
   // The card container always renders (never conditionally unmounted)
   return (
     <Card className={className} noPadding>
-      <div className="p-4 pb-0">
+      <div className={compact ? 'p-3 pb-0' : 'p-4 pb-0'}>
         <CardHeader title="Daily P&L" />
       </div>
       <div

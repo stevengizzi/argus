@@ -174,7 +174,7 @@ export function WatchlistSidebar({ className = '', onSymbolClick }: WatchlistSid
       {/* Toggle button for mobile/tablet with count badge */}
       <button
         onClick={() => setMobileOpen(true)}
-        className="fixed bottom-20 right-4 z-40 w-12 h-12 bg-argus-accent rounded-full flex items-center justify-center shadow-lg hover:bg-argus-accent/90 transition-colors min-[1024px]:hidden"
+        className="fixed bottom-20 right-4 z-30 w-12 h-12 bg-argus-accent rounded-full flex items-center justify-center shadow-lg hover:bg-argus-accent/90 transition-colors min-[1024px]:hidden"
         aria-label="Open watchlist"
       >
         <List className="w-6 h-6 text-white" />
@@ -190,23 +190,23 @@ export function WatchlistSidebar({ className = '', onSymbolClick }: WatchlistSid
       <AnimatePresence>
         {isMobileOpen && (
           <>
-            {/* Backdrop */}
+            {/* Backdrop - z-40 so SlideInPanel (z-50) renders above */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
-              className="fixed inset-0 bg-black/50 z-50 min-[1024px]:hidden"
+              className="fixed inset-0 bg-black/50 z-40 min-[1024px]:hidden"
               onClick={() => setMobileOpen(false)}
             />
 
-            {/* Panel */}
+            {/* Panel - z-40 so SlideInPanel (z-50) renders above */}
             <motion.aside
               initial={{ x: '100%' }}
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              className={`fixed top-0 right-0 bottom-0 z-50 bg-argus-surface border-l border-argus-border flex flex-col min-[1024px]:hidden ${
+              className={`fixed top-0 right-0 bottom-0 z-40 bg-argus-surface border-l border-argus-border flex flex-col min-[1024px]:hidden ${
                 isMobile ? 'w-full' : 'w-80'
               }`}
             >

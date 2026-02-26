@@ -11,7 +11,7 @@ Phase 1 sprint plan: @docs/07_PHASE1_SPRINT_PLAN.md
 ## Current State
 
 **Structure:** Two parallel tracks (DEC-079, February 19, 2026). Expanded to AI-enhanced platform (DEC-163, February 26, 2026).
-- **Build Track:** System construction at development velocity. Sprints 1–20 complete (1,522 pytest tests + 48 Vitest). Sprint 21a (Pattern Library page) is NEXT.
+- **Build Track:** System construction at development velocity. Sprints 1–21a complete (1,558 pytest tests + 70 Vitest). Sprint 21b (Orchestrator page) is NEXT.
 - **Validation Track:** Paper trading ACTIVE on Alpaca IEX (system stability only — DEC-081). Signal accuracy validation pending Databento activation. All pre-Databento backtests require re-validation (DEC-132). Migrates to IBKR paper after IBKR account approved (U24619949, submitted Feb 21).
 
 Active sprint plan: `docs/10_PHASE3_SPRINT_PLAN.md` (covers both tracks).
@@ -87,7 +87,7 @@ Active sprint plan: `docs/10_PHASE3_SPRINT_PLAN.md` (covers both tracks).
 
 **Validation Track sequence:** Build through Sprint 21d (7-page architecture) → activate Databento → IBKR paper (Gate 2, 20+ days) → Build through Sprint 26 → AI-enhanced paper with quality scoring (Gate 3, 30+ days) → Build through Sprint 32 → Full system paper (Gate 4, 50+ cumulative, Sharpe > 2.0) → CPA → live at minimum size on IBKR (Gate 5).
 
-**Build Track queue:** Pattern Library page (21a) → Orchestrator page (21b) → The Debrief (21c) → Dashboard+Performance+System+Nav+Copilot shell (21d) → AI Layer MVP + Copilot activation (22) → NLP Catalyst + Pre-Market (23) → Order Flow V1 (24) → Quality Engine + Dynamic Sizer (25) → Red-to-Green + Patterns (26) → Pattern Expansion I (27) → Order Flow V2 + Short Selling (28) → Pattern Expansion II (29) → Learning Loop V1 (30) → Orchestrator V2 (31) → Pattern Expansion III (32) → ML/Advanced (33+).
+**Build Track queue:** Orchestrator page (21b) → The Debrief (21c) → Dashboard+Performance+System+Nav+Copilot shell (21d) → AI Layer MVP + Copilot activation (22) → NLP Catalyst + Pre-Market (23) → Order Flow V1 (24) → Quality Engine + Dynamic Sizer (25) → Red-to-Green + Patterns (26) → Pattern Expansion I (27) → Order Flow V2 + Short Selling (28) → Pattern Expansion II (29) → Learning Loop V1 (30) → Orchestrator V2 (31) → Pattern Expansion III (32) → ML/Advanced (33+).
 
 **Command Center delivery (DEC-080):** Three surfaces from single React codebase — web app + Tauri desktop + PWA mobile. All operational after Sprint 16.
 
@@ -151,7 +151,12 @@ Components implemented:
 - VectorBT VWAP Reclaim sweeps (`backtest/vectorbt_vwap_reclaim.py`) — precompute+vectorize architecture (DEC-144)
 - VectorBT Afternoon Momentum sweeps (`backtest/vectorbt_afternoon_momentum.py`) — consolidation detection + breakout simulation (DEC-162)
 - Watchlist Sidebar (DEC-142) — responsive layout (desktop inline/tablet slide-out/mobile overlay), VWAP distance, compact badges, sort controls
-- Keyboard shortcuts (DEC-151) — 1–4 navigation, w watchlist toggle
+- Keyboard shortcuts (DEC-151, DEC-180) — 1–5 navigation, w watchlist toggle
+- Pattern Library page (Sprint 21a, DEC-172–179) — IncubatorPipeline, PatternCardGrid, PatternCard, PatternFilters, PatternDetail with 5 tabs (Overview, Backtest, Performance, Trades, Intelligence), MarkdownRenderer
+- SlideInPanel (shared) — extracted from TradeDetailPanel (DEC-177), used by SymbolDetailPanel
+- SymbolDetailPanel (global, DEC-177) — SymbolChart (candlestick), SymbolTradingHistory, SymbolPositionDetail. Triggered from any symbol click via symbolDetailUI Zustand store.
+- Strategy spec auto-discovery (DEC-181) — convention-based (`strat_X` → `STRATEGY_X.md`)
+- Dependencies added: react-markdown, remark-gfm
 
 ## Architecture
 
@@ -160,7 +165,7 @@ Three tiers, built in parallel (DEC-079):
 2. Command Center (FastAPI + React → web + Tauri desktop + PWA mobile) — dashboards, controls, reports → Build Track Sprint 14+
 3. AI Layer (Claude API) — advisory, approval workflow, reports → Build Track Sprint 22+
 
-Currently: Validation Track (paper trading on Alpaca) running in parallel with Build Track (Sprint 21 next).
+Currently: Validation Track (paper trading on Alpaca) running in parallel with Build Track (Sprint 21b next).
 
 ## Tech Stack
 

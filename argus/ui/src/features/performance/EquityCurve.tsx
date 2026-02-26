@@ -20,10 +20,19 @@ interface EquityCurveProps {
   dailyPnl: DailyPnlEntry[];
   isTransitioning?: boolean;
   className?: string;
+  /** When true, uses reduced padding and height for constrained spaces */
+  compact?: boolean;
 }
 
-export function EquityCurve({ dailyPnl, isTransitioning = false, className = '' }: EquityCurveProps) {
-  const chartHeight = useResponsiveHeight(300, 220, 180);
+export function EquityCurve({
+  dailyPnl,
+  isTransitioning = false,
+  className = '',
+  compact = false,
+}: EquityCurveProps) {
+  // Compact mode uses smaller heights: 160px vs 300/220/180 normal
+  const normalHeight = useResponsiveHeight(300, 220, 180);
+  const chartHeight = compact ? 160 : normalHeight;
   const seriesRef = useRef<ISeriesApi<'Area'> | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
 
@@ -91,7 +100,7 @@ export function EquityCurve({ dailyPnl, isTransitioning = false, className = '' 
   // The card container always renders (never conditionally unmounted)
   return (
     <Card className={className} noPadding>
-      <div className="p-4 pb-0">
+      <div className={compact ? 'p-3 pb-0' : 'p-4 pb-0'}>
         <CardHeader title="Equity Curve" />
       </div>
       <div

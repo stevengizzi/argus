@@ -245,13 +245,25 @@ class StrategySpecResponse(BaseModel):
     format: str = "markdown"
 
 
-# Mapping of strategy IDs to their spec sheet filenames
-STRATEGY_SPEC_MAP = {
-    "strat_orb_breakout": "STRATEGY_ORB_BREAKOUT.md",
-    "strat_orb_scalp": "STRATEGY_ORB_SCALP.md",
-    "strat_vwap_reclaim": "STRATEGY_VWAP_RECLAIM.md",
-    "strat_afternoon_momentum": "STRATEGY_AFTERNOON_MOMENTUM.md",
-}
+def _resolve_spec_path(strategy_id: str) -> Path | None:
+    """Resolve strategy spec sheet path from naming convention.
+
+    Convention: strat_X → STRATEGY_X.md (uppercase, underscore preserved)
+    Examples:
+        strat_orb_breakout → STRATEGY_ORB_BREAKOUT.md
+        strat_vwap_reclaim → STRATEGY_VWAP_RECLAIM.md
+
+    Args:
+        strategy_id: The strategy ID (e.g., "strat_orb_breakout").
+
+    Returns:
+        Path to the spec sheet if it exists, None otherwise.
+    """
+    spec_dir = Path(__file__).resolve().parent.parent.parent.parent / "docs" / "strategies"
+    # Remove "strat_" prefix and uppercase the remainder
+    filename = f"STRATEGY_{strategy_id.removeprefix('strat_').upper()}.md"
+    path = spec_dir / filename
+    return path if path.exists() else None
 
 
 @router.get("/{strategy_id}/spec", response_model=StrategySpecResponse)
@@ -277,16 +289,9 @@ async def get_strategy_spec(
     Raises:
         HTTPException 404: If no spec sheet exists for the strategy.
     """
-    filename = STRATEGY_SPEC_MAP.get(strategy_id)
-    if not filename:
+    spec_path = _resolve_spec_path(strategy_id)
+    if not spec_path:
         raise HTTPException(status_code=404, detail=f"No spec sheet for strategy {strategy_id}")
-
-    # Navigate from argus/api/routes/ up to project root, then into docs/strategies/
-    spec_dir = Path(__file__).resolve().parent.parent.parent.parent / "docs" / "strategies"
-    spec_path = spec_dir / filename
-
-    if not spec_path.exists():
-        raise HTTPException(status_code=404, detail=f"Spec sheet file not found: {filename}")
 
     content = spec_path.read_text(encoding="utf-8")
     return StrategySpecResponse(strategy_id=strategy_id, content=content)

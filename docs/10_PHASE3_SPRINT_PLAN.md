@@ -141,6 +141,7 @@ inform Build Track priorities.
 | 15 | Command Center Frontend | 4 pages (Dashboard, Trade Log, Performance, System). Responsive at 4 breakpoints. Lightweight Charts. WebSocket real-time. 8 sessions. Code review passed. Design research → UX Feature Backlog (DEC-106–110). | 926 | Feb 23 |
 | 16 | UX Polish | Desktop/PWA, Framer Motion, skeleton loading, sparklines, trade detail panel, emergency controls, CSV export, PWA, Tauri v2 (DEC-107, DEC-111–112) | 942 | Feb 24 |
 | 17 | Orchestrator V1 | Orchestrator, RegimeClassifier, PerformanceThrottler, CorrelationTracker, DEF-016 resolved, 3 API endpoints, 4 WS events, UI components (DEC-113–119) | 1,146 | Feb 24 |
+| 21a | Command Center | Pattern Library page (5th page), SymbolDetailPanel, SlideInPanel, strategy metadata enrichment, spec auto-discovery (DEC-172–183) | 1,558 + 70 | Feb 27 |
 
 ### Build Track Queue
 
@@ -320,14 +321,21 @@ per sprint velocity.
 - 1522 tests (pytest, 112 new) + 48 (Vitest, 8 new). 10 implementation sessions + 2 code review checkpoints. Code review passed. DEC-152–162.
 - **Milestone:** ARGUS now covers 9:30 AM–3:30 PM with four strategies (ORB, Scalp, VWAP Reclaim, Afternoon Momentum).
 
-#### Sprint 21a — Pattern Library Page (DEC-169, DEC-171)
-**Target:** ~1–2 days
-**Scope:**
-- **Pattern Library page** (NEW — 5th page): Master-detail layout. Left panel: strategy cards grid with pipeline stage badges, operating windows, key metrics, filters (stage, time window, pattern family), sort controls. Right panel: tabbed strategy detail (Overview, Performance, Backtest, Trades, Intelligence). Overview tab renders strategy spec as interactive UI (parameters editable via approval workflow).
-- **Stock/Asset Detail Panel (21-A from UX Backlog):** Slide-in panel from any symbol click — intraday chart with entry/stop/target overlays, trading history on symbol, position detail, fundamental context, quick actions.
-- **Incubator Pipeline visualization:** Horizontal pipeline showing 10 stages with dot indicators for strategy distribution.
-- Migrate strategy cards and strategy detail views from System page → Pattern Library.
-- **Tests:** Vitest component tests for PatternLibrary, StrategyDetail, StockDetailPanel.
+#### Sprint 21a — Pattern Library Page ✅ COMPLETE (Feb 27)
+**Delivered:**
+- **Pattern Library page (DEC-169, DEC-171):** NEW 5th page. Master-detail layout. Left panel: strategy cards grid with pipeline stage badges, operating windows, key metrics, filters (stage, time window, pattern family), sort controls. Right panel: tabbed strategy detail (Overview, Performance, Backtest, Trades, Intelligence).
+- **IncubatorPipeline (DEC-179):** Horizontal pipeline with 10 stages, dot indicators, click-to-filter, responsive (pipeline on desktop, compact pills on mobile).
+- **PatternCard, PatternCardGrid, PatternFilters:** Strategy cards with metrics, family badges, pipeline stage, responsive grid.
+- **PatternDetail with 5 tabs:** Overview (MarkdownRenderer for spec sheets + config summary), Backtest (structured summary from YAML), Performance (EquityCurve + DailyPnlChart in compact mode), Trades (symbol-filtered trade history), Intelligence (placeholder).
+- **SymbolDetailPanel (DEC-177):** Global slide-in panel triggered from any symbol click via `symbolDetailUI` Zustand store. SymbolChart (candlestick via Lightweight Charts), SymbolTradingHistory, SymbolPositionDetail.
+- **SlideInPanel extraction (DEC-177):** Shared component from TradeDetailPanel. Desktop: right 40%, mobile: bottom 90vh.
+- **Strategy metadata enrichment (DEC-172):** API returns time_window, family, description_short, performance_summary, backtest_summary.
+- **Strategy spec auto-discovery (DEC-181):** Convention-based (`strat_X` → `STRATEGY_X.md`), no hardcoded map.
+- **Z-index hierarchy (DEC-182):** SlideInPanel z-50, WatchlistSidebar mobile z-40.
+- **Compact chart prop (DEC-183):** EquityCurve and DailyPnlChart `compact` prop replaces CSS override.
+- **Keyboard shortcuts (DEC-180):** 1–5 navigation (Pattern Library = 4), w watchlist.
+- **Dependencies added:** react-markdown, remark-gfm
+- 1558 tests (pytest, 36 new) + 70 (Vitest, 22 new). 9 implementation sessions. Code review passed. DEC-172–183.
 
 #### Sprint 21b — Orchestrator Page (DEC-169, DEC-171)
 **Target:** ~1–2 days

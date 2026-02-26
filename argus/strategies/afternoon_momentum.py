@@ -531,7 +531,8 @@ class AfternoonMomentumStrategy(BaseStrategy):
             share_count=shares,
             rationale=(
                 f"Afternoon Momentum: {symbol} broke above consolidation high "
-                f"{consolidation_high:.2f} (range: {state.midday_low:.2f}-{consolidation_high:.2f}, "
+                f"{consolidation_high:.2f} "
+                f"(range: {state.midday_low:.2f}-{consolidation_high:.2f}, "
                 f"{state.consolidation_bars} bars)"
             ),
             time_stop_seconds=time_stop_seconds,
