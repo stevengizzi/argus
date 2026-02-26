@@ -36,6 +36,7 @@ from argus.core.config import (
     DataServiceConfig,
     DataSource,
     OrchestratorConfig,
+    load_afternoon_momentum_config,
     load_config,
     load_orb_config,
     load_orb_scalp_config,
@@ -55,6 +56,7 @@ from argus.data.databento_scanner import DatabentoScanner, DatabentoScannerConfi
 from argus.db.manager import DatabaseManager
 from argus.execution.alpaca_broker import AlpacaBroker
 from argus.execution.order_manager import OrderManager
+from argus.strategies.afternoon_momentum import AfternoonMomentumStrategy
 from argus.strategies.orb_breakout import OrbBreakoutStrategy
 from argus.strategies.orb_scalp import OrbScalpStrategy
 from argus.strategies.vwap_reclaim import VwapReclaimStrategy
@@ -296,6 +298,19 @@ class ArgusSystem:
             vwap_reclaim_strategy.set_watchlist(symbols)
             strategies_created.append("VwapReclaim")
 
+        # Afternoon Momentum (optional — only if config file exists)
+        afternoon_strategy: AfternoonMomentumStrategy | None = None
+        afternoon_yaml = self._config_dir / "strategies" / "afternoon_momentum.yaml"
+        if afternoon_yaml.exists():
+            afternoon_config = load_afternoon_momentum_config(afternoon_yaml)
+            afternoon_strategy = AfternoonMomentumStrategy(
+                config=afternoon_config,
+                data_service=self._data_service,
+                clock=self._clock,
+            )
+            afternoon_strategy.set_watchlist(symbols)
+            strategies_created.append("AfternoonMomentum")
+
         # Note: is_active and allocated_capital set by Orchestrator in Phase 9
         self._health_monitor.update_component(
             "strategy",
@@ -322,6 +337,8 @@ class ArgusSystem:
             self._orchestrator.register_strategy(scalp_strategy)
         if vwap_reclaim_strategy is not None:
             self._orchestrator.register_strategy(vwap_reclaim_strategy)
+        if afternoon_strategy is not None:
+            self._orchestrator.register_strategy(afternoon_strategy)
 
         await self._orchestrator.start()
 
@@ -344,6 +361,10 @@ class ArgusSystem:
         if vwap_reclaim_strategy is not None:
             self._health_monitor.update_component(
                 "strategy_vwap_reclaim", ComponentStatus.HEALTHY, "VWAP Reclaim running"
+            )
+        if afternoon_strategy is not None:
+            self._health_monitor.update_component(
+                "strategy_afternoon_momentum", ComponentStatus.HEALTHY, "Afternoon Momentum running"
             )
 
         # --- Phase 10: Order Manager ---
