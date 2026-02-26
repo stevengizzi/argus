@@ -91,6 +91,42 @@ const mockAllocations = [
   },
 ];
 
+// Four-strategy allocation (Sprint 20)
+const mockFourStrategyAllocations = [
+  {
+    strategy_id: 'orb_breakout',
+    allocation_pct: 0.20,
+    allocation_dollars: 20000,
+    deployed_pct: 0.08,
+    deployed_capital: 8000,
+    is_throttled: false,
+  },
+  {
+    strategy_id: 'orb_scalp',
+    allocation_pct: 0.20,
+    allocation_dollars: 20000,
+    deployed_pct: 0.04,
+    deployed_capital: 4000,
+    is_throttled: false,
+  },
+  {
+    strategy_id: 'vwap_reclaim',
+    allocation_pct: 0.20,
+    allocation_dollars: 20000,
+    deployed_pct: 0.06,
+    deployed_capital: 6000,
+    is_throttled: false,
+  },
+  {
+    strategy_id: 'afternoon_momentum',
+    allocation_pct: 0.20,
+    allocation_dollars: 20000,
+    deployed_pct: 0.05,
+    deployed_capital: 5000,
+    is_throttled: false,
+  },
+];
+
 describe('CapitalAllocation', () => {
   beforeEach(() => {
     mockViewMode = 'donut';
@@ -161,6 +197,39 @@ describe('CapitalAllocation', () => {
     expect(screen.getByText('ORB Breakout')).toBeInTheDocument();
     expect(screen.getByText('ORB Scalp')).toBeInTheDocument();
     expect(screen.getByText('Reserve')).toBeInTheDocument();
+  });
+
+  it('renders with four strategies (Sprint 20)', () => {
+    render(
+      <CapitalAllocation
+        allocations={mockFourStrategyAllocations}
+        cashReservePct={0.2}
+        totalEquity={100000}
+      />
+    );
+
+    // Should show all four strategies in legend
+    // (AllocationDonut uses shortened display names)
+    expect(screen.getByText('ORB Breakout')).toBeInTheDocument();
+    expect(screen.getByText('ORB Scalp')).toBeInTheDocument();
+    expect(screen.getByText('VWAP Reclaim')).toBeInTheDocument();
+    expect(screen.getByText('Afternoon Mom')).toBeInTheDocument();
+    expect(screen.getByText('Reserve')).toBeInTheDocument();
+  });
+
+  it('renders four strategy segments in SVG', () => {
+    const { container } = render(
+      <CapitalAllocation
+        allocations={mockFourStrategyAllocations}
+        cashReservePct={0.2}
+        totalEquity={100000}
+      />
+    );
+
+    // SVG should have track paths for all segments (4 strategies + 1 reserve)
+    const trackPaths = container.querySelectorAll('svg path');
+    // At minimum: 5 track segments + fill arcs
+    expect(trackPaths.length).toBeGreaterThanOrEqual(5);
   });
 
   it('shows center text with deployed percentage', () => {

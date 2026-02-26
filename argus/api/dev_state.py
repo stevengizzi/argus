@@ -22,6 +22,7 @@ from argus.api.dependencies import AppState
 from argus.api.routes.watchlist import SparklinePoint, VwapState, WatchlistItem
 from argus.core.clock import SystemClock
 from argus.core.config import (
+    AfternoonMomentumConfig,
     ApiConfig,
     HealthConfig,
     OrbBreakoutConfig,
@@ -150,6 +151,7 @@ def _generate_mock_trades(
     orb_count: int = 12,
     scalp_count: int = 6,
     vwap_reclaim_count: int = 8,
+    afternoon_momentum_count: int = 6,
 ) -> list[Trade]:
     """Generate realistic mock trades for seeding the database.
 
@@ -161,6 +163,7 @@ def _generate_mock_trades(
     For ORB Breakout: 5-120 min holds, 1R/2R targets
     For ORB Scalp: 30-120s holds, 0.3R targets, smaller P&L
     For VWAP Reclaim: 5-30 min holds, 1.5R/2R targets, mid-morning entries
+    For Afternoon Momentum: 15-60 min holds, 1.5R/2R targets, afternoon entries
     """
     # ORB Breakout uses these symbols
     orb_symbols = ["NVDA", "AAPL", "AMD", "META"]
@@ -168,6 +171,8 @@ def _generate_mock_trades(
     scalp_symbols = ["TSLA", "GOOG", "AMZN", "MSFT"]
     # VWAP Reclaim uses mid-cap momentum names
     vwap_reclaim_symbols = ["SOFI", "PLTR", "HOOD", "RIVN"]
+    # Afternoon Momentum uses large-cap names that consolidate midday
+    afternoon_momentum_symbols = ["MSFT", "GOOG", "META", "AMZN"]
 
     symbol_prices = {
         "TSLA": (180.0, 250.0),
@@ -239,10 +244,10 @@ def _generate_mock_trades(
         stop_price = round(entry_price - stop_distance, 2)
 
         # Position sizing based on $1000-$3000 risk per trade
-        # Scalp uses smaller risk, VWAP Reclaim is medium
+        # Scalp uses smaller risk, VWAP Reclaim and Afternoon Momentum are medium
         if strategy_id == "orb_scalp":
             risk_amount = random.uniform(500, 1500)
-        elif strategy_id == "vwap_reclaim":
+        elif strategy_id in ("vwap_reclaim", "afternoon_momentum"):
             risk_amount = random.uniform(800, 2000)
         else:
             risk_amount = random.uniform(1000, 3000)
@@ -340,6 +345,19 @@ def _generate_mock_trades(
         )
         trades.append(trade)
 
+    # Generate Afternoon Momentum trades (15-60 min holds, 1.5-2R targets, afternoon)
+    for _ in range(afternoon_momentum_count):
+        trade = generate_trade(
+            strategy_id="afternoon_momentum",
+            symbols=afternoon_momentum_symbols,
+            target_r=random.choice([1.5, 2.0]),
+            min_hold_seconds=15 * 60,  # 15 minutes
+            max_hold_seconds=60 * 60,  # 60 minutes
+            rationale="Afternoon consolidation breakout with volume surge",
+            entry_hour_range=(14, 15),  # 2:00 PM - 3:30 PM ET
+        )
+        trades.append(trade)
+
     return trades
 
 
@@ -347,12 +365,13 @@ def _create_mock_positions(now: datetime) -> list[ManagedPosition]:
     """Create mock managed positions for dev mode.
 
     Creates:
-    - 2 ORB Breakout positions (~$18k total notional, within $26.7k allocation)
-    - 2 ORB Scalp positions (~$20k total notional, within $26.7k allocation)
-    - 2 VWAP Reclaim positions (~$18k total notional, within $26.7k allocation)
+    - 2 ORB Breakout positions (~$15k total notional, within $20k allocation)
+    - 2 ORB Scalp positions (~$16k total notional, within $20k allocation)
+    - 2 VWAP Reclaim positions (~$14k total notional, within $20k allocation)
+    - 2 Afternoon Momentum positions (~$15k total notional, within $20k allocation)
 
-    Position sizes are realistic for a $100k account with 26.67% allocation per strategy
-    (three strategies + 20% cash reserve).
+    Position sizes are realistic for a $100k account with 20% allocation per strategy
+    (four strategies + 20% cash reserve).
     """
     positions = []
 
@@ -508,6 +527,58 @@ def _create_mock_positions(now: datetime) -> list[ManagedPosition]:
         )
     )
 
+    # --- Afternoon Momentum Positions (~$15k total = 75% of $20k allocation) ---
+    # Afternoon entries (2:10 PM, 2:25 PM ET pattern)
+
+    # Position 7: MSFT - entered at 2:10 PM (afternoon consolidation breakout), T1 hit
+    # 20 shares × $425.50 = $8,510 notional
+    entry_time_7 = now - timedelta(minutes=18)
+    positions.append(
+        ManagedPosition(
+            symbol="MSFT",
+            strategy_id="afternoon_momentum",
+            entry_price=425.50,
+            entry_time=entry_time_7,
+            shares_total=20,
+            shares_remaining=10,  # T1 took half
+            stop_price=425.50,  # Moved to breakeven after T1
+            original_stop_price=421.00,
+            stop_order_id="stop_msft_aftn_001",
+            t1_price=430.00,
+            t1_order_id=None,  # T1 filled
+            t1_shares=10,
+            t1_filled=True,
+            t2_price=434.50,
+            t2_order_id="t2_msft_aftn_001",
+            high_watermark=431.25,
+            realized_pnl=45.0,  # 10 × $4.50
+        )
+    )
+
+    # Position 8: META - entered at 2:25 PM (afternoon breakout), waiting for T1
+    # 15 shares × $515.80 = $7,737 notional
+    entry_time_8 = now - timedelta(minutes=8)
+    positions.append(
+        ManagedPosition(
+            symbol="META",
+            strategy_id="afternoon_momentum",
+            entry_price=515.80,
+            entry_time=entry_time_8,
+            shares_total=15,
+            shares_remaining=15,
+            stop_price=510.00,
+            original_stop_price=510.00,
+            stop_order_id="stop_meta_aftn_001",
+            t1_price=521.60,
+            t1_order_id="t1_meta_aftn_001",
+            t1_shares=8,
+            t1_filled=False,
+            t2_price=527.40,
+            high_watermark=518.50,
+            realized_pnl=0.0,
+        )
+    )
+
     return positions
 
 
@@ -517,49 +588,64 @@ async def _seed_orchestrator_decisions(trade_logger: TradeLogger, now: datetime)
     today = now.date().isoformat()
     yesterday = (now - timedelta(days=1)).date().isoformat()
 
-    # Today's ORB Breakout allocation (26.67%)
+    # Today's ORB Breakout allocation (20%)
     await trade_logger.log_orchestrator_decision(
         date=today,
         decision_type="allocation",
         strategy_id="orb_breakout",
         details={
-            "allocation_pct": 0.2667,
-            "allocation_dollars": 26670.0,
+            "allocation_pct": 0.20,
+            "allocation_dollars": 20000.0,
             "throttle_action": "none",
             "eligible": True,
             "regime": "bullish_trending",
         },
-        rationale="Active: 26.67% allocation (equal-weight, 3 strategies)",
+        rationale="Active: 20% allocation (equal-weight, 4 strategies)",
     )
 
-    # Today's ORB Scalp allocation (26.67%)
+    # Today's ORB Scalp allocation (20%)
     await trade_logger.log_orchestrator_decision(
         date=today,
         decision_type="allocation",
         strategy_id="orb_scalp",
         details={
-            "allocation_pct": 0.2667,
-            "allocation_dollars": 26670.0,
+            "allocation_pct": 0.20,
+            "allocation_dollars": 20000.0,
             "throttle_action": "none",
             "eligible": True,
             "regime": "bullish_trending",
         },
-        rationale="Active: 26.67% allocation (equal-weight, 3 strategies)",
+        rationale="Active: 20% allocation (equal-weight, 4 strategies)",
     )
 
-    # Today's VWAP Reclaim allocation (26.67%)
+    # Today's VWAP Reclaim allocation (20%)
     await trade_logger.log_orchestrator_decision(
         date=today,
         decision_type="allocation",
         strategy_id="vwap_reclaim",
         details={
-            "allocation_pct": 0.2667,
-            "allocation_dollars": 26670.0,
+            "allocation_pct": 0.20,
+            "allocation_dollars": 20000.0,
             "throttle_action": "none",
             "eligible": True,
             "regime": "bullish_trending",
         },
-        rationale="Active: 26.67% allocation (equal-weight, 3 strategies)",
+        rationale="Active: 20% allocation (equal-weight, 4 strategies)",
+    )
+
+    # Today's Afternoon Momentum allocation (20%)
+    await trade_logger.log_orchestrator_decision(
+        date=today,
+        decision_type="allocation",
+        strategy_id="afternoon_momentum",
+        details={
+            "allocation_pct": 0.20,
+            "allocation_dollars": 20000.0,
+            "throttle_action": "none",
+            "eligible": True,
+            "regime": "bullish_trending",
+        },
+        rationale="Active: 20% allocation (equal-weight, 4 strategies)",
     )
 
     await trade_logger.log_orchestrator_decision(
@@ -577,49 +663,64 @@ async def _seed_orchestrator_decisions(trade_logger: TradeLogger, now: datetime)
         rationale="SPY above both SMAs with positive momentum",
     )
 
-    # Yesterday's ORB Breakout allocation (26.67%)
+    # Yesterday's ORB Breakout allocation (20%)
     await trade_logger.log_orchestrator_decision(
         date=yesterday,
         decision_type="allocation",
         strategy_id="orb_breakout",
         details={
-            "allocation_pct": 0.2667,
-            "allocation_dollars": 26670.0,
+            "allocation_pct": 0.20,
+            "allocation_dollars": 20000.0,
             "throttle_action": "none",
             "eligible": True,
             "regime": "bullish_trending",
         },
-        rationale="Active: 26.67% allocation (equal-weight, 3 strategies)",
+        rationale="Active: 20% allocation (equal-weight, 4 strategies)",
     )
 
-    # Yesterday's ORB Scalp allocation (26.67%)
+    # Yesterday's ORB Scalp allocation (20%)
     await trade_logger.log_orchestrator_decision(
         date=yesterday,
         decision_type="allocation",
         strategy_id="orb_scalp",
         details={
-            "allocation_pct": 0.2667,
-            "allocation_dollars": 26670.0,
+            "allocation_pct": 0.20,
+            "allocation_dollars": 20000.0,
             "throttle_action": "none",
             "eligible": True,
             "regime": "bullish_trending",
         },
-        rationale="Active: 26.67% allocation (equal-weight, 3 strategies)",
+        rationale="Active: 20% allocation (equal-weight, 4 strategies)",
     )
 
-    # Yesterday's VWAP Reclaim allocation (26.67%)
+    # Yesterday's VWAP Reclaim allocation (20%)
     await trade_logger.log_orchestrator_decision(
         date=yesterday,
         decision_type="allocation",
         strategy_id="vwap_reclaim",
         details={
-            "allocation_pct": 0.2667,
-            "allocation_dollars": 26670.0,
+            "allocation_pct": 0.20,
+            "allocation_dollars": 20000.0,
             "throttle_action": "none",
             "eligible": True,
             "regime": "bullish_trending",
         },
-        rationale="Active: 26.67% allocation (equal-weight, 3 strategies)",
+        rationale="Active: 20% allocation (equal-weight, 4 strategies)",
+    )
+
+    # Yesterday's Afternoon Momentum allocation (20%)
+    await trade_logger.log_orchestrator_decision(
+        date=yesterday,
+        decision_type="allocation",
+        strategy_id="afternoon_momentum",
+        details={
+            "allocation_pct": 0.20,
+            "allocation_dollars": 20000.0,
+            "throttle_action": "none",
+            "eligible": True,
+            "regime": "bullish_trending",
+        },
+        rationale="Active: 20% allocation (equal-weight, 4 strategies)",
     )
 
     await trade_logger.log_orchestrator_decision(
@@ -646,32 +747,40 @@ def _create_mock_orchestrator(now: datetime) -> MockOrchestrator:
         timestamp=now,
     )
 
-    # Mock allocations: 26.67% each strategy + 20% reserve = 100%
-    # With 3 strategies and equal weight: (100% - 20% reserve) / 3 = 26.67% each
+    # Mock allocations: 20% each strategy + 20% reserve = 100%
+    # With 4 strategies and equal weight: (100% - 20% reserve) / 4 = 20% each
     allocations = {
         "orb_breakout": StrategyAllocation(
             strategy_id="orb_breakout",
-            allocation_pct=0.2667,
-            allocation_dollars=26670.0,
+            allocation_pct=0.20,
+            allocation_dollars=20000.0,
             throttle_action=ThrottleAction.NONE,
             eligible=True,
-            reason="Active: 26.67% allocation (equal-weight, 3 strategies)",
+            reason="Active: 20% allocation (equal-weight, 4 strategies)",
         ),
         "orb_scalp": StrategyAllocation(
             strategy_id="orb_scalp",
-            allocation_pct=0.2667,
-            allocation_dollars=26670.0,
+            allocation_pct=0.20,
+            allocation_dollars=20000.0,
             throttle_action=ThrottleAction.NONE,
             eligible=True,
-            reason="Active: 26.67% allocation (equal-weight, 3 strategies)",
+            reason="Active: 20% allocation (equal-weight, 4 strategies)",
         ),
         "vwap_reclaim": StrategyAllocation(
             strategy_id="vwap_reclaim",
-            allocation_pct=0.2667,
-            allocation_dollars=26670.0,
+            allocation_pct=0.20,
+            allocation_dollars=20000.0,
             throttle_action=ThrottleAction.NONE,
             eligible=True,
-            reason="Active: 26.67% allocation (equal-weight, 3 strategies)",
+            reason="Active: 20% allocation (equal-weight, 4 strategies)",
+        ),
+        "afternoon_momentum": StrategyAllocation(
+            strategy_id="afternoon_momentum",
+            allocation_pct=0.20,
+            allocation_dollars=20000.0,
+            throttle_action=ThrottleAction.NONE,
+            eligible=True,
+            reason="Active: 20% allocation (equal-weight, 4 strategies)",
         ),
     }
 
@@ -714,7 +823,7 @@ def _create_mock_watchlist(now: datetime) -> list[WatchlistItem]:
             "symbol": "NVDA",
             "base_price": 875.50,
             "gap_pct": 3.2,
-            "strategies": ["orb", "scalp", "vwap_reclaim"],
+            "strategies": ["orb", "scalp", "vwap_reclaim", "afternoon_momentum"],
             "vwap_state": VwapState.ABOVE_VWAP,
         },
         {
@@ -761,26 +870,33 @@ def _create_mock_watchlist(now: datetime) -> list[WatchlistItem]:
             "strategies": ["orb"],
             "vwap_state": VwapState.WATCHING,
         },
+        # Afternoon Momentum candidates (large-cap consolidation plays)
         {
             "symbol": "META",
             "base_price": 525.60,
             "gap_pct": 2.1,
-            "strategies": ["orb", "scalp"],
+            "strategies": ["orb", "scalp", "afternoon_momentum"],
             "vwap_state": VwapState.ABOVE_VWAP,
         },
-        # Scalp-only candidates (high volume, tight range)
+        {
+            "symbol": "MSFT",
+            "base_price": 425.50,
+            "gap_pct": 1.4,
+            "strategies": ["afternoon_momentum"],
+            "vwap_state": VwapState.WATCHING,
+        },
         {
             "symbol": "GOOG",
             "base_price": 165.40,
             "gap_pct": 1.2,
-            "strategies": ["scalp"],
+            "strategies": ["scalp", "afternoon_momentum"],
             "vwap_state": VwapState.WATCHING,
         },
         {
             "symbol": "AMZN",
             "base_price": 195.30,
             "gap_pct": 1.8,
-            "strategies": ["scalp"],
+            "strategies": ["scalp", "afternoon_momentum"],
             "vwap_state": VwapState.WATCHING,
         },
     ]
@@ -869,7 +985,7 @@ async def create_dev_state() -> AppState:
     clock = SystemClock()
     trade_logger = TradeLogger(db)
 
-    # Seed trades (12 ORB Breakout + 6 ORB Scalp + 8 VWAP Reclaim)
+    # Seed trades (12 ORB Breakout + 6 ORB Scalp + 8 VWAP Reclaim + 6 Afternoon Momentum)
     trades = _generate_mock_trades()
     for trade in trades:
         await trade_logger.log_trade(trade)
@@ -918,6 +1034,9 @@ async def create_dev_state() -> AppState:
     )
     health_monitor.update_component(
         "strategy_vwap_reclaim", ComponentStatus.HEALTHY, "VWAP Reclaim running"
+    )
+    health_monitor.update_component(
+        "strategy_afternoon_momentum", ComponentStatus.HEALTHY, "Afternoon Momentum running"
     )
 
     # Risk manager
@@ -968,6 +1087,10 @@ async def create_dev_state() -> AppState:
         t for t in trades
         if t.exit_time.date() == now.date() and t.strategy_id == "vwap_reclaim"
     ]
+    afternoon_todays_trades = [
+        t for t in trades
+        if t.exit_time.date() == now.date() and t.strategy_id == "afternoon_momentum"
+    ]
 
     mock_orb_breakout = MockStrategy(
         strategy_id="orb_breakout",
@@ -975,7 +1098,7 @@ async def create_dev_state() -> AppState:
         version="1.0.0",
         is_active=True,
         pipeline_stage="paper",
-        allocated_capital=26_670.0,  # 26.67% of $100k (3 strategies + 20% reserve)
+        allocated_capital=20_000.0,  # 20% of $100k (4 strategies + 20% reserve)
         daily_pnl=sum(t.net_pnl for t in orb_todays_trades),
         trade_count_today=len(orb_todays_trades),
         config=orb_config,
@@ -992,7 +1115,7 @@ async def create_dev_state() -> AppState:
         version="1.0.0",
         is_active=True,
         pipeline_stage="paper",
-        allocated_capital=26_670.0,  # 26.67% of $100k (3 strategies + 20% reserve)
+        allocated_capital=20_000.0,  # 20% of $100k (4 strategies + 20% reserve)
         daily_pnl=sum(t.net_pnl for t in scalp_todays_trades),
         trade_count_today=len(scalp_todays_trades),
         config=scalp_config,
@@ -1009,10 +1132,27 @@ async def create_dev_state() -> AppState:
         version="1.0.0",
         is_active=True,
         pipeline_stage="paper",
-        allocated_capital=26_670.0,  # 26.67% of $100k (3 strategies + 20% reserve)
+        allocated_capital=20_000.0,  # 20% of $100k (4 strategies + 20% reserve)
         daily_pnl=sum(t.net_pnl for t in vwap_todays_trades),
         trade_count_today=len(vwap_todays_trades),
         config=vwap_config,
+    )
+
+    afternoon_config = AfternoonMomentumConfig(
+        strategy_id="afternoon_momentum",
+        name="Afternoon Momentum",
+        version="1.0.0",
+    )
+    mock_afternoon_momentum = MockStrategy(
+        strategy_id="afternoon_momentum",
+        name="Afternoon Momentum",
+        version="1.0.0",
+        is_active=True,
+        pipeline_stage="paper",
+        allocated_capital=20_000.0,  # 20% of $100k (4 strategies + 20% reserve)
+        daily_pnl=sum(t.net_pnl for t in afternoon_todays_trades),
+        trade_count_today=len(afternoon_todays_trades),
+        config=afternoon_config,
     )
 
     # Mock orchestrator
@@ -1034,6 +1174,7 @@ async def create_dev_state() -> AppState:
             "orb_breakout": mock_orb_breakout,  # type: ignore[dict-item]
             "orb_scalp": mock_orb_scalp,  # type: ignore[dict-item]
             "vwap_reclaim": mock_vwap_reclaim,  # type: ignore[dict-item]
+            "afternoon_momentum": mock_afternoon_momentum,  # type: ignore[dict-item]
         },
         clock=clock,
         config=system_config,
