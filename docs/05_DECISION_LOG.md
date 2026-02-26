@@ -1799,5 +1799,199 @@ Each entry follows this format:
 
 ---
 
+## DEC-163 | Expanded Vision — AI-Enhanced Trading Intelligence Platform
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-26 |
+| **Decision** | Expand ARGUS from a 5-strategy rules-based system to a 15+ pattern AI-enhanced trading intelligence platform. Core additions: Setup Quality Engine (composite 0–100 scoring), Order Flow Model (Databento L2/L3), NLP Catalyst Pipeline (free sources + Claude API), Dynamic Position Sizer, expanded Pattern Library (15+ types), Learning Loop (outcome → score refinement), Pre-Market Intelligence Engine (4:00 AM → 9:25 AM automated pipeline). Target: 5–10%+ monthly returns on deployed capital at $100K–$500K scale. |
+| **Rationale** | Current rules-based architecture applies uniform filters and sizing to every setup. Top discretionary traders achieve dramatically higher returns by grading setup quality, adjusting size dynamically, reading order flow, and covering more patterns simultaneously. Every component of that discretionary edge is decomposable into quantifiable signals that ARGUS can measure — and measure across more stocks simultaneously than any human. The current architecture (Event Bus, broker abstraction, strategy abstraction, data provider abstraction) supports this evolution. |
+| **Scope** | Phases B–D in Expanded Roadmap. ~16 new sprints (23–36+). ~2–3 months Build Track. Infrastructure cost increases from $199/mo to ~$449–499/mo at full scale. |
+| **Impact** | Bible §4, §5, §9, §18. Architecture §3. Sprint Plan Sprints 23–36+. All six core docs. |
+| **Status** | Active |
+| **References** | `docs/research/ARGUS_Expanded_Roadmap.md` |
+
+---
+
+### DEC-164 | News/Catalyst Data — Free Sources First, Paid Later
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-26 |
+| **Decision** | NLP Catalyst Pipeline starts with free data sources: SEC EDGAR (8-K filings, Form 4 insider transactions), Finnhub (company news, earnings/FDA/IPO calendars, analyst recommendations, free tier 60 calls/min), and Financial Modeling Prep (earnings calendar, press releases, free tier 250 calls/day). Claude API performs catalyst classification and quality scoring. Paid news services (Benzinga Pro via IQFeed, ~$200/mo) deferred until free sources prove insufficient — trigger: >30% unclassified catalyst rate over 20 trading days. |
+| **Rationale** | ARGUS's pre-market use case (4:00–9:30 AM research) doesn't require sub-second news latency — catalysts happened overnight. Free sources provide structured SEC filings (highest reliability), ticker-tagged news (Finnhub), and calendar data (FMP). Claude API classifies and scores catalysts from raw headlines, replacing the pre-tagging Benzinga provides. Saves ~$200/month. |
+| **Amends** | Bible §18.2 Tier 2 data source priority. Does NOT change IQFeed plans for forex/breadth (future). |
+| **Status** | Active |
+
+---
+
+### DEC-165 | L2 Data for All Watchlist Symbols
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-26 |
+| **Decision** | Subscribe to Databento L2 (MBP-10, 10 depth levels) for all watchlist symbols. Watchlist rebuilt fresh each trading day during pre-market scanning (4:00 AM → 9:25 AM). L2 subscriptions activate at watchlist lock (9:25 AM), deactivate EOD. Databento Standard plan includes L2/L3 at no additional cost; constraint is session count (10 simultaneous), not symbol count within a session. ARGUS uses 1 session with Event Bus fan-out. |
+| **Rationale** | Order flow intelligence requires L2 depth data. Full-watchlist subscription (typically 15–25 stocks) ensures no opportunity missed. Single session handles all symbols. |
+| **Status** | Active |
+
+---
+
+### DEC-166 | Short Selling Introduction — Sprint 28
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-26 |
+| **Decision** | Short selling infrastructure (locate/borrow tracking, inverted risk logic, short-specific Risk Manager rules) in Sprint 28. First short strategy: Parabolic Short. Long-only strategies unaffected. |
+| **Rationale** | Short selling inverts several risk assumptions (unlimited loss potential, borrow costs, short squeeze risk). Adding after long-only system proven (15+ sprints of validation) and alongside L3 order flow data provides data foundation for safe short entries. |
+| **Status** | Active |
+
+---
+
+### DEC-167 | Pattern Library — Build in Batches, Validate in Parallel
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-26 |
+| **Decision** | New patterns built in batches of 3–4 per sprint, each through Incubator Pipeline stages 1–3 (Concept → Exploration → Validation). Paper trading validation runs in parallel. Patterns that don't pass walk-forward are suspended, not removed. Walk-forward validation non-negotiable (DEC-047). |
+| **Rationale** | One-at-a-time building stretches timeline to 6+ months. Batch building with parallel validation matches sprint velocity. Quality gates maintained. |
+| **Status** | Active |
+
+---
+
+### DEC-168 | UI/UX Integration Principle — Intelligence Visible Everywhere
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-26 |
+| **Decision** | New intelligence features (Quality Engine, Order Flow, Catalyst Pipeline, Dynamic Sizing, Learning Loop) integrate into existing Command Center pages via enrichment and progressive disclosure — not as separate siloed pages. Every intelligence signal is visible where the user already looks. Progressive disclosure: summary badge → click for breakdown → deep dive for analysis. |
+| **Rationale** | The design north star ("Bloomberg Terminal meets modern fintech") demands information density without navigation tax. A quality score is most useful on the position card. Order flow is most useful in the stock detail panel. |
+| **Status** | Active |
+
+---
+
+### DEC-169 | Seven-Page Application Architecture
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-26 |
+| **Decision** | Command Center expands from 4 pages to 7. Existing pages refined/narrowed, 3 new pages added. Navigation: icon sidebar (desktop) groups by concern, bottom tab bar (mobile) shows 5 primary tabs + "More" menu. |
+| **Pages** | (1) **Dashboard** — pure ambient awareness, narrower scope, pre-market mode before 9:30 AM. (2) **Trade Log** — unchanged, gains quality/catalyst/pattern columns. (3) **Performance** — analytics-focused, adds quality/catalyst/pattern breakdowns. (4) **Orchestrator** — NEW: operational command center, all decisioning visible and manually overridable, capital allocation controls, decision stream, risk gauges, emergency controls. (5) **Pattern Library** — NEW: strategy encyclopedia, master-detail layout, every strategy's parameters/performance/backtests/intelligence visible, incubator pipeline visualization. (6) **The Debrief** — NEW: knowledge accumulation surface, daily briefings (pre/post-market), research library, learning journal. (7) **System** — narrowed to infrastructure health only. |
+| **Rationale** | The 4-page structure designed for a simpler system. Dashboard tried to be ambient + operational. System mixed infrastructure health with strategy management. No home for accumulated knowledge/research. Three new pages solve: Orchestrator (operational controls), Pattern Library (strategy deep dives), The Debrief (knowledge accumulation). Existing pages get narrower, more focused scope. |
+| **Nav (desktop)** | Icon sidebar grouped: Monitor (Dashboard, Trades, Performance) → Operate (Orchestrator, Patterns) → Learn (Debrief) → Maintain (System). Keyboard shortcuts 1–7. |
+| **Nav (mobile)** | 5 bottom tabs: Dashboard, Trades, Orchestrator, Patterns, More (→ Performance, Debrief, System). During market hours the 5 you need most are always one tap away. |
+| **Status** | Active |
+
+---
+
+### DEC-170 | Contextual AI Copilot — Claude Everywhere
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-26 |
+| **Decision** | Claude is accessible from every page in the Command Center via a persistent, context-aware chat interface. Not a separate "AI page" — a slide-out panel (desktop: right side, 35% width; mobile: full-screen overlay) triggered by a floating button or keyboard shortcut (`c`). When opened, Claude automatically receives context about what page the user is on, what data is visible, and any selected entity (trade, strategy, position, report). Chat history persists in The Debrief's Learning Journal. Claude can take actions from chat (propose allocation changes, generate reports, annotate trades) that go through the standard approval workflow. |
+| **Rationale** | Having to leave the app to talk to Claude breaks operational flow. The user operates from Taipei during US market hours (10:30 PM – 5:00 AM local) — context-switching between ARGUS and Claude.ai wastes critical attention. Contextual AI means Claude already knows what you're looking at. "Why did we skip this setup?" asked from the Watchlist sidebar gives Claude the symbol, quality score, and order flow data automatically. "Analyze this strategy's performance" asked from Pattern Library gives Claude the strategy ID and time range. The chat panel is the AI Layer's primary user interface. |
+| **Context injection** | Each page provides a context payload when chat opens: Dashboard → current positions, P&L, regime. Orchestrator → allocation state, recent decisions, risk utilization. Pattern Library → selected strategy ID, parameters, recent performance. The Debrief → current document/briefing being viewed. Trade Detail Panel → full trade data, quality score, catalyst, order flow snapshot. |
+| **Action capabilities** | From chat, Claude can: generate a report (saved to The Debrief), propose parameter changes (approval flow), propose allocation override (approval flow), annotate a trade (saved to Learning Journal), trigger a backtest comparison, answer questions about any system data. All actions logged in audit trail. |
+| **Boundaries** | Claude never executes trades directly from chat. All trade-affecting proposals go through Risk Manager gates and approval workflow. Chat is not a "god mode" — it's a contextual assistant that works within the existing control framework. |
+| **Implementation** | Sprint 22 (AI Layer MVP) builds the API infrastructure. Chat panel UI built in Sprint 21d as a shell (initially shows "AI Layer coming in Sprint 22" placeholder). Full chat functionality activates when Sprint 22 completes. |
+| **Status** | Active |
+
+---
+
+### DEC-171 | Sprint 21 Split — Four Sub-Sprints for Page Architecture
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-26 |
+| **Decision** | Sprint 21 split into four sub-sprints to establish the 7-page architecture before intelligence features are added in Sprints 23+. (a) Pattern Library page + stock detail panel. (b) Orchestrator page + control migration. (c) The Debrief page + research library. (d) Dashboard refinement + Performance analytics + System cleanup + AI Copilot shell + nav restructure. |
+| **Rationale** | Original Sprint 21 (~80–100h) was already flagged for potential split (RSK-025). Expanding from 4 to 7 pages requires establishing the page structure first so intelligence sprints (23–32) add features to the correct locations. Each sub-sprint is independently valuable and demoable. |
+| **Amends** | DEC-096, DEC-108. |
+| **Status** | Active |
+
+---
+
+### DEC-172 | Strategy Metadata Enrichment
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-26 |
+| **Decision** | Extend `GET /api/v1/strategies` with `time_window`, `family`, `description_short`, `performance_summary`, `backtest_summary`. Single enriched endpoint rather than separate `/patterns` route. Performance summary computed via TradeLogger per-strategy queries at request time. |
+| **Rationale** | Avoids naming split between "strategies" (operational) and "patterns" (library) — they're the same objects. Single endpoint reduces client complexity. Per-strategy TradeLogger queries are fast (4 SQLite queries, sub-millisecond each). |
+| **Alternatives** | (B) Separate `/api/v1/patterns` endpoint — rejected, creates artificial distinction. (C) Composite client-side join of `/strategies` + `/performance` — rejected, adds latency and complexity. |
+| **Status** | Active |
+
+---
+
+### DEC-173 | Pipeline Stage in Config YAML
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-26 |
+| **Decision** | Store strategy pipeline stage as `pipeline_stage` field in each strategy's YAML config. Manual update. 10-stage vocabulary: concept, exploration, validation, ecosystem_replay, paper_trading, live_minimum, live_full, active_monitoring, suspended, retired. |
+| **Rationale** | Simple, config-driven, consistent with ARGUS's YAML-first design. Only 4 strategies currently — DB-backed solution premature. Can migrate to database when 15+ strategies make YAML editing cumbersome. |
+| **Alternatives** | (B) Database-backed — rejected as premature for 4 strategies. (C) Computed from system state — rejected, insufficient granularity (can't distinguish "validation" from "exploration"). |
+| **Status** | Active |
+
+---
+
+### DEC-174 | Strategy Family Classification
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-26 |
+| **Decision** | Store strategy family as `family` field in config YAML. Values: `orb_family`, `momentum`, `mean_reversion`, `uncategorized`. Display names mapped in frontend. Mapping: ORB Breakout/Scalp → orb_family, VWAP Reclaim → mean_reversion, Afternoon Momentum → momentum. |
+| **Rationale** | Consistent with DEC-173 (config-driven). YAML values are stable identifiers; UI labels are flexible. Same file, same update workflow. |
+| **Status** | Active |
+
+---
+
+### DEC-175 | Strategy Spec Sheets Served as Markdown
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-26 |
+| **Decision** | New `GET /api/v1/strategies/{strategy_id}/spec` endpoint serves strategy spec sheets from `docs/strategies/STRATEGY_*.md` as raw markdown. Frontend renders with react-markdown + remark-gfm. Overview tab combines live parameter table (from YAML config) with rendered spec sheet (from markdown file). |
+| **Rationale** | Avoids duplicating well-maintained strategy documentation. Spec sheets are the authoritative source — rendering them directly ensures consistency. react-markdown is lightweight (~12KB gzipped). Markdown files exist on disk in all modes (dev and production). |
+| **Alternatives** | (A) Hardcoded frontend descriptions — rejected, content duplication. (B) API returns structured description object — rejected, more work for same result, loses rich formatting. |
+| **Status** | Active |
+
+---
+
+### DEC-176 | Backtest Tab as Structured Placeholder
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-26 |
+| **Decision** | Backtest tab shows static summary from `backtest_summary` config section (status, WFE, OOS Sharpe, trade count, data months, last run date). No interactive backtest explorer in Sprint 21a — deferred to Sprint 21d. Existing walk-forward/VectorBT reports remain in docs/backtesting/ as files. |
+| **Rationale** | Ingesting backtest reports into a queryable API is a data pipeline project beyond Sprint 21a scope. Config-based summary provides the key metrics users need. Interactive explorer is Sprint 21d scope when analytics infrastructure is richer. |
+| **Status** | Active |
+
+---
+
+### DEC-177 | SlideInPanel Extraction + Symbol Detail Architecture
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-26 |
+| **Decision** | Extract shared SlideInPanel component from TradeDetailPanel. Handles animation, backdrop, close behavior, responsive sizing (desktop: right 40%, mobile: bottom 90vh). TradeDetailPanel refactored to use SlideInPanel as wrapper. SymbolDetailPanel is a new consumer. SymbolDetail triggered via `symbolDetailUI` Zustand store — any component can call `open(symbol)` to trigger the panel globally. |
+| **Rationale** | Two panels (trade detail, symbol detail) share identical slide-in UX. Extracting the shell eliminates duplication and ensures consistent animation behavior. Global Zustand store enables "click any symbol anywhere" without prop drilling. |
+| **Status** | Active |
+
+---
+
+### DEC-178 | Fundamentals Section Deferred to Sprint 23
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-26 |
+| **Decision** | Symbol Detail Panel in Sprint 21a ships without fundamentals section (market cap, float, sector, short interest). No data source exists for this data until Finnhub/FMP integration in Sprint 23 (NLP Catalyst Pipeline). Panel ships with: candlestick chart, trading history, position detail. |
+| **Rationale** | Building UI for data we can't populate is wasted effort. Clean panel with available data is better than empty sections. Fundamentals section adds naturally in Sprint 23 when CatalystService provides the data. |
+| **Status** | Active |
+
+---
+
+### DEC-179 | Incubator Pipeline Responsive Design
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-26 |
+| **Decision** | Desktop/tablet (≥640px): Connected pipeline with chevron arrows, stage nodes with counts. HTML/CSS flexbox implementation. Mobile (<640px): Compact horizontal scrollable pill row. Click-to-filter toggles: click stage to filter card grid, click same stage to clear filter. |
+| **Rationale** | Connected pipeline gives Pattern Library a distinctive visual signature on desktop. Compact pills save vertical space on mobile. HTML/CSS over SVG avoids complexity for what's essentially a styled flex row. |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
 *New decisions are appended chronologically as the project progresses.*
