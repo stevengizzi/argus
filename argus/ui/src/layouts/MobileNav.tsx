@@ -1,14 +1,14 @@
 /**
  * Bottom navigation bar for mobile and tablet (<1024px).
  *
- * Shows 4 tab items with icons and labels, with system status dot overlay.
+ * Shows 5 tab items with icons and labels, with system status dot overlay.
  */
 
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, ScrollText, TrendingUp, Activity } from 'lucide-react';
+import { LayoutDashboard, ScrollText, TrendingUp, BookOpen, Activity } from 'lucide-react';
 import { useLiveStore } from '../stores/live';
 
-// Navigation items in order - must match Sidebar.tsx for consistent keyboard shortcuts (1-4)
+// Navigation items in order - must match Sidebar.tsx for consistent keyboard shortcuts (1-5)
 const NAV_ITEMS: Array<{
   to: string;
   icon: typeof LayoutDashboard;
@@ -18,6 +18,7 @@ const NAV_ITEMS: Array<{
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/trades', icon: ScrollText, label: 'Trades' },
   { to: '/performance', icon: TrendingUp, label: 'Performance' },
+  { to: '/patterns', icon: BookOpen, label: 'Patterns' },
   { to: '/system', icon: Activity, label: 'System', showStatusDot: true },
 ];
 

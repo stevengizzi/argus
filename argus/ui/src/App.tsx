@@ -11,6 +11,7 @@ import { Login } from './pages/Login';
 import { DashboardPage } from './pages/DashboardPage';
 import { TradesPage } from './pages/TradesPage';
 import { PerformancePage } from './pages/PerformancePage';
+import { PatternLibraryPage } from './pages/PatternLibraryPage';
 import { SystemPage } from './pages/SystemPage';
 import { ConnectionTest } from './pages/ConnectionTest';
 
@@ -39,6 +40,7 @@ function App() {
           <Route index element={<DashboardPage />} />
           <Route path="trades" element={<TradesPage />} />
           <Route path="performance" element={<PerformancePage />} />
+          <Route path="patterns" element={<PatternLibraryPage />} />
           <Route path="system" element={<SystemPage />} />
           <Route path="dev/connection" element={<ConnectionTest />} />
         </Route>

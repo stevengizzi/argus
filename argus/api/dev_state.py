@@ -24,6 +24,7 @@ from argus.core.clock import SystemClock
 from argus.core.config import (
     AfternoonMomentumConfig,
     ApiConfig,
+    BacktestSummaryConfig,
     HealthConfig,
     OrbBreakoutConfig,
     OrbScalpConfig,
@@ -66,6 +67,10 @@ class MockStrategy:
     daily_pnl: float
     trade_count_today: int
     config: StrategyConfig
+    # New fields for Pattern Library (Sprint 21a)
+    family: str = "uncategorized"
+    description_short: str = ""
+    time_window_display: str = ""
 
     @property
     def _is_active(self) -> bool:
@@ -1068,12 +1073,7 @@ async def create_dev_state() -> AppState:
             order_manager._managed_positions[pos.symbol] = []
         order_manager._managed_positions[pos.symbol].append(pos)
 
-    # Mock strategies
-    orb_config = OrbBreakoutConfig(
-        strategy_id="orb_breakout",
-        name="ORB Breakout",
-        version="1.0.0",
-    )
+    # Mock strategies with Pattern Library fields (Sprint 21a)
     # Calculate daily P&L and trade counts by strategy
     orb_todays_trades = [
         t for t in trades
@@ -1092,6 +1092,26 @@ async def create_dev_state() -> AppState:
         if t.exit_time.date() == now.date() and t.strategy_id == "afternoon_momentum"
     ]
 
+    # ORB Breakout config with backtest summary
+    orb_config = OrbBreakoutConfig(
+        strategy_id="orb_breakout",
+        name="ORB Breakout",
+        version="1.0.0",
+        family="orb_family",
+        description_short=(
+            "Exploits gapping stocks breaking out of the first 5 minutes' "
+            "high with volume confirmation."
+        ),
+        time_window_display="9:35–11:30 AM",
+        backtest_summary=BacktestSummaryConfig(
+            status="validated",
+            wfe_pnl=28450.0,
+            oos_sharpe=2.15,
+            total_trades=1842,
+            data_months=35,
+            last_run="2026-02-20",
+        ),
+    )
     mock_orb_breakout = MockStrategy(
         strategy_id="orb_breakout",
         name="ORB Breakout",
@@ -1102,12 +1122,33 @@ async def create_dev_state() -> AppState:
         daily_pnl=sum(t.net_pnl for t in orb_todays_trades),
         trade_count_today=len(orb_todays_trades),
         config=orb_config,
+        family="orb_family",
+        description_short=(
+            "Exploits gapping stocks breaking out of the first 5 minutes' "
+            "high with volume confirmation."
+        ),
+        time_window_display="9:35–11:30 AM",
     )
 
+    # ORB Scalp config with backtest summary
     scalp_config = OrbScalpConfig(
         strategy_id="orb_scalp",
         name="ORB Scalp",
         version="1.0.0",
+        family="orb_family",
+        description_short=(
+            "Quick 0.3R scalp on the same opening range breakout pattern, "
+            "exiting within 120 seconds."
+        ),
+        time_window_display="9:45–11:30 AM",
+        backtest_summary=BacktestSummaryConfig(
+            status="validated",
+            wfe_pnl=8920.0,
+            oos_sharpe=1.85,
+            total_trades=3156,
+            data_months=35,
+            last_run="2026-02-22",
+        ),
     )
     mock_orb_scalp = MockStrategy(
         strategy_id="orb_scalp",
@@ -1119,12 +1160,33 @@ async def create_dev_state() -> AppState:
         daily_pnl=sum(t.net_pnl for t in scalp_todays_trades),
         trade_count_today=len(scalp_todays_trades),
         config=scalp_config,
+        family="orb_family",
+        description_short=(
+            "Quick 0.3R scalp on the same opening range breakout pattern, "
+            "exiting within 120 seconds."
+        ),
+        time_window_display="9:45–11:30 AM",
     )
 
+    # VWAP Reclaim config with backtest summary
     vwap_config = VwapReclaimConfig(
         strategy_id="vwap_reclaim",
         name="VWAP Reclaim",
         version="1.0.0",
+        family="mean_reversion",
+        description_short=(
+            "Enters long when a gapping stock pulls back below VWAP, "
+            "then reclaims above on volume."
+        ),
+        time_window_display="10:00 AM–12:00 PM",
+        backtest_summary=BacktestSummaryConfig(
+            status="validated",
+            wfe_pnl=15820.0,
+            oos_sharpe=1.49,
+            total_trades=59556,
+            data_months=35,
+            last_run="2026-02-25",
+        ),
     )
     mock_vwap_reclaim = MockStrategy(
         strategy_id="vwap_reclaim",
@@ -1136,12 +1198,33 @@ async def create_dev_state() -> AppState:
         daily_pnl=sum(t.net_pnl for t in vwap_todays_trades),
         trade_count_today=len(vwap_todays_trades),
         config=vwap_config,
+        family="mean_reversion",
+        description_short=(
+            "Enters long when a gapping stock pulls back below VWAP, "
+            "then reclaims above on volume."
+        ),
+        time_window_display="10:00 AM–12:00 PM",
     )
 
+    # Afternoon Momentum config with backtest summary
     afternoon_config = AfternoonMomentumConfig(
         strategy_id="afternoon_momentum",
         name="Afternoon Momentum",
         version="1.0.0",
+        family="momentum",
+        description_short=(
+            "Catches afternoon consolidation breakouts in gapping stocks "
+            "between 2:00–3:30 PM."
+        ),
+        time_window_display="2:00–3:30 PM",
+        backtest_summary=BacktestSummaryConfig(
+            status="validated",
+            wfe_pnl=12340.0,
+            oos_sharpe=1.72,
+            total_trades=1152,
+            data_months=35,
+            last_run="2026-02-26",
+        ),
     )
     mock_afternoon_momentum = MockStrategy(
         strategy_id="afternoon_momentum",
@@ -1153,6 +1236,12 @@ async def create_dev_state() -> AppState:
         daily_pnl=sum(t.net_pnl for t in afternoon_todays_trades),
         trade_count_today=len(afternoon_todays_trades),
         config=afternoon_config,
+        family="momentum",
+        description_short=(
+            "Catches afternoon consolidation breakouts in gapping stocks "
+            "between 2:00–3:30 PM."
+        ),
+        time_window_display="2:00–3:30 PM",
     )
 
     # Mock orchestrator

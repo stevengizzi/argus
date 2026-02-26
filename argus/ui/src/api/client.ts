@@ -6,6 +6,7 @@
 
 import type {
   AccountResponse,
+  BarsResponse,
   HealthResponse,
   LoginRequest,
   OrchestratorStatusResponse,
@@ -14,6 +15,7 @@ import type {
   PositionsResponse,
   SessionSummaryResponse,
   StrategiesResponse,
+  StrategySpecResponse,
   TokenResponse,
   TradesResponse,
   WatchlistResponse,
@@ -173,4 +175,22 @@ export async function getSessionSummary(
 // Watchlist endpoints
 export async function getWatchlist(): Promise<WatchlistResponse> {
   return fetchWithAuth<WatchlistResponse>('/watchlist');
+}
+
+// Strategy spec endpoints (Pattern Library)
+export async function fetchStrategySpec(strategyId: string): Promise<StrategySpecResponse> {
+  return fetchWithAuth<StrategySpecResponse>(`/strategies/${strategyId}/spec`);
+}
+
+// Market data endpoints
+export async function fetchSymbolBars(
+  symbol: string,
+  limit: number = 390
+): Promise<BarsResponse> {
+  const searchParams = new URLSearchParams();
+  if (limit !== 390) {
+    searchParams.set('limit', String(limit));
+  }
+  const query = searchParams.toString();
+  return fetchWithAuth<BarsResponse>(`/market/${symbol}/bars${query ? `?${query}` : ''}`);
 }

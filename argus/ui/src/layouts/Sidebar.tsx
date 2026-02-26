@@ -1,20 +1,21 @@
 /**
  * Icon-only sidebar for desktop (≥1024px).
  *
- * Shows 4 navigation items, paper mode badge, status indicator, and logout.
+ * Shows 5 navigation items, paper mode badge, status indicator, and logout.
  */
 
 import { useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, ScrollText, TrendingUp, Activity, LogOut } from 'lucide-react';
+import { LayoutDashboard, ScrollText, TrendingUp, BookOpen, Activity, LogOut } from 'lucide-react';
 import { useAuthStore } from '../stores/auth';
 import { useLiveStore } from '../stores/live';
 
-// Navigation items in sidebar order - keyboard shortcuts use this order (1, 2, 3, 4)
+// Navigation items in sidebar order - keyboard shortcuts use this order (1, 2, 3, 4, 5)
 const NAV_ITEMS = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/trades', icon: ScrollText, label: 'Trades' },
   { to: '/performance', icon: TrendingUp, label: 'Performance' },
+  { to: '/patterns', icon: BookOpen, label: 'Pattern Library' },
   { to: '/system', icon: Activity, label: 'System' },
 ] as const;
 

@@ -143,6 +143,23 @@ export interface HealthResponse {
 }
 
 // Strategies
+export interface PerformanceSummary {
+  trade_count: number;
+  win_rate: number;
+  net_pnl: number;
+  avg_r: number;
+  profit_factor: number;
+}
+
+export interface BacktestSummary {
+  status: string;
+  wfe_pnl: number | null;
+  oos_sharpe: number | null;
+  total_trades: number | null;
+  data_months: number | null;
+  last_run: string | null;
+}
+
 export interface StrategyInfo {
   strategy_id: string;
   name: string;
@@ -154,12 +171,41 @@ export interface StrategyInfo {
   trade_count_today: number;
   open_positions: number;
   config_summary: Record<string, unknown>;
+  time_window: string;
+  family: string;
+  description_short: string;
+  performance_summary: PerformanceSummary | null;
+  backtest_summary: BacktestSummary | null;
 }
 
 export interface StrategiesResponse {
   strategies: StrategyInfo[];
   count: number;
   timestamp: string;
+}
+
+// Strategy Spec (Pattern Library)
+export interface StrategySpecResponse {
+  strategy_id: string;
+  content: string;
+  format: string;
+}
+
+// Market Data
+export interface BarData {
+  timestamp: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
+export interface BarsResponse {
+  symbol: string;
+  timeframe: string;
+  bars: BarData[];
+  count: number;
 }
 
 // WebSocket
