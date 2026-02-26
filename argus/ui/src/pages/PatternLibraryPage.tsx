@@ -6,7 +6,7 @@
  * - Tablet/Mobile (<1024px): Full-width card list, selecting shows detail view
  */
 
-import { BookOpen, ArrowLeft } from 'lucide-react';
+import { BookOpen } from 'lucide-react';
 import { AnimatedPage } from '../components/AnimatedPage';
 import { Card } from '../components/Card';
 import { Skeleton } from '../components/Skeleton';
@@ -15,6 +15,7 @@ import { useStrategies } from '../hooks/useStrategies';
 import { usePatternLibraryUI } from '../stores/patternLibraryUI';
 import { IncubatorPipeline } from '../features/patterns/IncubatorPipeline';
 import { PatternCardGrid } from '../features/patterns/PatternCardGrid';
+import { PatternDetail } from '../features/patterns/PatternDetail';
 
 export function PatternLibraryPage() {
   const { data: strategiesData, isLoading } = useStrategies();
@@ -81,57 +82,16 @@ export function PatternLibraryPage() {
           </div>
         )}
 
-        {/* Right panel: Detail view (placeholder for Sessions 4-6) */}
+        {/* Right panel: Detail view */}
         {showDetail && (
           <div className={isDesktop ? 'flex-1 min-w-0' : 'w-full'}>
-            <PatternDetailPlaceholder
+            <PatternDetail
               strategyId={selectedStrategyId!}
-              strategies={strategies}
               onClose={() => setSelectedStrategy(null)}
-              showBackButton={!isDesktop}
             />
           </div>
         )}
       </div>
     </AnimatedPage>
-  );
-}
-
-/**
- * Placeholder for PatternDetail component (built in Sessions 4-6).
- */
-interface PatternDetailPlaceholderProps {
-  strategyId: string;
-  strategies: Array<{ strategy_id: string; name: string }>;
-  onClose: () => void;
-  showBackButton: boolean;
-}
-
-function PatternDetailPlaceholder({
-  strategyId,
-  strategies,
-  onClose,
-  showBackButton,
-}: PatternDetailPlaceholderProps) {
-  const strategy = strategies.find((s) => s.strategy_id === strategyId);
-
-  return (
-    <Card>
-      {showBackButton && (
-        <button
-          onClick={onClose}
-          className="flex items-center gap-2 text-argus-text-dim hover:text-argus-text mb-4"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          <span className="text-sm">Back to list</span>
-        </button>
-      )}
-      <h2 className="text-lg font-medium text-argus-text mb-2">
-        {strategy?.name || strategyId}
-      </h2>
-      <p className="text-argus-text-dim text-sm">
-        Pattern detail view coming in Sessions 4-6.
-      </p>
-    </Card>
   );
 }
