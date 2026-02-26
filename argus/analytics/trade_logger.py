@@ -537,6 +537,7 @@ class TradeLogger:
         offset: int = 0,
         strategy_id: str | None = None,
         decision_type: str | None = None,
+        date: str | None = None,
     ) -> tuple[list[dict], int]:
         """Query orchestrator decisions with pagination.
 
@@ -545,6 +546,7 @@ class TradeLogger:
             offset: Number of decisions to skip for pagination.
             strategy_id: Optional strategy ID filter.
             decision_type: Optional decision type filter.
+            date: Optional date filter (ISO YYYY-MM-DD format).
 
         Returns:
             Tuple of (list of decision dicts, total count).
@@ -559,6 +561,10 @@ class TradeLogger:
         if decision_type is not None:
             conditions.append("decision_type = ?")
             params.append(decision_type)
+
+        if date is not None:
+            conditions.append("date = ?")
+            params.append(date)
 
         where_clause = " AND ".join(conditions) if conditions else "1=1"
 

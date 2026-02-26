@@ -15,7 +15,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
@@ -105,6 +105,9 @@ class Orchestrator:
 
         # Intraday loss tracking
         self._intraday_losses: dict[str, list[float]] = {}  # strategy_id → [pnl, pnl, ...]
+
+        # Override tracking (transient — lost on restart, which is acceptable)
+        self._override_until: dict[str, datetime] = {}  # strategy_id → expiry datetime
 
     # -------------------------------------------------------------------------
     # Lifecycle
@@ -197,6 +200,11 @@ class Orchestrator:
     def cash_reserve_pct(self) -> float:
         """Cash reserve percentage from config."""
         return self._config.cash_reserve_pct
+
+    @property
+    def pre_market_complete(self) -> bool:
+        """Whether pre-market routine has completed today."""
+        return self._pre_market_done_today
 
     # -------------------------------------------------------------------------
     # Pre-Market Routine
@@ -312,7 +320,16 @@ class Orchestrator:
         for sid in eligible_ids:
             trades = await self._trade_logger.get_trades_by_strategy(sid, limit=200)
             daily_pnl = await self._trade_logger.get_daily_pnl(strategy_id=sid)
-            throttle_results[sid] = self._throttler.check(sid, trades, daily_pnl)
+            action = self._throttler.check(sid, trades, daily_pnl)
+
+            # Override check: if override is active, ignore REDUCE/SUSPEND
+            if self._is_override_active(sid) and action in (
+                ThrottleAction.REDUCE,
+                ThrottleAction.SUSPEND,
+            ):
+                action = ThrottleAction.NONE  # Override in effect
+
+            throttle_results[sid] = action
 
         active_ids = [
             sid for sid in eligible_ids if throttle_results[sid] != ThrottleAction.SUSPEND
@@ -393,6 +410,82 @@ class Orchestrator:
     # -------------------------------------------------------------------------
     # Manual Controls
     # -------------------------------------------------------------------------
+
+    async def override_throttle(
+        self, strategy_id: str, duration_minutes: int, reason: str
+    ) -> None:
+        """Temporarily override throttle for a strategy.
+
+        Args:
+            strategy_id: Strategy to override.
+            duration_minutes: How long the override lasts. Use 999+ for rest-of-day.
+            reason: Human-readable reason for the override.
+        """
+        now = self._clock.now()
+        et_tz = ZoneInfo("America/New_York")
+
+        if duration_minutes >= 999:
+            # Rest of day = 4:00 PM ET today
+            now_et = now.astimezone(et_tz)
+            eod = now_et.replace(hour=16, minute=0, second=0, microsecond=0)
+            self._override_until[strategy_id] = eod
+        else:
+            self._override_until[strategy_id] = now + timedelta(minutes=duration_minutes)
+
+        # Reactivate the strategy
+        strategy = self._strategies.get(strategy_id)
+        if strategy:
+            strategy.is_active = True
+
+        # Log the override decision
+        await self._log_decision(
+            "throttle_override",
+            strategy_id,
+            {"duration_minutes": duration_minutes, "reason": reason},
+            f"Manual throttle override: {reason}",
+        )
+
+        # Publish StrategyActivatedEvent
+        await self._event_bus.publish(
+            StrategyActivatedEvent(
+                strategy_id=strategy_id,
+                reason=f"Throttle override: {reason}",
+            )
+        )
+
+        logger.info(
+            "Throttle override for %s: %d minutes - %s",
+            strategy_id,
+            duration_minutes,
+            reason,
+        )
+
+    def _is_override_active(self, strategy_id: str) -> bool:
+        """Check if a throttle override is currently active.
+
+        Args:
+            strategy_id: Strategy to check.
+
+        Returns:
+            True if override is active, False otherwise.
+        """
+        if strategy_id not in self._override_until:
+            return False
+
+        now = self._clock.now()
+        expiry = self._override_until[strategy_id]
+
+        # Clean up expired overrides
+        if now >= expiry:
+            del self._override_until[strategy_id]
+            return False
+
+        return True
+
+    @property
+    def override_until(self) -> dict[str, datetime]:
+        """Get active override expiry times (copy)."""
+        return self._override_until.copy()
 
     async def manual_rebalance(self) -> dict[str, StrategyAllocation]:
         """Re-run allocation with current state. API-triggered.

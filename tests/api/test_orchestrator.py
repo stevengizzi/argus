@@ -37,6 +37,14 @@ if TYPE_CHECKING:
 
 
 @dataclass
+class MockApiStrategy:
+    """Minimal mock strategy for API testing."""
+
+    strategy_id: str
+    is_active: bool = True
+
+
+@dataclass
 class MockOrchestrator:
     """Mock orchestrator for API testing."""
 
@@ -46,6 +54,13 @@ class MockOrchestrator:
     _current_indicators: RegimeIndicators | None
     _last_regime_check: datetime | None
     _rebalance_called: bool = False
+    _override_until: dict[str, datetime] | None = None
+    _override_throttle_called: bool = False
+
+    def __post_init__(self) -> None:
+        """Initialize mutable default fields."""
+        if self._override_until is None:
+            self._override_until = {}
 
     @property
     def current_regime(self) -> MarketRegime:
@@ -81,6 +96,25 @@ class MockOrchestrator:
         """Mock rebalance - returns current allocations."""
         self._rebalance_called = True
         return self._current_allocations
+
+    async def override_throttle(
+        self, strategy_id: str, duration_minutes: int, reason: str
+    ) -> None:
+        """Mock override_throttle - just set the flag and expiry."""
+        self._override_throttle_called = True
+        if self._override_until is None:
+            self._override_until = {}
+        self._override_until[strategy_id] = datetime.now(UTC) + timedelta(
+            minutes=duration_minutes
+        )
+
+    def _is_override_active(self, strategy_id: str) -> bool:
+        """Check if override is active for a strategy."""
+        if self._override_until is None:
+            return False
+        if strategy_id not in self._override_until:
+            return False
+        return datetime.now(UTC) < self._override_until[strategy_id]
 
 
 # ---------------------------------------------------------------------------
@@ -125,8 +159,12 @@ async def app_state_with_orchestrator(
     app_state: AppState,
     mock_orchestrator: MockOrchestrator,
 ) -> AppState:
-    """Provide AppState with mock orchestrator."""
+    """Provide AppState with mock orchestrator and strategies."""
     app_state.orchestrator = mock_orchestrator  # type: ignore[assignment]
+    # Add mock strategies that match allocations in mock_orchestrator
+    app_state.strategies["orb_breakout"] = MockApiStrategy(  # type: ignore[assignment]
+        strategy_id="orb_breakout", is_active=True
+    )
     return app_state
 
 
@@ -278,7 +316,11 @@ async def test_get_decisions_paginated(
     client_with_decisions: AsyncClient,
     auth_headers: dict[str, str],
 ) -> None:
-    """GET /orchestrator/decisions returns paginated decision history."""
+    """GET /orchestrator/decisions returns paginated decision history.
+
+    Note: Without a date parameter, defaults to today's decisions only (Sprint 21b).
+    The fixture seeds 2 decisions today and 1 yesterday.
+    """
     response = await client_with_decisions.get(
         "/api/v1/orchestrator/decisions",
         headers=auth_headers,
@@ -287,8 +329,9 @@ async def test_get_decisions_paginated(
     assert response.status_code == 200
     data = response.json()
 
-    assert data["total"] == 3
-    assert len(data["decisions"]) == 3
+    # Now defaults to today only (2 decisions)
+    assert data["total"] == 2
+    assert len(data["decisions"]) == 2
     assert data["limit"] == 50
     assert data["offset"] == 0
 
@@ -305,7 +348,11 @@ async def test_get_decisions_with_pagination(
     client_with_decisions: AsyncClient,
     auth_headers: dict[str, str],
 ) -> None:
-    """GET /orchestrator/decisions respects limit and offset."""
+    """GET /orchestrator/decisions respects limit and offset.
+
+    Note: Without a date parameter, defaults to today's decisions only (Sprint 21b).
+    The fixture seeds 2 decisions today.
+    """
     response = await client_with_decisions.get(
         "/api/v1/orchestrator/decisions?limit=1&offset=1",
         headers=auth_headers,
@@ -314,7 +361,8 @@ async def test_get_decisions_with_pagination(
     assert response.status_code == 200
     data = response.json()
 
-    assert data["total"] == 3
+    # Now defaults to today only (2 decisions total)
+    assert data["total"] == 2
     assert len(data["decisions"]) == 1
     assert data["limit"] == 1
     assert data["offset"] == 1
@@ -586,6 +634,13 @@ async def app_state_with_orchestrator_and_positions(
 ) -> AppState:
     """Provide AppState with orchestrator and managed positions."""
     app_state.orchestrator = mock_orchestrator_with_throttle  # type: ignore[assignment]
+    # Add mock strategies that match allocations
+    app_state.strategies["orb_breakout"] = MockApiStrategy(  # type: ignore[assignment]
+        strategy_id="orb_breakout", is_active=True
+    )
+    app_state.strategies["orb_scalp"] = MockApiStrategy(  # type: ignore[assignment]
+        strategy_id="orb_scalp", is_active=False
+    )
     # Inject positions from sample_managed_positions fixture
     for pos in sample_managed_positions:
         if pos.symbol not in app_state.order_manager._managed_positions:
@@ -717,3 +772,130 @@ async def test_get_status_total_equity_from_broker(
     # SimulatedBroker defaults to $100K
     assert data["total_equity"] == 100_000.0
     assert data["total_deployed_capital"] == 0.0  # No positions
+
+
+# ---------------------------------------------------------------------------
+# Throttle Override Endpoint Tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_post_override_throttle_success(
+    client_with_orchestrator: AsyncClient,
+    auth_headers: dict[str, str],
+    mock_orchestrator: MockOrchestrator,
+) -> None:
+    """POST /orchestrator/strategies/{id}/override-throttle returns success."""
+    response = await client_with_orchestrator.post(
+        "/api/v1/orchestrator/strategies/orb_breakout/override-throttle",
+        headers=auth_headers,
+        json={"duration_minutes": 30, "reason": "Testing override"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data["success"] is True
+    assert "override" in data["message"].lower()
+    assert "30 minutes" in data["message"]
+    assert mock_orchestrator._override_throttle_called is True
+
+
+@pytest.mark.asyncio
+async def test_post_override_throttle_requires_auth(
+    client_with_orchestrator: AsyncClient,
+) -> None:
+    """POST /orchestrator/strategies/{id}/override-throttle requires authentication."""
+    response = await client_with_orchestrator.post(
+        "/api/v1/orchestrator/strategies/orb_breakout/override-throttle",
+        json={"duration_minutes": 30, "reason": "Testing"},
+    )
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_post_override_throttle_unknown_strategy_returns_404(
+    client_with_orchestrator: AsyncClient,
+    auth_headers: dict[str, str],
+) -> None:
+    """POST /orchestrator/strategies/{id}/override-throttle returns 404 for unknown strategy."""
+    response = await client_with_orchestrator.post(
+        "/api/v1/orchestrator/strategies/unknown_strategy/override-throttle",
+        headers=auth_headers,
+        json={"duration_minutes": 30, "reason": "Testing"},
+    )
+
+    assert response.status_code == 404
+    assert "not found" in response.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_post_override_throttle_returns_503_without_orchestrator(
+    client: AsyncClient,
+    auth_headers: dict[str, str],
+) -> None:
+    """POST /orchestrator/strategies/{id}/override-throttle returns 503 without orchestrator."""
+    response = await client.post(
+        "/api/v1/orchestrator/strategies/orb_breakout/override-throttle",
+        headers=auth_headers,
+        json={"duration_minutes": 30, "reason": "Testing"},
+    )
+
+    assert response.status_code == 503
+    assert "not available" in response.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_get_status_shows_override_active(
+    app_state_with_orchestrator: AppState,
+    auth_headers: dict[str, str],
+    mock_orchestrator: MockOrchestrator,
+    jwt_secret: str,
+) -> None:
+    """GET /orchestrator/status shows override_active when override is set."""
+    from httpx import ASGITransport, AsyncClient
+
+    # Set an override on the mock orchestrator
+    await mock_orchestrator.override_throttle("orb_breakout", 30, "Test")
+
+    app = create_app(app_state_with_orchestrator)
+    app.state.app_state = app_state_with_orchestrator
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+    ) as client:
+        response = await client.get(
+            "/api/v1/orchestrator/status",
+            headers=auth_headers,
+        )
+
+    assert response.status_code == 200
+    data = response.json()
+
+    # Find orb_breakout allocation
+    allocs_by_id = {a["strategy_id"]: a for a in data["allocations"]}
+    alloc = allocs_by_id["orb_breakout"]
+
+    assert alloc["override_active"] is True
+    assert alloc["override_until"] is not None
+
+
+@pytest.mark.asyncio
+async def test_get_status_shows_override_inactive_by_default(
+    client_with_orchestrator: AsyncClient,
+    auth_headers: dict[str, str],
+) -> None:
+    """GET /orchestrator/status shows override_active=False when no override set."""
+    response = await client_with_orchestrator.get(
+        "/api/v1/orchestrator/status",
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+
+    # Check that override is not active
+    alloc = data["allocations"][0]
+    assert alloc["override_active"] is False
+    assert alloc["override_until"] is None

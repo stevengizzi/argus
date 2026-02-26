@@ -107,6 +107,12 @@ class MockOrchestrator:
     _current_allocations: dict[str, StrategyAllocation]
     _current_indicators: RegimeIndicators | None
     _last_regime_check: datetime | None
+    _override_until: dict[str, datetime] | None = None
+
+    def __post_init__(self) -> None:
+        """Initialize mutable default fields."""
+        if self._override_until is None:
+            self._override_until = {}
 
     @property
     def current_regime(self) -> MarketRegime:
@@ -138,9 +144,32 @@ class MockOrchestrator:
         """Get cash reserve percentage."""
         return self._config.cash_reserve_pct
 
+    @property
+    def pre_market_complete(self) -> bool:
+        """Whether pre-market routine has completed today."""
+        return True  # Always complete in dev mode
+
     async def manual_rebalance(self) -> dict[str, StrategyAllocation]:
         """Mock rebalance - returns current allocations unchanged."""
         return self._current_allocations
+
+    async def override_throttle(
+        self, strategy_id: str, duration_minutes: int, reason: str
+    ) -> None:
+        """Mock override — just set the flag."""
+        if self._override_until is None:
+            self._override_until = {}
+        self._override_until[strategy_id] = datetime.now(UTC) + timedelta(
+            minutes=duration_minutes
+        )
+
+    def _is_override_active(self, strategy_id: str) -> bool:
+        """Check if override is active for a strategy."""
+        if self._override_until is None:
+            return False
+        if strategy_id not in self._override_until:
+            return False
+        return datetime.now(UTC) < self._override_until[strategy_id]
 
 
 # ---------------------------------------------------------------------------

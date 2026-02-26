@@ -1374,3 +1374,161 @@ async def test_pre_market_logs_decisions_to_database(
 
     # Should have logged decisions for both strategies (encapsulated DB access)
     assert mock_trade_logger.log_orchestrator_decision.call_count >= 2
+
+
+# ---------------------------------------------------------------------------
+# Throttle Override Tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_override_throttle_sets_expiry_and_reactivates(
+    orchestrator: Orchestrator,
+    event_bus: EventBus,
+    mock_trade_logger: AsyncMock,
+) -> None:
+    """Test override_throttle sets override flag and reactivates strategy."""
+    strategy = MockStrategy("orb_breakout")
+    strategy.is_active = False  # Start inactive (throttled)
+    orchestrator.register_strategy(strategy)
+
+    events: list = []
+    event_bus.subscribe(StrategyActivatedEvent, lambda e: events.append(e))
+
+    await orchestrator.override_throttle("orb_breakout", 30, "Testing override")
+    await event_bus.drain()
+
+    # Check override is set
+    assert "orb_breakout" in orchestrator._override_until
+    assert orchestrator._is_override_active("orb_breakout") is True
+
+    # Check strategy is reactivated
+    assert strategy.is_active is True
+
+    # Check event was published
+    assert len(events) == 1
+    assert events[0].strategy_id == "orb_breakout"
+    assert "override" in events[0].reason.lower()
+
+    # Check decision was logged
+    assert mock_trade_logger.log_orchestrator_decision.called
+    call_args = mock_trade_logger.log_orchestrator_decision.call_args
+    assert call_args.kwargs["decision_type"] == "throttle_override"
+    assert call_args.kwargs["strategy_id"] == "orb_breakout"
+
+
+@pytest.mark.asyncio
+async def test_is_override_active_returns_false_after_expiry(
+    orchestrator: Orchestrator,
+    fixed_clock: FixedClock,
+) -> None:
+    """Test _is_override_active returns False after override expires."""
+    strategy = MockStrategy("orb_breakout")
+    orchestrator.register_strategy(strategy)
+
+    # Set override for 30 minutes
+    await orchestrator.override_throttle("orb_breakout", 30, "Test")
+
+    # Should be active immediately
+    assert orchestrator._is_override_active("orb_breakout") is True
+
+    # Advance clock past expiry
+    fixed_clock.advance(minutes=35)
+
+    # Should be expired
+    assert orchestrator._is_override_active("orb_breakout") is False
+
+    # Override should be cleaned up from dict
+    assert "orb_breakout" not in orchestrator._override_until
+
+
+@pytest.mark.asyncio
+async def test_override_throttle_rest_of_day(
+    orchestrator: Orchestrator,
+    fixed_clock: FixedClock,
+) -> None:
+    """Test override_throttle with duration=999 sets to 4:00 PM ET."""
+    strategy = MockStrategy("orb_breakout")
+    orchestrator.register_strategy(strategy)
+
+    # Clock is at 9:30 AM ET (14:30 UTC)
+    await orchestrator.override_throttle("orb_breakout", 999, "Rest of day")
+
+    # Check override expiry is at 4:00 PM ET
+    expiry = orchestrator._override_until["orb_breakout"]
+    et_tz = ZoneInfo("America/New_York")
+    expiry_et = expiry.astimezone(et_tz)
+
+    assert expiry_et.hour == 16
+    assert expiry_et.minute == 0
+    assert expiry_et.second == 0
+
+
+@pytest.mark.asyncio
+async def test_calculate_allocations_skips_throttle_when_override_active(
+    orchestrator: Orchestrator,
+    mock_data_service: AsyncMock,
+    mock_trade_logger: AsyncMock,
+) -> None:
+    """Test _calculate_allocations respects active override."""
+    mock_data_service.fetch_daily_bars.return_value = create_spy_bars_bullish()
+
+    # Create mock trades with 5 consecutive losses (would normally cause REDUCE)
+    mock_trades = [MagicMock(net_pnl=-100) for _ in range(5)]
+    mock_trade_logger.get_trades_by_strategy.return_value = mock_trades
+
+    strategy = MockStrategy("orb_breakout")
+    orchestrator.register_strategy(strategy)
+
+    # First run pre-market without override - should be throttled
+    await orchestrator.run_pre_market()
+    alloc = orchestrator.current_allocations.get("orb_breakout")
+    assert alloc is not None
+    assert alloc.throttle_action == ThrottleAction.REDUCE
+
+    # Now set an override
+    await orchestrator.override_throttle("orb_breakout", 60, "Override test")
+
+    # Rebalance - throttle should be bypassed
+    await orchestrator.manual_rebalance()
+    alloc = orchestrator.current_allocations.get("orb_breakout")
+    assert alloc is not None
+    assert alloc.throttle_action == ThrottleAction.NONE  # Override in effect
+
+
+@pytest.mark.asyncio
+async def test_override_until_property_returns_copy(
+    orchestrator: Orchestrator,
+) -> None:
+    """Test override_until property returns a copy."""
+    strategy = MockStrategy("orb_breakout")
+    orchestrator.register_strategy(strategy)
+
+    await orchestrator.override_throttle("orb_breakout", 30, "Test")
+
+    overrides1 = orchestrator.override_until
+    overrides2 = orchestrator.override_until
+
+    # Should be copies, not the same object
+    assert overrides1 is not overrides2
+    assert overrides1 == overrides2
+
+
+def test_is_override_active_returns_false_for_unknown_strategy(
+    orchestrator: Orchestrator,
+) -> None:
+    """Test _is_override_active returns False for unknown strategy."""
+    assert orchestrator._is_override_active("unknown_strategy") is False
+
+
+@pytest.mark.asyncio
+async def test_override_throttle_for_unknown_strategy(
+    orchestrator: Orchestrator,
+) -> None:
+    """Test override_throttle still logs decision for unknown strategy."""
+    # No strategy registered, but override should still work
+    await orchestrator.override_throttle("nonexistent", 30, "Test")
+
+    # Override is set
+    assert "nonexistent" in orchestrator._override_until
+    assert orchestrator._is_override_active("nonexistent") is True
