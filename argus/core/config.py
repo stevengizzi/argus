@@ -446,6 +446,7 @@ class StrategyConfig(BaseModel):
     family: str = "uncategorized"
     description_short: str = ""
     time_window_display: str = ""
+    backtest_summary: BacktestSummaryConfig = Field(default_factory=BacktestSummaryConfig)
     risk_limits: StrategyRiskLimits = StrategyRiskLimits()
     operating_window: OperatingWindow = OperatingWindow()
     benchmarks: PerformanceBenchmarks = PerformanceBenchmarks()
@@ -545,7 +546,6 @@ class OrbBreakoutConfig(StrategyConfig):
     max_range_atr_ratio: float = Field(default=2.0, gt=0)
     chase_protection_pct: float = Field(default=0.005, ge=0, le=0.05)
     breakout_volume_multiplier: float = Field(default=1.5, gt=0)
-    backtest_summary: BacktestSummaryConfig = Field(default_factory=BacktestSummaryConfig)
 
 
 class OrbScalpConfig(StrategyConfig):
@@ -564,7 +564,6 @@ class OrbScalpConfig(StrategyConfig):
     chase_protection_pct: float = Field(default=0.005, ge=0, le=0.05)
     breakout_volume_multiplier: float = Field(default=1.5, gt=0)
     volume_threshold_rvol: float = Field(default=2.0, gt=0)
-    backtest_summary: BacktestSummaryConfig = Field(default_factory=BacktestSummaryConfig)
 
 
 class VwapReclaimConfig(StrategyConfig):
@@ -590,9 +589,6 @@ class VwapReclaimConfig(StrategyConfig):
     target_2_r: float = Field(default=2.0, gt=0)
     time_stop_minutes: int = Field(default=30, ge=1)
     stop_buffer_pct: float = Field(default=0.001, ge=0, le=0.05)
-
-    # Backtest summary
-    backtest_summary: BacktestSummaryConfig = Field(default_factory=BacktestSummaryConfig)
 
     @model_validator(mode="after")
     def validate_pullback_range(self) -> VwapReclaimConfig:
@@ -632,9 +628,6 @@ class AfternoonMomentumConfig(StrategyConfig):
     max_hold_minutes: int = Field(default=60, ge=5, le=120)
     stop_buffer_pct: float = Field(default=0.001, ge=0, le=0.05)
     force_close_time: str = "15:45"
-
-    # Backtest summary
-    backtest_summary: BacktestSummaryConfig = Field(default_factory=BacktestSummaryConfig)
 
     @model_validator(mode="after")
     def validate_atr_ratios(self) -> AfternoonMomentumConfig:

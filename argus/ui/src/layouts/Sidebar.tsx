@@ -66,7 +66,7 @@ export function Sidebar({ paperMode = false }: SidebarProps) {
   const status = useLiveStore((state) => state.status);
   const navigate = useNavigate();
 
-  // Keyboard shortcuts: 1-4 for navigation
+  // Keyboard shortcuts: 1-5 for navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Ignore if typing in an input or textarea
@@ -113,7 +113,7 @@ export function Sidebar({ paperMode = false }: SidebarProps) {
         />
       </div>
 
-      {/* Navigation - items are numbered 1-4 for keyboard shortcuts */}
+      {/* Navigation - items are numbered 1-5 for keyboard shortcuts */}
       <nav className="flex-1 flex flex-col items-center py-4 space-y-2">
         {NAV_ITEMS.map((item) => (
           <NavItem

@@ -33,6 +33,7 @@ dev = [
     "pytest-cov>=4.1,<6",
     "ruff>=0.2,<1",
     "httpx>=0.26,<1",  # Test client for API tests (Sprint 14)
+    "plotly>=5.18,<6",  # Backtest report generator + VectorBT visualizations
 ]
 
 [tool.pytest.ini_options]

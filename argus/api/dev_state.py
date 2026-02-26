@@ -67,10 +67,6 @@ class MockStrategy:
     daily_pnl: float
     trade_count_today: int
     config: StrategyConfig
-    # New fields for Pattern Library (Sprint 21a)
-    family: str = "uncategorized"
-    description_short: str = ""
-    time_window_display: str = ""
 
     @property
     def _is_active(self) -> bool:
@@ -1122,12 +1118,6 @@ async def create_dev_state() -> AppState:
         daily_pnl=sum(t.net_pnl for t in orb_todays_trades),
         trade_count_today=len(orb_todays_trades),
         config=orb_config,
-        family="orb_family",
-        description_short=(
-            "Exploits gapping stocks breaking out of the first 5 minutes' "
-            "high with volume confirmation."
-        ),
-        time_window_display="9:35–11:30 AM",
     )
 
     # ORB Scalp config with backtest summary
@@ -1160,12 +1150,6 @@ async def create_dev_state() -> AppState:
         daily_pnl=sum(t.net_pnl for t in scalp_todays_trades),
         trade_count_today=len(scalp_todays_trades),
         config=scalp_config,
-        family="orb_family",
-        description_short=(
-            "Quick 0.3R scalp on the same opening range breakout pattern, "
-            "exiting within 120 seconds."
-        ),
-        time_window_display="9:45–11:30 AM",
     )
 
     # VWAP Reclaim config with backtest summary
@@ -1198,12 +1182,6 @@ async def create_dev_state() -> AppState:
         daily_pnl=sum(t.net_pnl for t in vwap_todays_trades),
         trade_count_today=len(vwap_todays_trades),
         config=vwap_config,
-        family="mean_reversion",
-        description_short=(
-            "Enters long when a gapping stock pulls back below VWAP, "
-            "then reclaims above on volume."
-        ),
-        time_window_display="10:00 AM–12:00 PM",
     )
 
     # Afternoon Momentum config with backtest summary
@@ -1236,12 +1214,6 @@ async def create_dev_state() -> AppState:
         daily_pnl=sum(t.net_pnl for t in afternoon_todays_trades),
         trade_count_today=len(afternoon_todays_trades),
         config=afternoon_config,
-        family="momentum",
-        description_short=(
-            "Catches afternoon consolidation breakouts in gapping stocks "
-            "between 2:00–3:30 PM."
-        ),
-        time_window_display="2:00–3:30 PM",
     )
 
     # Mock orchestrator

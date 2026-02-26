@@ -12,6 +12,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from argus.analytics.performance import compute_metrics
 from argus.api.auth import require_auth
 from argus.api.dependencies import AppState, get_app_state
 
@@ -142,8 +143,6 @@ async def list_strategies(
     - Performance summary (if trades exist)
     - Backtest summary (from config)
     """
-    from argus.analytics.performance import compute_metrics
-
     strategies_list: list[StrategyInfo] = []
 
     # Get all managed positions for open position counting
@@ -173,23 +172,20 @@ async def list_strategies(
         family = getattr(strategy.config, "family", "uncategorized")
         description_short = getattr(strategy.config, "description_short", "")
 
-        # Extract backtest summary from config
-        backtest_summary: BacktestSummary | None = None
-        if hasattr(strategy.config, "backtest_summary"):
-            bs = strategy.config.backtest_summary
-            if hasattr(bs, "status"):
-                backtest_summary = BacktestSummary(
-                    status=bs.status,
-                    wfe_pnl=bs.wfe_pnl,
-                    oos_sharpe=bs.oos_sharpe,
-                    total_trades=bs.total_trades,
-                    data_months=bs.data_months,
-                    last_run=bs.last_run,
-                )
+        # Extract backtest summary from config (guaranteed on base StrategyConfig)
+        bs = strategy.config.backtest_summary
+        backtest_summary = BacktestSummary(
+            status=bs.status,
+            wfe_pnl=bs.wfe_pnl,
+            oos_sharpe=bs.oos_sharpe,
+            total_trades=bs.total_trades,
+            data_months=bs.data_months,
+            last_run=bs.last_run,
+        )
 
         # Build performance summary from trade history
         performance_summary: PerformanceSummary | None = None
-        trades = await state.trade_logger.get_trades_by_strategy(strategy_id)
+        trades = await state.trade_logger.get_trades_by_strategy(strategy_id, limit=10000)
         if trades:
             # Convert Trade objects to dicts for compute_metrics
             trade_dicts = [

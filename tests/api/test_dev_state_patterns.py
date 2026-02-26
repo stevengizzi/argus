@@ -16,15 +16,17 @@ from argus.api.dev_state import create_dev_state
 
 @pytest.mark.asyncio
 async def test_dev_state_mock_strategies_have_family() -> None:
-    """Dev state mock strategies have family field populated."""
+    """Dev state mock strategies have family field populated via config."""
     state = await create_dev_state()
 
     families = []
     for strategy_id, strategy in state.strategies.items():
-        # Check strategy has family attribute
-        assert hasattr(strategy, "family"), f"Strategy {strategy_id} missing family attribute"
-        assert strategy.family != "", f"Strategy {strategy_id} has empty family"
-        families.append(strategy.family)
+        # Check strategy config has family attribute
+        assert hasattr(strategy.config, "family"), (
+            f"Strategy {strategy_id} config missing family attribute"
+        )
+        assert strategy.config.family != "", f"Strategy {strategy_id} config has empty family"
+        families.append(strategy.config.family)
 
     # Should have 4 strategies
     assert len(families) == 4
@@ -32,40 +34,43 @@ async def test_dev_state_mock_strategies_have_family() -> None:
 
 @pytest.mark.asyncio
 async def test_dev_state_mock_strategies_have_description_short() -> None:
-    """Dev state mock strategies have description_short field populated."""
+    """Dev state mock strategies have description_short field populated via config."""
     state = await create_dev_state()
 
     for strategy_id, strategy in state.strategies.items():
-        # Check strategy has description_short attribute
+        # Check strategy config has description_short attribute
         assert hasattr(
-            strategy, "description_short"
-        ), f"Strategy {strategy_id} missing description_short"
+            strategy.config, "description_short"
+        ), f"Strategy {strategy_id} config missing description_short"
         assert (
-            strategy.description_short != ""
-        ), f"Strategy {strategy_id} has empty description_short"
+            strategy.config.description_short != ""
+        ), f"Strategy {strategy_id} config has empty description_short"
         # Description should be a meaningful sentence
-        assert len(strategy.description_short) > 20, (
-            f"Strategy {strategy_id} description too short: {strategy.description_short}"
+        assert len(strategy.config.description_short) > 20, (
+            f"Strategy {strategy_id} description too short: {strategy.config.description_short}"
         )
 
 
 @pytest.mark.asyncio
 async def test_dev_state_mock_strategies_have_time_window_display() -> None:
-    """Dev state mock strategies have time_window_display field populated."""
+    """Dev state mock strategies have time_window_display field populated via config."""
     state = await create_dev_state()
 
     for strategy_id, strategy in state.strategies.items():
-        # Check strategy has time_window_display attribute
+        # Check strategy config has time_window_display attribute
         assert hasattr(
-            strategy, "time_window_display"
-        ), f"Strategy {strategy_id} missing time_window_display"
+            strategy.config, "time_window_display"
+        ), f"Strategy {strategy_id} config missing time_window_display"
         assert (
-            strategy.time_window_display != ""
-        ), f"Strategy {strategy_id} has empty time_window_display"
+            strategy.config.time_window_display != ""
+        ), f"Strategy {strategy_id} config has empty time_window_display"
         # Time window should contain AM or PM
-        assert "AM" in strategy.time_window_display or "PM" in strategy.time_window_display, (
+        assert (
+            "AM" in strategy.config.time_window_display
+            or "PM" in strategy.config.time_window_display
+        ), (
             f"Strategy {strategy_id} time_window_display missing AM/PM: "
-            f"{strategy.time_window_display}"
+            f"{strategy.config.time_window_display}"
         )
 
 
@@ -110,7 +115,7 @@ async def test_dev_state_strategies_have_distinct_families() -> None:
 
     families = set()
     for strategy in state.strategies.values():
-        families.add(strategy.family)
+        families.add(strategy.config.family)
 
     # With 4 strategies (ORB Breakout, ORB Scalp, VWAP Reclaim, Afternoon Momentum):
     # - ORB Breakout and ORB Scalp share "orb_family"

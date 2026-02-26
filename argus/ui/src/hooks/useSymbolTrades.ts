@@ -13,17 +13,8 @@ export function useSymbolTrades(symbol: string | null) {
   return useQuery<TradesResponse, Error>({
     queryKey: ['trades', { symbol }],
     queryFn: async () => {
-      // The trades endpoint currently doesn't support symbol filtering,
-      // so we fetch all trades and filter client-side
-      const response = await getTrades({ limit: 100 });
-      const filteredTrades = response.trades.filter(
-        (trade) => trade.symbol === symbol
-      );
-      return {
-        ...response,
-        trades: filteredTrades,
-        total_count: filteredTrades.length,
-      };
+      // Use server-side symbol filtering
+      return getTrades({ symbol: symbol!, limit: 100 });
     },
     enabled: !!symbol, // Only fetch when symbol is provided
     refetchInterval: 30_000, // 30 seconds

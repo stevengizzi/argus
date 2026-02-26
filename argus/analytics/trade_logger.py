@@ -333,6 +333,7 @@ class TradeLogger:
         date_from: str | None = None,
         date_to: str | None = None,
         outcome: str | None = None,
+        symbol: str | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> list[dict]:
@@ -343,6 +344,7 @@ class TradeLogger:
             date_from: Optional start date filter (ISO YYYY-MM-DD).
             date_to: Optional end date filter (ISO YYYY-MM-DD).
             outcome: Optional outcome filter ("win", "loss", "breakeven").
+            symbol: Optional symbol filter (e.g., "AAPL").
             limit: Maximum number of trades to return (default 50).
             offset: Number of trades to skip for pagination.
 
@@ -355,6 +357,10 @@ class TradeLogger:
         if strategy_id is not None:
             conditions.append("strategy_id = ?")
             params.append(strategy_id)
+
+        if symbol is not None:
+            conditions.append("symbol = ?")
+            params.append(symbol)
 
         if date_from is not None:
             conditions.append("date(entry_time) >= ?")
@@ -390,6 +396,7 @@ class TradeLogger:
         date_from: str | None = None,
         date_to: str | None = None,
         outcome: str | None = None,
+        symbol: str | None = None,
     ) -> int:
         """Count trades matching filters for pagination total.
 
@@ -398,6 +405,7 @@ class TradeLogger:
             date_from: Optional start date filter (ISO YYYY-MM-DD).
             date_to: Optional end date filter (ISO YYYY-MM-DD).
             outcome: Optional outcome filter ("win", "loss", "breakeven").
+            symbol: Optional symbol filter (e.g., "AAPL").
 
         Returns:
             Total number of matching trades.
@@ -408,6 +416,10 @@ class TradeLogger:
         if strategy_id is not None:
             conditions.append("strategy_id = ?")
             params.append(strategy_id)
+
+        if symbol is not None:
+            conditions.append("symbol = ?")
+            params.append(symbol)
 
         if date_from is not None:
             conditions.append("date(entry_time) >= ?")

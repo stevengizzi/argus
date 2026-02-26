@@ -124,6 +124,7 @@ export async function getPositions(params?: {
 // Trade endpoints
 export async function getTrades(params?: {
   strategy_id?: string;
+  symbol?: string;
   date_from?: string;
   date_to?: string;
   outcome?: 'win' | 'loss' | 'breakeven';

@@ -258,3 +258,44 @@ class TestTradesEndpoint:
             headers=auth_headers,
         )
         assert response.status_code == 422  # Validation error
+
+    @pytest.mark.asyncio
+    async def test_trades_filter_symbol(
+        self,
+        client_with_trades: AsyncClient,
+        auth_headers: dict[str, str],
+    ) -> None:
+        """Filter trades by symbol returns only matching trades."""
+        response = await client_with_trades.get(
+            "/api/v1/trades?symbol=AAPL",
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        # AAPL appears once in the seeded data
+        assert data["total_count"] == 1
+        assert len(data["trades"]) == 1
+        for trade in data["trades"]:
+            assert trade["symbol"] == "AAPL"
+
+    @pytest.mark.asyncio
+    async def test_trades_filter_symbol_combined(
+        self,
+        client_with_trades: AsyncClient,
+        auth_headers: dict[str, str],
+    ) -> None:
+        """Symbol filter works with other filters (strategy_id)."""
+        # NVDA is in orb_breakout
+        response = await client_with_trades.get(
+            "/api/v1/trades?symbol=NVDA&strategy_id=orb_breakout",
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        # Should find the NVDA trade from orb_breakout
+        assert data["total_count"] == 1
+        for trade in data["trades"]:
+            assert trade["symbol"] == "NVDA"
+            assert trade["strategy_id"] == "orb_breakout"
