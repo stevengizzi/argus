@@ -1748,6 +1748,35 @@ class TestMultipleSymbols:
         assert signal2.symbol == "MSFT"
 
 
+class TestPositionSizing:
+    """Tests for position sizing edge cases (direct calculate_position_size calls)."""
+
+    def test_position_size_entry_below_stop_returns_zero(self) -> None:
+        """Position size returns 0 when entry is below stop (invalid for longs)."""
+        config = make_config()
+        strategy = AfternoonMomentumStrategy(config)
+        strategy.allocated_capital = 100_000
+
+        assert strategy.calculate_position_size(100.0, 101.0) == 0
+
+    def test_position_size_entry_equals_stop_returns_zero(self) -> None:
+        """Position size returns 0 when entry equals stop (zero risk)."""
+        config = make_config()
+        strategy = AfternoonMomentumStrategy(config)
+        strategy.allocated_capital = 100_000
+
+        assert strategy.calculate_position_size(100.0, 100.0) == 0
+
+    def test_position_size_zero_capital_returns_zero(self) -> None:
+        """Position size returns 0 when allocated capital is 0."""
+        config = make_config()
+        strategy = AfternoonMomentumStrategy(config)
+        strategy.allocated_capital = 0
+
+        # Valid entry/stop prices but no capital
+        assert strategy.calculate_position_size(100.0, 98.0) == 0
+
+
 class TestTimezoneHandling:
     """Tests for correct timezone handling."""
 
@@ -1806,6 +1835,78 @@ class TestTimezoneHandling:
         )
         await strategy.on_candle(candle_at)
         assert state.state == ConsolidationState.ACCUMULATING
+
+    @pytest.mark.asyncio
+    async def test_dst_transition_day(self) -> None:
+        """DST transition day (March 8, 2026 - spring forward) handled correctly.
+
+        On March 8, 2026 at 2:00 AM ET, clocks spring forward to 3:00 AM.
+        This means:
+        - 12:00 PM ET on March 8 = 16:00 UTC (EDT, UTC-4)
+        - 2:30 PM ET = 18:30 UTC
+
+        ZoneInfo("America/New_York") should handle this automatically.
+        """
+        config = make_config(consolidation_start_time="12:00")
+        mock_ds = MockDataService(atr=2.0)
+        strategy = AfternoonMomentumStrategy(config, data_service=mock_ds)
+        strategy.allocated_capital = 100_000
+        strategy.set_watchlist(["AAPL"])
+
+        # March 8, 2026 is a DST transition date (spring forward)
+        # After DST: 12:00 PM ET = 16:00 UTC (EDT = UTC-4)
+        dst_date = datetime(2026, 3, 8, tzinfo=ET)
+
+        # Candle at 12:00 PM ET on DST transition day → ACCUMULATING
+        candle_noon = CandleEvent(
+            symbol="AAPL",
+            timeframe="1m",
+            open=100.0,
+            high=100.5,
+            low=99.5,
+            close=100.0,
+            volume=100_000,
+            timestamp=datetime(2026, 3, 8, 16, 0, 0, tzinfo=UTC),  # 12:00 PM EDT
+        )
+        await strategy.on_candle(candle_noon)
+        state = strategy._get_symbol_state("AAPL")
+        assert state.state == ConsolidationState.ACCUMULATING
+
+        # Build consolidation through the afternoon
+        # 12:01 PM through 1:59 PM = 119 bars
+        # 16:01-16:59 UTC (12:01-12:59 PM EDT) = 59 bars
+        # 17:00-17:59 UTC (1:00-1:59 PM EDT) = 60 bars
+        for hour_offset in range(2):  # 16:xx and 17:xx
+            for minute in range(60):
+                if hour_offset == 0 and minute == 0:
+                    continue  # Skip 16:00 (already sent candle_noon)
+                await strategy.on_candle(
+                    CandleEvent(
+                        symbol="AAPL",
+                        timeframe="1m",
+                        open=100.0,
+                        high=100.3,
+                        low=99.7,
+                        close=100.0,
+                        volume=100_000,
+                        timestamp=datetime(2026, 3, 8, 16 + hour_offset, minute, 0, tzinfo=UTC),
+                    )
+                )
+
+        # Candle at 2:30 PM ET = 18:30 UTC — should be in entry window
+        candle_afternoon = CandleEvent(
+            symbol="AAPL",
+            timeframe="1m",
+            open=100.0,
+            high=100.8,
+            low=100.0,
+            close=100.5,  # Close above consolidation high (100.3)
+            volume=150_000,
+            timestamp=datetime(2026, 3, 8, 18, 30, 0, tzinfo=UTC),  # 2:30 PM EDT
+        )
+
+        # Strategy should recognize this is in the 2:00-3:30 PM entry window
+        assert strategy._is_in_entry_window(candle_afternoon) is True
 
 
 class TestConfigValidation:
