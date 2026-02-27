@@ -9,6 +9,10 @@
  * - Target at top with "X days left" right-aligned
  * - Pace calculation: Ahead (>110%), On pace (90-110%), Behind (<90%)
  * - Color-coded status text (green/amber/red)
+ *
+ * Sprint 21d Dashboard Summary: Accepts optional props from dashboard summary.
+ * When props provided, uses them directly (no loading state).
+ * When no props, falls back to individual hooks for standalone use.
  */
 
 import { useMemo } from 'react';
@@ -16,52 +20,11 @@ import { Card } from '../../components/Card';
 import { useGoals } from '../../hooks/useGoals';
 import { usePerformance } from '../../hooks/usePerformance';
 import { formatCurrency } from '../../utils/format';
+import type { GoalsData } from '../../api/types';
 
-interface TradingDayProgress {
-  elapsed: number;
-  remaining: number;
-  total: number;
-  elapsedPct: number;
-}
-
-/**
- * Calculate trading days elapsed and remaining in the current month.
- * Counts weekdays (Mon-Fri) only.
- */
-function calculateTradingDays(): TradingDayProgress {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth();
-
-  // First and last day of current month
-  const lastDay = new Date(year, month + 1, 0);
-  const today = now.getDate();
-
-  // Count weekdays from start of month to today
-  let elapsed = 0;
-  for (let day = 1; day <= today; day++) {
-    const date = new Date(year, month, day);
-    const dayOfWeek = date.getDay();
-    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
-      elapsed++;
-    }
-  }
-
-  // Count weekdays from today+1 to end of month
-  let remaining = 0;
-  const lastDate = lastDay.getDate();
-  for (let day = today + 1; day <= lastDate; day++) {
-    const date = new Date(year, month, day);
-    const dayOfWeek = date.getDay();
-    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
-      remaining++;
-    }
-  }
-
-  const total = elapsed + remaining;
-  const elapsedPct = total > 0 ? (elapsed / total) * 100 : 0;
-
-  return { elapsed, remaining, total, elapsedPct };
+export interface GoalTrackerProps {
+  /** Pre-fetched data from dashboard summary. If provided, hooks are skipped. */
+  data?: GoalsData;
 }
 
 interface PaceStatus {
@@ -76,7 +39,34 @@ interface PaceStatus {
  * On pace: 90-110% of pace (green)
  * Behind: <90% of pace (amber if >50%, red if <=50%)
  */
-function getPaceStatus(
+function getPaceStatusFromLabel(status: string): PaceStatus {
+  switch (status) {
+    case 'ahead':
+      return {
+        label: 'Ahead of pace',
+        barColor: 'bg-argus-profit',
+        textColor: 'text-argus-profit',
+      };
+    case 'on_pace':
+      return {
+        label: 'On pace',
+        barColor: 'bg-argus-profit',
+        textColor: 'text-argus-profit',
+      };
+    case 'behind':
+    default:
+      return {
+        label: 'Behind pace',
+        barColor: 'bg-amber-500',
+        textColor: 'text-amber-500',
+      };
+  }
+}
+
+/**
+ * Calculate pace status from current values.
+ */
+function getPaceStatusFromValues(
   currentPnl: number,
   target: number,
   elapsedPct: number
@@ -123,14 +113,59 @@ function getPaceStatus(
   }
 }
 
-export function GoalTracker() {
+/**
+ * Calculate trading days elapsed and remaining in the current month.
+ * Counts weekdays (Mon-Fri) only.
+ */
+function calculateTradingDays(): { elapsed: number; remaining: number; total: number; elapsedPct: number } {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+
+  // First and last day of current month
+  const lastDay = new Date(year, month + 1, 0);
+  const today = now.getDate();
+
+  // Count weekdays from start of month to today
+  let elapsed = 0;
+  for (let day = 1; day <= today; day++) {
+    const date = new Date(year, month, day);
+    const dayOfWeek = date.getDay();
+    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+      elapsed++;
+    }
+  }
+
+  // Count weekdays from today+1 to end of month
+  let remaining = 0;
+  const lastDate = lastDay.getDate();
+  for (let day = today + 1; day <= lastDate; day++) {
+    const date = new Date(year, month, day);
+    const dayOfWeek = date.getDay();
+    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+      remaining++;
+    }
+  }
+
+  const total = elapsed + remaining;
+  const elapsedPct = total > 0 ? (elapsed / total) * 100 : 0;
+
+  return { elapsed, remaining, total, elapsedPct };
+}
+
+export function GoalTracker({ data: propData }: GoalTrackerProps) {
+  // Only use hooks if no props provided (standalone mode)
   const { data: goalsData, isLoading: goalsLoading } = useGoals();
   const { data: perfData, isLoading: perfLoading } = usePerformance('month');
 
-  const tradingDays = useMemo(() => calculateTradingDays(), []);
+  // Calculate trading days (used for hook fallback path)
+  const tradingDaysLocal = useMemo(() => calculateTradingDays(), []);
 
-  // Loading state
-  if (goalsLoading || perfLoading) {
+  // Skip hooks loading state when props are provided
+  const isLoading = !propData && (goalsLoading || perfLoading);
+
+  // Loading state (only when using hooks)
+  if (isLoading) {
     return (
       <Card className="h-full">
         <div className="animate-pulse">
@@ -152,16 +187,32 @@ export function GoalTracker() {
     );
   }
 
-  const target = goalsData?.monthly_target_usd ?? 5000;
-  const currentPnl = perfData?.metrics.net_pnl ?? 0;
+  // Use props if provided, otherwise fall back to hook data
+  let target: number;
+  let currentPnl: number;
+  let remaining: number;
+  let avgDaily: number;
+  let needPerDay: number;
+  let paceStatus: PaceStatus;
+
+  if (propData) {
+    target = propData.monthly_target_usd;
+    currentPnl = propData.current_month_pnl;
+    remaining = propData.trading_days_remaining;
+    avgDaily = propData.avg_daily_pnl;
+    needPerDay = propData.needed_daily_pnl;
+    paceStatus = getPaceStatusFromLabel(propData.pace_status);
+  } else {
+    target = goalsData?.monthly_target_usd ?? 5000;
+    currentPnl = perfData?.metrics.net_pnl ?? 0;
+    remaining = tradingDaysLocal.remaining;
+    avgDaily = tradingDaysLocal.elapsed > 0 ? currentPnl / tradingDaysLocal.elapsed : 0;
+    const remainingToTarget = Math.max(0, target - currentPnl);
+    needPerDay = remaining > 0 ? remainingToTarget / remaining : 0;
+    paceStatus = getPaceStatusFromValues(currentPnl, target, tradingDaysLocal.elapsedPct);
+  }
+
   const progressPct = target > 0 ? Math.min((currentPnl / target) * 100, 100) : 0;
-
-  const paceStatus = getPaceStatus(currentPnl, target, tradingDays.elapsedPct);
-
-  // Calculate avg daily P&L and need/day
-  const avgDaily = tradingDays.elapsed > 0 ? currentPnl / tradingDays.elapsed : 0;
-  const remainingToTarget = Math.max(0, target - currentPnl);
-  const needPerDay = tradingDays.remaining > 0 ? remainingToTarget / tradingDays.remaining : 0;
 
   return (
     <Card className="h-full flex flex-col">
@@ -176,7 +227,7 @@ export function GoalTracker() {
           Target: {formatCurrency(target)}/mo
         </span>
         <span className="text-xs text-argus-text-dim">
-          {tradingDays.remaining} day{tradingDays.remaining !== 1 ? 's' : ''} left
+          {remaining} day{remaining !== 1 ? 's' : ''} left
         </span>
       </div>
 

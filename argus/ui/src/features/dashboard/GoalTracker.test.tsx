@@ -176,4 +176,59 @@ describe('GoalTracker', () => {
     const pulsingElements = container.querySelectorAll('.animate-pulse');
     expect(pulsingElements.length).toBeGreaterThan(0);
   });
+
+  // Sprint 21d: Props-based rendering tests (dashboard summary mode)
+  describe('with props (dashboard summary mode)', () => {
+    it('renders data from props without loading state', () => {
+      // Hooks return loading state but should be ignored when props provided
+      mockUseGoals.mockReturnValue({ data: null, isLoading: true });
+      mockUsePerformance.mockReturnValue({ data: null, isLoading: true });
+
+      const { container } = render(
+        <GoalTracker
+          data={{
+            monthly_target_usd: 6000,
+            current_month_pnl: 4500,
+            trading_days_elapsed: 15,
+            trading_days_remaining: 5,
+            avg_daily_pnl: 300,
+            needed_daily_pnl: 300,
+            pace_status: 'ahead',
+          }}
+        />
+      );
+
+      // Should NOT show loading state
+      const pulsingElements = container.querySelectorAll('.animate-pulse');
+      expect(pulsingElements.length).toBe(0);
+
+      // Should show values from props
+      expect(screen.getByText(/\$6,000/)).toBeInTheDocument();
+      expect(screen.getByText(/\$4,500/)).toBeInTheDocument();
+      expect(screen.getByText(/5 day.*left/i)).toBeInTheDocument();
+      expect(screen.getByText('Ahead of pace')).toBeInTheDocument();
+    });
+
+    it('renders correct pace status from props', () => {
+      mockUseGoals.mockReturnValue({ data: null, isLoading: false });
+      mockUsePerformance.mockReturnValue({ data: null, isLoading: false });
+
+      // Test "behind" pace status
+      render(
+        <GoalTracker
+          data={{
+            monthly_target_usd: 5000,
+            current_month_pnl: 1000,
+            trading_days_elapsed: 18,
+            trading_days_remaining: 2,
+            avg_daily_pnl: 55.56,
+            needed_daily_pnl: 2000,
+            pace_status: 'behind',
+          }}
+        />
+      );
+
+      expect(screen.getByText('Behind pace')).toBeInTheDocument();
+    });
+  });
 });

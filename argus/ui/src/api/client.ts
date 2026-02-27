@@ -10,6 +10,7 @@ import type {
   Briefing,
   BriefingsListResponse,
   CorrelationResponse,
+  DashboardSummaryResponse,
   DebriefSearchResponse,
   DecisionsResponse,
   DistributionResponse,
@@ -517,4 +518,9 @@ export async function getTradeReplay(tradeId: string): Promise<TradeReplayRespon
 // Config endpoints
 export async function getGoalsConfig(): Promise<GoalsConfig> {
   return fetchWithAuth<GoalsConfig>('/config/goals');
+}
+
+// Dashboard endpoints (Sprint 21d)
+export async function getDashboardSummary(): Promise<DashboardSummaryResponse> {
+  return fetchWithAuth<DashboardSummaryResponse>('/dashboard/summary');
 }

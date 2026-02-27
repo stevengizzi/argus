@@ -1,6 +1,11 @@
 /**
  * Dashboard page - main command post view.
  *
+ * Sprint 21d Dashboard Summary: Uses aggregate endpoint for instant card loading.
+ * - Single `useDashboardSummary()` hook fetches all dashboard data in one request
+ * - TodayStats and GoalTracker receive data as props (no individual loading states)
+ * - Other cards continue using their own hooks (they're fast enough)
+ *
  * Sprint 21d Session 5 (DEC-204): Dashboard scope refinement.
  * - OrchestratorStatusStrip at top (click to Orchestrator page)
  * - StrategyDeploymentBar below status strip
@@ -46,18 +51,18 @@ import {
 import { WatchlistSidebar } from '../features/watchlist';
 import { staggerContainer, staggerItem, staggerItemWithChildren } from '../utils/motion';
 import { useIsMultiColumn, useMediaQuery } from '../hooks/useMediaQuery';
-import { useAccount } from '../hooks/useAccount';
+import { useDashboardSummary } from '../hooks/useDashboardSummary';
 
 export function DashboardPage() {
   const isMultiColumn = useIsMultiColumn();
   const isDesktop = useMediaQuery('(min-width: 1024px)');
-  const { data: accountData } = useAccount();
+  const { data: summaryData } = useDashboardSummary();
   const [searchParams] = useSearchParams();
 
   // Check for pre-market: either real market status or dev mode override
   // Dev mode: use localStorage.setItem('argus_premarket', 'true') in console
   const isPreMarket =
-    accountData?.market_status === 'pre_market' ||
+    summaryData?.market.status === 'pre_market' ||
     searchParams.get('premarket') === 'true' ||
     (typeof window !== 'undefined' && localStorage.getItem('argus_premarket') === 'true');
 
@@ -110,11 +115,11 @@ export function DashboardPage() {
 
           <motion.div variants={staggerItem}><AccountSummary /></motion.div>
           <motion.div variants={staggerItem}><DailyPnlCard /></motion.div>
-          <motion.div variants={staggerItem}><GoalTracker /></motion.div>
+          <motion.div variants={staggerItem}><GoalTracker data={summaryData?.goals} /></motion.div>
 
           {/* 3-card row: Market Status | Today's Stats | Session Timeline */}
           <motion.div variants={staggerItem}><MarketStatusCard /></motion.div>
-          <motion.div variants={staggerItem}><TodayStats /></motion.div>
+          <motion.div variants={staggerItem}><TodayStats data={summaryData?.today_stats} /></motion.div>
           <motion.div variants={staggerItem}><SessionTimeline /></motion.div>
 
           <motion.div variants={staggerItem}><OpenPositions /></motion.div>
@@ -164,7 +169,7 @@ export function DashboardPage() {
               <DailyPnlCard />
             </motion.div>
             <motion.div variants={staggerItem} className="h-full">
-              <GoalTracker />
+              <GoalTracker data={summaryData?.goals} />
             </motion.div>
           </motion.div>
 
@@ -177,7 +182,7 @@ export function DashboardPage() {
               <MarketStatusCard />
             </motion.div>
             <motion.div variants={staggerItem} className="h-full">
-              <TodayStats />
+              <TodayStats data={summaryData?.today_stats} />
             </motion.div>
             <motion.div variants={staggerItem} className="h-full">
               <SessionTimeline />
@@ -243,7 +248,7 @@ export function DashboardPage() {
 
         {/* GoalTracker - full width on tablet */}
         <motion.div variants={staggerItem}>
-          <GoalTracker />
+          <GoalTracker data={summaryData?.goals} />
         </motion.div>
 
         {/* 3-card row: Market Status | Today's Stats | Session Timeline */}
@@ -255,7 +260,7 @@ export function DashboardPage() {
             <MarketStatusCard />
           </motion.div>
           <motion.div variants={staggerItem} className="h-full">
-            <TodayStats />
+            <TodayStats data={summaryData?.today_stats} />
           </motion.div>
           <motion.div variants={staggerItem} className="h-full">
             <SessionTimeline />

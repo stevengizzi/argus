@@ -11,6 +11,7 @@ from argus.api.routes.auth import router as auth_router
 from argus.api.routes.briefings import router as briefings_router
 from argus.api.routes.config import router as config_router
 from argus.api.routes.controls import router as controls_router
+from argus.api.routes.dashboard import router as dashboard_router
 from argus.api.routes.debrief_search import router as debrief_search_router
 from argus.api.routes.documents import router as documents_router
 from argus.api.routes.health import router as health_router
@@ -30,6 +31,7 @@ api_router = APIRouter()
 # Mount all route modules
 api_router.include_router(auth_router, prefix="/auth", tags=["auth"])
 api_router.include_router(account_router, tags=["account"])
+api_router.include_router(dashboard_router, prefix="/dashboard", tags=["dashboard"])
 api_router.include_router(positions_router, prefix="/positions", tags=["positions"])
 api_router.include_router(trades_router, prefix="/trades", tags=["trades"])
 api_router.include_router(performance_router, prefix="/performance", tags=["performance"])

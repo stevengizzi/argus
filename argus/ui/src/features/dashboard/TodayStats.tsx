@@ -7,6 +7,10 @@
  *   - Win Rate: percentage
  *   - Avg R: R-multiple
  *   - Best Trade: symbol + P&L
+ *
+ * Sprint 21d Dashboard Summary: Accepts optional props from dashboard summary.
+ * When props provided, uses them directly (no loading state).
+ * When no props, falls back to individual hooks for standalone use.
  */
 
 import { useMemo } from 'react';
@@ -14,14 +18,24 @@ import { Card } from '../../components/Card';
 import { usePerformance } from '../../hooks/usePerformance';
 import { useTrades } from '../../hooks/useTrades';
 import { formatCurrency } from '../../utils/format';
+import type { TodayStatsData } from '../../api/types';
 
-export function TodayStats() {
+export interface TodayStatsProps {
+  /** Pre-fetched data from dashboard summary. If provided, hooks are skipped. */
+  data?: TodayStatsData;
+}
+
+export function TodayStats({ data: propData }: TodayStatsProps) {
+  // Only use hooks if no props provided (standalone mode)
   const { data: perfData, isLoading: perfLoading } = usePerformance('day');
   const { data: tradesData, isLoading: tradesLoading } = useTrades({ limit: 100 });
 
-  // Find the best trade (highest P&L)
-  const bestTrade = useMemo(() => {
-    if (!tradesData?.trades.length) return null;
+  // Skip hooks loading state when props are provided
+  const isLoading = !propData && (perfLoading || tradesLoading);
+
+  // Find the best trade (highest P&L) - only needed when using hooks
+  const bestTradeFromHooks = useMemo(() => {
+    if (propData || !tradesData?.trades.length) return null;
 
     // Filter to today's trades (if the API doesn't already filter)
     const today = new Date().toISOString().split('T')[0];
@@ -37,10 +51,10 @@ export function TodayStats() {
       const bestPnl = best.realized_pnl ?? 0;
       return tradePnl > bestPnl ? trade : best;
     }, todaysTrades[0]);
-  }, [tradesData]);
+  }, [propData, tradesData]);
 
-  // Loading state
-  if (perfLoading || tradesLoading) {
+  // Loading state (only when using hooks)
+  if (isLoading) {
     return (
       <Card className="h-full">
         <div className="animate-pulse">
@@ -58,10 +72,26 @@ export function TodayStats() {
     );
   }
 
-  const metrics = perfData?.metrics;
-  const trades = metrics?.total_trades ?? 0;
-  const winRate = metrics?.win_rate ?? 0;
-  const avgR = metrics?.avg_r_multiple ?? 0;
+  // Use props if provided, otherwise fall back to hook data
+  let trades: number;
+  let winRate: number;
+  let avgR: number;
+  let bestTrade: { symbol: string; pnl: number } | null;
+
+  if (propData) {
+    trades = propData.trade_count;
+    winRate = propData.win_rate ?? 0;
+    avgR = propData.avg_r ?? 0;
+    bestTrade = propData.best_trade;
+  } else {
+    const metrics = perfData?.metrics;
+    trades = metrics?.total_trades ?? 0;
+    winRate = metrics?.win_rate ?? 0;
+    avgR = metrics?.avg_r_multiple ?? 0;
+    bestTrade = bestTradeFromHooks
+      ? { symbol: bestTradeFromHooks.symbol, pnl: bestTradeFromHooks.realized_pnl ?? 0 }
+      : null;
+  }
 
   return (
     <Card className="h-full flex flex-col">
@@ -115,7 +145,7 @@ export function TodayStats() {
             <div className="text-sm font-medium">
               <span className="text-argus-text">{bestTrade.symbol}</span>
               <span className="text-argus-profit ml-1">
-                +{formatCurrency(bestTrade.realized_pnl ?? 0)}
+                +{formatCurrency(bestTrade.pnl)}
               </span>
             </div>
           ) : (

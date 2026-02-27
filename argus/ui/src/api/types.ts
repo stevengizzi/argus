@@ -500,3 +500,80 @@ export interface GoalsConfig {
   monthly_target_usd: number;
   timestamp: string;
 }
+
+// Dashboard Summary (Sprint 21d)
+export interface AccountSummaryData {
+  equity: number;
+  cash: number;
+  buying_power: number;
+  daily_pnl: number;
+  daily_pnl_pct: number;
+}
+
+export interface BestTradeData {
+  symbol: string;
+  pnl: number;
+}
+
+export interface TodayStatsData {
+  trade_count: number;
+  win_rate: number | null;
+  avg_r: number | null;
+  best_trade: BestTradeData | null;
+}
+
+export interface GoalsData {
+  monthly_target_usd: number;
+  current_month_pnl: number;
+  trading_days_elapsed: number;
+  trading_days_remaining: number;
+  avg_daily_pnl: number;
+  needed_daily_pnl: number;
+  pace_status: 'ahead' | 'on_pace' | 'behind';
+}
+
+export interface MarketData {
+  status: 'pre_market' | 'open' | 'closed' | 'after_hours';
+  time_et: string;
+  is_paper: boolean;
+}
+
+export interface RegimeData {
+  classification: string;
+  description: string;
+  updated_at: string | null;
+}
+
+export interface StrategyDeploymentInfo {
+  strategy_id: string;
+  abbreviation: string;
+  deployed_capital: number;
+  position_count: number;
+  aggregate_pnl: number;
+}
+
+export interface DeploymentData {
+  strategies: StrategyDeploymentInfo[];
+  available_capital: number;
+  total_equity: number;
+}
+
+export interface OrchestratorSummaryData {
+  active_strategy_count: number;
+  total_strategy_count: number;
+  deployed_amount: number;
+  deployed_pct: number;
+  risk_used_pct: number;
+  regime: string;
+}
+
+export interface DashboardSummaryResponse {
+  account: AccountSummaryData;
+  today_stats: TodayStatsData;
+  goals: GoalsData;
+  market: MarketData;
+  regime: RegimeData;
+  deployment: DeploymentData;
+  orchestrator: OrchestratorSummaryData;
+  timestamp: string;
+}

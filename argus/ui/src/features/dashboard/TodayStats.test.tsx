@@ -224,4 +224,55 @@ describe('TodayStats', () => {
     const dashes = screen.getAllByText('—');
     expect(dashes.length).toBeGreaterThan(0);
   });
+
+  // Sprint 21d: Props-based rendering tests (dashboard summary mode)
+  describe('with props (dashboard summary mode)', () => {
+    it('renders data from props without loading state', () => {
+      // Hooks return loading state but should be ignored when props provided
+      mockUsePerformance.mockReturnValue({ data: null, isLoading: true });
+      mockUseTrades.mockReturnValue({ data: null, isLoading: true });
+
+      const { container } = render(
+        <TodayStats
+          data={{
+            trade_count: 8,
+            win_rate: 65,
+            avg_r: 0.9,
+            best_trade: { symbol: 'TSLA', pnl: 450 },
+          }}
+        />
+      );
+
+      // Should NOT show loading state
+      const pulsingElements = container.querySelectorAll('.animate-pulse');
+      expect(pulsingElements.length).toBe(0);
+
+      // Should show values from props
+      expect(screen.getByText('8')).toBeInTheDocument();
+      expect(screen.getByText('65%')).toBeInTheDocument();
+      expect(screen.getByText('+0.9R')).toBeInTheDocument();
+      expect(screen.getByText('TSLA')).toBeInTheDocument();
+    });
+
+    it('renders null fields as placeholders when props provided', () => {
+      mockUsePerformance.mockReturnValue({ data: null, isLoading: false });
+      mockUseTrades.mockReturnValue({ data: null, isLoading: false });
+
+      render(
+        <TodayStats
+          data={{
+            trade_count: 0,
+            win_rate: null,
+            avg_r: null,
+            best_trade: null,
+          }}
+        />
+      );
+
+      // Should show 0 trades and dashes for null fields
+      expect(screen.getByText('0')).toBeInTheDocument();
+      const dashes = screen.getAllByText('—');
+      expect(dashes.length).toBeGreaterThanOrEqual(2);
+    });
+  });
 });
