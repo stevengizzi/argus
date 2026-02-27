@@ -499,6 +499,7 @@ class TradeLogger:
         strategy_id: str | None,
         details: dict,
         rationale: str,
+        created_at: str | None = None,
     ) -> str:
         """Log an orchestrator decision to the database.
 
@@ -508,18 +509,39 @@ class TradeLogger:
             strategy_id: Strategy ID if applicable, None for system-wide decisions.
             details: Dict with decision details (will be JSON-serialized).
             rationale: Human-readable explanation.
+            created_at: Optional ISO timestamp (for dev mode mock data).
+                If not provided, uses database default (current time).
 
         Returns:
             The generated decision ID.
         """
         decision_id = generate_id()
-        sql = """INSERT INTO orchestrator_decisions
-                 (id, date, decision_type, strategy_id, details, rationale)
-                 VALUES (?, ?, ?, ?, ?, ?)"""
 
-        await self._db.execute(
-            sql, (decision_id, date, decision_type, strategy_id, json.dumps(details), rationale)
-        )
+        if created_at is not None:
+            sql = """INSERT INTO orchestrator_decisions
+                     (id, date, decision_type, strategy_id, details, rationale, created_at)
+                     VALUES (?, ?, ?, ?, ?, ?, ?)"""
+            await self._db.execute(
+                sql,
+                (
+                    decision_id,
+                    date,
+                    decision_type,
+                    strategy_id,
+                    json.dumps(details),
+                    rationale,
+                    created_at,
+                ),
+            )
+        else:
+            sql = """INSERT INTO orchestrator_decisions
+                     (id, date, decision_type, strategy_id, details, rationale)
+                     VALUES (?, ?, ?, ?, ?, ?)"""
+            await self._db.execute(
+                sql,
+                (decision_id, date, decision_type, strategy_id, json.dumps(details), rationale),
+            )
+
         await self._db.commit()
 
         logger.debug(

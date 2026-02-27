@@ -26,6 +26,7 @@ from argus.core.config import (
     ApiConfig,
     BacktestSummaryConfig,
     HealthConfig,
+    OperatingWindow,
     OrbBreakoutConfig,
     OrbScalpConfig,
     OrchestratorConfig,
@@ -67,6 +68,10 @@ class MockStrategy:
     daily_pnl: float
     trade_count_today: int
     config: StrategyConfig
+    # Throttle metrics for dev mode (Sprint 21b Session 3)
+    consecutive_losses: int = 0
+    rolling_sharpe: float | None = None
+    drawdown_pct: float = 0.0
 
     @property
     def _is_active(self) -> bool:
@@ -613,71 +618,36 @@ def _create_mock_positions(now: datetime) -> list[ManagedPosition]:
 
 
 async def _seed_orchestrator_decisions(trade_logger: TradeLogger, now: datetime) -> None:
-    """Seed mock orchestrator decisions for dev mode."""
-    # Log some sample orchestrator decisions
+    """Seed mock orchestrator decisions for dev mode.
+
+    Creates a realistic trading day timeline with ~15 decisions covering:
+    - Pre-market regime classification and allocations (9:25 AM)
+    - Strategy activations
+    - Regime re-checks at 30-minute intervals
+    - ORB Scalp throttle event (10:45 AM)
+    - Allocation rebalance after throttle
+    - Afternoon strategy activation
+    """
+    from zoneinfo import ZoneInfo
+
+    et_tz = ZoneInfo("America/New_York")
     today = now.date().isoformat()
     yesterday = (now - timedelta(days=1)).date().isoformat()
 
-    # Today's ORB Breakout allocation (20%)
-    await trade_logger.log_orchestrator_decision(
-        date=today,
-        decision_type="allocation",
-        strategy_id="orb_breakout",
-        details={
-            "allocation_pct": 0.20,
-            "allocation_dollars": 20000.0,
-            "throttle_action": "none",
-            "eligible": True,
-            "regime": "bullish_trending",
-        },
-        rationale="Active: 20% allocation (equal-weight, 4 strategies)",
-    )
+    # Build base datetime for "today" at 9:25 AM ET
+    now_et = now.astimezone(et_tz)
+    base_date = now_et.date()
 
-    # Today's ORB Scalp allocation (20%)
-    await trade_logger.log_orchestrator_decision(
-        date=today,
-        decision_type="allocation",
-        strategy_id="orb_scalp",
-        details={
-            "allocation_pct": 0.20,
-            "allocation_dollars": 20000.0,
-            "throttle_action": "none",
-            "eligible": True,
-            "regime": "bullish_trending",
-        },
-        rationale="Active: 20% allocation (equal-weight, 4 strategies)",
-    )
+    def make_timestamp(hour: int, minute: int) -> str:
+        """Create ISO timestamp for today at given ET hour:minute."""
+        dt = datetime(
+            base_date.year, base_date.month, base_date.day, hour, minute, 0, 0, tzinfo=et_tz
+        )
+        return dt.astimezone(UTC).isoformat()
 
-    # Today's VWAP Reclaim allocation (20%)
-    await trade_logger.log_orchestrator_decision(
-        date=today,
-        decision_type="allocation",
-        strategy_id="vwap_reclaim",
-        details={
-            "allocation_pct": 0.20,
-            "allocation_dollars": 20000.0,
-            "throttle_action": "none",
-            "eligible": True,
-            "regime": "bullish_trending",
-        },
-        rationale="Active: 20% allocation (equal-weight, 4 strategies)",
-    )
+    # === Pre-market decisions (9:25 AM) ===
 
-    # Today's Afternoon Momentum allocation (20%)
-    await trade_logger.log_orchestrator_decision(
-        date=today,
-        decision_type="allocation",
-        strategy_id="afternoon_momentum",
-        details={
-            "allocation_pct": 0.20,
-            "allocation_dollars": 20000.0,
-            "throttle_action": "none",
-            "eligible": True,
-            "regime": "bullish_trending",
-        },
-        rationale="Active: 20% allocation (equal-weight, 4 strategies)",
-    )
-
+    # 1. Regime classification
     await trade_logger.log_orchestrator_decision(
         date=today,
         decision_type="regime_classification",
@@ -689,13 +659,16 @@ async def _seed_orchestrator_decisions(trade_logger: TradeLogger, now: datetime)
             "spy_sma_50": 515.80,
             "spy_roc_5d": 1.25,
             "spy_realized_vol_20d": 12.5,
+            "trend_score": 2,
+            "vol_bucket": "normal",
         },
-        rationale="SPY above both SMAs with positive momentum",
+        rationale="SPY above both SMAs, bullish momentum (+1.25% 5d ROC), 12.5% vol → bullish_trending",
+        created_at=make_timestamp(9, 25),
     )
 
-    # Yesterday's ORB Breakout allocation (20%)
+    # 2-5. Initial allocations (equal-weight 20% each)
     await trade_logger.log_orchestrator_decision(
-        date=yesterday,
+        date=today,
         decision_type="allocation",
         strategy_id="orb_breakout",
         details={
@@ -706,11 +679,11 @@ async def _seed_orchestrator_decisions(trade_logger: TradeLogger, now: datetime)
             "regime": "bullish_trending",
         },
         rationale="Active: 20% allocation (equal-weight, 4 strategies)",
+        created_at=make_timestamp(9, 25),
     )
 
-    # Yesterday's ORB Scalp allocation (20%)
     await trade_logger.log_orchestrator_decision(
-        date=yesterday,
+        date=today,
         decision_type="allocation",
         strategy_id="orb_scalp",
         details={
@@ -721,11 +694,11 @@ async def _seed_orchestrator_decisions(trade_logger: TradeLogger, now: datetime)
             "regime": "bullish_trending",
         },
         rationale="Active: 20% allocation (equal-weight, 4 strategies)",
+        created_at=make_timestamp(9, 25),
     )
 
-    # Yesterday's VWAP Reclaim allocation (20%)
     await trade_logger.log_orchestrator_decision(
-        date=yesterday,
+        date=today,
         decision_type="allocation",
         strategy_id="vwap_reclaim",
         details={
@@ -736,11 +709,11 @@ async def _seed_orchestrator_decisions(trade_logger: TradeLogger, now: datetime)
             "regime": "bullish_trending",
         },
         rationale="Active: 20% allocation (equal-weight, 4 strategies)",
+        created_at=make_timestamp(9, 25),
     )
 
-    # Yesterday's Afternoon Momentum allocation (20%)
     await trade_logger.log_orchestrator_decision(
-        date=yesterday,
+        date=today,
         decision_type="allocation",
         strategy_id="afternoon_momentum",
         details={
@@ -751,19 +724,184 @@ async def _seed_orchestrator_decisions(trade_logger: TradeLogger, now: datetime)
             "regime": "bullish_trending",
         },
         rationale="Active: 20% allocation (equal-weight, 4 strategies)",
+        created_at=make_timestamp(9, 25),
+    )
+
+    # 6-8. Strategy activations
+    await trade_logger.log_orchestrator_decision(
+        date=today,
+        decision_type="strategy_activated",
+        strategy_id="orb_breakout",
+        details={"operating_window": {"earliest_entry": "09:35", "latest_entry": "11:30"}},
+        rationale="ORB Breakout activated for trading",
+        created_at=make_timestamp(9, 25),
+    )
+
+    await trade_logger.log_orchestrator_decision(
+        date=today,
+        decision_type="strategy_activated",
+        strategy_id="orb_scalp",
+        details={"operating_window": {"earliest_entry": "09:45", "latest_entry": "11:30"}},
+        rationale="ORB Scalp activated for trading",
+        created_at=make_timestamp(9, 25),
+    )
+
+    await trade_logger.log_orchestrator_decision(
+        date=today,
+        decision_type="strategy_activated",
+        strategy_id="vwap_reclaim",
+        details={"operating_window": {"earliest_entry": "10:00", "latest_entry": "12:00"}},
+        rationale="VWAP Reclaim activated (will begin scanning at 10:00 AM)",
+        created_at=make_timestamp(9, 25),
+    )
+
+    # 9. First regime re-check (10:00 AM) - unchanged
+    await trade_logger.log_orchestrator_decision(
+        date=today,
+        decision_type="regime_classification",
+        strategy_id=None,
+        details={
+            "regime": "bullish_trending",
+            "regime_changed": False,
+            "spy_price": 526.30,
+            "spy_change_pct": 0.15,
+        },
+        rationale="Regime re-check: bullish_trending unchanged, SPY +0.15%",
+        created_at=make_timestamp(10, 0),
+    )
+
+    # 10. Second regime re-check (10:30 AM) - regime change!
+    await trade_logger.log_orchestrator_decision(
+        date=today,
+        decision_type="regime_classification",
+        strategy_id=None,
+        details={
+            "regime": "range_bound",
+            "previous_regime": "bullish_trending",
+            "regime_changed": True,
+            "spy_price": 521.80,
+            "spy_sma_20": 520.30,
+            "reason": "SPY dropped below SMA-20",
+        },
+        rationale="Regime change: bullish_trending → range_bound (SPY dropped below SMA-20)",
+        created_at=make_timestamp(10, 30),
+    )
+
+    # 11. Allocation check after regime change (10:30 AM)
+    await trade_logger.log_orchestrator_decision(
+        date=today,
+        decision_type="allocation",
+        strategy_id=None,
+        details={
+            "action": "rebalance_check",
+            "result": "no_change",
+            "reason": "All strategies eligible in range_bound regime",
+        },
+        rationale="Rebalance check after regime change — allocations unchanged",
+        created_at=make_timestamp(10, 30),
+    )
+
+    # 12. ORB Scalp throttle event (10:45 AM) - 3 consecutive losses
+    await trade_logger.log_orchestrator_decision(
+        date=today,
+        decision_type="throttle",
+        strategy_id="orb_scalp",
+        details={
+            "throttle_action": "reduce",
+            "previous_action": "none",
+            "consecutive_losses": 3,
+            "rolling_sharpe": -0.12,
+            "drawdown_pct": 0.042,
+        },
+        rationale="ORB Scalp throttled to REDUCE: 3 consecutive losses",
+        created_at=make_timestamp(10, 45),
+    )
+
+    # 13. Allocation update after throttle (10:45 AM)
+    await trade_logger.log_orchestrator_decision(
+        date=today,
+        decision_type="allocation",
+        strategy_id="orb_scalp",
+        details={
+            "allocation_pct": 0.10,
+            "allocation_dollars": 8000.0,
+            "throttle_action": "reduce",
+            "previous_allocation_pct": 0.20,
+            "freed_capital": 12000.0,
+        },
+        rationale="ORB Scalp reduced to 10% ($8,000), excess redistributed",
+        created_at=make_timestamp(10, 45),
+    )
+
+    # 14. Third regime re-check (11:00 AM) - back to bullish
+    await trade_logger.log_orchestrator_decision(
+        date=today,
+        decision_type="regime_classification",
+        strategy_id=None,
+        details={
+            "regime": "bullish_trending",
+            "previous_regime": "range_bound",
+            "regime_changed": True,
+            "spy_price": 527.10,
+            "spy_sma_20": 520.30,
+            "reason": "SPY reclaimed SMA-20",
+        },
+        rationale="Regime change: range_bound → bullish_trending (SPY reclaimed SMA-20)",
+        created_at=make_timestamp(11, 0),
+    )
+
+    # 15. Afternoon Momentum activation (2:00 PM)
+    await trade_logger.log_orchestrator_decision(
+        date=today,
+        decision_type="strategy_activated",
+        strategy_id="afternoon_momentum",
+        details={"operating_window": {"earliest_entry": "14:00", "latest_entry": "15:30"}},
+        rationale="Afternoon Momentum scanning started",
+        created_at=make_timestamp(14, 0),
+    )
+
+    # === Yesterday's decisions (for history) ===
+
+    await trade_logger.log_orchestrator_decision(
+        date=yesterday,
+        decision_type="regime_classification",
+        strategy_id=None,
+        details={"regime": "bullish_trending"},
+        rationale="SPY above both SMAs with positive momentum",
+    )
+
+    await trade_logger.log_orchestrator_decision(
+        date=yesterday,
+        decision_type="allocation",
+        strategy_id="orb_breakout",
+        details={
+            "allocation_pct": 0.20,
+            "allocation_dollars": 20000.0,
+            "throttle_action": "none",
+        },
+        rationale="Active: 20% allocation (equal-weight, 4 strategies)",
     )
 
     await trade_logger.log_orchestrator_decision(
         date=yesterday,
         decision_type="eod_review",
         strategy_id=None,
-        details={"regime": "bullish_trending"},
-        rationale="End of day review",
+        details={"regime": "bullish_trending", "total_pnl": 1250.50, "trade_count": 14},
+        rationale="End of day review: +$1,250.50 across 14 trades",
     )
 
 
 def _create_mock_orchestrator(now: datetime) -> MockOrchestrator:
-    """Create a mock orchestrator for dev mode."""
+    """Create a mock orchestrator for dev mode.
+
+    Simulates a realistic mid-session state with:
+    - ORB Breakout: Active, ThrottleAction.NONE, 20% ($20,000)
+    - ORB Scalp: ThrottleAction.REDUCE, 10% ($8,000) — 3 consecutive losses
+    - VWAP Reclaim: Active, ThrottleAction.NONE, 25% ($25,000) — gets extra
+    - Afternoon Momentum: Active, ThrottleAction.NONE, 25% ($25,000) — gets extra
+
+    Total: 80% deployed + 20% reserve = 100%
+    """
     config = OrchestratorConfig()
 
     # Mock regime indicators
@@ -777,8 +915,9 @@ def _create_mock_orchestrator(now: datetime) -> MockOrchestrator:
         timestamp=now,
     )
 
-    # Mock allocations: 20% each strategy + 20% reserve = 100%
-    # With 4 strategies and equal weight: (100% - 20% reserve) / 4 = 20% each
+    # Mock allocations: realistic mid-session with ORB Scalp throttled
+    # Base: 20% each = 80% deployable. After throttle: ORB Scalp at 10% minimum,
+    # freed 10% redistributed → VWAP Reclaim and Afternoon Momentum each get +5%
     allocations = {
         "orb_breakout": StrategyAllocation(
             strategy_id="orb_breakout",
@@ -786,31 +925,31 @@ def _create_mock_orchestrator(now: datetime) -> MockOrchestrator:
             allocation_dollars=20000.0,
             throttle_action=ThrottleAction.NONE,
             eligible=True,
-            reason="Active: 20% allocation (equal-weight, 4 strategies)",
+            reason="Active: 20% allocation (equal-weight base)",
         ),
         "orb_scalp": StrategyAllocation(
             strategy_id="orb_scalp",
-            allocation_pct=0.20,
-            allocation_dollars=20000.0,
-            throttle_action=ThrottleAction.NONE,
+            allocation_pct=0.10,
+            allocation_dollars=8000.0,
+            throttle_action=ThrottleAction.REDUCE,
             eligible=True,
-            reason="Active: 20% allocation (equal-weight, 4 strategies)",
+            reason="Throttled to minimum (10%): 3 consecutive losses",
         ),
         "vwap_reclaim": StrategyAllocation(
             strategy_id="vwap_reclaim",
-            allocation_pct=0.20,
-            allocation_dollars=20000.0,
+            allocation_pct=0.25,
+            allocation_dollars=25000.0,
             throttle_action=ThrottleAction.NONE,
             eligible=True,
-            reason="Active: 20% allocation (equal-weight, 4 strategies)",
+            reason="Active: 25% allocation (received +5% from ORB Scalp throttle)",
         ),
         "afternoon_momentum": StrategyAllocation(
             strategy_id="afternoon_momentum",
-            allocation_pct=0.20,
-            allocation_dollars=20000.0,
+            allocation_pct=0.25,
+            allocation_dollars=25000.0,
             throttle_action=ThrottleAction.NONE,
             eligible=True,
-            reason="Active: 20% allocation (equal-weight, 4 strategies)",
+            reason="Active: 25% allocation (received +5% from ORB Scalp throttle)",
         ),
     }
 
@@ -819,7 +958,7 @@ def _create_mock_orchestrator(now: datetime) -> MockOrchestrator:
         _current_regime=MarketRegime.BULLISH_TRENDING,
         _current_allocations=allocations,
         _current_indicators=indicators,
-        _last_regime_check=now - timedelta(minutes=30),
+        _last_regime_check=now - timedelta(minutes=16),  # Next check in ~14 min
     )
 
 
@@ -1117,7 +1256,7 @@ async def create_dev_state() -> AppState:
         if t.exit_time.date() == now.date() and t.strategy_id == "afternoon_momentum"
     ]
 
-    # ORB Breakout config with backtest summary
+    # ORB Breakout config with backtest summary and operating window
     orb_config = OrbBreakoutConfig(
         strategy_id="orb_breakout",
         name="ORB Breakout",
@@ -1128,6 +1267,11 @@ async def create_dev_state() -> AppState:
             "high with volume confirmation."
         ),
         time_window_display="9:35–11:30 AM",
+        operating_window=OperatingWindow(
+            earliest_entry="09:35",
+            latest_entry="11:30",
+            force_close="15:50",
+        ),
         backtest_summary=BacktestSummaryConfig(
             status="validated",
             wfe_pnl=28450.0,
@@ -1143,13 +1287,17 @@ async def create_dev_state() -> AppState:
         version="1.0.0",
         is_active=True,
         pipeline_stage="paper_trading",
-        allocated_capital=20_000.0,  # 20% of $100k (4 strategies + 20% reserve)
+        allocated_capital=20_000.0,  # 20% of $100k
         daily_pnl=sum(t.net_pnl for t in orb_todays_trades),
         trade_count_today=len(orb_todays_trades),
         config=orb_config,
+        # Healthy strategy — no throttle issues
+        consecutive_losses=1,
+        rolling_sharpe=1.25,
+        drawdown_pct=0.018,
     )
 
-    # ORB Scalp config with backtest summary
+    # ORB Scalp config with backtest summary and operating window
     scalp_config = OrbScalpConfig(
         strategy_id="orb_scalp",
         name="ORB Scalp",
@@ -1160,6 +1308,11 @@ async def create_dev_state() -> AppState:
             "exiting within 120 seconds."
         ),
         time_window_display="9:45–11:30 AM",
+        operating_window=OperatingWindow(
+            earliest_entry="09:45",
+            latest_entry="11:30",
+            force_close="15:50",
+        ),
         backtest_summary=BacktestSummaryConfig(
             status="validated",
             wfe_pnl=8920.0,
@@ -1173,15 +1326,19 @@ async def create_dev_state() -> AppState:
         strategy_id="orb_scalp",
         name="ORB Scalp",
         version="1.0.0",
-        is_active=True,
+        is_active=True,  # Still active, just throttled
         pipeline_stage="paper_trading",
-        allocated_capital=20_000.0,  # 20% of $100k (4 strategies + 20% reserve)
+        allocated_capital=8_000.0,  # 10% of $100k — THROTTLED (REDUCE)
         daily_pnl=sum(t.net_pnl for t in scalp_todays_trades),
         trade_count_today=len(scalp_todays_trades),
         config=scalp_config,
+        # Throttled strategy — 3 consecutive losses triggered REDUCE
+        consecutive_losses=3,
+        rolling_sharpe=-0.12,
+        drawdown_pct=0.042,
     )
 
-    # VWAP Reclaim config with backtest summary
+    # VWAP Reclaim config with backtest summary and operating window
     vwap_config = VwapReclaimConfig(
         strategy_id="vwap_reclaim",
         name="VWAP Reclaim",
@@ -1192,6 +1349,11 @@ async def create_dev_state() -> AppState:
             "then reclaims above on volume."
         ),
         time_window_display="10:00 AM–12:00 PM",
+        operating_window=OperatingWindow(
+            earliest_entry="10:00",
+            latest_entry="12:00",
+            force_close="15:50",
+        ),
         backtest_summary=BacktestSummaryConfig(
             status="validated",
             wfe_pnl=15820.0,
@@ -1207,13 +1369,17 @@ async def create_dev_state() -> AppState:
         version="1.0.0",
         is_active=True,
         pipeline_stage="paper_trading",
-        allocated_capital=20_000.0,  # 20% of $100k (4 strategies + 20% reserve)
+        allocated_capital=25_000.0,  # 25% of $100k — received +5% from ORB Scalp throttle
         daily_pnl=sum(t.net_pnl for t in vwap_todays_trades),
         trade_count_today=len(vwap_todays_trades),
         config=vwap_config,
+        # Healthy strategy — no throttle issues
+        consecutive_losses=0,
+        rolling_sharpe=0.98,
+        drawdown_pct=0.015,
     )
 
-    # Afternoon Momentum config with backtest summary
+    # Afternoon Momentum config with backtest summary and operating window
     afternoon_config = AfternoonMomentumConfig(
         strategy_id="afternoon_momentum",
         name="Afternoon Momentum",
@@ -1224,6 +1390,11 @@ async def create_dev_state() -> AppState:
             "between 2:00–3:30 PM."
         ),
         time_window_display="2:00–3:30 PM",
+        operating_window=OperatingWindow(
+            earliest_entry="14:00",
+            latest_entry="15:30",
+            force_close="15:45",
+        ),
         backtest_summary=BacktestSummaryConfig(
             status="validated",
             wfe_pnl=12340.0,
@@ -1239,10 +1410,14 @@ async def create_dev_state() -> AppState:
         version="1.0.0",
         is_active=True,
         pipeline_stage="paper_trading",
-        allocated_capital=20_000.0,  # 20% of $100k (4 strategies + 20% reserve)
+        allocated_capital=25_000.0,  # 25% of $100k — received +5% from ORB Scalp throttle
         daily_pnl=sum(t.net_pnl for t in afternoon_todays_trades),
         trade_count_today=len(afternoon_todays_trades),
         config=afternoon_config,
+        # Healthy strategy — no throttle issues
+        consecutive_losses=0,
+        rolling_sharpe=1.42,
+        drawdown_pct=0.012,
     )
 
     # Mock orchestrator
