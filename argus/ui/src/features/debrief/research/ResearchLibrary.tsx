@@ -139,8 +139,8 @@ export function ResearchLibrary() {
     );
   }
 
-  // Loading state
-  if (isLoading) {
+  // Loading state (only on initial load, not during filter changes)
+  if (isLoading && !data) {
     return <DebriefSkeleton section="research" />;
   }
 

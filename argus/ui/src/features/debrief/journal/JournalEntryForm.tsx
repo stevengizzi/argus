@@ -12,6 +12,7 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Eye, Target, Lightbulb, Settings, X } from 'lucide-react';
 import { JournalTagInput } from './JournalTagInput';
+import { TradeSearchInput } from './TradeSearchInput';
 import { Card } from '../../../components/Card';
 import { useDebriefUI } from '../../../stores/debriefUI';
 import { useStrategies } from '../../../hooks/useStrategies';
@@ -109,6 +110,9 @@ export function JournalEntryForm({ initialData, onSave, onCancel }: JournalEntry
     initialData?.linked_strategy_id ?? ''
   );
   const [tags, setTags] = useState<string[]>(initialData?.tags ?? []);
+  const [linkedTradeIds, setLinkedTradeIds] = useState<string[]>(
+    initialData?.linked_trade_ids ?? []
+  );
   const [showSuccess, setShowSuccess] = useState(false);
 
   const collapsedInputRef = useRef<HTMLInputElement>(null);
@@ -130,6 +134,7 @@ export function JournalEntryForm({ initialData, onSave, onCancel }: JournalEntry
       setEntryType('observation');
       setStrategyId('');
       setTags([]);
+      setLinkedTradeIds([]);
       setJournalDraftExpanded(false);
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 2000);
@@ -161,6 +166,7 @@ export function JournalEntryForm({ initialData, onSave, onCancel }: JournalEntry
       setEntryType('observation');
       setStrategyId('');
       setTags([]);
+      setLinkedTradeIds([]);
       setJournalDraftExpanded(false);
     }
   };
@@ -178,16 +184,19 @@ export function JournalEntryForm({ initialData, onSave, onCancel }: JournalEntry
             content: content.trim(),
             entry_type: entryType,
             linked_strategy_id: strategyId || undefined,
+            linked_trade_ids: linkedTradeIds,
             tags,
           },
         });
         onSave?.(updated);
+        onCancel?.();
       } else {
         await createMutation.mutateAsync({
           entry_type: entryType,
           title: title.trim(),
           content: content.trim(),
           linked_strategy_id: strategyId || undefined,
+          linked_trade_ids: linkedTradeIds,
           tags,
         });
       }
@@ -322,9 +331,16 @@ export function JournalEntryForm({ initialData, onSave, onCancel }: JournalEntry
               />
             </div>
 
-            {/* Trade linking placeholder */}
-            <div className="py-2 px-3 text-xs text-argus-text-dim bg-argus-surface-2 rounded-md border border-argus-border border-dashed">
-              Trade linking will be added in Session 8
+            {/* Linked Trades */}
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-argus-text-dim">
+                Linked Trades (optional)
+              </label>
+              <TradeSearchInput
+                linkedTradeIds={linkedTradeIds}
+                onChange={setLinkedTradeIds}
+                disabled={isSaving}
+              />
             </div>
 
             {/* Action buttons */}

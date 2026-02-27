@@ -119,8 +119,8 @@ export function BriefingList() {
     );
   }
 
-  // Loading state
-  if (isLoading) {
+  // Loading state (only on initial load, not during refetches)
+  if (isLoading && !data) {
     return <DebriefSkeleton section="briefings" />;
   }
 

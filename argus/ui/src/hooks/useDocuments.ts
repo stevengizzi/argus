@@ -5,7 +5,7 @@
  * Documents can be from filesystem (read-only) or database (full CRUD).
  */
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import {
   fetchDocuments,
   fetchDocument,
@@ -26,6 +26,7 @@ export function useDocuments(category?: string) {
     queryKey: ['documents', category],
     queryFn: () => fetchDocuments(category),
     refetchInterval: 60_000, // 60 seconds
+    placeholderData: keepPreviousData, // Keep showing previous results while filtering
   });
 }
 

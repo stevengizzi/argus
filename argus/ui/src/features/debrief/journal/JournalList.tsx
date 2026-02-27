@@ -21,7 +21,6 @@ import { EmptyState } from '../../../components/EmptyState';
 import { useDebriefUI } from '../../../stores/debriefUI';
 import {
   useJournalEntries,
-  useJournalEntry,
   useDeleteJournalEntry,
   useJournalTags,
 } from '../../../hooks/useJournal';
@@ -76,7 +75,6 @@ export function JournalList() {
 
   // Data fetching
   const { data, isLoading, error } = useJournalEntries(apiParams);
-  const { data: editingEntry } = useJournalEntry(editingJournalEntryId);
   const { data: tagsData } = useJournalTags();
   const { data: strategiesData } = useStrategies();
 
@@ -117,29 +115,13 @@ export function JournalList() {
     }
   }, [deletingEntry, deleteMutation]);
 
-  // Handle edit save
-  const handleEditSave = useCallback(() => {
-    setEditingJournalEntryId(null);
-  }, [setEditingJournalEntryId]);
-
-  // Handle edit cancel
+  // Handle edit cancel (also used for save since card will close edit mode)
   const handleEditCancel = useCallback(() => {
     setEditingJournalEntryId(null);
   }, [setEditingJournalEntryId]);
 
-  // If editing, show edit form instead of list
-  if (editingJournalEntryId && editingEntry) {
-    return (
-      <JournalEntryForm
-        initialData={editingEntry}
-        onSave={handleEditSave}
-        onCancel={handleEditCancel}
-      />
-    );
-  }
-
-  // Loading state
-  if (isLoading) {
+  // Loading state (only on initial load, not during filter changes)
+  if (isLoading && !data) {
     return <DebriefSkeleton section="journal" />;
   }
 
@@ -269,7 +251,9 @@ export function JournalList() {
               >
                 <JournalEntryCard
                   entry={entry}
+                  isEditing={editingJournalEntryId === entry.id}
                   onEdit={() => setEditingJournalEntryId(entry.id)}
+                  onEditCancel={handleEditCancel}
                   onDelete={() => setDeletingEntry(entry)}
                 />
               </motion.div>
