@@ -106,13 +106,11 @@ export function BriefingCard({ briefing, onEdit, onRead, onDelete }: BriefingCar
   return (
     <Card
       interactive
-      className="hover:border-argus-text-dim transition-colors"
+      onClick={onRead}
+      className="hover:border-argus-text-dim transition-colors cursor-pointer"
     >
-      {/* Main clickable area for reading */}
-      <div
-        onClick={onRead}
-        className="cursor-pointer space-y-2"
-      >
+      {/* Main content area */}
+      <div className="space-y-2">
         {/* Top row: date + badges */}
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs text-argus-text-dim">

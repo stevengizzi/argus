@@ -62,9 +62,13 @@ export function ResearchDocCard({
   const categoryLabel = getCategoryLabel(doc.category);
 
   return (
-    <Card interactive className="hover:border-argus-text-dim transition-colors h-full flex flex-col">
-      {/* Main clickable area for reading */}
-      <div onClick={onRead} className="cursor-pointer flex-1 flex flex-col">
+    <Card
+      interactive
+      onClick={onRead}
+      className="hover:border-argus-text-dim transition-colors h-full flex flex-col cursor-pointer"
+    >
+      {/* Main content area */}
+      <div className="flex-1 flex flex-col">
         {/* Top row: category badge + source badge */}
         <div className="flex items-center justify-between mb-2">
           <span
