@@ -6,6 +6,109 @@ import pytest
 from httpx import AsyncClient
 
 
+class TestTradesBatchEndpoint:
+    """Tests for GET /api/v1/trades/batch endpoint."""
+
+    @pytest.mark.asyncio
+    async def test_batch_valid_ids(
+        self,
+        client_with_trades: AsyncClient,
+        auth_headers: dict[str, str],
+    ) -> None:
+        """Returns trades for valid IDs."""
+        # First get some actual trade IDs
+        response = await client_with_trades.get(
+            "/api/v1/trades?limit=3",
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
+        trade_ids = [t["id"] for t in response.json()["trades"]]
+        assert len(trade_ids) == 3
+
+        # Now batch fetch them
+        ids_param = ",".join(trade_ids)
+        response = await client_with_trades.get(
+            f"/api/v1/trades/batch?ids={ids_param}",
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "trades" in data
+        assert "count" in data
+        assert "timestamp" in data
+        assert data["count"] == 3
+        assert len(data["trades"]) == 3
+
+        # All requested IDs should be returned
+        returned_ids = {t["id"] for t in data["trades"]}
+        assert returned_ids == set(trade_ids)
+
+    @pytest.mark.asyncio
+    async def test_batch_empty_ids(
+        self,
+        client_with_trades: AsyncClient,
+        auth_headers: dict[str, str],
+    ) -> None:
+        """Empty ID string returns empty list."""
+        response = await client_with_trades.get(
+            "/api/v1/trades/batch?ids=",
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["trades"] == []
+        assert data["count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_batch_nonexistent_ids(
+        self,
+        client_with_trades: AsyncClient,
+        auth_headers: dict[str, str],
+    ) -> None:
+        """Nonexistent IDs are silently omitted."""
+        response = await client_with_trades.get(
+            "/api/v1/trades/batch?ids=nonexistent1,nonexistent2",
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["trades"] == []
+        assert data["count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_batch_too_many_ids(
+        self,
+        client_with_trades: AsyncClient,
+        auth_headers: dict[str, str],
+    ) -> None:
+        """Returns 400 if more than 50 IDs are requested."""
+        # Generate 51 fake IDs
+        ids = [f"id_{i}" for i in range(51)]
+        ids_param = ",".join(ids)
+
+        response = await client_with_trades.get(
+            f"/api/v1/trades/batch?ids={ids_param}",
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 400
+        assert "50" in response.json()["detail"]
+
+    @pytest.mark.asyncio
+    async def test_batch_unauthenticated(
+        self,
+        client_with_trades: AsyncClient,
+    ) -> None:
+        """Returns 401 without valid auth."""
+        response = await client_with_trades.get("/api/v1/trades/batch?ids=test")
+
+        assert response.status_code == 401
+        assert "detail" in response.json()
+
+
 class TestTradesEndpoint:
     """Tests for GET /api/v1/trades endpoint."""
 

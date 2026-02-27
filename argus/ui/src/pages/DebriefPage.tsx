@@ -99,24 +99,19 @@ export function DebriefPage() {
           // which are handled within their respective components
           break;
         case 'escape':
-          // Close any open modals and editors
+          // Close one thing at a time with priority: modal → editor → form
           if (readingBriefingId) {
             setReadingBriefingId(null);
-          }
-          if (readingDocumentId) {
+          } else if (readingDocumentId) {
             setReadingDocumentId(null);
-          }
-          if (editingBriefingId) {
+          } else if (editingBriefingId) {
             setEditingBriefingId(null);
-          }
-          if (editingDocumentId) {
+          } else if (editingDocumentId) {
             setEditingDocumentId(null);
-          }
-          if (editingJournalEntryId) {
+          } else if (editingJournalEntryId) {
             setEditingJournalEntryId(null);
-          }
-          // Collapse journal form
-          if (journalDraftExpanded) {
+          } else if (journalDraftExpanded) {
+            // Collapse journal form
             setJournalDraftExpanded(false);
           }
           break;

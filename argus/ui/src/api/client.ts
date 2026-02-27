@@ -28,11 +28,28 @@ import type {
   StrategySpecResponse,
   ThrottleOverrideRequest,
   TokenResponse,
+  TradesBatchResponse,
   TradesResponse,
   WatchlistResponse,
 } from './types';
 
 const API_BASE = '/api/v1';
+
+/**
+ * Custom error class that preserves HTTP status codes.
+ *
+ * Use this instead of generic Error to enable status-code-specific
+ * error handling (e.g., 409 Conflict for duplicate briefings).
+ */
+export class ApiError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+  }
+}
 
 /**
  * Get the stored JWT token from localStorage.
@@ -80,8 +97,8 @@ async function fetchWithAuth<T>(
       clearToken();
       window.location.href = '/login';
     }
-    const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
-    throw new Error(error.detail || `HTTP ${response.status}`);
+    const errorBody = await response.json().catch(() => ({ detail: 'Unknown error' }));
+    throw new ApiError(errorBody.detail || `HTTP ${response.status}`, response.status);
   }
 
   return response.json();
@@ -152,6 +169,13 @@ export async function getTrades(params?: {
   }
   const query = searchParams.toString();
   return fetchWithAuth<TradesResponse>(`/trades${query ? `?${query}` : ''}`);
+}
+
+export async function getTradesByIds(ids: string[]): Promise<TradesBatchResponse> {
+  if (ids.length === 0) {
+    return { trades: [], count: 0, timestamp: new Date().toISOString() };
+  }
+  return fetchWithAuth<TradesBatchResponse>(`/trades/batch?ids=${ids.join(',')}`);
 }
 
 // Performance endpoints

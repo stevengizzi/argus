@@ -390,6 +390,29 @@ class TradeLogger:
         rows = await self._db.fetch_all(sql, tuple(params))
         return [dict(row) for row in rows]  # type: ignore[arg-type]
 
+    async def get_trades_by_ids(self, trade_ids: list[str]) -> list[dict]:
+        """Retrieve trades by their IDs.
+
+        Args:
+            trade_ids: List of trade IDs to fetch.
+
+        Returns:
+            List of trade dicts for IDs that exist. Missing IDs are silently skipped.
+        """
+        if not trade_ids:
+            return []
+
+        # Build parameterized IN clause
+        placeholders = ",".join("?" * len(trade_ids))
+        sql = f"""
+            SELECT * FROM trades
+            WHERE id IN ({placeholders})
+            ORDER BY entry_time DESC
+        """
+
+        rows = await self._db.fetch_all(sql, tuple(trade_ids))
+        return [dict(row) for row in rows]  # type: ignore[arg-type]
+
     async def count_trades(
         self,
         strategy_id: str | None = None,

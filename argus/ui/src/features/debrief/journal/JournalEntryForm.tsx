@@ -117,6 +117,7 @@ export function JournalEntryForm({ initialData, onSave, onCancel }: JournalEntry
 
   const collapsedInputRef = useRef<HTMLInputElement>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
+  const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Data hooks
   const { data: strategiesData } = useStrategies();
@@ -137,9 +138,22 @@ export function JournalEntryForm({ initialData, onSave, onCancel }: JournalEntry
       setLinkedTradeIds([]);
       setJournalDraftExpanded(false);
       setShowSuccess(true);
-      setTimeout(() => setShowSuccess(false), 2000);
+      // Clear any existing timer before setting a new one
+      if (successTimerRef.current) {
+        clearTimeout(successTimerRef.current);
+      }
+      successTimerRef.current = setTimeout(() => setShowSuccess(false), 2000);
     }
   }, [createMutation.isSuccess, isEditMode, setJournalDraftExpanded]);
+
+  // Cleanup success timer on unmount
+  useEffect(() => {
+    return () => {
+      if (successTimerRef.current) {
+        clearTimeout(successTimerRef.current);
+      }
+    };
+  }, []);
 
   // Focus title input when form expands
   useEffect(() => {

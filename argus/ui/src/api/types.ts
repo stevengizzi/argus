@@ -84,6 +84,12 @@ export interface TradesResponse {
   timestamp: string;
 }
 
+export interface TradesBatchResponse {
+  trades: Trade[];
+  count: number;
+  timestamp: string;
+}
+
 // Performance
 export interface MetricsData {
   total_trades: number;

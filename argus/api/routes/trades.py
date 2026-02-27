@@ -10,7 +10,7 @@ import io
 from datetime import UTC, datetime
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
@@ -47,6 +47,14 @@ class TradesResponse(BaseModel):
     total_count: int
     limit: int
     offset: int
+    timestamp: str
+
+
+class TradesBatchResponse(BaseModel):
+    """Response for GET /trades/batch."""
+
+    trades: list[TradeResponse]
+    count: int
     timestamp: str
 
 
@@ -134,6 +142,76 @@ async def get_trades(
         total_count=total_count,
         limit=limit,
         offset=offset,
+        timestamp=datetime.now(UTC).isoformat(),
+    )
+
+
+@router.get("/batch", response_model=TradesBatchResponse)
+async def get_trades_batch(
+    _auth: dict = Depends(require_auth),  # noqa: B008
+    state: AppState = Depends(get_app_state),  # noqa: B008
+    ids: str = Query(..., description="Comma-separated trade IDs"),
+) -> TradesBatchResponse:
+    """Get multiple trades by their IDs in a single request.
+
+    Useful for fetching linked trades in journal entries without
+    fetching the entire trade history.
+
+    Args:
+        ids: Comma-separated list of trade IDs (ULIDs).
+
+    Returns:
+        List of trades matching the provided IDs.
+        Missing IDs are silently omitted from results.
+
+    Raises:
+        HTTPException: 400 if more than 50 IDs are requested.
+    """
+    # Parse comma-separated IDs
+    trade_ids = [tid.strip() for tid in ids.split(",") if tid.strip()]
+
+    if not trade_ids:
+        return TradesBatchResponse(
+            trades=[],
+            count=0,
+            timestamp=datetime.now(UTC).isoformat(),
+        )
+
+    if len(trade_ids) > 50:
+        raise HTTPException(
+            status_code=400,
+            detail="Maximum 50 trade IDs per request",
+        )
+
+    # Fetch trades by IDs
+    trades_data = await state.trade_logger.get_trades_by_ids(trade_ids)
+
+    # Transform to response format
+    trades: list[TradeResponse] = []
+    for row in trades_data:
+        trades.append(
+            TradeResponse(
+                id=row["id"],
+                strategy_id=row["strategy_id"],
+                symbol=row["symbol"],
+                side=row["side"],
+                entry_price=row["entry_price"],
+                entry_time=row["entry_time"],
+                exit_price=row.get("exit_price"),
+                exit_time=row.get("exit_time"),
+                shares=row["shares"],
+                pnl_dollars=row.get("net_pnl"),
+                pnl_r_multiple=row.get("r_multiple"),
+                exit_reason=row.get("exit_reason"),
+                hold_duration_seconds=row.get("hold_duration_seconds"),
+                commission=row.get("commission", 0.0),
+                market_regime=row.get("market_regime"),
+            )
+        )
+
+    return TradesBatchResponse(
+        trades=trades,
+        count=len(trades),
         timestamp=datetime.now(UTC).isoformat(),
     )
 

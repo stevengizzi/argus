@@ -7,7 +7,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { Search, X, TrendingUp, TrendingDown } from 'lucide-react';
-import { getTrades } from '../../../api/client';
+import { getTrades, getTradesByIds } from '../../../api/client';
 import { useSymbolDetailUI } from '../../../stores/symbolDetailUI';
 import { StrategyBadge } from '../../../components/Badge';
 import type { Trade } from '../../../api/types';
@@ -89,14 +89,11 @@ export function TradeSearchInput({
       return;
     }
 
-    // Fetch trades to get their details
-    // Note: In a real implementation, we'd have a batch fetch endpoint
-    // For now, we'll fetch recent trades and filter
+    // Use batch endpoint to fetch trades by their IDs directly
     const fetchLinkedTrades = async () => {
       try {
-        const response = await getTrades({ limit: 100 });
-        const linked = response.trades.filter((t) => linkedTradeIds.includes(t.id));
-        setLinkedTrades(linked);
+        const response = await getTradesByIds(linkedTradeIds);
+        setLinkedTrades(response.trades);
       } catch (error) {
         console.error('Failed to fetch linked trades:', error);
       }
