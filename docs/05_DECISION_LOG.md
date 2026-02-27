@@ -2250,5 +2250,157 @@ Each entry follows this format:
 
 ---
 
+### DEC-204 | Dashboard Scope Refinement
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-27 |
+| **Decision** | Dashboard narrows to pure ambient awareness. CapitalAllocation donut/bars, RiskGauge, MarketRegimeCard, and emergency controls removed (all live on Orchestrator page). Replaced by OrchestratorStatusStrip — single-line compact data row with strategy count, deployed capital, risk budget %, and regime badge. Click navigates to Orchestrator. |
+| **Rationale** | Avoids duplication across Dashboard and Orchestrator. Status strip provides essential operational numbers in one scannable line without the visual weight of charts and gauges. |
+| **Alternatives** | (A) Keep full donut on both pages — rejected, duplication with divergence risk. (C) Remove all orchestrator info from Dashboard — rejected, loses ambient awareness. |
+| **Status** | Active |
+
+---
+
+### DEC-205 | Performance Page Expansion
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-27 |
+| **Decision** | Performance page expands from single scroll view to 5-tab layout with 8 new visualizations: TradeActivityHeatmap, CalendarPnlView, RMultipleHistogram, RiskWaterfall, PortfolioTreemap, CorrelationMatrix, ComparativePeriodOverlay, and TradeReplay. Tabs: Overview, Heatmaps, Distribution, Portfolio, Replay. Period selector remains global above tabs. |
+| **Rationale** | Performance is the analytical backbone of ARGUS. Full suite built in Sprint 21d to avoid return trips. ~47 hours but delivers complete analytical depth. |
+| **Status** | Active |
+
+---
+
+### DEC-206 | Trade Activity Heatmap — D3 Color Scales
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-27 |
+| **Decision** | TradeActivityHeatmap uses D3 color scales (scaleSequential + interpolateRdYlGn) with React SVG rendering. 13×5 grid (30-min time bins × weekdays). Toggle between avg R-multiple and net P&L coloring. |
+| **Rationale** | D3 provides superior diverging color interpolation. React handles DOM. Best of both worlds — D3 for math, React for rendering. |
+| **Status** | Active |
+
+---
+
+### DEC-207 | Portfolio Treemap — D3 Hierarchy
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-27 |
+| **Decision** | PortfolioTreemap uses D3 hierarchy + treemap layout (d3-hierarchy module). Rectangles sized by position value, colored by unrealized P&L %. Mobile fallback to sorted list when container width < 400px. |
+| **Rationale** | Treemap tiling algorithms (squarify) are non-trivial. D3 is the right tool — justifies the dependency. Mobile fallback prevents unreadable tiny rectangles. |
+| **Status** | Active |
+
+---
+
+### DEC-208 | Comparative Period Overlay
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-27 |
+| **Decision** | Ghost line added to existing EquityCurve component showing previous period returns. Lower opacity (0.3), dashed styling. Toggle on/off. Previous period data fetched alongside current and date-shifted to align. |
+| **Rationale** | Minimal new code (second series on existing Lightweight Charts instance), high analytical insight. Enables "am I doing better or worse than last week/month?" at a glance. |
+| **Status** | Active |
+
+---
+
+### DEC-209 | Trade Replay Mode
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-27 |
+| **Decision** | TradeReplay uses Lightweight Charts candlestick with progressive bar reveal for playback animation. Playback controls: play/pause, speed (1x/2x/5x/10x), scrubber, step forward/back. Entry/exit/stop/target markers appear at correct bars. |
+| **Rationale** | Reuses existing chart library. setInterval + setVisibleRange creates smooth animated playback without custom rendering. Most powerful learning tool in the Performance suite. |
+| **Status** | Active |
+
+---
+
+### DEC-210 | System Page Cleanup
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-27 |
+| **Decision** | System page removes StrategyCards (migrated to Pattern Library + Orchestrator) and EmergencyControls (migrated to Orchestrator GlobalControls). Adds IntelligencePlaceholders — grid of 6 future component cards (AI Copilot, Pre-Market Engine, Catalyst Service, Order Flow Analyzer, Setup Quality Engine, Learning Loop) with sprint activation dates. |
+| **Rationale** | Clean separation: Pattern Library for strategy info, Orchestrator for operations, System for infrastructure health. Intelligence placeholders give roadmap visibility. |
+| **Status** | Active |
+
+---
+
+### DEC-211 | Navigation Restructure
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-27 |
+| **Decision** | Desktop sidebar: thin 1px divider lines between nav groups (Monitor: Dashboard/Trades/Performance, Operate: Orchestrator/Patterns, Learn: Debrief, Maintain: System). Mobile bottom bar: 5 primary tabs (Dashboard, Trades, Orchestrator, Patterns, More) + Framer Motion bottom sheet for overflow (Performance, Debrief, System). |
+| **Rationale** | 7 items need visual grouping on desktop. Mobile can't fit 7 equal tabs — More sheet is native-feeling overflow pattern. Primary mobile tabs prioritize market-hours needs (awareness + control). |
+| **Alternatives** | (B) Spacing-only groups — too subtle with 7 items. (C) Group labels — sidebar too narrow at 64px. Mobile: (B) Scrollable tabs — discoverability poor. (C) Hamburger menu — hides key pages. |
+| **Status** | Active. Amends DEC-199 (mobile tab arrangement). |
+
+---
+
+### DEC-212 | AI Copilot Shell Architecture
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-27 |
+| **Decision** | CopilotPanel is a new dedicated component, not reusing SlideInPanel. Persists across page navigation (mounted in AppShell). Has own Zustand store (copilotUI). Shows page context indicator from React Router. Sprint 21d builds shell with placeholder content; Sprint 22 activates with Claude API. CopilotButton is floating action button — desktop bottom-right 24px inset, mobile above tab bar. |
+| **Rationale** | Different lifecycle from data panels (SlideInPanel). Persists across pages, maintains chat state, needs own z-index layer. Will grow significantly in Sprint 22 — starting fresh avoids fighting assumptions baked into SlideInPanel. |
+| **Status** | Active |
+
+---
+
+### DEC-213 | Pre-Market Dashboard Layout
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-27 |
+| **Decision** | Full pre-market layout shell built in Sprint 21d with placeholder cards for watchlist, regime forecast, and catalyst summary. Time-gated on market_status from account endpoint. Dev mode supports ?premarket=true override. |
+| **Rationale** | Building the layout now (2 extra hours) means Sprint 23 wires data into existing components rather than designing from scratch. Placeholder cards communicate the roadmap. |
+| **Status** | Active |
+
+---
+
+### DEC-214 | Goal Tracking Configuration
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-27 |
+| **Decision** | GoalTracker reads monthly_target_usd from GoalsConfig sub-model in SystemConfig. Default $5,000. Simple config YAML field for V1. GoalTracker widget computes progress from current month P&L and elapsed trading days. |
+| **Rationale** | Simple config value sufficient for single-user system. Database-backed goal history with tracking over time can upgrade later when the feature proves its value. |
+| **Status** | Active |
+
+---
+
+### DEC-215 | Chart Library Assignments
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-27 |
+| **Decision** | D3 individual modules (d3-scale, d3-color, d3-hierarchy, d3-interpolate) for heatmap color scales, treemap layout, and correlation matrix. Recharts for R-multiple histogram. Custom SVG for calendar P&L and risk waterfall. Lightweight Charts for trade replay and comparative overlay. No full D3 bundle import. |
+| **Rationale** | Each library used where it excels. D3 modules imported individually to minimize bundle size. Extends DEC-104 (Lightweight Charts primary, Recharts for non-time-series). |
+| **Status** | Active. Extends DEC-104. |
+
+---
+
+### DEC-216 | Mobile Primary Tabs
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-27 |
+| **Decision** | Mobile bottom bar shows 5 tabs: Dashboard, Trades, Orchestrator, Patterns, More. Performance, Debrief, System accessible via More bottom sheet. |
+| **Rationale** | Market hours (primary mobile use case) need ambient awareness (Dashboard), trade details (Trades), operational control (Orchestrator), and strategy reference (Patterns). Performance and Debrief are post-session desktop activities. System is rarely accessed. |
+| **Status** | Active. Amends DEC-199. |
+
+---
+
+### DEC-217 | Copilot Button Positioning
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-27 |
+| **Decision** | CopilotButton: desktop fixed bottom-right 24px from edges. Mobile fixed right-aligned, bottom offset to clear MobileNav (h-16 + pb-3 + gap ≈ 88px). Button hides when CopilotPanel is open. Subtle entrance animation (scale spring) on first mount only. |
+| **Rationale** | Avoids tab bar overlap on mobile. Clean toggle behavior — no visual redundancy when panel visible. |
+| **Status** | Active |
+
+---
+
+### DEC-218 | Performance Tab Organization
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-27 |
+| **Decision** | Performance page uses 5-tab layout: Overview (existing metrics + equity curve + P&L + strategy breakdown + comparative overlay), Heatmaps (activity heatmap + calendar P&L), Distribution (R-multiple histogram + risk waterfall), Portfolio (treemap + correlation matrix), Replay (trade replay). Period selector global above tabs. |
+| **Rationale** | Organizes 8 new visualizations into focused analytical lenses without overwhelming. Each tab answers a different question. Overview preserves existing page content for zero disruption. |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
 *New decisions are appended chronologically as the project progresses.*

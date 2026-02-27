@@ -367,17 +367,19 @@ per sprint velocity.
 **Decisions:** DEC-196 through DEC-201
 **Resolved deferrals:** DEF-026 (FTS5 → LIKE search), DEF-027 (trade linking UI included)
 
-#### Sprint 21d — Dashboard Refinement + Performance Analytics + System Cleanup + Nav Restructure (DEC-169, DEC-171)
-**Target:** ~2–3 days
+### Sprint 21d — Dashboard Refinement + Performance Analytics + System Cleanup + Nav Restructure + AI Copilot Shell
+**Status:** IN PROGRESS
+**Target tests:** ~1689 pytest + ~182 Vitest
+**Sessions:** 14 (implementation) + 3 code reviews
 **Scope:**
-- **Dashboard refinement:** Narrow scope to pure ambient awareness. Remove controls and detailed panels migrated to Orchestrator/Pattern Library. Add: compact "Orchestrator Status" strip (strategies active, deployed capital, risk budget, regime badge — click navigates to Orchestrator). Pre-market mode: before 9:30 AM, Dashboard shows Pre-Market layout (ranked watchlist, regime forecast — placeholder until Sprint 23 populates with real data). Goal tracking indicator (21-J from UX Backlog).
-- **Performance page analytics (from UX Backlog DEC-108):** Trade activity heatmap (21-C, D3 calendar heatmap), win/loss R-multiple histogram (21-D, Recharts), portfolio treemap (21-E, D3), risk waterfall chart (21-F), comparative period overlay (21-G), strategy correlation matrix (21-H). Calendar P&L view. Side-by-side strategy comparison.
-- **System page cleanup:** Narrow to infrastructure health only. Strategy cards and controls already migrated. Add health cards for future intelligence components (Pre-Market Engine, Order Flow, Catalyst Service, Learning Loop — show "Not Yet Active" until respective sprints).
-- **AI Copilot shell (DEC-170):** Floating chat button (bottom-right, keyboard shortcut `c`). Slide-out panel (desktop: right 35%, mobile: full-screen overlay). Shows placeholder: "AI Copilot activating in Sprint 22. Chat with Claude will be available here — contextual, page-aware, with full system knowledge." Panel structure: message history area, input field, context indicator showing current page name.
-- **Nav restructure:** Desktop icon sidebar with 7 items grouped: Monitor (Dashboard 📊, Trades 📋, Performance 📈) | Operate (Orchestrator 🎯, Patterns 🧩) | Learn (Debrief 📚) | Maintain (System ⚙️). Keyboard shortcuts 1–7, `c` for copilot, `w` for watchlist. Mobile: 5 bottom tabs (Dashboard, Trades, Orchestrator, Patterns, More → Performance, Debrief, System). Copilot button floats above tab bar.
-- **Trade Replay Mode (21-I from UX Backlog):** Animated trade walkthrough from Trade Log or Pattern Library Trades tab.
-- **Tests:** Vitest for new dashboard components, heatmap, histogram, treemap, nav, copilot shell.
-- **Milestone:** 7-page Command Center architecture established. All intelligence sprints (23+) add features to the correct pages.
+- Dashboard: Remove migrated components (CapitalAllocation, RiskGauge, emergency controls). Add OrchestratorStatusStrip, HeatStripPortfolioBar, GoalTracker, PreMarketLayout with countdown and placeholder cards.
+- Performance: Expand to 5-tab layout with 8 new visualizations (TradeActivityHeatmap, CalendarPnlView, RMultipleHistogram, RiskWaterfall, PortfolioTreemap, CorrelationMatrix, ComparativePeriodOverlay, TradeReplay).
+- System: Remove StrategyCards and EmergencyControls. Add IntelligencePlaceholders (6 future component cards).
+- Navigation: Sidebar group dividers. Mobile 5-tab + More bottom sheet.
+- Copilot: CopilotPanel shell + CopilotButton + copilotUI store. Placeholder content for Sprint 22 activation.
+- Backend: 5 new endpoints (heatmap, distribution, correlation, replay, goals config). TradeLogger.get_daily_pnl_by_strategy(). Dev mock data expansion.
+- New dependencies: d3-scale, d3-color, d3-hierarchy, d3-interpolate (individual modules, not full bundle).
+**Decisions:** DEC-204 through DEC-218
 
 #### Sprint 22 — AI Layer MVP + Copilot Activation (DEC-096, DEC-098, DEC-170)
 **Target:** ~2–3 days

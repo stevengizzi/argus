@@ -11,7 +11,7 @@ Phase 1 sprint plan: @docs/07_PHASE1_SPRINT_PLAN.md
 ## Current State
 
 **Structure:** Two parallel tracks (DEC-079, February 19, 2026). Expanded to AI-enhanced platform (DEC-163, February 26, 2026).
-- **Build Track:** System construction at development velocity. Sprints 1–21c complete (1,664 pytest tests + 138 Vitest). Sprint 21d (Dashboard refinement + Performance analytics + System cleanup + AI Copilot shell) is NEXT.
+- **Build Track:** System construction at development velocity. Sprints 1–21c complete (1,664 pytest tests + 138 Vitest). Sprint 21d (Dashboard refinement + Performance analytics + System cleanup + AI Copilot shell) IN PROGRESS.
 - **Validation Track:** Paper trading ACTIVE on Alpaca IEX (system stability only — DEC-081). Signal accuracy validation pending Databento activation. All pre-Databento backtests require re-validation (DEC-132). Migrates to IBKR paper after IBKR account approved (U24619949, submitted Feb 21).
 
 Active sprint plan: `docs/10_PHASE3_SPRINT_PLAN.md` (covers both tracks).
