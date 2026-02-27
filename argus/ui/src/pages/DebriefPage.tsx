@@ -12,6 +12,7 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { GraduationCap } from 'lucide-react';
 import { AnimatedPage } from '../components/AnimatedPage';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 import { SegmentedTab, type SegmentedTabSegment } from '../components/SegmentedTab';
 import { useDebriefUI, type DebriefSection } from '../stores/debriefUI';
 import { BriefingList } from '../features/debrief/briefings';
@@ -75,9 +76,11 @@ export function DebriefPage() {
           animate="animate"
           exit="exit"
         >
-          {activeSection === 'briefings' && <BriefingList />}
-          {activeSection === 'research' && <ResearchLibrary />}
-          {activeSection === 'journal' && <JournalList />}
+          <ErrorBoundary name={activeSection}>
+            {activeSection === 'briefings' && <BriefingList />}
+            {activeSection === 'research' && <ResearchLibrary />}
+            {activeSection === 'journal' && <JournalList />}
+          </ErrorBoundary>
         </motion.div>
       </AnimatePresence>
     </AnimatedPage>
