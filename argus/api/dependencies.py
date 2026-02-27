@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 from fastapi import Request
 
 if TYPE_CHECKING:
+    from argus.analytics.debrief_service import DebriefService
     from argus.analytics.trade_logger import TradeLogger
     from argus.core.clock import Clock
     from argus.core.config import SystemConfig
@@ -45,6 +46,7 @@ class AppState:
         clock: Time provider (SystemClock or FixedClock for tests).
         config: System configuration.
         start_time: Unix timestamp of when the system started.
+        debrief_service: Service for The Debrief page content.
     """
 
     event_bus: EventBus
@@ -59,6 +61,7 @@ class AppState:
     clock: Clock | None = None
     config: SystemConfig | None = None
     start_time: float = 0.0
+    debrief_service: DebriefService | None = None
 
 
 def get_app_state(request: Request) -> AppState:
