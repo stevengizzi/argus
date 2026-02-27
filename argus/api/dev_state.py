@@ -16,6 +16,7 @@ import time
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
+from argus.analytics.debrief_service import DebriefService
 from argus.analytics.trade_logger import TradeLogger
 from argus.api.auth import hash_password, set_jwt_secret
 from argus.api.dependencies import AppState
@@ -665,7 +666,7 @@ async def _seed_orchestrator_decisions(trade_logger: TradeLogger, now: datetime)
             "trend_score": 2,
             "vol_bucket": "normal",
         },
-        rationale="SPY above both SMAs, bullish momentum (+1.25% 5d ROC), 12.5% vol → bullish_trending",
+        rationale="SPY above both SMAs, bullish momentum, 12.5% vol → bullish_trending",
         created_at=make_timestamp(9, 25),
     )
 
@@ -1120,6 +1121,537 @@ def _create_mock_watchlist(now: datetime) -> list[WatchlistItem]:
 
 
 # ---------------------------------------------------------------------------
+# Debrief Content Seeding
+# ---------------------------------------------------------------------------
+
+
+async def _seed_briefings(debrief_service: DebriefService, now: datetime) -> None:
+    """Seed mock briefings for dev mode.
+
+    Creates 5 briefings across the last 2 days:
+    - 2 days ago: Pre-market (final) + EOD (final)
+    - 1 day ago: Pre-market (final) + EOD (final)
+    - Today: Pre-market (draft)
+    """
+    today = now.date()
+    two_days_ago = (now - timedelta(days=2)).date()
+    one_day_ago = (now - timedelta(days=1)).date()
+
+    # 1. Pre-market, 2 days ago, final
+    await debrief_service.create_briefing(
+        date=two_days_ago.isoformat(),
+        briefing_type="pre_market",
+        title=f"Pre-Market Briefing — {two_days_ago.strftime('%b %d, %Y')}",
+        content="""## Market Overview
+
+Overnight futures are pointing higher with ES +0.45% following strong earnings from tech sector.
+Asia closed mixed, Europe modestly green. SPY is bullish above the 20-day MA ($521.30),
+with resistance at $528.50.
+
+## Key Levels (SPY, QQQ)
+
+| Index | Support | Resistance | VWAP | Notes |
+|-------|---------|------------|------|-------|
+| SPY   | 521.30  | 528.50     | 524.80 | Above 20MA |
+| QQQ   | 442.00  | 451.00     | 446.50 | Strong momentum |
+
+## Watchlist
+
+1. **NVDA** - Gap +3.2%, earnings aftermath momentum, watching $875 breakout level
+2. **TSLA** - Gap +2.8%, consolidating after yesterday's move, key level $225
+3. **AMD** - Gap +2.1%, following NVDA sympathy, entry above $165
+4. **AAPL** - Gap +1.5%, steady accumulation pattern
+5. **MSFT** - Gap +1.2%, rotation into quality tech
+
+## Catalysts
+
+- NVDA post-earnings analyst commentary expected mid-morning
+- Fed's Williams speaking at 11:00 AM ET
+- Weekly jobless claims at 8:30 AM (consensus 215K)
+
+## Game Plan
+
+Aggressive stance today given bullish overnight action. Focus on ORB setups in gappers,
+especially NVDA and AMD. Risk limits normal — up to 3 concurrent positions per strategy.
+Watch for regime shift if SPY loses 521 level.
+""",
+    )
+    # Update to final status
+    briefings, _ = await debrief_service.list_briefings(
+        briefing_type="pre_market", date_from=two_days_ago.isoformat()
+    )
+    if briefings:
+        await debrief_service.update_briefing(briefings[0]["id"], status="final")
+
+    # 2. EOD, 2 days ago, final
+    await debrief_service.create_briefing(
+        date=two_days_ago.isoformat(),
+        briefing_type="eod",
+        title=f"End of Day Review — {two_days_ago.strftime('%b %d, %Y')}",
+        content="""## Session Summary
+
+Strong trend day with SPY closing +1.1% near highs. Volume 15% above average.
+Tech led with NVDA +4.2% on earnings follow-through. VIX compressed to 13.5, indicating low fear.
+
+## Trades Review
+
+| Symbol | Strategy | Entry | Exit | P&L | Notes |
+|--------|----------|-------|------|-----|-------|
+| NVDA | ORB Breakout | 872.50 | 885.20 | +$382 | Perfect setup, held for T2 |
+| TSLA | ORB Scalp | 225.10 | 225.85 | +$112 | Quick 0.3R, clean exit |
+| AMD | VWAP Reclaim | 163.80 | 166.40 | +$195 | Mid-morning entry |
+| AAPL | ORB Breakout | 185.60 | 184.20 | -$140 | Stopped out, weak volume |
+| PLTR | VWAP Reclaim | 31.50 | 32.85 | +$135 | Textbook reclaim |
+| META | ORB Scalp | 522.30 | 521.10 | -$72 | False breakout |
+| MSFT | Afternoon Momentum | 424.50 | 428.20 | +$111 | Consolidation break |
+| GOOG | ORB Breakout | 165.80 | 164.50 | -$39 | Chopped out |
+
+**Session Stats:** 8 trades, 5W/3L, Win Rate 62.5%, Net P&L +$684
+
+## What Worked
+
+- NVDA setup was textbook — clear OR, volume surge on break, held through T2
+- VWAP Reclaim entries on PLTR and AMD both worked with volume confirmation
+- Afternoon Momentum on MSFT caught the 2:15 PM breakout perfectly
+
+## What Didn't Work
+
+- Two false breakouts in first 20 minutes (META, GOOG) — should have waited for volume
+- AAPL entry was against weak relative strength, ignored sector rotation
+
+## Key Lessons
+
+1. On trend days, trust the T2 targets — both NVDA and PLTR had room to run
+2. Relative strength matters more than gap size — AAPL lagged all day despite gap
+3. Low-volume breakouts in first 15 minutes are often traps
+
+## Tomorrow's Focus
+
+Watch for continuation in NVDA/AMD semiconductor names. Fed speak could introduce volatility.
+Consider reducing position sizes if VIX expands above 15.
+""",
+    )
+    briefings, _ = await debrief_service.list_briefings(
+        briefing_type="eod", date_from=two_days_ago.isoformat()
+    )
+    if briefings:
+        await debrief_service.update_briefing(briefings[0]["id"], status="final")
+
+    # 3. Pre-market, 1 day ago, final (sparse)
+    await debrief_service.create_briefing(
+        date=one_day_ago.isoformat(),
+        briefing_type="pre_market",
+        title=f"Pre-Market Briefing — {one_day_ago.strftime('%b %d, %Y')}",
+        content="""## Market Overview
+
+Choppy overnight session. Futures flat after yesterday's rally. No clear direction —
+expecting range-bound action. VIX ticking up to 14.2.
+
+## Key Levels (SPY, QQQ)
+
+| Index | Support | Resistance | VWAP | Notes |
+|-------|---------|------------|------|-------|
+| SPY   | 524.00  | 530.00     | 527.50 | Consolidating |
+| QQQ   | 448.50  | 454.00     | 451.20 | Inside day setup |
+
+## Watchlist
+
+Reduced watchlist today — fewer quality gaps. Focus on NVDA continuation and any oversold bounces.
+
+## Game Plan
+
+Defensive stance. Reduce position sizes by 30%. Avoid first 30 minutes.
+Look for VWAP Reclaim setups after 10:30 AM rather than ORB.
+""",
+    )
+    briefings, _ = await debrief_service.list_briefings(
+        briefing_type="pre_market",
+        date_from=one_day_ago.isoformat(),
+        date_to=one_day_ago.isoformat(),
+    )
+    if briefings:
+        await debrief_service.update_briefing(briefings[0]["id"], status="final")
+
+    # 4. EOD, 1 day ago, final
+    await debrief_service.create_briefing(
+        date=one_day_ago.isoformat(),
+        briefing_type="eod",
+        title=f"End of Day Review — {one_day_ago.strftime('%b %d, %Y')}",
+        content="""## Session Summary
+
+Choppy, low-conviction day as expected. SPY closed -0.2% on below-average volume.
+Multiple failed breakouts in the morning.
+
+## Trades Review
+
+| Symbol | Strategy | Entry | Exit | P&L | Notes |
+|--------|----------|-------|------|-----|-------|
+| NVDA | ORB Breakout | 888.50 | 883.20 | -$159 | Reversal, should have skipped |
+| TSLA | ORB Scalp | 224.30 | 223.85 | -$68 | Scalp stopped |
+| HOOD | VWAP Reclaim | 22.80 | 23.45 | +$65 | Only clean setup |
+| PLTR | ORB Breakout | 33.20 | 32.10 | -$132 | Gap fade |
+| SOFI | ORB Scalp | 15.40 | 15.10 | -$45 | Overtrading |
+
+**Session Stats:** 5 trades, 1W/4L, Win Rate 20%, Net P&L -$339
+
+## What Worked
+
+- HOOD VWAP Reclaim worked because I waited for volume confirmation post-10:30
+
+## What Didn't Work
+
+- Overtrading in morning despite plan to wait — took 3 ORB trades when should have skipped
+- Ignored own briefing about defensive stance
+- Chased NVDA continuation when setup quality was poor
+
+## Key Lessons
+
+1. When the briefing says "defensive", actually be defensive — follow the plan
+2. 3+ morning losses = stop trading ORB strategies for the day
+3. Low-volume gap-up days after trend days often mean-revert
+
+## Tomorrow's Focus
+
+Reset mentally. Stick to the plan. Quality over quantity — only A+ setups.
+""",
+    )
+    briefings, _ = await debrief_service.list_briefings(
+        briefing_type="eod",
+        date_from=one_day_ago.isoformat(),
+        date_to=one_day_ago.isoformat(),
+    )
+    if briefings:
+        await debrief_service.update_briefing(briefings[0]["id"], status="final")
+
+    # 5. Pre-market, today, draft (partial)
+    await debrief_service.create_briefing(
+        date=today.isoformat(),
+        briefing_type="pre_market",
+        title=f"Pre-Market Briefing — {today.strftime('%b %d, %Y')}",
+        content="""## Market Overview
+
+Futures mixed with ES -0.1%, NQ +0.2%. Asia was green overnight. Europe flat.
+SPY testing 20-day MA support at $525.20. VIX at 14.8 — slightly elevated.
+
+## Key Levels (SPY, QQQ)
+
+| Index | Support | Resistance | VWAP | Notes |
+|-------|---------|------------|------|-------|
+| SPY   | 525.20  | 530.50     | -    | At 20MA support |
+| QQQ   | 449.00  | 455.00     | -    | Range-bound |
+
+## Watchlist
+
+*Scanning in progress...*
+
+## Catalysts
+
+*To be updated...*
+
+## Game Plan
+
+*Pending market open assessment...*
+""",
+    )
+    # Leave as draft (default status)
+
+
+async def _seed_documents(debrief_service: DebriefService) -> None:
+    """Seed mock documents for dev mode.
+
+    Creates 3 research documents in the database.
+    """
+    # 1. VWAP Entry Timing Research
+    await debrief_service.create_document(
+        category="research",
+        title="VWAP Entry Timing Research",
+        content="""# VWAP Entry Timing Research
+
+## Overview
+
+Analysis of optimal entry timing for VWAP Reclaim strategy based on 6 months of paper trading data.
+
+## Key Findings
+
+### Time Windows
+
+- **Best window:** 10:15 AM - 11:00 AM ET
+- **Worst window:** 9:30 AM - 10:00 AM ET (too volatile, many false signals)
+- **Afternoon:** 1:30 PM - 2:30 PM works but with lower win rate
+
+### Volume Requirements
+
+Entries with volume > 1.5x average showed:
+- 68% win rate vs 52% without volume confirmation
+- Average R-multiple of 1.3R vs 0.7R
+- Fewer time-stop exits (15% vs 32%)
+
+### Pullback Depth
+
+Optimal pullback range: 0.3% - 0.8% below VWAP
+- Shallower pullbacks (<0.3%): Often false breaks
+- Deeper pullbacks (>0.8%): Lower success rate, larger stops needed
+
+## Recommendations
+
+1. Wait minimum 30 minutes after open before taking VWAP Reclaim entries
+2. Require volume surge on reclaim candle (>1.5x 20-bar average)
+3. Target pullbacks in 0.3%-0.8% range for optimal risk/reward
+
+## Data Source
+
+Paper trading results from 2026-01-01 to 2026-02-15. 156 trades analyzed.
+""",
+        tags=["vwap", "timing", "entry", "research"],
+    )
+
+    # 2. ORB Gap Size Analysis
+    await debrief_service.create_document(
+        category="research",
+        title="ORB Gap Size Analysis",
+        content="""# ORB Gap Size Analysis
+
+## Purpose
+
+Evaluate the relationship between overnight gap percentage and ORB Breakout success rates.
+
+## Methodology
+
+Analyzed 1,842 ORB Breakout trades from backtest (35 months of data).
+
+## Results by Gap Size
+
+| Gap Range | Win Rate | Avg R | Sample Size |
+|-----------|----------|-------|-------------|
+| 1.0-2.0%  | 48%      | 0.42R | 412         |
+| 2.0-3.0%  | 55%      | 0.85R | 687         |
+| 3.0-5.0%  | 61%      | 1.12R | 521         |
+| 5.0%+     | 58%      | 0.95R | 222         |
+
+## Key Observations
+
+1. Sweet spot appears to be 2.5%-4.0% gap range
+2. Very large gaps (>5%) often mean-revert in first hour
+3. Small gaps (<2%) lack momentum for T2 targets
+
+## Parameter Recommendation
+
+Current gap threshold of 2.0% is appropriate. Consider increasing to 2.5% for higher quality setups.
+""",
+        tags=["orb", "gaps", "statistics", "backtest"],
+    )
+
+    # 3. AI Scoring Calibration Notes (placeholder)
+    await debrief_service.create_document(
+        category="ai_report",
+        title="AI Scoring Calibration Notes",
+        content="""# AI Scoring Calibration Notes
+
+## Status
+
+*This document will be populated when the AI Layer (Sprint 22+) is implemented.*
+
+## Planned Sections
+
+- Setup Quality Engine calibration data
+- Pattern recognition confidence thresholds
+- Signal strength scoring methodology
+- Calibration procedures and validation results
+
+## Notes
+
+Initial calibration will use first 30 days of AI-scored trades to establish baseline metrics.
+""",
+        tags=["ai", "scoring", "calibration", "placeholder"],
+    )
+
+
+async def _seed_journal_entries(
+    debrief_service: DebriefService, trade_ids: list[str], now: datetime
+) -> None:
+    """Seed mock journal entries for dev mode.
+
+    Creates 10 journal entries of various types spread across the last 2 weeks.
+    """
+    # Observations (3)
+    await debrief_service.create_journal_entry(
+        entry_type="observation",
+        title="Regime transitions happen faster than expected",
+        content="""Noticed that when SPY breaks below the 20-day MA, the shift from bullish_trending
+to range_bound happens within 30-45 minutes, not hours.
+
+The RegimeClassifier's 30-minute polling interval might miss quick regime changes.
+Consider implementing event-driven regime updates when SPY crosses key levels.
+
+This matters for allocation decisions — by the time we detect range_bound,
+we may have already taken 2-3 bullish-biased trades.""",
+        tags=["regime-change", "timing", "observation"],
+    )
+
+    await debrief_service.create_journal_entry(
+        entry_type="observation",
+        title="VWAP gap patterns on high-gap days",
+        content="""On days where the scanner finds 10+ stocks with gaps > 3%,
+VWAP Reclaim setups tend to fail more often.
+
+Hypothesis: High-gap days correlate with strong trending behavior,
+so mean-reversion strategies underperform.
+
+Should investigate adding a "gap day severity" filter that reduces VWAP Reclaim
+allocation when scanner finds excessive gap counts.""",
+        tags=["gap-day", "vwap", "false-breakout"],
+    )
+
+    await debrief_service.create_journal_entry(
+        entry_type="observation",
+        title="Afternoon momentum works best on trend days",
+        content="""Reviewing the last 20 Afternoon Momentum trades:
+- On trend days (SPY >+0.5%): 75% win rate, avg 1.4R
+- On choppy days (SPY ±0.3%): 40% win rate, avg 0.6R
+
+The strategy needs a regime filter. Consider only activating Afternoon Momentum
+when RegimeClassifier shows bullish_trending or bearish_trending.""",
+        tags=["momentum", "timing", "regime-change"],
+    )
+
+    # Trade annotations (2) - link to real trade IDs
+    if len(trade_ids) >= 2:
+        await debrief_service.create_journal_entry(
+            entry_type="trade_annotation",
+            title="TSLA — exited too early on T1",
+            content="""This trade hit T1 but continued to T2 and beyond.
+
+Entry was clean — ORB with volume confirmation. Stop was appropriate at OR low.
+
+**Mistake:** Took profits at T1 when momentum was still strong. Should have:
+1. Held 50% for T2 as per the plan
+2. Trailed stop to breakeven on remaining position
+
+**Lesson:** When volume on breakout is >2x average, extend the T2 target or consider trailing.""",
+            linked_trade_ids=[trade_ids[0]],
+            tags=["early-exit", "patience", "t1-t2"],
+        )
+
+        await debrief_service.create_journal_entry(
+            entry_type="trade_annotation",
+            title="AMD — entered on low volume, paid the price",
+            content="""Classic discipline failure. Entry conditions were met
+except volume was only 0.8x average.
+
+Took the trade anyway because "AMD always moves" — that's not a strategy, that's gambling.
+
+**Result:** Stopped out for -1R within 15 minutes.
+
+**Rule to add:** No exceptions to volume filter. If volume < 1.2x average,
+skip the setup regardless of pattern quality.""",
+            linked_trade_ids=[trade_ids[1]],
+            tags=["low-volume", "discipline", "rules-violation"],
+        )
+
+    # Pattern notes (2)
+    await debrief_service.create_journal_entry(
+        entry_type="pattern_note",
+        title="ORB gap threshold might need to be 3% not 2%",
+        content="""After reviewing the ORB Gap Size Analysis document,
+I'm considering raising the minimum gap from 2.0% to 3.0%.
+
+The data shows:
+- 2.0-3.0% gaps: 55% win rate
+- 3.0-5.0% gaps: 61% win rate
+
+This would reduce trade count by ~40% but increase quality significantly.
+
+**Concerns:**
+- Fewer opportunities might lead to overtrading on remaining setups
+- Some of my best trades were 2.5% gaps
+
+**Next step:** Run a 2-week paper test with 3.0% threshold alongside current 2.0%
+and compare results.""",
+        tags=["orb", "gap-threshold", "parameter-tuning"],
+    )
+
+    await debrief_service.create_journal_entry(
+        entry_type="pattern_note",
+        title="Regime-based position sizing idea",
+        content="""Thinking about dynamic position sizing based on regime:
+
+| Regime | Base Size | Rationale |
+|--------|-----------|-----------|
+| bullish_trending | 100% | Full conviction |
+| bearish_trending | 75% | Counter-trend risk |
+| range_bound | 50% | Low edge environment |
+| high_volatility | 50% | Larger stops needed |
+| crisis | 25% | Preserve capital |
+
+This would be in addition to the current throttle-based sizing.
+The Orchestrator could multiply the two factors.
+
+Need to backtest the impact on overall returns vs risk.""",
+        tags=["regime-change", "position-sizing", "discipline"],
+    )
+
+    # System notes (2)
+    await debrief_service.create_journal_entry(
+        entry_type="system_note",
+        title="Throttle kicks in too aggressively at 3 consecutive losses",
+        content="""Observed issue: The PerformanceThrottler triggers REDUCE at 3 consecutive losses,
+but this is happening too often during choppy morning sessions.
+
+**Problem:** 3 quick scalp losses (0.3R each = 0.9R total) trigger the same throttle
+as 3 full losses (3R total).
+
+**Proposed fix:** Weight the throttle by R-multiple lost, not just loss count. Suggestion:
+- Track cumulative R lost in rolling window
+- Trigger REDUCE at -2.5R cumulative
+- Trigger SUSPEND at -4.0R cumulative
+
+This would prevent excessive throttling on small scalp losses
+while still protecting against real drawdowns.""",
+        tags=["throttle", "system", "orb-scalp"],
+    )
+
+    await debrief_service.create_journal_entry(
+        entry_type="system_note",
+        title="RegimeClassifier has ~30min lag on regime changes",
+        content="""The 30-minute polling interval for regime classification creates noticeable lag.
+
+**Example from 2/25:**
+- SPY broke below 20-day MA at 10:15 AM
+- RegimeClassifier detected change at 10:30 AM
+- Two ORB trades taken between 10:15-10:30 were bullish-biased and stopped out
+
+**Options:**
+1. Reduce polling to 15 minutes (more API calls)
+2. Add event-driven detection on MA cross events
+3. Accept the lag and filter trades manually
+
+Leaning toward option 2 — should be straightforward to add SPY MA cross detection.""",
+        tags=["regime-change", "system", "latency"],
+    )
+
+    # Additional observation
+    await debrief_service.create_journal_entry(
+        entry_type="observation",
+        title="Earnings catalysts produce bigger moves than momentum catalysts",
+        content="""Comparing catalyst types from the last month:
+
+**Earnings-driven gaps:**
+- Average gap: 4.2%
+- Follow-through rate: 68%
+- Average T2 hit rate: 42%
+
+**Momentum/news-driven gaps:**
+- Average gap: 2.8%
+- Follow-through rate: 51%
+- Average T2 hit rate: 28%
+
+**Implication:** Should weight earnings catalysts more heavily in pre-market scanning.
+Consider a catalyst_type field in the watchlist that affects position sizing.""",
+        tags=["earnings", "catalyst", "momentum", "statistics"],
+    )
+
+
+# ---------------------------------------------------------------------------
 # Main factory
 # ---------------------------------------------------------------------------
 
@@ -1156,6 +1688,7 @@ async def create_dev_state() -> AppState:
     event_bus = EventBus()
     clock = SystemClock()
     trade_logger = TradeLogger(db)
+    debrief_service = DebriefService(db)
 
     # Seed trades (12 ORB Breakout + 6 ORB Scalp + 8 VWAP Reclaim + 6 Afternoon Momentum)
     trades = _generate_mock_trades()
@@ -1165,6 +1698,14 @@ async def create_dev_state() -> AppState:
     # Seed orchestrator decisions
     now = datetime.now(UTC)
     await _seed_orchestrator_decisions(trade_logger, now)
+
+    # Seed debrief content (briefings, documents, journal entries)
+    await _seed_briefings(debrief_service, now)
+    await _seed_documents(debrief_service)
+    # Get trade IDs for linking journal entries
+    recent_trades = await trade_logger.query_trades(limit=10)
+    trade_ids = [t["id"] for t in recent_trades]
+    await _seed_journal_entries(debrief_service, trade_ids, now)
 
     # Broker with $100K
     broker = SimulatedBroker(initial_cash=100_000.0)
@@ -1447,6 +1988,7 @@ async def create_dev_state() -> AppState:
         clock=clock,
         config=system_config,
         start_time=time.time(),
+        debrief_service=debrief_service,
     )
 
     # Inject mock watchlist for dev mode

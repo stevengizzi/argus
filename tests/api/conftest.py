@@ -18,6 +18,7 @@ from pathlib import Path
 import pytest
 from httpx import ASGITransport, AsyncClient
 
+from argus.analytics.debrief_service import DebriefService
 from argus.analytics.trade_logger import TradeLogger
 from argus.api.auth import create_access_token, hash_password, set_jwt_secret
 from argus.api.dependencies import AppState
@@ -91,6 +92,12 @@ async def test_db(tmp_path: Path) -> AsyncGenerator[DatabaseManager, None]:
 def test_trade_logger(test_db: DatabaseManager) -> TradeLogger:
     """Provide a TradeLogger backed by a temp database."""
     return TradeLogger(test_db)
+
+
+@pytest.fixture
+def test_debrief_service(test_db: DatabaseManager) -> DebriefService:
+    """Provide a DebriefService backed by a temp database."""
+    return DebriefService(test_db)
 
 
 @pytest.fixture
@@ -168,6 +175,7 @@ def test_system_config(api_config: ApiConfig) -> SystemConfig:
 async def app_state(
     test_event_bus: EventBus,
     test_trade_logger: TradeLogger,
+    test_debrief_service: DebriefService,
     test_broker: SimulatedBroker,
     test_health_monitor: HealthMonitor,
     test_risk_manager: RiskManager,
@@ -191,6 +199,7 @@ async def app_state(
         clock=test_clock,
         config=test_system_config,
         start_time=time.time(),
+        debrief_service=test_debrief_service,
     )
 
 
@@ -607,6 +616,129 @@ async def client_with_trades(
     """Provide client with AppState containing seeded trades."""
     app = create_app(app_state_with_trades)
     app.state.app_state = app_state_with_trades
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+    ) as client:
+        yield client
+
+
+@pytest.fixture
+async def seeded_debrief_service(test_debrief_service: DebriefService) -> DebriefService:
+    """Provide a DebriefService pre-populated with test data.
+
+    Creates:
+    - 3 briefings (2 pre_market, 1 eod)
+    - 5 journal entries (various types)
+    - 2 documents (research category)
+    """
+    # Create briefings
+    await test_debrief_service.create_briefing(
+        date="2026-02-20",
+        briefing_type="pre_market",
+        title="Pre-Market Test Briefing",
+        content="Test pre-market content with analysis.",
+    )
+    await test_debrief_service.create_briefing(
+        date="2026-02-20",
+        briefing_type="eod",
+        title="EOD Test Briefing",
+        content="Test end of day review content.",
+    )
+    await test_debrief_service.create_briefing(
+        date="2026-02-21",
+        briefing_type="pre_market",
+        title="Second Pre-Market Briefing",
+        content="Another pre-market briefing for testing pagination.",
+    )
+
+    # Create journal entries
+    await test_debrief_service.create_journal_entry(
+        entry_type="observation",
+        title="Test Observation",
+        content="Observing market patterns for testing.",
+        tags=["test", "observation"],
+    )
+    await test_debrief_service.create_journal_entry(
+        entry_type="trade_annotation",
+        title="Test Trade Note",
+        content="Annotation about a specific trade.",
+        linked_trade_ids=["trade_001"],
+        tags=["trade", "annotation"],
+    )
+    await test_debrief_service.create_journal_entry(
+        entry_type="pattern_note",
+        title="Test Pattern",
+        content="Notes about a pattern observed.",
+        tags=["pattern", "test"],
+    )
+    await test_debrief_service.create_journal_entry(
+        entry_type="system_note",
+        title="System Configuration Note",
+        content="Notes about system behavior.",
+        tags=["system", "config"],
+    )
+    await test_debrief_service.create_journal_entry(
+        entry_type="observation",
+        title="Searchable Entry",
+        content="This entry contains the word FINDME for search tests.",
+        tags=["search", "test"],
+    )
+
+    # Create documents
+    await test_debrief_service.create_document(
+        category="research",
+        title="Test Research Document",
+        content="Research content for testing the debrief service.",
+        tags=["test", "research"],
+    )
+    await test_debrief_service.create_document(
+        category="research",
+        title="Another Research Doc",
+        content="More research content with FINDME keyword.",
+        tags=["test", "research", "search"],
+    )
+
+    return test_debrief_service
+
+
+@pytest.fixture
+async def app_state_with_debrief(
+    test_event_bus: EventBus,
+    test_trade_logger: TradeLogger,
+    seeded_debrief_service: DebriefService,
+    test_broker: SimulatedBroker,
+    test_health_monitor: HealthMonitor,
+    test_risk_manager: RiskManager,
+    test_order_manager: OrderManager,
+    test_clock: FixedClock,
+    test_system_config: SystemConfig,
+) -> AppState:
+    """Provide AppState with seeded debrief content for API testing."""
+    return AppState(
+        event_bus=test_event_bus,
+        trade_logger=test_trade_logger,
+        broker=test_broker,
+        health_monitor=test_health_monitor,
+        risk_manager=test_risk_manager,
+        order_manager=test_order_manager,
+        data_service=None,
+        strategies={},
+        clock=test_clock,
+        config=test_system_config,
+        start_time=time.time(),
+        debrief_service=seeded_debrief_service,
+    )
+
+
+@pytest.fixture
+async def client_with_debrief(
+    app_state_with_debrief: AppState,
+    jwt_secret: str,
+) -> AsyncGenerator[AsyncClient, None]:
+    """Provide client with AppState containing seeded debrief data."""
+    app = create_app(app_state_with_debrief)
+    app.state.app_state = app_state_with_debrief
     async with AsyncClient(
         transport=ASGITransport(app=app),
         base_url="http://test",
