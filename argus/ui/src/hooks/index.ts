@@ -12,6 +12,11 @@ export {
 } from './useControls';
 export { useHealth } from './useHealth';
 export { useLiveEquity, type LiveEquityData } from './useLiveEquity';
+export { useOrchestratorDecisions } from './useOrchestratorDecisions';
+export {
+  useRebalanceMutation,
+  useThrottleOverrideMutation,
+} from './useOrchestratorMutations';
 export { useOrchestratorStatus } from './useOrchestratorStatus';
 export { usePerformance } from './usePerformance';
 export { usePositions } from './usePositions';

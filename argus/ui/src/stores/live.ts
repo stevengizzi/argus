@@ -71,6 +71,13 @@ export function setQueryClient(client: QueryClient): void {
 function invalidateCacheForEvent(eventType: string): void {
   if (!queryClient) return;
 
+  // Handle orchestrator.* events (regime changes, allocation updates, etc.)
+  if (eventType.startsWith('orchestrator.')) {
+    queryClient.invalidateQueries({ queryKey: ['orchestrator-status'] });
+    queryClient.invalidateQueries({ queryKey: ['orchestrator-decisions'] });
+    return;
+  }
+
   switch (eventType as WSEventType) {
     case 'position.opened':
       queryClient.invalidateQueries({ queryKey: ['positions'] });

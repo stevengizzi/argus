@@ -7,6 +7,7 @@
 import type {
   AccountResponse,
   BarsResponse,
+  DecisionsResponse,
   HealthResponse,
   LoginRequest,
   OrchestratorStatusResponse,
@@ -16,6 +17,7 @@ import type {
   SessionSummaryResponse,
   StrategiesResponse,
   StrategySpecResponse,
+  ThrottleOverrideRequest,
   TokenResponse,
   TradesResponse,
   WatchlistResponse,
@@ -169,6 +171,29 @@ export async function getStrategies(): Promise<StrategiesResponse> {
 // Orchestrator endpoints
 export async function getOrchestratorStatus(): Promise<OrchestratorStatusResponse> {
   return fetchWithAuth<OrchestratorStatusResponse>('/orchestrator/status');
+}
+
+export async function getOrchestratorDecisions(
+  date?: string
+): Promise<DecisionsResponse> {
+  const params = new URLSearchParams();
+  params.set('limit', '100');
+  if (date) params.set('date', date);
+  return fetchWithAuth<DecisionsResponse>(`/orchestrator/decisions?${params}`);
+}
+
+export async function triggerRebalance(): Promise<{ success: boolean; message: string }> {
+  return fetchWithAuth('/orchestrator/rebalance', { method: 'POST' });
+}
+
+export async function overrideThrottle(
+  strategyId: string,
+  body: ThrottleOverrideRequest
+): Promise<{ success: boolean; message: string }> {
+  return fetchWithAuth(`/orchestrator/strategies/${strategyId}/override-throttle`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
 }
 
 // Session summary endpoints

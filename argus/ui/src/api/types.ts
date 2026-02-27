@@ -277,6 +277,12 @@ export interface WatchlistResponse {
 }
 
 // Orchestrator
+export interface OperatingWindow {
+  earliest_entry: string;
+  latest_entry: string;
+  force_close: string;
+}
+
 export interface AllocationInfo {
   strategy_id: string;
   allocation_pct: number;
@@ -288,6 +294,18 @@ export interface AllocationInfo {
   deployed_capital: number;
   deployed_pct: number;
   is_throttled: boolean;
+  // Extended fields (Sprint 21b)
+  operating_window: OperatingWindow | null;
+  consecutive_losses: number;
+  rolling_sharpe: number | null;
+  drawdown_pct: number;
+  is_active: boolean;
+  health_status: string;
+  trade_count_today: number;
+  daily_pnl: number;
+  open_position_count: number;
+  override_active: boolean;
+  override_until: string | null;
 }
 
 export interface OrchestratorStatusResponse {
@@ -302,4 +320,31 @@ export interface OrchestratorStatusResponse {
   total_deployed_capital: number;
   total_equity: number;
   timestamp: string;
+  // Session state (Sprint 21b)
+  session_phase: string;
+  pre_market_complete: boolean;
+  pre_market_completed_at: string | null;
+}
+
+export interface DecisionInfo {
+  id: string;
+  date: string;
+  decision_type: string;
+  strategy_id: string | null;
+  details: Record<string, unknown> | null;
+  rationale: string | null;
+  created_at: string;
+}
+
+export interface DecisionsResponse {
+  decisions: DecisionInfo[];
+  total: number;
+  limit: number;
+  offset: number;
+  timestamp: string;
+}
+
+export interface ThrottleOverrideRequest {
+  duration_minutes: number;
+  reason: string;
 }
