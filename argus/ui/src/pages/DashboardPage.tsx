@@ -1,6 +1,12 @@
 /**
  * Dashboard page - main command post view.
  *
+ * Sprint 21d Session 5 (DEC-204): Dashboard scope refinement.
+ * - OrchestratorStatusStrip at top (click to Orchestrator page)
+ * - HeatStripPortfolioBar below status strip
+ * - GoalTracker in third position of top row
+ * - PreMarketLayout when market_status === 'pre_market' or ?premarket=true
+ *
  * Sprint 21d Session 4 (DEC-204): Dashboard scope refinement.
  * - OrchestratorStatusStrip at top (click to Orchestrator page)
  * - Removed RiskAllocationPanel (migrated to Orchestrator page)
@@ -21,6 +27,7 @@
  */
 
 import { motion } from 'framer-motion';
+import { useSearchParams } from 'react-router-dom';
 import {
   AccountSummary,
   DailyPnlCard,
@@ -31,36 +38,35 @@ import {
   HealthMini,
   SessionSummaryCard,
   OrchestratorStatusStrip,
+  HeatStripPortfolioBar,
+  GoalTracker,
+  PreMarketLayout,
 } from '../features/dashboard';
 import { WatchlistSidebar } from '../features/watchlist';
 import { staggerContainer, staggerItem, staggerItemWithChildren } from '../utils/motion';
 import { useIsMultiColumn, useMediaQuery } from '../hooks/useMediaQuery';
-
-/**
- * Placeholder for GoalTracker component (Session 5).
- */
-function GoalTrackerPlaceholder() {
-  return (
-    <div className="bg-argus-surface border border-argus-border rounded-lg p-4 h-full flex items-center justify-center">
-      <span className="text-sm text-argus-text-dim">Goal Tracker (Session 5)</span>
-    </div>
-  );
-}
-
-/**
- * Placeholder for HeatStripPortfolioBar component (Session 5).
- */
-function HeatStripPlaceholder() {
-  return (
-    <div className="bg-argus-surface-2/30 border border-argus-border/50 rounded-lg px-4 py-2">
-      <span className="text-xs text-argus-text-dim">Portfolio Heat Strip (Session 5)</span>
-    </div>
-  );
-}
+import { useAccount } from '../hooks/useAccount';
 
 export function DashboardPage() {
   const isMultiColumn = useIsMultiColumn();
   const isDesktop = useMediaQuery('(min-width: 1024px)');
+  const { data: accountData } = useAccount();
+  const [searchParams] = useSearchParams();
+
+  // Check for pre-market: either real market status or dev mode override
+  const isPreMarket =
+    accountData?.market_status === 'pre_market' ||
+    searchParams.get('premarket') === 'true';
+
+  // Render pre-market layout when applicable
+  if (isPreMarket) {
+    return (
+      <>
+        <PreMarketLayout />
+        <WatchlistSidebar />
+      </>
+    );
+  }
 
   // Phone: flat vertical stagger, all cards as direct children
   if (!isMultiColumn) {
@@ -78,9 +84,9 @@ export function DashboardPage() {
             <OrchestratorStatusStrip />
           </motion.div>
 
-          {/* Heat strip placeholder */}
+          {/* Heat strip portfolio bar */}
           <motion.div variants={staggerItem}>
-            <HeatStripPlaceholder />
+            <HeatStripPortfolioBar />
           </motion.div>
 
           {/* Session summary card - shows after market close with trades */}
@@ -88,7 +94,7 @@ export function DashboardPage() {
 
           <motion.div variants={staggerItem}><AccountSummary /></motion.div>
           <motion.div variants={staggerItem}><DailyPnlCard /></motion.div>
-          <motion.div variants={staggerItem}><GoalTrackerPlaceholder /></motion.div>
+          <motion.div variants={staggerItem}><GoalTracker /></motion.div>
 
           {/* Market pair: always 2-col even on phone */}
           <motion.div
@@ -127,9 +133,9 @@ export function DashboardPage() {
             <OrchestratorStatusStrip />
           </motion.div>
 
-          {/* Heat strip placeholder */}
+          {/* Heat strip portfolio bar */}
           <motion.div variants={staggerItem}>
-            <HeatStripPlaceholder />
+            <HeatStripPortfolioBar />
           </motion.div>
 
           <SessionSummaryCard />
@@ -146,7 +152,7 @@ export function DashboardPage() {
               <DailyPnlCard />
             </motion.div>
             <motion.div variants={staggerItem} className="h-full">
-              <GoalTrackerPlaceholder />
+              <GoalTracker />
             </motion.div>
           </motion.div>
 
@@ -201,9 +207,9 @@ export function DashboardPage() {
           <OrchestratorStatusStrip />
         </motion.div>
 
-        {/* Heat strip placeholder */}
+        {/* Heat strip portfolio bar */}
         <motion.div variants={staggerItem}>
-          <HeatStripPlaceholder />
+          <HeatStripPortfolioBar />
         </motion.div>
 
         <SessionSummaryCard />
@@ -220,9 +226,9 @@ export function DashboardPage() {
           </motion.div>
         </motion.div>
 
-        {/* GoalTracker placeholder - full width on tablet */}
+        {/* GoalTracker - full width on tablet */}
         <motion.div variants={staggerItem}>
-          <GoalTrackerPlaceholder />
+          <GoalTracker />
         </motion.div>
 
         <motion.div
