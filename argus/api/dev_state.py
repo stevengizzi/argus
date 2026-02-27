@@ -192,6 +192,7 @@ def _generate_mock_trades(
     scalp_count: int = 6,
     vwap_reclaim_count: int = 8,
     afternoon_momentum_count: int = 6,
+    include_today: bool = False,
 ) -> list[Trade]:
     """Generate realistic mock trades for seeding the database.
 
@@ -204,6 +205,10 @@ def _generate_mock_trades(
     For ORB Scalp: 30-120s holds, 0.3R targets, smaller P&L
     For VWAP Reclaim: 5-30 min holds, 1.5R/2R targets, mid-morning entries
     For Afternoon Momentum: 15-60 min holds, 1.5R/2R targets, afternoon entries
+
+    Args:
+        include_today: If False, all trades are from past 30 days (days_ago >= 1).
+                       If True, trades may be from today (days_ago >= 0).
     """
     # ORB Breakout uses these symbols
     orb_symbols = ["NVDA", "AAPL", "AMD", "META"]
@@ -232,6 +237,8 @@ def _generate_mock_trades(
     trades: list[Trade] = []
     now = datetime.now(UTC)
 
+    min_days_ago = 0 if include_today else 1
+
     def generate_trade(
         strategy_id: str,
         symbols: list[str],
@@ -243,7 +250,7 @@ def _generate_mock_trades(
     ) -> Trade:
         """Generate a single trade with strategy-specific parameters."""
         # Spread trades over the last 30 days
-        days_ago = random.randint(0, 29)
+        days_ago = random.randint(min_days_ago, 29)
         trade_date = now - timedelta(days=days_ago)
         # Set entry time to market hours
         if entry_hour_range:
@@ -397,6 +404,155 @@ def _generate_mock_trades(
             entry_hour_range=(14, 15),  # 2:00 PM - 3:30 PM ET
         )
         trades.append(trade)
+
+    return trades
+
+
+def _generate_today_trades() -> list[Trade]:
+    """Generate deterministic trades for today with controlled outcomes.
+
+    Creates exactly 18 trades for today with:
+    - 11 wins (61% win rate)
+    - 6 losses
+    - 1 breakeven
+
+    Distribution by strategy:
+    - ORB Breakout: 5 trades (3W, 2L)
+    - ORB Scalp: 6 trades (4W, 1L, 1BE)
+    - VWAP Reclaim: 4 trades (2W, 2L)
+    - Afternoon Momentum: 3 trades (2W, 1L)
+
+    This ensures TodayStats shows consistent, meaningful data.
+    """
+    now = datetime.now(UTC)
+    trades: list[Trade] = []
+
+    # Fixed symbol prices for consistency
+    symbol_prices = {
+        "NVDA": 875.50,
+        "AAPL": 185.80,
+        "AMD": 165.30,
+        "META": 525.60,
+        "TSLA": 225.80,
+        "GOOG": 165.40,
+        "AMZN": 195.30,
+        "MSFT": 425.50,
+        "PLTR": 32.50,
+        "SOFI": 15.20,
+        "HOOD": 22.40,
+        "RIVN": 18.50,
+    }
+
+    # Trade templates: (strategy_id, symbol, outcome, entry_hour, entry_min, target_r)
+    trade_templates = [
+        # ORB Breakout: 5 trades (3W, 2L)
+        ("orb_breakout", "NVDA", TradeOutcome.WIN, 9, 42, 2.0),
+        ("orb_breakout", "AAPL", TradeOutcome.WIN, 9, 48, 1.5),
+        ("orb_breakout", "AMD", TradeOutcome.LOSS, 10, 5, 2.0),
+        ("orb_breakout", "META", TradeOutcome.WIN, 10, 22, 1.0),
+        ("orb_breakout", "GOOG", TradeOutcome.LOSS, 10, 45, 2.0),
+        # ORB Scalp: 6 trades (4W, 1L, 1BE)
+        ("orb_scalp", "TSLA", TradeOutcome.WIN, 9, 47, 0.3),
+        ("orb_scalp", "AMZN", TradeOutcome.WIN, 9, 52, 0.3),
+        ("orb_scalp", "MSFT", TradeOutcome.LOSS, 10, 8, 0.3),
+        ("orb_scalp", "GOOG", TradeOutcome.WIN, 10, 18, 0.3),
+        ("orb_scalp", "TSLA", TradeOutcome.WIN, 10, 35, 0.3),
+        ("orb_scalp", "AMZN", TradeOutcome.BREAKEVEN, 10, 55, 0.3),
+        # VWAP Reclaim: 4 trades (2W, 2L)
+        ("vwap_reclaim", "PLTR", TradeOutcome.WIN, 10, 18, 1.5),
+        ("vwap_reclaim", "SOFI", TradeOutcome.LOSS, 10, 35, 1.5),
+        ("vwap_reclaim", "HOOD", TradeOutcome.WIN, 10, 52, 2.0),
+        ("vwap_reclaim", "RIVN", TradeOutcome.LOSS, 11, 15, 1.5),
+        # Afternoon Momentum: 3 trades (2W, 1L)
+        ("afternoon_momentum", "MSFT", TradeOutcome.WIN, 14, 12, 1.5),
+        ("afternoon_momentum", "META", TradeOutcome.WIN, 14, 28, 2.0),
+        ("afternoon_momentum", "GOOG", TradeOutcome.LOSS, 14, 45, 1.5),
+    ]
+
+    for strategy_id, symbol, outcome, entry_hour, entry_min, target_r in trade_templates:
+        entry_price = symbol_prices[symbol]
+
+        # Calculate risk (stop distance) - 0.8% - 1.2% risk
+        risk_pct = 0.01
+        stop_distance = round(entry_price * risk_pct, 2)
+        stop_price = round(entry_price - stop_distance, 2)
+
+        # Position sizing
+        if strategy_id == "orb_scalp":
+            risk_amount = 800.0
+        elif strategy_id in ("vwap_reclaim", "afternoon_momentum"):
+            risk_amount = 1200.0
+        else:
+            risk_amount = 1500.0
+        shares = max(10, int(risk_amount / stop_distance))
+
+        # Entry time (convert ET to UTC by adding 5 hours for winter)
+        entry_time = now.replace(
+            hour=entry_hour + 5,
+            minute=entry_min,
+            second=0,
+            microsecond=0,
+        )
+
+        # Calculate exit based on outcome
+        if outcome == TradeOutcome.WIN:
+            exit_price = round(entry_price + (stop_distance * target_r), 2)
+            exit_reason = ExitReason.TARGET_1
+            r_multiple = target_r
+            gross_pnl = round(shares * (exit_price - entry_price), 2)
+            # Hold duration: scalps shorter
+            if strategy_id == "orb_scalp":
+                hold_seconds = random.randint(30, 90)
+            else:
+                hold_seconds = random.randint(5 * 60, 30 * 60)
+        elif outcome == TradeOutcome.LOSS:
+            exit_price = stop_price
+            exit_reason = ExitReason.STOP_LOSS
+            r_multiple = -1.0
+            gross_pnl = round(shares * (exit_price - entry_price), 2)
+            if strategy_id == "orb_scalp":
+                hold_seconds = random.randint(20, 60)
+            else:
+                hold_seconds = random.randint(3 * 60, 15 * 60)
+        else:  # BREAKEVEN
+            exit_price = round(entry_price + random.uniform(-0.02, 0.02), 2)
+            exit_reason = ExitReason.TIME_STOP
+            gross_pnl = round(shares * (exit_price - entry_price), 2)
+            r_multiple = round(gross_pnl / (shares * stop_distance), 2) if stop_distance > 0 else 0.0
+            hold_seconds = random.randint(60, 120)
+
+        exit_time = entry_time + timedelta(seconds=hold_seconds)
+
+        # Commission: $1 per 100 shares (minimum $1)
+        commission = max(1.0, round(shares / 100, 2))
+
+        rationale_map = {
+            "orb_breakout": "ORB breakout with volume confirmation",
+            "orb_scalp": "ORB scalp quick momentum capture",
+            "vwap_reclaim": "VWAP reclaim after pullback",
+            "afternoon_momentum": "Afternoon consolidation breakout",
+        }
+
+        trades.append(
+            Trade(
+                strategy_id=strategy_id,
+                symbol=symbol,
+                asset_class=AssetClass.US_STOCKS,
+                side=OrderSide.BUY,
+                entry_price=entry_price,
+                entry_time=entry_time,
+                exit_price=exit_price,
+                exit_time=exit_time,
+                shares=shares,
+                stop_price=stop_price,
+                target_prices=[round(entry_price + stop_distance * target_r, 2)],
+                exit_reason=exit_reason,
+                gross_pnl=gross_pnl,
+                commission=commission,
+                r_multiple=r_multiple,
+                rationale=rationale_map.get(strategy_id, "Mock trade"),
+            )
+        )
 
     return trades
 
@@ -1691,8 +1847,13 @@ async def create_dev_state() -> AppState:
     trade_logger = TradeLogger(db)
     debrief_service = DebriefService(db)
 
-    # Seed trades (12 ORB Breakout + 6 ORB Scalp + 8 VWAP Reclaim + 6 Afternoon Momentum)
-    trades = _generate_mock_trades()
+    # Seed trades:
+    # - Historical: 12 ORB Breakout + 6 ORB Scalp + 8 VWAP Reclaim + 6 Afternoon Momentum
+    #   (spread over past 30 days, excluding today)
+    # - Today: 18 trades with controlled outcomes for TodayStats demo
+    historical_trades = _generate_mock_trades(include_today=False)
+    today_trades = _generate_today_trades()
+    trades = historical_trades + today_trades
     for trade in trades:
         await trade_logger.log_trade(trade)
 

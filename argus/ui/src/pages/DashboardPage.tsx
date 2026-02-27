@@ -3,7 +3,7 @@
  *
  * Sprint 21d Session 5 (DEC-204): Dashboard scope refinement.
  * - OrchestratorStatusStrip at top (click to Orchestrator page)
- * - HeatStripPortfolioBar below status strip
+ * - StrategyDeploymentBar below status strip
  * - GoalTracker in third position of top row
  * - PreMarketLayout when market_status === 'pre_market' or ?premarket=true
  *
@@ -31,14 +31,15 @@ import { useSearchParams } from 'react-router-dom';
 import {
   AccountSummary,
   DailyPnlCard,
-  MarketStatusBadge,
-  MarketRegimeCard,
+  MarketStatusCard,
+  TodayStats,
+  SessionTimeline,
   OpenPositions,
   RecentTrades,
   HealthMini,
   SessionSummaryCard,
   OrchestratorStatusStrip,
-  HeatStripPortfolioBar,
+  StrategyDeploymentBar,
   GoalTracker,
   PreMarketLayout,
 } from '../features/dashboard';
@@ -54,12 +55,27 @@ export function DashboardPage() {
   const [searchParams] = useSearchParams();
 
   // Check for pre-market: either real market status or dev mode override
+  // Dev mode: use localStorage.setItem('argus_premarket', 'true') in console
   const isPreMarket =
     accountData?.market_status === 'pre_market' ||
-    searchParams.get('premarket') === 'true';
+    searchParams.get('premarket') === 'true' ||
+    (typeof window !== 'undefined' && localStorage.getItem('argus_premarket') === 'true');
 
   // Render pre-market layout when applicable
+  // Desktop: flex wrapper positions sidebar on right (same as active-market layout)
+  // Tablet/Mobile: WatchlistSidebar renders its own FAB + overlay
   if (isPreMarket) {
+    if (isDesktop) {
+      return (
+        <div className="flex gap-6 -mr-6 -mb-6">
+          <div className="flex-1 min-w-0">
+            <PreMarketLayout />
+          </div>
+          <WatchlistSidebar className="sticky top-0 h-[calc(100vh-3rem)] flex-shrink-0" />
+        </div>
+      );
+    }
+
     return (
       <>
         <PreMarketLayout />
@@ -84,9 +100,9 @@ export function DashboardPage() {
             <OrchestratorStatusStrip />
           </motion.div>
 
-          {/* Heat strip portfolio bar */}
+          {/* Strategy deployment bar */}
           <motion.div variants={staggerItem}>
-            <HeatStripPortfolioBar />
+            <StrategyDeploymentBar />
           </motion.div>
 
           {/* Session summary card - shows after market close with trades */}
@@ -96,14 +112,10 @@ export function DashboardPage() {
           <motion.div variants={staggerItem}><DailyPnlCard /></motion.div>
           <motion.div variants={staggerItem}><GoalTracker /></motion.div>
 
-          {/* Market pair: always 2-col even on phone */}
-          <motion.div
-            className="grid grid-cols-2 gap-4"
-            variants={staggerItem}
-          >
-            <MarketStatusBadge />
-            <MarketRegimeCard />
-          </motion.div>
+          {/* 3-card row: Market Status | Today's Stats | Session Timeline */}
+          <motion.div variants={staggerItem}><MarketStatusCard /></motion.div>
+          <motion.div variants={staggerItem}><TodayStats /></motion.div>
+          <motion.div variants={staggerItem}><SessionTimeline /></motion.div>
 
           <motion.div variants={staggerItem}><OpenPositions /></motion.div>
           <motion.div variants={staggerItem}><RecentTrades /></motion.div>
@@ -133,9 +145,9 @@ export function DashboardPage() {
             <OrchestratorStatusStrip />
           </motion.div>
 
-          {/* Heat strip portfolio bar */}
+          {/* Strategy deployment bar */}
           <motion.div variants={staggerItem}>
-            <HeatStripPortfolioBar />
+            <StrategyDeploymentBar />
           </motion.div>
 
           <SessionSummaryCard />
@@ -156,16 +168,19 @@ export function DashboardPage() {
             </motion.div>
           </motion.div>
 
-          {/* 2-col row: Market Status | Market Regime */}
+          {/* 3-col row: Market Status | Today's Stats | Session Timeline */}
           <motion.div
-            className="grid grid-cols-2 gap-6"
+            className="grid grid-cols-3 gap-6"
             variants={staggerItemWithChildren(0.08)}
           >
             <motion.div variants={staggerItem} className="h-full">
-              <MarketStatusBadge />
+              <MarketStatusCard />
             </motion.div>
             <motion.div variants={staggerItem} className="h-full">
-              <MarketRegimeCard />
+              <TodayStats />
+            </motion.div>
+            <motion.div variants={staggerItem} className="h-full">
+              <SessionTimeline />
             </motion.div>
           </motion.div>
 
@@ -207,9 +222,9 @@ export function DashboardPage() {
           <OrchestratorStatusStrip />
         </motion.div>
 
-        {/* Heat strip portfolio bar */}
+        {/* Strategy deployment bar */}
         <motion.div variants={staggerItem}>
-          <HeatStripPortfolioBar />
+          <StrategyDeploymentBar />
         </motion.div>
 
         <SessionSummaryCard />
@@ -231,12 +246,20 @@ export function DashboardPage() {
           <GoalTracker />
         </motion.div>
 
+        {/* 3-card row: Market Status | Today's Stats | Session Timeline */}
         <motion.div
-          className="grid grid-cols-2 gap-5"
-          variants={staggerItem}
+          className="grid grid-cols-3 gap-5"
+          variants={staggerItemWithChildren(0.08)}
         >
-          <MarketStatusBadge />
-          <MarketRegimeCard />
+          <motion.div variants={staggerItem} className="h-full">
+            <MarketStatusCard />
+          </motion.div>
+          <motion.div variants={staggerItem} className="h-full">
+            <TodayStats />
+          </motion.div>
+          <motion.div variants={staggerItem} className="h-full">
+            <SessionTimeline />
+          </motion.div>
         </motion.div>
 
         <motion.div variants={staggerItem}>

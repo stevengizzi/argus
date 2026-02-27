@@ -1,7 +1,7 @@
 /**
  * Tests for GoalTracker component.
  *
- * Sprint 21d Session 5.
+ * Sprint 21d Code Review — Enhanced GoalTracker with 2-column layout.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -56,32 +56,62 @@ describe('GoalTracker', () => {
     vi.clearAllMocks();
   });
 
-  it('renders on pace state with green progress bar', () => {
-    // On pace: current P&L exceeds expected progress
+  it('renders Monthly Goal header', () => {
     mockUseGoals.mockReturnValue({
       data: mockGoalsData,
       isLoading: false,
     });
     mockUsePerformance.mockReturnValue({
-      data: createMockPerformanceData(4000), // 80% of target, likely on pace mid-month
+      data: createMockPerformanceData(4000),
       isLoading: false,
     });
 
     render(<GoalTracker />);
 
-    // Check target is displayed (formatCurrency adds decimals: $5,000.00)
+    expect(screen.getByText('Monthly Goal')).toBeInTheDocument();
+  });
+
+  it('renders target amount and current P&L', () => {
+    mockUseGoals.mockReturnValue({
+      data: mockGoalsData,
+      isLoading: false,
+    });
+    mockUsePerformance.mockReturnValue({
+      data: createMockPerformanceData(4000),
+      isLoading: false,
+    });
+
+    render(<GoalTracker />);
+
+    // Check target is displayed
     expect(screen.getByText(/Target:/)).toBeInTheDocument();
     expect(screen.getByText(/\$5,000/)).toBeInTheDocument();
 
-    // Check current P&L is displayed (formatCurrency adds decimals: $4,000.00)
+    // Check current P&L is displayed
     expect(screen.getByText(/\$4,000/)).toBeInTheDocument();
 
     // Check progress percentage
     expect(screen.getByText(/80%/)).toBeInTheDocument();
   });
 
-  it('renders behind pace state with amber/red progress bar', () => {
-    // Behind pace: low P&L relative to target
+  it('renders progress percentage at 50%', () => {
+    mockUseGoals.mockReturnValue({
+      data: mockGoalsData,
+      isLoading: false,
+    });
+    mockUsePerformance.mockReturnValue({
+      data: createMockPerformanceData(2500),
+      isLoading: false,
+    });
+
+    render(<GoalTracker />);
+
+    // 50% progress
+    expect(screen.getByText(/\$2,500/)).toBeInTheDocument();
+    expect(screen.getByText(/50%/)).toBeInTheDocument();
+  });
+
+  it('renders behind pace state with Behind pace label', () => {
     mockUseGoals.mockReturnValue({
       data: mockGoalsData,
       isLoading: false,
@@ -93,27 +123,57 @@ describe('GoalTracker', () => {
 
     render(<GoalTracker />);
 
-    // Check current P&L (formatCurrency adds decimals: $500.00)
-    expect(screen.getByText(/\$500/)).toBeInTheDocument();
-
-    // Should show behind pace
+    // Should show behind pace (low P&L relative to expected progress)
     expect(screen.getByText(/Behind pace/)).toBeInTheDocument();
   });
 
-  it('renders with correct percentage calculation', () => {
+  it('renders Avg daily and Need/day stats', () => {
     mockUseGoals.mockReturnValue({
       data: mockGoalsData,
       isLoading: false,
     });
     mockUsePerformance.mockReturnValue({
-      data: createMockPerformanceData(2500), // 50% of target
+      data: createMockPerformanceData(2000),
       isLoading: false,
     });
 
     render(<GoalTracker />);
 
-    // Check percentage is calculated correctly
-    expect(screen.getByText(/\$2,500/)).toBeInTheDocument();
-    expect(screen.getByText(/50%/)).toBeInTheDocument();
+    // Check stats labels are present
+    expect(screen.getByText('Avg daily:')).toBeInTheDocument();
+    expect(screen.getByText('Need/day:')).toBeInTheDocument();
+  });
+
+  it('renders days left in month', () => {
+    mockUseGoals.mockReturnValue({
+      data: mockGoalsData,
+      isLoading: false,
+    });
+    mockUsePerformance.mockReturnValue({
+      data: createMockPerformanceData(3000),
+      isLoading: false,
+    });
+
+    render(<GoalTracker />);
+
+    // Should show days remaining (variable based on current date)
+    expect(screen.getByText(/day.*left/i)).toBeInTheDocument();
+  });
+
+  it('renders loading skeleton when data is loading', () => {
+    mockUseGoals.mockReturnValue({
+      data: null,
+      isLoading: true,
+    });
+    mockUsePerformance.mockReturnValue({
+      data: null,
+      isLoading: true,
+    });
+
+    const { container } = render(<GoalTracker />);
+
+    // Check for skeleton animation
+    const pulsingElements = container.querySelectorAll('.animate-pulse');
+    expect(pulsingElements.length).toBeGreaterThan(0);
   });
 });
