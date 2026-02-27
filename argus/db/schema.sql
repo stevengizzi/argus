@@ -240,24 +240,69 @@ CREATE INDEX IF NOT EXISTS idx_approval_status ON approval_log(status);
 CREATE INDEX IF NOT EXISTS idx_approval_proposed_at ON approval_log(proposed_at);
 
 -- ---------------------------------------------------------------------------
+-- Briefings Table
+-- ---------------------------------------------------------------------------
+-- Pre-market and EOD briefings for The Debrief page (Sprint 21c)
+DROP TABLE IF EXISTS briefings;
+CREATE TABLE IF NOT EXISTS briefings (
+    id TEXT PRIMARY KEY,                    -- ULID
+    date TEXT NOT NULL,                     -- YYYY-MM-DD
+    briefing_type TEXT NOT NULL,            -- 'pre_market' or 'eod'
+    status TEXT NOT NULL DEFAULT 'draft',   -- 'draft', 'final', 'ai_generated'
+    title TEXT NOT NULL,
+    content TEXT NOT NULL DEFAULT '',
+    metadata TEXT,                          -- JSON
+    author TEXT NOT NULL DEFAULT 'user',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(date, briefing_type)
+);
+
+CREATE INDEX IF NOT EXISTS idx_briefings_date ON briefings(date);
+CREATE INDEX IF NOT EXISTS idx_briefings_type ON briefings(briefing_type);
+CREATE INDEX IF NOT EXISTS idx_briefings_status ON briefings(status);
+
+-- ---------------------------------------------------------------------------
 -- Journal Entries Table
 -- ---------------------------------------------------------------------------
--- Learning journal (from Architecture doc Section 3.8)
+-- Learning journal for The Debrief page (Sprint 21c, replaces original schema)
+DROP TABLE IF EXISTS journal_entries;
 CREATE TABLE IF NOT EXISTS journal_entries (
     id TEXT PRIMARY KEY,                    -- ULID
-    entry_type TEXT NOT NULL,               -- 'observation', 'analysis', 'decision', 'insight'
+    entry_type TEXT NOT NULL,               -- 'observation', 'trade_annotation', 'pattern_note', 'system_note'
+    title TEXT NOT NULL DEFAULT '',
     content TEXT NOT NULL,
-    author TEXT NOT NULL,                   -- 'user' or 'claude'
+    author TEXT NOT NULL DEFAULT 'user',
     linked_strategy_id TEXT,
     linked_trade_ids TEXT,                  -- JSON array
-    linked_date_range TEXT,                 -- JSON: {start, end}
     tags TEXT,                              -- JSON array
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_journal_type ON journal_entries(entry_type);
 CREATE INDEX IF NOT EXISTS idx_journal_author ON journal_entries(author);
 CREATE INDEX IF NOT EXISTS idx_journal_created ON journal_entries(created_at);
+
+-- ---------------------------------------------------------------------------
+-- Documents Table
+-- ---------------------------------------------------------------------------
+-- Database-stored documents for The Debrief page (Sprint 21c)
+DROP TABLE IF EXISTS documents;
+CREATE TABLE IF NOT EXISTS documents (
+    id TEXT PRIMARY KEY,                    -- ULID
+    category TEXT NOT NULL,                 -- 'research', 'strategy', 'backtest', 'ai_report'
+    title TEXT NOT NULL,
+    content TEXT NOT NULL,
+    author TEXT NOT NULL DEFAULT 'user',
+    tags TEXT,                              -- JSON array
+    metadata TEXT,                          -- JSON
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_documents_category ON documents(category);
+CREATE INDEX IF NOT EXISTS idx_documents_created ON documents(created_at);
 
 -- ---------------------------------------------------------------------------
 -- System Health Table
