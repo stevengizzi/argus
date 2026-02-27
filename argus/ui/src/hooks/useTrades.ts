@@ -23,7 +23,9 @@ export function useTrades(params?: UseTradesParams) {
   return useQuery<TradesResponse, Error>({
     queryKey: ['trades', params],
     queryFn: () => getTrades(params),
-    refetchInterval: 30_000, // 30 seconds
-    placeholderData: keepPreviousData, // Keep previous data while fetching new
+    staleTime: 30_000, // Data is fresh for 30 seconds
+    refetchInterval: 30_000, // Poll every 30 seconds while tab is active
+    refetchOnWindowFocus: false, // Don't refetch when user tabs back
+    placeholderData: keepPreviousData, // Show stale data while refetching
   });
 }

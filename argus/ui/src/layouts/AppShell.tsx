@@ -13,6 +13,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Sidebar } from './Sidebar';
 import { MobileNav } from './MobileNav';
 import { useLiveStore } from '../stores/live';
+import { usePrefetchDashboard } from '../hooks/usePrefetchDashboard';
 import { SymbolDetailPanel } from '../features/symbol';
 import { pageVariants } from '../utils/motion';
 
@@ -30,6 +31,9 @@ export function AppShell({ paperMode = true }: AppShellProps) {
   const connect = useLiveStore((state) => state.connect);
   const disconnect = useLiveStore((state) => state.disconnect);
   const mainRef = useRef<HTMLElement>(null);
+
+  // Prefetch Dashboard data on app load for instant card rendering
+  usePrefetchDashboard();
 
   // Cache the current outlet element by its pathname.
   // When AnimatePresence clones the exiting element, retrieving from cache

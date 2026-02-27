@@ -14,6 +14,7 @@
  */
 
 import { useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { BookOpen } from 'lucide-react';
 import { AnimatedPage } from '../components/AnimatedPage';
 import { Card } from '../components/Card';
@@ -30,12 +31,27 @@ import { PatternDetail } from '../features/patterns/PatternDetail';
 const TABS = ['overview', 'performance', 'backtest', 'trades', 'intelligence'];
 
 export function PatternLibraryPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const { data: strategiesData, isLoading } = useStrategies();
   const { selectedStrategyId, setSelectedStrategy, filters, setFilter, activeTab, setActiveTab } = usePatternLibraryUI();
   const isDesktop = useMediaQuery('(min-width: 1024px)');
 
   const strategies = strategiesData?.strategies ?? [];
   const sortedStrategies = useSortedStrategies(strategies);
+
+  // Handle strategy query param on mount
+  useEffect(() => {
+    const strategyParam = searchParams.get('strategy');
+    if (strategyParam && strategies.length > 0) {
+      // Verify the strategy exists before selecting
+      const strategyExists = strategies.some((s) => s.strategy_id === strategyParam);
+      if (strategyExists) {
+        setSelectedStrategy(strategyParam);
+        // Clear the query param after selecting
+        setSearchParams({}, { replace: true });
+      }
+    }
+  }, [searchParams, strategies, setSelectedStrategy, setSearchParams]);
 
   // On tablet/mobile, selecting a strategy shows detail view (hides grid)
   const showDetail = selectedStrategyId !== null;

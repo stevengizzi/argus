@@ -10,7 +10,8 @@
  * - Tooltip: strategy name, deployed amount, position count, aggregate P&L
  */
 
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { usePositions } from '../../hooks/usePositions';
 import { useAccount } from '../../hooks/useAccount';
 import { formatCurrency } from '../../utils/format';
@@ -31,6 +32,13 @@ interface TooltipData {
   aggregatePnl: number;
   x: number;
   y: number;
+  segmentHeight: number;
+}
+
+interface TooltipPosition {
+  left: number;
+  top: number;
+  flipped: boolean;
 }
 
 interface StrategySegment {
@@ -55,12 +63,15 @@ interface AvailableSegment {
 type Segment = StrategySegment | AvailableSegment;
 
 export function StrategyDeploymentBar() {
+  const navigate = useNavigate();
   const { data: positionsData, isLoading: positionsLoading } = usePositions();
   const { data: accountData, isLoading: accountLoading } = useAccount();
 
   const [tooltip, setTooltip] = useState<TooltipData | null>(null);
+  const [tooltipPosition, setTooltipPosition] = useState<TooltipPosition | null>(null);
   const [containerWidth, setContainerWidth] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
+  const tooltipRef = useRef<HTMLDivElement>(null);
 
   // Measure container width
   useEffect(() => {
@@ -208,12 +219,60 @@ export function StrategyDeploymentBar() {
       aggregatePnl: stratSeg.aggregatePnl,
       x: rect.left + rect.width / 2,
       y: rect.top,
+      segmentHeight: rect.height,
     });
   };
 
   const handleMouseLeave = () => {
     setTooltip(null);
+    setTooltipPosition(null);
   };
+
+  // Handle segment clicks for navigation
+  const handleSegmentClick = (segment: Segment) => {
+    if (segment.strategyId === 'available') {
+      // Navigate to Orchestrator page for available capital
+      navigate('/orchestrator');
+    } else {
+      // Navigate to Pattern Library with strategy pre-selected
+      navigate(`/patterns?strategy=${segment.strategyId}`);
+    }
+  };
+
+  // Calculate tooltip position with viewport collision detection
+  useLayoutEffect(() => {
+    if (!tooltip || !tooltipRef.current) {
+      setTooltipPosition(null);
+      return;
+    }
+
+    const tooltipRect = tooltipRef.current.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const minMargin = 8;
+    const gap = 8;
+
+    // Start with position above the segment
+    let left = tooltip.x;
+    let top = tooltip.y - gap;
+    let flipped = false;
+
+    // Check if tooltip would overflow top of viewport
+    if (top - tooltipRect.height < minMargin) {
+      // Flip below the segment
+      top = tooltip.y + tooltip.segmentHeight + gap;
+      flipped = true;
+    }
+
+    // Check horizontal bounds
+    const halfWidth = tooltipRect.width / 2;
+    if (left - halfWidth < minMargin) {
+      left = minMargin + halfWidth;
+    } else if (left + halfWidth > viewportWidth - minMargin) {
+      left = viewportWidth - minMargin - halfWidth;
+    }
+
+    setTooltipPosition({ left, top, flipped });
+  }, [tooltip]);
 
   // Loading state
   if (positionsLoading || accountLoading) {
@@ -288,9 +347,10 @@ export function StrategyDeploymentBar() {
           {segmentRects.map((seg) => (
             <g
               key={seg.strategyId}
-              className={seg.strategyId !== 'available' ? 'cursor-pointer' : ''}
-              onMouseEnter={seg.strategyId !== 'available' ? (e) => handleMouseEnter(seg, e) : undefined}
-              onMouseLeave={seg.strategyId !== 'available' ? handleMouseLeave : undefined}
+              className="cursor-pointer"
+              onMouseEnter={(e) => handleMouseEnter(seg, e)}
+              onMouseLeave={handleMouseLeave}
+              onClick={() => handleSegmentClick(seg)}
             >
               <rect
                 x={`${seg.x}%`}
@@ -298,7 +358,7 @@ export function StrategyDeploymentBar() {
                 width={`${seg.widthPct}%`}
                 height={BAR_HEIGHT}
                 fill={seg.color}
-                className={seg.strategyId !== 'available' ? 'transition-opacity hover:opacity-80' : ''}
+                className="transition-all hover:brightness-110"
               />
               {/* Label */}
               {containerWidth > 0 && getLabel(seg.widthPct, seg) && (
@@ -324,11 +384,15 @@ export function StrategyDeploymentBar() {
       {/* Tooltip */}
       {tooltip && (
         <div
+          ref={tooltipRef}
           className="fixed z-50 bg-argus-surface border border-argus-border rounded px-2 py-1.5 text-xs shadow-lg pointer-events-none"
           style={{
-            left: tooltip.x,
-            top: tooltip.y - 8,
-            transform: 'translate(-50%, -100%)',
+            left: tooltipPosition?.left ?? tooltip.x,
+            top: tooltipPosition?.top ?? tooltip.y - 8,
+            transform: tooltipPosition
+              ? `translate(-50%, ${tooltipPosition.flipped ? '0%' : '-100%'})`
+              : 'translate(-50%, -100%)',
+            opacity: tooltipPosition ? 1 : 0,
           }}
         >
           <div className="font-medium text-argus-text">{tooltip.name}</div>

@@ -6,8 +6,14 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { StrategyDeploymentBar } from './StrategyDeploymentBar';
 import type { PositionsResponse, AccountResponse } from '../../api/types';
+
+// Wrapper component for Router context
+const renderWithRouter = (ui: React.ReactElement) => {
+  return render(<MemoryRouter>{ui}</MemoryRouter>);
+};
 
 // Mock usePositions hook
 const mockUsePositions = vi.fn();
@@ -114,7 +120,7 @@ describe('StrategyDeploymentBar', () => {
       isLoading: false,
     });
 
-    const { container } = render(<StrategyDeploymentBar />);
+    const { container } = renderWithRouter(<StrategyDeploymentBar />);
 
     // Check SVG is rendered
     const svg = container.querySelector('svg');
@@ -135,7 +141,7 @@ describe('StrategyDeploymentBar', () => {
       isLoading: false,
     });
 
-    render(<StrategyDeploymentBar />);
+    renderWithRouter(<StrategyDeploymentBar />);
 
     expect(screen.getByText('No capital deployed')).toBeInTheDocument();
   });
@@ -150,7 +156,7 @@ describe('StrategyDeploymentBar', () => {
       isLoading: true,
     });
 
-    const { container } = render(<StrategyDeploymentBar />);
+    const { container } = renderWithRouter(<StrategyDeploymentBar />);
 
     // Check for animate-pulse skeleton
     const skeleton = container.querySelector('.animate-pulse');
@@ -167,7 +173,7 @@ describe('StrategyDeploymentBar', () => {
       isLoading: false,
     });
 
-    const { container } = render(<StrategyDeploymentBar />);
+    const { container } = renderWithRouter(<StrategyDeploymentBar />);
 
     // Should have segments grouped by strategy (2 strategies + available)
     // orb_breakout: pos-1 + pos-2
@@ -191,7 +197,7 @@ describe('StrategyDeploymentBar', () => {
       isLoading: false,
     });
 
-    render(<StrategyDeploymentBar />);
+    renderWithRouter(<StrategyDeploymentBar />);
 
     // Should show empty state when equity is zero
     expect(screen.getByText('No capital deployed')).toBeInTheDocument();

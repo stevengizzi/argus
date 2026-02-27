@@ -14,6 +14,8 @@ export function useAccount() {
   return useQuery<AccountResponse, Error>({
     queryKey: ['account'],
     queryFn: getAccount,
-    refetchInterval: 5_000, // 5 seconds
+    staleTime: 5_000, // Data is fresh for 5 seconds
+    refetchInterval: 5_000, // Poll every 5 seconds while tab is active
+    refetchOnWindowFocus: false, // Don't refetch when user tabs back
   });
 }

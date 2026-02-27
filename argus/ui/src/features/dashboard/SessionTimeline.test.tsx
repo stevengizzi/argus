@@ -6,17 +6,23 @@
 
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { SessionTimeline } from './SessionTimeline';
+
+// Wrapper component for Router context
+const renderWithRouter = (ui: React.ReactElement) => {
+  return render(<MemoryRouter>{ui}</MemoryRouter>);
+};
 
 describe('SessionTimeline', () => {
   it('renders Session Timeline header', () => {
-    render(<SessionTimeline />);
+    renderWithRouter(<SessionTimeline />);
 
     expect(screen.getByText('Session Timeline')).toBeInTheDocument();
   });
 
   it('renders SVG timeline', () => {
-    const { container } = render(<SessionTimeline />);
+    const { container } = renderWithRouter(<SessionTimeline />);
 
     // Check SVG is rendered
     const svg = container.querySelector('svg');
@@ -24,7 +30,7 @@ describe('SessionTimeline', () => {
   });
 
   it('renders time labels (9:30, 12PM, 4PM)', () => {
-    render(<SessionTimeline />);
+    renderWithRouter(<SessionTimeline />);
 
     expect(screen.getByText('9:30')).toBeInTheDocument();
     expect(screen.getByText('12PM')).toBeInTheDocument();
@@ -32,7 +38,7 @@ describe('SessionTimeline', () => {
   });
 
   it('renders strategy bars with letters', () => {
-    render(<SessionTimeline />);
+    renderWithRouter(<SessionTimeline />);
 
     // Strategy letters should be visible
     expect(screen.getByText('O')).toBeInTheDocument(); // ORB
@@ -42,7 +48,7 @@ describe('SessionTimeline', () => {
   });
 
   it('renders strategy window rects in SVG', () => {
-    const { container } = render(<SessionTimeline />);
+    const { container } = renderWithRouter(<SessionTimeline />);
 
     // Should have multiple rect elements for strategy bars
     const rects = container.querySelectorAll('svg rect');
@@ -51,7 +57,7 @@ describe('SessionTimeline', () => {
   });
 
   it('renders status text based on time', () => {
-    render(<SessionTimeline />);
+    renderWithRouter(<SessionTimeline />);
 
     // Should have some status text (varies based on current time)
     // Could be: "Pre-market...", "Active: O, S, V", "No strategies active", "After hours..."

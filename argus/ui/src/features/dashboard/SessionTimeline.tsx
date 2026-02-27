@@ -13,7 +13,10 @@
  */
 
 import { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { ArrowRight } from 'lucide-react';
 import { Card } from '../../components/Card';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { getStrategyColor } from '../../utils/strategyConfig';
 
 // Trading day boundaries (minutes from midnight ET)
@@ -102,7 +105,10 @@ const TIMELINE_Y = 20;
 const LABEL_Y = 55;
 
 export function SessionTimeline() {
+  const navigate = useNavigate();
   const [currentMinute, setCurrentMinute] = useState(getCurrentMinutesET);
+  const [isHovered, setIsHovered] = useState(false);
+  const isTablet = useMediaQuery('(max-width: 1023px)');
 
   // Update current time every 30 seconds
   useEffect(() => {
@@ -123,19 +129,35 @@ export function SessionTimeline() {
     ).map((s) => s.id);
   }, [currentMinute]);
 
-  // Time labels to show
-  const timeLabels = [
-    { minute: MARKET_OPEN, label: '9:30' },
-    { minute: 12 * 60, label: '12PM' },
-    { minute: MARKET_CLOSE, label: '4PM' },
-  ];
+  // Time labels - use shorter labels at tablet width to avoid overlap
+  const timeLabels = useMemo(() => [
+    { minute: MARKET_OPEN, label: isTablet ? '9:30' : '9:30', anchor: 'start' as const },
+    { minute: 12 * 60, label: isTablet ? '12' : '12PM', anchor: 'middle' as const, offset: isTablet ? 8 : 0 },
+    { minute: MARKET_CLOSE, label: isTablet ? '4' : '4PM', anchor: 'end' as const },
+  ], [isTablet]);
+
+  const handleClick = () => {
+    navigate('/orchestrator');
+  };
 
   return (
-    <Card className="h-full flex flex-col">
+    <Card
+      className="h-full flex flex-col cursor-pointer transition-colors hover:border-argus-border-bright"
+      onClick={handleClick}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
       {/* Header */}
-      <h3 className="text-xs font-medium uppercase tracking-wider text-argus-text-dim mb-2">
-        Session Timeline
-      </h3>
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="text-xs font-medium uppercase tracking-wider text-argus-text-dim">
+          Session Timeline
+        </h3>
+        <ArrowRight
+          className={`w-3.5 h-3.5 text-argus-text-dim transition-opacity ${
+            isHovered ? 'opacity-100' : 'opacity-0'
+          }`}
+        />
+      </div>
 
       {/* SVG Timeline */}
       <div className="flex-1 min-h-0">
@@ -212,13 +234,14 @@ export function SessionTimeline() {
           )}
 
           {/* Time labels */}
-          {timeLabels.map(({ minute, label }) => (
+          {timeLabels.map(({ minute, label, anchor, offset }) => (
             <text
               key={minute}
               x={`${minuteToPercent(minute)}%`}
               y={LABEL_Y}
-              textAnchor={minute === MARKET_OPEN ? 'start' : minute === MARKET_CLOSE ? 'end' : 'middle'}
-              className="fill-argus-text-dim text-[10px]"
+              dx={offset ?? 0}
+              textAnchor={anchor}
+              className={`fill-argus-text-dim ${isTablet ? 'text-[9px]' : 'text-[10px]'}`}
             >
               {label}
             </text>
