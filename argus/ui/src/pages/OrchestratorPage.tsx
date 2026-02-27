@@ -5,7 +5,8 @@
  * - RegimePanel: Session phase, market regime, indicator breakdown
  * - StrategyCoverageTimeline: Strategy operating windows visualization
  * - CapitalAllocation: Reused from dashboard (tracks donut/bars view)
- * - Placeholder sections for Session 6-7 components
+ * - StrategyOperationsGrid: Per-strategy operational status cards
+ * - Placeholder sections for Session 7 components (DecisionTimeline, GlobalControls)
  *
  * Uses stagger animation pattern from DashboardPage.
  */
@@ -17,7 +18,7 @@ import { Card } from '../components/Card';
 import { CardHeader } from '../components/CardHeader';
 import { Skeleton } from '../components/Skeleton';
 import { CapitalAllocation } from '../components/CapitalAllocation';
-import { RegimePanel, StrategyCoverageTimeline } from '../features/orchestrator';
+import { RegimePanel, StrategyCoverageTimeline, StrategyOperationsGrid } from '../features/orchestrator';
 import { useOrchestratorStatus } from '../hooks';
 import { staggerContainer, staggerItem } from '../utils/motion';
 
@@ -111,14 +112,9 @@ export function OrchestratorPage() {
           />
         </motion.div>
 
-        {/* Section 4: Strategy Operations — placeholder for Session 6 */}
+        {/* Section 4: Strategy Operations */}
         <motion.div variants={staggerItem}>
-          <Card>
-            <CardHeader title="Strategy Operations" subtitle="Session 6" />
-            <div className="flex items-center justify-center h-32 text-sm text-argus-text-dim">
-              Per-strategy cards with controls — coming in Session 6
-            </div>
-          </Card>
+          <StrategyOperationsGrid />
         </motion.div>
 
         {/* Section 5: Decision Timeline — placeholder for Session 7 */}
