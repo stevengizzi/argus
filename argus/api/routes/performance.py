@@ -455,6 +455,8 @@ async def get_correlation(
 async def get_performance(
     period: Literal["today", "week", "month", "all"],
     strategy_id: str | None = Query(default=None, description="Filter by strategy ID"),
+    date_from: str | None = Query(default=None, description="Override start date (ISO format)"),
+    date_to: str | None = Query(default=None, description="Override end date (ISO format)"),
     _auth: dict = Depends(require_auth),  # noqa: B008
     state: AppState = Depends(get_app_state),  # noqa: B008
 ) -> PerformanceResponse:
@@ -469,6 +471,8 @@ async def get_performance(
             - "month": 1st of month to today
             - "all": All-time (no date filter)
         strategy_id: Optional filter to get metrics for a specific strategy only.
+        date_from: Override start date (ISO format, e.g., "2026-02-01").
+        date_to: Override end date (ISO format, e.g., "2026-02-28").
 
     Returns:
         PerformanceResponse with metrics, daily P&L, and per-strategy breakdown.
@@ -480,17 +484,20 @@ async def get_performance(
     now_utc = state.clock.now() if state.clock is not None else datetime.now(UTC)
     now_et = now_utc.astimezone(ET_TZ)
 
-    # Get date range
-    try:
-        date_from, date_to = _get_date_range(period, now_et)
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e)) from e
+    # Use custom date range if provided, otherwise compute from period
+    if date_from is not None and date_to is not None:
+        computed_from, computed_to = date_from, date_to
+    else:
+        try:
+            computed_from, computed_to = _get_date_range(period, now_et)
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e)) from e
 
     # Fetch trades for the period (use high limit to get all)
     trades = await state.trade_logger.query_trades(
         strategy_id=strategy_id,
-        date_from=date_from,
-        date_to=date_to,
+        date_from=computed_from,
+        date_to=computed_to,
         limit=10000,
         offset=0,
     )
@@ -500,8 +507,8 @@ async def get_performance(
 
     # Fetch daily P&L
     daily_pnl_data = await state.trade_logger.get_daily_pnl(
-        date_from=date_from,
-        date_to=date_to,
+        date_from=computed_from,
+        date_to=computed_to,
         strategy_id=strategy_id,
     )
     daily_pnl = [
@@ -536,8 +543,8 @@ async def get_performance(
     # Build response
     return PerformanceResponse(
         period=period,
-        date_from=date_from or "",
-        date_to=date_to or "",
+        date_from=computed_from or "",
+        date_to=computed_to or "",
         metrics=_metrics_to_data(overall_metrics),
         daily_pnl=daily_pnl,
         by_strategy=by_strategy,

@@ -20,10 +20,10 @@
  * - data contains placeholder (previous period's data) during transitions
  */
 
-import { Component, type ReactNode, useState } from 'react';
+import { Component, type ReactNode, useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { TrendingUp } from 'lucide-react';
-import { usePerformance } from '../hooks/usePerformance';
+import { usePerformance, usePreviousPeriodPerformance } from '../hooks/usePerformance';
 import { Card } from '../components/Card';
 import { SegmentedTab } from '../components/SegmentedTab';
 import {
@@ -102,7 +102,21 @@ export function PerformancePage() {
   // Tab state
   const [activeTab, setActiveTab] = useState<PerformanceTab>('overview');
 
+  // Comparison state
+  const [comparisonEnabled, setComparisonEnabled] = useState(false);
+
   const { data, isLoading, error, isFetching } = usePerformance(period);
+
+  // Fetch previous period data for comparison (only when enabled and not "all" period)
+  const { data: comparisonData } = usePreviousPeriodPerformance(
+    period,
+    comparisonEnabled && period !== 'all'
+  );
+
+  // Handle comparison toggle from EquityCurve
+  const handleComparisonToggle = useCallback((enabled: boolean) => {
+    setComparisonEnabled(enabled);
+  }, []);
 
   // First load (no cache at all) — show skeleton
   // With keepPreviousData, isLoading is only true when there's truly no data
@@ -185,7 +199,13 @@ export function PerformancePage() {
 
       {/* Tab content */}
       {activeTab === 'overview' && (
-        <OverviewTabContent data={data} isFetching={isFetching} />
+        <OverviewTabContent
+          data={data}
+          isFetching={isFetching}
+          period={period}
+          comparisonData={comparisonData?.daily_pnl}
+          onComparisonToggle={handleComparisonToggle}
+        />
       )}
 
       {activeTab === 'heatmaps' && (
@@ -243,9 +263,21 @@ function PageHeader({ selectedPeriod, onPeriodChange, activeTab, onTabChange }: 
 interface OverviewTabProps {
   data: NonNullable<ReturnType<typeof usePerformance>['data']>;
   isFetching: boolean;
+  period: PerformancePeriod;
+  comparisonData?: Array<{ date: string; pnl: number; trades: number }>;
+  onComparisonToggle?: (enabled: boolean) => void;
 }
 
-function OverviewTabContent({ data, isFetching }: OverviewTabProps) {
+function OverviewTabContent({
+  data,
+  isFetching,
+  period,
+  comparisonData,
+  onComparisonToggle,
+}: OverviewTabProps) {
+  // Show comparison toggle for all periods except "all"
+  const showComparison = period !== 'all';
+
   return (
     <motion.div
       className="space-y-4 md:space-y-6"
@@ -269,7 +301,14 @@ function OverviewTabContent({ data, isFetching }: OverviewTabProps) {
             </Card>
           }
         >
-          <EquityCurve dailyPnl={data.daily_pnl} isTransitioning={isFetching} />
+          <EquityCurve
+            dailyPnl={data.daily_pnl}
+            isTransitioning={isFetching}
+            period={period}
+            showComparison={showComparison}
+            comparisonData={comparisonData}
+            onComparisonToggle={onComparisonToggle}
+          />
         </ChartErrorBoundary>
       </motion.div>
       <motion.div variants={staggerItem}>
@@ -375,7 +414,7 @@ function ReplayTabContent() {
       <Card>
         <div className="text-center py-12">
           <p className="text-argus-text-dim">
-            Trade Replay coming in Session 9
+            Trade Replay loading in next session
           </p>
         </div>
       </Card>

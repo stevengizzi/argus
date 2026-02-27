@@ -185,14 +185,35 @@ export async function getTradesByIds(ids: string[]): Promise<TradesBatchResponse
 }
 
 // Performance endpoints
+export interface PerformanceQueryOptions {
+  strategyId?: string;
+  /** Override start date (ISO format, e.g., "2026-02-01") */
+  dateFrom?: string;
+  /** Override end date (ISO format, e.g., "2026-02-28") */
+  dateTo?: string;
+}
+
 export async function getPerformance(
   period: PerformancePeriod,
-  strategyId?: string
+  strategyIdOrOptions?: string | PerformanceQueryOptions
 ): Promise<PerformanceResponse> {
   const searchParams = new URLSearchParams();
-  if (strategyId) {
-    searchParams.set('strategy_id', strategyId);
+
+  // Handle overloaded signature
+  if (typeof strategyIdOrOptions === 'string') {
+    searchParams.set('strategy_id', strategyIdOrOptions);
+  } else if (strategyIdOrOptions) {
+    if (strategyIdOrOptions.strategyId) {
+      searchParams.set('strategy_id', strategyIdOrOptions.strategyId);
+    }
+    if (strategyIdOrOptions.dateFrom) {
+      searchParams.set('date_from', strategyIdOrOptions.dateFrom);
+    }
+    if (strategyIdOrOptions.dateTo) {
+      searchParams.set('date_to', strategyIdOrOptions.dateTo);
+    }
   }
+
   const query = searchParams.toString();
   return fetchWithAuth<PerformanceResponse>(`/performance/${period}${query ? `?${query}` : ''}`);
 }
