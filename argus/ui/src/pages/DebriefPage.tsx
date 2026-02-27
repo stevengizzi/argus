@@ -15,7 +15,7 @@ import { AnimatedPage } from '../components/AnimatedPage';
 import { Card } from '../components/Card';
 import { SegmentedTab, type SegmentedTabSegment } from '../components/SegmentedTab';
 import { useDebriefUI, type DebriefSection } from '../stores/debriefUI';
-// DebriefSkeleton is exported from features/debrief and will be used by tab components in later sessions
+import { BriefingList } from '../features/debrief/briefings';
 import { DURATION, EASE } from '../utils/motion';
 
 const SECTIONS: SegmentedTabSegment[] = [
@@ -74,28 +74,12 @@ export function DebriefPage() {
           animate="animate"
           exit="exit"
         >
-          {activeSection === 'briefings' && <BriefingsPlaceholder />}
+          {activeSection === 'briefings' && <BriefingList />}
           {activeSection === 'research' && <ResearchPlaceholder />}
           {activeSection === 'journal' && <JournalPlaceholder />}
         </motion.div>
       </AnimatePresence>
     </AnimatedPage>
-  );
-}
-
-/**
- * Placeholder for Briefings tab (Session 5 will implement BriefingList).
- */
-function BriefingsPlaceholder() {
-  return (
-    <Card>
-      <div className="flex flex-col items-center justify-center py-12 text-center">
-        <p className="text-argus-text-dim mb-2">Briefings tab placeholder</p>
-        <p className="text-sm text-argus-text-dim">
-          Pre-market and end-of-day briefings will appear here.
-        </p>
-      </div>
-    </Card>
   );
 }
 
