@@ -11,7 +11,7 @@ Phase 1 sprint plan: @docs/07_PHASE1_SPRINT_PLAN.md
 ## Current State
 
 **Structure:** Two parallel tracks (DEC-079, February 19, 2026). Expanded to AI-enhanced platform (DEC-163, February 26, 2026).
-- **Build Track:** System construction at development velocity. Sprints 1–21a complete (1,558 pytest tests + 70 Vitest). Sprint 21b (Orchestrator page) is NEXT.
+- **Build Track:** System construction at development velocity. Sprints 1–21b complete (1,597 pytest tests + 100 Vitest). Sprint 21c (The Debrief page) is NEXT.
 - **Validation Track:** Paper trading ACTIVE on Alpaca IEX (system stability only — DEC-081). Signal accuracy validation pending Databento activation. All pre-Databento backtests require re-validation (DEC-132). Migrates to IBKR paper after IBKR account approved (U24619949, submitted Feb 21).
 
 Active sprint plan: `docs/10_PHASE3_SPRINT_PLAN.md` (covers both tracks).
@@ -29,9 +29,20 @@ Active sprint plan: `docs/10_PHASE3_SPRINT_PLAN.md` (covers both tracks).
 - ARGUS expanded to AI-enhanced trading intelligence platform (15+ patterns, Setup Quality Engine, Order Flow Model, NLP Catalyst Pipeline, Dynamic Position Sizer, Learning Loop, Pre-Market Engine).
 - Seven-page Command Center (DEC-169): Dashboard, Trade Log, Performance, Orchestrator (NEW), Pattern Library (NEW), The Debrief (NEW), System.
 - Contextual AI Copilot (DEC-170): Claude accessible from every page via slide-out chat panel. Context-aware. Actions through approval workflow.
-- Sprint 21 split into 21a–21d (DEC-171): 21a Pattern Library page, 21b Orchestrator page, 21c The Debrief page, 21d Dashboard+Performance+System+nav+Copilot shell.
+- Sprint 21 split into 21a–21d (DEC-171): 21a Pattern Library page ✅, 21b Orchestrator page ✅, 21c The Debrief page (NEXT), 21d Dashboard+Performance+System+nav+Copilot shell.
 - Free catalyst sources first (DEC-164): SEC EDGAR + Finnhub + FMP. Benzinga deferred.
 - Full roadmap: `docs/research/ARGUS_Expanded_Roadmap.md`.
+
+**Sprint 21b Results (Orchestrator Page — Feb 27):**
+- Orchestrator page: 6th Command Center page. Hero row layout (DEC-192): SessionOverview + RegimePanel stacked left, CapitalAllocation donut right.
+- RegimePanel gauge redesign (DEC-195): Visual gauge bars for Trend/Vol/Momentum with marker dots. Regime badge hero. Session phase badge in page header.
+- StrategyCoverageTimeline (custom SVG, DEC-188). StrategyOperationsGrid (2-col cards, allocation bars, throttle status, pause/resume).
+- DecisionTimeline (newest-first, DEC-194). GlobalControls (rebalance, flatten, pause with ConfirmModal).
+- Throttle override (DEC-187): duration + mandatory reason, in-memory expiry, logged to decisions.
+- Strategy config consolidation (DEC-193): shared strategyConfig.ts replaces 3 duplicated maps.
+- API: session_phase, pre_market_complete, per-strategy throttle metrics, override endpoint. Client-side regime scoring (DEC-191).
+- Nav updated to 6 pages (DEC-189). Keyboard shortcuts 1–6.
+- 1597 tests (pytest, 39 new) + 100 (Vitest, 30 new). 13 sessions. Code review passed (DEC-192–195).
 
 **Sprint 20 Results (Afternoon Momentum — Feb 26):**
 - AfternoonMomentumStrategy: standalone from BaseStrategy (DEC-152), 5-state machine (DEC-155), consolidation high/low channel + ATR filter (DEC-153). T1=1.0R/T2=2.0R, dynamic time stop compressed to force_close (DEC-157).

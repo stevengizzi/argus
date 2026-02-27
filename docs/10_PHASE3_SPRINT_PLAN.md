@@ -142,6 +142,7 @@ inform Build Track priorities.
 | 16 | UX Polish | Desktop/PWA, Framer Motion, skeleton loading, sparklines, trade detail panel, emergency controls, CSV export, PWA, Tauri v2 (DEC-107, DEC-111–112) | 942 | Feb 24 |
 | 17 | Orchestrator V1 | Orchestrator, RegimeClassifier, PerformanceThrottler, CorrelationTracker, DEF-016 resolved, 3 API endpoints, 4 WS events, UI components (DEC-113–119) | 1,146 | Feb 24 |
 | 21a | Command Center | Pattern Library page (5th page), SymbolDetailPanel, SlideInPanel, strategy metadata enrichment, spec auto-discovery (DEC-172–183) | 1,558 + 70 | Feb 27 |
+| 21b | Command Center | Orchestrator page (6th page), hero row layout, regime gauges, strategy operations, decision timeline, throttle override, session phase (DEC-186–195) | 1,597 + 100 | Feb 27 |
 
 ### Build Track Queue
 
@@ -337,16 +338,17 @@ per sprint velocity.
 - **Dependencies added:** react-markdown, remark-gfm
 - 1558 tests (pytest, 36 new) + 70 (Vitest, 22 new). 9 implementation sessions. Code review passed. DEC-172–183.
 
-#### Sprint 21b — Orchestrator Page (DEC-169, DEC-171, DEC-186–191)
-**Status:** IN PROGRESS
-**Target:** ~8 sessions, ~1578 pytest + ~78 Vitest
-**Scope:**
-- **Orchestrator page** (6th page): Real-time operational nerve center. Vertical flow layout (DEC-186). Sections: RegimePanel (session phase, regime badge, indicator breakdown DEC-190/191), StrategyCoverageTimeline (custom SVG DEC-188), CapitalAllocation (reuse), StrategyOperationsGrid (per-strategy cards with allocation, throttle detail, controls), DecisionTimeline (chronological decision log), GlobalControls (rebalance, emergency flatten/pause).
-- Throttle override: duration + reason + confirmation, in-memory _override_until, logged to decision log (DEC-187).
-- API extensions: session_phase, pre_market_complete, per-strategy operating_window, throttle metrics (consecutive_losses, rolling_sharpe, drawdown_pct), override status. Date filter on decisions endpoint. New POST override endpoint.
-- Dev mode: ORB Scalp throttled (REDUCE), ~15 decision entries, operating windows, session phase.
-- Nav: 6 pages, abbreviated mobile labels (DEC-189). Keyboard shortcuts 1–6.
-- Tests: ~20 new pytest, ~8 new Vitest.
+#### Sprint 21b — Orchestrator Page ✅ COMPLETE (Feb 27)
+**Delivered:**
+- **Orchestrator page (DEC-169, DEC-171):** NEW 6th page. Hero row layout (DEC-192): SessionOverview + RegimePanel stacked left, CapitalAllocation donut right. StrategyCoverageTimeline (custom SVG, DEC-188). StrategyOperationsGrid (2-col cards with allocation bars, throttle status, pause/resume). DecisionTimeline (newest-first, DEC-194). GlobalControls (force rebalance, emergency flatten/pause with ConfirmModal).
+- **RegimePanel gauge redesign (DEC-195):** Visual gauge bars for Trend/Vol/Momentum with positioned marker dots on red→yellow→green gradient. Regime badge as hero element. Session phase badge extracted to page header (`SessionPhaseBadge`).
+- **Throttle override (DEC-187):** Duration dropdown (30m/1h/rest-of-day) + mandatory reason textarea. In-memory `_override_until` with time-based expiry. Logged to decision log.
+- **Strategy config consolidation (DEC-193):** Shared `strategyConfig.ts` with `STRATEGY_DISPLAY` record. All components import from single source.
+- **ConfirmModal extraction:** Reusable confirmation dialog extracted from GlobalControls.
+- **API extensions:** Session phase, pre_market_complete, per-strategy operating_window/throttle metrics/override status. Date filter on decisions endpoint. POST override endpoint. Client-side regime input scoring (DEC-191).
+- **Dev mode:** ORB Scalp throttled (REDUCE), ~15 decision entries, operating windows, session phase. Four-strategy mock data.
+- **Nav:** 6 pages, abbreviated mobile labels (DEC-189). Keyboard shortcuts 1–6.
+- 1597 tests (pytest, 39 new) + 100 (Vitest, 30 new). 13 sessions (8 implementation + 1 review + 4 polish). Code review passed. DEC-186–195.
 - **Deferred to 21d:** PreMarketCard/EodSummaryCard as dedicated components, multi-day regime history, decision filtering, "More" menu for mobile nav.
 
 #### Sprint 21c — The Debrief Page (DEC-169, DEC-171)

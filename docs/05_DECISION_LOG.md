@@ -2121,5 +2121,51 @@ Each entry follows this format:
 
 ---
 
+### DEC-192 | Orchestrator Hero Row Layout
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-27 |
+| **Sprint** | 21b (review) |
+| **Decision** | Orchestrator page top section uses a 2-column hero row: left column stacks SessionOverview (aggregated daily metrics) + RegimePanel, right column holds CapitalAllocation donut. Left column uses flex-1 on RegimePanel to match right column height. |
+| **Rationale** | Answers three key questions above the fold: how's the day going, what's the market doing, where's the capital. Previous layout had CapitalAllocation + SessionOverview in a separate row below the timeline, wasting vertical space. Stacking SessionOverview + RegimePanel naturally matches donut height. Mobile stacks: SessionOverview → RegimePanel → CapitalAllocation. |
+| **Alternatives** | (1) Three separate full-width rows (too much scrolling), (2) CapitalAllocation full-width with bars view (wasted horizontal space for donut) |
+| **Status** | Active |
+
+---
+
+### DEC-193 | Strategy Display Config Consolidation
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-27 |
+| **Sprint** | 21b (review) |
+| **Decision** | Unified `strategyConfig.ts` with `STRATEGY_DISPLAY` record containing name, shortName, letter, color, tailwindColor, badgeId for all strategies. Helper functions: `getStrategyDisplay()`, `getStrategyBorderClass()`, `getStrategyBarClass()`, `getStrategyColor()`. All components import from shared config. Tailwind classes kept as full static strings for purge compatibility. |
+| **Rationale** | Strategy colors and names were duplicated across StrategyCoverageTimeline, StrategyOperationsCard, and ThrottleOverrideDialog with slight inconsistencies. Single source of truth scales to 15+ strategies without per-component updates. |
+| **Status** | Active |
+
+---
+
+### DEC-194 | Decision Log Newest-First Ordering
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-27 |
+| **Sprint** | 21b (review) |
+| **Decision** | DecisionTimeline sorts newest-first so latest orchestrator decisions appear at top without scrolling. Subtitle shows "X today · newest first" to indicate ordering. |
+| **Rationale** | Orchestrator page is an operational dashboard — the question is always "what just happened?" Chronological reading order suits The Debrief page (post-session review), not live operations. |
+| **Status** | Active |
+
+---
+
+### DEC-195 | Regime Card Gauge Redesign + Session Phase in Header
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-27 |
+| **Sprint** | 21b (review) |
+| **Decision** | RegimePanel redesigned: regime badge as hero element, three visual gauge bars (Trend, Vol, Momentum) with positioned marker dots on red→yellow→green gradient. Normalization: Trend (-2 to +2 → 0-1), Volatility (0-50% inverted, low vol = green/right), Momentum (-5% to +5% ROC → 0-1). Scale labels: Bear/Bull, Crisis/Calm, Bearish/Bullish. Session phase badge extracted to `SessionPhaseBadge` component and moved to page header next to "Orchestrator" title with countdown timer. |
+| **Rationale** | Previous text-row layout with check/X icons was a data dump — no instant gut feel. Gauge bars provide immediate visual read of market state. Session phase applies to entire page, not just regime card. |
+| **Alternatives** | (1) Keep text rows with better formatting (rejected — still requires reading), (2) Circular gauges/dials (rejected — take more horizontal space than linear bars) |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
 *New decisions are appended chronologically as the project progresses.*
