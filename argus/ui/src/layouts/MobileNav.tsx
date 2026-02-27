@@ -1,52 +1,40 @@
 /**
  * Bottom navigation bar for mobile and tablet (<1024px).
  *
- * Shows 7 tab items with icons and labels, with system status dot overlay.
+ * Shows 5 primary tabs + More bottom sheet.
+ * Primary: Dashboard, Trades, Orchestrator, Patterns, More
+ * More sheet: Performance, Debrief, System
+ *
+ * Sprint 21d — Navigation restructure (DEC-211, DEC-216).
  */
 
-import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, ScrollText, TrendingUp, BookOpen, Gauge, GraduationCap, Activity } from 'lucide-react';
-import { useLiveStore } from '../stores/live';
+import { useState } from 'react';
+import { NavLink, useLocation } from 'react-router-dom';
+import { LayoutDashboard, ScrollText, Gauge, BookOpen, MoreHorizontal } from 'lucide-react';
+import { MoreSheet } from './MoreSheet';
 
-// Navigation items in order - must match Sidebar.tsx for consistent keyboard shortcuts (1-7)
+// Routes that live in the More sheet
+const MORE_ROUTES = ['/performance', '/debrief', '/system'];
+
+// Primary navigation items (5 tabs)
 const NAV_ITEMS: Array<{
   to: string;
   icon: typeof LayoutDashboard;
   label: string;
-  showStatusDot?: boolean;
 }> = [
   { to: '/', icon: LayoutDashboard, label: 'Dash' },
   { to: '/trades', icon: ScrollText, label: 'Trades' },
-  { to: '/performance', icon: TrendingUp, label: 'Perf' },
-  { to: '/patterns', icon: BookOpen, label: 'Patterns' },
   { to: '/orchestrator', icon: Gauge, label: 'Orch' },
-  { to: '/debrief', icon: GraduationCap, label: 'Debrief' },
-  { to: '/system', icon: Activity, label: 'System', showStatusDot: true },
+  { to: '/patterns', icon: BookOpen, label: 'Patterns' },
 ];
 
 interface NavItemProps {
   to: string;
   icon: React.ReactNode;
   label: string;
-  showStatusDot?: boolean;
 }
 
-function NavItem({ to, icon, label, showStatusDot }: NavItemProps) {
-  const status = useLiveStore((state) => state.status);
-
-  const getStatusColor = () => {
-    switch (status) {
-      case 'connected':
-        return 'bg-argus-profit';
-      case 'connecting':
-        return 'bg-argus-warning';
-      case 'error':
-        return 'bg-argus-loss';
-      default:
-        return 'bg-argus-loss';
-    }
-  };
-
+function NavItem({ to, icon, label }: NavItemProps) {
   return (
     <NavLink
       to={to}
@@ -58,17 +46,7 @@ function NavItem({ to, icon, label, showStatusDot }: NavItemProps) {
     >
       {({ isActive }) => (
         <>
-          <div className="relative">
-            {icon}
-            {/* Status dot overlay for System tab */}
-            {showStatusDot && (
-              <div
-                className={`absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full ${getStatusColor()} ${
-                  status === 'connected' ? 'pulse' : ''
-                }`}
-              />
-            )}
-          </div>
+          <div className="relative">{icon}</div>
           <span className="text-[8px] mt-1 font-medium">{label}</span>
           {/* Active indicator dot */}
           {isActive && (
@@ -80,20 +58,61 @@ function NavItem({ to, icon, label, showStatusDot }: NavItemProps) {
   );
 }
 
-export function MobileNav() {
+interface MoreTabProps {
+  isActive: boolean;
+  onClick: () => void;
+}
+
+function MoreTab({ isActive, onClick }: MoreTabProps) {
   return (
-    <nav className="min-[1024px]:hidden fixed bottom-0 left-0 right-0 z-50 bg-argus-surface border-t border-argus-border pb-3">
-      <div className="flex h-16">
-        {NAV_ITEMS.map((item) => (
-          <NavItem
-            key={item.to}
-            to={item.to}
-            icon={<item.icon className="w-5 h-5" />}
-            label={item.label}
-            showStatusDot={item.showStatusDot}
-          />
-        ))}
+    <button
+      onClick={onClick}
+      className={`flex flex-col items-center justify-center flex-1 py-2 transition-all duration-150 active:scale-95 ${
+        isActive ? 'text-argus-accent' : 'text-argus-text-dim'
+      }`}
+    >
+      <div className="relative">
+        <MoreHorizontal className="w-5 h-5" />
       </div>
-    </nav>
+      <span className="text-[8px] mt-1 font-medium">More</span>
+      {/* Active indicator dot when on a More route */}
+      {isActive && (
+        <span className="w-1 h-1 mt-0.5 rounded-full bg-argus-accent" />
+      )}
+    </button>
+  );
+}
+
+export function MobileNav() {
+  const [isMoreOpen, setIsMoreOpen] = useState(false);
+  const location = useLocation();
+
+  // More tab is active if current route is in MORE_ROUTES
+  const isMoreActive = MORE_ROUTES.includes(location.pathname);
+
+  return (
+    <>
+      <nav className="min-[1024px]:hidden fixed bottom-0 left-0 right-0 z-40 bg-argus-surface border-t border-argus-border pb-3">
+        <div className="flex h-16">
+          {NAV_ITEMS.map((item) => (
+            <NavItem
+              key={item.to}
+              to={item.to}
+              icon={<item.icon className="w-5 h-5" />}
+              label={item.label}
+            />
+          ))}
+          <MoreTab
+            isActive={isMoreActive}
+            onClick={() => setIsMoreOpen(true)}
+          />
+        </div>
+      </nav>
+
+      <MoreSheet
+        isOpen={isMoreOpen}
+        onClose={() => setIsMoreOpen(false)}
+      />
+    </>
   );
 }

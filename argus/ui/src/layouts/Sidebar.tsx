@@ -1,25 +1,44 @@
 /**
  * Icon-only sidebar for desktop (≥1024px).
  *
- * Shows 7 navigation items, paper mode badge, status indicator, and logout.
+ * Shows 7 navigation items with group dividers, paper mode badge, status indicator, and logout.
+ *
+ * Groups:
+ * - Monitor: Dashboard, Trades, Performance
+ * - Operate: Orchestrator, Patterns
+ * - Learn: Debrief
+ * - Maintain: System
+ *
+ * Keyboard shortcuts: 1-7 for pages, 'c' for Copilot, 'w' for Watchlist.
  */
 
 import { useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, ScrollText, TrendingUp, BookOpen, Gauge, GraduationCap, Activity, LogOut } from 'lucide-react';
+import { LayoutDashboard, ScrollText, TrendingUp, Gauge, BookOpen, GraduationCap, Activity, LogOut } from 'lucide-react';
 import { useAuthStore } from '../stores/auth';
 import { useLiveStore } from '../stores/live';
+import { useCopilotUIStore } from '../stores/copilotUI';
 
-// Navigation items in sidebar order - keyboard shortcuts use this order (1, 2, 3, 4, 5, 6, 7)
-const NAV_ITEMS = [
+// Navigation items with dividers between groups
+// Keyboard shortcuts use numeric order: 1=Dashboard, 2=Trades, etc.
+const NAV_ITEMS: Array<{
+  to: string;
+  icon: typeof LayoutDashboard;
+  label: string;
+  divider?: boolean;
+}> = [
+  // Monitor group
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/trades', icon: ScrollText, label: 'Trades' },
-  { to: '/performance', icon: TrendingUp, label: 'Performance' },
-  { to: '/patterns', icon: BookOpen, label: 'Pattern Library' },
+  { to: '/performance', icon: TrendingUp, label: 'Performance', divider: true },
+  // Operate group
   { to: '/orchestrator', icon: Gauge, label: 'Orchestrator' },
-  { to: '/debrief', icon: GraduationCap, label: 'The Debrief' },
+  { to: '/patterns', icon: BookOpen, label: 'Pattern Library', divider: true },
+  // Learn group
+  { to: '/debrief', icon: GraduationCap, label: 'The Debrief', divider: true },
+  // Maintain group
   { to: '/system', icon: Activity, label: 'System' },
-] as const;
+];
 
 interface NavItemProps {
   to: string;
@@ -59,6 +78,10 @@ function NavItem({ to, icon, label }: NavItemProps) {
   );
 }
 
+function NavDivider() {
+  return <div className="w-8 mx-auto border-b border-argus-border my-2" />;
+}
+
 interface SidebarProps {
   paperMode?: boolean;
 }
@@ -66,9 +89,10 @@ interface SidebarProps {
 export function Sidebar({ paperMode = false }: SidebarProps) {
   const logout = useAuthStore((state) => state.logout);
   const status = useLiveStore((state) => state.status);
+  const toggleCopilot = useCopilotUIStore((state) => state.toggle);
   const navigate = useNavigate();
 
-  // Keyboard shortcuts: 1-6 for navigation
+  // Keyboard shortcuts: 1-7 for navigation, 'c' for copilot
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Ignore if typing in an input or textarea
@@ -77,15 +101,22 @@ export function Sidebar({ paperMode = false }: SidebarProps) {
         return;
       }
 
+      // Numeric shortcuts for navigation
       const keyNum = parseInt(e.key, 10);
       if (keyNum >= 1 && keyNum <= NAV_ITEMS.length) {
         navigate(NAV_ITEMS[keyNum - 1].to);
+        return;
+      }
+
+      // 'c' for copilot toggle
+      if (e.key === 'c') {
+        toggleCopilot();
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [navigate]);
+  }, [navigate, toggleCopilot]);
 
   const getStatusColor = () => {
     switch (status) {
@@ -117,13 +148,15 @@ export function Sidebar({ paperMode = false }: SidebarProps) {
 
       {/* Navigation - items are numbered 1-7 for keyboard shortcuts */}
       <nav className="flex-1 flex flex-col items-center py-4 space-y-2">
-        {NAV_ITEMS.map((item) => (
-          <NavItem
-            key={item.to}
-            to={item.to}
-            icon={<item.icon className="w-5 h-5" />}
-            label={item.label}
-          />
+        {NAV_ITEMS.map((item, index) => (
+          <div key={item.to} className="w-full flex flex-col items-center">
+            <NavItem
+              to={item.to}
+              icon={<item.icon className="w-5 h-5" />}
+              label={item.label}
+            />
+            {item.divider && index < NAV_ITEMS.length - 1 && <NavDivider />}
+          </div>
         ))}
       </nav>
 
