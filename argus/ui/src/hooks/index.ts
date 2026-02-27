@@ -28,3 +28,29 @@ export { useSymbolBars } from './useSymbolBars';
 export { useSymbolTrades } from './useSymbolTrades';
 export { useTrades, type UseTradesParams } from './useTrades';
 export { useTradeFilters, type TradeFilterValues, type OutcomeFilter } from './useTradeFilters';
+
+// Debrief hooks
+export {
+  useBriefings,
+  useBriefing,
+  useCreateBriefing,
+  useUpdateBriefing,
+  useDeleteBriefing,
+} from './useBriefings';
+export {
+  useDocuments,
+  useDocument,
+  useCreateDocument,
+  useUpdateDocument,
+  useDeleteDocument,
+  useDocumentTags,
+} from './useDocuments';
+export {
+  useJournalEntries,
+  useJournalEntry,
+  useCreateJournalEntry,
+  useUpdateJournalEntry,
+  useDeleteJournalEntry,
+  useJournalTags,
+} from './useJournal';
+export { useDebriefSearch, type SearchScope } from './useDebriefSearch';

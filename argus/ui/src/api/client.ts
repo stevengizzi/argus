@@ -7,13 +7,22 @@
 import type {
   AccountResponse,
   BarsResponse,
+  Briefing,
+  BriefingsListResponse,
+  DebriefSearchResponse,
   DecisionsResponse,
+  DocumentsListResponse,
+  DocumentTagsResponse,
   HealthResponse,
+  JournalEntriesListResponse,
+  JournalEntry,
+  JournalTagsResponse,
   LoginRequest,
   OrchestratorStatusResponse,
   PerformancePeriod,
   PerformanceResponse,
   PositionsResponse,
+  ResearchDocument,
   SessionSummaryResponse,
   StrategiesResponse,
   StrategySpecResponse,
@@ -225,4 +234,215 @@ export async function fetchSymbolBars(
   }
   const query = searchParams.toString();
   return fetchWithAuth<BarsResponse>(`/market/${symbol}/bars${query ? `?${query}` : ''}`);
+}
+
+// Debrief — Briefings endpoints
+export interface BriefingsParams {
+  briefing_type?: 'pre_market' | 'eod';
+  status?: 'draft' | 'final' | 'ai_generated';
+  date_from?: string;
+  date_to?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export async function fetchBriefings(
+  params?: BriefingsParams
+): Promise<BriefingsListResponse> {
+  const searchParams = new URLSearchParams();
+  if (params) {
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined) {
+        searchParams.set(key, String(value));
+      }
+    });
+  }
+  const query = searchParams.toString();
+  return fetchWithAuth<BriefingsListResponse>(`/debrief/briefings${query ? `?${query}` : ''}`);
+}
+
+export async function fetchBriefing(id: string): Promise<Briefing> {
+  return fetchWithAuth<Briefing>(`/debrief/briefings/${id}`);
+}
+
+export interface CreateBriefingData {
+  date: string;
+  briefing_type: 'pre_market' | 'eod';
+  title?: string;
+}
+
+export async function createBriefing(data: CreateBriefingData): Promise<Briefing> {
+  return fetchWithAuth<Briefing>('/debrief/briefings', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export interface UpdateBriefingData {
+  title?: string;
+  content?: string;
+  status?: 'draft' | 'final' | 'ai_generated';
+  metadata?: Record<string, unknown>;
+}
+
+export async function updateBriefing(
+  id: string,
+  data: UpdateBriefingData
+): Promise<Briefing> {
+  return fetchWithAuth<Briefing>(`/debrief/briefings/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteBriefing(id: string): Promise<void> {
+  await fetchWithAuth<void>(`/debrief/briefings/${id}`, {
+    method: 'DELETE',
+  });
+}
+
+// Debrief — Documents endpoints
+export async function fetchDocuments(
+  category?: string
+): Promise<DocumentsListResponse> {
+  const searchParams = new URLSearchParams();
+  if (category) {
+    searchParams.set('category', category);
+  }
+  const query = searchParams.toString();
+  return fetchWithAuth<DocumentsListResponse>(`/debrief/documents${query ? `?${query}` : ''}`);
+}
+
+export async function fetchDocument(id: string): Promise<ResearchDocument> {
+  return fetchWithAuth<ResearchDocument>(`/debrief/documents/${id}`);
+}
+
+export interface CreateDocumentData {
+  category: string;
+  title: string;
+  content: string;
+  tags?: string[];
+}
+
+export async function createDocument(data: CreateDocumentData): Promise<ResearchDocument> {
+  return fetchWithAuth<ResearchDocument>('/debrief/documents', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export interface UpdateDocumentData {
+  title?: string;
+  content?: string;
+  category?: string;
+  tags?: string[];
+}
+
+export async function updateDocument(
+  id: string,
+  data: UpdateDocumentData
+): Promise<ResearchDocument> {
+  return fetchWithAuth<ResearchDocument>(`/debrief/documents/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteDocument(id: string): Promise<void> {
+  await fetchWithAuth<void>(`/debrief/documents/${id}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function fetchDocumentTags(): Promise<DocumentTagsResponse> {
+  return fetchWithAuth<DocumentTagsResponse>('/debrief/documents/tags');
+}
+
+// Debrief — Journal endpoints
+export interface JournalParams {
+  entry_type?: string;
+  strategy_id?: string;
+  tag?: string;
+  search?: string;
+  date_from?: string;
+  date_to?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export async function fetchJournalEntries(
+  params?: JournalParams
+): Promise<JournalEntriesListResponse> {
+  const searchParams = new URLSearchParams();
+  if (params) {
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined) {
+        searchParams.set(key, String(value));
+      }
+    });
+  }
+  const query = searchParams.toString();
+  return fetchWithAuth<JournalEntriesListResponse>(`/debrief/journal${query ? `?${query}` : ''}`);
+}
+
+export async function fetchJournalEntry(id: string): Promise<JournalEntry> {
+  return fetchWithAuth<JournalEntry>(`/debrief/journal/${id}`);
+}
+
+export interface CreateJournalEntryData {
+  entry_type: 'observation' | 'trade_annotation' | 'pattern_note' | 'system_note';
+  title: string;
+  content: string;
+  linked_strategy_id?: string;
+  linked_trade_ids?: string[];
+  tags?: string[];
+}
+
+export async function createJournalEntry(data: CreateJournalEntryData): Promise<JournalEntry> {
+  return fetchWithAuth<JournalEntry>('/debrief/journal', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export interface UpdateJournalEntryData {
+  title?: string;
+  content?: string;
+  entry_type?: 'observation' | 'trade_annotation' | 'pattern_note' | 'system_note';
+  linked_strategy_id?: string;
+  linked_trade_ids?: string[];
+  tags?: string[];
+}
+
+export async function updateJournalEntry(
+  id: string,
+  data: UpdateJournalEntryData
+): Promise<JournalEntry> {
+  return fetchWithAuth<JournalEntry>(`/debrief/journal/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteJournalEntry(id: string): Promise<void> {
+  await fetchWithAuth<void>(`/debrief/journal/${id}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function fetchJournalTags(): Promise<JournalTagsResponse> {
+  return fetchWithAuth<JournalTagsResponse>('/debrief/journal/tags');
+}
+
+// Debrief — Search endpoint
+export async function fetchDebriefSearch(
+  query: string,
+  scope?: 'all' | 'briefings' | 'journal' | 'documents'
+): Promise<DebriefSearchResponse> {
+  const searchParams = new URLSearchParams();
+  searchParams.set('query', query);
+  if (scope) {
+    searchParams.set('scope', scope);
+  }
+  return fetchWithAuth<DebriefSearchResponse>(`/debrief/search?${searchParams}`);
 }

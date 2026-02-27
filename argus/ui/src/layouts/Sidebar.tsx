@@ -1,22 +1,23 @@
 /**
  * Icon-only sidebar for desktop (≥1024px).
  *
- * Shows 6 navigation items, paper mode badge, status indicator, and logout.
+ * Shows 7 navigation items, paper mode badge, status indicator, and logout.
  */
 
 import { useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, ScrollText, TrendingUp, BookOpen, Gauge, Activity, LogOut } from 'lucide-react';
+import { LayoutDashboard, ScrollText, TrendingUp, BookOpen, Gauge, GraduationCap, Activity, LogOut } from 'lucide-react';
 import { useAuthStore } from '../stores/auth';
 import { useLiveStore } from '../stores/live';
 
-// Navigation items in sidebar order - keyboard shortcuts use this order (1, 2, 3, 4, 5, 6)
+// Navigation items in sidebar order - keyboard shortcuts use this order (1, 2, 3, 4, 5, 6, 7)
 const NAV_ITEMS = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/trades', icon: ScrollText, label: 'Trades' },
   { to: '/performance', icon: TrendingUp, label: 'Performance' },
   { to: '/patterns', icon: BookOpen, label: 'Pattern Library' },
   { to: '/orchestrator', icon: Gauge, label: 'Orchestrator' },
+  { to: '/debrief', icon: GraduationCap, label: 'The Debrief' },
   { to: '/system', icon: Activity, label: 'System' },
 ] as const;
 
@@ -114,7 +115,7 @@ export function Sidebar({ paperMode = false }: SidebarProps) {
         />
       </div>
 
-      {/* Navigation - items are numbered 1-6 for keyboard shortcuts */}
+      {/* Navigation - items are numbered 1-7 for keyboard shortcuts */}
       <nav className="flex-1 flex flex-col items-center py-4 space-y-2">
         {NAV_ITEMS.map((item) => (
           <NavItem

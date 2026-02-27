@@ -1,14 +1,14 @@
 /**
  * Bottom navigation bar for mobile and tablet (<1024px).
  *
- * Shows 6 tab items with icons and labels, with system status dot overlay.
+ * Shows 7 tab items with icons and labels, with system status dot overlay.
  */
 
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, ScrollText, TrendingUp, BookOpen, Gauge, Activity } from 'lucide-react';
+import { LayoutDashboard, ScrollText, TrendingUp, BookOpen, Gauge, GraduationCap, Activity } from 'lucide-react';
 import { useLiveStore } from '../stores/live';
 
-// Navigation items in order - must match Sidebar.tsx for consistent keyboard shortcuts (1-6)
+// Navigation items in order - must match Sidebar.tsx for consistent keyboard shortcuts (1-7)
 const NAV_ITEMS: Array<{
   to: string;
   icon: typeof LayoutDashboard;
@@ -20,6 +20,7 @@ const NAV_ITEMS: Array<{
   { to: '/performance', icon: TrendingUp, label: 'Perf' },
   { to: '/patterns', icon: BookOpen, label: 'Patterns' },
   { to: '/orchestrator', icon: Gauge, label: 'Orch' },
+  { to: '/debrief', icon: GraduationCap, label: 'Debrief' },
   { to: '/system', icon: Activity, label: 'System', showStatusDot: true },
 ];
 
@@ -68,7 +69,7 @@ function NavItem({ to, icon, label, showStatusDot }: NavItemProps) {
               />
             )}
           </div>
-          <span className="text-[9px] mt-1 font-medium">{label}</span>
+          <span className="text-[8px] mt-1 font-medium">{label}</span>
           {/* Active indicator dot */}
           {isActive && (
             <span className="w-1 h-1 mt-0.5 rounded-full bg-argus-accent" />

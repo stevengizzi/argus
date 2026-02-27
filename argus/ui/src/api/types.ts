@@ -348,3 +348,81 @@ export interface ThrottleOverrideRequest {
   duration_minutes: number;
   reason: string;
 }
+
+// Debrief — Briefings
+export interface Briefing {
+  id: string;
+  date: string;
+  briefing_type: 'pre_market' | 'eod';
+  status: 'draft' | 'final' | 'ai_generated';
+  title: string;
+  content: string;
+  metadata: Record<string, unknown> | null;
+  author: string;
+  created_at: string;
+  updated_at: string;
+  word_count: number;
+  reading_time_min: number;
+}
+
+export interface BriefingsListResponse {
+  briefings: Briefing[];
+  total: number;
+}
+
+// Debrief — Research Documents
+export interface ResearchDocument {
+  id: string;
+  category: 'research' | 'strategy' | 'backtest' | 'ai_report';
+  title: string;
+  content: string;
+  author: string;
+  tags: string[];
+  word_count: number;
+  reading_time_min: number;
+  source: 'filesystem' | 'database';
+  is_editable: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DocumentsListResponse {
+  documents: ResearchDocument[];
+  total: number;
+}
+
+export interface DocumentTagsResponse {
+  tags: string[];
+}
+
+// Debrief — Journal
+export type JournalEntryType = 'observation' | 'trade_annotation' | 'pattern_note' | 'system_note';
+
+export interface JournalEntry {
+  id: string;
+  entry_type: JournalEntryType;
+  title: string;
+  content: string;
+  author: string;
+  linked_strategy_id: string | null;
+  linked_trade_ids: string[];
+  tags: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface JournalEntriesListResponse {
+  entries: JournalEntry[];
+  total: number;
+}
+
+export interface JournalTagsResponse {
+  tags: string[];
+}
+
+// Debrief — Search
+export interface DebriefSearchResponse {
+  briefings: Briefing[];
+  journal: JournalEntry[];
+  documents: ResearchDocument[];
+}

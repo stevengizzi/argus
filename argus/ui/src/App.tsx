@@ -13,6 +13,7 @@ import { TradesPage } from './pages/TradesPage';
 import { PerformancePage } from './pages/PerformancePage';
 import { PatternLibraryPage } from './pages/PatternLibraryPage';
 import { OrchestratorPage } from './pages/OrchestratorPage';
+import { DebriefPage } from './pages/DebriefPage';
 import { SystemPage } from './pages/SystemPage';
 import { ConnectionTest } from './pages/ConnectionTest';
 
@@ -43,6 +44,7 @@ function App() {
           <Route path="performance" element={<PerformancePage />} />
           <Route path="patterns" element={<PatternLibraryPage />} />
           <Route path="orchestrator" element={<OrchestratorPage />} />
+          <Route path="debrief" element={<DebriefPage />} />
           <Route path="system" element={<SystemPage />} />
           <Route path="dev/connection" element={<ConnectionTest />} />
         </Route>
