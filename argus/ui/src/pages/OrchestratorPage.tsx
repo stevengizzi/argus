@@ -6,7 +6,8 @@
  * - StrategyCoverageTimeline: Strategy operating windows visualization
  * - CapitalAllocation: Reused from dashboard (tracks donut/bars view)
  * - StrategyOperationsGrid: Per-strategy operational status cards
- * - Placeholder sections for Session 7 components (DecisionTimeline, GlobalControls)
+ * - DecisionTimeline: Today's orchestrator decisions in chronological order
+ * - GlobalControls: Force rebalance, emergency flatten/pause buttons
  *
  * Uses stagger animation pattern from DashboardPage.
  */
@@ -15,10 +16,16 @@ import { motion } from 'framer-motion';
 import { Gauge } from 'lucide-react';
 import { AnimatedPage } from '../components/AnimatedPage';
 import { Card } from '../components/Card';
-import { CardHeader } from '../components/CardHeader';
 import { Skeleton } from '../components/Skeleton';
 import { CapitalAllocation } from '../components/CapitalAllocation';
-import { RegimePanel, StrategyCoverageTimeline, StrategyOperationsGrid } from '../features/orchestrator';
+import {
+  RegimePanel,
+  StrategyCoverageTimeline,
+  StrategyOperationsGrid,
+  DecisionTimeline,
+  GlobalControls,
+  ThrottleOverrideDialog,
+} from '../features/orchestrator';
 import { useOrchestratorStatus } from '../hooks';
 import { staggerContainer, staggerItem } from '../utils/motion';
 
@@ -117,26 +124,19 @@ export function OrchestratorPage() {
           <StrategyOperationsGrid />
         </motion.div>
 
-        {/* Section 5: Decision Timeline — placeholder for Session 7 */}
+        {/* Section 5: Decision Timeline */}
         <motion.div variants={staggerItem}>
-          <Card>
-            <CardHeader title="Decision Timeline" subtitle="Session 7" />
-            <div className="flex items-center justify-center h-32 text-sm text-argus-text-dim">
-              Today's orchestrator decisions — coming in Session 7
-            </div>
-          </Card>
+          <DecisionTimeline />
         </motion.div>
 
-        {/* Section 6: Global Controls — placeholder for Session 7 */}
+        {/* Section 6: Global Controls */}
         <motion.div variants={staggerItem}>
-          <Card>
-            <CardHeader title="Global Controls" subtitle="Session 7" />
-            <div className="flex items-center justify-center h-20 text-sm text-argus-text-dim">
-              Force rebalance, emergency controls — coming in Session 7
-            </div>
-          </Card>
+          <GlobalControls />
         </motion.div>
       </motion.div>
+
+      {/* Throttle override dialog (mounted outside scroll flow) */}
+      <ThrottleOverrideDialog />
     </AnimatedPage>
   );
 }
