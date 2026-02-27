@@ -23,15 +23,18 @@ import type { TodayStatsData } from '../../api/types';
 export interface TodayStatsProps {
   /** Pre-fetched data from dashboard summary. If provided, hooks are skipped. */
   data?: TodayStatsData;
+  /** When true, internal hooks are disabled — component waits for props instead of fetching. */
+  useSummaryData?: boolean;
 }
 
-export function TodayStats({ data: propData }: TodayStatsProps) {
-  // Only use hooks if no props provided (standalone mode)
-  const { data: perfData, isLoading: perfLoading } = usePerformance('day');
-  const { data: tradesData, isLoading: tradesLoading } = useTrades({ limit: 100 });
+export function TodayStats({ data: propData, useSummaryData }: TodayStatsProps) {
+  // Disable hooks when using summary data mode — component renders structure immediately
+  const { data: perfData, isLoading: perfLoading } = usePerformance('day', { enabled: !useSummaryData });
+  const { data: tradesData, isLoading: tradesLoading } = useTrades({ limit: 100 }, { enabled: !useSummaryData });
 
-  // Skip hooks loading state when props are provided
-  const isLoading = !propData && (perfLoading || tradesLoading);
+  // In summary mode, never show skeleton — render structure with dash placeholders
+  // In standalone mode, show skeleton while hooks are loading
+  const isLoading = !useSummaryData && !propData && (perfLoading || tradesLoading);
 
   // Find the best trade (highest P&L) - only needed when using hooks
   const bestTradeFromHooks = useMemo(() => {

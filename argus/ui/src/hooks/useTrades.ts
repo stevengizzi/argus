@@ -19,7 +19,12 @@ export interface UseTradesParams {
   offset?: number;
 }
 
-export function useTrades(params?: UseTradesParams) {
+export interface UseTradesOptions {
+  /** When false, disables the query. Used when parent provides data via props. */
+  enabled?: boolean;
+}
+
+export function useTrades(params?: UseTradesParams, options?: UseTradesOptions) {
   return useQuery<TradesResponse, Error>({
     queryKey: ['trades', params],
     queryFn: () => getTrades(params),
@@ -27,5 +32,6 @@ export function useTrades(params?: UseTradesParams) {
     refetchInterval: 30_000, // Poll every 30 seconds while tab is active
     refetchOnWindowFocus: false, // Don't refetch when user tabs back
     placeholderData: keepPreviousData, // Show stale data while refetching
+    enabled: options?.enabled ?? true,
   });
 }

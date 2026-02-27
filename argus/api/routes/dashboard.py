@@ -397,10 +397,9 @@ async def get_dashboard_summary(
                 position_count_by_strategy[pos.strategy_id] = (
                     position_count_by_strategy.get(pos.strategy_id, 0) + 1
                 )
-                # Unrealized P&L
-                unrealized = (pos.current_price - pos.entry_price) * pos.shares_remaining
+                # Use realized_pnl from partial exits (ManagedPosition doesn't track current_price)
                 pnl_by_strategy[pos.strategy_id] = (
-                    pnl_by_strategy.get(pos.strategy_id, 0.0) + unrealized
+                    pnl_by_strategy.get(pos.strategy_id, 0.0) + pos.realized_pnl
                 )
 
     total_deployed = sum(deployed_by_strategy.values())

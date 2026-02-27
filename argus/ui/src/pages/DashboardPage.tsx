@@ -115,11 +115,11 @@ export function DashboardPage() {
 
           <motion.div variants={staggerItem}><AccountSummary /></motion.div>
           <motion.div variants={staggerItem}><DailyPnlCard /></motion.div>
-          <motion.div variants={staggerItem}><GoalTracker data={summaryData?.goals} /></motion.div>
+          <motion.div variants={staggerItem}><GoalTracker data={summaryData?.goals} useSummaryData /></motion.div>
 
           {/* 3-card row: Market Status | Today's Stats | Session Timeline */}
           <motion.div variants={staggerItem}><MarketStatusCard /></motion.div>
-          <motion.div variants={staggerItem}><TodayStats data={summaryData?.today_stats} /></motion.div>
+          <motion.div variants={staggerItem}><TodayStats data={summaryData?.today_stats} useSummaryData /></motion.div>
           <motion.div variants={staggerItem}><SessionTimeline /></motion.div>
 
           <motion.div variants={staggerItem}><OpenPositions /></motion.div>
@@ -169,7 +169,7 @@ export function DashboardPage() {
               <DailyPnlCard />
             </motion.div>
             <motion.div variants={staggerItem} className="h-full">
-              <GoalTracker data={summaryData?.goals} />
+              <GoalTracker data={summaryData?.goals} useSummaryData />
             </motion.div>
           </motion.div>
 
@@ -182,7 +182,7 @@ export function DashboardPage() {
               <MarketStatusCard />
             </motion.div>
             <motion.div variants={staggerItem} className="h-full">
-              <TodayStats data={summaryData?.today_stats} />
+              <TodayStats data={summaryData?.today_stats} useSummaryData />
             </motion.div>
             <motion.div variants={staggerItem} className="h-full">
               <SessionTimeline />
@@ -248,7 +248,7 @@ export function DashboardPage() {
 
         {/* GoalTracker - full width on tablet */}
         <motion.div variants={staggerItem}>
-          <GoalTracker data={summaryData?.goals} />
+          <GoalTracker data={summaryData?.goals} useSummaryData />
         </motion.div>
 
         {/* 3-card row: Market Status | Today's Stats | Session Timeline */}
@@ -260,7 +260,7 @@ export function DashboardPage() {
             <MarketStatusCard />
           </motion.div>
           <motion.div variants={staggerItem} className="h-full">
-            <TodayStats data={summaryData?.today_stats} />
+            <TodayStats data={summaryData?.today_stats} useSummaryData />
           </motion.div>
           <motion.div variants={staggerItem} className="h-full">
             <SessionTimeline />

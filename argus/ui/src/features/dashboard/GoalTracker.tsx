@@ -25,6 +25,8 @@ import type { GoalsData } from '../../api/types';
 export interface GoalTrackerProps {
   /** Pre-fetched data from dashboard summary. If provided, hooks are skipped. */
   data?: GoalsData;
+  /** When true, internal hooks are disabled — component waits for props instead of fetching. */
+  useSummaryData?: boolean;
 }
 
 interface PaceStatus {
@@ -153,16 +155,17 @@ function calculateTradingDays(): { elapsed: number; remaining: number; total: nu
   return { elapsed, remaining, total, elapsedPct };
 }
 
-export function GoalTracker({ data: propData }: GoalTrackerProps) {
-  // Only use hooks if no props provided (standalone mode)
-  const { data: goalsData, isLoading: goalsLoading } = useGoals();
-  const { data: perfData, isLoading: perfLoading } = usePerformance('month');
+export function GoalTracker({ data: propData, useSummaryData }: GoalTrackerProps) {
+  // Disable hooks when using summary data mode — component renders structure immediately
+  const { data: goalsData, isLoading: goalsLoading } = useGoals({ enabled: !useSummaryData });
+  const { data: perfData, isLoading: perfLoading } = usePerformance('month', { enabled: !useSummaryData });
 
   // Calculate trading days (used for hook fallback path)
   const tradingDaysLocal = useMemo(() => calculateTradingDays(), []);
 
-  // Skip hooks loading state when props are provided
-  const isLoading = !propData && (goalsLoading || perfLoading);
+  // In summary mode, never show skeleton — render structure with default values
+  // In standalone mode, show skeleton while hooks are loading
+  const isLoading = !useSummaryData && !propData && (goalsLoading || perfLoading);
 
   // Loading state (only when using hooks)
   if (isLoading) {
