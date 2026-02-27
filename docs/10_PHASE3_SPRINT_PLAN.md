@@ -351,14 +351,26 @@ per sprint velocity.
 - 1597 tests (pytest, 39 new) + 100 (Vitest, 30 new). 13 sessions (8 implementation + 1 review + 4 polish). Code review passed. DEC-186–195.
 - **Deferred to 21d:** PreMarketCard/EodSummaryCard as dedicated components, multi-day regime history, decision filtering, "More" menu for mobile nav.
 
-#### Sprint 21c — The Debrief Page (DEC-169, DEC-171)
-**Target:** ~1–2 days
+### Sprint 21c — The Debrief Page
+**Status:** IN PROGRESS
+**Sessions:** 10 implementation + 2 code reviews
+**Target tests:** ~50 new pytest + ~30 new Vitest
+
 **Scope:**
-- **The Debrief page** (NEW — 6th page): Three sections via in-page tabs. Section A — Daily Briefings: reverse-chronological list of pre-market and EOD report placeholders (structure now, AI Layer populates in Sprint 22). Manual entry support. Section B — Research Library: document browser for all project research (market data report, broker report, parameter validation, strategy specs, expanded roadmap). Documents rendered as readable panels with markdown support. Taggable, searchable, filterable by type. Section C — Learning Journal: manual observations, trade annotations (linked to trade IDs), pattern observations. Free-form entries with tags and date.
-- Import existing research documents as initial Research Library content.
-- API: `/api/v1/debrief/briefings` (CRUD), `/api/v1/debrief/documents` (read + metadata), `/api/v1/debrief/journal` (CRUD with tags/links).
-- **Mobile:** Tab-based. Briefings default view. Document viewer optimized for phone reading.
-- **Tests:** Vitest component tests, pytest for new API endpoints.
+- Database schema: briefings, updated journal_entries, documents tables
+- DebriefService: full CRUD, template generation, filesystem document discovery, LIKE search
+- API: 4 route files under /debrief prefix (~15 endpoints)
+- Frontend: DebriefPage with 3-section SegmentedTab
+  - Briefings tab: list, cards, creation flow, full markdown editor with preview, DocumentModal reading
+  - Research Library: hybrid filesystem + database docs, category filter, CRUD on DB docs, tag management
+  - Journal: inline creation, 4 entry types, tag autocomplete, comprehensive filtering, inline editing, trade search and linking
+- Navigation: 7th page (GraduationCap), keyboard shortcuts 1-7
+- Polish: skeleton loading, Framer Motion animations, responsive, empty states
+- Shared TagInput component
+- Dev mode mock data: 5 briefings, 3 DB docs, 10 journal entries
+
+**Decisions:** DEC-196 through DEC-201
+**Resolved deferrals:** DEF-026 (FTS5 → LIKE search), DEF-027 (trade linking UI included)
 
 #### Sprint 21d — Dashboard Refinement + Performance Analytics + System Cleanup + Nav Restructure (DEC-169, DEC-171)
 **Target:** ~2–3 days

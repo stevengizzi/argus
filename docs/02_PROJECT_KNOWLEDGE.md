@@ -12,7 +12,7 @@ Argus is a fully automated, AI-enhanced multi-strategy trading intelligence plat
 
 **Structure:** Two parallel tracks (DEC-079, February 19, 2026). Build Track (system construction) + Validation Track (strategy confidence-building).
 
-**Build Track:** 1558 tests (pytest) + 70 (Vitest). Sprints 1–21a complete. Sprint 21b (Orchestrator page) NEXT.
+**Build Track:** 1558 tests (pytest) + 70 (Vitest). Sprints 1–21b complete. Sprint 21c (The Debrief page) IN PROGRESS.
 - Phase 1 (Core Engine): ✅ COMPLETE — 362 tests, Feb 14–16
 - Phase 2 (Backtesting): ✅ COMPLETE — 542 tests, Feb 16–17
 - Sprint 11 (Extended Backtest): ✅ COMPLETE — 35 months, 15 WF windows, WFE=0.56

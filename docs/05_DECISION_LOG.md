@@ -2167,5 +2167,68 @@ Each entry follows this format:
 
 ---
 
+### DEC-196 | Journal Entry Types — Updated
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-27 |
+| **Decision** | Journal entry_type values updated from original schema ('observation', 'analysis', 'decision', 'insight') to ('observation', 'trade_annotation', 'pattern_note', 'system_note'). Schema DROP + recreate since table was never populated. |
+| **Rationale** | New types better reflect actual usage patterns: observations for general notes, trade annotations for per-trade learning, pattern notes for strategy refinement, system notes for platform/infrastructure observations. |
+| **Status** | Active |
+
+---
+
+### DEC-197 | Briefings Table Schema
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-27 |
+| **Decision** | New `briefings` table with UNIQUE(date, briefing_type) constraint. Two types: pre_market and eod. Three statuses: draft, final, ai_generated. Template-based creation generates markdown section headers server-side. |
+| **Rationale** | One briefing per type per day enforces discipline. Template generation ensures consistent structure without requiring users to remember section headers. ai_generated status prepares for Sprint 22 AI Layer. |
+| **Status** | Active |
+
+---
+
+### DEC-198 | Research Library — Hybrid Filesystem + Database Source
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-27 |
+| **Decision** | Research Library serves documents from two sources: filesystem (auto-discovered from docs/research/, docs/strategies/, docs/backtesting/) and database (user-created via UI). Filesystem docs are read-only with stable IDs (fs_{category}_{filename}). Database docs support full CRUD with categories and tags. |
+| **Rationale** | Repo documentation should be accessible without duplication. Database docs enable user-created research notes and future AI-generated reports. Hybrid approach serves both needs. |
+| **Status** | Active |
+
+---
+
+### DEC-199 | Navigation — 7 Pages
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-27 |
+| **Decision** | Command Center expanded to 7 pages: Dashboard, Trade Log, Performance, Pattern Library, Orchestrator, The Debrief, System. GraduationCap icon for Debrief. Keyboard shortcuts 1–7. Mobile nav: Dash/Trades/Perf/Patterns/Orch/Debrief/System. |
+| **Rationale** | The Debrief is the 6th functional page (before System). Positioned after Orchestrator because it's the knowledge/review layer accessed after operational monitoring. Mobile labels abbreviated to fit 7 items. |
+| **Amends** | DEC-169 (was 6 pages built, now 7 of 7), DEC-180 (shortcuts 1–5 → 1–7), DEC-189 (mobile 6-tab → 7-tab) |
+| **Status** | Active |
+
+---
+
+### DEC-200 | Search — LIKE Queries Over FTS5
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-27 |
+| **Decision** | Full-text search across debrief content (briefings, journal, documents) uses comprehensive LIKE queries across title+content+tags columns. FTS5 virtual tables not implemented. |
+| **Rationale** | At <1,000 entries, LIKE '%term%' is instant. FTS5 adds virtual table creation, sync triggers on INSERT/UPDATE/DELETE, rebuild commands, different query syntax, and CI compatibility concerns for zero user-visible benefit at current scale. Can be swapped in as a backend optimization if search performance degrades at >10K entries. |
+| **Resolves** | DEF-026 (FTS5 deferred → replaced with LIKE search, which is the shipped solution) |
+| **Status** | Active |
+
+---
+
+### DEC-201 | Journal Trade Linking — Full UI in Sprint 21c
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-27 |
+| **Decision** | Journal trade linking includes full search UI (TradeSearchInput component) in Sprint 21c. Search trades by symbol, select from dropdown, display linked trades as removable chips. |
+| **Rationale** | Trade annotations without trade linking have limited value. The search component (~200 lines) is tractable within sprint scope and completes the journal's core value proposition. |
+| **Resolves** | DEF-027 (trade linking UI deferred → now included) |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
 *New decisions are appended chronologically as the project progresses.*
