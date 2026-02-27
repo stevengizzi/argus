@@ -2402,5 +2402,54 @@ Each entry follows this format:
 
 ---
 
+### DEC-219 | StrategyDeploymentBar Redesign
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-28 |
+| **Decision** | Redesigned HeatStripPortfolioBar → StrategyDeploymentBar. Segments represent capital deployed per strategy (using strategy accent colors from strategyConfig.ts) plus an "Available" segment in muted dark. Labels show strategy abbreviation + dollar amount (letter-only below 60px, hidden below 30px). Only outer edges of first/last segments get rounded corners. Clicking a strategy segment navigates to Pattern Library with that strategy pre-selected. Clicking "Available" navigates to Orchestrator. |
+| **Rationale** | Per-position P&L heat coloring was unreadable at a glance — no labels, no way to identify which stock was which without hovering. Strategy-level deployment with accent colors communicates "how much capital is where" instantly, which the positions table doesn't give as quickly. |
+| **Supersedes** | Original HeatStripPortfolioBar design |
+| **Status** | Active |
+
+---
+
+### DEC-220 | GoalTracker Enhancement
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-28 |
+| **Decision** | GoalTracker card enhanced with "MONTHLY GOAL" header label, 2-column layout: left column (progress bar, dollar amount, pace status), right column (avg daily P&L, need/day). Pace calculation: ahead (>110% of expected pace), on_pace (90–110%), behind (<90%). Color-coded: green for ahead/on_pace, amber for behind (>50%), red for behind (≤50%). |
+| **Rationale** | Original card had no label, wasted space above/below the progress bar. Adding pace stats turns it from a simple progress bar into a "pace dashboard" — instantly see if daily average is above or below what's needed. |
+| **Status** | Active |
+
+---
+
+### DEC-221 | Market + Regime Row → 3-Card Row
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-28 |
+| **Decision** | Merged Market and Market Regime into single "Market Status" card (~1/3 width). Added two new cards: "Today's Stats" (2×2 grid: trade count, win rate, avg R, best trade) and "Session Timeline" (custom SVG horizontal timeline with strategy operating windows as colored bars, "now" marker, and "Active: X" label). Session Timeline click navigates to Orchestrator page. All three cards at equal 1/3 width on desktop/tablet, stacked on mobile. |
+| **Rationale** | Two separate cards for Market and Market Regime used too much horizontal space for too little data at desktop width. Session Timeline answers "what should be running right now?" at a glance without navigating to Orchestrator. Today's Stats provides the quick session summary previously unavailable on Dashboard. |
+| **Status** | Active |
+
+---
+
+### DEC-222 | Dashboard Aggregate Endpoint
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-28 |
+| **Decision** | New `GET /api/v1/dashboard/summary` endpoint returns all Dashboard card data in a single response: account, today_stats, goals, market, regime, deployment, orchestrator. Frontend `useDashboardSummary()` hook polls at 5s with `placeholderData: keepPreviousData` to prevent skeleton flash on refetch or tab-switch. Individual hooks (usePerformance, useGoals, etc.) retained for other pages. |
+| **Rationale** | TodayStats and GoalTracker loaded visibly slower than other cards because they depended on separate slower queries. Aggregate endpoint eliminates multi-query waterfall — one request, one loading state. |
+| **Status** | Active |
+
+---
+
+### DEC-223 | useSummaryData Hook Disabling Pattern
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-28 |
+| **Decision** | Components that accept pre-fetched data via props also accept a `useSummaryData` boolean prop. When true, internal TanStack Query hooks pass `enabled: false`, preventing them from firing. Components render their normal structure with dash/zero placeholders while waiting for prop data, avoiding skeleton flash. Applied to TodayStats and GoalTracker. `usePerformance`, `useTrades`, and `useGoals` hooks extended with optional `{ enabled }` parameter. |
+| **Rationale** | React's rules of hooks prevent conditional hook calls. Even with prop data intended, hooks fired unconditionally and showed skeleton loading states during the brief window before the summary endpoint responded. Disabling hooks entirely when the parent owns the data flow eliminates the stagger. |
+| **Status** | Active |
+
 *End of Decision Log v1.0*
 *New decisions are appended chronologically as the project progresses.*

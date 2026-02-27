@@ -1017,6 +1017,7 @@ GET    /api/v1/orchestrator/status     — Regime, allocations, throttle state, 
 GET    /api/v1/orchestrator/decisions  — Decision history (paginated)
 POST   /api/v1/orchestrator/rebalance  — Trigger manual rebalance
 GET    /api/v1/session-summary         — Session recap (P&L, wins/losses, best/worst trade, regime, strategies). Query: ?date=YYYY-MM-DD
+GET    /api/v1/dashboard/summary       — Aggregate endpoint returning all Dashboard card data (account, today_stats, goals, market, regime, deployment, orchestrator) in single response. Sprint 21d (DEC-222).
 
 # Intelligence endpoints (Sprint 23–30)
 GET  /api/v1/catalysts/{symbol}          # Catalysts for a symbol
