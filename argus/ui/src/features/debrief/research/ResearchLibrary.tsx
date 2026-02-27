@@ -86,13 +86,16 @@ export function ResearchLibrary() {
   // Adapt document for DocumentModal (which expects StrategyDocument shape)
   const documentForModal = useMemo(() => {
     if (!readingDocument) return null;
+    // Filesystem docs use last_modified (file mtime), database docs use updated_at
+    const lastModified =
+      readingDocument.last_modified ?? readingDocument.updated_at ?? readingDocument.created_at;
     return {
       doc_id: readingDocument.id,
       title: readingDocument.title,
       filename: '', // Not used
       word_count: readingDocument.word_count,
       reading_time_min: readingDocument.reading_time_min,
-      last_modified: readingDocument.updated_at,
+      last_modified: lastModified ?? new Date().toISOString(),
       content: readingDocument.content,
     };
   }, [readingDocument]);
@@ -205,7 +208,7 @@ export function ResearchLibrary() {
             }
           />
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-stretch">
             {documents.map((doc, index) => (
               <motion.div
                 key={doc.id}
@@ -213,6 +216,7 @@ export function ResearchLibrary() {
                 initial="hidden"
                 animate="visible"
                 variants={listItemVariants}
+                className="h-full"
               >
                 <ResearchDocCard
                   document={doc}

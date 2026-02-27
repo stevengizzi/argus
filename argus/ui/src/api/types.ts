@@ -382,8 +382,9 @@ export interface ResearchDocument {
   reading_time_min: number;
   source: 'filesystem' | 'database';
   is_editable: boolean;
-  created_at: string;
-  updated_at: string;
+  created_at: string | null;
+  updated_at: string | null;
+  last_modified: string | null; // Filesystem docs use this for mtime
 }
 
 export interface DocumentsListResponse {

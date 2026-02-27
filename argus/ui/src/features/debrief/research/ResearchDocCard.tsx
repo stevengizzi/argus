@@ -62,11 +62,11 @@ export function ResearchDocCard({
   const categoryLabel = getCategoryLabel(doc.category);
 
   return (
-    <Card interactive className="hover:border-argus-text-dim transition-colors">
+    <Card interactive className="hover:border-argus-text-dim transition-colors h-full flex flex-col">
       {/* Main clickable area for reading */}
-      <div onClick={onRead} className="cursor-pointer space-y-2">
+      <div onClick={onRead} className="cursor-pointer flex-1 flex flex-col">
         {/* Top row: category badge + source badge */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between mb-2">
           <span
             className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${categoryColorClass}`}
           >
@@ -86,21 +86,19 @@ export function ResearchDocCard({
         </div>
 
         {/* Title */}
-        <h3 className="text-base font-semibold text-argus-text">{doc.title}</h3>
+        <h3 className="text-base font-semibold text-argus-text mb-2">{doc.title}</h3>
 
-        {/* Tags */}
-        {doc.tags.length > 0 && (
-          <div className="flex flex-wrap gap-1.5">
-            {doc.tags.map((tag) => (
-              <span
-                key={tag}
-                className="px-2 py-0.5 text-xs rounded-full bg-argus-surface-2 text-argus-text-dim"
-              >
-                {tag}
-              </span>
-            ))}
-          </div>
-        )}
+        {/* Tags - always render container for consistent height */}
+        <div className="flex flex-wrap gap-1.5 min-h-[24px] flex-1">
+          {doc.tags.map((tag) => (
+            <span
+              key={tag}
+              className="px-2 py-0.5 text-xs rounded-full bg-argus-surface-2 text-argus-text-dim h-fit"
+            >
+              {tag}
+            </span>
+          ))}
+        </div>
       </div>
 
       {/* Bottom row: metadata + actions */}
