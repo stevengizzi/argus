@@ -2,7 +2,7 @@
  * Skeleton loading state for Orchestrator page.
  *
  * Matches the structure of:
- * - RegimePanel: badge + indicator rows
+ * - Hero row: SessionOverview + RegimePanel (left) | CapitalAllocation (right)
  * - StrategyCoverageTimeline: bars for each strategy
  * - StrategyOperationsGrid: 4 strategy cards
  * - DecisionTimeline: 5 decision items
@@ -15,32 +15,72 @@ import { Skeleton } from '../../components/Skeleton';
 export function OrchestratorSkeleton() {
   return (
     <div className="space-y-6">
-      {/* RegimePanel skeleton */}
-      <Card>
-        <div className="space-y-4">
-          {/* Header row: badge + session phase */}
-          <div className="flex items-center justify-between">
-            <Skeleton variant="rect" width={96} height={24} className="rounded-full" />
-            <Skeleton variant="line" width={120} height={16} />
-          </div>
-          {/* Indicator rows */}
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <Skeleton variant="line" width={64} height={14} />
-              <Skeleton variant="line" width={100} height={14} />
-              <Skeleton variant="line" width={80} height={14} />
+      {/* Hero Row skeleton: Session + Regime | Capital Allocation */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Left column: SessionOverview + RegimePanel stacked */}
+        <div className="flex flex-col gap-4">
+          {/* SessionOverview skeleton */}
+          <Card>
+            <div className="space-y-4">
+              <Skeleton variant="line" width={120} height={16} />
+              {/* P&L prominent */}
+              <div className="flex flex-col items-center py-2">
+                <Skeleton variant="line" width={80} height={12} />
+                <Skeleton variant="line" width={100} height={32} className="mt-1" />
+              </div>
+              {/* Metric rows */}
+              <div className="space-y-2">
+                {[...Array(4)].map((_, i) => (
+                  <div key={i} className="flex justify-between">
+                    <Skeleton variant="line" width={100} height={14} />
+                    <Skeleton variant="line" width={50} height={14} />
+                  </div>
+                ))}
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Skeleton variant="line" width={64} height={14} />
-              <Skeleton variant="line" width={80} height={14} />
+          </Card>
+
+          {/* RegimePanel skeleton */}
+          <Card>
+            <div className="space-y-4">
+              {/* Header row: badge + session phase */}
+              <div className="flex items-center justify-between">
+                <Skeleton variant="rect" width={96} height={24} className="rounded-full" />
+                <Skeleton variant="line" width={120} height={16} />
+              </div>
+              {/* Indicator rows */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Skeleton variant="line" width={64} height={14} />
+                  <Skeleton variant="line" width={100} height={14} />
+                  <Skeleton variant="line" width={80} height={14} />
+                </div>
+                <div className="flex items-center gap-2">
+                  <Skeleton variant="line" width={64} height={14} />
+                  <Skeleton variant="line" width={80} height={14} />
+                </div>
+                <div className="flex items-center gap-2">
+                  <Skeleton variant="line" width={64} height={14} />
+                  <Skeleton variant="line" width={100} height={14} />
+                </div>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Skeleton variant="line" width={64} height={14} />
-              <Skeleton variant="line" width={100} height={14} />
-            </div>
-          </div>
+          </Card>
         </div>
-      </Card>
+
+        {/* Right column: Capital Allocation skeleton (fills height) */}
+        <Card className="h-full">
+          <div className="flex flex-col items-center justify-center h-full gap-6 py-4">
+            <Skeleton variant="circle" width={140} height={140} />
+            <div className="w-full space-y-2">
+              <Skeleton variant="line" width={120} height={16} className="mx-auto" />
+              <Skeleton variant="line" height={12} />
+              <Skeleton variant="line" height={12} />
+              <Skeleton variant="line" height={12} />
+            </div>
+          </div>
+        </Card>
+      </div>
 
       {/* StrategyCoverageTimeline skeleton */}
       <Card>
@@ -77,42 +117,6 @@ export function OrchestratorSkeleton() {
           </div>
         </div>
       </Card>
-
-      {/* Capital Allocation + Session Overview skeleton (2-column) */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Capital Allocation skeleton */}
-        <Card>
-          <div className="flex items-center gap-6">
-            <Skeleton variant="circle" width={100} height={100} />
-            <div className="flex-1 space-y-2">
-              <Skeleton variant="line" width={120} height={16} />
-              <Skeleton variant="line" height={12} />
-              <Skeleton variant="line" height={12} />
-            </div>
-          </div>
-        </Card>
-
-        {/* Session Overview skeleton */}
-        <Card>
-          <div className="space-y-4">
-            <Skeleton variant="line" width={120} height={16} />
-            {/* P&L prominent */}
-            <div className="flex flex-col items-center py-2">
-              <Skeleton variant="line" width={80} height={12} />
-              <Skeleton variant="line" width={100} height={32} className="mt-1" />
-            </div>
-            {/* Metric rows */}
-            <div className="space-y-2">
-              {[...Array(4)].map((_, i) => (
-                <div key={i} className="flex justify-between">
-                  <Skeleton variant="line" width={100} height={14} />
-                  <Skeleton variant="line" width={50} height={14} />
-                </div>
-              ))}
-            </div>
-          </div>
-        </Card>
-      </div>
 
       {/* StrategyOperationsGrid skeleton (4 cards) */}
       <div className="grid grid-cols-1 min-[834px]:grid-cols-2 gap-4">

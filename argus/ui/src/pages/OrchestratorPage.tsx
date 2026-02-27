@@ -26,6 +26,8 @@ import {
   ThrottleOverrideDialog,
   SessionOverview,
   OrchestratorSkeleton,
+  SessionPhaseBadge,
+  computeCountdown,
 } from '../features/orchestrator';
 import { useOrchestratorStatus } from '../hooks';
 import { staggerContainer, staggerItem } from '../utils/motion';
@@ -43,12 +45,18 @@ export function OrchestratorPage() {
     is_throttled: alloc.is_throttled,
   })) ?? [];
 
+  // Compute countdown from orchestrator data
+  const countdown = computeCountdown(orchestratorData?.next_regime_check);
+  const sessionPhase = orchestratorData?.session_phase ?? 'market_closed';
+
   if (isLoading) {
     return (
       <AnimatedPage>
-        <div className="flex items-center gap-3 mb-6">
-          <Gauge className="w-6 h-6 text-argus-accent" />
-          <h1 className="text-xl font-semibold text-argus-text">Orchestrator</h1>
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <Gauge className="w-6 h-6 text-argus-accent" />
+            <h1 className="text-xl font-semibold text-argus-text">Orchestrator</h1>
+          </div>
         </div>
         <OrchestratorSkeleton />
       </AnimatedPage>
@@ -58,9 +66,11 @@ export function OrchestratorPage() {
   if (error) {
     return (
       <AnimatedPage>
-        <div className="flex items-center gap-3 mb-6">
-          <Gauge className="w-6 h-6 text-argus-accent" />
-          <h1 className="text-xl font-semibold text-argus-text">Orchestrator</h1>
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <Gauge className="w-6 h-6 text-argus-accent" />
+            <h1 className="text-xl font-semibold text-argus-text">Orchestrator</h1>
+          </div>
         </div>
         <Card>
           <div className="flex flex-col items-center justify-center h-48 text-center">
@@ -77,9 +87,17 @@ export function OrchestratorPage() {
   return (
     <AnimatedPage>
       {/* Page header */}
-      <div className="flex items-center gap-3 mb-6">
-        <Gauge className="w-6 h-6 text-argus-accent" />
-        <h1 className="text-xl font-semibold text-argus-text">Orchestrator</h1>
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <Gauge className="w-6 h-6 text-argus-accent" />
+          <h1 className="text-xl font-semibold text-argus-text">Orchestrator</h1>
+          <SessionPhaseBadge phase={sessionPhase} />
+        </div>
+        {countdown && (
+          <span className="text-xs text-argus-text-dim">
+            Next check in <span className="text-argus-text tabular-nums">{countdown}</span>
+          </span>
+        )}
       </div>
 
       {/* Staggered content sections */}
@@ -89,19 +107,15 @@ export function OrchestratorPage() {
         initial="hidden"
         animate="show"
       >
-        {/* Section 1: Regime & Session */}
-        <motion.div variants={staggerItem}>
-          <RegimePanel orchestratorData={orchestratorData} />
-        </motion.div>
-
-        {/* Section 2: Strategy Coverage Timeline */}
-        <motion.div variants={staggerItem}>
-          <StrategyCoverageTimeline allocations={orchestratorData?.allocations ?? []} />
-        </motion.div>
-
-        {/* Section 3: Capital Allocation + Session Overview (side by side) */}
+        {/* Section 1: Hero Row — Session + Regime | Capital Allocation */}
         <motion.div variants={staggerItem}>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Left column: Session Overview + Regime stacked, stretch to match right */}
+            <div className="flex flex-col gap-4 lg:h-full">
+              <SessionOverview allocations={orchestratorData?.allocations ?? []} />
+              <RegimePanel orchestratorData={orchestratorData} className="flex-1" />
+            </div>
+            {/* Right column: Capital Allocation */}
             <CapitalAllocation
               allocations={allocations}
               cashReservePct={orchestratorData?.cash_reserve_pct ?? 0.2}
@@ -109,21 +123,25 @@ export function OrchestratorPage() {
               totalDeployedCapital={orchestratorData?.total_deployed_capital}
               totalEquity={orchestratorData?.total_equity}
             />
-            <SessionOverview allocations={orchestratorData?.allocations ?? []} />
           </div>
         </motion.div>
 
-        {/* Section 4: Strategy Operations */}
+        {/* Section 2: Strategy Coverage Timeline */}
+        <motion.div variants={staggerItem}>
+          <StrategyCoverageTimeline allocations={orchestratorData?.allocations ?? []} />
+        </motion.div>
+
+        {/* Section 3: Strategy Operations */}
         <motion.div variants={staggerItem}>
           <StrategyOperationsGrid />
         </motion.div>
 
-        {/* Section 5: Decision Timeline */}
+        {/* Section 4: Decision Timeline */}
         <motion.div variants={staggerItem}>
           <DecisionTimeline />
         </motion.div>
 
-        {/* Section 6: Global Controls */}
+        {/* Section 5: Global Controls */}
         <motion.div variants={staggerItem}>
           <GlobalControls />
         </motion.div>

@@ -30,17 +30,17 @@ export function SessionOverview({ allocations }: SessionOverviewProps) {
   return (
     <Card>
       <CardHeader title="Session Overview" />
-      <div className="space-y-4">
-        {/* Total P&L - prominent display */}
-        <div className="text-center py-2">
-          <div className="text-xs text-argus-text-dim uppercase tracking-wide mb-1">
+      <div className="space-y-3">
+        {/* Total P&L - prominent but compact */}
+        <div className="text-center py-1">
+          <div className="text-xs text-argus-text-dim uppercase tracking-wide mb-0.5">
             Total P&L Today
           </div>
           <PnlValue value={totalPnl} size="xl" />
         </div>
 
         {/* Metric rows */}
-        <div className="space-y-2 text-sm">
+        <div className="space-y-1.5 text-sm">
           <MetricRow label="Trades Today" value={totalTrades} />
           <MetricRow label="Open Positions" value={totalOpenPositions} />
           <MetricRow

@@ -47,8 +47,9 @@ export function usePauseStrategy() {
   return useMutation({
     mutationFn: (strategyId: string) => controlPost(`/strategies/${strategyId}/pause`),
     onSuccess: () => {
-      // Invalidate strategies to refresh the list
+      // Invalidate strategies and orchestrator status to refresh UI
       queryClient.invalidateQueries({ queryKey: ['strategies'] });
+      queryClient.invalidateQueries({ queryKey: ['orchestrator-status'] });
     },
   });
 }
@@ -62,7 +63,9 @@ export function useResumeStrategy() {
   return useMutation({
     mutationFn: (strategyId: string) => controlPost(`/strategies/${strategyId}/resume`),
     onSuccess: () => {
+      // Invalidate strategies and orchestrator status to refresh UI
       queryClient.invalidateQueries({ queryKey: ['strategies'] });
+      queryClient.invalidateQueries({ queryKey: ['orchestrator-status'] });
     },
   });
 }
@@ -109,7 +112,9 @@ export function useEmergencyPauseAll() {
   return useMutation({
     mutationFn: () => controlPost('/emergency/pause'),
     onSuccess: () => {
+      // Invalidate strategies and orchestrator status to refresh UI
       queryClient.invalidateQueries({ queryKey: ['strategies'] });
+      queryClient.invalidateQueries({ queryKey: ['orchestrator-status'] });
     },
   });
 }

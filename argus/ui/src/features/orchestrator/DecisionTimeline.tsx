@@ -53,16 +53,16 @@ export function DecisionTimeline() {
     );
   }
 
-  // Sort decisions chronologically (oldest first for reading order)
+  // Sort decisions reverse chronologically (newest first for operational relevance)
   const decisions = [...(data?.decisions ?? [])].sort(
-    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
   );
 
   return (
     <div>
       <CardHeader
         title="Decision Log"
-        subtitle={decisions.length > 0 ? `${decisions.length} decisions today` : undefined}
+        subtitle={decisions.length > 0 ? `${decisions.length} today · newest first` : undefined}
       />
       <Card>
         {decisions.length === 0 ? (

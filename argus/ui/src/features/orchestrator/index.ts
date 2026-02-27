@@ -2,8 +2,10 @@
  * Orchestrator feature module barrel export.
  */
 
-export { RegimePanel } from './RegimePanel';
+export { RegimePanel, computeCountdown } from './RegimePanel';
 export { RegimeInputBreakdown } from './RegimeInputBreakdown';
+export { RegimeGauges } from './RegimeGauges';
+export { SessionPhaseBadge } from './SessionPhaseBadge';
 export { StrategyCoverageTimeline } from './StrategyCoverageTimeline';
 export { StrategyOperationsGrid } from './StrategyOperationsGrid';
 export { StrategyOperationsCard } from './StrategyOperationsCard';

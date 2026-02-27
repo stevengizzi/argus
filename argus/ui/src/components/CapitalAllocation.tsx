@@ -77,7 +77,7 @@ export function CapitalAllocation({
   const isEmpty = allocations.length === 0;
 
   return (
-    <Card className="h-full">
+    <Card className="h-full flex flex-col">
       <CardHeader title="Capital Allocation" />
 
       {/* View toggle */}
@@ -91,8 +91,8 @@ export function CapitalAllocation({
         />
       </div>
 
-      {/* Content area with consistent min-height to prevent card size changes on toggle */}
-      <div className="min-h-[280px] md:min-h-[320px]">
+      {/* Content area - flex-1 to fill height, centered content, min-h for standalone use */}
+      <div className="flex-1 min-h-[280px] md:min-h-[320px] flex flex-col justify-center">
         <AnimatePresence mode="wait">
           {viewMode === 'donut' ? (
             <motion.div
