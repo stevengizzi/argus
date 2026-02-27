@@ -48,6 +48,24 @@ class TestBriefingsAPI:
         assert response.status_code == 401
 
     @pytest.mark.asyncio
+    async def test_create_duplicate_briefing_returns_409(
+        self, client_with_debrief: AsyncClient, auth_headers: dict[str, str]
+    ) -> None:
+        """POST /debrief/briefings with duplicate date+type returns 409."""
+        payload = {"date": "2026-03-15", "briefing_type": "eod"}
+        await client_with_debrief.post(
+            "/api/v1/debrief/briefings",
+            json=payload,
+            headers=auth_headers,
+        )
+        response = await client_with_debrief.post(
+            "/api/v1/debrief/briefings",
+            json=payload,
+            headers=auth_headers,
+        )
+        assert response.status_code == 409
+
+    @pytest.mark.asyncio
     async def test_list_briefings(
         self, client_with_debrief: AsyncClient, auth_headers: dict[str, str]
     ) -> None:
@@ -475,6 +493,33 @@ class TestJournalAPI:
         )
 
         assert response.status_code == 204
+
+    @pytest.mark.asyncio
+    async def test_update_journal_entry_clear_strategy_link(
+        self, client_with_debrief: AsyncClient, auth_headers: dict[str, str]
+    ) -> None:
+        """PUT /debrief/journal/{id} with null linked_strategy_id clears it."""
+        # Create entry with a strategy link
+        create_resp = await client_with_debrief.post(
+            "/api/v1/debrief/journal",
+            json={
+                "entry_type": "trade_annotation",
+                "title": "Linked Entry",
+                "content": "Content",
+                "linked_strategy_id": "orb_breakout",
+            },
+            headers=auth_headers,
+        )
+        entry_id = create_resp.json()["id"]
+
+        # Clear the link
+        response = await client_with_debrief.put(
+            f"/api/v1/debrief/journal/{entry_id}",
+            json={"linked_strategy_id": None},
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
+        assert response.json()["linked_strategy_id"] is None
 
     @pytest.mark.asyncio
     async def test_journal_tags(

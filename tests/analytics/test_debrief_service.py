@@ -178,6 +178,31 @@ class TestBriefings:
         result = await debrief_service.delete_briefing("nonexistent_id")
         assert result is False
 
+    async def test_briefing_metadata_roundtrip(self, debrief_service: DebriefService) -> None:
+        """Metadata dict survives create → update → read roundtrip."""
+        created = await debrief_service.create_briefing(
+            date="2026-02-28",
+            briefing_type="pre_market",
+        )
+        updated = await debrief_service.update_briefing(
+            created["id"], metadata={"source": "ai", "confidence": 0.85}
+        )
+        assert updated is not None
+        assert updated["metadata"] == {"source": "ai", "confidence": 0.85}
+
+        # Re-read to verify persistence
+        reloaded = await debrief_service.get_briefing(created["id"])
+        assert reloaded is not None
+        assert reloaded["metadata"] == {"source": "ai", "confidence": 0.85}
+
+    async def test_create_duplicate_briefing_raises(
+        self, debrief_service: DebriefService
+    ) -> None:
+        """Creating a duplicate (same date+type) raises ValueError."""
+        await debrief_service.create_briefing(date="2026-02-27", briefing_type="pre_market")
+        with pytest.raises(ValueError, match="already exists"):
+            await debrief_service.create_briefing(date="2026-02-27", briefing_type="pre_market")
+
 
 class TestJournal:
     """Tests for journal entry CRUD operations."""
@@ -255,6 +280,27 @@ class TestJournal:
         assert len(entries) == 1
         assert total == 1
         assert "regime-change" in entries[0]["tags"]
+
+    async def test_list_journal_entries_exact_tag_match(
+        self, debrief_service: DebriefService
+    ) -> None:
+        """Tag filter matches exactly, not as substring."""
+        await debrief_service.create_journal_entry(
+            entry_type="observation",
+            title="Entry A",
+            content="Content",
+            tags=["test"],
+        )
+        await debrief_service.create_journal_entry(
+            entry_type="observation",
+            title="Entry B",
+            content="Content",
+            tags=["testing", "backtest"],
+        )
+
+        entries, total = await debrief_service.list_journal_entries(tag="test")
+        assert total == 1
+        assert entries[0]["title"] == "Entry A"
 
     async def test_list_journal_entries_search(self, debrief_service: DebriefService) -> None:
         """list_journal_entries searches title and content."""
@@ -429,6 +475,21 @@ class TestDocuments:
         # Word count: "# Test Document This is test content." = 7 words
         assert docs[0]["word_count"] == 7
 
+    async def test_document_metadata_roundtrip(self, debrief_service: DebriefService) -> None:
+        """Document metadata dict survives create → update → read roundtrip."""
+        created = await debrief_service.create_document(
+            category="research",
+            title="Meta Test",
+            content="Content",
+            metadata={"version": 2, "reviewed": True},
+        )
+        assert created["metadata"] == {"version": 2, "reviewed": True}
+
+        # Re-read to verify persistence
+        reloaded = await debrief_service.get_document(created["id"])
+        assert reloaded is not None
+        assert reloaded["metadata"] == {"version": 2, "reviewed": True}
+
 
 class TestSearch:
     """Tests for unified search functionality."""
@@ -437,29 +498,33 @@ class TestSearch:
         self, debrief_service: DebriefService
     ) -> None:
         """search_all finds matching items across all content types."""
-        # Create content with searchable keyword
+        # Create content with searchable keyword (unique to avoid fs matches)
         await debrief_service.create_briefing(
             date="2026-02-27",
             briefing_type="pre_market",
-            title="Pre-Market with NVDA analysis",
-            content="Looking at NVDA momentum.",
+            title="Pre-Market with XYZUNIQ analysis",
+            content="Looking at XYZUNIQ momentum.",
         )
         await debrief_service.create_journal_entry(
             entry_type="observation",
-            title="NVDA observation",
-            content="NVDA patterns observed.",
+            title="XYZUNIQ observation",
+            content="XYZUNIQ patterns observed.",
         )
         await debrief_service.create_document(
             category="research",
-            title="NVDA Research",
-            content="Deep dive into NVDA.",
+            title="XYZUNIQ Research",
+            content="Deep dive into XYZUNIQ.",
         )
 
-        results = await debrief_service.search_all(query="NVDA", scope="all")
+        results = await debrief_service.search_all(query="XYZUNIQ", scope="all")
 
         assert len(results["briefings"]) == 1
         assert len(results["journal"]) == 1
-        assert len(results["documents"]) == 1
+        # Note: documents may include filesystem documents if they match
+        assert len(results["documents"]) >= 1
+        # Verify our database document is included
+        db_docs = [d for d in results["documents"] if d.get("source") == "database"]
+        assert len(db_docs) == 1
 
     async def test_search_scoped_to_briefings(self, debrief_service: DebriefService) -> None:
         """search_all with briefings scope only searches briefings."""
@@ -500,3 +565,29 @@ class TestSearch:
         assert len(results["briefings"]) == 0
         assert len(results["journal"]) == 1
         assert len(results["documents"]) == 0
+
+    async def test_search_finds_filesystem_documents(
+        self, debrief_service: DebriefService, tmp_path: Path
+    ) -> None:
+        """search_all includes matching filesystem documents."""
+        research_dir = tmp_path / "docs" / "research"
+        research_dir.mkdir(parents=True)
+        test_file = research_dir / "searchable_doc.md"
+        test_file.write_text(
+            "# Searchable Research\n\nContains FINDMEFS keyword.", encoding="utf-8"
+        )
+
+        # Monkey-patch discover to use tmp_path
+        original = debrief_service.discover_filesystem_documents
+
+        def patched_discover(base_dir=None):
+            return original(tmp_path)
+
+        debrief_service.discover_filesystem_documents = patched_discover  # type: ignore[method-assign]
+
+        results = await debrief_service.search_all(query="FINDMEFS", scope="documents")
+        assert len(results["documents"]) == 1
+        assert results["documents"][0]["source"] == "filesystem"
+
+        # Restore
+        debrief_service.discover_filesystem_documents = original  # type: ignore[method-assign]

@@ -5,13 +5,16 @@ Provides a unified search endpoint across all debrief content types.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 
 from argus.api.auth import require_auth
-from argus.api.dependencies import AppState, get_app_state
+from argus.api.dependencies import get_debrief_service
+
+if TYPE_CHECKING:
+    from argus.analytics.debrief_service import DebriefService
 
 router = APIRouter()
 
@@ -25,22 +28,12 @@ class SearchResultsResponse(BaseModel):
     total_count: int
 
 
-def _get_debrief_service(state: AppState):
-    """Get the debrief service or raise 503 if unavailable."""
-    if state.debrief_service is None:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Debrief service not available",
-        )
-    return state.debrief_service
-
-
 @router.get("/search", response_model=SearchResultsResponse)
 async def search_debrief_content(
     query: str = Query(..., min_length=1, description="Search query"),
     scope: str = Query("all", description="Search scope: all, briefings, journal, documents"),
     _auth: dict = Depends(require_auth),  # noqa: B008
-    state: AppState = Depends(get_app_state),  # noqa: B008
+    service: DebriefService = Depends(get_debrief_service),  # noqa: B008
 ) -> SearchResultsResponse:
     """Search across all debrief content types.
 
@@ -54,8 +47,6 @@ async def search_debrief_content(
     Returns:
         Search results grouped by content type with total count.
     """
-    service = _get_debrief_service(state)
-
     results = await service.search_all(query=query, scope=scope)
 
     total_count = (

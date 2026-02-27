@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from fastapi import Request
+from fastapi import Depends, HTTPException, Request, status
 
 if TYPE_CHECKING:
     from argus.analytics.debrief_service import DebriefService
@@ -79,3 +79,23 @@ def get_app_state(request: Request) -> AppState:
             return {"broker_connected": state.broker.is_connected}
     """
     return request.app.state.app_state
+
+
+def get_debrief_service(state: AppState = Depends(get_app_state)):  # noqa: B008
+    """FastAPI dependency to get the DebriefService.
+
+    Args:
+        state: The AppState from which to retrieve the service.
+
+    Returns:
+        The DebriefService instance.
+
+    Raises:
+        HTTPException 503: If the debrief service is not available.
+    """
+    if state.debrief_service is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Debrief service not available",
+        )
+    return state.debrief_service

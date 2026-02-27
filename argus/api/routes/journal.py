@@ -6,13 +6,16 @@ Supports observations, trade annotations, pattern notes, and system notes.
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 
 from argus.api.auth import require_auth
-from argus.api.dependencies import AppState, get_app_state
+from argus.api.dependencies import get_debrief_service
+
+if TYPE_CHECKING:
+    from argus.analytics.debrief_service import DebriefService
 
 router = APIRouter()
 
@@ -69,16 +72,6 @@ class JournalTagsResponse(BaseModel):
     tags: list[str]
 
 
-def _get_debrief_service(state: AppState):
-    """Get the debrief service or raise 503 if unavailable."""
-    if state.debrief_service is None:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Debrief service not available",
-        )
-    return state.debrief_service
-
-
 def _dict_to_entry_response(entry: dict) -> JournalEntryResponse:
     """Convert a journal entry dict to JournalEntryResponse."""
     return JournalEntryResponse(
@@ -99,7 +92,7 @@ def _dict_to_entry_response(entry: dict) -> JournalEntryResponse:
 async def create_journal_entry(
     body: CreateJournalEntryRequest,
     _auth: dict = Depends(require_auth),  # noqa: B008
-    state: AppState = Depends(get_app_state),  # noqa: B008
+    service: DebriefService = Depends(get_debrief_service),  # noqa: B008
 ) -> JournalEntryResponse:
     """Create a new journal entry.
 
@@ -109,8 +102,6 @@ async def create_journal_entry(
     Returns:
         The created journal entry.
     """
-    service = _get_debrief_service(state)
-
     entry = await service.create_journal_entry(
         entry_type=body.entry_type,
         title=body.title,
@@ -126,7 +117,7 @@ async def create_journal_entry(
 @router.get("", response_model=JournalEntriesListResponse)
 async def list_journal_entries(
     _auth: dict = Depends(require_auth),  # noqa: B008
-    state: AppState = Depends(get_app_state),  # noqa: B008
+    service: DebriefService = Depends(get_debrief_service),  # noqa: B008
     entry_type: JournalEntryType | None = Query(  # noqa: B008
         None, description="Filter by entry type"
     ),
@@ -153,8 +144,6 @@ async def list_journal_entries(
     Returns:
         Paginated list of journal entries with total count.
     """
-    service = _get_debrief_service(state)
-
     entries, total = await service.list_journal_entries(
         entry_type=entry_type,
         strategy_id=strategy_id,
@@ -175,15 +164,13 @@ async def list_journal_entries(
 @router.get("/tags", response_model=JournalTagsResponse)
 async def get_journal_tags(
     _auth: dict = Depends(require_auth),  # noqa: B008
-    state: AppState = Depends(get_app_state),  # noqa: B008
+    service: DebriefService = Depends(get_debrief_service),  # noqa: B008
 ) -> JournalTagsResponse:
     """Get all unique tags from journal entries.
 
     Returns:
         List of unique tags sorted alphabetically.
     """
-    service = _get_debrief_service(state)
-
     tags = await service.get_journal_tags()
 
     return JournalTagsResponse(tags=tags)
@@ -193,7 +180,7 @@ async def get_journal_tags(
 async def get_journal_entry(
     entry_id: str,
     _auth: dict = Depends(require_auth),  # noqa: B008
-    state: AppState = Depends(get_app_state),  # noqa: B008
+    service: DebriefService = Depends(get_debrief_service),  # noqa: B008
 ) -> JournalEntryResponse:
     """Get a single journal entry by ID.
 
@@ -206,8 +193,6 @@ async def get_journal_entry(
     Raises:
         HTTPException 404: If the entry is not found.
     """
-    service = _get_debrief_service(state)
-
     entry = await service.get_journal_entry(entry_id)
     if entry is None:
         raise HTTPException(
@@ -223,7 +208,7 @@ async def update_journal_entry(
     entry_id: str,
     body: UpdateJournalEntryRequest,
     _auth: dict = Depends(require_auth),  # noqa: B008
-    state: AppState = Depends(get_app_state),  # noqa: B008
+    service: DebriefService = Depends(get_debrief_service),  # noqa: B008
 ) -> JournalEntryResponse:
     """Update a journal entry.
 
@@ -237,21 +222,19 @@ async def update_journal_entry(
     Raises:
         HTTPException 404: If the entry is not found.
     """
-    service = _get_debrief_service(state)
-
-    # Build kwargs from non-None fields
+    # Build kwargs from explicitly provided fields (allows setting to null)
     update_kwargs: dict[str, Any] = {}
-    if body.entry_type is not None:
+    if "entry_type" in body.model_fields_set:
         update_kwargs["entry_type"] = body.entry_type
-    if body.title is not None:
+    if "title" in body.model_fields_set:
         update_kwargs["title"] = body.title
-    if body.content is not None:
+    if "content" in body.model_fields_set:
         update_kwargs["content"] = body.content
-    if body.linked_strategy_id is not None:
+    if "linked_strategy_id" in body.model_fields_set:
         update_kwargs["linked_strategy_id"] = body.linked_strategy_id
-    if body.linked_trade_ids is not None:
+    if "linked_trade_ids" in body.model_fields_set:
         update_kwargs["linked_trade_ids"] = body.linked_trade_ids
-    if body.tags is not None:
+    if "tags" in body.model_fields_set:
         update_kwargs["tags"] = body.tags
 
     entry = await service.update_journal_entry(entry_id, **update_kwargs)
@@ -268,7 +251,7 @@ async def update_journal_entry(
 async def delete_journal_entry(
     entry_id: str,
     _auth: dict = Depends(require_auth),  # noqa: B008
-    state: AppState = Depends(get_app_state),  # noqa: B008
+    service: DebriefService = Depends(get_debrief_service),  # noqa: B008
 ) -> None:
     """Delete a journal entry.
 
@@ -278,8 +261,6 @@ async def delete_journal_entry(
     Raises:
         HTTPException 404: If the entry is not found.
     """
-    service = _get_debrief_service(state)
-
     deleted = await service.delete_journal_entry(entry_id)
     if not deleted:
         raise HTTPException(

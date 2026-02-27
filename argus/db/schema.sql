@@ -243,7 +243,6 @@ CREATE INDEX IF NOT EXISTS idx_approval_proposed_at ON approval_log(proposed_at)
 -- Briefings Table
 -- ---------------------------------------------------------------------------
 -- Pre-market and EOD briefings for The Debrief page (Sprint 21c)
-DROP TABLE IF EXISTS briefings;
 CREATE TABLE IF NOT EXISTS briefings (
     id TEXT PRIMARY KEY,                    -- ULID
     date TEXT NOT NULL,                     -- YYYY-MM-DD
@@ -265,8 +264,7 @@ CREATE INDEX IF NOT EXISTS idx_briefings_status ON briefings(status);
 -- ---------------------------------------------------------------------------
 -- Journal Entries Table
 -- ---------------------------------------------------------------------------
--- Learning journal for The Debrief page (Sprint 21c, replaces original schema)
-DROP TABLE IF EXISTS journal_entries;
+-- Learning journal for The Debrief page (Sprint 21c)
 CREATE TABLE IF NOT EXISTS journal_entries (
     id TEXT PRIMARY KEY,                    -- ULID
     entry_type TEXT NOT NULL,               -- 'observation', 'trade_annotation', 'pattern_note', 'system_note'
@@ -288,7 +286,6 @@ CREATE INDEX IF NOT EXISTS idx_journal_created ON journal_entries(created_at);
 -- Documents Table
 -- ---------------------------------------------------------------------------
 -- Database-stored documents for The Debrief page (Sprint 21c)
-DROP TABLE IF EXISTS documents;
 CREATE TABLE IF NOT EXISTS documents (
     id TEXT PRIMARY KEY,                    -- ULID
     category TEXT NOT NULL,                 -- 'research', 'strategy', 'backtest', 'ai_report'

@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import sqlite3
 from datetime import datetime
 from pathlib import Path
 
@@ -39,6 +40,9 @@ class DebriefService:
             db: The database manager instance.
         """
         self._db = db
+        self._fs_doc_cache: list[dict] | None = None
+        self._fs_doc_cache_time: float = 0.0
+        self._fs_doc_cache_ttl: float = 30.0  # seconds
 
     # -------------------------------------------------------------------------
     # Briefing Methods
@@ -78,8 +82,15 @@ class DebriefService:
             INSERT INTO briefings (id, date, briefing_type, title, content)
             VALUES (?, ?, ?, ?, ?)
         """
-        await self._db.execute(sql, (briefing_id, date, briefing_type, title, content))
-        await self._db.commit()
+        try:
+            await self._db.execute(sql, (briefing_id, date, briefing_type, title, content))
+            await self._db.commit()
+        except sqlite3.IntegrityError as e:
+            if "UNIQUE constraint failed" in str(e):
+                raise ValueError(
+                    f"Briefing already exists for {date} ({briefing_type})"
+                ) from e
+            raise
 
         logger.info("Created briefing %s: %s %s", briefing_id[:8], briefing_type, date)
 
@@ -339,12 +350,18 @@ class DebriefService:
             params.append(strategy_id)
 
         if tag is not None:
-            conditions.append("tags LIKE ?")
-            params.append(f"%{tag}%")
+            # Use json_each for exact tag matching within JSON array
+            conditions.append(
+                "EXISTS (SELECT 1 FROM json_each(tags) WHERE json_each.value = ?)"
+            )
+            params.append(tag)
 
         if search is not None:
-            conditions.append("(title LIKE ? OR content LIKE ?)")
-            search_pattern = f"%{search}%"
+            escaped = self._escape_like(search)
+            conditions.append(
+                "(title LIKE ? ESCAPE '\\' OR content LIKE ? ESCAPE '\\')"
+            )
+            search_pattern = f"%{escaped}%"
             params.append(search_pattern)
             params.append(search_pattern)
 
@@ -618,7 +635,19 @@ class DebriefService:
         Returns:
             List of document dicts with filesystem metadata.
         """
-        base_dir = Path(__file__).parent.parent.parent if base_dir is None else Path(base_dir)
+        import time as _time
+
+        # Only cache when using default base_dir (production path)
+        if (
+            base_dir is None
+            and self._fs_doc_cache is not None
+            and (_time.monotonic() - self._fs_doc_cache_time) < self._fs_doc_cache_ttl
+        ):
+            return self._fs_doc_cache
+
+        resolved_base = (
+            Path(__file__).parent.parent.parent if base_dir is None else Path(base_dir)
+        )
 
         documents: list[dict] = []
         scan_patterns = [
@@ -628,7 +657,7 @@ class DebriefService:
         ]
 
         for category, pattern in scan_patterns:
-            search_path = base_dir / pattern.rsplit("/", 1)[0]
+            search_path = resolved_base / pattern.rsplit("/", 1)[0]
             if not search_path.exists():
                 continue
 
@@ -639,6 +668,10 @@ class DebriefService:
                     documents.append(doc)
                 except OSError as e:
                     logger.warning("Failed to read document %s: %s", filepath, e)
+
+        if base_dir is None:
+            self._fs_doc_cache = documents
+            self._fs_doc_cache_time = _time.monotonic()
 
         return documents
 
@@ -699,12 +732,13 @@ class DebriefService:
             "documents": [],
         }
 
-        pattern = f"%{query}%"
+        escaped = self._escape_like(query)
+        pattern = f"%{escaped}%"
 
         if scope in ("all", "briefings"):
             sql = """
                 SELECT * FROM briefings
-                WHERE title LIKE ? OR content LIKE ?
+                WHERE title LIKE ? ESCAPE '\\' OR content LIKE ? ESCAPE '\\'
                 ORDER BY date DESC
                 LIMIT 50
             """
@@ -714,7 +748,8 @@ class DebriefService:
         if scope in ("all", "journal"):
             sql = """
                 SELECT * FROM journal_entries
-                WHERE title LIKE ? OR content LIKE ? OR tags LIKE ?
+                WHERE title LIKE ? ESCAPE '\\' OR content LIKE ? ESCAPE '\\'
+                    OR tags LIKE ? ESCAPE '\\'
                 ORDER BY created_at DESC
                 LIMIT 50
             """
@@ -724,12 +759,22 @@ class DebriefService:
         if scope in ("all", "documents"):
             sql = """
                 SELECT * FROM documents
-                WHERE title LIKE ? OR content LIKE ? OR tags LIKE ?
+                WHERE title LIKE ? ESCAPE '\\' OR content LIKE ? ESCAPE '\\'
+                    OR tags LIKE ? ESCAPE '\\'
                 ORDER BY created_at DESC
                 LIMIT 50
             """
             rows = await self._db.fetch_all(sql, (pattern, pattern, pattern))
             results["documents"] = [self._row_to_document_dict(row) for row in rows]
+
+            # Also search filesystem documents
+            fs_docs = self.discover_filesystem_documents()
+            query_lower = query.lower()
+            for doc in fs_docs:
+                if query_lower in doc.get("title", "").lower() or query_lower in doc.get(
+                    "content", ""
+                ).lower():
+                    results["documents"].append(doc)
 
         return results
 
@@ -830,22 +875,39 @@ Note any overnight catalysts, watchlist candidates, or adjustments to strategy.
         """
         return max(1, word_count // 200)
 
-    def _parse_json_field(self, value: str | None) -> list:
+    def _parse_json_field(
+        self, value: str | None, *, expect_list: bool = True
+    ) -> list | dict | None:
         """Safely parse a JSON field.
 
         Args:
             value: JSON string or None.
+            expect_list: If True, expects a JSON array (returns []).
+                If False, expects a JSON object (returns None).
 
         Returns:
-            Parsed list, or empty list on error/None.
+            Parsed list or dict, or default on error/None.
         """
         if value is None:
-            return []
+            return [] if expect_list else None
         try:
             result = json.loads(value)
-            return result if isinstance(result, list) else []
+            if expect_list:
+                return result if isinstance(result, list) else []
+            return result if isinstance(result, dict) else None
         except (json.JSONDecodeError, TypeError):
-            return []
+            return [] if expect_list else None
+
+    def _escape_like(self, term: str) -> str:
+        """Escape LIKE wildcards in a search term.
+
+        Args:
+            term: Raw search term.
+
+        Returns:
+            Escaped term safe for LIKE patterns.
+        """
+        return term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
     def _row_to_briefing_dict(self, row: object) -> dict:
         """Convert a database row to a briefing dict.
@@ -867,7 +929,7 @@ Note any overnight catalysts, watchlist candidates, or adjustments to strategy.
             "status": r["status"],
             "title": r["title"],
             "content": content,
-            "metadata": self._parse_json_field(r.get("metadata")) if r.get("metadata") else None,
+            "metadata": self._parse_json_field(r.get("metadata"), expect_list=False),
             "author": r["author"],
             "created_at": r["created_at"],
             "updated_at": r["updated_at"],
@@ -919,7 +981,7 @@ Note any overnight catalysts, watchlist candidates, or adjustments to strategy.
             "content": content,
             "author": r["author"],
             "tags": self._parse_json_field(r.get("tags")),
-            "metadata": self._parse_json_field(r.get("metadata")) if r.get("metadata") else None,
+            "metadata": self._parse_json_field(r.get("metadata"), expect_list=False),
             "created_at": r["created_at"],
             "updated_at": r["updated_at"],
             "word_count": word_count,

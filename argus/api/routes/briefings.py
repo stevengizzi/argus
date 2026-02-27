@@ -5,13 +5,16 @@ Provides endpoints for creating, listing, and managing pre-market and EOD briefi
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 
 from argus.api.auth import require_auth
-from argus.api.dependencies import AppState, get_app_state
+from argus.api.dependencies import get_debrief_service
+
+if TYPE_CHECKING:
+    from argus.analytics.debrief_service import DebriefService
 
 router = APIRouter()
 
@@ -42,7 +45,7 @@ class BriefingResponse(BaseModel):
     status: str
     title: str
     content: str
-    metadata: dict[str, Any] | list | None = None
+    metadata: dict[str, Any] | None = None
     author: str
     created_at: str
     updated_at: str
@@ -57,21 +60,11 @@ class BriefingsListResponse(BaseModel):
     total: int
 
 
-def _get_debrief_service(state: AppState):
-    """Get the debrief service or raise 503 if unavailable."""
-    if state.debrief_service is None:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Debrief service not available",
-        )
-    return state.debrief_service
-
-
 @router.post("", response_model=BriefingResponse, status_code=status.HTTP_201_CREATED)
 async def create_briefing(
     body: CreateBriefingRequest,
     _auth: dict = Depends(require_auth),  # noqa: B008
-    state: AppState = Depends(get_app_state),  # noqa: B008
+    service: DebriefService = Depends(get_debrief_service),  # noqa: B008
 ) -> BriefingResponse:
     """Create a new briefing.
 
@@ -84,14 +77,21 @@ async def create_briefing(
 
     Returns:
         The created briefing.
-    """
-    service = _get_debrief_service(state)
 
-    briefing = await service.create_briefing(
-        date=body.date,
-        briefing_type=body.briefing_type,
-        title=body.title,
-    )
+    Raises:
+        HTTPException 409: If a briefing already exists for the date and type.
+    """
+    try:
+        briefing = await service.create_briefing(
+            date=body.date,
+            briefing_type=body.briefing_type,
+            title=body.title,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(e),
+        ) from e
 
     return BriefingResponse(**briefing)
 
@@ -99,7 +99,7 @@ async def create_briefing(
 @router.get("", response_model=BriefingsListResponse)
 async def list_briefings(
     _auth: dict = Depends(require_auth),  # noqa: B008
-    state: AppState = Depends(get_app_state),  # noqa: B008
+    service: DebriefService = Depends(get_debrief_service),  # noqa: B008
     briefing_type: Literal["pre_market", "eod"] | None = Query(
         None, description="Filter by briefing type"
     ),
@@ -124,8 +124,6 @@ async def list_briefings(
     Returns:
         Paginated list of briefings with total count.
     """
-    service = _get_debrief_service(state)
-
     briefings, total = await service.list_briefings(
         briefing_type=briefing_type,
         status=briefing_status,
@@ -145,7 +143,7 @@ async def list_briefings(
 async def get_briefing(
     briefing_id: str,
     _auth: dict = Depends(require_auth),  # noqa: B008
-    state: AppState = Depends(get_app_state),  # noqa: B008
+    service: DebriefService = Depends(get_debrief_service),  # noqa: B008
 ) -> BriefingResponse:
     """Get a single briefing by ID.
 
@@ -158,8 +156,6 @@ async def get_briefing(
     Raises:
         HTTPException 404: If the briefing is not found.
     """
-    service = _get_debrief_service(state)
-
     briefing = await service.get_briefing(briefing_id)
     if briefing is None:
         raise HTTPException(
@@ -175,7 +171,7 @@ async def update_briefing(
     briefing_id: str,
     body: UpdateBriefingRequest,
     _auth: dict = Depends(require_auth),  # noqa: B008
-    state: AppState = Depends(get_app_state),  # noqa: B008
+    service: DebriefService = Depends(get_debrief_service),  # noqa: B008
 ) -> BriefingResponse:
     """Update a briefing.
 
@@ -189,17 +185,15 @@ async def update_briefing(
     Raises:
         HTTPException 404: If the briefing is not found.
     """
-    service = _get_debrief_service(state)
-
-    # Build kwargs from non-None fields
+    # Build kwargs from explicitly provided fields (allows setting to null)
     update_kwargs: dict[str, Any] = {}
-    if body.title is not None:
+    if "title" in body.model_fields_set:
         update_kwargs["title"] = body.title
-    if body.content is not None:
+    if "content" in body.model_fields_set:
         update_kwargs["content"] = body.content
-    if body.status is not None:
+    if "status" in body.model_fields_set:
         update_kwargs["status"] = body.status
-    if body.metadata is not None:
+    if "metadata" in body.model_fields_set:
         update_kwargs["metadata"] = body.metadata
 
     briefing = await service.update_briefing(briefing_id, **update_kwargs)
@@ -216,7 +210,7 @@ async def update_briefing(
 async def delete_briefing(
     briefing_id: str,
     _auth: dict = Depends(require_auth),  # noqa: B008
-    state: AppState = Depends(get_app_state),  # noqa: B008
+    service: DebriefService = Depends(get_debrief_service),  # noqa: B008
 ) -> None:
     """Delete a briefing.
 
@@ -226,8 +220,6 @@ async def delete_briefing(
     Raises:
         HTTPException 404: If the briefing is not found.
     """
-    service = _get_debrief_service(state)
-
     deleted = await service.delete_briefing(briefing_id)
     if not deleted:
         raise HTTPException(

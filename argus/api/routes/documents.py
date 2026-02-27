@@ -6,13 +6,16 @@ markdown content. Supports both database-stored documents and filesystem discove
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 
 from argus.api.auth import require_auth
-from argus.api.dependencies import AppState, get_app_state
+from argus.api.dependencies import get_debrief_service
+
+if TYPE_CHECKING:
+    from argus.analytics.debrief_service import DebriefService
 
 router = APIRouter()
 
@@ -44,7 +47,7 @@ class DocumentResponse(BaseModel):
     content: str
     author: str
     tags: list[str]
-    metadata: dict[str, Any] | list | None = None
+    metadata: dict[str, Any] | None = None
     created_at: str | None = None
     updated_at: str | None = None
     word_count: int
@@ -65,16 +68,6 @@ class TagsResponse(BaseModel):
     """Response model for listing unique tags."""
 
     tags: list[str]
-
-
-def _get_debrief_service(state: AppState):
-    """Get the debrief service or raise 503 if unavailable."""
-    if state.debrief_service is None:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Debrief service not available",
-        )
-    return state.debrief_service
 
 
 def _dict_to_document_response(doc: dict) -> DocumentResponse:
@@ -100,7 +93,7 @@ def _dict_to_document_response(doc: dict) -> DocumentResponse:
 @router.get("", response_model=DocumentsListResponse)
 async def list_documents(
     _auth: dict = Depends(require_auth),  # noqa: B008
-    state: AppState = Depends(get_app_state),  # noqa: B008
+    service: DebriefService = Depends(get_debrief_service),  # noqa: B008
     category: str | None = Query(None, description="Filter by category"),
 ) -> DocumentsListResponse:
     """List all documents, merging filesystem and database sources.
@@ -113,8 +106,6 @@ async def list_documents(
     Returns:
         List of all documents with total count.
     """
-    service = _get_debrief_service(state)
-
     # Get filesystem documents
     fs_docs = service.discover_filesystem_documents()
 
@@ -140,15 +131,13 @@ async def list_documents(
 @router.get("/tags", response_model=TagsResponse)
 async def get_document_tags(
     _auth: dict = Depends(require_auth),  # noqa: B008
-    state: AppState = Depends(get_app_state),  # noqa: B008
+    service: DebriefService = Depends(get_debrief_service),  # noqa: B008
 ) -> TagsResponse:
     """Get all unique tags from database documents.
 
     Returns:
         List of unique tags sorted alphabetically.
     """
-    service = _get_debrief_service(state)
-
     # Get all database documents and extract unique tags
     db_docs = await service.list_documents()
     all_tags: set[str] = set()
@@ -164,7 +153,7 @@ async def get_document_tags(
 async def get_document(
     document_id: str,
     _auth: dict = Depends(require_auth),  # noqa: B008
-    state: AppState = Depends(get_app_state),  # noqa: B008
+    service: DebriefService = Depends(get_debrief_service),  # noqa: B008
 ) -> DocumentResponse:
     """Get a single document by ID.
 
@@ -179,8 +168,6 @@ async def get_document(
     Raises:
         HTTPException 404: If the document is not found.
     """
-    service = _get_debrief_service(state)
-
     # Check if this is a filesystem document
     if document_id.startswith("fs_"):
         fs_docs = service.discover_filesystem_documents()
@@ -207,7 +194,7 @@ async def get_document(
 async def create_document(
     body: CreateDocumentRequest,
     _auth: dict = Depends(require_auth),  # noqa: B008
-    state: AppState = Depends(get_app_state),  # noqa: B008
+    service: DebriefService = Depends(get_debrief_service),  # noqa: B008
 ) -> DocumentResponse:
     """Create a new document in the database.
 
@@ -217,8 +204,6 @@ async def create_document(
     Returns:
         The created document.
     """
-    service = _get_debrief_service(state)
-
     doc = await service.create_document(
         category=body.category,
         title=body.title,
@@ -234,7 +219,7 @@ async def update_document(
     document_id: str,
     body: UpdateDocumentRequest,
     _auth: dict = Depends(require_auth),  # noqa: B008
-    state: AppState = Depends(get_app_state),  # noqa: B008
+    service: DebriefService = Depends(get_debrief_service),  # noqa: B008
 ) -> DocumentResponse:
     """Update a document.
 
@@ -251,8 +236,6 @@ async def update_document(
         HTTPException 400: If attempting to edit a filesystem document.
         HTTPException 404: If the document is not found.
     """
-    service = _get_debrief_service(state)
-
     # Reject filesystem document edits
     if document_id.startswith("fs_"):
         raise HTTPException(
@@ -260,15 +243,15 @@ async def update_document(
             detail="Cannot edit filesystem documents",
         )
 
-    # Build kwargs from non-None fields
+    # Build kwargs from explicitly provided fields (allows setting to null)
     update_kwargs: dict[str, Any] = {}
-    if body.title is not None:
+    if "title" in body.model_fields_set:
         update_kwargs["title"] = body.title
-    if body.content is not None:
+    if "content" in body.model_fields_set:
         update_kwargs["content"] = body.content
-    if body.category is not None:
+    if "category" in body.model_fields_set:
         update_kwargs["category"] = body.category
-    if body.tags is not None:
+    if "tags" in body.model_fields_set:
         update_kwargs["tags"] = body.tags
 
     doc = await service.update_document(document_id, **update_kwargs)
@@ -285,7 +268,7 @@ async def update_document(
 async def delete_document(
     document_id: str,
     _auth: dict = Depends(require_auth),  # noqa: B008
-    state: AppState = Depends(get_app_state),  # noqa: B008
+    service: DebriefService = Depends(get_debrief_service),  # noqa: B008
 ) -> None:
     """Delete a document.
 
@@ -298,8 +281,6 @@ async def delete_document(
         HTTPException 400: If attempting to delete a filesystem document.
         HTTPException 404: If the document is not found.
     """
-    service = _get_debrief_service(state)
-
     # Reject filesystem document deletes
     if document_id.startswith("fs_"):
         raise HTTPException(
