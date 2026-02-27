@@ -12,11 +12,11 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { GraduationCap } from 'lucide-react';
 import { AnimatedPage } from '../components/AnimatedPage';
-import { Card } from '../components/Card';
 import { SegmentedTab, type SegmentedTabSegment } from '../components/SegmentedTab';
 import { useDebriefUI, type DebriefSection } from '../stores/debriefUI';
 import { BriefingList } from '../features/debrief/briefings';
 import { ResearchLibrary } from '../features/debrief/research';
+import { JournalList } from '../features/debrief/journal';
 import { DURATION, EASE } from '../utils/motion';
 
 const SECTIONS: SegmentedTabSegment[] = [
@@ -77,25 +77,9 @@ export function DebriefPage() {
         >
           {activeSection === 'briefings' && <BriefingList />}
           {activeSection === 'research' && <ResearchLibrary />}
-          {activeSection === 'journal' && <JournalPlaceholder />}
+          {activeSection === 'journal' && <JournalList />}
         </motion.div>
       </AnimatePresence>
     </AnimatedPage>
-  );
-}
-
-/**
- * Placeholder for Journal tab (Session 7 will implement JournalList).
- */
-function JournalPlaceholder() {
-  return (
-    <Card>
-      <div className="flex flex-col items-center justify-center py-12 text-center">
-        <p className="text-argus-text-dim mb-2">Learning Journal tab placeholder</p>
-        <p className="text-sm text-argus-text-dim">
-          Observations, trade annotations, and notes will appear here.
-        </p>
-      </div>
-    </Card>
   );
 }
