@@ -38,6 +38,8 @@ import { TradeActivityHeatmap } from '../features/performance/TradeActivityHeatm
 import { CalendarPnlView } from '../features/performance/CalendarPnlView';
 import { RMultipleHistogram } from '../features/performance/RMultipleHistogram';
 import { RiskWaterfall } from '../features/performance/RiskWaterfall';
+import { PortfolioTreemap } from '../features/performance/PortfolioTreemap';
+import { CorrelationMatrix } from '../features/performance/CorrelationMatrix';
 import { staggerContainer, staggerItem } from '../utils/motion';
 import type { PerformancePeriod } from '../api/types';
 
@@ -195,7 +197,7 @@ export function PerformancePage() {
       )}
 
       {activeTab === 'portfolio' && (
-        <PortfolioTabContent />
+        <PortfolioTabContent period={period} />
       )}
 
       {activeTab === 'replay' && (
@@ -339,21 +341,25 @@ function DistributionTabContent({ period }: DistributionTabProps) {
   );
 }
 
-/** Portfolio tab - Coming soon placeholder */
-function PortfolioTabContent() {
+/** Portfolio tab - Treemap + Correlation Matrix */
+interface PortfolioTabProps {
+  period: PerformancePeriod;
+}
+
+function PortfolioTabContent({ period }: PortfolioTabProps) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.25 }}
+      className="space-y-4 md:space-y-6"
+      variants={staggerContainer(0.08)}
+      initial="hidden"
+      animate="show"
     >
-      <Card>
-        <div className="text-center py-12">
-          <p className="text-argus-text-dim">
-            Portfolio Treemap and Correlation Matrix coming in Session 8
-          </p>
-        </div>
-      </Card>
+      <motion.div variants={staggerItem}>
+        <PortfolioTreemap />
+      </motion.div>
+      <motion.div variants={staggerItem}>
+        <CorrelationMatrix period={period} />
+      </motion.div>
     </motion.div>
   );
 }

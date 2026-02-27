@@ -16,6 +16,10 @@ export { CalendarPnlView } from './CalendarPnlView';
 export { RMultipleHistogram } from './RMultipleHistogram';
 export { RiskWaterfall } from './RiskWaterfall';
 
+// Sprint 21d — Portfolio tab
+export { PortfolioTreemap } from './PortfolioTreemap';
+export { CorrelationMatrix } from './CorrelationMatrix';
+
 // Skeleton exports
 export {
   PerformanceSkeleton,
