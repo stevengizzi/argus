@@ -53,6 +53,10 @@ vi.mock('../features/performance/CorrelationMatrix', () => ({
   CorrelationMatrix: () => <div data-testid="correlation-matrix">Matrix</div>,
 }));
 
+vi.mock('../features/performance/TradeReplay', () => ({
+  TradeReplay: () => <div data-testid="trade-replay">Trade Replay</div>,
+}));
+
 import { usePerformance, usePreviousPeriodPerformance } from '../hooks/usePerformance';
 
 const mockPerformanceData = {
@@ -204,16 +208,16 @@ describe('PerformancePage', () => {
     });
   });
 
-  it('shows Replay placeholder on Replay tab', async () => {
+  it('shows TradeReplay on Replay tab', async () => {
     renderWithProviders(<PerformancePage />);
 
     // Click Replay tab
     const replayTab = screen.getByRole('tab', { name: 'Replay' });
     fireEvent.click(replayTab);
 
-    // Should show placeholder
+    // Should show TradeReplay component
     await waitFor(() => {
-      expect(screen.getByText('Trade Replay loading in next session')).toBeInTheDocument();
+      expect(screen.getByTestId('trade-replay')).toBeInTheDocument();
     });
   });
 

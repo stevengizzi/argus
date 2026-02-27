@@ -40,6 +40,7 @@ import { RMultipleHistogram } from '../features/performance/RMultipleHistogram';
 import { RiskWaterfall } from '../features/performance/RiskWaterfall';
 import { PortfolioTreemap } from '../features/performance/PortfolioTreemap';
 import { CorrelationMatrix } from '../features/performance/CorrelationMatrix';
+import { TradeReplay } from '../features/performance/TradeReplay';
 import { staggerContainer, staggerItem } from '../utils/motion';
 import type { PerformancePeriod } from '../api/types';
 
@@ -403,7 +404,7 @@ function PortfolioTabContent({ period }: PortfolioTabProps) {
   );
 }
 
-/** Replay tab - Coming soon placeholder */
+/** Replay tab - Animated trade walkthrough */
 function ReplayTabContent() {
   return (
     <motion.div
@@ -411,13 +412,7 @@ function ReplayTabContent() {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25 }}
     >
-      <Card>
-        <div className="text-center py-12">
-          <p className="text-argus-text-dim">
-            Trade Replay loading in next session
-          </p>
-        </div>
-      </Card>
+      <TradeReplay />
     </motion.div>
   );
 }
