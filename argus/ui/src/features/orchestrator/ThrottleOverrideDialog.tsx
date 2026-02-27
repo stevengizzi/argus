@@ -13,6 +13,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useOrchestratorUI } from '../../stores/orchestratorUI';
 import { useThrottleOverrideMutation } from '../../hooks/useOrchestratorMutations';
 import { DURATION, EASE } from '../../utils/motion';
+import { getStrategyDisplay } from '../../utils/strategyConfig';
 
 const DURATION_OPTIONS = [
   { value: 30, label: '30 minutes' },
@@ -21,19 +22,6 @@ const DURATION_OPTIONS = [
 ] as const;
 
 const MIN_REASON_LENGTH = 10;
-
-/**
- * Format strategy ID to display name.
- */
-function formatStrategyName(strategyId: string): string {
-  const names: Record<string, string> = {
-    orb_breakout: 'ORB Breakout',
-    orb_scalp: 'ORB Scalp',
-    vwap_reclaim: 'VWAP Reclaim',
-    afternoon_momentum: 'Afternoon Momentum',
-  };
-  return names[strategyId] || strategyId.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-}
 
 export function ThrottleOverrideDialog() {
   const { overrideDialogOpen, overrideTargetStrategy, closeOverrideDialog } =
@@ -133,7 +121,7 @@ export function ThrottleOverrideDialog() {
                   <div className="text-sm">
                     <span className="text-argus-text-dim">Strategy: </span>
                     <span className="text-argus-text font-medium">
-                      {formatStrategyName(overrideTargetStrategy)}
+                      {getStrategyDisplay(overrideTargetStrategy).name}
                     </span>
                   </div>
                 )}

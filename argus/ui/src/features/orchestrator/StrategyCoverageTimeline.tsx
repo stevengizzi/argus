@@ -19,6 +19,7 @@ import { Card } from '../../components/Card';
 import { CardHeader } from '../../components/CardHeader';
 import type { AllocationInfo } from '../../api/types';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
+import { getStrategyDisplay, getStrategyColor } from '../../utils/strategyConfig';
 
 interface StrategyCoverageTimelineProps {
   allocations: AllocationInfo[];
@@ -28,22 +29,6 @@ interface StrategyCoverageTimelineProps {
 const MARKET_START_MIN = 570;  // 9:30 AM = 9*60 + 30
 const MARKET_END_MIN = 960;    // 4:00 PM = 16*60
 const TOTAL_MIN = MARKET_END_MIN - MARKET_START_MIN; // 390
-
-// Strategy colors (match Badge.tsx)
-const STRATEGY_COLORS: Record<string, string> = {
-  orb_breakout: '#60a5fa',      // blue-400
-  orb_scalp: '#c084fc',         // purple-400
-  vwap_reclaim: '#2dd4bf',      // teal-400
-  afternoon_momentum: '#fbbf24', // amber-400
-};
-
-// Strategy display names
-const STRATEGY_LABELS: Record<string, { full: string; medium: string; short: string }> = {
-  orb_breakout: { full: 'ORB Breakout', medium: 'ORB', short: 'O' },
-  orb_scalp: { full: 'ORB Scalp', medium: 'Scalp', short: 'S' },
-  vwap_reclaim: { full: 'VWAP Reclaim', medium: 'VWAP', short: 'V' },
-  afternoon_momentum: { full: 'Afternoon', medium: 'PM', short: 'A' },
-};
 
 // Time label positions
 const TIME_LABELS_FULL = [
@@ -216,7 +201,7 @@ export function StrategyCoverageTimeline({ allocations }: StrategyCoverageTimeli
             const window = alloc.operating_window!;
             const startPct = timeToPercent(window.earliest_entry);
             const endPct = timeToPercent(window.latest_entry);
-            const color = STRATEGY_COLORS[alloc.strategy_id] ?? '#6b7280';
+            const color = getStrategyColor(alloc.strategy_id);
             const isThrottled = alloc.is_throttled || !alloc.is_active;
             const y = idx * layout.rowHeight + 4;
             const barHeight = layout.rowHeight - 8;
@@ -276,13 +261,9 @@ export function StrategyCoverageTimeline({ allocations }: StrategyCoverageTimeli
           }}
         >
           {strategiesWithWindows.map((alloc) => {
-            const labels = STRATEGY_LABELS[alloc.strategy_id] ?? {
-              full: alloc.strategy_id,
-              medium: alloc.strategy_id.slice(0, 4),
-              short: alloc.strategy_id.charAt(0).toUpperCase()
-            };
-            const label = isDesktop ? labels.full : isTablet ? labels.medium : labels.short;
-            const color = STRATEGY_COLORS[alloc.strategy_id] ?? '#6b7280';
+            const config = getStrategyDisplay(alloc.strategy_id);
+            const label = isDesktop ? config.name : isTablet ? config.shortName : config.letter;
+            const color = config.color;
             const isThrottled = alloc.is_throttled || !alloc.is_active;
 
             return (

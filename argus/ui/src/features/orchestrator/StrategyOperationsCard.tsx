@@ -18,35 +18,16 @@ import { PnlValue } from '../../components/PnlValue';
 import { usePauseStrategy, useResumeStrategy } from '../../hooks/useControls';
 import { useOrchestratorUI } from '../../stores/orchestratorUI';
 import { formatCurrencyCompact, formatPercent } from '../../utils/format';
+import {
+  getStrategyDisplay,
+  getStrategyBorderClass,
+  getStrategyBarClass,
+} from '../../utils/strategyConfig';
 import type { AllocationInfo } from '../../api/types';
 
 interface StrategyOperationsCardProps {
   allocation: AllocationInfo;
 }
-
-// Strategy display names
-const STRATEGY_NAMES: Record<string, string> = {
-  orb_breakout: 'ORB Breakout',
-  orb_scalp: 'ORB Scalp',
-  vwap_reclaim: 'VWAP Reclaim',
-  afternoon_momentum: 'Afternoon Momentum',
-};
-
-// Strategy colors for left border
-const STRATEGY_BORDER_COLORS: Record<string, string> = {
-  orb_breakout: 'border-l-blue-400',
-  orb_scalp: 'border-l-purple-400',
-  vwap_reclaim: 'border-l-teal-400',
-  afternoon_momentum: 'border-l-amber-400',
-};
-
-// Strategy progress bar colors
-const STRATEGY_BAR_COLORS: Record<string, string> = {
-  orb_breakout: 'bg-blue-400',
-  orb_scalp: 'bg-purple-400',
-  vwap_reclaim: 'bg-teal-400',
-  afternoon_momentum: 'bg-amber-400',
-};
 
 /**
  * Format operating window time from "09:35" to "9:35 AM"
@@ -92,9 +73,10 @@ export function StrategyOperationsCard({ allocation }: StrategyOperationsCardPro
   const resumeMutation = useResumeStrategy();
   const openOverrideDialog = useOrchestratorUI((s) => s.openOverrideDialog);
 
-  const strategyName = STRATEGY_NAMES[allocation.strategy_id] || allocation.strategy_id;
-  const borderClass = STRATEGY_BORDER_COLORS[allocation.strategy_id] || 'border-l-gray-400';
-  const barColorClass = STRATEGY_BAR_COLORS[allocation.strategy_id] || 'bg-gray-400';
+  const strategyConfig = getStrategyDisplay(allocation.strategy_id);
+  const strategyName = strategyConfig.name;
+  const borderClass = getStrategyBorderClass(allocation.strategy_id);
+  const barColorClass = getStrategyBarClass(allocation.strategy_id);
   const healthStatus = deriveHealthStatus(allocation);
   const isThrottled = allocation.throttle_action !== 'none' && allocation.throttle_action !== 'NONE';
 
@@ -163,7 +145,7 @@ export function StrategyOperationsCard({ allocation }: StrategyOperationsCardPro
                 format={formatCurrencyCompact}
               />{' '}
               <span className="text-argus-text-dim">
-                ({formatPercent(allocation.allocation_pct / 100)})
+                ({formatPercent(allocation.allocation_pct)})
               </span>
             </span>
           </div>

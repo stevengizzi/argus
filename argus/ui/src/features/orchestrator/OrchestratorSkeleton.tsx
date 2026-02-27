@@ -78,17 +78,41 @@ export function OrchestratorSkeleton() {
         </div>
       </Card>
 
-      {/* Capital Allocation skeleton */}
-      <Card>
-        <div className="flex items-center gap-6">
-          <Skeleton variant="circle" width={100} height={100} />
-          <div className="flex-1 space-y-2">
-            <Skeleton variant="line" width={120} height={16} />
-            <Skeleton variant="line" height={12} />
-            <Skeleton variant="line" height={12} />
+      {/* Capital Allocation + Session Overview skeleton (2-column) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Capital Allocation skeleton */}
+        <Card>
+          <div className="flex items-center gap-6">
+            <Skeleton variant="circle" width={100} height={100} />
+            <div className="flex-1 space-y-2">
+              <Skeleton variant="line" width={120} height={16} />
+              <Skeleton variant="line" height={12} />
+              <Skeleton variant="line" height={12} />
+            </div>
           </div>
-        </div>
-      </Card>
+        </Card>
+
+        {/* Session Overview skeleton */}
+        <Card>
+          <div className="space-y-4">
+            <Skeleton variant="line" width={120} height={16} />
+            {/* P&L prominent */}
+            <div className="flex flex-col items-center py-2">
+              <Skeleton variant="line" width={80} height={12} />
+              <Skeleton variant="line" width={100} height={32} className="mt-1" />
+            </div>
+            {/* Metric rows */}
+            <div className="space-y-2">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="flex justify-between">
+                  <Skeleton variant="line" width={100} height={14} />
+                  <Skeleton variant="line" width={50} height={14} />
+                </div>
+              ))}
+            </div>
+          </div>
+        </Card>
+      </div>
 
       {/* StrategyOperationsGrid skeleton (4 cards) */}
       <div className="grid grid-cols-1 min-[834px]:grid-cols-2 gap-4">

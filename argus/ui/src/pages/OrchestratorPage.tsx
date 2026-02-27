@@ -24,6 +24,7 @@ import {
   DecisionTimeline,
   GlobalControls,
   ThrottleOverrideDialog,
+  SessionOverview,
   OrchestratorSkeleton,
 } from '../features/orchestrator';
 import { useOrchestratorStatus } from '../hooks';
@@ -98,15 +99,18 @@ export function OrchestratorPage() {
           <StrategyCoverageTimeline allocations={orchestratorData?.allocations ?? []} />
         </motion.div>
 
-        {/* Section 3: Capital Allocation (reuse existing) */}
+        {/* Section 3: Capital Allocation + Session Overview (side by side) */}
         <motion.div variants={staggerItem}>
-          <CapitalAllocation
-            allocations={allocations}
-            cashReservePct={orchestratorData?.cash_reserve_pct ?? 0.2}
-            totalDeployedPct={orchestratorData?.total_deployed_pct}
-            totalDeployedCapital={orchestratorData?.total_deployed_capital}
-            totalEquity={orchestratorData?.total_equity}
-          />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <CapitalAllocation
+              allocations={allocations}
+              cashReservePct={orchestratorData?.cash_reserve_pct ?? 0.2}
+              totalDeployedPct={orchestratorData?.total_deployed_pct}
+              totalDeployedCapital={orchestratorData?.total_deployed_capital}
+              totalEquity={orchestratorData?.total_equity}
+            />
+            <SessionOverview allocations={orchestratorData?.allocations ?? []} />
+          </div>
         </motion.div>
 
         {/* Section 4: Strategy Operations */}
