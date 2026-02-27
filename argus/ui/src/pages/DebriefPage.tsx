@@ -7,8 +7,16 @@
  * - Journal: Typed entries for observations, trade annotations, and notes
  *
  * Uses SegmentedTab for section switching with Framer Motion transitions.
+ *
+ * Keyboard shortcuts:
+ * - 'b' → switch to Briefings tab
+ * - 'r' → switch to Research tab
+ * - 'j' → switch to Journal tab
+ * - 'n' → start new entry (expand form in current tab)
+ * - Escape → close editor/form
  */
 
+import { useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { GraduationCap } from 'lucide-react';
 import { AnimatedPage } from '../components/AnimatedPage';
@@ -42,10 +50,97 @@ const tabContentVariants = {
 export function DebriefPage() {
   const activeSection = useDebriefUI((state) => state.activeSection);
   const setActiveSection = useDebriefUI((state) => state.setActiveSection);
+  const journalDraftExpanded = useDebriefUI((state) => state.journalDraftExpanded);
+  const setJournalDraftExpanded = useDebriefUI((state) => state.setJournalDraftExpanded);
+  const editingBriefingId = useDebriefUI((state) => state.editingBriefingId);
+  const setEditingBriefingId = useDebriefUI((state) => state.setEditingBriefingId);
+  const readingBriefingId = useDebriefUI((state) => state.readingBriefingId);
+  const setReadingBriefingId = useDebriefUI((state) => state.setReadingBriefingId);
+  const editingDocumentId = useDebriefUI((state) => state.editingDocumentId);
+  const setEditingDocumentId = useDebriefUI((state) => state.setEditingDocumentId);
+  const readingDocumentId = useDebriefUI((state) => state.readingDocumentId);
+  const setReadingDocumentId = useDebriefUI((state) => state.setReadingDocumentId);
+  const editingJournalEntryId = useDebriefUI((state) => state.editingJournalEntryId);
+  const setEditingJournalEntryId = useDebriefUI((state) => state.setEditingJournalEntryId);
 
   const handleSectionChange = (value: string) => {
     setActiveSection(value as DebriefSection);
   };
+
+  // Keyboard shortcuts for tab navigation and actions
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if typing in an input, textarea, or contenteditable
+      const target = e.target as HTMLElement;
+      if (
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.isContentEditable
+      ) {
+        return;
+      }
+
+      switch (e.key.toLowerCase()) {
+        case 'b':
+          setActiveSection('briefings');
+          break;
+        case 'r':
+          setActiveSection('research');
+          break;
+        case 'j':
+          setActiveSection('journal');
+          break;
+        case 'n':
+          // Start new entry in current tab
+          if (activeSection === 'journal') {
+            setJournalDraftExpanded(true);
+          }
+          // Note: Briefings and Research "new" actions require dropdown/navigation,
+          // which are handled within their respective components
+          break;
+        case 'escape':
+          // Close any open modals and editors
+          if (readingBriefingId) {
+            setReadingBriefingId(null);
+          }
+          if (readingDocumentId) {
+            setReadingDocumentId(null);
+          }
+          if (editingBriefingId) {
+            setEditingBriefingId(null);
+          }
+          if (editingDocumentId) {
+            setEditingDocumentId(null);
+          }
+          if (editingJournalEntryId) {
+            setEditingJournalEntryId(null);
+          }
+          // Collapse journal form
+          if (journalDraftExpanded) {
+            setJournalDraftExpanded(false);
+          }
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [
+    activeSection,
+    journalDraftExpanded,
+    editingBriefingId,
+    readingBriefingId,
+    editingDocumentId,
+    readingDocumentId,
+    editingJournalEntryId,
+    setActiveSection,
+    setJournalDraftExpanded,
+    setEditingBriefingId,
+    setReadingBriefingId,
+    setEditingDocumentId,
+    setReadingDocumentId,
+    setEditingJournalEntryId,
+  ]);
 
   return (
     <AnimatedPage>

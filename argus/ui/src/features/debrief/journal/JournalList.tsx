@@ -12,7 +12,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Search, X, BookOpen } from 'lucide-react';
+import { Search, X, Pencil, Filter } from 'lucide-react';
 import { JournalEntryForm } from './JournalEntryForm';
 import { JournalEntryCard } from './JournalEntryCard';
 import { DebriefSkeleton } from '../DebriefSkeleton';
@@ -235,10 +235,28 @@ export function JournalList() {
 
         {/* Entries list */}
         {entries.length === 0 ? (
-          <EmptyState
-            icon={BookOpen}
-            message="No journal entries yet. Start capturing your observations!"
-          />
+          hasActiveFilters ? (
+            <EmptyState
+              icon={Filter}
+              message="No entries match your filters."
+              action={
+                <button
+                  onClick={() => {
+                    clearJournalFilters();
+                    setSearchInput('');
+                  }}
+                  className="text-sm text-argus-accent hover:underline"
+                >
+                  Clear filters
+                </button>
+              }
+            />
+          ) : (
+            <EmptyState
+              icon={Pencil}
+              message="No journal entries yet. Start capturing your observations, trade annotations, and pattern notes."
+            />
+          )
         ) : (
           <div className="space-y-3">
             {entries.map((entry, index) => (

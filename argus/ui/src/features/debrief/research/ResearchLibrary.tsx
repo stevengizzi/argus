@@ -16,7 +16,7 @@
 
 import { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, FileText } from 'lucide-react';
+import { Plus, FolderOpen, Filter } from 'lucide-react';
 import { ResearchDocCard } from './ResearchDocCard';
 import { DocumentEditor } from './DocumentEditor';
 import { DebriefSkeleton } from '../DebriefSkeleton';
@@ -189,24 +189,25 @@ export function ResearchLibrary() {
 
         {/* Documents grid */}
         {documents.length === 0 ? (
-          <EmptyState
-            icon={FileText}
-            message={
-              researchCategoryFilter
-                ? 'No documents in this category.'
-                : 'No documents yet. Create your first one!'
-            }
-            action={
-              !researchCategoryFilter && (
+          researchCategoryFilter ? (
+            <EmptyState
+              icon={Filter}
+              message="No documents in this category."
+            />
+          ) : (
+            <EmptyState
+              icon={FolderOpen}
+              message="No documents found. Your research documents will appear here."
+              action={
                 <button
                   onClick={handleCreateDocument}
                   className="text-sm text-argus-accent hover:underline"
                 >
-                  Create a document
+                  Add a document
                 </button>
-              )
-            }
-          />
+              }
+            />
+          )
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-stretch">
             {documents.map((doc, index) => (

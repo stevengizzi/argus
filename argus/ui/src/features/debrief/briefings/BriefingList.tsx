@@ -86,9 +86,21 @@ export function BriefingList() {
       });
       // Open the editor for the new briefing
       setEditingBriefingId(newBriefing.id);
-    } catch (error) {
-      // Error is handled by mutation state
-      console.error('Failed to create briefing:', error);
+    } catch (err) {
+      // Check if this is a 409 Conflict (briefing already exists)
+      const error = err as { status?: number };
+      if (error.status === 409) {
+        // Find the existing briefing for today and this type, then edit it
+        const today = new Date().toISOString().split('T')[0];
+        const existingBriefing = data?.briefings?.find(
+          (b) => b.date === today && b.briefing_type === type
+        );
+        if (existingBriefing) {
+          setEditingBriefingId(existingBriefing.id);
+        }
+      } else {
+        console.error('Failed to create briefing:', err);
+      }
     }
   };
 
@@ -188,14 +200,17 @@ export function BriefingList() {
                   exit={{ opacity: 0, y: -8, scale: 0.95 }}
                   transition={{ duration: DURATION.fast }}
                   className="absolute right-0 mt-2 w-56 py-1 bg-argus-surface border border-argus-border rounded-lg shadow-xl z-10"
+                  onMouseDown={(e) => e.stopPropagation()}
                 >
                   <button
+                    type="button"
                     onClick={() => handleCreateBriefing('pre_market')}
                     className="w-full px-4 py-2 text-sm text-left text-argus-text hover:bg-argus-surface-2 transition-colors"
                   >
                     Pre-Market Briefing
                   </button>
                   <button
+                    type="button"
                     onClick={() => handleCreateBriefing('eod')}
                     className="w-full px-4 py-2 text-sm text-left text-argus-text hover:bg-argus-surface-2 transition-colors"
                   >
@@ -211,7 +226,7 @@ export function BriefingList() {
         {briefings.length === 0 ? (
           <EmptyState
             icon={BookOpen}
-            message="No briefings yet. Create your first one!"
+            message="No briefings yet. Create your first pre-market briefing to start building your trading journal."
             action={
               <button
                 onClick={() => setDropdownOpen(true)}
