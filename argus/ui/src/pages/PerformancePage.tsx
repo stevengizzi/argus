@@ -36,6 +36,8 @@ import {
 } from '../features/performance';
 import { TradeActivityHeatmap } from '../features/performance/TradeActivityHeatmap';
 import { CalendarPnlView } from '../features/performance/CalendarPnlView';
+import { RMultipleHistogram } from '../features/performance/RMultipleHistogram';
+import { RiskWaterfall } from '../features/performance/RiskWaterfall';
 import { staggerContainer, staggerItem } from '../utils/motion';
 import type { PerformancePeriod } from '../api/types';
 
@@ -189,7 +191,7 @@ export function PerformancePage() {
       )}
 
       {activeTab === 'distribution' && (
-        <DistributionTabContent />
+        <DistributionTabContent period={period} />
       )}
 
       {activeTab === 'portfolio' && (
@@ -314,21 +316,25 @@ function HeatmapsTabContent({ period, dailyPnl }: HeatmapsTabProps) {
   );
 }
 
-/** Distribution tab - Coming soon placeholder */
-function DistributionTabContent() {
+/** Distribution tab - R-Multiple Histogram + Risk Waterfall */
+interface DistributionTabProps {
+  period: PerformancePeriod;
+}
+
+function DistributionTabContent({ period }: DistributionTabProps) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.25 }}
+      className="space-y-4 md:space-y-6"
+      variants={staggerContainer(0.08)}
+      initial="hidden"
+      animate="show"
     >
-      <Card>
-        <div className="text-center py-12">
-          <p className="text-argus-text-dim">
-            R-Multiple Distribution and Risk Waterfall coming in Session 7
-          </p>
-        </div>
-      </Card>
+      <motion.div variants={staggerItem}>
+        <RMultipleHistogram period={period} />
+      </motion.div>
+      <motion.div variants={staggerItem}>
+        <RiskWaterfall />
+      </motion.div>
     </motion.div>
   );
 }

@@ -12,6 +12,10 @@ export { StrategyBreakdown } from './StrategyBreakdown';
 export { TradeActivityHeatmap } from './TradeActivityHeatmap';
 export { CalendarPnlView } from './CalendarPnlView';
 
+// Sprint 21d — Distribution tab
+export { RMultipleHistogram } from './RMultipleHistogram';
+export { RiskWaterfall } from './RiskWaterfall';
+
 // Skeleton exports
 export {
   PerformanceSkeleton,
