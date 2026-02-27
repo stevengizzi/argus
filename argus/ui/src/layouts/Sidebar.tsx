@@ -1,21 +1,22 @@
 /**
  * Icon-only sidebar for desktop (≥1024px).
  *
- * Shows 5 navigation items, paper mode badge, status indicator, and logout.
+ * Shows 6 navigation items, paper mode badge, status indicator, and logout.
  */
 
 import { useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, ScrollText, TrendingUp, BookOpen, Activity, LogOut } from 'lucide-react';
+import { LayoutDashboard, ScrollText, TrendingUp, BookOpen, Gauge, Activity, LogOut } from 'lucide-react';
 import { useAuthStore } from '../stores/auth';
 import { useLiveStore } from '../stores/live';
 
-// Navigation items in sidebar order - keyboard shortcuts use this order (1, 2, 3, 4, 5)
+// Navigation items in sidebar order - keyboard shortcuts use this order (1, 2, 3, 4, 5, 6)
 const NAV_ITEMS = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/trades', icon: ScrollText, label: 'Trades' },
   { to: '/performance', icon: TrendingUp, label: 'Performance' },
   { to: '/patterns', icon: BookOpen, label: 'Pattern Library' },
+  { to: '/orchestrator', icon: Gauge, label: 'Orchestrator' },
   { to: '/system', icon: Activity, label: 'System' },
 ] as const;
 
@@ -66,7 +67,7 @@ export function Sidebar({ paperMode = false }: SidebarProps) {
   const status = useLiveStore((state) => state.status);
   const navigate = useNavigate();
 
-  // Keyboard shortcuts: 1-5 for navigation
+  // Keyboard shortcuts: 1-6 for navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Ignore if typing in an input or textarea
@@ -113,7 +114,7 @@ export function Sidebar({ paperMode = false }: SidebarProps) {
         />
       </div>
 
-      {/* Navigation - items are numbered 1-5 for keyboard shortcuts */}
+      {/* Navigation - items are numbered 1-6 for keyboard shortcuts */}
       <nav className="flex-1 flex flex-col items-center py-4 space-y-2">
         {NAV_ITEMS.map((item) => (
           <NavItem

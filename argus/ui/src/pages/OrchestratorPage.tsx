@@ -16,7 +16,6 @@ import { motion } from 'framer-motion';
 import { Gauge } from 'lucide-react';
 import { AnimatedPage } from '../components/AnimatedPage';
 import { Card } from '../components/Card';
-import { Skeleton } from '../components/Skeleton';
 import { CapitalAllocation } from '../components/CapitalAllocation';
 import {
   RegimePanel,
@@ -25,6 +24,7 @@ import {
   DecisionTimeline,
   GlobalControls,
   ThrottleOverrideDialog,
+  OrchestratorSkeleton,
 } from '../features/orchestrator';
 import { useOrchestratorStatus } from '../hooks';
 import { staggerContainer, staggerItem } from '../utils/motion';
@@ -49,17 +49,7 @@ export function OrchestratorPage() {
           <Gauge className="w-6 h-6 text-argus-accent" />
           <h1 className="text-xl font-semibold text-argus-text">Orchestrator</h1>
         </div>
-        <div className="space-y-6">
-          <Card>
-            <Skeleton className="h-24" />
-          </Card>
-          <Card>
-            <Skeleton className="h-40" />
-          </Card>
-          <Card>
-            <Skeleton className="h-64" />
-          </Card>
-        </div>
+        <OrchestratorSkeleton />
       </AnimatedPage>
     );
   }
