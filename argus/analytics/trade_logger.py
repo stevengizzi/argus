@@ -515,6 +515,50 @@ class TradeLogger:
         rows = await self._db.fetch_all(sql, tuple(params))
         return [dict(row) for row in rows]  # type: ignore[arg-type]
 
+    async def get_daily_pnl_by_strategy(
+        self,
+        date_from: str | None = None,
+        date_to: str | None = None,
+    ) -> list[dict]:
+        """Get daily P&L broken out by strategy.
+
+        Used for computing strategy correlation matrices and other
+        cross-strategy analytics.
+
+        Args:
+            date_from: Optional start date filter (ISO YYYY-MM-DD).
+            date_to: Optional end date filter (ISO YYYY-MM-DD).
+
+        Returns:
+            List of dicts with {date, strategy_id, pnl} rows.
+            Each row represents one strategy's P&L for one day.
+        """
+        conditions: list[str] = ["exit_time IS NOT NULL"]
+        params: list[object] = []
+
+        if date_from is not None:
+            conditions.append("date(exit_time) >= ?")
+            params.append(date_from)
+
+        if date_to is not None:
+            conditions.append("date(exit_time) <= ?")
+            params.append(date_to)
+
+        where_clause = " AND ".join(conditions)
+        sql = f"""
+            SELECT
+                date(exit_time) as date,
+                strategy_id,
+                SUM(net_pnl) as pnl
+            FROM trades
+            WHERE {where_clause}
+            GROUP BY date(exit_time), strategy_id
+            ORDER BY date DESC, strategy_id
+        """
+
+        rows = await self._db.fetch_all(sql, tuple(params))
+        return [dict(row) for row in rows]  # type: ignore[arg-type]
+
     async def log_orchestrator_decision(
         self,
         date: str,
