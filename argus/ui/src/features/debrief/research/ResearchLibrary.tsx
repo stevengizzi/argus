@@ -71,6 +71,32 @@ export function ResearchLibrary() {
   const [deletingDocument, setDeletingDocument] = useState<ResearchDocument | null>(null);
   const [isCreating, setIsCreating] = useState(false);
 
+  // Sort documents: database docs (Custom) first, then filesystem (Repo), then by title
+  // IMPORTANT: All hooks must be called before any early returns (React rules of hooks)
+  const documents = useMemo(() => {
+    return [...(data?.documents ?? [])].sort((a, b) => {
+      // Database docs first
+      if (a.source === 'database' && b.source !== 'database') return -1;
+      if (a.source !== 'database' && b.source === 'database') return 1;
+      // Then sort by title
+      return a.title.localeCompare(b.title);
+    });
+  }, [data?.documents]);
+
+  // Adapt document for DocumentModal (which expects StrategyDocument shape)
+  const documentForModal = useMemo(() => {
+    if (!readingDocument) return null;
+    return {
+      doc_id: readingDocument.id,
+      title: readingDocument.title,
+      filename: '', // Not used
+      word_count: readingDocument.word_count,
+      reading_time_min: readingDocument.reading_time_min,
+      last_modified: readingDocument.updated_at,
+      content: readingDocument.content,
+    };
+  }, [readingDocument]);
+
   // Handle category filter change
   const handleCategoryChange = (value: string) => {
     setResearchCategoryFilter(value || null);
@@ -126,30 +152,6 @@ export function ResearchLibrary() {
       </div>
     );
   }
-
-  // Sort documents: database docs (Custom) first, then filesystem (Repo), then by title
-  const documents = useMemo(() => {
-    return [...(data?.documents ?? [])].sort((a, b) => {
-      // Database docs first
-      if (a.source === 'database' && b.source !== 'database') return -1;
-      if (a.source !== 'database' && b.source === 'database') return 1;
-      // Then sort by title
-      return a.title.localeCompare(b.title);
-    });
-  }, [data?.documents]);
-
-  // Adapt document for DocumentModal (which expects StrategyDocument shape)
-  const documentForModal = readingDocument
-    ? {
-        doc_id: readingDocument.id,
-        title: readingDocument.title,
-        filename: '', // Not used
-        word_count: readingDocument.word_count,
-        reading_time_min: readingDocument.reading_time_min,
-        last_modified: readingDocument.updated_at,
-        content: readingDocument.content,
-      }
-    : null;
 
   return (
     <>
