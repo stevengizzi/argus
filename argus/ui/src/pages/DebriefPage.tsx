@@ -16,6 +16,7 @@ import { Card } from '../components/Card';
 import { SegmentedTab, type SegmentedTabSegment } from '../components/SegmentedTab';
 import { useDebriefUI, type DebriefSection } from '../stores/debriefUI';
 import { BriefingList } from '../features/debrief/briefings';
+import { ResearchLibrary } from '../features/debrief/research';
 import { DURATION, EASE } from '../utils/motion';
 
 const SECTIONS: SegmentedTabSegment[] = [
@@ -75,27 +76,11 @@ export function DebriefPage() {
           exit="exit"
         >
           {activeSection === 'briefings' && <BriefingList />}
-          {activeSection === 'research' && <ResearchPlaceholder />}
+          {activeSection === 'research' && <ResearchLibrary />}
           {activeSection === 'journal' && <JournalPlaceholder />}
         </motion.div>
       </AnimatePresence>
     </AnimatedPage>
-  );
-}
-
-/**
- * Placeholder for Research tab (Session 6 will implement ResearchLibrary).
- */
-function ResearchPlaceholder() {
-  return (
-    <Card>
-      <div className="flex flex-col items-center justify-center py-12 text-center">
-        <p className="text-argus-text-dim mb-2">Research Library tab placeholder</p>
-        <p className="text-sm text-argus-text-dim">
-          Documentation and research notes will appear here.
-        </p>
-      </div>
-    </Card>
   );
 }
 
