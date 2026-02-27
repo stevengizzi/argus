@@ -8,6 +8,10 @@ export { EquityCurve } from './EquityCurve';
 export { DailyPnlChart } from './DailyPnlChart';
 export { StrategyBreakdown } from './StrategyBreakdown';
 
+// Sprint 21d — Heatmaps tab
+export { TradeActivityHeatmap } from './TradeActivityHeatmap';
+export { CalendarPnlView } from './CalendarPnlView';
+
 // Skeleton exports
 export {
   PerformanceSkeleton,

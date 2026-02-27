@@ -4,6 +4,13 @@
  * Shows equity curve, daily P&L histogram, metrics grid, and strategy breakdown.
  * Period selector controls the time range for all data.
  *
+ * Sprint 21d: Refactored into tabbed layout with 5 sub-views:
+ * - Overview: existing content (MetricsGrid, EquityCurve, DailyPnlChart, StrategyBreakdown)
+ * - Heatmaps: TradeActivityHeatmap, CalendarPnlView
+ * - Distribution: RMultipleHistogram, RiskWaterfall
+ * - Portfolio: PortfolioTreemap, CorrelationMatrix
+ * - Replay: TradeReplay
+ *
  * Uses local state for period to prevent data flash during page exit animations.
  * Containers/headers stay stable during period changes - only data values transition.
  *
@@ -18,6 +25,7 @@ import { motion } from 'framer-motion';
 import { TrendingUp } from 'lucide-react';
 import { usePerformance } from '../hooks/usePerformance';
 import { Card } from '../components/Card';
+import { SegmentedTab } from '../components/SegmentedTab';
 import {
   PeriodSelector,
   MetricsGrid,
@@ -26,8 +34,21 @@ import {
   StrategyBreakdown,
   PerformanceSkeleton,
 } from '../features/performance';
+import { TradeActivityHeatmap } from '../features/performance/TradeActivityHeatmap';
+import { CalendarPnlView } from '../features/performance/CalendarPnlView';
 import { staggerContainer, staggerItem } from '../utils/motion';
 import type { PerformancePeriod } from '../api/types';
+
+// Performance tabs
+type PerformanceTab = 'overview' | 'heatmaps' | 'distribution' | 'portfolio' | 'replay';
+
+const TAB_SEGMENTS = [
+  { label: 'Overview', value: 'overview' },
+  { label: 'Heatmaps', value: 'heatmaps' },
+  { label: 'Distribution', value: 'distribution' },
+  { label: 'Portfolio', value: 'portfolio' },
+  { label: 'Replay', value: 'replay' },
+];
 
 // Error boundary to catch chart rendering errors
 interface ErrorBoundaryProps {
@@ -74,6 +95,9 @@ export function PerformancePage() {
     return (params.get('period') as PerformancePeriod) || 'month';
   });
 
+  // Tab state
+  const [activeTab, setActiveTab] = useState<PerformanceTab>('overview');
+
   const { data, isLoading, error, isFetching } = usePerformance(period);
 
   // First load (no cache at all) — show skeleton
@@ -81,7 +105,12 @@ export function PerformancePage() {
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <PageHeader selectedPeriod={period} onPeriodChange={setPeriod} />
+        <PageHeader
+          selectedPeriod={period}
+          onPeriodChange={setPeriod}
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+        />
         <PerformanceSkeleton />
       </div>
     );
@@ -90,7 +119,12 @@ export function PerformancePage() {
   if (error && !data) {
     return (
       <div className="space-y-6">
-        <PageHeader selectedPeriod={period} onPeriodChange={setPeriod} />
+        <PageHeader
+          selectedPeriod={period}
+          onPeriodChange={setPeriod}
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+        />
         <Card>
           <div className="text-center py-8">
             <TrendingUp className="w-8 h-8 text-argus-loss mx-auto mb-4" />
@@ -111,7 +145,12 @@ export function PerformancePage() {
   if (!data || data.metrics.total_trades === 0) {
     return (
       <div className="space-y-6">
-        <PageHeader selectedPeriod={period} onPeriodChange={setPeriod} />
+        <PageHeader
+          selectedPeriod={period}
+          onPeriodChange={setPeriod}
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+        />
         <Card>
           <div className="text-center py-8">
             <TrendingUp className="w-8 h-8 text-argus-text-dim mx-auto mb-4" />
@@ -130,18 +169,86 @@ export function PerformancePage() {
       initial="hidden"
       animate="show"
     >
-      {/* Page header with period selector */}
-      <motion.div
-        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
-        variants={staggerItem}
-      >
+      {/* Page header with period selector and tabs */}
+      <motion.div variants={staggerItem}>
+        <PageHeader
+          selectedPeriod={period}
+          onPeriodChange={setPeriod}
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+        />
+      </motion.div>
+
+      {/* Tab content */}
+      {activeTab === 'overview' && (
+        <OverviewTabContent data={data} isFetching={isFetching} />
+      )}
+
+      {activeTab === 'heatmaps' && (
+        <HeatmapsTabContent period={period} dailyPnl={data.daily_pnl} />
+      )}
+
+      {activeTab === 'distribution' && (
+        <DistributionTabContent />
+      )}
+
+      {activeTab === 'portfolio' && (
+        <PortfolioTabContent />
+      )}
+
+      {activeTab === 'replay' && (
+        <ReplayTabContent />
+      )}
+    </motion.div>
+  );
+}
+
+/** Page header with title, period selector, and tabs */
+interface PageHeaderProps {
+  selectedPeriod: PerformancePeriod;
+  onPeriodChange: (period: PerformancePeriod) => void;
+  activeTab: PerformanceTab;
+  onTabChange: (tab: PerformanceTab) => void;
+}
+
+function PageHeader({ selectedPeriod, onPeriodChange, activeTab, onTabChange }: PageHeaderProps) {
+  return (
+    <div className="space-y-4">
+      {/* Title and period selector */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
           <TrendingUp className="w-6 h-6 text-argus-accent" />
           <h1 className="text-xl font-semibold text-argus-text">Performance</h1>
         </div>
-        <PeriodSelector selectedPeriod={period} onPeriodChange={setPeriod} />
-      </motion.div>
+        <PeriodSelector selectedPeriod={selectedPeriod} onPeriodChange={onPeriodChange} />
+      </div>
 
+      {/* Tab navigation */}
+      <SegmentedTab
+        segments={TAB_SEGMENTS}
+        activeValue={activeTab}
+        onChange={(value) => onTabChange(value as PerformanceTab)}
+        size="sm"
+        layoutId="performance-tabs"
+      />
+    </div>
+  );
+}
+
+/** Overview tab - existing content */
+interface OverviewTabProps {
+  data: NonNullable<ReturnType<typeof usePerformance>['data']>;
+  isFetching: boolean;
+}
+
+function OverviewTabContent({ data, isFetching }: OverviewTabProps) {
+  return (
+    <motion.div
+      className="space-y-4 md:space-y-6"
+      variants={staggerContainer(0.08)}
+      initial="hidden"
+      animate="show"
+    >
       {/* Metrics grid — pass isFetching for subtle transition */}
       <motion.div variants={staggerItem}>
         <MetricsGrid metrics={data.metrics} isTransitioning={isFetching} />
@@ -183,20 +290,83 @@ export function PerformancePage() {
   );
 }
 
-/** Page header for loading/error states */
-interface PageHeaderProps {
-  selectedPeriod: PerformancePeriod;
-  onPeriodChange: (period: PerformancePeriod) => void;
+/** Heatmaps tab - Trade Activity Heatmap + Calendar P&L */
+interface HeatmapsTabProps {
+  period: PerformancePeriod;
+  dailyPnl: Array<{ date: string; pnl: number; trades: number }>;
 }
 
-function PageHeader({ selectedPeriod, onPeriodChange }: PageHeaderProps) {
+function HeatmapsTabContent({ period, dailyPnl }: HeatmapsTabProps) {
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-      <div className="flex items-center gap-3">
-        <TrendingUp className="w-6 h-6 text-argus-accent" />
-        <h1 className="text-xl font-semibold text-argus-text">Performance</h1>
-      </div>
-      <PeriodSelector selectedPeriod={selectedPeriod} onPeriodChange={onPeriodChange} />
-    </div>
+    <motion.div
+      className="space-y-4 md:space-y-6"
+      variants={staggerContainer(0.08)}
+      initial="hidden"
+      animate="show"
+    >
+      <motion.div variants={staggerItem}>
+        <TradeActivityHeatmap period={period} />
+      </motion.div>
+      <motion.div variants={staggerItem}>
+        <CalendarPnlView dailyPnl={dailyPnl} />
+      </motion.div>
+    </motion.div>
+  );
+}
+
+/** Distribution tab - Coming soon placeholder */
+function DistributionTabContent() {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.25 }}
+    >
+      <Card>
+        <div className="text-center py-12">
+          <p className="text-argus-text-dim">
+            R-Multiple Distribution and Risk Waterfall coming in Session 7
+          </p>
+        </div>
+      </Card>
+    </motion.div>
+  );
+}
+
+/** Portfolio tab - Coming soon placeholder */
+function PortfolioTabContent() {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.25 }}
+    >
+      <Card>
+        <div className="text-center py-12">
+          <p className="text-argus-text-dim">
+            Portfolio Treemap and Correlation Matrix coming in Session 8
+          </p>
+        </div>
+      </Card>
+    </motion.div>
+  );
+}
+
+/** Replay tab - Coming soon placeholder */
+function ReplayTabContent() {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.25 }}
+    >
+      <Card>
+        <div className="text-center py-12">
+          <p className="text-argus-text-dim">
+            Trade Replay coming in Session 9
+          </p>
+        </div>
+      </Card>
+    </motion.div>
   );
 }
