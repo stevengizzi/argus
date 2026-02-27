@@ -68,7 +68,10 @@ class MockStrategy:
     daily_pnl: float
     trade_count_today: int
     config: StrategyConfig
-    # Throttle metrics for dev mode (Sprint 21b Session 3)
+    # Throttle metrics — stored here for potential direct-access patterns.
+    # Note: The orchestrator route currently derives these independently from
+    # trade_logger data, so these values serve as reference/documentation of
+    # the intended mock scenario rather than being read by the API.
     consecutive_losses: int = 0
     rolling_sharpe: float | None = None
     drawdown_pct: float = 0.0

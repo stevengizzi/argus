@@ -25,8 +25,12 @@ router = APIRouter(tags=["orchestrator"])
 # ---------------------------------------------------------------------------
 
 
-def _compute_session_phase() -> str:
+def _compute_session_phase(now_et: datetime | None = None) -> str:
     """Compute current session phase from ET time.
+
+    Args:
+        now_et: Optional datetime in ET timezone. If None, uses current time.
+                Accepts a datetime parameter for testability (clock injection pattern).
 
     Returns one of:
     - pre_market: before 9:30
@@ -36,7 +40,8 @@ def _compute_session_phase() -> str:
     - after_hours: 16:00-20:00
     - market_closed: after 20:00 or weekends
     """
-    now_et = datetime.now(ZoneInfo("America/New_York"))
+    if now_et is None:
+        now_et = datetime.now(ZoneInfo("America/New_York"))
     t = now_et.time()
     weekday = now_et.weekday()
 
@@ -74,7 +79,10 @@ STRATEGY_WINDOWS: dict[str, dict[str, str]] = {
 
 
 class OperatingWindow(BaseModel):
-    """Strategy operating window times."""
+    """Strategy operating window times.
+
+    API response model — subset of config.OperatingWindow (excludes active_days).
+    """
 
     earliest_entry: str  # "09:35"
     latest_entry: str  # "11:30"
@@ -243,18 +251,26 @@ async def get_orchestrator_status(
         deployed_pct = deployed_capital / total_equity if total_equity > 0 else 0.0
         is_throttled = alloc.throttle_action.value == "suspend"
 
-        # Get operating window
+        # Get strategy-specific data
+        strategy = state.strategies.get(strategy_id)
+
+        # Get operating window — prefer strategy config, fall back to hardcoded dict
         op_window: OperatingWindow | None = None
-        if strategy_id in STRATEGY_WINDOWS:
+        if strategy is not None:
+            cfg_window = getattr(getattr(strategy, "_config", None), "operating_window", None)
+            if cfg_window is not None:
+                op_window = OperatingWindow(
+                    earliest_entry=cfg_window.earliest_entry,
+                    latest_entry=cfg_window.latest_entry,
+                    force_close=cfg_window.force_close,
+                )
+        if op_window is None and strategy_id in STRATEGY_WINDOWS:
             window = STRATEGY_WINDOWS[strategy_id]
             op_window = OperatingWindow(
                 earliest_entry=window["earliest_entry"],
                 latest_entry=window["latest_entry"],
                 force_close=window["force_close"],
             )
-
-        # Get strategy-specific data
-        strategy = state.strategies.get(strategy_id)
         is_active = True
         trade_count_today = 0
         daily_pnl = 0.0

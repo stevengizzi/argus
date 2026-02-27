@@ -596,6 +596,7 @@ class TradeLogger:
         total = int(dict(count_row).get("count", 0)) if count_row else 0  # type: ignore[arg-type]
 
         # Get paginated results
+        # Returns newest-first. Frontend DecisionTimeline reverses for chronological display.
         sql = f"""
             SELECT id, date, decision_type, strategy_id, details, rationale, created_at
             FROM orchestrator_decisions

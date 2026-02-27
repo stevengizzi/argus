@@ -10,9 +10,8 @@ Tests the new fields and functionality added in Sprint 21b:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime, time, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
-from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -87,30 +86,6 @@ class MockOrchestratorExtended:
 class TestComputeSessionPhase:
     """Tests for _compute_session_phase() helper."""
 
-    def test_pre_market_phase(self) -> None:
-        """Returns pre_market before 9:30 AM ET on a weekday."""
-        # Monday 9:00 AM ET
-        mock_time = datetime(2026, 2, 23, 9, 0, 0, tzinfo=ZoneInfo("America/New_York"))
-        with patch(
-            "argus.api.routes.orchestrator.datetime"
-        ) as mock_datetime:
-            mock_datetime.now.return_value = mock_time
-            mock_datetime.side_effect = lambda *args, **kwargs: datetime(*args, **kwargs)
-            # Need to handle time() constructor
-            result = _compute_session_phase()
-        # Actually let me fix this - patch is tricky with datetime
-        # Just test directly with actual time
-
-    def test_market_open_phase(self) -> None:
-        """Returns market_open from 9:30-11:30 AM ET."""
-        # Test at 10:00 AM ET on a Monday
-        with patch("argus.api.routes.orchestrator.datetime") as mock_dt:
-            mock_now = datetime(2026, 2, 23, 10, 0, 0, tzinfo=ZoneInfo("America/New_York"))
-            mock_dt.now.return_value = mock_now
-            # Keep time class accessible
-            mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
-            # This is getting complex - let me use a different approach
-
     def test_session_phases_cover_all_periods(self) -> None:
         """Session phase computation covers all market periods."""
         # Instead of mocking, test the logic directly
@@ -154,10 +129,9 @@ def test_session_phase_parametrized(
     target_date = base_date + timedelta(days=weekday)
     target_time = target_date.replace(hour=hour, minute=minute)
 
-    with patch("argus.api.routes.orchestrator.datetime") as mock_dt:
-        mock_dt.now.return_value = target_time
-        result = _compute_session_phase()
-        assert result == expected
+    # Pass now_et directly — clock injection pattern (no mocking required)
+    result = _compute_session_phase(now_et=target_time)
+    assert result == expected
 
 
 # ---------------------------------------------------------------------------
