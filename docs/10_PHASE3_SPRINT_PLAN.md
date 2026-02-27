@@ -351,23 +351,18 @@ per sprint velocity.
 - 1597 tests (pytest, 39 new) + 100 (Vitest, 30 new). 13 sessions (8 implementation + 1 review + 4 polish). Code review passed. DEC-186–195.
 - **Deferred to 21d:** PreMarketCard/EodSummaryCard as dedicated components, multi-day regime history, decision filtering, "More" menu for mobile nav.
 
-### Sprint 21c — The Debrief Page
-**Status:** IN PROGRESS
-**Sessions:** 10 implementation + 2 code reviews
-**Target tests:** ~50 new pytest + ~30 new Vitest
-
-**Scope:**
-- Database schema: briefings, updated journal_entries, documents tables
-- DebriefService: full CRUD, template generation, filesystem document discovery, LIKE search
-- API: 4 route files under /debrief prefix (~15 endpoints)
-- Frontend: DebriefPage with 3-section SegmentedTab
-  - Briefings tab: list, cards, creation flow, full markdown editor with preview, DocumentModal reading
-  - Research Library: hybrid filesystem + database docs, category filter, CRUD on DB docs, tag management
-  - Journal: inline creation, 4 entry types, tag autocomplete, comprehensive filtering, inline editing, trade search and linking
-- Navigation: 7th page (GraduationCap), keyboard shortcuts 1-7
-- Polish: skeleton loading, Framer Motion animations, responsive, empty states
-- Shared TagInput component
-- Dev mode mock data: 5 briefings, 3 DB docs, 10 journal entries
+#### Sprint 21c — The Debrief Page ✅ COMPLETE (Feb 27)
+**Delivered:**
+- **The Debrief page (DEC-169, DEC-171):** 7th and final Command Center page. Three-section SegmentedTab: Briefings, Research Library, Journal.
+- **Briefings tab:** BriefingList (Pre-Market/EOD creation dropdown, reverse-chronological cards), BriefingCard (type+status badges, content preview, DocumentModal reading), BriefingEditor (side-by-side markdown edit/preview on desktop, toggle on mobile, Ctrl+S save, unsaved indicator, key-based remount pattern). UNIQUE(date, briefing_type) constraint — 409 Conflict handled via ApiError class (DEC-202).
+- **Research Library:** Hybrid filesystem (read-only repo docs from docs/research/, docs/strategies/, docs/backtesting/) + database (CRUD custom docs) via DEC-198. ResearchDocCard (category+source badges), DocumentEditor (markdown, category selector, TagInput). Custom docs sort first.
+- **Journal:** JournalList (4-filter dimensions: type, strategy, tag, search with 300ms debounce). JournalEntryCard (4 typed badges — Observation/Eye, Trade Annotation/Target, Pattern Note/Lightbulb, System Note/Settings — expand/collapse, inline edit via AnimatePresence). JournalEntryForm (collapsed→expanded inline creation, success flash). TradeSearchInput (debounced symbol search, linked trade chips → SymbolDetailPanel). TagInput shared component (autocomplete, keyboard nav, duplicate prevention).
+- **Backend:** DebriefService (992 lines), 3 DB tables (briefings, journal_entries updated DEC-196, documents), 4 API route files (briefings.py, documents.py, journal.py, debrief_search.py), LIKE search over FTS5 (DEC-200). Batch trade fetch endpoint (DEC-203).
+- **Nav:** 7 pages complete (DEC-199). Keyboard shortcuts 1–7, b/r/j tab switching, n new entry, Escape close (else-if priority chain).
+- **Dev mode:** 5 briefings, 3+ DB docs, 10 journal entries.
+- **Post-review fixes:** ApiError class (DEC-202), Escape handler cascade, success flash timer cleanup, batch trade endpoint (DEC-203).
+- 1664 tests (pytest, 105 new) + 138 (Vitest, 38 new). 10 implementation sessions + 2 code reviews + 1 fix session. Code review passed. DEC-196–203.
+- **Resolved deferrals:** DEF-026 (FTS5 → LIKE search, DEC-200), DEF-027 (trade linking UI, DEC-201).
 
 **Decisions:** DEC-196 through DEC-201
 **Resolved deferrals:** DEF-026 (FTS5 → LIKE search), DEF-027 (trade linking UI included)

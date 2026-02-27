@@ -11,7 +11,7 @@ Phase 1 sprint plan: @docs/07_PHASE1_SPRINT_PLAN.md
 ## Current State
 
 **Structure:** Two parallel tracks (DEC-079, February 19, 2026). Expanded to AI-enhanced platform (DEC-163, February 26, 2026).
-- **Build Track:** System construction at development velocity. Sprints 1–21b complete (1,597 pytest tests + 100 Vitest). Sprint 21c (The Debrief page) is NEXT.
+- **Build Track:** System construction at development velocity. Sprints 1–21c complete (1,664 pytest tests + 138 Vitest). Sprint 21d (Dashboard refinement + Performance analytics + System cleanup + AI Copilot shell) is NEXT.
 - **Validation Track:** Paper trading ACTIVE on Alpaca IEX (system stability only — DEC-081). Signal accuracy validation pending Databento activation. All pre-Databento backtests require re-validation (DEC-132). Migrates to IBKR paper after IBKR account approved (U24619949, submitted Feb 21).
 
 Active sprint plan: `docs/10_PHASE3_SPRINT_PLAN.md` (covers both tracks).
@@ -351,6 +351,8 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 | DEF-023 | Watchlist Endpoint Production Implementation | Sprint 20+ when live scanner generates watchlist candidates | GET /api/v1/watchlist returns mock data only via `_mock_watchlist` attribute injection. Production implementation needs to aggregate from: Scanner watchlist, Strategy state (which symbols each strategy tracks), DataService (prices, sparkline), and VWAP Reclaim strategy state. Location: `argus/api/routes/watchlist.py`. |
 | DEF-024 | Trailing Stop Mechanism | Walk-forward shows afternoon moves routinely exceed T2 targets | Order Manager trailing stop logic, Risk Manager awareness, VectorBT sweep support, backtesting infrastructure. Touches cross-cutting concerns across execution, risk, and backtesting layers. T1/T2 fixed targets proven across four strategies — trailing stop adds complexity only if data shows clear benefit. DEC-158. |
 | DEF-025 | Shared Consolidation Base Class | Second consolidation-based strategy designed (e.g., Midday Range Breakout) | AfternoonMomentumStrategy inherits directly from BaseStrategy (DEC-152). If a second consolidation variant is built, extract shared midday range tracking into a ConsolidationBaseStrategy ABC. Follows the OrbBaseStrategy extraction pattern (DEC-120). |
+| DEF-026 | ~~FTS5 full-text search~~ | — | **RESOLVED** (DEC-200): LIKE queries shipped as V1 solution. FTS5 deferred to >10K entries. |
+| DEF-027 | ~~Journal trade linking UI~~ | — | **RESOLVED** (DEC-201): Full search UI with TradeSearchInput shipped in Sprint 21c. |
 
 This keeps it lightweight — no new document, no new sync burden. Items get removed (or moved to "Completed") as they're addressed. Both Claudes see the trigger column and know when to raise the flag.
 

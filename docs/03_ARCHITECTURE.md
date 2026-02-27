@@ -846,16 +846,46 @@ CREATE TABLE approval_log (
     notes TEXT
 );
 
-CREATE TABLE journal_entries (
-    id TEXT PRIMARY KEY,
-    entry_type TEXT NOT NULL,  -- 'observation', 'analysis', 'decision', 'insight'
+-- Briefings (Sprint 21c, DEC-197)
+CREATE TABLE IF NOT EXISTS briefings (
+    id TEXT PRIMARY KEY,                    -- ULID
+    date TEXT NOT NULL,                     -- YYYY-MM-DD
+    briefing_type TEXT NOT NULL,            -- 'pre_market' or 'eod'
+    status TEXT NOT NULL DEFAULT 'draft',   -- 'draft', 'final', 'ai_generated'
+    title TEXT NOT NULL,
+    content TEXT NOT NULL DEFAULT '',
+    metadata TEXT,                          -- JSON
+    author TEXT NOT NULL DEFAULT 'user',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(date, briefing_type)
+);
+
+-- Journal Entries (Sprint 21c, DEC-196 — updated types)
+CREATE TABLE IF NOT EXISTS journal_entries (
+    id TEXT PRIMARY KEY,                    -- ULID
+    entry_type TEXT NOT NULL,               -- 'observation', 'trade_annotation', 'pattern_note', 'system_note'
+    title TEXT NOT NULL DEFAULT '',
     content TEXT NOT NULL,
-    author TEXT NOT NULL,  -- 'user' or 'claude'
+    author TEXT NOT NULL DEFAULT 'user',
     linked_strategy_id TEXT,
-    linked_trade_ids TEXT,  -- JSON array
-    linked_date_range TEXT,  -- JSON: {start, end}
-    tags TEXT,  -- JSON array
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    linked_trade_ids TEXT,                  -- JSON array
+    tags TEXT,                              -- JSON array
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Documents (Sprint 21c, DEC-198)
+CREATE TABLE IF NOT EXISTS documents (
+    id TEXT PRIMARY KEY,                    -- ULID
+    category TEXT NOT NULL,                 -- 'research', 'strategy', 'backtest', 'ai_report'
+    title TEXT NOT NULL,
+    content TEXT NOT NULL,
+    author TEXT NOT NULL DEFAULT 'user',
+    tags TEXT,                              -- JSON array
+    metadata TEXT,                          -- JSON
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE system_health (
@@ -1006,9 +1036,19 @@ POST /api/v1/ai/report/generate         # Generate analysis report
 POST /api/v1/ai/analyze/trade/{id}      # Analyze specific trade
 
 # Debrief endpoints (Sprint 21c)
-GET/POST /api/v1/debrief/briefings      # Briefing CRUD
-GET      /api/v1/debrief/documents      # Research library (read + metadata)
-GET/POST /api/v1/debrief/journal        # Learning journal CRUD
+GET/POST         /api/v1/debrief/briefings           # List / create briefings
+GET/PUT/DELETE   /api/v1/debrief/briefings/{id}      # Get / update / delete briefing
+GET/POST         /api/v1/debrief/documents           # List / create documents (DB + filesystem)
+GET/PUT/DELETE   /api/v1/debrief/documents/{id}      # Get / update / delete document
+GET              /api/v1/debrief/documents/tags      # List all document tags
+GET/POST         /api/v1/debrief/journal             # List / create journal entries
+GET/PUT/DELETE   /api/v1/debrief/journal/{id}        # Get / update / delete entry
+GET              /api/v1/debrief/journal/tags        # List all journal tags
+GET              /api/v1/debrief/search              # Unified search across all 3 types
+
+# Trade batch endpoint (Sprint 21c, DEC-203)
+GET  /api/v1/trades/batch?ids=<ULIDs>           # Batch fetch trades by ID (max 50)
+
 ```
 
 ### WebSocket

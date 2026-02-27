@@ -2230,5 +2230,25 @@ Each entry follows this format:
 
 ---
 
+### DEC-202 | ApiError Class for HTTP Status Preservation
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-27 |
+| **Decision** | Custom `ApiError` class in `client.ts` preserves HTTP status code on API errors. `fetchWithAuth` throws `ApiError(message, status)` instead of plain `Error`. Consumers check `error.status` for status-specific handling (e.g., 409 Conflict). |
+| **Rationale** | Plain `Error` objects lose HTTP status codes, making status-specific error handling impossible. Discovered when 409 Conflict detection in BriefingList silently failed — `error.status === 409` was always `undefined`. Pattern applies to all future API error handling. |
+| **Status** | Active |
+
+---
+
+### DEC-203 | Batch Trade Fetch Endpoint
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-27 |
+| **Decision** | `GET /api/v1/trades/batch?ids=<comma-separated-ULIDs>` returns trades matching provided IDs. `TradeLogger.get_trades_by_ids()` method. 50 ID limit per request (400 if exceeded). |
+| **Rationale** | TradeSearchInput previously fetched last 100 trades and filtered client-side to resolve linked trade chips — older trades would never display. Batch endpoint ensures linked trade chips always resolve regardless of age. Generalizes to any future UI needing to resolve a known set of trade IDs. |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
 *New decisions are appended chronologically as the project progresses.*
