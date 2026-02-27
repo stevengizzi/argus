@@ -9,10 +9,14 @@ import type {
   BarsResponse,
   Briefing,
   BriefingsListResponse,
+  CorrelationResponse,
   DebriefSearchResponse,
   DecisionsResponse,
+  DistributionResponse,
   DocumentsListResponse,
   DocumentTagsResponse,
+  GoalsConfig,
+  HeatmapResponse,
   HealthResponse,
   JournalEntriesListResponse,
   JournalEntry,
@@ -28,6 +32,7 @@ import type {
   StrategySpecResponse,
   ThrottleOverrideRequest,
   TokenResponse,
+  TradeReplayResponse,
   TradesBatchResponse,
   TradesResponse,
   WatchlistResponse,
@@ -469,4 +474,47 @@ export async function fetchDebriefSearch(
     searchParams.set('scope', scope);
   }
   return fetchWithAuth<DebriefSearchResponse>(`/debrief/search?${searchParams}`);
+}
+
+// Performance analytics endpoints (Sprint 21d)
+export async function getHeatmapData(
+  period: PerformancePeriod,
+  strategyId?: string
+): Promise<HeatmapResponse> {
+  const searchParams = new URLSearchParams();
+  searchParams.set('period', period);
+  if (strategyId) {
+    searchParams.set('strategy_id', strategyId);
+  }
+  return fetchWithAuth<HeatmapResponse>(`/performance/heatmap?${searchParams}`);
+}
+
+export async function getDistribution(
+  period: PerformancePeriod,
+  strategyId?: string
+): Promise<DistributionResponse> {
+  const searchParams = new URLSearchParams();
+  searchParams.set('period', period);
+  if (strategyId) {
+    searchParams.set('strategy_id', strategyId);
+  }
+  return fetchWithAuth<DistributionResponse>(`/performance/distribution?${searchParams}`);
+}
+
+export async function getCorrelation(
+  period: PerformancePeriod
+): Promise<CorrelationResponse> {
+  const searchParams = new URLSearchParams();
+  searchParams.set('period', period);
+  return fetchWithAuth<CorrelationResponse>(`/performance/correlation?${searchParams}`);
+}
+
+// Trade replay endpoint
+export async function getTradeReplay(tradeId: string): Promise<TradeReplayResponse> {
+  return fetchWithAuth<TradeReplayResponse>(`/trades/${tradeId}/replay`);
+}
+
+// Config endpoints
+export async function getGoalsConfig(): Promise<GoalsConfig> {
+  return fetchWithAuth<GoalsConfig>('/config/goals');
 }

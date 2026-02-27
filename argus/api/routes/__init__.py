@@ -9,6 +9,7 @@ from fastapi import APIRouter
 from argus.api.routes.account import router as account_router
 from argus.api.routes.auth import router as auth_router
 from argus.api.routes.briefings import router as briefings_router
+from argus.api.routes.config import router as config_router
 from argus.api.routes.controls import router as controls_router
 from argus.api.routes.debrief_search import router as debrief_search_router
 from argus.api.routes.documents import router as documents_router
@@ -39,6 +40,7 @@ api_router.include_router(orchestrator_router, prefix="/orchestrator", tags=["or
 api_router.include_router(session_router, tags=["session"])
 api_router.include_router(watchlist_router, prefix="/watchlist", tags=["watchlist"])
 api_router.include_router(market_router, prefix="/market", tags=["market"])
+api_router.include_router(config_router, prefix="/config", tags=["config"])
 api_router.include_router(briefings_router, prefix="/debrief/briefings", tags=["debrief"])
 api_router.include_router(documents_router, prefix="/debrief/documents", tags=["debrief"])
 api_router.include_router(journal_router, prefix="/debrief/journal", tags=["debrief"])

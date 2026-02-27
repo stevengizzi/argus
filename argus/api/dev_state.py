@@ -26,6 +26,7 @@ from argus.core.config import (
     AfternoonMomentumConfig,
     ApiConfig,
     BacktestSummaryConfig,
+    GoalsConfig,
     HealthConfig,
     OperatingWindow,
     OrbBreakoutConfig,
@@ -1711,13 +1712,14 @@ async def create_dev_state() -> AppState:
     broker = SimulatedBroker(initial_cash=100_000.0)
     await broker.connect()
 
-    # Config with dev password
+    # Config with dev password and goals
     api_config = ApiConfig(
         enabled=True,
         password_hash=hash_password("argus"),
         jwt_secret_env="ARGUS_JWT_SECRET",
     )
-    system_config = SystemConfig(api=api_config)
+    goals_config = GoalsConfig(monthly_target_usd=5000.0)
+    system_config = SystemConfig(api=api_config, goals=goals_config)
     health_config = HealthConfig()
 
     # Health monitor

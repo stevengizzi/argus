@@ -91,6 +91,16 @@ class ApiConfig(BaseModel):
     static_dir: str = ""  # path to built React app; empty = don't serve static
 
 
+class GoalsConfig(BaseModel):
+    """Goal tracking configuration (Sprint 21d, DEC-214).
+
+    Configures performance targets for the GoalTracker dashboard widget.
+    Simple config value for V1; database-backed goals with history can upgrade later.
+    """
+
+    monthly_target_usd: float = Field(default=5000.0, ge=0)
+
+
 class DataSource(StrEnum):
     """Data service provider selection."""
 
@@ -129,6 +139,8 @@ class SystemConfig(BaseModel):
     ibkr: IBKRConfig = Field(default_factory=lambda: IBKRConfig())
     # Command Center API configuration (Sprint 14)
     api: ApiConfig = Field(default_factory=lambda: ApiConfig())
+    # Goal tracking configuration (Sprint 21d, DEC-214)
+    goals: GoalsConfig = Field(default_factory=lambda: GoalsConfig())
 
     @field_validator("timezone")
     @classmethod

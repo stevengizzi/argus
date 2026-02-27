@@ -54,3 +54,10 @@ export {
   useJournalTags,
 } from './useJournal';
 export { useDebriefSearch, type SearchScope } from './useDebriefSearch';
+
+// Performance analytics hooks (Sprint 21d)
+export { useHeatmapData } from './useHeatmapData';
+export { useDistribution } from './useDistribution';
+export { useCorrelation } from './useCorrelation';
+export { useTradeReplay } from './useTradeReplay';
+export { useGoals } from './useGoals';

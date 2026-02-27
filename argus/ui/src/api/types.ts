@@ -433,3 +433,70 @@ export interface DebriefSearchResponse {
   journal: JournalEntry[];
   documents: ResearchDocument[];
 }
+
+// Performance — Heatmap
+export interface HeatmapCell {
+  hour: number;          // 9-15 (ET)
+  day_of_week: number;   // 0=Mon, 4=Fri
+  trade_count: number;
+  avg_r_multiple: number;
+  net_pnl: number;
+}
+
+export interface HeatmapResponse {
+  cells: HeatmapCell[];
+  period: string;
+  timestamp: string;
+}
+
+// Performance — Distribution
+export interface DistributionBin {
+  range_min: number;    // e.g., -1.0
+  range_max: number;    // e.g., -0.75
+  count: number;
+  avg_pnl: number;
+}
+
+export interface DistributionResponse {
+  bins: DistributionBin[];
+  total_trades: number;
+  mean_r: number;
+  median_r: number;
+  period: string;
+  timestamp: string;
+}
+
+// Performance — Correlation
+export interface CorrelationResponse {
+  strategy_ids: string[];
+  matrix: number[][];   // NxN correlation matrix
+  period: string;
+  data_days: number;
+  message: string | null;
+  timestamp: string;
+}
+
+// Trade Replay
+export interface ReplayBar {
+  timestamp: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
+export interface TradeReplayResponse {
+  trade: Trade;
+  bars: ReplayBar[];
+  entry_bar_index: number;
+  exit_bar_index: number | null;
+  vwap: number[] | null;
+  timestamp: string;
+}
+
+// Config — Goals
+export interface GoalsConfig {
+  monthly_target_usd: number;
+  timestamp: string;
+}

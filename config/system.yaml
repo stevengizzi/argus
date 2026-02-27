@@ -52,3 +52,7 @@ api:
     - "http://localhost:5173"
   ws_heartbeat_interval_seconds: 30
   ws_tick_throttle_ms: 1000
+
+# Goal tracking (Sprint 21d — DEC-214)
+goals:
+  monthly_target_usd: 5000
