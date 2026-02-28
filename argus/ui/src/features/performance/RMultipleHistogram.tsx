@@ -43,9 +43,11 @@ const MEAN_LINE_COLOR = '#3b82f6';
 
 interface RMultipleHistogramProps {
   period: PerformancePeriod;
+  /** Fill available height (for matching heights in grid rows) */
+  fullHeight?: boolean;
 }
 
-export function RMultipleHistogram({ period }: RMultipleHistogramProps) {
+export function RMultipleHistogram({ period, fullHeight = false }: RMultipleHistogramProps) {
   const [strategyFilter, setStrategyFilter] = useState<string>('all');
 
   const strategyId = strategyFilter === 'all' ? undefined : strategyFilter;
@@ -84,11 +86,11 @@ export function RMultipleHistogram({ period }: RMultipleHistogramProps) {
 
   if (isLoading) {
     return (
-      <Card>
+      <Card fullHeight={fullHeight}>
         <div className="px-4 pt-4 pb-2">
           <h3 className="text-sm font-medium text-argus-text">R-Multiple Distribution</h3>
         </div>
-        <div className="h-[280px] flex items-center justify-center">
+        <div className="flex-grow flex items-center justify-center min-h-[280px]">
           <div className="text-argus-text-dim">Loading distribution data...</div>
         </div>
       </Card>
@@ -97,11 +99,11 @@ export function RMultipleHistogram({ period }: RMultipleHistogramProps) {
 
   if (error) {
     return (
-      <Card>
+      <Card fullHeight={fullHeight}>
         <div className="px-4 pt-4 pb-2">
           <h3 className="text-sm font-medium text-argus-text">R-Multiple Distribution</h3>
         </div>
-        <div className="h-[280px] flex items-center justify-center">
+        <div className="flex-grow flex items-center justify-center min-h-[280px]">
           <div className="text-argus-loss">Failed to load distribution data</div>
         </div>
       </Card>
@@ -111,7 +113,7 @@ export function RMultipleHistogram({ period }: RMultipleHistogramProps) {
   const isEmpty = !data?.bins || data.bins.length === 0 || data.total_trades === 0;
 
   return (
-    <Card noPadding>
+    <Card noPadding fullHeight={fullHeight}>
       {/* Header with title and strategy filter */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-4 pt-4 pb-2">
         <h3 className="text-sm font-medium text-argus-text">R-Multiple Distribution</h3>
@@ -130,9 +132,9 @@ export function RMultipleHistogram({ period }: RMultipleHistogramProps) {
       </div>
 
       {/* Chart area */}
-      <div className="px-4 pb-2">
+      <div className="px-4 pb-2 flex-grow flex flex-col justify-center">
         {isEmpty ? (
-          <div className="h-[240px] flex items-center justify-center">
+          <div className="min-h-[240px] flex items-center justify-center">
             <p className="text-argus-text-dim">No trades to analyze</p>
           </div>
         ) : (

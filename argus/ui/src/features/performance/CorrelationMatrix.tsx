@@ -49,9 +49,11 @@ interface TooltipData {
 
 interface CorrelationMatrixProps {
   period: PerformancePeriod;
+  /** Fill available height (for matching heights in grid rows) */
+  fullHeight?: boolean;
 }
 
-export function CorrelationMatrix({ period }: CorrelationMatrixProps) {
+export function CorrelationMatrix({ period, fullHeight = false }: CorrelationMatrixProps) {
   const [tooltip, setTooltip] = useState<TooltipData | null>(null);
 
   const { data, isLoading, error } = useCorrelation(period);
@@ -91,11 +93,11 @@ export function CorrelationMatrix({ period }: CorrelationMatrixProps) {
 
   if (isLoading) {
     return (
-      <Card>
+      <Card fullHeight={fullHeight}>
         <div className="px-4 pt-4 pb-2">
           <h3 className="text-sm font-medium text-argus-text">Correlation Matrix</h3>
         </div>
-        <div className="h-[200px] flex items-center justify-center">
+        <div className="flex-grow flex items-center justify-center min-h-[200px]">
           <div className="text-argus-text-dim">Loading correlation data...</div>
         </div>
       </Card>
@@ -104,11 +106,11 @@ export function CorrelationMatrix({ period }: CorrelationMatrixProps) {
 
   if (error) {
     return (
-      <Card>
+      <Card fullHeight={fullHeight}>
         <div className="px-4 pt-4 pb-2">
           <h3 className="text-sm font-medium text-argus-text">Correlation Matrix</h3>
         </div>
-        <div className="h-[200px] flex items-center justify-center">
+        <div className="flex-grow flex items-center justify-center min-h-[200px]">
           <div className="text-argus-loss">Failed to load correlation data</div>
         </div>
       </Card>
@@ -121,11 +123,11 @@ export function CorrelationMatrix({ period }: CorrelationMatrixProps) {
 
   if (hasInsufficientData) {
     return (
-      <Card>
+      <Card fullHeight={fullHeight}>
         <div className="px-4 pt-4 pb-2">
           <h3 className="text-sm font-medium text-argus-text">Correlation Matrix</h3>
         </div>
-        <div className="h-[200px] flex items-center justify-center flex-col gap-2">
+        <div className="flex-grow flex items-center justify-center flex-col gap-2 min-h-[200px]">
           <p className="text-argus-text-dim">
             Insufficient data for correlation analysis
           </p>
@@ -146,7 +148,7 @@ export function CorrelationMatrix({ period }: CorrelationMatrixProps) {
   const svgHeight = gridSize + LABEL_WIDTH + 10;
 
   return (
-    <Card noPadding>
+    <Card noPadding fullHeight={fullHeight}>
       <div className="px-4 pt-4 pb-2">
         <h3 className="text-sm font-medium text-argus-text">Correlation Matrix</h3>
         <p className="text-xs text-argus-text-dim mt-1">
@@ -154,7 +156,7 @@ export function CorrelationMatrix({ period }: CorrelationMatrixProps) {
         </p>
       </div>
 
-      <div className="px-4 pb-4 overflow-x-auto relative">
+      <div className="px-4 pb-4 overflow-x-auto relative flex-grow flex flex-col justify-center">
         <svg
           width={svgWidth}
           height={svgHeight}

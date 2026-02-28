@@ -371,12 +371,12 @@ function DistributionTabContent({ period }: DistributionTabProps) {
       animate="show"
     >
       {/* Side by side on desktop (≥1024px), stacked on tablet/mobile */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
-        <motion.div variants={staggerItem} className="lg:col-span-1">
-          <RMultipleHistogram period={period} />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 items-stretch">
+        <motion.div variants={staggerItem} className="lg:col-span-1 h-full">
+          <RMultipleHistogram period={period} fullHeight />
         </motion.div>
-        <motion.div variants={staggerItem} className="lg:col-span-1">
-          <RiskWaterfall />
+        <motion.div variants={staggerItem} className="lg:col-span-1 h-full">
+          <RiskWaterfall fullHeight />
         </motion.div>
       </div>
     </motion.div>
@@ -396,12 +396,12 @@ function PortfolioTabContent({ period }: PortfolioTabProps) {
       animate="show"
     >
       {/* Side by side on desktop (≥1024px): 60% treemap, 40% correlation */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 md:gap-6">
-        <motion.div variants={staggerItem} className="lg:col-span-3">
-          <PortfolioTreemap />
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 md:gap-6 items-stretch">
+        <motion.div variants={staggerItem} className="lg:col-span-3 h-full">
+          <PortfolioTreemap fullHeight />
         </motion.div>
-        <motion.div variants={staggerItem} className="lg:col-span-2">
-          <CorrelationMatrix period={period} />
+        <motion.div variants={staggerItem} className="lg:col-span-2 h-full">
+          <CorrelationMatrix period={period} fullHeight />
         </motion.div>
       </div>
     </motion.div>

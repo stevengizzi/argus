@@ -38,7 +38,12 @@ interface PositionRisk {
   strategyId: string;
 }
 
-export function RiskWaterfall() {
+interface RiskWaterfallProps {
+  /** Fill available height (for matching heights in grid rows) */
+  fullHeight?: boolean;
+}
+
+export function RiskWaterfall({ fullHeight = false }: RiskWaterfallProps) {
   const { data: positionsData, isLoading: positionsLoading } = usePositions();
   const { data: accountData, isLoading: accountLoading } = useAccount();
 
@@ -97,11 +102,11 @@ export function RiskWaterfall() {
 
   if (isLoading) {
     return (
-      <Card>
+      <Card fullHeight={fullHeight}>
         <div className="px-4 pt-4 pb-2">
           <h3 className="text-sm font-medium text-argus-text">Risk Waterfall</h3>
         </div>
-        <div className="h-[200px] flex items-center justify-center">
+        <div className="flex-grow flex items-center justify-center min-h-[200px]">
           <div className="text-argus-text-dim">Loading positions...</div>
         </div>
       </Card>
@@ -118,7 +123,7 @@ export function RiskWaterfall() {
     : TOP_MARGIN + positionRisks.length * (BAR_HEIGHT + BAR_GAP) + BOTTOM_MARGIN;
 
   return (
-    <Card noPadding>
+    <Card noPadding fullHeight={fullHeight}>
       <div className="px-4 pt-4 pb-2">
         <h3 className="text-sm font-medium text-argus-text">Risk Waterfall</h3>
         <p className="text-xs text-argus-text-dim mt-1">
@@ -126,9 +131,9 @@ export function RiskWaterfall() {
         </p>
       </div>
 
-      <div className="px-4 pb-4 overflow-x-auto">
+      <div className="px-4 pb-4 overflow-x-auto flex-grow flex flex-col justify-center">
         {isEmpty ? (
-          <div className="h-[100px] flex items-center justify-center">
+          <div className="min-h-[100px] flex items-center justify-center">
             <p className="text-argus-text-dim">No open positions — zero risk exposure</p>
           </div>
         ) : (

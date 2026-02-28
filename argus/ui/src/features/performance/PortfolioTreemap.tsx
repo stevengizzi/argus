@@ -52,7 +52,12 @@ interface TooltipData extends TreemapNode {
   y: number;
 }
 
-export function PortfolioTreemap() {
+interface PortfolioTreemapProps {
+  /** Fill available height (for matching heights in grid rows) */
+  fullHeight?: boolean;
+}
+
+export function PortfolioTreemap({ fullHeight = false }: PortfolioTreemapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [tooltip, setTooltip] = useState<TooltipData | null>(null);
@@ -171,11 +176,11 @@ export function PortfolioTreemap() {
 
   if (isLoading) {
     return (
-      <Card>
+      <Card fullHeight={fullHeight}>
         <div className="px-4 pt-4 pb-2">
           <h3 className="text-sm font-medium text-argus-text">Portfolio Treemap</h3>
         </div>
-        <div className="h-[200px] flex items-center justify-center">
+        <div className="flex-grow flex items-center justify-center min-h-[200px]">
           <div className="text-argus-text-dim">Loading positions...</div>
         </div>
       </Card>
@@ -183,7 +188,7 @@ export function PortfolioTreemap() {
   }
 
   return (
-    <Card noPadding>
+    <Card noPadding fullHeight={fullHeight}>
       <div className="px-4 pt-4 pb-2">
         <h3 className="text-sm font-medium text-argus-text">Portfolio Treemap</h3>
         <p className="text-xs text-argus-text-dim mt-1">
@@ -191,9 +196,9 @@ export function PortfolioTreemap() {
         </p>
       </div>
 
-      <div ref={containerRef} className="px-4 pb-4 relative">
+      <div ref={containerRef} className="px-4 pb-4 relative flex-grow flex flex-col">
         {isEmpty ? (
-          <div className="h-[200px] flex items-center justify-center">
+          <div className="min-h-[200px] flex-grow flex items-center justify-center">
             <p className="text-argus-text-dim">No open positions</p>
           </div>
         ) : isMobile ? (
