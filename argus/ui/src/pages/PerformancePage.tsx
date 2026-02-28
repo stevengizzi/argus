@@ -20,7 +20,7 @@
  * - data contains placeholder (previous period's data) during transitions
  */
 
-import { Component, type ReactNode, useState, useCallback } from 'react';
+import { Component, type ReactNode, useState, useCallback, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { TrendingUp } from 'lucide-react';
 import { usePerformance, usePreviousPeriodPerformance } from '../hooks/usePerformance';
@@ -117,6 +117,42 @@ export function PerformancePage() {
   // Handle comparison toggle from EquityCurve
   const handleComparisonToggle = useCallback((enabled: boolean) => {
     setComparisonEnabled(enabled);
+  }, []);
+
+  // Keyboard shortcuts for tab navigation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if typing in an input, textarea, or contenteditable
+      const target = e.target as HTMLElement;
+      if (
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.isContentEditable
+      ) {
+        return;
+      }
+
+      switch (e.key.toLowerCase()) {
+        case 'o':
+          setActiveTab('overview');
+          break;
+        case 'h':
+          setActiveTab('heatmaps');
+          break;
+        case 'd':
+          setActiveTab('distribution');
+          break;
+        case 'p':
+          setActiveTab('portfolio');
+          break;
+        case 'r':
+          setActiveTab('replay');
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
   // First load (no cache at all) — show skeleton
