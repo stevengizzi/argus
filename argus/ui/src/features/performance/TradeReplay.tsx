@@ -46,7 +46,33 @@ import { useTrades } from '../../hooks/useTrades';
 import { formatCurrency, formatR } from '../../utils/format';
 import { chartColors, lwcDefaultOptions } from '../../utils/chartTheme';
 import { getStrategyDisplay } from '../../utils/strategyConfig';
-import type { Trade, ReplayBar } from '../../api/types';
+import type { Trade, ReplayBar, PerformancePeriod } from '../../api/types';
+
+/**
+ * Convert a PerformancePeriod to date_from and date_to strings.
+ */
+function periodToDateRange(period: PerformancePeriod): { date_from?: string; date_to?: string } {
+  const now = new Date();
+  const today = now.toISOString().split('T')[0];
+
+  switch (period) {
+    case 'day':
+      return { date_from: today, date_to: today };
+    case 'week': {
+      const weekAgo = new Date(now);
+      weekAgo.setDate(weekAgo.getDate() - 7);
+      return { date_from: weekAgo.toISOString().split('T')[0], date_to: today };
+    }
+    case 'month': {
+      const monthAgo = new Date(now);
+      monthAgo.setMonth(monthAgo.getMonth() - 1);
+      return { date_from: monthAgo.toISOString().split('T')[0], date_to: today };
+    }
+    case 'all':
+    default:
+      return {}; // No date filter
+  }
+}
 
 // Speed options for playback
 const SPEED_OPTIONS = [1, 2, 5, 10] as const;
@@ -55,9 +81,11 @@ type PlaybackSpeed = typeof SPEED_OPTIONS[number];
 interface TradeReplayProps {
   /** Optional initial trade ID to load */
   initialTradeId?: string;
+  /** Period for filtering trades in the dropdown */
+  period?: PerformancePeriod;
 }
 
-export function TradeReplay({ initialTradeId }: TradeReplayProps) {
+export function TradeReplay({ initialTradeId, period = 'all' }: TradeReplayProps) {
   // State
   const [selectedTradeId, setSelectedTradeId] = useState<string | null>(initialTradeId ?? null);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -74,8 +102,11 @@ export function TradeReplay({ initialTradeId }: TradeReplayProps) {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const playbackIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Fetch trades for selector (recent 50)
-  const { data: tradesData } = useTrades({ limit: 50 });
+  // Convert period to date range for filtering trades
+  const dateRange = useMemo(() => periodToDateRange(period), [period]);
+
+  // Fetch trades for selector (filtered by period, limit 50)
+  const { data: tradesData } = useTrades({ ...dateRange, limit: 50 });
   const trades = tradesData?.trades ?? [];
 
   // Fetch replay data for selected trade
@@ -192,14 +223,23 @@ export function TradeReplay({ initialTradeId }: TradeReplayProps) {
     ? currentBarIndex >= replayData.exit_bar_index
     : false;
 
-  // Create/destroy chart
+  // Create/destroy chart when replay data is available
+  // The key dependency is !!replayData?.bars?.length - this ensures the chart
+  // is created only when we have data AND the container is rendered
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
+    // Ensure container has dimensions before creating chart
+    const containerWidth = container.clientWidth;
+    if (containerWidth === 0) {
+      // Container not visible yet - will be handled by ResizeObserver
+      return;
+    }
+
     const chart = createChart(container, {
       ...lwcDefaultOptions,
-      width: container.clientWidth,
+      width: containerWidth,
       height: 350,
       timeScale: {
         ...lwcDefaultOptions.timeScale,
@@ -235,11 +275,13 @@ export function TradeReplay({ initialTradeId }: TradeReplayProps) {
     vwapSeriesRef.current = vwapSeries;
 
     // Handle resize
-    const resizeObserver = new ResizeObserver(() => {
-      if (chartRef.current && container) {
-        chartRef.current.applyOptions({
-          width: container.clientWidth,
-        });
+    const resizeObserver = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (chartRef.current && entry) {
+        const newWidth = entry.contentRect.width;
+        if (newWidth > 0) {
+          chartRef.current.applyOptions({ width: newWidth });
+        }
       }
     });
     resizeObserver.observe(container);
@@ -252,7 +294,8 @@ export function TradeReplay({ initialTradeId }: TradeReplayProps) {
       vwapSeriesRef.current = null;
       markersPluginRef.current = null;
     };
-  }, []);
+    // Re-create chart when replayData becomes available (container becomes visible)
+  }, [replayData?.bars?.length]);
 
   // Update chart data when visible range changes
   useEffect(() => {
@@ -260,7 +303,11 @@ export function TradeReplay({ initialTradeId }: TradeReplayProps) {
     const vwapSeries = vwapSeriesRef.current;
     const chart = chartRef.current;
 
+    // Wait for chart to be created
     if (!candleSeries || !chart) return;
+
+    // Wait for data to be available
+    if (visibleCandles.length === 0) return;
 
     // Set visible data
     candleSeries.setData(visibleCandles);
@@ -273,10 +320,8 @@ export function TradeReplay({ initialTradeId }: TradeReplayProps) {
       markersPluginRef.current.setMarkers(markers);
     }
 
-    // Fit content
-    if (visibleCandles.length > 0) {
-      chart.timeScale().fitContent();
-    }
+    // Fit content to show all visible candles
+    chart.timeScale().fitContent();
   }, [visibleCandles, visibleVwap, markers]);
 
   // Add price lines when trade data loads

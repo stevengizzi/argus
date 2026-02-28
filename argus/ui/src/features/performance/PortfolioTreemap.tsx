@@ -16,13 +16,16 @@
 
 import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import { treemap, hierarchy, treemapSquarify } from 'd3-hierarchy';
-import { scaleSequential } from 'd3-scale';
-import { interpolateRdYlGn } from 'd3-scale-chromatic';
 import { Card } from '../../components/Card';
 import { Badge } from '../../components/Badge';
 import { usePositions } from '../../hooks/usePositions';
 import { useAccount } from '../../hooks/useAccount';
 import { useSymbolDetailUI } from '../../stores/symbolDetailUI';
+import {
+  createDivergingScale,
+  getContrastTextColor,
+  getLegendColors,
+} from '../../utils/colorScales';
 import type { Position } from '../../api/types';
 
 // Strategy abbreviation map
@@ -118,17 +121,20 @@ export function PortfolioTreemap() {
   }, [treemapData, dimensions]);
 
   // Color scale: diverging green-red based on P&L %
-  const colorScale = useMemo(() => {
+  const { colorScale, absMax } = useMemo(() => {
     if (treemapData.length === 0) {
-      return scaleSequential(interpolateRdYlGn).domain([-5, 5]);
+      return { colorScale: createDivergingScale(-5, 5), absMax: 5 };
     }
 
     const pnlValues = treemapData.map((d) => d.pnlPct);
-    const absMax = Math.max(Math.abs(Math.min(...pnlValues)), Math.abs(Math.max(...pnlValues)), 1);
+    const minVal = Math.min(...pnlValues);
+    const maxVal = Math.max(...pnlValues);
+    const absMaxVal = Math.max(Math.abs(minVal), Math.abs(maxVal), 1);
 
-    // Domain goes from negative to positive (red to green)
-    // interpolateRdYlGn goes from red (0) to green (1), so we reverse the domain
-    return scaleSequential(interpolateRdYlGn).domain([-absMax, absMax]);
+    return {
+      colorScale: createDivergingScale(-absMaxVal, absMaxVal),
+      absMax: absMaxVal,
+    };
   }, [treemapData]);
 
   // Handle rectangle click
@@ -214,9 +220,8 @@ export function PortfolioTreemap() {
                 const showLabel = width >= 60 && height >= 36;
                 const color = colorScale(node.data.pnlPct);
 
-                // Text color based on background brightness
-                const textColor =
-                  Math.abs(node.data.pnlPct) > 2 ? '#ffffff' : 'rgba(255, 255, 255, 0.9)';
+                // Dynamic text color based on background luminance
+                const textColor = getContrastTextColor(color);
 
                 return (
                   <g key={node.data.symbol}>
@@ -264,23 +269,13 @@ export function PortfolioTreemap() {
             <div className="flex items-center justify-center gap-2 mt-4">
               <span className="text-xs text-argus-text-dim">Loss</span>
               <div className="flex">
-                {[...Array(7)].map((_, i) => {
-                  const t = (i - 3) / 3; // -1 to 1
-                  const absMax =
-                    treemapData.length > 0
-                      ? Math.max(
-                          ...treemapData.map((d) => Math.abs(d.pnlPct)),
-                          1
-                        )
-                      : 5;
-                  return (
-                    <div
-                      key={i}
-                      className="w-6 h-4"
-                      style={{ backgroundColor: colorScale(t * absMax) }}
-                    />
-                  );
-                })}
+                {getLegendColors(absMax).map((color, i) => (
+                  <div
+                    key={i}
+                    className="w-6 h-4"
+                    style={{ backgroundColor: color }}
+                  />
+                ))}
               </div>
               <span className="text-xs text-argus-text-dim">Profit</span>
             </div>

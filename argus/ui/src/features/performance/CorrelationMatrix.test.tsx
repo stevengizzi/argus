@@ -137,7 +137,7 @@ describe('CorrelationMatrix', () => {
     expect(screen.getByText('Failed to load correlation data')).toBeInTheDocument();
   });
 
-  it('displays strategy short names in headers', () => {
+  it('displays strategy single-letter abbreviations in headers', () => {
     vi.mocked(useCorrelation).mockReturnValue({
       data: mockCorrelationData,
       isLoading: false,
@@ -145,20 +145,24 @@ describe('CorrelationMatrix', () => {
       isFetching: false,
     } as ReturnType<typeof useCorrelation>);
 
-    render(<CorrelationMatrix period="month" />);
+    const { container } = render(<CorrelationMatrix period="month" />);
 
-    // Should show short names in headers (ORB, Scalp, VWAP, AFTN)
-    // Each name appears twice (once in row header, once in column header)
-    const orbTexts = screen.getAllByText('ORB');
-    expect(orbTexts.length).toBe(2);
+    // SVG text elements should contain single-letter abbreviations for headers
+    const svgTextElements = container.querySelectorAll('svg text');
+    const svgTextContents = Array.from(svgTextElements).map((el) => el.textContent);
 
-    const scalpTexts = screen.getAllByText('Scalp');
-    expect(scalpTexts.length).toBe(2);
+    // Each letter appears twice (once in row header, once in column header)
+    expect(svgTextContents.filter((t) => t === 'O').length).toBe(2);
+    expect(svgTextContents.filter((t) => t === 'S').length).toBe(2);
+    expect(svgTextContents.filter((t) => t === 'V').length).toBe(2);
+    expect(svgTextContents.filter((t) => t === 'A').length).toBe(2);
 
-    const vwapTexts = screen.getAllByText('VWAP');
-    expect(vwapTexts.length).toBe(2);
-
-    const aftnTexts = screen.getAllByText('AFTN');
-    expect(aftnTexts.length).toBe(2);
+    // Tooltips should contain full strategy names
+    const titles = container.querySelectorAll('svg title');
+    const titleContents = Array.from(titles).map((el) => el.textContent);
+    expect(titleContents).toContain('ORB Breakout');
+    expect(titleContents).toContain('ORB Scalp');
+    expect(titleContents).toContain('VWAP Reclaim');
+    expect(titleContents).toContain('Afternoon Momentum');
   });
 });

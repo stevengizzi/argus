@@ -41,10 +41,27 @@ vi.mock('d3-scale', () => ({
     scale.domain = vi.fn(() => scale);
     return scale;
   }),
+  scaleLinear: vi.fn(() => {
+    const scale = (value: number) => {
+      // Return a color based on value (simplified for testing)
+      if (value > 0) return '#22c55e'; // green for positive
+      if (value < 0) return '#ef4444'; // red for negative
+      return '#3b4252'; // neutral gray for zero
+    };
+    scale.domain = vi.fn(() => scale);
+    scale.range = vi.fn(() => scale);
+    scale.interpolate = vi.fn(() => scale);
+    scale.clamp = vi.fn(() => scale);
+    return scale;
+  }),
 }));
 
 vi.mock('d3-scale-chromatic', () => ({
   interpolateRdYlGn: vi.fn((t: number) => `rgb(${Math.round(255 * t)}, ${Math.round(255 * (1 - t))}, 0)`),
+}));
+
+vi.mock('d3-interpolate', () => ({
+  interpolateRgb: vi.fn(() => (t: number) => `rgb(${Math.round(255 * t)}, ${Math.round(255 * (1 - t))}, 0)`),
 }));
 
 // Mock framer-motion

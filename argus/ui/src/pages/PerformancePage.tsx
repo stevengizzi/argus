@@ -222,7 +222,7 @@ export function PerformancePage() {
       )}
 
       {activeTab === 'replay' && (
-        <ReplayTabContent />
+        <ReplayTabContent period={period} />
       )}
     </motion.div>
   );
@@ -366,17 +366,19 @@ interface DistributionTabProps {
 function DistributionTabContent({ period }: DistributionTabProps) {
   return (
     <motion.div
-      className="space-y-4 md:space-y-6"
       variants={staggerContainer(0.08)}
       initial="hidden"
       animate="show"
     >
-      <motion.div variants={staggerItem}>
-        <RMultipleHistogram period={period} />
-      </motion.div>
-      <motion.div variants={staggerItem}>
-        <RiskWaterfall />
-      </motion.div>
+      {/* Side by side on desktop (≥1024px), stacked on tablet/mobile */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+        <motion.div variants={staggerItem} className="lg:col-span-1">
+          <RMultipleHistogram period={period} />
+        </motion.div>
+        <motion.div variants={staggerItem} className="lg:col-span-1">
+          <RiskWaterfall />
+        </motion.div>
+      </div>
     </motion.div>
   );
 }
@@ -389,30 +391,36 @@ interface PortfolioTabProps {
 function PortfolioTabContent({ period }: PortfolioTabProps) {
   return (
     <motion.div
-      className="space-y-4 md:space-y-6"
       variants={staggerContainer(0.08)}
       initial="hidden"
       animate="show"
     >
-      <motion.div variants={staggerItem}>
-        <PortfolioTreemap />
-      </motion.div>
-      <motion.div variants={staggerItem}>
-        <CorrelationMatrix period={period} />
-      </motion.div>
+      {/* Side by side on desktop (≥1024px): 60% treemap, 40% correlation */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 md:gap-6">
+        <motion.div variants={staggerItem} className="lg:col-span-3">
+          <PortfolioTreemap />
+        </motion.div>
+        <motion.div variants={staggerItem} className="lg:col-span-2">
+          <CorrelationMatrix period={period} />
+        </motion.div>
+      </div>
     </motion.div>
   );
 }
 
 /** Replay tab - Animated trade walkthrough */
-function ReplayTabContent() {
+interface ReplayTabProps {
+  period: PerformancePeriod;
+}
+
+function ReplayTabContent({ period }: ReplayTabProps) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25 }}
     >
-      <TradeReplay />
+      <TradeReplay period={period} />
     </motion.div>
   );
 }

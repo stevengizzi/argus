@@ -18,22 +18,17 @@ import { scaleSequential } from 'd3-scale';
 import { interpolateRdBu } from 'd3-scale-chromatic';
 import { Card } from '../../components/Card';
 import { useCorrelation } from '../../hooks/useCorrelation';
+import { getStrategyDisplay } from '../../utils/strategyConfig';
+import { getContrastTextColor } from '../../utils/colorScales';
 import type { PerformancePeriod } from '../../api/types';
 
-// Strategy name mappings
-const STRATEGY_SHORT_NAMES: Record<string, string> = {
-  strat_orb_breakout: 'ORB',
-  strat_orb_scalp: 'Scalp',
-  strat_vwap_reclaim: 'VWAP',
-  strat_afternoon_momentum: 'AFTN',
-};
-
-const STRATEGY_FULL_NAMES: Record<string, string> = {
-  strat_orb_breakout: 'ORB Breakout',
-  strat_orb_scalp: 'ORB Scalp',
-  strat_vwap_reclaim: 'VWAP Reclaim',
-  strat_afternoon_momentum: 'Afternoon Momentum',
-};
+/**
+ * Gets the strategy key from a full strategy ID.
+ * Handles both "strat_orb_breakout" and "orb_breakout" formats.
+ */
+function getStrategyKey(strategyId: string): string {
+  return strategyId.replace(/^strat_/, '');
+}
 
 // Get interpretation text for correlation value
 function getCorrelationInterpretation(value: number): string {
@@ -167,34 +162,44 @@ export function CorrelationMatrix({ period }: CorrelationMatrixProps) {
           role="img"
           aria-label="Strategy correlation matrix"
         >
-          {/* Column headers (top) */}
+          {/* Column headers (top) - using strategy config letters */}
           <g transform={`translate(${LABEL_WIDTH + 5}, 0)`}>
-            {data.strategy_ids.map((strategyId, i) => (
-              <text
-                key={`col-${strategyId}`}
-                x={i * (CELL_SIZE + GAP) + CELL_SIZE / 2}
-                y={LABEL_WIDTH - 8}
-                textAnchor="middle"
-                className="fill-argus-text text-xs font-medium"
-              >
-                {STRATEGY_SHORT_NAMES[strategyId] ?? strategyId.slice(-4)}
-              </text>
-            ))}
+            {data.strategy_ids.map((strategyId, i) => {
+              const display = getStrategyDisplay(getStrategyKey(strategyId));
+              return (
+                <g key={`col-${strategyId}`}>
+                  <title>{display.name}</title>
+                  <text
+                    x={i * (CELL_SIZE + GAP) + CELL_SIZE / 2}
+                    y={LABEL_WIDTH - 8}
+                    textAnchor="middle"
+                    className="fill-argus-text text-xs font-medium"
+                  >
+                    {display.letter}
+                  </text>
+                </g>
+              );
+            })}
           </g>
 
-          {/* Row headers (left) */}
+          {/* Row headers (left) - using strategy config letters */}
           <g transform={`translate(0, ${LABEL_WIDTH + 5})`}>
-            {data.strategy_ids.map((strategyId, i) => (
-              <text
-                key={`row-${strategyId}`}
-                x={LABEL_WIDTH - 8}
-                y={i * (CELL_SIZE + GAP) + CELL_SIZE / 2 + 4}
-                textAnchor="end"
-                className="fill-argus-text text-xs font-medium"
-              >
-                {STRATEGY_SHORT_NAMES[strategyId] ?? strategyId.slice(-4)}
-              </text>
-            ))}
+            {data.strategy_ids.map((strategyId, i) => {
+              const display = getStrategyDisplay(getStrategyKey(strategyId));
+              return (
+                <g key={`row-${strategyId}`}>
+                  <title>{display.name}</title>
+                  <text
+                    x={LABEL_WIDTH - 8}
+                    y={i * (CELL_SIZE + GAP) + CELL_SIZE / 2 + 4}
+                    textAnchor="end"
+                    className="fill-argus-text text-xs font-medium"
+                  >
+                    {display.letter}
+                  </text>
+                </g>
+              );
+            })}
           </g>
 
           {/* Matrix cells */}
@@ -206,11 +211,8 @@ export function CorrelationMatrix({ period }: CorrelationMatrixProps) {
                   ? 'rgba(59, 130, 246, 0.7)' // Blue for diagonal (self-correlation)
                   : colorScale(value);
 
-                // Text color: white on strong colors, darker on neutral
-                const textColor =
-                  isDiagonal || Math.abs(value) > 0.4
-                    ? '#ffffff'
-                    : 'rgba(255, 255, 255, 0.9)';
+                // Dynamic text color based on background luminance
+                const textColor = getContrastTextColor(cellColor);
 
                 return (
                   <g key={`cell-${rowIdx}-${colIdx}`}>
@@ -266,8 +268,20 @@ export function CorrelationMatrix({ period }: CorrelationMatrixProps) {
           <span className="text-xs text-argus-text-dim">+1.0</span>
         </div>
 
+        {/* Strategy key legend */}
+        <div className="flex flex-wrap justify-center gap-x-4 gap-y-1 mt-3">
+          {data.strategy_ids.map((strategyId) => {
+            const display = getStrategyDisplay(getStrategyKey(strategyId));
+            return (
+              <span key={strategyId} className="text-xs text-argus-text-dim">
+                <span className="font-medium text-argus-text">{display.letter}</span> = {display.shortName}
+              </span>
+            );
+          })}
+        </div>
+
         {/* Interpretation helper */}
-        <div className="mt-3 text-center">
+        <div className="mt-2 text-center">
           <p className="text-xs text-argus-text-dim">
             Low correlations (&lt;0.3) indicate good diversification between strategies
           </p>
@@ -285,8 +299,8 @@ export function CorrelationMatrix({ period }: CorrelationMatrixProps) {
           >
             <div className="text-xs space-y-1">
               <div className="text-argus-text font-medium">
-                {STRATEGY_FULL_NAMES[tooltip.row] ?? tooltip.row} &harr;{' '}
-                {STRATEGY_FULL_NAMES[tooltip.col] ?? tooltip.col}
+                {getStrategyDisplay(getStrategyKey(tooltip.row)).name} &harr;{' '}
+                {getStrategyDisplay(getStrategyKey(tooltip.col)).name}
               </div>
               <div className="text-argus-text-dim">
                 Correlation:{' '}

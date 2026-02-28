@@ -15,12 +15,15 @@
 
 import { useState, useRef, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { scaleDiverging } from 'd3-scale';
-import { interpolateRdYlGn } from 'd3-scale-chromatic';
 import { Card } from '../../components/Card';
 import { CardHeader } from '../../components/CardHeader';
 import { SegmentedTab } from '../../components/SegmentedTab';
 import { useHeatmapData } from '../../hooks/useHeatmapData';
+import {
+  createDivergingScale,
+  getContrastTextColor,
+  getLegendColors,
+} from '../../utils/colorScales';
 import type { PerformancePeriod, HeatmapCell } from '../../api/types';
 
 // Time bins: 9:30, 10:00, 10:30, ..., 15:30 (13 bins)
@@ -40,6 +43,15 @@ const COLOR_SEGMENTS = [
   { label: 'By P&L', value: 'pnl' },
 ];
 
+// Strategy options for filter
+const STRATEGY_OPTIONS = [
+  { label: 'All Strategies', value: 'all' },
+  { label: 'ORB Breakout', value: 'strat_orb_breakout' },
+  { label: 'ORB Scalp', value: 'strat_orb_scalp' },
+  { label: 'VWAP Reclaim', value: 'strat_vwap_reclaim' },
+  { label: 'Afternoon Momentum', value: 'strat_afternoon_momentum' },
+];
+
 interface TradeActivityHeatmapProps {
   period: PerformancePeriod;
 }
@@ -48,10 +60,12 @@ export function TradeActivityHeatmap({ period }: TradeActivityHeatmapProps) {
   const navigate = useNavigate();
   const containerRef = useRef<HTMLDivElement>(null);
   const [colorMode, setColorMode] = useState<ColorMode>('r_multiple');
+  const [strategyFilter, setStrategyFilter] = useState<string>('all');
   const [hoveredCell, setHoveredCell] = useState<HeatmapCell | null>(null);
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
 
-  const { data, isLoading, error } = useHeatmapData(period);
+  const strategyId = strategyFilter === 'all' ? undefined : strategyFilter;
+  const { data, isLoading, error } = useHeatmapData(period, strategyId);
 
   // Build a lookup map for cells
   const cellMap = useMemo(() => {
@@ -67,9 +81,9 @@ export function TradeActivityHeatmap({ period }: TradeActivityHeatmapProps) {
   }, [data?.cells]);
 
   // Compute color scale domain based on data
-  const colorScale = useMemo(() => {
+  const { colorScale, absMax } = useMemo(() => {
     if (!data?.cells || data.cells.length === 0) {
-      return scaleDiverging(interpolateRdYlGn).domain([-1, 0, 1]);
+      return { colorScale: createDivergingScale(-1, 1), absMax: 1 };
     }
 
     const values = data.cells.map((c) =>
@@ -79,9 +93,12 @@ export function TradeActivityHeatmap({ period }: TradeActivityHeatmapProps) {
     const maxVal = Math.max(...values);
 
     // For a diverging scale centered on 0
-    const absMax = Math.max(Math.abs(minVal), Math.abs(maxVal), 0.01);
+    const absMaxVal = Math.max(Math.abs(minVal), Math.abs(maxVal), 0.01);
 
-    return scaleDiverging(interpolateRdYlGn).domain([-absMax, 0, absMax]);
+    return {
+      colorScale: createDivergingScale(-absMaxVal, absMaxVal),
+      absMax: absMaxVal,
+    };
   }, [data?.cells, colorMode]);
 
   // Handle cell click - navigate to trades with filter
@@ -153,13 +170,27 @@ export function TradeActivityHeatmap({ period }: TradeActivityHeatmapProps) {
     <Card>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-4 pt-4 pb-2">
         <h3 className="text-sm font-medium text-argus-text">Trade Activity Heatmap</h3>
-        <SegmentedTab
-          segments={COLOR_SEGMENTS}
-          activeValue={colorMode}
-          onChange={(v) => setColorMode(v as ColorMode)}
-          size="sm"
-          layoutId="heatmap-color-mode"
-        />
+        <div className="flex items-center gap-3">
+          <select
+            value={strategyFilter}
+            onChange={(e) => setStrategyFilter(e.target.value)}
+            className="px-3 py-1.5 text-sm bg-argus-surface-2 border border-argus-border rounded-md text-argus-text focus:outline-none focus:ring-1 focus:ring-argus-accent"
+            aria-label="Filter by strategy"
+          >
+            {STRATEGY_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+          <SegmentedTab
+            segments={COLOR_SEGMENTS}
+            activeValue={colorMode}
+            onChange={(v) => setColorMode(v as ColorMode)}
+            size="sm"
+            layoutId="heatmap-color-mode"
+          />
+        </div>
       </div>
 
       <div
@@ -225,13 +256,13 @@ export function TradeActivityHeatmap({ period }: TradeActivityHeatmapProps) {
 
                     const hasData = cell && cell.trade_count > 0;
                     const fillColor = hasData
-                      ? String(colorScale(value))
+                      ? colorScale(value)
                       : 'rgba(55, 65, 81, 0.3)'; // gray for empty
 
-                    // Text color: light on dark, dark on light
-                    const textColor = hasData && Math.abs(value) > 0.5
-                      ? '#ffffff'
-                      : 'rgba(255, 255, 255, 0.8)';
+                    // Dynamic text color based on background luminance
+                    const textColor = hasData
+                      ? getContrastTextColor(fillColor)
+                      : 'rgba(255, 255, 255, 0.6)';
 
                     return (
                       <g key={`${dayIdx}-${hourIdx}`}>
@@ -269,16 +300,13 @@ export function TradeActivityHeatmap({ period }: TradeActivityHeatmapProps) {
             <div className="flex items-center justify-center gap-2 mt-4">
               <span className="text-xs text-argus-text-dim">Loss</span>
               <div className="flex">
-                {[...Array(7)].map((_, i) => {
-                  const t = (i - 3) / 3; // -1 to 1
-                  return (
-                    <div
-                      key={i}
-                      className="w-6 h-4"
-                      style={{ backgroundColor: String(colorScale(t)) }}
-                    />
-                  );
-                })}
+                {getLegendColors(absMax).map((color, i) => (
+                  <div
+                    key={i}
+                    className="w-6 h-4"
+                    style={{ backgroundColor: color }}
+                  />
+                ))}
               </div>
               <span className="text-xs text-argus-text-dim">Profit</span>
             </div>

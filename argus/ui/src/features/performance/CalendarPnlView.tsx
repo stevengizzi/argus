@@ -15,9 +15,11 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { scaleDiverging } from 'd3-scale';
-import { interpolateRdYlGn } from 'd3-scale-chromatic';
 import { Card } from '../../components/Card';
+import {
+  createDivergingScale,
+  getContrastTextColor,
+} from '../../utils/colorScales';
 import type { DailyPnlEntry } from '../../api/types';
 
 // Day of week headers
@@ -53,15 +55,14 @@ export function CalendarPnlView({ dailyPnl }: CalendarPnlViewProps) {
   // Compute color scale based on P&L values
   const colorScale = useMemo(() => {
     if (dailyPnl.length === 0) {
-      return scaleDiverging(interpolateRdYlGn).domain([-100, 0, 100]);
+      return createDivergingScale(-100, 100);
     }
 
     const values = dailyPnl.map((e) => e.pnl);
     const minVal = Math.min(...values);
     const maxVal = Math.max(...values);
-    const absMax = Math.max(Math.abs(minVal), Math.abs(maxVal), 1);
 
-    return scaleDiverging(interpolateRdYlGn).domain([-absMax, 0, absMax]);
+    return createDivergingScale(minVal, maxVal);
   }, [dailyPnl]);
 
   // Get calendar data for current month
@@ -221,20 +222,14 @@ export function CalendarPnlView({ dailyPnl }: CalendarPnlViewProps) {
                 if (day.isWeekend && day.date !== null) {
                   bgColor = 'rgba(55, 65, 81, 0.2)';
                 } else if (hasData) {
-                  bgColor = String(colorScale(entry.pnl));
+                  bgColor = colorScale(entry.pnl);
                 } else if (day.date !== null) {
                   bgColor = 'rgba(55, 65, 81, 0.1)';
                 }
 
-                // Text color for P&L
+                // Dynamic text color based on background luminance
                 const pnlColor = hasData
-                  ? entry.pnl >= 0
-                    ? Math.abs(entry.pnl) > 100
-                      ? '#ffffff'
-                      : 'rgb(74, 222, 128)'
-                    : Math.abs(entry.pnl) > 100
-                      ? '#ffffff'
-                      : 'rgb(248, 113, 113)'
+                  ? getContrastTextColor(bgColor)
                   : undefined;
 
                 return (
