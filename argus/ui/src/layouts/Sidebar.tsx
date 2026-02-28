@@ -9,15 +9,13 @@
  * - Learn: Debrief
  * - Maintain: System
  *
- * Keyboard shortcuts: 1-7 for pages, 'c' for Copilot, 'w' for Watchlist.
+ * Keyboard shortcuts handled in AppShell (1-7 for pages, 'c' for Copilot, 'w' for Watchlist).
  */
 
-import { useEffect } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 import { LayoutDashboard, ScrollText, TrendingUp, Gauge, BookOpen, GraduationCap, Activity, LogOut } from 'lucide-react';
 import { useAuthStore } from '../stores/auth';
 import { useLiveStore } from '../stores/live';
-import { useCopilotUIStore } from '../stores/copilotUI';
 
 // Navigation items with dividers between groups
 // Keyboard shortcuts use numeric order: 1=Dashboard, 2=Trades, etc.
@@ -89,34 +87,6 @@ interface SidebarProps {
 export function Sidebar({ paperMode = false }: SidebarProps) {
   const logout = useAuthStore((state) => state.logout);
   const status = useLiveStore((state) => state.status);
-  const toggleCopilot = useCopilotUIStore((state) => state.toggle);
-  const navigate = useNavigate();
-
-  // Keyboard shortcuts: 1-7 for navigation, 'c' for copilot
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignore if typing in an input or textarea
-      const target = e.target as HTMLElement;
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
-        return;
-      }
-
-      // Numeric shortcuts for navigation
-      const keyNum = parseInt(e.key, 10);
-      if (keyNum >= 1 && keyNum <= NAV_ITEMS.length) {
-        navigate(NAV_ITEMS[keyNum - 1].to);
-        return;
-      }
-
-      // 'c' for copilot toggle
-      if (e.key === 'c') {
-        toggleCopilot();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [navigate, toggleCopilot]);
 
   const getStatusColor = () => {
     switch (status) {

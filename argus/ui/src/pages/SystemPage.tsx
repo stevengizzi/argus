@@ -1,8 +1,10 @@
 /**
  * System health and monitoring page.
  *
- * Shows overall system status, component health, strategy cards,
- * and WebSocket event log.
+ * Shows overall system status, component health, intelligence placeholders,
+ * and WebSocket event log. Infrastructure-focused — operations moved to Orchestrator.
+ *
+ * Sprint 21d — System cleanup (DEC-210).
  */
 
 import { motion } from 'framer-motion';
@@ -10,9 +12,8 @@ import { Activity } from 'lucide-react';
 import {
   SystemOverview,
   ComponentStatusList,
-  StrategyCards,
   EventsLog,
-  EmergencyControls,
+  IntelligencePlaceholders,
 } from '../features/system';
 import { staggerContainer, staggerItem } from '../utils/motion';
 
@@ -30,28 +31,20 @@ export function SystemPage() {
         <h1 className="text-xl font-semibold text-argus-text">System</h1>
       </motion.div>
 
-      {/* Main content grid */}
+      {/* Main content grid: SystemOverview + ComponentStatusList */}
       <motion.div className="grid grid-cols-1 lg:grid-cols-2 gap-6" variants={staggerItem}>
-        {/* Left column: Overview and Components */}
-        <div className="space-y-6">
-          <SystemOverview />
-          <ComponentStatusList />
-        </div>
+        <SystemOverview />
+        <ComponentStatusList />
+      </motion.div>
 
-        {/* Right column: Strategies */}
-        <div>
-          <StrategyCards />
-        </div>
+      {/* Intelligence placeholders */}
+      <motion.div variants={staggerItem}>
+        <IntelligencePlaceholders />
       </motion.div>
 
       {/* Events log - full width at bottom */}
       <motion.div variants={staggerItem}>
         <EventsLog />
-      </motion.div>
-
-      {/* Emergency controls */}
-      <motion.div variants={staggerItem}>
-        <EmergencyControls />
       </motion.div>
     </motion.div>
   );

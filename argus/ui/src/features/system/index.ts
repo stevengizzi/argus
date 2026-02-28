@@ -1,13 +1,17 @@
 /**
  * System feature components.
  *
- * Health monitoring, strategy status, and event logging.
+ * Health monitoring, intelligence placeholders, and event logging.
+ * Strategy cards and emergency controls moved to Orchestrator (Sprint 21d, DEC-210).
  */
 
 export { SystemOverview } from './SystemOverview';
 export { ComponentStatusList } from './ComponentStatus';
-export { StrategyCards } from './StrategyCards';
 export { EventsLog } from './EventsLog';
+export { IntelligencePlaceholders } from './IntelligencePlaceholders';
+
+// Legacy exports — kept for Orchestrator page imports
+export { StrategyCards } from './StrategyCards';
 export { EmergencyControls } from './EmergencyControls';
 
 // Skeleton exports

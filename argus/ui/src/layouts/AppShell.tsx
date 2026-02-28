@@ -5,15 +5,19 @@
  * - Desktop (≥1024px): Icon sidebar pinned left + main content
  * - Tablet (640–1023px): Bottom tab bar with labels
  * - Phone (<640px): Bottom tab bar with icons
+ *
+ * Mounts global panels: SymbolDetailPanel, CopilotPanel, CopilotButton.
  */
 
 import { useEffect, useCallback, useRef } from 'react';
-import { useLocation, useOutlet } from 'react-router-dom';
+import { useLocation, useOutlet, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Sidebar } from './Sidebar';
 import { MobileNav } from './MobileNav';
 import { useLiveStore } from '../stores/live';
+import { useCopilotUIStore } from '../stores/copilotUI';
 import { SymbolDetailPanel } from '../features/symbol';
+import { CopilotPanel, CopilotButton } from '../features/copilot';
 import { pageVariants } from '../utils/motion';
 
 interface AppShellProps {
@@ -24,11 +28,24 @@ interface AppShellProps {
 // This persists across re-renders and prevents content flash during transitions.
 const outletCache = new Map<string, React.ReactNode>();
 
+// Navigation routes for keyboard shortcuts
+const NAV_ROUTES = [
+  '/',
+  '/trades',
+  '/performance',
+  '/orchestrator',
+  '/patterns',
+  '/debrief',
+  '/system',
+];
+
 export function AppShell({ paperMode = true }: AppShellProps) {
   const location = useLocation();
+  const navigate = useNavigate();
   const currentOutlet = useOutlet();
   const connect = useLiveStore((state) => state.connect);
   const disconnect = useLiveStore((state) => state.disconnect);
+  const toggleCopilot = useCopilotUIStore((state) => state.toggle);
   const mainRef = useRef<HTMLElement>(null);
 
   // Cache the current outlet element by its pathname.
@@ -41,6 +58,33 @@ export function AppShell({ paperMode = true }: AppShellProps) {
     connect();
     return () => disconnect();
   }, [connect, disconnect]);
+
+  // Global keyboard shortcuts for mobile (Sidebar handles desktop but mobile needs this)
+  // 1-7 for navigation, 'c' for copilot
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if typing in an input or textarea
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+        return;
+      }
+
+      // Numeric shortcuts for navigation
+      const keyNum = parseInt(e.key, 10);
+      if (keyNum >= 1 && keyNum <= NAV_ROUTES.length) {
+        navigate(NAV_ROUTES[keyNum - 1]);
+        return;
+      }
+
+      // 'c' for copilot toggle
+      if (e.key === 'c') {
+        toggleCopilot();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [navigate, toggleCopilot]);
 
   // Clean up old cache entries and scroll to top after exit transition completes.
   // This creates the effect: fade to black at old scroll position → scroll to top → fade in new page.
@@ -85,8 +129,10 @@ export function AppShell({ paperMode = true }: AppShellProps) {
       {/* Mobile/tablet bottom navigation */}
       <MobileNav />
 
-      {/* Global symbol detail panel */}
+      {/* Global panels */}
       <SymbolDetailPanel />
+      <CopilotPanel />
+      <CopilotButton />
     </div>
   );
 }
