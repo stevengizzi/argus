@@ -11,7 +11,7 @@ Phase 1 sprint plan: @docs/07_PHASE1_SPRINT_PLAN.md
 ## Current State
 
 **Structure:** Two parallel tracks (DEC-079, February 19, 2026). Expanded to AI-enhanced platform (DEC-163, February 26, 2026).
-- **Build Track:** System construction at development velocity. Sprints 1–21c complete (1,664 pytest tests + 138 Vitest). Sprint 21d (Dashboard refinement + Performance analytics + System cleanup + AI Copilot shell) IN PROGRESS.
+- **Build Track:** System construction at development velocity. Sprints 1–21d complete (1,712 pytest tests + 257 Vitest). Sprint 22 (AI Layer MVP) is NEXT.
 - **Validation Track:** Paper trading ACTIVE on Alpaca IEX (system stability only — DEC-081). Signal accuracy validation pending Databento activation. All pre-Databento backtests require re-validation (DEC-132). Migrates to IBKR paper after IBKR account approved (U24619949, submitted Feb 21).
 
 Active sprint plan: `docs/10_PHASE3_SPRINT_PLAN.md` (covers both tracks).
@@ -29,9 +29,28 @@ Active sprint plan: `docs/10_PHASE3_SPRINT_PLAN.md` (covers both tracks).
 - ARGUS expanded to AI-enhanced trading intelligence platform (15+ patterns, Setup Quality Engine, Order Flow Model, NLP Catalyst Pipeline, Dynamic Position Sizer, Learning Loop, Pre-Market Engine).
 - Seven-page Command Center (DEC-169): Dashboard, Trade Log, Performance, Orchestrator (NEW), Pattern Library (NEW), The Debrief (NEW), System.
 - Contextual AI Copilot (DEC-170): Claude accessible from every page via slide-out chat panel. Context-aware. Actions through approval workflow.
-- Sprint 21 split into 21a–21d (DEC-171): 21a Pattern Library page ✅, 21b Orchestrator page ✅, 21c The Debrief page (NEXT), 21d Dashboard+Performance+System+nav+Copilot shell.
+- Sprint 21 split into 21a–21d (DEC-171): 21a Pattern Library page ✅, 21b Orchestrator page ✅, 21c The Debrief page ✅, 21d Dashboard+Performance+System+nav+Copilot shell ✅. All 7 Command Center pages complete.
 - Free catalyst sources first (DEC-164): SEC EDGAR + Finnhub + FMP. Benzinga deferred.
 - Full roadmap: `docs/research/ARGUS_Expanded_Roadmap.md`.
+
+**Sprint 21d Results (Dashboard + Performance + System + Copilot — Feb 27–28):**
+- Dashboard redesign (DEC-204): OrchestratorStatusStrip, StrategyDeploymentBar (DEC-219), GoalTracker (DEC-220), 3-card row with MarketStatus/TodayStats/SessionTimeline (DEC-221). PreMarketLayout placeholder (DEC-213). Dashboard aggregate endpoint (DEC-222), useSummaryData hook disabling (DEC-223).
+- Performance 5-tab suite: 8 visualizations — TradeActivityHeatmap (D3), CalendarPnlView, RMultipleHistogram (Recharts), RiskWaterfall, PortfolioTreemap (D3), CorrelationMatrix, ComparativePeriodOverlay, TradeReplay. Unified diverging color scale (DEC-224), WCAG text contrast (DEC-225), single-letter strategy labels (DEC-226), desktop side-by-side layouts (DEC-227), tab shortcuts o/h/d/p/r (DEC-228). Performance Workbench deferred (DEC-229).
+- System: narrowed to infrastructure + IntelligencePlaceholders (DEC-210).
+- Navigation: sidebar dividers, mobile 5+More bottom sheet (DEC-211, DEC-216).
+- CopilotPanel shell + CopilotButton + copilotUI store (DEC-212, DEC-217). `c` shortcut. Placeholder for Sprint 22.
+- Backend: 5 new endpoints (heatmap, distribution, correlation, replay, goals) + dashboard summary aggregate. GoalsConfig.
+- 1712 tests (pytest, 48 new) + 257 (Vitest, 119 new). 13 sessions + 3 code reviews. Code review passed (DEC-204–229).
+- Deferred: DEF-028 (CalendarPnlView strategy filter), DEC-229 (Performance Workbench).
+
+**Sprint 21c Results (The Debrief Page — Feb 27):**
+- The Debrief: 7th Command Center page. Three-section SegmentedTab: Briefings, Research Library, Journal.
+- Briefings: Pre-Market/EOD creation, BriefingEditor with side-by-side markdown edit/preview, 409 Conflict via ApiError (DEC-202).
+- Research Library: hybrid filesystem (read-only repo docs) + database (CRUD custom docs, DEC-198). ResearchDocCard, DocumentEditor, TagInput.
+- Journal: 4-filter dimensions, typed badges (Observation/Trade Annotation/Pattern Note/System Note), expand/collapse, inline edit. TradeSearchInput with linked trade chips → SymbolDetailPanel. Batch trade fetch (DEC-203).
+- Backend: DebriefService (992 lines), 3 DB tables, 4 API route files, LIKE search (DEC-200).
+- Nav: 7 pages complete (DEC-199). Keyboard shortcuts 1–7, b/r/j tab switching, n new entry, Escape close.
+- 1664 tests (pytest, 105 new) + 138 (Vitest, 38 new). 10 sessions + 2 code reviews + 1 fix session. Code review passed (DEC-196–203).
 
 **Sprint 21b Results (Orchestrator Page — Feb 27):**
 - Orchestrator page: 6th Command Center page. Hero row layout (DEC-192): SessionOverview + RegimePanel stacked left, CapitalAllocation donut right.
@@ -353,6 +372,7 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 | DEF-025 | Shared Consolidation Base Class | Second consolidation-based strategy designed (e.g., Midday Range Breakout) | AfternoonMomentumStrategy inherits directly from BaseStrategy (DEC-152). If a second consolidation variant is built, extract shared midday range tracking into a ConsolidationBaseStrategy ABC. Follows the OrbBaseStrategy extraction pattern (DEC-120). |
 | DEF-026 | ~~FTS5 full-text search~~ | — | **RESOLVED** (DEC-200): LIKE queries shipped as V1 solution. FTS5 deferred to >10K entries. |
 | DEF-027 | ~~Journal trade linking UI~~ | — | **RESOLVED** (DEC-201): Full search UI with TradeSearchInput shipped in Sprint 21c. |
+| DEF-028 | CalendarPnlView strategy filter | Performance Workbench implementation (DEC-229) OR user requests during paper trading | CalendarPnlView renders all-strategy aggregated P&L. Strategy-specific calendar filtering deferred because calendar needs a different data query path than other charts (daily aggregation by strategy). Low priority — user can already filter by strategy in Overview and Heatmaps tabs. |
 
 This keeps it lightweight — no new document, no new sync burden. Items get removed (or moved to "Completed") as they're addressed. Both Claudes see the trigger column and know when to raise the flag.
 

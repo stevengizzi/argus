@@ -29,7 +29,7 @@ export interface TodayStatsProps {
 
 export function TodayStats({ data: propData, useSummaryData }: TodayStatsProps) {
   // Disable hooks when using summary data mode — component renders structure immediately
-  const { data: perfData, isLoading: perfLoading } = usePerformance('day', { enabled: !useSummaryData });
+  const { data: perfData, isLoading: perfLoading } = usePerformance('today', { enabled: !useSummaryData });
   const { data: tradesData, isLoading: tradesLoading } = useTrades({ limit: 100 }, { enabled: !useSummaryData });
 
   // In summary mode, never show skeleton — render structure with dash placeholders
@@ -50,8 +50,8 @@ export function TodayStats({ data: propData, useSummaryData }: TodayStatsProps) 
 
     // Find the trade with highest P&L
     return todaysTrades.reduce((best, trade) => {
-      const tradePnl = trade.realized_pnl ?? 0;
-      const bestPnl = best.realized_pnl ?? 0;
+      const tradePnl = trade.pnl_dollars ?? 0;
+      const bestPnl = best.pnl_dollars ?? 0;
       return tradePnl > bestPnl ? trade : best;
     }, todaysTrades[0]);
   }, [propData, tradesData]);
@@ -92,7 +92,7 @@ export function TodayStats({ data: propData, useSummaryData }: TodayStatsProps) 
     winRate = metrics?.win_rate ?? 0;
     avgR = metrics?.avg_r_multiple ?? 0;
     bestTrade = bestTradeFromHooks
-      ? { symbol: bestTradeFromHooks.symbol, pnl: bestTradeFromHooks.realized_pnl ?? 0 }
+      ? { symbol: bestTradeFromHooks.symbol, pnl: bestTradeFromHooks.pnl_dollars ?? 0 }
       : null;
   }
 

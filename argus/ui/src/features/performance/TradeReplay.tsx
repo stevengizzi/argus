@@ -56,7 +56,7 @@ function periodToDateRange(period: PerformancePeriod): { date_from?: string; dat
   const today = now.toISOString().split('T')[0];
 
   switch (period) {
-    case 'day':
+    case 'today':
       return { date_from: today, date_to: today };
     case 'week': {
       const weekAgo = new Date(now);

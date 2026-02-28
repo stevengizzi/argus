@@ -15,6 +15,7 @@
 import { motion } from 'framer-motion';
 import { Card } from '../../components/Card';
 import { CardHeader } from '../../components/CardHeader';
+import { Badge } from '../../components/Badge';
 import { staggerContainer, staggerItem, staggerItemWithChildren } from '../../utils/motion';
 import { MarketCountdown } from './MarketCountdown';
 import { SessionSummaryCard } from './SessionSummaryCard';
@@ -39,7 +40,7 @@ function PlaceholderCard({
     <Card className="h-full flex flex-col">
       <CardHeader
         title={title}
-        badge={{ text: 'Coming', variant: 'neutral' }}
+        action={<Badge variant="neutral">Coming</Badge>}
       />
 
       <div className="flex-1 flex flex-col items-center justify-center py-6 text-center">
@@ -65,7 +66,7 @@ function RankedWatchlistPlaceholder() {
     <Card className="h-full flex flex-col">
       <CardHeader
         title="Ranked Watchlist"
-        badge={{ text: 'Coming', variant: 'neutral' }}
+        action={<Badge variant="neutral">Coming</Badge>}
       />
 
       {/* Empty table header */}
@@ -98,7 +99,7 @@ function RegimeForecastPlaceholder() {
     <Card className="h-full flex flex-col">
       <CardHeader
         title="Regime Forecast"
-        badge={{ text: 'Coming', variant: 'neutral' }}
+        action={<Badge variant="neutral">Coming</Badge>}
       />
 
       <div className="flex-1 flex items-center justify-center py-6">

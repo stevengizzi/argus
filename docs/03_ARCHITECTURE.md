@@ -1050,6 +1050,16 @@ GET              /api/v1/debrief/search              # Unified search across all
 # Trade batch endpoint (Sprint 21c, DEC-203)
 GET  /api/v1/trades/batch?ids=<ULIDs>           # Batch fetch trades by ID (max 50)
 
+# Performance analytics endpoints (Sprint 21d)
+GET  /api/v1/performance/heatmap                # Trade activity heatmap data (hour×DOW grid)
+GET  /api/v1/performance/distribution           # R-multiple histogram + risk waterfall data
+GET  /api/v1/performance/correlation            # Strategy pairwise correlation matrix
+GET  /api/v1/performance/replay/{trade_id}      # Trade replay bar data for Lightweight Charts
+GET  /api/v1/goals                              # GoalsConfig (monthly target, read/update)
+
+# Market data endpoint (Sprint 21a)
+GET  /api/v1/market/{symbol}/bars               # Synthetic OHLCV for dev mode symbol charts
+
 ```
 
 ### WebSocket
@@ -1069,19 +1079,29 @@ ws://host/ws/v1/live?token={jwt}
 
 ## 4.1 Command Center Frontend (`argus/ui/`)
 
-### Implementation Status (Sprint 16)
+### Implementation Status (Sprint 21d)
 
-Four pages delivered with responsive design across four breakpoints. Single React codebase targeting web, Tauri desktop (v2), and PWA mobile (DEC-080). Full animation system (Framer Motion), skeleton loading, emergency controls, trade detail panel, CSV export.
+Seven pages delivered with responsive design across four breakpoints (DEC-169). Single React codebase targeting web, Tauri desktop (v2), and PWA mobile (DEC-080). Full animation system (Framer Motion), skeleton loading, emergency controls, trade detail panel, CSV export. Desktop icon sidebar with group dividers. Mobile 5-tab + More bottom sheet (DEC-211, DEC-216). AI Copilot shell panel (DEC-212). 1712 pytest + 257 Vitest tests.
 
 ### Pages
 
-**Dashboard** (`/`): Account summary cards (equity, daily P&L, open positions count, win rate). Three-card analytics row: CapitalAllocation (track-and-fill donut + horizontal bars toggle, DEC-133), Risk Budget (daily/weekly risk gauges), Market Regime (regime badge + description, DEC-134). Market and Market Regime cards pair at tablet/phone widths. Positions panel with table/timeline toggle (DEC-125) and three-way filter All/Open/Closed (DEC-128), recent trades list, system health mini-display. SessionSummaryCard appears after market close when trades exist (DEC-131 dev-mode override). View state persisted in Zustand store (DEC-129).
+**Dashboard** (`/`): Ambient awareness surface (DEC-204). OrchestratorStatusStrip (clickable → Orchestrator page). StrategyDeploymentBar (per-strategy capital deployment with accent colors, click → Pattern Library or Orchestrator, DEC-219). GoalTracker (2-column pace dashboard with avg daily P&L and need/day metrics, color-coded pace indicator, DEC-220). Three-card row: MarketStatus (merged Market + Market Regime, DEC-221), TodayStats (2×2 metrics grid), SessionTimeline (SVG strategy windows with "now" marker, click → Orchestrator). Positions panel with table/timeline toggle and three-way filter All/Open/Closed (DEC-128). Recent trades list. SessionSummaryCard after hours (DEC-131). PreMarketLayout with placeholder cards (DEC-213, time-gated, data wired Sprint 23). Dashboard aggregate endpoint for single-request data loading (DEC-222). useSummaryData hook disabling pattern (DEC-223).
 
-**Trade Log** (`/trades`): Filter bar (strategy, outcome, date range), stats summary row (total trades, win rate, net P&L), paginated trade table with color-coded exit reason badges.
+**Trade Log** (`/trades`): Filter bar (strategy, outcome, date range), stats summary row (total trades, win rate, net P&L), paginated trade table with color-coded exit reason badges. Row click opens TradeDetailPanel.
 
-**Performance** (`/performance`): Period selector (Today/Week/Month/All), 12-metric grid (6 primary + 6 secondary), equity curve (Lightweight Charts area chart), daily P&L histogram (Lightweight Charts), strategy breakdown table.
+**Performance** (`/performance`): Five-tab layout (DEC-218, DEC-228). Overview: MetricsGrid, EquityCurve (Lightweight Charts), DailyPnlChart, StrategyBreakdown, comparison toggle. Heatmaps: TradeActivityHeatmap (D3, DEC-206), CalendarPnlView. Distribution: RMultipleHistogram (Recharts), RiskWaterfall — side-by-side on desktop (DEC-227). Portfolio: PortfolioTreemap (D3, DEC-207), CorrelationMatrix — side-by-side 60/40 on desktop (DEC-227). Replay: TradeReplay (DEC-209) with trade selector and Lightweight Charts playback. Unified diverging color scale across all P&L charts (DEC-224). Dynamic WCAG text contrast (DEC-225). Strategy-level single-letter labels (DEC-226). Tab keyboard shortcuts: o/h/d/p/r (DEC-228). Performance Workbench customizable layout deferred (DEC-229).
 
-**System** (`/system`): System overview (uptime, mode, broker/data sources, timestamps), component health status with descriptions, strategy cards with parameters, collapsible events log.
+**Orchestrator** (`/orchestrator`): Hero row — SessionOverview + RegimePanel stacked left, CapitalAllocation donut right (DEC-192). RegimePanel with visual gauge bars for Trend/Vol/Momentum (DEC-195). StrategyCoverageTimeline (custom SVG with "now" marker). StrategyOperationsGrid (2-col cards with allocation bars, throttle status, pause/resume). DecisionTimeline (newest-first, DEC-194). GlobalControls (force rebalance, emergency flatten/pause with ConfirmModal). ThrottleOverrideDialog (duration + mandatory reason). Emergency controls migrated from Dashboard.
+
+**Pattern Library** (`/patterns`): IncubatorPipeline (10-stage horizontal pipeline with counts and click-to-filter). PatternCardGrid (filterable by family/time window, sortable). PatternCard (badges, stats, accent styling). PatternDetail (5 tabs: Overview, Performance, Backtest, Trades, Intelligence). OverviewTab (parameter table + document index with DocumentModal). PerformanceTab (strategy-filtered charts, DEC-183). BacktestTab (structured placeholder from config YAML, DEC-176). TradesTab (reuses TradeTable). IntelligenceTab (placeholder). Master-detail responsive layout (desktop 35%/65%, mobile drill-down). Arrow key navigation (DEC-185).
+
+**The Debrief** (`/debrief`): Three-section SegmentedTab. Briefings (Pre-Market/EOD creation, editor with side-by-side markdown preview). Research Library (hybrid filesystem + database documents, DEC-198). Journal (4-filter dimensions, typed entry cards, inline editing, TradeSearchInput with linked trade chips). LIKE search (DEC-200). Batch trade fetch (DEC-203). Keyboard: b/r/j tabs, n new entry.
+
+**System** (`/system`): SystemOverview (uptime, mode, broker/data sources). ComponentStatusList (infrastructure health). IntelligencePlaceholders (6 AI component cards with sprint target badges, DEC-210). EventsLog (WebSocket event stream).
+
+**AI Copilot** (global panel, DEC-212): CopilotPanel slide-out (desktop 35% right, mobile 90vh bottom sheet). CopilotButton floating action (desktop bottom-right 24px, mobile above tab bar, DEC-217). Page context indicator. Placeholder content — activated Sprint 22. Keyboard: `c` toggle.
+
+**Global panels:** SlideInPanel shared shell (DEC-177). SymbolDetailPanel (global, mounted in AppShell, click any symbol anywhere). TradeDetailPanel (slide-in from trade rows). WatchlistSidebar (desktop inline 280px / tablet slide-out / mobile overlay, DEC-147).
 
 ### Responsive Breakpoints
 
@@ -1091,6 +1111,16 @@ Four pages delivered with responsive design across four breakpoints. Single Reac
 | 834px | iPad portrait | Icon sidebar | Adapted grid, medium tables |
 | 1194px | iPad landscape | Full sidebar | Full tables, side-by-side panels |
 | 1512px | MacBook Pro | Full sidebar | Maximum information density |
+
+### Navigation (Sprint 21d, DEC-211, DEC-216)
+
+| Surface | Navigation | Pages |
+|---------|-----------|-------|
+| Desktop (≥1024px) | Icon sidebar with group dividers | All 7 pages visible |
+| Tablet (640–1023px) | Icon sidebar | All 7 pages visible |
+| Mobile (<640px) | Bottom tab bar (5 tabs) + More sheet | Dash, Trades, Orch, Patterns, More → (Performance, Debrief, System) |
+
+Global keyboard shortcuts: `1`–`7` page navigation, `w` watchlist toggle, `c` copilot toggle (DEC-199).
 
 ### Tech Stack (Frontend)
 
@@ -1115,7 +1145,7 @@ See `docs/ui/UX_FEATURE_BACKLOG.md` for the complete prioritized inventory (35 f
 - Sprint 16: ✅ Motion/animation, sparklines, skeleton loading, controls, trade detail panel, PWA, Tauri
 - Sprint 17: ✅ Strategy allocation donut, risk utilization gauges, orchestrator interaction panel
 - Sprint 18: ✅ SessionSummaryCard (after-hours recap), PositionTimeline (Gantt), three-way position filter, Zustand UI state persistence
-- Sprint 21: Stock detail panel, Dashboard V2, heatmaps, trade replay, portfolio visualizations
+- Sprint 21: ✅ Stock detail panel, Dashboard V2, 8 performance visualizations, Pattern Library, Orchestrator page, The Debrief, System cleanup, nav restructure, Copilot shell
 - Sprint 22: AI insight cards, strategy optimization landscape
 
 ### Control Endpoints (Sprint 16, DEC-111)

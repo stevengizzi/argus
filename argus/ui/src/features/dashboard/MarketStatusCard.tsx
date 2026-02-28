@@ -117,7 +117,9 @@ export function MarketStatusCard() {
           {currentTime} ET
         </span>
         {isPaperMode && (
-          <Badge variant="warning" className="text-[10px] px-1.5 py-0">PAPER</Badge>
+          <span className="text-[10px]">
+            <Badge variant="warning">PAPER</Badge>
+          </span>
         )}
       </div>
 

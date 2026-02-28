@@ -497,7 +497,7 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 | **Likelihood** | High |
 | **Impact** | Medium — schedule slip, potential quality issues |
 | **Mitigation** | Plan to split into Sprint 21a (highest-priority items: stock detail panel, Dashboard V2, heatmaps) and Sprint 21b (remaining items: treemap, correlation matrix, trade replay, etc.). Use priority tiers from UX Feature Backlog to select which items ship first. The backlog is a menu, not a mandate. |
-| **Status** | Open — monitor when Sprint 21 planning begins |
+| **Status** | Mitigated ✅ — Sprint 21 split into 21a–21d (DEC-171). All 4 sub-sprints completed on schedule (Feb 27–28). Scope managed successfully through incremental delivery. |
 
 ---
 

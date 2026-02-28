@@ -88,15 +88,6 @@ function getCurrentMinutesET(): number {
   return hours * 60 + minutes;
 }
 
-// Format minutes from midnight to time string
-function formatMinuteToTime(minute: number): string {
-  const hours = Math.floor(minute / 60);
-  const mins = minute % 60;
-  const hour12 = hours > 12 ? hours - 12 : hours;
-  const ampm = hours >= 12 ? 'PM' : 'AM';
-  return mins === 0 ? `${hour12}${ampm}` : `${hour12}:${mins.toString().padStart(2, '0')}${ampm}`;
-}
-
 // Timeline dimensions
 const TIMELINE_HEIGHT = 60;
 const BAR_HEIGHT = 10;
@@ -141,11 +132,14 @@ export function SessionTimeline() {
   };
 
   return (
+    <div
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      className="h-full"
+    >
     <Card
       className="h-full flex flex-col cursor-pointer transition-colors hover:border-argus-border-bright"
       onClick={handleClick}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
     >
       {/* Header */}
       <div className="flex items-center justify-between mb-2">
@@ -262,5 +256,6 @@ export function SessionTimeline() {
         {!isPreMarket && !isAfterHours && activeStrategies.length === 0 && 'No strategies active'}
       </div>
     </Card>
+    </div>
   );
 }

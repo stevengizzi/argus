@@ -367,19 +367,20 @@ per sprint velocity.
 **Decisions:** DEC-196 through DEC-201
 **Resolved deferrals:** DEF-026 (FTS5 → LIKE search), DEF-027 (trade linking UI included)
 
-### Sprint 21d — Dashboard Refinement + Performance Analytics + System Cleanup + Nav Restructure + AI Copilot Shell
-**Status:** IN PROGRESS
-**Target tests:** ~1689 pytest + ~182 Vitest
-**Sessions:** 14 (implementation) + 3 code reviews
-**Scope:**
-- Dashboard: Remove migrated components (CapitalAllocation, RiskGauge, emergency controls). Add OrchestratorStatusStrip, HeatStripPortfolioBar, GoalTracker, PreMarketLayout with countdown and placeholder cards.
-- Performance: Expand to 5-tab layout with 8 new visualizations (TradeActivityHeatmap, CalendarPnlView, RMultipleHistogram, RiskWaterfall, PortfolioTreemap, CorrelationMatrix, ComparativePeriodOverlay, TradeReplay).
-- System: Remove StrategyCards and EmergencyControls. Add IntelligencePlaceholders (6 future component cards).
-- Navigation: Sidebar group dividers. Mobile 5-tab + More bottom sheet.
-- Copilot: CopilotPanel shell + CopilotButton + copilotUI store. Placeholder content for Sprint 22 activation.
-- Backend: 5 new endpoints (heatmap, distribution, correlation, replay, goals config). TradeLogger.get_daily_pnl_by_strategy(). Dev mock data expansion.
-- New dependencies: d3-scale, d3-color, d3-hierarchy, d3-interpolate (individual modules, not full bundle).
-**Decisions:** DEC-204 through DEC-218
+#### Sprint 21d — Dashboard Refinement + Performance Analytics + System Cleanup + Nav Restructure + AI Copilot Shell ✅ COMPLETE (Feb 27–28)
+**Delivered:**
+- **Dashboard redesign (DEC-204):** Narrowed to ambient awareness. OrchestratorStatusStrip (clickable → Orchestrator). StrategyDeploymentBar (per-strategy capital deployment with accent colors, DEC-219). GoalTracker (2-column pace dashboard, DEC-220). Three-card row: MarketStatus (merged Market+Regime), TodayStats (2×2 metrics), SessionTimeline (SVG strategy windows + "now" marker, DEC-221). PreMarketLayout with placeholder cards (DEC-213). Dashboard aggregate endpoint (DEC-222). useSummaryData hook disabling pattern (DEC-223). Removed: CapitalAllocation, RiskGauge, MarketRegimeCard (migrated to Orchestrator in Sprint 17/21b).
+- **Performance analytics (DEC-205):** 5-tab layout with 8 visualizations. Overview (MetricsGrid, EquityCurve, DailyPnlChart, StrategyBreakdown, comparison toggle). Heatmaps (TradeActivityHeatmap via D3, CalendarPnlView). Distribution (RMultipleHistogram via Recharts, RiskWaterfall — side-by-side desktop DEC-227). Portfolio (PortfolioTreemap via D3, CorrelationMatrix — side-by-side 60/40 desktop). Replay (TradeReplay with trade selector + Lightweight Charts playback). Unified diverging color scale (DEC-224). WCAG dynamic text contrast (DEC-225). Single-letter strategy labels (DEC-226). Tab keyboard shortcuts o/h/d/p/r (DEC-228). Performance Workbench deferred (DEC-229).
+- **System cleanup (DEC-210):** Removed StrategyCards and EmergencyControls. Added IntelligencePlaceholders (6 AI component cards with sprint target badges).
+- **Navigation restructure (DEC-211, DEC-216):** Sidebar group dividers. Mobile 5-tab (Dash, Trades, Orch, Patterns, More) + MoreSheet bottom sheet (Performance, Debrief, System).
+- **AI Copilot shell (DEC-212, DEC-217):** CopilotPanel (new component, persists across pages), CopilotButton (adaptive positioning), copilotUI Zustand store, `c` keyboard shortcut. Placeholder content for Sprint 22 activation.
+- **Backend:** 5 new endpoints (heatmap, distribution, correlation, replay, goals) + dashboard summary aggregate. GoalsConfig. New TradeLogger method. Dev mock data expansion.
+- **Dependencies:** d3-scale, d3-color, d3-hierarchy, d3-interpolate (individual modules).
+- 1712 tests (pytest, 48 new) + 257 (Vitest, 119 new). 13 implementation sessions + 3 code reviews. Code review passed (DEC-204–229).
+- **Deferred:** DEF-028 (CalendarPnlView strategy filter), DEC-229 (Performance Workbench).
+
+**Decisions:** DEC-204 through DEC-229
+**Deferred:** DEF-028, DEC-229
 
 #### Sprint 22 — AI Layer MVP + Copilot Activation (DEC-096, DEC-098, DEC-170)
 **Target:** ~2–3 days

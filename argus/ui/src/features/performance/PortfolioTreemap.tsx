@@ -15,7 +15,7 @@
  */
 
 import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
-import { treemap, hierarchy, treemapSquarify } from 'd3-hierarchy';
+import { treemap, hierarchy, treemapSquarify, type HierarchyRectangularNode } from 'd3-hierarchy';
 import { Card } from '../../components/Card';
 import { Badge } from '../../components/Badge';
 import { usePositions } from '../../hooks/usePositions';
@@ -105,24 +105,27 @@ export function PortfolioTreemap({ fullHeight = false }: PortfolioTreemapProps) 
   const treemapLayout = useMemo(() => {
     if (treemapData.length === 0 || dimensions.width === 0) return [];
 
-    const root = hierarchy({ children: treemapData })
-      .sum((d) => (d as TreemapNode).value || 0)
+    const root = hierarchy<{ children?: TreemapNode[] } | TreemapNode>({ children: treemapData })
+      .sum((d) => ('value' in d ? d.value : 0) || 0)
       .sort((a, b) => (b.value || 0) - (a.value || 0));
 
-    const treemapGenerator = treemap<typeof root.data>()
+    const treemapGenerator = treemap<{ children?: TreemapNode[] } | TreemapNode>()
       .size([dimensions.width, dimensions.height])
       .padding(3)
       .tile(treemapSquarify);
 
     treemapGenerator(root);
 
-    return root.leaves().map((leaf) => ({
-      x0: leaf.x0 ?? 0,
-      y0: leaf.y0 ?? 0,
-      x1: leaf.x1 ?? 0,
-      y1: leaf.y1 ?? 0,
-      data: leaf.data as TreemapNode,
-    }));
+    return root.leaves().map((leaf) => {
+      const rectNode = leaf as HierarchyRectangularNode<TreemapNode>;
+      return {
+        x0: rectNode.x0 ?? 0,
+        y0: rectNode.y0 ?? 0,
+        x1: rectNode.x1 ?? 0,
+        y1: rectNode.y1 ?? 0,
+        data: rectNode.data as TreemapNode,
+      };
+    });
   }, [treemapData, dimensions]);
 
   // Color scale: diverging green-red based on P&L %
@@ -324,7 +327,7 @@ export function PortfolioTreemap({ fullHeight = false }: PortfolioTreemapProps) 
             <div className="text-xs space-y-1">
               <div className="text-argus-text font-medium flex items-center gap-2">
                 {tooltip.symbol}
-                <Badge variant="muted" size="sm">
+                <Badge variant="neutral">
                   {STRATEGY_ABBREV[tooltip.strategyId] ?? tooltip.strategyId}
                 </Badge>
               </div>
@@ -413,7 +416,7 @@ function MobileListFallback({
             </span>
 
             {/* P&L badge */}
-            <Badge variant={pos.pnlPct >= 0 ? 'profit' : 'loss'} size="sm">
+            <Badge variant={pos.pnlPct >= 0 ? 'success' : 'danger'}>
               {pos.pnlPct >= 0 ? '+' : ''}
               {pos.pnlPct.toFixed(1)}%
             </Badge>

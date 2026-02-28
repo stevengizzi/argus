@@ -14,7 +14,7 @@ import { useState, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePositions } from '../../hooks/usePositions';
 import { useAccount } from '../../hooks/useAccount';
-import { formatCurrency } from '../../utils/format';
+import { formatCurrency, formatCurrencyCompact } from '../../utils/format';
 import { getStrategyDisplay, getStrategyColor, STRATEGY_DISPLAY } from '../../utils/strategyConfig';
 
 /** Height on desktop and mobile */
@@ -195,7 +195,7 @@ export function StrategyDeploymentBar() {
 
     const stratSeg = segment as StrategySegment;
     if (pixelWidth >= LABEL_FULL_MIN_WIDTH) {
-      return `${stratSeg.letter} ${formatCurrency(stratSeg.deployedValue, { compact: true })}`;
+      return `${stratSeg.letter} ${formatCurrencyCompact(stratSeg.deployedValue)}`;
     }
     if (pixelWidth >= LABEL_LETTER_MIN_WIDTH) {
       return stratSeg.letter;
