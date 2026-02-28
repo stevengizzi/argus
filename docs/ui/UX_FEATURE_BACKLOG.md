@@ -604,6 +604,11 @@ Drag-and-drop dashboard widget arrangement. Layout presets (Market Hours, Review
 Bell icon with alert history. Collects trade executions, system warnings, AI recommendations. Badge for unread. Slide-down panel.
 *Effort: ~5 hours.*
 
+### Performance Workbench (DEC-229)
+Refactor Performance page from fixed 5-tab layout to customizable widget grid using `react-grid-layout`. Stage 1: resize/rearrange widgets within existing tabs, layout persistence via backend API, per-widget min/max size constraints. Stage 2: widget palette/sandbox, custom tab CRUD (add/rename/delete), drag-from-palette, mobile fallback (fixed stack per tab). Backend endpoint for layout serialization.
+**Dependencies:** All 8 Performance visualizations complete (DEC-205).
+**Resolves:** DEC-229. Supersedes DEC-218 (fixed tab layout).
+
 ---
 
 ## Summary by Sprint

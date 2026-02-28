@@ -2451,5 +2451,68 @@ Each entry follows this format:
 | **Rationale** | React's rules of hooks prevent conditional hook calls. Even with prop data intended, hooks fired unconditionally and showed skeleton loading states during the brief window before the summary endpoint responded. Disabling hooks entirely when the parent owns the data flow eliminates the stagger. |
 | **Status** | Active |
 
+---
+
+### DEC-224 | Unified Diverging Color Scale
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-28 |
+| **Decision** | Single shared diverging color scale (`colorScales.ts`) for all charts encoding profit/loss. Zero maps to neutral gray, negatives to red/orange, positives to green. Applied to TradeActivityHeatmap, CalendarPnlView, PortfolioTreemap. |
+| **Rationale** | Three charts used slightly different color mappings, causing negative values to render green in some cases. Unified scale ensures visual consistency and eliminates misreadings. |
+| **Status** | Active |
+
+---
+
+### DEC-225 | Dynamic Text Color for Data-Driven Backgrounds
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-28 |
+| **Decision** | Shared `getContrastTextColor()` utility computes WCAG luminance and flips text from white to dark when background is too light. Applied to heatmap, calendar, treemap, and correlation matrix cells. |
+| **Rationale** | White text on light green/yellow/off-white cells was illegible. Dynamic contrast ensures readability regardless of underlying data value. |
+| **Status** | Active |
+
+---
+
+### DEC-226 | Correlation Matrix Strategy Labels
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-28 |
+| **Decision** | Correlation matrix axis labels use single-letter strategy badges from `STRATEGY_DISPLAY` in `strategyConfig.ts` (O, S, V, A) with hover tooltips for full names. Replaces last-4-characters of strategy ID. |
+| **Rationale** | Previous labels ("ntum", "kout", "calp", "laim") were meaningless. Single letters match existing visual language (watchlist badges, position timeline, strategy cards). |
+| **Status** | Active |
+
+---
+
+### DEC-227 | Performance Desktop Layout Density
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-28 |
+| **Decision** | Distribution tab: RMultipleHistogram + RiskWaterfall side-by-side (50/50) on desktop. Portfolio tab: PortfolioTreemap + CorrelationMatrix side-by-side (60/40) on desktop. Stack vertically on tablet/mobile. Overview, Heatmaps, Replay tabs unchanged. |
+| **Rationale** | Full-width cards wasted horizontal space for charts that don't need it. Side-by-side pairing improves information density without sacrificing readability. |
+| **Status** | Active |
+
+---
+
+### DEC-228 | Performance Tab Keyboard Shortcuts
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-28 |
+| **Decision** | Performance page tab shortcuts: `o` (Overview), `h` (Heatmaps), `d` (Distribution), `p` (Portfolio), `r` (Replay). Suppressed during input/textarea focus. |
+| **Rationale** | Extends keyboard shortcut system (DEC-199) for intra-page navigation. Mnemonic first-letter mapping. |
+| **Status** | Active |
+
+---
+
+### DEC-229 | Performance Workbench — Deferred
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-28 |
+| **Decision** | Performance page will be refactored into a customizable widget grid ("Performance Workbench") using `react-grid-layout`. Two stages: Stage 1 (rearrangeable/resizable widgets within tabs, layout persistence), Stage 2 (widget palette, custom tab CRUD, drag-from-palette). Layout persistence via backend API endpoint. Deferred to post-Sprint 21d, estimated 11–14 sessions. |
+| **Rationale** | Fixed tab layouts don't scale as visualization count grows (8 now, 15+ by Sprint 25). Custom layouts let the user build analysis workflows tailored to different contexts (morning prep, post-session review, weekly report). react-grid-layout is mature and handles snap, resize, responsive breakpoints. Backend persistence keeps user state centralized. |
+| **Status** | Deferred |
+| **Supersedes** | DEC-218 (fixed 5-tab organization) — tabs become user-customizable presets |
+
+---
+
 *End of Decision Log v1.0*
 *New decisions are appended chronologically as the project progresses.*
