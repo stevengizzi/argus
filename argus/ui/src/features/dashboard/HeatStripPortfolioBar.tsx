@@ -12,18 +12,19 @@
  */
 
 import { useState, useRef, useEffect, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { usePositions } from '../../hooks/usePositions';
 import { useAccount } from '../../hooks/useAccount';
 import { useSymbolDetailUI } from '../../stores/symbolDetailUI';
 import { formatCurrency, formatPercent } from '../../utils/format';
 import { getStrategyDisplay } from '../../utils/strategyConfig';
+import { DURATION, EASE } from '../../utils/motion';
 
 /** Minimum segment width in pixels */
 const MIN_SEGMENT_WIDTH = 20;
 
-/** Height on desktop and mobile */
-const DESKTOP_HEIGHT = 24;
-const MOBILE_HEIGHT = 20;
+/** Height of the bar */
+const BAR_HEIGHT = 24;
 
 interface TooltipData {
   symbol: string;
@@ -137,8 +138,8 @@ export function HeatStripPortfolioBar() {
   const overflowWidthPct = overflowCount > 0 ? 5 : 0;
   const scale = totalVisiblePct > 0 ? (100 - overflowWidthPct) / totalVisiblePct : 1;
 
-  // Determine height based on screen width (simplified — use CSS media query in real app)
-  const height = DESKTOP_HEIGHT;
+  // Fixed height for simplicity
+  const height = BAR_HEIGHT;
 
   const handleSegmentClick = (symbol: string) => {
     openSymbolDetail(symbol);
@@ -201,8 +202,28 @@ export function HeatStripPortfolioBar() {
     return { ...seg, x, width, isFirst, isLast };
   });
 
+  // Segment entrance animation variants
+  const segmentVariants = {
+    hidden: { scaleX: 0, opacity: 0 },
+    visible: (i: number) => ({
+      scaleX: 1,
+      opacity: 1,
+      transition: {
+        duration: DURATION.normal,
+        delay: i * 0.04, // Stagger 40ms between segments
+        ease: EASE.out,
+      },
+    }),
+  };
+
   return (
-    <div ref={containerRef} className="relative">
+    <motion.div
+      ref={containerRef}
+      className="relative"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: DURATION.fast }}
+    >
       <svg
         width="100%"
         height={height}
@@ -221,9 +242,9 @@ export function HeatStripPortfolioBar() {
           ry={8}
         />
 
-        {/* Position segments */}
-        {segmentRects.map((seg) => (
-          <rect
+        {/* Position segments with entrance animation */}
+        {segmentRects.map((seg, idx) => (
+          <motion.rect
             key={seg.positionId}
             x={`${seg.x}%`}
             y={0}
@@ -232,7 +253,12 @@ export function HeatStripPortfolioBar() {
             fill={getSegmentColor(seg.pnlPct)}
             rx={seg.isFirst ? 8 : 0}
             ry={seg.isFirst ? 8 : 0}
-            className="cursor-pointer transition-opacity hover:opacity-80"
+            className="cursor-pointer hover:opacity-80"
+            style={{ originX: 0 }} // Scale from left edge
+            variants={segmentVariants}
+            initial="hidden"
+            animate="visible"
+            custom={idx}
             onClick={() => handleSegmentClick(seg.symbol)}
             onMouseEnter={(e) => handleMouseEnter(seg, e)}
             onMouseLeave={handleMouseLeave}
@@ -266,24 +292,30 @@ export function HeatStripPortfolioBar() {
       </svg>
 
       {/* Tooltip */}
-      {tooltip && (
-        <div
-          className="fixed z-50 bg-argus-surface border border-argus-border rounded px-2 py-1 text-xs shadow-lg pointer-events-none"
-          style={{
-            left: tooltip.x,
-            top: tooltip.y - 8,
-            transform: 'translate(-50%, -100%)',
-          }}
-        >
-          <div className="font-medium text-argus-text">{tooltip.symbol}</div>
-          <div className="text-argus-text-dim">
-            {formatCurrency(tooltip.pnl)} ({formatPercent(tooltip.pnlPct)})
-          </div>
-          <div className="text-argus-text-dim">
-            {tooltip.shares} shares · {getStrategyDisplay(tooltip.strategy).shortName}
-          </div>
-        </div>
-      )}
-    </div>
+      <AnimatePresence>
+        {tooltip && (
+          <motion.div
+            className="fixed z-50 bg-argus-surface border border-argus-border rounded px-2 py-1 text-xs shadow-lg pointer-events-none"
+            style={{
+              left: tooltip.x,
+              top: tooltip.y - 8,
+              transform: 'translate(-50%, -100%)',
+            }}
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: DURATION.fast }}
+          >
+            <div className="font-medium text-argus-text">{tooltip.symbol}</div>
+            <div className="text-argus-text-dim">
+              {formatCurrency(tooltip.pnl)} ({formatPercent(tooltip.pnlPct)})
+            </div>
+            <div className="text-argus-text-dim">
+              {tooltip.shares} shares · {getStrategyDisplay(tooltip.strategy).shortName}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
   );
 }

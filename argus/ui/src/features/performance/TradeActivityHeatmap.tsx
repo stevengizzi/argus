@@ -106,7 +106,7 @@ export function TradeActivityHeatmap({ period }: TradeActivityHeatmapProps) {
     navigate(`/trades?hour=${hour}&day=${dayOfWeek}`);
   }, [navigate]);
 
-  // Handle cell hover
+  // Handle cell hover (desktop)
   const handleCellHover = useCallback((
     cell: HeatmapCell | null,
     event?: React.MouseEvent<SVGRectElement>
@@ -120,6 +120,27 @@ export function TradeActivityHeatmap({ period }: TradeActivityHeatmapProps) {
       });
     }
   }, []);
+
+  // Handle cell tap (mobile) - toggle tooltip on tap
+  const handleCellTap = useCallback((
+    cell: HeatmapCell,
+    event: React.TouchEvent<SVGRectElement>
+  ) => {
+    event.preventDefault(); // Prevent mouse events from firing
+
+    const rect = event.currentTarget.getBoundingClientRect();
+
+    // Toggle: if same cell is tapped, close tooltip; otherwise show new one
+    if (hoveredCell?.hour === cell.hour && hoveredCell?.day_of_week === cell.day_of_week) {
+      setHoveredCell(null);
+    } else {
+      setHoveredCell(cell);
+      setTooltipPosition({
+        x: rect.left + rect.width / 2,
+        y: rect.top - 10,
+      });
+    }
+  }, [hoveredCell]);
 
   // Format time bin label
   const getTimeBinLabel = (hour: number): string => {
@@ -277,6 +298,7 @@ export function TradeActivityHeatmap({ period }: TradeActivityHeatmapProps) {
                           onClick={() => hasData && handleCellClick(hour, dayIdx)}
                           onMouseEnter={(e) => hasData && handleCellHover(cell, e)}
                           onMouseLeave={() => handleCellHover(null)}
+                          onTouchStart={(e) => hasData && cell && handleCellTap(cell, e)}
                         />
                         {hasData && (
                           <text

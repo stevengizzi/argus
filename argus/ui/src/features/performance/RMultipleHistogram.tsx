@@ -90,8 +90,22 @@ export function RMultipleHistogram({ period, fullHeight = false }: RMultipleHist
         <div className="px-4 pt-4 pb-2">
           <h3 className="text-sm font-medium text-argus-text">R-Multiple Distribution</h3>
         </div>
-        <div className="flex-grow flex items-center justify-center min-h-[280px]">
-          <div className="text-argus-text-dim">Loading distribution data...</div>
+        <div className="px-4 pb-4">
+          {/* Skeleton histogram bars */}
+          <div className="flex items-end gap-1 justify-center min-h-[240px] pt-4">
+            {[40, 65, 85, 100, 80, 55, 35, 60, 75, 50, 30].map((h, i) => (
+              <div
+                key={i}
+                className="skeleton-shimmer rounded-t w-8"
+                style={{ height: `${h}%` }}
+              />
+            ))}
+          </div>
+          {/* Skeleton annotation */}
+          <div className="flex justify-center gap-4 mt-4">
+            <div className="skeleton-shimmer rounded h-4 w-20" />
+            <div className="skeleton-shimmer rounded h-4 w-20" />
+          </div>
         </div>
       </Card>
     );

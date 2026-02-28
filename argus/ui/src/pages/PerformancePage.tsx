@@ -21,7 +21,7 @@
  */
 
 import { Component, type ReactNode, useState, useCallback, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { TrendingUp } from 'lucide-react';
 import { usePerformance, usePreviousPeriodPerformance } from '../hooks/usePerformance';
 import { Card } from '../components/Card';
@@ -234,32 +234,74 @@ export function PerformancePage() {
         />
       </motion.div>
 
-      {/* Tab content */}
-      {activeTab === 'overview' && (
-        <OverviewTabContent
-          data={data}
-          isFetching={isFetching}
-          period={period}
-          comparisonData={comparisonData?.daily_pnl}
-          onComparisonToggle={handleComparisonToggle}
-        />
-      )}
+      {/* Tab content with crossfade transitions */}
+      <AnimatePresence mode="wait">
+        {activeTab === 'overview' && (
+          <motion.div
+            key="overview"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+          >
+            <OverviewTabContent
+              data={data}
+              isFetching={isFetching}
+              period={period}
+              comparisonData={comparisonData?.daily_pnl}
+              onComparisonToggle={handleComparisonToggle}
+            />
+          </motion.div>
+        )}
 
-      {activeTab === 'heatmaps' && (
-        <HeatmapsTabContent period={period} dailyPnl={data.daily_pnl} />
-      )}
+        {activeTab === 'heatmaps' && (
+          <motion.div
+            key="heatmaps"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+          >
+            <HeatmapsTabContent period={period} dailyPnl={data.daily_pnl} />
+          </motion.div>
+        )}
 
-      {activeTab === 'distribution' && (
-        <DistributionTabContent period={period} />
-      )}
+        {activeTab === 'distribution' && (
+          <motion.div
+            key="distribution"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+          >
+            <DistributionTabContent period={period} />
+          </motion.div>
+        )}
 
-      {activeTab === 'portfolio' && (
-        <PortfolioTabContent period={period} />
-      )}
+        {activeTab === 'portfolio' && (
+          <motion.div
+            key="portfolio"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+          >
+            <PortfolioTabContent period={period} />
+          </motion.div>
+        )}
 
-      {activeTab === 'replay' && (
-        <ReplayTabContent period={period} />
-      )}
+        {activeTab === 'replay' && (
+          <motion.div
+            key="replay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+          >
+            <ReplayTabContent period={period} />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }

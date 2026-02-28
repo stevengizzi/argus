@@ -120,9 +120,14 @@ describe('RMultipleHistogram', () => {
       isFetching: true,
     } as ReturnType<typeof useDistribution>);
 
-    render(<RMultipleHistogram period="month" />);
+    const { container } = render(<RMultipleHistogram period="month" />);
 
-    expect(screen.getByText('Loading distribution data...')).toBeInTheDocument();
+    // Should show title
+    expect(screen.getByText('R-Multiple Distribution')).toBeInTheDocument();
+
+    // Should show skeleton bars (skeleton-shimmer class elements)
+    const skeletonElements = container.querySelectorAll('.skeleton-shimmer');
+    expect(skeletonElements.length).toBeGreaterThan(0);
   });
 
   it('shows error state', () => {

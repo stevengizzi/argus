@@ -105,9 +105,27 @@ export function RiskWaterfall({ fullHeight = false }: RiskWaterfallProps) {
       <Card fullHeight={fullHeight}>
         <div className="px-4 pt-4 pb-2">
           <h3 className="text-sm font-medium text-argus-text">Risk Waterfall</h3>
+          <p className="text-xs text-argus-text-dim mt-1">
+            Worst-case scenario if all stops hit
+          </p>
         </div>
-        <div className="flex-grow flex items-center justify-center min-h-[200px]">
-          <div className="text-argus-text-dim">Loading positions...</div>
+        <div className="px-4 pb-4">
+          {/* Skeleton waterfall bars */}
+          <div className="space-y-3 min-h-[180px]">
+            {[85, 65, 50, 35].map((w, i) => (
+              <div key={i} className="flex items-center gap-3">
+                <div className="skeleton-shimmer rounded h-4 w-12" />
+                <div className="skeleton-shimmer rounded-md h-7" style={{ width: `${w}%` }} />
+                <div className="skeleton-shimmer rounded h-4 w-16" />
+              </div>
+            ))}
+          </div>
+          {/* Skeleton total summary */}
+          <div className="mt-4 pt-3 border-t border-argus-border">
+            <div className="flex justify-center">
+              <div className="skeleton-shimmer rounded h-4 w-48" />
+            </div>
+          </div>
         </div>
       </Card>
     );

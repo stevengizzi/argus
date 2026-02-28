@@ -155,9 +155,14 @@ describe('RiskWaterfall', () => {
       isFetching: true,
     } as ReturnType<typeof useAccount>);
 
-    render(<RiskWaterfall />);
+    const { container } = render(<RiskWaterfall />);
 
-    expect(screen.getByText('Loading positions...')).toBeInTheDocument();
+    // Should show title
+    expect(screen.getByText('Risk Waterfall')).toBeInTheDocument();
+
+    // Should show skeleton bars (skeleton-shimmer class elements)
+    const skeletonElements = container.querySelectorAll('.skeleton-shimmer');
+    expect(skeletonElements.length).toBeGreaterThan(0);
   });
 
   it('calculates and displays risk correctly', () => {

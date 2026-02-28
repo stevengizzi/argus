@@ -119,9 +119,14 @@ describe('CorrelationMatrix', () => {
       isFetching: true,
     } as ReturnType<typeof useCorrelation>);
 
-    render(<CorrelationMatrix period="month" />);
+    const { container } = render(<CorrelationMatrix period="month" />);
 
-    expect(screen.getByText('Loading correlation data...')).toBeInTheDocument();
+    // Should show title
+    expect(screen.getByText('Correlation Matrix')).toBeInTheDocument();
+
+    // Should show skeleton grid (skeleton-shimmer class elements)
+    const skeletonElements = container.querySelectorAll('.skeleton-shimmer');
+    expect(skeletonElements.length).toBeGreaterThan(0);
   });
 
   it('shows error state', () => {

@@ -96,9 +96,33 @@ export function CorrelationMatrix({ period, fullHeight = false }: CorrelationMat
       <Card fullHeight={fullHeight}>
         <div className="px-4 pt-4 pb-2">
           <h3 className="text-sm font-medium text-argus-text">Correlation Matrix</h3>
+          <div className="skeleton-shimmer rounded h-3 w-48 mt-1" />
         </div>
-        <div className="flex-grow flex items-center justify-center min-h-[200px]">
-          <div className="text-argus-text-dim">Loading correlation data...</div>
+        <div className="px-4 pb-4 flex-grow flex flex-col justify-center">
+          {/* Skeleton grid - simulate 4x4 matrix */}
+          <div className="flex flex-col items-center gap-2 min-h-[200px] py-4">
+            {/* Column headers */}
+            <div className="flex gap-1 ml-12">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={`col-${i}`} className="skeleton-shimmer rounded w-14 h-4" />
+              ))}
+            </div>
+            {/* Rows with labels */}
+            {[1, 2, 3, 4].map((row) => (
+              <div key={`row-${row}`} className="flex items-center gap-1">
+                <div className="skeleton-shimmer rounded w-10 h-4" />
+                {[1, 2, 3, 4].map((col) => (
+                  <div key={`cell-${row}-${col}`} className="skeleton-shimmer rounded w-14 h-14" />
+                ))}
+              </div>
+            ))}
+          </div>
+          {/* Color scale legend skeleton */}
+          <div className="flex items-center justify-center gap-2 mt-4">
+            <div className="skeleton-shimmer rounded h-3 w-8" />
+            <div className="skeleton-shimmer rounded h-4 w-40" />
+            <div className="skeleton-shimmer rounded h-3 w-8" />
+          </div>
         </div>
       </Card>
     );

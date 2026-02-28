@@ -150,7 +150,7 @@ export function PortfolioTreemap({ fullHeight = false }: PortfolioTreemapProps) 
     [openSymbolDetail]
   );
 
-  // Handle hover
+  // Handle hover (desktop)
   const handleMouseEnter = useCallback(
     (data: TreemapNode, event: React.MouseEvent<SVGRectElement>) => {
       const rect = event.currentTarget.getBoundingClientRect();
@@ -169,6 +169,29 @@ export function PortfolioTreemap({ fullHeight = false }: PortfolioTreemapProps) 
   const handleMouseLeave = useCallback(() => {
     setTooltip(null);
   }, []);
+
+  // Handle touch (mobile/tablet) - toggle tooltip, second tap navigates
+  const handleTouchStart = useCallback(
+    (data: TreemapNode, event: React.TouchEvent<SVGRectElement>) => {
+      // If this symbol already has tooltip showing, let click handler navigate
+      if (tooltip?.symbol === data.symbol) {
+        return; // Let the onClick fire
+      }
+
+      // Otherwise show tooltip and prevent click
+      event.preventDefault();
+      const rect = event.currentTarget.getBoundingClientRect();
+      const containerRect = containerRef.current?.getBoundingClientRect();
+      if (containerRect) {
+        setTooltip({
+          ...data,
+          x: rect.left + rect.width / 2 - containerRect.left,
+          y: rect.top - containerRect.top - 10,
+        });
+      }
+    },
+    [tooltip]
+  );
 
   const isLoading = positionsLoading || accountLoading;
   const isEmpty = treemapData.length === 0;
@@ -241,6 +264,7 @@ export function PortfolioTreemap({ fullHeight = false }: PortfolioTreemapProps) 
                       onClick={() => handleClick(node.data.symbol)}
                       onMouseEnter={(e) => handleMouseEnter(node.data, e)}
                       onMouseLeave={handleMouseLeave}
+                      onTouchStart={(e) => handleTouchStart(node.data, e)}
                     />
                     {showLabel && (
                       <>

@@ -14,6 +14,10 @@ vi.mock('framer-motion', async () => {
       div: 'div',
       span: 'span',
       button: 'button',
+      rect: 'rect',
+      g: 'g',
+      svg: 'svg',
+      path: 'path',
     },
   };
 });
