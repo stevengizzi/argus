@@ -44,14 +44,14 @@ inform Build Track priorities.
 - **Key metrics:** System stability + signal accuracy + execution quality
 - **Exit criteria:** No kill criteria triggered, user satisfied, strategy behavior matches backtest expectations
 
-### Gate 3: AI-Enhanced Paper Trading (PENDING — After Sprint 26)
-- **Prerequisites:** Setup Quality Engine scoring every trade, NLP Catalyst Pipeline enriching watchlist, Order Flow V1 contributing to entries, Dynamic Position Sizing in paper mode
+### Gate 3: AI-Enhanced Paper Trading (PENDING — After Sprint 25)
+- **Prerequisites:** Setup Quality Engine scoring every trade (5 dimensions — Order Flow added post-revenue per DEC-239), NLP Catalyst Pipeline enriching watchlist, Dynamic Position Sizing in paper mode
 - **Strategies:** 7 active (4 Phase 1 + Red-to-Green + 2 pattern modules)
 - **Duration:** Minimum 30 trading days
 - **Key metric:** Quality-score-to-outcome correlation — A+ setups must outperform B setups. If not, fall back to uniform sizing.
 - **Exit criteria:** Quality calibration passes, no kill criteria triggered, intelligence layer demonstrably improving trade selection
 
-### Gate 4: Full System Paper Trading (PENDING — After Sprint 32)
+### Gate 4: Full System Paper Trading (PENDING — After Sprint 31)
 - **Prerequisites:** 18 patterns active, Learning Loop V1 refining scores weekly, Orchestrator V2 managing allocation with AI advisor
 - **Duration:** Minimum 20 more trading days (50+ cumulative across Gates 2–4)
 - **Key metric:** System-level Sharpe > 2.0 over rolling 30-day windows
@@ -72,9 +72,9 @@ inform Build Track priorities.
 5. ⬜ Sprint 21: 7-page Command Center with full analytics
 6. ⬜ Databento subscription activated + IBKR paper account enabled
 7. ⬜ Gate 2: IBKR paper trading (20+ days, DEC-076 parameters, quality data)
-8. ⬜ Sprint 26: Intelligence infrastructure operational (Quality Engine, Order Flow, Catalysts)
+8. ⬜ Sprint 25: Intelligence infrastructure operational (Quality Engine, Catalysts, Dynamic Sizing — Order Flow deferred to post-revenue per DEC-238)
 9. ⬜ Gate 3: AI-enhanced paper trading (30+ days, quality scoring active)
-10. ⬜ Sprint 32: Full pattern library + Learning Loop + Orchestrator V2
+10. ⬜ Sprint 31: Full pattern library + Learning Loop + Orchestrator V2
 11. ⬜ Gate 4: Full system paper trading (20+ days, system Sharpe > 2.0)
 12. ⬜ CPA consultation on capital/risk/tax implications (DEF-004)
 13. ⬜ Gate 5: Explicit go/no-go → live trading on IBKR at minimum size
@@ -450,67 +450,65 @@ per sprint velocity.
 - **UI:** Dashboard pre-market mode now populated with live data. Watchlist sidebar gains catalyst type badges. Trade Detail Panel gains catalyst context section. The Debrief gains real pre-market briefings.
 - **Tests:** ~80 new.
 
-#### Sprint 24 — Order Flow Model V1 (DEC-163, DEC-165)
-**Target:** ~2–3 days
-**Scope:**
-- Databento L2 (MBP-10) subscription for all watchlist symbols. DatabentoDataService extension.
-- **OrderFlowAnalyzer** (`argus/intelligence/order_flow.py`): bid/ask imbalance, ask thinning, tape speed, bid stacking. Throttled 100ms updates.
-- **OrderFlowEvent** on Event Bus. OrderFlowSnapshot for strategy queries.
-- **UI:** Watchlist gains flow quality dot (green/yellow/red). Trade Detail Panel gains L2 depth heatmap + entry flow snapshot.
-- **Deferred:** L3, iceberg/spoofing detection → Sprint 28.
-- **Tests:** ~60 new.
-
-#### Sprint 25 — Setup Quality Engine + Dynamic Position Sizer (DEC-163)
+#### Sprint 24 — Setup Quality Engine + Dynamic Position Sizer (DEC-163, DEC-239)
 **Target:** ~3–4 days
 **Scope:**
-- **SetupQualityEngine** (`argus/intelligence/quality_engine.py`): Composite 0–100 scoring from 6 weighted inputs. Configurable weights via YAML.
+- **SetupQualityEngine** (`argus/intelligence/quality_engine.py`): Composite 0–100 scoring from 5 weighted inputs (DEC-239). Order Flow dimension added post-revenue when Databento Plus activated. Configurable weights via YAML.
 - **DynamicPositionSizer** (`argus/intelligence/position_sizer.py`): Grade → risk tier → share count. A+=2–3%, B=0.5–0.75%, C-=SKIP. Replaces fixed risk_per_trade_pct. Risk Manager limits still enforced.
 - SignalEvent enrichment: quality_score, quality_grade, risk_tier fields.
 - Quality History DB table for Learning Loop.
 - **UI:** Dashboard gains quality distribution mini-card. Watchlist/positions/trade log gain quality grade badges. Trade Detail gains radar chart + "Why this size?" breakdown. Performance gains "by quality grade" chart.
 - **Tests:** ~100 new.
 
-#### Sprint 26 — Red-to-Green + Pattern Library Foundation (DEC-163, DEC-167)
+#### Sprint 25 — Red-to-Green + Pattern Library Foundation (DEC-163, DEC-167)
 **Target:** ~2 days
 - RedToGreenStrategy through Incubator stages 1–3.
 - PatternLibrary ABC interface. Bull Flag + Flat-Top Breakout modules.
 - Pattern modules feed "pattern strength" to Quality Engine.
 - **7 strategies/patterns active.** Tests: ~80 new.
 
-#### Sprint 27 — Pattern Expansion I (DEC-167)
+#### Sprint 26 — Pattern Expansion I (DEC-167)
 **Target:** ~2–3 days
 - Dip-and-Rip, HOD Break, Pre-Market High Break, Gap-and-Go modules. Each stages 1–3.
 - **11 strategies/patterns active.** Tests: ~60 new.
 
-#### Sprint 28 — Order Flow V2 + Short Selling (DEC-166)
+#### Sprint 27 — Short Selling Infrastructure + Parabolic Short (DEC-166, DEC-238)
 **Target:** ~2–3 days
-- Databento L3 integration. Iceberg/spoofing/absorption detection.
-- Short selling infrastructure. Parabolic Short module.
+- Short selling infrastructure: locate/borrow tracking, inverted risk logic, short-specific Risk Manager rules.
+- Parabolic Short module (first short strategy).
+- **Note:** Decoupled from Order Flow V2 (DEC-238). Short entries use L1 signals (parabolic extension detection, volume exhaustion, reversal candle patterns). Order Flow enhancement added post-revenue.
 - **12 strategies/patterns active.** Tests: ~80 new.
 
-#### Sprint 29 — Pattern Expansion II (DEC-167)
+#### Sprint 28 — Pattern Expansion II (DEC-167)
 **Target:** ~2–3 days
 - ABCD Reversal, Sympathy Play, Power Hour Reversal, Earnings Gap Continuation modules.
 - **16 strategies/patterns active.** Tests: ~60 new.
 
-#### Sprint 30 — Learning Loop V1 (DEC-163)
+#### Sprint 29 — Learning Loop V1 (DEC-163)
 **Target:** ~2–3 days
 - LearningDatabase, PostTradeAnalyzer, weekly batch retraining, quality calibration.
 - **UI:** Performance gains calibration chart. Dashboard gains weekly insight card. System gains Learning Loop health.
 - Tests: ~60 new.
 
-#### Sprint 31 — Orchestrator V2 AI-Enhanced (DEC-163)
+#### Sprint 30 — Orchestrator V2 AI-Enhanced (DEC-163)
 **Target:** ~2–3 days
 - Intraday dynamic allocation. AI allocation advisor. Correlation-aware allocation. Quality-weighted replaces equal-weight. Opportunity cost tracking.
 - Tests: ~60 new.
 
-#### Sprint 32 — Pattern Expansion III + Volume Profile (DEC-163)
+#### Sprint 31 — Pattern Expansion III + Volume Profile (DEC-163)
 **Target:** ~2–3 days
 - Volume Shelf Bounce, Micro Float Runner modules. Volume Profile (VPOC/value area).
 - **18 strategies/patterns — full V1 library.** Tests: ~60 new.
 
-#### Sprint 33+ — Optimization & Expansion (Backlog)
+#### Sprint 32+ — Optimization & Expansion (Backlog)
 - Learning Loop V2 (ML — LightGBM). Advanced Regime Engine. Crypto expansion via IBKR. Monte Carlo simulation. Tax optimization. Strategy breeding.
+
+#### Post-Revenue Backlog (DEC-238)
+Scheduled when monthly trading income justifies Databento Plus tier ($1,399/mo). Historical L2/L3 data available on current Standard plan for backtesting these features before activation.
+
+- **Order Flow Model V1** (was Sprint 24): Databento L2 (MBP-10) subscription for watchlist symbols. OrderFlowAnalyzer (bid/ask imbalance, ask thinning, tape speed, bid stacking). OrderFlowEvent on Event Bus. UI: flow quality indicators, L2 depth heatmap. ~2–3 days.
+- **Order Flow V2 + L3** (was part of Sprint 28): Databento L3 integration. Iceberg/spoofing/absorption detection. ~1–2 days.
+- **Setup Quality Engine 6th Dimension:** Add Order Flow (20%) to scoring. Rebalance all weights to original 6-dimension design. ~0.5 day.
 
 ---
 

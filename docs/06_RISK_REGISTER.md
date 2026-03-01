@@ -482,7 +482,7 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 | **Risk** | ARGUS now has a fixed monthly cost ($199/mo Databento) that was previously $0 on Alpaca's free tier. As the system scales to multi-asset, costs increase: CME futures (+$179/month), OPRA options (+$199/month), IQFeed supplemental (~$160–250/month). Full multi-asset data stack could reach $540–630+/month. These costs exist regardless of trading profitability. |
 | **Severity** | Low (current), Medium (at full multi-asset expansion) |
 | **Likelihood** | High (cost is certain; question is whether trading revenue exceeds it) |
-| **Mitigation** | (1) Start with US equities only ($199/month). (2) Cost deferred until adapter ready (DEC-087). (3) Add asset classes only when strategies for them are validated and paper-traded. (4) Monitor data cost as percentage of trading revenue — target <10% of gross P&L. (5) IQFeed supplemental added only when forex/news features are needed, not speculatively. (6) All subscriptions can be paused if system is taken offline. (7) $199/month is modest relative to trading capital ($25K–100K+). |
+| **Mitigation** | (1) Start with US equities only ($199/month). (2) Cost deferred until adapter ready (DEC-087). (3) Add asset classes only when strategies for them are validated and paper-traded. (4) Monitor data cost as percentage of trading revenue — target <10% of gross P&L. (5) IQFeed supplemental added only when forex/news features are needed, not speculatively. (6) All subscriptions can be paused if system is taken offline. (7) $199/month is modest relative to trading capital ($25K–100K+). (8) L2/L3 live data confirmed to require Plus tier at $1,399/mo (DEC-237) — not included in Standard as previously assumed. Order Flow Model deferred to post-revenue (DEC-238). |
 | **Trigger for action** | Monthly data costs exceed 20% of gross trading P&L after 3 months of live trading. |
 | **Status** | Open — accepted. Monthly cost budgeted as cost of doing business. |
 
@@ -660,6 +660,19 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 | **Impact** | Low-Medium (delays Sprint 21.5 completion by 2-4 sessions at most) |
 | **Mitigation** | Sprint 21.5 is structured with buffer sessions (13-15) specifically for fixing discovered issues. Phased approach (Databento first, IBKR second, combined third) isolates problems. No real capital at risk during this phase. |
 | **Status** | Active |
+
+---
+
+### RSK-038 — Revenue-Dependent L2 Data Access for Order Flow Model
+
+| Field | Value |
+|-------|-------|
+| **Risk** | The Order Flow Model (bid/ask imbalance, ask thinning, tape speed, bid stacking) requires Databento Plus tier ($1,399/mo) for live L2 depth streaming. This is $1,200/mo over the current Standard plan. If trading revenue is insufficient or slow to materialize, the Order Flow enhancement may remain indefinitely deferred, limiting the Setup Quality Engine to 5 dimensions instead of the designed 6. |
+| **Severity** | Low |
+| **Likelihood** | Medium (revenue target of 10%/month on $25K+ should exceed $1,200/mo, but timeline uncertain) |
+| **Mitigation** | (1) All 4 current strategies and the intelligence layer operate on L1 data — no functionality blocked. (2) Historical L2 available on Standard plan for backtesting Order Flow Model before committing to Plus. (3) Setup Quality Engine designed with configurable weights — 5-dimension V1 is production-ready. (4) Order Flow adds incremental edge (~3–5% win rate improvement), not foundational capability. (5) Can backtest to quantify exact dollar value of Order Flow signals before deciding to upgrade. |
+| **Trigger for action** | Monthly trading net P&L exceeds $2,000 for 3 consecutive months (covers Plus tier upgrade + margin). |
+| **Status** | Open — accepted. Order Flow deferred to post-revenue backlog (DEC-238). |
 
 ---
 

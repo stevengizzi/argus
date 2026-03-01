@@ -45,9 +45,9 @@ Argus is a fully automated, AI-enhanced multi-strategy trading intelligence plat
 
 **IBKR Account (Feb 21):** Application submitted. Account ID U24619949. Individual margin account, IBKR Pro tiered pricing. Awaiting approval — paper trading account will be enabled post-approval for Sprint 13 adapter development.
 
-**Next Build sprints:** Live Integration (Sprint 21.5, IN PROGRESS) → Backtest Re-Validation (Sprint 21.6, parallel with 22) → AI Layer MVP (Sprint 22) → NLP Catalyst Pipeline + Pre-Market Engine (Sprint 23) → Order Flow Model V1 (Sprint 24) → Setup Quality Engine + Dynamic Position Sizer (Sprint 25) → Red-to-Green + Pattern Library Foundation (Sprint 26) → Pattern Expansion I (Sprint 27) → Order Flow V2 + Short Selling (Sprint 28) → Pattern Expansion II (Sprint 29) → Learning Loop V1 (Sprint 30) → Orchestrator V2 AI-Enhanced (Sprint 31) → Pattern Expansion III + Volume Profile (Sprint 32) → Learning Loop V2 ML (Sprint 33) → Advanced Regime Engine (Sprint 34) → Crypto Expansion (Sprint 35). See `docs/research/ARGUS_Expanded_Roadmap.md`.
+**Next Build sprints:** Live Integration (Sprint 21.5, IN PROGRESS) → Backtest Re-Validation (Sprint 21.6, parallel with 22) → AI Layer MVP (Sprint 22) → NLP Catalyst Pipeline + Pre-Market Engine (Sprint 23) → Setup Quality Engine + Dynamic Position Sizer (Sprint 24, DEC-240) → Red-to-Green + Pattern Library Foundation (Sprint 25) → Pattern Expansion I (Sprint 26) → Short Selling + Parabolic Short (Sprint 27) → Pattern Expansion II (Sprint 28) → Learning Loop V1 (Sprint 29) → Orchestrator V2 AI-Enhanced (Sprint 30) → Pattern Expansion III + Volume Profile (Sprint 31) → Learning Loop V2 ML (Sprint 32+). Order Flow Model V1 and V2 deferred to post-revenue backlog (DEC-238). See `docs/research/ARGUS_Expanded_Roadmap.md`. UX Feature Backlog (`docs/ui/UX_FEATURE_BACKLOG.md`) + DEC-168 (intelligence UI integration) provide per-sprint enhancement add-ons. Databento subscription activation recommended around Sprint 21 (DEC-161). All pre-Databento backtests require re-validation with quality data (DEC-132).
 
-**Validation Track sequence:** Build through Sprint 21d (7-page architecture + analytics) → Sprint 21.5 live integration (Databento + IBKR paper) → activate Databento → IBKR paper trading with quality data (Gate 2, 20+ days, starts during Sprint 21.5) → Sprint 21.6 backtest re-validation (parallel with Sprint 22) → Build through Sprint 26 (intelligence infrastructure) → AI-enhanced paper trading with quality scoring (Gate 3, 30+ days) → Build through Sprint 32 (full pattern library + learning loop) → Full system paper trading (Gate 4, 50+ cumulative days, system Sharpe > 2.0) → CPA consultation → live at minimum size on IBKR (Gate 5).
+**Validation Track sequence:** Build through Sprint 21d (7-page architecture + analytics) → Sprint 21.5 live integration (Databento + IBKR paper) → activate Databento → IBKR paper trading with quality data (Gate 2, 20+ days, starts during Sprint 21.5) → Sprint 21.6 backtest re-validation (parallel with Sprint 22) → Build through Sprint 25 (intelligence infrastructure — Quality Engine, Catalysts, Pattern Library) → AI-enhanced paper trading with quality scoring (Gate 3, 30+ days) → Build through Sprint 31 (full pattern library + learning loop) → Full system paper trading (Gate 4, 50+ cumulative days, system Sharpe > 2.0) → CPA consultation → live at minimum size on IBKR (Gate 5).
 
 **✅ IBKR ACCOUNT APPROVED:** Account ID: U24619949. Individual margin account, IBKR Pro (tiered pricing). Paper trading account available. IB Gateway setup and live integration testing in Sprint 21.5 (DEC-232, DEC-236).
 
@@ -56,7 +56,7 @@ Argus is a fully automated, AI-enhanced multi-strategy trading intelligence plat
 - **System name:** Argus
 - **Language:** Python 3.11+
 - **Brokerages:** Broker-agnostic abstraction layer. Interactive Brokers (sole live execution — DEC-083, `ib_async` library). Alpaca (strategy incubator paper testing only — DEC-086). SimulatedBroker (backtesting/shadow system). IBKR covers entire asset class roadmap (stocks, options, futures, forex, crypto) through single account.
-- **Data:** Databento US Equities Standard ($199/mo) for all live market data and new historical data (DEC-082). Full universe, no symbol limits, L0–L3 schemas, exchange-direct proprietary feeds. DataService abstraction for future provider swaps. IQFeed supplemental (forex, Benzinga news, breadth indicators) when needed. Alpaca data deprecated for production use (DEC-081/086).
+- **Data:** Databento US Equities Standard ($199/mo) for all live market data and new historical data (DEC-082). Full universe, no symbol limits, L0–L1 live schemas (EQUS.MINI), exchange-direct proprietary feeds. L2/L3 historical access included (1-month lookback); live L2/L3 streaming requires Plus tier at $1,399/mo (DEC-237). DataService abstraction for future provider swaps. IQFeed supplemental (forex, Benzinga news, breadth indicators) when needed. Alpaca data deprecated for production use (DEC-081/086).
 - **IBKR timing:** IBKRBroker adapter in Sprint 13. IBKR is the production execution broker from day one of live trading. No phased migration from Alpaca (DEC-083). Supersedes DEC-003/DEC-031.
 - **Backtesting:** Two-layer toolkit — VectorBT (fast parameter sweeps) and custom Replay Harness (ecosystem-level testing using production code). Backtrader dropped (DEC-046) — Replay Harness provides higher fidelity by running actual production code, and VectorBT covers fast parameter exploration.
 - **Walk-forward validation:** Mandatory for all parameter optimization. 70/30 in-sample/out-of-sample split minimum. Non-negotiable overfitting defense (DEC-047).
@@ -193,8 +193,8 @@ Argus is a fully automated, AI-enhanced multi-strategy trading intelligence plat
 - **VectorBT Afternoon Momentum divergences harmonized (DEC-162):** Precompute+vectorize architecture. ATR method divergence documented (SMA vs Wilder's). Single entry per day in VectorBT vs live retry (conservative).
 - **Expanded vision — AI-enhanced platform (DEC-163):** ARGUS expanded from 5-strategy rules-based to 15+ pattern AI-enhanced. Setup Quality Engine, Order Flow Model, NLP Catalyst Pipeline, Dynamic Position Sizer, Pattern Library, Learning Loop, Pre-Market Intelligence Engine. Target 5–10%+ monthly returns at $100K–$500K scale.
 - **Catalyst data — free sources first (DEC-164):** SEC EDGAR + Finnhub + FMP for V1. Claude API classifies/scores catalysts. Benzinga Pro deferred until free sources prove insufficient (>30% unclassified rate over 20 days).
-- **L2 data for all watchlist symbols (DEC-165):** Databento MBP-10 for full daily watchlist. L2 included in Standard plan. Single session with Event Bus fan-out.
-- **Short selling in Sprint 28 (DEC-166):** Long-only proven first. Parabolic Short first short strategy. Locate/borrow tracking, inverted risk logic.
+- **L2 data for all watchlist symbols (DEC-165, SUPERSEDED by DEC-237):** Databento MBP-10 planned for watchlist symbols. Live L2/L3 requires Plus tier ($1,399/mo), not included in Standard. Order Flow Model deferred to post-revenue (DEC-238).
+- **Short selling in Sprint 27 (DEC-166, amended by DEC-238/DEC-240):** Long-only proven first. Parabolic Short first short strategy. Locate/borrow tracking, inverted risk logic. Decoupled from Order Flow V2 — uses L1 signals only.
 - **Pattern library batch build (DEC-167):** 3–4 patterns per sprint, stages 1–3 within sprint, paper validation in parallel.
 - **UI/UX integration principle (DEC-168):** Intelligence features enrich existing pages, not siloed. Progressive disclosure: badge → breakdown → deep dive.
 - **Seven-page architecture (DEC-169):** Dashboard, Trade Log, Performance, Orchestrator, Pattern Library, The Debrief, System. **7 of 7 built** (all complete — Sprint 21c). Desktop icon sidebar grouped by concern. Mobile 7-tab with abbreviated labels (DEC-199).
@@ -231,6 +231,10 @@ Argus is a fully automated, AI-enhanced multi-strategy trading intelligence plat
 - **Databento datasets phased (DEC-234):** XNAS.ITCH first (Sessions 1-2), XNYS.PILLAR added (Sessions 3-4). Full NASDAQ + NYSE coverage by mid-sprint. 2 of 10 session slots used.
 - **Backtest re-validation separate (DEC-235):** DEC-132 re-validation is Sprint 21.6, runs parallel with Sprint 22 (AI Layer). Spec drafted after Sprint 21.5 completion.
 - **IBKR approved (DEC-236):** Account U24619949 approved. Paper trading available for Sprint 21.5.
+- **Databento Standard does NOT include live L2/L3 (DEC-237):** Standard plan ($199/mo) provides live L0+L1 only (EQUS.MINI). Live L2 (MBP-10) and L3 (MBO) require Plus tier ($1,399/mo). Historical L2/L3 included in Standard (1-month lookback). Supersedes DEC-165.
+- **Order Flow Model deferred to post-revenue (DEC-238):** Order Flow V1 (was Sprint 24) and V2 (was part of Sprint 28) moved to post-revenue backlog. All strategies and intelligence layer operate on L1 data. Order Flow is an edge enhancement, not a foundation. Scheduled when trading income justifies Plus tier upgrade.
+- **Setup Quality Engine 5 dimensions in V1 (DEC-239):** Order Flow removed from V1 scoring. Weights: Pattern Strength 30%, Catalyst Quality 25%, Volume Profile 20%, Historical Match 15%, Regime Alignment 10%. 6th dimension (Order Flow) added post-revenue with full rebalance.
+- **Sprint roadmap renumbered (DEC-240):** Old Sprints 25–32 renumbered to 24–31 after Order Flow removal. Short selling (was Sprint 28) decoupled from OF V2, now standalone Sprint 27. Post-revenue backlog created for Order Flow V1, V2, and Quality Engine 6th dimension.
 
 
 ## Architecture Summary
@@ -251,7 +255,7 @@ Key components:
 - **Control endpoints (DEC-111):** Strategy pause/resume, position close, emergency flatten all, emergency pause all. JWT-gated. Confirmation modals for emergency actions.
 - **CSV trade export (DEC-112):** GET /trades/export/csv with filters. StreamingResponse, date-stamped filename. 10K row limit.
 - **Setup Quality Engine** scores every potential trade 0–100 on six dimensions (pattern strength, catalyst quality, order flow, volume profile, historical match, regime alignment). Outputs quality grade (A+ through C-) driving dynamic position sizing.
-- **Order Flow Model** processes Databento L2 (MBP-10) depth data: bid/ask imbalance, ask thinning, tape speed, bid stacking signals for entry confidence.
+- **Order Flow Model** (POST-REVENUE, DEC-238) will process Databento L2 (MBP-10) depth data: bid/ask imbalance, ask thinning, tape speed, bid stacking signals for entry confidence. Requires Databento Plus tier ($1,399/mo, DEC-237). Historical L2 available on Standard for backtesting.
 - **NLP Catalyst Pipeline** ingests SEC EDGAR filings, Finnhub news, FMP calendars; classifies and scores catalyst quality via Claude API (DEC-164).
 - **Dynamic Position Sizer** maps quality grades to risk tiers: A+ = 2–3% risk, B = 0.5–0.75%, C- = skip. Replaces fixed risk_per_trade_pct.
 - **Pre-Market Intelligence Engine** runs automated 4:00 AM → 9:25 AM pipeline: gap scanning, catalyst research, watchlist ranking, quality pre-scoring, briefing delivery.
@@ -323,11 +327,14 @@ Concept → Exploration (VectorBT) → Validation (Replay Harness + Walk-Forward
 | IQFeed (forex + news + breadth) | ~$160–250/mo | When forex strategies or Tier 2 news needed | Deferred until specific feature requires it |
 | Databento CME Futures | $179/mo + exchange fees | When futures strategies launch | Separate dataset subscription |
 | Claude API (AI Layer) | ~$35–50/mo | Sprint 22 onward (DEC-098) | All-Opus, pay-as-you-go. Prompt caching reduces effective cost. |
+| Databento Plus (L2/L3 live) | $1,399/mo | Post-revenue (DEC-238) | Required for Order Flow Model. $1,200/mo over Standard. |
 | **Current monthly (paper trading)** | **$199/mo** | | Databento only |
 | **Projected monthly (live, equities only)** | **~$235–250 + commissions** | | Databento + Claude API + commissions |
 | **Projected monthly (full multi-asset)** | **~$575–680 + commissions** | | Databento + IQFeed + futures + Claude API + commissions |
-| **Projected monthly (full AI-enhanced, equities only)** | **~$449–499 + commissions** | Phase C+ | Databento + Claude API (increased) + commissions |
+| **Projected monthly (AI-enhanced, no OF)** | **~$249–299 + commissions** | Sprint 24+ | Databento Standard + Claude API + commissions |
+| **Projected monthly (AI-enhanced + Order Flow)** | **~$1,449–1,499 + commissions** | Post-revenue | Databento Plus + Claude API + commissions |
 | Free news sources (Finnhub/FMP/EDGAR) | $0 | Sprint 23+ | Paid Benzinga upgrade (~$200/mo) only if needed (DEC-164) |
+
 
 ## Market Regime Classification (V1)
 

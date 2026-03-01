@@ -1832,7 +1832,7 @@ Each entry follows this format:
 | **Date** | 2026-02-26 |
 | **Decision** | Subscribe to Databento L2 (MBP-10, 10 depth levels) for all watchlist symbols. Watchlist rebuilt fresh each trading day during pre-market scanning (4:00 AM → 9:25 AM). L2 subscriptions activate at watchlist lock (9:25 AM), deactivate EOD. Databento Standard plan includes L2/L3 at no additional cost; constraint is session count (10 simultaneous), not symbol count within a session. ARGUS uses 1 session with Event Bus fan-out. |
 | **Rationale** | Order flow intelligence requires L2 depth data. Full-watchlist subscription (typically 15–25 stocks) ensures no opportunity missed. Single session handles all symbols. |
-| **Status** | Active |
+| **Status** | Superseded by DEC-237 (Standard plan does NOT include live L2/L3) |
 
 ---
 
@@ -2593,6 +2593,55 @@ Each entry follows this format:
 | **Date** | 2026-02-28 |
 | **Decision** | IBKR account (U24619949) approved. Paper trading account available for Sprint 21.5 integration testing. Blocker removed — IBKR paper trading proceeds in parallel with Databento integration. |
 | **Rationale** | Account approval was a prerequisite for Sprint 21.5 Phase B. With both Databento subscription and IBKR approval ready, Sprint 21.5 can proceed at full velocity across both phases. |
+| **Status** | Active |
+
+---
+
+### DEC-237 | Databento Standard Plan Does NOT Include Live L2/L3 — Supersedes DEC-165
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-01 |
+| **Decision** | Databento Standard plan ($199/mo) includes live L0 + L1 data only (EQUS.MINI dataset). Live L2 (MBP-10) and L3 (MBO) streaming requires Plus tier ($1,399/mo + annual contract) or Unlimited ($3,500/mo). Standard plan DOES include historical L2/L3 access (1-month lookback) for backtesting. Verified via Databento dashboard pricing matrix (March 1, 2026) and confirmed by Session 1 live connection test returning "A live data license is required to access XNAS.ITCH." |
+| **Supersedes** | DEC-165 (which incorrectly stated "L2 included in Standard plan") |
+| **Rationale** | DEC-165 was based on ambiguous pricing page language. The dashboard's "Plans and live data" matrix clearly shows L2/L3 checkmarks only on Plus and Unlimited tiers. Historical API access (which our test used successfully) is a different entitlement than live streaming. |
+| **Impact** | Order Flow Model (live L2 depth) cannot be built at $199/mo. Requires $1,200/mo upgrade to Plus tier. |
+| **Status** | Active |
+
+---
+
+### DEC-238 | Order Flow Model Deferred to Post-Revenue
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-01 |
+| **Decision** | Order Flow Model V1 (was Sprint 24) and Order Flow V2 + L3 integration (was part of Sprint 28) deferred to post-revenue trading. These sprints move to a "Post-Revenue Backlog" and will be scheduled when monthly trading income justifies the $1,200/mo Databento Plus upgrade. All four current strategies and the planned intelligence layer (AI, catalysts, quality scoring, pattern library, learning loop) operate on L1 data. Order Flow is an edge enhancement, not a foundation. |
+| **Rationale** | (1) Live L2/L3 requires Databento Plus at $1,399/mo — a $1,200/mo increase over current Standard. (2) Profitable day trading at 10%+/month is achievable without L2 data — top retail traders (Ross Cameron, SMB Capital trainees) use price action and volume (L1). (3) All four ARGUS strategies use L1 signals (candle breakouts, volume surges, VWAP crosses). (4) Setup Quality Engine can score on 5 dimensions without Order Flow and add it as a 6th dimension post-revenue. (5) Historical L2 remains available on Standard for backtesting the Order Flow Model before going live. |
+| **Supersedes** | Sprint 24 scope (DEC-163), Sprint 28 Order Flow V2 scope (DEC-163) |
+| **Amends** | DEC-166 (Short Selling) — decoupled from Order Flow V2, now standalone sprint |
+| **Status** | Active |
+
+---
+
+### DEC-239 | Setup Quality Engine — 5 Dimensions in V1, Order Flow Added Post-Revenue
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-01 |
+| **Decision** | Setup Quality Engine launches with 5 scoring dimensions (Order Flow removed from V1). Weights redistributed: Pattern Strength 30% (was 25%), Catalyst Quality 25% (was 20%), Volume Profile 20% (was 15%), Historical Match 15% (was 10%), Regime Alignment 10% (unchanged). When Order Flow Model activates post-revenue, it becomes the 6th dimension and all weights rebalance to the original 6-dimension design. |
+| **Rationale** | Order Flow was 20% of composite score. Redistributing to the remaining 5 dimensions preserves the scoring framework. Pattern Strength and Catalyst Quality get the largest increases as the highest-signal dimensions. The engine's YAML-configurable weights (DEC-163) make post-revenue rebalancing trivial. |
+| **Amends** | Bible Section 19.2 scoring dimensions |
+| **Status** | Active |
+
+---
+
+### DEC-240 | Sprint Roadmap Renumbered — Order Flow Removed, Queue Collapsed
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-01 |
+| **Decision** | Future sprint queue renumbered after removing Order Flow sprints. Mapping: old Sprint 25 → new Sprint 24, old Sprint 26 → new Sprint 25, old Sprint 27 → new Sprint 26, old Sprint 28 (short selling only, OF V2 removed) → new Sprint 27, old Sprint 29 → new Sprint 28, old Sprint 30 → new Sprint 29, old Sprint 31 → new Sprint 30, old Sprint 32 → new Sprint 31, old Sprint 33+ → new Sprint 32+. Net effect: 2 sprints removed from pre-revenue path, accelerating time to live trading. |
+| **Rationale** | Consistent numbering prevents confusion. Sprints 22–23 unchanged. Gap from removing Sprint 24 (OF V1) collapsed. Sprint 28's OF V2 component moved to post-revenue backlog; short selling infrastructure retained as standalone Sprint 27. |
 | **Status** | Active |
 
 ---

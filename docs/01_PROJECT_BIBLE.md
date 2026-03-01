@@ -541,6 +541,16 @@ Feed news articles through Claude's API for nuanced analysis beyond simple class
 The core innovation transforming ARGUS from binary pass/fail filtering to intelligence-driven trading. Grades every potential trade 0–100 across six dimensions.
 
 ### 19.2 Scoring Dimensions
+**V1 — 5 Dimensions (DEC-239):**
+| Dimension | Weight | Source |
+|-----------|--------|--------|
+| Pattern Strength | 30% | Strategy module |
+| Catalyst Quality | 25% | NLP Catalyst Pipeline |
+| Volume Profile | 20% | Databento L1 |
+| Historical Match | 15% | Learning Loop |
+| Regime Alignment | 10% | RegimeClassifier |
+
+**Post-Revenue — 6 Dimensions (when Order Flow Model activates, DEC-238):**
 | Dimension | Weight | Source |
 |-----------|--------|--------|
 | Pattern Strength | 25% | Strategy module |
@@ -549,6 +559,8 @@ The core innovation transforming ARGUS from binary pass/fail filtering to intell
 | Volume Profile | 15% | Databento L1 |
 | Historical Match | 10% | Learning Loop |
 | Regime Alignment | 10% | RegimeClassifier |
+
+Weights are YAML-configurable. Rebalancing on Order Flow activation is a config change, not a code change.
 
 ### 19.3 Quality Grades and Risk Tiers
 | Grade | Score | Risk % | Behavior |
@@ -575,7 +587,7 @@ Every trade generates feedback. Weekly batch retraining refines weights. V1: sta
 Reveals intent behind price movement: real buying pressure vs spoofing, hidden orders, momentum absorption.
 
 ### 20.2 Data Source
-Databento L2 (MBP-10, 10 depth levels) for V1. L3 (individual order events) for V2. Both included in Standard plan.
+Databento L2 (MBP-10, 10 depth levels) for V1. L3 (individual order events) for V2. **Correction (DEC-237):** Live L2/L3 requires Databento Plus tier ($1,399/mo). Standard plan ($199/mo) includes historical L2/L3 only (1-month lookback). Order Flow Model deferred to post-revenue (DEC-238). Historical L2 available immediately for backtesting signal quality.
 
 ### 20.3 Signals
 V1: bid/ask imbalance, ask thinning rate, tape speed, bid stacking.

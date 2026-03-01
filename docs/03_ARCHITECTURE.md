@@ -234,7 +234,7 @@ Live Trading:
                                         ├── CandleEvents (1m bars)     ├── Strategy 1
                                         ├── TickEvents (every trade)   ├── Strategy 2
                                         ├── IndicatorEvents (VWAP,ATR) ├── ...
-                                        └── L2 Depth (when needed)     └── Strategy 30+
+                                        └── L2 Depth (post-revenue)    └── Strategy 30+
 
 Historical / Backtesting:
   Databento Historical API ──REST──> DataFetcher ──> Parquet files ──> VectorBT / Replay Harness
@@ -256,7 +256,7 @@ Future (when needed):
 **DatabentoDataService Configuration (DatabentoConfig):**
 - `api_key`: Databento API key (from environment variable, never in code)
 - `dataset`: "XNAS.ITCH" (NASDAQ) + "XNYS.PILLAR" (NYSE) or equivalent composite
-- `schema`: ["ohlcv-1m", "trades"] (default), ["mbp-10"] (optional L2)
+- `schema`: ["ohlcv-1m", "trades"] (default). L2 ["mbp-10"] requires Plus tier (DEC-237), deferred post-revenue (DEC-238).
 - `symbols`: list or "ALL_SYMBOLS" for full universe
 - `reconnect_max_retries`: 10
 - `reconnect_base_delay_seconds`: 1.0
@@ -906,14 +906,15 @@ New module directory housing all AI-enhanced trading intelligence components. Th
 Composite scorer grading every potential trade 0–100 on six weighted dimensions.
 
 Interface:
-- `score_setup(symbol, pattern_type, pattern_strength, catalyst, order_flow, volume_profile, regime) -> SetupQuality`
+- `score_setup(symbol, pattern_type, pattern_strength, catalyst, volume_profile, regime, order_flow=None) -> SetupQuality`
+  - V1: 5 dimensions (DEC-239). `order_flow` param reserved for post-revenue activation.
 - `get_historical_match(pattern_type, catalyst_category, regime) -> HistoricalPerformance`
 
 Events published: `QualitySignalEvent(symbol, score, grade, risk_tier, components, rationale)`
 Config: `config/quality_engine.yaml` (weights, thresholds, tier mappings)
 
-#### OrderFlowAnalyzer (`intelligence/order_flow.py`)
-Processes Databento L2/L3 depth data into actionable signals.
+#### OrderFlowAnalyzer (`intelligence/order_flow.py`) — POST-REVENUE (DEC-238)
+Processes Databento L2/L3 depth data into actionable signals. Requires Databento Plus tier ($1,399/mo, DEC-237). Historical L2 available on Standard for backtesting.
 
 Interface:
 - `start(symbols: list[str]) -> None` — begin L2 analysis
@@ -922,6 +923,7 @@ Interface:
 
 Events published: `OrderFlowEvent(symbol, imbalance_ratio, ask_thin_rate, tape_speed, bid_stack_score, composite_score, timestamp)`
 Throttling: configurable interval (default 100ms)
+**Status:** Deferred to post-revenue. Historical backtesting can proceed on Standard plan.
 
 #### CatalystService (`intelligence/catalyst_service.py`)
 Ingests and classifies news/filing data from free sources (DEC-164).
