@@ -382,6 +382,48 @@ per sprint velocity.
 **Decisions:** DEC-204 through DEC-229
 **Deferred:** DEF-028, DEC-229
 
+### Sprint 21.5 — Live Integration (Databento + IBKR)
+**Status:** IN PROGRESS
+**Start:** Feb 28, 2026
+**Estimated sessions:** 13–16 (Claude Code) + 3 code reviews (Claude.ai)
+**Test count start:** 1712 (pytest) + 257 (Vitest)
+
+**Scope:**
+- Phase A (Sessions 1-5): Databento live activation — connection, data flow, indicators, scanner, strategy signals, XNYS.PILLAR addition
+- Phase B (Sessions 6-9): IBKR paper trading — Gateway setup, connection, bracket orders, position management, reconnection
+- Phase C (Sessions 10-12): End-to-end integration — full system startup, first live market sessions (all 4 strategies), Command Center with live data
+- Phase D (Sessions 13-15): Stability observation, overnight Taipei workflow, startup automation, cleanup, LIVE_OPERATIONS.md
+
+**Key deliverables:**
+- `config/system_live.yaml` (Databento + IBKR config)
+- `.env.example` (documented environment variables)
+- Multi-dataset Databento streaming (XNAS.ITCH + XNYS.PILLAR)
+- Live Databento data flowing through all 4 strategies
+- Paper trades executing on IBKR via IB Gateway
+- Command Center showing real-time live data
+- `docs/LIVE_OPERATIONS.md` (startup/shutdown/monitoring guide)
+- Startup/shutdown automation scripts
+
+**Decisions:** DEC-230 through DEC-236
+**Prerequisites:** Databento subscription activated, IBKR account approved (✅ both ready)
+**Exit criteria:** Full market session (9:30-4:00 ET) completed without crashes, all 4 strategies processing data, paper trades executing, Command Center operational with live data, clean overnight workflow verified
+
+### Sprint 21.6 — Backtest Re-Validation (DEC-132 / DEC-235)
+**Status:** QUEUED (runs parallel with Sprint 22)
+**Estimated sessions:** 6-8
+**Full spec:** To be drafted after Sprint 21.5 completion
+
+**Scope:**
+- Pull Databento historical data for all 28+ backtest symbols (35 months)
+- Re-run VectorBT parameter sweeps with exchange-direct data
+- Re-run walk-forward analysis for all 4 strategies
+- Compare results against Alpaca-data baselines
+- Adjust parameters if material differences found
+- Update strategy specs and decision log entries marked "provisional per DEC-132"
+
+**Prerequisites:** Sprint 21.5 complete (Databento data pipeline confirmed working)
+**Exit criteria:** All 4 strategy parameters either confirmed or updated with Databento data. DEC-132 resolved.
+
 #### Sprint 22 — AI Layer MVP + Copilot Activation (DEC-096, DEC-098, DEC-170)
 **Target:** ~2–3 days
 **Scope:**
@@ -396,6 +438,7 @@ per sprint velocity.
 - **Approval workflow:** Claude proposes changes → approval card appears in Orchestrator decision stream AND as Copilot message → user approves/rejects/modifies.
 - API: `/api/v1/ai/chat` (WebSocket), `/api/v1/ai/briefing/generate`, `/api/v1/ai/report/generate`, `/api/v1/ai/analyze/trade/{trade_id}`.
 - **UX (from Backlog):** AI insight cards on Dashboard (22-A). Strategy optimization landscape in Orchestrator (22-C, Three.js/Plotly 3D). Multi-line outcome projections on Performance (22-D, Monte Carlo fan chart).
+**Updated prerequisite (DEC-230):** Sprint 22 now follows Sprint 21.5 (live integration). AI Layer will be built on top of a live system with real Databento data and IBKR paper execution, rather than mock data. Copilot tested with real market context from session one. Sprint 21.6 (backtest re-validation) runs in parallel.
 
 #### Sprint 23 — NLP Catalyst Pipeline + Pre-Market Engine (DEC-163, DEC-164)
 **Target:** ~2–3 days

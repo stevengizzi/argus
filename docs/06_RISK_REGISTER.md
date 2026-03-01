@@ -472,7 +472,7 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 | **Likelihood** | High (nightly reset is guaranteed; question is whether reconnection handles it cleanly) |
 | **Mitigation** | (1) ARGUS trades only during market hours (9:30 AM – 4:00 PM ET). The reset window does not overlap. (2) Docker containerization of IB Gateway for consistent environment. (3) Robust reconnection logic with exponential backoff built into IBKRBroker adapter. (4) All stops placed broker-side — survive gateway disconnections. (5) State reconstruction (already implemented for Alpaca) rebuilds positions and orders from IBKR on reconnect. (6) HealthMonitor detects gateway state and alerts. (7) Community has solved this problem thousands of times — well-documented patterns exist. |
 | **Trigger for action** | Reconnection failures during paper trading that result in missed trades or position tracking errors. |
-| **Status** | Open — validate during Sprint 13. Accepted risk with full mitigation plan. |
+| **Status** | Active — Sprint 21.5 addresses directly. IB Gateway setup (DEC-232), nightly restart handling, and reconnection validated in Sessions 6, 9. |
 
 ---
 
@@ -648,6 +648,18 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 | **Likelihood** | Medium |
 | **Mitigation** | Copilot is advisory, not in the execution path. Trades execute regardless of chat state. Pre-compute common contexts (positions, regime, quality scores) so Claude responses can reference cached data. Streaming responses show partial text immediately. |
 | **Status** | Open |
+
+---
+
+### RSK-037 | First Live Integration Discovery Risk
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-28 |
+| **Risk** | Integration testing against real Databento and IBKR services may uncover issues not caught by mock-based unit tests (data format differences, timing edge cases, network reliability, API behavior discrepancies). |
+| **Likelihood** | High (nearly certain some issues will surface) |
+| **Impact** | Low-Medium (delays Sprint 21.5 completion by 2-4 sessions at most) |
+| **Mitigation** | Sprint 21.5 is structured with buffer sessions (13-15) specifically for fixing discovered issues. Phased approach (Databento first, IBKR second, combined third) isolates problems. No real capital at risk during this phase. |
+| **Status** | Active |
 
 ---
 

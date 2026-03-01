@@ -11,7 +11,7 @@ Phase 1 sprint plan: @docs/07_PHASE1_SPRINT_PLAN.md
 ## Current State
 
 **Structure:** Two parallel tracks (DEC-079, February 19, 2026). Expanded to AI-enhanced platform (DEC-163, February 26, 2026).
-- **Build Track:** System construction at development velocity. Sprints 1–21d complete (1,712 pytest tests + 257 Vitest). Sprint 22 (AI Layer MVP) is NEXT.
+- **Build Track:** System construction at development velocity. Sprints 1–21d complete (1,712 pytest tests + 257 Vitest). Sprint 21.5 (Live Integration — Databento + IBKR) is NEXT.
 - **Validation Track:** Paper trading ACTIVE on Alpaca IEX (system stability only — DEC-081). Signal accuracy validation pending Databento activation. All pre-Databento backtests require re-validation (DEC-132). Migrates to IBKR paper after IBKR account approved (U24619949, submitted Feb 21).
 
 Active sprint plan: `docs/10_PHASE3_SPRINT_PLAN.md` (covers both tracks).
@@ -23,7 +23,10 @@ Active sprint plan: `docs/10_PHASE3_SPRINT_PLAN.md` (covers both tracks).
 - **Historical data:** Databento source, Parquet cache. Existing Alpaca Parquet files retained. DEC-085.
 - **Cost deferral:** Databento subscription activated when adapter ready for integration testing. DEC-087.
 
-- IBKR account application submitted Feb 21, 2026 (Account ID: U24619949). Individual, Margin, IBKR Pro (tiered), GA address. Permissions: Stocks, Options L3, Futures, Forex, Crypto. Awaiting approval.
+- IBKR account approved (U24619949). Paper trading available. IB Gateway for API connections (DEC-232). Individual, Margin, IBKR Pro (tiered), GA address. Permissions: Stocks, Options L3, Futures, Forex, Crypto.
+
+**Databento status:** Subscription activating. XNAS.ITCH + XNYS.PILLAR datasets (DEC-234).
+**Databento datasets:** XNAS.ITCH (Nasdaq), XNYS.PILLAR (NYSE). 2 of 10 session slots.
 
 **Expanded Vision (DEC-163, February 26, 2026):**
 - ARGUS expanded to AI-enhanced trading intelligence platform (15+ patterns, Setup Quality Engine, Order Flow Model, NLP Catalyst Pipeline, Dynamic Position Sizer, Learning Loop, Pre-Market Engine).
@@ -256,6 +259,9 @@ docs/
 - `cd argus/ui && npm install` — Install frontend dependencies
 - `cd argus/ui && npm run dev` — Start frontend dev server (Vite)
 - `cd argus/ui && npm run build` — Build frontend for production
+- `python -m argus.main --config system_live.yaml` - Live mode (Databento + IBKR paper)
+- `python -m argus.main --dev` - Dev mode (mock data, no external connections)
+- `python -m argus.main --config system.yaml` - Alpaca incubator mode (legacy)
 
 
 ## Code Style

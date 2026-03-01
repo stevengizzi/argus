@@ -2514,5 +2514,88 @@ Each entry follows this format:
 
 ---
 
+### DEC-230 | Sprint 21.5 — Live Integration Sprint
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-28 |
+| **Decision** | Insert Sprint 21.5 (Live Integration) between Sprint 21d and Sprint 22. Dedicated sprint for connecting DatabentoDataService and IBKRBroker adapters to real services, validating end-to-end data flow, and running first live market sessions with paper trading. |
+| **Rationale** | Sprints 12 and 13 built adapters against mocks/unit tests. No code has touched real Databento feeds or real IB Gateway. Integration testing against live services is non-trivial — timestamp formats, reconnection under real network conditions, data gaps during fast markets, and order rejection edge cases only surface with real connections. This work was not on the roadmap and represents a significant gap between "adapters built" and "system operational." |
+| **Alternatives** | (1) Fold integration work into Sprint 22 sessions — rejected because Sprint 22 (AI Layer) has its own complexity; mixing infrastructure debugging with AI feature development would compromise both. (2) Skip dedicated sprint, just "turn it on" — rejected because every adapter-to-real-service connection historically hits issues that require focused debugging. |
+| **Status** | Active |
+
+---
+
+### DEC-231 | Separate Config File for Live Operation
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-28 |
+| **Decision** | Create `config/system_live.yaml` as a separate config file for Databento + IBKR operation. Original `config/system.yaml` retained as Alpaca incubator config. Selected via `--config` CLI flag. |
+| **Rationale** | Clean separation between incubator (Alpaca) and production (Databento/IBKR) configurations. Easy to switch between modes. No risk of accidentally running live config during development. |
+| **Alternatives** | (1) Modify system.yaml in place — rejected because loses ability to quickly switch back to Alpaca mode. (2) Environment variable override — rejected because too many values to override; config file is cleaner. |
+| **Status** | Active |
+
+---
+
+### DEC-232 | IB Gateway for API Connection (Not TWS)
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-28 |
+| **Decision** | Use IB Gateway (headless) rather than Trader Workstation (TWS) for IBKR API connections. |
+| **Rationale** | ARGUS is a headless automated system — no need for TWS GUI. Gateway uses fewer resources, is easier to Docker-containerize (RSK-022), and is designed for automated trading systems. TWS available as fallback if Gateway has issues. |
+| **Alternatives** | TWS — functional but unnecessary resource overhead for headless operation. |
+| **Status** | Active |
+
+---
+
+### DEC-233 | All Four Strategies Active from First Live Session
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-28 |
+| **Decision** | All four strategies active from the first live market session (Session 11). No incremental activation. Sessions 4-5 validate all strategies with real data (without execution), Session 10 validates combined startup. If Session 10 reveals a strategy-specific issue, that strategy is disabled while others proceed. |
+| **Rationale** | Strategy-prefixed logging makes per-strategy debugging straightforward. Strategies operate in time-separated windows (ORB morning, VWAP mid-morning, Afternoon afternoon), naturally isolating most issues. By Session 11, data flow through all four strategies has already been validated in Sessions 4-5. The only new variable is IBKR execution, which is strategy-agnostic. Incremental activation would add 2-3 sessions with marginal debugging benefit. |
+| **Alternatives** | Incremental activation (ORB → +Scalp → +VWAP → +Afternoon over 4 sessions) — rejected as overly cautious given pre-validation in earlier sessions and time-separated strategy windows. |
+| **Status** | Active |
+
+---
+
+### DEC-234 | Databento Datasets: XNAS First, Add XNYS in Sessions 3-4
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-28 |
+| **Decision** | Start with XNAS.ITCH (Nasdaq TotalView-ITCH) in Sessions 1-2 for pipeline validation. Add XNYS.PILLAR (NYSE) in Sessions 3-4 once Nasdaq data flow is confirmed working. Two datasets use 2 of the 10 allowed concurrent sessions on the Databento Standard plan. NYSE Arca (ARCX.PILLAR) added later only if specifically needed. |
+| **Rationale** | The momentum/small-cap day trading universe spans both NASDAQ and NYSE. NASDAQ-only would systematically miss NYSE-listed gappers — if the best opportunity on a given day is NYSE-listed, the scanner wouldn't see it. However, debugging multi-dataset streaming on day one adds unnecessary complexity. Starting with XNAS validates the pipeline, then adding XNYS is a small incremental change. SPY (needed for RegimeClassifier) routes through NYSE data. |
+| **Alternatives** | (1) XNAS only for weeks — rejected because it systematically misses a large portion of the tradeable universe. (2) Both datasets from Session 1 — rejected because validating one dataset first isolates data pipeline issues from multi-dataset issues. |
+| **Status** | Active |
+
+---
+
+### DEC-235 | Sprint 21.6 — Backtest Re-Validation Separated from Live Integration
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-28 |
+| **Decision** | DEC-132 backtest re-validation (re-running parameter sweeps and walk-forward analysis with Databento data) is a separate Sprint 21.6, not part of Sprint 21.5. Sprint 21.6 runs in parallel with Sprint 22 (AI Layer). Full spec to be drafted after Sprint 21.5 completes, informed by integration discoveries. |
+| **Rationale** | Re-validation is analytical work (data processing, parameter sweeps, statistical analysis) that is fundamentally different from integration testing (connecting, configuring, debugging). Separating them allows Sprint 21.5 to focus purely on "does the system work" and Sprint 21.6 on "are the parameters valid." Sprint 21.6 doesn't block AI Layer development. Deferring the spec allows integration discoveries to inform the re-validation approach. |
+| **Alternatives** | Include in Sprint 21.5 — rejected because it extends the sprint significantly and mixes two different types of work. |
+| **Status** | Active |
+
+---
+
+### DEC-236 | IBKR Account Approved — Paper Trading Ready
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-28 |
+| **Decision** | IBKR account (U24619949) approved. Paper trading account available for Sprint 21.5 integration testing. Blocker removed — IBKR paper trading proceeds in parallel with Databento integration. |
+| **Rationale** | Account approval was a prerequisite for Sprint 21.5 Phase B. With both Databento subscription and IBKR approval ready, Sprint 21.5 can proceed at full velocity across both phases. |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
 *New decisions are appended chronologically as the project progresses.*
