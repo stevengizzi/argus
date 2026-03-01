@@ -3,7 +3,7 @@
 > **Sprint Owner:** Steven + Claude (both instances)
 > **Estimated Sessions:** 13–16 (Claude Code) + 3 code reviews (Claude.ai)
 > **Prerequisites:** Databento subscription activated, IBKR account approved ✅
-> **Target Outcome:** ARGUS running live during market hours with Databento exchange-direct data flowing through all four strategies, executing paper trades on IBKR, visible in Command Center
+> **Target Outcome:** ARGUS running live during market hours with Databento consolidated market data flowing through all four strategies, executing paper trades on IBKR, visible in Command Center
 
 ---
 
@@ -19,7 +19,7 @@ By the end of this sprint, Steven should be able to:
 
 1. Start ARGUS before US market open (~9:15 AM ET / 10:15 PM Taipei)
 2. Watch the Command Center Dashboard show live market data, strategy states, and watchlist updates
-3. See strategies generate real signals based on Databento exchange-direct data
+3. See strategies generate real signals based on Databento market data
 4. See paper trades execute on IBKR and appear in the Command Center Trade Log
 5. Watch positions managed in real-time (stops, targets, time stops) through the IBKR paper account
 6. Confirm that the system handles a full market session (9:30 AM – 4:00 PM ET) without crashes
@@ -43,8 +43,10 @@ IB Gateway (headless). ARGUS is a headless automated system — no need for TWS 
 ### MD-21.5-2: Paper Trading Hours → **Regular Hours Only**
 Regular trading hours (9:30 AM – 4:00 PM ET) for initial validation. Matches all four strategy windows.
 
-### MD-21.5-3: Dataset Selection → **XNAS.ITCH First, Add XNYS.PILLAR in Sessions 3–4**
-Start with XNAS.ITCH (Nasdaq TotalView-ITCH) in Sessions 1–2 to validate the data pipeline. Add XNYS.PILLAR (NYSE) in Sessions 3–4 once the pipeline is confirmed working. This provides full coverage of the momentum/small-cap day trading universe across both major exchanges. NYSE Arca (`ARCX.PILLAR`) added later only if specifically needed (SPY and many ETFs route through XNYS). Two datasets use 2 of the 10-session Standard plan limit.
+### MD-21.5-3: Dataset Selection → **EQUS.MINI (Consolidated US Equities)**
+~~XNAS.ITCH first, add XNYS.PILLAR later~~ — **Superseded by DEC-237.** Databento Standard plan ($199/mo) provides live streaming for **EQUS.MINI only**. Individual exchange datasets (XNAS.ITCH, XNYS.PILLAR) require the Plus tier ($1,399/mo). EQUS.MINI is the Databento US Equities Mini consolidated feed covering **all US equities** (Nasdaq + NYSE + regional exchanges) in a single dataset. One dataset = 1 of 10 allowed concurrent sessions. L0 + L1 schemas available (ohlcv-1m, trades, tbbo). This provides everything all four strategies need.
+
+**Session 1 discovery:** Attempted XNAS.ITCH connection returned "A live data license is required to access XNAS.ITCH" — confirming Standard plan's live coverage is EQUS.MINI only.
 
 ### MD-21.5-4: Config File Strategy → **Separate `system_live.yaml`**
 Create `config/system_live.yaml` for Databento + IBKR. Original `system.yaml` retained as Alpaca incubator config. `--config` CLI flag selects.
@@ -65,9 +67,9 @@ Sessions 5 and 10 confirm all four strategies work with real data (without execu
 
 | Session | Focus | Deliverable |
 |---------|-------|-------------|
-| 1 | Databento account setup + basic connection | API key configured, DatabentoDataService connects, receives raw records, logs first data |
-| 2 | Data flow validation | CandleEvents published to EventBus, IndicatorEngine computes VWAP/ATR/SMA/RVOL on live bars, verify timestamps and symbol normalization |
-| 3 | Scanner + watchlist + NYSE dataset | DatabentoScanner produces gap watchlist at market open. Add XNYS.PILLAR dataset for full exchange coverage. Verify both datasets stream concurrently. |
+| 1 ✅ | Databento account setup + basic connection | API key configured, `system_live.yaml` created, config switching works, IBKR paper connection verified. **XNAS.ITCH license error discovered → DEC-237 filed, dataset must be EQUS.MINI.** |
+| 2 | EQUS.MINI live streaming + data flow validation | Switch to EQUS.MINI dataset. Establish live streaming. CandleEvents published to EventBus, IndicatorEngine computes VWAP/ATR/SMA/RVOL on live bars, verify timestamps and symbol normalization. |
+| 3 | Scanner + watchlist deep validation | DatabentoScanner produces gap watchlist at market open using EQUS.MINI data. Verify gap calculation accuracy, watchlist timing, both Nasdaq and NYSE stocks represented in results, edge cases (low-gap days, pre-market data availability). |
 | 4 | Strategy signal generation (all 4, data only) | All four strategies receive data, track state machines, generate (or correctly don't generate) signals. No execution — broker can fail gracefully. Fix any bugs. |
 | 5 | Multi-strategy cross-validation | Cross-strategy interactions with real data: ALLOW_ALL policy, Risk Manager cross-checks, allocation caps. Verify EventBus routing to all strategies (DEC-125). |
 
@@ -118,7 +120,7 @@ Each prompt below is designed to be copy-pasted directly into a **new Claude Cod
 
 ---
 
-### Session 1: Databento Account Setup + Basic Connection
+### Session 1: Databento Account Setup + Basic Connection ✅ COMPLETE
 
 ```
 # ARGUS Sprint 21.5 — Session 1: Databento Basic Connection
@@ -138,7 +140,7 @@ Sprint 21.5 is the live integration sprint. We're connecting ARGUS to real Datab
 2. Create `.env.example` documenting all required environment variables (DATABENTO_API_KEY, IBKR_HOST, IBKR_PORT, IBKR_CLIENT_ID, ARGUS_JWT_SECRET, ARGUS_PASSWORD_HASH)
 3. Add `--config` CLI flag to main.py if not already present (check first)
 4. Add `python-dotenv` to requirements if not present, wire `.env` loading into main.py startup
-5. Start the system with `--config system_live.yaml` and attempt to connect DatabentoDataService to the live Databento API
+5. Start the system with `--config config/system_live.yaml` and attempt to connect DatabentoDataService to the live Databento API
 6. Initial dataset: XNAS.ITCH (Nasdaq TotalView-ITCH). Configured in `config/databento.yaml`.
 7. Debug and fix any connection issues (authentication, dataset selection, session creation)
 8. Verify: raw Databento records are being received and logged. We don't need them fully processed yet — just confirm the connection works and data flows.
@@ -153,46 +155,77 @@ Sprint 21.5 is the live integration sprint. We're connecting ARGUS to real Datab
 ## Definition of Done
 - `system_live.yaml` exists with databento data source configured
 - `.env.example` exists documenting required env vars
-- System starts without crash using `--config system_live.yaml`
+- System starts without crash using `--config config/system_live.yaml`
 - DatabentoDataService connects to Databento API with XNAS.ITCH dataset
 - Raw data records appear in logs (even if not yet fully processed)
 - Any connection errors are diagnosed and fixed
 - Commit: `feat(integration): databento live connection + system_live config`
 ```
 
+**Session 1 Outcome:**
+- ✅ `config/system_live.yaml` created (`data_source: databento`, `broker_source: ibkr`)
+- ✅ `.env.example` created with all env vars documented
+- ✅ `--config` CLI flag updated (detects file vs directory paths)
+- ✅ IBKR paper trading connection verified (account equity: $1,000,345)
+- ✅ Databento API key validated (historical API works)
+- ⚠️ **Live streaming failed:** "A live data license is required to access XNAS.ITCH"
+- **Root cause (DEC-237):** Standard plan ($199/mo) only provides live streaming for EQUS.MINI (consolidated US equities). Individual exchange datasets (XNAS.ITCH, XNYS.PILLAR) require Plus tier ($1,399/mo).
+- **Fix:** Switch to EQUS.MINI dataset in Session 2.
+- Commit: `7eab4a5` — `feat(integration): databento live connection + system_live config`
+
 ---
 
-### Session 2: Data Flow Validation
+### Session 2: EQUS.MINI Live Streaming + Data Flow Validation
 
 ```
-# ARGUS Sprint 21.5 — Session 2: Databento Data Flow Validation
+# ARGUS Sprint 21.5 — Session 2: EQUS.MINI Live Streaming + Data Flow Validation
 
 ## Context
-Read CLAUDE.md for full project context. Sprint 21.5 Session 1 established basic Databento connection. Raw records are flowing from XNAS.ITCH dataset.
+Read CLAUDE.md for full project context. Sprint 21.5 Session 1 established basic Databento connection and config infrastructure, but live streaming failed because the Standard plan only covers EQUS.MINI — not individual exchange datasets like XNAS.ITCH (DEC-237).
 
 ## What Session 1 Accomplished
-- `system_live.yaml` created with `data_source: databento`
-- `.env` / `.env.example` set up with DATABENTO_API_KEY
-- DatabentoDataService connects to Databento API and receives raw records
-- [Note any specific issues found/fixed in Session 1]
+- `config/system_live.yaml` created with `data_source: databento`, `broker_source: ibkr`
+- `.env` / `.env.example` set up with all required env vars
+- `--config` CLI flag works (file path detection)
+- IBKR paper trading connection verified (account equity: $1,000,345)
+- Databento API key valid for historical data
+- Live streaming on XNAS.ITCH returned license error — Standard plan provides EQUS.MINI only (DEC-237)
 
 ## Goals for This Session
-1. Verify databento_utils.py `normalize_databento_df()` correctly processes live records (timestamp normalization, column mapping, UTC handling)
-2. Verify CandleEvents are published to EventBus with correct symbol, OHLCV data, and timestamps
-3. Verify IndicatorEngine receives CandleEvents and computes indicators:
+
+### Priority 1: Establish Live Streaming on EQUS.MINI
+1. Update `config/databento.yaml` to use `EQUS.MINI` dataset instead of `XNAS.ITCH`
+   - EQUS.MINI is the Databento US Equities Mini consolidated feed
+   - Covers ALL US equities (Nasdaq + NYSE + regional exchanges) in a single dataset
+   - Available schemas on Standard: L0 (ohlcv-1m, trades, statistics) and L1 (tbbo, bbo-1m)
+   - Uses 1 of 10 allowed concurrent sessions
+2. Update any hardcoded dataset references in `argus/data/databento_data_service.py` if XNAS.ITCH was embedded there
+3. Start the system with `--config config/system_live.yaml` and verify live streaming connects
+4. Confirm raw Databento records are received and logged
+
+### Priority 2: Validate Data Flow Pipeline
+5. Verify `databento_utils.py` `normalize_databento_df()` correctly processes live EQUS.MINI records
+   - Timestamp normalization (ts_event → timestamp, UTC handling)
+   - Column mapping (OHLCV fields)
+   - Symbol normalization (verify EQUS.MINI symbol format matches what strategies expect)
+6. Verify CandleEvents are published to EventBus with correct symbol, OHLCV data, and timestamps
+7. Verify IndicatorEngine receives CandleEvents and computes indicators:
    - VWAP (should reset daily, accumulate intraday)
    - ATR-14 (should have meaningful values after warmup period)
    - SMA-9, SMA-20, SMA-50
    - RVOL (relative volume vs historical average)
-4. Verify IndicatorEvents are published with correct values
-5. Compare a few data points against Databento's web dashboard or another source to confirm accuracy
-6. Fix any issues with data normalization, timestamp handling, or indicator computation
+8. Verify IndicatorEvents are published with correct values
+9. Compare a few data points against a reference source (Databento web dashboard, TradingView) to confirm accuracy
+
+### Important: EQUS.MINI vs Exchange-Specific Datasets
+EQUS.MINI is a consolidated feed — it shows the national best bid/offer and consolidated trades across all exchanges. This is different from XNAS.ITCH (which showed only Nasdaq's order book). For our L1 strategies, consolidated data is exactly what we need — it shows the actual prices traders see. The only difference from the original plan is that we won't see per-exchange order book depth (which would have required Plus tier anyway per DEC-237).
 
 ## Key Files
 - `argus/data/databento_data_service.py`
 - `argus/data/databento_utils.py`
 - `argus/data/indicator_engine.py`
 - `argus/core/event_bus.py`
+- `config/databento.yaml` — DATASET CHANGE HERE
 
 ## Testing Approach
 - Start system during market hours (or use Databento's replay/historical API if outside market hours)
@@ -200,62 +233,71 @@ Read CLAUDE.md for full project context. Sprint 21.5 Session 1 established basic
 - Spot-check: pick 2-3 symbols, compare VWAP/SMA values against a reference (Databento dashboard, TradingView, etc.)
 
 ## Definition of Done
+- `config/databento.yaml` updated to use EQUS.MINI dataset
+- DatabentoDataService connects and receives live streaming data
 - CandleEvents flowing through EventBus with correct data
 - All 5 indicators computing without errors
 - Spot-check confirms indicator values are in the right ballpark (within 0.1% for VWAP/SMA)
 - No crashes or unhandled exceptions during 30+ minutes of data flow
-- Commit: `fix(integration): databento data flow validation + indicator fixes`
+- Commit: `fix(integration): switch to EQUS.MINI dataset + data flow validation`
 ```
 
 ---
 
-### Session 3: Scanner + Watchlist + NYSE Dataset
+### Session 3: Scanner + Watchlist Deep Validation
 
 ```
-# ARGUS Sprint 21.5 — Session 3: Scanner + Watchlist + NYSE Dataset
+# ARGUS Sprint 21.5 — Session 3: Scanner + Watchlist Validation
 
 ## Context
-Read CLAUDE.md for full project context. Sprint 21.5, Session 2 confirmed Databento data flows correctly through EventBus and IndicatorEngine on the XNAS.ITCH (Nasdaq) dataset.
+Read CLAUDE.md for full project context. Sprint 21.5, Session 2 switched to EQUS.MINI dataset and validated data flow through EventBus and IndicatorEngine. EQUS.MINI is a consolidated feed covering all US equities (Nasdaq + NYSE + regional) in a single dataset.
 
 ## What Sessions 1-2 Accomplished
-- DatabentoDataService connects and streams live Nasdaq data
+- `system_live.yaml` and `.env` infrastructure established
+- EQUS.MINI dataset configured (replacing XNAS.ITCH per DEC-237)
+- DatabentoDataService connects and streams live consolidated market data
 - CandleEvents published correctly, IndicatorEngine computes all indicators
-- [Note any specific issues found/fixed]
+- [Note any specific issues found/fixed in Session 2]
 
 ## Goals for This Session
-1. Add XNYS.PILLAR (NYSE) dataset to Databento configuration
-   - Update `config/databento.yaml` to include both XNAS.ITCH and XNYS.PILLAR
-   - Verify DatabentoDataService can subscribe to multiple datasets concurrently
-   - Confirm both datasets stream data without conflicts (symbol collisions, timestamp interleaving)
-   - This uses 2 of the 10 allowed concurrent sessions on the Standard plan
-2. Verify DatabentoScanner produces a gap watchlist at/before market open
-   - Check: symbols with gap >= min_gap_pct (2.0%) appear from BOTH exchanges
+1. Verify DatabentoScanner produces a gap watchlist at/before market open using EQUS.MINI data
+   - Check: symbols with gap >= min_gap_pct (2.0%) appear in watchlist
+   - Check: watchlist includes stocks from BOTH Nasdaq and NYSE (EQUS.MINI covers both)
    - Check: symbols below min_price are filtered out
    - Check: watchlist is published before 9:35 AM ET (ORB earliest_entry)
+2. Validate gap calculation accuracy:
+   - Gap = (current_open - prev_close) / prev_close
+   - Confirm DatabentoScanner has access to previous close data
+   - Cross-reference 3-5 watchlist stocks against TradingView/Finviz to confirm gap percentages match
 3. Verify Orchestrator pre-market routine receives the watchlist and distributes to strategies
 4. Verify strategies subscribe to the correct symbols for data streaming
-5. If outside market hours: use DataFetcher to pull Databento historical data for a recent date and simulate the scanner flow (also tests the historical data pipeline)
+5. Test edge cases:
+   - What happens on a low-gap day (few or zero stocks gap > 2%)?
+   - What happens if scanner runs before sufficient pre-market data is available?
+   - Are halted/suspended stocks correctly excluded?
+6. If outside market hours: use DataFetcher to pull Databento historical data for a recent date and simulate the scanner flow (also tests the historical data pipeline with Databento backend)
 
 ## Key Files
-- `argus/data/databento_data_service.py` — multi-dataset subscription
 - `argus/data/databento_scanner.py`
+- `argus/data/databento_data_service.py`
 - `argus/data/data_fetcher.py` (historical data + Databento backend)
 - `argus/core/orchestrator.py` (pre-market routine)
-- `config/databento.yaml` — dataset configuration
+- `config/databento.yaml`
 - `config/scanner.yaml`
 
 ## Important Notes
-- DatabentoScanner V1 is watchlist-based (DEC-137) — verify the watchlist config has symbols from both exchanges
-- Gap calculation requires previous close + current open. Confirm DatabentoScanner has access to both.
+- DatabentoScanner V1 is watchlist-based (DEC-137) — verify the watchlist config has appropriate symbols
+- Gap calculation requires previous close + current open. Confirm DatabentoScanner has access to both via EQUS.MINI.
 - If running outside market hours, historical mode testing is equally valuable.
-- Watch for: symbol format differences between XNAS and XNYS, duplicate symbol handling if a symbol appears on both
+- Watch for: symbol format differences between scanner output and strategy expectations
 
 ## Definition of Done
-- Both XNAS.ITCH and XNYS.PILLAR streaming concurrently without errors
-- Scanner produces a non-empty watchlist of gapped stocks from both exchanges
-- Watchlist distributed to strategies via Orchestrator
+- Scanner produces a non-empty watchlist of gapped stocks (both Nasdaq and NYSE-listed)
+- Gap percentages verified against external reference (3-5 stocks spot-checked)
+- Watchlist distributed to strategies via Orchestrator pre-market routine
 - Historical data fetch from Databento works correctly (Parquet cache populated)
-- Commit: `feat(integration): NYSE dataset + scanner live validation`
+- Edge cases documented (low-gap day behavior, timing)
+- Commit: `fix(integration): scanner + watchlist live validation`
 ```
 
 ---
@@ -266,13 +308,13 @@ Read CLAUDE.md for full project context. Sprint 21.5, Session 2 confirmed Databe
 # ARGUS Sprint 21.5 — Session 4: All Strategy Live Signals (Data Only)
 
 ## Context
-Read CLAUDE.md for full project context. Sprint 21.5, Sessions 1-3 established Databento data flow (Nasdaq + NYSE) and scanner. This session tests all four strategies with real data — no execution yet.
+Read CLAUDE.md for full project context. Sprint 21.5, Sessions 1-3 established Databento data flow (EQUS.MINI consolidated feed covering all US equities) and scanner. This session tests all four strategies with real data — no execution yet.
 
 ## What Sessions 1-3 Accomplished
-- Full Databento data pipeline working: connection → normalization → EventBus → IndicatorEngine → indicators
-- Both XNAS.ITCH and XNYS.PILLAR datasets streaming concurrently
-- Scanner produces watchlist from both exchanges, distributed to strategies
-- [Note any specific issues]
+- Full Databento data pipeline working: connection → EQUS.MINI streaming → normalization → EventBus → IndicatorEngine → indicators
+- Scanner produces watchlist from consolidated feed (Nasdaq + NYSE stocks)
+- Watchlist distributed to strategies via Orchestrator
+- [Note any specific issues found/fixed]
 
 ## Goals for This Session
 1. Enable all four strategies in `system_live.yaml`
@@ -318,7 +360,7 @@ Read CLAUDE.md for full project context. Sprint 21.5, Sessions 1-3 established D
 Read CLAUDE.md for full project context. Sprint 21.5, Session 4 validated all four strategies individually with real data. This session focuses on how they interact.
 
 ## What Sessions 1-4 Accomplished
-- Full data pipeline + scanner + all 4 strategies processing real Databento data
+- Full data pipeline + scanner + all 4 strategies processing real Databento data (EQUS.MINI consolidated feed)
 - [Specific findings from Session 4 — signals generated? state machine issues?]
 
 ## Goals for This Session
@@ -373,7 +415,7 @@ Read CLAUDE.md for full project context. Sprint 21.5 Phase B — connecting to I
    - Gateway Config → Settings → API → Enable ActiveX and Socket Clients
    - Socket port: 4002 (paper trading)
    - Trusted IPs: 127.0.0.1
-3. Start ARGUS with `--config system_live.yaml` and attempt IBKRBroker connection
+3. Start ARGUS with `--config config/system_live.yaml` and attempt IBKRBroker connection
 4. Debug connection issues (common: wrong port, client ID conflict, Gateway not in API mode, paper trading not enabled, firewall blocking localhost)
 5. Once connected, verify:
    - Account info retrieval (buying power, account value)
@@ -571,19 +613,19 @@ Read CLAUDE.md for full project context. Session 8 completed position management
 Read CLAUDE.md for full project context. Phase A (Databento, Sessions 1-5) and Phase B (IBKR, Sessions 6-9) are complete individually. This session combines both for the first time.
 
 ## What Has Been Accomplished
-- Databento: live streaming (XNAS + XNYS), indicators, scanner, all 4 strategies processing data correctly
+- Databento: EQUS.MINI live streaming (consolidated Nasdaq + NYSE + regional), indicators, scanner, all 4 strategies processing data correctly
 - IBKR: connection, bracket orders, position management, reconnection, state reconstruction
 - Each provider tested independently — this is the first combined test
 
 ## Goals for This Session
-1. Start ARGUS with `system_live.yaml` — BOTH Databento data AND IBKR execution active simultaneously
+1. Start ARGUS with `--config config/system_live.yaml` — BOTH Databento data AND IBKR execution active simultaneously
 2. Walk through the full 12-phase startup sequence and verify each phase:
    - Phase 1: Config loading (system_live.yaml)
    - Phase 2: Database initialization
    - Phase 3: Broker connection (IBKR paper)
    - Phase 4: Event Bus
    - Phase 5: Risk Manager
-   - Phase 6: Data Service (Databento — both datasets)
+   - Phase 6: Data Service (Databento — EQUS.MINI)
    - Phase 7: Scanner (Databento)
    - Phase 8: Strategies (all 4)
    - Phase 9: Order Manager
@@ -634,7 +676,7 @@ Read CLAUDE.md for full project context. This is THE milestone session — ARGUS
 - [ ] All four strategies enabled in config
 
 ## Goals for This Session
-1. Start ARGUS with `--config system_live.yaml` at least 15 minutes before market open (9:15 AM ET)
+1. Start ARGUS with `--config config/system_live.yaml` at least 15 minutes before market open (9:15 AM ET)
 2. Open Command Center in browser — verify Dashboard loads
 3. Monitor the full session across all strategy windows:
    - **Pre-market:** Watchlist generation, regime classification, allocation
@@ -758,7 +800,7 @@ Read CLAUDE.md for full project context. Core integration is complete (Sessions 
 3. Create a startup script (`scripts/start_live.sh` or similar) that:
    - Checks IB Gateway is running (exit with error if not)
    - Checks `.env` exists with required vars
-   - Starts ARGUS with `--config system_live.yaml`
+   - Starts ARGUS with `--config config/system_live.yaml`
    - Optionally starts the frontend dev server
    - Redirects logs to dated file (`logs/argus_YYYY-MM-DD.log`)
 4. Create a shutdown script (`scripts/stop_live.sh`) that:
@@ -839,7 +881,7 @@ Read CLAUDE.md for full project context. Final session of Sprint 21.5. Fix accum
    - Tick-level data: DEBUG only
    - Indicator computation: DEBUG only
 3. Update CLAUDE.md with:
-   - New commands (startup/shutdown scripts, `--config system_live.yaml`)
+   - New commands (startup/shutdown scripts, `--config config/system_live.yaml`)
    - Updated "Current State" reflecting live integration complete
    - Any new architectural rules discovered during integration
    - Databento + IBKR connection details
@@ -919,10 +961,13 @@ Sprint 21.5, Phase A (Sessions 1-5) — Databento live data integration.
 ## Context
 Read the project instructions for full ARGUS context. Sprint 21.5 is the live integration sprint, connecting the DatabentoDataService adapter (built in Sprint 12 against mocks) to the real Databento API, and validating data flow through the entire pipeline including all four strategies.
 
+## Key Discovery: DEC-237
+Session 1 revealed that the Standard plan ($199/mo) only provides live streaming for EQUS.MINI (consolidated US equities). Individual exchange datasets (XNAS.ITCH, XNYS.PILLAR) require the Plus tier ($1,399/mo). Session 2 switched to EQUS.MINI. This is a consolidated feed covering all US equities — functionally equivalent for L1 strategies.
+
 ## What Was Built/Changed in Sessions 1-5
 - `config/system_live.yaml` — new config file for Databento + IBKR operation
 - `.env.example` — documented environment variables
-- Databento multi-dataset support (XNAS.ITCH + XNYS.PILLAR)
+- Switched from XNAS.ITCH to EQUS.MINI dataset (DEC-237)
 - Fixes to `argus/data/databento_data_service.py` for live connection issues
 - Fixes to `argus/data/databento_utils.py` for real data normalization
 - Fixes to `argus/data/indicator_engine.py` for live indicator computation
@@ -931,14 +976,14 @@ Read the project instructions for full ARGUS context. Sprint 21.5 is the live in
 - Any new test additions
 
 ## Review Checklist
-1. **Data integrity**: Are CandleEvents correctly normalized? Timestamps correct? OHLCV values sensible?
-2. **Multi-dataset**: XNAS + XNYS streaming concurrently without conflicts?
+1. **Data integrity**: Are CandleEvents correctly normalized from EQUS.MINI? Timestamps correct? OHLCV values sensible?
+2. **EQUS.MINI compatibility**: Any issues from using consolidated feed vs exchange-specific? Symbol format differences?
 3. **Indicator accuracy**: VWAP, ATR, SMA values validated against reference source?
-4. **Scanner reliability**: Watchlist generated before strategy windows open? Both exchanges represented?
+4. **Scanner reliability**: Watchlist generated before strategy windows open? Both Nasdaq and NYSE stocks represented?
 5. **Strategy behavior**: All 4 state machines transitioning correctly with real data?
 6. **Cross-strategy**: ALLOW_ALL, allocation caps, risk checks working?
 7. **Error handling**: Graceful handling of data gaps, reconnection, malformed records?
-8. **Config management**: system_live.yaml clean? Secrets properly externalized?
+8. **Config management**: system_live.yaml clean? Secrets properly externalized? EQUS.MINI configured correctly?
 9. **Logging**: Appropriate levels? Useful for debugging without being noisy?
 
 ## Materials
@@ -1000,7 +1045,7 @@ Read the project instructions for full ARGUS context. This phase connected the I
 Sprint 21.5, Phase C (Sessions 10-12) — Full system integration with live data and paper execution, including the first live market session.
 
 ## Context
-Read the project instructions for full ARGUS context. This phase combined Databento data and IBKR execution for the first time, ran the first live market session with all four strategies, and validated the Command Center with real data.
+Read the project instructions for full ARGUS context. This phase combined Databento data (EQUS.MINI consolidated feed) and IBKR execution for the first time, ran the first live market session with all four strategies, and validated the Command Center with real data.
 
 ## What Was Built/Changed in Sessions 10-12
 - Combined Databento + IBKR startup sequence fixes
@@ -1038,11 +1083,13 @@ DEC-132 backtest re-validation is deliberately separated from Sprint 21.5. Full 
 
 **Scope preview:**
 1. Pull Databento historical data for all 28+ backtest symbols across 35 months
-2. Re-run VectorBT parameter sweeps with exchange-direct data
+2. Re-run VectorBT parameter sweeps with Databento data (EQUS.MINI historical or exchange-specific historical — Standard plan includes historical access to all datasets)
 3. Re-run walk-forward analysis for all 4 strategies
 4. Compare results against Alpaca-data baselines
 5. Adjust parameters if material differences found
 6. Update strategy specs and resolve DEC-132
+
+**Note on historical data:** While live streaming on Standard is limited to EQUS.MINI, historical data access includes exchange-specific datasets (XNAS.ITCH, XNYS.PILLAR) with 1-month lookback. For longer historical periods, EQUS.MINI historical data is available. Sprint 21.6 spec will determine the optimal data source for re-validation.
 
 **Timing:** Runs in parallel with Sprint 22 (AI Layer MVP). Estimated 6-8 sessions.
 
@@ -1061,7 +1108,7 @@ Updated queue:
 - **Sprint 21.5** (this sprint): Live Integration — Databento + IBKR
 - **Sprint 21.6** (parallel with 22): DEC-132 Backtest Re-Validation with Databento data
 - **Sprint 22**: AI Layer MVP (unchanged scope)
-- **Sprint 23+**: Unchanged
+- **Sprint 23+**: NLP Catalyst Pipeline + Pre-Market Engine (unchanged)
 
 ---
 
@@ -1083,23 +1130,22 @@ ARGUS_PASSWORD_HASH=<bcrypt-hash-for-api-login>
 
 ```bash
 # Live mode (Databento + IBKR paper)
-python -m argus.main --config system_live.yaml
+python -m argus.main --config config/system_live.yaml
 
 # Dev mode (mock data, no external connections)
 python -m argus.main --dev
 
 # Alpaca incubator mode (legacy)
-python -m argus.main --config system.yaml
+python -m argus.main --config config/system.yaml
 ```
 
-### Databento Datasets
+### Databento Dataset
 
-| Dataset | Exchange | Added In |
-|---------|----------|----------|
-| XNAS.ITCH | Nasdaq (TotalView-ITCH) | Session 1 |
-| XNYS.PILLAR | NYSE | Session 3 |
+| Dataset | Coverage | Sessions Used |
+|---------|----------|---------------|
+| EQUS.MINI | All US Equities (Nasdaq + NYSE + regional exchanges), consolidated L0 + L1 | 1 of 10 allowed |
 
-Uses 2 of 10 allowed concurrent sessions on Standard plan.
+Standard plan ($199/mo) live streaming covers EQUS.MINI only. Individual exchange datasets (XNAS.ITCH, XNYS.PILLAR, etc.) require Plus tier ($1,399/mo) for live streaming. Historical access to all datasets included on Standard (1-month lookback). See DEC-237.
 
 ### IBKR Paper Account Safety Checks
 
