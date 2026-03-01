@@ -677,11 +677,11 @@ def load_yaml_file(path: Path) -> dict[str, Any]:
     return data if data is not None else {}
 
 
-def load_config(config_dir: Path) -> ArgusConfig:
+def load_config(config_dir: Path, system_config_file: Path | None = None) -> ArgusConfig:
     """Load the complete Argus configuration from a directory of YAML files.
 
     Expected files in config_dir:
-        - system.yaml
+        - system.yaml (or override via system_config_file)
         - risk_limits.yaml
         - brokers.yaml
         - orchestrator.yaml
@@ -691,16 +691,23 @@ def load_config(config_dir: Path) -> ArgusConfig:
 
     Args:
         config_dir: Path to the configuration directory.
+        system_config_file: Optional path to a specific system config file.
+            If provided, this file is used instead of config_dir/system.yaml.
+            Useful for switching between profiles (e.g., system_live.yaml).
 
     Returns:
         Validated ArgusConfig instance.
 
     Raises:
-        FileNotFoundError: If config_dir does not exist.
+        FileNotFoundError: If config_dir does not exist or system_config_file
+            is specified but does not exist.
         pydantic.ValidationError: If any config value fails validation.
     """
     if not config_dir.exists():
         raise FileNotFoundError(f"Config directory not found: {config_dir}")
+
+    if system_config_file is not None and not system_config_file.exists():
+        raise FileNotFoundError(f"System config file not found: {system_config_file}")
 
     raw: dict[str, Any] = {}
 
@@ -713,9 +720,13 @@ def load_config(config_dir: Path) -> ArgusConfig:
     }
 
     for key, filename in file_mapping.items():
-        filepath = config_dir / filename
-        if filepath.exists():
-            raw[key] = load_yaml_file(filepath)
+        # Use custom system config file if provided
+        if key == "system" and system_config_file is not None:
+            raw[key] = load_yaml_file(system_config_file)
+        else:
+            filepath = config_dir / filename
+            if filepath.exists():
+                raw[key] = load_yaml_file(filepath)
 
     return ArgusConfig(**raw)
 

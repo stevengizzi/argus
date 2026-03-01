@@ -3,11 +3,16 @@
 Wires all components together and runs the event loop.
 
 Usage:
-    python -m argus.main                    # Default: config/ directory
-    python -m argus.main --config /path/to  # Custom config directory
-    python -m argus.main --paper            # Force paper trading (default)
-    python -m argus.main --dry-run          # Start, connect, but don't trade
-    python -m argus.main --no-api           # Disable Command Center API server
+    python -m argus.main                              # Default: config/ directory
+    python -m argus.main --config /path/to/           # Custom config directory
+    python -m argus.main --config config/system_live.yaml  # Specific system config
+    python -m argus.main --paper                      # Force paper trading (default)
+    python -m argus.main --dry-run                    # Start, connect, but don't trade
+    python -m argus.main --no-api                     # Disable Command Center API server
+
+System profiles:
+    - config/system.yaml      — Alpaca/simulated (development/incubator)
+    - config/system_live.yaml — Databento + IBKR (live integration)
 """
 
 from __future__ import annotations
@@ -74,17 +79,26 @@ logger = logging.getLogger(__name__)
 class ArgusSystem:
     """Top-level system container. Owns all components and their lifecycle."""
 
-    def __init__(self, config_dir: Path, dry_run: bool = False, enable_api: bool = True) -> None:
+    def __init__(
+        self,
+        config_dir: Path,
+        dry_run: bool = False,
+        enable_api: bool = True,
+        system_config_file: Path | None = None,
+    ) -> None:
         """Initialize the Argus system.
 
         Args:
             config_dir: Path to configuration directory.
             dry_run: If True, connect but don't stream data or trade.
             enable_api: If True, start the Command Center API server.
+            system_config_file: Optional path to a specific system config file.
+                If provided, this file is used instead of config_dir/system.yaml.
         """
         self._config_dir = config_dir
         self._dry_run = dry_run
         self._enable_api = enable_api
+        self._system_config_file = system_config_file
         self._shutdown_event = asyncio.Event()
 
         # Components (initialized in start())
@@ -125,7 +139,7 @@ class ArgusSystem:
 
         # --- Phase 1: Foundation ---
         logger.info("[1/12] Loading configuration...")
-        config = load_config(self._config_dir)
+        config = load_config(self._config_dir, self._system_config_file)
         self._config = config
 
         self._clock = SystemClock()
@@ -202,8 +216,8 @@ class ArgusSystem:
             self._data_service = DatabentoDataService(
                 event_bus=self._event_bus,
                 config=config.broker.databento,
+                data_config=data_config,
                 clock=self._clock,
-                health_monitor=self._health_monitor,
             )
         else:
             logger.info("Using Alpaca data service")
@@ -713,7 +727,12 @@ def parse_args() -> argparse.Namespace:
         "--config",
         type=Path,
         default=Path("config"),
-        help="Path to configuration directory (default: config/)",
+        help=(
+            "Path to configuration directory OR a specific system config file. "
+            "If a .yaml file is provided (e.g., config/system_live.yaml), "
+            "that file is used as the system config and the parent directory "
+            "is used for other config files. (default: config/)"
+        ),
     )
     parser.add_argument(
         "--paper",
@@ -743,12 +762,27 @@ def main() -> None:
     # Set up logging first
     setup_logging(log_level="INFO")
 
-    logger.info("Argus starting with config from: %s", args.config)
+    # Detect if --config is a file or directory
+    config_path = args.config
+    system_config_file: Path | None = None
+
+    if config_path.suffix in (".yaml", ".yml"):
+        # --config points to a specific system config file
+        system_config_file = config_path
+        config_dir = config_path.parent
+        logger.info(
+            "Argus starting with system config: %s (dir: %s)", system_config_file, config_dir
+        )
+    else:
+        # --config points to a directory
+        config_dir = config_path
+        logger.info("Argus starting with config from: %s", config_dir)
 
     system = ArgusSystem(
-        config_dir=args.config,
+        config_dir=config_dir,
         dry_run=args.dry_run,
         enable_api=not args.no_api,
+        system_config_file=system_config_file,
     )
 
     loop = asyncio.new_event_loop()

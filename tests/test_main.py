@@ -367,7 +367,8 @@ class TestArgusSystemWiring:
             with contextlib.suppress(Exception):
                 await system.start()
 
-            mock_load_config.assert_called_once_with(mock_config_dir)
+            # load_config now takes (config_dir, system_config_file)
+            mock_load_config.assert_called_once_with(mock_config_dir, None)
 
     def test_parse_args_defaults(self) -> None:
         """Parse args returns correct defaults."""

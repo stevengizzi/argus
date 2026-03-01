@@ -1,0 +1,64 @@
+# Argus System Configuration — LIVE MODE
+# Uses Databento (market data) + IBKR (execution)
+#
+# Usage: python -m argus.main --config config/system_live.yaml
+#
+# IMPORTANT: This is for live integration testing. IBKR is configured for
+# PAPER TRADING (port 4002). Do NOT change to port 4001 without explicit
+# confirmation from the operator.
+
+timezone: "America/New_York"
+market_open: "09:30"
+market_close: "16:00"
+log_level: "INFO"
+heartbeat_interval_seconds: 60
+data_dir: "data"
+
+# Data source: "databento" for live market data (DEC-082)
+data_source: "databento"
+
+# Broker source: "ibkr" for IBKR paper trading (DEC-083)
+broker_source: "ibkr"
+
+# Interactive Brokers configuration (Sprint 13 — production execution)
+# See DEC-083: IBKR Pro for live execution, no PFOF
+ibkr:
+  # Connection settings — IB Gateway on localhost
+  host: "127.0.0.1"
+  port: 4002  # 4001=live, 4002=paper. USE 4002 FOR PAPER TRADING.
+  client_id: 1
+  account: ""  # IBKR account ID — auto-detected from connection
+  timeout_seconds: 30.0
+  readonly: false
+
+  # Reconnection settings
+  reconnect_max_retries: 10
+  reconnect_base_delay_seconds: 1.0
+  reconnect_max_delay_seconds: 60.0
+
+  # Operational safety — IBKR limit is 50 orders/sec, leave headroom
+  max_order_rate_per_second: 45.0
+
+health:
+  heartbeat_interval_seconds: 60
+  heartbeat_url_env: "HEALTHCHECKS_PING_URL"
+  alert_webhook_url_env: "DISCORD_WEBHOOK_URL"
+  daily_check_enabled: true
+  weekly_reconciliation_enabled: true
+
+# Command Center API (Sprint 14 — DEC-099)
+api:
+  enabled: true
+  host: "0.0.0.0"
+  port: 8000
+  password_hash: ""  # Run: python -m argus.api.setup_password
+  jwt_secret_env: "ARGUS_JWT_SECRET"
+  jwt_expiry_hours: 24
+  cors_origins:
+    - "http://localhost:5173"
+  ws_heartbeat_interval_seconds: 30
+  ws_tick_throttle_ms: 1000
+
+# Goal tracking (Sprint 21d — DEC-214)
+goals:
+  monthly_target_usd: 5000
