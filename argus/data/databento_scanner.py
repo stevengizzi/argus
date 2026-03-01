@@ -43,7 +43,7 @@ class DatabentoScannerConfig:
         max_price: float = 500.0,
         min_volume: int = 1_000_000,
         max_symbols_returned: int = 10,
-        dataset: str = "XNAS.ITCH",
+        dataset: str = "EQUS.MINI",  # DEC-237: Standard plan
     ) -> None:
         self.universe_symbols = universe_symbols or []
         self.min_gap_pct = min_gap_pct

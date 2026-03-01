@@ -26,7 +26,7 @@ class TestDatabentoScannerConfig:
         assert config.max_price == 500.0
         assert config.min_volume == 1_000_000
         assert config.max_symbols_returned == 10
-        assert config.dataset == "XNAS.ITCH"
+        assert config.dataset == "EQUS.MINI"  # DEC-237: Standard plan default
 
     def test_custom_config(self) -> None:
         """Test custom configuration values."""

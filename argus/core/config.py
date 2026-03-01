@@ -220,8 +220,8 @@ class DatabentoConfig(BaseModel):
     api_key_env_var: str = "DATABENTO_API_KEY"
 
     # Dataset selection — determines which exchange feeds are included
-    # XNAS.ITCH = Nasdaq TotalView-ITCH (recommended for trading firms)
-    dataset: str = "XNAS.ITCH"
+    # EQUS.MINI = US Equities Mini consolidated feed (Standard plan — DEC-237)
+    dataset: str = "EQUS.MINI"
 
     # Schema subscriptions for live streaming
     bar_schema: str = "ohlcv-1m"  # Completed 1-minute OHLCV bars → CandleEvents
@@ -252,7 +252,12 @@ class DatabentoConfig(BaseModel):
     def validate_dataset(cls, v: str) -> str:
         """Validate dataset is a known Databento US equities dataset."""
         known_datasets = {
-            "XNAS.ITCH",  # Nasdaq TotalView-ITCH (primary recommendation)
+            # Consolidated feeds (preferred for Standard plan — DEC-237)
+            "EQUS.MINI",  # US Equities Mini — consolidated feed (Standard plan)
+            "EQUS.MAX",  # US Equities Max — all exchanges (Plus/Pro)
+            "EQUS.SUMMARY",  # Consolidated summary (delayed)
+            # Exchange-specific feeds (require Plus tier or higher)
+            "XNAS.ITCH",  # Nasdaq TotalView-ITCH
             "XNAS.BASIC",  # Nasdaq Basic with NLS Plus
             "XNYS.PILLAR",  # NYSE Integrated
             "ARCX.PILLAR",  # NYSE Arca Integrated
@@ -262,7 +267,6 @@ class DatabentoConfig(BaseModel):
             "XPSX.ITCH",  # Nasdaq PSX TotalView-ITCH
             "XCHI.PILLAR",  # NYSE Chicago Integrated
             "XCIS.TRADESBBO",  # NYSE National Trades and BBO
-            "EQUS.SUMMARY",  # Consolidated summary (delayed)
         }
         if v not in known_datasets:
             raise ValueError(f"Unknown dataset '{v}'. Known datasets: {sorted(known_datasets)}")

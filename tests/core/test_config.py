@@ -244,7 +244,7 @@ class TestDatabentoConfig:
         config = DatabentoConfig()
         assert config.enabled is True
         assert config.api_key_env_var == "DATABENTO_API_KEY"
-        assert config.dataset == "XNAS.ITCH"
+        assert config.dataset == "EQUS.MINI"  # DEC-237: Standard plan default
         assert config.bar_schema == "ohlcv-1m"
         assert config.trade_schema == "trades"
         assert config.depth_schema == "mbp-10"
@@ -329,11 +329,16 @@ class TestDatabentoConfig:
         config = BrokerConfig()
         assert hasattr(config, "databento")
         assert isinstance(config.databento, DatabentoConfig)
-        assert config.databento.dataset == "XNAS.ITCH"
+        assert config.databento.dataset == "EQUS.MINI"  # DEC-237: Standard plan default
 
     def test_all_known_datasets_validate(self) -> None:
         """All documented datasets pass validation."""
         known_datasets = [
+            # Consolidated feeds (DEC-237)
+            "EQUS.MINI",  # Standard plan
+            "EQUS.MAX",  # Plus/Pro
+            "EQUS.SUMMARY",
+            # Exchange-specific feeds
             "XNAS.ITCH",
             "XNAS.BASIC",
             "XNYS.PILLAR",
@@ -344,7 +349,6 @@ class TestDatabentoConfig:
             "XPSX.ITCH",
             "XCHI.PILLAR",
             "XCIS.TRADESBBO",
-            "EQUS.SUMMARY",
         ]
         for dataset in known_datasets:
             config = DatabentoConfig(dataset=dataset)

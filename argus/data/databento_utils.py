@@ -10,14 +10,15 @@ import pandas as pd
 def normalize_databento_df(df: pd.DataFrame) -> pd.DataFrame:
     """Normalize Databento DataFrame to ARGUS standard schema.
 
-    Databento's to_df() returns columns like:
-        ts_event, rtype, publisher_id, instrument_id, open, high, low, close, volume, ...
+    Databento's to_df() returns data with:
+        - ts_event as the index (datetime)
+        - Columns: rtype, publisher_id, instrument_id, open, high, low, close, volume, symbol
 
     ARGUS standard schema:
         timestamp, open, high, low, close, volume
 
     This function:
-    1. Selects and renames ts_event → timestamp
+    1. Extracts ts_event from index (or column if present) → timestamp
     2. Ensures timestamps are UTC-aware
     3. Sorts by timestamp
     4. Resets index
@@ -37,8 +38,21 @@ def normalize_databento_df(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
         return pd.DataFrame(columns=["timestamp", "open", "high", "low", "close", "volume"])
 
-    result = df[["ts_event", "open", "high", "low", "close", "volume"]].copy()
-    result = result.rename(columns={"ts_event": "timestamp"})
+    # Handle both cases: ts_event as index or as column
+    if "ts_event" in df.columns:
+        # ts_event is a column (older library versions or different methods)
+        result = df[["ts_event", "open", "high", "low", "close", "volume"]].copy()
+        result = result.rename(columns={"ts_event": "timestamp"})
+    elif df.index.name == "ts_event":
+        # ts_event is the index (current library behavior)
+        result = df[["open", "high", "low", "close", "volume"]].copy()
+        result = result.reset_index()
+        result = result.rename(columns={"ts_event": "timestamp"})
+    else:
+        # Fallback: try to use the index as timestamp if it's datetime-like
+        result = df[["open", "high", "low", "close", "volume"]].copy()
+        result = result.reset_index()
+        result.columns = ["timestamp", "open", "high", "low", "close", "volume"]
 
     # Ensure UTC-aware timestamps
     if result["timestamp"].dt.tz is None:

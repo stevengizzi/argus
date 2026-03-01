@@ -28,15 +28,18 @@ alpaca:
 
 # Databento market data (Sprint 12 — primary production data source)
 # See DEC-082: Databento US Equities Standard ($199/mo)
+# See DEC-237: Standard plan provides EQUS.MINI (consolidated), not exchange-specific feeds
 databento:
   enabled: true
   api_key_env_var: "DATABENTO_API_KEY"  # Env var name (not the key itself!)
 
   # Dataset selection — determines which exchange feeds are included
-  # - XNAS.ITCH: Nasdaq TotalView-ITCH (recommended for equities)
-  # - XNYS.PILLAR: NYSE Integrated
-  # - DBEQ.BASIC: Databento Equities Basic (free tier, limited)
-  dataset: "XNAS.ITCH"
+  # EQUS.MINI: US Equities Mini consolidated feed (Standard plan — DEC-237)
+  #   - Covers ALL US equities (Nasdaq + NYSE + regional exchanges)
+  #   - Available schemas: L0 (ohlcv-1m, trades, statistics), L1 (tbbo, bbo-1m)
+  #   - Single consolidated feed showing national best prices
+  # Exchange-specific feeds (XNAS.ITCH, XNYS.PILLAR) require Plus tier or higher
+  dataset: "EQUS.MINI"
 
   # Schema subscriptions for live streaming
   bar_schema: "ohlcv-1m"     # Completed 1-minute OHLCV bars → CandleEvents

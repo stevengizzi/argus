@@ -40,8 +40,8 @@ class DataFetcherConfig(BaseModel):
     # Data source selection
     source: str = Field(default="alpaca", pattern=r"^(alpaca|databento)$")
 
-    # Databento-specific settings
-    databento_dataset: str = "XNAS.ITCH"
+    # Databento-specific settings (DEC-237: EQUS.MINI for Standard plan)
+    databento_dataset: str = "EQUS.MINI"
     databento_cache_dir: Path = Path("data/databento_cache")
 
 
