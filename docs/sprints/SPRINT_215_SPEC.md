@@ -300,6 +300,27 @@ Read CLAUDE.md for full project context. Sprint 21.5, Session 2 switched to EQUS
 - Commit: `fix(integration): scanner + watchlist live validation`
 ```
 
+**Session 3 Outcome (March 1, 2026):**
+- ✅ Fixed scanner.yaml: changed dataset from `XNAS.ITCH` to `EQUS.MINI` per DEC-237
+- ✅ Implemented proper gap calculation in `DatabentoScanner.scan_with_gap_data()`:
+  - Fetches 7 days of daily bars (accounts for weekends/holidays)
+  - Computes gap = (today_open - prev_close) / prev_close
+  - Added `reference_date` parameter for historical testing
+  - Volume and price filters working
+- ✅ Updated `scan()` method to use `scan_with_gap_data()` with graceful fallback
+- ✅ Created test script at `scripts/test_databento_scanner.py`
+- ✅ Verified watchlist distribution: main.py correctly passes symbols to all strategies via `set_watchlist()`
+- **Test Results (Historical - Feb 27, 2026):**
+  - Gap scan found 2 candidates (min 1%): NFLX (-2.96%), META (-1.01%)
+  - AAPL gap was 0.13% (correctly below threshold)
+  - Strict filter tests (20% gap, price 100-200) correctly returned 0 candidates
+- **Edge Cases Documented:**
+  - Low-gap day: Falls back to static symbol list (all configured symbols with gap_pct=0)
+  - Data unavailable: API 422 error → graceful fallback to static list
+  - Halted stocks: No data returned by Databento → naturally excluded
+- All 15 existing DatabentoScanner tests pass
+- Commit: `fix(integration): scanner + watchlist live validation`
+
 ---
 
 ### Session 4: Strategy Signal Generation (All 4 Strategies)

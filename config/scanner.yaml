@@ -49,4 +49,4 @@ databento_scanner:
   max_price: 500.0
   min_volume: 1000000
   max_symbols_returned: 10
-  dataset: "XNAS.ITCH"
+  dataset: "EQUS.MINI"  # DEC-237: Consolidated US equities (Nasdaq + NYSE)

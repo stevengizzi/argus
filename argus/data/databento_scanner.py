@@ -113,11 +113,10 @@ class DatabentoScanner(Scanner):
 
         Strategy:
         1. Use the configured watchlist of symbols (V1 approach)
-        2. Query Databento for yesterday's closing prices
-        3. Query Databento for today's opening print
-        4. Compute gap_pct = (today_open - yesterday_close) / yesterday_close
-        5. Filter by min_gap_pct, min_price, max_price from config
-        6. Sort by gap_pct descending, return top N candidates
+        2. Query Databento for yesterday's closing prices and today's opens
+        3. Compute gap_pct = (today_open - yesterday_close) / yesterday_close
+        4. Filter by min_gap_pct, min_price, max_price from config
+        5. Sort by gap_pct descending, return top N candidates
 
         This runs ONCE per day, before market open.
 
@@ -133,63 +132,81 @@ class DatabentoScanner(Scanner):
             logger.warning("DatabentoScanner has no universe symbols configured")
             return []
 
-        candidates: list[WatchlistItem] = []
-
+        # Try to use full gap calculation with Databento data
         try:
-            # For V1, we do a simplified scan:
-            # - Use configured symbols
-            # - Return them as candidates with basic filtering
-            # Full gap computation would require actual API calls
-
-            for symbol in self._config.universe_symbols:
-                # V1: Create candidate without actual gap calculation
-                # Real implementation would fetch yesterday close and today open
-                item = WatchlistItem(
-                    symbol=symbol,
-                    gap_pct=0.0,  # Would be computed from real data
-                    premarket_volume=0,  # Would be fetched from real data
+            candidates = await self.scan_with_gap_data()
+            if candidates:
+                logger.info(
+                    "DatabentoScanner found %d candidates with gap data",
+                    len(candidates),
                 )
-                candidates.append(item)
-
-            # Limit to max_symbols_returned
-            candidates = candidates[: self._config.max_symbols_returned]
-
+                return candidates
         except Exception as e:
-            logger.error("DatabentoScanner error: %s", e)
-            return []
+            logger.warning(
+                "Gap data fetch failed, falling back to static list: %s", e
+            )
 
-        logger.info("DatabentoScanner found %d candidates", len(candidates))
+        # Fallback: return configured symbols without gap filtering
+        # (used when Databento API is unavailable or before market open)
+        logger.info("Using fallback static symbol list")
+        candidates = [
+            WatchlistItem(
+                symbol=symbol,
+                gap_pct=0.0,
+                premarket_volume=0,
+            )
+            for symbol in self._config.universe_symbols[: self._config.max_symbols_returned]
+        ]
+
+        logger.info("DatabentoScanner found %d candidates (fallback)", len(candidates))
         return candidates
 
-    async def scan_with_gap_data(self, symbols: list[str] | None = None) -> list[WatchlistItem]:
+    async def scan_with_gap_data(
+        self,
+        symbols: list[str] | None = None,
+        reference_date: datetime | None = None,
+    ) -> list[WatchlistItem]:
         """Scan with actual gap data from Databento (full implementation).
 
-        This method fetches real market data to compute gaps. Use this
-        when Databento subscription is active.
+        Computes gaps by fetching daily bars and comparing:
+        - Gap = (today's open - yesterday's close) / yesterday's close
+
+        For live pre-market scanning: reference_date should be today's date.
+        For historical testing: reference_date can be any past trading date.
 
         Args:
             symbols: Optional list of symbols to scan. If None, uses config.
+            reference_date: Date to compute gaps for. If None, uses current date.
 
         Returns:
-            List of WatchlistItems with computed gap data.
+            List of WatchlistItems with computed gap data, filtered and sorted.
         """
         target_symbols = symbols or self._config.universe_symbols
         if not target_symbols:
             return []
 
-        logger.info("Scanning %d symbols with gap data", len(target_symbols))
+        # Use provided reference date or current time
+        ref_date = reference_date or datetime.now(UTC)
+        ref_date_str = ref_date.strftime("%Y-%m-%d")
 
-        now = datetime.now(UTC)
-        yesterday = now - timedelta(days=1)
+        logger.info(
+            "Scanning %d symbols with gap data for %s",
+            len(target_symbols),
+            ref_date_str,
+        )
 
-        # Fetch yesterday's daily bars for closing prices
+        # Fetch 5 trading days of daily bars to ensure we have prev day's close and today's open
+        # (accounts for weekends/holidays)
+        start_date = ref_date - timedelta(days=7)
+        end_date = ref_date + timedelta(days=1)  # Exclusive end
+
         try:
             data = self._client.timeseries.get_range(
                 dataset=self._config.dataset,
                 symbols=target_symbols,
                 schema="ohlcv-1d",
-                start=yesterday.strftime("%Y-%m-%d"),
-                end=now.strftime("%Y-%m-%d"),
+                start=start_date.strftime("%Y-%m-%d"),
+                end=end_date.strftime("%Y-%m-%d"),
                 stype_in="raw_symbol",
             )
             df = data.to_df()
@@ -201,49 +218,89 @@ class DatabentoScanner(Scanner):
             logger.warning("No daily data returned from Databento")
             return []
 
+        # Reset index to get ts_event and symbol as columns
+        df = df.reset_index()
+
         candidates: list[WatchlistItem] = []
 
-        # Group by symbol and compute gap
+        # Process each symbol
         for symbol in target_symbols:
-            # Get symbol column, or fall back to index if multi-indexed DataFrame
-            if "symbol" in df.columns:
-                symbol_col = df["symbol"]
-            elif hasattr(df.index, "get_level_values"):
-                symbol_col = df.index.get_level_values(0)
-            else:
-                continue  # Cannot determine symbol column
+            try:
+                # Filter to this symbol
+                if "symbol" in df.columns:
+                    symbol_data = df[df["symbol"] == symbol].copy()
+                else:
+                    # Databento may use instrument_id instead
+                    continue
 
-            symbol_data = df[symbol_col == symbol]
-            if symbol_data.empty:
+                if symbol_data.empty or len(symbol_data) < 2:
+                    logger.debug("Insufficient data for %s (need 2+ days)", symbol)
+                    continue
+
+                # Sort by timestamp to ensure chronological order
+                symbol_data = symbol_data.sort_values("ts_event")
+
+                # Get the last two days
+                # Last row = reference date (today), second-to-last = previous day
+                today_row = symbol_data.iloc[-1]
+                prev_row = symbol_data.iloc[-2]
+
+                today_open = float(today_row["open"])
+                prev_close = float(prev_row["close"])
+
+                if prev_close <= 0:
+                    continue
+
+                # Compute gap percentage
+                gap_pct = (today_open - prev_close) / prev_close
+
+                # Apply filters
+                if abs(gap_pct) < self._config.min_gap_pct:
+                    continue
+                if prev_close < self._config.min_price:
+                    continue
+                if prev_close > self._config.max_price:
+                    continue
+
+                # Volume filter on previous day's volume
+                prev_volume = int(prev_row.get("volume", 0))
+                if prev_volume < self._config.min_volume:
+                    logger.debug(
+                        "%s filtered: volume %d < min %d",
+                        symbol,
+                        prev_volume,
+                        self._config.min_volume,
+                    )
+                    continue
+
+                item = WatchlistItem(
+                    symbol=symbol,
+                    gap_pct=gap_pct,
+                    premarket_volume=0,  # Would be populated from live trades in pre-market
+                )
+                candidates.append(item)
+
+                logger.debug(
+                    "%s: prev_close=%.2f, today_open=%.2f, gap=%.2f%%",
+                    symbol,
+                    prev_close,
+                    today_open,
+                    gap_pct * 100,
+                )
+
+            except (KeyError, IndexError, ValueError) as e:
+                logger.warning("Error processing %s: %s", symbol, e)
                 continue
 
-            # Get yesterday's close and today's open (if available)
-            prev_close = float(symbol_data.iloc[-1]["close"])
-
-            # For gap calculation, we'd need today's opening price
-            # This is a simplified version - real implementation would
-            # use intraday data or snapshot API for current open
-            today_open = prev_close  # Placeholder
-
-            gap_pct = (today_open - prev_close) / prev_close if prev_close > 0 else 0
-
-            # Apply filters
-            if abs(gap_pct) < self._config.min_gap_pct:
-                continue
-            if prev_close < self._config.min_price:
-                continue
-            if prev_close > self._config.max_price:
-                continue
-
-            item = WatchlistItem(
-                symbol=symbol,
-                gap_pct=gap_pct,
-                premarket_volume=0,  # Could be fetched from pre-market data
-            )
-            candidates.append(item)
-
-        # Sort by absolute gap descending
+        # Sort by absolute gap descending (strongest gaps first)
         candidates.sort(key=lambda x: abs(x.gap_pct), reverse=True)
+
+        logger.info(
+            "Gap scan complete: %d candidates from %d symbols (min_gap=%.1f%%)",
+            len(candidates),
+            len(target_symbols),
+            self._config.min_gap_pct * 100,
+        )
 
         # Limit to max
         return candidates[: self._config.max_symbols_returned]
