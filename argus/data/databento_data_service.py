@@ -82,7 +82,8 @@ class DatabentoDataService(DataService):
         self._hist_client: Any = None  # db.Historical
 
         # Symbol mapping
-        self._symbol_map = DatabentoSymbolMap()
+        self._symbol_map = DatabentoSymbolMap()  # Legacy, may be unused
+        self._id_to_symbol_cache: dict[int, str] = {}  # instrument_id → symbol cache
 
         # Price and indicator caches (same pattern as AlpacaDataService)
         self._price_cache: dict[str, float] = {}
@@ -467,13 +468,25 @@ class DatabentoDataService(DataService):
             self._on_error(record)
         # Other record types (SystemMsg, etc.) are silently ignored
 
+    def _resolve_symbol(self, instrument_id: int) -> str | None:
+        """Resolve instrument_id to symbol using Databento's symbology_map.
+
+        The Databento library maintains symbology_map as instrument_id → symbol.
+        Direct lookup is O(1).
+        """
+        if self._live_client:
+            # Direct lookup: symbology_map is {instrument_id: symbol}
+            return self._live_client.symbology_map.get(instrument_id)
+
     def _on_symbol_mapping(self, msg: Any) -> None:
         """Process SymbolMappingMsg — populate the symbol map.
 
         These arrive at session start before any data messages.
         Runs on Databento's reader thread.
         """
-        self._symbol_map.on_symbol_mapping(msg)
+        # Note: The Databento library handles symbol mapping internally via symbology_map.
+        # This callback is kept for backwards compatibility but may not be called.
+        pass
 
     def _on_ohlcv(self, msg: Any) -> None:
         """Process OHLCVMsg — convert to CandleEvent, update indicators.
@@ -487,14 +500,14 @@ class DatabentoDataService(DataService):
             msg.close    — float, bar close price
             msg.volume   — int, bar volume
             msg.ts_event — int, nanosecond Unix timestamp (bar OPEN time)
-            msg.hd.instrument_id — int, Databento instrument identifier
+            msg.instrument_id — int, Databento instrument identifier
         """
-        # Resolve instrument_id → symbol
-        symbol = self._symbol_map.get_symbol(msg.hd.instrument_id)
+        # Resolve instrument_id → symbol using Databento's symbology_map
+        symbol = self._resolve_symbol(msg.instrument_id)
         if symbol is None:
             logger.debug(
                 "Unknown instrument_id=%d in OHLCVMsg (mapping not yet received)",
-                msg.hd.instrument_id,
+                msg.instrument_id,
             )
             return
 
@@ -506,20 +519,24 @@ class DatabentoDataService(DataService):
         # Convert nanosecond timestamp to datetime
         ts = datetime.fromtimestamp(msg.ts_event / 1e9, tz=UTC)
 
+        # Databento prices are in fixed-point format (scaled by 1e9)
+        # Convert to standard floating-point prices
+        price_scale = 1e-9
+
         # Build CandleEvent
         candle_event = CandleEvent(
             symbol=symbol,
             timestamp=ts,
-            open=msg.open,
-            high=msg.high,
-            low=msg.low,
-            close=msg.close,
+            open=msg.open * price_scale,
+            high=msg.high * price_scale,
+            low=msg.low * price_scale,
+            close=msg.close * price_scale,
             volume=int(msg.volume),
             timeframe="1m",
         )
 
-        # Update price cache
-        self._price_cache[symbol] = msg.close
+        # Update price cache (use scaled price)
+        self._price_cache[symbol] = msg.close * price_scale
 
         # Update indicators
         indicator_events = self._update_indicators(symbol, candle_event)
@@ -539,9 +556,9 @@ class DatabentoDataService(DataService):
             msg.price    — float, trade price
             msg.size     — int, trade size (shares)
             msg.ts_event — int, nanosecond Unix timestamp
-            msg.hd.instrument_id — int
+            msg.instrument_id — int
         """
-        symbol = self._symbol_map.get_symbol(msg.hd.instrument_id)
+        symbol = self._resolve_symbol(msg.instrument_id)
         if symbol is None:
             return
 
@@ -550,15 +567,18 @@ class DatabentoDataService(DataService):
 
         ts = datetime.fromtimestamp(msg.ts_event / 1e9, tz=UTC)
 
+        # Databento prices are in fixed-point format (scaled by 1e9)
+        price = msg.price * 1e-9
+
         tick_event = TickEvent(
             symbol=symbol,
             timestamp=ts,
-            price=msg.price,
+            price=price,
             volume=int(msg.size),
         )
 
         # Update price cache
-        self._price_cache[symbol] = msg.price
+        self._price_cache[symbol] = price
 
         # Bridge to asyncio
         if self._loop is not None and self._loop.is_running():
@@ -698,8 +718,10 @@ class DatabentoDataService(DataService):
         """
         logger.info("Warming up indicators for %d symbols", len(symbols))
 
-        # Fetch last 60 1m candles for each symbol
-        end = self._clock.now()
+        # Fetch last 60 1m candles for each symbol.
+        # Use a 20-minute buffer because Databento historical data has ~15min lag.
+        # Warmup data will be slightly stale but that's acceptable for indicator seeding.
+        end = self._clock.now() - timedelta(minutes=20)
         start = end - timedelta(minutes=60)
 
         for symbol in symbols:

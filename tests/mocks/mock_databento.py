@@ -31,16 +31,18 @@ class MockOHLCVMsg:
     """Mock Databento OHLCVMsg for unit tests.
 
     Represents a completed OHLCV bar from the ohlcv-1m schema.
-    Prices are already floats in the Python client (no fixed-point conversion needed).
+    In the current Databento API, prices are in fixed-point format (scaled by 1e9).
+    instrument_id is now a direct attribute (not nested in hd).
     """
 
-    hd: MockRecordHeader = field(default_factory=MockRecordHeader)
-    open: float = 0.0
+    instrument_id: int = 0  # Direct attribute in current API
+    open: float = 0.0  # Fixed-point scaled by 1e9
     high: float = 0.0
     low: float = 0.0
     close: float = 0.0
     volume: int = 0
     ts_event: int = 0  # Nanosecond Unix timestamp (bar OPEN time)
+    hd: MockRecordHeader = field(default_factory=MockRecordHeader)  # Legacy, kept for compatibility
 
 
 @dataclass
@@ -48,12 +50,14 @@ class MockTradeMsg:
     """Mock Databento TradeMsg for unit tests.
 
     Represents an individual trade from the trades schema.
+    In the current Databento API, instrument_id is a direct attribute.
     """
 
-    hd: MockRecordHeader = field(default_factory=MockRecordHeader)
-    price: float = 0.0
+    instrument_id: int = 0  # Direct attribute in current API
+    price: float = 0.0  # Fixed-point scaled by 1e9
     size: int = 0
     ts_event: int = 0  # Nanosecond Unix timestamp
+    hd: MockRecordHeader = field(default_factory=MockRecordHeader)  # Legacy, kept for compatibility
 
 
 @dataclass
@@ -80,6 +84,7 @@ class MockLiveClient:
 
     Records subscribe/start/stop calls. Allows injecting messages
     via fire_callback() to simulate Databento data arriving.
+    Provides symbology_map for instrument_id → symbol resolution.
     """
 
     def __init__(self, key: str = "") -> None:
@@ -95,6 +100,17 @@ class MockLiveClient:
         self.stopped = False
         self._block_for_close_should_raise: Exception | None = None
         self._block_for_close_should_return_immediately = False
+        # symbology_map: instrument_id → symbol (current Databento API)
+        self._symbology_map: dict[int, str] = {}
+
+    @property
+    def symbology_map(self) -> dict[int, str]:
+        """Return the instrument_id → symbol mapping.
+
+        In the real Databento client, this is populated automatically
+        from SymbolMappingMsg records at session start.
+        """
+        return self._symbology_map
 
     def subscribe(
         self,

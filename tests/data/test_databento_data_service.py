@@ -498,11 +498,13 @@ class TestDatabentoDataServiceStop:
 class TestSymbolMappingFlow:
     """Tests for symbol mapping processing."""
 
-    def test_on_symbol_mapping_updates_symbol_map(
-        self, mock_databento, event_bus, databento_config, data_config
+    def test_symbol_resolution_uses_live_client_symbology_map(
+        self, mock_databento, event_bus, databento_config, data_config, monkeypatch
     ):
-        """_on_symbol_mapping updates the symbol map."""
+        """_resolve_symbol uses the live client's symbology_map."""
         from argus.data.databento_data_service import DatabentoDataService
+
+        monkeypatch.setenv("DATABENTO_API_KEY", "test-key")
 
         service = DatabentoDataService(
             event_bus=event_bus,
@@ -510,10 +512,15 @@ class TestSymbolMappingFlow:
             data_config=data_config,
         )
 
-        msg = MockSymbolMappingMsg(instrument_id=100, stype_in_symbol="AAPL")
-        service._on_symbol_mapping(msg)
+        # Create a mock live client with symbology_map
+        mock_client = MockLiveClient()
+        mock_client._symbology_map = {100: "AAPL", 200: "TSLA"}
+        service._live_client = mock_client
 
-        assert service._symbol_map.get_symbol(100) == "AAPL"
+        # _resolve_symbol should look up in symbology_map
+        assert service._resolve_symbol(100) == "AAPL"
+        assert service._resolve_symbol(200) == "TSLA"
+        assert service._resolve_symbol(999) is None  # Unknown ID
 
     def test_on_ohlcv_skips_unknown_instrument_id(
         self, mock_databento, event_bus, databento_config, data_config
@@ -529,7 +536,7 @@ class TestSymbolMappingFlow:
 
         # No mapping added for instrument_id=999
         msg = MockOHLCVMsg(
-            hd=MockRecordHeader(instrument_id=999),
+            instrument_id=999,
             open=100.0,
             high=105.0,
             low=99.0,
@@ -557,7 +564,7 @@ class TestSymbolMappingFlow:
         )
 
         msg = MockTradeMsg(
-            hd=MockRecordHeader(instrument_id=999),
+            instrument_id=999,
             price=100.0,
             size=100,
             ts_event=int(datetime(2026, 2, 21, 10, 0, tzinfo=UTC).timestamp() * 1e9),
@@ -584,22 +591,25 @@ class TestOHLCVConversion:
         )
         service._active_symbols = {"AAPL"}
 
-        # Add mapping
-        service._symbol_map.add_mapping(100, "AAPL")
+        # Set up mock live client with symbology_map
+        mock_client = MockLiveClient()
+        mock_client._symbology_map = {100: "AAPL"}
+        service._live_client = mock_client
 
+        # Prices are fixed-point (scaled by 1e9)
         msg = MockOHLCVMsg(
-            hd=MockRecordHeader(instrument_id=100),
-            open=150.0,
-            high=155.0,
-            low=149.0,
-            close=154.0,
+            instrument_id=100,
+            open=150.0 * 1e9,
+            high=155.0 * 1e9,
+            low=149.0 * 1e9,
+            close=154.0 * 1e9,
             volume=10000,
             ts_event=int(datetime(2026, 2, 21, 10, 0, tzinfo=UTC).timestamp() * 1e9),
         )
 
         service._on_ohlcv(msg)
 
-        # Price cache should have AAPL
+        # Price cache should have AAPL (converted from fixed-point)
         assert "AAPL" in service._price_cache
         assert service._price_cache["AAPL"] == 154.0
 
@@ -615,17 +625,22 @@ class TestOHLCVConversion:
             data_config=data_config,
         )
         service._active_symbols = {"AAPL"}
-        service._symbol_map.add_mapping(100, "AAPL")
+
+        # Set up mock live client with symbology_map
+        mock_client = MockLiveClient()
+        mock_client._symbology_map = {100: "AAPL"}
+        service._live_client = mock_client
 
         expected_time = datetime(2026, 2, 21, 10, 30, 0, tzinfo=UTC)
         ts_ns = int(expected_time.timestamp() * 1e9)
 
+        # Prices are fixed-point (scaled by 1e9)
         msg = MockOHLCVMsg(
-            hd=MockRecordHeader(instrument_id=100),
-            open=150.0,
-            high=155.0,
-            low=149.0,
-            close=154.0,
+            instrument_id=100,
+            open=150.0 * 1e9,
+            high=155.0 * 1e9,
+            low=149.0 * 1e9,
+            close=154.0 * 1e9,
             volume=10000,
             ts_event=ts_ns,
         )
@@ -651,14 +666,19 @@ class TestOHLCVConversion:
             data_config=data_config,
         )
         service._active_symbols = {"AAPL"}
-        service._symbol_map.add_mapping(100, "AAPL")
 
+        # Set up mock live client with symbology_map
+        mock_client = MockLiveClient()
+        mock_client._symbology_map = {100: "AAPL"}
+        service._live_client = mock_client
+
+        # Prices are fixed-point (scaled by 1e9)
         msg = MockOHLCVMsg(
-            hd=MockRecordHeader(instrument_id=100),
-            open=150.0,
-            high=155.0,
-            low=149.0,
-            close=152.50,
+            instrument_id=100,
+            open=150.0 * 1e9,
+            high=155.0 * 1e9,
+            low=149.0 * 1e9,
+            close=152.50 * 1e9,
             volume=10000,
             ts_event=int(datetime(2026, 2, 21, 10, 0, tzinfo=UTC).timestamp() * 1e9),
         )
@@ -679,14 +699,19 @@ class TestOHLCVConversion:
             data_config=data_config,
         )
         service._active_symbols = {"TSLA"}  # Only tracking TSLA
-        service._symbol_map.add_mapping(100, "AAPL")  # But mapping AAPL
 
+        # Set up mock live client with symbology_map for AAPL
+        mock_client = MockLiveClient()
+        mock_client._symbology_map = {100: "AAPL"}
+        service._live_client = mock_client
+
+        # Prices are fixed-point (scaled by 1e9)
         msg = MockOHLCVMsg(
-            hd=MockRecordHeader(instrument_id=100),
-            open=150.0,
-            high=155.0,
-            low=149.0,
-            close=154.0,
+            instrument_id=100,
+            open=150.0 * 1e9,
+            high=155.0 * 1e9,
+            low=149.0 * 1e9,
+            close=154.0 * 1e9,
             volume=10000,
             ts_event=int(datetime(2026, 2, 21, 10, 0, tzinfo=UTC).timestamp() * 1e9),
         )
@@ -712,11 +737,16 @@ class TestTradeConversion:
             data_config=data_config,
         )
         service._active_symbols = {"AAPL"}
-        service._symbol_map.add_mapping(100, "AAPL")
 
+        # Set up mock live client with symbology_map
+        mock_client = MockLiveClient()
+        mock_client._symbology_map = {100: "AAPL"}
+        service._live_client = mock_client
+
+        # Prices are fixed-point (scaled by 1e9)
         msg = MockTradeMsg(
-            hd=MockRecordHeader(instrument_id=100),
-            price=151.25,
+            instrument_id=100,
+            price=151.25 * 1e9,
             size=500,
             ts_event=int(datetime(2026, 2, 21, 10, 0, tzinfo=UTC).timestamp() * 1e9),
         )
@@ -737,11 +767,16 @@ class TestTradeConversion:
             data_config=data_config,
         )
         service._active_symbols = {"TSLA"}
-        service._symbol_map.add_mapping(100, "AAPL")
 
+        # Set up mock live client with symbology_map for AAPL
+        mock_client = MockLiveClient()
+        mock_client._symbology_map = {100: "AAPL"}
+        service._live_client = mock_client
+
+        # Prices are fixed-point (scaled by 1e9)
         msg = MockTradeMsg(
-            hd=MockRecordHeader(instrument_id=100),
-            price=151.25,
+            instrument_id=100,
+            price=151.25 * 1e9,
             size=500,
             ts_event=int(datetime(2026, 2, 21, 10, 0, tzinfo=UTC).timestamp() * 1e9),
         )
@@ -1010,7 +1045,11 @@ class TestStaleDataMonitor:
             data_config=data_config,
         )
         service._active_symbols = {"AAPL"}
-        service._symbol_map.add_mapping(100, "AAPL")
+
+        # Set up mock live client with symbology_map
+        mock_client = MockLiveClient()
+        mock_client._symbology_map = {100: "AAPL"}
+        service._live_client = mock_client
 
         # Set up record class references (normally done in start())
         service._OHLCVMsg = MockOHLCVMsg
@@ -1021,13 +1060,13 @@ class TestStaleDataMonitor:
         # Set initial time
         service._last_message_time = 0
 
-        # Process a message
+        # Process a message (prices in fixed-point format)
         msg = MockOHLCVMsg(
-            hd=MockRecordHeader(instrument_id=100),
-            open=150.0,
-            high=155.0,
-            low=149.0,
-            close=154.0,
+            instrument_id=100,
+            open=150.0 * 1e9,
+            high=155.0 * 1e9,
+            low=149.0 * 1e9,
+            close=154.0 * 1e9,
             volume=10000,
             ts_event=int(datetime(2026, 2, 21, 10, 0, tzinfo=UTC).timestamp() * 1e9),
         )
