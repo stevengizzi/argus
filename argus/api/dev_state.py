@@ -515,11 +515,11 @@ def _generate_today_trades() -> list[Trade]:
             else:
                 hold_seconds = random.randint(3 * 60, 15 * 60)
         else:  # BREAKEVEN
-            exit_price = round(entry_price + random.uniform(-0.02, 0.02), 2)
+            exit_price = entry_price  # Exactly breakeven (gross_pnl = 0)
             exit_reason = ExitReason.TIME_STOP
-            gross_pnl = round(shares * (exit_price - entry_price), 2)
-            r_multiple = round(gross_pnl / (shares * stop_distance), 2) if stop_distance > 0 else 0.0
-            hold_seconds = random.randint(60, 120)
+            gross_pnl = 0.0
+            r_multiple = 0.0
+            hold_seconds = 90  # Fixed for determinism
 
         exit_time = entry_time + timedelta(seconds=hold_seconds)
 

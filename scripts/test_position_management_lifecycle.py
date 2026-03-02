@@ -529,17 +529,17 @@ async def run_tests() -> int:
     logger.info("")
     logger.info("Step 7: Flattening position for TradeLogger test...")
 
-    # Use Order Manager's flatten mechanism
+    # Use Order Manager's flatten mechanism (not broker.flatten_all)
     positions = order_manager.get_managed_positions()
     if TEST_SYMBOL in positions and len(positions[TEST_SYMBOL]) > 0:
-        # Trigger flatten via broker
-        await broker.flatten_all()
+        # Trigger flatten via Order Manager (logs trade and updates internal state)
+        await order_manager.emergency_flatten()
         await asyncio.sleep(3)
 
         # Verify position is closed
         positions_after = order_manager.get_managed_positions()
         if TEST_SYMBOL not in positions_after or len(positions_after.get(TEST_SYMBOL, [])) == 0:
-            logger.info("Position flattened successfully")
+            logger.info("Position flattened successfully via Order Manager")
             results.record_pass("Position Flatten")
         else:
             results.record_fail("Position Flatten", "Position still exists after flatten")
