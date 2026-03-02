@@ -2690,5 +2690,27 @@ Each entry follows this format:
 
 ---
 
+### DEC-245 | flatten_all() SMART Routing Fix
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-28 |
+| **Decision** | `flatten_all()` in IBKRBroker must use `get_stock_contract()` for SMART routing, not `ib_pos.contract` directly. The fill contract retains the execution exchange (e.g., ARCA), and IBKR's precautionary settings block direct routing to specific exchanges. |
+| **Rationale** | Sprint 21.5 Session 7 discovered IBKR error 10311 ("This order will be directly routed to ARCA") when flatten_all() used the position's contract object directly. Using the contract resolver ensures SMART routing for all exit orders. |
+| **Status** | Active |
+
+---
+
+### DEC-246 | get_open_orders() Broker ABC Method
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-28 |
+| **Decision** | Added `get_open_orders()` as abstract method to Broker ABC. Implemented in IBKRBroker (via `ib_async` `openTrades()` with ULID recovery from `orderRef`), AlpacaBroker (via `get_orders()` API), and SimulatedBroker (returns pending bracket orders). |
+| **Rationale** | Order Manager's `reconstruct_from_broker()` and Health Monitor both called this method, but it was never implemented in any broker class. Discovered during Sprint 21.5 Session 9 resilience validation. Critical for state reconstruction after restarts. |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
 *New decisions are appended chronologically as the project progresses.*
