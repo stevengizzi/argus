@@ -66,9 +66,8 @@ logs/
 *.db-shm
 *.db-wal
 
-# Historical data (large Parquet files)
-data/historical/
-data/backtest_runs/
+# Runtime data (DB, caches, Parquet files)
+data/
 
 # Docs
 docs/IBKR-disclosures/
