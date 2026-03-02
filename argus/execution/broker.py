@@ -132,6 +132,14 @@ class Broker(ABC):
         """
 
     @abstractmethod
+    async def get_open_orders(self) -> list[Order]:
+        """Get all open (unfilled, not cancelled) orders.
+
+        Returns:
+            List of Order objects for all open orders at the broker.
+        """
+
+    @abstractmethod
     async def flatten_all(self) -> list[OrderResult]:
         """Emergency: close all open positions at market price.
 

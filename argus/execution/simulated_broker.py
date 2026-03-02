@@ -591,6 +591,41 @@ class SimulatedBroker(Broker):
 
         raise KeyError(f"Order {order_id} not found")
 
+    async def get_open_orders(self) -> list[Order]:
+        """Get all open (pending) orders.
+
+        Returns:
+            List of Order objects for pending bracket orders.
+        """
+        self._check_connected()
+
+        orders = []
+        for bracket in self._pending_brackets:
+            # Map bracket order type to OrderType enum
+            if bracket.order_type == "stop":
+                order_type = OrderType.STOP
+                stop_price = bracket.trigger_price
+                limit_price = None
+            else:  # limit
+                order_type = OrderType.LIMIT
+                stop_price = None
+                limit_price = bracket.trigger_price
+
+            order = Order(
+                id=bracket.order_id,
+                strategy_id=bracket.strategy_id,
+                symbol=bracket.symbol,
+                side=bracket.side,
+                order_type=order_type,
+                quantity=bracket.quantity,
+                stop_price=stop_price,
+                limit_price=limit_price,
+            )
+            orders.append(order)
+
+        logger.info("Retrieved %d open orders from SimulatedBroker", len(orders))
+        return orders
+
     async def flatten_all(self) -> list[OrderResult]:
         """Close all positions and cancel all pending orders.
 

@@ -40,9 +40,11 @@ from argus.models.trading import (
     BracketOrderResult,
     Order,
     OrderResult,
+    OrderSide,
     OrderStatus,
     Position,
 )
+from argus.models.trading import OrderType as TradingOrderType
 
 if TYPE_CHECKING:
     from ib_async import Contract, Trade
@@ -848,6 +850,73 @@ class IBKRBroker(Broker):
             raise KeyError(f"Order {order_id} not found at IBKR")
 
         return self._map_ibkr_status_to_model(trade.orderStatus.status)
+
+    async def get_open_orders(self) -> list[Order]:
+        """Get all open (unfilled, not cancelled) orders from IBKR.
+
+        Uses ib_async's openTrades() cache which is auto-updated after connection.
+
+        Returns:
+            List of Order objects for all open orders at IBKR.
+        """
+        open_trades = self._ib.openTrades()
+        orders = []
+
+        for trade in open_trades:
+            ib_id = trade.order.orderId
+            ulid = self._ibkr_to_ulid.get(ib_id)
+
+            # Recover ULID from orderRef if not in mapping
+            if ulid is None and trade.order.orderRef:
+                ulid = trade.order.orderRef
+                self._ulid_to_ibkr[ulid] = ib_id
+                self._ibkr_to_ulid[ib_id] = ulid
+
+            # If still no ULID, assign unknown prefix
+            if ulid is None:
+                ulid = f"unknown_{ib_id}"
+
+            # Map IBKR order type to trading model OrderType
+            ib_type = trade.order.orderType
+            if ib_type == "MKT":
+                order_type = TradingOrderType.MARKET
+            elif ib_type == "LMT":
+                order_type = TradingOrderType.LIMIT
+            elif ib_type == "STP":
+                order_type = TradingOrderType.STOP
+            elif ib_type == "STP LMT":
+                order_type = TradingOrderType.STOP_LIMIT
+            else:
+                order_type = TradingOrderType.MARKET
+
+            # Map side
+            side = OrderSide.BUY if trade.order.action.lower() == "buy" else OrderSide.SELL
+
+            # Extract prices
+            stop_price = None
+            limit_price = None
+            if ib_type == "STP":
+                stop_price = trade.order.auxPrice
+            elif ib_type == "LMT":
+                limit_price = trade.order.lmtPrice
+            elif ib_type == "STP LMT":
+                stop_price = trade.order.auxPrice
+                limit_price = trade.order.lmtPrice
+
+            order = Order(
+                id=ulid,
+                strategy_id="",  # Unknown at broker level
+                symbol=trade.contract.symbol if trade.contract else "",
+                side=side,
+                order_type=order_type,
+                quantity=int(trade.order.totalQuantity),
+                stop_price=stop_price,
+                limit_price=limit_price,
+            )
+            orders.append(order)
+
+        logger.info("Retrieved %d open orders from IBKR", len(orders))
+        return orders
 
     async def flatten_all(self) -> list[OrderResult]:
         """Emergency: cancel all open orders, then close all positions.

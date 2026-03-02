@@ -712,6 +712,52 @@ class AlpacaBroker(Broker):
             logger.error(f"Failed to get order status for {order_id}: {e}", exc_info=True)
             raise KeyError(f"Order {order_id} not found at Alpaca") from e
 
+    async def get_open_orders(self) -> list[Order]:
+        """Get all open (unfilled, not cancelled) orders from Alpaca.
+
+        Returns:
+            List of Order objects for all open orders at Alpaca.
+
+        Raises:
+            ConnectionError: If not connected.
+        """
+        if not self._connected or not self._trading_client:
+            raise ConnectionError("AlpacaBroker not connected. Call connect() first.")
+
+        try:
+            from alpaca.trading.requests import GetOrdersRequest
+
+            request = GetOrdersRequest(status="open")
+            alpaca_orders = self._trading_client.get_orders(request)
+            orders = []
+
+            for alpaca_order in alpaca_orders:
+                alpaca_order_id = str(alpaca_order.id)
+                our_id = self._reverse_id_map.get(alpaca_order_id)
+
+                # If not in mapping, use alpaca ID as unknown
+                if our_id is None:
+                    our_id = f"unknown_{alpaca_order_id}"
+
+                order = Order(
+                    id=our_id,
+                    strategy_id="",  # Unknown at broker level
+                    symbol=alpaca_order.symbol,
+                    side=self._map_side_to_model(alpaca_order.side),
+                    order_type=self._map_order_type_to_model(alpaca_order.order_type),
+                    quantity=int(alpaca_order.qty) if alpaca_order.qty else 0,
+                    stop_price=float(alpaca_order.stop_price) if alpaca_order.stop_price else None,
+                    limit_price=float(alpaca_order.limit_price) if alpaca_order.limit_price else None,
+                )
+                orders.append(order)
+
+            logger.info(f"Retrieved {len(orders)} open orders from Alpaca")
+            return orders
+
+        except Exception as e:
+            logger.error(f"Failed to get open orders from Alpaca: {e}", exc_info=True)
+            return []
+
     async def flatten_all(self) -> list[OrderResult]:
         """Emergency: close all open positions at market price.
 
