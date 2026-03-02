@@ -9,8 +9,11 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
+
+import pandas as pd
 
 from argus.core.events import WatchlistItem
 from argus.data.scanner import Scanner
@@ -20,6 +23,12 @@ if TYPE_CHECKING:
     from argus.core.config import DatabentoConfig
 
 logger = logging.getLogger(__name__)
+
+# Pattern to extract available end date from Databento 422 error messages
+# Example: "The dataset EQUS.MINI has data available up to '2026-02-28 00:00:00+00:00'."
+_AVAILABLE_END_PATTERN = re.compile(
+    r"data available up to '(\d{4}-\d{2}-\d{2})"
+)
 
 
 class DatabentoScannerConfig:
@@ -174,6 +183,12 @@ class DatabentoScanner(Scanner):
         For live pre-market scanning: reference_date should be today's date.
         For historical testing: reference_date can be any past trading date.
 
+        Handles Databento historical data lag gracefully:
+        - If the API returns 422 "data_end_after_available_end", extracts the
+          available end date and retries the query
+        - For gap scanning, we need YESTERDAY's daily bar, so 1-2 days of lag
+          is acceptable
+
         Args:
             symbols: Optional list of symbols to scan. If None, uses config.
             reference_date: Date to compute gaps for. If None, uses current date.
@@ -195,27 +210,12 @@ class DatabentoScanner(Scanner):
             ref_date_str,
         )
 
-        # Fetch 5 trading days of daily bars to ensure we have prev day's close and today's open
-        # (accounts for weekends/holidays)
-        start_date = ref_date - timedelta(days=7)
-        end_date = ref_date + timedelta(days=1)  # Exclusive end
-
-        try:
-            data = self._client.timeseries.get_range(
-                dataset=self._config.dataset,
-                symbols=target_symbols,
-                schema="ohlcv-1d",
-                start=start_date.strftime("%Y-%m-%d"),
-                end=end_date.strftime("%Y-%m-%d"),
-                stype_in="raw_symbol",
-            )
-            df = data.to_df()
-        except Exception as e:
-            logger.error("Failed to fetch daily data from Databento: %s", e)
-            return []
-
-        if df.empty:
-            logger.warning("No daily data returned from Databento")
+        # Fetch daily bars with historical data lag handling
+        df = await self._fetch_daily_bars_with_lag_handling(
+            target_symbols, ref_date
+        )
+        if df is None or df.empty:
+            logger.warning("No daily data available from Databento")
             return []
 
         # Reset index to get ts_event and symbol as columns
@@ -304,6 +304,144 @@ class DatabentoScanner(Scanner):
 
         # Limit to max
         return candidates[: self._config.max_symbols_returned]
+
+    async def _fetch_daily_bars_with_lag_handling(
+        self,
+        symbols: list[str],
+        ref_date: datetime,
+    ) -> pd.DataFrame | None:
+        """Fetch daily bars, handling Databento historical data lag gracefully.
+
+        Databento historical data typically has ~15-minute lag during market hours.
+        If querying for today's data returns a 422 error with "data_end_after_available_end",
+        this method:
+        1. Extracts the available end date from the error message
+        2. Retries the query using the available date range
+        3. Returns whatever data is available (which is sufficient for gap calculation
+           since we need yesterday's close, not today's)
+
+        Args:
+            symbols: List of symbols to fetch.
+            ref_date: Reference date for the query.
+
+        Returns:
+            DataFrame with daily bars, or None if fetch failed.
+        """
+        import databento as db
+
+        # Calculate date range: 7 days back to capture prev trading day across weekends
+        start_date = ref_date - timedelta(days=7)
+        end_date = ref_date + timedelta(days=1)  # Exclusive end
+
+        try:
+            data = self._client.timeseries.get_range(
+                dataset=self._config.dataset,
+                symbols=symbols,
+                schema="ohlcv-1d",
+                start=start_date.strftime("%Y-%m-%d"),
+                end=end_date.strftime("%Y-%m-%d"),
+                stype_in="raw_symbol",
+            )
+            return data.to_df()
+
+        except db.BentoHttpError as e:
+            # Check for 422 with data lag message
+            if e.http_status == 422 and "data_end_after_available_end" in str(e):
+                logger.warning(
+                    "Databento historical data lag detected (422). "
+                    "Extracting available end date from error."
+                )
+
+                # Extract available end date from error message
+                available_end = self._extract_available_end_date(str(e))
+                if available_end:
+                    logger.info(
+                        "Retrying with available end date: %s",
+                        available_end.strftime("%Y-%m-%d"),
+                    )
+                    return await self._fetch_daily_bars_retry(
+                        symbols, start_date, available_end
+                    )
+                else:
+                    # Couldn't parse date - try with yesterday
+                    yesterday = ref_date - timedelta(days=1)
+                    logger.info(
+                        "Could not parse available date; retrying with yesterday: %s",
+                        yesterday.strftime("%Y-%m-%d"),
+                    )
+                    return await self._fetch_daily_bars_retry(
+                        symbols, start_date, yesterday
+                    )
+
+            # Re-raise other HTTP errors
+            logger.error("Databento HTTP error fetching daily data: %s", e)
+            return None
+
+        except Exception as e:
+            logger.error("Failed to fetch daily data from Databento: %s", e)
+            return None
+
+    def _extract_available_end_date(self, error_message: str) -> datetime | None:
+        """Extract the available end date from a Databento 422 error message.
+
+        Parses messages like:
+        "The dataset EQUS.MINI has data available up to '2026-02-28 00:00:00+00:00'."
+
+        Args:
+            error_message: The error message string from BentoHttpError.
+
+        Returns:
+            datetime if successfully parsed, None otherwise.
+        """
+        match = _AVAILABLE_END_PATTERN.search(error_message)
+        if match:
+            date_str = match.group(1)
+            try:
+                return datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=UTC)
+            except ValueError:
+                logger.warning("Failed to parse date from error: %s", date_str)
+        return None
+
+    async def _fetch_daily_bars_retry(
+        self,
+        symbols: list[str],
+        start_date: datetime,
+        end_date: datetime,
+    ) -> pd.DataFrame | None:
+        """Retry fetching daily bars with adjusted end date.
+
+        Args:
+            symbols: List of symbols to fetch.
+            start_date: Start date for the query.
+            end_date: Adjusted end date (exclusive).
+
+        Returns:
+            DataFrame with daily bars, or None if fetch failed.
+        """
+        try:
+            # Add 1 day to end_date since Databento uses exclusive end
+            query_end = end_date + timedelta(days=1)
+
+            data = self._client.timeseries.get_range(
+                dataset=self._config.dataset,
+                symbols=symbols,
+                schema="ohlcv-1d",
+                start=start_date.strftime("%Y-%m-%d"),
+                end=query_end.strftime("%Y-%m-%d"),
+                stype_in="raw_symbol",
+            )
+            df = data.to_df()
+
+            if not df.empty:
+                logger.info(
+                    "Retry successful: fetched %d daily bar records",
+                    len(df),
+                )
+            return df
+
+        except Exception as e:
+            logger.error("Retry fetch also failed: %s", e)
+            return None
 
     async def start(self) -> None:
         """Initialize scanner resources.

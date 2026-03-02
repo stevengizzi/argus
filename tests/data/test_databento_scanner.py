@@ -6,11 +6,17 @@ Tests the Databento-based pre-market gap scanner implementation.
 from __future__ import annotations
 
 import sys
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
+import pandas as pd
 import pytest
 
-from argus.data.databento_scanner import DatabentoScanner, DatabentoScannerConfig
+from argus.data.databento_scanner import (
+    DatabentoScanner,
+    DatabentoScannerConfig,
+    _AVAILABLE_END_PATTERN,
+)
 
 
 class TestDatabentoScannerConfig:
@@ -249,3 +255,287 @@ class TestDatabentoScannerScanWithGapData:
         result = await scanner.scan_with_gap_data()
 
         assert result == []
+
+
+class TestAvailableEndDatePattern:
+    """Tests for the _AVAILABLE_END_PATTERN regex."""
+
+    def test_extracts_date_from_standard_error_message(self) -> None:
+        """Test pattern extracts date from standard Databento 422 error."""
+        error_msg = (
+            "The dataset EQUS.MINI has data available up to '2026-02-28 00:00:00+00:00'. "
+            "The `end` in the query ('2026-03-03 00:00:00+00:00') is after the available range."
+        )
+        match = _AVAILABLE_END_PATTERN.search(error_msg)
+
+        assert match is not None
+        assert match.group(1) == "2026-02-28"
+
+    def test_extracts_date_from_different_dataset(self) -> None:
+        """Test pattern works with different dataset names."""
+        error_msg = "The dataset XNAS.ITCH has data available up to '2026-01-15 00:00:00+00:00'."
+        match = _AVAILABLE_END_PATTERN.search(error_msg)
+
+        assert match is not None
+        assert match.group(1) == "2026-01-15"
+
+    def test_no_match_for_unrelated_message(self) -> None:
+        """Test pattern doesn't match unrelated error messages."""
+        error_msg = "Authentication failed: Invalid API key"
+        match = _AVAILABLE_END_PATTERN.search(error_msg)
+
+        assert match is None
+
+
+class TestExtractAvailableEndDate:
+    """Tests for _extract_available_end_date method."""
+
+    def test_extracts_datetime_from_error_message(self) -> None:
+        """Test extracts datetime object from error message."""
+        config = DatabentoScannerConfig(universe_symbols=["AAPL"])
+        scanner = DatabentoScanner(config)
+
+        error_msg = (
+            "The dataset EQUS.MINI has data available up to '2026-02-28 00:00:00+00:00'."
+        )
+        result = scanner._extract_available_end_date(error_msg)
+
+        assert result is not None
+        assert result.year == 2026
+        assert result.month == 2
+        assert result.day == 28
+        assert result.tzinfo == UTC
+
+    def test_returns_none_for_unparseable_message(self) -> None:
+        """Test returns None when date cannot be extracted."""
+        config = DatabentoScannerConfig(universe_symbols=["AAPL"])
+        scanner = DatabentoScanner(config)
+
+        error_msg = "Some other error without a date"
+        result = scanner._extract_available_end_date(error_msg)
+
+        assert result is None
+
+
+class TestFetchDailyBarsWithLagHandling:
+    """Tests for _fetch_daily_bars_with_lag_handling method."""
+
+    @pytest.mark.asyncio
+    async def test_returns_dataframe_on_success(self) -> None:
+        """Test returns DataFrame when API call succeeds."""
+        config = DatabentoScannerConfig(universe_symbols=["AAPL"])
+        scanner = DatabentoScanner(config)
+
+        mock_df = pd.DataFrame({
+            "ts_event": [1],
+            "symbol": ["AAPL"],
+            "open": [150.0],
+            "close": [152.0],
+        })
+        mock_data = MagicMock()
+        mock_data.to_df.return_value = mock_df
+
+        mock_client = MagicMock()
+        mock_client.timeseries.get_range.return_value = mock_data
+        scanner._hist_client = mock_client
+
+        ref_date = datetime(2026, 2, 28, tzinfo=UTC)
+        result = await scanner._fetch_daily_bars_with_lag_handling(["AAPL"], ref_date)
+
+        assert result is not None
+        assert len(result) == 1
+        assert result["symbol"].iloc[0] == "AAPL"
+
+    @pytest.mark.asyncio
+    async def test_handles_422_with_retry(self) -> None:
+        """Test handles 422 error by retrying with available date."""
+        import databento as db
+
+        config = DatabentoScannerConfig(universe_symbols=["AAPL"])
+        scanner = DatabentoScanner(config)
+
+        # Create real BentoHttpError with 422 status
+        error_msg = (
+            "The dataset EQUS.MINI has data available up to '2026-02-28 00:00:00+00:00'. "
+            "data_end_after_available_end"
+        )
+        http_error = db.BentoHttpError(
+            http_status=422,
+            message=error_msg,
+        )
+
+        # Create mock successful response for retry
+        mock_df = pd.DataFrame({
+            "ts_event": [1, 2],
+            "symbol": ["AAPL", "AAPL"],
+            "open": [150.0, 151.0],
+            "close": [152.0, 153.0],
+        })
+        mock_data = MagicMock()
+        mock_data.to_df.return_value = mock_df
+
+        mock_client = MagicMock()
+        # First call raises 422, second call succeeds
+        mock_client.timeseries.get_range.side_effect = [http_error, mock_data]
+        scanner._hist_client = mock_client
+
+        ref_date = datetime(2026, 3, 3, tzinfo=UTC)
+        result = await scanner._fetch_daily_bars_with_lag_handling(["AAPL"], ref_date)
+
+        # Should have made 2 calls - original and retry
+        assert mock_client.timeseries.get_range.call_count == 2
+        assert result is not None
+        assert len(result) == 2
+
+    @pytest.mark.asyncio
+    async def test_returns_none_for_non_422_http_error(self) -> None:
+        """Test returns None for non-422 HTTP errors."""
+        import databento as db
+
+        config = DatabentoScannerConfig(universe_symbols=["AAPL"])
+        scanner = DatabentoScanner(config)
+
+        # Create real BentoHttpError with 500 status
+        http_error = db.BentoHttpError(
+            http_status=500,
+            message="Internal Server Error",
+        )
+
+        mock_client = MagicMock()
+        mock_client.timeseries.get_range.side_effect = http_error
+        scanner._hist_client = mock_client
+
+        ref_date = datetime(2026, 3, 3, tzinfo=UTC)
+        result = await scanner._fetch_daily_bars_with_lag_handling(["AAPL"], ref_date)
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_returns_none_for_general_exception(self) -> None:
+        """Test returns None for general exceptions."""
+        config = DatabentoScannerConfig(universe_symbols=["AAPL"])
+        scanner = DatabentoScanner(config)
+
+        mock_client = MagicMock()
+        mock_client.timeseries.get_range.side_effect = Exception("Network error")
+        scanner._hist_client = mock_client
+
+        ref_date = datetime(2026, 3, 3, tzinfo=UTC)
+        result = await scanner._fetch_daily_bars_with_lag_handling(["AAPL"], ref_date)
+
+        assert result is None
+
+
+class TestFetchDailyBarsRetry:
+    """Tests for _fetch_daily_bars_retry method."""
+
+    @pytest.mark.asyncio
+    async def test_retry_succeeds(self) -> None:
+        """Test retry returns DataFrame on success."""
+        config = DatabentoScannerConfig(universe_symbols=["AAPL"])
+        scanner = DatabentoScanner(config)
+
+        mock_df = pd.DataFrame({
+            "ts_event": [1],
+            "symbol": ["AAPL"],
+            "open": [150.0],
+            "close": [152.0],
+        })
+        mock_data = MagicMock()
+        mock_data.to_df.return_value = mock_df
+
+        mock_client = MagicMock()
+        mock_client.timeseries.get_range.return_value = mock_data
+        scanner._hist_client = mock_client
+
+        start_date = datetime(2026, 2, 21, tzinfo=UTC)
+        end_date = datetime(2026, 2, 28, tzinfo=UTC)
+
+        result = await scanner._fetch_daily_bars_retry(["AAPL"], start_date, end_date)
+
+        assert result is not None
+        assert len(result) == 1
+
+    @pytest.mark.asyncio
+    async def test_retry_returns_none_on_failure(self) -> None:
+        """Test retry returns None when API call fails."""
+        config = DatabentoScannerConfig(universe_symbols=["AAPL"])
+        scanner = DatabentoScanner(config)
+
+        mock_client = MagicMock()
+        mock_client.timeseries.get_range.side_effect = Exception("Still failing")
+        scanner._hist_client = mock_client
+
+        start_date = datetime(2026, 2, 21, tzinfo=UTC)
+        end_date = datetime(2026, 2, 28, tzinfo=UTC)
+
+        result = await scanner._fetch_daily_bars_retry(["AAPL"], start_date, end_date)
+
+        assert result is None
+
+
+class TestScanFallbackBehavior:
+    """Tests for scan() fallback to static list."""
+
+    @pytest.mark.asyncio
+    async def test_scan_falls_back_on_gap_data_failure(self) -> None:
+        """Test scan falls back to static list when gap data fetch fails."""
+        config = DatabentoScannerConfig(
+            universe_symbols=["AAPL", "MSFT", "NVDA"],
+            max_symbols_returned=2,
+        )
+        scanner = DatabentoScanner(config)
+
+        # Make scan_with_gap_data return empty (simulating failure)
+        mock_client = MagicMock()
+        mock_client.timeseries.get_range.side_effect = Exception("API Error")
+        scanner._hist_client = mock_client
+
+        result = await scanner.scan([])
+
+        # Should fall back to static list
+        assert len(result) == 2
+        assert result[0].symbol == "AAPL"
+        assert result[1].symbol == "MSFT"
+        # Fallback items have gap_pct=0.0
+        assert result[0].gap_pct == 0.0
+
+    @pytest.mark.asyncio
+    async def test_scan_uses_gap_data_when_available(self) -> None:
+        """Test scan uses gap data when available."""
+        config = DatabentoScannerConfig(
+            universe_symbols=["AAPL", "MSFT"],
+            min_gap_pct=0.01,  # 1%
+            min_price=10.0,
+            max_price=1000.0,
+            min_volume=100,  # Low threshold for test
+            max_symbols_returned=10,
+        )
+        scanner = DatabentoScanner(config)
+
+        # Create mock DataFrame with gap data
+        # AAPL: prev_close=150, today_open=153 → 2% gap
+        # MSFT: prev_close=300, today_open=303 → 1% gap
+        mock_df = pd.DataFrame({
+            "ts_event": [1, 2, 3, 4],  # 2 days × 2 symbols
+            "symbol": ["AAPL", "AAPL", "MSFT", "MSFT"],
+            "open": [148.0, 153.0, 298.0, 303.0],  # prev day, today
+            "close": [150.0, 155.0, 300.0, 305.0],
+            "volume": [1000, 1100, 2000, 2100],
+        })
+        mock_data = MagicMock()
+        mock_data.to_df.return_value = mock_df
+
+        mock_client = MagicMock()
+        mock_client.timeseries.get_range.return_value = mock_data
+        scanner._hist_client = mock_client
+
+        result = await scanner.scan([])
+
+        # Should have found both stocks with gaps
+        assert len(result) == 2
+        # AAPL has larger gap (2% vs 1%), should be first
+        assert result[0].symbol == "AAPL"
+        assert result[0].gap_pct == pytest.approx(0.02, rel=0.01)  # ~2%
+        assert result[1].symbol == "MSFT"
+        assert result[1].gap_pct == pytest.approx(0.01, rel=0.01)  # ~1%
