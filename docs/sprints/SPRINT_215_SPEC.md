@@ -570,6 +570,29 @@ Read CLAUDE.md for full project context. Session 6 established basic IBKR connec
 - Commit: `fix(integration): IBKR bracket order lifecycle validation`
 ```
 
+**Session 7 Outcome (March 2, 2026):**
+- ✅ **IBKRBroker.place_bracket_order() validated:**
+  - Entry (MARKET) + Stop (STOP) + T1 (LIMIT) submitted atomically
+  - All bracket component order IDs tracked correctly in ManagedPosition
+  - parentId linkage and transmit flag sequencing verified
+- ✅ **Fill streaming verified:**
+  - Entry fill: SPY 1 share @ $686.16
+  - OrderFilledEvent published correctly to EventBus
+- ✅ **Order cancellation works:**
+  - `IBKRBroker.cancel_order()` successfully cancels open stop orders
+  - Cancelled status streamed back via OrderCancelledEvent
+- ✅ **flatten_all() fixed (bug discovered and fixed):**
+  - Original issue: IBKR error 10311 ("direct routed to ARCA") when using ib_pos.contract directly
+  - Root cause: Position contract retained fill exchange (ARCA), triggering IBKR's precautionary settings
+  - Fix: Modified `flatten_all()` to use SMART routing via `_contracts.get_stock_contract()` instead of `ib_pos.contract`
+  - All 11 integration tests pass after fix
+- ✅ **Test script created:** `scripts/test_ibkr_bracket_lifecycle.py`
+  - Tests IBKRBroker abstraction (not raw ib_async)
+  - 11 test steps: connect → price check → bracket order → entry fill → children visible → position verify → cancel order → flatten_all → no open orders → disconnect
+- ✅ **All 1710 pytest tests pass** (no regression from flatten_all fix)
+- ✅ **78 IBKR broker unit tests pass**
+- Commit: `fix(integration): IBKR bracket order lifecycle validation`
+
 ---
 
 ### Session 8: Position Management Lifecycle

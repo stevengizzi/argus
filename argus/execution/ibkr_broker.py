@@ -886,7 +886,11 @@ class IBKRBroker(Broker):
             ulid = generate_id()
             close_order.orderRef = ulid
 
-            trade = self._ib.placeOrder(ib_pos.contract, close_order)
+            # Use SMART routing for close orders to avoid direct routing restrictions
+            # (ib_pos.contract may retain fill exchange like ARCA, which triggers error 10311)
+            close_contract = self._contracts.get_stock_contract(ib_pos.contract.symbol)
+
+            trade = self._ib.placeOrder(close_contract, close_order)
 
             # Store mappings
             self._ulid_to_ibkr[ulid] = trade.order.orderId
