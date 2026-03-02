@@ -433,6 +433,33 @@ Read CLAUDE.md for full project context. Sprint 21.5, Session 4 validated all fo
 - ⚠️ **Scanner fallback triggered:** Databento historical data unavailable for current date (422 error), falls back to static symbol list (10 symbols)
 - **Commit:** `fix(databento): update for current API + fixed-point price format`
 
+**Sessions 4+5+6 Live Observation (March 2, 2026 — 10:36 AM - 11:07+ AM ET):**
+- ✅ **30+ minutes continuous operation:** System ran stably with no crashes
+- ✅ **Data flow confirmed:**
+  - All 10 symbols (AAPL, MSFT, NVDA, TSLA, AMD, AMZN, META, GOOGL, NFLX, SPY) routed to strategies every minute
+  - ~988K log lines generated showing high activity
+- ✅ **ORB strategies (OR_REJECTED — expected):**
+  - All 10 symbols: `OR_REJECTED: No candles in OR window`
+  - Correct behavior — system started at 10:36 AM, missing the 9:30-9:35 AM opening range window
+  - Warmup data only available through Feb 28 (Databento historical lag)
+- ✅ **VWAP Reclaim state machine working:**
+  - 16 total state transitions logged
+  - All 10 symbols: `WATCHING → ABOVE_VWAP` (initial state, price above VWAP at startup)
+  - AMD: Full cycle — `ABOVE_VWAP → BELOW_VWAP → above_vwap` (crossed VWAP both directions)
+  - AAPL: `ABOVE_VWAP → BELOW_VWAP` (close=262.94, vwap=262.97)
+  - NFLX: Full entry flow — `WATCHING → ABOVE_VWAP → BELOW_VWAP → entered`
+- ✅ **Signal generation confirmed:**
+  - NFLX at 10:58 AM ET: `SIGNAL_GENERATED: strat_vwap_reclaim for NFLX - entry=97.09, stop=96.34, shares=3573`
+  - Entry: $97.09, Stop: $96.34, T1: $97.83, T2: $98.58, Time stop: 30m
+- ✅ **Risk Manager evaluation working:**
+  - Signal correctly rejected: `Single-stock exposure would exceed limit: $346,884.71 > $50,017.27 (5% of equity)`
+  - Correct behavior — position sizing (3573 shares × $97.09 = ~$347K) exceeded 5% concentration limit
+- ⚠️ **Known issues (non-blocking):**
+  - Scanner: Databento historical data lag (422 error) → static symbol list fallback
+  - Regime: SPY historical data unavailable → `range_bound` fallback
+  - Logging: Minor capitalization inconsistency (`above_vwap` vs `ABOVE_VWAP`)
+- **Observation completed successfully** — Sessions 4, 5, and 6 validated with live data
+
 ---
 
 ### Session 6: IB Gateway Setup + Connection
