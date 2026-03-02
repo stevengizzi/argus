@@ -411,11 +411,11 @@ Read CLAUDE.md for full project context. Sprint 21.5, Session 4 validated all fo
 ```
 
 **Sessions 4+5+6 Combined Outcome (March 2, 2026):**
-- ✅ **Databento API fixes required (DEC-238, DEC-239, DEC-240):**
-  - `msg.hd.instrument_id` changed to `msg.instrument_id` (direct attribute)
-  - Symbol resolution now uses Databento's built-in `symbology_map` property
-  - Prices are in fixed-point format (scaled by 1e9) — multiply by 1e-9
-  - Historical data has ~15 min lag — added 20-minute buffer to warmup end time
+- ✅ **Databento API fixes required (DEC-241, DEC-242, DEC-243, DEC-244):**
+  - `msg.hd.instrument_id` changed to `msg.instrument_id` (direct attribute) — DEC-241
+  - Symbol resolution now uses Databento's built-in `symbology_map` property — DEC-242
+  - Prices are in fixed-point format (scaled by 1e9) — multiply by 1e-9 — DEC-243
+  - Historical data has ~15 min lag — added 20-minute buffer to warmup end time — DEC-244
 - ✅ **All tests updated and passing:** 1712 pytest tests, 50 Databento-specific tests
 - ✅ **Live system startup verified:**
   - IBKR paper connection: $1,000,345.40 equity, 0 positions

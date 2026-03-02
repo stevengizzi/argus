@@ -2646,5 +2646,49 @@ Each entry follows this format:
 
 ---
 
+### DEC-241 | Databento API — instrument_id Is Direct Attribute (Not Nested in Header)
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-02 |
+| **Decision** | Databento library changed: `msg.instrument_id` replaces `msg.hd.instrument_id`. The `hd` (header) nesting was removed in a library update. All record types now expose `instrument_id` as a direct attribute. |
+| **Rationale** | Discovered during first live connection. Runtime AttributeError on every incoming record. |
+| **Status** | Active |
+
+---
+
+### DEC-242 | Databento Symbology — Use Library's Built-In `symbology_map`
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-02 |
+| **Decision** | Symbol resolution uses `self._live_client.symbology_map.get(instrument_id)` instead of custom `DatabentoSymbolMap`. The Databento library maintains its own `symbology_map` dict (instrument_id → symbol) populated from SymbolMappingMsg records at session start. |
+| **Rationale** | Custom DatabentoSymbolMap was not being populated with current library. Built-in mapping is maintained automatically and is O(1) lookup. |
+| **Status** | Active |
+
+---
+
+### DEC-243 | Databento Prices Are Fixed-Point Format (Scaled by 1e9)
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-02 |
+| **Decision** | All Databento price fields (open, high, low, close, price) are in fixed-point integer format scaled by 1e9. Multiply by 1e-9 to get standard floating-point prices. Applied to both OHLCVMsg and TradeMsg handlers. |
+| **Rationale** | Discovered when prices appeared as ~150,000,000,000 instead of ~150.00. Databento uses fixed-point for precision on their wire protocol. |
+| **Status** | Active |
+
+---
+
+### DEC-244 | Databento Historical Data Has ~15-Minute Lag
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-02 |
+| **Decision** | Databento historical API returns data with approximately 15 minutes of lag. Indicator warmup end time uses a 20-minute buffer (`clock.now() - 20min`) to avoid 422 errors from requesting data beyond available range. |
+| **Rationale** | Warmup was requesting data up to `now()`, which returned 422 "data_end_after_available_end". 20-minute buffer provides margin. Slightly stale warmup data is acceptable for indicator seeding. |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
 *New decisions are appended chronologically as the project progresses.*
