@@ -28,7 +28,6 @@ from argus.core.events import (
     IndicatorEvent,
     TickEvent,
 )
-from argus.data.databento_symbol_map import DatabentoSymbolMap
 from argus.data.databento_utils import normalize_databento_df
 from argus.data.indicator_engine import IndicatorEngine
 from argus.data.service import DataService
@@ -80,10 +79,6 @@ class DatabentoDataService(DataService):
         # Databento clients — created in start(), destroyed in stop()
         self._live_client: Any = None  # db.Live
         self._hist_client: Any = None  # db.Historical
-
-        # Symbol mapping
-        self._symbol_map = DatabentoSymbolMap()  # Legacy, may be unused
-        self._id_to_symbol_cache: dict[int, str] = {}  # instrument_id → symbol cache
 
         # Price and indicator caches (same pattern as AlpacaDataService)
         self._price_cache: dict[str, float] = {}
@@ -254,9 +249,6 @@ class DatabentoDataService(DataService):
         # Create fresh client
         self._live_client = db.Live(key=api_key)
 
-        # Clear symbol map — new session will send fresh mappings
-        self._symbol_map.clear()
-
         # Determine symbols to subscribe
         subscribe_symbols: str | list[str]
         if isinstance(self._config.symbols, list):
@@ -346,7 +338,6 @@ class DatabentoDataService(DataService):
             with contextlib.suppress(asyncio.CancelledError):
                 await self._stale_monitor_task
 
-        self._symbol_map.clear()
         logger.info("DatabentoDataService stopped")
 
     async def get_current_price(self, symbol: str) -> float | None:
@@ -438,11 +429,6 @@ class DatabentoDataService(DataService):
         """Check if data is currently stale (no recent updates)."""
         return self._stale_published
 
-    @property
-    def symbol_map(self) -> DatabentoSymbolMap:
-        """Access the symbol map for testing and debugging."""
-        return self._symbol_map
-
     # ──────────────────────────────────────────────
     # Callback Dispatch (runs on Databento's reader thread)
     # ──────────────────────────────────────────────
@@ -479,13 +465,11 @@ class DatabentoDataService(DataService):
             return self._live_client.symbology_map.get(instrument_id)
 
     def _on_symbol_mapping(self, msg: Any) -> None:
-        """Process SymbolMappingMsg — populate the symbol map.
+        """Handle SymbolMappingMsg (no-op, library handles mapping internally).
 
-        These arrive at session start before any data messages.
-        Runs on Databento's reader thread.
+        The Databento library populates symbology_map automatically from these messages.
+        This callback exists for dispatch completeness but performs no action (DEC-242).
         """
-        # Note: The Databento library handles symbol mapping internally via symbology_map.
-        # This callback is kept for backwards compatibility but may not be called.
         pass
 
     def _on_ohlcv(self, msg: Any) -> None:

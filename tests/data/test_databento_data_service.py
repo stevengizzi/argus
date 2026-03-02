@@ -426,31 +426,6 @@ class TestDatabentoDataServiceStop:
         assert stale_task.cancelled() or stale_task.done()
 
     @pytest.mark.asyncio
-    async def test_stop_clears_symbol_map(
-        self, mock_databento, event_bus, databento_config, data_config
-    ):
-        """Stop clears the symbol map."""
-        from argus.data.databento_data_service import DatabentoDataService
-
-        service = DatabentoDataService(
-            event_bus=event_bus,
-            config=databento_config,
-            data_config=data_config,
-        )
-        service._warm_up_indicators = AsyncMock()
-
-        with patch.dict("os.environ", {"DATABENTO_API_KEY": "test-key"}):
-            await service.start(["AAPL"], ["1m"])
-
-        # Add a mapping
-        service._symbol_map.add_mapping(100, "AAPL")
-        assert service._symbol_map.symbol_count == 1
-
-        await service.stop()
-
-        assert service._symbol_map.symbol_count == 0
-
-    @pytest.mark.asyncio
     async def test_stop_sets_running_false(
         self, mock_databento, event_bus, databento_config, data_config
     ):
@@ -1247,7 +1222,6 @@ class TestReconnectionLogic:
                     with contextlib.suppress(Exception):
                         service._live_client.stop()
                 service._live_client = db.Live(key="test")
-                service._symbol_map.clear()
                 service._OHLCVMsg = MockOHLCVMsg
                 service._TradeMsg = MockTradeMsg
                 service._SymbolMappingMsg = MockSymbolMappingMsg
@@ -1297,33 +1271,6 @@ class TestReconnectionLogic:
             assert service._live_client.started is True
 
             await service.stop()
-
-    @pytest.mark.asyncio
-    async def test_symbol_map_cleared_on_reconnection(
-        self, mock_databento, event_bus, databento_config, data_config
-    ):
-        """Symbol map is cleared on each reconnection attempt."""
-        from argus.data.databento_data_service import DatabentoDataService
-
-        service = DatabentoDataService(
-            event_bus=event_bus,
-            config=databento_config,
-            data_config=data_config,
-        )
-
-        # Add a mapping
-        service._symbol_map.add_mapping(100, "AAPL")
-        assert service._symbol_map.symbol_count == 1
-
-        # Simulate what _connect_live_session does
-        with patch.dict("os.environ", {"DATABENTO_API_KEY": "test-key"}):
-            await service._connect_live_session()
-
-        # Symbol map should be cleared
-        assert service._symbol_map.symbol_count == 0
-
-        if service._live_client:
-            service._live_client.stop()
 
     @pytest.mark.asyncio
     async def test_previous_client_stopped_before_new_one(
@@ -1387,7 +1334,6 @@ class TestReconnectionLogic:
                 with contextlib.suppress(Exception):
                     service._live_client.stop()
             service._live_client = db.Live(key="test")
-            service._symbol_map.clear()
             service._OHLCVMsg = MockOHLCVMsg
             service._TradeMsg = MockTradeMsg
             service._SymbolMappingMsg = MockSymbolMappingMsg
@@ -1434,7 +1380,6 @@ class TestReconnectionLogic:
                     service._live_client.stop()
             # Create new client
             service._live_client = db.Live(key="test")
-            service._symbol_map.clear()
             service._live_client.subscribe(
                 dataset=config.dataset,
                 schema=config.bar_schema,
