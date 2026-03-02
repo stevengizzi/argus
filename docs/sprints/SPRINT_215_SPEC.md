@@ -410,6 +410,29 @@ Read CLAUDE.md for full project context. Sprint 21.5, Session 4 validated all fo
 - Commit: `fix(integration): cross-strategy interactions validated with live data`
 ```
 
+**Sessions 4+5+6 Combined Outcome (March 2, 2026):**
+- ✅ **Databento API fixes required (DEC-238, DEC-239, DEC-240):**
+  - `msg.hd.instrument_id` changed to `msg.instrument_id` (direct attribute)
+  - Symbol resolution now uses Databento's built-in `symbology_map` property
+  - Prices are in fixed-point format (scaled by 1e9) — multiply by 1e-9
+  - Historical data has ~15 min lag — added 20-minute buffer to warmup end time
+- ✅ **All tests updated and passing:** 1712 pytest tests, 50 Databento-specific tests
+- ✅ **Live system startup verified:**
+  - IBKR paper connection: $1,000,345.40 equity, 0 positions
+  - Databento EQUS.MINI: Live streaming established, symbology mappings received
+  - All 4 strategies registered (3/4 active during ORB window)
+  - 12-phase startup completes successfully
+- ✅ **IBKR test order placed:**
+  - BUY 1 AAPL @ $50.00 LIMIT submitted successfully
+  - Order status: Submitted, Broker order ID: 3
+  - Fill streaming and bracket orders ready for next session
+- ✅ **Strategy event routing verified (code review):**
+  - `_on_candle_for_strategies()` subscribes to CandleEvent
+  - Routes to active strategies where symbol is in watchlist
+  - Signal → Risk Manager → Event Bus flow intact
+- ⚠️ **Scanner fallback triggered:** Databento historical data unavailable for current date (422 error), falls back to static symbol list (10 symbols)
+- **Commit:** `fix(databento): update for current API + fixed-point price format`
+
 ---
 
 ### Session 6: IB Gateway Setup + Connection
