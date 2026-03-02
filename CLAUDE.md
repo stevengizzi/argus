@@ -11,8 +11,8 @@ Phase 1 sprint plan: @docs/07_PHASE1_SPRINT_PLAN.md
 ## Current State
 
 **Structure:** Two parallel tracks (DEC-079, February 19, 2026). Expanded to AI-enhanced platform (DEC-163, February 26, 2026).
-- **Build Track:** System construction at development velocity. Sprints 1–21d complete (1,712 pytest tests + 257 Vitest). Sprint 21.5 (Live Integration — Databento + IBKR) is NEXT.
-- **Validation Track:** Paper trading ACTIVE on Alpaca IEX (system stability only — DEC-081). Signal accuracy validation pending Databento activation. All pre-Databento backtests require re-validation (DEC-132). Migrates to IBKR paper after IBKR account approved (U24619949, submitted Feb 21).
+- **Build Track:** System construction at development velocity. Sprints 1–21d complete. Sprint 21.5 (Live Integration) IN PROGRESS — 1,708 pytest tests + 255 Vitest. Sessions 1–9 + A1 + B0 complete, Blocks B1–B5 + C + D pending.
+- **Validation Track:** Databento EQUS.MINI live streaming confirmed (DEC-248). IBKR paper trading operational via IB Gateway (DEC-236). Paper validation in progress on Databento + IBKR (replaces Alpaca IEX). All pre-Databento backtests require re-validation (DEC-132). Sprint 21.6 (backtest re-validation) runs parallel with Sprint 22.
 
 Active sprint plan: `docs/10_PHASE3_SPRINT_PLAN.md` (covers both tracks).
 
@@ -21,12 +21,12 @@ Active sprint plan: `docs/10_PHASE3_SPRINT_PLAN.md` (covers both tracks).
 - **Execution broker:** Interactive Brokers (IBKR Pro, tiered). Sole live execution broker. SmartRouting, no PFOF. `ib_async` library (asyncio-native). DEC-083.
 - **Alpaca:** Demoted to strategy incubator paper testing only. No real capital through Alpaca. DEC-086.
 - **Historical data:** Databento source, Parquet cache. Existing Alpaca Parquet files retained. DEC-085.
-- **Cost deferral:** Databento subscription activated when adapter ready for integration testing. DEC-087.
+- **Cost deferral:** Databento subscription ACTIVATED (Sprint 21.5, Feb 28). DEC-087.
 
 - IBKR account approved (U24619949). Paper trading available. IB Gateway for API connections (DEC-232). Individual, Margin, IBKR Pro (tiered), GA address. Permissions: Stocks, Options L3, Futures, Forex, Crypto.
 
-**Databento status:** Subscription activating. XNAS.ITCH + XNYS.PILLAR datasets (DEC-234).
-**Databento datasets:** XNAS.ITCH (Nasdaq), XNYS.PILLAR (NYSE). 2 of 10 session slots.
+**Databento status:** Subscription ACTIVE. EQUS.MINI dataset confirmed working (DEC-248). Live streaming + all required schemas (ohlcv-1m, ohlcv-1d, trades, tbbo) verified. Supersedes XNAS.ITCH + XNYS.PILLAR plan (DEC-234 amended).
+**Databento dataset:** EQUS.MINI (consolidated US equities — all exchanges in single feed). 1 of 10 session slots.
 
 **Expanded Vision (DEC-163, February 26, 2026):**
 - ARGUS expanded to AI-enhanced trading intelligence platform (15+ patterns, Setup Quality Engine, Order Flow Model, NLP Catalyst Pipeline, Dynamic Position Sizer, Learning Loop, Pre-Market Engine).
@@ -35,6 +35,16 @@ Active sprint plan: `docs/10_PHASE3_SPRINT_PLAN.md` (covers both tracks).
 - Sprint 21 split into 21a–21d (DEC-171): 21a Pattern Library page ✅, 21b Orchestrator page ✅, 21c The Debrief page ✅, 21d Dashboard+Performance+System+nav+Copilot shell ✅. All 7 Command Center pages complete.
 - Free catalyst sources first (DEC-164): SEC EDGAR + Finnhub + FMP. Benzinga deferred.
 - Full roadmap: `docs/research/ARGUS_Expanded_Roadmap.md`.
+
+**Sprint 21.5 Progress (Live Integration — Feb 28 – Mar 3, IN PROGRESS):**
+- Sessions 1–3: Databento live connection. API format discoveries: instrument_id direct attribute (DEC-241), built-in symbology_map replaces custom DatabentoSymbolMap (DEC-242), prices fixed-point ×1e9 (DEC-243). Dataset switched from XNAS.ITCH to EQUS.MINI (DEC-237/248).
+- Sessions 4–6: First live market data streaming (30+ min). CandleEvents across 10 symbols. VWAP Reclaim signal on NFLX (rejected by Risk Manager for 5% concentration limit — position sizing investigation queued for B1).
+- Session 7: IBKR paper connection via IB Gateway. Bracket orders validated. flatten_all() SMART routing fix (DEC-245).
+- Sessions 8–9: Position management lifecycle. State reconstruction from broker. Reconnection. get_open_orders() added to Broker ABC (DEC-246).
+- Session A1: Validation scripts — 13/13 integration PASS, 4/4 resilience PASS. Discovered EQUS.MINI historical daily bar data has multi-day lag (up to ~6 days over weekends).
+- Session B0: DatabentoScanner resilience fix for historical data lag (DEC-247, 13 new tests). EQUS.MINI diagnostic script confirmed: live streaming works, all schemas available, multi-symbol queries functional (DEC-248). Orphaned DatabentoSymbolMap deleted.
+- Remaining: Block B (B1–B5: position sizing, time stop validation, operational scripts, LIVE_OPERATIONS.md, doc sync) + Block C (C1–C3: full market day validation) + Block D (D1: sprint closeout).
+- DEC-241 through DEC-248.
 
 **Sprint 21d Results (Dashboard + Performance + System + Copilot — Feb 27–28):**
 - Dashboard redesign (DEC-204): OrchestratorStatusStrip, StrategyDeploymentBar (DEC-219), GoalTracker (DEC-220), 3-card row with MarketStatus/TodayStats/SessionTimeline (DEC-221). PreMarketLayout placeholder (DEC-213). Dashboard aggregate endpoint (DEC-222), useSummaryData hook disabling (DEC-223).
@@ -118,9 +128,9 @@ Active sprint plan: `docs/10_PHASE3_SPRINT_PLAN.md` (covers both tracks).
 
 **Recommended ORB parameters (DEC-076):** or=5, hold=15, gap=2.0, stop_buf=0.0, target_r=2.0, atr=999.0 (disabled).
 
-**Validation Track sequence:** Build through Sprint 21d (7-page architecture) → activate Databento → IBKR paper (Gate 2, 20+ days) → Build through Sprint 26 → AI-enhanced paper with quality scoring (Gate 3, 30+ days) → Build through Sprint 32 → Full system paper (Gate 4, 50+ cumulative, Sharpe > 2.0) → CPA → live at minimum size on IBKR (Gate 5).
+**Validation Track sequence:** Sprint 21.5 live integration (Databento + IBKR paper, IN PROGRESS) → IBKR paper trading with quality data (Gate 2, 20+ days, starts during Sprint 21.5) → Sprint 21.6 backtest re-validation (parallel with Sprint 22) → Build through Sprint 25 (intelligence infrastructure) → AI-enhanced paper with quality scoring (Gate 3, 30+ days) → Build through Sprint 31 → Full system paper (Gate 4, 50+ cumulative, Sharpe > 2.0) → CPA → live at minimum size on IBKR (Gate 5).
 
-**Build Track queue:** Orchestrator page (21b) → The Debrief (21c) → Dashboard+Performance+System+Nav+Copilot shell (21d) → AI Layer MVP + Copilot activation (22) → NLP Catalyst + Pre-Market (23) → Order Flow V1 (24) → Quality Engine + Dynamic Sizer (25) → Red-to-Green + Patterns (26) → Pattern Expansion I (27) → Order Flow V2 + Short Selling (28) → Pattern Expansion II (29) → Learning Loop V1 (30) → Orchestrator V2 (31) → Pattern Expansion III (32) → ML/Advanced (33+).
+**Build Track queue:** Live Integration (21.5, IN PROGRESS) → Backtest Re-Validation (21.6, parallel with 22) → AI Layer MVP + Copilot activation (22) → NLP Catalyst + Pre-Market (23) → Quality Engine + Dynamic Sizer (24, DEC-240) → Red-to-Green + Patterns (25) → Pattern Expansion I (26) → Short Selling + Parabolic Short (27) → Pattern Expansion II (28) → Learning Loop V1 (29) → Orchestrator V2 AI-Enhanced (30) → Pattern Expansion III + Volume Profile (31) → Learning Loop V2 ML (32+). Order Flow V1/V2 deferred to post-revenue backlog (DEC-238).
 
 **Command Center delivery (DEC-080):** Three surfaces from single React codebase — web app + Tauri desktop + PWA mobile. All operational after Sprint 16.
 
@@ -150,7 +160,7 @@ Components implemented:
 - Dependencies: alpaca-py>=0.30, python-dotenv>=1.0, aiohttp>=3.9, plotly>=6.5, matplotlib>=3.8, seaborn>=0.13 (NOT alpaca-trade-api — deprecated)
 - Research reports completed: Market Data Infrastructure (`argus_market_data_research_report.md`) and Execution Broker (`argus_execution_broker_research_report.md`)
 - Decisions DEC-081–087: Databento data backbone, IBKR live execution, Alpaca incubator-only, sprint resequencing, Parquet cache strategy, cost deferral
-- DatabentoConfig, DatabentoSymbolMap, DatabentoDataService (Sprint 12, partial — core streaming, indicators, stale monitor, historical cache)
+- DatabentoConfig, DatabentoDataService (Sprint 12+21.5 — core streaming, indicators, stale monitor, historical cache). DatabentoSymbolMap removed (DEC-242 — library built-in symbology_map used instead).
 - DataStaleEvent, DataResumedEvent events
 - DatabentoDataService reconnection with exponential backoff, DataFetcher Databento backend (historical + manifest), DatabentoScanner (V1 watchlist), DataSource enum + system integration, shared databento_utils.py (DEC-090, DEC-091)
 - IndicatorEngine (Sprint 12.5, DEC-092) — shared indicator computation (VWAP, ATR-14, SMA-9/20/50, RVOL) used by all four DataService implementations. DEF-013 resolved.
@@ -190,6 +200,7 @@ Components implemented:
 - SymbolDetailPanel (global, DEC-177) — SymbolChart (candlestick), SymbolTradingHistory, SymbolPositionDetail. Triggered from any symbol click via symbolDetailUI Zustand store.
 - Strategy spec auto-discovery (DEC-181) — convention-based (`strat_X` → `STRATEGY_X.md`)
 - Dependencies added: react-markdown, remark-gfm
+- Sprint 21.5 Live Integration: Databento EQUS.MINI live streaming + IBKR paper trading. DatabentoScanner resilience for historical data lag (DEC-247). flatten_all() SMART routing fix (DEC-245). get_open_orders() Broker ABC method (DEC-246). Diagnostic script (`scripts/diagnose_databento.py`). Validation scripts (`scripts/test_session8_integration.py`, `scripts/test_session9_resilience.py`).
 
 ## Architecture
 
@@ -198,7 +209,7 @@ Three tiers, built in parallel (DEC-079):
 2. Command Center (FastAPI + React → web + Tauri desktop + PWA mobile) — dashboards, controls, reports → Build Track Sprint 14+
 3. AI Layer (Claude API) — advisory, approval workflow, reports → Build Track Sprint 22+
 
-Currently: Validation Track (paper trading on Alpaca) running in parallel with Build Track (Sprint 21b next).
+Currently: Sprint 21.5 Live Integration IN PROGRESS (Databento EQUS.MINI + IBKR paper). Sprint 22 (AI Layer MVP) next after 21.5 completes.
 
 ## Tech Stack
 
@@ -259,9 +270,12 @@ docs/
 - `cd argus/ui && npm install` — Install frontend dependencies
 - `cd argus/ui && npm run dev` — Start frontend dev server (Vite)
 - `cd argus/ui && npm run build` — Build frontend for production
-- `python -m argus.main --config system_live.yaml` - Live mode (Databento + IBKR paper)
 - `python -m argus.main --dev` - Dev mode (mock data, no external connections)
 - `python -m argus.main --config system.yaml` - Alpaca incubator mode (legacy)
+- `python -m argus.main --config config/system_live.yaml` — Live mode (Databento EQUS.MINI + IBKR paper)
+- `python scripts/diagnose_databento.py` — Diagnose Databento EQUS.MINI capabilities (historical, live, schemas, multi-symbol)
+- `python scripts/test_session8_integration.py` — Integration validation (13 checks: connection, data, strategies, risk, orders, UI)
+- `python scripts/test_session9_resilience.py` — Resilience validation (4 checks: reconnection, state reconstruction, graceful degradation, recovery)
 
 
 ## Code Style

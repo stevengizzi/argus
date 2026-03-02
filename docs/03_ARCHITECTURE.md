@@ -255,13 +255,13 @@ Future (when needed):
 
 **DatabentoDataService Configuration (DatabentoConfig):**
 - `api_key`: Databento API key (from environment variable, never in code)
-- `dataset`: "XNAS.ITCH" (NASDAQ) + "XNYS.PILLAR" (NYSE) or equivalent composite
+- `dataset`: "EQUS.MINI" (consolidated US equities — all exchanges in single feed, DEC-248)
 - `schema`: ["ohlcv-1m", "trades"] (default). L2 ["mbp-10"] requires Plus tier (DEC-237), deferred post-revenue (DEC-238).
 - `symbols`: list or "ALL_SYMBOLS" for full universe
 - `reconnect_max_retries`: 10
 - `reconnect_base_delay_seconds`: 1.0
 
-**Implementation Status:** Sprint 12 ✅ COMPLETE (Feb 21). DatabentoConfig, DatabentoSymbolMap, DatabentoDataService (live streaming, reconnection with exponential backoff, indicators, stale data monitor, historical/Parquet cache). DataFetcher Databento backend with manifest tracking. DatabentoScanner (V1 watchlist). DataSource enum for config-driven provider selection. Shared normalization via `argus/data/databento_utils.py` (DEC-091). Threading model: Databento reader thread → `call_soon_threadsafe()` → asyncio Event Bus (DEC-088). Default dataset: XNAS.ITCH (DEC-089). See `argus_market_data_research_report.md` Section 14.
+**Implementation Status:** Sprint 12 ✅ COMPLETE (Feb 21), updated Sprint 21.5 (Mar 2–3). DatabentoConfig, DatabentoDataService (live streaming, reconnection with exponential backoff, indicators, stale data monitor, historical/Parquet cache). DataFetcher Databento backend with manifest tracking. DatabentoScanner (V1 watchlist with historical data lag resilience, DEC-247). DataSource enum for config-driven provider selection. Shared normalization via `argus/data/databento_utils.py` (DEC-091). Threading model: Databento reader thread → `call_soon_threadsafe()` → asyncio Event Bus (DEC-088). Production dataset: EQUS.MINI (DEC-248, supersedes XNAS.ITCH DEC-089) — consolidated US equities covering all exchanges in single feed. Symbol resolution uses Databento library's built-in `symbology_map` (DEC-242). Prices in fixed-point format ×1e9 (DEC-243). DatabentoSymbolMap removed (replaced by built-in mapping). Live streaming + all required schemas (ohlcv-1m, ohlcv-1d, trades, tbbo) verified on Standard plan. See `argus_market_data_research_report.md` Section 14.
 
 
 ### 3.3 Broker Abstraction (`execution/broker.py`)
@@ -278,7 +278,8 @@ class Broker(ABC):
     async def get_positions(self) -> list[Position]
     async def get_account(self) -> AccountInfo
     async def get_order_status(self, order_id: str) -> OrderStatus
-    async def flatten_all(self) -> list[OrderResult]  # Emergency: close everything
+    async def get_open_orders(self) -> list[Order]  # For state reconstruction (DEC-246)
+    async def flatten_all(self) -> list[OrderResult]  # Emergency: close everything (uses SMART routing DEC-245)
 ```
 
 **Implementations:**
@@ -339,7 +340,7 @@ ARGUS ──ib_async──> IB Gateway (Java) ──> IBKR Servers ──> Excha
 - All stops placed broker-side — survive gateway disconnections.
 - Paper trading uses separate paper account linked to live account. Same API, different port.
 
-Implemented in Sprint 13 (Feb 22). 78 IBKRBroker tests + 13 Order Manager T2 tests + 8 integration tests. See DEC-083, DEC-093, DEC-094, and `argus_execution_broker_research_report.md` Section 11.
+Implemented in Sprint 13 (Feb 22), updated Sprint 21.5 (Mar 2–3). 78 IBKRBroker tests + 13 Order Manager T2 tests + 8 integration tests. Sprint 21.5 additions: `flatten_all()` SMART routing fix (DEC-245 — uses `get_stock_contract()` instead of fill contract), `get_open_orders()` implementation with ULID recovery from `orderRef` (DEC-246). Live IBKR paper trading validated (Sessions 7–9). See DEC-083, DEC-093, DEC-094, and `argus_execution_broker_research_report.md` Section 11.
 
 ### 3.4 Base Strategy (`strategies/base_strategy.py`)
 

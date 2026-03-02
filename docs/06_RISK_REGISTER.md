@@ -651,7 +651,7 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 
 ---
 
-### RSK-037 | First Live Integration Discovery Risk
+### RSK-037 | First Live Integration Discovery Risk — VALIDATED
 | Field | Value |
 |-------|-------|
 | **Date** | 2026-02-28 |
@@ -659,8 +659,8 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 | **Likelihood** | High (nearly certain some issues will surface) |
 | **Impact** | Low-Medium (delays Sprint 21.5 completion by 2-4 sessions at most) |
 | **Mitigation** | Sprint 21.5 is structured with buffer sessions (13-15) specifically for fixing discovered issues. Phased approach (Databento first, IBKR second, combined third) isolates problems. No real capital at risk during this phase. |
-| **Status** | Active |
-
+| **Outcome** | VALIDATED — Risk materialized as expected. Six integration discoveries required code fixes: (1) Databento `instrument_id` direct attribute, not nested in header (DEC-241), (2) built-in `symbology_map` replaces custom DatabentoSymbolMap (DEC-242), (3) fixed-point price format ×1e9 (DEC-243), (4) historical data ~15-min intraday lag (DEC-244), (5) `flatten_all()` SMART routing for exit orders (DEC-245), (6) `get_open_orders()` missing from Broker ABC (DEC-246). Additional discovery: historical daily bar data has multi-day lag (~6 days over weekends), handled by scanner resilience fix (DEC-247). All issues resolved within the sprint's buffer sessions. Impact was exactly as estimated — Low-Medium. |
+| **Status** | Resolved — Sprint 21.5 |
 ---
 
 ### RSK-038 — Revenue-Dependent L2 Data Access for Order Flow Model

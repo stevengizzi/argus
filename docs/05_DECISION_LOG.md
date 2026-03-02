@@ -2712,5 +2712,28 @@ Each entry follows this format:
 
 ---
 
+### DEC-247 | Scanner Resilience for Databento Historical Data Lag
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-03 |
+| **Decision** | DatabentoScanner gracefully handles Databento historical API lag via `_fetch_daily_bars_with_lag_handling()`. When the scanner receives a 422 `data_end_after_available_end` error, it extracts the available end date from the error message via regex, retries the query with the adjusted date range, and falls back to the static watchlist if the retry also fails. Gap calculations use the most recent available daily bars (may be 1–6 days old depending on weekends/processing). |
+| **Rationale** | Databento EQUS.MINI historical data has a multi-day lag (up to ~6 days over weekends), much longer than the ~15-minute lag observed for intraday data during market hours (DEC-244). The scanner's daily bar query for gap calculation triggered 422 errors when requesting data beyond the available range. This is distinct from the live streaming API, which operates independently. Scanner failure must not block system startup — the static watchlist fallback ensures strategies always have symbols to trade. |
+| **Alternatives** | (1) Hardcode a lookback buffer (e.g., always query 7 days back) — rejected because it wastes bandwidth and doesn't handle variable lag. (2) Omit `end` parameter entirely — rejected because Databento API may return unexpected ranges. (3) Accept scanner failure silently — rejected because clear logging aids diagnosis. |
+| **Status** | Active |
+
+---
+
+### DEC-248 | EQUS.MINI Confirmed as Production Live Dataset
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-03 |
+| **Decision** | EQUS.MINI confirmed as the production dataset for ARGUS on Databento Standard plan. Diagnostic script (`scripts/diagnose_databento.py`) verified: (1) live streaming subscription accepted without license error, (2) symbology mappings received, (3) historical ohlcv-1m bars available, (4) all four required schemas functional (ohlcv-1m, ohlcv-1d, trades, tbbo), (5) multi-symbol queries working (8 symbols tested). XNAS.ITCH is no longer the default — EQUS.MINI provides consolidated exchange-direct data across all US equities in a single subscription. |
+| **Rationale** | Earlier sessions (4–6) used XNAS.ITCH successfully for live streaming, but DEC-237 revealed XNAS.ITCH requires a live data license on Standard plan. EQUS.MINI (the consolidated equities mini dataset) is included in Standard for both historical and live L0+L1 data. The diagnostic confirmed EQUS.MINI supports all schemas ARGUS requires, including `tbbo` (top-of-book bid/offer) for L1 quote data. Supersedes DEC-089 (default dataset was XNAS.ITCH). Amends DEC-234 (phased dataset plan) — EQUS.MINI replaces the XNAS.ITCH + XNYS.PILLAR multi-dataset approach since it already covers all US exchanges in one feed. |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
 *New decisions are appended chronologically as the project progresses.*
