@@ -45,7 +45,7 @@ Active sprint plan: `docs/10_PHASE3_SPRINT_PLAN.md` (covers both tracks).
 - Session B0: DatabentoScanner resilience fix for historical data lag (DEC-247, 13 new tests). EQUS.MINI diagnostic script confirmed: live streaming works, all schemas available, multi-symbol queries functional (DEC-248). Orphaned DatabentoSymbolMap deleted.
 - Sessions B1–B5: Position sizing verified (Risk Manager concentration limit working correctly). Time stop/EOD flatten validated. Operational scripts created (`scripts/start_live.sh`, `scripts/stop_live.sh`). `docs/LIVE_OPERATIONS.md` created (418 lines). Documentation sync complete.
 - Remaining: Block C (C1–C3: full market day validation) + Block D (D1: sprint closeout).
-- DEC-241 through DEC-248.
+- DEC-241 through DEC-249.
 
 **Sprint 21d Results (Dashboard + Performance + System + Copilot — Feb 27–28):**
 - Dashboard redesign (DEC-204): OrchestratorStatusStrip, StrategyDeploymentBar (DEC-219), GoalTracker (DEC-220), 3-card row with MarketStatus/TodayStats/SessionTimeline (DEC-221). PreMarketLayout placeholder (DEC-213). Dashboard aggregate endpoint (DEC-222), useSummaryData hook disabling (DEC-223).
@@ -201,7 +201,7 @@ Components implemented:
 - SymbolDetailPanel (global, DEC-177) — SymbolChart (candlestick), SymbolTradingHistory, SymbolPositionDetail. Triggered from any symbol click via symbolDetailUI Zustand store.
 - Strategy spec auto-discovery (DEC-181) — convention-based (`strat_X` → `STRATEGY_X.md`)
 - Dependencies added: react-markdown, remark-gfm
-- Sprint 21.5 Live Integration: Databento EQUS.MINI live streaming + IBKR paper trading. DatabentoScanner resilience for historical data lag (DEC-247). flatten_all() SMART routing fix (DEC-245). get_open_orders() Broker ABC method (DEC-246). Diagnostic script (`scripts/diagnose_databento.py`). Validation scripts (`scripts/test_session8_integration.py`, `scripts/test_session9_resilience.py`).
+- Sprint 21.5 Live Integration: Databento EQUS.MINI live streaming + IBKR paper trading. DatabentoScanner resilience for historical data lag (DEC-247). flatten_all() SMART routing fix (DEC-245). get_open_orders() Broker ABC method (DEC-246). Concentration limit approve-with-modification (DEC-249). Diagnostic script (`scripts/diagnose_databento.py`). Validation scripts (`scripts/test_session8_integration.py`, `scripts/test_session9_resilience.py`, `scripts/test_time_stop_eod.py`). Operational scripts (`scripts/start_live.sh`, `scripts/stop_live.sh`). `docs/LIVE_OPERATIONS.md`.
 
 ## Architecture
 
@@ -277,6 +277,9 @@ docs/
 - `python scripts/diagnose_databento.py` — Diagnose Databento EQUS.MINI capabilities (historical, live, schemas, multi-symbol)
 - `python scripts/test_session8_integration.py` — Integration validation (13 checks: connection, data, strategies, risk, orders, UI)
 - `python scripts/test_session9_resilience.py` — Resilience validation (4 checks: reconnection, state reconstruction, graceful degradation, recovery)
+- `python scripts/test_time_stop_eod.py` — Time stop + EOD flatten validation (dual-mode: IBKR paper or mock)
+- `./scripts/start_live.sh [--with-ui]` — Start ARGUS in live mode (4 pre-flight checks, PID management)
+- `./scripts/stop_live.sh` — Graceful shutdown (SIGINT, 60s timeout, force kill fallback)
 
 
 ## Code Style

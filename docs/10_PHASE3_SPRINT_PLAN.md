@@ -411,8 +411,10 @@ per sprint velocity.
 - `docs/LIVE_OPERATIONS.md` ✅ (418 lines)
 - Startup/shutdown automation scripts (`scripts/start_live.sh`, `scripts/stop_live.sh`) ✅
 - `scripts/diagnose_databento.py` diagnostic tool ✅
+- Concentration limit approve-with-modification (DEC-249) ✅
+- Time stop + EOD validation script (`scripts/test_time_stop_eod.py`) ✅
 
-**Decisions:** DEC-241 through DEC-248
+**Decisions:** DEC-241 through DEC-249
 **Prerequisites:** Databento subscription activated ✅, IBKR account approved ✅
 **Exit criteria:** Full market session (9:30-4:00 ET) completed without crashes, all 4 strategies processing data, paper trades executing, Command Center operational with live data, clean overnight workflow verified
 

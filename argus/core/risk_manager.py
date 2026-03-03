@@ -205,12 +205,17 @@ class RiskManager:
         2. Daily loss limit breached? → Reject
         3. Weekly loss limit breached? → Reject
         4. Max concurrent positions exceeded? → Reject
+        4.5a. Single-stock concentration limit (DEC-249) → Modify share count or reject
+        4.5b. Duplicate stock policy (DEC-121) → Reject
         5. Cash reserve enforcement → Reject or modify share count
         6. Buying power check → Reject or modify share count
         7. PDT check (margin accounts under threshold) → Reject
 
-        If share count must be reduced (steps 5-6), check the 0.25R floor:
-        if reduced position potential profit < 0.25R, reject entirely.
+        Steps 4.5a, 5, and 6 can each reduce share count (approve-with-modification).
+        Reductions cascade: concentration may reduce first, then cash reserve or buying
+        power may reduce further. All reduction reasons are accumulated and reported.
+        At each stage, the 0.25R floor is checked against the original share count —
+        if reduced position potential profit < 0.25R of original, reject entirely.
 
         Args:
             signal: The SignalEvent to evaluate.
@@ -285,7 +290,7 @@ class RiskManager:
         # This can reduce shares (approve-with-modification), unlike duplicate policy
         max_conc_shares = self._get_concentration_limit_shares(signal, account.equity)
         modified_shares: int | None = None
-        modification_reason: str | None = None
+        modification_reasons: list[str] = []
 
         if max_conc_shares is not None and signal.share_count > max_conc_shares:
             if max_conc_shares <= 0:
@@ -314,7 +319,7 @@ class RiskManager:
                     ),
                 )
             modified_shares = max_conc_shares
-            modification_reason = "concentration limit"
+            modification_reasons.append("concentration limit")
             logger.info(
                 "Signal %s %s: shares reduced from %d to %d for concentration limit",
                 signal.symbol,
@@ -368,7 +373,7 @@ class RiskManager:
                     reason="Position reduced below 0.25R minimum — not worth taking",
                 )
             modified_shares = reduced
-            modification_reason = "cash reserve constraint"
+            modification_reasons.append("cash reserve constraint")
 
         # 6. Buying power check (recalculate cost with effective shares)
         effective_shares = modified_shares if modified_shares is not None else signal.share_count
@@ -385,7 +390,7 @@ class RiskManager:
                     reason="Position reduced below 0.25R minimum — not worth taking",
                 )
             modified_shares = reduced
-            modification_reason = "buying power constraint"
+            modification_reasons.append("buying power constraint")
 
         # 7. PDT check
         if self._config.pdt.enabled:
@@ -399,17 +404,18 @@ class RiskManager:
 
         # Approve (with or without modifications)
         if modified_shares is not None:
+            combined_reason = " + ".join(modification_reasons)
             logger.info(
                 "Signal approved with modification: %s %s shares reduced from %d to %d (%s)",
                 signal.symbol,
                 signal.strategy_id,
                 signal.share_count,
                 modified_shares,
-                modification_reason,
+                combined_reason,
             )
             mod_reason = (
                 f"Reduced from {signal.share_count} to {modified_shares} "
-                f"shares — {modification_reason}"
+                f"shares — {combined_reason}"
             )
             return OrderApprovedEvent(
                 signal=signal,

@@ -468,7 +468,7 @@ When a signal is partially valid, the Risk Manager may approve with modification
 
 | Permitted Modifications | Rules |
 |------------------------|-------|
-| Reduce share count | Reduce to fit buying power or position limits. Reject if reduced position yields < 0.25R potential profit. |
+| Reduce share count | Reduce to fit concentration limit (DEC-249), buying power, or cash reserve. Multiple reductions cascade and accumulate. Reject if reduced position yields < 0.25R potential profit. |
 | Tighten profit targets | If cross-strategy exposure limits require faster exit. |
 
 | Prohibited Modifications | Reason |
