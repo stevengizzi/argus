@@ -281,16 +281,59 @@ class RiskManager:
                 reason=f"Max concurrent positions ({max_pos}) reached",
             )
 
-        # 4.5. Cross-strategy risk checks (DEC-121, DEC-124)
-        cross_reason = await self._check_cross_strategy_risk(signal, account.equity)
-        if cross_reason:
+        # 4.5a. Single-stock concentration limit (DEC-121, DEC-249)
+        # This can reduce shares (approve-with-modification), unlike duplicate policy
+        max_conc_shares = self._get_concentration_limit_shares(signal, account.equity)
+        modified_shares: int | None = None
+        modification_reason: str | None = None
+
+        if max_conc_shares is not None and signal.share_count > max_conc_shares:
+            if max_conc_shares <= 0:
+                max_exp = account.equity * self._config.cross_strategy.max_single_stock_pct
+                logger.warning(
+                    "Signal rejected: concentration limit already reached for %s (max $%.2f)",
+                    signal.symbol,
+                    max_exp,
+                )
+                return OrderRejectedEvent(
+                    signal=signal,
+                    reason=f"Concentration limit already reached for {signal.symbol}",
+                )
+            # Reduce shares to fit concentration limit
+            if self._below_025r_floor(signal.share_count, max_conc_shares, signal):
+                max_pct = self._config.cross_strategy.max_single_stock_pct * 100
+                logger.warning(
+                    "Signal rejected: concentration-reduced shares (%d) below 0.25R floor",
+                    max_conc_shares,
+                )
+                return OrderRejectedEvent(
+                    signal=signal,
+                    reason=(
+                        f"Position reduced for {max_pct:.0f}% concentration limit "
+                        f"would be below 0.25R minimum — not worth taking"
+                    ),
+                )
+            modified_shares = max_conc_shares
+            modification_reason = "concentration limit"
+            logger.info(
+                "Signal %s %s: shares reduced from %d to %d for concentration limit",
+                signal.symbol,
+                signal.strategy_id,
+                signal.share_count,
+                max_conc_shares,
+            )
+
+        # 4.5b. Duplicate stock policy check (DEC-121, DEC-124)
+        # This is a hard reject — reducing shares won't help
+        dup_reason = await self._check_duplicate_stock_policy(signal)
+        if dup_reason:
             logger.warning(
-                "Signal rejected: cross-strategy risk (%s %s) - %s",
+                "Signal rejected: duplicate stock policy (%s %s) - %s",
                 signal.strategy_id,
                 signal.symbol,
-                cross_reason,
+                dup_reason,
             )
-            return OrderRejectedEvent(signal=signal, reason=cross_reason)
+            return OrderRejectedEvent(signal=signal, reason=dup_reason)
 
         # 5. Cash reserve enforcement (DEC-037: use start-of-day equity)
         # Fall back to live equity if start-of-day equity not yet snapshotted
@@ -299,9 +342,9 @@ class RiskManager:
         )
         reserve = equity_for_reserve * self._config.account.cash_reserve_pct
         available = account.cash - reserve
-        cost = signal.entry_price * signal.share_count
-        modified_shares: int | None = None
-        modification_reason: str | None = None
+        # Use effective share count (may have been reduced by concentration limit)
+        effective_shares = modified_shares if modified_shares is not None else signal.share_count
+        cost = signal.entry_price * effective_shares
 
         if cost > available:
             if available <= 0:
@@ -327,8 +370,10 @@ class RiskManager:
             modified_shares = reduced
             modification_reason = "cash reserve constraint"
 
-        # 6. Buying power check (only if not already reduced)
-        if modified_shares is None and cost > account.buying_power:
+        # 6. Buying power check (recalculate cost with effective shares)
+        effective_shares = modified_shares if modified_shares is not None else signal.share_count
+        cost = signal.entry_price * effective_shares
+        if cost > account.buying_power:
             reduced = int(account.buying_power / signal.entry_price)
             if self._below_025r_floor(signal.share_count, reduced, signal):
                 logger.warning(
@@ -405,31 +450,30 @@ class RiskManager:
 
         return reduced_risk < 0.25 * original_r
 
-    async def _check_cross_strategy_risk(self, signal: SignalEvent, equity: float) -> str | None:
-        """Check cross-strategy risk limits.
+    def _get_concentration_limit_shares(
+        self, signal: SignalEvent, equity: float
+    ) -> int | None:
+        """Calculate max shares allowed by single-stock concentration limit.
 
-        Verifies that the new position wouldn't violate:
-        1. Single-stock exposure limit (max_single_stock_pct)
-        2. Duplicate stock policy (if not ALLOW_ALL)
+        Returns the maximum number of shares that would keep the position within
+        the concentration limit (max_single_stock_pct of equity), accounting for
+        any existing positions in the same symbol.
 
         Args:
             signal: The trade signal to evaluate.
             equity: Current account equity.
 
         Returns:
-            Rejection reason string if limit violated, None if acceptable.
+            Max allowable shares (may be less than signal.share_count), or
+            None if Order Manager is unavailable (skip check).
         """
-        # Skip checks if Order Manager not available
         if self._order_manager is None:
             return None
 
         cross_config = self._config.cross_strategy
 
-        # Get all managed positions by symbol
+        # Get existing exposure for this symbol
         managed = self._order_manager.get_managed_positions()
-
-        # 1. Single-stock exposure check
-        proposed_exposure = signal.entry_price * signal.share_count
         existing_exposure = 0.0
 
         positions_for_symbol = managed.get(signal.symbol, [])
@@ -437,20 +481,44 @@ class RiskManager:
             if not pos.is_fully_closed:
                 existing_exposure += pos.entry_price * pos.shares_remaining
 
-        total_exposure = existing_exposure + proposed_exposure
+        # Calculate remaining capacity
         max_exposure = equity * cross_config.max_single_stock_pct
+        remaining_capacity = max_exposure - existing_exposure
 
-        if total_exposure > max_exposure:
-            return (
-                f"Single-stock exposure would exceed limit: "
-                f"${total_exposure:.2f} > ${max_exposure:.2f} "
-                f"({cross_config.max_single_stock_pct * 100:.0f}% of equity)"
-            )
+        if remaining_capacity <= 0:
+            return 0
 
-        # 2. Duplicate stock policy check (skip if ALLOW_ALL)
+        # Max shares we can add
+        max_shares = int(remaining_capacity / signal.entry_price)
+        return max_shares
+
+    async def _check_duplicate_stock_policy(
+        self, signal: SignalEvent
+    ) -> str | None:
+        """Check duplicate stock policy (hard reject if violated).
+
+        Verifies that the new position wouldn't violate the duplicate stock
+        policy (if not ALLOW_ALL). This is a hard reject — cannot be fixed
+        by reducing share count.
+
+        Args:
+            signal: The trade signal to evaluate.
+
+        Returns:
+            Rejection reason string if policy violated, None if acceptable.
+        """
+        if self._order_manager is None:
+            return None
+
+        cross_config = self._config.cross_strategy
         policy = cross_config.duplicate_stock_policy
+
         if policy == DuplicateStockPolicy.ALLOW_ALL:
             return None
+
+        # Get managed positions for this symbol
+        managed = self._order_manager.get_managed_positions()
+        positions_for_symbol = managed.get(signal.symbol, [])
 
         # Check if another strategy already holds this symbol
         for pos in positions_for_symbol:

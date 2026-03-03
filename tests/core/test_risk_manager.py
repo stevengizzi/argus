@@ -877,8 +877,12 @@ class TestCrossStrategyRiskExposure:
         assert isinstance(result, OrderApprovedEvent)
 
     @pytest.mark.asyncio
-    async def test_signal_rejected_exposure_exceeds_limit(self) -> None:
-        """Signal should be rejected when combined exposure exceeds limit."""
+    async def test_signal_reduced_when_exposure_exceeds_limit(self) -> None:
+        """Signal should have shares reduced when combined exposure exceeds limit.
+
+        DEC-249: Concentration limit now uses approve-with-modification instead
+        of hard rejection. Shares are reduced to fit within the limit.
+        """
         broker = SimulatedBroker(initial_cash=100_000)
         await broker.connect()
         bus = EventBus()
@@ -900,13 +904,102 @@ class TestCrossStrategyRiskExposure:
         rm = RiskManager(config=config, broker=broker, event_bus=bus, order_manager=om)
         await rm.initialize()
 
-        # New signal: 10 more shares = $1500
-        # Total: $6000 = 6% (exceeds 5% limit)
+        # New signal: 10 more shares at $150 = $1500
+        # Total would be: $6000 = 6% (exceeds 5% limit)
+        # Max capacity: $5000 - $4500 = $500 = 3 shares
         signal = make_signal(symbol="AAPL", share_count=10, entry_price=150.0)
         result = await rm.evaluate_signal(signal)
 
+        # Should approve with reduced shares, not reject
+        assert isinstance(result, OrderApprovedEvent)
+        assert result.modifications is not None
+        assert result.modifications["share_count"] == 3  # Reduced from 10 to 3
+        assert "concentration limit" in result.modifications["reason"]
+
+    @pytest.mark.asyncio
+    async def test_signal_rejected_concentration_reduced_below_025r_floor(self) -> None:
+        """Signal should be rejected if concentration-reduced shares fall below 0.25R.
+
+        DEC-249: When concentration limit reduces shares, if the reduced position
+        would have potential profit < 0.25R of original, reject entirely.
+        """
+        broker = SimulatedBroker(initial_cash=100_000)
+        await broker.connect()
+        bus = EventBus()
+        clock = FixedClock(datetime.now(UTC))
+        config = make_risk_config(max_single_stock_pct=0.05)
+
+        om_config = OrderManagerConfig()
+        om = OrderManager(event_bus=bus, broker=broker, clock=clock, config=om_config)
+
+        # Add an existing position: 33 shares at $150 = $4950 (4.95%)
+        pos = make_managed_position(
+            symbol="AAPL",
+            strategy_id="strat_other",
+            entry_price=150.0,
+            shares_remaining=33,
+        )
+        om._managed_positions["AAPL"] = [pos]
+
+        rm = RiskManager(config=config, broker=broker, event_bus=bus, order_manager=om)
+        await rm.initialize()
+
+        # New signal: 100 shares with $3 risk per share
+        # Max capacity: $5000 - $4950 = $50 = 0 shares (truncated to int)
+        # Would reduce from 100 to 0 — below 0.25R floor
+        # Actually: 100 shares * $3 risk = $300 R. 0.25R = $75. 0 shares = $0 risk.
+        signal = make_signal(
+            symbol="AAPL",
+            share_count=100,
+            entry_price=150.0,
+            stop_price=147.0,  # $3 risk per share
+        )
+        result = await rm.evaluate_signal(signal)
+
+        # With only $50 remaining capacity, max shares = 0
+        # This should be rejected because no shares can be added
         assert isinstance(result, OrderRejectedEvent)
-        assert "single-stock exposure" in result.reason.lower()
+        assert "concentration limit already reached" in result.reason.lower()
+
+    @pytest.mark.asyncio
+    async def test_signal_rejected_concentration_limit_already_at_max(self) -> None:
+        """Signal should be rejected when concentration limit is already maxed out.
+
+        DEC-249: If existing positions already use 100% of concentration limit,
+        any new signal for that symbol should be rejected (0 capacity remaining).
+        """
+        broker = SimulatedBroker(initial_cash=100_000)
+        await broker.connect()
+        bus = EventBus()
+        clock = FixedClock(datetime.now(UTC))
+        config = make_risk_config(max_single_stock_pct=0.05)  # 5% = $5000
+
+        om_config = OrderManagerConfig()
+        om = OrderManager(event_bus=bus, broker=broker, clock=clock, config=om_config)
+
+        # Add position that's exactly at the limit: 33 shares at $150 = $4950 (~5%)
+        # Actually, need to be AT or ABOVE the limit
+        pos = make_managed_position(
+            symbol="AAPL",
+            strategy_id="strat_other",
+            entry_price=150.0,
+            shares_remaining=34,  # $5100 > $5000 limit (already exceeded)
+        )
+        om._managed_positions["AAPL"] = [pos]
+
+        rm = RiskManager(config=config, broker=broker, event_bus=bus, order_manager=om)
+        await rm.initialize()
+
+        # Any new signal should be rejected — no capacity remaining
+        signal = make_signal(
+            symbol="AAPL",
+            share_count=1,  # Even 1 share
+            entry_price=150.0,
+        )
+        result = await rm.evaluate_signal(signal)
+
+        assert isinstance(result, OrderRejectedEvent)
+        assert "concentration limit already reached" in result.reason.lower()
 
     @pytest.mark.asyncio
     async def test_signal_approved_same_strategy_positions(self) -> None:
@@ -1286,7 +1379,10 @@ class TestCrossStrategyRiskEdgeCases:
 
     @pytest.mark.asyncio
     async def test_set_order_manager_enables_checks(self) -> None:
-        """Setting Order Manager via setter should enable cross-strategy checks."""
+        """Setting Order Manager via setter should enable cross-strategy checks.
+
+        DEC-249: Concentration limit now uses approve-with-modification.
+        """
         broker = SimulatedBroker(initial_cash=100_000)
         await broker.connect()
         bus = EventBus()
@@ -1307,11 +1403,15 @@ class TestCrossStrategyRiskEdgeCases:
         rm.set_order_manager(om)
 
         # Signal for $1500 exceeds $1000 limit
+        # Max shares: $1000 / $150 = 6 shares
         signal = make_signal(share_count=10, entry_price=150.0)
         result = await rm.evaluate_signal(signal)
 
-        assert isinstance(result, OrderRejectedEvent)
-        assert "single-stock exposure" in result.reason.lower()
+        # Should approve with reduced shares (DEC-249)
+        assert isinstance(result, OrderApprovedEvent)
+        assert result.modifications is not None
+        assert result.modifications["share_count"] == 6  # Reduced from 10 to 6
+        assert "concentration limit" in result.modifications["reason"]
 
     @pytest.mark.asyncio
     async def test_empty_managed_positions(self) -> None:
@@ -1416,7 +1516,10 @@ class TestCrossStrategyRiskEdgeCases:
 
     @pytest.mark.asyncio
     async def test_partially_closed_position_correct_exposure(self) -> None:
-        """Partially closed positions should use remaining shares for exposure."""
+        """Partially closed positions should use remaining shares for exposure.
+
+        DEC-249: Concentration limit now uses approve-with-modification.
+        """
         broker = SimulatedBroker(initial_cash=100_000)
         await broker.connect()
         bus = EventBus()
@@ -1455,6 +1558,7 @@ class TestCrossStrategyRiskEdgeCases:
         assert isinstance(result, OrderApprovedEvent)
 
         # Larger signal: 5 shares = $750, total = $5250 (over $5000)
+        # Remaining capacity: $5000 - $4500 = $500 = 3 shares
         signal2 = make_signal(
             symbol="AAPL",
             strategy_id="strat_orb_breakout",
@@ -1463,12 +1567,20 @@ class TestCrossStrategyRiskEdgeCases:
         )
         result2 = await rm.evaluate_signal(signal2)
 
-        assert isinstance(result2, OrderRejectedEvent)
-        assert "single-stock exposure" in result2.reason.lower()
+        # Should approve with reduced shares (DEC-249)
+        assert isinstance(result2, OrderApprovedEvent)
+        assert result2.modifications is not None
+        assert result2.modifications["share_count"] == 3  # Reduced from 5 to 3
+        assert "concentration limit" in result2.modifications["reason"]
 
     @pytest.mark.asyncio
-    async def test_exposure_check_precedes_duplicate_policy(self) -> None:
-        """Exposure check should run before duplicate policy check."""
+    async def test_concentration_reduces_then_duplicate_policy_rejects(self) -> None:
+        """Concentration check reduces shares, then duplicate policy still rejects.
+
+        DEC-249: Concentration check now reduces shares instead of rejecting.
+        The duplicate policy check runs AFTER concentration check, so even with
+        reduced shares, the duplicate policy will block the trade.
+        """
         broker = SimulatedBroker(initial_cash=100_000)
         await broker.connect()
         bus = EventBus()
@@ -1494,7 +1606,8 @@ class TestCrossStrategyRiskEdgeCases:
         await rm.initialize()
 
         # Signal for $1500 more, total $3000 = 3% (exceeds 2% limit)
-        # Should fail on exposure, not duplicate policy
+        # Concentration check will reduce shares to 3 ($500 remaining capacity)
+        # Then duplicate policy check will reject (BLOCK_ALL)
         signal = make_signal(
             symbol="AAPL",
             strategy_id="strat_orb_breakout",
@@ -1504,12 +1617,15 @@ class TestCrossStrategyRiskEdgeCases:
         result = await rm.evaluate_signal(signal)
 
         assert isinstance(result, OrderRejectedEvent)
-        # Should be rejected for exposure, not duplicate
-        assert "single-stock exposure" in result.reason.lower()
+        # Should be rejected for duplicate policy (concentration check passed with reduction)
+        assert "duplicate stock blocked" in result.reason.lower()
 
     @pytest.mark.asyncio
     async def test_multiple_positions_same_symbol_mixed_strategies(self) -> None:
-        """Multiple positions from different strategies in same symbol should combine."""
+        """Multiple positions from different strategies in same symbol should combine.
+
+        DEC-249: Concentration limit now uses approve-with-modification.
+        """
         broker = SimulatedBroker(initial_cash=100_000)
         await broker.connect()
         bus = EventBus()
@@ -1559,6 +1675,7 @@ class TestCrossStrategyRiskEdgeCases:
         assert isinstance(result, OrderApprovedEvent)
 
         # Signal for $1500 = total $5250 (over $5000)
+        # Remaining capacity: $5000 - $3750 = $1250 = 8 shares
         signal2 = make_signal(
             symbol="AAPL",
             strategy_id="strat_new",
@@ -1567,7 +1684,11 @@ class TestCrossStrategyRiskEdgeCases:
         )
         result2 = await rm.evaluate_signal(signal2)
 
-        assert isinstance(result2, OrderRejectedEvent)
+        # Should approve with reduced shares (DEC-249)
+        assert isinstance(result2, OrderApprovedEvent)
+        assert result2.modifications is not None
+        assert result2.modifications["share_count"] == 8  # Reduced from 10 to 8
+        assert "concentration limit" in result2.modifications["reason"]
 
     @pytest.mark.asyncio
     async def test_cross_strategy_check_uses_equity_not_cash(self) -> None:

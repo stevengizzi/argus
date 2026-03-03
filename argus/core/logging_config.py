@@ -74,6 +74,7 @@ class ConsoleFormatter(logging.Formatter):
 def setup_logging(
     log_level: str = "INFO",
     log_dir: Path | None = None,
+    file_level: str | None = None,
 ) -> None:
     """Configure logging for the Argus system.
 
@@ -83,6 +84,8 @@ def setup_logging(
     Args:
         log_level: Root log level (DEBUG, INFO, WARNING, ERROR).
         log_dir: Directory for log files. Default: logs/
+        file_level: File handler log level. Defaults to same as log_level.
+            Set to "DEBUG" only when actively debugging — generates high volume.
     """
     if log_dir is None:
         log_dir = Path("logs")
@@ -101,15 +104,23 @@ def setup_logging(
     root.addHandler(console)
 
     # File handler — JSON structured
+    # Default to same level as log_level (INFO for production)
+    effective_file_level = file_level or log_level
     log_file = log_dir / f"argus_{datetime.now().strftime('%Y%m%d')}.jsonl"
     file_handler = logging.FileHandler(log_file, encoding="utf-8")
     file_handler.setFormatter(JsonFormatter())
-    file_handler.setLevel(logging.DEBUG)
+    file_handler.setLevel(getattr(logging, effective_file_level.upper(), logging.INFO))
     root.addHandler(file_handler)
 
     # Suppress noisy third-party loggers
     logging.getLogger("aiohttp").setLevel(logging.WARNING)
     logging.getLogger("alpaca").setLevel(logging.WARNING)
     logging.getLogger("websockets").setLevel(logging.WARNING)
+    logging.getLogger("databento").setLevel(logging.WARNING)
+    logging.getLogger("ib_async").setLevel(logging.WARNING)
+    logging.getLogger("ib_insync").setLevel(logging.WARNING)
+    logging.getLogger("asyncio").setLevel(logging.WARNING)
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
 
-    logging.info("Logging initialized. File: %s", log_file)
+    logging.info("Logging initialized (level=%s, file=%s)", log_level, log_file)

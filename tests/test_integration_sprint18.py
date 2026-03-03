@@ -387,8 +387,13 @@ class TestCrossStrategyRiskChecks:
         await order_manager.stop()
 
     @pytest.mark.asyncio
-    async def test_signal_rejected_when_single_stock_exposure_exceeded(self) -> None:
-        """Signal rejected when single-stock exposure would exceed limit."""
+    async def test_signal_rejected_when_concentration_reduced_below_025r_floor(self) -> None:
+        """Signal rejected when concentration-reduced shares fall below 0.25R floor.
+
+        DEC-249: Concentration limit now uses approve-with-modification instead
+        of hard rejection. However, if the reduced position has potential profit
+        less than 0.25R of the original, it's rejected as "not worth taking".
+        """
         event_bus = EventBus()
         clock = FixedClock(datetime(2026, 2, 25, 15, 0, 0, tzinfo=UTC))
         broker = SimulatedBroker(initial_cash=100_000)
@@ -447,12 +452,16 @@ class TestCrossStrategyRiskChecks:
 
         # Scalp tries to add $3,000 more (20 shares × $150)
         # Total would be $7,500 > $5,000 limit
+        # Remaining capacity: $5,000 - $4,500 = $500 = 3 shares
+        # Original R: 20 shares × $1 risk = $20
+        # Reduced R: 3 shares × $1 risk = $3
+        # 0.25R floor: $5 > $3, so rejected
         scalp_signal = SignalEvent(
             strategy_id="strat_orb_scalp",
             symbol="AAPL",
             side=Side.LONG,
             entry_price=150.0,
-            stop_price=149.0,
+            stop_price=149.0,  # $1 risk per share
             target_prices=(150.30,),
             share_count=20,
             rationale="ORB Scalp breakout",
@@ -461,8 +470,9 @@ class TestCrossStrategyRiskChecks:
 
         scalp_result = await risk_manager.evaluate_signal(scalp_signal)
 
+        # DEC-249: Rejected because reduced position is below 0.25R floor
         assert isinstance(scalp_result, OrderRejectedEvent)
-        assert "exposure" in scalp_result.reason.lower() or "exceed" in scalp_result.reason.lower()
+        assert "0.25r" in scalp_result.reason.lower() or "not worth" in scalp_result.reason.lower()
 
         await order_manager.stop()
 
@@ -849,7 +859,12 @@ class TestIntegrationGaps:
     @pytest.mark.asyncio
     async def test_same_symbol_collision_blocked(self) -> None:
         """When ORB has an open position in AAPL, ORB Scalp's signal for AAPL
-        should be blocked by cross-strategy single-stock exposure limit."""
+        should be blocked because concentration-reduced shares fall below 0.25R floor.
+
+        DEC-249: Concentration limit now uses approve-with-modification. The signal
+        is rejected because the reduced position (3 shares) would have risk < 0.25R
+        of the original (20 shares).
+        """
         event_bus = EventBus()
         clock = FixedClock(datetime(2026, 2, 25, 15, 0, 0, tzinfo=UTC))
         broker = SimulatedBroker(initial_cash=100_000)
@@ -908,8 +923,11 @@ class TestIntegrationGaps:
         await order_manager.on_approved(orb_result)
         await asyncio.sleep(0.05)
 
-        # Now ORB Scalp tries the SAME symbol — should be blocked by exposure limit
+        # Now ORB Scalp tries the SAME symbol — should be blocked
         # 30 shares @ $150 = $4,500 existing + 20 @ $150 = $3,000 = $7,500 > $5,000 limit
+        # Remaining capacity: $5,000 - $4,500 = $500 = 3 shares
+        # Original R: 20 shares × $1 = $20, 0.25R = $5
+        # Reduced R: 3 shares × $1 = $3 < $5, so rejected
         scalp_signal = SignalEvent(
             strategy_id="strat_orb_scalp",
             symbol="AAPL",
@@ -924,9 +942,10 @@ class TestIntegrationGaps:
 
         scalp_result = await risk_manager.evaluate_signal(scalp_signal)
 
-        # Should be rejected due to single-stock exposure
+        # Should be rejected because concentration-reduced shares fall below 0.25R floor
         assert isinstance(scalp_result, OrderRejectedEvent)
-        assert "exposure" in scalp_result.reason.lower() or "exceed" in scalp_result.reason.lower()
+        reason_lower = scalp_result.reason.lower()
+        assert "0.25r" in reason_lower or "not worth" in reason_lower or "concentration" in reason_lower
 
         await order_manager.stop()
 

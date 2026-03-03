@@ -712,6 +712,9 @@ class TestCrossStrategyRisk:
         await asyncio.sleep(0.05)
 
         # VWAP: $1,000 (10 shares × $100) — total $5,500 > $5,000 limit
+        # Remaining capacity: $500 = 5 shares
+        # Original R: 10 × $0.50 = $5, Reduced R: 5 × $0.50 = $2.50
+        # 0.25R floor: $1.25 < $2.50, so approved with modification (DEC-249)
         vwap_signal = SignalEvent(
             strategy_id="strat_vwap_reclaim",
             symbol="AAPL",
@@ -724,8 +727,12 @@ class TestCrossStrategyRisk:
             time_stop_seconds=1800,
         )
         vwap_result = await risk_manager.evaluate_signal(vwap_signal)
-        assert isinstance(vwap_result, OrderRejectedEvent)
-        assert "exposure" in vwap_result.reason.lower() or "exceed" in vwap_result.reason.lower()
+
+        # DEC-249: Approved with reduced shares instead of rejected
+        assert isinstance(vwap_result, OrderApprovedEvent)
+        assert vwap_result.modifications is not None
+        assert vwap_result.modifications["share_count"] == 5  # Reduced from 10 to 5
+        assert "concentration limit" in vwap_result.modifications["reason"]
 
         await order_manager.stop()
 

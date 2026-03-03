@@ -2735,5 +2735,17 @@ Each entry follows this format:
 
 ---
 
+### DEC-249 | Concentration Limit Uses Approve-With-Modification
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-03 |
+| **Decision** | The single-stock concentration limit (5% of equity) now uses approve-with-modification instead of hard rejection. When a signal's position value would exceed the concentration limit, shares are reduced to fit within the limit. If the reduced position falls below the 0.25R floor (reduced risk < 0.25 × original risk), the signal is rejected entirely. |
+| **Rationale** | Sprint 21.5 Session B1 investigation found that VWAP Reclaim's NFLX signal (3,573 shares, ~$346K) was rejected for concentration (5% limit = $50K). The issue was systemic: risk-based position sizing (`shares = $2K risk / tight stop`) produces large positions that exceed concentration limits for mid-to-high priced stocks with tight stops. Rather than reject these signals outright, the system now right-sizes them by reducing shares to fit within concentration, similar to the existing cash reserve and buying power constraints. The 0.25R floor prevents taking positions that are "not worth it" after reduction. |
+| **Alternatives** | (1) Keep as hard rejection — rejected because most VWAP Reclaim signals on stocks >$50 would be rejected, producing noise. (2) Add pre-flight check in strategy — rejected because strategies don't have access to total equity, and it duplicates Risk Manager logic. (3) Reduce risk budget in strategy config — rejected because it would make trades not worth taking for lower-priced stocks. |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
 *New decisions are appended chronologically as the project progresses.*
