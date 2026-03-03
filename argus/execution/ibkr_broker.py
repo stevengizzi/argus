@@ -417,6 +417,21 @@ class IBKRBroker(Broker):
 
     # --- Order Building Helpers ---
 
+    def _round_price(self, price: float, tick_size: float = 0.01) -> float:
+        """Round price to minimum tick size for IBKR submission.
+
+        IBKR rejects orders with prices that don't conform to the minimum
+        price variation for the contract (Error 110). US equities use $0.01.
+
+        Args:
+            price: The raw price to round.
+            tick_size: Minimum tick size (default $0.01 for US equities).
+
+        Returns:
+            Price rounded to the nearest tick.
+        """
+        return round(round(price / tick_size) * tick_size, 2)
+
     def _build_ib_order(self, order: Order) -> IBOrder:
         """Convert ARGUS Order model to ib_async Order object.
 
@@ -445,11 +460,11 @@ class IBKRBroker(Broker):
         elif order_type == "limit":
             if order.limit_price is None:
                 raise ValueError("Limit order requires limit_price")
-            ib_order = LimitOrder(action, order.quantity, order.limit_price)
+            ib_order = LimitOrder(action, order.quantity, self._round_price(order.limit_price))
         elif order_type == "stop":
             if order.stop_price is None:
                 raise ValueError("Stop order requires stop_price")
-            ib_order = StopOrder(action, order.quantity, order.stop_price)
+            ib_order = StopOrder(action, order.quantity, self._round_price(order.stop_price))
         elif order_type == "stop_limit":
             if order.stop_price is None or order.limit_price is None:
                 raise ValueError("Stop-limit order requires both stop_price and limit_price")
@@ -457,8 +472,8 @@ class IBKRBroker(Broker):
                 action=action,
                 totalQuantity=order.quantity,
                 orderType="STP LMT",
-                auxPrice=order.stop_price,  # trigger price
-                lmtPrice=order.limit_price,  # limit price
+                auxPrice=self._round_price(order.stop_price),  # trigger price
+                lmtPrice=self._round_price(order.limit_price),  # limit price
             )
         else:
             raise ValueError(f"Unsupported order type: {order.order_type}")
@@ -591,7 +606,7 @@ class IBKRBroker(Broker):
         stop_ulid = generate_id()
         if stop.stop_price is None:
             raise ValueError("Stop order requires stop_price")
-        stop_ib = StopOrder(exit_action, stop.quantity, stop.stop_price)
+        stop_ib = StopOrder(exit_action, stop.quantity, self._round_price(stop.stop_price))
         stop_ib.parentId = parent_id
         stop_ib.tif = "DAY"
         stop_ib.outsideRth = False
@@ -620,7 +635,7 @@ class IBKRBroker(Broker):
 
             if target.limit_price is None:
                 raise ValueError("Target order requires limit_price")
-            t_ib = LimitOrder(exit_action, target.quantity, target.limit_price)
+            t_ib = LimitOrder(exit_action, target.quantity, self._round_price(target.limit_price))
             t_ib.parentId = parent_id
             t_ib.tif = "DAY"
             t_ib.outsideRth = False
@@ -719,10 +734,11 @@ class IBKRBroker(Broker):
         # Apply modifications
         if "price" in modifications:
             # Stop orders use auxPrice, limit orders use lmtPrice
+            rounded_price = self._round_price(modifications["price"])
             if trade.order.orderType == "STP":
-                trade.order.auxPrice = modifications["price"]
+                trade.order.auxPrice = rounded_price
             else:
-                trade.order.lmtPrice = modifications["price"]
+                trade.order.lmtPrice = rounded_price
 
         if "quantity" in modifications:
             trade.order.totalQuantity = modifications["quantity"]
