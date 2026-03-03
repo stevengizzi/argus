@@ -11,7 +11,7 @@ Phase 1 sprint plan: @docs/07_PHASE1_SPRINT_PLAN.md
 ## Current State
 
 **Structure:** Two parallel tracks (DEC-079, February 19, 2026). Expanded to AI-enhanced platform (DEC-163, February 26, 2026).
-- **Build Track:** System construction at development velocity. Sprints 1–21d complete. Sprint 21.5 (Live Integration) IN PROGRESS — 1,708 pytest tests + 255 Vitest. Sessions 1–9 + A1 + B0 complete, Blocks B1–B5 + C + D pending.
+- **Build Track:** System construction at development velocity. Sprints 1–21d complete. Sprint 21.5 (Live Integration) IN PROGRESS — 1,710 pytest tests + 255 Vitest. Sessions 1–9 + Blocks A + B complete, Block C (full market day validation) + D (closeout) pending.
 - **Validation Track:** Databento EQUS.MINI live streaming confirmed (DEC-248). IBKR paper trading operational via IB Gateway (DEC-236). Paper validation in progress on Databento + IBKR (replaces Alpaca IEX). All pre-Databento backtests require re-validation (DEC-132). Sprint 21.6 (backtest re-validation) runs parallel with Sprint 22.
 
 Active sprint plan: `docs/10_PHASE3_SPRINT_PLAN.md` (covers both tracks).
@@ -38,12 +38,13 @@ Active sprint plan: `docs/10_PHASE3_SPRINT_PLAN.md` (covers both tracks).
 
 **Sprint 21.5 Progress (Live Integration — Feb 28 – Mar 3, IN PROGRESS):**
 - Sessions 1–3: Databento live connection. API format discoveries: instrument_id direct attribute (DEC-241), built-in symbology_map replaces custom DatabentoSymbolMap (DEC-242), prices fixed-point ×1e9 (DEC-243). Dataset switched from XNAS.ITCH to EQUS.MINI (DEC-237/248).
-- Sessions 4–6: First live market data streaming (30+ min). CandleEvents across 10 symbols. VWAP Reclaim signal on NFLX (rejected by Risk Manager for 5% concentration limit — position sizing investigation queued for B1).
+- Sessions 4–6: First live market data streaming (30+ min). CandleEvents across 10 symbols. VWAP Reclaim signal on NFLX (rejected by Risk Manager for 5% concentration limit — correct behavior, position sizing verified in B1).
 - Session 7: IBKR paper connection via IB Gateway. Bracket orders validated. flatten_all() SMART routing fix (DEC-245).
 - Sessions 8–9: Position management lifecycle. State reconstruction from broker. Reconnection. get_open_orders() added to Broker ABC (DEC-246).
 - Session A1: Validation scripts — 13/13 integration PASS, 4/4 resilience PASS. Discovered EQUS.MINI historical daily bar data has multi-day lag (up to ~6 days over weekends).
 - Session B0: DatabentoScanner resilience fix for historical data lag (DEC-247, 13 new tests). EQUS.MINI diagnostic script confirmed: live streaming works, all schemas available, multi-symbol queries functional (DEC-248). Orphaned DatabentoSymbolMap deleted.
-- Remaining: Block B (B1–B5: position sizing, time stop validation, operational scripts, LIVE_OPERATIONS.md, doc sync) + Block C (C1–C3: full market day validation) + Block D (D1: sprint closeout).
+- Sessions B1–B5: Position sizing verified (Risk Manager concentration limit working correctly). Time stop/EOD flatten validated. Operational scripts created (`scripts/start_live.sh`, `scripts/stop_live.sh`). `docs/LIVE_OPERATIONS.md` created (418 lines). Documentation sync complete.
+- Remaining: Block C (C1–C3: full market day validation) + Block D (D1: sprint closeout).
 - DEC-241 through DEC-248.
 
 **Sprint 21d Results (Dashboard + Performance + System + Copilot — Feb 27–28):**

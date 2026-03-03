@@ -1248,3 +1248,89 @@ Standard plan ($199/mo) live streaming covers EQUS.MINI only. Individual exchang
 3. `ibkr.yaml` has `port: 4002` (paper) not `port: 4001` (live)
 4. IBKRBroker connection log shows paper trading account ID
 5. NEVER change port to 4001 until explicit live trading decision (Gate 5)
+
+---
+
+## 9. Extended Session Outcomes (Block A–B)
+
+During sprint execution, Sessions 1–9 completed core integration work. Additional sessions were added for validation and hardening:
+
+### Session A1: Validation Scripts (March 2, 2026)
+
+**Purpose:** Create automated validation scripts to verify integration health.
+
+**Outcomes:**
+- ✅ Created `scripts/test_session8_integration.py` — 13 integration checks (connection, data flow, strategies, risk, orders, UI)
+- ✅ Created `scripts/test_session9_resilience.py` — 4 resilience checks (reconnection, state reconstruction, graceful degradation, recovery)
+- ✅ **All 13/13 integration checks PASS**
+- ✅ **All 4/4 resilience checks PASS**
+- ⚠️ **Discovered:** EQUS.MINI historical data has multi-day lag (up to ~6 days over weekends), causing 422 errors when scanner requests recent daily bars
+- ⚠️ **EOD flatten test blocked:** Scanner's historical data dependency prevented full EOD validation — queued for B0
+
+### Session B0: Scanner Resilience (March 3, 2026)
+
+**Purpose:** Fix DatabentoScanner to handle historical data lag gracefully.
+
+**Outcomes:**
+- ✅ **DEC-247:** DatabentoScanner resilience fix — retry with adjusted date range on 422 error, graceful fallback to static watchlist if retry fails
+- ✅ 13 new tests for scanner resilience scenarios
+- ✅ Created `scripts/diagnose_databento.py` — comprehensive diagnostic for EQUS.MINI capabilities
+- ✅ **DEC-248:** EQUS.MINI confirmed as production dataset:
+  - Live streaming: ✅ Working
+  - Schemas: ohlcv-1m ✅, ohlcv-1d ✅, trades ✅, tbbo ✅
+  - Multi-symbol queries: ✅ Functional
+  - Historical data: ~1–6 day lag (varies by day of week)
+- ✅ Deleted orphaned `DatabentoSymbolMap` class — replaced by library's built-in `symbology_map` (DEC-242)
+- ✅ 1710 pytest tests passing, 255 Vitest tests passing
+
+### Sessions B1–B4 (March 3, 2026)
+
+**B1 — Position Sizing Verification:**
+- ✅ Confirmed VWAP Reclaim signal rejection on NFLX was correct behavior (5% concentration limit properly enforced)
+- ✅ Position sizing calculation verified: 3573 shares × $97.09 = ~$347K > $50K (5% of $1M equity)
+- No code changes needed — Risk Manager working as designed
+
+**B2 — Time Stop / EOD Validation:**
+- ✅ Strategy time stops configured correctly in YAML
+- ✅ EOD flatten scheduled at 3:55 PM ET in Order Manager
+- ✅ Afternoon Momentum force_close at 3:45 PM verified
+- Validated via code review + dry run
+
+**B3 — Operational Scripts:**
+- ✅ Created `scripts/start_live.sh` — startup script with pre-flight checks (IB Gateway running, .env exists), optional --with-ui flag
+- ✅ Created `scripts/stop_live.sh` — graceful shutdown with timeout and process verification
+
+**B4 — LIVE_OPERATIONS.md:**
+- ✅ Created comprehensive `docs/LIVE_OPERATIONS.md` (418 lines):
+  - Daily startup/shutdown procedures
+  - Monitoring checklist
+  - Mid-session restart procedure
+  - IB Gateway maintenance
+  - Emergency procedures (flatten all, pause all, kill switch)
+  - Common issues troubleshooting
+  - Taipei timezone reference
+
+### Session B5: Documentation Sync (March 3, 2026)
+
+**Purpose:** Update all project documentation to reflect Sprint 21.5 progress.
+
+**Checklist:**
+- Decision Log: DEC-241 through DEC-248 already recorded
+- Sprint spec: Extended session outcomes added (this section)
+- CLAUDE.md: Current state updated
+- PROJECT_KNOWLEDGE.md: Sprint 21.5 entry updated
+- PHASE3_SPRINT_PLAN.md: Sprint tracking updated
+
+### Remaining: Block C + D
+
+**Block C (C1–C3): Full Market Day Validation**
+- Run ARGUS through complete market session (9:30 AM – 4:00 PM ET)
+- All 4 strategies processing live data
+- Paper trades executing on IBKR
+- Command Center displaying real-time data
+- EOD flatten observed and verified
+
+**Block D (D1): Sprint Closeout**
+- Final code review
+- Sprint 21.5 resolved
+- Sprint 22 readiness confirmed

@@ -383,21 +383,21 @@ per sprint velocity.
 **Deferred:** DEF-028, DEC-229
 
 ### Sprint 21.5 — Live Integration (Databento + IBKR)
-**Status:** IN PROGRESS — Blocks A + B0 complete, Blocks B1–B5 + C + D pending
+**Status:** IN PROGRESS — Blocks A + B complete, Block C (full market day) + D (closeout) pending
 **Start:** Feb 28, 2026
 **Estimated sessions:** 13–16 (Claude Code) + 3 code reviews (Claude.ai)
-**Test count:** 1708 (pytest) + 255 (Vitest) — as of Session B0
+**Test count:** 1710 (pytest) + 255 (Vitest) — as of Session B5
 
 **Completed sessions:**
 - Sessions 1–3: Databento connection. API format discoveries: instrument_id direct attribute (DEC-241), built-in symbology_map (DEC-242), fixed-point prices ×1e9 (DEC-243). Dataset switch from XNAS.ITCH to EQUS.MINI (DEC-237/248).
-- Sessions 4–6: First live market data streaming. 30+ min with CandleEvents across 10 symbols. VWAP Reclaim signal on NFLX (~$97, 3573 shares requested — rejected by Risk Manager for concentration limit, position sizing investigation queued for B1).
+- Sessions 4–6: First live market data streaming. 30+ min with CandleEvents across 10 symbols. VWAP Reclaim signal on NFLX (~$97, 3573 shares requested — correctly rejected by Risk Manager for 5% concentration limit).
 - Session 7: IBKR paper connection. Bracket orders validated. flatten_all() SMART routing fix (DEC-245).
 - Sessions 8–9: Position management lifecycle. State reconstruction from broker. Reconnection. get_open_orders() added to Broker ABC (DEC-246).
 - Session A1: Validation scripts — 13/13 integration PASS, 4/4 resilience PASS. Discovered EQUS.MINI historical data lag blocking scanner (422 error).
 - Session B0: Scanner resilience fix (DEC-247, 13 new tests). EQUS.MINI diagnostic — live streaming confirmed, all schemas verified (ohlcv-1m, ohlcv-1d, trades, tbbo), multi-symbol queries functional (DEC-248). DatabentoSymbolMap deleted.
+- Sessions B1–B5: Position sizing verified (Risk Manager concentration limit working correctly). Time stop/EOD flatten validated via code review. Operational scripts created (`scripts/start_live.sh`, `scripts/stop_live.sh`). `docs/LIVE_OPERATIONS.md` created (418 lines). Documentation sync complete.
 
 **Remaining sessions:**
-- Block B (B1–B5): Position sizing investigation, time stop/EOD validation, operational scripts, LIVE_OPERATIONS.md, doc sync
 - Block C (C1–C3): Full trading day validation (all 4 strategies, Databento + IBKR, Command Center with live data)
 - Block D (D1): Sprint closeout + documentation
 
@@ -408,11 +408,11 @@ per sprint velocity.
 - Live Databento data flowing through all 4 strategies — pending full-day validation
 - Paper trades executing on IBKR via IB Gateway ✅
 - Command Center showing real-time live data — pending full-day validation
-- `docs/LIVE_OPERATIONS.md` — pending (Session B4)
-- Startup/shutdown automation scripts — pending (Session B3)
+- `docs/LIVE_OPERATIONS.md` ✅ (418 lines)
+- Startup/shutdown automation scripts (`scripts/start_live.sh`, `scripts/stop_live.sh`) ✅
 - `scripts/diagnose_databento.py` diagnostic tool ✅
 
-**Decisions:** DEC-230 through DEC-248
+**Decisions:** DEC-241 through DEC-248
 **Prerequisites:** Databento subscription activated ✅, IBKR account approved ✅
 **Exit criteria:** Full market session (9:30-4:00 ET) completed without crashes, all 4 strategies processing data, paper trades executing, Command Center operational with live data, clean overnight workflow verified
 
