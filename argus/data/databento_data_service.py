@@ -106,6 +106,12 @@ class DatabentoDataService(DataService):
         self._SymbolMappingMsg: type | None = None
         self._ErrorMsg: type | None = None
 
+        # Data heartbeat tracking (periodic INFO log for visibility)
+        self._heartbeat_task: asyncio.Task | None = None
+        self._heartbeat_interval_seconds: float = 300.0  # 5 minutes
+        self._candles_since_heartbeat: int = 0
+        self._symbols_seen_since_heartbeat: set[str] = set()
+
     # ──────────────────────────────────────────────
     # DataService ABC Implementation
     # ──────────────────────────────────────────────
@@ -156,6 +162,9 @@ class DatabentoDataService(DataService):
 
         # 6. Start stale data monitor
         self._stale_monitor_task = asyncio.create_task(self._stale_data_monitor())
+
+        # 7. Start data heartbeat (periodic INFO log for visibility)
+        self._heartbeat_task = asyncio.create_task(self._data_heartbeat())
 
         logger.info(
             "DatabentoDataService started: dataset=%s, symbols=%d, schemas=[%s, %s]",
@@ -338,6 +347,12 @@ class DatabentoDataService(DataService):
             with contextlib.suppress(asyncio.CancelledError):
                 await self._stale_monitor_task
 
+        # Cancel heartbeat task
+        if self._heartbeat_task and not self._heartbeat_task.done():
+            self._heartbeat_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._heartbeat_task
+
         logger.info("DatabentoDataService stopped")
 
     async def get_current_price(self, symbol: str) -> float | None:
@@ -499,6 +514,10 @@ class DatabentoDataService(DataService):
         # (relevant when subscribing to ALL_SYMBOLS but only trading a subset)
         if self._active_symbols and symbol not in self._active_symbols:
             return
+
+        # Track for periodic heartbeat logging
+        self._candles_since_heartbeat += 1
+        self._symbols_seen_since_heartbeat.add(symbol)
 
         # Convert nanosecond timestamp to datetime
         ts = datetime.fromtimestamp(msg.ts_event / 1e9, tz=UTC)
@@ -784,6 +803,30 @@ class DatabentoDataService(DataService):
                 event = DataResumedEvent(provider="databento")
                 await self._event_bus.publish(event)
                 self._stale_published = False
+
+    async def _data_heartbeat(self) -> None:
+        """Periodic INFO log showing data flow activity.
+
+        Logs every 5 minutes with candle count and active symbols.
+        Provides visibility that data is flowing without being too noisy.
+        """
+        while self._running:
+            await asyncio.sleep(self._heartbeat_interval_seconds)
+
+            # Capture and reset counters
+            candle_count = self._candles_since_heartbeat
+            symbols_seen = len(self._symbols_seen_since_heartbeat)
+            self._candles_since_heartbeat = 0
+            self._symbols_seen_since_heartbeat.clear()
+
+            # Log heartbeat
+            interval_mins = int(self._heartbeat_interval_seconds / 60)
+            logger.info(
+                "Data heartbeat: %d candles received in last %dm (%d symbols active)",
+                candle_count,
+                interval_mins,
+                symbols_seen,
+            )
 
     # ──────────────────────────────────────────────
     # Historical Data / Parquet Cache (DEC-085)
