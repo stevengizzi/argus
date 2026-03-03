@@ -1179,8 +1179,9 @@ class TestRiskAndThrottling:
     async def test_cross_strategy_stock_limit(self) -> None:
         """Cross-strategy single-stock exposure limit enforced.
 
-        DEC-249: Concentration limit now uses approve-with-modification. The signal
-        is rejected because the reduced position falls below 0.25R floor.
+        DEC-249/DEC-250: Concentration limit uses approve-with-modification.
+        The signal is rejected because the reduced position's risk falls below
+        the min_position_risk_dollars floor ($100 default).
         """
         event_bus = EventBus()
         clock = FixedClock(datetime(2026, 2, 25, 15, 0, 0, tzinfo=UTC))
@@ -1239,8 +1240,7 @@ class TestRiskAndThrottling:
         # VWAP tries to add $3,000 (20 shares × $150)
         # Total would be $7,500 > $5,000 limit
         # Remaining capacity: $5,000 - $4,500 = $500 = 3 shares
-        # Original R: 20 shares × $1 = $20, 0.25R = $5
-        # Reduced R: 3 shares × $1 = $3 < $5, so rejected for 0.25R floor
+        # Reduced risk: 3 shares × $1 = $3 < $100 min_position_risk_dollars
         vwap_signal = SignalEvent(
             strategy_id="strat_vwap_reclaim",
             symbol="AAPL",
@@ -1254,10 +1254,10 @@ class TestRiskAndThrottling:
         )
         vwap_result = await risk_manager.evaluate_signal(vwap_signal)
 
-        # Rejected because concentration-reduced shares fall below 0.25R floor
+        # DEC-250: Rejected because reduced position risk ($3) is below $100 floor
         assert isinstance(vwap_result, OrderRejectedEvent)
         reason_lower = vwap_result.reason.lower()
-        assert "0.25r" in reason_lower or "not worth" in reason_lower or "concentration" in reason_lower
+        assert "below" in reason_lower and "minimum" in reason_lower
 
         await order_manager.stop()
 

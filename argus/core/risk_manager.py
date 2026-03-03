@@ -214,8 +214,8 @@ class RiskManager:
         Steps 4.5a, 5, and 6 can each reduce share count (approve-with-modification).
         Reductions cascade: concentration may reduce first, then cash reserve or buying
         power may reduce further. All reduction reasons are accumulated and reported.
-        At each stage, the 0.25R floor is checked against the original share count —
-        if reduced position potential profit < 0.25R of original, reject entirely.
+        At each stage, the minimum risk floor is checked — if reduced position's total
+        risk < min_position_risk_dollars (default $100), reject as not worth taking.
 
         Args:
             signal: The SignalEvent to evaluate.
@@ -305,17 +305,22 @@ class RiskManager:
                     reason=f"Concentration limit already reached for {signal.symbol}",
                 )
             # Reduce shares to fit concentration limit
-            if self._below_025r_floor(signal.share_count, max_conc_shares, signal):
+            if self._below_min_risk_floor(max_conc_shares, signal):
                 max_pct = self._config.cross_strategy.max_single_stock_pct * 100
+                min_risk = self._config.account.min_position_risk_dollars
+                risk_per_share = abs(signal.entry_price - signal.stop_price)
+                reduced_risk = max_conc_shares * risk_per_share
                 logger.warning(
-                    "Signal rejected: concentration-reduced shares (%d) below 0.25R floor",
+                    "Signal rejected: concentration-reduced shares (%d) risk $%.2f below $%.0f floor",
                     max_conc_shares,
+                    reduced_risk,
+                    min_risk,
                 )
                 return OrderRejectedEvent(
                     signal=signal,
                     reason=(
                         f"Position reduced for {max_pct:.0f}% concentration limit "
-                        f"would be below 0.25R minimum — not worth taking"
+                        f"would risk ${reduced_risk:.2f} — below ${min_risk:.0f} minimum"
                     ),
                 )
             modified_shares = max_conc_shares
@@ -363,14 +368,19 @@ class RiskManager:
                 )
             # Calculate reduced shares
             reduced = int(available / signal.entry_price)
-            if self._below_025r_floor(signal.share_count, reduced, signal):
+            if self._below_min_risk_floor(reduced, signal):
+                min_risk = self._config.account.min_position_risk_dollars
+                risk_per_share = abs(signal.entry_price - signal.stop_price)
+                reduced_risk = reduced * risk_per_share
                 logger.warning(
-                    "Signal rejected: reduced shares (%d) below 0.25R floor",
+                    "Signal rejected: cash-reserve-reduced shares (%d) risk $%.2f below $%.0f floor",
                     reduced,
+                    reduced_risk,
+                    min_risk,
                 )
                 return OrderRejectedEvent(
                     signal=signal,
-                    reason="Position reduced below 0.25R minimum — not worth taking",
+                    reason=f"Position reduced for cash reserve would risk ${reduced_risk:.2f} — below ${min_risk:.0f} minimum",
                 )
             modified_shares = reduced
             modification_reasons.append("cash reserve constraint")
@@ -380,14 +390,19 @@ class RiskManager:
         cost = signal.entry_price * effective_shares
         if cost > account.buying_power:
             reduced = int(account.buying_power / signal.entry_price)
-            if self._below_025r_floor(signal.share_count, reduced, signal):
+            if self._below_min_risk_floor(reduced, signal):
+                min_risk = self._config.account.min_position_risk_dollars
+                risk_per_share = abs(signal.entry_price - signal.stop_price)
+                reduced_risk = reduced * risk_per_share
                 logger.warning(
-                    "Signal rejected: reduced shares (%d) below 0.25R floor",
+                    "Signal rejected: buying-power-reduced shares (%d) risk $%.2f below $%.0f floor",
                     reduced,
+                    reduced_risk,
+                    min_risk,
                 )
                 return OrderRejectedEvent(
                     signal=signal,
-                    reason="Position reduced below 0.25R minimum — not worth taking",
+                    reason=f"Position reduced for buying power would risk ${reduced_risk:.2f} — below ${min_risk:.0f} minimum",
                 )
             modified_shares = reduced
             modification_reasons.append("buying power constraint")
@@ -431,16 +446,17 @@ class RiskManager:
         )
         return OrderApprovedEvent(signal=signal, modifications=None)
 
-    def _below_025r_floor(
-        self, original_shares: int, reduced_shares: int, signal: SignalEvent
-    ) -> bool:
-        """Check if reduced position is below the 0.25R floor.
+    def _below_min_risk_floor(self, reduced_shares: int, signal: SignalEvent) -> bool:
+        """Check if reduced position is below the minimum risk dollar floor.
 
-        R = original_shares * abs(entry_price - stop_price).
-        If reduced_shares * r_per_share < 0.25 * R, reject.
+        Positions with total risk below min_position_risk_dollars are rejected
+        as "not worth taking" — e.g., $100 default floor.
+
+        This replaces the ratio-based 0.25R floor (DEC-250) which incorrectly
+        compared against uncapped position size, causing valid signals to be
+        rejected when concentration limits reduced share counts significantly.
 
         Args:
-            original_shares: Original share count from signal.
             reduced_shares: Proposed reduced share count.
             signal: The original signal.
 
@@ -450,11 +466,10 @@ class RiskManager:
         if reduced_shares <= 0:
             return True
 
-        r_per_share = abs(signal.entry_price - signal.stop_price)
-        original_r = original_shares * r_per_share
-        reduced_risk = reduced_shares * r_per_share
+        risk_per_share = abs(signal.entry_price - signal.stop_price)
+        reduced_risk = reduced_shares * risk_per_share
 
-        return reduced_risk < 0.25 * original_r
+        return reduced_risk < self._config.account.min_position_risk_dollars
 
     def _get_concentration_limit_shares(
         self, signal: SignalEvent, equity: float

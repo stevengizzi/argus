@@ -63,6 +63,7 @@ def make_risk_config(
     pdt_threshold: float = 25000.0,
     max_single_stock_pct: float = 0.05,
     duplicate_stock_policy: DuplicateStockPolicy = DuplicateStockPolicy.ALLOW_ALL,
+    min_position_risk_dollars: float = 100.0,
 ) -> RiskConfig:
     """Create a RiskConfig for testing."""
     return RiskConfig(
@@ -71,6 +72,7 @@ def make_risk_config(
             weekly_loss_limit_pct=weekly_loss_limit_pct,
             cash_reserve_pct=cash_reserve_pct,
             max_concurrent_positions=max_concurrent_positions,
+            min_position_risk_dollars=min_position_risk_dollars,
         ),
         cross_strategy=CrossStrategyRiskConfig(
             max_single_stock_pct=max_single_stock_pct,
@@ -325,8 +327,8 @@ class TestRiskManagerRejection:
         assert "concurrent positions" in result.reason.lower()
 
     @pytest.mark.asyncio
-    async def test_signal_rejected_below_025r_floor(self) -> None:
-        """Signal should be rejected if reduced below 0.25R floor."""
+    async def test_signal_rejected_below_min_risk_floor(self) -> None:
+        """Signal should be rejected if reduced below min_position_risk_dollars floor."""
         # Start with 20K, deploy most of it
         broker = SimulatedBroker(initial_cash=20_000)
         await broker.connect()
@@ -880,14 +882,16 @@ class TestCrossStrategyRiskExposure:
     async def test_signal_reduced_when_exposure_exceeds_limit(self) -> None:
         """Signal should have shares reduced when combined exposure exceeds limit.
 
-        DEC-249: Concentration limit now uses approve-with-modification instead
-        of hard rejection. Shares are reduced to fit within the limit.
+        DEC-249/DEC-250: Concentration limit uses approve-with-modification.
+        Shares are reduced to fit within the limit. Low min_position_risk_dollars
+        to allow the reduced position ($9 risk) to pass.
         """
         broker = SimulatedBroker(initial_cash=100_000)
         await broker.connect()
         bus = EventBus()
         clock = FixedClock(datetime.now(UTC))
-        config = make_risk_config(max_single_stock_pct=0.05)
+        # Low floor to test approve-with-modification (reduced risk: 3 × $3 = $9)
+        config = make_risk_config(max_single_stock_pct=0.05, min_position_risk_dollars=1.0)
 
         om_config = OrderManagerConfig()
         om = OrderManager(event_bus=bus, broker=broker, clock=clock, config=om_config)
@@ -917,11 +921,11 @@ class TestCrossStrategyRiskExposure:
         assert "concentration limit" in result.modifications["reason"]
 
     @pytest.mark.asyncio
-    async def test_signal_rejected_concentration_reduced_below_025r_floor(self) -> None:
-        """Signal should be rejected if concentration-reduced shares fall below 0.25R.
+    async def test_signal_rejected_concentration_reduced_below_min_risk_floor(self) -> None:
+        """Signal should be rejected if concentration-reduced shares fall below min risk floor.
 
-        DEC-249: When concentration limit reduces shares, if the reduced position
-        would have potential profit < 0.25R of original, reject entirely.
+        DEC-249/DEC-250: When concentration limit reduces shares, if the reduced position
+        would have total risk < min_position_risk_dollars ($100 default), reject entirely.
         """
         broker = SimulatedBroker(initial_cash=100_000)
         await broker.connect()
@@ -946,8 +950,7 @@ class TestCrossStrategyRiskExposure:
 
         # New signal: 100 shares with $3 risk per share
         # Max capacity: $5000 - $4950 = $50 = 0 shares (truncated to int)
-        # Would reduce from 100 to 0 — below 0.25R floor
-        # Actually: 100 shares * $3 risk = $300 R. 0.25R = $75. 0 shares = $0 risk.
+        # Would reduce from 100 to 0 — rejected (0 shares remaining)
         signal = make_signal(
             symbol="AAPL",
             share_count=100,
@@ -1381,7 +1384,8 @@ class TestCrossStrategyRiskEdgeCases:
     async def test_set_order_manager_enables_checks(self) -> None:
         """Setting Order Manager via setter should enable cross-strategy checks.
 
-        DEC-249: Concentration limit now uses approve-with-modification.
+        DEC-249/DEC-250: Concentration limit uses approve-with-modification.
+        Low min_position_risk_dollars to allow the reduced position ($18 risk) to pass.
         """
         broker = SimulatedBroker(initial_cash=100_000)
         await broker.connect()
@@ -1390,6 +1394,7 @@ class TestCrossStrategyRiskEdgeCases:
         config = make_risk_config(
             max_single_stock_pct=0.01,  # Very low: 1% = $1000
             duplicate_stock_policy=DuplicateStockPolicy.ALLOW_ALL,
+            min_position_risk_dollars=1.0,  # Low floor to allow reduced position
         )
 
         om_config = OrderManagerConfig()
@@ -1518,7 +1523,8 @@ class TestCrossStrategyRiskEdgeCases:
     async def test_partially_closed_position_correct_exposure(self) -> None:
         """Partially closed positions should use remaining shares for exposure.
 
-        DEC-249: Concentration limit now uses approve-with-modification.
+        DEC-249/DEC-250: Concentration limit uses approve-with-modification.
+        Low min_position_risk_dollars to allow small reduced positions.
         """
         broker = SimulatedBroker(initial_cash=100_000)
         await broker.connect()
@@ -1527,6 +1533,7 @@ class TestCrossStrategyRiskEdgeCases:
         config = make_risk_config(
             max_single_stock_pct=0.05,  # 5% = $5000
             duplicate_stock_policy=DuplicateStockPolicy.ALLOW_ALL,
+            min_position_risk_dollars=1.0,  # Low floor for test positions
         )
 
         om_config = OrderManagerConfig()
@@ -1577,9 +1584,10 @@ class TestCrossStrategyRiskEdgeCases:
     async def test_concentration_reduces_then_duplicate_policy_rejects(self) -> None:
         """Concentration check reduces shares, then duplicate policy still rejects.
 
-        DEC-249: Concentration check now reduces shares instead of rejecting.
+        DEC-249/DEC-250: Concentration check reduces shares instead of rejecting.
         The duplicate policy check runs AFTER concentration check, so even with
         reduced shares, the duplicate policy will block the trade.
+        Low min_position_risk_dollars to allow concentration reduction to pass.
         """
         broker = SimulatedBroker(initial_cash=100_000)
         await broker.connect()
@@ -1588,6 +1596,7 @@ class TestCrossStrategyRiskEdgeCases:
         config = make_risk_config(
             max_single_stock_pct=0.02,  # 2% = $2000
             duplicate_stock_policy=DuplicateStockPolicy.BLOCK_ALL,
+            min_position_risk_dollars=1.0,  # Low floor to allow concentration reduction
         )
 
         om_config = OrderManagerConfig()
@@ -1624,7 +1633,8 @@ class TestCrossStrategyRiskEdgeCases:
     async def test_multiple_positions_same_symbol_mixed_strategies(self) -> None:
         """Multiple positions from different strategies in same symbol should combine.
 
-        DEC-249: Concentration limit now uses approve-with-modification.
+        DEC-249/DEC-250: Concentration limit uses approve-with-modification.
+        Low min_position_risk_dollars to allow small reduced positions.
         """
         broker = SimulatedBroker(initial_cash=100_000)
         await broker.connect()
@@ -1633,6 +1643,7 @@ class TestCrossStrategyRiskEdgeCases:
         config = make_risk_config(
             max_single_stock_pct=0.05,  # 5% = $5000
             duplicate_stock_policy=DuplicateStockPolicy.ALLOW_ALL,
+            min_position_risk_dollars=1.0,  # Low floor for test positions
         )
 
         om_config = OrderManagerConfig()

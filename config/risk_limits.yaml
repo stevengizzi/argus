@@ -4,6 +4,9 @@ account:
   cash_reserve_pct: 0.20
   max_concurrent_positions: 10
   emergency_shutdown_enabled: true
+  # Minimum position risk floor — positions below this are rejected as "not worth taking"
+  # Replaces ratio-based 0.25R floor (DEC-250)
+  min_position_risk_dollars: 100.0
 
 cross_strategy:
   max_single_stock_pct: 0.05

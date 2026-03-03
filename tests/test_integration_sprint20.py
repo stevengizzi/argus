@@ -649,6 +649,8 @@ class TestCrossStrategyRisk:
             account=AccountRiskConfig(
                 daily_loss_limit_pct=0.03,
                 max_concurrent_positions=10,
+                # Set low floor to test approve-with-modification (DEC-250)
+                min_position_risk_dollars=1.0,
             ),
             cross_strategy=CrossStrategyRiskConfig(
                 duplicate_stock_policy=DuplicateStockPolicy.ALLOW_ALL,
@@ -713,8 +715,7 @@ class TestCrossStrategyRisk:
 
         # VWAP: $1,000 (10 shares × $100) — total $5,500 > $5,000 limit
         # Remaining capacity: $500 = 5 shares
-        # Original R: 10 × $0.50 = $5, Reduced R: 5 × $0.50 = $2.50
-        # 0.25R floor: $1.25 < $2.50, so approved with modification (DEC-249)
+        # Reduced risk: 5 × $0.50 = $2.50 > $1.0 floor → approved with modification
         vwap_signal = SignalEvent(
             strategy_id="strat_vwap_reclaim",
             symbol="AAPL",
@@ -728,7 +729,7 @@ class TestCrossStrategyRisk:
         )
         vwap_result = await risk_manager.evaluate_signal(vwap_signal)
 
-        # DEC-249: Approved with reduced shares instead of rejected
+        # DEC-249/DEC-250: Approved with reduced shares (above $1 floor)
         assert isinstance(vwap_result, OrderApprovedEvent)
         assert vwap_result.modifications is not None
         assert vwap_result.modifications["share_count"] == 5  # Reduced from 10 to 5

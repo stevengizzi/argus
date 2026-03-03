@@ -159,6 +159,9 @@ class AccountRiskConfig(BaseModel):
     cash_reserve_pct: float = Field(default=0.20, ge=0, le=0.5)
     max_concurrent_positions: int = Field(default=10, ge=1)
     emergency_shutdown_enabled: bool = True
+    # Minimum position risk floor — positions below this dollar amount are rejected
+    # as "not worth taking" (replaces ratio-based 0.25R floor — DEC-250)
+    min_position_risk_dollars: float = Field(default=100.0, gt=0)
 
 
 class CrossStrategyRiskConfig(BaseModel):
