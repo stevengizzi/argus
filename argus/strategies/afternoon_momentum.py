@@ -120,6 +120,11 @@ class AfternoonMomentumStrategy(BaseStrategy):
         # Per-symbol state
         self._symbol_state: dict[str, ConsolidationSymbolState] = {}
 
+        # Observability: track window logging for the day
+        self._logged_window_opened: bool = False
+        self._logged_window_closed: bool = False
+        self._signals_generated_today: int = 0
+
         # Parse consolidation start time
         cons_start_str = config.consolidation_start_time
         csh, csm = map(int, cons_start_str.split(":"))
@@ -218,6 +223,9 @@ class AfternoonMomentumStrategy(BaseStrategy):
         if symbol not in self._watchlist:
             return None
 
+        # Observability: Log window open/close status
+        self._log_window_status(event)
+
         state = self._get_symbol_state(symbol)
 
         # Track volume for all bars
@@ -238,6 +246,60 @@ class AfternoonMomentumStrategy(BaseStrategy):
 
         # State machine transitions
         return await self._process_state_machine(symbol, event, state, atr)
+
+    def _log_window_status(self, candle: CandleEvent) -> None:
+        """Log window open/close status for observability.
+
+        Logs once per day when the entry window opens and closes.
+        """
+        candle_time = self._get_candle_time(candle)
+
+        # Log window opened (first candle in entry window)
+        if not self._logged_window_opened and candle_time >= self._earliest_entry_time:
+            # Count consolidated symbols
+            consolidated = sum(
+                1 for s in self._symbol_state.values()
+                if s.state == ConsolidationState.CONSOLIDATED
+            )
+            logger.info(
+                "Afternoon Momentum: Window opened. "
+                "Monitoring %d symbols for consolidation patterns. "
+                "%d symbols consolidated.",
+                len(self._watchlist),
+                consolidated,
+            )
+            self._logged_window_opened = True
+
+        # Log window closed (first candle past entry window)
+        if (
+            not self._logged_window_closed
+            and self._logged_window_opened
+            and candle_time >= self._latest_entry_time
+        ):
+            # Compile summary
+            consolidated = sum(
+                1 for s in self._symbol_state.values()
+                if s.state == ConsolidationState.CONSOLIDATED
+            )
+            entered = sum(
+                1 for s in self._symbol_state.values()
+                if s.state == ConsolidationState.ENTERED
+            )
+            rejected = sum(
+                1 for s in self._symbol_state.values()
+                if s.state == ConsolidationState.REJECTED
+            )
+            logger.info(
+                "Afternoon Momentum: Window closed. "
+                "Evaluated %d symbols. "
+                "Consolidated: %d. Entered: %d. Rejected: %d. Signals: %d.",
+                len(self._symbol_state),
+                consolidated,
+                entered,
+                rejected,
+                self._signals_generated_today,
+            )
+            self._logged_window_closed = True
 
     async def _process_state_machine(
         self,
@@ -340,12 +402,12 @@ class AfternoonMomentumStrategy(BaseStrategy):
             and state.consolidation_bars >= self._pm_config.min_consolidation_bars
         ):
             state.state = ConsolidationState.CONSOLIDATED
-            logger.debug(
-                "%s: ACCUMULATING -> CONSOLIDATED (ratio=%.2f < threshold=%.2f, bars=%d)",
+            logger.info(
+                "Afternoon Momentum: %s consolidation detected "
+                "(%d bars, range/ATR %.2f) — watching for breakout",
                 symbol,
-                consolidation_ratio,
-                self._pm_config.consolidation_atr_ratio,
                 state.consolidation_bars,
+                consolidation_ratio,
             )
 
         return None
@@ -541,6 +603,7 @@ class AfternoonMomentumStrategy(BaseStrategy):
         # Mark state as entered
         state.state = ConsolidationState.ENTERED
         state.position_active = True
+        self._signals_generated_today += 1
 
         logger.info(
             "%s: Afternoon breakout signal - entry=%.2f, stop=%.2f, T1=%.2f, T2=%.2f, "
@@ -643,6 +706,9 @@ class AfternoonMomentumStrategy(BaseStrategy):
         """Reset all intraday state for a new trading day."""
         super().reset_daily_state()
         self._symbol_state.clear()
+        self._logged_window_opened = False
+        self._logged_window_closed = False
+        self._signals_generated_today = 0
         logger.debug("%s: Afternoon Momentum strategy daily state reset", self.strategy_id)
 
     def mark_position_closed(self, symbol: str) -> None:

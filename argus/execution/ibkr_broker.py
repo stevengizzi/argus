@@ -12,7 +12,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import datetime, time
 from typing import TYPE_CHECKING
+from zoneinfo import ZoneInfo
 
 from ib_async import IB, LimitOrder, MarketOrder, StopOrder
 from ib_async import Order as IBOrder
@@ -31,6 +33,7 @@ from argus.execution.broker import Broker
 from argus.execution.ibkr_contracts import IBKRContractResolver
 from argus.execution.ibkr_errors import (
     IBKRErrorSeverity,
+    OVERNIGHT_MAINTENANCE_CODES,
     classify_error,
     is_connection_error,
     is_order_rejection,
@@ -282,6 +285,10 @@ class IBKRBroker(Broker):
         - WARNING: Log at warning level. Order rejections publish OrderCancelledEvent.
         - INFO: Log at debug level (suppress noise from market data messages).
 
+        Outside market hours (9:30 AM – 4:00 PM ET), overnight maintenance error codes
+        (1100, 1102, 2107, 2157) are downgraded to INFO level since connectivity issues
+        during IB Gateway nightly maintenance are expected.
+
         Args:
             req_id: Request ID associated with the error (often IBKR order ID).
             error_code: IBKR error code.
@@ -289,6 +296,11 @@ class IBKRBroker(Broker):
             contract: Optional contract associated with the error.
         """
         error_info = classify_error(error_code, error_string)
+
+        # Downgrade overnight maintenance codes outside market hours
+        if error_code in OVERNIGHT_MAINTENANCE_CODES and not self._is_market_hours():
+            logger.info("IBKR maintenance %d (outside market hours): %s", error_code, error_string)
+            return
 
         if error_info.severity == IBKRErrorSeverity.CRITICAL:
             logger.critical("IBKR error %d: %s", error_code, error_string)
@@ -312,6 +324,18 @@ class IBKRBroker(Broker):
         else:
             # INFO severity — debug log only (e.g., market data not subscribed)
             logger.debug("IBKR info %d: %s", error_code, error_string)
+
+    def _is_market_hours(self) -> bool:
+        """Check if current time is within US market hours (9:30 AM – 4:00 PM ET).
+
+        Returns:
+            True if currently within market hours, False otherwise.
+        """
+        et_tz = ZoneInfo("America/New_York")
+        now_et = datetime.now(et_tz)
+        market_open = time(9, 30)
+        market_close = time(16, 0)
+        return market_open <= now_et.time() <= market_close
 
     @staticmethod
     def _map_ib_order_type(ib_type: str) -> OrderType:

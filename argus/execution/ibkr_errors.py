@@ -207,7 +207,25 @@ IBKR_ERROR_MAP: dict[int, IBKRErrorInfo] = {
         "Sec-def data farm connection is OK",
         "log",
     ),
+    2107: IBKRErrorInfo(
+        2107,
+        IBKRErrorSeverity.WARNING,
+        "system",
+        "HMDS data farm connection is inactive",
+        "log",
+    ),
+    2157: IBKRErrorInfo(
+        2157,
+        IBKRErrorSeverity.INFO,
+        "system",
+        "Sec-def data farm connection is inactive",
+        "log",
+    ),
 }
+
+# Error codes that are expected during overnight maintenance
+# These should be logged at INFO level outside market hours
+OVERNIGHT_MAINTENANCE_CODES: frozenset[int] = frozenset({1100, 1102, 2107, 2157})
 
 # Error codes that indicate order rejection
 _ORDER_REJECTION_CODES: frozenset[int] = frozenset({110, 200, 201, 203})

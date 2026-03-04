@@ -49,7 +49,7 @@ from argus.core.config import (
     load_yaml_file,
 )
 from argus.core.event_bus import EventBus
-from argus.core.events import CandleEvent, PositionClosedEvent
+from argus.core.events import CandleEvent, PositionClosedEvent, ShutdownRequestedEvent
 from argus.core.health import ComponentStatus, HealthMonitor
 from argus.core.logging_config import setup_logging
 from argus.core.orchestrator import Orchestrator
@@ -415,6 +415,8 @@ class ArgusSystem:
         self._event_bus.subscribe(CandleEvent, self._on_candle_for_strategies)
         # Subscribe to PositionClosedEvents to update strategy position tracking
         self._event_bus.subscribe(PositionClosedEvent, self._on_position_closed_for_strategies)
+        # Subscribe to ShutdownRequestedEvent for auto-shutdown after EOD flatten
+        self._event_bus.subscribe(ShutdownRequestedEvent, self._on_shutdown_requested)
 
         # --- Phase 11: Start streaming ---
         logger.info("[11/12] Starting data streams...")
@@ -552,6 +554,30 @@ class ArgusSystem:
                 event.symbol,
                 event.strategy_id,
             )
+
+    async def _on_shutdown_requested(self, event: ShutdownRequestedEvent) -> None:
+        """Handle shutdown request from Order Manager after EOD flatten.
+
+        Schedules graceful shutdown after the configured delay to allow
+        any final operations (trade logging, API responses) to complete.
+
+        Args:
+            event: The shutdown request event with delay configuration.
+        """
+        delay = event.delay_seconds
+        logger.info(
+            "Auto-shutdown requested (reason=%s). Initiating in %ds...",
+            event.reason,
+            delay,
+        )
+
+        # Schedule the delayed shutdown
+        async def delayed_shutdown() -> None:
+            await asyncio.sleep(delay)
+            logger.info("Auto-shutdown initiated")
+            self.request_shutdown()
+
+        asyncio.create_task(delayed_shutdown())
 
     async def _reconstruct_strategy_state(self, symbols: list[str]) -> None:
         """Reconstruct strategy state if restarting mid-day.

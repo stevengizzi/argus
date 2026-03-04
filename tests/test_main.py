@@ -1377,3 +1377,116 @@ max_hold_seconds: 120
             call_args = orb_strategy.set_watchlist.call_args[0][0]
             assert "AAPL" in call_args
             assert "MSFT" in call_args
+
+
+class TestPositionClosedEventRouting:
+    """Tests for PositionClosedEvent routing to strategies (Sprint 21.5 C1 fix)."""
+
+    @pytest.mark.asyncio
+    async def test_position_closed_event_includes_symbol(self) -> None:
+        """PositionClosedEvent includes symbol field (C1 bug fix)."""
+        from argus.core.events import ExitReason, PositionClosedEvent
+
+        event = PositionClosedEvent(
+            position_id="pos_123",
+            strategy_id="strat_vwap_reclaim",
+            symbol="AAPL",
+            exit_price=100.0,
+            realized_pnl=50.0,
+            exit_reason=ExitReason.TIME_STOP,
+            hold_duration_seconds=1802,
+        )
+
+        assert event.symbol == "AAPL"
+        assert event.exit_reason == ExitReason.TIME_STOP
+
+    @pytest.mark.asyncio
+    async def test_position_closed_routes_to_strategy(
+        self, mock_config_dir: Path, mock_env_vars: None
+    ) -> None:
+        """PositionClosedEvent correctly routes to strategy with mark_position_closed."""
+        from argus.core.events import ExitReason, PositionClosedEvent
+        from argus.main import ArgusSystem
+
+        system = ArgusSystem(config_dir=mock_config_dir, dry_run=True)
+
+        # Create mock orchestrator with strategy
+        mock_strategy = MagicMock()
+        mock_strategy.mark_position_closed = MagicMock()
+
+        mock_orchestrator = MagicMock()
+        mock_orchestrator.get_strategies = MagicMock(
+            return_value={"vwap_reclaim": mock_strategy}
+        )
+        system._orchestrator = mock_orchestrator
+
+        # Create a time-stop PositionClosedEvent
+        event = PositionClosedEvent(
+            position_id="pos_123",
+            strategy_id="vwap_reclaim",
+            symbol="AAPL",
+            exit_price=100.0,
+            realized_pnl=50.0,
+            exit_reason=ExitReason.TIME_STOP,
+        )
+
+        # Call the handler directly
+        await system._on_position_closed_for_strategies(event)
+
+        # Verify mark_position_closed was called with the symbol
+        mock_strategy.mark_position_closed.assert_called_once_with("AAPL")
+
+
+class TestAutoShutdown:
+    """Tests for auto-shutdown after EOD flatten (Sprint 21.5 C1 feature)."""
+
+    @pytest.mark.asyncio
+    async def test_shutdown_requested_event_schedules_shutdown(
+        self, mock_config_dir: Path, mock_env_vars: None
+    ) -> None:
+        """ShutdownRequestedEvent schedules delayed shutdown."""
+        import asyncio
+
+        from argus.core.events import ShutdownRequestedEvent
+        from argus.main import ArgusSystem
+
+        system = ArgusSystem(config_dir=mock_config_dir, dry_run=True)
+
+        # Create event with very short delay for testing
+        event = ShutdownRequestedEvent(
+            reason="eod_flatten_complete",
+            delay_seconds=0,  # Immediate for test
+        )
+
+        # Handle the event
+        await system._on_shutdown_requested(event)
+
+        # Allow the scheduled task to run
+        await asyncio.sleep(0.1)
+
+        # Verify shutdown was requested
+        assert system._shutdown_event.is_set()
+
+    def test_shutdown_requested_event_has_correct_fields(self) -> None:
+        """ShutdownRequestedEvent has reason and delay_seconds fields."""
+        from argus.core.events import ShutdownRequestedEvent
+
+        event = ShutdownRequestedEvent(
+            reason="eod_flatten_complete",
+            delay_seconds=60,
+        )
+
+        assert event.reason == "eod_flatten_complete"
+        assert event.delay_seconds == 60
+
+    @pytest.mark.asyncio
+    async def test_order_manager_config_has_auto_shutdown_fields(self) -> None:
+        """OrderManagerConfig has auto_shutdown_after_eod and delay fields."""
+        from argus.core.config import OrderManagerConfig
+
+        config = OrderManagerConfig()
+
+        assert hasattr(config, "auto_shutdown_after_eod")
+        assert hasattr(config, "auto_shutdown_delay_seconds")
+        assert config.auto_shutdown_after_eod is True  # Default
+        assert config.auto_shutdown_delay_seconds == 60  # Default

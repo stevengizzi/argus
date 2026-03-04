@@ -33,6 +33,7 @@ from argus.core.events import (
     OrderType,
     PositionClosedEvent,
     PositionOpenedEvent,
+    ShutdownRequestedEvent,
     Side,
     TickEvent,
 )
@@ -785,6 +786,7 @@ class OrderManager:
 
         1. Cancel all open orders (stops, targets)
         2. Close all remaining positions at market
+        3. If auto_shutdown_after_eod is enabled, request system shutdown
         """
         logger.info("EOD flatten triggered — closing all positions")
         self._flattened_today = True
@@ -793,6 +795,20 @@ class OrderManager:
             for position in positions:
                 if not position.is_fully_closed:
                     await self._flatten_position(position, reason="eod_flatten")
+
+        # Request auto-shutdown if enabled
+        if self._config.auto_shutdown_after_eod:
+            delay = self._config.auto_shutdown_delay_seconds
+            logger.info(
+                "EOD flatten complete. Auto-shutdown in %ds...",
+                delay,
+            )
+            await self._event_bus.publish(
+                ShutdownRequestedEvent(
+                    reason="eod_flatten_complete",
+                    delay_seconds=delay,
+                )
+            )
 
     async def emergency_flatten(self) -> None:
         """Close everything immediately. Used by circuit breakers.
@@ -1129,6 +1145,7 @@ class OrderManager:
             PositionClosedEvent(
                 position_id=generate_id(),
                 strategy_id=position.strategy_id,
+                symbol=position.symbol,
                 exit_price=weighted_exit_price,
                 realized_pnl=position.realized_pnl,
                 exit_reason=exit_reason,

@@ -253,6 +253,7 @@ class PositionClosedEvent(Event):
 
     position_id: str = ""
     strategy_id: str = ""
+    symbol: str = ""
     exit_price: float = 0.0
     realized_pnl: float = 0.0
     exit_reason: ExitReason = ExitReason.MANUAL
@@ -292,6 +293,18 @@ class RegimeChangeEvent(Event):
     old_regime: str = ""
     new_regime: str = ""
     indicators: dict[str, float] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class ShutdownRequestedEvent(Event):
+    """Request graceful system shutdown.
+
+    Published after EOD flatten completes when auto_shutdown_after_eod is enabled.
+    The main run loop listens for this event and initiates graceful shutdown.
+    """
+
+    reason: str = "eod_flatten_complete"
+    delay_seconds: int = 60  # Delay before shutdown to allow final operations
 
 
 # ---------------------------------------------------------------------------

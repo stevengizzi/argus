@@ -136,8 +136,8 @@ class TestInfoSeverityCodes:
         """All INFO severity codes are correctly identified."""
         info_codes = get_info_error_codes()
 
-        # Known info codes from the spec
-        expected_info = {1102, 161, 202, 354, 10167, 2103, 2104, 2106, 2158}
+        # Known info codes from the spec (including maintenance codes 2157)
+        expected_info = {1102, 161, 202, 354, 10167, 2103, 2104, 2106, 2157, 2158}
 
         assert info_codes == expected_info
 
@@ -182,6 +182,8 @@ class TestErrorMapCompleteness:
             2104,
             2105,
             2106,
+            2107,  # HMDS data farm inactive
+            2157,  # Sec-def data farm inactive
             2158,
         }
 
