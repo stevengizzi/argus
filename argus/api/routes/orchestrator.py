@@ -246,10 +246,41 @@ async def get_orchestrator_status(
     allocations: list[AllocationInfo] = []
     total_deployed_pct = 0.0
 
-    for strategy_id, alloc in orchestrator.current_allocations.items():
+    # Determine which strategies to include: prefer current_allocations, fallback to state.strategies
+    # This ensures the Capital Allocation visualization has data even before pre-market runs
+    strategy_ids_with_allocations = set(orchestrator.current_allocations.keys())
+    registered_strategy_ids = set(state.strategies.keys())
+
+    # Use current_allocations if available, otherwise use registered strategies
+    strategies_to_show = strategy_ids_with_allocations or registered_strategy_ids
+
+    # Pre-compute equal-weight fallback allocation if needed
+    num_strategies = len(strategies_to_show)
+    cash_reserve = orchestrator.cash_reserve_pct
+    deployable_equity = total_equity * (1.0 - cash_reserve)
+    fallback_pct = (1.0 / num_strategies) if num_strategies > 0 else 0.0
+    fallback_dollars = deployable_equity * fallback_pct if num_strategies > 0 else 0.0
+
+    for strategy_id in strategies_to_show:
+        # Use orchestrator allocation if available, otherwise generate fallback
+        alloc = orchestrator.current_allocations.get(strategy_id)
+        if alloc is not None:
+            allocation_pct = alloc.allocation_pct
+            allocation_dollars = alloc.allocation_dollars
+            throttle_action_value = alloc.throttle_action.value
+            eligible = alloc.eligible
+            reason = alloc.reason
+            is_throttled = throttle_action_value == "suspend"
+        else:
+            # Fallback: equal-weight allocation before pre-market routine
+            allocation_pct = fallback_pct
+            allocation_dollars = fallback_dollars
+            throttle_action_value = "none"
+            eligible = True
+            reason = "Pre-market: pending allocation"
+            is_throttled = False
         deployed_capital = deployed_by_strategy.get(strategy_id, 0.0)
         deployed_pct = deployed_capital / total_equity if total_equity > 0 else 0.0
-        is_throttled = alloc.throttle_action.value == "suspend"
 
         # Get strategy-specific data
         strategy = state.strategies.get(strategy_id)
@@ -351,11 +382,11 @@ async def get_orchestrator_status(
         allocations.append(
             AllocationInfo(
                 strategy_id=strategy_id,
-                allocation_pct=alloc.allocation_pct,
-                allocation_dollars=alloc.allocation_dollars,
-                throttle_action=alloc.throttle_action.value,
-                eligible=alloc.eligible,
-                reason=alloc.reason,
+                allocation_pct=allocation_pct,
+                allocation_dollars=allocation_dollars,
+                throttle_action=throttle_action_value,
+                eligible=eligible,
+                reason=reason,
                 deployed_capital=deployed_capital,
                 deployed_pct=deployed_pct,
                 is_throttled=is_throttled,
