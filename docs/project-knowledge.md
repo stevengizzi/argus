@@ -44,7 +44,7 @@ ARGUS is a fully automated, AI-enhanced multi-strategy day trading system for US
 
 ### Build Track Queue
 
-21.5 (Live Integration, IN PROGRESS) → 21.6 (Backtest Re-Validation, parallel w/ 22) → 22 (AI Layer MVP) → 23 (NLP Catalyst + Pre-Market Engine) → 24 (Setup Quality Engine + Dynamic Sizer) → 25 (Red-to-Green + Pattern Library) → 26 (Pattern Expansion I) → 27 (Short Selling + Parabolic Short) → 28–32+ (Pattern Expansion II/III, Learning Loop, Orchestrator V2). Order Flow Model deferred to post-revenue (DEC-238).
+21.5 (Live Integration, IN PROGRESS) → 21.7 (FMP Scanner Integration, DEC-259) → 21.6 (Backtest Re-Validation, parallel w/ 22) → 22 (AI Layer MVP) → 23 (NLP Catalyst + Pre-Market Engine) → 24 (Setup Quality Engine + Dynamic Sizer) → 25 (Red-to-Green + Pattern Library) → 26 (Pattern Expansion I) → 27 (Short Selling + Parabolic Short) → 28–32+ (Pattern Expansion II/III, Learning Loop, Orchestrator V2). Order Flow Model deferred to post-revenue (DEC-238).
 
 ### Validation Track
 
@@ -80,7 +80,7 @@ Paper trading active with Databento EQUS.MINI + IBKR paper (Account U24619949, D
 - **Testing:** pytest + Vitest (DEC-130), ruff linting
 - **Config:** YAML → Pydantic BaseModel validation (DEC-032)
 - **IDs:** ULIDs via `python-ulid` (DEC-026)
-- **Infra:** GitHub (public repo), Databento ($199/mo active), IBKR paper trading active
+- **Infra:** GitHub (public repo), Databento ($199/mo active), FMP Starter ($22/mo, Sprint 21.7), IBKR paper trading active
 
 ### File Structure
 
@@ -135,7 +135,7 @@ Per-trade risk: 0.5–1% of strategy allocation. Daily loss limit: 3–5%. Weekl
 - **IBKR Gateway:** Requires running Java process. Nightly resets need automated reconnection (RSK-022).
 - **Pre-Databento backtests provisional:** All pre-Databento parameter optimization requires re-validation (DEC-132).
 - **No live L2/L3 on Standard plan:** Requires Plus tier $1,399/mo (DEC-237).
-- **Databento EQUS.MINI historical lag:** Multi-day lag for daily bars (DEC-247). Scanner handles with retry + static watchlist fallback.
+- **Databento EQUS.MINI historical lag:** Multi-day lag for daily bars (DEC-247). Scanner currently uses static watchlist fallback. FMP Starter integration (Sprint 21.7, DEC-258/259) will provide reliable pre-market daily bars for dynamic symbol selection.
 - **Latency from Taipei:** ~150–200ms to US exchanges. Scalping has structural disadvantages; longer-duration strategies (5–30 min holds) preferred.
 - **Secrets:** All API keys in encrypted secrets manager, never in code/git.
 - **Audit:** Every action logged immutably.
@@ -147,9 +147,11 @@ Per-trade risk: 0.5–1% of strategy allocation. Daily loss limit: 3–5%. Weekl
 | Item | Cost | Status |
 |------|------|--------|
 | Databento US Equities Standard | $199/mo | Active |
+| FMP Starter (pre-market scanning) | $22/mo | Sprint 21.7 activation (DEC-258) |
 | IBKR commissions | ~$43/day at scale | Paper trading (no cost yet) |
 | Claude API (Sprint 22+) | ~$35–50/mo | Not yet active |
-| IQFeed (forex/news, future) | ~$160–250/mo | Deferred |
+| FMP Premium/Ultimate (NLP, Sprint 23+) | $59–149/mo | Future upgrade from Starter |
+| IQFeed (forex/breadth, future) | ~$160–250/mo | Deferred (DEF-011) |
 | Databento Plus (live L2/L3) | $1,399/mo | Post-revenue (DEC-238) |
 
 ---
@@ -160,7 +162,7 @@ Per-trade risk: 0.5–1% of strategy allocation. Daily loss limit: 3–5%. Weekl
 
 **Foundational:** DEC-025 (Event Bus FIFO), DEC-027 (Risk Manager modifications), DEC-028 (strategy statefulness), DEC-029 (Event Bus sole streaming), DEC-032 (Pydantic config), DEC-047 (walk-forward mandatory), DEC-079 (parallel tracks), DEC-082 (Databento primary), DEC-083 (IBKR sole broker), DEC-098 (Claude Opus), DEC-132 (re-validation required).
 
-**Data & Execution:** DEC-088 (Databento threading), DEC-090 (DataSource enum), DEC-094 (BrokerSource enum), DEC-117 (atomic brackets), DEC-237 (no live L2 on Standard), DEC-248 (EQUS.MINI confirmed), DEC-249 (concentration approve-with-modification).
+**Data & Execution:** DEC-088 (Databento threading), DEC-090 (DataSource enum), DEC-094 (BrokerSource enum), DEC-117 (atomic brackets), DEC-237 (no live L2 on Standard), DEC-248 (EQUS.MINI confirmed), DEC-249 (concentration approve-with-modification), DEC-257 (hybrid Databento+FMP architecture), DEC-258 (FMP Starter for scanning).
 
 **Frontend:** DEC-099 (in-process API), DEC-102 (JWT auth), DEC-104/215 (chart libraries), DEC-109 (design north star), DEC-149 (VectorBT precompute+vectorize), DEC-169 (7-page architecture), DEC-170 (AI Copilot), DEC-199 (navigation + shortcuts).
 

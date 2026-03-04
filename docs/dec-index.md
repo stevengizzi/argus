@@ -1,6 +1,6 @@
 # ARGUS — Decision Index
 
-> 249 unique decisions (DEC-001 through DEC-249) + DEC-250 (metarepo retrofit)
+> 260 decisions (DEC-001 through DEC-260)
 > Generated: March 4, 2026 | Source: `docs/decision-log.md`
 > Legend: ● Active | ○ Superseded | △ Amended | ✗ Duplicate entry
 
@@ -270,3 +270,13 @@
 - ● **DEC-248**: EQUS.MINI Confirmed — all US exchanges, one feed
 - ● **DEC-249**: Concentration Limit — approve-with-modification, 0.25R floor
 - ● **DEC-250**: Metarepo Workflow Retrofit
+- ● **DEC-251**: Replace 0.25R Ratio Floor with Absolute Minimum Risk Floor
+- ● **DEC-252**: Round Order Prices to Tick Size Before IBKR Submission
+- ● **DEC-253**: Add Data Heartbeat Logging
+- ● **DEC-254**: Auto-Shutdown After EOD Flatten
+- ● **DEC-255**: Downgrade IBKR Maintenance Errors Outside Market Hours
+- ● **DEC-256**: Add Symbol Field to PositionClosedEvent
+- ● **DEC-257**: Hybrid Multi-Source Data Architecture — Databento streaming + FMP scanning
+- ● **DEC-258**: FMP Starter for Pre-Market Scanning ($22/mo)
+- ● **DEC-259**: Sprint 21.7 — FMP Scanner Integration
+- ● **DEC-260**: Data Provider Evaluation — IQFeed, dxFeed, Exegy, Finnhub, QuantConnect rejected

@@ -419,6 +419,26 @@ Status: Blocks A + B0-B5 + C1 complete. C2 (second market day) + D (closeout) pe
 **Prerequisites:** Databento subscription activated ✅, IBKR account approved ✅
 **Exit criteria:** Full market session (9:30-4:00 ET) completed without crashes, all 4 strategies processing data, paper trades executing, Command Center operational with live data, clean overnight workflow verified
 
+### Sprint 21.7 — FMP Scanner Integration (DEC-257, DEC-258, DEC-259)
+**Status:** QUEUED (follows Sprint 21.5 completion)
+**Estimated sessions:** 2–3
+**Full spec:** To be drafted in dedicated sprint planning conversation
+
+**Scope:**
+- Add FMP Starter ($22/mo) as scanning data source
+- Implement `FMPScannerSource` class: 1–2 REST calls pre-market (daily bars for gap/volume screening, gainers/losers endpoint)
+- Config entry for FMP API key (secrets manager)
+- Scanner adapter: parse FMP JSON → ranked symbol list via existing Scanner interface
+- Tests for FMP adapter (mock HTTP responses)
+- Validate end-to-end: FMP scan → symbol list → Databento live subscription → strategy execution
+
+**Rationale:** Databento historical daily bar lag (DEC-247) makes the scanner non-functional for pre-market gap/volume screening. Static 10-symbol fallback is adequate for execution validation but not for alpha validation. FMP Starter provides reliable pre-market daily bars at $22/mo. Every paper trading session after this sprint produces more meaningful validation data for Gate 2 metrics.
+
+**Prerequisites:** Sprint 21.5 complete (live pipeline confirmed working)
+**Exit criteria:** Scanner produces dynamic watchlist from FMP data pre-market. Full pipeline validated: FMP scan → Databento subscription → strategies receive data → paper trades execute.
+
+**Decisions:** DEC-257 (hybrid architecture), DEC-258 (FMP Starter), DEC-259 (this sprint), DEC-260 (rejected providers)
+
 ### Sprint 21.6 — Backtest Re-Validation (DEC-132 / DEC-235)
 **Status:** QUEUED (runs parallel with Sprint 22)
 **Estimated sessions:** 6-8

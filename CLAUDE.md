@@ -6,10 +6,10 @@
 ## Current State
 
 - **Active sprint:** 21.5 (Live Integration) — Blocks A+B complete, C+D pending
-- **Next sprint:** 22 (AI Layer MVP)
+- **Next sprint:** 21.7 (FMP Scanner Integration) → 22 (AI Layer MVP)
 - **Tests:** 1,710 pytest + 255 Vitest
 - **Strategies:** 4 active (ORB Breakout, ORB Scalp, VWAP Reclaim, Afternoon Momentum)
-- **Infrastructure:** Databento EQUS.MINI (live) + IBKR paper trading (Account U24619949)
+- **Infrastructure:** Databento EQUS.MINI (live) + IBKR paper trading (Account U24619949) + FMP Starter (Sprint 21.7, scanning)
 - **Frontend:** 7-page Command Center (all built), Tauri desktop + PWA mobile
 
 ## Project Structure
@@ -184,11 +184,11 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 | ~~DEF-008~~ | ~~Synthetic data e2e trade trigger test~~ | ~~Sprint 8~~ | **RESOLVED** — Root cause: timezone bug in OrbBreakout (DEC-061). After fix, harness produces 59 trades on 7 months of real data with relaxed max_range_atr_ratio. Additional fixes: fill price ($0.01 bug), trade logging (sync fill handling), data integrity (original stop, weighted exit price). 488 tests. |
 | ~~DEF-009~~ | ~~VectorBT vs Replay Harness cross-validation~~ | ~~Sprint 9 starts~~ | **DONE** — `cross_validate_single_symbol()` implemented in walk_forward.py. Compares VectorBT trade count vs Replay Harness for matching params; VectorBT >= Replay is PASS (DEC-069). |
 | ~~DEF-010~~ | ~~Remove `_simulate_trades_for_day_slow()`~~ | ~~Sprint 9 completes~~ | **DONE** — Legacy function removed from vectorbt_orb.py. Tests updated to use wrapper over vectorized functions (DEC-070). |
-| DEF-011 | IQFeedDataService adapter | Forex strategy development starts OR Tier 2 news integration starts | IQFeed provides forex, Benzinga news, and breadth indicators that Databento lacks. Build when a specific feature requires it. ~$160–250/month. |
+| DEF-011 | IQFeedDataService adapter | Forex strategy development starts OR breadth indicator integration starts | IQFeed provides forex and breadth indicators (advance/decline, TICK, TRIN) that neither Databento nor FMP provide. Benzinga news originally a draw but FMP covers news needs more cost-effectively (DEC-258/260). Build when a specific feature requires forex or breadth data. ~$160–250/month. |
 | DEF-012 | Databento L2 depth activation | A strategy requires order book depth data for entry/exit decisions | MBP-10 schema available on Standard plan. DatabentoDataService designed for L2 from Sprint 12, but not activated until a strategy needs it. |
 | ~~DEF-013~~ | ~~Extract shared IndicatorEngine from DataService implementations~~ | ~~Sprint 12.5~~ | **DONE** — `IndicatorEngine` class created in `argus/data/indicator_engine.py`. All four DataService implementations (AlpacaDataService, DatabentoDataService, ReplayDataService, BacktestDataService) now delegate to IndicatorEngine. 27 new tests, 685 total tests passing. DEC-092. |
 | DEF-014 | SystemAlertEvent for dead data feed | Command Center MVP (Sprint 14–16) OR Health Monitor alerting built | `DatabentoDataService._run_with_reconnection()` logs `critical` when max retries exceeded but emits no Event Bus event. Add `SystemAlertEvent` (or similar) so Health Monitor and Command Center can react (red banner, push notification). Location: `argus/data/databento_data_service.py`. |
-| DEF-015 | DatabentoScanner full-universe scanning | Databento subscription active (DEC-087) AND paper trading validates need for broader symbol coverage | V1 DatabentoScanner uses configured watchlist. Full-universe scanning (~8K US equities) requires cost/latency analysis with live Databento subscription. Location: `argus/data/databento_scanner.py`, `scan()` and `scan_with_gap_data()`. |
+| DEF-015 | DatabentoScanner full-universe scanning | ~~Databento subscription active (DEC-087) AND paper trading validates need for broader symbol coverage~~ **PARTIALLY ADDRESSED** by DEC-258/259: FMP Starter provides pre-market daily bars for gap/volume scanning across full US equity universe. Sprint 21.7 implements `FMPScannerSource`. Remaining: fine-tune scanning criteria, evaluate universe breadth with live FMP data. Location: `argus/data/databento_scanner.py` + new FMP scanner adapter. |
 | ~~DEF-016~~ | ~~Order Manager `place_bracket_order()` integration~~ | ~~Sprint 17~~ | **DONE** (Sprint 17, DEC-117). Order Manager uses `place_bracket_order()` for atomic entry+stop+T1+T2. ManagedPosition tracks bracket component IDs. SimulatedBroker + IBKRBroker validated. Known limitation: AlpacaBroker bracket child order fills don't route correctly — acceptable, Alpaca is incubator-only (DEC-086). |
 | DEF-017 | Performance-weighted + correlation-adjusted allocation | 20+ days of multi-strategy live data available | V1 uses equal-weight. V2 shifts ±10% based on trailing Sharpe/drawdown. V3 adds CorrelationTracker cross-correlation penalty. CorrelationTracker infrastructure built in Sprint 17 (DEC-116). |
 | DEF-018 | Real VIX data integration | IQFeed subscription activated OR CBOE Databento dataset added | RegimeClassifier V1 uses SPY 20-day realized vol as VIX proxy (DEC-113). Replace with real-time VIX index when data source available. |
@@ -221,7 +221,7 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 
 | Document | What It Covers |
 |----------|---------------|
-| `docs/decision-log.md` | All 250 DEC entries with full rationale |
+| `docs/decision-log.md` | All 260 DEC entries with full rationale |
 | `docs/dec-index.md` | Quick-reference index with status markers |
 | `docs/sprint-history.md` | Complete sprint history (1–21.5) |
 | `docs/process-evolution.md` | Workflow evolution narrative |

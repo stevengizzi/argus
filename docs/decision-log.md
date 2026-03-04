@@ -2826,5 +2826,61 @@ Each entry follows this format:
 
 ---
 
+### DEC-257 | Hybrid Multi-Source Data Architecture
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-04 |
+| **Sprint** | Pre-21.7 planning |
+| **Decision** | ARGUS uses a hybrid multi-source data architecture: Databento for live streaming and backtesting, FMP for pre-market scanning, IBKR for execution. Each provider used for its architectural strength — no overlap, no redundancy. Push-based streaming (Databento) cannot be replaced by REST polling (FMP or any other REST API) for live strategy execution. |
+| **Alternatives Considered** | 1. Single-provider (Databento for everything): Rejected — Databento historical daily bar lag (DEC-247) makes scanner non-functional. 2. Single-provider (FMP Ultimate for everything): Rejected — REST polling at ~600ms/symbol intervals cannot support sub-second strategy state transitions (VWAP Reclaim 5-state machine, ORB breakout detection). FMP lacks trade-level data needed for Replay Harness. 3. IQFeed as replacement for both: Rejected — more expensive ($143+/mo), Windows-dependent, 500-symbol cap kills scanning. 4. dxFeed: Rejected — enterprise pricing (~$350/mo), no self-service API. 5. Exegy: Rejected — institutional HFT infrastructure ($50K–500K+/year), irrelevant at 150ms Taipei latency. |
+| **Rationale** | Databento's push-based streaming delivers every trade and quote to the Event Bus within microseconds. Strategies react to individual trades — this is a fundamental architectural requirement, not a nice-to-have. C1 session proved this with a successful VWAP Reclaim trade on AAPL. FMP provides exactly what Databento lacks: reliable pre-market daily bars and screener endpoints for gap/volume scanning across the full US equity universe. The two providers are complementary with zero overlap. Total cost: $221/mo ($199 Databento + $22 FMP Starter). |
+| **Cross-References** | DEC-082 (Databento primary), DEC-247 (scanner historical lag), DEC-248 (EQUS.MINI confirmed), DEC-258 (FMP Starter), DEC-259 (Sprint 21.7) |
+| **Status** | Active |
+
+---
+
+### DEC-258 | FMP Starter for Pre-Market Scanning
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-04 |
+| **Sprint** | Pre-21.7 planning |
+| **Decision** | Add Financial Modeling Prep (FMP) Starter plan ($22/mo) as the scanning data source. FMP provides REST endpoints for daily bars, pre-market gainers/losers, and stock screener — exactly what the scanner needs to replace the broken Databento historical daily bar path (DEC-247). |
+| **Alternatives Considered** | 1. FMP Premium ($59/mo): Premature — Starter covers scanning needs; upgrade when Sprint 23 (NLP Catalyst) activates. 2. FMP Ultimate ($149/mo): Same — the additional features (earnings transcripts, 1-min intraday, 13F holdings) are Sprint 23–24 requirements, not scanning requirements. 3. Finnhub free tier: Rejected — 15-min delayed data, recent reports of stale WebSocket news feeds with no support response. 4. Fix Databento scanner: Not viable — multi-day historical lag is a Databento infrastructure limitation, not a bug we can work around. |
+| **Rationale** | $22/mo solves the scanner problem completely. FMP Starter provides 250 API calls/min, daily OHLCV bars with no lag, pre-market gainers/losers endpoint, and stock screener. Implementation is lightweight: one REST call pre-market, parse JSON, return ranked symbol list. Upgrade path to Premium/Ultimate is clean for future NLP and fundamentals needs. |
+| **Cross-References** | DEC-247 (scanner lag problem), DEC-257 (hybrid architecture), DEC-259 (Sprint 21.7), DEC-164 (NLP Catalyst Pipeline — future FMP upgrade), DEF-015 (full-universe scanning — partially addressed) |
+| **Status** | Active |
+
+---
+
+### DEC-259 | Sprint 21.7 — FMP Scanner Integration
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-04 |
+| **Sprint** | Pre-21.7 planning |
+| **Decision** | Sprint 21.7 is a focused 2–3 session mini-sprint to integrate FMP Starter as the scanning data source. Slotted between Sprint 21.5 (Live Integration) and Sprint 21.6 (Backtest Re-Validation). Implementation: `FMPScannerSource` class making 1–2 REST calls pre-market, config entry for API key, tests. |
+| **Alternatives Considered** | 1. Bundle into Sprint 22 (AI Layer): Rejected — scanner is independent of AI Layer and should be validated before AI Copilot observes symbol selection. 2. Bundle into Sprint 21.6 (Backtest Re-Validation): Rejected — different concern entirely; 21.6 is about parameter validation, not data sourcing. 3. Defer to later: Rejected — every paper trading session with the static 10-symbol watchlist produces less meaningful validation data. Earlier scanner activation means better Gate 2 metrics. |
+| **Rationale** | Small, focused scope (2–3 sessions). Independent of all other sprints. Directly improves paper trading quality by enabling dynamic symbol selection from full US equity universe. Once activated, every subsequent paper trading session produces more meaningful alpha validation data. |
+| **Cross-References** | DEC-257 (hybrid architecture), DEC-258 (FMP Starter), DEC-247 (scanner lag), DEF-015 (full-universe scanning) |
+| **Status** | Active |
+
+---
+
+### DEC-260 | Data Provider Evaluation — IQFeed, dxFeed, Exegy, Finnhub, QuantConnect Rejected
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-04 |
+| **Sprint** | Pre-21.7 planning |
+| **Decision** | Five additional data providers evaluated and rejected for current ARGUS needs. IQFeed: $143+/mo, Windows-dependent, 500-symbol cap. dxFeed: enterprise pricing (~$350/mo), no self-service API. Exegy: institutional HFT ($50K–500K+/year), irrelevant at Taipei latency. Finnhub: possible future NLP supplement but FMP covers same ground with better screeners; free tier is 15-min delayed. QuantConnect: platform requiring complete ARGUS rewrite, not a data provider. |
+| **Alternatives Considered** | Each provider was the alternative. See DEC-257 for the chosen architecture. |
+| **Rationale** | None of the five providers offer a better cost/capability ratio than the Databento + FMP hybrid for ARGUS's specific requirements (push-based live streaming + REST pre-market scanning + Taipei latency constraints + Python-native APIs). Finnhub remains on radar as supplementary NLP source if FMP's news coverage proves insufficient during Sprint 23. |
+| **Cross-References** | DEC-257 (hybrid architecture), DEC-258 (FMP Starter), DEC-082 (Databento primary), DEF-011 (IQFeed — remains deferred for forex/breadth use case) |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
-*Next DEC: 251*
+*Next DEC: 261*
