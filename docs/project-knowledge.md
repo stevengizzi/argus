@@ -38,7 +38,7 @@ ARGUS is a fully automated, AI-enhanced multi-strategy day trading system for US
 | 21b | Orchestrator page | 1597+100V | Feb 27 | DEC-186–195 |
 | 21c | The Debrief page | 1664+138V | Feb 27 | DEC-196–203 |
 | 21d | Dashboard+Performance+System+Copilot shell | 1712+257V | Feb 27–28 | DEC-204–229 |
-| 21.5 | Live Integration (IN PROGRESS) | 1710+255V | Feb 28– | DEC-230–249 |
+| 21.5 | Live Integration (IN PROGRESS) | 1715+255V | Feb 28– | DEC-230–256 |
 
 *Full sprint scopes and session details: `docs/sprint-history.md`*
 

@@ -383,10 +383,10 @@ per sprint velocity.
 **Deferred:** DEF-028, DEC-229
 
 ### Sprint 21.5 — Live Integration (Databento + IBKR)
-**Status:** IN PROGRESS — Blocks A + B complete, Block C (full market day) + D (closeout) pending
+Status: Blocks A + B0-B5 + C1 complete. C2 (second market day) + D (closeout) pending.
 **Start:** Feb 28, 2026
 **Estimated sessions:** 13–16 (Claude Code) + 3 code reviews (Claude.ai)
-**Test count:** 1710 (pytest) + 255 (Vitest) — as of Session B5
+**Test count:** 1715 (pytest) + 255 (Vitest) — as of Session C1
 
 **Completed sessions:**
 - Sessions 1–3: Databento connection. API format discoveries: instrument_id direct attribute (DEC-241), built-in symbology_map (DEC-242), fixed-point prices ×1e9 (DEC-243). Dataset switch from XNAS.ITCH to EQUS.MINI (DEC-237/248).
@@ -396,9 +396,10 @@ per sprint velocity.
 - Session A1: Validation scripts — 13/13 integration PASS, 4/4 resilience PASS. Discovered EQUS.MINI historical data lag blocking scanner (422 error).
 - Session B0: Scanner resilience fix (DEC-247, 13 new tests). EQUS.MINI diagnostic — live streaming confirmed, all schemas verified (ohlcv-1m, ohlcv-1d, trades, tbbo), multi-symbol queries functional (DEC-248). DatabentoSymbolMap deleted.
 - Sessions B1–B5: Position sizing verified (Risk Manager concentration limit working correctly). Time stop/EOD flatten validated via code review. Operational scripts created (`scripts/start_live.sh`, `scripts/stop_live.sh`). `docs/LIVE_OPERATIONS.md` created (418 lines). Documentation sync complete.
+- Session C1 (Mar 3): First live market day. AAPL VWAP Reclaim +$70.30. Bugs found & fixed: 0.25R floor (DEC-250), tick rounding (DEC-251). Post-session: auto-shutdown (DEC-253), IBKR error severity (DEC-254), PositionClosedEvent fix (DEC-255).
 
 **Remaining sessions:**
-- Block C (C1–C3): Full trading day validation (all 4 strategies, Databento + IBKR, Command Center with live data)
+- Block C (C2–C3): Full trading day validation (all 4 strategies, Databento + IBKR, Command Center with live data)
 - Block D (D1): Sprint closeout + documentation
 
 **Key deliverables:**
@@ -414,7 +415,7 @@ per sprint velocity.
 - Concentration limit approve-with-modification (DEC-249) ✅
 - Time stop + EOD validation script (`scripts/test_time_stop_eod.py`) ✅
 
-**Decisions:** DEC-241 through DEC-249
+**Decisions:** DEC-241-249, DEC-251-256
 **Prerequisites:** Databento subscription activated ✅, IBKR account approved ✅
 **Exit criteria:** Full market session (9:30-4:00 ET) completed without crashes, all 4 strategies processing data, paper trades executing, Command Center operational with live data, clean overnight workflow verified
 

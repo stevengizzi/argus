@@ -2747,5 +2747,84 @@ Each entry follows this format:
 
 ---
 
+### DEC-251 | Replace 0.25R Ratio Floor with Absolute Minimum Risk Floor
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-03 |
+| **Sprint** | 21.5 (Session C1) |
+| **Decision** | Replace the 0.25R ratio-based floor (which compared reduced shares against the uncapped position) with a $100 absolute minimum risk dollar floor. Any position risking ≥$100 is worth taking; below $100 is rejected. Configurable via `min_position_risk_dollars` in risk config. |
+| **Rationale** | The 0.25R floor was rejecting every signal on stocks above ~$50 because risk-based sizing produces massive uncapped positions that the 5% concentration cap reduces to 15–20% of original — always below the 25% threshold. Discovered during first live market session when all VWAP Reclaim signals were rejected despite valid setups. An absolute dollar floor avoids this structural mismatch. |
+| **Supersedes** | N/A (modifies DEC-249 implementation; DEC-249 itself still valid) |
+| **Cross-References** | DEC-249 (concentration approve-with-modification) |
+| **Status** | Active |
+
+---
+
+### DEC-252 | Round Order Prices to Tick Size Before IBKR Submission
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-03 |
+| **Sprint** | 21.5 (Session C1) |
+| **Decision** | Round all order prices (entry limit, stop, T1 target, T2 target) to $0.01 tick size in `IBKRBroker` before submitting to IBKR. Strategies compute mathematically precise values; the broker adapter normalizes for exchange requirements. Helper `_round_price()` with configurable tick size (default $0.01 for US equities). |
+| **Rationale** | IBKR rejected all 9 bracket order legs across 3 symbols with Error 110 ("price does not conform to minimum price variation") because strategy calculations produced values like 296.703, 299.857000001, 188.37144. The broker adapter is the correct boundary for this normalization. |
+| **Cross-References** | DEC-117 (atomic bracket orders), DEC-083 (IBKR sole broker) |
+| **Status** | Active |
+
+---
+
+### DEC-253 | Add Data Heartbeat Logging
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-03 |
+| **Sprint** | 21.5 (Session C1) |
+| **Decision** | Log a single INFO line every 5 minutes showing candle count and active symbol count: "Data heartbeat: 50 candles received in last 5m (10 symbols active)". Provides data flow confirmation without per-candle noise. |
+| **Rationale** | During C1 startup, initial diagnosis couldn't determine if Databento data was flowing because CandleEvent processing had no INFO-level logging. The heartbeat provides low-noise confirmation that the data pipeline is alive. |
+| **Cross-References** | DEC-248 (EQUS.MINI confirmed) |
+| **Status** | Active |
+
+---
+
+### DEC-254 | Auto-Shutdown After EOD Flatten
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-04 |
+| **Sprint** | 21.5 (Session C1 closeout) |
+| **Decision** | After EOD flatten completes and confirms 0 open positions, schedule graceful shutdown with configurable delay (default 60s). Implemented via `ShutdownRequestedEvent`. Config flag `auto_shutdown_after_eod: true` in `OrderManagerConfig`. |
+| **Rationale** | During C1, ARGUS kept running overnight after market close, cycling IBKR 1100 disconnect errors every 15–30 minutes. Operator was asleep (3:50 AM Taipei when EOD flatten runs). Auto-shutdown eliminates unnecessary overnight resource usage and log noise. Manual shutdown via `stop_live.sh` is unacceptable for Taipei timezone operation. |
+| **Cross-References** | RSK-022 (nightly IB Gateway resets) |
+| **Status** | Active |
+
+---
+
+### DEC-255 | Downgrade IBKR Maintenance Errors Outside Market Hours
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-04 |
+| **Sprint** | 21.5 (Session C1 closeout) |
+| **Decision** | IBKR error codes 1100, 1102, 2107, 2157 (farm connectivity messages) logged at INFO instead of CRITICAL/WARNING outside market hours (9:30 AM – 4:00 PM ET). During market hours, severity unchanged. |
+| **Rationale** | C1 overnight log had 20+ CRITICAL alerts from IBKR cycling connections during nightly maintenance. These are expected behavior, not actionable. With auto-shutdown (DEC-254) this is less critical but still relevant during the post-market window before shutdown completes. |
+| **Cross-References** | DEC-254 (auto-shutdown), RSK-022 (nightly IB Gateway resets) |
+| **Status** | Active |
+
+---
+
+### DEC-256 | Add Symbol Field to PositionClosedEvent
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-04 |
+| **Sprint** | 21.5 (Session C1 closeout) |
+| **Decision** | Added `symbol` field to `PositionClosedEvent`. The `ArgusSystem._on_position_closed_for_strategies` handler requires the symbol to route the event to the correct strategy. |
+| **Rationale** | Discovered during first live trade (AAPL time-stop exit). Handler raised an exception on `PositionClosedEvent` (seq=93981) because the symbol field was missing. Trade still completed because the event bus continued processing other handlers, but strategies were not notified of position closures. Bug fix, not a design choice. |
+| **Cross-References** | DEC-025 (Event Bus FIFO) |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
 *Next DEC: 251*
