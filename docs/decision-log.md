@@ -279,7 +279,7 @@ Each entry follows this format:
 | Field | Value |
 |-------|-------|
 | **Date** | 2026-02-14 |
-| **Decision** | The Argus GitHub repository is connected to the Claude.ai project via Anthropic's native GitHub integration. Selected files/folders synced: `docs/`, `CLAUDE.md`, `config/`. Project instructions (02_PROJECT_KNOWLEDGE.md text) remain manually maintained separately. |
+| **Decision** | The Argus GitHub repository is connected to the Claude.ai project via Anthropic's native GitHub integration. Selected files/folders synced: `docs/`, `CLAUDE.md`, `config/`. Project instructions (project-knowledge.md text) remain manually maintained separately. |
 | **Rationale** | Eliminates manual file re-upload. Both Claudes read from the same git-based source of truth — Claude Code reads from the local filesystem, Claude.ai reads via GitHub sync. Clicking "Sync now" after pushing is the only manual step. Project instructions are a separate text field that doesn't sync from GitHub, but they change infrequently (major milestones only). |
 | **Alternatives Considered** | ClaudeSync (third-party Python tool, one-way sync — unnecessary given native integration), manual file upload (tedious, error-prone), syncing entire repo (wasteful — Claude.ai doesn't need source code for strategic conversations) |
 | **Status** | Active |
@@ -359,7 +359,7 @@ Each entry follows this format:
 | **Decision** | Phase 1 builds the `Broker` ABC, `SimulatedBroker`, and `AlpacaBroker`. The IBKR adapter is deferred to Phase 3 or later (when production scaling is needed). A comprehensive `Broker` ABC test suite ensures any future adapter is drop-in compatible. |
 | **Alternatives** | Implement IBKR adapter in Phase 1 (per original DEC-003) |
 | **Rationale** | The broker abstraction layer (built in Phase 1) achieves the anti-lock-in goal of DEC-003 without actually implementing IBKR. The IBKR adapter is meaningfully harder than Alpaca (requires TWS Gateway, different auth model, `ib_insync` event loop integration, different order model). This represents 3–5 days of work providing zero value until production scaling — all Phase 1-3 trading uses Alpaca. A comprehensive test suite against the `Broker` ABC guarantees drop-in compatibility when IBKR is implemented. See amended DEC-003. |
-| **Status** | Active |
+| **Status** | Superseded by DEC-083 |
 
 ### DEC-032 | Configuration Validation via Pydantic
 | Field | Value |
@@ -852,17 +852,6 @@ Each entry follows this format:
 
 ---
 
-### DEC-076 | Phase 3 ORB Parameter Recommendations
-| Field | Value |
-|-------|-------|
-| **Date** | 2026-02-17 |
-| **Decision** | ORB strategy parameters for Phase 3: `opening_range_minutes=5`, `max_hold_minutes=15`, `min_gap_pct=2.0`, `stop_buffer_pct=0.0`, `target_r=2.0`, `max_range_atr_ratio=999.0` (disabled). Two high-sensitivity parameters changed (or: 15→5, hold: 30→15). ATR filter disabled (DEC-075). Three low-sensitivity parameters unchanged. |
-| **Alternatives** | (a) Use sweep top-1 set exactly (or=5, hold=15, gap=2.0, atr=0.5, target_r=1.0, stop_buf=0.0) — rejected because ATR=0.5 is non-transferable (DEC-075) and target_r=1.0 shows no meaningful advantage over 2.0. (b) Change more parameters (raise min_gap to 3.0%) — rejected to preserve trade frequency for paper trading evaluation. (c) Keep all defaults — rejected because or=15 and hold=30 produce a break-even strategy. |
-| **Rationale** | Based on 522K-combination parameter sweep, sensitivity analysis, and final validation (137 trades, Sharpe 0.93, PF 1.18, +$8,087 on $100K over 11 months). Walk-forward inconclusive (DEC-073) due to insufficient data — Sprint 11 will revalidate with extended data. Conservative approach: only change the two parameters with high sensitivity and clear directional signal. |
-| **Status** | Active — validated. Sprint 11 extended walk-forward (15 windows, 35 months) showed fixed-params WFE (P&L) = 0.56, overall OOS Sharpe = +0.34, aggregate OOS P&L = $7,741 across 378 trades. WFE (Sharpe) = -0.91 but metric is inappropriate for fixed-params runs (IS Sharpe swings wildly when params aren't optimized per window). Parameters confirmed for paper trading. |
-
----
-
 ### DEC-077 | Phase Restructure — Comprehensive Validation Phase
 | Field | Value |
 |-------|-------|
@@ -1022,7 +1011,7 @@ Each entry follows this format:
 | **Decision** | XNAS.ITCH (Nasdaq TotalView-ITCH) as the default Databento dataset for live streaming. Configurable via `DatabentoConfig.dataset`. |
 | **Alternatives** | (a) DBEQ.BASIC — consolidated, but lower fidelity. (b) XNYS.PILLAR — NYSE only, misses NASDAQ-listed stocks that ORB primarily targets. (c) Multiple datasets simultaneously — adds complexity, deferred. |
 | **Rationale** | Databento's most recommended feed for trading firms. Deepest historical data availability (best backtest/live parity). Provides L2/L3 when needed. Covers the majority of high-gap NASDAQ-listed stocks that ORB targets. XNYS.PILLAR can be added later for NYSE-listed coverage if needed. |
-| **Status** | Active |
+| **Status** | Superseded by DEC-248 |
 
 ---
 
@@ -1109,7 +1098,7 @@ Each entry follows this format:
 | **Decision** | Defer Databento subscription activation ($199/mo) until approximately Sprint 19 (VWAP Reclaim), when new strategies require quality data for backtesting and parameter validation. Sprints 14–18 (Command Center, Orchestrator, ORB Scalp, Desktop/PWA) are UI and infrastructure work that can use Alpaca paper data. |
 | **Alternatives** | (1) Activate immediately — rejected because $200–600 would be spent during sprints that don't benefit from quality data. (2) Activate after Sprint 22 — rejected because strategy development (Sprints 19–20) needs quality data for backtesting and walk-forward validation. |
 | **Rationale** | Saves $400–600 during UI/infrastructure development sprints with zero downside. Databento data matters when building signal intuition and validating strategy parameters — not when building dashboards and orchestration logic. Alpaca paper trading data is sufficient for Command Center development and testing. Amends DEC-087 timing guidance. |
-| **Status** | Active |
+| **Status** | Superseded by DEC-143 |
 | **Amends** | DEC-087 (cost deferral — original timing was "when adapter ready for integration testing") |
 
 ---
@@ -1799,7 +1788,7 @@ Each entry follows this format:
 
 ---
 
-## DEC-163 | Expanded Vision — AI-Enhanced Trading Intelligence Platform
+### DEC-163 | Expanded Vision — AI-Enhanced Trading Intelligence Platform
 
 | Field | Value |
 |-------|-------|
@@ -2570,7 +2559,7 @@ Each entry follows this format:
 | **Decision** | Start with XNAS.ITCH (Nasdaq TotalView-ITCH) in Sessions 1-2 for pipeline validation. Add XNYS.PILLAR (NYSE) in Sessions 3-4 once Nasdaq data flow is confirmed working. Two datasets use 2 of the 10 allowed concurrent sessions on the Databento Standard plan. NYSE Arca (ARCX.PILLAR) added later only if specifically needed. |
 | **Rationale** | The momentum/small-cap day trading universe spans both NASDAQ and NYSE. NASDAQ-only would systematically miss NYSE-listed gappers — if the best opportunity on a given day is NYSE-listed, the scanner wouldn't see it. However, debugging multi-dataset streaming on day one adds unnecessary complexity. Starting with XNAS validates the pipeline, then adding XNYS is a small incremental change. SPY (needed for RegimeClassifier) routes through NYSE data. |
 | **Alternatives** | (1) XNAS only for weeks — rejected because it systematically misses a large portion of the tradeable universe. (2) Both datasets from Session 1 — rejected because validating one dataset first isolates data pipeline issues from multi-dataset issues. |
-| **Status** | Active |
+| **Status** | Superseded by DEC-248 |
 
 ---
 
@@ -2747,5 +2736,16 @@ Each entry follows this format:
 
 ---
 
+### DEC-250 | Metarepo Workflow Retrofit
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-04 |
+| **Decision** | Process transition point. All future sprints use the metarepo sprint-planning protocol, three-tier review system (close-out + Tier 2 reviewer + Tier 3 architectural review in Claude.ai), and universal rules from `.claude/rules/universal.md`. Sprint numbering continues from current (next sprint is 22). Documentation split into Tier A (Claude.ai Project Knowledge + `.claude/`) and Tier B (repo `docs/`). |
+| **Rationale** | 21 sprints of organic process evolution distilled into a repeatable framework. Two-Claude workflow formalized with explicit protocols, review tiers, and documentation hierarchy. Prevents regression to ad-hoc practices as project scales. See `docs/process-evolution.md` for pre-retrofit history. |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
-*New decisions are appended chronologically as the project progresses.*
+*Next DEC: 251*

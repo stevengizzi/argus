@@ -3,7 +3,7 @@
 > Comprehensive inventory of UI/UX enhancements for the ARGUS Command Center.
 > Originally extracted from design research (Feb 23, 2026). Major revision Feb 26, 2026: expanded from 4 to 7 pages (DEC-169), AI Copilot added (DEC-170), Sprint 21 split into 21a–21d (DEC-171), intelligence layer UI integration (DEC-168).
 > Organized by sprint based on dependencies, effort, and impact.
-> Referenced by: `02_PROJECT_KNOWLEDGE.md`, `10_PHASE3_SPRINT_PLAN.md`, `docs/research/ARGUS_Expanded_Roadmap.md`
+> Referenced by: `project-knowledge.md`, `10_PHASE3_SPRINT_PLAN.md`, `docs/research/ARGUS_Expanded_Roadmap.md`
 
 ---
 
@@ -584,6 +584,23 @@ New health card on System page: last retrain date, model version, convergence st
 
 ## Sprint 23+ — Future Enhancements (Backlog)
 
+### Strategy Activity Feed [P1]
+Live stream of per-symbol, per-strategy state showing the system's reasoning in real time. Replaces the "black box" gap between "scanning for setups" and "trade executed." Each active strategy reports its current state for each watchlist symbol:
+- ORB: `NVDA — WATCHING (price within OR, no breakout yet)` → `NVDA — BREAKOUT (close > OR high, checking volume...)`
+- VWAP Reclaim: `GOOGL — ABOVE_VWAP (waiting for dip)` → `GOOGL — PULLBACK (below VWAP 2m ago)` → `GOOGL — RECLAIM_CANDIDATE (crossed back above)`
+- Afternoon Momentum: `TSLA — ACCUMULATING (14 bars, range/ATR 0.62)` → `TSLA — CONSOLIDATED (28 bars, watching for breakout)`
+
+**Backend:** New endpoint `GET /api/v1/strategies/activity` returns current state per symbol per strategy. Strategies already track this state internally (state machines in VWAP Reclaim and Afternoon Momentum, OR tracking in ORB family) — just needs to be exposed via API.
+
+**Frontend — Dashboard:** Compact card showing top 3–5 most interesting symbols (closest to triggering, or in advanced states). Answers "what is the system watching right now?" at a glance.
+
+**Frontend — Orchestrator:** Full activity feed with all symbols × all strategies. Filterable by strategy, state, symbol. Complements (not replaces) the Decision Timeline, which shows orchestrator-level events. The Activity Feed shows strategy-level reasoning.
+
+**Progressive disclosure:** Symbol row click → opens SymbolDetailPanel (already built, DEC-177) with strategy state context.
+
+**Note:** Does NOT require AI layer — purely exposes existing strategy state machines. Could be pulled forward to Sprint 22 alongside AI Copilot activation, since the Copilot could reference this same state data for contextual answers.
+*Effort: ~8–12 hours (backend 3–4h, Dashboard card 2–3h, Orchestrator feed 3–5h).*
+
 ### Allocation Sunburst [P2]
 Concentric ring chart: outer = strategy allocation, inner = positions within each strategy. Color by P&L. D3 sunburst.
 *Effort: ~6 hours.*
@@ -618,16 +635,17 @@ Refactor Performance page from fixed 5-tab layout to customizable widget grid us
 | **16** ✅ | Motion, micro-interactions, sparklines | ~15h | Polish & perceived quality |
 | **17** ✅ | Donut/bars, tabs, gauges, badges | ~11h | Multi-strategy awareness |
 | **18–20** ✅ | Timeline, watchlist, session summary | ~11h | Multi-strategy operations |
-| **21a** | Pattern Library page (master-detail, pipeline, stock detail panel) | ~31h | Strategy encyclopedia |
-| **21b** | Orchestrator page (3-column, decisions, allocation, risk) | ~30h | Operational command center |
-| **21c** | The Debrief page (briefings, research, journal) | ~22h | Knowledge accumulation |
-| **21d** | Dashboard + Performance analytics + System + Nav + Copilot shell | ~68h | Architecture + analytics |
+| **21a** ✅ | Pattern Library page (master-detail, pipeline, stock detail panel) | ~31h | Strategy encyclopedia |
+| **21b** ✅ | Orchestrator page (3-column, decisions, allocation, risk) | ~30h | Operational command center |
+| **21c** ✅ | The Debrief page (briefings, research, journal) | ~22h | Knowledge accumulation |
+| **21d** ✅ | Dashboard + Performance analytics + System + Nav + Copilot shell | ~68h | Architecture + analytics |
 | **22** | Copilot activation, AI insight cards, briefings, EOD, optimization landscape, projections | ~54h | AI-enhanced visualization |
+| **22+** | Strategy Activity Feed | ~8–12h | Real-time strategy reasoning visibility |
 | **23** | Catalyst badges, pre-market live data, floating actions, persistent state | ~21h | Catalyst intelligence UI |
+| **23+** | Sunburst, regime timeline, symbol heatmap, configurable grid, notifications | ~36h | Refinement & customization |
 | **24** | Flow indicator, L2 heatmap, entry snapshot | ~14h | Order flow UI |
 | **25** | Quality badges, breakdown radar, performance by grade, allocation by quality | ~19h | Quality scoring UI |
 | **30** | Calibration chart, weekly insight, learning loop health | ~8h | Learning loop UI |
-| **23+** | Sunburst, regime timeline, symbol heatmap, configurable grid, notifications | ~36h | Refinement & customization |
 
 ---
 

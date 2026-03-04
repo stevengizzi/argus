@@ -16,22 +16,22 @@ If the answer to any of these is yes, either update the doc directly or output a
 
 ```
 ## Docs Update Needed
-- docs/DECISION_LOG.md: Add DEC-025 — chose websockets library over socket.io for Event Bus. Rationale: lighter weight, stdlib support in Python 3.11+.
+- docs/decision-log.md: Add DEC-025 — chose websockets library over socket.io for Event Bus. Rationale: lighter weight, stdlib support in Python 3.11+.
 - CLAUDE.md: Update Current State to "Phase 1 — Event Bus and BaseStrategy implemented. Working on Risk Manager."
 ```
 
 ### When creating a new module or file
 - If it adds to or changes the project structure → update CLAUDE.md project structure section
-- If it introduces a new interface → update docs/ARCHITECTURE.md
+- If it introduces a new interface → update docs/03_ARCHITECTURE.md
 - If it requires new commands to run → update CLAUDE.md commands section
 
 ### When adding a dependency
 - Update CLAUDE.md tech stack section
-- Note in docs/DECISION_LOG.md if it was a meaningful choice (not for trivial packages)
+- Note in docs/decision-log.md if it was a meaningful choice (not for trivial packages)
 
 ### When a test reveals unexpected behavior
-- If it challenges an assumption → update docs/RISK_REGISTER.md
-- If it changes how a component works → update docs/ARCHITECTURE.md
+- If it challenges an assumption → update docs/risk-register.md
+- If it changes how a component works → update docs/03_ARCHITECTURE.md
 
 ## How to Update
 

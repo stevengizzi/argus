@@ -197,6 +197,7 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 | **If Wrong** | Sprint 13 development proceeds against mock Gateway responses. Integration testing delayed until account is approved. |
 | **Contingency** | Develop IBKRBroker adapter using mock/recorded responses. Integration testing happens when account is ready. Alpaca paper trading continues unaffected during the wait. Contact newaccounts@interactivebrokers.com if no response within 5 business days. |
 | **Review Date** | Feb 26, 2026 (5 business days post-submission) |
+| **Status** | **Resolved** (DEC-236) — IBKR account approved Feb 28, 2026. Paper trading ready for Sprint 21.5. |
 
 ---
 
@@ -673,6 +674,54 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 | **Mitigation** | (1) All 4 current strategies and the intelligence layer operate on L1 data — no functionality blocked. (2) Historical L2 available on Standard plan for backtesting Order Flow Model before committing to Plus. (3) Setup Quality Engine designed with configurable weights — 5-dimension V1 is production-ready. (4) Order Flow adds incremental edge (~3–5% win rate improvement), not foundational capability. (5) Can backtest to quantify exact dollar value of Order Flow signals before deciding to upgrade. |
 | **Trigger for action** | Monthly trading net P&L exceeds $2,000 for 3 consecutive months (covers Plus tier upgrade + margin). |
 | **Status** | Open — accepted. Order Flow deferred to post-revenue backlog (DEC-238). |
+
+---
+
+### RSK-039 — Taipei Latency Impact on Execution Quality
+
+| Field | Value |
+|-------|-------|
+| **Risk** | ~150–200ms latency to US exchanges from Taipei may cause slippage on fast-moving entries, particularly ORB strategies during the opening range. |
+| **Severity** | Medium |
+| **Likelihood** | Medium |
+| **Mitigation** | Longer-duration strategies (VWAP Reclaim, Afternoon Momentum) are structurally advantaged. Monitor fill quality per strategy. Consider deactivating ORB Scalp if fill rates are poor. |
+| **Status** | Open |
+
+---
+
+### RSK-040 — Sprint 21.5 Block C Not Yet Validated
+
+| Field | Value |
+|-------|-------|
+| **Risk** | No full market day has been run with all 4 strategies live. System-level interactions under real market conditions are untested. |
+| **Severity** | High |
+| **Likelihood** | High (it hasn't happened yet) |
+| **Mitigation** | Block C is the next milestone. Must complete before advancing to Sprint 22. |
+| **Status** | Open |
+
+---
+
+### RSK-041 — Documentation Tier Transition Risk
+
+| Field | Value |
+|-------|-------|
+| **Risk** | Moving from monolithic Project Knowledge to Tier A/B split creates a window where some context may be in the old format and some in the new. |
+| **Severity** | Low |
+| **Likelihood** | Medium |
+| **Mitigation** | Complete file placement in repo before starting Sprint 22. Verify Claude Code reads new CLAUDE.md correctly in first post-retrofit session. |
+| **Status** | Open |
+
+---
+
+### RSK-042 — Pre-Databento Backtest Re-Validation Not Yet Started
+
+| Field | Value |
+|-------|-------|
+| **Risk** | DEC-132 requires re-validation but Sprint 21.6 hasn't begun. All current strategy parameters are provisional. |
+| **Severity** | High |
+| **Likelihood** | Medium |
+| **Mitigation** | Sprint 21.6 planned parallel with Sprint 22. Ensure it actually starts — don't let AI Layer work crowd it out. |
+| **Status** | Open |
 
 ---
 
