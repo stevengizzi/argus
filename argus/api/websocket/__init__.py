@@ -3,6 +3,7 @@
 Bridges Event Bus events to connected WebSocket clients.
 """
 
+from argus.api.websocket.ai_chat import ai_ws_router, get_active_connections
 from argus.api.websocket.live import (
     ClientConnection,
     WebSocketBridge,
@@ -17,4 +18,6 @@ __all__ = [
     "get_bridge",
     "reset_bridge",
     "ws_router",
+    "ai_ws_router",
+    "get_active_connections",
 ]

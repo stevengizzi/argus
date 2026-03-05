@@ -12,7 +12,10 @@ from typing import TYPE_CHECKING
 from fastapi import Depends, HTTPException, Request, status
 
 if TYPE_CHECKING:
+    from argus.ai.client import ClaudeClient
+    from argus.ai.context import SystemContextBuilder
     from argus.ai.conversations import ConversationManager
+    from argus.ai.prompts import PromptManager
     from argus.ai.usage import UsageTracker
     from argus.analytics.debrief_service import DebriefService
     from argus.analytics.trade_logger import TradeLogger
@@ -53,6 +56,9 @@ class AppState:
         cached_watchlist: Cached scanner results for the current session.
         conversation_manager: AI chat conversation persistence.
         usage_tracker: AI API usage tracking.
+        ai_client: Claude API client wrapper.
+        prompt_manager: AI prompt construction and token budgets.
+        context_builder: AI system context builder.
     """
 
     event_bus: EventBus
@@ -71,6 +77,9 @@ class AppState:
     cached_watchlist: list[WatchlistItem] = field(default_factory=list)
     conversation_manager: ConversationManager | None = None
     usage_tracker: UsageTracker | None = None
+    ai_client: ClaudeClient | None = None
+    prompt_manager: PromptManager | None = None
+    context_builder: SystemContextBuilder | None = None
 
 
 def get_app_state(request: Request) -> AppState:

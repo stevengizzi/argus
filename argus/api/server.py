@@ -17,6 +17,7 @@ Usage:
 from __future__ import annotations
 
 import asyncio
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -29,6 +30,8 @@ from argus.api.dependencies import AppState
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
+
+logger = logging.getLogger(__name__)
 
 
 def create_app(app_state: AppState) -> FastAPI:
@@ -62,6 +65,26 @@ def create_app(app_state: AppState) -> FastAPI:
                 # In tests, the secret may be set directly
                 pass
 
+        # Initialize AI services if not already done and if enabled
+        ai_initialized_here = False
+        if app_state.config and app_state.config.ai and app_state.config.ai.enabled:
+            # Only initialize if not already set (e.g., by main.py)
+            if app_state.ai_client is None:
+                try:
+                    from argus.ai.client import ClaudeClient
+                    from argus.ai.context import SystemContextBuilder
+                    from argus.ai.prompts import PromptManager
+
+                    app_state.ai_client = ClaudeClient(app_state.config.ai)
+                    app_state.prompt_manager = PromptManager(app_state.config.ai)
+                    app_state.context_builder = SystemContextBuilder()
+                    ai_initialized_here = True
+                    logger.info("AI services initialized (ClaudeClient, PromptManager, SystemContextBuilder)")
+                except Exception as e:
+                    logger.error(f"Failed to initialize AI services: {e}")
+        elif app_state.config and app_state.config.ai and not app_state.config.ai.enabled:
+            logger.info("AI services disabled — no API key")
+
         # Start WebSocket bridge for event streaming
         from argus.api.websocket import get_bridge
 
@@ -73,6 +96,13 @@ def create_app(app_state: AppState) -> FastAPI:
 
         # Cleanup on shutdown
         bridge.stop()
+
+        # Cleanup AI services if we initialized them here
+        if ai_initialized_here:
+            app_state.ai_client = None
+            app_state.prompt_manager = None
+            app_state.context_builder = None
+            logger.info("AI services cleaned up")
 
     app = FastAPI(
         title="Argus Command Center API",
@@ -100,9 +130,10 @@ def create_app(app_state: AppState) -> FastAPI:
     app.include_router(api_router, prefix="/api/v1")
 
     # Mount WebSocket routes (no prefix)
-    from argus.api.websocket import ws_router
+    from argus.api.websocket import ai_ws_router, ws_router
 
     app.include_router(ws_router)
+    app.include_router(ai_ws_router)
 
     # Mount static files if configured
     if app_state.config and app_state.config.api and app_state.config.api.static_dir:

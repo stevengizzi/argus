@@ -7,6 +7,7 @@ All routes are mounted under /api/v1 prefix.
 from fastapi import APIRouter
 
 from argus.api.routes.account import router as account_router
+from argus.api.routes.ai import router as ai_router
 from argus.api.routes.auth import router as auth_router
 from argus.api.routes.briefings import router as briefings_router
 from argus.api.routes.config import router as config_router
@@ -47,3 +48,4 @@ api_router.include_router(briefings_router, prefix="/debrief/briefings", tags=["
 api_router.include_router(documents_router, prefix="/debrief/documents", tags=["debrief"])
 api_router.include_router(journal_router, prefix="/debrief/journal", tags=["debrief"])
 api_router.include_router(debrief_search_router, prefix="/debrief", tags=["debrief"])
+api_router.include_router(ai_router, prefix="/ai", tags=["ai"])
