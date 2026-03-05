@@ -92,7 +92,9 @@ class FMPScannerSource(Scanner):
         """Scan for candidates using FMP biggest-gainers/losers/actives.
 
         Args:
-            criteria_list: Scanner criteria from active strategies (currently ignored).
+            criteria_list: Scanner criteria from active strategies. Currently unused —
+                FMP endpoints are pre-filtered. Strategy-specific filtering deferred
+                to Sprint 23+ (see DEF-032).
 
         Returns:
             List of WatchlistItems sorted by gap percentage descending.

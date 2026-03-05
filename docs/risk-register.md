@@ -749,6 +749,19 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 
 ---
 
+### RSK-045 — FMP API Availability
+
+| Field | Value |
+|-------|-------|
+| **Severity** | Medium |
+| **Likelihood** | Low |
+| **Description** | FMP REST endpoints could experience downtime, schema changes, or rate limiting. This is ARGUS's first dependency on a REST API for real-time-adjacent functionality (pre-market scanning). |
+| **Mitigation** | Fallback to static symbol list already implemented in `FMPScannerSource.scan()`. Monitor scanner logs for `scan_source="fmp_fallback"` during paper trading sessions. |
+| **Status** | Open |
+| **Cross-References** | DEC-257, DEC-258 |
+
+---
+
 ## Review Schedule
 
 | Review Type | Frequency | Next Review |

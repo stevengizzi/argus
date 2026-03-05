@@ -724,7 +724,7 @@ class FMPScannerSource(Scanner):
 
     async def scan(self, criteria_list: list[ScannerCriteria]) -> list[WatchlistItem]:
         """Scan using FMP gainers/losers/actives endpoints.
-        1. Fetch from /api/v3/gainers, /api/v3/losers, /api/v3/actives (concurrent)
+        1. Fetch from /stable/biggest-gainers, /stable/biggest-losers, /stable/most-actives (concurrent)
         2. Deduplicate (gainers/losers win over actives)
         3. Filter by price range, volume
         4. Sort by absolute gap_pct descending
