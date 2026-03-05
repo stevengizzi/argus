@@ -134,6 +134,8 @@ class WatchlistItem:
     premarket_volume: int = 0
     float_shares: int = 0
     catalyst: str = ""
+    scan_source: str = ""  # e.g., "fmp", "static", "fmp_fallback"
+    selection_reason: str = ""  # e.g., "gap_up_3.2%", "gap_down_1.8%", "high_volume"
 
 
 @dataclass(frozen=True)
