@@ -60,6 +60,8 @@ from argus.data.databento_data_service import DatabentoDataService
 from argus.data.databento_scanner import DatabentoScanner, DatabentoScannerConfig
 from argus.data.fmp_scanner import FMPScannerConfig, FMPScannerSource
 from argus.data.scanner import StaticScanner
+from argus.ai.conversations import ConversationManager
+from argus.ai.usage import UsageTracker
 from argus.db.manager import DatabaseManager
 from argus.execution.alpaca_broker import AlpacaBroker
 from argus.execution.order_manager import OrderManager
@@ -108,6 +110,8 @@ class ArgusSystem:
         self._event_bus: EventBus | None = None
         self._db: DatabaseManager | None = None
         self._trade_logger: TradeLogger | None = None
+        self._conversation_manager: ConversationManager | None = None
+        self._usage_tracker: UsageTracker | None = None
         self._broker: Broker | None = None
         self._data_service: DataService | None = None
         self._scanner: Scanner | None = None
@@ -154,6 +158,14 @@ class ArgusSystem:
         self._db = DatabaseManager(db_path)
         await self._db.initialize()
         self._trade_logger = TradeLogger(self._db)
+
+        # Initialize AI persistence tables
+        # NOTE: Shares SQLite write lock with Trade Logger. Monitor latency during
+        # active trading + chat. See RSK-NEW-5.
+        self._conversation_manager = ConversationManager(self._db)
+        await self._conversation_manager.initialize()
+        self._usage_tracker = UsageTracker(self._db)
+        await self._usage_tracker.initialize()
 
         # --- Phase 3: Broker ---
         logger.info("[3/12] Connecting to broker...")
@@ -479,6 +491,8 @@ class ArgusSystem:
                     config=config.system,
                     start_time=time.time(),
                     cached_watchlist=self._cached_watchlist,
+                    conversation_manager=self._conversation_manager,
+                    usage_tracker=self._usage_tracker,
                 )
                 api_app = create_app(app_state)
 

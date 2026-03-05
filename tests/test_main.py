@@ -147,6 +147,8 @@ class TestArgusSystemWiring:
         # Mock all components
         with (
             patch("argus.main.DatabaseManager") as mock_db_class,
+            patch("argus.main.ConversationManager") as mock_conv_class,
+            patch("argus.main.UsageTracker") as mock_usage_class,
             patch("argus.main.AlpacaBroker") as mock_broker_class,
             patch("argus.main.HealthMonitor") as mock_health_class,
             patch("argus.main.RiskManager") as mock_risk_class,
@@ -185,6 +187,8 @@ class TestArgusSystemWiring:
                 return lambda *a, **kw: make_tracker(name, cls)
 
             mock_db_class.side_effect = tracker("db", mock_db_class)
+            mock_conv_class.side_effect = tracker("conv", mock_conv_class)
+            mock_usage_class.side_effect = tracker("usage", mock_usage_class)
             mock_broker_class.side_effect = tracker("broker", mock_broker_class)
             mock_health_class.side_effect = tracker("health", mock_health_class)
             mock_risk_class.side_effect = tracker("risk", mock_risk_class)
@@ -251,12 +255,20 @@ class TestArgusSystemWiring:
 
         with (
             patch("argus.main.DatabaseManager") as mock_db_class,
+            patch("argus.main.ConversationManager") as mock_conv_class,
+            patch("argus.main.UsageTracker") as mock_usage_class,
             patch("argus.main.AlpacaBroker") as mock_broker_class,
         ):
             mock_db = MagicMock()
             mock_db.initialize = AsyncMock()
             mock_db.close = AsyncMock()
             mock_db_class.return_value = mock_db
+
+            # AI managers
+            for ai_cls in [mock_conv_class, mock_usage_class]:
+                ai_inst = MagicMock()
+                ai_inst.initialize = AsyncMock()
+                ai_cls.return_value = ai_inst
 
             mock_broker = MagicMock()
             mock_broker.connect = AsyncMock(side_effect=Exception("Connection failed"))
@@ -291,6 +303,8 @@ class TestArgusSystemWiring:
 
         with (
             patch("argus.main.DatabaseManager") as mock_db_class,
+            patch("argus.main.ConversationManager") as mock_conv_class,
+            patch("argus.main.UsageTracker") as mock_usage_class,
             patch("argus.main.AlpacaBroker") as mock_broker_class,
             patch("argus.main.HealthMonitor") as mock_health_class,
             patch("argus.main.RiskManager") as mock_risk_class,
@@ -302,6 +316,8 @@ class TestArgusSystemWiring:
             # Setup mocks
             for cls in [
                 mock_db_class,
+                mock_conv_class,
+                mock_usage_class,
                 mock_broker_class,
                 mock_health_class,
                 mock_risk_class,
@@ -479,6 +495,8 @@ class TestOrchestratorIntegration:
 
         with (
             patch("argus.main.DatabaseManager") as mock_db_class,
+            patch("argus.main.ConversationManager") as mock_conv_class,
+            patch("argus.main.UsageTracker") as mock_usage_class,
             patch("argus.main.AlpacaBroker") as mock_broker_class,
             patch("argus.main.HealthMonitor") as mock_health_class,
             patch("argus.main.RiskManager") as mock_risk_class,
@@ -491,6 +509,8 @@ class TestOrchestratorIntegration:
             # Setup all mocks with all necessary async methods
             for cls in [
                 mock_db_class,
+                mock_conv_class,
+                mock_usage_class,
                 mock_broker_class,
                 mock_health_class,
                 mock_risk_class,
@@ -651,6 +671,8 @@ api:
 
         with (
             patch("argus.main.DatabaseManager") as mock_db_class,
+            patch("argus.main.ConversationManager") as mock_conv_class,
+            patch("argus.main.UsageTracker") as mock_usage_class,
             patch("argus.main.AlpacaBroker") as mock_broker_class,
             patch("argus.main.HealthMonitor") as mock_health_class,
             patch("argus.main.RiskManager") as mock_risk_class,
@@ -666,6 +688,8 @@ api:
             # Setup all mocks with all necessary async methods
             for cls in [
                 mock_db_class,
+                mock_conv_class,
+                mock_usage_class,
                 mock_broker_class,
                 mock_health_class,
                 mock_risk_class,
@@ -799,6 +823,8 @@ api:
 
         with (
             patch("argus.main.DatabaseManager") as mock_db_class,
+            patch("argus.main.ConversationManager") as mock_conv_class,
+            patch("argus.main.UsageTracker") as mock_usage_class,
             patch("argus.main.AlpacaBroker") as mock_broker_class,
             patch("argus.main.HealthMonitor") as mock_health_class,
             patch("argus.main.RiskManager") as mock_risk_class,
@@ -814,6 +840,8 @@ api:
             # Setup all mocks with all necessary async methods
             for cls in [
                 mock_db_class,
+                mock_conv_class,
+                mock_usage_class,
                 mock_broker_class,
                 mock_health_class,
                 mock_risk_class,
@@ -891,6 +919,8 @@ max_hold_seconds: 120
 
         with (
             patch("argus.main.DatabaseManager") as mock_db_class,
+            patch("argus.main.ConversationManager") as mock_conv_class,
+            patch("argus.main.UsageTracker") as mock_usage_class,
             patch("argus.main.AlpacaBroker") as mock_broker_class,
             patch("argus.main.HealthMonitor") as mock_health_class,
             patch("argus.main.RiskManager") as mock_risk_class,
@@ -904,6 +934,8 @@ max_hold_seconds: 120
             # Setup all mocks
             for cls in [
                 mock_db_class,
+                mock_conv_class,
+                mock_usage_class,
                 mock_broker_class,
                 mock_health_class,
                 mock_risk_class,
@@ -985,6 +1017,8 @@ max_hold_seconds: 120
 
         with (
             patch("argus.main.DatabaseManager") as mock_db_class,
+            patch("argus.main.ConversationManager") as mock_conv_class,
+            patch("argus.main.UsageTracker") as mock_usage_class,
             patch("argus.main.AlpacaBroker") as mock_broker_class,
             patch("argus.main.HealthMonitor") as mock_health_class,
             patch("argus.main.RiskManager") as mock_risk_class,
@@ -998,6 +1032,8 @@ max_hold_seconds: 120
             # Setup all mocks
             for cls in [
                 mock_db_class,
+                mock_conv_class,
+                mock_usage_class,
                 mock_broker_class,
                 mock_health_class,
                 mock_risk_class,
@@ -1066,6 +1102,8 @@ max_hold_seconds: 120
 
         with (
             patch("argus.main.DatabaseManager") as mock_db_class,
+            patch("argus.main.ConversationManager") as mock_conv_class,
+            patch("argus.main.UsageTracker") as mock_usage_class,
             patch("argus.main.AlpacaBroker") as mock_broker_class,
             patch("argus.main.HealthMonitor") as mock_health_class,
             patch("argus.main.RiskManager") as mock_risk_class,
@@ -1079,6 +1117,8 @@ max_hold_seconds: 120
             # Setup all mocks
             for cls in [
                 mock_db_class,
+                mock_conv_class,
+                mock_usage_class,
                 mock_broker_class,
                 mock_health_class,
                 mock_risk_class,
@@ -1136,6 +1176,8 @@ max_hold_seconds: 120
 
         with (
             patch("argus.main.DatabaseManager") as mock_db_class,
+            patch("argus.main.ConversationManager") as mock_conv_class,
+            patch("argus.main.UsageTracker") as mock_usage_class,
             patch("argus.main.AlpacaBroker") as mock_broker_class,
             patch("argus.main.HealthMonitor") as mock_health_class,
             patch("argus.main.RiskManager") as mock_risk_class,
@@ -1148,6 +1190,8 @@ max_hold_seconds: 120
             # Setup all mocks
             for cls in [
                 mock_db_class,
+                mock_conv_class,
+                mock_usage_class,
                 mock_broker_class,
                 mock_health_class,
                 mock_data_class,
@@ -1225,6 +1269,8 @@ max_hold_seconds: 120
 
         with (
             patch("argus.main.DatabaseManager") as mock_db_class,
+            patch("argus.main.ConversationManager") as mock_conv_class,
+            patch("argus.main.UsageTracker") as mock_usage_class,
             patch("argus.main.AlpacaBroker") as mock_broker_class,
             patch("argus.main.HealthMonitor") as mock_health_class,
             patch("argus.main.RiskManager") as mock_risk_class,
@@ -1238,6 +1284,8 @@ max_hold_seconds: 120
             # Setup mocks
             for cls in [
                 mock_db_class,
+                mock_conv_class,
+                mock_usage_class,
                 mock_broker_class,
                 mock_risk_class,
                 mock_data_class,
@@ -1314,6 +1362,8 @@ max_hold_seconds: 120
 
         with (
             patch("argus.main.DatabaseManager") as mock_db_class,
+            patch("argus.main.ConversationManager") as mock_conv_class,
+            patch("argus.main.UsageTracker") as mock_usage_class,
             patch("argus.main.AlpacaBroker") as mock_broker_class,
             patch("argus.main.HealthMonitor") as mock_health_class,
             patch("argus.main.RiskManager") as mock_risk_class,
@@ -1326,6 +1376,8 @@ max_hold_seconds: 120
             # Setup all mocks
             for cls in [
                 mock_db_class,
+                mock_conv_class,
+                mock_usage_class,
                 mock_broker_class,
                 mock_health_class,
                 mock_risk_class,

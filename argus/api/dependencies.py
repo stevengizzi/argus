@@ -12,6 +12,8 @@ from typing import TYPE_CHECKING
 from fastapi import Depends, HTTPException, Request, status
 
 if TYPE_CHECKING:
+    from argus.ai.conversations import ConversationManager
+    from argus.ai.usage import UsageTracker
     from argus.analytics.debrief_service import DebriefService
     from argus.analytics.trade_logger import TradeLogger
     from argus.core.clock import Clock
@@ -49,6 +51,8 @@ class AppState:
         start_time: Unix timestamp of when the system started.
         debrief_service: Service for The Debrief page content.
         cached_watchlist: Cached scanner results for the current session.
+        conversation_manager: AI chat conversation persistence.
+        usage_tracker: AI API usage tracking.
     """
 
     event_bus: EventBus
@@ -65,6 +69,8 @@ class AppState:
     start_time: float = 0.0
     debrief_service: DebriefService | None = None
     cached_watchlist: list[WatchlistItem] = field(default_factory=list)
+    conversation_manager: ConversationManager | None = None
+    usage_tracker: UsageTracker | None = None
 
 
 def get_app_state(request: Request) -> AppState:
