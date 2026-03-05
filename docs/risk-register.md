@@ -590,6 +590,20 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 
 ---
 
+### RSK-046 | Broad-Universe Processing Throughput
+| Field | Value |
+|-------|-------|
+| **Identified** | 2026-03-06 (DEC-263) |
+| **Status** | Open |
+| **Likelihood** | Low |
+| **Impact** | Medium |
+| **Description** | Full-universe monitoring (3,000–5,000 symbols) with continuous IndicatorEngine computation may exceed CPU budget during volatility spikes. |
+| **Mitigation** | Processing math shows ~2–4% CPU with ~97% headroom. Cython/Rust hot-path optimization deferred until profiling shows need. Monitor actual CPU usage during paper trading. |
+| **Trigger** | CPU usage exceeds 50% sustained during market hours. |
+| **Owner** | Sprint 23 implementation |
+
+---
+
 ## Review Schedule
 
 | Review Type | Frequency | Next Review |

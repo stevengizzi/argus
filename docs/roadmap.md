@@ -50,7 +50,7 @@ These foundations are correct and remain:
 | Binary scanner (pass/fail filters) | **Opportunity Ranker** (composite quality score per setup) |
 | 4 active strategies | **15+ artisanal patterns** covering the full momentum playbook, then **hundreds of micro-strategies** via systematic search |
 | Uniform position sizing (fixed % risk per trade) | **Dynamic position sizing** tied to setup quality grade |
-| Price/volume entry triggers only | **NLP catalyst pipeline** enriching entry context |
+| Price/volume entry triggers only, static pre-market watchlist | **Full-universe monitoring** with strategy-specific filters + **NLP catalyst pipeline** enriching entry context (DEC-263) |
 | AI Layer as advisory add-on (Sprint 22) | **AI Layer as the brain** — real-time setup grading, sizing decisions, learning loop |
 | Orchestrator V1 (rules-based allocation) | **Ensemble Orchestrator** (correlation-aware, activation-filtered, hundreds of micro-strategies) |
 | RegimeClassifier (SPY vol proxy) | **Multi-factor regime engine** with sector rotation awareness |
@@ -65,7 +65,7 @@ These foundations are correct and remain:
 4. **Expanded Pattern Library** — From 4 to 15+ artisanal patterns (bull flags, ABCD, flat-top breakouts, dip-and-rip, HOD breaks, red-to-green, parabolic short, etc.)
 5. **Short Selling Infrastructure** — Locate/borrow tracking, inverted risk logic, short-specific Risk Manager rules, uptick rule compliance
 6. **Learning Loop** — Post-trade analysis that correlates quality scores with actual outcomes, continuous recalibration
-7. **Pre-Market Intelligence Engine** — Automated pre-market scanning, catalyst research, and watchlist generation
+7. **Universe Manager** — Broad-universe monitoring with strategy-specific filters, continuous intra-day screening, pre-market intelligence, and catalyst-driven enrichment (DEC-263)
 8. **BacktestEngine** — Production-code backtesting at 5–10x Replay Harness speed, with Research Console UI
 9. **Systematic Strategy Search** — Parameterized templates, tiered sweep infrastructure, statistical validation (FDR, smoothness priors)
 10. **The Synapse** — 3D strategy space visualization (Three.js) showing all micro-strategies as nodes, with real-time firing animations, correlation connections, and navigable grouping modes. The system's brain made visible.
@@ -120,8 +120,10 @@ Paper trading runs in parallel with the Build Track. Gates are calendar-limited 
 - Setup Quality Engine active, scoring every trade
 - NLP catalyst pipeline enriching watchlist
 - Dynamic position sizing in paper mode
+- Full-universe monitoring with strategy-specific filters (DEC-263)
 - Minimum 30 trading days
 - **Key metric:** Track quality-score-to-outcome correlation. If A+ setups don't outperform B setups, the quality engine isn't working yet.
+- **Key metric:** Compare opportunity detection: how many setups per day does the broad universe surface vs. the static pre-market watchlist baseline?
 
 ### Gate 4: Full System Paper Trading (PENDING — After Phase 6)
 - 13–15+ patterns active including short selling
@@ -180,15 +182,17 @@ Re-validate all pre-Databento strategy parameters using Databento tick-level dat
 
 **Updated prerequisite (DEC-230):** Sprint 22 now follows Sprint 21.5 (live integration). AI Layer built on top of a live system with real Databento data and IBKR paper execution. Copilot tested with real market context from session one.
 
-### Sprint 23: NLP Catalyst Pipeline + Pre-Market Engine (DEC-163, DEC-164)
-**Target:** ~3–4 days
+### Sprint 23: NLP Catalyst Pipeline + Universe Manager (DEC-163, DEC-164, DEC-263)
+**Target:** ~4–5 days (scope expanded per DEC-263; may decompose into 23 + 23.5)
 
 **Scope:**
-- **CatalystPipeline** (`argus/intelligence/catalyst.py`): SEC EDGAR filing monitor (10-K, 10-Q, 8-K, insider trades). Finnhub/FMP news feed. Claude API for catalyst classification and quality grading.
+- **Universe Manager** (`argus/data/universe_manager.py`): Replaces static pre-market watchlist with broad-universe monitoring (DEC-263). Pre-market: FMP scan builds initial viable universe (3,000–5,000 symbols, minimal system-level filters — not delisted, not OTC). Market open: Databento subscribes to full viable universe. Full IndicatorEngine (VWAP, ATR, EMAs) runs on every subscribed symbol from market open. Each strategy declares `universe_filter` (sector, market cap, float, price range, volume) and `behavioral_triggers` in structured config. Strategies evaluate every candle against their declared filters with early-exit for non-matching symbols. Catalyst Pipeline feeds into Universe Manager as one awareness input among many.
+- **Strategy universe filter declarations:** Update all 4 active strategies (ORB Breakout, ORB Scalp, VWAP Reclaim, Afternoon Momentum) with explicit `universe_filter` YAML config. Extract implicit filter logic from strategy code into declarative specs.
+- **CatalystPipeline** (`argus/intelligence/catalyst.py`): SEC EDGAR filing monitor (10-K, 10-Q, 8-K, insider trades). FMP news feed. Claude API for catalyst classification and quality grading.
 - **CatalystEvent** on Event Bus: `(symbol, catalyst_type, quality_grade, summary, source, timestamp)`.
-- **Pre-Market Intelligence Engine** (`argus/intelligence/premarket.py`): 4:00–9:30 AM ET automated scanning. FMP gainers/losers/actives → catalyst research → watchlist generation. Morning intelligence brief (structured summary saved to Debrief).
+- **Pre-market intelligence brief:** Morning scan results + catalyst research + watchlist generation, structured summary saved to Debrief. This is the Universe Manager's first invocation each day, not a separate system.
 - **UI:** Dashboard gains catalyst badges on watchlist entries. Orchestrator gains catalyst alert panel. Debrief gains Pre-Market Intelligence Brief view and research library. System gains API health monitoring for external services.
-- **Tests:** ~80 new.
+- **Tests:** ~100 new (Universe Manager routing, filter declarations, broad subscription handling, catalyst pipeline).
 
 ### Sprint 24: Setup Quality Engine + Dynamic Position Sizer (DEC-163, DEC-239)
 **Target:** ~3–4 days
@@ -662,6 +666,7 @@ The original Orchestrator V2 concept (enhanced rules-based for ~15 strategies) i
 | **Pattern library complexity explosion** | Medium | 6–7 | Each pattern must pass walk-forward independently. Retire patterns that don't earn their keep. |
 | **Dynamic sizing amplifies losses** | Medium | 5 | A+ sizing caps at 3%. Account-level daily/weekly limits unchanged. Circuit breakers still override. |
 | **Claude API latency** | Medium | 5 | Cache catalyst scores (don't change intraday). Pre-compute during pre-market. Only novel catalysts need real-time scoring. |
+| **Broad-universe processing throughput** | Low | 5–9 | Pure Python at 4,000 symbols uses ~2–4% CPU. Monitor during paper trading. If per-second processing exceeds 100ms, Cythonize IndicatorEngine hot path (~0.5 day effort). DEC-263. |
 | **Three.js performance at scale** | Medium | 9 | Instanced mesh geometry. Performance target: 60fps at 800 nodes. Budget for optimization sessions. |
 | **Scope creep extending timeline** | Medium | All | Each sprint is independently valuable. Can pause at any phase boundary. |
 | **Taipei latency (~150–200ms)** | Low | All | Structural disadvantage for ultra-short holds. Longer-duration strategies (5–30 min) preferred. Already reflected in strategy design. |
@@ -722,6 +727,7 @@ Items deferred until monthly trading income justifies their cost or complexity. 
 
 **Cython/Rust Hot Path:**
 - If BacktestEngine speed is the bottleneck for continuous discovery, rewrite inner loop in compiled code for 10–50x speedup.
+- If live IndicatorEngine processing on broad universe (DEC-263) exceeds 100ms/sec during Phase 9+ ensemble scale, Cythonize VWAP/ATR/EMA update functions. Estimated ~0.5 day effort, 10–50x speedup on hot path. Not expected to be needed before Phase 9 (~200+ micro-strategies).
 
 **Monte Carlo Simulation:**
 - Risk assessment via simulation. Confidence intervals on expected returns, drawdown probabilities.

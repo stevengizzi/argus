@@ -2912,5 +2912,19 @@ Each entry follows this format:
 
 ---
 
+### DEC-263 | Full-Universe Strategy-Specific Monitoring Architecture
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-06 |
+| **Sprint** | Pre-Sprint 23 planning |
+| **Decision** | Full-universe strategy-specific monitoring. Each strategy declares `universe_filter` (sector, market cap, float, price range, volume) and `behavioral_triggers` (pattern conditions requiring live indicator data) in structured YAML config. ARGUS subscribes to the broadest viable universe via Databento EQUS.MINI (3,000–5,000 symbols). Full IndicatorEngine computation (VWAP, ATR, EMAs) runs on every subscribed symbol from market open — no lazy computation, no tiered processing. Strategies evaluate every candle against their declared filters with early-exit for non-matching symbols. Universe Manager replaces "Pre-Market Intelligence Engine" in Sprint 23 scope. Pre-market scan is the Universe Manager's first invocation, not a separate system. Cython optimization deferred until profiling shows need. |
+| **Rationale** | Stateful indicators (VWAP cumulative sums, ATR Wilder smoothing, SMA rolling windows) require continuous computation — lazy backfill on first signal creates multi-minute latency at the worst moment. Processing budget analysis shows ~8,000–12,000 ticks/sec across full universe. Per-tick work (VWAP sums, candle high/low, volume) ~1–2μs/event → ~2% CPU. Per-candle work (ATR, EMAs, strategy evaluation at 4,000 updates/min) negligible. Total: ~2–4% of one CPU core in pure Python with ~97% headroom. Most strategy setups are purely technical (consolidation breakouts, VWAP reclaims) and don't require news correlation — broad technical monitoring captures far more opportunities than catalyst-driven watchlist expansion. |
+| **Alternatives** | (1) Static pre-market watchlist — rejected: misses intraday setups forming on symbols not in morning scan. (2) Tiered/lazy processing — rejected: stateful indicators require continuous computation; backfill latency unacceptable at signal time. (3) Catalyst-driven expansion only — rejected: most setups are technical, not news-correlated; overweights catalyst dependency. (4) Cython from Sprint 23 — rejected: 2–4% CPU with 97% headroom doesn't justify premature optimization; defer until Phase 9+ ensemble scale if profiling shows need. |
+| **Cross-References** | DEC-092 (IndicatorEngine extraction), DEC-248 (EQUS.MINI), DEC-258 (FMP Starter for scanning), DEF-015 (superseded — full-universe scanning now addressed), DEC-163 (expanded vision). Risk: RSK-046 (broad-universe processing throughput at ensemble scale). |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
-*Next DEC: 263*
+*Next DEC: 264*

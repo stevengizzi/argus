@@ -282,3 +282,4 @@
 - ● **DEC-260**: Data Provider Evaluation — IQFeed, dxFeed, Exegy, Finnhub, QuantConnect rejected
 - ● **DEC-261**: ORB Family Same-Symbol Mutual Exclusion — ClassVar prevents dual-fire
 - ● **DEC-262**: Roadmap Consolidation — Unified Strategic Direction
+- ● **DEC-263**: Full-Universe Strategy-Specific Monitoring Architecture

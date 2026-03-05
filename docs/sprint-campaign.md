@@ -535,19 +535,23 @@ Since this sprint is already in progress, pick up from current state:
 
 ---
 
-### Sprint 23: NLP Catalyst + Pre-Market Engine
+### Sprint 23: NLP Catalyst + Universe Manager (DEC-263)
 
 **Type:** B (Mixed Backend + Frontend) | **Modes:** Iterative Judgment Loop
 **Duration:** ~3 days | **Sessions:** 4–6 (2–3 backend, 2–3 frontend)
 **Depends on:** Sprint 22 complete (uses Claude API for narrative generation)
 **Adversarial review:** No (builds on proven Claude API integration from Sprint 22)
-**Delivers:** SEC EDGAR + Finnhub + FMP pipeline, Pre-Market Intelligence Brief, catalyst badges, AI debrief narratives
+**Delivers:** Universe Manager with broad-universe monitoring (DEC-263), strategy-declared universe filters, SEC EDGAR + FMP catalyst pipeline, Pre-Market Intelligence Brief, catalyst badges, AI debrief narratives. May decompose into Sprint 23 + 23.5 during planning.
 
 **Choreography:**
 
 1. **[Claude.ai]** Sprint Planning — `sprint-planning.md`
    - **Phase A — Think:**
-     - NLP pipeline architecture: SEC EDGAR + Finnhub + FMP data sources → Claude API analysis → catalyst tags
+     - Universe Manager architecture: subscription scope (3,000–5,000 symbols), symbol batching, memory budget
+     - Strategy YAML `universe_filter` and `behavioral_triggers` schema design
+     - IndicatorEngine full-universe computation model (DEC-263)
+     - Early-exit evaluation routing for non-matching symbols
+     - NLP pipeline architecture: SEC EDGAR + FMP data sources → Claude API analysis → catalyst tags
      - Pre-Market Intelligence Brief layout and content (visual spec: where accessible, what sections, how catalyst cards render)
      - Catalyst badge design for Pre-Market Watchlist panel (visual spec: badge shape, color, information density)
      - The Debrief page evolution (AI narrative generation)

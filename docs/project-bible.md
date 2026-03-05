@@ -35,6 +35,8 @@ A Tauri-based desktop application (with mobile web companion) that provides real
 ### Project C: The AI Layer
 Claude integration as the intelligence brain — real-time setup quality scoring, catalyst analysis, pre-market briefing generation, post-trade evaluation, learning loop model updates, and natural language copilot accessible from every page of the Command Center (DEC-170). The AI Layer is not an add-on; it is the central intelligence that grades every setup, sizes every position, and continuously refines the system's edge. Claude also handles approval workflow for system changes, report generation, and strategy development assistance. Connected to Claude Code for implementation workflow.
 
+The foundation of the AI Layer is the **Universe Manager** (DEC-263) — full-universe monitoring with continuous IndicatorEngine computation (VWAP, ATR, EMAs) on 3,000–5,000 symbols from market open. Each strategy declares its own `universe_filter` (sector, market cap, float, price range, volume) and `behavioral_triggers` in YAML config. Filtering happens at strategy evaluation time, not at subscription time, ensuring any strategy can discover opportunities anywhere in the market without pre-filtering blind spots.
+
 **Build and validation run in parallel.** Project A (Trading Engine) is the foundation and was built first. Projects B (Command Center) and C (AI Layer) are built incrementally alongside ongoing strategy validation. All three were *designed* simultaneously so that Project A's interfaces are dashboard-ready and AI-ready from day one. Real capital deployment gates on strategy validation confidence, but system construction proceeds at development velocity. See DEC-079.
 
 ---
@@ -76,7 +78,8 @@ Strategies follow a **daily-stateful, session-stateless** model. Within a tradin
 Every strategy defines:
 - **Identity:** Name, unique ID, version, asset class, description
 - **Market Conditions Filter:** Conditions under which this strategy is eligible to activate
-- **Scanner Logic:** How it finds trade candidates
+- **Universe Filter:** Sector, market cap, float, price range, volume criteria defining the strategy's eligible universe (DEC-263)
+- **Scanner Logic:** How it finds trade candidates from symbols passing the universe filter
 - **Entry Criteria:** Non-negotiable conditions that must ALL be true for a trade
 - **Position Sizing:** Calculated from the strategy's allocated capital (set by the Orchestrator)
 - **Exit Rules:** Stop loss, profit targets, time stops, trailing stops

@@ -225,6 +225,8 @@ class IndicatorEngine:
 - **RVOL**: Resets daily. Uses first 20 bars of day as baseline volume.
 - **Auto-reset**: Engine detects day boundary via `timestamp_date` parameter.
 
+**Full-universe computation (DEC-263, Sprint 23+):** The IndicatorEngine will maintain full indicator state (VWAP, ATR, EMAs) for every symbol in the broad Databento subscription (3,000–5,000 symbols) from market open. No lazy computation — indicators are always current for every symbol so that strategies can evaluate setups without backfill latency. Processing budget analysis confirms pure Python handles this at ~2–4% CPU utilization.
+
 ### 3.2b Data Flow Architecture
 
 ```
@@ -744,6 +746,18 @@ class FMPScannerSource(Scanner):
 **WatchlistItem Fields (Sprint 21.7):**
 - `scan_source: str` — "fmp", "fmp_fallback", or "static"
 - `selection_reason: str` — Human-readable selection rationale
+
+### 3.7d Universe Manager (Sprint 23+, DEC-263)
+
+**Planned:** The current scanner architecture (pre-market scan → static watchlist → Databento subscription) evolves into a Universe Manager that provides broad-universe monitoring with strategy-specific filters.
+
+**Architecture:** Each strategy declares a `universe_filter` in YAML config (sector, market cap, float, price range, average volume) and `behavioral_triggers` (the price action conditions requiring live indicator data). The Universe Manager subscribes to the broadest viable universe via Databento EQUS.MINI (3,000–5,000 symbols). The IndicatorEngine runs full indicator computation (VWAP, ATR, EMAs) on every subscribed symbol from market open — no lazy computation or tiered processing. Strategies evaluate every candle close against their declared universe filters with early-exit for non-matching symbols.
+
+**Processing budget:** ~8,000–12,000 ticks/sec across full universe. Per-tick work (VWAP sums, candle high/low, volume) ~1–2μs/event → ~2% CPU. Per-candle work (ATR, EMAs, strategy evaluation) ~4,000 updates/min → negligible. Total: ~2–4% of one CPU core in pure Python with ~97% headroom.
+
+**Inputs:** Pre-market FMP scan (first invocation), NLP Catalyst Pipeline (enrichment), continuous intra-day behavioral monitoring (technical screening on full indicator data).
+
+**Scaling:** At Phase 9+ ensemble scale (200–800 micro-strategies), per-candle strategy evaluation scales with micro-strategy count. Cython optimization of IndicatorEngine hot path deferred until profiling demonstrates need (DEC-263).
 
 ### 3.8 Health Monitor (`core/health.py`)
 
