@@ -1,6 +1,6 @@
 # ARGUS — Risk & Assumptions Register
 
-> *Version 1.0 | February 2026*
+> *Version 1.1 | March 2026 — Reviewed and triaged during DEC-262 roadmap consolidation*
 > *This document explicitly tracks the assumptions the system is built on and the risks that could invalidate them. Review monthly (or after any significant market event) to ensure assumptions still hold and risks are being managed. An unexamined assumption is a hidden risk.*
 
 ---
@@ -70,16 +70,6 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 
 ---
 
-### ASM-005 — Commission-Free Trading Sustainability (SUPERSEDED)
-| Field | Value |
-|-------|-------|
-| **Assumption** | ~~Commission-free trading remains available.~~ No longer relevant — IBKR Pro uses tiered commission pricing (DEC-083). |
-| **Confidence** | N/A |
-| **Basis** | IBKR Pro charges ~$0.0035/share + clearing/exchange fees. This is an explicit cost, offset by estimated $0.02/share execution quality advantage over PFOF brokers. Net cost-positive. |
-| **Status** | Superseded by DEC-083. Commission costs are explicit and budgeted. |
-
----
-
 ### ASM-006 — Sufficient Capital for Multi-Strategy Ecosystem
 | Field | Value |
 |-------|-------|
@@ -101,18 +91,6 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 | **If Wrong** | System defeats its purpose if frequent human intervention is required. |
 | **Contingency** | All trading logic fully automated. Circuit breakers handle adverse events autonomously. Notifications only for truly important events. Approval timeouts have safe defaults. Emergency shutdown always available remotely via mobile. |
 | **Review Date** | After first month of live trading |
-
----
-
-### ASM-008 — VPS Reliability
-| Field | Value |
-|-------|-------|
-| **Assumption** | AWS EC2 in us-east-1 provides >99.9% uptime during market hours |
-| **Confidence** | High |
-| **Basis** | AWS SLA guarantees 99.99% for EC2. us-east-1 is their most mature region. |
-| **If Wrong** | Positions unmanaged during outage. Broker-side stops remain active but no dynamic management. |
-| **Contingency** | All stops placed at broker level. Dead man's switch alerts user if system goes silent. Recovery procedure targets <5 minutes. Consider multi-AZ if single instance proves unreliable. |
-| **Review Date** | After first major AWS incident |
 
 ---
 
@@ -185,19 +163,6 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 | **If Wrong** | Gateway disconnections during market hours would disrupt trading. Existing stops are placed broker-side and remain active even if Gateway disconnects. |
 | **Contingency** | Build robust reconnection logic with exponential backoff. Monitor gateway health via HealthMonitor. If instability persists, evaluate TWS (desktop app) as alternative to Gateway. |
 | **Review Date** | Sprint 13 + first month of IBKR paper trading |
-
----
-
-### ASM-015 — IBKR Account Opening Timeline
-| Field | Value |
-|-------|-------|
-| **Assumption** | IBKR account (including paper trading) can be opened within 1–2 weeks, not blocking Sprint 13 significantly. |
-| **Confidence** | Medium-High |
-| **Basis** | Application submitted Feb 21, 2026. Account ID: U24619949. Individual margin account, IBKR Pro, Georgia address. Standard US citizen application — typically approved in 1–3 business days. Applying while physically in Taiwan may trigger additional verification, but IBKR is known to be accommodating of US citizens abroad. |
-| **If Wrong** | Sprint 13 development proceeds against mock Gateway responses. Integration testing delayed until account is approved. |
-| **Contingency** | Develop IBKRBroker adapter using mock/recorded responses. Integration testing happens when account is ready. Alpaca paper trading continues unaffected during the wait. Contact newaccounts@interactivebrokers.com if no response within 5 business days. |
-| **Review Date** | Feb 26, 2026 (5 business days post-submission) |
-| **Status** | **Resolved** (DEC-236) — IBKR account approved Feb 28, 2026. Paper trading ready for Sprint 21.5. |
 
 ---
 
@@ -357,41 +322,6 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 
 ---
 
-### RSK-013 — Weekly Loss Limit Reset on Restart
-| Field | Value |
-|-------|-------|
-| **Severity** | Medium |
-| **Likelihood** | Low |
-| **Description** | If the system restarts mid-week, the weekly realized P&L must be reconstructed from the database. Without reconstruction, the weekly loss limit effectively resets to zero, allowing more risk than intended. |
-| **Mitigation** | `reconstruct_state()` method queries TradeLogger for the current week's trades and rebuilds weekly P&L. Tested explicitly. Integrity check verifies reconstruction accuracy. Implemented and tested in Sprint 2 polish. |
-| **Owner** | Risk Manager |
-
----
-
-### RSK-014 — Flaky Reconnection Test ✅ CLOSED
-| Field | Value |
-|-------|-------|
-| **Severity** | Low |
-| **Likelihood** | High |
-| **Description** | `test_reconnection_with_exponential_backoff` in AlpacaDataService tests is timing-dependent and fails intermittently. Not a production issue, but degrades CI reliability and masks real failures. |
-| **Mitigation** | Fixed in Sprint 4a polish: mocked `asyncio.sleep` to make the test deterministic. Validated with 10x consecutive passes. Commit 738aab8. |
-| **Status** | **Closed** — February 15, 2026 |
-| **Owner** | Development |
-
----
-
-### RSK-015 — Stale Data False Positives Outside Market Hours ✅ CLOSED
-| Field | Value |
-|-------|-------|
-| **Severity** | Medium |
-| **Likelihood** | High |
-| **Description** | The stale data monitor in AlpacaDataService runs continuously but only expects data during market hours (9:30 AM – 4:00 PM EST). Outside those hours, lack of data is normal but will trigger stale data alerts and potentially pause strategies unnecessarily during pre-market startup. |
-| **Mitigation** | Stale data monitor now checks market hours (9:30–16:00 ET) and weekdays before alerting. Implemented in Sprint 5 with market hours gating in `_stale_data_monitor()`. |
-| **Status** | **Closed** — February 16, 2026 |
-| **Owner** | Data Service |
-
----
-
 ### RSK-016 — Backtest Overfitting Risk
 | Field | Value |
 |-------|-------|
@@ -423,22 +353,6 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 | **Description** | A poorly tuned news scanner adds noise instead of signal — false catalyst classifications, irrelevant headlines matched to symbols, or delayed information that triggers incorrect filtering (e.g., filtering out a valid setup due to stale negative news). |
 | **Mitigation** | Tier 1 uses only structured data (calendar dates, earnings dates) — no NLP noise. Tier 2 uses strict symbol-ticker matching (not company name matching, which produces false positives). Classification starts with conservative keyword patterns and is refined through manual review during paper trading. News metadata is advisory (enriches scanner output) — it does not veto trades in V1. Kill switch: any tier can be disabled without affecting core trading logic. Manual catalyst logging during Phase 3 paper trading provides ground truth for tuning. |
 | **Owner** | Data Service / Intelligence Module |
-
----
-
-### RSK-019 | VectorBT / Replay Harness Trade Count Divergence — RESOLVED
-| Field | Value |
-|-------|-------|
-| **Date Identified** | 2026-02-17 |
-| **Date Resolved** | 2026-02-17 |
-| **Category** | Data Integrity |
-| **Likelihood** | Mitigated |
-| **Impact** | Reduced — parameter mismatch bugs fixed; known ATR divergence is architectural, not a bug |
-| **Description** | Original issue: cross-validation showed VectorBT 21 trades vs Replay Harness 135 trades (ratio 0.16). Root causes identified: (1) CLI hardcoded 4 of 6 parameters, (2) function used `.get()` with defaults, (3) Replay Harness loaded all 29 symbols vs VectorBT's 1 symbol. |
-| **Resolution** | (1) Added all 6 CLI args for cross-validation mode. (2) Function now requires all params explicitly (raises KeyError if missing). (3) Added `symbols` field to `BacktestConfig`; Replay Harness now filters symbols. After fixes: TSLA with matched params (max_atr=0.5) shows VectorBT 17, Replay 0 — PASS. With max_atr=999.0: VectorBT 21, Replay 39 — known divergence due to ATR calculation difference (daily vs 1m), not a bug. |
-| **Remaining Known Divergence** | VectorBT computes ATR(14) from daily bars; BacktestDataService uses 1m bars. This causes range/ATR ratios to be higher in Replay Harness, rejecting more entries with tight filters. This is an architectural difference — VectorBT is an approximation for fast parameter sweeps, not a perfect emulator. |
-| **Status** | Closed — no longer blocks Sprint 10 |
-| **Tests** | 542 tests passing; new test `test_cross_validate_missing_params_raises` verifies param validation |
 
 ---
 
@@ -486,19 +400,6 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 | **Mitigation** | (1) Start with US equities only ($199/month). (2) Cost deferred until adapter ready (DEC-087). (3) Add asset classes only when strategies for them are validated and paper-traded. (4) Monitor data cost as percentage of trading revenue — target <10% of gross P&L. (5) IQFeed supplemental added only when forex/news features are needed, not speculatively. (6) All subscriptions can be paused if system is taken offline. (7) $199/month is modest relative to trading capital ($25K–100K+). (8) L2/L3 live data confirmed to require Plus tier at $1,399/mo (DEC-237) — not included in Standard as previously assumed. Order Flow Model deferred to post-revenue (DEC-238). |
 | **Trigger for action** | Monthly data costs exceed 20% of gross trading P&L after 3 months of live trading. |
 | **Status** | Open — accepted. Monthly cost budgeted as cost of doing business. |
-
----
-
-### RSK-024 | Sprint 21 Scope Risk — Analytics Sprint May Exceed Single Sprint
-
-| Field | Value |
-|-------|-------|
-| **Date** | 2026-02-23 |
-| **Description** | Sprint 21 (CC Analytics & Strategy Lab) is estimated at 80–100 hours across 11 features (21-A through 21-K). This significantly exceeds the scope of previous sprints. Risk of scope creep or quality degradation if attempted as a single sprint. |
-| **Likelihood** | High |
-| **Impact** | Medium — schedule slip, potential quality issues |
-| **Mitigation** | Plan to split into Sprint 21a (highest-priority items: stock detail panel, Dashboard V2, heatmaps) and Sprint 21b (remaining items: treemap, correlation matrix, trade replay, etc.). Use priority tiers from UX Feature Backlog to select which items ship first. The backlog is a menu, not a mandate. |
-| **Status** | Mitigated ✅ — Sprint 21 split into 21a–21d (DEC-171). All 4 sub-sprints completed on schedule (Feb 27–28). Scope managed successfully through incremental delivery. |
 
 ---
 
@@ -564,20 +465,6 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 | **Impact** | Medium — paper trading validation will surface performance divergence before live capital is risked |
 | **Mitigation** | (1) DEC-132 mandates Databento re-validation for all strategies before live deployment. (2) Paper trading on Alpaca provides initial reality check. (3) Conservative parameter selection (not the highest-Sharpe combo) reduces overfit risk. (4) Start at minimum size even after validation passes. |
 | **Status** | Open — addressed by Databento re-validation + paper trading |
-
----
-
-### RSK-030 | Low Afternoon Trade Counts in Alpaca IEX Data
-| Field | Value |
-|-------|-------|
-| **Date Identified** | 2026-02-26 |
-| **Category** | Data Quality |
-| **Description** | Afternoon Momentum consolidation detection and breakout confirmation are volume-sensitive. Alpaca's IEX data captures only ~2-3% of market volume (DEC-081). VectorBT sweep may produce very few qualifying trades, making statistical analysis unreliable. |
-| **Likelihood** | High |
-| **Impact** | Medium — sweep results are directional guidance only, not statistically validated. |
-| **Mitigation** | All results provisional per DEC-132. True validation requires Databento exchange-direct data. Low trade counts don't invalidate the strategy thesis — they indicate data limitations. |
-| **Status** | Open |
-| **Owner** | Steven |
 
 ---
 
@@ -652,18 +539,6 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 
 ---
 
-### RSK-037 | First Live Integration Discovery Risk — VALIDATED
-| Field | Value |
-|-------|-------|
-| **Date** | 2026-02-28 |
-| **Risk** | Integration testing against real Databento and IBKR services may uncover issues not caught by mock-based unit tests (data format differences, timing edge cases, network reliability, API behavior discrepancies). |
-| **Likelihood** | High (nearly certain some issues will surface) |
-| **Impact** | Low-Medium (delays Sprint 21.5 completion by 2-4 sessions at most) |
-| **Mitigation** | Sprint 21.5 is structured with buffer sessions (13-15) specifically for fixing discovered issues. Phased approach (Databento first, IBKR second, combined third) isolates problems. No real capital at risk during this phase. |
-| **Outcome** | VALIDATED — Risk materialized as expected. Six integration discoveries required code fixes: (1) Databento `instrument_id` direct attribute, not nested in header (DEC-241), (2) built-in `symbology_map` replaces custom DatabentoSymbolMap (DEC-242), (3) fixed-point price format ×1e9 (DEC-243), (4) historical data ~15-min intraday lag (DEC-244), (5) `flatten_all()` SMART routing for exit orders (DEC-245), (6) `get_open_orders()` missing from Broker ABC (DEC-246). Additional discovery: historical daily bar data has multi-day lag (~6 days over weekends), handled by scanner resilience fix (DEC-247). All issues resolved within the sprint's buffer sessions. Impact was exactly as estimated — Low-Medium. |
-| **Status** | Resolved — Sprint 21.5 |
----
-
 ### RSK-038 — Revenue-Dependent L2 Data Access for Order Flow Model
 
 | Field | Value |
@@ -689,30 +564,6 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 
 ---
 
-### RSK-040 — Sprint 21.5 Block C Not Yet Validated
-
-| Field | Value |
-|-------|-------|
-| **Risk** | No full market day has been run with all 4 strategies live. System-level interactions under real market conditions are untested. |
-| **Severity** | High |
-| **Likelihood** | High (it hasn't happened yet) |
-| **Mitigation** | Block C is the next milestone. Must complete before advancing to Sprint 22. |
-| **Status** | Open |
-
----
-
-### RSK-041 — Documentation Tier Transition Risk
-
-| Field | Value |
-|-------|-------|
-| **Risk** | Moving from monolithic Project Knowledge to Tier A/B split creates a window where some context may be in the old format and some in the new. |
-| **Severity** | Low |
-| **Likelihood** | Medium |
-| **Mitigation** | Complete file placement in repo before starting Sprint 22. Verify Claude Code reads new CLAUDE.md correctly in first post-retrofit session. |
-| **Status** | Open |
-
----
-
 ### RSK-042 — Pre-Databento Backtest Re-Validation Not Yet Started
 
 | Field | Value |
@@ -722,30 +573,7 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 | **Likelihood** | Medium |
 | **Mitigation** | Sprint 21.6 planned parallel with Sprint 22. Ensure it actually starts — don't let AI Layer work crowd it out. |
 | **Status** | Open |
-
----
-
-### RSK-043 | ORB Dual-Fire on Same Symbol — RESOLVED
-
-| Field | Value |
-|-------|-------|
-| **Identified** | 2026-03-04 (C2 paper trading) |
-| **Resolved** | 2026-03-05 (Sprint 21.5.1 Session 1) |
-| **Description** | ORB Breakout and ORB Scalp fired simultaneously on the same symbol, doubling risk exposure beyond concentration limits. |
-| **Impact** | 4 incidents in C2: AMZN, NFLX, META, SPY. Effective concentration ~10–12.5% vs 5% cap. |
-| **Resolution** | DEC-261: ClassVar `_orb_family_triggered_symbols` on OrbBaseStrategy provides first-to-fire-wins mutual exclusion. |
-
----
-
-### RSK-044 | Concentration Limit Race Condition — RESOLVED
-
-| Field | Value |
-|-------|-------|
-| **Identified** | 2026-03-04 (C2 analysis) |
-| **Resolved** | 2026-03-05 (Sprint 21.5.1 Session 1) |
-| **Description** | Multiple signals approved before fills arrived, allowing total exposure to exceed concentration limit. |
-| **Impact** | All 4 C2 dual-fire symbols hit ~12.3–12.5% vs 5% cap. |
-| **Resolution** | `get_pending_entry_exposure()` on OrderManager now included in Risk Manager concentration check. |
+| **Note (2026-03-06)** | Sprint 21.6 is queued and planned to run in parallel with Sprint 22 per ROADMAP.md. Risk remains active until re-validation completes. |
 
 ---
 
@@ -773,4 +601,181 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 
 ---
 
-*End of Risk & Assumptions Register v1.0*
+---
+
+## Archived Entries
+
+*Closed, resolved, or superseded items moved here for historical reference. Archived 2026-03-06 during DEC-262 documentation consolidation.*
+
+### ASM-005 — Commission-Free Trading Sustainability (SUPERSEDED)
+| Field | Value |
+|-------|-------|
+| **Assumption** | ~~Commission-free trading remains available.~~ No longer relevant — IBKR Pro uses tiered commission pricing (DEC-083). |
+| **Confidence** | N/A |
+| **Basis** | IBKR Pro charges ~$0.0035/share + clearing/exchange fees. This is an explicit cost, offset by estimated $0.02/share execution quality advantage over PFOF brokers. Net cost-positive. |
+| **Status** | Superseded by DEC-083. Commission costs are explicit and budgeted. |
+| **Closed** | 2026-03-06 — Superseded by IBKR production architecture. |
+
+---
+
+### ASM-008 — VPS Reliability
+| Field | Value |
+|-------|-------|
+| **Assumption** | AWS EC2 in us-east-1 provides >99.9% uptime during market hours |
+| **Confidence** | High |
+| **Basis** | AWS SLA guarantees 99.99% for EC2. us-east-1 is their most mature region. |
+| **If Wrong** | Positions unmanaged during outage. Broker-side stops remain active but no dynamic management. |
+| **Contingency** | All stops placed at broker level. Dead man's switch alerts user if system goes silent. Recovery procedure targets <5 minutes. Consider multi-AZ if single instance proves unreliable. |
+| **Closed** | 2026-03-06 — ARGUS now runs locally from Taipei, not on AWS VPS. Assumption no longer applies. |
+
+---
+
+### ASM-015 — IBKR Account Opening Timeline
+| Field | Value |
+|-------|-------|
+| **Assumption** | IBKR account (including paper trading) can be opened within 1–2 weeks, not blocking Sprint 13 significantly. |
+| **Confidence** | Medium-High |
+| **Basis** | Application submitted Feb 21, 2026. Account ID: U24619949. Individual margin account, IBKR Pro, Georgia address. Standard US citizen application — typically approved in 1–3 business days. Applying while physically in Taiwan may trigger additional verification, but IBKR is known to be accommodating of US citizens abroad. |
+| **If Wrong** | Sprint 13 development proceeds against mock Gateway responses. Integration testing delayed until account is approved. |
+| **Contingency** | Develop IBKRBroker adapter using mock/recorded responses. Integration testing happens when account is ready. Alpaca paper trading continues unaffected during the wait. Contact newaccounts@interactivebrokers.com if no response within 5 business days. |
+| **Review Date** | Feb 26, 2026 (5 business days post-submission) |
+| **Closed** | Resolved (DEC-236) — IBKR account approved Feb 28, 2026. Paper trading ready for Sprint 21.5. |
+
+---
+
+### RSK-013 — Weekly Loss Limit Reset on Restart
+| Field | Value |
+|-------|-------|
+| **Severity** | Medium |
+| **Likelihood** | Low |
+| **Description** | If the system restarts mid-week, the weekly realized P&L must be reconstructed from the database. Without reconstruction, the weekly loss limit effectively resets to zero, allowing more risk than intended. |
+| **Mitigation** | `reconstruct_state()` method queries TradeLogger for the current week's trades and rebuilds weekly P&L. Tested explicitly. Integrity check verifies reconstruction accuracy. Implemented and tested in Sprint 2 polish. |
+| **Owner** | Risk Manager |
+| **Closed** | 2026-03-06 — State reconstruction implemented and tested in Sprint 2. Risk fully mitigated. |
+
+---
+
+### RSK-014 — Flaky Reconnection Test
+| Field | Value |
+|-------|-------|
+| **Severity** | Low |
+| **Likelihood** | High |
+| **Description** | `test_reconnection_with_exponential_backoff` in AlpacaDataService tests is timing-dependent and fails intermittently. Not a production issue, but degrades CI reliability and masks real failures. |
+| **Mitigation** | Fixed in Sprint 4a polish: mocked `asyncio.sleep` to make the test deterministic. Validated with 10x consecutive passes. Commit 738aab8. |
+| **Closed** | February 15, 2026 |
+| **Owner** | Development |
+
+---
+
+### RSK-015 — Stale Data False Positives Outside Market Hours
+| Field | Value |
+|-------|-------|
+| **Severity** | Medium |
+| **Likelihood** | High |
+| **Description** | The stale data monitor in AlpacaDataService runs continuously but only expects data during market hours (9:30 AM – 4:00 PM EST). Outside those hours, lack of data is normal but will trigger stale data alerts and potentially pause strategies unnecessarily during pre-market startup. |
+| **Mitigation** | Stale data monitor now checks market hours (9:30–16:00 ET) and weekdays before alerting. Implemented in Sprint 5 with market hours gating in `_stale_data_monitor()`. |
+| **Closed** | February 16, 2026 |
+| **Owner** | Data Service |
+
+---
+
+### RSK-019 | VectorBT / Replay Harness Trade Count Divergence
+| Field | Value |
+|-------|-------|
+| **Date Identified** | 2026-02-17 |
+| **Date Resolved** | 2026-02-17 |
+| **Category** | Data Integrity |
+| **Likelihood** | Mitigated |
+| **Impact** | Reduced — parameter mismatch bugs fixed; known ATR divergence is architectural, not a bug |
+| **Description** | Original issue: cross-validation showed VectorBT 21 trades vs Replay Harness 135 trades (ratio 0.16). Root causes identified: (1) CLI hardcoded 4 of 6 parameters, (2) function used `.get()` with defaults, (3) Replay Harness loaded all 29 symbols vs VectorBT's 1 symbol. |
+| **Resolution** | (1) Added all 6 CLI args for cross-validation mode. (2) Function now requires all params explicitly (raises KeyError if missing). (3) Added `symbols` field to `BacktestConfig`; Replay Harness now filters symbols. After fixes: TSLA with matched params (max_atr=0.5) shows VectorBT 17, Replay 0 — PASS. With max_atr=999.0: VectorBT 21, Replay 39 — known divergence due to ATR calculation difference (daily vs 1m), not a bug. |
+| **Remaining Known Divergence** | VectorBT computes ATR(14) from daily bars; BacktestDataService uses 1m bars. This causes range/ATR ratios to be higher in Replay Harness, rejecting more entries with tight filters. This is an architectural difference — VectorBT is an approximation for fast parameter sweeps, not a perfect emulator. |
+| **Closed** | 2026-02-17 — no longer blocks Sprint 10 |
+| **Tests** | 542 tests passing; new test `test_cross_validate_missing_params_raises` verifies param validation |
+
+---
+
+### RSK-024 | Sprint 21 Scope Risk — Analytics Sprint May Exceed Single Sprint
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-23 |
+| **Description** | Sprint 21 (CC Analytics & Strategy Lab) is estimated at 80–100 hours across 11 features (21-A through 21-K). This significantly exceeds the scope of previous sprints. Risk of scope creep or quality degradation if attempted as a single sprint. |
+| **Likelihood** | High |
+| **Impact** | Medium — schedule slip, potential quality issues |
+| **Mitigation** | Plan to split into Sprint 21a (highest-priority items: stock detail panel, Dashboard V2, heatmaps) and Sprint 21b (remaining items: treemap, correlation matrix, trade replay, etc.). Use priority tiers from UX Feature Backlog to select which items ship first. The backlog is a menu, not a mandate. |
+| **Closed** | Mitigated ✅ — Sprint 21 split into 21a–21d (DEC-171). All 4 sub-sprints completed on schedule (Feb 27–28). Scope managed successfully through incremental delivery. |
+
+---
+
+### RSK-030 | Low Afternoon Trade Counts in Alpaca IEX Data
+| Field | Value |
+|-------|-------|
+| **Date Identified** | 2026-02-26 |
+| **Category** | Data Quality |
+| **Description** | Afternoon Momentum consolidation detection and breakout confirmation are volume-sensitive. Alpaca's IEX data captures only ~2-3% of market volume (DEC-081). VectorBT sweep may produce very few qualifying trades, making statistical analysis unreliable. |
+| **Likelihood** | High |
+| **Impact** | Medium — sweep results are directional guidance only, not statistically validated. |
+| **Mitigation** | All results provisional per DEC-132. True validation requires Databento exchange-direct data. Low trade counts don't invalidate the strategy thesis — they indicate data limitations. |
+| **Owner** | Steven |
+| **Closed** | 2026-03-06 — Databento EQUS.MINI is now the primary data source (DEC-248). Alpaca IEX data quality is irrelevant for production. |
+
+---
+
+### RSK-037 | First Live Integration Discovery Risk
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-02-28 |
+| **Risk** | Integration testing against real Databento and IBKR services may uncover issues not caught by mock-based unit tests (data format differences, timing edge cases, network reliability, API behavior discrepancies). |
+| **Likelihood** | High (nearly certain some issues will surface) |
+| **Impact** | Low-Medium (delays Sprint 21.5 completion by 2-4 sessions at most) |
+| **Mitigation** | Sprint 21.5 is structured with buffer sessions (13-15) specifically for fixing discovered issues. Phased approach (Databento first, IBKR second, combined third) isolates problems. No real capital at risk during this phase. |
+| **Outcome** | VALIDATED — Risk materialized as expected. Six integration discoveries required code fixes: (1) Databento `instrument_id` direct attribute, not nested in header (DEC-241), (2) built-in `symbology_map` replaces custom DatabentoSymbolMap (DEC-242), (3) fixed-point price format ×1e9 (DEC-243), (4) historical data ~15-min intraday lag (DEC-244), (5) `flatten_all()` SMART routing for exit orders (DEC-245), (6) `get_open_orders()` missing from Broker ABC (DEC-246). Additional discovery: historical daily bar data has multi-day lag (~6 days over weekends), handled by scanner resilience fix (DEC-247). All issues resolved within the sprint's buffer sessions. Impact was exactly as estimated — Low-Medium. |
+| **Closed** | 2026-03-05 — Sprint 21.5 |
+
+---
+
+### RSK-040 — Sprint 21.5 Block C Not Yet Validated
+| Field | Value |
+|-------|-------|
+| **Risk** | No full market day has been run with all 4 strategies live. System-level interactions under real market conditions are untested. |
+| **Severity** | High |
+| **Likelihood** | High (it hasn't happened yet) |
+| **Mitigation** | Block C is the next milestone. Must complete before advancing to Sprint 22. |
+| **Closed** | 2026-03-06 — Sprint 21.5 completed March 5, 2026. Block C validated with all 4 strategies running live. |
+
+---
+
+### RSK-041 — Documentation Tier Transition Risk
+| Field | Value |
+|-------|-------|
+| **Risk** | Moving from monolithic Project Knowledge to Tier A/B split creates a window where some context may be in the old format and some in the new. |
+| **Severity** | Low |
+| **Likelihood** | Medium |
+| **Mitigation** | Complete file placement in repo before starting Sprint 22. Verify Claude Code reads new CLAUDE.md correctly in first post-retrofit session. |
+| **Closed** | 2026-03-06 — Metarepo installation complete. Documentation tier transition successful. All files renamed to kebab-case and archived. |
+
+---
+
+### RSK-043 | ORB Dual-Fire on Same Symbol
+| Field | Value |
+|-------|-------|
+| **Identified** | 2026-03-04 (C2 paper trading) |
+| **Resolved** | 2026-03-05 (Sprint 21.5.1 Session 1) |
+| **Description** | ORB Breakout and ORB Scalp fired simultaneously on the same symbol, doubling risk exposure beyond concentration limits. |
+| **Impact** | 4 incidents in C2: AMZN, NFLX, META, SPY. Effective concentration ~10–12.5% vs 5% cap. |
+| **Resolution** | DEC-261: ClassVar `_orb_family_triggered_symbols` on OrbBaseStrategy provides first-to-fire-wins mutual exclusion. |
+
+---
+
+### RSK-044 | Concentration Limit Race Condition
+| Field | Value |
+|-------|-------|
+| **Identified** | 2026-03-04 (C2 analysis) |
+| **Resolved** | 2026-03-05 (Sprint 21.5.1 Session 1) |
+| **Description** | Multiple signals approved before fills arrived, allowing total exposure to exceed concentration limit. |
+| **Impact** | All 4 C2 dual-fire symbols hit ~12.3–12.5% vs 5% cap. |
+| **Resolution** | `get_pending_entry_exposure()` on OrderManager now included in Risk Manager concentration check. |
+
+---
+
+*End of Risk & Assumptions Register v1.1*

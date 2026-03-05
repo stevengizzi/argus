@@ -230,30 +230,31 @@ CHOREOGRAPHY:
 | 23 | NLP Catalyst + Pre-Market Engine | B | iterative-judgment | 4–6 | 3 | No | No |
 | 24 | Setup Quality Engine + Dynamic Sizer | B | adversarial, iterative-judgment | 5–7 | 3–4 | **Yes** | **Phase 5 Gate** |
 | **Phase 6: Strategy Expansion** | | | | | | | |
-| 25 | Red-to-Green Strategy | B | iterative-judgment | 3–5 | 2–3 | No | No |
-| 26 | Pattern Expansion I (2–3 strategies) | B | iterative-judgment | 5–7 | 4–5 | No | No |
-| 27 | Pattern Expansion II + Learning Loop V1 | B | iterative-judgment | 5–7 | 4–5 | No | **Phase 6 Gate** |
+| 25 | Red-to-Green + Pattern Library Foundation | B | iterative-judgment | 3–5 | 2–3 | No | No |
+| 26 | Pattern Expansion I | B | iterative-judgment | 5–7 | 4–5 | No | No |
+| 27 | Short Selling Infrastructure + Pattern Expansion II | B | iterative-judgment | 3–5 | 3 | No | No |
+| 28 | Learning Loop V1 | B | iterative-judgment | 3–5 | 3 | No | **Phase 6 Gate** |
 | **Phase 7: Infrastructure Unification** | | | | | | | |
-| 28 | BacktestEngine Core + Research Console | C | adversarial, iterative-judgment | 6–8 | 4 | **Yes** | No |
-| 29 | Parallel Sweep Infrastructure | B | iterative-judgment | 5–7 | 3–4 | No | No |
-| 30 | Parameterized Strategy Templates | C | adversarial, iterative-judgment | 5–7 | 3–4 | **Yes** | **Phase 7 Gate** |
+| 29 | BacktestEngine Core + Research Console | C | adversarial, iterative-judgment | 6–8 | 4 | **Yes** | No |
+| 30 | Parallel Sweep Infrastructure | B | iterative-judgment | 5–7 | 3–4 | No | No |
+| 31 | Parameterized Strategy Templates | C | adversarial, iterative-judgment | 5–7 | 3–4 | **Yes** | **Phase 7 Gate** |
 | **Phase 8: Controlled Experiment** | | | | | | | |
-| 31 | Statistical Validation Framework | B | adversarial, iterative-judgment | 5–7 | 3–4 | **Yes** | No |
-| 32 | ORB Family Systematic Search | D | research, adversarial | 5–8 | 4–5 | **Yes** | No |
-| 33 | Ensemble Performance Analysis | D | research | 3–5 | 2–3 | No | **Phase 8 GATE (GO/NO-GO)** |
+| 32 | Statistical Validation Framework | B | adversarial, iterative-judgment | 5–7 | 3–4 | **Yes** | No |
+| 33 | ORB Family Systematic Search | D | research, adversarial | 5–8 | 4–5 | **Yes** | No |
+| 34 | Ensemble Performance Analysis | D | research | 3–5 | 2–3 | No | **Phase 8 GATE (GO/NO-GO)** |
 | **Phase 9: Ensemble Scaling** | | | | | | | |
-| 34 | Cross-Family Search (VWAP + Momentum) | B | iterative-judgment | 5–7 | 4–5 | No | No |
-| 35 | Cross-Family Search (Remaining) | B | iterative-judgment | 5–7 | 4–5 | No | No |
-| 36a | Ensemble Orchestrator V2 (Backend) | C | adversarial | 4–6 | 3 | **Yes** | No |
-| 36b | Constellation (Frontend) | B | iterative-judgment, research-first | 6–10 | 4 | No | No |
-| 37a | Ensemble WebSocket Backend | A | standard | 2–4 | 2 | No | No |
-| 37b | Real-Time Constellation + Page Evolutions | B | iterative-judgment | 6–10 | 4 | No | **Phase 9 Gate** |
+| 35 | Cross-Family Search (VWAP + Momentum) | B | iterative-judgment | 5–7 | 4–5 | No | No |
+| 36 | Cross-Family Search (Remaining) | B | iterative-judgment | 5–7 | 4–5 | No | No |
+| 37a | Ensemble Orchestrator V2 (Backend) | C | adversarial | 4–6 | 3 | **Yes** | No |
+| 37b | Synapse (Frontend) | B | iterative-judgment, research-first | 6–10 | 4 | No | No |
+| 38a | Ensemble WebSocket Backend | A | standard | 2–4 | 2 | No | No |
+| 38b | Real-Time Synapse + Page Evolutions | B | iterative-judgment | 6–10 | 4 | No | **Phase 9 Gate** |
 | **Phase 10: Full Vision** | | | | | | | |
-| 38 | Learning Loop V2 (Ensemble Edition) | B | iterative-judgment | 4–6 | 4–5 | No | No |
-| 39 | Continuous Discovery Pipeline | B | iterative-judgment | 4–6 | 3–4 | No | No |
-| 40 | Performance Workbench | B | iterative-judgment | 5–8 | 4–5 | No | **Phase 10 Gate** |
+| 39 | Learning Loop V2 (Ensemble Edition) | B | iterative-judgment | 4–6 | 4–5 | No | No |
+| 40 | Continuous Discovery Pipeline | B | iterative-judgment | 4–6 | 3–4 | No | No |
+| 41 | Performance Workbench | B | iterative-judgment | 5–8 | 4–5 | No | **Phase 10 Gate** |
 
-**Totals:** 22 sprints (including sub-sprints) | ~100–145 sessions | ~12–16 weeks estimated
+**Totals:** 23 sprints (including sub-sprints) | ~105–155 sessions | ~13–17 weeks estimated
 
 ---
 
@@ -271,29 +272,30 @@ Based on the roadmap's per-sprint duration estimates. Start date: March 5, 2026.
 | **Phase 5 Gate** | **Mar 21** | **Mar 22** | Strategic check-in + doc compression |
 | 25 | Mar 22 | Mar 25 | |
 | 26 | Mar 25 | Mar 30 | |
-| 27 | Mar 31 | Apr 4 | |
-| **Phase 6 Gate** | **Apr 4** | **Apr 5** | Strategic check-in + CPA consultation gate |
-| 28 | Apr 6 | Apr 10 | Adversarial review adds ~0.5 day |
-| 29 | Apr 10 | Apr 14 | |
-| 30 | Apr 14 | Apr 18 | Adversarial review adds ~0.5 day |
-| **Phase 7 Gate** | **Apr 18** | **Apr 19** | Strategic check-in + data sufficiency decision |
-| 31 | Apr 20 | Apr 24 | Adversarial review adds ~0.5 day |
-| 32 | Apr 24 | Apr 29 | Multi-day compute; may need cloud burst |
-| 33 | Apr 29 | May 2 | |
-| **Phase 8 GATE** | **May 2** | **May 3** | **GO/NO-GO — pivotal decision** |
-| 34 | May 4 | May 9 | Only if GO |
-| 35 | May 9 | May 14 | Only if GO |
-| 36a | May 14 | May 17 | Adversarial review adds ~0.5 day |
-| 36b | May 17 | May 21 | Three.js mini-discovery before implementation |
-| 37a | May 21 | May 23 | |
-| 37b | May 23 | May 27 | |
-| **Phase 9 Gate** | **May 27** | **May 28** | Strategic check-in + codebase health audit |
-| 38 | May 29 | Jun 3 | |
-| 39 | Jun 3 | Jun 7 | |
-| 40 | Jun 7 | Jun 12 | |
-| **Phase 10 Gate** | **Jun 12** | **Jun 13** | Final strategic check-in |
+| 27 | Mar 31 | Apr 3 | Short Selling + Pattern Expansion II |
+| 28 | Apr 3 | Apr 6 | Learning Loop V1 |
+| **Phase 6 Gate** | **Apr 6** | **Apr 7** | Strategic check-in + CPA consultation gate |
+| 29 | Apr 8 | Apr 12 | Adversarial review adds ~0.5 day |
+| 30 | Apr 12 | Apr 16 | |
+| 31 | Apr 16 | Apr 20 | Adversarial review adds ~0.5 day |
+| **Phase 7 Gate** | **Apr 20** | **Apr 21** | Strategic check-in + data sufficiency decision |
+| 32 | Apr 22 | Apr 26 | Adversarial review adds ~0.5 day |
+| 33 | Apr 26 | May 1 | Multi-day compute; may need cloud burst |
+| 34 | May 1 | May 4 | |
+| **Phase 8 GATE** | **May 4** | **May 5** | **GO/NO-GO — pivotal decision** |
+| 35 | May 6 | May 11 | Only if GO |
+| 36 | May 11 | May 16 | Only if GO |
+| 37a | May 16 | May 19 | Adversarial review adds ~0.5 day |
+| 37b | May 19 | May 23 | Three.js mini-discovery before implementation |
+| 38a | May 23 | May 25 | |
+| 38b | May 25 | May 29 | |
+| **Phase 9 Gate** | **May 29** | **May 30** | Strategic check-in + codebase health audit |
+| 39 | May 31 | Jun 5 | |
+| 40 | Jun 5 | Jun 9 | |
+| 41 | Jun 9 | Jun 14 | |
+| **Phase 10 Gate** | **Jun 14** | **Jun 15** | Final strategic check-in |
 
-**Total calendar estimate:** ~14 weeks (March 5 – June 13)
+**Total calendar estimate:** ~15 weeks (March 5 – June 15)
 
 ---
 
@@ -310,16 +312,16 @@ Phase 5 (Linear Chain — each sprint depends on the previous):
 
 Phase 6 (Linear Chain):
 
-  25 ──→ 26 ──→ 27
-  (R2G)  (3 strats) (3 strats + learning loop)
-                        │
-                        ▼
-                   PHASE 6 GATE
-                   (CPA consultation gate — live trading may begin)
+  25 ──→ 26 ──→ 27 ──→ 28
+  (R2G)  (exp-I) (short+exp-II) (learning loop)
+                                      │
+                                      ▼
+                                 PHASE 6 GATE
+                                 (CPA consultation gate — live trading may begin)
 
 Phase 7 (Linear Chain, CAN partially overlap with late Phase 6):
 
-  28 ──→ 29 ──→ 30
+  29 ──→ 30 ──→ 31
   (engine) (sweep) (templates)
                       │
                       ▼
@@ -328,7 +330,7 @@ Phase 7 (Linear Chain, CAN partially overlap with late Phase 6):
 
 Phase 8 (Linear Chain):
 
-  31 ──→ 32 ──→ 33
+  32 ──→ 33 ──→ 34
   (stats) (experiment) (analysis)
                           │
                           ▼
@@ -345,15 +347,15 @@ Phase 8 (Linear Chain):
 
 Phase 9 (Linear with sub-sprint decomposition):
 
-  34 ──→ 35 ──→ 36a ──→ 36b ──→ 37a ──→ 37b
-  (VWAP)  (all)  (orch)  (const) (ws)   (rt-const)
+  35 ──→ 36 ──→ 37a ──→ 37b ──→ 38a ──→ 38b
+  (VWAP)  (all)  (orch) (synapse) (ws)  (rt-synapse)
                                             │
                                             ▼
                                        PHASE 9 GATE
 
 Phase 10 (Linear Chain):
 
-  38 ──→ 39 ──→ 40
+  39 ──→ 40 ──→ 41
   (learn) (discover) (workbench)
                         │
                         ▼
@@ -365,19 +367,19 @@ Phase 10 (Linear Chain):
 | Dependency | Description |
 |-----------|-------------|
 | Phase 6 requires Phase 5 | Strategies need quality filtering (Sprint 24) and AI layer (Sprint 22) |
-| Phase 7 can overlap Phase 6 | Sprint 28 (BacktestEngine) only needs existing strategies to test against — could start after Sprint 25–26. The roadmap sequences them serially for simplicity, but parallelism is possible if velocity is ahead of schedule. |
-| Phase 8 requires Phase 7 | The experiment (Sprint 32) needs BacktestEngine (28), sweeps (29), and templates (30) |
+| Phase 7 can overlap Phase 6 | Sprint 29 (BacktestEngine) only needs existing strategies to test against — could start after Sprint 26–27. The roadmap sequences them serially for simplicity, but parallelism is possible if velocity is ahead of schedule. |
+| Phase 8 requires Phase 7 | The experiment (Sprint 33) needs BacktestEngine (29), sweeps (30), and templates (31) |
 | Phase 9 requires Phase 8 GO | If NO-GO, Phase 9 does not execute |
-| Sprint 32 requires data sufficiency | The Phase 7 gate must resolve the historical data risk (RSK from roadmap) before Sprint 31 begins |
-| Sprint 36b requires Three.js research | A mini-discovery session before implementation (see Sprint 36b choreography) |
+| Sprint 33 requires data sufficiency | The Phase 7 gate must resolve the historical data risk (RSK from roadmap) before Sprint 32 begins |
+| Sprint 37b requires Three.js research | A mini-discovery session before implementation (see Sprint 37b choreography) |
 
 **Potential Parallelism Windows:**
 
 | Window | What Could Overlap | Conditions |
 |--------|-------------------|------------|
-| Phase 6 + Phase 7 start | Sprint 28 could overlap with Sprint 26–27 | Only if Phase 6 is on track and you have bandwidth |
-| Sprint 36a + 36b prep | Three.js mini-discovery during 36a implementation | Research conversation doesn't block backend work |
-| Sprint 37a + 37b prep | Frontend planning during backend WebSocket work | Planning doesn't block implementation |
+| Phase 6 + Phase 7 start | Sprint 29 could overlap with Sprint 27–28 | Only if Phase 6 is on track and you have bandwidth |
+| Sprint 37a + 37b prep | Three.js mini-discovery during 37a implementation | Research conversation doesn't block backend work |
+| Sprint 38a + 38b prep | Frontend planning during backend WebSocket work | Planning doesn't block implementation |
 
 ---
 
@@ -672,13 +674,13 @@ Since this sprint is already in progress, pick up from current state:
 
 ---
 
-## 5. Phase 6: Strategy Expansion — Artisanal (Sprints 25–27)
+## 5. Phase 6: Strategy Expansion — Artisanal (Sprints 25–28)
 
-*Adds strategies one at a time. Each hand-designed, backtested, validated. Target: ~2–3 weeks.*
+*Adds strategies one at a time. Each hand-designed, backtested, validated. Includes short selling infrastructure. Target: ~2–3 weeks.*
 
 ---
 
-### Sprint 25: Red-to-Green Strategy
+### Sprint 25: Red-to-Green + Pattern Library Foundation
 
 **Type:** B (Mixed Backend + Frontend) | **Modes:** Iterative Judgment Loop
 **Duration:** ~2–3 days | **Sessions:** 3–5 (2 backend, 1–3 frontend)
@@ -727,105 +729,137 @@ Since this sprint is already in progress, pick up from current state:
 
 ---
 
-### Sprint 26: Pattern Expansion I (2–3 Strategies)
+### Sprint 26: Pattern Expansion I
 
 **Type:** B (Mixed Backend + Frontend) | **Modes:** Iterative Judgment Loop
 **Duration:** ~4–5 days | **Sessions:** 5–7 (3–4 backend, 2–3 frontend)
 **Depends on:** Sprint 25 complete
-**Adversarial review:** No (unless short selling is introduced — see note below)
-**Delivers:** 7–8 active strategies, Pattern Library cards, Short Exposure indicator (if applicable)
-
-**Special note:** If Parabolic Short is one of the expansion candidates, short-selling infrastructure must be built first (locate tracking, uptick rule compliance, short-specific risk limits). This changes the sprint to **Type C** with a mandatory adversarial review focused on short-selling risk controls. Decide this during Phase A of sprint planning.
+**Adversarial review:** No
+**Delivers:** 2–3 additional pattern modules (Dip-and-Rip, HOD Break, Gap-and-Go), Pattern Library cards, Dashboard Short Exposure indicator (infrastructure prep)
 
 **Choreography:**
 
 1. **[Claude.ai]** Sprint Planning — `sprint-planning.md`
    - **Phase A — Think:**
-     - Strategy candidate selection (Gap Fill, ABCD Pattern, Parabolic Short — decide which 2–3)
-     - **Decision point:** If Parabolic Short → adversarial review required for short-selling infrastructure
+     - Strategy candidates: Dip-and-Rip, HOD Break, Gap-and-Go (per ROADMAP.md)
      - Per-strategy: spec, VectorBT sweep design, validation plan
-     - Short Exposure indicator visual spec (if applicable): long/short balance bar on Dashboard
+     - Short Exposure indicator visual spec (infrastructure prep for Sprint 27): long/short balance bar on Dashboard
      - Session decomposition: one backend session per strategy (implementation + sweep + validation) → frontend cards + indicator
-   - Flag: Iterative Judgment Loop (multiple new cards, possible new indicator)
-   - If short selling: Flag Adversarial Review → escalate to Type C choreography
+   - Flag: Iterative Judgment Loop (multiple new cards, Short Exposure indicator)
    - **Phase B** — Design Summary → **[You]** save
    - **Phase C** — Generate sprint package
    - **Phase D** — Verify
    - **[You]** Save all artifacts
 
-2. **[Claude.ai]** Adversarial Review (ONLY if short selling introduced)
-   - Focus: locate tracking correctness, uptick rule compliance, short-specific margin requirements, short squeeze risk controls
-
-3. **[Claude Code]** Sessions 1–3: Backend — One session per strategy (implementation + sweep + validation)
+2. **[Claude Code]** Sessions 1–3: Backend — One session per strategy (implementation + sweep + validation)
    → Close-out per session → Tier 2 review per session
    → Performance benchmarks in every prompt (backtesting.md rules)
 
-4. **[Claude Code]** Session 4: Frontend — Pattern Library cards + Short Exposure indicator (if applicable)
+3. **[Claude Code]** Session 4: Frontend — Pattern Library cards + Short Exposure indicator
    → Visual spec → **[You]** screenshot → close-out
 
-5. **[Claude Code]** Tier 2 Review — Session 4 (visual verification)
+4. **[Claude Code]** Tier 2 Review — Session 4 (visual verification)
 
-6. **[Claude Code]** Session 5+ (if needed): Frontend fix sessions
+5. **[Claude Code]** Session 5+ (if needed): Frontend fix sessions
 
-7. **[Claude Code]** Doc Sync — `doc-sync.md`
+6. **[Claude Code]** Doc Sync — `doc-sync.md`
 
-8. **[Claude.ai]** Tier 3 Review — `tier-3-review.md`
-   → If short selling was introduced: mandatory Tier 3 (Type C rule)
+7. **[Claude.ai]** Tier 3 Review — `tier-3-review.md`
 
 ---
 
-### Sprint 27: Pattern Expansion II + Learning Loop V1
+### Sprint 27: Short Selling Infrastructure + Pattern Expansion II
 
 **Type:** B (Mixed Backend + Frontend) | **Modes:** Iterative Judgment Loop
-**Duration:** ~4–5 days | **Sessions:** 5–7 (3–4 backend, 2–3 frontend)
+**Duration:** ~3 days | **Sessions:** 3–5 (2–3 backend, 1–2 frontend)
 **Depends on:** Sprint 26 complete
-**Adversarial review:** No
-**Delivers:** 10–11 active strategies, Learning Loop V1 (health bands, throttle/boost, correlation monitoring), Orchestrator health panel, Performance correlation matrix
+**Adversarial review:** No (short selling follows established Risk Manager patterns)
+**Delivers:** Short selling infrastructure (locate/borrow tracking, inverted risk logic, uptick rule compliance), Parabolic Short strategy, 1–2 additional long patterns, Dashboard short exposure indicator activated
 
 **Choreography:**
 
 1. **[Claude.ai]** Sprint Planning — `sprint-planning.md`
    - **Phase A — Think:**
-     - Strategy candidates (2–3 more to reach 10–11 total)
-     - Learning Loop V1 design: rolling performance tracking, throttle/boost recommendation logic, correlation monitoring algorithm
+     - Short selling infrastructure design: locate tracking, inverted risk logic (stop above entry, target below), short-specific Risk Manager rules, uptick rule compliance (SSR detection), short exposure limits
+     - Parabolic Short strategy spec: parabolic extension detection, volume exhaustion, reversal candle patterns
+     - 1–2 additional long pattern modules (ABCD Reversal, Sympathy Play, or others from planned roster) if velocity allows
+     - Dashboard Short Exposure indicator activation (infrastructure built in Sprint 26)
+     - Session decomposition: backend short selling infrastructure → backend Parabolic Short + additional patterns → frontend Pattern Library cards + short exposure activation
+   - Flag: Iterative Judgment Loop (Parabolic Short card, short exposure indicator)
+   - **Phase B** — Design Summary → **[You]** save
+   - **Phase C** — Generate sprint package
+   - **Phase D** — Verify
+   - **[You]** Save all artifacts
+
+2. **[Claude Code]** Session 1: Backend — Short selling infrastructure
+   → Close-out → Tier 2 review
+
+3. **[Claude Code]** Session 2: Backend — Parabolic Short + additional patterns (implementation + sweep + validation)
+   → Close-out → Tier 2 review
+   → Performance benchmarks in every prompt (backtesting.md rules)
+
+4. **[Claude Code]** Session 3: Frontend — Pattern Library cards + short exposure indicator activation
+   → Visual spec → **[You]** screenshot → close-out
+
+5. **[Claude Code]** Tier 2 Review — Session 3 (visual verification)
+
+6. **[Claude Code]** Session 4+ (if needed): Frontend fix sessions
+
+7. **[Claude Code]** Doc Sync — `doc-sync.md`
+   → Update: Architecture doc (short selling infrastructure section), Decision Log
+
+8. **[Claude.ai]** Tier 3 Review — `tier-3-review.md`
+
+---
+
+### Sprint 28: Learning Loop V1
+
+**Type:** B (Mixed Backend + Frontend) | **Modes:** Iterative Judgment Loop
+**Duration:** ~3 days | **Sessions:** 3–5 (2 backend, 1–3 frontend)
+**Depends on:** Sprint 27 complete
+**Adversarial review:** No
+**Delivers:** LearningDatabase, PostTradeAnalyzer, throttle/boost recommendations, Orchestrator health bands, Performance correlation matrix
+
+**Choreography:**
+
+1. **[Claude.ai]** Sprint Planning — `sprint-planning.md`
+   - **Phase A — Think:**
+     - LearningDatabase design: stores all scored setups (traded and untraded), outcomes, quality scores, regime context
+     - PostTradeAnalyzer: correlates quality scores with outcomes, weekly batch retraining of Quality Engine weights
+     - Throttle/boost recommendation logic: performance-aware throttling, strategies that underperform historical baseline get throttled, outperformers get boosted
      - Orchestrator health panel visual spec: horizontal health bands per strategy, throttle/boost action cards
      - Performance page correlation matrix visual spec: heatmap with warning indicators for high correlation
-     - Session decomposition: backend strategies → backend Learning Loop engine → frontend health panel → frontend correlation matrix
+     - Session decomposition: backend LearningDatabase + PostTradeAnalyzer → backend throttle/boost engine → frontend health panel + correlation matrix
    - Flag: Iterative Judgment Loop (two significant new UI components)
    - **Phase B** — Design Summary → **[You]** save
    - **Phase C** — Generate sprint package
    - **Phase D** — Verify
    - **[You]** Save all artifacts
 
-2. **[Claude Code]** Sessions 1–2: Backend — New strategies (implementation + sweep + validation)
-   → Close-out per session → Tier 2 review per session
-
-3. **[Claude Code]** Session 3: Backend — Learning Loop V1 engine
+2. **[Claude Code]** Session 1: Backend — LearningDatabase + PostTradeAnalyzer
    → Close-out → Tier 2 review
 
-4. **[Claude Code]** Session 4: Frontend — Orchestrator health bands + throttle/boost cards
-   → Visual spec → **[You]** screenshot Orchestrator → close-out
+3. **[Claude Code]** Session 2: Backend — Throttle/boost engine + correlation monitoring
+   → Close-out → Tier 2 review
 
-5. **[Claude Code]** Tier 2 Review — Session 4 (visual verification)
+4. **[Claude Code]** Session 3: Frontend — Orchestrator health bands + throttle/boost cards + Performance correlation matrix
+   → Visual spec → **[You]** screenshot Orchestrator + Performance → close-out
 
-6. **[Claude Code]** Session 5: Frontend — Performance correlation matrix heatmap
-   → Visual spec → **[You]** screenshot Performance page → close-out
+5. **[Claude Code]** Tier 2 Review — Session 3 (visual verification)
 
-7. **[Claude Code]** Tier 2 Review — Session 5 (visual verification)
+6. **[Claude Code]** Session 4+ (if needed): Frontend fix sessions
 
-8. **[Claude Code]** Session 6+ (if needed): Frontend fix sessions
-
-9. **[Claude Code]** Doc Sync — `doc-sync.md`
+7. **[Claude Code]** Doc Sync — `doc-sync.md`
    → **This is the last sprint in Phase 6 — extra attention to doc currency**
    → Update: all strategy documentation, Learning Loop architecture, Performance page capabilities
 
-10. **[Claude.ai]** Tier 3 Review — `tier-3-review.md` (sprint completion + phase completion)
+8. **[Claude.ai]** Tier 3 Review — `tier-3-review.md` (sprint completion + phase completion)
 
 ---
 
 ### Phase 6 Gate
 
-**Trigger:** Sprint 27 complete
+**Trigger:** Sprint 28 complete
 **Protocol:** Strategic Check-In (`strategic-check-in.md`) + Documentation Compression + Codebase Health Audit
 
 This is the most significant non-Phase-8 gate because **live trading with real capital could begin during or after Phase 6** (per roadmap).
@@ -854,13 +888,13 @@ This is the most significant non-Phase-8 gate because **live trading with real c
 
 ---
 
-## 6. Phase 7: Infrastructure Unification (Sprints 28–30)
+## 6. Phase 7: Infrastructure Unification (Sprints 29–31)
 
 *Builds the BacktestEngine, sweeps, and template system. Research infrastructure in parallel with live trading. Target: ~2–2.5 weeks.*
 
 ---
 
-### Sprint 28: BacktestEngine Core + Research Console
+### Sprint 29: BacktestEngine Core + Research Console
 
 **Type:** C (Architecture-Shifting) | **Modes:** Adversarial Review, Iterative Judgment Loop
 **Duration:** ~4 days | **Sessions:** 6–8 (3–4 backend, 3–4 frontend)
@@ -924,11 +958,11 @@ This is the most significant non-Phase-8 gate because **live trading with real c
 
 ---
 
-### Sprint 29: Parallel Sweep Infrastructure
+### Sprint 30: Parallel Sweep Infrastructure
 
 **Type:** B (Mixed Backend + Frontend) | **Modes:** Iterative Judgment Loop
 **Duration:** ~3–4 days | **Sessions:** 5–7 (2–3 backend, 3–4 frontend)
-**Depends on:** Sprint 28 complete (needs BacktestEngine)
+**Depends on:** Sprint 29 complete (needs BacktestEngine)
 **Adversarial review:** No (builds on Sprint 28's reviewed architecture)
 **Delivers:** Multiprocessing harness, parameter grid spec, worker pool, Research Console upgrades (Sweep Manager, Heatmap, 3D Parameter Landscape)
 
@@ -969,11 +1003,11 @@ This is the most significant non-Phase-8 gate because **live trading with real c
 
 ---
 
-### Sprint 30: Parameterized Strategy Templates
+### Sprint 31: Parameterized Strategy Templates
 
 **Type:** C (Architecture-Shifting) | **Modes:** Adversarial Review, Iterative Judgment Loop
 **Duration:** ~3–4 days | **Sessions:** 5–7 (3 backend, 2–4 frontend)
-**Depends on:** Sprint 29 complete
+**Depends on:** Sprint 30 complete
 **Adversarial review:** **YES** — significant refactor of strategy architecture (Roadmap Contradiction Note). Strategies become templates. Risk Manager, Orchestrator, Order Manager must see no difference.
 **Delivers:** Template system, template configuration schema, template registry, existing strategies refactored as templates, Pattern Library evolution to template gallery
 
@@ -1042,7 +1076,7 @@ This is the most significant non-Phase-8 gate because **live trading with real c
 
 ### Phase 7 Gate
 
-**Trigger:** Sprint 30 complete
+**Trigger:** Sprint 31 complete
 **Protocol:** Strategic Check-In (`strategic-check-in.md`) + Documentation Compression
 
 **[Claude.ai]** Strategic Check-In Conversation:
@@ -1066,13 +1100,13 @@ This is the most significant non-Phase-8 gate because **live trading with real c
 
 ---
 
-## 7. Phase 8: Controlled Experiment (Sprints 31–33)
+## 7. Phase 8: Controlled Experiment (Sprints 32–34)
 
-*The proving ground. Everything before this is valuable regardless. Everything after depends on Sprint 32's results. Target: ~2–2.5 weeks.*
+*The proving ground. Everything before this is valuable regardless. Everything after depends on Sprint 33's results. Target: ~2–2.5 weeks.*
 
 ---
 
-### Sprint 31: Statistical Validation Framework
+### Sprint 32: Statistical Validation Framework
 
 **Type:** B (Mixed Backend + Frontend) | **Modes:** Adversarial Review, Iterative Judgment Loop
 **Duration:** ~3–4 days | **Sessions:** 5–7 (3 backend, 2–4 frontend)
@@ -1142,11 +1176,11 @@ This is the most significant non-Phase-8 gate because **live trading with real c
 
 ---
 
-### Sprint 32: ORB Family Systematic Search
+### Sprint 33: ORB Family Systematic Search
 
 **Type:** D (Research / Experiment) | **Modes:** Research Sprint, Adversarial Review
 **Duration:** ~4–5 days (compute-heavy) | **Sessions:** 5–8
-**Depends on:** Sprint 31 complete
+**Depends on:** Sprint 32 complete
 **Adversarial review:** **YES** — validating the experimental methodology before committing compute resources
 **Delivers:** Either (a) a validated ensemble of 50–200 ORB micro-strategies that outperform hand-crafted, or (b) evidence that the approach doesn't work
 
@@ -1226,15 +1260,15 @@ This is the most significant non-Phase-8 gate because **live trading with real c
 
 8. **[Claude Code]** Doc Sync — `doc-sync.md`
 
-9. **[You]** Save all results, heatmaps, equity curves. These feed Sprint 33.
+9. **[You]** Save all results, heatmaps, equity curves. These feed Sprint 34.
 
 ---
 
-### Sprint 33: Ensemble Performance Analysis
+### Sprint 34: Ensemble Performance Analysis
 
 **Type:** D (Research / Experiment) | **Modes:** Research Sprint
 **Duration:** ~2–3 days | **Sessions:** 3–5
-**Depends on:** Sprint 32 complete (uses Sprint 32 results as input)
+**Depends on:** Sprint 33 complete (uses Sprint 33 results as input)
 **Adversarial review:** No (this is the analysis of already-collected results)
 **Delivers:** Correlation Cluster Map, Regime Breakdown, Commission Impact Model, Go/No-Go Dashboard — and the **decision that determines the rest of the roadmap**
 
@@ -1271,7 +1305,7 @@ This is the most significant non-Phase-8 gate because **live trading with real c
 
 ### Phase 8 Gate — THE GO/NO-GO DECISION ★★★
 
-**Trigger:** Sprint 33 complete
+**Trigger:** Sprint 34 complete
 **Protocol:** Custom Gate Review (NOT a standard strategic check-in — this is bigger)
 
 This is the pivotal decision of the entire campaign. Everything from Sprint 34 onward depends on the outcome.
@@ -1281,12 +1315,12 @@ This is the pivotal decision of the entire campaign. Everything from Sprint 34 o
 Start with:
 ```
 "We are at the Phase 8 gate — the go/no-go decision for the ensemble vision.
-Sprint 32 results and Sprint 33 analysis are complete. I need to make the
+Sprint 33 results and Sprint 34 analysis are complete. I need to make the
 decision that determines whether we proceed to Phase 9 (ensemble scaling)
 or continue with the Phase 6 artisanal approach.
 
-Here are the results: [paste Sprint 32/33 key metrics]
-Here are the pre-defined success criteria from Sprint 32 planning: [paste]
+Here are the results: [paste Sprint 33/34 key metrics]
+Here are the pre-defined success criteria from Sprint 33 planning: [paste]
 Here is the Go/No-Go Dashboard output: [paste or screenshot reference]"
 ```
 
@@ -1309,7 +1343,7 @@ Here is the Go/No-Go Dashboard output: [paste or screenshot reference]"
 **NO-GO:** The ensemble methodology did not produce the desired results.
 - Log as DEC entry with full rationale and failure analysis
 - Decision fork:
-  - **NO-GO (salvageable):** The methodology needs adjustment. Plan a revised Sprint 32 with specific changes. Phase 9 is delayed, not cancelled.
+  - **NO-GO (salvageable):** The methodology needs adjustment. Plan a revised Sprint 33 with specific changes. Phase 9 is delayed, not cancelled.
   - **NO-GO (fundamental):** The approach doesn't work for day trading. Phase 9 is cancelled. Continue Phase 6 artisanal approach. ARGUS remains strong — the ceiling is lower but the floor hasn't changed. BacktestEngine and Research Console remain valuable for individual strategy research.
 - Update roadmap accordingly
 
@@ -1317,18 +1351,18 @@ Here is the Go/No-Go Dashboard output: [paste or screenshot reference]"
 
 ---
 
-## 8. Phase 9: Ensemble Scaling (Sprints 34–37)
+## 8. Phase 9: Ensemble Scaling (Sprints 35–38)
 
-*Extends the proven methodology across all families. Builds the Ensemble Orchestrator and Constellation. Target: ~3–4 weeks. ONLY executes if Phase 8 GO.*
+*Extends the proven methodology across all families. Builds the Ensemble Orchestrator and Synapse. Target: ~3–4 weeks. ONLY executes if Phase 8 GO.*
 
 ---
 
-### Sprint 34: Cross-Family Search (VWAP + Afternoon Momentum)
+### Sprint 35: Cross-Family Search (VWAP + Afternoon Momentum)
 
 **Type:** B (Mixed Backend + Frontend) | **Modes:** Iterative Judgment Loop
 **Duration:** ~4–5 days | **Sessions:** 5–7 (3 backend, 2–4 frontend)
 **Depends on:** Phase 8 GO decision
-**Adversarial review:** No (methodology proven in Sprint 32)
+**Adversarial review:** No (methodology proven in Sprint 33)
 **Delivers:** VWAP and Afternoon Momentum micro-strategy ensembles, cross-family correlation analysis, Research Console Cross-Family View
 
 **Choreography:**
@@ -1374,18 +1408,18 @@ Here is the Go/No-Go Dashboard output: [paste or screenshot reference]"
 
 ---
 
-### Sprint 35: Cross-Family Search (Remaining Families)
+### Sprint 36: Cross-Family Search (Remaining Families)
 
 **Type:** B (Mixed Backend + Frontend) | **Modes:** Iterative Judgment Loop
 **Duration:** ~4–5 days | **Sessions:** 5–7 (3–4 backend, 2–3 frontend)
-**Depends on:** Sprint 34 complete
+**Depends on:** Sprint 35 complete
 **Adversarial review:** No
 **Delivers:** All remaining family ensembles (Red-to-Green, Gap Fill, ABCD, etc.), full cross-family correlation map
 
 **Choreography:**
 
 1. **[Claude.ai]** Sprint Planning — `sprint-planning.md`
-   - **Phase A:** Same pattern as Sprint 34 but for remaining families. Plan one backend session per family (or batch smaller families). Frontend: full strategy universe correlation map.
+   - **Phase A:** Same pattern as Sprint 35 but for remaining families. Plan one backend session per family (or batch smaller families). Frontend: full strategy universe correlation map.
    - **Phase B–D:** Standard
    - **[You]** Save all artifacts
 
@@ -1405,11 +1439,11 @@ Here is the Go/No-Go Dashboard output: [paste or screenshot reference]"
 
 ---
 
-### Sprint 36a: Ensemble Orchestrator V2 (Backend)
+### Sprint 37a: Ensemble Orchestrator V2 (Backend)
 
 **Type:** C (Architecture-Shifting) | **Modes:** Adversarial Review
 **Duration:** ~3 days | **Sessions:** 4–6
-**Depends on:** Sprint 35 complete (needs all family ensembles)
+**Depends on:** Sprint 36 complete (needs all family ensembles)
 **Adversarial review:** **YES** — replaces the core Orchestrator, handles hundreds of micro-strategies (Roadmap Contradiction Note: supersedes original Orchestrator V2 concept)
 **Delivers:** Activation filtering, correlation-aware capital allocation, position consolidation, regime-dependent selection
 
@@ -1420,7 +1454,7 @@ Here is the Go/No-Go Dashboard output: [paste or screenshot reference]"
      - Activation filtering design: how are micro-strategy conditions evaluated? Pre-computed lookup tables?
      - Capital allocation across active micro-strategies: correlation-aware algorithm, shared capital pools for correlated strategies
      - Position consolidation: when 50 micro-strategies want to buy NVDA, how is the single position sized? How is aggregate conviction calculated?
-     - Regime-dependent ensemble selection: how does the Learning Loop (Sprint 27) feed regime classification?
+     - Regime-dependent ensemble selection: how does the Learning Loop (Sprint 28) feed regime classification?
      - **Critical invariant:** The Orchestrator must handle 200–800 micro-strategies without latency impact on execution
      - Migration plan: how does the new Orchestrator replace the old one? Feature flags? Dual-path validation?
      - Session decomposition: activation filtering → capital allocation + position consolidation → regime integration + migration → validation
@@ -1443,7 +1477,7 @@ Here is the Go/No-Go Dashboard output: [paste or screenshot reference]"
 
 3. **[Claude Code]** Sessions 1–4: Backend implementation
    → Close-out per session → Tier 2 review per session
-   → **Canary test before Session 1:** Capture current Orchestrator behavior on a reference set. After Sprint 36a, new Orchestrator must produce equivalent-or-better results.
+   → **Canary test before Session 1:** Capture current Orchestrator behavior on a reference set. After Sprint 37a, new Orchestrator must produce equivalent-or-better results.
 
 4. **[Claude Code]** Doc Sync — `doc-sync.md`
    → **Architecture doc update MANDATORY** (Orchestrator section rewritten)
@@ -1452,19 +1486,19 @@ Here is the Go/No-Go Dashboard output: [paste or screenshot reference]"
 
 ---
 
-### Sprint 36b: Constellation (Frontend)
+### Sprint 37b: Synapse (Frontend)
 
 **Type:** B (Mixed Backend + Frontend) | **Modes:** Iterative Judgment Loop, Research-First
 **Duration:** ~4 days | **Sessions:** 6–10
-**Depends on:** Sprint 36a complete (needs Ensemble Orchestrator for data), but Three.js research can happen during 36a
+**Depends on:** Sprint 37a complete (needs Ensemble Orchestrator for data), but Three.js research can happen during 37a
 **Adversarial review:** No (frontend visualization, not architectural)
-**Delivers:** Constellation page (page 10) — 3D strategy space, color/size/opacity encoding, correlation connections, navigation, grouping modes
+**Delivers:** Synapse page (page 10) — 3D strategy space, color/size/opacity encoding, correlation connections, navigation, grouping modes
 
-**Special: Mini-Discovery before implementation.** The Constellation is the most visually complex component ARGUS has ever built. Before writing code, run a research conversation.
+**Special: Mini-Discovery before implementation.** The Synapse is the most visually complex component ARGUS has ever built. Before writing code, run a research conversation.
 
 **Choreography:**
 
-1. **[Claude.ai]** Mini-Discovery Conversation — (can overlap with Sprint 36a)
+1. **[Claude.ai]** Mini-Discovery Conversation — (can overlap with Sprint 37a)
    - NOT a full discovery protocol — a focused research session on Three.js for data visualization
    - Explore: Three.js instanced mesh geometry for 500–800 nodes, spring physics for transitions, WebGL performance budgets, Zustand state management for 3D scene
    - Review examples of similar 3D data visualizations
@@ -1477,7 +1511,7 @@ Here is the Go/No-Go Dashboard output: [paste or screenshot reference]"
      - Grouping mode transitions: spring physics for smooth node rearrangement
      - Navigation: orbit controls, click-to-select, zoom-to-cluster
      - Info panel: slide-in on node click with micro-strategy details
-     - REST endpoint for ensemble state (backend, coordinate with Sprint 36a)
+     - REST endpoint for ensemble state (backend, coordinate with Sprint 37a)
      - **Performance target:** 60fps with 800 nodes, connections toggleable
      - Visual spec: detailed description of each grouping mode (by family, by time, by sector, by regime, by performance), color scheme, size encoding, opacity encoding
      - Session decomposition: backend REST endpoint → frontend scene setup + node rendering → frontend grouping modes + transitions → frontend navigation + info panel → frontend polish
@@ -1521,11 +1555,11 @@ Here is the Go/No-Go Dashboard output: [paste or screenshot reference]"
 
 ---
 
-### Sprint 37a: Ensemble WebSocket Backend
+### Sprint 38a: Ensemble WebSocket Backend
 
 **Type:** A (Backend-Dominant) | **Modes:** Standard
 **Duration:** ~2 days | **Sessions:** 2–4
-**Depends on:** Sprint 36b complete
+**Depends on:** Sprint 37b complete
 **Adversarial review:** No (WebSocket is well-understood pattern)
 **Delivers:** WebSocket stream for ensemble state changes (activations, positions, allocations, health)
 
@@ -1546,23 +1580,23 @@ Here is the Go/No-Go Dashboard output: [paste or screenshot reference]"
 
 ---
 
-### Sprint 37b: Real-Time Constellation + Page Evolutions
+### Sprint 38b: Real-Time Synapse + Page Evolutions
 
 **Type:** B (Mixed Backend + Frontend) | **Modes:** Iterative Judgment Loop
 **Duration:** ~4 days | **Sessions:** 6–10
-**Depends on:** Sprint 37a complete (needs WebSocket stream)
+**Depends on:** Sprint 38a complete (needs WebSocket stream)
 **Adversarial review:** No
-**Delivers:** Real-time firing effects, timeline scrubber, Dashboard evolution (Ensemble Heartbeat, Family Activity Bars, Mini-Constellation), Orchestrator evolution (Activation Stream, Capital Treemap), Performance evolution (Contribution Attribution, Correlation Stability), Debrief evolution (ensemble narratives)
+**Delivers:** Real-time firing effects, timeline scrubber, Dashboard evolution (Ensemble Heartbeat, Family Activity Bars, Mini-Synapse), Orchestrator evolution (Activation Stream, Capital Treemap), Performance evolution (Contribution Attribution, Correlation Stability), Debrief evolution (ensemble narratives)
 
-**This is the highest UI surface area sprint in the entire campaign — touching 5 pages + the Constellation.**
+**This is the highest UI surface area sprint in the entire campaign — touching 5 pages + the Synapse.**
 
 **Choreography:**
 
 1. **[Claude.ai]** Sprint Planning — `sprint-planning.md`
    - **Phase A — Think:**
-     - Constellation real-time effects: firing pulse animation, holding glow, rejection flash, color encoding for P&L
+     - Synapse real-time effects: firing pulse animation, holding glow, rejection flash, color encoding for P&L
      - Timeline scrubber: data model (store all events), playback controls, fast-forward compression
-     - Dashboard evolution: Ensemble Heartbeat, Family Activity Bars, Mini-Constellation (simplified 2D) — visual specs for each
+     - Dashboard evolution: Ensemble Heartbeat, Family Activity Bars, Mini-Synapse (simplified 2D) — visual specs for each
      - Orchestrator evolution: Activation Stream (real-time feed), Capital Allocation Treemap — visual specs
      - Performance evolution: Contribution Attribution (waterfall chart), Correlation Stability Monitor — visual specs
      - Debrief evolution: ensemble-scale AI narrative template
@@ -1574,11 +1608,11 @@ Here is the Go/No-Go Dashboard output: [paste or screenshot reference]"
    - **Phase D** — Verify
    - **[You]** Save all artifacts
 
-2. **[Claude Code]** Sessions 1–2: Frontend — Constellation real-time firing + timeline scrubber
+2. **[Claude Code]** Sessions 1–2: Frontend — Synapse real-time firing + timeline scrubber
    → **[You]** Screenshot/record: firing animation visible? Scrubber working? Performance acceptable?
    → Close-out per session → Tier 2 review per session
 
-3. **[Claude Code]** Session 3: Frontend — Dashboard evolution (Heartbeat, Activity Bars, Mini-Constellation)
+3. **[Claude Code]** Session 3: Frontend — Dashboard evolution (Heartbeat, Activity Bars, Mini-Synapse)
    → **[You]** Screenshot Dashboard → close-out
 
 4. **[Claude Code]** Session 4: Frontend — Orchestrator evolution (Activation Stream, Capital Treemap)
@@ -1601,11 +1635,11 @@ Here is the Go/No-Go Dashboard output: [paste or screenshot reference]"
 
 ### Phase 9 Gate
 
-**Trigger:** Sprint 37b complete
+**Trigger:** Sprint 38b complete
 **Protocol:** Strategic Check-In (`strategic-check-in.md`) + Codebase Health Audit (`codebase-health-audit.md`) + Documentation Compression
 
 **[Claude.ai]** Strategic Check-In:
-1. **Progress review:** Full ensemble operational in paper trading? Constellation working? All pages updated?
+1. **Progress review:** Full ensemble operational in paper trading? Synapse working? All pages updated?
 2. **Paper trading assessment at ensemble scale:** Are 20–60 micro-strategies activating per day as expected? Is the ensemble Sharpe tracking toward 3.0+?
 3. **Performance assessment:** Is the system fast enough? Any latency issues with 200–800 micro-strategies?
 4. **Phase 10 scope review:** Is the Learning Loop V2 scope still correct? Continuous Discovery Pipeline still needed?
@@ -1625,19 +1659,19 @@ Here is the Go/No-Go Dashboard output: [paste or screenshot reference]"
 
 ---
 
-## 9. Phase 10: Full Vision (Sprints 38–40)
+## 9. Phase 10: Full Vision (Sprints 39–41)
 
 *The self-improving system. Ensemble learns, adapts, evolves. Target: ~2.5–3.5 weeks.*
 
 ---
 
-### Sprint 38: Learning Loop V2 (Ensemble Edition)
+### Sprint 39: Learning Loop V2 (Ensemble Edition)
 
 **Type:** B (Mixed Backend + Frontend) | **Modes:** Iterative Judgment Loop
 **Duration:** ~4–5 days | **Sessions:** 4–6 (2–3 backend, 2–3 frontend)
 **Depends on:** Phase 9 Gate complete
-**Adversarial review:** No (Learning Loop V1 exists from Sprint 27; V2 is an evolution, not a new architecture)
-**Delivers:** Automated micro-strategy throttling/boosting, rolling recalibration, automatic retirement/promotion, Constellation lifecycle animations, Adaptation Timeline
+**Adversarial review:** No (Learning Loop V1 exists from Sprint 28; V2 is an evolution, not a new architecture)
+**Delivers:** Automated micro-strategy throttling/boosting, rolling recalibration, automatic retirement/promotion, Synapse lifecycle animations, Adaptation Timeline
 
 **Choreography:**
 
@@ -1647,7 +1681,7 @@ Here is the Go/No-Go Dashboard output: [paste or screenshot reference]"
      - Rolling recalibration: frequency (every N trading days), methodology (re-run statistical validation on recent data)
      - Retirement criteria: when is a micro-strategy "dead"? Gradual vs. sudden?
      - Promotion pipeline: staging queue → human approval → activation
-     - Constellation lifecycle animations: birth (fade in, grow), throttle (shrink), retirement (fade out, color shift to grey), boost (grow, brighten)
+     - Synapse lifecycle animations: birth (fade in, grow), throttle (shrink), retirement (fade out, color shift to grey), boost (grow, brighten)
      - Adaptation Timeline visual spec: timeline showing additions, retirements, throttle/boost events, net ensemble metrics over time
      - Session decomposition: backend automation engine (throttle/boost/retire/promote) → backend recalibration pipeline → frontend lifecycle animations → frontend Adaptation Timeline
    - Flag: Iterative Judgment Loop (lifecycle animations are novel visual work)
@@ -1659,7 +1693,7 @@ Here is the Go/No-Go Dashboard output: [paste or screenshot reference]"
 2. **[Claude Code]** Sessions 1–2: Backend — Automation engine + recalibration pipeline
    → Close-out per session → Tier 2 review per session
 
-3. **[Claude Code]** Session 3: Frontend — Constellation lifecycle animations
+3. **[Claude Code]** Session 3: Frontend — Synapse lifecycle animations
    → **[You]** Screenshot/record: birth animation visible? Decay visible? Retirement fade?
    → Close-out
 
@@ -1676,13 +1710,13 @@ Here is the Go/No-Go Dashboard output: [paste or screenshot reference]"
 
 ---
 
-### Sprint 39: Continuous Discovery Pipeline
+### Sprint 40: Continuous Discovery Pipeline
 
 **Type:** B (Mixed Backend + Frontend) | **Modes:** Iterative Judgment Loop
 **Duration:** ~3–4 days | **Sessions:** 4–6 (2–3 backend, 2–3 frontend)
-**Depends on:** Sprint 38 complete (promotion pipeline needed for discoveries)
+**Depends on:** Sprint 39 complete (promotion pipeline needed for discoveries)
 **Adversarial review:** No
-**Delivers:** Overnight discovery background process, Discovery Feed, Staging Queue visualization (ghost nodes on Constellation), Discovery Heatmap, Morning intelligence brief integration
+**Delivers:** Overnight discovery background process, Discovery Feed, Staging Queue visualization (ghost nodes on Synapse), Discovery Heatmap, Morning intelligence brief integration
 
 **Choreography:**
 
@@ -1692,10 +1726,10 @@ Here is the Go/No-Go Dashboard output: [paste or screenshot reference]"
      - Discovery → staging → human review → activation flow
      - Morning intelligence brief integration: "Overnight Discovery" section
      - Discovery Feed visual spec: overnight results cards with approve/reject buttons
-     - Staging Queue on Constellation: ghost nodes showing prospective positions
+     - Staging Queue on Synapse: ghost nodes showing prospective positions
      - Discovery Heatmap visual spec: explored vs. unexplored vs. yielding regions of parameter space
      - Session decomposition: backend overnight pipeline + scheduling → backend staging queue + intelligence brief integration → frontend Discovery Feed + approve/reject UI → frontend ghost nodes + Discovery Heatmap
-   - Flag: Iterative Judgment Loop (ghost nodes on Constellation, Discovery Heatmap)
+   - Flag: Iterative Judgment Loop (ghost nodes on Synapse, Discovery Heatmap)
    - **Phase B** — Design Summary → **[You]** save
    - **Phase C** — Generate sprint package
    - **Phase D** — Verify
@@ -1707,8 +1741,8 @@ Here is the Go/No-Go Dashboard output: [paste or screenshot reference]"
 3. **[Claude Code]** Session 3: Frontend — Discovery Feed + approve/reject UI
    → **[You]** Screenshot → close-out
 
-4. **[Claude Code]** Session 4: Frontend — Ghost nodes on Constellation + Discovery Heatmap
-   → **[You]** Screenshot Constellation with ghost nodes + heatmap → close-out
+4. **[Claude Code]** Session 4: Frontend — Ghost nodes on Synapse + Discovery Heatmap
+   → **[You]** Screenshot Synapse with ghost nodes + heatmap → close-out
 
 5. **[Claude Code]** Tier 2 Reviews — Sessions 3–4 (visual verification)
 
@@ -1720,11 +1754,11 @@ Here is the Go/No-Go Dashboard output: [paste or screenshot reference]"
 
 ---
 
-### Sprint 40: Performance Workbench
+### Sprint 41: Performance Workbench
 
 **Type:** B (Mixed Backend + Frontend) | **Modes:** Iterative Judgment Loop
 **Duration:** ~4–5 days | **Sessions:** 5–8 (1 backend, 4–7 frontend)
-**Depends on:** Sprint 39 complete
+**Depends on:** Sprint 40 complete
 **Adversarial review:** No
 **Delivers:** Customizable widget grid (react-grid-layout), drag/drop/resize, named layout tabs, full widget palette
 
@@ -1774,11 +1808,11 @@ Here is the Go/No-Go Dashboard output: [paste or screenshot reference]"
 
 ### Phase 10 Gate (Full Vision)
 
-**Trigger:** Sprint 40 complete
+**Trigger:** Sprint 41 complete
 **Protocol:** Strategic Check-In (`strategic-check-in.md`) + Final Documentation Reconciliation
 
 **[Claude.ai]** Strategic Check-In (Final):
-1. **Full system review:** All 10 pages operational? Constellation live? Discovery pipeline running? Performance Workbench customizable?
+1. **Full system review:** All 10 pages operational? Synapse live? Discovery pipeline running? Performance Workbench customizable?
 2. **System performance:** Ensemble Sharpe on paper trading? Drawdown metrics? Comparison to Phase 6 artisanal baseline?
 3. **Operational assessment:** Is the nightly workflow (review brief → approve discoveries → monitor session → review debrief) sustainable? Is it achieving the "few hours of active work per night" goal from the Day Trading Manifesto?
 4. **Live trading with ensemble:** If not already live (from Phase 6 gate), is this the right time?
@@ -1803,11 +1837,11 @@ Summary of all gates and checkpoints in the campaign, with exact protocols and t
 | Gate | After Sprint | Protocol | Cadence Rule | Special Focus |
 |------|-------------|----------|--------------|---------------|
 | Phase 5 Gate | 24 | `strategic-check-in.md` + Doc Compression | Phase boundary | Paper trading health, Phase 6 readiness |
-| Phase 6 Gate | 27 | `strategic-check-in.md` + `codebase-health-audit.md` + Doc Compression | Phase boundary + 4–6 sprint cadence | **CPA consultation, live trading decision, data purchase decision** |
-| Phase 7 Gate | 30 | `strategic-check-in.md` + Doc Compression | Phase boundary | **Data sufficiency resolution (MUST happen before Phase 8)** |
-| Phase 8 Gate | 33 | **Custom Gate Review** (see Section 7) | Phase boundary | **GO/NO-GO — pivotal campaign decision** |
-| Phase 9 Gate | 37b | `strategic-check-in.md` + `codebase-health-audit.md` + Doc Compression | Phase boundary + 4–6 sprint cadence | Ensemble paper trading health, scale performance |
-| Phase 10 Gate | 40 | `strategic-check-in.md` + Final Doc Reconciliation | Campaign completion | Full system review, horizon planning |
+| Phase 6 Gate | 28 | `strategic-check-in.md` + `codebase-health-audit.md` + Doc Compression | Phase boundary + 4–6 sprint cadence | **CPA consultation, live trading decision, data purchase decision** |
+| Phase 7 Gate | 31 | `strategic-check-in.md` + Doc Compression | Phase boundary | **Data sufficiency resolution (MUST happen before Phase 8)** |
+| Phase 8 Gate | 34 | **Custom Gate Review** (see Section 7) | Phase boundary | **GO/NO-GO — pivotal campaign decision** |
+| Phase 9 Gate | 38b | `strategic-check-in.md` + `codebase-health-audit.md` + Doc Compression | Phase boundary + 4–6 sprint cadence | Ensemble paper trading health, scale performance |
+| Phase 10 Gate | 41 | `strategic-check-in.md` + Final Doc Reconciliation | Campaign completion | Full system review, horizon planning |
 
 ### Mid-Phase Check-Ins
 
@@ -1847,7 +1881,7 @@ This is NOT a full strategic check-in — it's a 15-minute calibration in a brie
 | Phase 6 | Major compression. CPA and live-trading DECs are high-priority entries. |
 | Phase 7 | Architecture doc gets new major sections (BacktestEngine, Templates, Research Console). |
 | Phase 8 | GO/NO-GO DEC is the most important entry in the entire project. Document thoroughly. |
-| Phase 9 | Architecture doc rewrite (Ensemble Orchestrator supersedes original). Constellation documentation. |
+| Phase 9 | Architecture doc rewrite (Ensemble Orchestrator supersedes original). Synapse documentation. |
 | Phase 10 | Final reconciliation. All docs reflect complete system state. |
 
 ---
@@ -1858,11 +1892,11 @@ Proactive rule creation prevents repeating mistakes. Create rules AFTER the spri
 
 | After Sprint | Rule File | Content |
 |-------------|-----------|---------|
-| 28 | `backtest-engine.md` | BacktestEngine constraints, result equivalence requirements, performance benchmarks |
-| 30 | `strategy-templates.md` | Template system constraints, configuration schema rules, instance validation requirements |
-| 31 | `statistical-validation.md` | FDR method, minimum trade counts, data split methodology, smoothness prior parameters |
-| 36a | `ensemble-orchestrator.md` | Orchestrator V2 constraints, activation filtering rules, position consolidation logic |
-| 36b | `constellation.md` | Three.js performance budgets, node rendering constraints, grouping mode requirements |
+| 29 | `backtest-engine.md` | BacktestEngine constraints, result equivalence requirements, performance benchmarks |
+| 31 | `strategy-templates.md` | Template system constraints, configuration schema rules, instance validation requirements |
+| 32 | `statistical-validation.md` | FDR method, minimum trade counts, data split methodology, smoothness prior parameters |
+| 37a | `ensemble-orchestrator.md` | Orchestrator V2 constraints, activation filtering rules, position consolidation logic |
+| 37b | `synapse.md` | Three.js performance budgets, node rendering constraints, grouping mode requirements |
 
 Additionally, review existing rules at each phase gate:
 - `backtesting.md` — still accurate after BacktestEngine introduction?
