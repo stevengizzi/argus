@@ -3,7 +3,7 @@
 > Comprehensive inventory of UI/UX enhancements for the ARGUS Command Center.
 > Originally extracted from design research (Feb 23, 2026). Major revision Feb 26, 2026: expanded from 4 to 7 pages (DEC-169), AI Copilot added (DEC-170), Sprint 21 split into 21a–21d (DEC-171), intelligence layer UI integration (DEC-168).
 > Organized by sprint based on dependencies, effort, and impact.
-> Referenced by: `project-knowledge.md`, `10_PHASE3_SPRINT_PLAN.md`, `docs/research/ARGUS_Expanded_Roadmap.md`
+> Referenced by: `project-knowledge.md`, `docs/roadmap.md`
 
 ---
 

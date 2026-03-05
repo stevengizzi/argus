@@ -156,7 +156,7 @@ python scripts/test_time_stop_eod.py     # Time stop + EOD flatten (IBKR or mock
 - **Design principles (DEC-109):** Information over decoration. Ambient awareness. Progressive disclosure. Motion with purpose. Mobile as primary trading surface. Research lab aesthetics.
 - **Animation library (DEC-110):** Framer Motion for page transitions + stagger. CSS transitions for hover/micro-interactions. Lightweight Charts native for chart animations. Budget: <500ms, 60fps, never blocks interaction.
 - **Chart library stack (DEC-104, DEC-108):** Lightweight Charts (time-series) + Recharts (standard charts) + D3 (custom viz, sparingly) + Three.js/Plotly 3D (Sprint 22 optimization landscape).
-- **UX Feature Backlog:** `docs/ui/UX_FEATURE_BACKLOG.md` — canonical inventory of all planned UI/UX enhancements. Reference when planning sprint UX scope. (DEC-106)
+- **UX Feature Backlog:** `docs/ui/ux-feature-backlog.md` — canonical inventory of all planned UI/UX enhancements. Reference when planning sprint UX scope. (DEC-106)
 - **Responsive breakpoints:** 393px (iPhone SE/mini), 834px (iPad portrait), 1194px (iPad landscape), 1512px (MacBook Pro).
 - **Mobile nav:** Bottom tab bar. Desktop/tablet: icon sidebar.
 - **Frontend testing (DEC-130):** Vitest for React component tests. Config: `vitest.config.ts`. Pattern: `ComponentName.test.tsx` alongside component. Setup: `src/test/setup.ts`.
@@ -218,16 +218,17 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 
 | Document | What It Covers |
 |----------|---------------|
-| `docs/decision-log.md` | All 261 DEC entries with full rationale |
+| `docs/decision-log.md` | All 262 DEC entries with full rationale |
 | `docs/dec-index.md` | Quick-reference index with status markers |
 | `docs/sprint-history.md` | Complete sprint history (1–21.7) |
 | `docs/process-evolution.md` | Workflow evolution narrative |
-| `docs/LIVE_OPERATIONS.md` | Live trading procedures (418 lines) |
+| `docs/live-operations.md` | Live trading procedures |
 | `docs/strategies/STRATEGY_*.md` | Per-strategy spec sheets |
 | `docs/risk-register.md` | Active risks and assumptions |
-| `docs/01_PROJECT_BIBLE.md` | System vision and invariants |
-| `docs/03_ARCHITECTURE.md` | Technical blueprint |
-| `docs/10_PHASE3_SPRINT_PLAN.md` | Active sprint plan (both tracks) |
-| `docs/ui/UX_FEATURE_BACKLOG.md` | Planned UI/UX enhancements |
+| `docs/project-bible.md` | System vision and invariants |
+| `docs/architecture.md` | Technical blueprint |
+| `docs/roadmap.md` | Strategic vision + sprint queue (DEC-262) |
+| `docs/sprint-campaign.md` | Operational sprint choreography |
+| `docs/ui/ux-feature-backlog.md` | Planned UI/UX enhancements |
 | `.claude/rules/` | Backtesting, trading-strategies, universal rules |
 | `.claude/skills/doc-sync.md` | Documentation sync protocol |

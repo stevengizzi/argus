@@ -22,7 +22,7 @@ If the answer to any of these is yes, either update the doc directly or output a
 
 ### When creating a new module or file
 - If it adds to or changes the project structure → update CLAUDE.md project structure section
-- If it introduces a new interface → update docs/03_ARCHITECTURE.md
+- If it introduces a new interface → update docs/architecture.md
 - If it requires new commands to run → update CLAUDE.md commands section
 
 ### When adding a dependency
@@ -31,7 +31,7 @@ If the answer to any of these is yes, either update the doc directly or output a
 
 ### When a test reveals unexpected behavior
 - If it challenges an assumption → update docs/risk-register.md
-- If it changes how a component works → update docs/03_ARCHITECTURE.md
+- If it changes how a component works → update docs/architecture.md
 
 ## How to Update
 

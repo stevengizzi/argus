@@ -1,7 +1,7 @@
 # ARGUS — Decision Index
 
-> 261 decisions (DEC-001 through DEC-261)
-> Generated: March 5, 2026 | Source: `docs/decision-log.md`
+> 262 decisions (DEC-001 through DEC-262)
+> Generated: March 6, 2026 | Source: `docs/decision-log.md`
 > Legend: ● Active | ○ Superseded | △ Amended | ✗ Duplicate entry
 
 
@@ -281,3 +281,4 @@
 - ● **DEC-259**: Sprint 21.7 — FMP Scanner Integration
 - ● **DEC-260**: Data Provider Evaluation — IQFeed, dxFeed, Exegy, Finnhub, QuantConnect rejected
 - ● **DEC-261**: ORB Family Same-Symbol Mutual Exclusion — ClassVar prevents dual-fire
+- ● **DEC-262**: Roadmap Consolidation — Unified Strategic Direction

@@ -1197,7 +1197,7 @@ Global keyboard shortcuts: `1`–`7` page navigation, `w` watchlist toggle, `c` 
 
 ### Planned Enhancements
 
-See `docs/ui/UX_FEATURE_BACKLOG.md` for the complete prioritized inventory (35 features, Sprints 16–23+). Key upcoming:
+See `docs/ui/ux-feature-backlog.md` for the complete prioritized inventory (35 features, Sprints 16–23+). Key upcoming:
 - Sprint 16: ✅ Motion/animation, sparklines, skeleton loading, controls, trade detail panel, PWA, Tauri
 - Sprint 17: ✅ Strategy allocation donut, risk utilization gauges, orchestrator interaction panel
 - Sprint 18: ✅ SessionSummaryCard (after-hours recap), PositionTimeline (Gantt), three-way position filter, Zustand UI state persistence

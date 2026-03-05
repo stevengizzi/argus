@@ -46,15 +46,15 @@ ARGUS is a fully automated, AI-enhanced multi-strategy day trading system for US
 
 ### Build Track Queue
 
-21.6 (Backtest Re-Validation, parallel w/ 22) → 22 (AI Layer MVP) → 23 (NLP Catalyst + Pre-Market Engine) → 24 (Setup Quality Engine + Dynamic Sizer) → 25 (Red-to-Green + Pattern Library) → 26 (Pattern Expansion I) → 27 (Short Selling + Parabolic Short) → 28–32+ (Pattern Expansion II/III, Learning Loop, Orchestrator V2). Order Flow Model deferred to post-revenue (DEC-238).
+21.6 (Backtest Re-Validation, parallel w/ 22) → 22 (AI Layer MVP) → 23 (NLP Catalyst + Pre-Market Engine) → 24 (Setup Quality Engine + Dynamic Sizer) → 25 (Red-to-Green + Pattern Library Foundation) → 26 (Pattern Expansion I) → 27 (Short Selling + Parabolic Short + Pattern Expansion II) → 28 (Learning Loop V1) → 29–31 (BacktestEngine, Sweep Infrastructure, Strategy Templates) → 32–34 (Statistical Validation, ORB Systematic Search ★, Ensemble Analysis) → 35–38 (Cross-Family Search, Ensemble Orchestrator V2, Synapse) → 39–41 (Learning Loop V2, Continuous Discovery, Performance Workbench). Order Flow Model deferred to post-revenue (DEC-238). Full roadmap: `docs/roadmap.md` (DEC-262).
 
 ### Validation Track
 
 Paper trading active with Databento EQUS.MINI + IBKR paper (Account U24619949, DEC-236). Gates: IBKR paper 20+ days (Gate 2) → AI-enhanced paper 30+ days (Gate 3) → Full system paper 50+ cumulative days, Sharpe > 2.0 (Gate 4) → CPA consultation → live minimum size (Gate 5).
 
-### Expanded Vision (DEC-163)
+### Expanded Vision (DEC-163, DEC-262)
 
-15+ pattern AI-enhanced platform. Planned: Setup Quality Engine (0–100 scoring, DEC-239), NLP Catalyst Pipeline (SEC EDGAR + Finnhub + FMP + Claude API, DEC-164), Dynamic Position Sizer, Learning Loop, Pre-Market Intelligence Engine. Order Flow Model deferred to post-revenue (DEC-238, requires Databento Plus $1,399/mo). See `docs/research/ARGUS_Expanded_Roadmap.md`.
+15+ artisanal patterns → ensemble systematic search → self-improving trading intelligence platform. Near-term (Phase 5–6): Setup Quality Engine (0–100 scoring, DEC-239), NLP Catalyst Pipeline (SEC EDGAR + FMP + Claude API, DEC-164), Dynamic Position Sizer, Learning Loop V1, Short Selling Infrastructure, Pre-Market Intelligence Engine. Mid-term (Phase 7–8): BacktestEngine, parameterized strategy templates, systematic parameter search, controlled experiment (go/no-go gate). Long-term (Phase 9–10): Ensemble Orchestrator V2, Synapse visualization, Continuous Discovery Pipeline, Performance Workbench. Order Flow Model deferred to post-revenue (DEC-238, requires Databento Plus $1,399/mo). Full roadmap: `docs/roadmap.md`.
 
 ---
 
@@ -168,6 +168,8 @@ Per-trade risk: 0.5–1% of strategy allocation. Daily loss limit: 3–5%. Weekl
 
 **Frontend:** DEC-099 (in-process API), DEC-102 (JWT auth), DEC-104/215 (chart libraries), DEC-109 (design north star), DEC-149 (VectorBT precompute+vectorize), DEC-169 (7-page architecture), DEC-170 (AI Copilot), DEC-199 (navigation + shortcuts).
 
+**Documentation:** DEC-262 (roadmap consolidation — single canonical roadmap.md).
+
 **Superseded (do not use):** DEC-031 (IBKR deferral → DEC-083), DEC-089 (XNAS.ITCH → DEC-248), DEC-097 (activation timing → DEC-143/161), DEC-165 (L2 included → DEC-237), DEC-234 (XNAS+XNYS phased → DEC-248).
 
 ---
@@ -186,19 +188,19 @@ Per-trade risk: 0.5–1% of strategy allocation. Daily loss limit: 3–5%. Weekl
 
 | Document | Purpose |
 |----------|---------|
-| `01_PROJECT_BIBLE.md` | Source of truth — what and why |
-| `project-knowledge.md` | This file (Claude context) |
-| `03_ARCHITECTURE.md` | Technical blueprint — how |
+| `docs/project-bible.md` | Source of truth — what and why |
+| `docs/project-knowledge.md` | This file (Claude context) |
+| `docs/architecture.md` | Technical blueprint — how |
+| `docs/roadmap.md` | Strategic vision + sprint queue (DEC-262) |
+| `docs/sprint-campaign.md` | Operational sprint choreography |
 | `docs/decision-log.md` | All DEC entries with full rationale |
 | `docs/dec-index.md` | Quick-reference DEC index with status |
 | `docs/sprint-history.md` | Complete sprint history |
 | `docs/process-evolution.md` | Workflow evolution narrative |
-| `risk-register.md` | Assumptions and risks |
-| `10_PHASE3_SPRINT_PLAN.md` | Active sprint plan + queue |
+| `docs/risk-register.md` | Assumptions and risks |
+| `docs/live-operations.md` | Live trading procedures |
 | `CLAUDE.md` | Claude Code session context |
-| `docs/LIVE_OPERATIONS.md` | Live trading procedures (418 lines) |
-| `docs/research/ARGUS_Expanded_Roadmap.md` | AI-enhanced platform roadmap |
-| `docs/ui/UX_FEATURE_BACKLOG.md` | 35 planned UI features |
+| `docs/ui/ux-feature-backlog.md` | Planned UI features |
 | `docs/strategies/STRATEGY_*.md` | Per-strategy spec sheets |
 
 ---
