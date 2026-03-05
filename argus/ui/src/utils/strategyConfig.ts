@@ -27,37 +27,37 @@ export interface StrategyDisplayConfig {
  * Strategy display configuration keyed by strategy_id.
  */
 export const STRATEGY_DISPLAY: Record<string, StrategyDisplayConfig> = {
-  orb_breakout: {
+  strat_orb_breakout: {
     name: 'ORB Breakout',
     shortName: 'ORB',
     letter: 'O',
     color: '#60a5fa',
     tailwindColor: 'blue-400',
-    badgeId: 'orb_breakout',
+    badgeId: 'strat_orb_breakout',
   },
-  orb_scalp: {
+  strat_orb_scalp: {
     name: 'ORB Scalp',
     shortName: 'Scalp',
     letter: 'S',
     color: '#c084fc',
     tailwindColor: 'purple-400',
-    badgeId: 'orb_scalp',
+    badgeId: 'strat_orb_scalp',
   },
-  vwap_reclaim: {
+  strat_vwap_reclaim: {
     name: 'VWAP Reclaim',
     shortName: 'VWAP',
     letter: 'V',
     color: '#2dd4bf',
     tailwindColor: 'teal-400',
-    badgeId: 'vwap_reclaim',
+    badgeId: 'strat_vwap_reclaim',
   },
-  afternoon_momentum: {
+  strat_afternoon_momentum: {
     name: 'Afternoon Momentum',
     shortName: 'PM',
     letter: 'A',
     color: '#fbbf24',
     tailwindColor: 'amber-400',
-    badgeId: 'afternoon_momentum',
+    badgeId: 'strat_afternoon_momentum',
   },
 };
 
@@ -66,10 +66,10 @@ export const STRATEGY_DISPLAY: Record<string, StrategyDisplayConfig> = {
  * These must be full static strings for Tailwind purge to work.
  */
 export const STRATEGY_BORDER_CLASSES: Record<string, string> = {
-  orb_breakout: 'border-l-blue-400',
-  orb_scalp: 'border-l-purple-400',
-  vwap_reclaim: 'border-l-teal-400',
-  afternoon_momentum: 'border-l-amber-400',
+  strat_orb_breakout: 'border-l-blue-400',
+  strat_orb_scalp: 'border-l-purple-400',
+  strat_vwap_reclaim: 'border-l-teal-400',
+  strat_afternoon_momentum: 'border-l-amber-400',
 };
 
 /**
@@ -77,22 +77,32 @@ export const STRATEGY_BORDER_CLASSES: Record<string, string> = {
  * These must be full static strings for Tailwind purge to work.
  */
 export const STRATEGY_BAR_CLASSES: Record<string, string> = {
-  orb_breakout: 'bg-blue-400',
-  orb_scalp: 'bg-purple-400',
-  vwap_reclaim: 'bg-teal-400',
-  afternoon_momentum: 'bg-amber-400',
+  strat_orb_breakout: 'bg-blue-400',
+  strat_orb_scalp: 'bg-purple-400',
+  strat_vwap_reclaim: 'bg-teal-400',
+  strat_afternoon_momentum: 'bg-amber-400',
 };
 
 /**
  * Get strategy display config with fallback for unknown strategies.
+ * Handles both prefixed ('strat_orb_breakout') and non-prefixed ('orb_breakout') IDs.
  */
 export function getStrategyDisplay(strategyId: string): StrategyDisplayConfig {
-  const config = STRATEGY_DISPLAY[strategyId];
-  if (config) {
-    return config;
+  // Normalize: lowercase, replace hyphens with underscores
+  const normalizedId = strategyId.toLowerCase().replace(/-/g, '_');
+
+  // Direct lookup first
+  if (STRATEGY_DISPLAY[normalizedId]) {
+    return STRATEGY_DISPLAY[normalizedId];
   }
 
-  // Fallback for unknown strategies: title-case the ID
+  // Try with strat_ prefix if not already prefixed
+  const prefixedId = normalizedId.startsWith('strat_') ? normalizedId : `strat_${normalizedId}`;
+  if (STRATEGY_DISPLAY[prefixedId]) {
+    return STRATEGY_DISPLAY[prefixedId];
+  }
+
+  // Grey fallback for unknown strategies: title-case the ID
   return {
     name: strategyId.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
     shortName: strategyId.slice(0, 4).toUpperCase(),
@@ -104,22 +114,33 @@ export function getStrategyDisplay(strategyId: string): StrategyDisplayConfig {
 }
 
 /**
+ * Normalize strategy ID to handle both prefixed and non-prefixed formats.
+ */
+function normalizeStrategyId(strategyId: string): string {
+  const normalized = strategyId.toLowerCase().replace(/-/g, '_');
+  return normalized.startsWith('strat_') ? normalized : `strat_${normalized}`;
+}
+
+/**
  * Get border-left class for a strategy with fallback.
  */
 export function getStrategyBorderClass(strategyId: string): string {
-  return STRATEGY_BORDER_CLASSES[strategyId] ?? 'border-l-gray-400';
+  const normalized = normalizeStrategyId(strategyId);
+  return STRATEGY_BORDER_CLASSES[normalized] ?? STRATEGY_BORDER_CLASSES[strategyId] ?? 'border-l-gray-400';
 }
 
 /**
  * Get background class for a strategy with fallback.
  */
 export function getStrategyBarClass(strategyId: string): string {
-  return STRATEGY_BAR_CLASSES[strategyId] ?? 'bg-gray-400';
+  const normalized = normalizeStrategyId(strategyId);
+  return STRATEGY_BAR_CLASSES[normalized] ?? STRATEGY_BAR_CLASSES[strategyId] ?? 'bg-gray-400';
 }
 
 /**
  * Get strategy hex color with fallback.
  */
 export function getStrategyColor(strategyId: string): string {
-  return STRATEGY_DISPLAY[strategyId]?.color ?? '#6b7280';
+  const normalized = normalizeStrategyId(strategyId);
+  return STRATEGY_DISPLAY[normalized]?.color ?? STRATEGY_DISPLAY[strategyId]?.color ?? '#6b7280';
 }

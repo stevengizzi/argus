@@ -18,6 +18,7 @@ import { Badge, StrategyBadge } from '../../components/Badge';
 import { SegmentedTab } from '../../components/SegmentedTab';
 import { PositionTimeline } from '../../components/PositionTimeline';
 import { TradeDetailPanel } from '../trades/TradeDetailPanel';
+import { PositionDetailPanel } from './PositionDetailPanel';
 import { usePositions } from '../../hooks/usePositions';
 import { useTrades } from '../../hooks/useTrades';
 import { useLiveStore } from '../../stores/live';
@@ -63,8 +64,14 @@ function getExitReasonVariant(reason: string | null): 'success' | 'danger' | 'wa
   return exitReasonVariants[reason] ?? 'neutral';
 }
 
+type SortField = 'symbol' | 'pnl' | 'r' | 'time';
+type SortDir = 'asc' | 'desc';
+
 export function OpenPositions() {
   const [selectedTrade, setSelectedTrade] = useState<Trade | null>(null);
+  const [selectedPosition, setSelectedPosition] = useState<EnrichedPosition | null>(null);
+  const [sortField, setSortField] = useState<SortField>('time');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
   const { data: positionsData, isLoading: positionsLoading, error: positionsError } = usePositions();
 
   // Filter trades to today (ET) to show only "Closed Today"
@@ -136,17 +143,86 @@ export function OpenPositions() {
     },
   ], [enrichedPositions.length, trades.length]);
 
+  // Toggle sort direction or change field
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      setSortDir('desc');
+    }
+  };
+
+  // Sort indicator component
+  const SortIndicator = ({ field }: { field: SortField }) => {
+    if (sortField !== field) return null;
+    return <span className="ml-1">{sortDir === 'asc' ? '▲' : '▼'}</span>;
+  };
+
+  // Sorted positions
+  const sortedPositions = useMemo(() => {
+    const sorted = [...enrichedPositions];
+    const multiplier = sortDir === 'asc' ? 1 : -1;
+
+    sorted.sort((a, b) => {
+      switch (sortField) {
+        case 'symbol':
+          return multiplier * a.symbol.localeCompare(b.symbol);
+        case 'pnl':
+          return multiplier * (a.livePnl - b.livePnl);
+        case 'r':
+          return multiplier * (a.liveR - b.liveR);
+        case 'time':
+          return multiplier * (a.hold_duration_seconds - b.hold_duration_seconds);
+        default:
+          return 0;
+      }
+    });
+
+    return sorted;
+  }, [enrichedPositions, sortField, sortDir]);
+
+  // Sorted trades
+  const sortedTrades = useMemo(() => {
+    const sorted = [...trades];
+    const multiplier = sortDir === 'asc' ? 1 : -1;
+
+    sorted.sort((a, b) => {
+      switch (sortField) {
+        case 'symbol':
+          return multiplier * a.symbol.localeCompare(b.symbol);
+        case 'pnl':
+          return multiplier * ((a.pnl_dollars ?? 0) - (b.pnl_dollars ?? 0));
+        case 'r':
+          return multiplier * ((a.pnl_r_multiple ?? 0) - (b.pnl_r_multiple ?? 0));
+        case 'time':
+          // For closed trades, sort by exit_time
+          const timeA = a.exit_time ? new Date(a.exit_time).getTime() : 0;
+          const timeB = b.exit_time ? new Date(b.exit_time).getTime() : 0;
+          return multiplier * (timeA - timeB);
+        default:
+          return 0;
+      }
+    });
+
+    return sorted;
+  }, [trades, sortField, sortDir]);
+
   // Handle timeline position/trade click - opens detail panel
   const handleTimelineClick = (item: Position | Trade) => {
-    // Convert Position to Trade format for the panel
-    // The panel expects a Trade, so we create a minimal trade-like object
     if ('position_id' in item) {
-      // It's a Position - we can't open the detail panel for open positions yet
-      // TODO: Create a PositionDetailPanel for open positions
+      // It's a Position - find the enriched version and open position detail panel
+      const enriched = enrichedPositions.find(p => p.position_id === item.position_id);
+      if (enriched) setSelectedPosition(enriched);
       return;
     }
     // It's a Trade
     setSelectedTrade(item);
+  };
+
+  // Handle open position row click - opens position detail panel
+  const handlePositionRowClick = (position: EnrichedPosition) => {
+    setSelectedPosition(position);
   };
 
   const isLoading = positionFilter === 'closed' ? tradesLoading : positionsLoading;
@@ -196,32 +272,56 @@ export function OpenPositions() {
     return (
       <>
         {/* Desktop/Tablet combined table */}
-        <div className="hidden md:block overflow-x-auto">
+        <div className="hidden md:block max-h-[420px] overflow-y-auto overflow-x-auto">
           <table className="w-full text-sm">
-            <thead>
+            <thead className="sticky top-0 z-10 bg-argus-surface">
               <tr className="bg-argus-surface-2 text-argus-text-dim text-xs uppercase tracking-wider">
-                <th className="px-4 py-2 text-left font-medium">Symbol</th>
+                <th
+                  className="px-4 py-2 text-left font-medium cursor-pointer hover:text-argus-text select-none"
+                  onClick={() => handleSort('symbol')}
+                >
+                  Symbol<SortIndicator field="symbol" />
+                </th>
                 <th className="px-4 py-2 text-left font-medium">Strategy</th>
-                <th className="px-4 py-2 text-right font-medium">P&L</th>
-                <th className="px-4 py-2 text-right font-medium">R</th>
+                <th
+                  className="px-4 py-2 text-right font-medium cursor-pointer hover:text-argus-text select-none"
+                  onClick={() => handleSort('pnl')}
+                >
+                  P&L<SortIndicator field="pnl" />
+                </th>
+                <th
+                  className="px-4 py-2 text-right font-medium cursor-pointer hover:text-argus-text select-none"
+                  onClick={() => handleSort('r')}
+                >
+                  R<SortIndicator field="r" />
+                </th>
                 <th className="px-4 py-2 text-center font-medium">Status</th>
-                <th className="px-4 py-2 text-right font-medium">Time</th>
+                <th
+                  className="px-4 py-2 text-right font-medium cursor-pointer hover:text-argus-text select-none"
+                  onClick={() => handleSort('time')}
+                >
+                  Time<SortIndicator field="time" />
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-argus-border">
               {/* Open positions section */}
-              {enrichedPositions.length > 0 && (
+              {sortedPositions.length > 0 && (
                 <>
                   <tr className="bg-argus-surface-2/50">
                     <td colSpan={6} className="px-4 py-1.5 text-xs font-medium text-argus-accent">
                       Open Positions
                     </td>
                   </tr>
-                  {enrichedPositions.map((pos) => (
-                    <tr key={pos.position_id} className="transition-colors duration-150 hover:bg-argus-bg/50">
+                  {sortedPositions.map((pos) => (
+                    <tr
+                      key={pos.position_id}
+                      className="transition-colors duration-150 hover:bg-argus-bg/50 cursor-pointer"
+                      onClick={() => handlePositionRowClick(pos)}
+                    >
                       <td className="px-4 py-3 font-medium text-argus-text">
                         <button
-                          onClick={() => openSymbolDetail(pos.symbol)}
+                          onClick={(e) => { e.stopPropagation(); openSymbolDetail(pos.symbol); }}
                           className="hover:text-argus-accent hover:underline transition-colors cursor-pointer"
                         >
                           {pos.symbol}
@@ -255,7 +355,7 @@ export function OpenPositions() {
                       Closed Today
                     </td>
                   </tr>
-                  {trades.map((trade) => (
+                  {sortedTrades.map((trade) => (
                     <tr key={trade.id} className="transition-colors duration-150 hover:bg-argus-bg/50 opacity-75">
                       <td className="px-4 py-3 font-medium text-argus-text">
                         <button
@@ -298,12 +398,16 @@ export function OpenPositions() {
               <div className="px-4 py-2 bg-argus-surface-2/50">
                 <span className="text-xs font-medium text-argus-accent">Open Positions</span>
               </div>
-              {enrichedPositions.map((pos) => (
-                <div key={pos.position_id} className="p-4 transition-colors duration-150 hover:bg-argus-bg/50">
+              {sortedPositions.map((pos) => (
+                <div
+                  key={pos.position_id}
+                  className="p-4 transition-colors duration-150 hover:bg-argus-bg/50 cursor-pointer"
+                  onClick={() => handlePositionRowClick(pos)}
+                >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <button
-                        onClick={() => openSymbolDetail(pos.symbol)}
+                        onClick={(e) => { e.stopPropagation(); openSymbolDetail(pos.symbol); }}
                         className="font-medium text-argus-text hover:text-argus-accent hover:underline transition-colors cursor-pointer"
                       >
                         {pos.symbol}
@@ -327,7 +431,7 @@ export function OpenPositions() {
               <div className="px-4 py-2 bg-argus-surface-2/50">
                 <span className="text-xs font-medium text-argus-text-dim">Closed Today</span>
               </div>
-              {trades.map((trade) => (
+              {sortedTrades.map((trade) => (
                 <div key={trade.id} className="p-4 transition-colors duration-150 hover:bg-argus-bg/50 opacity-75">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -409,28 +513,52 @@ export function OpenPositions() {
     return (
       <>
         {/* Desktop table (lg and up) */}
-        <div className="hidden lg:block overflow-x-auto">
+        <div className="hidden lg:block max-h-[420px] overflow-y-auto overflow-x-auto">
           <table className="w-full text-sm">
-            <thead>
+            <thead className="sticky top-0 z-10 bg-argus-surface">
               <tr className="bg-argus-surface-2 text-argus-text-dim text-xs uppercase tracking-wider">
-                <th className="px-4 py-2 text-left font-medium">Symbol</th>
+                <th
+                  className="px-4 py-2 text-left font-medium cursor-pointer hover:text-argus-text select-none"
+                  onClick={() => handleSort('symbol')}
+                >
+                  Symbol<SortIndicator field="symbol" />
+                </th>
                 <th className="px-4 py-2 text-left font-medium">Strategy</th>
                 <th className="px-4 py-2 text-left font-medium">Side</th>
                 <th className="px-4 py-2 text-right font-medium">Entry</th>
                 <th className="px-4 py-2 text-right font-medium">Current</th>
-                <th className="px-4 py-2 text-right font-medium">P&L</th>
-                <th className="px-4 py-2 text-right font-medium">R</th>
-                <th className="px-4 py-2 text-right font-medium">Time</th>
+                <th
+                  className="px-4 py-2 text-right font-medium cursor-pointer hover:text-argus-text select-none"
+                  onClick={() => handleSort('pnl')}
+                >
+                  P&L<SortIndicator field="pnl" />
+                </th>
+                <th
+                  className="px-4 py-2 text-right font-medium cursor-pointer hover:text-argus-text select-none"
+                  onClick={() => handleSort('r')}
+                >
+                  R<SortIndicator field="r" />
+                </th>
+                <th
+                  className="px-4 py-2 text-right font-medium cursor-pointer hover:text-argus-text select-none"
+                  onClick={() => handleSort('time')}
+                >
+                  Time<SortIndicator field="time" />
+                </th>
                 <th className="px-4 py-2 text-right font-medium">Stop</th>
                 <th className="px-4 py-2 text-right font-medium">T1</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-argus-border">
-              {enrichedPositions.map((pos) => (
-                <tr key={pos.position_id} className="transition-colors duration-150 hover:bg-argus-bg/50">
+              {sortedPositions.map((pos) => (
+                <tr
+                  key={pos.position_id}
+                  className="transition-colors duration-150 hover:bg-argus-bg/50 cursor-pointer"
+                  onClick={() => handlePositionRowClick(pos)}
+                >
                   <td className="px-4 py-3 font-medium text-argus-text">
                     <button
-                      onClick={() => openSymbolDetail(pos.symbol)}
+                      onClick={(e) => { e.stopPropagation(); openSymbolDetail(pos.symbol); }}
                       className="hover:text-argus-accent hover:underline transition-colors cursor-pointer"
                     >
                       {pos.symbol}
@@ -468,9 +596,9 @@ export function OpenPositions() {
         </div>
 
         {/* Tablet table (md to lg) */}
-        <div className="hidden md:block lg:hidden overflow-x-auto">
+        <div className="hidden md:block lg:hidden max-h-[420px] overflow-y-auto overflow-x-auto">
           <table className="w-full text-sm">
-            <thead>
+            <thead className="sticky top-0 z-10 bg-argus-surface">
               <tr className="bg-argus-surface-2 text-argus-text-dim text-xs uppercase tracking-wider">
                 <th className="px-4 py-2 text-left font-medium">Symbol</th>
                 <th className="px-4 py-2 text-right font-medium">Entry</th>
@@ -481,11 +609,15 @@ export function OpenPositions() {
               </tr>
             </thead>
             <tbody className="divide-y divide-argus-border">
-              {enrichedPositions.map((pos) => (
-                <tr key={pos.position_id} className="transition-colors duration-150 hover:bg-argus-bg/50">
+              {sortedPositions.map((pos) => (
+                <tr
+                  key={pos.position_id}
+                  className="transition-colors duration-150 hover:bg-argus-bg/50 cursor-pointer"
+                  onClick={() => handlePositionRowClick(pos)}
+                >
                   <td className="px-4 py-3 font-medium text-argus-text">
                     <button
-                      onClick={() => openSymbolDetail(pos.symbol)}
+                      onClick={(e) => { e.stopPropagation(); openSymbolDetail(pos.symbol); }}
                       className="hover:text-argus-accent hover:underline transition-colors cursor-pointer"
                     >
                       {pos.symbol}
@@ -510,12 +642,16 @@ export function OpenPositions() {
 
         {/* Phone layout (compact cards) */}
         <div className="md:hidden divide-y divide-argus-border">
-          {enrichedPositions.map((pos) => (
-            <div key={pos.position_id} className="p-4 transition-colors duration-150 hover:bg-argus-bg/50">
+          {sortedPositions.map((pos) => (
+            <div
+              key={pos.position_id}
+              className="p-4 transition-colors duration-150 hover:bg-argus-bg/50 cursor-pointer"
+              onClick={() => handlePositionRowClick(pos)}
+            >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => openSymbolDetail(pos.symbol)}
+                    onClick={(e) => { e.stopPropagation(); openSymbolDetail(pos.symbol); }}
                     className="font-medium text-argus-text hover:text-argus-accent hover:underline transition-colors cursor-pointer"
                   >
                     {pos.symbol}
@@ -565,20 +701,40 @@ export function OpenPositions() {
     return (
       <>
         {/* Desktop/Tablet table */}
-        <div className="hidden md:block overflow-x-auto">
+        <div className="hidden md:block max-h-[420px] overflow-y-auto overflow-x-auto">
           <table className="w-full text-sm">
-            <thead>
+            <thead className="sticky top-0 z-10 bg-argus-surface">
               <tr className="bg-argus-surface-2 text-argus-text-dim text-xs uppercase tracking-wider">
-                <th className="px-4 py-2 text-left font-medium">Symbol</th>
+                <th
+                  className="px-4 py-2 text-left font-medium cursor-pointer hover:text-argus-text select-none"
+                  onClick={() => handleSort('symbol')}
+                >
+                  Symbol<SortIndicator field="symbol" />
+                </th>
                 <th className="px-4 py-2 text-left font-medium">Strategy</th>
-                <th className="px-4 py-2 text-right font-medium">P&L</th>
-                <th className="px-4 py-2 text-right font-medium">R</th>
+                <th
+                  className="px-4 py-2 text-right font-medium cursor-pointer hover:text-argus-text select-none"
+                  onClick={() => handleSort('pnl')}
+                >
+                  P&L<SortIndicator field="pnl" />
+                </th>
+                <th
+                  className="px-4 py-2 text-right font-medium cursor-pointer hover:text-argus-text select-none"
+                  onClick={() => handleSort('r')}
+                >
+                  R<SortIndicator field="r" />
+                </th>
                 <th className="px-4 py-2 text-center font-medium">Exit</th>
-                <th className="px-4 py-2 text-right font-medium">Time</th>
+                <th
+                  className="px-4 py-2 text-right font-medium cursor-pointer hover:text-argus-text select-none"
+                  onClick={() => handleSort('time')}
+                >
+                  Time<SortIndicator field="time" />
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-argus-border">
-              {trades.map((trade) => (
+              {sortedTrades.map((trade) => (
                 <tr key={trade.id} className="transition-colors duration-150 hover:bg-argus-bg/50">
                   <td className="px-4 py-3 font-medium text-argus-text">
                     <button
@@ -613,7 +769,7 @@ export function OpenPositions() {
 
         {/* Phone layout */}
         <div className="md:hidden divide-y divide-argus-border">
-          {trades.map((trade) => (
+          {sortedTrades.map((trade) => (
             <div key={trade.id} className="p-4 transition-colors duration-150 hover:bg-argus-bg/50">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -716,6 +872,12 @@ export function OpenPositions() {
       <TradeDetailPanel
         trade={selectedTrade}
         onClose={() => setSelectedTrade(null)}
+      />
+
+      {/* Position detail panel - opens when clicking an open position */}
+      <PositionDetailPanel
+        position={selectedPosition}
+        onClose={() => setSelectedPosition(null)}
       />
     </>
   );

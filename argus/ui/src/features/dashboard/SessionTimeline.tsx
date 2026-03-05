@@ -36,35 +36,35 @@ interface StrategyWindow {
 
 const STRATEGY_WINDOWS: StrategyWindow[] = [
   {
-    id: 'orb_breakout',
+    id: 'strat_orb_breakout',
     letter: 'O',
     startMinute: 9 * 60 + 35, // 9:35 AM
     endMinute: 11 * 60 + 30, // 11:30 AM
-    color: getStrategyColor('orb_breakout'),
+    color: getStrategyColor('strat_orb_breakout'),
     row: 0,
   },
   {
-    id: 'orb_scalp',
+    id: 'strat_orb_scalp',
     letter: 'S',
     startMinute: 9 * 60 + 45, // 9:45 AM
     endMinute: 11 * 60 + 30, // 11:30 AM
-    color: getStrategyColor('orb_scalp'),
+    color: getStrategyColor('strat_orb_scalp'),
     row: 1,
   },
   {
-    id: 'vwap_reclaim',
+    id: 'strat_vwap_reclaim',
     letter: 'V',
     startMinute: 10 * 60, // 10:00 AM
     endMinute: 12 * 60, // 12:00 PM
-    color: getStrategyColor('vwap_reclaim'),
+    color: getStrategyColor('strat_vwap_reclaim'),
     row: 2,
   },
   {
-    id: 'afternoon_momentum',
+    id: 'strat_afternoon_momentum',
     letter: 'A',
     startMinute: 14 * 60, // 2:00 PM
     endMinute: 15 * 60 + 30, // 3:30 PM
-    color: getStrategyColor('afternoon_momentum'),
+    color: getStrategyColor('strat_afternoon_momentum'),
     row: 0, // Can use row 0 since it doesn't overlap with ORB
   },
 ];

@@ -103,7 +103,7 @@ function getSeverityClasses(severity: DecisionSeverity): {
 }
 
 /**
- * Format timestamp to "9:25 AM" format in ET.
+ * Format timestamp to "9:25 AM ET" format.
  */
 function formatDecisionTime(isoString: string): string {
   const date = new Date(isoString);
@@ -111,7 +111,7 @@ function formatDecisionTime(isoString: string): string {
     timeZone: 'America/New_York',
     hour: 'numeric',
     minute: '2-digit',
-  });
+  }) + ' ET';
 }
 
 export function DecisionTimelineItem({

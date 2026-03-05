@@ -234,7 +234,7 @@ export function TradeDetailPanel({ trade, onClose }: TradeDetailPanelProps) {
             </div>
           </div>
 
-          {/* Price Levels placeholder - would need additional data from API */}
+          {/* Price Levels */}
           <div className="space-y-3">
             <h3 className="text-sm font-medium text-argus-text-dim uppercase tracking-wider">Price Levels</h3>
             <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
@@ -243,22 +243,30 @@ export function TradeDetailPanel({ trade, onClose }: TradeDetailPanelProps) {
                   <Shield className="w-3 h-3 text-argus-loss" />
                   Stop
                 </span>
-                <span className="tabular-nums text-argus-loss">—</span>
+                <span className="tabular-nums text-argus-loss">
+                  {trade.stop_price ? formatPrice(trade.stop_price) : '—'}
+                </span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-argus-text-dim flex items-center gap-1">
                   <Target className="w-3 h-3 text-argus-profit" />
                   T1
                 </span>
-                <span className="tabular-nums text-argus-profit">—</span>
-              </div>
-              <div className="flex items-center justify-between col-span-2 justify-self-end">
-                <span className="text-argus-text-dim flex items-center gap-1">
-                  <Target className="w-3 h-3 text-argus-profit" />
-                  T2
+                <span className="tabular-nums text-argus-profit">
+                  {trade.target_prices?.[0] ? formatPrice(trade.target_prices[0]) : '—'}
                 </span>
-                <span className="tabular-nums text-argus-profit ml-4">—</span>
               </div>
+              {trade.target_prices?.[1] && trade.target_prices[1] > 0 && (
+                <div className="flex items-center justify-between col-span-2 justify-self-end">
+                  <span className="text-argus-text-dim flex items-center gap-1">
+                    <Target className="w-3 h-3 text-argus-profit" />
+                    T2
+                  </span>
+                  <span className="tabular-nums text-argus-profit ml-4">
+                    {formatPrice(trade.target_prices[1])}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         </div>

@@ -157,7 +157,8 @@ export function Badge({ children, variant }: BaseBadgeProps) {
 
 // Strategy badge - shows strategy type with color coding
 export function StrategyBadge({ strategyId, onAmber = false }: StrategyBadgeProps) {
-  const normalizedId = strategyId.toLowerCase().replace(/-/g, '_') as StrategyId;
+  // Normalize: lowercase, replace hyphens, strip "strat_" prefix
+  const normalizedId = strategyId.toLowerCase().replace(/-/g, '_').replace(/^strat_/, '') as StrategyId;
   const label = strategyLabels[normalizedId] || strategyId.toUpperCase().slice(0, 4);
 
   // On amber backgrounds, use dark bg with white text for contrast
@@ -176,7 +177,8 @@ export function StrategyBadge({ strategyId, onAmber = false }: StrategyBadgeProp
 
 // Compact strategy badge - single-letter pill for dense layouts (watchlist sidebar)
 export function CompactStrategyBadge({ strategyId }: { strategyId: string }) {
-  const normalizedId = strategyId.toLowerCase().replace(/-/g, '_') as StrategyId;
+  // Normalize: lowercase, replace hyphens, strip "strat_" prefix
+  const normalizedId = strategyId.toLowerCase().replace(/-/g, '_').replace(/^strat_/, '') as StrategyId;
   const letter = strategyLetters[normalizedId] || strategyId.charAt(0).toUpperCase();
   const colorClass = strategyColors[normalizedId] || 'text-argus-text-dim bg-argus-surface-2';
 

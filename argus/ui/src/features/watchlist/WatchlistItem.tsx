@@ -30,7 +30,7 @@ export function WatchlistItem({ item, onClick }: WatchlistItemProps) {
   const vwapConfig = vwapStateConfig[vwap_state];
   const isPositiveGap = gap_pct > 0;
   const isEntered = vwap_state === 'entered';
-  const isVwapTracked = strategies.includes('vwap_reclaim');
+  const isVwapTracked = strategies.includes('vwap_reclaim') || strategies.includes('strat_vwap_reclaim');
   const showVwapIndicator = isVwapTracked && vwapConfig.show;
 
   const handleClick = () => {

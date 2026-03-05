@@ -117,6 +117,7 @@ export function PositionTimeline({
   const [tooltip, setTooltip] = useState<TooltipData | null>(null);
   const [currentMinutes, setCurrentMinutes] = useState(getCurrentETMinutes());
   const [containerWidth, setContainerWidth] = useState(1000);
+  const [zoomLevel, setZoomLevel] = useState(1);
 
   // Detect larger screens for responsive time axis labels
   // Below 900px: hourly labels with abbreviated format (e.g., "10a", "11a")
@@ -197,6 +198,8 @@ export function PositionTimeline({
   // Calculate vertical stacking for overlapping positions
   const stackedPositions = useMemo(() => {
     const lanes: { end: number; items: TimelinePosition[] }[] = [];
+    // Visual breathing room between bars (accounts for min-width causing visual overlap)
+    const LANE_PADDING_MINUTES = 2;
 
     for (const pos of timelinePositions) {
       const startMinutes = parseToETMinutes(pos.entryTime.toISOString());
@@ -204,8 +207,8 @@ export function PositionTimeline({
         ? parseToETMinutes(pos.exitTime.toISOString())
         : currentMinutes;
 
-      // Find a lane where this position doesn't overlap
-      let laneIndex = lanes.findIndex((lane) => lane.end <= startMinutes);
+      // Find a lane where this position doesn't overlap (with padding for visual clarity)
+      let laneIndex = lanes.findIndex((lane) => lane.end + LANE_PADDING_MINUTES <= startMinutes);
       if (laneIndex === -1) {
         laneIndex = lanes.length;
         lanes.push({ end: endMinutes, items: [] });
@@ -287,12 +290,27 @@ export function PositionTimeline({
 
   return (
     <div className="relative">
-      {/* Timeline container - horizontally scrollable on mobile */}
+      {/* Zoom slider */}
+      <div className="flex items-center gap-2 mb-2 text-xs text-argus-text-dim">
+        <span>Zoom</span>
+        <input
+          type="range"
+          min={1}
+          max={4}
+          step={0.5}
+          value={zoomLevel}
+          onChange={(e) => setZoomLevel(parseFloat(e.target.value))}
+          className="w-20 accent-argus-accent"
+        />
+        <span>{zoomLevel}x</span>
+      </div>
+
+      {/* Timeline container - horizontally scrollable */}
       <div
         ref={containerRef}
         className="overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-argus-border scrollbar-track-transparent"
       >
-        <div className="min-w-[600px] lg:min-w-0">
+        <div className="min-w-[600px] lg:min-w-0" style={{ width: `${100 * zoomLevel}%` }}>
           {/* Time axis */}
           <div className="relative h-6 border-b border-argus-border mb-2">
             {timeLabels.map((minutes) => {
@@ -348,14 +366,14 @@ export function PositionTimeline({
                       className={`absolute h-7 rounded-md cursor-pointer transition-shadow hover:shadow-lg hover:z-20 flex items-center gap-1 px-1.5 overflow-hidden ${getBarColor(pos.pnl, pos.isOpen)}`}
                       style={{
                         left: `${left}%`,
-                        width: `max(${width}%, 48px)`, // Minimum width for visibility
+                        width: `max(${width}%, 20px)`, // Minimum width for visibility
                         top: `${laneIndex * 36}px`,
                       }}
                       initial={{ opacity: 0, x: -20 }}
                       animate={{
                         opacity: pos.isOpen ? 1 : 0.6,
                         x: 0,
-                        width: `max(${width}%, 48px)`,
+                        width: `max(${width}%, 20px)`,
                       }}
                       exit={{ opacity: 0, transition: { duration: DURATION.normal } }}
                       transition={{
