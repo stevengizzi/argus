@@ -1,12 +1,30 @@
 # ARGUS — Claude Code Context
 
 > Dense, actionable context for Claude Code sessions. No history — see `docs/` for that.
-> Last updated: March 4, 2026
+> Last updated: March 5, 2026
+
+## Active Sprint
+
+**Sprint 21.7: FMP Scanner Integration**
+Sprint package: `docs/sprints/sprint-21.7/`
+Design summary: `docs/sprints/sprint-21.7/design-summary.md`
+
+Session status:
+- [ ] Session 0: Prep (FMP activation, API key, branch)
+- [ ] Session 1: FMPScannerSource + WatchlistItem extension
+- [ ] Session 2: Config routing + API endpoint wiring
+- [ ] Session 3: Pre-Market Watchlist panel (frontend)
+
+Key constraints this sprint:
+- Do NOT modify DatabentoScanner, AlpacaScanner, StaticScanner
+- Do NOT modify any strategy files
+- scanner_type routing comes from scanner.yaml, not data_source
+- FMP_API_KEY must be read from environment at start(), never hardcoded
 
 ## Current State
 
-- **Active sprint:** None (between sprints)
-- **Next sprint:** 21.7 (FMP Scanner Integration) → 22 (AI Layer MVP)
+- **Active sprint:** 21.7 (FMP Scanner Integration)
+- **Next sprint:** 22 (AI Layer MVP)
 - **Tests:** 1,737 pytest + 291 Vitest
 - **Strategies:** 4 active (ORB Breakout, ORB Scalp, VWAP Reclaim, Afternoon Momentum)
 - **Infrastructure:** Databento EQUS.MINI (live) + IBKR paper trading (Account U24619949) + FMP Starter (Sprint 21.7, scanning)
@@ -205,19 +223,6 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 | DEF-029 | Persist Live Candle Data to Database for Post-Session Replay | Live candle data flows through the Event Bus but isn't persisted to the database. The Performance page Replay tab shows "Bar data not available for this trade" because there are no stored bars around the trade's timestamps. Need a new `candle_bars` table (symbol, timestamp, open, high, low, close, volume) with writes from the DataService callback. ~3,900 rows/day (10 symbols × 390 bars). Required for post-session review, The Debrief page EOD analysis, and replay visualizations. |
 - DEF-030: Live candlestick chart real-time updates (TradeChart loads historical only, no WebSocket subscription). Trigger: Sprint 22+ or UX backlog prioritization.
 - DEF-031: Orders table persistence (orders not persisted to DB, only completed trades). Trigger: when post-hoc order forensics needed beyond log analysis.
-
-## Current Sprint Context (21.5 — Live Integration)
-
-**Blocks A+B COMPLETE:**
-- Databento EQUS.MINI live streaming confirmed (all schemas)
-- IBKR paper trading operational (bracket orders, position lifecycle)
-- Validation scripts: 13/13 integration PASS + 4/4 resilience PASS
-- Scanner resilience for historical data lag (13 new tests)
-- Operational scripts and LIVE_OPERATIONS.md complete
-
-**Blocks C+D PENDING:**
-- Block C: Full market day validation — all 4 strategies live under real conditions
-- Block D: Sprint closeout — doc sync, review, test cleanup
 
 ## Reference
 
