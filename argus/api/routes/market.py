@@ -13,7 +13,6 @@ from pydantic import BaseModel
 
 from argus.api.auth import require_auth
 from argus.api.dependencies import AppState, get_app_state
-from argus.execution.simulated_broker import SimulatedBroker
 
 router = APIRouter()
 ET_TZ = ZoneInfo("America/New_York")
@@ -122,8 +121,8 @@ async def get_symbol_bars(
 ) -> BarsResponse:
     """Get intraday bars for a symbol.
 
-    In dev mode, returns synthetic data. In production, queries DataService
-    (Databento Historical API with Parquet caching).
+    Attempts to fetch real data from DataService first. Falls back to synthetic
+    data if DataService is unavailable or returns no data.
 
     Args:
         symbol: Stock symbol (e.g., "AAPL", "TSLA").
@@ -136,10 +135,9 @@ async def get_symbol_bars(
         BarsResponse with OHLCV data.
     """
     upper_symbol = symbol.upper()
-    is_dev_mode = isinstance(state.broker, SimulatedBroker)
 
-    if not is_dev_mode and state.data_service is not None:
-        # Production: fetch real bars from Databento via DataService
+    # Try real data first if DataService is available and has get_historical_candles
+    if state.data_service is not None and hasattr(state.data_service, "get_historical_candles"):
         try:
             # Parse time range
             if start_time and end_time:
@@ -155,13 +153,7 @@ async def get_symbol_bars(
                 upper_symbol, timeframe, start, end
             )
 
-            if df.empty:
-                logger.warning(
-                    "No bars returned for %s from DataService, falling back to synthetic",
-                    upper_symbol,
-                )
-                bars = _generate_synthetic_bars(upper_symbol, min(limit, 390))
-            else:
+            if df is not None and not df.empty:
                 bars = []
                 for _, row in df.iterrows():
                     # Handle timestamp: could be datetime or pandas Timestamp
@@ -185,17 +177,34 @@ async def get_symbol_bars(
                 if limit and len(bars) > limit:
                     bars = bars[-limit:]
 
-        except Exception as e:
-            logger.warning(
-                "Failed to fetch real bars for %s: %s, falling back to synthetic",
-                upper_symbol,
-                e,
-            )
-            bars = _generate_synthetic_bars(upper_symbol, min(limit, 390))
-    else:
-        # Dev mode: synthetic data
-        bars = _generate_synthetic_bars(upper_symbol, min(limit, 390))
+                logger.info(
+                    "Bars for %s: %d bars, price range %.2f-%.2f",
+                    upper_symbol,
+                    len(bars),
+                    min(b.low for b in bars) if bars else 0,
+                    max(b.high for b in bars) if bars else 0,
+                )
 
+                return BarsResponse(
+                    symbol=upper_symbol,
+                    timeframe=timeframe,
+                    bars=bars,
+                    count=len(bars),
+                )
+            else:
+                logger.warning(
+                    "No bars returned for %s from DataService, falling back to synthetic",
+                    upper_symbol,
+                )
+
+        except Exception:
+            logger.exception(
+                "Failed to fetch real bars for %s, falling back to synthetic",
+                upper_symbol,
+            )
+
+    # Fallback: synthetic data
+    bars = _generate_synthetic_bars(upper_symbol, min(limit, 390))
     return BarsResponse(
         symbol=upper_symbol,
         timeframe=timeframe,

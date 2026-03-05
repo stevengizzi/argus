@@ -17,7 +17,6 @@ const mockFitContent = vi.fn();
 const mockAddSeries = vi.fn(() => ({
   setData: mockSetData,
   createPriceLine: mockCreatePriceLine,
-  setMarkers: mockSetMarkers,
 }));
 const mockTimeScale = vi.fn(() => ({ fitContent: mockFitContent }));
 const mockRemove = vi.fn();
@@ -30,6 +29,9 @@ vi.mock('lightweight-charts', () => ({
     remove: mockRemove,
     applyOptions: mockApplyOptions,
     priceScale: vi.fn(() => ({ applyOptions: vi.fn() })),
+  })),
+  createSeriesMarkers: vi.fn(() => ({
+    setMarkers: mockSetMarkers,
   })),
   CandlestickSeries: 'CandlestickSeries',
   LineStyle: {

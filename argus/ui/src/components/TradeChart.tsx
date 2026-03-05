@@ -12,11 +12,14 @@ import { useRef, useEffect, useMemo } from 'react';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import {
   createChart,
+  createSeriesMarkers,
   CandlestickSeries,
   type IChartApi,
   type ISeriesApi,
+  type ISeriesMarkersPluginApi,
   type CandlestickData,
   type UTCTimestamp,
+  type Time,
   type SeriesMarker,
   LineStyle,
 } from 'lightweight-charts';
@@ -36,28 +39,55 @@ export interface TradeChartProps {
 }
 
 /**
+ * Validate that a value is a finite number suitable for chart display.
+ */
+function isValidPrice(value: unknown): value is number {
+  return typeof value === 'number' && isFinite(value) && value > 0;
+}
+
+/**
  * Compute time range for bar fetching.
- * Adds 15 minutes padding before entry and after exit.
+ * Scales padding with hold duration: max(50% of hold duration, 5 minutes).
+ * This ensures short trades fill ~33% of chart width, longer trades ~50%.
+ * Returns null if dates are invalid.
  */
 function computeTimeRange(
   entryTime: string,
   exitTime: string | undefined,
   isOpen: boolean,
-): { startTime: string; endTime: string } {
+): { startTime: string; endTime: string } | null {
   const entryDate = new Date(entryTime);
-  const startDate = new Date(entryDate.getTime() - 15 * 60 * 1000);
+
+  // Validate entry date
+  if (isNaN(entryDate.getTime())) {
+    return null;
+  }
 
   let endDate: Date;
   if (isOpen || !exitTime) {
     // For open positions, use current time + 1 minute buffer
     endDate = new Date(Date.now() + 60 * 1000);
   } else {
-    endDate = new Date(new Date(exitTime).getTime() + 15 * 60 * 1000);
+    const exitDate = new Date(exitTime);
+    if (isNaN(exitDate.getTime())) {
+      // Invalid exit time, use current time as fallback
+      endDate = new Date(Date.now() + 60 * 1000);
+    } else {
+      endDate = exitDate;
+    }
   }
+
+  // Scale padding with hold duration: max(50% of hold, 5 minutes)
+  const holdMs = endDate.getTime() - entryDate.getTime();
+  const minPaddingMs = 5 * 60 * 1000; // 5 minutes
+  const paddingMs = Math.max(holdMs * 0.5, minPaddingMs);
+
+  const startDate = new Date(entryDate.getTime() - paddingMs);
+  const endDateWithPadding = new Date(endDate.getTime() + paddingMs);
 
   return {
     startTime: startDate.toISOString(),
-    endTime: endDate.toISOString(),
+    endTime: endDateWithPadding.toISOString(),
   };
 }
 
@@ -75,14 +105,19 @@ export function TradeChart({
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
+  const markersPluginRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
 
-  // Compute time range for data fetching
-  const { startTime, endTime } = useMemo(
+  // Compute time range for data fetching (null if dates are invalid)
+  const timeRange = useMemo(
     () => computeTimeRange(entryTime, exitTime, isOpen),
     [entryTime, exitTime, isOpen]
   );
 
-  const { data: barsData, isLoading, error } = useTradeChartBars(symbol, startTime, endTime);
+  const { data: barsData, isLoading, error } = useTradeChartBars(
+    symbol,
+    timeRange?.startTime ?? null,
+    timeRange?.endTime ?? null
+  );
 
   // Transform bars data to Lightweight Charts format
   const chartData = useMemo(() => {
@@ -150,6 +185,10 @@ export function TradeChart({
     });
     candleSeriesRef.current = candleSeries;
 
+    // Create markers plugin for entry/exit markers
+    const markersPlugin = createSeriesMarkers(candleSeries, []);
+    markersPluginRef.current = markersPlugin;
+
     // Handle resize
     const resizeObserver = new ResizeObserver(() => {
       if (chartRef.current && container) {
@@ -166,6 +205,7 @@ export function TradeChart({
       chart.remove();
       chartRef.current = null;
       candleSeriesRef.current = null;
+      markersPluginRef.current = null;
     };
   }, []);
 
@@ -182,18 +222,20 @@ export function TradeChart({
     // Note: We recreate them each time data changes
 
     // Add price level overlays
-    // Entry price: Blue dashed line
-    candleSeries.createPriceLine({
-      price: entryPrice,
-      color: '#3b82f6', // Blue
-      lineWidth: 1,
-      lineStyle: LineStyle.Dashed,
-      axisLabelVisible: true,
-      title: `Entry`,
-    });
+    // Entry price: Blue dashed line (only if valid)
+    if (isValidPrice(entryPrice)) {
+      candleSeries.createPriceLine({
+        price: entryPrice,
+        color: '#3b82f6', // Blue
+        lineWidth: 1,
+        lineStyle: LineStyle.Dashed,
+        axisLabelVisible: true,
+        title: `Entry`,
+      });
+    }
 
     // Stop price: Red solid line
-    if (stopPrice && stopPrice > 0) {
+    if (isValidPrice(stopPrice)) {
       candleSeries.createPriceLine({
         price: stopPrice,
         color: '#ef4444', // Red
@@ -205,9 +247,9 @@ export function TradeChart({
     }
 
     // T1 price: Green dashed line
-    if (targetPrices?.[0] && targetPrices[0] > 0) {
+    if (isValidPrice(targetPrices?.[0])) {
       candleSeries.createPriceLine({
-        price: targetPrices[0],
+        price: targetPrices![0],
         color: '#22c55e', // Green
         lineWidth: 1,
         lineStyle: LineStyle.Dashed,
@@ -216,10 +258,10 @@ export function TradeChart({
       });
     }
 
-    // T2 price: Green dotted line (only if > 0)
-    if (targetPrices?.[1] && targetPrices[1] > 0) {
+    // T2 price: Green dotted line
+    if (isValidPrice(targetPrices?.[1])) {
       candleSeries.createPriceLine({
-        price: targetPrices[1],
+        price: targetPrices![1],
         color: '#22c55e', // Green
         lineWidth: 1,
         lineStyle: LineStyle.Dotted,
@@ -229,7 +271,7 @@ export function TradeChart({
     }
 
     // Exit price: Orange solid line (closed trades only, if differs from entry by > $0.01)
-    if (!isOpen && exitPrice && Math.abs(exitPrice - entryPrice) > 0.01) {
+    if (!isOpen && isValidPrice(exitPrice) && isValidPrice(entryPrice) && Math.abs(exitPrice - entryPrice) > 0.01) {
       candleSeries.createPriceLine({
         price: exitPrice,
         color: '#f97316', // Orange
@@ -241,7 +283,7 @@ export function TradeChart({
     }
 
     // Current price: Cyan dashed line (open positions only)
-    if (isOpen && currentPrice && currentPrice > 0) {
+    if (isOpen && isValidPrice(currentPrice)) {
       candleSeries.createPriceLine({
         price: currentPrice,
         color: '#06b6d4', // Cyan
@@ -252,66 +294,68 @@ export function TradeChart({
       });
     }
 
-    // Add markers for entry/exit
-    const markers: SeriesMarker<UTCTimestamp>[] = [];
+    // Add markers for entry/exit via plugin
+    const markers: SeriesMarker<Time>[] = [];
 
-    // Entry marker
+    // Entry marker - blue up-arrow for visibility on all candle colors
     if (chartData.entryBarIndex >= 0 && chartData.candles[chartData.entryBarIndex]) {
       markers.push({
         time: chartData.candles[chartData.entryBarIndex].time,
         position: 'belowBar',
-        color: '#3b82f6', // Blue
+        color: '#60a5fa', // Blue - visible against both green and red candles
         shape: 'arrowUp',
         text: 'Entry',
       });
     }
 
-    // Exit marker (for closed trades)
+    // Exit marker (for closed trades) - blue down-arrow for visibility on all candle colors
     if (!isOpen && chartData.exitBarIndex >= 0 && chartData.candles[chartData.exitBarIndex]) {
-      const isWin = exitPrice && exitPrice > entryPrice;
       markers.push({
         time: chartData.candles[chartData.exitBarIndex].time,
         position: 'aboveBar',
-        color: isWin ? '#22c55e' : '#ef4444',
-        shape: isWin ? 'arrowUp' : 'arrowDown',
+        color: '#60a5fa', // Blue - visible against both green and red candles
+        shape: 'arrowDown',
         text: 'Exit',
       });
     }
 
-    candleSeries.setMarkers(markers);
+    if (markersPluginRef.current) {
+      markersPluginRef.current.setMarkers(markers);
+    }
 
     // Fit content after data update
     chart.timeScale().fitContent();
   }, [chartData, entryPrice, exitPrice, stopPrice, targetPrices, currentPrice, isOpen]);
 
   const hasNoBars = !isLoading && !error && (!barsData?.bars?.length);
+  const hasInvalidTimeRange = timeRange === null;
 
   return (
     <div className="bg-argus-surface-2 rounded-lg border border-argus-border overflow-hidden relative">
       {/* Chart container - always mounted so ref is available */}
       <div
         ref={containerRef}
-        className={`h-[250px] ${isLoading || error || hasNoBars ? 'invisible' : ''}`}
+        className={`h-[250px] ${isLoading || error || hasNoBars || hasInvalidTimeRange ? 'invisible' : ''}`}
         data-testid="trade-chart-container"
       />
 
       {/* Loading overlay */}
-      {isLoading && (
+      {isLoading && !hasInvalidTimeRange && (
         <div className="absolute inset-0 h-[250px] flex items-center justify-center bg-argus-surface-2">
           <Loader2 className="w-8 h-8 text-argus-text-dim animate-spin" />
         </div>
       )}
 
       {/* Empty state */}
-      {hasNoBars && (
+      {hasNoBars && !hasInvalidTimeRange && (
         <div className="absolute inset-0 h-[250px] flex flex-col items-center justify-center gap-2 text-argus-text-dim bg-argus-surface-2">
           <AlertCircle className="w-6 h-6" />
           <span className="text-sm">Bar data not available for this trade</span>
         </div>
       )}
 
-      {/* Error overlay */}
-      {error && !isLoading && (
+      {/* Invalid time range or error overlay */}
+      {(error || hasInvalidTimeRange) && !isLoading && (
         <div className="absolute inset-0 h-[250px] flex flex-col items-center justify-center gap-2 text-argus-text-dim bg-argus-surface-2">
           <AlertCircle className="w-6 h-6 text-argus-loss" />
           <span className="text-sm">Chart unavailable</span>

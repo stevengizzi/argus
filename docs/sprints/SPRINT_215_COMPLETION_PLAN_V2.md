@@ -644,7 +644,7 @@ to reflect Sprint 21.5 progress through Block B completion.
 
 ## Checklist — check each doc, update ONLY if something changed
 
-### 1. docs/05_DECISION_LOG.md
+### 1. docs/decision-log.md
 Check current highest DEC number first. Add any new decisions from
 Sessions A1, B0-B4 that aren't already logged. Examples:
 - Scanner resilience for historical data lag (B0)
@@ -668,7 +668,7 @@ Update "Current State" section:
 - Note: LIVE_OPERATIONS.md created
 - Note: EQUS.MINI diagnostic results
 
-### 4. docs/02_PROJECT_KNOWLEDGE.md
+### 4. docs/project-knowledge.md
 Draft the Sprint 21.5 Build Track entry update. Include:
 - Accurate test counts (pytest + Vitest)
 - Key deliverables list
@@ -1074,7 +1074,7 @@ the final documentation pass and sprint closeout.
 
 ## Part 1: Final Documentation Updates
 
-### docs/05_DECISION_LOG.md
+### docs/decision-log.md
 Add any remaining DEC entries from Blocks A–C. Include:
 - Final dataset decision (EQUS.MINI confirmed or XNAS.ITCH fallback)
 - Scanner resilience pattern
@@ -1095,7 +1095,7 @@ Final update:
 - Operational: LIVE_OPERATIONS.md, startup/shutdown scripts
 - Next: Sprint 21.6 (backtest re-validation) + Sprint 22 (AI Layer)
 
-### docs/02_PROJECT_KNOWLEDGE.md
+### docs/project-knowledge.md
 Final Build Track entry:
 
     - Sprint 21.5 (Live Integration): ✅ COMPLETE — XXXX tests (pytest)
@@ -1113,7 +1113,7 @@ Update Validation Track status.
 ### docs/10_PHASE3_SPRINT_PLAN.md
 Move Sprint 21.5 to completed table with final metrics.
 
-### docs/06_RISK_REGISTER.md
+### docs/risk-register.md
 Update any risks validated or invalidated during integration:
 - RSK-022 (IB Gateway reliability): status update based on experience
 - Any new risks discovered during live testing

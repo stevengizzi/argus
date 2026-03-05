@@ -5,8 +5,16 @@ Tests GET /api/v1/market/{symbol}/bars endpoint.
 
 from __future__ import annotations
 
+from collections.abc import AsyncGenerator
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock
+
+import pandas as pd
 import pytest
-from httpx import AsyncClient
+from httpx import ASGITransport, AsyncClient
+
+from argus.api.dependencies import AppState
+from argus.api.server import create_app
 
 pytestmark = pytest.mark.asyncio
 
@@ -240,3 +248,107 @@ class TestRealDataIntegration:
         assert data["symbol"] == "TSLA"
         assert "bars" in data
         assert "count" in data
+
+    async def test_bars_endpoint_returns_real_data_when_data_service_available(
+        self,
+        app_state: AppState,
+        jwt_secret: str,
+        auth_headers: dict[str, str],
+    ) -> None:
+        """Returns real data from DataService when available.
+
+        Mocks DataService with get_historical_candles returning a known
+        DataFrame with SOFI prices at ~$15. Verifies bars response has
+        prices in the $15 range, not synthetic ~$269.
+        """
+        # Create mock DataService with get_historical_candles
+        mock_data_service = AsyncMock()
+
+        # Create a DataFrame with SOFI prices at ~$15
+        timestamps = [
+            datetime(2026, 3, 5, 14, 30, 0, tzinfo=UTC),
+            datetime(2026, 3, 5, 14, 31, 0, tzinfo=UTC),
+            datetime(2026, 3, 5, 14, 32, 0, tzinfo=UTC),
+        ]
+        df = pd.DataFrame({
+            "timestamp": timestamps,
+            "open": [15.10, 15.15, 15.20],
+            "high": [15.25, 15.30, 15.35],
+            "low": [15.05, 15.10, 15.15],
+            "close": [15.20, 15.22, 15.28],
+            "volume": [100000, 120000, 110000],
+        })
+        mock_data_service.get_historical_candles = AsyncMock(return_value=df)
+
+        # Inject mock DataService into AppState
+        app_state.data_service = mock_data_service
+
+        # Create client with modified app_state
+        app = create_app(app_state)
+        app.state.app_state = app_state
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://test",
+        ) as client:
+            response = await client.get(
+                "/api/v1/market/SOFI/bars?start_time=2026-03-05T14:30:00&end_time=2026-03-05T15:45:00",
+                headers=auth_headers,
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+
+        # Should return real data from mock
+        assert data["symbol"] == "SOFI"
+        assert data["count"] == 3
+        assert len(data["bars"]) == 3
+
+        # Prices should be in the ~$15 range (from our mock), NOT ~$269 (synthetic)
+        bar = data["bars"][0]
+        assert 14.0 <= bar["open"] <= 16.0, f"Expected ~$15, got {bar['open']}"
+        assert 14.0 <= bar["high"] <= 16.0
+        assert 14.0 <= bar["low"] <= 16.0
+        assert 14.0 <= bar["close"] <= 16.0
+
+        # Verify mock was called
+        mock_data_service.get_historical_candles.assert_called_once()
+
+    async def test_bars_endpoint_synthetic_fallback_when_data_service_none(
+        self,
+        app_state: AppState,
+        jwt_secret: str,
+        auth_headers: dict[str, str],
+    ) -> None:
+        """Falls back to synthetic data when data_service is None.
+
+        Verifies that when state.data_service is None, the endpoint
+        returns deterministic synthetic data.
+        """
+        # Ensure data_service is None
+        app_state.data_service = None
+
+        # Create client with modified app_state
+        app = create_app(app_state)
+        app.state.app_state = app_state
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://test",
+        ) as client:
+            response = await client.get(
+                "/api/v1/market/SOFI/bars?limit=10",
+                headers=auth_headers,
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+
+        # Should return synthetic data
+        assert data["symbol"] == "SOFI"
+        assert data["count"] == 10
+        assert len(data["bars"]) == 10
+
+        # Synthetic SOFI data has base price derived from hash
+        # md5("SOFI")[:8] = "d3f5e3a2" -> int value % 490 + 10 ≈ 269
+        bar = data["bars"][0]
+        assert bar["open"] > 100, f"Expected synthetic price >$100, got {bar['open']}"
+        assert bar["volume"] > 0

@@ -1318,7 +1318,7 @@ During sprint execution, Sessions 1–9 completed core integration work. Additio
 - Decision Log: DEC-241 through DEC-248 already recorded
 - Sprint spec: Extended session outcomes added (this section)
 - CLAUDE.md: Current state updated
-- PROJECT_KNOWLEDGE.md: Sprint 21.5 entry updated
+- project-knowledge.md: Sprint 21.5 entry updated
 - PHASE3_SPRINT_PLAN.md: Sprint tracking updated
 
 ### Remaining: Block C + D
