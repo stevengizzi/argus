@@ -11,10 +11,10 @@ ARGUS is a fully automated, AI-enhanced multi-strategy day trading system for US
 
 ## Current State
 
-**Tests:** 1,710 pytest + 255 Vitest
-**Sprints completed:** 1 through 21d (21 full sprints + sub-sprints)
-**Active sprint:** 21.5 (Live Integration) — Blocks A+B complete, Block C (market day) + D (closeout) pending
-**Next sprint:** 22 (AI Layer MVP)
+**Tests:** 1,737 pytest + 291 Vitest
+**Sprints completed:** 1 through 21.5.1 (21 full sprints + sub-sprints + live integration)
+**Active sprint:** None (between sprints)
+**Next sprint:** 21.7 (FMP Scanner Integration) → 22 (AI Layer MVP)
 **GitHub:** `https://github.com/stevengizzi/argus.git` (public)
 
 ### Sprint History (Summary)
@@ -38,13 +38,14 @@ ARGUS is a fully automated, AI-enhanced multi-strategy day trading system for US
 | 21b | Orchestrator page | 1597+100V | Feb 27 | DEC-186–195 |
 | 21c | The Debrief page | 1664+138V | Feb 27 | DEC-196–203 |
 | 21d | Dashboard+Performance+System+Copilot shell | 1712+257V | Feb 27–28 | DEC-204–229 |
-| 21.5 | Live Integration (IN PROGRESS) | 1715+255V | Feb 28– | DEC-230–256 |
+| 21.5 | Live Integration | 1737+291V | Feb 28–Mar 5 | DEC-230–261 |
+| 21.5.1 | C2 Bug Fixes + UI Polish | (included above) | Mar 5 | DEC-261 |
 
 *Full sprint scopes and session details: `docs/sprint-history.md`*
 
 ### Build Track Queue
 
-21.5 (Live Integration, IN PROGRESS) → 21.7 (FMP Scanner Integration, DEC-259) → 21.6 (Backtest Re-Validation, parallel w/ 22) → 22 (AI Layer MVP) → 23 (NLP Catalyst + Pre-Market Engine) → 24 (Setup Quality Engine + Dynamic Sizer) → 25 (Red-to-Green + Pattern Library) → 26 (Pattern Expansion I) → 27 (Short Selling + Parabolic Short) → 28–32+ (Pattern Expansion II/III, Learning Loop, Orchestrator V2). Order Flow Model deferred to post-revenue (DEC-238).
+21.7 (FMP Scanner Integration, DEC-259) → 21.6 (Backtest Re-Validation, parallel w/ 22) → 22 (AI Layer MVP) → 23 (NLP Catalyst + Pre-Market Engine) → 24 (Setup Quality Engine + Dynamic Sizer) → 25 (Red-to-Green + Pattern Library) → 26 (Pattern Expansion I) → 27 (Short Selling + Parabolic Short) → 28–32+ (Pattern Expansion II/III, Learning Loop, Orchestrator V2). Order Flow Model deferred to post-revenue (DEC-238).
 
 ### Validation Track
 
@@ -114,7 +115,7 @@ Strategy files: `snake_case.py` → classes: `PascalCase`. Config: `snake_case.y
 | 3 | VWAP Reclaim | 10:00 AM–12:00 PM | 5–30 min | Mean-reversion, 5-state machine, OOS Sharpe 1.49 |
 | 4 | Afternoon Momentum | 2:00–3:30 PM | 15–60 min | Consolidation breakout, 8 entry conditions |
 
-Cross-strategy: ALLOW_ALL (DEC-121/160). Time windows largely non-overlapping. 5% max single-stock exposure across all strategies. ORB family shares OrbBaseStrategy ABC (DEC-120). Per-signal time stops (DEC-122).
+Cross-strategy: ALLOW_ALL (DEC-121/160). Time windows largely non-overlapping. 5% max single-stock exposure across all strategies. ORB family shares OrbBaseStrategy ABC (DEC-120) with same-symbol mutual exclusion — first ORB strategy to fire on a symbol blocks the other for the day (DEC-261). Per-signal time stops (DEC-122).
 
 ### Pipeline Stages
 Concept → Exploration (VectorBT) → Validation (Replay + WF) → Ecosystem Replay → Paper (20–30 days) → Live Min → Live Full → Active → Suspended → Retired
@@ -162,7 +163,7 @@ Per-trade risk: 0.5–1% of strategy allocation. Daily loss limit: 3–5%. Weekl
 
 **Foundational:** DEC-025 (Event Bus FIFO), DEC-027 (Risk Manager modifications), DEC-028 (strategy statefulness), DEC-029 (Event Bus sole streaming), DEC-032 (Pydantic config), DEC-047 (walk-forward mandatory), DEC-079 (parallel tracks), DEC-082 (Databento primary), DEC-083 (IBKR sole broker), DEC-098 (Claude Opus), DEC-132 (re-validation required).
 
-**Data & Execution:** DEC-088 (Databento threading), DEC-090 (DataSource enum), DEC-094 (BrokerSource enum), DEC-117 (atomic brackets), DEC-237 (no live L2 on Standard), DEC-248 (EQUS.MINI confirmed), DEC-249 (concentration approve-with-modification), DEC-257 (hybrid Databento+FMP architecture), DEC-258 (FMP Starter for scanning).
+**Data & Execution:** DEC-088 (Databento threading), DEC-090 (DataSource enum), DEC-094 (BrokerSource enum), DEC-117 (atomic brackets), DEC-237 (no live L2 on Standard), DEC-248 (EQUS.MINI confirmed), DEC-249 (concentration approve-with-modification), DEC-257 (hybrid Databento+FMP architecture), DEC-258 (FMP Starter for scanning). DEC-251 (absolute risk floor), DEC-252 (price rounding), DEC-261 (ORB exclusion).
 
 **Frontend:** DEC-099 (in-process API), DEC-102 (JWT auth), DEC-104/215 (chart libraries), DEC-109 (design north star), DEC-149 (VectorBT precompute+vectorize), DEC-169 (7-page architecture), DEC-170 (AI Copilot), DEC-199 (navigation + shortcuts).
 

@@ -415,6 +415,8 @@ OrbBaseStrategy (ABC)          ← shared: scanner criteria, gap filtering, OR t
 
 **OrbBaseStrategy** (`strategies/orb_base.py`): Provides shared opening range formation tracking, breakout detection with volume/VWAP confirmation, and scanner criteria. Subclasses override `_build_signal()` for target construction and `_get_time_stop_seconds()` for hold duration.
 
+**Same-symbol mutual exclusion (DEC-261):** `_orb_family_triggered_symbols: ClassVar[set[str]]` shared across all OrbBaseStrategy subclasses. When either ORB Breakout or ORB Scalp fires a signal, the symbol is added to this set. Phase 2 breakout detection checks the set before evaluating — if the symbol is present, the strategy skips it. The set is cleared by `reset_daily_state()` each morning. Prevents dual-fire incidents where both ORB strategies open positions on the same symbol simultaneously.
+
 **OrbScalpStrategy** (`strategies/orb_scalp.py`): Fast ORB variant. Single T1 target at 0.3R, 120-second max hold via per-signal `time_stop_seconds` field (DEC-122). No T2 split — trades too fast for partial exits (DEC-123). Uses same entry criteria as OrbBreakout but diverges entirely on exit management.
 
 ### 3.4.2 VWAP Reclaim Strategy (`strategies/vwap_reclaim.py`)
@@ -468,7 +470,7 @@ When a signal is partially valid, the Risk Manager may approve with modification
 
 | Permitted Modifications | Rules |
 |------------------------|-------|
-| Reduce share count | Reduce to fit concentration limit (DEC-249), buying power, or cash reserve. Multiple reductions cascade and accumulate. Reject if reduced position yields < 0.25R potential profit. |
+| Reduce share count | Reduce to fit concentration limit (DEC-249), buying power, or cash reserve. Multiple reductions cascade and accumulate. Includes pending entry exposure in concentration check to prevent race conditions. Reject if reduced position risk < `min_position_risk_dollars` ($100 absolute floor, DEC-251). Concentration check includes pending entry order exposure via `OrderManager.get_pending_entry_exposure()` to prevent race conditions when multiple signals approve before fills arrive. |
 | Tighten profit targets | If cross-strategy exposure limits require faster exit. |
 
 | Prohibited Modifications | Reason |
@@ -560,6 +562,8 @@ class Orchestrator:
 ### 3.7 Order Manager (`execution/order_manager.py`)
 
 Manages the lifecycle of every order from submission to fill/cancel. Position management is event-driven.
+
+**Sprint 21.5.1 additions:** `_handle_flatten_fill()` matches positions by `strategy_id` (with fallback to first-open position + warning log) to correctly route flatten fills when multiple strategies hold positions in the same symbol. `get_pending_entry_exposure(symbol)` returns total notional from pending (unfilled) entry orders for use in Risk Manager concentration checks.
 
 **Constructor:**
 ```python
@@ -1105,6 +1109,10 @@ Seven pages delivered with responsive design across four breakpoints (DEC-169). 
 **AI Copilot** (global panel, DEC-212): CopilotPanel slide-out (desktop 35% right, mobile 90vh bottom sheet). CopilotButton floating action (desktop bottom-right 24px, mobile above tab bar, DEC-217). Page context indicator. Placeholder content — activated Sprint 22. Keyboard: `c` toggle.
 
 **Global panels:** SlideInPanel shared shell (DEC-177). SymbolDetailPanel (global, mounted in AppShell, click any symbol anywhere). TradeDetailPanel (slide-in from trade rows). WatchlistSidebar (desktop inline 280px / tablet slide-out / mobile overlay, DEC-147).
+
+**TradeChart** (`components/TradeChart.tsx`, Sprint 21.5.1): TradingView Lightweight Charts v5 candlestick chart with price level overlays (entry blue, stop red, T1/T2 green, exit orange, current cyan) and entry/exit markers. Zoom padding scales with hold duration: max(50% of hold, 5 minutes). Embedded in both TradeDetailPanel (closed trades) and PositionDetailPanel (open positions). Data from `fetchSymbolBars()` via bars API endpoint with start_time/end_time parameters.
+
+**PositionDetailPanel** (`features/dashboard/PositionDetailPanel.tsx`, Sprint 21.5.1): Live position detail view with P&L, price levels, and embedded TradeChart. Opened by clicking on a row in OpenPositions table.
 
 ### Responsive Breakpoints
 

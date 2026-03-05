@@ -208,26 +208,37 @@
 **Sessions:** 13 implementation + 3 code reviews. **Largest sprint** (14 total sessions — should have been split further).
 **Notes:** Most Vitest-dense sprint (119 new). Performance Workbench deferred (DEC-229). Copilot shell ready for Sprint 22 activation.
 
-### Sprint 21.5 — Live Integration (IN PROGRESS)
-**Date:** Feb 28 – present
-**Scope:** Connecting live Databento market data feeds with IBKR paper trading.
-**Block A (Sessions 1–6):** Databento connection, API format discoveries (instrument_id direct attribute, built-in symbology_map, fixed-point prices, historical lag). First live market data streaming (30+ min, 10 symbols, 3 strategies per minute). VWAP Reclaim signal on NFLX — correctly rejected by Risk Manager for concentration limit.
-**Block B (Sessions 7–B5):** IBKR paper connection, bracket orders, flatten_all() SMART routing fix. Position management lifecycle confirmed. Validation scripts (13/13 PASS + 4/4 PASS resilience). Scanner resilience for historical data lag (DEC-247, 13 new tests). EQUS.MINI confirmed (DEC-248). Position sizing verification. Time stop/EOD validation. Operational scripts (`start_live.sh`, `stop_live.sh`). `docs/LIVE_OPERATIONS.md` (418 lines). Concentration limit approve-with-modification (DEC-249). Logging config polish.
-**Block C (pending):** Full market day validation — all 4 strategies live under real market conditions.
-**Block D (pending):** Sprint closeout — doc sync, review, test cleanup.
-**Key decisions:** DEC-230–249.
-**Notes:** Orphaned DatabentoSymbolMap deleted (replaced by built-in symbology_map). Dead code cleanup. Live data confirmed ARGUS can process real market signals correctly.
+### Sprint 21.5 — Live Integration (1737 pytest + 291 Vitest, +25/+34)
+**Date:** Feb 28 – Mar 5, 2026
+**Scope:** Connected live Databento market data feeds (EQUS.MINI) with IBKR paper trading execution via IB Gateway. 4 blocks + unplanned sub-sprint (21.5.1). 49 commits, 150 files modified, 47 new files.
+**Block A (1 session):** Validation scripts for Databento + IBKR integration. 13/13 integration PASS, 4/4 resilience PASS.
+**Block B (6 sessions):** Scanner resilience for historical data lag (DEC-247, 13 tests). EQUS.MINI confirmed (DEC-248). Concentration limit approve-with-modification (DEC-249). Position sizing verification. Operational scripts (`start_live.sh`, `stop_live.sh`). LIVE_OPERATIONS.md (417 lines). Absolute risk floor replaces 0.25R ratio (DEC-251).
+**Block C (3 sessions):** Live paper trading. C1: AAPL VWAP Reclaim +$70.30 (1.22R), price rounding fix (DEC-252), heartbeat logging (DEC-253). C2: 11 trades, +$335.79, 40% win rate, 4 ORB dual-fire incidents discovered. C3: ran with 21.5.1 fixes.
+**Block D (1 session):** Sprint closeout, audit, documentation sync.
+**Key decisions:** DEC-230–261 (32 decisions). Hybrid multi-source data architecture (DEC-257). FMP Starter for scanning (DEC-258). Sprint 21.7 queued (DEC-259). 5 data providers evaluated and rejected (DEC-260).
+**Sessions:** ~25 total (Block A: 1, Block B: 6, Block C: 3, Block D: 1, Sub-sprint 21.5.1: 5+1 hotfix, plus prior sessions 1–9 from earlier conversations).
+**Notes:** Largest sprint by scope expansion. Originally scoped as 13–15 sessions, grew to ~25 across 4 blocks. Spawned unplanned sub-sprint 21.5.1. First live paper trade validated end-to-end order lifecycle.
+
+### Sprint 21.5.1 — C2 Bug Fixes + UI Polish (included in 21.5 test counts)
+**Date:** Mar 5, 2026
+**Scope:** Unplanned sub-sprint triggered by C2 paper trading findings. 5 sessions + 1 hotfix, all in one day.
+**Session 1 (Trading Engine):** Flatten fill strategy_id routing with fallback. Pending entry exposure in concentration check. ORB family same-symbol mutual exclusion via ClassVar (DEC-261). +12 pytest.
+**Session 2 (Backend Data):** Daily P&L includes unrealized. 0.0 handling fix (is not None). Bars endpoint real data wiring. TradeResponse stop/target fields. +8 pytest, +2 Vitest.
+**Session 3 (Frontend UX):** Strategy colors (strat_ prefix normalization). Price levels display. Position timeline zoom (1x–4x). PositionDetailPanel. Sortable/clickable OpenPositions. +20 Vitest.
+**Session 4+4b (Trade Chart + Hotfix):** TradeChart with Lightweight Charts v5. Price level overlays. Trade filters (Zustand store). Hotfix: removed is_dev_mode gate blocking real bars in paper trading. +2 pytest, +14 Vitest.
+**Key decisions:** DEC-261.
+**Notes:** Most UI-dense sub-sprint. All C2 critical bugs resolved in single day.
 
 ---
 
 ## Sprint Statistics
 
-- **Total sprints:** 21 full + 6 sub-sprints (17.5, 18.5, 18.75, 12.5, 21.5 in progress)
-- **Total sessions:** ~180+ Claude Code sessions
-- **Total tests:** 1,710 pytest + 255 Vitest = 1,965 total
-- **Total decisions:** 249 (DEC-001 through DEC-249)
-- **Calendar days (active dev):** ~18 (Feb 14 – Mar 4, 2026)
-- **Largest sprint:** 21d (14 sessions)
+- **Total sprints:** 21 full + 7 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1)
+- **Total sessions:** ~205+ Claude Code sessions
+- **Total tests:** 1,737 pytest + 291 Vitest = 2,028 total
+- **Total decisions:** 261 (DEC-001 through DEC-261)
+- **Calendar days (active dev):** ~20 (Feb 14 – Mar 5, 2026)
+- **Largest sprint:** 21.5 (~25 sessions, scope expansion from 13 planned)
 - **Cleanest sprint:** 12.5 (1 session, pure refactor)
 - **Most test-dense:** 21c (105 new pytest) and 21d (119 new Vitest)
 - **Crisis sprint:** 8 (VectorBT performance — iterrows() → vectorized, 4 conversations)

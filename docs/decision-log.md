@@ -2882,5 +2882,19 @@ Each entry follows this format:
 
 ---
 
+### DEC-261 | ORB Family Same-Symbol Mutual Exclusion
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-05 |
+| **Sprint** | 21.5.1 (Session 1) |
+| **Decision** | ORB Breakout and ORB Scalp share a class-level `_orb_family_triggered_symbols: ClassVar[set[str]]` on `OrbBaseStrategy`. When either subclass generates a signal for a symbol, it adds that symbol to the set. Phase 2 breakout detection in `on_candle` checks the set and skips if the symbol is already present. The set is cleared in `reset_daily_state()`. An autouse pytest fixture in `tests/conftest.py` clears the set between tests. |
+| **Rationale** | C2 paper trading session (March 4) produced 4 dual-fire incidents: AMZN, NFLX, META, and SPY each triggered both ORB Breakout and ORB Scalp simultaneously on the same candle. This doubled risk exposure on those symbols (2 positions × ~5% concentration = ~10–12.5% actual exposure) and violated the concentration limit's intent. Since both strategies share OrbBaseStrategy and monitor the same opening range, the first to fire wins. ClassVar ensures cross-instance visibility without Event Bus coupling. |
+| **Alternatives** | (1) Event Bus notification between strategies — rejected because OrbBaseStrategy already shares code; ClassVar is simpler and zero-latency. (2) Risk Manager cross-strategy duplicate check — rejected because it would require the Risk Manager to understand strategy family relationships, violating separation of concerns. (3) Orchestrator-level coordination — rejected as too heavyweight for a same-family exclusion; Orchestrator manages strategy lifecycle, not signal-level deconfliction. |
+| **Cross-References** | DEC-120 (OrbBaseStrategy ABC), DEC-121 (ALLOW_ALL cross-strategy), DEC-261 |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
-*Next DEC: 261*
+*Next DEC: 262*

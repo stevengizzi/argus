@@ -5,9 +5,9 @@
 
 ## Current State
 
-- **Active sprint:** 21.5 (Live Integration) — Blocks A+B complete, C+D pending
+- **Active sprint:** None (between sprints)
 - **Next sprint:** 21.7 (FMP Scanner Integration) → 22 (AI Layer MVP)
-- **Tests:** 1,710 pytest + 255 Vitest
+- **Tests:** 1,737 pytest + 291 Vitest
 - **Strategies:** 4 active (ORB Breakout, ORB Scalp, VWAP Reclaim, Afternoon Momentum)
 - **Infrastructure:** Databento EQUS.MINI (live) + IBKR paper trading (Account U24619949) + FMP Starter (Sprint 21.7, scanning)
 - **Frontend:** 7-page Command Center (all built), Tauri desktop + PWA mobile
@@ -40,7 +40,7 @@ argus/
 python -m pytest tests/                   # Run all tests
 python -m pytest tests/ -x               # Stop on first failure
 python -m pytest tests/ -x -q            # Fail-fast, quiet
-cd argus/ui && npx vitest run            # Frontend tests (~255)
+cd argus/ui && npx vitest run            # Frontend tests (~291)
 
 # Trading engine
 python -m argus.main                      # Start (paper trading default)
@@ -203,6 +203,8 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 | ~~DEF-027~~ | ~~Journal trade linking UI~~ | — | **RESOLVED** (DEC-201): Full search UI with TradeSearchInput shipped in Sprint 21c. |
 | DEF-028 | CalendarPnlView strategy filter | Performance Workbench implementation (DEC-229) OR user requests during paper trading | CalendarPnlView renders all-strategy aggregated P&L. Strategy-specific calendar filtering deferred because calendar needs a different data query path than other charts (daily aggregation by strategy). Low priority — user can already filter by strategy in Overview and Heatmaps tabs. |
 | DEF-029 | Persist Live Candle Data to Database for Post-Session Replay | Live candle data flows through the Event Bus but isn't persisted to the database. The Performance page Replay tab shows "Bar data not available for this trade" because there are no stored bars around the trade's timestamps. Need a new `candle_bars` table (symbol, timestamp, open, high, low, close, volume) with writes from the DataService callback. ~3,900 rows/day (10 symbols × 390 bars). Required for post-session review, The Debrief page EOD analysis, and replay visualizations. |
+- DEF-030: Live candlestick chart real-time updates (TradeChart loads historical only, no WebSocket subscription). Trigger: Sprint 22+ or UX backlog prioritization.
+- DEF-031: Orders table persistence (orders not persisted to DB, only completed trades). Trigger: when post-hoc order forensics needed beyond log analysis.
 
 ## Current Sprint Context (21.5 — Live Integration)
 

@@ -69,8 +69,8 @@ inform Build Track priorities.
 2. ✅ Sprint 12: DatabentoDataService adapter built (Feb 21)
 3. ✅ Sprint 13: IBKRBroker adapter built (Feb 22, 811 tests)
 4. ✅ Sprint 20: Four strategies covering 9:30 AM–3:30 PM
-5. ⬜ Sprint 21: 7-page Command Center with full analytics
-6. ⬜ Databento subscription activated + IBKR paper account enabled
+5. ✅ Sprint 21: 7-page Command Center with full analytics
+6. ✅ Databento subscription activated + IBKR paper account enabled
 7. ⬜ Gate 2: IBKR paper trading (20+ days, DEC-076 parameters, quality data)
 8. ⬜ Sprint 25: Intelligence infrastructure operational (Quality Engine, Catalysts, Dynamic Sizing — Order Flow deferred to post-revenue per DEC-238)
 9. ⬜ Gate 3: AI-enhanced paper trading (30+ days, quality scoring active)
@@ -383,10 +383,10 @@ per sprint velocity.
 **Deferred:** DEF-028, DEC-229
 
 ### Sprint 21.5 — Live Integration (Databento + IBKR)
-Status: Blocks A + B0-B5 + C1 complete. C2 (second market day) + D (closeout) pending.
+Status: ✅ COMPLETE (Feb 28 – Mar 5, 2026)
 **Start:** Feb 28, 2026
 **Estimated sessions:** 13–16 (Claude Code) + 3 code reviews (Claude.ai)
-**Test count:** 1715 (pytest) + 255 (Vitest) — as of Session C1
+**Test count:** 1,737 (pytest) + 291 (Vitest) — final
 
 **Completed sessions:**
 - Sessions 1–3: Databento connection. API format discoveries: instrument_id direct attribute (DEC-241), built-in symbology_map (DEC-242), fixed-point prices ×1e9 (DEC-243). Dataset switch from XNAS.ITCH to EQUS.MINI (DEC-237/248).
@@ -396,7 +396,11 @@ Status: Blocks A + B0-B5 + C1 complete. C2 (second market day) + D (closeout) pe
 - Session A1: Validation scripts — 13/13 integration PASS, 4/4 resilience PASS. Discovered EQUS.MINI historical data lag blocking scanner (422 error).
 - Session B0: Scanner resilience fix (DEC-247, 13 new tests). EQUS.MINI diagnostic — live streaming confirmed, all schemas verified (ohlcv-1m, ohlcv-1d, trades, tbbo), multi-symbol queries functional (DEC-248). DatabentoSymbolMap deleted.
 - Sessions B1–B5: Position sizing verified (Risk Manager concentration limit working correctly). Time stop/EOD flatten validated via code review. Operational scripts created (`scripts/start_live.sh`, `scripts/stop_live.sh`). `docs/LIVE_OPERATIONS.md` created (418 lines). Documentation sync complete.
-- Session C1 (Mar 3): First live market day. AAPL VWAP Reclaim +$70.30. Bugs found & fixed: 0.25R floor (DEC-250), tick rounding (DEC-251). Post-session: auto-shutdown (DEC-253), IBKR error severity (DEC-254), PositionClosedEvent fix (DEC-255).
+- Session C1 (Mar 3): First live market day. AAPL VWAP Reclaim +$70.30 (1.22R). Bugs found & fixed: absolute risk floor replaces 0.25R ratio (DEC-251), tick rounding (DEC-252). Post-session: heartbeat logging (DEC-253), auto-shutdown (DEC-254), IBKR error severity (DEC-255), PositionClosedEvent symbol field (DEC-256).
+- Session C2 (Mar 4): Second paper trading session. 11 trades, 7 symbols, 3 strategies active. +$335.79 net P&L, 40% win rate. Discovered 4 ORB dual-fire incidents, flatten fill mismatch, concentration race condition, win rate 0% bug, dashboard P&L excluding unrealized, strategy colors all grey, candlestick chart showing synthetic data. Full post-market diagnostic captured.
+- Session C3 (Mar 5): Third paper trading session with 21.5.1 fixes deployed. Ran successfully.
+- Sprint 21.5.1 (Mar 5, unplanned): 5 sessions + 1 hotfix. Session 1: flatten fill routing, concentration race fix, ORB exclusion (DEC-261). Session 2: daily P&L includes unrealized, 0.0 handling fix, bars endpoint real data, TradeResponse fields. Session 3: strategy colors, price levels, position timeline zoom, PositionDetailPanel. Session 4+4b: TradeChart (Lightweight Charts v5), trade filters, is_dev_mode gate removal.
+- Block D (Mar 5): Sprint closeout, documentation sync, code audit. READ-ONLY session.
 
 **Remaining sessions:**
 - Block C (C2–C3): Full trading day validation (all 4 strategies, Databento + IBKR, Command Center with live data)
@@ -415,9 +419,20 @@ Status: Blocks A + B0-B5 + C1 complete. C2 (second market day) + D (closeout) pe
 - Concentration limit approve-with-modification (DEC-249) ✅
 - Time stop + EOD validation script (`scripts/test_time_stop_eod.py`) ✅
 
-**Decisions:** DEC-241-249, DEC-251-256
+**Decisions:** DEC-230–261 (32 decisions)
 **Prerequisites:** Databento subscription activated ✅, IBKR account approved ✅
 **Exit criteria:** Full market session (9:30-4:00 ET) completed without crashes, all 4 strategies processing data, paper trades executing, Command Center operational with live data, clean overnight workflow verified
+
+### Sprint 21.5.1 — C2 Bug Fixes + UI Polish ✅ COMPLETE (Mar 5, 2026)
+**Unplanned sub-sprint** triggered by C2 paper trading findings.
+**Sessions:** 5 implementation + 1 hotfix (all in one day)
+**Tests added:** +25 pytest (1,712→1,737), +34 Vitest (257→291)
+**Decisions:** DEC-261
+**Key deliverables:**
+- Trading engine: flatten fill strategy_id matching, pending entry exposure in concentration check, ORB family same-symbol mutual exclusion (DEC-261)
+- Backend: daily P&L includes unrealized, 0.0 handling fix, bars endpoint real data, TradeResponse stop/target fields
+- Frontend: strategy colors, price levels display, position timeline zoom, PositionDetailPanel, TradeChart (Lightweight Charts v5), trade filters
+- Hotfix: removed is_dev_mode gate blocking real bars data in paper trading
 
 ### Sprint 21.7 — FMP Scanner Integration (DEC-257, DEC-258, DEC-259)
 **Status:** QUEUED (follows Sprint 21.5 completion)

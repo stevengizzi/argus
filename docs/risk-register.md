@@ -471,7 +471,7 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 | **Risk** | IB Gateway disconnects nightly between 11:45 PM – 12:45 AM ET for system maintenance. All API connections drop. This is a known, documented behavior — not a bug. Reconnection failures could cause missed trades or position tracking errors if they bleed into market hours. |
 | **Severity** | Low (nightly reset itself), Medium (if reconnection fails before market open) |
 | **Likelihood** | High (nightly reset is guaranteed; question is whether reconnection handles it cleanly) |
-| **Mitigation** | (1) ARGUS trades only during market hours (9:30 AM – 4:00 PM ET). The reset window does not overlap. (2) Docker containerization of IB Gateway for consistent environment. (3) Robust reconnection logic with exponential backoff built into IBKRBroker adapter. (4) All stops placed broker-side — survive gateway disconnections. (5) State reconstruction (already implemented for Alpaca) rebuilds positions and orders from IBKR on reconnect. (6) HealthMonitor detects gateway state and alerts. (7) Community has solved this problem thousands of times — well-documented patterns exist. |
+| **Mitigation** | (1) ARGUS trades only during market hours (9:30 AM – 4:00 PM ET). The reset window does not overlap. (2) Docker containerization of IB Gateway for consistent environment. (3) Robust reconnection logic with exponential backoff built into IBKRBroker adapter. (4) All stops placed broker-side — survive gateway disconnections. (5) State reconstruction (already implemented for Alpaca) rebuilds positions and orders from IBKR on reconnect. (6) HealthMonitor detects gateway state and alerts. (7) Community has solved this problem thousands of times — well-documented patterns exist. Mitigated by DEC-254 (auto-shutdown after EOD flatten) and DEC-255 (IBKR maintenance error severity downgrade outside market hours). |
 | **Trigger for action** | Reconnection failures during paper trading that result in missed trades or position tracking errors. |
 | **Status** | Active — Sprint 21.5 addresses directly. IB Gateway setup (DEC-232), nightly restart handling, and reconnection validated in Sessions 6, 9. |
 
@@ -722,6 +722,30 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 | **Likelihood** | Medium |
 | **Mitigation** | Sprint 21.6 planned parallel with Sprint 22. Ensure it actually starts — don't let AI Layer work crowd it out. |
 | **Status** | Open |
+
+---
+
+### RSK-043 | ORB Dual-Fire on Same Symbol — RESOLVED
+
+| Field | Value |
+|-------|-------|
+| **Identified** | 2026-03-04 (C2 paper trading) |
+| **Resolved** | 2026-03-05 (Sprint 21.5.1 Session 1) |
+| **Description** | ORB Breakout and ORB Scalp fired simultaneously on the same symbol, doubling risk exposure beyond concentration limits. |
+| **Impact** | 4 incidents in C2: AMZN, NFLX, META, SPY. Effective concentration ~10–12.5% vs 5% cap. |
+| **Resolution** | DEC-261: ClassVar `_orb_family_triggered_symbols` on OrbBaseStrategy provides first-to-fire-wins mutual exclusion. |
+
+---
+
+### RSK-044 | Concentration Limit Race Condition — RESOLVED
+
+| Field | Value |
+|-------|-------|
+| **Identified** | 2026-03-04 (C2 analysis) |
+| **Resolved** | 2026-03-05 (Sprint 21.5.1 Session 1) |
+| **Description** | Multiple signals approved before fills arrived, allowing total exposure to exceed concentration limit. |
+| **Impact** | All 4 C2 dual-fire symbols hit ~12.3–12.5% vs 5% cap. |
+| **Resolution** | `get_pending_entry_exposure()` on OrderManager now included in Risk Manager concentration check. |
 
 ---
 

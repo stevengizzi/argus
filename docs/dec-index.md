@@ -1,7 +1,7 @@
 # ARGUS — Decision Index
 
-> 260 decisions (DEC-001 through DEC-260)
-> Generated: March 4, 2026 | Source: `docs/decision-log.md`
+> 261 decisions (DEC-001 through DEC-261)
+> Generated: March 5, 2026 | Source: `docs/decision-log.md`
 > Legend: ● Active | ○ Superseded | △ Amended | ✗ Duplicate entry
 
 
@@ -268,7 +268,7 @@
 - ● **DEC-246**: get_open_orders() Broker ABC Method
 - ● **DEC-247**: Scanner Resilience — historical data lag handling
 - ● **DEC-248**: EQUS.MINI Confirmed — all US exchanges, one feed
-- ● **DEC-249**: Concentration Limit — approve-with-modification, 0.25R floor
+- △ **DEC-249**: Concentration Limit — approve-with-modification, 0.25R floor — amended by DEC-251 (absolute $100 floor replaces ratio)
 - ● **DEC-250**: Metarepo Workflow Retrofit
 - ● **DEC-251**: Replace 0.25R Ratio Floor with Absolute Minimum Risk Floor
 - ● **DEC-252**: Round Order Prices to Tick Size Before IBKR Submission
@@ -280,3 +280,4 @@
 - ● **DEC-258**: FMP Starter for Pre-Market Scanning ($22/mo)
 - ● **DEC-259**: Sprint 21.7 — FMP Scanner Integration
 - ● **DEC-260**: Data Provider Evaluation — IQFeed, dxFeed, Exegy, Finnhub, QuantConnect rejected
+- ● **DEC-261**: ORB Family Same-Symbol Mutual Exclusion — ClassVar prevents dual-fire
