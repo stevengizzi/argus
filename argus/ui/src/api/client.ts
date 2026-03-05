@@ -277,11 +277,19 @@ export async function fetchStrategySpec(strategyId: string): Promise<StrategySpe
 // Market data endpoints
 export async function fetchSymbolBars(
   symbol: string,
-  limit: number = 390
+  limit?: number,
+  startTime?: string,
+  endTime?: string,
 ): Promise<BarsResponse> {
   const searchParams = new URLSearchParams();
-  if (limit !== 390) {
+  if (limit !== undefined && limit !== 390) {
     searchParams.set('limit', String(limit));
+  }
+  if (startTime) {
+    searchParams.set('start_time', startTime);
+  }
+  if (endTime) {
+    searchParams.set('end_time', endTime);
   }
   const query = searchParams.toString();
   return fetchWithAuth<BarsResponse>(`/market/${symbol}/bars${query ? `?${query}` : ''}`);

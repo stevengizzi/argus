@@ -8,6 +8,7 @@
 import { TrendingUp, TrendingDown, Target, Shield, Clock, ExternalLink } from 'lucide-react';
 import { SlideInPanel } from '../../components/SlideInPanel';
 import { Badge } from '../../components/Badge';
+import { TradeChart } from '../../components/TradeChart';
 import { useSymbolDetailUI } from '../../stores/symbolDetailUI';
 import type { Trade } from '../../api/types';
 import {
@@ -184,6 +185,18 @@ export function TradeDetailPanel({ trade, onClose }: TradeDetailPanelProps) {
               )}
             </div>
           </div>
+
+          {/* Trade Chart */}
+          <TradeChart
+            symbol={trade.symbol}
+            entryTime={trade.entry_time}
+            exitTime={trade.exit_time ?? undefined}
+            entryPrice={trade.entry_price}
+            exitPrice={trade.exit_price ?? undefined}
+            stopPrice={trade.stop_price ?? undefined}
+            targetPrices={trade.target_prices ?? undefined}
+            isOpen={false}
+          />
 
           {/* Exit Reason */}
           {trade.exit_reason && (

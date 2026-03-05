@@ -14,6 +14,11 @@ vi.mock('../../stores/symbolDetailUI', () => ({
   useSymbolDetailUI: () => ({ open: vi.fn() }),
 }));
 
+// Mock the TradeChart component since it makes API calls
+vi.mock('../../components/TradeChart', () => ({
+  TradeChart: () => <div data-testid="mock-trade-chart">Trade Chart</div>,
+}));
+
 const mockTrade: Trade = {
   id: 'trade-001',
   strategy_id: 'strat_orb_breakout',

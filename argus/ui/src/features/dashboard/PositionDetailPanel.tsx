@@ -9,6 +9,7 @@ import { TrendingUp, Target, Shield, Clock, ExternalLink } from 'lucide-react';
 import { SlideInPanel } from '../../components/SlideInPanel';
 import { Badge, StrategyBadge } from '../../components/Badge';
 import { PnlValue } from '../../components/PnlValue';
+import { TradeChart } from '../../components/TradeChart';
 import { useSymbolDetailUI } from '../../stores/symbolDetailUI';
 import type { Position } from '../../api/types';
 import {
@@ -156,6 +157,17 @@ export function PositionDetailPanel({ position, onClose }: PositionDetailPanelPr
               <div className="text-lg font-medium tabular-nums">{formatPrice(position.livePrice)}</div>
             </div>
           </div>
+
+          {/* Trade Chart */}
+          <TradeChart
+            symbol={position.symbol}
+            entryTime={position.entry_time}
+            entryPrice={position.entry_price}
+            currentPrice={position.livePrice}
+            stopPrice={position.stop_price}
+            targetPrices={[position.t1_price, position.t2_price]}
+            isOpen={true}
+          />
 
           {/* Position Details */}
           <div className="space-y-3">
