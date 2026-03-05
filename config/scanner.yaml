@@ -1,16 +1,36 @@
 # Scanner Configuration
 # Controls pre-market stock selection
+# scanner_type: "fmp" | "databento" | "alpaca" | "static"
+# "fmp" uses Financial Modeling Prep REST API (DEC-258, Sprint 21.7)
+# "static" used for replay/backtest; "databento"/"alpaca" retained for fallback
+scanner_type: "fmp"
 
-# Scanner type: "static" for replay/backtest, "alpaca" for live trading
-scanner_type: "static"
-
-# Static scanner symbols (used when scanner_type = "static")
+# Static scanner symbols (fallback for all scanner types when API fails)
 static_symbols:
   - "AAPL"
   - "MSFT"
   - "NVDA"
   - "TSLA"
   - "AMD"
+  - "AMZN"
+  - "META"
+  - "GOOGL"
+
+# FMP scanner configuration (used when scanner_type = "fmp")
+fmp_scanner:
+  min_price: 10.0
+  max_price: 500.0
+  min_volume: 500000
+  max_symbols_returned: 15
+  fallback_symbols:
+    - "AAPL"
+    - "MSFT"
+    - "NVDA"
+    - "TSLA"
+    - "AMD"
+    - "AMZN"
+    - "META"
+    - "GOOGL"
 
 # Alpaca scanner configuration (used when scanner_type = "alpaca")
 alpaca_scanner:
@@ -31,7 +51,7 @@ alpaca_scanner:
   min_volume_yesterday: 1000000
   max_symbols_returned: 10
 
-# Databento scanner configuration (used when data_source = "databento")
+# Databento scanner configuration (used when scanner_type = "databento")
 databento_scanner:
   universe_symbols:
     - "AAPL"

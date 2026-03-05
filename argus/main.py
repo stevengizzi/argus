@@ -58,6 +58,8 @@ from argus.data.alpaca_data_service import AlpacaDataService
 from argus.data.alpaca_scanner import AlpacaScanner
 from argus.data.databento_data_service import DatabentoDataService
 from argus.data.databento_scanner import DatabentoScanner, DatabentoScannerConfig
+from argus.data.fmp_scanner import FMPScannerConfig, FMPScannerSource
+from argus.data.scanner import StaticScanner
 from argus.db.manager import DatabaseManager
 from argus.execution.alpaca_broker import AlpacaBroker
 from argus.execution.order_manager import OrderManager
@@ -115,6 +117,7 @@ class ArgusSystem:
         self._orchestrator: Orchestrator | None = None
         self._api_task: asyncio.Task[None] | None = None
         self._config: object | None = None  # Store config for API access
+        self._cached_watchlist: list = []  # Scanner results for API watchlist endpoint
 
     async def start(self) -> None:
         """Initialize and start all components in dependency order.
@@ -234,7 +237,14 @@ class ArgusSystem:
         logger.info("[7/12] Running pre-market scan...")
         scanner_yaml = load_yaml_file(self._config_dir / "scanner.yaml")
 
-        if config.system.data_source == DataSource.DATABENTO:
+        scanner_type = scanner_yaml.get("scanner_type", "static")
+
+        if scanner_type == "fmp":
+            logger.info("Using FMP scanner")
+            fmp_scanner_data = scanner_yaml.get("fmp_scanner", {})
+            fmp_config = FMPScannerConfig(**fmp_scanner_data)
+            self._scanner = FMPScannerSource(config=fmp_config)
+        elif scanner_type == "databento":
             logger.info("Using Databento scanner")
             databento_scanner_data = scanner_yaml.get("databento_scanner", {})
             db_scanner_config = DatabentoScannerConfig(**databento_scanner_data)
@@ -242,7 +252,7 @@ class ArgusSystem:
                 config=db_scanner_config,
                 databento_config=config.broker.databento,
             )
-        else:
+        elif scanner_type == "alpaca":
             logger.info("Using Alpaca scanner")
             alpaca_scanner_data = scanner_yaml.get("alpaca_scanner", {})
             scanner_config = AlpacaScannerConfig(**alpaca_scanner_data)
@@ -250,10 +260,15 @@ class ArgusSystem:
                 config=scanner_config,
                 alpaca_config=config.broker.alpaca,
             )
+        else:
+            logger.info("Using static scanner (type=%s)", scanner_type)
+            static_symbols = scanner_yaml.get("static_symbols", [])
+            self._scanner = StaticScanner(symbols=static_symbols)
         await self._scanner.start()
 
         # Scan with empty criteria list (use scanner defaults)
         watchlist = await self._scanner.scan([])
+        self._cached_watchlist = watchlist
         symbols = [item.symbol for item in watchlist]
 
         if not symbols:
@@ -463,6 +478,7 @@ class ArgusSystem:
                     clock=self._clock,
                     config=config.system,
                     start_time=time.time(),
+                    cached_watchlist=self._cached_watchlist,
                 )
                 api_app = create_app(app_state)
 

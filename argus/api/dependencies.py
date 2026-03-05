@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from argus.core.clock import Clock
     from argus.core.config import SystemConfig
     from argus.core.event_bus import EventBus
+    from argus.core.events import WatchlistItem
     from argus.core.health import HealthMonitor
     from argus.core.orchestrator import Orchestrator
     from argus.core.risk_manager import RiskManager
@@ -47,6 +48,7 @@ class AppState:
         config: System configuration.
         start_time: Unix timestamp of when the system started.
         debrief_service: Service for The Debrief page content.
+        cached_watchlist: Cached scanner results for the current session.
     """
 
     event_bus: EventBus
@@ -62,6 +64,7 @@ class AppState:
     config: SystemConfig | None = None
     start_time: float = 0.0
     debrief_service: DebriefService | None = None
+    cached_watchlist: list[WatchlistItem] = field(default_factory=list)
 
 
 def get_app_state(request: Request) -> AppState:

@@ -43,6 +43,8 @@ class WatchlistItem(BaseModel):
     vwap_state: VwapState
     sparkline: list[SparklinePoint]  # Last 30 data points for mini chart
     vwap_distance_pct: float | None = None  # (price - vwap) / vwap, signed. None if no VWAP.
+    scan_source: str = ""  # "fmp" | "fmp_fallback" | "static" | ""
+    selection_reason: str = ""  # "gap_up_3.2%" | "gap_down_1.8%" | "high_volume" | ""
 
 
 class WatchlistResponse(BaseModel):
@@ -90,9 +92,20 @@ async def get_watchlist(
         if mock_watchlist is not None:
             watchlist_items = mock_watchlist
     else:
-        # Production mode: aggregate from scanner and strategies
-        # This is a placeholder for the production implementation
-        pass
+        # Production mode: aggregate from scanner's cached watchlist
+        for core_item in state.cached_watchlist:
+            watchlist_items.append(
+                WatchlistItem(
+                    symbol=core_item.symbol,
+                    current_price=0.0,  # Populated from data_service in Sprint 22+
+                    gap_pct=core_item.gap_pct,
+                    strategies=[],  # Populated from strategy states in Sprint 22+
+                    vwap_state=VwapState.WATCHING,
+                    sparkline=[],
+                    scan_source=core_item.scan_source,
+                    selection_reason=core_item.selection_reason,
+                )
+            )
 
     return WatchlistResponse(
         symbols=watchlist_items,

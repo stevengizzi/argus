@@ -176,7 +176,7 @@ class TestScannerConfig:
     def test_loads_from_yaml(self) -> None:
         """Scanner config loads from scanner.yaml."""
         config = load_scanner_config(Path("config/scanner.yaml"))
-        assert config.scanner_type == "static"
+        assert config.scanner_type == "fmp"  # Sprint 21.7: FMP scanner for production
         assert "AAPL" in config.static_symbols
 
     def test_custom_symbols(self) -> None:

@@ -276,6 +276,8 @@ export interface WatchlistItem {
   vwap_state: VwapState;
   sparkline: SparklinePoint[];
   vwap_distance_pct: number | null;  // (current_price - vwap) / vwap, signed. Null if VWAP not tracked.
+  scan_source: string;  // "fmp" | "fmp_fallback" | "static" | ""
+  selection_reason: string;  // "gap_up_3.2%" | "gap_down_1.8%" | "high_volume" | ""
 }
 
 export interface WatchlistResponse {

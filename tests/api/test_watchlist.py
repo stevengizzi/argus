@@ -182,6 +182,52 @@ class TestWatchlistEndpoint:
 
         assert response.status_code == 401
 
+    @pytest.mark.asyncio
+    async def test_watchlist_response_includes_scan_source_field(
+        self,
+        client_with_watchlist: AsyncClient,
+        auth_headers: dict[str, str],
+    ) -> None:
+        """Watchlist items include scan_source field."""
+        response = await client_with_watchlist.get("/api/v1/watchlist", headers=auth_headers)
+
+        assert response.status_code == 200
+        data = response.json()
+
+        for item in data["symbols"]:
+            assert "scan_source" in item
+            assert isinstance(item["scan_source"], str)
+
+        # Check expected values from mock data
+        sources = {item["symbol"]: item["scan_source"] for item in data["symbols"]}
+        assert sources["NVDA"] == "fmp"
+        assert sources["TSLA"] == "fmp"
+        assert sources["PLTR"] == "fmp"
+        assert sources["SOFI"] == "fmp_fallback"
+
+    @pytest.mark.asyncio
+    async def test_watchlist_response_includes_selection_reason_field(
+        self,
+        client_with_watchlist: AsyncClient,
+        auth_headers: dict[str, str],
+    ) -> None:
+        """Watchlist items include selection_reason field."""
+        response = await client_with_watchlist.get("/api/v1/watchlist", headers=auth_headers)
+
+        assert response.status_code == 200
+        data = response.json()
+
+        for item in data["symbols"]:
+            assert "selection_reason" in item
+            assert isinstance(item["selection_reason"], str)
+
+        # Check expected values from mock data
+        reasons = {item["symbol"]: item["selection_reason"] for item in data["symbols"]}
+        assert reasons["NVDA"] == "gap_up_3.2%"
+        assert reasons["TSLA"] == "gap_up_2.8%"
+        assert reasons["PLTR"] == "gap_up_5.5%"
+        assert reasons["SOFI"] == ""  # Fallback has no selection_reason
+
 
 # Fixture for client with mock watchlist data
 @pytest.fixture
@@ -210,6 +256,8 @@ async def app_state_with_watchlist(app_state):
             vwap_state=VwapState.ABOVE_VWAP,
             sparkline=create_sparkline(875.50),
             vwap_distance_pct=0.0045,  # Above VWAP: positive
+            scan_source="fmp",
+            selection_reason="gap_up_3.2%",
         ),
         WatchlistItem(
             symbol="TSLA",
@@ -219,6 +267,8 @@ async def app_state_with_watchlist(app_state):
             vwap_state=VwapState.WATCHING,
             sparkline=create_sparkline(225.80),
             vwap_distance_pct=None,  # No VWAP strategy
+            scan_source="fmp",
+            selection_reason="gap_up_2.8%",
         ),
         WatchlistItem(
             symbol="PLTR",
@@ -228,6 +278,8 @@ async def app_state_with_watchlist(app_state):
             vwap_state=VwapState.ENTERED,
             sparkline=create_sparkline(32.50),
             vwap_distance_pct=0.0032,  # Entered: positive
+            scan_source="fmp",
+            selection_reason="gap_up_5.5%",
         ),
         WatchlistItem(
             symbol="SOFI",
@@ -237,6 +289,8 @@ async def app_state_with_watchlist(app_state):
             vwap_state=VwapState.BELOW_VWAP,
             sparkline=create_sparkline(15.20),
             vwap_distance_pct=-0.0055,  # Below VWAP: negative
+            scan_source="fmp_fallback",
+            selection_reason="",
         ),
     ]
 
@@ -250,8 +304,6 @@ async def client_with_watchlist(
     jwt_secret: str,
 ):
     """Provide client with AppState containing mock watchlist."""
-    from collections.abc import AsyncGenerator
-
     from httpx import ASGITransport, AsyncClient
 
     from argus.api.server import create_app
