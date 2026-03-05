@@ -700,6 +700,51 @@ class AlpacaScanner(Scanner):
 
 **Data Source:** Uses `StockHistoricalDataClient.get_stock_snapshot()` for batch snapshot retrieval. Gap calculated as `(open_price - prev_close) / prev_close`.
 
+### 3.7c FMPScannerSource (`data/fmp_scanner.py`)
+
+Pre-market scanner using Financial Modeling Prep (FMP) REST API. Primary scanner for production (DEC-258, Sprint 21.7).
+
+**Constructor:**
+```python
+class FMPScannerSource(Scanner):
+    def __init__(
+        self,
+        config: FMPScannerConfig,
+    ) -> None
+```
+
+**Interface (implements Scanner ABC):**
+```python
+class FMPScannerSource(Scanner):
+    async def start(self) -> None:
+        """Read FMP_API_KEY from environment. Raises if missing."""
+
+    async def stop(self) -> None:
+        """Clear API key from memory."""
+
+    async def scan(self, criteria_list: list[ScannerCriteria]) -> list[WatchlistItem]:
+        """Scan using FMP gainers/losers/actives endpoints.
+        1. Fetch from /api/v3/gainers, /api/v3/losers, /api/v3/actives (concurrent)
+        2. Deduplicate (gainers/losers win over actives)
+        3. Filter by price range, volume
+        4. Sort by absolute gap_pct descending
+        5. Return top max_symbols_returned as WatchlistItems
+        Falls back to static symbols if API fails.
+        """
+```
+
+**Configuration (FMPScannerConfig):**
+- `min_price`, `max_price` — Price range filter (default 10–500)
+- `min_volume` — Volume filter (default 500,000)
+- `max_symbols_returned` — Cap on results (default 15)
+- `fallback_symbols: list[str]` — Static fallback if API fails
+
+**Data Source:** FMP REST API. Gap = `changesPercentage / 100`. Selection reason populated from endpoint source (`gap_up_X.X%`, `gap_down_X.X%`, `high_volume`).
+
+**WatchlistItem Fields (Sprint 21.7):**
+- `scan_source: str` — "fmp", "fmp_fallback", or "static"
+- `selection_reason: str` — Human-readable selection rationale
+
 ### 3.8 Health Monitor (`core/health.py`)
 
 Tracks system health, sends heartbeat pings, and dispatches critical alerts.

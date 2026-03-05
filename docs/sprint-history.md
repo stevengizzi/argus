@@ -229,13 +229,23 @@
 **Key decisions:** DEC-261.
 **Notes:** Most UI-dense sub-sprint. All C2 critical bugs resolved in single day.
 
+### Sprint 21.7 — FMP Scanner Integration (1754 pytest + 296 Vitest, +17/+5)
+**Date:** Mar 5, 2026
+**Scope:** Integrate Financial Modeling Prep (FMP) Starter as pre-market scanning data source (DEC-258/259). Replaces static watchlist with dynamic gap/volume scanning across full US equity universe.
+**Session 1 (Backend):** `FMPScannerSource` implementing Scanner ABC. `WatchlistItem` extended with `scan_source` and `selection_reason` fields. 15 new pytest.
+**Session 2 (Backend):** Config routing in `main.py` (scanner_type dispatch from scanner.yaml). `scanner.yaml` fmp_scanner section. Watchlist API endpoint wiring. `AppState.cached_watchlist`. 2 new pytest.
+**Session 3 (Frontend):** `PreMarketWatchlistPanel` replaces `RankedWatchlistPlaceholder`. Source badge (FMP green / Static neutral). Gap% coloring. Selection reason formatting. 5 new Vitest.
+**Key decisions:** DEC-258 (FMP Starter), DEC-259 (Sprint 21.7 scope).
+**Sessions:** 3 implementation + 3 Tier 2 reviews.
+**Notes:** Cleanest focused mini-sprint. All 3 sessions CLEAN self-assessment, all Tier 2 reviews APPROVED. Pre-market scanning now uses FMP gainers/losers/actives endpoints instead of static 10-symbol watchlist.
+
 ---
 
 ## Sprint Statistics
 
-- **Total sprints:** 21 full + 7 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1)
-- **Total sessions:** ~205+ Claude Code sessions
-- **Total tests:** 1,737 pytest + 291 Vitest = 2,028 total
+- **Total sprints:** 21 full + 8 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.7)
+- **Total sessions:** ~210+ Claude Code sessions
+- **Total tests:** 1,754 pytest + 296 Vitest = 2,050 total
 - **Total decisions:** 261 (DEC-001 through DEC-261)
 - **Calendar days (active dev):** ~20 (Feb 14 – Mar 5, 2026)
 - **Largest sprint:** 21.5 (~25 sessions, scope expansion from 13 planned)

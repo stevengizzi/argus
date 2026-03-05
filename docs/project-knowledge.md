@@ -11,10 +11,10 @@ ARGUS is a fully automated, AI-enhanced multi-strategy day trading system for US
 
 ## Current State
 
-**Tests:** 1,737 pytest + 291 Vitest
-**Sprints completed:** 1 through 21.5.1 (21 full sprints + sub-sprints + live integration)
+**Tests:** 1,754 pytest + 296 Vitest
+**Sprints completed:** 1 through 21.7 (21 full sprints + sub-sprints + FMP integration)
 **Active sprint:** None (between sprints)
-**Next sprint:** 21.7 (FMP Scanner Integration) → 22 (AI Layer MVP)
+**Next sprint:** 22 (AI Layer MVP)
 **GitHub:** `https://github.com/stevengizzi/argus.git` (public)
 
 ### Sprint History (Summary)
@@ -40,12 +40,13 @@ ARGUS is a fully automated, AI-enhanced multi-strategy day trading system for US
 | 21d | Dashboard+Performance+System+Copilot shell | 1712+257V | Feb 27–28 | DEC-204–229 |
 | 21.5 | Live Integration | 1737+291V | Feb 28–Mar 5 | DEC-230–261 |
 | 21.5.1 | C2 Bug Fixes + UI Polish | (included above) | Mar 5 | DEC-261 |
+| 21.7 | FMP Scanner Integration | 1754+296V | Mar 5 | DEC-258–259 |
 
 *Full sprint scopes and session details: `docs/sprint-history.md`*
 
 ### Build Track Queue
 
-21.7 (FMP Scanner Integration, DEC-259) → 21.6 (Backtest Re-Validation, parallel w/ 22) → 22 (AI Layer MVP) → 23 (NLP Catalyst + Pre-Market Engine) → 24 (Setup Quality Engine + Dynamic Sizer) → 25 (Red-to-Green + Pattern Library) → 26 (Pattern Expansion I) → 27 (Short Selling + Parabolic Short) → 28–32+ (Pattern Expansion II/III, Learning Loop, Orchestrator V2). Order Flow Model deferred to post-revenue (DEC-238).
+21.6 (Backtest Re-Validation, parallel w/ 22) → 22 (AI Layer MVP) → 23 (NLP Catalyst + Pre-Market Engine) → 24 (Setup Quality Engine + Dynamic Sizer) → 25 (Red-to-Green + Pattern Library) → 26 (Pattern Expansion I) → 27 (Short Selling + Parabolic Short) → 28–32+ (Pattern Expansion II/III, Learning Loop, Orchestrator V2). Order Flow Model deferred to post-revenue (DEC-238).
 
 ### Validation Track
 
@@ -136,7 +137,7 @@ Per-trade risk: 0.5–1% of strategy allocation. Daily loss limit: 3–5%. Weekl
 - **IBKR Gateway:** Requires running Java process. Nightly resets need automated reconnection (RSK-022).
 - **Pre-Databento backtests provisional:** All pre-Databento parameter optimization requires re-validation (DEC-132).
 - **No live L2/L3 on Standard plan:** Requires Plus tier $1,399/mo (DEC-237).
-- **Databento EQUS.MINI historical lag:** Multi-day lag for daily bars (DEC-247). Scanner currently uses static watchlist fallback. FMP Starter integration (Sprint 21.7, DEC-258/259) will provide reliable pre-market daily bars for dynamic symbol selection.
+- **Databento EQUS.MINI historical lag:** Multi-day lag for daily bars (DEC-247). **Resolved by Sprint 21.7:** FMP Scanner now provides dynamic pre-market symbol selection via gainers/losers/actives endpoints.
 - **Latency from Taipei:** ~150–200ms to US exchanges. Scalping has structural disadvantages; longer-duration strategies (5–30 min holds) preferred.
 - **Secrets:** All API keys in encrypted secrets manager, never in code/git.
 - **Audit:** Every action logged immutably.

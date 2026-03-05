@@ -5,27 +5,15 @@
 
 ## Active Sprint
 
-**Sprint 21.7: FMP Scanner Integration**
-Sprint package: `docs/sprints/sprint-21.7/`
-Design summary: `docs/sprints/sprint-21.7/design-summary.md`
+**No active sprint.** Sprint 21.7 (FMP Scanner Integration) completed March 5, 2026.
 
-Session status:
-- [ ] Session 0: Prep (FMP activation, API key, branch)
-- [ ] Session 1: FMPScannerSource + WatchlistItem extension
-- [ ] Session 2: Config routing + API endpoint wiring
-- [ ] Session 3: Pre-Market Watchlist panel (frontend)
-
-Key constraints this sprint:
-- Do NOT modify DatabentoScanner, AlpacaScanner, StaticScanner
-- Do NOT modify any strategy files
-- scanner_type routing comes from scanner.yaml, not data_source
-- FMP_API_KEY must be read from environment at start(), never hardcoded
+Next sprint: **22 (AI Layer MVP)** — Claude API integration, AI Copilot activation.
 
 ## Current State
 
-- **Active sprint:** 21.7 (FMP Scanner Integration)
+- **Active sprint:** None (between sprints)
 - **Next sprint:** 22 (AI Layer MVP)
-- **Tests:** 1,737 pytest + 291 Vitest
+- **Tests:** 1,754 pytest + 296 Vitest
 - **Strategies:** 4 active (ORB Breakout, ORB Scalp, VWAP Reclaim, Afternoon Momentum)
 - **Infrastructure:** Databento EQUS.MINI (live) + IBKR paper trading (Account U24619949) + FMP Starter (Sprint 21.7, scanning)
 - **Frontend:** 7-page Command Center (all built), Tauri desktop + PWA mobile
@@ -149,6 +137,7 @@ python scripts/test_time_stop_eod.py     # Time stop + EOD flatten (IBKR or mock
 - Separate configs: system.yaml (Alpaca incubator), system_live.yaml (Databento + IBKR) (DEC-231)
 - NEVER hardcode configuration values — always read from YAML config files
 - Broker API keys and secrets NEVER in code or committed files — environment variables only
+- FMP_API_KEY required for pre-market scanning (Sprint 21.7, DEC-258)
 
 ### Backtesting
 - VectorBT: precompute+vectorize architecture MANDATORY (DEC-149)
@@ -214,7 +203,7 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 | DEF-020 | Cross-strategy sector exposure check (max_single_sector_pct) | IQFeed subscription activated OR fundamentals data source integrated | Risk Manager cross-strategy checks skip sector exposure in V1 — no sector classification data available (DEC-126). Requires SIC/GICS mapping per symbol. Single-stock cap (5%) provides concentration protection meanwhile. |
 | DEF-021 | Sub-bar backtesting precision for ORB Scalp | Databento tick-level data available for backtesting OR Scalp paper trading results diverge significantly from backtests | Synthetic ticks give ~15s granularity per 1m bar (DEC-053). Scalp targets 30–120s holds — time stops shorter than 60s resolve at nearest bar boundary. Backtesting results are directional guidance, not exact P&L. |
 | DEF-022 | VwapBaseStrategy ABC extraction | Second VWAP-based strategy designed (e.g., VWAP Fade) | No shared logic exists yet — VwapReclaimStrategy inherits directly from BaseStrategy (DEC-136). If a second VWAP variant is built, extract shared VWAP crossover tracking into a VwapBaseStrategy ABC. Follows the OrbBaseStrategy extraction pattern (DEC-120). |
-| DEF-023 | Watchlist Endpoint Production Implementation | Sprint 20+ when live scanner generates watchlist candidates | GET /api/v1/watchlist returns mock data only via `_mock_watchlist` attribute injection. Production implementation needs to aggregate from: Scanner watchlist, Strategy state (which symbols each strategy tracks), DataService (prices, sparkline), and VWAP Reclaim strategy state. Location: `argus/api/routes/watchlist.py`. |
+| ~~DEF-023~~ | ~~Watchlist Endpoint Production Implementation~~ | — | **PARTIALLY RESOLVED** (Sprint 21.7): Watchlist endpoint now reads from `cached_watchlist` (scan_source, selection_reason populated). Remaining: current_price, sparkline, strategy state aggregation. |
 | DEF-024 | Trailing Stop Mechanism | Walk-forward shows afternoon moves routinely exceed T2 targets | Order Manager trailing stop logic, Risk Manager awareness, VectorBT sweep support, backtesting infrastructure. Touches cross-cutting concerns across execution, risk, and backtesting layers. T1/T2 fixed targets proven across four strategies — trailing stop adds complexity only if data shows clear benefit. DEC-158. |
 | DEF-025 | Shared Consolidation Base Class | Second consolidation-based strategy designed (e.g., Midday Range Breakout) | AfternoonMomentumStrategy inherits directly from BaseStrategy (DEC-152). If a second consolidation variant is built, extract shared midday range tracking into a ConsolidationBaseStrategy ABC. Follows the OrbBaseStrategy extraction pattern (DEC-120). |
 | ~~DEF-026~~ | ~~FTS5 full-text search~~ | — | **RESOLVED** (DEC-200): LIKE queries shipped as V1 solution. FTS5 deferred to >10K entries. |
@@ -228,9 +217,9 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 
 | Document | What It Covers |
 |----------|---------------|
-| `docs/decision-log.md` | All 260 DEC entries with full rationale |
+| `docs/decision-log.md` | All 261 DEC entries with full rationale |
 | `docs/dec-index.md` | Quick-reference index with status markers |
-| `docs/sprint-history.md` | Complete sprint history (1–21.5) |
+| `docs/sprint-history.md` | Complete sprint history (1–21.7) |
 | `docs/process-evolution.md` | Workflow evolution narrative |
 | `docs/LIVE_OPERATIONS.md` | Live trading procedures (418 lines) |
 | `docs/strategies/STRATEGY_*.md` | Per-strategy spec sheets |
