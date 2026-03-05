@@ -1376,7 +1376,11 @@ class TestOrbScalpSignalProperties:
     @pytest.mark.asyncio
     async def test_different_scalp_target_r_values(self) -> None:
         """Test different scalp_target_r values."""
+        from argus.strategies.orb_base import OrbBaseStrategy
+
         for target_r in [0.2, 0.4, 0.5]:
+            # Clear exclusion set between iterations (each iteration fires on AAPL)
+            OrbBaseStrategy._orb_family_triggered_symbols.clear()
             config = make_scalp_config(scalp_target_r=target_r, chase_protection_pct=0.02)
             mock_data_service = AsyncMock()
             mock_data_service.get_indicator.side_effect = lambda s, i: {
@@ -1415,7 +1419,11 @@ class TestOrbScalpSignalProperties:
     @pytest.mark.asyncio
     async def test_different_max_hold_seconds_values(self) -> None:
         """Test different max_hold_seconds values."""
+        from argus.strategies.orb_base import OrbBaseStrategy
+
         for hold_seconds in [30, 60, 300]:
+            # Clear exclusion set between iterations (each iteration fires on AAPL)
+            OrbBaseStrategy._orb_family_triggered_symbols.clear()
             config = make_scalp_config(max_hold_seconds=hold_seconds, chase_protection_pct=0.02)
             mock_data_service = AsyncMock()
             mock_data_service.get_indicator.side_effect = lambda s, i: {

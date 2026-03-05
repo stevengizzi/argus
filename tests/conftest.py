@@ -11,6 +11,7 @@ from argus.core.event_bus import EventBus
 from argus.core.risk_manager import RiskManager
 from argus.db.manager import DatabaseManager
 from argus.execution.simulated_broker import SimulatedBroker
+from argus.strategies.orb_base import OrbBaseStrategy
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
@@ -64,3 +65,16 @@ def risk_manager(
         broker=simulated_broker,
         event_bus=bus,
     )
+
+
+@pytest.fixture(autouse=True)
+def clear_orb_family_exclusion_set() -> None:
+    """Clear the ORB family exclusion set before and after each test.
+
+    The _orb_family_triggered_symbols is a class variable shared across
+    all OrbBaseStrategy subclasses. If not cleared between tests, state
+    from one test can affect another, causing false failures.
+    """
+    OrbBaseStrategy._orb_family_triggered_symbols.clear()
+    yield
+    OrbBaseStrategy._orb_family_triggered_symbols.clear()

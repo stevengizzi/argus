@@ -1026,3 +1026,263 @@ class TestEarliestEntryEnforcement:
         assert signal is not None
         assert signal.symbol == "TSLA"
         assert signal.entry_price == 102.0
+
+
+class TestOrbFamilyExclusion:
+    """Tests for ORB family same-symbol mutual exclusion (DEC-261).
+
+    When one ORB strategy fires on a symbol, other ORB strategies should
+    not also fire on that same symbol in the same session.
+    """
+
+    @pytest.mark.asyncio
+    async def test_orb_breakout_firing_blocks_orb_scalp(self) -> None:
+        """When ORB Breakout fires on AAPL, ORB Scalp should not also fire on AAPL."""
+        from argus.core.config import OrbScalpConfig
+        from argus.strategies.orb_base import OrbBaseStrategy
+        from argus.strategies.orb_scalp import OrbScalpStrategy
+        from datetime import timedelta
+
+        # Clear the class-level exclusion set for clean test
+        OrbBaseStrategy._orb_family_triggered_symbols.clear()
+
+        # Create ORB Breakout strategy
+        breakout_config = make_orb_config(
+            strategy_id="strat_orb_breakout",
+            orb_window_minutes=15,
+            chase_protection_pct=0.02,
+        )
+        mock_data_service = AsyncMock()
+        mock_data_service.get_indicator.side_effect = lambda s, i: {
+            "atr_14": 2.0,
+            "vwap": 100.0,
+        }.get(i)
+
+        breakout_strategy = OrbBreakoutStrategy(breakout_config, data_service=mock_data_service)
+        breakout_strategy.allocated_capital = 100_000
+        breakout_strategy.set_watchlist(["AAPL"])
+
+        # Create ORB Scalp strategy
+        scalp_config = OrbScalpConfig(
+            strategy_id="strat_orb_scalp",
+            name="ORB Scalp",
+            orb_window_minutes=15,
+            scalp_target_r=0.3,
+            max_hold_seconds=120,
+            risk_limits=StrategyRiskLimits(
+                max_trades_per_day=12,
+                max_daily_loss_pct=0.03,
+                max_loss_per_trade_pct=0.01,
+                max_concurrent_positions=2,
+            ),
+            operating_window=OperatingWindow(latest_entry="11:30"),
+        )
+        scalp_strategy = OrbScalpStrategy(scalp_config, data_service=mock_data_service)
+        scalp_strategy.allocated_capital = 100_000
+        scalp_strategy.set_watchlist(["AAPL"])
+
+        # Feed OR candles to both strategies
+        base_time = datetime(2025, 6, 2, 13, 30, 0, tzinfo=UTC)
+        for i in range(15):
+            candle = make_candle(
+                symbol="AAPL",
+                timestamp=base_time + timedelta(minutes=i),
+                high=101.0,
+                low=99.0,
+                close=100.0,
+                volume=100_000,
+            )
+            await breakout_strategy.on_candle(candle)
+            await scalp_strategy.on_candle(candle)
+
+        # Finalize OR
+        finalize_candle = make_candle(
+            symbol="AAPL",
+            timestamp=datetime(2025, 6, 2, 13, 45, 0, tzinfo=UTC),
+        )
+        await breakout_strategy.on_candle(finalize_candle)
+        await scalp_strategy.on_candle(finalize_candle)
+
+        # Send breakout candle
+        breakout_candle = make_candle(
+            symbol="AAPL",
+            timestamp=datetime(2025, 6, 2, 14, 0, 0, tzinfo=UTC),
+            open_price=101.0,
+            high=102.5,
+            low=100.8,
+            close=102.0,
+            volume=200_000,
+        )
+
+        # Breakout fires first
+        breakout_signal = await breakout_strategy.on_candle(breakout_candle)
+        assert breakout_signal is not None
+        assert "AAPL" in OrbBaseStrategy._orb_family_triggered_symbols
+
+        # Scalp should NOT fire (same symbol already triggered)
+        scalp_signal = await scalp_strategy.on_candle(breakout_candle)
+        assert scalp_signal is None
+
+        # Clean up
+        OrbBaseStrategy._orb_family_triggered_symbols.clear()
+
+    @pytest.mark.asyncio
+    async def test_orb_exclusion_allows_different_symbols(self) -> None:
+        """ORB exclusion only blocks same symbol, not different symbols."""
+        from argus.core.config import OrbScalpConfig
+        from argus.strategies.orb_base import OrbBaseStrategy
+        from argus.strategies.orb_scalp import OrbScalpStrategy
+        from datetime import timedelta
+
+        # Clear the class-level exclusion set
+        OrbBaseStrategy._orb_family_triggered_symbols.clear()
+
+        # Create strategies
+        breakout_config = make_orb_config(
+            strategy_id="strat_orb_breakout",
+            orb_window_minutes=15,
+            chase_protection_pct=0.02,
+        )
+        mock_data_service = AsyncMock()
+        mock_data_service.get_indicator.side_effect = lambda s, i: {
+            "atr_14": 2.0,
+            "vwap": 100.0,
+        }.get(i)
+
+        breakout_strategy = OrbBreakoutStrategy(breakout_config, data_service=mock_data_service)
+        breakout_strategy.allocated_capital = 100_000
+        breakout_strategy.set_watchlist(["AAPL", "NVDA"])
+
+        scalp_config = OrbScalpConfig(
+            strategy_id="strat_orb_scalp",
+            name="ORB Scalp",
+            orb_window_minutes=15,
+            scalp_target_r=0.3,
+            max_hold_seconds=120,
+            risk_limits=StrategyRiskLimits(
+                max_trades_per_day=12,
+                max_daily_loss_pct=0.03,
+                max_loss_per_trade_pct=0.01,
+                max_concurrent_positions=2,
+            ),
+            operating_window=OperatingWindow(latest_entry="11:30"),
+        )
+        scalp_strategy = OrbScalpStrategy(scalp_config, data_service=mock_data_service)
+        scalp_strategy.allocated_capital = 100_000
+        scalp_strategy.set_watchlist(["AAPL", "NVDA"])
+
+        # Set up OR for AAPL
+        base_time = datetime(2025, 6, 2, 13, 30, 0, tzinfo=UTC)
+        for i in range(15):
+            candle = make_candle(
+                symbol="AAPL",
+                timestamp=base_time + timedelta(minutes=i),
+                high=101.0,
+                low=99.0,
+                close=100.0,
+                volume=100_000,
+            )
+            await breakout_strategy.on_candle(candle)
+
+        # Set up OR for NVDA on scalp strategy
+        for i in range(15):
+            candle = make_candle(
+                symbol="NVDA",
+                timestamp=base_time + timedelta(minutes=i),
+                high=501.0,
+                low=499.0,
+                close=500.0,
+                volume=100_000,
+            )
+            await scalp_strategy.on_candle(candle)
+
+        # Finalize
+        await breakout_strategy.on_candle(
+            make_candle(symbol="AAPL", timestamp=datetime(2025, 6, 2, 13, 45, 0, tzinfo=UTC))
+        )
+        await scalp_strategy.on_candle(
+            make_candle(symbol="NVDA", timestamp=datetime(2025, 6, 2, 13, 45, 0, tzinfo=UTC))
+        )
+
+        # Breakout fires on AAPL
+        breakout_signal = await breakout_strategy.on_candle(
+            make_candle(
+                symbol="AAPL",
+                timestamp=datetime(2025, 6, 2, 14, 0, 0, tzinfo=UTC),
+                close=102.0,
+                volume=200_000,
+            )
+        )
+        assert breakout_signal is not None
+        assert "AAPL" in OrbBaseStrategy._orb_family_triggered_symbols
+
+        # Scalp can still fire on NVDA (different symbol)
+        scalp_signal = await scalp_strategy.on_candle(
+            make_candle(
+                symbol="NVDA",
+                timestamp=datetime(2025, 6, 2, 14, 0, 0, tzinfo=UTC),
+                close=502.0,
+                volume=200_000,
+            )
+        )
+        assert scalp_signal is not None  # Should fire on different symbol
+
+        # Clean up
+        OrbBaseStrategy._orb_family_triggered_symbols.clear()
+
+    def test_reset_daily_state_clears_orb_family_exclusion(self) -> None:
+        """reset_daily_state clears the ORB family exclusion set."""
+        from argus.strategies.orb_base import OrbBaseStrategy
+
+        # Add a symbol to the exclusion set
+        OrbBaseStrategy._orb_family_triggered_symbols.add("AAPL")
+        OrbBaseStrategy._orb_family_triggered_symbols.add("NVDA")
+
+        # Create a strategy and reset daily state
+        config = make_orb_config()
+        strategy = OrbBreakoutStrategy(config)
+        strategy.reset_daily_state()
+
+        # Exclusion set should be cleared
+        assert len(OrbBaseStrategy._orb_family_triggered_symbols) == 0
+
+    def test_exclusion_set_is_class_level_shared(self) -> None:
+        """Exclusion set is shared across all OrbBaseStrategy subclasses."""
+        from argus.core.config import OrbScalpConfig
+        from argus.strategies.orb_base import OrbBaseStrategy
+        from argus.strategies.orb_scalp import OrbScalpStrategy
+
+        # Clear the set
+        OrbBaseStrategy._orb_family_triggered_symbols.clear()
+
+        # Create both strategy types
+        breakout_config = make_orb_config(strategy_id="strat_breakout")
+        scalp_config = OrbScalpConfig(
+            strategy_id="strat_scalp",
+            name="ORB Scalp",
+            orb_window_minutes=15,
+            scalp_target_r=0.3,
+            max_hold_seconds=120,
+            risk_limits=StrategyRiskLimits(
+                max_trades_per_day=12,
+                max_daily_loss_pct=0.03,
+                max_loss_per_trade_pct=0.01,
+                max_concurrent_positions=2,
+            ),
+            operating_window=OperatingWindow(latest_entry="11:30"),
+        )
+
+        breakout_strategy = OrbBreakoutStrategy(breakout_config)
+        scalp_strategy = OrbScalpStrategy(scalp_config)
+
+        # Add a symbol via class attribute
+        OrbBaseStrategy._orb_family_triggered_symbols.add("TEST")
+
+        # Both strategies should see it
+        assert "TEST" in OrbBaseStrategy._orb_family_triggered_symbols
+        # Access via strategy instances (they share the same class variable)
+        assert "TEST" in breakout_strategy._orb_family_triggered_symbols
+        assert "TEST" in scalp_strategy._orb_family_triggered_symbols
+
+        # Clean up
+        OrbBaseStrategy._orb_family_triggered_symbols.clear()

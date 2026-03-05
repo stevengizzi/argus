@@ -1117,6 +1117,67 @@ class TestCrossStrategyRiskExposure:
 
         assert isinstance(result, OrderApprovedEvent)
 
+    @pytest.mark.asyncio
+    async def test_concentration_includes_pending_entry_exposure(self) -> None:
+        """Concentration check should include pending (unfilled) entry orders.
+
+        DEC-261 Bug 2 Fix: Race condition where two strategies send signals for
+        the same symbol before either fills. Without including pending exposure,
+        both could be approved and exceed concentration limit.
+        """
+        broker = SimulatedBroker(initial_cash=100_000)
+        await broker.connect()
+        bus = EventBus()
+        clock = FixedClock(datetime.now(UTC))
+        # 5% = $5000 max single-stock exposure
+        config = make_risk_config(max_single_stock_pct=0.05, min_position_risk_dollars=1.0)
+
+        om_config = OrderManagerConfig()
+        om = OrderManager(event_bus=bus, broker=broker, clock=clock, config=om_config)
+
+        # No filled positions, but simulate a pending entry order using order manager
+        from argus.execution.order_manager import PendingManagedOrder
+
+        pending_signal = make_signal(
+            symbol="AAPL",
+            strategy_id="orb_breakout",
+            share_count=20,  # 20 × $150 = $3000 pending
+            entry_price=150.0,
+            stop_price=148.0,
+        )
+        pending_approved = OrderApprovedEvent(signal=pending_signal, modifications=None)
+        pending = PendingManagedOrder(
+            order_id="pending-entry-001",
+            order_type="entry",
+            symbol="AAPL",
+            strategy_id="orb_breakout",
+            shares=20,
+            signal=pending_approved,
+        )
+        om._pending_orders["pending-entry-001"] = pending
+
+        rm = RiskManager(config=config, broker=broker, event_bus=bus, order_manager=om)
+        await rm.initialize()
+
+        # Second signal: 20 shares = $3000
+        # Without pending exposure: 0 + $3000 = 3% → approved
+        # With pending exposure: $3000 + $3000 = $6000 = 6% → exceeds 5%
+        # Should be reduced to: $5000 - $3000 = $2000 = 13 shares
+        signal = make_signal(
+            symbol="AAPL",
+            strategy_id="orb_scalp",
+            share_count=20,
+            entry_price=150.0,
+            stop_price=148.0,
+        )
+        result = await rm.evaluate_signal(signal)
+
+        # Should approve with reduced shares
+        assert isinstance(result, OrderApprovedEvent)
+        assert result.modifications is not None
+        assert result.modifications["share_count"] == 13  # $2000 / $150 = 13 shares
+        assert "concentration limit" in result.modifications["reason"]
+
 
 class TestCrossStrategyDuplicatePolicy:
     """Tests for duplicate stock policy enforcement."""

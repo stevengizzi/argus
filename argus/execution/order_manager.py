@@ -691,11 +691,29 @@ class OrderManager:
     ) -> None:
         """Market order to flatten position has filled."""
         positions = self._managed_positions.get(pending.symbol, [])
-        # Find the position that was being flattened
+        # Find the position that was being flattened, matching by strategy_id
         position = next(
-            (p for p in positions if p.shares_remaining > 0),
+            (
+                p
+                for p in positions
+                if p.shares_remaining > 0 and p.strategy_id == pending.strategy_id
+            ),
             None,
         )
+        # Fallback: if no strategy_id match, use first open position (for backwards compat)
+        if position is None:
+            position = next(
+                (p for p in positions if p.shares_remaining > 0),
+                None,
+            )
+            if position is not None:
+                logger.warning(
+                    "Flatten fill for %s strategy_id mismatch: expected %s, "
+                    "falling back to position from %s",
+                    pending.symbol,
+                    pending.strategy_id,
+                    position.strategy_id,
+                )
         if position is None:
             logger.warning("Flatten fill for %s but no open position", pending.symbol)
             return
@@ -1251,6 +1269,41 @@ class OrderManager:
             Returns copies to prevent external mutation.
         """
         return {k: list(v) for k, v in self._managed_positions.items()}
+
+    def get_pending_entry_exposure(self, symbol: str) -> float:
+        """Return total notional exposure from pending (unfilled) entry orders for a symbol.
+
+        Used by Risk Manager to include pending entries in concentration checks.
+        Prevents race conditions when multiple signals approve before fills arrive.
+
+        Args:
+            symbol: The symbol to query.
+
+        Returns:
+            Total notional exposure (shares × entry_price) from pending entry orders.
+        """
+        total_exposure = 0.0
+        for pending in self._pending_orders.values():
+            if pending.order_type == "entry" and pending.symbol == symbol:
+                # pending.signal is OrderApprovedEvent, pending.signal.signal is SignalEvent
+                if pending.signal is None:
+                    logger.debug(
+                        "Pending entry order %s has no signal, skipping exposure calc",
+                        pending.order_id,
+                    )
+                    continue
+                signal = pending.signal.signal
+                if signal is None:
+                    logger.debug(
+                        "Pending entry order %s has no inner signal, skipping exposure calc",
+                        pending.order_id,
+                    )
+                    continue
+                # Use the potentially modified share count from the approved event
+                share_count = pending.shares
+                entry_price = signal.entry_price
+                total_exposure += share_count * entry_price
+        return total_exposure
 
     def get_all_positions_flat(self) -> list[ManagedPosition]:
         """Return all managed positions as a flat list (for API/UI).

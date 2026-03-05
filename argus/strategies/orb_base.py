@@ -18,7 +18,7 @@ import logging
 from abc import abstractmethod
 from dataclasses import dataclass, field
 from datetime import time
-from typing import TYPE_CHECKING, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, ClassVar, Protocol, runtime_checkable
 from zoneinfo import ZoneInfo
 
 from argus.core.clock import Clock
@@ -95,6 +95,10 @@ class OrbBaseStrategy(BaseStrategy):
     - get_exit_rules(): Define exit behavior (targets, time stops)
     - get_market_conditions_filter(): Define regime conditions
     """
+
+    # Class-level shared state: symbols that any ORB subclass has already
+    # triggered on today. Prevents co-firing (DEC-261).
+    _orb_family_triggered_symbols: ClassVar[set[str]] = set()
 
     def __init__(
         self,
@@ -364,6 +368,10 @@ class OrbBaseStrategy(BaseStrategy):
 
         # Phase 2: Breakout Detection
         if state.or_complete and state.or_valid and not state.breakout_triggered:
+            # DEC-261: ORB family same-symbol exclusion — first to fire wins
+            if symbol in OrbBaseStrategy._orb_family_triggered_symbols:
+                return None
+
             # Check entry window
             if not self._is_after_earliest_entry(event):
                 return None
@@ -429,6 +437,8 @@ class OrbBaseStrategy(BaseStrategy):
         """Reset all intraday state for a new trading day."""
         super().reset_daily_state()
         self._symbol_state.clear()
+        # DEC-261: Clear ORB family exclusion set for new day
+        OrbBaseStrategy._orb_family_triggered_symbols.clear()
         logger.debug("%s: ORB strategy daily state reset", self.strategy_id)
 
     def mark_position_closed(self, symbol: str) -> None:

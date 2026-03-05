@@ -3227,3 +3227,484 @@ async def test_single_target_with_odd_share_count(
     assert targets[0].quantity == 77
 
     await om.stop()
+
+
+# ---------------------------------------------------------------------------
+# Flatten Fill Routing Tests (DEC-261 Bug 1 Fix)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_flatten_fill_routes_to_correct_strategy_when_multiple_positions(
+    event_bus: EventBus,
+    fixed_clock: FixedClock,
+    config: OrderManagerConfig,
+) -> None:
+    """Flatten fill routes to correct strategy when multiple positions exist on same symbol."""
+    mock_broker = MagicMock()
+    order_counter = {"n": 0}
+
+    def make_bracket_result(
+        entry: MagicMock, stop: MagicMock, targets: list[MagicMock]
+    ) -> BracketOrderResult:
+        order_counter["n"] += 1
+        return BracketOrderResult(
+            entry=OrderResult(
+                order_id=entry.id,
+                broker_order_id=f"broker-entry-{order_counter['n']}",
+                status=OrderStatus.FILLED,
+                filled_quantity=entry.quantity,
+                filled_avg_price=150.0,
+            ),
+            stop=OrderResult(
+                order_id=stop.id,
+                broker_order_id=f"broker-stop-{order_counter['n']}",
+                status=OrderStatus.PENDING,
+            ),
+            targets=[
+                OrderResult(
+                    order_id=t.id,
+                    broker_order_id=f"broker-target-{order_counter['n'] + i}",
+                    status=OrderStatus.PENDING,
+                )
+                for i, t in enumerate(targets)
+            ],
+        )
+
+    mock_broker.place_bracket_order = AsyncMock(side_effect=make_bracket_result)
+    mock_broker.place_order = AsyncMock(
+        side_effect=lambda order: OrderResult(
+            order_id=order.id,
+            broker_order_id=f"broker-flatten-{order_counter['n']}",
+            status=OrderStatus.SUBMITTED,
+        )
+    )
+    mock_broker.cancel_order = AsyncMock(return_value=True)
+
+    closed_events: list[PositionClosedEvent] = []
+
+    async def handler(event: PositionClosedEvent) -> None:
+        closed_events.append(event)
+
+    event_bus.subscribe(PositionClosedEvent, handler)
+
+    om = OrderManager(
+        event_bus=event_bus,
+        broker=mock_broker,
+        clock=fixed_clock,
+        config=config,
+    )
+
+    await om.start()
+
+    # Create two positions on same symbol from different strategies
+    signal_breakout = make_signal(
+        symbol="AAPL",
+        strategy_id="orb_breakout",
+        entry_price=150.0,
+        stop_price=148.0,
+        target_prices=(152.0, 154.0),
+        share_count=100,
+    )
+    signal_scalp = make_signal(
+        symbol="AAPL",
+        strategy_id="orb_scalp",
+        entry_price=151.0,
+        stop_price=149.0,
+        target_prices=(153.0,),
+        share_count=50,
+    )
+
+    await om.on_approved(make_approved(signal=signal_breakout))
+    await om.on_approved(make_approved(signal=signal_scalp))
+
+    # Both positions should exist
+    positions = om._managed_positions["AAPL"]
+    assert len(positions) == 2
+    breakout_pos = next(p for p in positions if p.strategy_id == "orb_breakout")
+    scalp_pos = next(p for p in positions if p.strategy_id == "orb_scalp")
+
+    # Flatten the scalp position
+    await om._flatten_position(scalp_pos, reason="time_stop")
+
+    # Find the pending flatten order
+    pending_order = None
+    for pending in om._pending_orders.values():
+        if pending.order_type == "flatten" and pending.strategy_id == "orb_scalp":
+            pending_order = pending
+            break
+    assert pending_order is not None
+
+    # Simulate fill
+    fill_event = OrderFilledEvent(
+        order_id=pending_order.order_id,
+        fill_price=150.5,
+        fill_quantity=50,
+    )
+    await om.on_fill(fill_event)
+    await event_bus.drain()
+
+    # Verify scalp position closed, breakout position still open
+    assert len(closed_events) == 1
+    assert closed_events[0].strategy_id == "orb_scalp"
+    assert breakout_pos.shares_remaining == 100  # Still open
+
+    await om.stop()
+
+
+@pytest.mark.asyncio
+async def test_flatten_fill_fallback_when_strategy_id_not_found(
+    event_bus: EventBus,
+    fixed_clock: FixedClock,
+    config: OrderManagerConfig,
+) -> None:
+    """Flatten fill falls back to first open position when strategy_id doesn't match."""
+    mock_broker = MagicMock()
+    order_counter = {"n": 0}
+
+    def make_bracket_result(
+        entry: MagicMock, stop: MagicMock, targets: list[MagicMock]
+    ) -> BracketOrderResult:
+        order_counter["n"] += 1
+        return BracketOrderResult(
+            entry=OrderResult(
+                order_id=entry.id,
+                broker_order_id=f"broker-entry-{order_counter['n']}",
+                status=OrderStatus.FILLED,
+                filled_quantity=entry.quantity,
+                filled_avg_price=150.0,
+            ),
+            stop=OrderResult(
+                order_id=stop.id,
+                broker_order_id=f"broker-stop-{order_counter['n']}",
+                status=OrderStatus.PENDING,
+            ),
+            targets=[
+                OrderResult(
+                    order_id=t.id,
+                    broker_order_id=f"broker-target-{order_counter['n'] + i}",
+                    status=OrderStatus.PENDING,
+                )
+                for i, t in enumerate(targets)
+            ],
+        )
+
+    mock_broker.place_bracket_order = AsyncMock(side_effect=make_bracket_result)
+    mock_broker.place_order = AsyncMock(
+        side_effect=lambda order: OrderResult(
+            order_id=order.id,
+            broker_order_id=f"broker-flatten-{order_counter['n']}",
+            status=OrderStatus.SUBMITTED,
+        )
+    )
+    mock_broker.cancel_order = AsyncMock(return_value=True)
+
+    closed_events: list[PositionClosedEvent] = []
+
+    async def handler(event: PositionClosedEvent) -> None:
+        closed_events.append(event)
+
+    event_bus.subscribe(PositionClosedEvent, handler)
+
+    om = OrderManager(
+        event_bus=event_bus,
+        broker=mock_broker,
+        clock=fixed_clock,
+        config=config,
+    )
+
+    await om.start()
+
+    # Create a position
+    signal = make_signal(
+        symbol="AAPL",
+        strategy_id="orb_breakout",
+        share_count=100,
+    )
+    await om.on_approved(make_approved(signal=signal))
+
+    position = om._managed_positions["AAPL"][0]
+
+    # Flatten position
+    await om._flatten_position(position, reason="time_stop")
+
+    # Find the pending flatten order and modify its strategy_id to simulate mismatch
+    pending_order = None
+    for pending in om._pending_orders.values():
+        if pending.order_type == "flatten":
+            pending_order = pending
+            # Force a strategy_id mismatch
+            pending_order.strategy_id = "non_existent_strategy"
+            break
+    assert pending_order is not None
+
+    # Simulate fill - should fall back to first open position
+    fill_event = OrderFilledEvent(
+        order_id=pending_order.order_id,
+        fill_price=150.5,
+        fill_quantity=100,
+    )
+    await om.on_fill(fill_event)
+    await event_bus.drain()
+
+    # Position should still be closed via fallback
+    assert len(closed_events) == 1
+    assert closed_events[0].strategy_id == "orb_breakout"
+
+    await om.stop()
+
+
+@pytest.mark.asyncio
+async def test_flatten_fill_single_position_unchanged_behavior(
+    event_bus: EventBus,
+    fixed_clock: FixedClock,
+    config: OrderManagerConfig,
+) -> None:
+    """Single position flatten behavior unchanged (regression test)."""
+    mock_broker = MagicMock()
+    order_counter = {"n": 0}
+
+    def make_bracket_result(
+        entry: MagicMock, stop: MagicMock, targets: list[MagicMock]
+    ) -> BracketOrderResult:
+        order_counter["n"] += 1
+        return BracketOrderResult(
+            entry=OrderResult(
+                order_id=entry.id,
+                broker_order_id=f"broker-entry-{order_counter['n']}",
+                status=OrderStatus.FILLED,
+                filled_quantity=entry.quantity,
+                filled_avg_price=150.0,
+            ),
+            stop=OrderResult(
+                order_id=stop.id,
+                broker_order_id=f"broker-stop-{order_counter['n']}",
+                status=OrderStatus.PENDING,
+            ),
+            targets=[
+                OrderResult(
+                    order_id=t.id,
+                    broker_order_id=f"broker-target-{order_counter['n'] + i}",
+                    status=OrderStatus.PENDING,
+                )
+                for i, t in enumerate(targets)
+            ],
+        )
+
+    mock_broker.place_bracket_order = AsyncMock(side_effect=make_bracket_result)
+    mock_broker.place_order = AsyncMock(
+        side_effect=lambda order: OrderResult(
+            order_id=order.id,
+            broker_order_id=f"broker-flatten-{order_counter['n']}",
+            status=OrderStatus.SUBMITTED,
+        )
+    )
+    mock_broker.cancel_order = AsyncMock(return_value=True)
+
+    closed_events: list[PositionClosedEvent] = []
+
+    async def handler(event: PositionClosedEvent) -> None:
+        closed_events.append(event)
+
+    event_bus.subscribe(PositionClosedEvent, handler)
+
+    om = OrderManager(
+        event_bus=event_bus,
+        broker=mock_broker,
+        clock=fixed_clock,
+        config=config,
+    )
+
+    await om.start()
+
+    # Create a single position
+    signal = make_signal(
+        symbol="AAPL",
+        strategy_id="orb_breakout",
+        share_count=100,
+    )
+    await om.on_approved(make_approved(signal=signal))
+
+    position = om._managed_positions["AAPL"][0]
+
+    # Flatten position
+    await om._flatten_position(position, reason="eod")
+
+    # Find the pending flatten order
+    pending_order = None
+    for pending in om._pending_orders.values():
+        if pending.order_type == "flatten":
+            pending_order = pending
+            break
+    assert pending_order is not None
+
+    # Simulate fill
+    fill_event = OrderFilledEvent(
+        order_id=pending_order.order_id,
+        fill_price=150.5,
+        fill_quantity=100,
+    )
+    await om.on_fill(fill_event)
+    await event_bus.drain()
+
+    # Position should be closed
+    assert len(closed_events) == 1
+    assert closed_events[0].strategy_id == "orb_breakout"
+    # Exit reason is TIME_STOP by default when _flattened_today flag is not set
+    assert closed_events[0].exit_reason == ExitReason.TIME_STOP
+
+    await om.stop()
+
+
+# ---------------------------------------------------------------------------
+# Pending Entry Exposure Tests (DEC-261 Bug 2 Fix)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_get_pending_entry_exposure_with_pending_orders(
+    order_manager: OrderManager,
+) -> None:
+    """get_pending_entry_exposure returns correct exposure for pending entry orders."""
+    await order_manager.start()
+
+    # Create a signal
+    signal = make_signal(
+        symbol="AAPL",
+        entry_price=150.0,
+        share_count=100,
+    )
+    approved = make_approved(signal=signal)
+
+    # Manually create a pending entry order (without the fill completing)
+    from argus.execution.order_manager import PendingManagedOrder
+
+    pending = PendingManagedOrder(
+        order_id="test-pending-001",
+        order_type="entry",
+        symbol="AAPL",
+        strategy_id="orb_breakout",
+        shares=100,
+        signal=approved,
+    )
+    order_manager._pending_orders["test-pending-001"] = pending
+
+    # Check exposure
+    exposure = order_manager.get_pending_entry_exposure("AAPL")
+    assert exposure == 150.0 * 100  # entry_price * shares = 15000
+
+    await order_manager.stop()
+
+
+@pytest.mark.asyncio
+async def test_get_pending_entry_exposure_no_pending_orders(
+    order_manager: OrderManager,
+) -> None:
+    """get_pending_entry_exposure returns 0 when no pending orders."""
+    await order_manager.start()
+
+    exposure = order_manager.get_pending_entry_exposure("AAPL")
+    assert exposure == 0.0
+
+    await order_manager.stop()
+
+
+@pytest.mark.asyncio
+async def test_get_pending_entry_exposure_ignores_non_entry_orders(
+    order_manager: OrderManager,
+) -> None:
+    """get_pending_entry_exposure ignores non-entry orders (stops, targets, flattens)."""
+    await order_manager.start()
+
+    # Create a signal
+    signal = make_signal(
+        symbol="AAPL",
+        entry_price=150.0,
+        share_count=100,
+    )
+    approved = make_approved(signal=signal)
+
+    from argus.execution.order_manager import PendingManagedOrder
+
+    # Add various pending orders
+    order_manager._pending_orders["pending-stop"] = PendingManagedOrder(
+        order_id="pending-stop",
+        order_type="stop",
+        symbol="AAPL",
+        strategy_id="orb_breakout",
+        shares=100,
+        signal=approved,
+    )
+    order_manager._pending_orders["pending-target"] = PendingManagedOrder(
+        order_id="pending-target",
+        order_type="target",
+        symbol="AAPL",
+        strategy_id="orb_breakout",
+        shares=50,
+        signal=approved,
+    )
+    order_manager._pending_orders["pending-flatten"] = PendingManagedOrder(
+        order_id="pending-flatten",
+        order_type="flatten",
+        symbol="AAPL",
+        strategy_id="orb_breakout",
+        shares=100,
+        signal=approved,
+    )
+
+    # Check exposure - should be 0 since no entry orders
+    exposure = order_manager.get_pending_entry_exposure("AAPL")
+    assert exposure == 0.0
+
+    await order_manager.stop()
+
+
+@pytest.mark.asyncio
+async def test_get_pending_entry_exposure_multiple_symbols(
+    order_manager: OrderManager,
+) -> None:
+    """get_pending_entry_exposure only counts orders for the specified symbol."""
+    await order_manager.start()
+
+    # Create signals for different symbols
+    signal_aapl = make_signal(
+        symbol="AAPL",
+        entry_price=150.0,
+        share_count=100,
+    )
+    signal_nvda = make_signal(
+        symbol="NVDA",
+        entry_price=500.0,
+        share_count=50,
+    )
+
+    from argus.execution.order_manager import PendingManagedOrder
+
+    # Add pending entry orders for both symbols
+    order_manager._pending_orders["pending-aapl"] = PendingManagedOrder(
+        order_id="pending-aapl",
+        order_type="entry",
+        symbol="AAPL",
+        strategy_id="orb_breakout",
+        shares=100,
+        signal=make_approved(signal=signal_aapl),
+    )
+    order_manager._pending_orders["pending-nvda"] = PendingManagedOrder(
+        order_id="pending-nvda",
+        order_type="entry",
+        symbol="NVDA",
+        strategy_id="orb_breakout",
+        shares=50,
+        signal=make_approved(signal=signal_nvda),
+    )
+
+    # Check exposure for each symbol
+    aapl_exposure = order_manager.get_pending_entry_exposure("AAPL")
+    nvda_exposure = order_manager.get_pending_entry_exposure("NVDA")
+    tsla_exposure = order_manager.get_pending_entry_exposure("TSLA")
+
+    assert aapl_exposure == 150.0 * 100  # 15000
+    assert nvda_exposure == 500.0 * 50  # 25000
+    assert tsla_exposure == 0.0  # No pending orders
+
+    await order_manager.stop()

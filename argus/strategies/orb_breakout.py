@@ -125,6 +125,8 @@ class OrbBreakoutStrategy(OrbBaseStrategy):
         # Mark breakout as triggered
         state.breakout_triggered = True
         state.position_active = True
+        # DEC-261: Mark symbol as triggered for ORB family exclusion
+        OrbBaseStrategy._orb_family_triggered_symbols.add(symbol)
 
         logger.info(
             "%s: ORB breakout signal - entry=%.2f, stop=%.2f, targets=(%.2f, %.2f), shares=%d",

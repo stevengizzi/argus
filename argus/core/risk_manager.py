@@ -502,6 +502,10 @@ class RiskManager:
             if not pos.is_fully_closed:
                 existing_exposure += pos.entry_price * pos.shares_remaining
 
+        # Include pending (unfilled) entry orders to prevent race conditions
+        pending_exposure = self._order_manager.get_pending_entry_exposure(signal.symbol)
+        existing_exposure += pending_exposure
+
         # Calculate remaining capacity
         max_exposure = equity * cross_config.max_single_stock_pct
         remaining_capacity = max_exposure - existing_exposure
