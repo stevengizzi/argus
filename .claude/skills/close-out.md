@@ -15,7 +15,8 @@ are complete and tests pass.
 Produce the following report between the markers shown. This exact format is required
 for downstream parsing by the Tier 2 review.
 
-**Important:** Render the report inside a fenced code block (triple backticks with `markdown` language hint) so the user can copy/paste it with table formatting preserved.
+**Important:** Render the report inside a fenced code block (triple backticks with `markdown` 
+language hint) so the user can copy/paste it with table formatting preserved.
 
 ```
 ---BEGIN-CLOSE-OUT---

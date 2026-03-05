@@ -52,6 +52,11 @@ For each of the following, assess PASS or FAIL:
 - If ANY escalation criterion is met, the verdict MUST be ESCALATE
 
 ### Step 3: Produce Review Report
+Produce the following report between the markers shown. This exact format is required
+for downstream parsing.
+
+**Important:** Render the report inside a fenced code block (triple backticks with `markdown` 
+language hint) so the user can copy/paste it with table formatting preserved.
 
 ```
 ---BEGIN-REVIEW---
