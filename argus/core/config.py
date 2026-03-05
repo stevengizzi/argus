@@ -13,6 +13,8 @@ from typing import Any
 import yaml
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from argus.ai.config import AIConfig
+
 # ---------------------------------------------------------------------------
 # Enums
 # ---------------------------------------------------------------------------
@@ -141,6 +143,8 @@ class SystemConfig(BaseModel):
     api: ApiConfig = Field(default_factory=lambda: ApiConfig())
     # Goal tracking configuration (Sprint 21d, DEC-214)
     goals: GoalsConfig = Field(default_factory=lambda: GoalsConfig())
+    # AI Layer configuration (Sprint 22)
+    ai: AIConfig = Field(default_factory=lambda: AIConfig())
 
     @field_validator("timezone")
     @classmethod
