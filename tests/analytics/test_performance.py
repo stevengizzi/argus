@@ -379,3 +379,86 @@ class TestAlternateFieldNames:
         result = compute_metrics(trades)
 
         assert result.avg_r_multiple == 1.5
+
+
+class TestZeroPnlHandling:
+    """Tests for correct handling of zero P&L trades (B2 bug fix).
+
+    The B2 bug was caused by using `or` instead of `is not None` when
+    checking for net_pnl values. Since 0.0 is falsy in Python,
+    `0.0 or fallback` would return fallback, causing breakeven trades
+    to be misclassified.
+    """
+
+    def test_compute_metrics_pnl_zero_not_misclassified(self) -> None:
+        """Trades with net_pnl=0.0 are correctly classified as breakeven.
+
+        This tests the B2 fix where trades with exactly 0.0 P&L were being
+        misclassified because the get_pnl helper used `or` which treats 0.0
+        as falsy.
+        """
+        trades = [
+            # Win
+            {"net_pnl": 100.0, "exit_price": 150.0, "exit_time": "2026-02-20T10:00:00"},
+            # Exactly zero - should be breakeven, not misclassified
+            {"net_pnl": 0.0, "exit_price": 150.0, "exit_time": "2026-02-20T11:00:00"},
+            # Loss
+            {"net_pnl": -100.0, "exit_price": 145.0, "exit_time": "2026-02-20T12:00:00"},
+        ]
+
+        result = compute_metrics(trades)
+
+        assert result.total_trades == 3
+        assert result.wins == 1
+        assert result.losses == 1
+        assert result.breakeven == 1
+        # Win rate should be 1/3 = 33.33%
+        assert result.win_rate == pytest.approx(1 / 3, rel=0.01)
+
+    def test_compute_metrics_win_rate_correct_with_mixed_results(self) -> None:
+        """Win rate is computed correctly with wins, losses, and breakevens.
+
+        Validates that the win rate formula correctly handles a diverse set
+        of trades including breakeven trades at exactly $0.
+        """
+        trades = [
+            # 3 Wins
+            {"net_pnl": 200.0, "exit_price": 150.0, "exit_time": "2026-02-20T09:00:00"},
+            {"net_pnl": 150.0, "exit_price": 155.0, "exit_time": "2026-02-20T09:30:00"},
+            {"net_pnl": 100.0, "exit_price": 152.0, "exit_time": "2026-02-20T10:00:00"},
+            # 2 Losses
+            {"net_pnl": -75.0, "exit_price": 145.0, "exit_time": "2026-02-20T10:30:00"},
+            {"net_pnl": -125.0, "exit_price": 142.0, "exit_time": "2026-02-20T11:00:00"},
+            # 2 Breakevens (within $0.50 threshold)
+            {"net_pnl": 0.0, "exit_price": 150.0, "exit_time": "2026-02-20T11:30:00"},
+            {"net_pnl": 0.25, "exit_price": 150.0, "exit_time": "2026-02-20T12:00:00"},
+        ]
+
+        result = compute_metrics(trades)
+
+        assert result.total_trades == 7
+        assert result.wins == 3
+        assert result.losses == 2
+        assert result.breakeven == 2
+        # Win rate = wins / total = 3/7 ≈ 0.4286
+        assert result.win_rate == pytest.approx(3 / 7, rel=0.01)
+        # Net P&L = 200 + 150 + 100 - 75 - 125 + 0 + 0.25 = 250.25
+        assert result.net_pnl == pytest.approx(250.25, rel=0.01)
+
+    def test_compute_metrics_zero_pnl_with_alternate_field_name(self) -> None:
+        """Zero P&L works correctly with pnl_dollars field name.
+
+        Ensures the fix also applies when using the alternate field name.
+        """
+        trades = [
+            {"pnl_dollars": 100.0, "exit_price": 150.0, "exit_time": "2026-02-20T10:00:00"},
+            {"pnl_dollars": 0.0, "exit_price": 150.0, "exit_time": "2026-02-20T11:00:00"},
+            {"pnl_dollars": -50.0, "exit_price": 145.0, "exit_time": "2026-02-20T12:00:00"},
+        ]
+
+        result = compute_metrics(trades)
+
+        assert result.wins == 1
+        assert result.losses == 1
+        assert result.breakeven == 1
+        assert result.net_pnl == pytest.approx(50.0)

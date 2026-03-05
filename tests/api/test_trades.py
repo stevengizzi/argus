@@ -402,3 +402,49 @@ class TestTradesEndpoint:
         for trade in data["trades"]:
             assert trade["symbol"] == "NVDA"
             assert trade["strategy_id"] == "orb_breakout"
+
+
+class TestTradeResponseFields:
+    """Tests for TradeResponse field completeness."""
+
+    @pytest.mark.asyncio
+    async def test_trade_response_includes_stop_and_target_prices(
+        self,
+        client_with_trades: AsyncClient,
+        auth_headers: dict[str, str],
+    ) -> None:
+        """TradeResponse includes stop_price and target_prices fields.
+
+        Verifies that the new fields added for trade detail display
+        are present in the API response.
+        """
+        response = await client_with_trades.get(
+            "/api/v1/trades?limit=1",
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["trades"]) > 0
+
+        trade = data["trades"][0]
+
+        # New fields should be present
+        assert "stop_price" in trade
+        assert "target_prices" in trade
+
+        # stop_price should be a number or None
+        assert trade["stop_price"] is None or isinstance(trade["stop_price"], (int, float))
+
+        # target_prices should be a list or None
+        assert trade["target_prices"] is None or isinstance(trade["target_prices"], list)
+
+        # For seeded trades, stop_price and target_prices should have values
+        # (the seeded trades in conftest.py include these fields)
+        assert trade["stop_price"] is not None
+        assert trade["target_prices"] is not None
+        assert len(trade["target_prices"]) > 0
+
+        # All target prices should be numbers
+        for tp in trade["target_prices"]:
+            assert isinstance(tp, (int, float))

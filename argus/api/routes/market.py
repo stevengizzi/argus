@@ -3,18 +3,21 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import random
-from datetime import timedelta
+from datetime import datetime, timedelta, UTC
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 
 from argus.api.auth import require_auth
 from argus.api.dependencies import AppState, get_app_state
+from argus.execution.simulated_broker import SimulatedBroker
 
 router = APIRouter()
 ET_TZ = ZoneInfo("America/New_York")
+logger = logging.getLogger(__name__)
 
 
 class BarData(BaseModel):
@@ -111,28 +114,90 @@ def _generate_synthetic_bars(symbol: str, limit: int) -> list[BarData]:
 async def get_symbol_bars(
     symbol: str,
     timeframe: str = "1m",
-    limit: int = 390,
+    limit: int = Query(390, ge=1, le=1000),
+    start_time: str | None = Query(None, description="Start time (ISO-8601)"),
+    end_time: str | None = Query(None, description="End time (ISO-8601)"),
     _auth: dict = Depends(require_auth),  # noqa: B008
     state: AppState = Depends(get_app_state),  # noqa: B008
 ) -> BarsResponse:
     """Get intraday bars for a symbol.
 
-    In dev mode, returns synthetic data. In production, queries DataService.
+    In dev mode, returns synthetic data. In production, queries DataService
+    (Databento Historical API with Parquet caching).
 
     Args:
         symbol: Stock symbol (e.g., "AAPL", "TSLA").
         timeframe: Bar timeframe (default "1m"). Only 1m supported currently.
-        limit: Number of bars to return (max 390 for a full trading day).
+        limit: Number of bars to return (max 1000).
+        start_time: Optional start time (ISO-8601 datetime). Defaults to today's market open.
+        end_time: Optional end time (ISO-8601 datetime). Defaults to current time or market close.
 
     Returns:
         BarsResponse with OHLCV data.
     """
-    # For now, always use synthetic data (production DataService integration
-    # will be added when Databento is active)
-    bars = _generate_synthetic_bars(symbol.upper(), min(limit, 390))
+    upper_symbol = symbol.upper()
+    is_dev_mode = isinstance(state.broker, SimulatedBroker)
+
+    if not is_dev_mode and state.data_service is not None:
+        # Production: fetch real bars from Databento via DataService
+        try:
+            # Parse time range
+            if start_time and end_time:
+                start = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
+                end = datetime.fromisoformat(end_time.replace("Z", "+00:00"))
+            else:
+                # Default: today's trading session
+                now_et = datetime.now(ET_TZ)
+                start = now_et.replace(hour=9, minute=30, second=0, microsecond=0)
+                end = min(now_et, now_et.replace(hour=16, minute=0, second=0, microsecond=0))
+
+            df = await state.data_service.get_historical_candles(
+                upper_symbol, timeframe, start, end
+            )
+
+            if df.empty:
+                logger.warning(
+                    "No bars returned for %s from DataService, falling back to synthetic",
+                    upper_symbol,
+                )
+                bars = _generate_synthetic_bars(upper_symbol, min(limit, 390))
+            else:
+                bars = []
+                for _, row in df.iterrows():
+                    # Handle timestamp: could be datetime or pandas Timestamp
+                    ts = row["timestamp"]
+                    if hasattr(ts, "isoformat"):
+                        ts_str = ts.isoformat()
+                    else:
+                        ts_str = str(ts)
+
+                    bars.append(
+                        BarData(
+                            timestamp=ts_str,
+                            open=round(float(row["open"]), 2),
+                            high=round(float(row["high"]), 2),
+                            low=round(float(row["low"]), 2),
+                            close=round(float(row["close"]), 2),
+                            volume=int(row["volume"]),
+                        )
+                    )
+                # Return most recent N bars if limit specified
+                if limit and len(bars) > limit:
+                    bars = bars[-limit:]
+
+        except Exception as e:
+            logger.warning(
+                "Failed to fetch real bars for %s: %s, falling back to synthetic",
+                upper_symbol,
+                e,
+            )
+            bars = _generate_synthetic_bars(upper_symbol, min(limit, 390))
+    else:
+        # Dev mode: synthetic data
+        bars = _generate_synthetic_bars(upper_symbol, min(limit, 390))
 
     return BarsResponse(
-        symbol=symbol.upper(),
+        symbol=upper_symbol,
         timeframe=timeframe,
         bars=bars,
         count=len(bars),

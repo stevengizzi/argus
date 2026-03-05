@@ -25,7 +25,7 @@ import { usePositionsUIStore } from '../../stores/positionsUI';
 import { useSymbolDetailUI } from '../../stores/symbolDetailUI';
 import { formatPrice, formatDuration, formatTime } from '../../utils/format';
 import { OpenPositionsSkeleton } from './DashboardSkeleton';
-import { getMarketContext, isPreMarket } from '../../utils/marketTime';
+import { getMarketContext, isPreMarket, getTodayET } from '../../utils/marketTime';
 import { shouldShowEmpty } from '../../utils/testMode';
 import type { Position, Trade } from '../../api/types';
 import type { SegmentedTabSegment } from '../../components/SegmentedTab';
@@ -66,7 +66,14 @@ function getExitReasonVariant(reason: string | null): 'success' | 'danger' | 'wa
 export function OpenPositions() {
   const [selectedTrade, setSelectedTrade] = useState<Trade | null>(null);
   const { data: positionsData, isLoading: positionsLoading, error: positionsError } = usePositions();
-  const { data: tradesData, isLoading: tradesLoading } = useTrades({ limit: 10 });
+
+  // Filter trades to today (ET) to show only "Closed Today"
+  const todayET = useMemo(() => getTodayET(), []);
+  const { data: tradesData, isLoading: tradesLoading } = useTrades({
+    limit: 50,
+    date_from: todayET,
+    date_to: todayET,
+  });
   const priceUpdates = useLiveStore((state) => state.priceUpdates);
 
   // UI state from Zustand store (persists across layout changes)

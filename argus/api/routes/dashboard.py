@@ -251,7 +251,23 @@ async def get_dashboard_summary(
     cash = account_info.cash
     buying_power = account_info.buying_power
 
-    daily_pnl = await state.trade_logger.get_todays_pnl()
+    # Closed trade P&L
+    closed_pnl = await state.trade_logger.get_todays_pnl()
+
+    # Unrealized P&L from open positions
+    unrealized_pnl = 0.0
+    if state.order_manager is not None and state.data_service is not None:
+        for pos in state.order_manager.get_all_positions_flat():
+            if pos.is_fully_closed:
+                continue
+            try:
+                current_price = await state.data_service.get_current_price(pos.symbol)
+                if current_price is not None:
+                    unrealized_pnl += (current_price - pos.entry_price) * pos.shares_remaining
+            except Exception:
+                pass  # Use 0 for positions where price unavailable
+
+    daily_pnl = closed_pnl + unrealized_pnl
     daily_pnl_pct = (daily_pnl / equity * 100) if equity > 0 else 0.0
 
     account_data = AccountSummaryData(

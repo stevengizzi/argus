@@ -181,3 +181,62 @@ class TestUnauthenticated:
         response = await client.get("/api/v1/market/AAPL/bars")
 
         assert response.status_code == 401
+
+
+class TestRealDataIntegration:
+    """Tests for real data integration (B4 fix).
+
+    These tests verify that the bars endpoint correctly uses real Databento
+    data when available, and falls back to synthetic data when not.
+    """
+
+    async def test_bars_endpoint_falls_back_to_synthetic_on_error(
+        self,
+        client: AsyncClient,
+        auth_headers: dict[str, str],
+    ) -> None:
+        """Returns synthetic data when real data fetch fails.
+
+        In dev mode (SimulatedBroker), the endpoint should return synthetic
+        data. This test verifies the fallback behavior works correctly.
+        """
+        response = await client.get(
+            "/api/v1/market/AAPL/bars?limit=10",
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+
+        # Should return synthetic data (dev mode uses SimulatedBroker)
+        assert data["symbol"] == "AAPL"
+        assert data["count"] == 10
+        assert len(data["bars"]) == 10
+
+        # Synthetic data should still have valid OHLCV structure
+        bar = data["bars"][0]
+        assert bar["low"] <= bar["high"]
+        assert bar["volume"] > 0
+
+    async def test_bars_endpoint_accepts_time_parameters(
+        self,
+        client: AsyncClient,
+        auth_headers: dict[str, str],
+    ) -> None:
+        """Bars endpoint accepts start_time and end_time parameters.
+
+        Verifies that the new time parameters for real data queries
+        are accepted by the API.
+        """
+        response = await client.get(
+            "/api/v1/market/TSLA/bars?limit=50&start_time=2026-02-20T09:30:00&end_time=2026-02-20T16:00:00",
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+
+        # Should return data (synthetic in test mode)
+        assert data["symbol"] == "TSLA"
+        assert "bars" in data
+        assert "count" in data

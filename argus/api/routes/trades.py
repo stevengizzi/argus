@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import csv
 import io
+import json
 import random
 from datetime import UTC, datetime, timedelta
 from typing import Literal
@@ -39,6 +40,8 @@ class TradeResponse(BaseModel):
     hold_duration_seconds: int | None
     commission: float
     market_regime: str | None
+    stop_price: float | None = None
+    target_prices: list[float] | None = None
 
 
 class TradesResponse(BaseModel):
@@ -118,6 +121,12 @@ async def get_trades(
     # Transform database rows to response format
     trades: list[TradeResponse] = []
     for row in trades_data:
+        # Parse target_prices from JSON string
+        target_prices_raw = row.get("target_prices")
+        target_prices = (
+            json.loads(target_prices_raw) if target_prices_raw else None
+        )
+
         trades.append(
             TradeResponse(
                 id=row["id"],
@@ -135,6 +144,8 @@ async def get_trades(
                 hold_duration_seconds=row.get("hold_duration_seconds"),
                 commission=row.get("commission", 0.0),
                 market_regime=row.get("market_regime"),
+                stop_price=row.get("stop_price"),
+                target_prices=target_prices,
             )
         )
 
@@ -190,6 +201,12 @@ async def get_trades_batch(
     # Transform to response format
     trades: list[TradeResponse] = []
     for row in trades_data:
+        # Parse target_prices from JSON string
+        target_prices_raw = row.get("target_prices")
+        target_prices = (
+            json.loads(target_prices_raw) if target_prices_raw else None
+        )
+
         trades.append(
             TradeResponse(
                 id=row["id"],
@@ -207,6 +224,8 @@ async def get_trades_batch(
                 hold_duration_seconds=row.get("hold_duration_seconds"),
                 commission=row.get("commission", 0.0),
                 market_regime=row.get("market_regime"),
+                stop_price=row.get("stop_price"),
+                target_prices=target_prices,
             )
         )
 
@@ -484,6 +503,12 @@ async def get_trade_replay(
 
     trade_row = trades_data[0]
 
+    # Parse target_prices from JSON string
+    target_prices_raw = trade_row.get("target_prices")
+    target_prices = (
+        json.loads(target_prices_raw) if target_prices_raw else None
+    )
+
     # Build trade response
     trade = TradeResponse(
         id=trade_row["id"],
@@ -501,6 +526,8 @@ async def get_trade_replay(
         hold_duration_seconds=trade_row.get("hold_duration_seconds"),
         commission=trade_row.get("commission", 0.0),
         market_regime=trade_row.get("market_regime"),
+        stop_price=trade_row.get("stop_price"),
+        target_prices=target_prices,
     )
 
     # Check if we're in dev mode (has _mock_watchlist attribute)

@@ -63,11 +63,24 @@ def compute_metrics(trades: list[dict]) -> PerformanceMetrics:
         return PerformanceMetrics()
 
     # Get P&L field (handle both naming conventions)
+    # Use `is not None` checks, not `or`, to correctly handle 0.0 (breakeven trades)
     def get_pnl(t: dict) -> float:
-        return t.get("net_pnl") or t.get("pnl_dollars") or 0.0
+        val = t.get("net_pnl")
+        if val is not None:
+            return val
+        val = t.get("pnl_dollars")
+        if val is not None:
+            return val
+        return 0.0
 
     def get_r_multiple(t: dict) -> float:
-        return t.get("r_multiple") or t.get("pnl_r_multiple") or 0.0
+        val = t.get("r_multiple")
+        if val is not None:
+            return val
+        val = t.get("pnl_r_multiple")
+        if val is not None:
+            return val
+        return 0.0
 
     # Categorize trades (using $0.50 threshold consistent with backtest/metrics.py)
     winners = [t for t in closed_trades if get_pnl(t) > 0.50]
@@ -158,7 +171,13 @@ def _compute_streaks(trades: list[dict]) -> tuple[int, int]:
     current_losses = 0
 
     def get_pnl(t: dict) -> float:
-        return t.get("net_pnl") or t.get("pnl_dollars") or 0.0
+        val = t.get("net_pnl")
+        if val is not None:
+            return val
+        val = t.get("pnl_dollars")
+        if val is not None:
+            return val
+        return 0.0
 
     for trade in sorted_trades:
         pnl = get_pnl(trade)
@@ -192,7 +211,13 @@ def _compute_daily_pnl(trades: list[dict]) -> list[float]:
     daily_totals: dict[str, float] = {}
 
     def get_pnl(t: dict) -> float:
-        return t.get("net_pnl") or t.get("pnl_dollars") or 0.0
+        val = t.get("net_pnl")
+        if val is not None:
+            return val
+        val = t.get("pnl_dollars")
+        if val is not None:
+            return val
+        return 0.0
 
     for trade in trades:
         exit_time = trade.get("exit_time")

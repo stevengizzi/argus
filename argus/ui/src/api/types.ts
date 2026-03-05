@@ -74,6 +74,8 @@ export interface Trade {
   hold_duration_seconds: number | null;
   commission: number;
   market_regime: string | null;
+  stop_price: number | null;
+  target_prices: number[] | null;
 }
 
 export interface TradesResponse {

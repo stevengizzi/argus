@@ -270,3 +270,17 @@ export function isMarketOpen(): boolean {
 export function isPreMarket(): boolean {
   return getMarketContext().status === 'pre_market';
 }
+
+/**
+ * Get today's date in ET timezone as YYYY-MM-DD string.
+ *
+ * Useful for filtering trades to "today" in API calls.
+ */
+export function getTodayET(): string {
+  const now = new Date();
+  // Intl.DateTimeFormat with 'en-CA' locale returns YYYY-MM-DD format
+  const etDate = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/New_York',
+  }).format(now);
+  return etDate;
+}
