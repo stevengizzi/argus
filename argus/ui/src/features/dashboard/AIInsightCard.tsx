@@ -46,6 +46,7 @@ function AIInsightError({ onRetry }: { onRetry: () => void }) {
         Unable to generate insight
       </div>
       <button
+        type="button"
         onClick={onRetry}
         className="mt-3 text-sm text-argus-accent hover:text-argus-accent-bright transition-colors flex items-center gap-1.5"
       >
@@ -146,6 +147,7 @@ export function AIInsightCard() {
           {insightData.cached && ' (cached)'}
         </span>
         <button
+          type="button"
           onClick={() => refetch()}
           disabled={isFetching}
           className="flex items-center gap-1 text-argus-accent hover:text-argus-accent-bright transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
