@@ -6,9 +6,12 @@ Combines per-page context with system-wide state.
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from argus.api.dependencies import AppState
@@ -91,7 +94,8 @@ class SystemContextBuilder:
                     state["account_equity"] = getattr(account, "equity", 0.0)
                 else:
                     state["account_equity"] = 0.0
-            except Exception:
+            except Exception as e:
+                logger.warning("Failed to get account equity: %s", e)
                 state["account_equity"] = 0.0
         else:
             state["account_equity"] = 0.0
@@ -101,7 +105,8 @@ class SystemContextBuilder:
             try:
                 daily_pnl = await app_state.trade_logger.get_todays_pnl()
                 state["daily_pnl"] = daily_pnl
-            except Exception:
+            except Exception as e:
+                logger.warning("Failed to get daily P&L: %s", e)
                 state["daily_pnl"] = 0.0
         else:
             state["daily_pnl"] = 0.0
@@ -116,8 +121,8 @@ class SystemContextBuilder:
                     state["circuit_breakers"].append(
                         {"type": "risk_manager", "reason": "Circuit breaker triggered"}
                     )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("Failed to check circuit breaker status: %s", e)
 
         return state
 
@@ -208,7 +213,8 @@ class SystemContextBuilder:
                                 "realized_pnl": pos.realized_pnl,
                             })
                 result["positions"] = positions_list
-            except Exception:
+            except Exception as e:
+                logger.warning("Failed to build Dashboard positions: %s", e)
                 result["positions"] = []
         else:
             result["positions"] = []
@@ -250,7 +256,8 @@ class SystemContextBuilder:
                     }
                     for t in trades
                 ]
-            except Exception:
+            except Exception as e:
+                logger.warning("Failed to get recent trades: %s", e)
                 result["recent_trades"] = []
         else:
             result["recent_trades"] = []
@@ -313,7 +320,8 @@ class SystemContextBuilder:
                     {"strategy_id": sid, "pct": pct * 100}
                     for sid, pct in allocations.items()
                 ]
-            except Exception:
+            except Exception as e:
+                logger.warning("Failed to get strategy allocations: %s", e)
                 result["allocations"] = []
         else:
             result["allocations"] = []
@@ -381,7 +389,8 @@ class SystemContextBuilder:
                     "total_trades": len(today_trades),
                     "net_pnl": daily_pnl,
                 }
-            except Exception:
+            except Exception as e:
+                logger.warning("Failed to build Debrief summary: %s", e)
                 result["today_summary"] = {"total_trades": 0, "net_pnl": 0.0}
         else:
             result["today_summary"] = {"total_trades": 0, "net_pnl": 0.0}
@@ -413,7 +422,8 @@ class SystemContextBuilder:
                     "status": str(status),
                     "uptime": context_data.get("uptime", "N/A"),
                 }
-            except Exception:
+            except Exception as e:
+                logger.warning("Failed to get health monitor status: %s", e)
                 result["health"] = {"status": "unknown", "uptime": "N/A"}
         else:
             result["health"] = context_data.get("health", {"status": "unknown"})
@@ -425,14 +435,16 @@ class SystemContextBuilder:
             try:
                 connected = getattr(app_state.broker, "is_connected", False)
                 connections["broker"] = "connected" if connected else "disconnected"
-            except Exception:
+            except Exception as e:
+                logger.warning("Failed to check broker connection: %s", e)
                 connections["broker"] = "unknown"
 
         if app_state.data_service is not None:
             try:
                 connected = getattr(app_state.data_service, "is_connected", False)
                 connections["data_feed"] = "connected" if connected else "disconnected"
-            except Exception:
+            except Exception as e:
+                logger.warning("Failed to check data feed connection: %s", e)
                 connections["data_feed"] = "unknown"
 
         result["connections"] = connections

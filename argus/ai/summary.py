@@ -276,8 +276,8 @@ class DailySummaryGenerator:
                         strategy_breakdown[sid]["wins"] += 1
                     elif trade.net_pnl < 0:
                         strategy_breakdown[sid]["losses"] += 1
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("Failed to build strategy breakdown: %s", e)
 
         # Calculate win rate per strategy
         for sid, stats in strategy_breakdown.items():
@@ -343,7 +343,8 @@ class DailySummaryGenerator:
         if app_state.trade_logger is not None:
             try:
                 data["daily_pnl"] = await app_state.trade_logger.get_todays_pnl()
-            except Exception:
+            except Exception as e:
+                logger.warning("Failed to get daily P&L for insight: %s", e)
                 data["daily_pnl"] = 0.0
         else:
             data["daily_pnl"] = 0.0
