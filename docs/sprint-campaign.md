@@ -24,7 +24,7 @@ This document maps every sprint in the ARGUS roadmap to its exact workflow chore
 
 | Category | Artifacts Used |
 |----------|---------------|
-| **Protocols** | `sprint-planning.md`, `adversarial-review.md`, `strategic-check-in.md`, `tier-3-review.md`, `codebase-health-audit.md`, `impromptu-triage.md` |
+| **Protocols** | `sprint-planning.md`, `adversarial-review.md`, `strategic-check-in.md`, `tier-3-review.md`, `codebase-health-audit.md`, `impromptu-triage.md`, `in-flight-triage.md` |
 | **Templates** | `sprint-spec.md`, `spec-by-contradiction.md`, `implementation-prompt.md`, `review-prompt.md`, `design-summary.md`, `decision-entry.md` |
 | **Skills** | `close-out.md`, `review.md`, `diagnostic.md`, `doc-sync.md`, `canary-test.md` |
 | **Agents** | `@reviewer` (Tier 2 automated review) |
@@ -47,6 +47,10 @@ CHOREOGRAPHY:
 1. [Claude.ai] Sprint Planning — protocol: sprint-planning.md
    Phase A: Think → Phase B: Design Summary → Phase C: Generate → Phase D: Verify
    [You] Save design summary + all artifacts immediately after each generation
+
+1.5 [Claude.ai] Open Work Journal — paste handoff prompt from Phase D
+    into a fresh conversation. Keep open for the duration of the sprint.
+    Bring issues here as they arise. See: in-flight-triage.md
 
 2. [Claude Code] Session 1 — paste implementation prompt
    → implementation → tests → close-out skill (close-out.md)
@@ -85,6 +89,9 @@ CHOREOGRAPHY:
    Flag: Iterative Judgment Loop for frontend sessions
    Phase B: Design Summary → Phase C: Generate → Phase D: Verify
    [You] Save design summary + all artifacts
+
+1.5 [Claude.ai] Open Work Journal — paste handoff prompt from Phase D
+    into a fresh conversation. See: in-flight-triage.md
 
 2. [Claude Code] Backend Session(s) — paste implementation prompt
    → implementation → tests → close-out skill
@@ -132,6 +139,9 @@ CHOREOGRAPHY:
    Flag: Iterative Judgment Loop (if sprint includes UI)
    Phase B: Design Summary → Phase C: Generate → Phase D: Verify
    [You] Save design summary + all artifacts
+
+1.5 [Claude.ai] Open Work Journal — paste handoff prompt from Phase D
+    into a fresh conversation. See: in-flight-triage.md
 
 2. [Claude.ai] Adversarial Review — protocol: adversarial-review.md
    *** SEPARATE conversation from planning ***
@@ -186,6 +196,9 @@ CHOREOGRAPHY:
    not just by session. Each stage has its own success gate.
    Phase D: Verify
    [You] Save design summary + all artifacts
+
+1.5 [Claude.ai] Open Work Journal — paste handoff prompt from Phase D
+    into a fresh conversation. See: in-flight-triage.md
 
 2. [Claude.ai] Adversarial Review — protocol: adversarial-review.md
    (RECOMMENDED for Type D — the methodology must be sound)
@@ -1954,6 +1967,7 @@ Additionally, review existing rules at each phase gate:
 | I need to... | Use | Type |
 |---|---|---|
 | Start any sprint | `sprint-planning.md` (Phase A→B→C→D) | Protocol |
+| Triage an issue mid-sprint | `in-flight-triage.md` (Work Journal conversation) | Protocol |
 | Stress-test an architecture decision | `adversarial-review.md` (separate conversation) | Protocol |
 | Implement a session | Paste implementation prompt (from `implementation-prompt.md`) | Template |
 | End an implementation session | `close-out.md` | Skill |

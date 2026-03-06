@@ -215,6 +215,21 @@ With finalized spec-level artifacts in hand, generate prompts:
    placeholder. Claude Code reads the Review Context File itself. No other
    assembly required.
 
+3. **Work Journal Handoff Prompt** -- a self-contained document that the
+   developer pastes into a fresh Claude.ai conversation to create the
+   Sprint Work Journal (see in-flight-triage.md). The handoff prompt
+   must include:
+   - Sprint goal and scope summary
+   - Session breakdown table (session, scope, creates, modifies, score)
+   - Session dependency chain
+   - "Do not modify" file list
+   - Issue category definitions (from in-flight-triage.md, summarized)
+   - Escalation triggers (from Sprint-Level Escalation Criteria)
+   - Reserved DEC/RSK/DEF numbers
+
+   The developer opens the work journal conversation before starting
+   Session 1 and brings issues to it throughout the sprint.
+
 After each artifact: save it, confirm saved, then request the next.
 
 ### Phase E: Verify
@@ -284,6 +299,8 @@ Before ending the conversation, verify:
 - [ ] If new config fields are added: YAML field names verified against Pydantic
       model names; regression checklist includes config validation item
 - [ ] Frontend sessions with visual review items have a budgeted fix slot
+- [ ] Work journal handoff prompt is self-contained (no "paste X here" —
+      all sprint context embedded)
 
 ---
 
@@ -306,3 +323,4 @@ A complete sprint package contains:
 10. Review Context File (single shared file)
 11. Implementation Prompts (one per session)
 12. Tier 2 Review Prompts (one per session, references Review Context File)
+13. Work Journal Handoff Prompt (for in-flight triage conversation)
