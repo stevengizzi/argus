@@ -373,8 +373,7 @@ class ConversationManager:
             Dict with conversation data.
         """
         # Use ET timezone for "today" to match trading hours
-        et_tz = ZoneInfo("America/New_York")
-        today = date.today()
+        today = datetime.now(ZoneInfo("America/New_York")).date()
         today_str = today.isoformat()
 
         # Try to find existing conversation
