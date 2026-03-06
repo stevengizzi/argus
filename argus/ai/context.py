@@ -182,15 +182,32 @@ class SystemContextBuilder:
         elif app_state.order_manager is not None:
             try:
                 managed_positions = app_state.order_manager.get_managed_positions()
-                result["positions"] = [
-                    {
-                        "symbol": mp.symbol,
-                        "shares": mp.current_shares,
-                        "avg_price": mp.entry_price,
-                        "unrealized_pnl": mp.unrealized_pnl,
-                    }
-                    for mp in managed_positions
-                ]
+                positions_list = []
+                for symbol, pos_list in managed_positions.items():
+                    for pos in pos_list:
+                        if not pos.is_fully_closed:
+                            # Compute unrealized P&L if data service is available
+                            unrealized = 0.0
+                            if app_state.data_service is not None:
+                                try:
+                                    current_price = await app_state.data_service.get_current_price(
+                                        symbol
+                                    )
+                                    if current_price is not None:
+                                        unrealized = (
+                                            current_price - pos.entry_price
+                                        ) * pos.shares_remaining
+                                except Exception:
+                                    pass
+                            positions_list.append({
+                                "symbol": symbol,
+                                "strategy_id": pos.strategy_id,
+                                "shares": pos.shares_remaining,
+                                "entry_price": pos.entry_price,
+                                "unrealized_pnl": unrealized,
+                                "realized_pnl": pos.realized_pnl,
+                            })
+                result["positions"] = positions_list
             except Exception:
                 result["positions"] = []
         else:
@@ -227,7 +244,7 @@ class SystemContextBuilder:
                 result["recent_trades"] = [
                     {
                         "symbol": t.get("symbol"),
-                        "pnl": t.get("realized_pnl", 0),
+                        "pnl": t.get("net_pnl", 0),
                         "outcome": t.get("outcome"),
                         "strategy_id": t.get("strategy_id"),
                     }
@@ -356,7 +373,9 @@ class SystemContextBuilder:
                 today_trades = [
                     t
                     for t in trades
-                    if t.get("exit_time", "").startswith(datetime.now().strftime("%Y-%m-%d"))
+                    if t.get("exit_time", "").startswith(
+                        datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d")
+                    )
                 ]
                 result["today_summary"] = {
                     "total_trades": len(today_trades),

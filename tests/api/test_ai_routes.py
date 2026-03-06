@@ -1062,6 +1062,44 @@ async def test_get_insight_returns_503_without_summary_generator(
     assert data["message"] == "Insight generation not available"
 
 
+@pytest.mark.asyncio
+async def test_get_insight_returns_graceful_error_on_exception(
+    app_state_with_ai: AppState,
+    jwt_secret: str,
+    mock_ai_cache: MagicMock,
+    auth_headers: dict[str, str],
+) -> None:
+    """GET /insight returns graceful error (not 500) when generate_insight throws."""
+    # Create a mock generator that raises an exception
+    mock_generator = MagicMock()
+    mock_generator.generate_insight = AsyncMock(
+        side_effect=RuntimeError("Unexpected data assembly error")
+    )
+
+    app_state_with_ai.ai_summary_generator = mock_generator
+    app_state_with_ai.ai_cache = mock_ai_cache
+
+    app = create_app(app_state_with_ai)
+    app.state.app_state = app_state_with_ai
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+    ) as client:
+        response = await client.get(
+            "/api/v1/ai/insight",
+            headers=auth_headers,
+        )
+
+    # Should return 200 with error message, NOT 500
+    assert response.status_code == 200
+    data = response.json()
+    assert data["insight"] is None
+    assert "message" in data
+    assert "RuntimeError" in data["message"]
+    assert data["cached"] is False
+
+
 # --- ET timezone conversation tests ---
 
 

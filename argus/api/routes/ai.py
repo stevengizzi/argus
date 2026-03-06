@@ -686,7 +686,16 @@ async def get_insight(
             )
 
     # Generate new insight
-    insight = await state.ai_summary_generator.generate_insight(state)
+    try:
+        insight = await state.ai_summary_generator.generate_insight(state)
+    except Exception as e:
+        logger.error(f"Failed to generate insight: {e}")
+        return InsightResponse(
+            insight=None,
+            generated_at=now,
+            cached=False,
+            message=f"Insight generation failed: {type(e).__name__}",
+        )
 
     # Cache the result
     if state.ai_cache is not None:

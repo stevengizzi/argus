@@ -355,3 +355,94 @@ class TestDailySummaryGeneratorDataAssembly:
         data = await generator._assemble_insight_data(app_state)
 
         assert "Circuit breaker active" in data["alerts"]
+
+    async def test_assemble_insight_data_computes_unrealized_pnl(self) -> None:
+        """_assemble_insight_data computes unrealized P&L from data service."""
+
+        @dataclass
+        class MockPosition:
+            symbol: str
+            strategy_id: str
+            shares_remaining: int
+            entry_price: float
+            is_fully_closed: bool = False
+
+        class MockOrderManagerWithPosition:
+            def get_managed_positions(self) -> dict[str, list[MockPosition]]:
+                return {
+                    "AAPL": [MockPosition(
+                        symbol="AAPL",
+                        strategy_id="orb_breakout",
+                        shares_remaining=100,
+                        entry_price=150.0,
+                    )],
+                }
+
+        mock_data_service = MagicMock()
+        mock_data_service.get_current_price = AsyncMock(return_value=155.0)
+
+        @dataclass
+        class MockAppStateWithDataService:
+            trade_logger: MockTradeLogger
+            orchestrator: MockOrchestrator
+            risk_manager: MockRiskManager
+            order_manager: MockOrderManagerWithPosition
+            data_service: MagicMock
+
+        client = MockClaudeClient(enabled=True)
+        generator = DailySummaryGenerator(client=client)
+        app_state = MockAppStateWithDataService(
+            trade_logger=MockTradeLogger(),
+            orchestrator=MockOrchestrator(),
+            risk_manager=MockRiskManager(),
+            order_manager=MockOrderManagerWithPosition(),
+            data_service=mock_data_service,
+        )
+
+        data = await generator._assemble_insight_data(app_state)
+
+        assert len(data["positions"]) == 1
+        # Unrealized P&L: (155 - 150) * 100 = 500
+        assert data["positions"][0]["unrealized_pnl"] == 500.0
+
+
+class TestGenerateInsightErrorHandling:
+    """Test error handling in generate_insight method."""
+
+    async def test_generate_insight_returns_fallback_on_exception(self) -> None:
+        """generate_insight returns fallback string when _assemble_insight_data throws."""
+        client = MockClaudeClient(enabled=True)
+        generator = DailySummaryGenerator(client=client)
+
+        # Mock _assemble_insight_data to raise an exception
+        generator._assemble_insight_data = AsyncMock(
+            side_effect=RuntimeError("Data assembly failed")
+        )
+
+        app_state = MockAppState(
+            trade_logger=MockTradeLogger(),
+            orchestrator=MockOrchestrator(),
+            risk_manager=MockRiskManager(),
+            order_manager=MockOrderManager(),
+        )
+
+        result = await generator.generate_insight(app_state)
+
+        assert result == "Insight temporarily unavailable."
+
+    async def test_generate_insight_returns_fallback_on_api_exception(self) -> None:
+        """generate_insight returns fallback when API call throws."""
+        client = MockClaudeClient(enabled=True)
+        client.send_message = AsyncMock(side_effect=Exception("Network error"))
+        generator = DailySummaryGenerator(client=client)
+
+        app_state = MockAppState(
+            trade_logger=MockTradeLogger(),
+            orchestrator=MockOrchestrator(),
+            risk_manager=MockRiskManager(),
+            order_manager=MockOrderManager(),
+        )
+
+        result = await generator.generate_insight(app_state)
+
+        assert result == "Insight temporarily unavailable."

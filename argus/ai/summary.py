@@ -128,41 +128,46 @@ class DailySummaryGenerator:
                 logger.debug("Returning cached insight")
                 return cached.get("insight", "")
 
-        # Assemble lighter data
-        data = await self._assemble_insight_data(app_state)
+        try:
+            # Assemble lighter data
+            data = await self._assemble_insight_data(app_state)
 
-        # Build prompt
-        prompt = self._build_insight_prompt(data)
+            # Build prompt
+            prompt = self._build_insight_prompt(data)
 
-        # Call Claude API
-        messages = [{"role": "user", "content": prompt}]
-        response, usage_record = await self._client.send_message(
-            messages,
-            system=INSIGHT_SYSTEM_PROMPT,
-            tools=None,
-            stream=False,
-        )
-
-        # Record usage
-        if self._usage_tracker is not None:
-            await self._usage_tracker.record_usage(
-                conversation_id=None,
-                input_tokens=usage_record.input_tokens,
-                output_tokens=usage_record.output_tokens,
-                model=usage_record.model,
-                estimated_cost_usd=usage_record.estimated_cost_usd,
-                endpoint="insight",
+            # Call Claude API
+            messages = [{"role": "user", "content": prompt}]
+            response, usage_record = await self._client.send_message(
+                messages,
+                system=INSIGHT_SYSTEM_PROMPT,
+                tools=None,
+                stream=False,
             )
 
-        # Extract content
-        if response.get("type") == "error":
-            insight = f"Unable to generate insight: {response.get('message', 'Unknown error')}"
-        else:
-            content_parts = []
-            for block in response.get("content", []):
-                if block.get("type") == "text":
-                    content_parts.append(block.get("text", ""))
-            insight = "\n".join(content_parts) or "No insight generated."
+            # Record usage
+            if self._usage_tracker is not None:
+                await self._usage_tracker.record_usage(
+                    conversation_id=None,
+                    input_tokens=usage_record.input_tokens,
+                    output_tokens=usage_record.output_tokens,
+                    model=usage_record.model,
+                    estimated_cost_usd=usage_record.estimated_cost_usd,
+                    endpoint="insight",
+                )
+
+            # Extract content
+            if response.get("type") == "error":
+                insight = f"Unable to generate insight: {response.get('message', 'Unknown error')}"
+            else:
+                content_parts = []
+                for block in response.get("content", []):
+                    if block.get("type") == "text":
+                        content_parts.append(block.get("text", ""))
+                insight = "\n".join(content_parts) or "No insight generated."
+
+        except Exception as e:
+            logger.error(f"Error generating insight: {e}")
+            insight = "Insight temporarily unavailable."
 
         # Cache the result
         if self._cache is not None:
@@ -308,14 +313,28 @@ class DailySummaryGenerator:
                 for symbol, pos_list in managed.items():
                     for pos in pos_list:
                         if not pos.is_fully_closed:
+                            # Compute unrealized P&L if data service available
+                            unrealized = 0.0
+                            if app_state.data_service is not None:
+                                try:
+                                    current_price = await app_state.data_service.get_current_price(
+                                        symbol
+                                    )
+                                    if current_price is not None:
+                                        unrealized = (
+                                            current_price - pos.entry_price
+                                        ) * pos.shares_remaining
+                                except Exception:
+                                    pass
                             positions.append({
                                 "symbol": symbol,
                                 "shares": pos.shares_remaining,
-                                "unrealized_pnl": pos.unrealized_pnl,
+                                "unrealized_pnl": unrealized,
                                 "strategy_id": pos.strategy_id,
                             })
                 data["positions"] = positions
-            except Exception:
+            except Exception as e:
+                logger.warning(f"Error assembling positions for insight: {e}")
                 data["positions"] = []
         else:
             data["positions"] = []
