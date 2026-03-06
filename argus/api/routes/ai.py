@@ -86,7 +86,7 @@ class MessageResponse(BaseModel):
     conversation_id: str
     role: str
     content: str
-    tool_use_data: dict[str, Any] | None = None
+    tool_use_data: list[dict[str, Any]] | None = None
     page_context: dict[str, Any] | None = None
     is_complete: bool
     created_at: str

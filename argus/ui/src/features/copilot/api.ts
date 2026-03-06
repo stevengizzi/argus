@@ -166,6 +166,7 @@ class CopilotWebSocketManager implements ChatWebSocketManager {
   private reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
   private intentionalClose = false;
   private pendingMessageId: string | null = null;
+  private pendingToolUse: ToolUseData[] = [];  // Collect tool_use events during stream
 
   connect(): void {
     const token = getToken();
@@ -305,6 +306,7 @@ class CopilotWebSocketManager implements ChatWebSocketManager {
       store.setIsStreaming(false);
       store.setStreamingContent('');
       this.pendingMessageId = null;
+      this.pendingToolUse = [];
 
       if (import.meta.env.DEV) {
         console.log(`CopilotWS: Synced ${messages.length} messages from REST`);
@@ -333,6 +335,7 @@ class CopilotWebSocketManager implements ChatWebSocketManager {
 
         case 'stream_start':
           this.pendingMessageId = data.message_id;
+          this.pendingToolUse = [];  // Reset tool_use collection for new stream
           // If conversation_id is provided and different, update store
           if (data.conversation_id && data.conversation_id !== store.conversationId) {
             store.setConversationId(data.conversation_id);
@@ -346,24 +349,28 @@ class CopilotWebSocketManager implements ChatWebSocketManager {
           break;
 
         case 'tool_use': {
-          // Tool use arrives during stream — we'll collect them
-          // For now, just log. Session 5 builds ActionCard.
+          // Collect tool_use events during stream
           const toolUseData: ToolUseData = {
             toolName: data.tool_name,
             toolInput: data.tool_input,
             proposalId: data.proposal_id,
           };
+          this.pendingToolUse.push(toolUseData);
           if (import.meta.env.DEV) {
-            console.log('CopilotWS: Tool use', toolUseData);
+            console.log('CopilotWS: Tool use collected', toolUseData);
           }
-          // We'll store tool_use in the finalized message
           break;
         }
 
         case 'stream_end': {
           const messageId = this.pendingMessageId || crypto.randomUUID();
+          const toolUse = this.pendingToolUse.length > 0 ? this.pendingToolUse : undefined;
           this.pendingMessageId = null;
-          store.finalizeStreamingMessage(messageId, data.full_content);
+          this.pendingToolUse = [];
+          if (import.meta.env.DEV && toolUse) {
+            console.log('CopilotWS: Finalizing message with toolUse', toolUse);
+          }
+          store.finalizeStreamingMessage(messageId, data.full_content, toolUse);
           break;
         }
 
@@ -371,6 +378,7 @@ class CopilotWebSocketManager implements ChatWebSocketManager {
           store.setError(data.message || 'An error occurred');
           store.setIsStreaming(false);
           this.pendingMessageId = null;
+          this.pendingToolUse = [];
           break;
 
         default:

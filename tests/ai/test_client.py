@@ -227,3 +227,154 @@ class TestClaudeClientWithMockedAPI:
         assert "Exception" in response["error"]
         assert "Service unavailable" in response["message"]
         assert usage.input_tokens == 0
+
+
+class TestStreamEventToDict:
+    """Test ClaudeClient._stream_event_to_dict conversion."""
+
+    def test_content_block_start_preserves_tool_use_fields(
+        self, enabled_config: AIConfig
+    ) -> None:
+        """Test that content_block_start events preserve content_block for tool_use."""
+        client = ClaudeClient(enabled_config)
+
+        # Mock content_block_start event with tool_use
+        mock_content_block = MagicMock()
+        mock_content_block.type = "tool_use"
+        mock_content_block.id = "toolu_abc123"
+        mock_content_block.name = "propose_allocation_change"
+
+        mock_event = MagicMock()
+        mock_event.type = "content_block_start"
+        mock_event.content_block = mock_content_block
+        mock_event.index = 0
+        # Remove attributes that shouldn't exist
+        del mock_event.delta
+        del mock_event.message
+
+        result = client._stream_event_to_dict(mock_event)
+
+        assert result["type"] == "content_block_start"
+        assert result["index"] == 0
+        assert "content_block" in result
+        assert result["content_block"]["type"] == "tool_use"
+        assert result["content_block"]["id"] == "toolu_abc123"
+        assert result["content_block"]["name"] == "propose_allocation_change"
+
+    def test_content_block_delta_preserves_partial_json(
+        self, enabled_config: AIConfig
+    ) -> None:
+        """Test that content_block_delta events preserve delta.partial_json."""
+        client = ClaudeClient(enabled_config)
+
+        # Mock content_block_delta event with input_json_delta
+        mock_delta = MagicMock()
+        mock_delta.type = "input_json_delta"
+        mock_delta.partial_json = '{"strategy_id": "vwap_reclaim"'
+        # Ensure text attribute doesn't exist
+        del mock_delta.text
+        del mock_delta.stop_reason
+
+        mock_event = MagicMock()
+        mock_event.type = "content_block_delta"
+        mock_event.delta = mock_delta
+        mock_event.index = 0
+        # Remove attributes that shouldn't exist
+        del mock_event.content_block
+        del mock_event.message
+
+        result = client._stream_event_to_dict(mock_event)
+
+        assert result["type"] == "content_block_delta"
+        assert result["index"] == 0
+        assert "delta" in result
+        assert result["delta"]["type"] == "input_json_delta"
+        assert result["delta"]["partial_json"] == '{"strategy_id": "vwap_reclaim"'
+        # Also check backward-compatible top-level delta_type
+        assert result["delta_type"] == "input_json_delta"
+
+    def test_content_block_delta_preserves_text_delta(
+        self, enabled_config: AIConfig
+    ) -> None:
+        """Test that text_delta events preserve delta.text and backward-compatible fields."""
+        client = ClaudeClient(enabled_config)
+
+        # Mock content_block_delta event with text_delta
+        mock_delta = MagicMock()
+        mock_delta.type = "text_delta"
+        mock_delta.text = "Hello, I can help you with that."
+        # Ensure partial_json attribute doesn't exist
+        del mock_delta.partial_json
+        del mock_delta.stop_reason
+
+        mock_event = MagicMock()
+        mock_event.type = "content_block_delta"
+        mock_event.delta = mock_delta
+        mock_event.index = 0
+        # Remove attributes that shouldn't exist
+        del mock_event.content_block
+        del mock_event.message
+
+        result = client._stream_event_to_dict(mock_event)
+
+        assert result["type"] == "content_block_delta"
+        assert "delta" in result
+        assert result["delta"]["type"] == "text_delta"
+        assert result["delta"]["text"] == "Hello, I can help you with that."
+        # Check backward-compatible top-level fields
+        assert result["text"] == "Hello, I can help you with that."
+        assert result["delta_type"] == "text_delta"
+
+    def test_content_block_start_preserves_text_block_fields(
+        self, enabled_config: AIConfig
+    ) -> None:
+        """Test that content_block_start events preserve content_block for text blocks."""
+        client = ClaudeClient(enabled_config)
+
+        # Mock content_block_start event with text block
+        mock_content_block = MagicMock()
+        mock_content_block.type = "text"
+        mock_content_block.text = ""
+        # Ensure tool_use-specific attributes don't exist
+        del mock_content_block.id
+        del mock_content_block.name
+
+        mock_event = MagicMock()
+        mock_event.type = "content_block_start"
+        mock_event.content_block = mock_content_block
+        mock_event.index = 0
+        # Remove attributes that shouldn't exist
+        del mock_event.delta
+        del mock_event.message
+
+        result = client._stream_event_to_dict(mock_event)
+
+        assert result["type"] == "content_block_start"
+        assert "content_block" in result
+        assert result["content_block"]["type"] == "text"
+
+    def test_message_start_preserves_message_info(
+        self, enabled_config: AIConfig
+    ) -> None:
+        """Test that message_start events preserve message info."""
+        client = ClaudeClient(enabled_config)
+
+        # Mock message_start event
+        mock_message = MagicMock()
+        mock_message.id = "msg_123abc"
+        mock_message.model = "claude-opus-4-5-20250514"
+
+        mock_event = MagicMock()
+        mock_event.type = "message_start"
+        mock_event.message = mock_message
+        # Remove attributes that shouldn't exist
+        del mock_event.delta
+        del mock_event.content_block
+        del mock_event.index
+
+        result = client._stream_event_to_dict(mock_event)
+
+        assert result["type"] == "message_start"
+        assert "message" in result
+        assert result["message"]["id"] == "msg_123abc"
+        assert result["message"]["model"] == "claude-opus-4-5-20250514"

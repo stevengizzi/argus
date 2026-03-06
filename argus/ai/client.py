@@ -389,20 +389,50 @@ class ClaudeClient:
     def _stream_event_to_dict(self, event: Any) -> dict[str, Any]:
         """Convert a stream event to a dictionary.
 
+        Preserves all fields needed for tool_use processing:
+        - content_block: full dict on content_block_start (type, id, name for tool_use)
+        - delta: full dict on content_block_delta (type, text, partial_json)
+
         Args:
-            event: The stream event object.
+            event: The stream event object from the Anthropic SDK.
 
         Returns:
-            Dictionary representation of the event.
+            Dictionary representation of the event with all fields preserved.
         """
         event_dict: dict[str, Any] = {"type": event.type}
 
+        # Extract content_block for content_block_start events (tool_use detection)
+        if hasattr(event, "content_block"):
+            content_block = event.content_block
+            block_dict: dict[str, Any] = {"type": getattr(content_block, "type", "")}
+            # For tool_use blocks, include id and name
+            if hasattr(content_block, "id"):
+                block_dict["id"] = content_block.id
+            if hasattr(content_block, "name"):
+                block_dict["name"] = content_block.name
+            # For text blocks, include text if present
+            if hasattr(content_block, "text"):
+                block_dict["text"] = content_block.text
+            event_dict["content_block"] = block_dict
+
+        # Extract delta as a full dict for content_block_delta events
         if hasattr(event, "delta"):
             delta = event.delta
-            if hasattr(delta, "text"):
-                event_dict["text"] = delta.text
+            delta_dict: dict[str, Any] = {}
             if hasattr(delta, "type"):
+                delta_dict["type"] = delta.type
+                # Also keep at top level for backward compatibility
                 event_dict["delta_type"] = delta.type
+            if hasattr(delta, "text"):
+                delta_dict["text"] = delta.text
+                # Also keep at top level for backward compatibility
+                event_dict["text"] = delta.text
+            if hasattr(delta, "partial_json"):
+                delta_dict["partial_json"] = delta.partial_json
+            # For message_delta events, include stop_reason
+            if hasattr(delta, "stop_reason"):
+                delta_dict["stop_reason"] = delta.stop_reason
+            event_dict["delta"] = delta_dict
 
         if hasattr(event, "index"):
             event_dict["index"] = event.index

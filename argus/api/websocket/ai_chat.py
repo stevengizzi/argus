@@ -279,6 +279,20 @@ async def _handle_chat_message(
         async for event in stream_gen:
             event_type = event.get("type", "")
 
+            # DEBUG: Log all events to diagnose tool_use processing
+            logger.debug("Stream event: type=%s, keys=%s", event_type, list(event.keys()))
+            if event_type == "content_block_start":
+                logger.debug(
+                    "content_block_start details: content_block=%s",
+                    event.get("content_block", "MISSING"),
+                )
+            if event_type == "content_block_delta":
+                logger.debug(
+                    "content_block_delta details: delta=%s, delta_type=%s",
+                    event.get("delta", "MISSING"),
+                    event.get("delta_type", "MISSING"),
+                )
+
             if event_type == "error":
                 await websocket.send_json({
                     "type": "error",
@@ -320,6 +334,11 @@ async def _handle_chat_message(
 
             elif event_type == "content_block_stop":
                 # Block finished - finalize tool_use if we have one
+                logger.debug(
+                    "content_block_stop: current_tool_use=%s, input_json_len=%d",
+                    current_tool_use,
+                    len(current_tool_input_json),
+                )
                 if current_tool_use is not None:
                     # Parse accumulated JSON
                     import json as json_module
@@ -391,6 +410,110 @@ async def _handle_chat_message(
         # Stream was cancelled by client
         logger.info(f"Stream cancelled for conversation {conversation_id}")
         raise
+
+    # If tool_use blocks were detected, send tool_results and continue conversation
+    if tool_use_blocks:
+        logger.info(
+            "Tool use detected, sending tool_results continuation. "
+            "tool_use_blocks=%s",
+            tool_use_blocks,
+        )
+
+        # Build tool_results
+        import json as json_module
+        tool_results: list[dict[str, Any]] = []
+        for tu in tool_use_blocks:
+            tool_name = tu.get("name", "")
+            tool_use_id = tu.get("id", "")
+            proposal_id = tu.get("proposal_id")
+
+            if tool_name == "generate_report":
+                result_content = "Report generation queued."
+            elif proposal_id:
+                result_content = f"Proposal #{proposal_id} created. Awaiting operator approval."
+            else:
+                result_content = "Action acknowledged."
+
+            tool_results.append({
+                "tool_use_id": tool_use_id,
+                "content": result_content,
+            })
+
+        # Build the assistant message with tool_use content blocks
+        assistant_content: list[dict[str, Any]] = []
+        # Add any text content first
+        if full_content_parts:
+            assistant_content.append({
+                "type": "text",
+                "text": "".join(full_content_parts),
+            })
+        # Add tool_use blocks
+        for tu in tool_use_blocks:
+            assistant_content.append({
+                "type": "tool_use",
+                "id": tu.get("id", ""),
+                "name": tu.get("name", ""),
+                "input": tu.get("input", {}),
+            })
+
+        # Build continuation messages
+        continuation_messages = list(messages)
+        continuation_messages.append({
+            "role": "assistant",
+            "content": assistant_content,
+        })
+
+        # Log the exact messages being sent
+        logger.info(
+            "send_with_tool_results: messages=%s",
+            json_module.dumps(continuation_messages, indent=2, default=str)[:2000],
+        )
+        logger.info(
+            "send_with_tool_results: tool_results=%s",
+            json_module.dumps(tool_results, indent=2),
+        )
+
+        try:
+            continuation_response, continuation_usage = await app_state.ai_client.send_with_tool_results(
+                continuation_messages,
+                full_system,
+                ARGUS_TOOLS,
+                tool_results,
+            )
+
+            logger.info(
+                "Continuation response received: type=%s, keys=%s",
+                continuation_response.get("type"),
+                list(continuation_response.keys()),
+            )
+
+            # Extract continuation text content
+            if continuation_response.get("type") != "error":
+                for block in continuation_response.get("content", []):
+                    if block.get("type") == "text":
+                        continuation_text = block.get("text", "")
+                        if continuation_text:
+                            full_content_parts.append(continuation_text)
+                            # Stream the continuation text to the client
+                            await websocket.send_json({
+                                "type": "token",
+                                "content": continuation_text,
+                            })
+            else:
+                logger.error(
+                    "Continuation response error: %s",
+                    continuation_response.get("message", "Unknown error"),
+                )
+
+        except Exception as e:
+            logger.exception(
+                "Error in send_with_tool_results continuation: %s", e
+            )
+            # Don't fail the whole stream, just log and continue
+            await websocket.send_json({
+                "type": "error",
+                "message": f"Tool result continuation failed: {e}",
+            })
 
     # Send stream_end
     full_content = "".join(full_content_parts)
