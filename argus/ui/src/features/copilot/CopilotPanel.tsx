@@ -184,19 +184,39 @@ function AINotConfiguredState() {
 function MessageList() {
   const messages = useCopilotUIStore((state) => state.messages);
   const isStreaming = useCopilotUIStore((state) => state.isStreaming);
+  const streamingContent = useCopilotUIStore((state) => state.streamingContent);
   const isLoading = useCopilotUIStore((state) => state.isLoading);
   const aiEnabled = useCopilotUIStore((state) => state.aiEnabled);
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const isNearBottomRef = useRef(true);
 
-  // Auto-scroll to bottom on new messages or streaming content
+  // Track if user is near the bottom of the scroll container
+  const handleScroll = useCallback(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const threshold = 50; // pixels from bottom
+    const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+    isNearBottomRef.current = distanceFromBottom <= threshold;
+  }, []);
+
+  // Auto-scroll to bottom on new messages (always scroll for new messages)
   useEffect(() => {
     const container = scrollContainerRef.current;
     if (container) {
-      // Scroll to bottom
+      container.scrollTop = container.scrollHeight;
+      isNearBottomRef.current = true;
+    }
+  }, [messages]);
+
+  // Auto-scroll during streaming only if user is near the bottom
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (container && isStreaming && isNearBottomRef.current) {
       container.scrollTop = container.scrollHeight;
     }
-  }, [messages, isStreaming]);
+  }, [streamingContent, isStreaming]);
 
   if (!aiEnabled) {
     return <AINotConfiguredState />;
@@ -213,6 +233,7 @@ function MessageList() {
   return (
     <div
       ref={scrollContainerRef}
+      onScroll={handleScroll}
       className="flex-1 overflow-y-auto px-4 py-4 space-y-4"
     >
       {/* Render messages oldest-first */}

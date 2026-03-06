@@ -29,7 +29,6 @@ function ChatInputComponent({ page, pageContext }: ChatInputProps) {
   const [value, setValue] = useState('');
   const [isTruncated, setIsTruncated] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const prevIsOpenRef = useRef<boolean | null>(null);
 
   const isOpen = useCopilotUIStore((state) => state.isOpen);
   const isStreaming = useCopilotUIStore((state) => state.isStreaming);
@@ -38,16 +37,15 @@ function ChatInputComponent({ page, pageContext }: ChatInputProps) {
 
   const isDisabled = !aiEnabled || (!wsConnected && !isStreaming);
 
-  // Auto-focus when panel opens (but not on initial page load if already open)
+  // Auto-focus when panel opens
+  // ChatInput only mounts when panel is open (inside AnimatePresence), so focus on mount
   useEffect(() => {
-    // Skip initial render (prevIsOpenRef.current is null)
-    if (prevIsOpenRef.current === false && isOpen && !isDisabled) {
+    if (isOpen && !isDisabled) {
       // Small delay to ensure panel animation has started and element is visible
       requestAnimationFrame(() => {
         textareaRef.current?.focus();
       });
     }
-    prevIsOpenRef.current = isOpen;
   }, [isOpen, isDisabled]);
 
   // Auto-resize textarea
