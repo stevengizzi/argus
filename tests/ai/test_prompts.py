@@ -60,9 +60,30 @@ class TestPromptManagerSystemPrompt:
         assert "Active Strategies" in prompt
         assert "Current Configuration" in prompt
         assert "Your Role" in prompt
+        assert "Tool Use — Mandatory for Configuration Changes" in prompt
         assert "Behavioral Guardrails" in prompt
         assert "ADVISORY ONLY" in prompt
         assert "NEVER recommend specific trade" in prompt
+
+    def test_system_prompt_contains_mandatory_tool_use_directive(
+        self, manager: PromptManager
+    ) -> None:
+        """Test that system prompt contains mandatory tool use instructions."""
+        prompt = manager.build_system_prompt()
+
+        # Check for explicit mandatory language
+        assert "you MUST immediately use the corresponding tool" in prompt
+        assert "Do not narrate your intention to use the tool" in prompt
+
+        # Check all 5 tool types are mentioned
+        assert "propose_allocation_change" in prompt
+        assert "propose_risk_param_change" in prompt
+        assert "propose_strategy_suspend" in prompt
+        assert "propose_strategy_resume" in prompt
+        assert "generate_report" in prompt
+
+        # Check prohibition against narrating without calling
+        assert 'Never respond with "Let me propose that"' in prompt
 
     def test_system_prompt_with_strategies(self, manager: PromptManager) -> None:
         """Test system prompt with strategy data."""
