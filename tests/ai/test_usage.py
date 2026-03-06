@@ -288,3 +288,93 @@ class TestUsageTrackerInitialization:
             estimated_cost_usd=0.01,
         )
         assert usage_id is not None
+
+
+class TestUsageTrackerETTimezone:
+    """Test ET timezone handling for usage timestamps."""
+
+    async def test_record_usage_stores_et_timestamps(
+        self, usage_tracker: UsageTracker, db: DatabaseManager
+    ) -> None:
+        """record_usage stores timestamps in ET timezone without offset."""
+        # Record a usage event
+        mock_time = datetime(2026, 3, 6, 10, 30, 0, tzinfo=ZoneInfo("America/New_York"))
+
+        with patch("argus.ai.usage.datetime") as mock_dt:
+            mock_dt.now.return_value = mock_time
+
+            usage_id = await usage_tracker.record_usage(
+                conversation_id=None,
+                input_tokens=500,
+                output_tokens=200,
+                model="claude-opus-4-5-20250514",
+                estimated_cost_usd=0.025,
+            )
+
+        # Query the raw timestamp from the database
+        row = await db.fetch_one(
+            "SELECT timestamp FROM ai_usage WHERE id = ?", (usage_id,)
+        )
+        assert row is not None
+        stored_timestamp = row["timestamp"]
+
+        # Verify it's stored as naive ET format (no timezone offset)
+        assert stored_timestamp == "2026-03-06T10:30:00"
+        assert "+" not in stored_timestamp
+        assert "Z" not in stored_timestamp
+
+    async def test_daily_usage_query_matches_et_timestamps(
+        self, usage_tracker: UsageTracker
+    ) -> None:
+        """get_daily_usage correctly matches records stored with ET timestamps."""
+        # Record usage at 3 PM ET on March 6
+        mock_time = datetime(2026, 3, 6, 15, 0, 0, tzinfo=ZoneInfo("America/New_York"))
+
+        with patch("argus.ai.usage.datetime") as mock_dt:
+            mock_dt.now.return_value = mock_time
+
+            await usage_tracker.record_usage(
+                conversation_id=None,
+                input_tokens=1000,
+                output_tokens=500,
+                model="claude-opus-4-5-20250514",
+                estimated_cost_usd=0.05,
+            )
+
+        # Query with the ET date
+        usage = await usage_tracker.get_daily_usage("2026-03-06")
+
+        assert usage["input_tokens"] == 1000
+        assert usage["output_tokens"] == 500
+        assert usage["call_count"] == 1
+
+    async def test_timezone_alignment_utc_vs_et_date_boundary(
+        self, usage_tracker: UsageTracker
+    ) -> None:
+        """Usage recorded at 11 PM ET (next day UTC) is found by ET date query.
+
+        At 11 PM ET, it's already the next day in UTC (4 AM UTC).
+        The record should be found when querying by the ET date, not UTC date.
+        """
+        # 11 PM ET on March 6 = 4 AM UTC on March 7
+        mock_time = datetime(2026, 3, 6, 23, 0, 0, tzinfo=ZoneInfo("America/New_York"))
+
+        with patch("argus.ai.usage.datetime") as mock_dt:
+            mock_dt.now.return_value = mock_time
+
+            await usage_tracker.record_usage(
+                conversation_id=None,
+                input_tokens=800,
+                output_tokens=400,
+                model="claude-opus-4-5-20250514",
+                estimated_cost_usd=0.04,
+            )
+
+        # Query with ET date (March 6) should find the record
+        et_usage = await usage_tracker.get_daily_usage("2026-03-06")
+        assert et_usage["call_count"] == 1
+        assert et_usage["input_tokens"] == 800
+
+        # Query with UTC date (March 7) should NOT find the record
+        utc_usage = await usage_tracker.get_daily_usage("2026-03-07")
+        assert utc_usage["call_count"] == 0

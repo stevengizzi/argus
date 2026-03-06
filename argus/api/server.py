@@ -72,10 +72,12 @@ def create_app(app_state: AppState) -> FastAPI:
             if app_state.ai_client is None:
                 try:
                     from argus.ai.actions import ActionManager
+                    from argus.ai.cache import ResponseCache
                     from argus.ai.client import ClaudeClient
                     from argus.ai.context import SystemContextBuilder
                     from argus.ai.conversations import ConversationManager
                     from argus.ai.prompts import PromptManager
+                    from argus.ai.summary import DailySummaryGenerator
                     from argus.ai.usage import UsageTracker
 
                     app_state.ai_client = ClaudeClient(app_state.config.ai)
@@ -97,10 +99,21 @@ def create_app(app_state: AppState) -> FastAPI:
                     await app_state.action_manager.initialize()
                     app_state.action_manager.start_cleanup_task()
 
+                    # Initialize cache and summary generator for /insight endpoint
+                    app_state.ai_cache = ResponseCache(
+                        default_ttl=app_state.config.ai.cache_ttl_seconds
+                    )
+                    app_state.ai_summary_generator = DailySummaryGenerator(
+                        client=app_state.ai_client,
+                        usage_tracker=app_state.usage_tracker,
+                        cache=app_state.ai_cache,
+                    )
+
                     ai_initialized_here = True
                     logger.info(
                         "AI services initialized (ClaudeClient, PromptManager, "
-                        "SystemContextBuilder, ConversationManager, UsageTracker, ActionManager)"
+                        "SystemContextBuilder, ConversationManager, UsageTracker, "
+                        "ActionManager, DailySummaryGenerator, ResponseCache)"
                     )
                 except Exception as e:
                     logger.error(f"Failed to initialize AI services: {e}")
@@ -129,6 +142,8 @@ def create_app(app_state: AppState) -> FastAPI:
             app_state.conversation_manager = None
             app_state.usage_tracker = None
             app_state.action_manager = None
+            app_state.ai_summary_generator = None
+            app_state.ai_cache = None
             logger.info("AI services cleaned up")
 
     app = FastAPI(

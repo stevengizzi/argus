@@ -110,7 +110,8 @@ class UsageTracker:
             The usage record ID.
         """
         usage_id = generate_id()
-        now = datetime.now(ZoneInfo("UTC")).isoformat()
+        # Use ET timezone for consistent date-based queries (DEC-XXX)
+        now = datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%dT%H:%M:%S")
 
         sql = """
             INSERT INTO ai_usage (id, conversation_id, timestamp, input_tokens, output_tokens, model, estimated_cost_usd, endpoint)

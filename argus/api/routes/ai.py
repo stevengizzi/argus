@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime, date
+from zoneinfo import ZoneInfo
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -227,7 +228,7 @@ async def post_chat(
     if conversation_id is None:
         # Create new conversation with tag based on page
         tag = PAGE_TAG_MAP.get(request.page, "general")
-        today_str = date.today().isoformat()
+        today_str = datetime.now(ZoneInfo("America/New_York")).date().isoformat()
         conversation = await state.conversation_manager.create_conversation(today_str, tag)
         conversation_id = conversation["id"]
     else:
@@ -627,8 +628,8 @@ async def get_ai_usage(
             daily_breakdown=usage.get("daily_breakdown"),
         )
     else:
-        # Default: today's usage
-        today_str = date.today().isoformat()
+        # Default: today's usage (in ET timezone for consistency)
+        today_str = datetime.now(ZoneInfo("America/New_York")).date().isoformat()
         usage = await state.usage_tracker.get_daily_usage(today_str)
         return AIUsageResponse(
             period=today_str,

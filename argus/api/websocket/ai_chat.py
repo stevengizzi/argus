@@ -10,6 +10,7 @@ import asyncio
 import json
 import logging
 from datetime import UTC, datetime, date
+from zoneinfo import ZoneInfo
 from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -196,7 +197,7 @@ async def _handle_chat_message(
     # Get or create conversation
     if conversation_id is None:
         tag = PAGE_TAG_MAP.get(page, "general")
-        today_str = date.today().isoformat()
+        today_str = datetime.now(ZoneInfo("America/New_York")).date().isoformat()
         conversation = await app_state.conversation_manager.create_conversation(today_str, tag)
         conversation_id = conversation["id"]
     else:
@@ -304,6 +305,10 @@ async def _handle_chat_message(
             if event_type == "message_start":
                 msg_info = event.get("message", {})
                 model = msg_info.get("model", "")
+                # Extract input_tokens from message_start usage
+                usage_data = event.get("usage", {})
+                if usage_data:
+                    total_input_tokens = usage_data.get("input_tokens", 0)
 
             elif event_type == "content_block_start":
                 # Check if it's a tool_use block
@@ -395,6 +400,10 @@ async def _handle_chat_message(
                 stop_reason = event.get("delta", {}).get("stop_reason")
                 if stop_reason:
                     logger.debug("Stream stop_reason: %s", stop_reason)
+                # Extract output_tokens from message_delta usage
+                usage_data = event.get("usage", {})
+                if usage_data:
+                    total_output_tokens = usage_data.get("output_tokens", 0)
 
             elif event_type == "message_stop":
                 # Stream complete
@@ -529,14 +538,22 @@ async def _handle_chat_message(
         tool_use_data=tool_use_blocks if tool_use_blocks else None,
     )
 
-    # Record usage (approximate for streaming)
+    # Record usage (use actual API data when available, fall back to estimation)
     if app_state.usage_tracker is not None and model:
-        # Estimate tokens from content length
-        input_tokens = len(full_system) // 4 + sum(len(m.get("content", "")) // 4 for m in messages)
-        output_tokens = len(full_content) // 4
+        if total_input_tokens > 0 or total_output_tokens > 0:
+            # Use actual API usage data
+            input_tokens = total_input_tokens
+            output_tokens = total_output_tokens
+        else:
+            # Fallback: estimate from content length
+            input_tokens = len(full_system) // 4 + sum(
+                len(m.get("content", "")) // 4 for m in messages
+            )
+            output_tokens = len(full_content) // 4
+        # Use config values for cost calculation
         cost = (
-            (input_tokens / 1_000_000) * 15.0 +
-            (output_tokens / 1_000_000) * 75.0
+            (input_tokens / 1_000_000) * app_state.config.ai.cost_per_million_input_tokens
+            + (output_tokens / 1_000_000) * app_state.config.ai.cost_per_million_output_tokens
         )
         await app_state.usage_tracker.record_usage(
             conversation_id,

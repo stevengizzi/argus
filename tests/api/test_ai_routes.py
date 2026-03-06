@@ -7,9 +7,10 @@ context inspection, status, and usage tracking.
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator
-from datetime import date
+from datetime import date, datetime
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
+from zoneinfo import ZoneInfo
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -598,7 +599,7 @@ async def test_get_usage_today(
     client_with_ai: AsyncClient,
     auth_headers: dict[str, str],
 ) -> None:
-    """GET /usage with no params returns today's usage."""
+    """GET /usage with no params returns today's usage in ET."""
     response = await client_with_ai.get(
         "/api/v1/ai/usage",
         headers=auth_headers,
@@ -606,7 +607,9 @@ async def test_get_usage_today(
 
     assert response.status_code == 200
     data = response.json()
-    assert data["period"] == date.today().isoformat()
+    # Endpoint now uses ET timezone for date
+    et_today = datetime.now(ZoneInfo("America/New_York")).date().isoformat()
+    assert data["period"] == et_today
     assert data["input_tokens"] == 1000
     assert data["output_tokens"] == 500
     assert data["estimated_cost_usd"] == 0.10
@@ -962,3 +965,130 @@ async def test_actions_endpoint_503_when_not_configured(
 
     assert response.status_code == 503
     assert "Action manager not available" in response.json()["detail"]
+
+
+# --- GET /insight tests ---
+
+
+@pytest.fixture
+def mock_ai_summary_generator() -> MagicMock:
+    """Provide a mock DailySummaryGenerator for testing."""
+    generator = MagicMock()
+
+    async def mock_generate_insight(app_state: Any) -> str:
+        return "Market is showing strong momentum with bullish signals."
+
+    generator.generate_insight = AsyncMock(side_effect=mock_generate_insight)
+    return generator
+
+
+@pytest.fixture
+def mock_ai_cache() -> MagicMock:
+    """Provide a mock ResponseCache for testing."""
+    cache = MagicMock()
+
+    async def mock_get(key: str) -> dict | None:
+        return None  # No cache hit
+
+    async def mock_set(key: str, value: dict, ttl: int | None = None) -> None:
+        pass
+
+    cache.get = AsyncMock(side_effect=mock_get)
+    cache.set = AsyncMock(side_effect=mock_set)
+    return cache
+
+
+@pytest.fixture
+async def app_state_with_insight(
+    app_state_with_ai: AppState,
+    mock_ai_summary_generator: MagicMock,
+    mock_ai_cache: MagicMock,
+) -> AppState:
+    """Provide AppState with AI services and insight generation configured."""
+    app_state_with_ai.ai_summary_generator = mock_ai_summary_generator
+    app_state_with_ai.ai_cache = mock_ai_cache
+    return app_state_with_ai
+
+
+@pytest.fixture
+async def client_with_insight(
+    app_state_with_insight: AppState,
+    jwt_secret: str,
+) -> AsyncGenerator[AsyncClient, None]:
+    """Provide client with insight generation configured."""
+    app = create_app(app_state_with_insight)
+    app.state.app_state = app_state_with_insight
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+    ) as client:
+        yield client
+
+
+@pytest.mark.asyncio
+async def test_get_insight_returns_insight_when_initialized(
+    client_with_insight: AsyncClient,
+    auth_headers: dict[str, str],
+) -> None:
+    """GET /insight returns a non-null insight when DailySummaryGenerator is initialized."""
+    response = await client_with_insight.get(
+        "/api/v1/ai/insight",
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["insight"] is not None
+    assert "momentum" in data["insight"]
+    assert "generated_at" in data
+    assert data["cached"] is False
+
+
+@pytest.mark.asyncio
+async def test_get_insight_returns_503_without_summary_generator(
+    client_with_ai: AsyncClient,
+    auth_headers: dict[str, str],
+) -> None:
+    """GET /insight returns message when DailySummaryGenerator is not initialized."""
+    # client_with_ai has AI services but no summary generator
+    response = await client_with_ai.get(
+        "/api/v1/ai/insight",
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["insight"] is None
+    assert data["message"] == "Insight generation not available"
+
+
+# --- ET timezone conversation tests ---
+
+
+@pytest.mark.asyncio
+async def test_post_chat_creates_conversation_with_et_date(
+    client_with_ai: AsyncClient,
+    auth_headers: dict[str, str],
+    mock_conversation_manager: MagicMock,
+) -> None:
+    """POST /chat creates a conversation with an ET-based date field."""
+    response = await client_with_ai.post(
+        "/api/v1/ai/chat",
+        json={
+            "message": "Hello, Claude!",
+            "page": "Dashboard",
+            "page_context": {},
+        },
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+
+    # Verify create_conversation was called with ET date
+    mock_conversation_manager.create_conversation.assert_called_once()
+    call_args = mock_conversation_manager.create_conversation.call_args
+    date_arg = call_args[0][0]  # First positional argument is the date
+
+    # The date should be in ET timezone
+    et_today = datetime.now(ZoneInfo("America/New_York")).date().isoformat()
+    assert date_arg == et_today

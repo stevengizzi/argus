@@ -378,3 +378,64 @@ class TestStreamEventToDict:
         assert "message" in result
         assert result["message"]["id"] == "msg_123abc"
         assert result["message"]["model"] == "claude-opus-4-5-20250514"
+
+    def test_message_start_extracts_usage_input_tokens(
+        self, enabled_config: AIConfig
+    ) -> None:
+        """Test that message_start events extract usage.input_tokens."""
+        client = ClaudeClient(enabled_config)
+
+        # Mock message_start event with usage data
+        mock_usage = MagicMock()
+        mock_usage.input_tokens = 1500
+
+        mock_message = MagicMock()
+        mock_message.id = "msg_usage_test"
+        mock_message.model = "claude-opus-4-5-20250514"
+        mock_message.usage = mock_usage
+
+        mock_event = MagicMock()
+        mock_event.type = "message_start"
+        mock_event.message = mock_message
+        # Remove attributes that shouldn't exist
+        del mock_event.delta
+        del mock_event.content_block
+        del mock_event.index
+        del mock_event.usage
+
+        result = client._stream_event_to_dict(mock_event)
+
+        assert result["type"] == "message_start"
+        assert "usage" in result
+        assert result["usage"]["input_tokens"] == 1500
+
+    def test_message_delta_extracts_usage_output_tokens(
+        self, enabled_config: AIConfig
+    ) -> None:
+        """Test that message_delta events extract usage.output_tokens."""
+        client = ClaudeClient(enabled_config)
+
+        # Mock message_delta event with usage data
+        mock_usage = MagicMock()
+        mock_usage.output_tokens = 750
+
+        mock_delta = MagicMock()
+        mock_delta.stop_reason = "end_turn"
+        del mock_delta.type
+        del mock_delta.text
+        del mock_delta.partial_json
+
+        mock_event = MagicMock()
+        mock_event.type = "message_delta"
+        mock_event.delta = mock_delta
+        mock_event.usage = mock_usage
+        # Remove attributes that shouldn't exist
+        del mock_event.content_block
+        del mock_event.index
+        del mock_event.message
+
+        result = client._stream_event_to_dict(mock_event)
+
+        assert result["type"] == "message_delta"
+        assert "usage" in result
+        assert result["usage"]["output_tokens"] == 750

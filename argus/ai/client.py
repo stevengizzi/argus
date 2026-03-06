@@ -442,5 +442,17 @@ class ClaudeClient:
                 "id": event.message.id,
                 "model": event.message.model,
             }
+            # Extract usage from message_start (input_tokens)
+            if hasattr(event.message, "usage") and event.message.usage is not None:
+                usage = event.message.usage
+                event_dict["usage"] = {
+                    "input_tokens": getattr(usage, "input_tokens", 0),
+                }
+
+        # Extract usage from message_delta (output_tokens)
+        if hasattr(event, "usage") and event.usage is not None:
+            usage_dict = event_dict.get("usage", {})
+            usage_dict["output_tokens"] = getattr(event.usage, "output_tokens", 0)
+            event_dict["usage"] = usage_dict
 
         return event_dict
