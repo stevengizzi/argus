@@ -31,9 +31,24 @@ import {
 } from '../features/orchestrator';
 import { useOrchestratorStatus } from '../hooks';
 import { staggerContainer, staggerItem } from '../utils/motion';
+import { useCopilotContext } from '../hooks/useCopilotContext';
 
 export function OrchestratorPage() {
   const { data: orchestratorData, isLoading, error } = useOrchestratorStatus();
+
+  // Register Copilot context
+  useCopilotContext('Orchestrator', () => ({
+    sessionPhase: orchestratorData?.session_phase ?? 'unknown',
+    regime: orchestratorData?.regime ?? 'unknown',
+    allocations: orchestratorData?.allocations?.map(a => ({
+      strategyId: a.strategy_id,
+      allocationPct: a.allocation_pct,
+      isThrottled: a.is_throttled,
+    })) ?? [],
+    totalDeployedPct: orchestratorData?.total_deployed_pct ?? 0,
+    cashReservePct: orchestratorData?.cash_reserve_pct ?? 0,
+    suspendedStrategies: orchestratorData?.allocations?.filter(a => a.is_throttled).map(a => a.strategy_id) ?? [],
+  }));
 
   // Extract allocation data for CapitalAllocation component
   const allocations = orchestratorData?.allocations.map(alloc => ({

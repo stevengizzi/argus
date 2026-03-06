@@ -46,6 +46,10 @@ describe('CopilotPanel', () => {
       aiEnabled: false,
       error: null,
       isLoading: false,
+      currentPage: null,
+      contextProvider: null,
+      isReconnecting: false,
+      reconnectAttempt: 0,
     });
     // Reset body overflow
     document.body.style.overflow = '';
@@ -80,7 +84,7 @@ describe('CopilotPanel', () => {
     expect(screen.getByPlaceholderText('AI not configured')).toBeDisabled();
   });
 
-  it('shows context indicator with current page name', () => {
+  it('shows page name in header', () => {
     useCopilotUIStore.setState({ isOpen: true });
 
     render(
@@ -89,7 +93,8 @@ describe('CopilotPanel', () => {
       </TestWrapper>
     );
 
-    expect(screen.getByText('Page: Trade Log')).toBeInTheDocument();
+    // Header shows "ARGUS Copilot • Trade Log"
+    expect(screen.getByText(/• Trade Log/)).toBeInTheDocument();
   });
 
   it('closes when close button is clicked', () => {

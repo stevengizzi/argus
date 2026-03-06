@@ -21,11 +21,10 @@ const MAX_LINES = 5;
 const LINE_HEIGHT = 20; // Approximate line height in pixels
 
 interface ChatInputProps {
-  page: string;
-  pageContext: Record<string, unknown>;
+  getPageContext: () => { page: string; context: Record<string, unknown> };
 }
 
-function ChatInputComponent({ page, pageContext }: ChatInputProps) {
+function ChatInputComponent({ getPageContext }: ChatInputProps) {
   const [value, setValue] = useState('');
   const [isTruncated, setIsTruncated] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -86,9 +85,12 @@ function ChatInputComponent({ page, pageContext }: ChatInputProps) {
     const trimmedValue = value.trim();
     if (!trimmedValue || isDisabled || isStreaming) return;
 
+    // Get current page context (lazy evaluation)
+    const { page, context } = getPageContext();
+
     // Send message via WebSocket
     const ws = getCopilotWebSocket();
-    ws.sendMessage(trimmedValue, page, pageContext);
+    ws.sendMessage(trimmedValue, page, context);
 
     // Clear input
     setValue('');
@@ -97,7 +99,7 @@ function ChatInputComponent({ page, pageContext }: ChatInputProps) {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
-  }, [value, isDisabled, isStreaming, page, pageContext]);
+  }, [value, isDisabled, isStreaming, getPageContext]);
 
   const handleCancel = useCallback(() => {
     const ws = getCopilotWebSocket();

@@ -60,12 +60,24 @@ export function AppShell({ paperMode = true }: AppShellProps) {
   }, [connect, disconnect]);
 
   // Global keyboard shortcuts for mobile (Sidebar handles desktop but mobile needs this)
-  // 1-7 for navigation, 'c' for copilot
+  // 1-7 for navigation, 'c' for copilot, Cmd/Ctrl+K for copilot
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Ignore if typing in an input or textarea
       const target = e.target as HTMLElement;
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+        // Exception: Cmd/Ctrl+K should work even in inputs (common pattern)
+        if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
+          e.preventDefault();
+          toggleCopilot();
+        }
+        return;
+      }
+
+      // Cmd/Ctrl+K for copilot toggle (works globally)
+      if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        toggleCopilot();
         return;
       }
 

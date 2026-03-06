@@ -16,8 +16,14 @@ import {
   IntelligencePlaceholders,
 } from '../features/system';
 import { staggerContainer, staggerItem } from '../utils/motion';
+import { useCopilotContext } from '../hooks/useCopilotContext';
 
 export function SystemPage() {
+  // Register Copilot context
+  useCopilotContext('System', () => ({
+    pageDescription: 'System health and monitoring',
+  }));
+
   return (
     <motion.div
       className="space-y-6"

@@ -20,6 +20,10 @@ describe('copilotUI store', () => {
       aiEnabled: false,
       error: null,
       isLoading: false,
+      currentPage: null,
+      contextProvider: null,
+      isReconnecting: false,
+      reconnectAttempt: 0,
     });
   });
 
@@ -180,6 +184,87 @@ describe('copilotUI store', () => {
       expect(state.isStreaming).toBe(false);
       expect(state.streamingContent).toBe('');
       expect(state.error).toBeNull();
+    });
+  });
+
+  describe('context provider', () => {
+    it('registerContextProvider sets currentPage and provider', () => {
+      const store = useCopilotUIStore.getState();
+      const mockProvider = () => ({ equity: 10000, positions: 3 });
+
+      store.registerContextProvider('Dashboard', mockProvider);
+
+      const state = useCopilotUIStore.getState();
+      expect(state.currentPage).toBe('Dashboard');
+      expect(state.contextProvider).toBe(mockProvider);
+    });
+
+    it('unregisterContextProvider clears state only for matching page', () => {
+      const store = useCopilotUIStore.getState();
+      const mockProvider = () => ({ equity: 10000 });
+
+      store.registerContextProvider('Dashboard', mockProvider);
+      store.unregisterContextProvider('Trades'); // Different page
+
+      const state = useCopilotUIStore.getState();
+      expect(state.currentPage).toBe('Dashboard');
+      expect(state.contextProvider).toBe(mockProvider);
+    });
+
+    it('unregisterContextProvider clears state for matching page', () => {
+      const store = useCopilotUIStore.getState();
+      const mockProvider = () => ({ equity: 10000 });
+
+      store.registerContextProvider('Dashboard', mockProvider);
+      store.unregisterContextProvider('Dashboard');
+
+      const state = useCopilotUIStore.getState();
+      expect(state.currentPage).toBeNull();
+      expect(state.contextProvider).toBeNull();
+    });
+
+    it('getPageContext returns current page and evaluated context', () => {
+      const store = useCopilotUIStore.getState();
+      const mockProvider = () => ({ equity: 10000, positions: 3 });
+
+      store.registerContextProvider('Dashboard', mockProvider);
+
+      const result = store.getPageContext();
+      expect(result.page).toBe('Dashboard');
+      expect(result.context).toEqual({ equity: 10000, positions: 3 });
+    });
+
+    it('getPageContext returns Unknown and empty context when no provider', () => {
+      const store = useCopilotUIStore.getState();
+
+      const result = store.getPageContext();
+      expect(result.page).toBe('Unknown');
+      expect(result.context).toEqual({});
+    });
+  });
+
+  describe('reconnection state', () => {
+    it('setIsReconnecting updates reconnecting state', () => {
+      const store = useCopilotUIStore.getState();
+
+      store.setIsReconnecting(true);
+      expect(useCopilotUIStore.getState().isReconnecting).toBe(true);
+
+      store.setIsReconnecting(false);
+      expect(useCopilotUIStore.getState().isReconnecting).toBe(false);
+    });
+
+    it('setReconnectAttempt updates attempt count', () => {
+      const store = useCopilotUIStore.getState();
+
+      store.setReconnectAttempt(1);
+      expect(useCopilotUIStore.getState().reconnectAttempt).toBe(1);
+
+      store.setReconnectAttempt(2);
+      expect(useCopilotUIStore.getState().reconnectAttempt).toBe(2);
+
+      store.setReconnectAttempt(0);
+      expect(useCopilotUIStore.getState().reconnectAttempt).toBe(0);
     });
   });
 });

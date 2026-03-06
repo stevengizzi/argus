@@ -28,6 +28,9 @@ export interface ChatMessage {
   createdAt: string;
 }
 
+// Context provider function type
+export type ContextProvider = () => Record<string, unknown>;
+
 interface CopilotUIState {
   // Panel state
   isOpen: boolean;
@@ -41,6 +44,14 @@ interface CopilotUIState {
   aiEnabled: boolean;
   error: string | null;
   isLoading: boolean;
+
+  // Page context state
+  currentPage: string | null;
+  contextProvider: ContextProvider | null;
+
+  // Reconnection state
+  isReconnecting: boolean;
+  reconnectAttempt: number;
 
   // Panel actions
   toggle: () => void;
@@ -60,6 +71,15 @@ interface CopilotUIState {
   clearError: () => void;
   setIsLoading: (loading: boolean) => void;
 
+  // Context provider actions
+  registerContextProvider: (page: string, provider: ContextProvider) => void;
+  unregisterContextProvider: (page: string) => void;
+  getPageContext: () => { page: string; context: Record<string, unknown> };
+
+  // Reconnection actions
+  setIsReconnecting: (reconnecting: boolean) => void;
+  setReconnectAttempt: (attempt: number) => void;
+
   // Streaming completion — transitions streaming to final message
   finalizeStreamingMessage: (messageId: string, fullContent: string, toolUse?: ToolUseData[]) => void;
 
@@ -67,7 +87,7 @@ interface CopilotUIState {
   resetConversation: () => void;
 }
 
-export const useCopilotUIStore = create<CopilotUIState>((set) => ({
+export const useCopilotUIStore = create<CopilotUIState>((set, get) => ({
   // Panel state
   isOpen: false,
 
@@ -80,6 +100,14 @@ export const useCopilotUIStore = create<CopilotUIState>((set) => ({
   aiEnabled: false,
   error: null,
   isLoading: false,
+
+  // Page context state
+  currentPage: null,
+  contextProvider: null,
+
+  // Reconnection state
+  isReconnecting: false,
+  reconnectAttempt: 0,
 
   // Panel actions
   toggle: () => set((state) => ({ isOpen: !state.isOpen })),
@@ -102,6 +130,26 @@ export const useCopilotUIStore = create<CopilotUIState>((set) => ({
   setError: (error) => set({ error }),
   clearError: () => set({ error: null }),
   setIsLoading: (isLoading) => set({ isLoading }),
+
+  // Context provider actions
+  registerContextProvider: (page, provider) => set({ currentPage: page, contextProvider: provider }),
+  unregisterContextProvider: (page) => set((state) => {
+    // Only unregister if this page is the current provider
+    if (state.currentPage === page) {
+      return { currentPage: null, contextProvider: null };
+    }
+    return {};
+  }),
+  getPageContext: () => {
+    const state = get();
+    const page = state.currentPage || 'Unknown';
+    const context = state.contextProvider ? state.contextProvider() : {};
+    return { page, context };
+  },
+
+  // Reconnection actions
+  setIsReconnecting: (isReconnecting) => set({ isReconnecting }),
+  setReconnectAttempt: (reconnectAttempt) => set({ reconnectAttempt }),
 
   // Streaming completion
   finalizeStreamingMessage: (messageId, fullContent, toolUse) => set((state) => {

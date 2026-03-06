@@ -11,4 +11,5 @@ export { CopilotPlaceholder } from './CopilotPlaceholder';
 export { ChatMessage } from './ChatMessage';
 export { StreamingMessage } from './StreamingMessage';
 export { ChatInput } from './ChatInput';
+export { ConversationHistory } from './ConversationHistory';
 export * from './api';

@@ -242,12 +242,20 @@ class CopilotWebSocketManager implements ChatWebSocketManager {
   }
 
   private scheduleReconnect(): void {
+    const store = useCopilotUIStore.getState();
+
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
       console.error('CopilotWS: Max reconnection attempts reached');
       this.state = 'error';
-      useCopilotUIStore.getState().setError('Connection failed. Please refresh.');
+      store.setIsReconnecting(false);
+      store.setReconnectAttempt(0);
+      store.setError('Connection failed. Please refresh.');
       return;
     }
+
+    // Show reconnecting banner
+    store.setIsReconnecting(true);
+    store.setReconnectAttempt(this.reconnectAttempts + 1);
 
     // Exponential backoff: 1s, 2s, 4s
     const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 4000);
@@ -256,10 +264,55 @@ class CopilotWebSocketManager implements ChatWebSocketManager {
       console.log(`CopilotWS: Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts + 1})`);
     }
 
-    this.reconnectTimeout = setTimeout(() => {
+    this.reconnectTimeout = setTimeout(async () => {
       this.reconnectAttempts++;
+
+      // Re-fetch current conversation from REST to sync state
+      await this.syncConversationFromRest();
+
+      // Attempt WebSocket reconnect
       this.connect();
     }, delay);
+  }
+
+  private async syncConversationFromRest(): Promise<void> {
+    const store = useCopilotUIStore.getState();
+    const conversationId = store.conversationId;
+
+    if (!conversationId) {
+      return;
+    }
+
+    try {
+      if (import.meta.env.DEV) {
+        console.log('CopilotWS: Re-fetching conversation from REST');
+      }
+
+      const response = await fetchConversation(conversationId);
+
+      // Convert API messages to store format
+      const messages: ChatMessage[] = response.messages.map((msg) => ({
+        id: msg.id,
+        role: msg.role,
+        content: msg.content,
+        toolUse: msg.tool_use_data || undefined,
+        isComplete: msg.is_complete,
+        createdAt: msg.created_at,
+      }));
+
+      // Replace any partial/streaming messages with persisted versions
+      store.setMessages(messages);
+      store.setIsStreaming(false);
+      store.setStreamingContent('');
+      this.pendingMessageId = null;
+
+      if (import.meta.env.DEV) {
+        console.log(`CopilotWS: Synced ${messages.length} messages from REST`);
+      }
+    } catch (error) {
+      console.error('CopilotWS: Failed to sync conversation', error);
+      // Don't block reconnection attempt — just log the error
+    }
   }
 
   private handleMessage(event: MessageEvent): void {
@@ -273,6 +326,9 @@ class CopilotWebSocketManager implements ChatWebSocketManager {
           this.state = 'connected';
           this.reconnectAttempts = 0;
           store.setWsConnected(true);
+          // Clear reconnecting state on successful connection
+          store.setIsReconnecting(false);
+          store.setReconnectAttempt(0);
           break;
 
         case 'stream_start':

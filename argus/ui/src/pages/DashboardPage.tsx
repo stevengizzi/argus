@@ -52,12 +52,23 @@ import { WatchlistSidebar } from '../features/watchlist';
 import { staggerContainer, staggerItem, staggerItemWithChildren } from '../utils/motion';
 import { useIsMultiColumn, useMediaQuery } from '../hooks/useMediaQuery';
 import { useDashboardSummary } from '../hooks/useDashboardSummary';
+import { useCopilotContext } from '../hooks/useCopilotContext';
 
 export function DashboardPage() {
   const isMultiColumn = useIsMultiColumn();
   const isDesktop = useMediaQuery('(min-width: 1024px)');
   const { data: summaryData } = useDashboardSummary();
   const [searchParams] = useSearchParams();
+
+  // Register Copilot context
+  useCopilotContext('Dashboard', () => ({
+    equity: summaryData?.account?.equity ?? 0,
+    dailyPnl: summaryData?.account?.daily_pnl ?? 0,
+    regime: summaryData?.orchestrator?.regime ?? 'unknown',
+    activeStrategyCount: summaryData?.orchestrator?.active_strategy_count ?? 0,
+    marketStatus: summaryData?.market?.status ?? 'unknown',
+    deployedPct: summaryData?.orchestrator?.deployed_pct ?? 0,
+  }));
 
   // Check for pre-market: either real market status or dev mode override
   // Dev mode: use localStorage.setItem('argus_premarket', 'true') in console

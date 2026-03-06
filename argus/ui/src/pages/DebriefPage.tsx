@@ -27,6 +27,7 @@ import { BriefingList } from '../features/debrief/briefings';
 import { ResearchLibrary } from '../features/debrief/research';
 import { JournalList } from '../features/debrief/journal';
 import { DURATION, EASE } from '../utils/motion';
+import { useCopilotContext } from '../hooks/useCopilotContext';
 
 const SECTIONS: SegmentedTabSegment[] = [
   { label: 'Briefings', value: 'briefings' },
@@ -62,6 +63,11 @@ export function DebriefPage() {
   const setReadingDocumentId = useDebriefUI((state) => state.setReadingDocumentId);
   const editingJournalEntryId = useDebriefUI((state) => state.editingJournalEntryId);
   const setEditingJournalEntryId = useDebriefUI((state) => state.setEditingJournalEntryId);
+
+  // Register Copilot context
+  useCopilotContext('Debrief', () => ({
+    currentView: activeSection,
+  }));
 
   const handleSectionChange = (value: string) => {
     setActiveSection(value as DebriefSection);

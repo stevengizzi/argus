@@ -43,6 +43,7 @@ import { CorrelationMatrix } from '../features/performance/CorrelationMatrix';
 import { TradeReplay } from '../features/performance/TradeReplay';
 import { staggerContainer, staggerItem } from '../utils/motion';
 import type { PerformancePeriod } from '../api/types';
+import { useCopilotContext } from '../hooks/useCopilotContext';
 
 // Performance tabs
 type PerformanceTab = 'overview' | 'heatmaps' | 'distribution' | 'portfolio' | 'replay';
@@ -107,6 +108,20 @@ export function PerformancePage() {
   const [comparisonEnabled, setComparisonEnabled] = useState(false);
 
   const { data, isLoading, error, isFetching } = usePerformance(period);
+
+  // Register Copilot context
+  useCopilotContext('Performance', () => ({
+    selectedTimeframe: period,
+    activeTab,
+    metrics: data ? {
+      totalReturn: data.metrics.net_pnl,
+      winRate: data.metrics.win_rate,
+      sharpeRatio: data.metrics.sharpe_ratio,
+      maxDrawdown: data.metrics.max_drawdown_pct,
+      totalTrades: data.metrics.total_trades,
+      profitFactor: data.metrics.profit_factor,
+    } : null,
+  }));
 
   // Fetch previous period data for comparison (only when enabled and not "all" period)
   const { data: comparisonData } = usePreviousPeriodPerformance(

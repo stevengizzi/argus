@@ -26,6 +26,7 @@ import { usePatternLibraryUI } from '../stores/patternLibraryUI';
 import { IncubatorPipeline } from '../features/patterns/IncubatorPipeline';
 import { PatternCardGrid } from '../features/patterns/PatternCardGrid';
 import { PatternDetail } from '../features/patterns/PatternDetail';
+import { useCopilotContext } from '../hooks/useCopilotContext';
 
 // Tab order for keyboard navigation
 const TABS = ['overview', 'performance', 'backtest', 'trades', 'intelligence'];
@@ -38,6 +39,25 @@ export function PatternLibraryPage() {
 
   const strategies = strategiesData?.strategies ?? [];
   const sortedStrategies = useSortedStrategies(strategies);
+
+  // Register Copilot context
+  useCopilotContext('PatternLibrary', () => {
+    const selectedStrategy = strategies.find(s => s.strategy_id === selectedStrategyId);
+    return {
+      selectedPattern: selectedStrategy ? {
+        name: selectedStrategy.strategy_id,
+        stage: selectedStrategy.pipeline_stage,
+        family: selectedStrategy.family,
+      } : null,
+      patternStats: selectedStrategy ? {
+        winRate: selectedStrategy.live_metrics?.win_rate ?? selectedStrategy.backtest_metrics?.win_rate ?? null,
+        avgR: selectedStrategy.live_metrics?.avg_r ?? selectedStrategy.backtest_metrics?.avg_r ?? null,
+        sampleSize: selectedStrategy.live_metrics?.total_trades ?? selectedStrategy.backtest_metrics?.total_trades ?? null,
+      } : null,
+      stageFilter: filters.stage,
+      totalPatterns: strategies.length,
+    };
+  });
 
   // Handle strategy query param on mount
   useEffect(() => {

@@ -24,6 +24,7 @@ import { staggerContainer, staggerItem } from '../utils/motion';
 import { getToken } from '../api/client';
 import type { Trade } from '../api/types';
 import type { OutcomeFilter, TradeFilterValues } from '../hooks/useTradeFilters';
+import { useCopilotContext } from '../hooks/useCopilotContext';
 
 const ITEMS_PER_PAGE = 20;
 
@@ -40,6 +41,24 @@ export function TradesPage() {
   const [selectedTrade, setSelectedTrade] = useState<Trade | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
+
+  // Register Copilot context (defined early, uses state below)
+  useCopilotContext('Trades', () => ({
+    filters: {
+      strategy: filters.strategy_id ?? 'all',
+      outcome: filters.outcome,
+      dateFrom: filters.date_from,
+      dateTo: filters.date_to,
+    },
+    visibleTradeCount: data?.trades?.length ?? 0,
+    totalTradeCount: data?.total_count ?? 0,
+    selectedTrade: selectedTrade ? {
+      symbol: selectedTrade.symbol,
+      pnl: selectedTrade.realized_pnl,
+      outcome: selectedTrade.outcome,
+      strategy: selectedTrade.strategy_id,
+    } : null,
+  }));
 
   // Local state initialized from URL - immune to URL changes during exit animation
   const [filters, setFilters] = useState<FilterState>(() => {

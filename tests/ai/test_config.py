@@ -19,7 +19,7 @@ class TestAIConfigDefaults:
 
         assert config.enabled is False
         assert config.api_key == ""
-        assert config.model == "claude-opus-4-5-20250514"
+        assert config.model == "claude-opus-4-5-20251101"
         assert config.max_response_tokens == 4096
         assert config.system_prompt_token_budget == 1500
         assert config.page_context_token_budget == 2000

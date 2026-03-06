@@ -11,12 +11,13 @@
 import { useEffect, useCallback, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Bot, AlertCircle, WifiOff } from 'lucide-react';
+import { X, Bot, AlertCircle, WifiOff, RefreshCw } from 'lucide-react';
 import { useCopilotUIStore } from '../../stores/copilotUI';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { ChatMessage } from './ChatMessage';
 import { StreamingMessage } from './StreamingMessage';
 import { ChatInput } from './ChatInput';
+import { ConversationHistory } from './ConversationHistory';
 import {
   getCopilotWebSocket,
   checkAIStatus,
@@ -109,6 +110,25 @@ function ErrorBanner() {
       >
         <X className="w-4 h-4 text-red-400" />
       </button>
+    </div>
+  );
+}
+
+/**
+ * Reconnecting banner component.
+ */
+function ReconnectingBanner() {
+  const isReconnecting = useCopilotUIStore((state) => state.isReconnecting);
+  const reconnectAttempt = useCopilotUIStore((state) => state.reconnectAttempt);
+
+  if (!isReconnecting) return null;
+
+  return (
+    <div className="flex items-center gap-2 px-4 py-2 bg-yellow-500/10 border-b border-yellow-500/20 text-sm">
+      <RefreshCw className="w-4 h-4 text-yellow-400 flex-shrink-0 animate-spin" />
+      <span className="flex-1 text-yellow-400">
+        Reconnecting{reconnectAttempt > 0 ? ` (attempt ${reconnectAttempt})` : '...'}
+      </span>
     </div>
   );
 }
@@ -248,14 +268,16 @@ function MessageList() {
 }
 
 export function CopilotPanel() {
-  const { isOpen, close } = useCopilotUIStore();
+  const { isOpen, close, getPageContext } = useCopilotUIStore();
   const aiEnabled = useCopilotUIStore((state) => state.aiEnabled);
+  const currentPage = useCopilotUIStore((state) => state.currentPage);
   const location = useLocation();
   const isDesktop = useMediaQuery('(min-width: 1024px)');
   const initializedRef = useRef(false);
 
-  const pageName = PAGE_LABELS[location.pathname] ?? 'Unknown';
-  const pageKey = PAGE_KEYS[location.pathname] ?? 'Dashboard';
+  // Use registered page name from store, fall back to URL-based lookup
+  const pageName = currentPage ?? PAGE_LABELS[location.pathname] ?? 'Unknown';
+  const pageKey = currentPage ?? PAGE_KEYS[location.pathname] ?? 'Dashboard';
 
   // Initialize AI status and WebSocket on panel open
   useEffect(() => {
@@ -365,10 +387,11 @@ export function CopilotPanel() {
                 <Bot className="w-5 h-5 text-argus-accent" />
                 <div>
                   <div className="flex items-center gap-2">
-                    <h2 className="text-base font-semibold text-argus-text">ARGUS Copilot</h2>
+                    <h2 className="text-base font-semibold text-argus-text">
+                      ARGUS Copilot <span className="text-argus-text-dim font-normal">• {pageName}</span>
+                    </h2>
                     <ConnectionStatus />
                   </div>
-                  <span className="text-xs text-argus-text-dim">Page: {pageName}</span>
                 </div>
               </div>
               <button
@@ -380,8 +403,14 @@ export function CopilotPanel() {
               </button>
             </div>
 
-            {/* Error banner */}
+            {/* Error and reconnecting banners */}
             <ErrorBanner />
+            <ReconnectingBanner />
+
+            {/* Conversation history dropdown */}
+            <div className="flex-shrink-0 px-4 py-2 border-b border-argus-border/50">
+              <ConversationHistory />
+            </div>
 
             {/* Message list */}
             <div className="flex-1 overflow-hidden flex flex-col">
@@ -390,7 +419,7 @@ export function CopilotPanel() {
 
             {/* Chat input */}
             <div className="flex-shrink-0 border-t border-argus-border px-4 py-3">
-              <ChatInput page={pageKey} pageContext={{}} />
+              <ChatInput getPageContext={getPageContext} />
             </div>
           </motion.div>
         </>

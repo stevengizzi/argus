@@ -1,7 +1,7 @@
 /**
  * Tests for ChatInput component.
  *
- * Sprint 22, Session 4a.
+ * Sprint 22, Session 4a. Updated Session 4b for getPageContext prop.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -25,6 +25,10 @@ vi.mock('../api', () => ({
   }),
 }));
 
+// Helper to create mock getPageContext function
+const createMockGetPageContext = (page = 'Dashboard', context = {}) =>
+  vi.fn(() => ({ page, context }));
+
 describe('ChatInput', () => {
   beforeEach(() => {
     // Clear mock calls
@@ -42,8 +46,9 @@ describe('ChatInput', () => {
 
   it('sends message on Enter key', async () => {
     const user = userEvent.setup();
+    const mockGetPageContext = createMockGetPageContext('Dashboard', {});
 
-    render(<ChatInput page="Dashboard" pageContext={{}} />);
+    render(<ChatInput getPageContext={mockGetPageContext} />);
 
     const input = screen.getByRole('textbox', { name: /chat message input/i });
     await user.type(input, 'Hello world');
@@ -54,8 +59,9 @@ describe('ChatInput', () => {
 
   it('creates newline on Shift+Enter', async () => {
     const user = userEvent.setup();
+    const mockGetPageContext = createMockGetPageContext();
 
-    render(<ChatInput page="Dashboard" pageContext={{}} />);
+    render(<ChatInput getPageContext={mockGetPageContext} />);
 
     const input = screen.getByRole('textbox', { name: /chat message input/i });
     await user.type(input, 'Line 1');
@@ -68,8 +74,9 @@ describe('ChatInput', () => {
 
   it('shows Cancel button when streaming', () => {
     useCopilotUIStore.setState({ isStreaming: true });
+    const mockGetPageContext = createMockGetPageContext();
 
-    render(<ChatInput page="Dashboard" pageContext={{}} />);
+    render(<ChatInput getPageContext={mockGetPageContext} />);
 
     // Cancel button should be visible
     expect(screen.getByRole('button', { name: /cancel/i })).toBeInTheDocument();
@@ -79,8 +86,9 @@ describe('ChatInput', () => {
 
   it('is disabled when AI not configured', () => {
     useCopilotUIStore.setState({ aiEnabled: false });
+    const mockGetPageContext = createMockGetPageContext();
 
-    render(<ChatInput page="Dashboard" pageContext={{}} />);
+    render(<ChatInput getPageContext={mockGetPageContext} />);
 
     const input = screen.getByRole('textbox', { name: /chat message input/i });
     expect(input).toBeDisabled();
@@ -89,8 +97,9 @@ describe('ChatInput', () => {
 
   it('rejects empty message', async () => {
     const user = userEvent.setup();
+    const mockGetPageContext = createMockGetPageContext();
 
-    render(<ChatInput page="Dashboard" pageContext={{}} />);
+    render(<ChatInput getPageContext={mockGetPageContext} />);
 
     const input = screen.getByRole('textbox', { name: /chat message input/i });
     // Type only whitespace
@@ -102,7 +111,9 @@ describe('ChatInput', () => {
   });
 
   it('disables send button when input is empty', () => {
-    render(<ChatInput page="Dashboard" pageContext={{}} />);
+    const mockGetPageContext = createMockGetPageContext();
+
+    render(<ChatInput getPageContext={mockGetPageContext} />);
 
     const sendButton = screen.getByRole('button', { name: /send/i });
     expect(sendButton).toBeDisabled();
@@ -111,12 +122,26 @@ describe('ChatInput', () => {
   it('calls cancelStream when Cancel button is clicked', async () => {
     const user = userEvent.setup();
     useCopilotUIStore.setState({ isStreaming: true });
+    const mockGetPageContext = createMockGetPageContext();
 
-    render(<ChatInput page="Dashboard" pageContext={{}} />);
+    render(<ChatInput getPageContext={mockGetPageContext} />);
 
     const cancelButton = screen.getByRole('button', { name: /cancel/i });
     await user.click(cancelButton);
 
     expect(mockCancelStream).toHaveBeenCalled();
+  });
+
+  it('uses context from getPageContext when sending', async () => {
+    const user = userEvent.setup();
+    const mockGetPageContext = createMockGetPageContext('Trades', { selectedSymbol: 'AAPL' });
+
+    render(<ChatInput getPageContext={mockGetPageContext} />);
+
+    const input = screen.getByRole('textbox', { name: /chat message input/i });
+    await user.type(input, 'Test message');
+    await user.keyboard('{Enter}');
+
+    expect(mockSendMessage).toHaveBeenCalledWith('Test message', 'Trades', { selectedSymbol: 'AAPL' });
   });
 });
