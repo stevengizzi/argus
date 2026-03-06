@@ -4,16 +4,24 @@
  * Global chat panel that persists across pages. Uses own animation and lifecycle
  * separate from SlideInPanel (different z-index layer, maintains chat state).
  *
- * Sprint 21d — Copilot shell (DEC-212). Content activates Sprint 22.
+ * Sprint 21d — Copilot shell (DEC-212).
+ * Sprint 22, Session 4a — Live chat integration.
  */
 
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Bot, Send } from 'lucide-react';
+import { X, Bot, AlertCircle, WifiOff } from 'lucide-react';
 import { useCopilotUIStore } from '../../stores/copilotUI';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
-import { CopilotPlaceholder } from './CopilotPlaceholder';
+import { ChatMessage } from './ChatMessage';
+import { StreamingMessage } from './StreamingMessage';
+import { ChatInput } from './ChatInput';
+import {
+  getCopilotWebSocket,
+  checkAIStatus,
+  loadTodayConversation,
+} from './api';
 import { DURATION, EASE } from '../../utils/motion';
 
 // Map pathname to readable page name
@@ -27,12 +35,235 @@ const PAGE_LABELS: Record<string, string> = {
   '/system': 'System',
 };
 
+// Map pathname to API page context key
+const PAGE_KEYS: Record<string, string> = {
+  '/': 'Dashboard',
+  '/trades': 'Trades',
+  '/performance': 'Performance',
+  '/orchestrator': 'Orchestrator',
+  '/patterns': 'PatternLibrary',
+  '/debrief': 'Debrief',
+  '/system': 'System',
+};
+
+/**
+ * Connection status indicator.
+ */
+function ConnectionStatus() {
+  const wsConnected = useCopilotUIStore((state) => state.wsConnected);
+  const aiEnabled = useCopilotUIStore((state) => state.aiEnabled);
+  const error = useCopilotUIStore((state) => state.error);
+
+  if (error) {
+    return (
+      <span className="flex items-center gap-1 text-xs text-red-400">
+        <span className="w-2 h-2 rounded-full bg-red-400" />
+        Error
+      </span>
+    );
+  }
+
+  if (!aiEnabled) {
+    return (
+      <span className="flex items-center gap-1 text-xs text-argus-text-dim">
+        <WifiOff className="w-3 h-3" />
+        Offline
+      </span>
+    );
+  }
+
+  if (wsConnected) {
+    return (
+      <span className="flex items-center gap-1 text-xs text-green-400">
+        <span className="w-2 h-2 rounded-full bg-green-400" />
+        Connected
+      </span>
+    );
+  }
+
+  return (
+    <span className="flex items-center gap-1 text-xs text-argus-text-dim">
+      <span className="w-2 h-2 rounded-full bg-gray-400 animate-pulse" />
+      Connecting...
+    </span>
+  );
+}
+
+/**
+ * Error banner component.
+ */
+function ErrorBanner() {
+  const error = useCopilotUIStore((state) => state.error);
+  const clearError = useCopilotUIStore((state) => state.clearError);
+
+  if (!error) return null;
+
+  return (
+    <div className="flex items-center gap-2 px-4 py-2 bg-red-500/10 border-b border-red-500/20 text-sm">
+      <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+      <span className="flex-1 text-red-400">{error}</span>
+      <button
+        onClick={clearError}
+        className="p-1 hover:bg-red-500/20 rounded transition-colors"
+        aria-label="Dismiss error"
+      >
+        <X className="w-4 h-4 text-red-400" />
+      </button>
+    </div>
+  );
+}
+
+/**
+ * Loading skeleton for conversation.
+ */
+function LoadingSkeleton() {
+  return (
+    <div className="flex flex-col gap-4 p-4 animate-pulse">
+      {/* User message skeleton */}
+      <div className="flex justify-end">
+        <div className="w-2/3 h-12 bg-argus-surface-2 rounded-2xl rounded-br-md" />
+      </div>
+      {/* Assistant message skeleton */}
+      <div className="flex justify-start">
+        <div className="w-3/4 h-20 bg-argus-surface-2 rounded-2xl rounded-bl-md" />
+      </div>
+      {/* Another pair */}
+      <div className="flex justify-end">
+        <div className="w-1/2 h-10 bg-argus-surface-2 rounded-2xl rounded-br-md" />
+      </div>
+      <div className="flex justify-start">
+        <div className="w-2/3 h-16 bg-argus-surface-2 rounded-2xl rounded-bl-md" />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Empty state when no conversation exists.
+ */
+function EmptyState() {
+  return (
+    <div className="flex flex-col items-center justify-center h-full px-6 py-8 text-center">
+      <div className="p-4 rounded-full bg-argus-accent/10 mb-4">
+        <Bot className="w-10 h-10 text-argus-accent" />
+      </div>
+      <h3 className="text-lg font-medium text-argus-text mb-2">
+        Start a conversation
+      </h3>
+      <p className="text-sm text-argus-text-dim max-w-xs">
+        Ask questions about your trading data, request analysis, or get insights
+        about your strategies.
+      </p>
+    </div>
+  );
+}
+
+/**
+ * AI Not Configured state.
+ */
+function AINotConfiguredState() {
+  return (
+    <div className="flex flex-col items-center justify-center h-full px-6 py-8 text-center">
+      <div className="p-4 rounded-full bg-argus-surface-2 mb-4">
+        <WifiOff className="w-10 h-10 text-argus-text-dim" />
+      </div>
+      <h3 className="text-lg font-medium text-argus-text mb-2">
+        AI Not Configured
+      </h3>
+      <p className="text-sm text-argus-text-dim max-w-xs">
+        The AI Copilot requires an API key to be configured. Check your system
+        settings to enable AI features.
+      </p>
+    </div>
+  );
+}
+
+/**
+ * Message list container.
+ */
+function MessageList() {
+  const messages = useCopilotUIStore((state) => state.messages);
+  const isStreaming = useCopilotUIStore((state) => state.isStreaming);
+  const isLoading = useCopilotUIStore((state) => state.isLoading);
+  const aiEnabled = useCopilotUIStore((state) => state.aiEnabled);
+
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to bottom on new messages or streaming content
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (container) {
+      // Scroll to bottom
+      container.scrollTop = container.scrollHeight;
+    }
+  }, [messages, isStreaming]);
+
+  if (!aiEnabled) {
+    return <AINotConfiguredState />;
+  }
+
+  if (isLoading) {
+    return <LoadingSkeleton />;
+  }
+
+  if (messages.length === 0 && !isStreaming) {
+    return <EmptyState />;
+  }
+
+  return (
+    <div
+      ref={scrollContainerRef}
+      className="flex-1 overflow-y-auto px-4 py-4 space-y-4"
+    >
+      {/* Render messages oldest-first */}
+      {messages.map((message) => (
+        <ChatMessage key={message.id} message={message} />
+      ))}
+
+      {/* Streaming message */}
+      <StreamingMessage />
+    </div>
+  );
+}
+
 export function CopilotPanel() {
   const { isOpen, close } = useCopilotUIStore();
+  const aiEnabled = useCopilotUIStore((state) => state.aiEnabled);
   const location = useLocation();
   const isDesktop = useMediaQuery('(min-width: 1024px)');
+  const initializedRef = useRef(false);
 
   const pageName = PAGE_LABELS[location.pathname] ?? 'Unknown';
+  const pageKey = PAGE_KEYS[location.pathname] ?? 'Dashboard';
+
+  // Initialize AI status and WebSocket on panel open
+  useEffect(() => {
+    if (isOpen && !initializedRef.current) {
+      initializedRef.current = true;
+
+      // Check AI status first
+      checkAIStatus().then((enabled) => {
+        if (enabled) {
+          // Connect WebSocket
+          const ws = getCopilotWebSocket();
+          ws.connect();
+
+          // Load today's conversation
+          loadTodayConversation();
+        }
+      });
+    }
+  }, [isOpen]);
+
+  // Reconnect WebSocket if disconnected while panel is open
+  useEffect(() => {
+    if (isOpen && aiEnabled) {
+      const ws = getCopilotWebSocket();
+      if (ws.getState() === 'disconnected') {
+        ws.connect();
+      }
+    }
+  }, [isOpen, aiEnabled]);
 
   // Close on Escape key — check isOpen first to not conflict with other panels
   const handleKeyDown = useCallback(
@@ -112,7 +343,10 @@ export function CopilotPanel() {
               <div className="flex items-center gap-3">
                 <Bot className="w-5 h-5 text-argus-accent" />
                 <div>
-                  <h2 className="text-base font-semibold text-argus-text">AI Copilot</h2>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-base font-semibold text-argus-text">ARGUS Copilot</h2>
+                    <ConnectionStatus />
+                  </div>
                   <span className="text-xs text-argus-text-dim">Page: {pageName}</span>
                 </div>
               </div>
@@ -125,28 +359,17 @@ export function CopilotPanel() {
               </button>
             </div>
 
-            {/* Scrollable content area */}
-            <div className="flex-1 overflow-y-auto">
-              <CopilotPlaceholder />
+            {/* Error banner */}
+            <ErrorBanner />
+
+            {/* Message list */}
+            <div className="flex-1 overflow-hidden flex flex-col">
+              <MessageList />
             </div>
 
-            {/* Footer with disabled input */}
+            {/* Chat input */}
             <div className="flex-shrink-0 border-t border-argus-border px-4 py-3">
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  disabled
-                  placeholder="Activating Sprint 22..."
-                  className="flex-1 bg-argus-surface-2/50 border border-argus-border rounded-lg px-3 py-2 text-sm text-argus-text-dim placeholder:text-argus-text-dim/60 cursor-not-allowed"
-                />
-                <button
-                  disabled
-                  className="p-2 rounded-lg bg-argus-surface-2/50 text-argus-text-dim cursor-not-allowed"
-                  aria-label="Send message"
-                >
-                  <Send className="w-4 h-4" />
-                </button>
-              </div>
+              <ChatInput page={pageKey} pageContext={{}} />
             </div>
           </motion.div>
         </>

@@ -2,6 +2,7 @@
  * Tests for CopilotPanel component.
  *
  * Sprint 21d, Session 11.
+ * Sprint 22, Session 4a — Updated for live chat integration.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -9,6 +10,19 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { CopilotPanel } from './CopilotPanel';
 import { useCopilotUIStore } from '../../stores/copilotUI';
+
+// Mock the API module to prevent actual API calls
+vi.mock('./api', () => ({
+  getCopilotWebSocket: vi.fn(() => ({
+    connect: vi.fn(),
+    disconnect: vi.fn(),
+    sendMessage: vi.fn(),
+    cancelStream: vi.fn(),
+    getState: vi.fn(() => 'disconnected'),
+  })),
+  checkAIStatus: vi.fn().mockResolvedValue(false),
+  loadTodayConversation: vi.fn().mockResolvedValue(undefined),
+}));
 
 // Wrapper with router
 function TestWrapper({ children, initialPath = '/' }: { children: React.ReactNode; initialPath?: string }) {
@@ -24,6 +38,14 @@ describe('CopilotPanel', () => {
     // Reset the Zustand store before each test
     useCopilotUIStore.setState({
       isOpen: false,
+      messages: [],
+      conversationId: null,
+      isStreaming: false,
+      streamingContent: '',
+      wsConnected: false,
+      aiEnabled: false,
+      error: null,
+      isLoading: false,
     });
     // Reset body overflow
     document.body.style.overflow = '';
@@ -36,7 +58,7 @@ describe('CopilotPanel', () => {
       </TestWrapper>
     );
 
-    expect(screen.queryByText('AI Copilot')).not.toBeInTheDocument();
+    expect(screen.queryByText('ARGUS Copilot')).not.toBeInTheDocument();
   });
 
   it('renders panel content when open', () => {
@@ -48,17 +70,14 @@ describe('CopilotPanel', () => {
       </TestWrapper>
     );
 
-    // Header (there are two "AI Copilot" texts - one in header, one in placeholder)
-    expect(screen.getAllByText('AI Copilot')).toHaveLength(2);
+    // Header
+    expect(screen.getByText('ARGUS Copilot')).toBeInTheDocument();
 
-    // Placeholder content
-    expect(screen.getByText('Contextual AI assistant activating Sprint 22. Soon you\'ll chat with Claude here — page-aware, with full system knowledge.')).toBeInTheDocument();
+    // AI Not Configured state (since aiEnabled is false)
+    expect(screen.getByText('AI Not Configured')).toBeInTheDocument();
 
-    // Feature list
-    expect(screen.getByText('Answer questions about any system data')).toBeInTheDocument();
-
-    // Disabled input
-    expect(screen.getByPlaceholderText('Activating Sprint 22...')).toBeDisabled();
+    // Chat input should be disabled
+    expect(screen.getByPlaceholderText('AI not configured')).toBeDisabled();
   });
 
   it('shows context indicator with current page name', () => {
@@ -87,5 +106,37 @@ describe('CopilotPanel', () => {
     fireEvent.click(closeButton);
 
     expect(closeSpy).toHaveBeenCalled();
+  });
+
+  it('shows empty state when AI enabled but no messages', () => {
+    useCopilotUIStore.setState({
+      isOpen: true,
+      aiEnabled: true,
+      messages: [],
+    });
+
+    render(
+      <TestWrapper>
+        <CopilotPanel />
+      </TestWrapper>
+    );
+
+    expect(screen.getByText('Start a conversation')).toBeInTheDocument();
+  });
+
+  it('shows error banner when error exists', () => {
+    useCopilotUIStore.setState({
+      isOpen: true,
+      aiEnabled: true,
+      error: 'Connection failed',
+    });
+
+    render(
+      <TestWrapper>
+        <CopilotPanel />
+      </TestWrapper>
+    );
+
+    expect(screen.getByText('Connection failed')).toBeInTheDocument();
   });
 });
