@@ -164,6 +164,15 @@ class PendingProposalsResponse(BaseModel):
     count: int
 
 
+class InsightResponse(BaseModel):
+    """Response body for GET /insight."""
+
+    insight: str | None
+    generated_at: str
+    cached: bool
+    message: str | None = None
+
+
 # --- Helper Functions ---
 
 
@@ -629,6 +638,65 @@ async def get_ai_usage(
             call_count=usage["call_count"],
             daily_breakdown=None,
         )
+
+
+@router.get("/insight", response_model=InsightResponse)
+async def get_insight(
+    _auth: dict = Depends(require_auth),  # noqa: B008
+    state: AppState = Depends(get_app_state),  # noqa: B008
+) -> InsightResponse:
+    """Get a brief AI-generated insight for the Dashboard.
+
+    Returns a cached insight if available, otherwise generates a new one.
+    Uses lighter data assembly for faster response.
+
+    Returns:
+        InsightResponse with generated or cached insight.
+    """
+    now = datetime.now(UTC).isoformat()
+
+    # Check if AI is enabled
+    if state.ai_client is None or not state.ai_client.enabled:
+        return InsightResponse(
+            insight=None,
+            generated_at=now,
+            cached=False,
+            message="AI not available",
+        )
+
+    # Check if summary generator is available
+    if state.ai_summary_generator is None:
+        return InsightResponse(
+            insight=None,
+            generated_at=now,
+            cached=False,
+            message="Insight generation not available",
+        )
+
+    # Check cache first
+    cached = False
+    if state.ai_cache is not None:
+        cached_result = await state.ai_cache.get("insight")
+        if cached_result is not None:
+            return InsightResponse(
+                insight=cached_result.get("insight", ""),
+                generated_at=cached_result.get("generated_at", now),
+                cached=True,
+            )
+
+    # Generate new insight
+    insight = await state.ai_summary_generator.generate_insight(state)
+
+    # Cache the result
+    if state.ai_cache is not None:
+        await state.ai_cache.set("insight", {"insight": insight, "generated_at": now})
+        cached = False  # Just generated, not cached
+
+    return InsightResponse(
+        insight=insight,
+        generated_at=now,
+        cached=cached,
+    )
 
 
 # --- Helper Functions for Building Context ---
