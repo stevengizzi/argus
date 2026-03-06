@@ -1,6 +1,7 @@
 /**
  * Dashboard feature exports.
  *
+ * Sprint 22 Session 6: Added AIInsightCard.
  * Sprint 21d Session 5: Added HeatStripPortfolioBar, GoalTracker, MarketCountdown, PreMarketLayout.
  * Sprint 21d Session 4: Added OrchestratorStatusStrip.
  * RiskAllocationPanel kept for reference but no longer used on Dashboard
@@ -8,6 +9,7 @@
  */
 
 export { AccountSummary } from './AccountSummary';
+export { AIInsightCard } from './AIInsightCard';
 export { DailyPnlCard } from './DailyPnlCard';
 export { MarketStatusBadge } from './MarketStatusBadge';
 export { OpenPositions } from './OpenPositions';

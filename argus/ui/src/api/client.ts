@@ -6,9 +6,13 @@
 
 import type {
   AccountResponse,
+  AIInsightResponse,
+  AIStatusResponse,
   BarsResponse,
   Briefing,
   BriefingsListResponse,
+  ConversationDetailResponse,
+  ConversationsListResponse,
   CorrelationResponse,
   DashboardSummaryResponse,
   DebriefSearchResponse,
@@ -552,4 +556,54 @@ export async function getGoalsConfig(): Promise<GoalsConfig> {
 // Dashboard endpoints (Sprint 21d)
 export async function getDashboardSummary(): Promise<DashboardSummaryResponse> {
   return fetchWithAuth<DashboardSummaryResponse>('/dashboard/summary');
+}
+
+// AI endpoints (Sprint 22 Session 6)
+export async function getAIStatus(): Promise<AIStatusResponse> {
+  return fetchWithAuth<AIStatusResponse>('/ai/status');
+}
+
+export async function getAIInsight(): Promise<AIInsightResponse> {
+  return fetchWithAuth<AIInsightResponse>('/ai/insight');
+}
+
+export interface ConversationsParams {
+  date_from?: string;
+  date_to?: string;
+  tag?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export async function getConversations(
+  params?: ConversationsParams
+): Promise<ConversationsListResponse> {
+  const searchParams = new URLSearchParams();
+  if (params) {
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined) {
+        searchParams.set(key, String(value));
+      }
+    });
+  }
+  const query = searchParams.toString();
+  return fetchWithAuth<ConversationsListResponse>(`/ai/conversations${query ? `?${query}` : ''}`);
+}
+
+export async function getConversation(
+  conversationId: string,
+  limit?: number,
+  offset?: number
+): Promise<ConversationDetailResponse> {
+  const searchParams = new URLSearchParams();
+  if (limit !== undefined) {
+    searchParams.set('limit', String(limit));
+  }
+  if (offset !== undefined) {
+    searchParams.set('offset', String(offset));
+  }
+  const query = searchParams.toString();
+  return fetchWithAuth<ConversationDetailResponse>(
+    `/ai/conversations/${conversationId}${query ? `?${query}` : ''}`
+  );
 }

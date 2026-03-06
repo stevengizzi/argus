@@ -61,3 +61,12 @@ export { useDistribution } from './useDistribution';
 export { useCorrelation } from './useCorrelation';
 export { useTradeReplay } from './useTradeReplay';
 export { useGoals } from './useGoals';
+
+// AI hooks (Sprint 22 Session 6)
+export {
+  useAIStatus,
+  useAIInsight,
+  useConversations,
+  useConversation,
+  type ConversationFilters,
+} from './useAI';

@@ -3,11 +3,13 @@
  *
  * Manages active section, editing states, filters, and other UI state
  * for The Debrief page. Session-level only — does not persist to localStorage.
+ *
+ * Sprint 22 Session 6: Added 'learning_journal' section.
  */
 
 import { create } from 'zustand';
 
-export type DebriefSection = 'briefings' | 'research' | 'journal';
+export type DebriefSection = 'briefings' | 'research' | 'journal' | 'learning_journal';
 
 export type JournalFilterKey = 'type' | 'strategy_id' | 'tag' | 'search';
 

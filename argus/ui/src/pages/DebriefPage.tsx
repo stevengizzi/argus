@@ -1,10 +1,11 @@
 /**
  * The Debrief page — institutional knowledge layer.
  *
- * Three sections:
+ * Four sections:
  * - Briefings: Pre-market and end-of-day structured reports
  * - Research: Unified view of all project documentation
  * - Journal: Typed entries for observations, trade annotations, and notes
+ * - Learning Journal: AI Copilot conversation history browser
  *
  * Uses SegmentedTab for section switching with Framer Motion transitions.
  *
@@ -12,8 +13,11 @@
  * - 'b' → switch to Briefings tab
  * - 'r' → switch to Research tab
  * - 'j' → switch to Journal tab
+ * - 'l' → switch to Learning Journal tab
  * - 'n' → start new entry (expand form in current tab)
  * - Escape → close editor/form
+ *
+ * Sprint 22 Session 6: Added Learning Journal section.
  */
 
 import { useEffect } from 'react';
@@ -25,7 +29,7 @@ import { SegmentedTab, type SegmentedTabSegment } from '../components/SegmentedT
 import { useDebriefUI, type DebriefSection } from '../stores/debriefUI';
 import { BriefingList } from '../features/debrief/briefings';
 import { ResearchLibrary } from '../features/debrief/research';
-import { JournalList } from '../features/debrief/journal';
+import { JournalList, ConversationBrowser } from '../features/debrief/journal';
 import { DURATION, EASE } from '../utils/motion';
 import { useCopilotContext } from '../hooks/useCopilotContext';
 
@@ -33,6 +37,7 @@ const SECTIONS: SegmentedTabSegment[] = [
   { label: 'Briefings', value: 'briefings' },
   { label: 'Research', value: 'research' },
   { label: 'Journal', value: 'journal' },
+  { label: 'Learning Journal', value: 'learning_journal' },
 ];
 
 const tabContentVariants = {
@@ -95,6 +100,9 @@ export function DebriefPage() {
           break;
         case 'j':
           setActiveSection('journal');
+          break;
+        case 'l':
+          setActiveSection('learning_journal');
           break;
         case 'n':
           // Start new entry in current tab
@@ -176,6 +184,7 @@ export function DebriefPage() {
             {activeSection === 'briefings' && <BriefingList />}
             {activeSection === 'research' && <ResearchLibrary />}
             {activeSection === 'journal' && <JournalList />}
+            {activeSection === 'learning_journal' && <ConversationBrowser />}
           </ErrorBoundary>
         </motion.div>
       </AnimatePresence>

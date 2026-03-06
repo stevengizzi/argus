@@ -35,6 +35,7 @@ import { motion } from 'framer-motion';
 import { useSearchParams } from 'react-router-dom';
 import {
   AccountSummary,
+  AIInsightCard,
   DailyPnlCard,
   MarketStatusCard,
   TodayStats,
@@ -133,6 +134,9 @@ export function DashboardPage() {
           <motion.div variants={staggerItem}><TodayStats data={summaryData?.today_stats} useSummaryData /></motion.div>
           <motion.div variants={staggerItem}><SessionTimeline /></motion.div>
 
+          {/* AI Insight card */}
+          <motion.div variants={staggerItem}><AIInsightCard /></motion.div>
+
           <motion.div variants={staggerItem}><OpenPositions /></motion.div>
           <motion.div variants={staggerItem}><RecentTrades /></motion.div>
           <motion.div variants={staggerItem}><HealthMini /></motion.div>
@@ -198,6 +202,11 @@ export function DashboardPage() {
             <motion.div variants={staggerItem} className="h-full">
               <SessionTimeline />
             </motion.div>
+          </motion.div>
+
+          {/* AI Insight card */}
+          <motion.div variants={staggerItem}>
+            <AIInsightCard />
           </motion.div>
 
           <motion.div variants={staggerItem}>
@@ -276,6 +285,11 @@ export function DashboardPage() {
           <motion.div variants={staggerItem} className="h-full">
             <SessionTimeline />
           </motion.div>
+        </motion.div>
+
+        {/* AI Insight card */}
+        <motion.div variants={staggerItem}>
+          <AIInsightCard />
         </motion.div>
 
         <motion.div variants={staggerItem}>

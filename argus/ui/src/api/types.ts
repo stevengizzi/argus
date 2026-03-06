@@ -581,3 +581,61 @@ export interface DashboardSummaryResponse {
   orchestrator: OrchestratorSummaryData;
   timestamp: string;
 }
+
+// AI — Insight (Sprint 22 Session 6)
+export interface AIInsightResponse {
+  insight: string | null;
+  generated_at: string;
+  cached: boolean;
+  message: string | null;
+}
+
+// AI — Status
+export interface AIStatusResponse {
+  enabled: boolean;
+  model: string | null;
+  usage: {
+    today?: Record<string, unknown>;
+    this_month?: Record<string, unknown>;
+    per_day_average?: number;
+  } | null;
+}
+
+// AI — Conversations
+export interface ConversationSummary {
+  id: string;
+  date: string;
+  tag: string;
+  title: string;
+  message_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ConversationsListResponse {
+  conversations: ConversationSummary[];
+  total: number;
+}
+
+export interface ConversationMessage {
+  id: string;
+  conversation_id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  tool_use_data: Array<{
+    id: string;
+    name: string;
+    input: Record<string, unknown>;
+  }> | null;
+  page_context: Record<string, unknown> | null;
+  is_complete: boolean;
+  created_at: string;
+}
+
+export interface ConversationDetailResponse {
+  conversation: ConversationSummary;
+  messages: ConversationMessage[];
+}
+
+// AI — Conversation tag types for color coding
+export type ConversationTag = 'session' | 'research' | 'debrief' | 'pre-market' | 'general';
