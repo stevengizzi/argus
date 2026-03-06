@@ -10,12 +10,23 @@ Public classes:
 - ResponseCache: TTL-based caching for AI responses
 - ConversationManager: Chat conversation persistence
 - UsageTracker: API usage tracking and cost monitoring
+- ActionManager: Manages AI action proposals requiring approval
+- ActionProposal: Data class for a single action proposal
 
 Tool definitions:
 - ARGUS_TOOLS: List of tool definitions for tool_use
 - TOOLS_REQUIRING_APPROVAL: Set of tools that require operator approval
 """
 
+from argus.ai.actions import (
+    ActionManager,
+    ActionProposal,
+    ActionProposalError,
+    InvalidToolError,
+    ProposalExpiredError,
+    ProposalNotFoundError,
+    ProposalNotPendingError,
+)
 from argus.ai.cache import ResponseCache
 from argus.ai.client import ClaudeClient, UsageRecord
 from argus.ai.config import AIConfig
@@ -40,6 +51,14 @@ __all__ = [
     # Persistence
     "ConversationManager",
     "UsageTracker",
+    # Actions
+    "ActionManager",
+    "ActionProposal",
+    "ActionProposalError",
+    "InvalidToolError",
+    "ProposalExpiredError",
+    "ProposalNotFoundError",
+    "ProposalNotPendingError",
     # Tools
     "ARGUS_TOOLS",
     "TOOLS_REQUIRING_APPROVAL",

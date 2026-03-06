@@ -660,3 +660,305 @@ async def test_get_usage_returns_503_when_not_configured(
     )
 
     assert response.status_code == 503
+
+
+# --- Action Proposal Endpoints ---
+
+
+@pytest.fixture
+def mock_action_manager() -> MagicMock:
+    """Provide a mock ActionManager for testing."""
+    manager = MagicMock()
+
+    # Mock proposal data
+    mock_proposal = MagicMock()
+    mock_proposal.id = "proposal_test_123"
+    mock_proposal.conversation_id = "conv_123"
+    mock_proposal.message_id = None
+    mock_proposal.tool_name = "propose_allocation_change"
+    mock_proposal.tool_use_id = "tu_001"
+    mock_proposal.tool_input = {"strategy_id": "orb_breakout", "new_allocation_pct": 30}
+    mock_proposal.status = "pending"
+    mock_proposal.result = None
+    mock_proposal.failure_reason = None
+    mock_proposal.created_at = MagicMock()
+    mock_proposal.created_at.isoformat = MagicMock(return_value="2026-03-06T10:00:00+00:00")
+    mock_proposal.expires_at = MagicMock()
+    mock_proposal.expires_at.isoformat = MagicMock(return_value="2026-03-06T10:05:00+00:00")
+    mock_proposal.resolved_at = None
+
+    # Approved proposal version
+    approved_proposal = MagicMock()
+    approved_proposal.id = "proposal_test_123"
+    approved_proposal.conversation_id = "conv_123"
+    approved_proposal.message_id = None
+    approved_proposal.tool_name = "propose_allocation_change"
+    approved_proposal.tool_use_id = "tu_001"
+    approved_proposal.tool_input = {"strategy_id": "orb_breakout", "new_allocation_pct": 30}
+    approved_proposal.status = "approved"
+    approved_proposal.result = None
+    approved_proposal.failure_reason = None
+    approved_proposal.created_at = mock_proposal.created_at
+    approved_proposal.expires_at = mock_proposal.expires_at
+    approved_proposal.resolved_at = MagicMock()
+    approved_proposal.resolved_at.isoformat = MagicMock(return_value="2026-03-06T10:02:00+00:00")
+
+    # Rejected proposal version
+    rejected_proposal = MagicMock()
+    rejected_proposal.id = "proposal_test_123"
+    rejected_proposal.conversation_id = "conv_123"
+    rejected_proposal.message_id = None
+    rejected_proposal.tool_name = "propose_allocation_change"
+    rejected_proposal.tool_use_id = "tu_001"
+    rejected_proposal.tool_input = {"strategy_id": "orb_breakout", "new_allocation_pct": 30}
+    rejected_proposal.status = "rejected"
+    rejected_proposal.result = None
+    rejected_proposal.failure_reason = None
+    rejected_proposal.created_at = mock_proposal.created_at
+    rejected_proposal.expires_at = mock_proposal.expires_at
+    rejected_proposal.resolved_at = MagicMock()
+    rejected_proposal.resolved_at.isoformat = MagicMock(return_value="2026-03-06T10:02:00+00:00")
+
+    async def mock_approve_proposal(proposal_id: str):
+        if proposal_id == "not_found":
+            from argus.ai.actions import ProposalNotFoundError
+            raise ProposalNotFoundError(f"Proposal {proposal_id} not found")
+        if proposal_id == "expired":
+            from argus.ai.actions import ProposalExpiredError
+            raise ProposalExpiredError("Proposal expired")
+        if proposal_id == "already_approved":
+            from argus.ai.actions import ProposalNotPendingError
+            raise ProposalNotPendingError("approved")
+        return approved_proposal
+
+    async def mock_reject_proposal(proposal_id: str, reason: str = ""):
+        if proposal_id == "not_found":
+            from argus.ai.actions import ProposalNotFoundError
+            raise ProposalNotFoundError(f"Proposal {proposal_id} not found")
+        if proposal_id == "already_rejected":
+            from argus.ai.actions import ProposalNotPendingError
+            raise ProposalNotPendingError("rejected")
+        return rejected_proposal
+
+    async def mock_get_pending_proposals(conversation_id: str | None = None):
+        return [mock_proposal]
+
+    manager.approve_proposal = AsyncMock(side_effect=mock_approve_proposal)
+    manager.reject_proposal = AsyncMock(side_effect=mock_reject_proposal)
+    manager.get_pending_proposals = AsyncMock(side_effect=mock_get_pending_proposals)
+
+    return manager
+
+
+@pytest.fixture
+async def app_state_with_actions(
+    app_state_with_ai: AppState,
+    mock_action_manager: MagicMock,
+) -> AppState:
+    """Provide AppState with AI services and ActionManager configured."""
+    app_state_with_ai.action_manager = mock_action_manager
+    return app_state_with_ai
+
+
+@pytest.fixture
+async def client_with_actions(
+    app_state_with_actions: AppState,
+    jwt_secret: str,
+) -> AsyncGenerator[AsyncClient, None]:
+    """Provide client with ActionManager configured."""
+    app = create_app(app_state_with_actions)
+    app.state.app_state = app_state_with_actions
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+    ) as client:
+        yield client
+
+
+# --- POST /actions/{id}/approve tests ---
+
+
+@pytest.mark.asyncio
+async def test_approve_action_success(
+    client_with_actions: AsyncClient,
+    auth_headers: dict[str, str],
+) -> None:
+    """POST /actions/{id}/approve approves a pending proposal."""
+    response = await client_with_actions.post(
+        "/api/v1/ai/actions/proposal_test_123/approve",
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "approved"
+    assert data["proposal"]["id"] == "proposal_test_123"
+    assert data["proposal"]["status"] == "approved"
+
+
+@pytest.mark.asyncio
+async def test_approve_action_not_found(
+    client_with_actions: AsyncClient,
+    auth_headers: dict[str, str],
+) -> None:
+    """POST /actions/{id}/approve returns 404 for unknown proposal."""
+    response = await client_with_actions.post(
+        "/api/v1/ai/actions/not_found/approve",
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_approve_action_expired(
+    client_with_actions: AsyncClient,
+    auth_headers: dict[str, str],
+) -> None:
+    """POST /actions/{id}/approve returns 410 for expired proposal."""
+    response = await client_with_actions.post(
+        "/api/v1/ai/actions/expired/approve",
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 410
+    assert "expired" in response.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_approve_action_not_pending(
+    client_with_actions: AsyncClient,
+    auth_headers: dict[str, str],
+) -> None:
+    """POST /actions/{id}/approve returns 409 for already-approved proposal."""
+    response = await client_with_actions.post(
+        "/api/v1/ai/actions/already_approved/approve",
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_approve_action_requires_auth(
+    client_with_actions: AsyncClient,
+) -> None:
+    """POST /actions/{id}/approve requires authentication."""
+    response = await client_with_actions.post(
+        "/api/v1/ai/actions/proposal_test_123/approve",
+    )
+
+    assert response.status_code == 401
+
+
+# --- POST /actions/{id}/reject tests ---
+
+
+@pytest.mark.asyncio
+async def test_reject_action_success(
+    client_with_actions: AsyncClient,
+    auth_headers: dict[str, str],
+) -> None:
+    """POST /actions/{id}/reject rejects a pending proposal."""
+    response = await client_with_actions.post(
+        "/api/v1/ai/actions/proposal_test_123/reject",
+        json={"reason": "Not appropriate"},
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "rejected"
+    assert data["proposal"]["id"] == "proposal_test_123"
+    assert data["proposal"]["status"] == "rejected"
+
+
+@pytest.mark.asyncio
+async def test_reject_action_without_reason(
+    client_with_actions: AsyncClient,
+    auth_headers: dict[str, str],
+) -> None:
+    """POST /actions/{id}/reject works without reason."""
+    response = await client_with_actions.post(
+        "/api/v1/ai/actions/proposal_test_123/reject",
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_reject_action_not_found(
+    client_with_actions: AsyncClient,
+    auth_headers: dict[str, str],
+) -> None:
+    """POST /actions/{id}/reject returns 404 for unknown proposal."""
+    response = await client_with_actions.post(
+        "/api/v1/ai/actions/not_found/reject",
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_reject_action_requires_auth(
+    client_with_actions: AsyncClient,
+) -> None:
+    """POST /actions/{id}/reject requires authentication."""
+    response = await client_with_actions.post(
+        "/api/v1/ai/actions/proposal_test_123/reject",
+    )
+
+    assert response.status_code == 401
+
+
+# --- GET /actions/pending tests ---
+
+
+@pytest.mark.asyncio
+async def test_get_pending_actions_success(
+    client_with_actions: AsyncClient,
+    auth_headers: dict[str, str],
+) -> None:
+    """GET /actions/pending returns pending proposals."""
+    response = await client_with_actions.get(
+        "/api/v1/ai/actions/pending",
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert "proposals" in data
+    assert "count" in data
+    assert data["count"] == 1
+    assert len(data["proposals"]) == 1
+    assert data["proposals"][0]["id"] == "proposal_test_123"
+
+
+@pytest.mark.asyncio
+async def test_get_pending_actions_requires_auth(
+    client_with_actions: AsyncClient,
+) -> None:
+    """GET /actions/pending requires authentication."""
+    response = await client_with_actions.get(
+        "/api/v1/ai/actions/pending",
+    )
+
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_actions_endpoint_503_when_not_configured(
+    client_with_ai: AsyncClient,
+    auth_headers: dict[str, str],
+) -> None:
+    """Action endpoints return 503 when ActionManager not configured."""
+    # client_with_ai has AI services but no action_manager
+    response = await client_with_ai.get(
+        "/api/v1/ai/actions/pending",
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 503
+    assert "Action manager not available" in response.json()["detail"]

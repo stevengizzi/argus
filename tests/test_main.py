@@ -7,10 +7,16 @@ These tests verify the ArgusSystem wiring, not the individual components.
 from __future__ import annotations
 
 import contextlib
+import os
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
+# Set ANTHROPIC_API_KEY to empty string before any argus imports to prevent AIConfig auto-enable.
+# This must happen before any test imports argus.main (which calls load_dotenv()).
+# Setting to empty string (not deleting) prevents load_dotenv() from loading it from .env.
+os.environ["ANTHROPIC_API_KEY"] = ""
 
 
 @pytest.fixture
@@ -36,6 +42,9 @@ health:
   alert_webhook_url: ""
   daily_check_enabled: false
   weekly_reconciliation_enabled: false
+
+ai:
+  enabled: false
 """)
 
     # brokers.yaml
@@ -128,6 +137,8 @@ def mock_env_vars(monkeypatch: pytest.MonkeyPatch) -> None:
     """Set mock environment variables for API keys."""
     monkeypatch.setenv("ALPACA_API_KEY", "test_api_key")
     monkeypatch.setenv("ALPACA_SECRET_KEY", "test_secret_key")
+    # Ensure ANTHROPIC_API_KEY is not set (AIConfig auto-enables if present)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
 
 
 class TestArgusSystemWiring:
@@ -149,6 +160,7 @@ class TestArgusSystemWiring:
             patch("argus.main.DatabaseManager") as mock_db_class,
             patch("argus.main.ConversationManager") as mock_conv_class,
             patch("argus.main.UsageTracker") as mock_usage_class,
+            patch("argus.main.ActionManager") as mock_action_class,
             patch("argus.main.AlpacaBroker") as mock_broker_class,
             patch("argus.main.HealthMonitor") as mock_health_class,
             patch("argus.main.RiskManager") as mock_risk_class,
@@ -189,6 +201,7 @@ class TestArgusSystemWiring:
             mock_db_class.side_effect = tracker("db", mock_db_class)
             mock_conv_class.side_effect = tracker("conv", mock_conv_class)
             mock_usage_class.side_effect = tracker("usage", mock_usage_class)
+            mock_action_class.side_effect = tracker("action", mock_action_class)
             mock_broker_class.side_effect = tracker("broker", mock_broker_class)
             mock_health_class.side_effect = tracker("health", mock_health_class)
             mock_risk_class.side_effect = tracker("risk", mock_risk_class)
@@ -234,6 +247,9 @@ class TestArgusSystemWiring:
 
         system._broker = MagicMock()
         system._broker.disconnect = AsyncMock()
+
+        # ActionManager (Sprint 22.3a)
+        system._action_manager = None
 
         await system.shutdown()
 
@@ -771,6 +787,9 @@ api:
 
         system._broker = MagicMock()
         system._broker.disconnect = AsyncMock()
+
+        # ActionManager (Sprint 22.3a)
+        system._action_manager = None
 
         await system.shutdown()
 

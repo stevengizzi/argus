@@ -60,6 +60,7 @@ from argus.data.databento_data_service import DatabentoDataService
 from argus.data.databento_scanner import DatabentoScanner, DatabentoScannerConfig
 from argus.data.fmp_scanner import FMPScannerConfig, FMPScannerSource
 from argus.data.scanner import StaticScanner
+from argus.ai.actions import ActionManager
 from argus.ai.conversations import ConversationManager
 from argus.ai.usage import UsageTracker
 from argus.db.manager import DatabaseManager
@@ -166,6 +167,13 @@ class ArgusSystem:
         await self._conversation_manager.initialize()
         self._usage_tracker = UsageTracker(self._db)
         await self._usage_tracker.initialize()
+
+        # Initialize ActionManager if AI is enabled
+        self._action_manager: ActionManager | None = None
+        if config.system.ai.enabled:
+            self._action_manager = ActionManager(self._db, self._event_bus, config.system.ai)
+            await self._action_manager.initialize()
+            logger.info("ActionManager initialized")
 
         # --- Phase 3: Broker ---
         logger.info("[3/12] Connecting to broker...")
@@ -493,7 +501,12 @@ class ArgusSystem:
                     cached_watchlist=self._cached_watchlist,
                     conversation_manager=self._conversation_manager,
                     usage_tracker=self._usage_tracker,
+                    action_manager=self._action_manager,
                 )
+
+                # Start ActionManager cleanup task if AI is enabled
+                if self._action_manager is not None:
+                    self._action_manager.start_cleanup_task()
                 api_app = create_app(app_state)
 
                 # Start WebSocket bridge
@@ -713,6 +726,11 @@ class ArgusSystem:
 
             get_bridge().stop()
             logger.info("API server stopped")
+
+        # 0a. Stop ActionManager cleanup task
+        if self._action_manager is not None:
+            logger.info("Stopping ActionManager cleanup task...")
+            self._action_manager.stop_cleanup_task()
 
         # 1. Stop scanner
         if self._scanner:

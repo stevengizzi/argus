@@ -1,7 +1,7 @@
 """AI routes for the Command Center API.
 
 Provides endpoints for AI chat, conversation history, usage tracking,
-and context inspection. All endpoints are JWT-protected.
+context inspection, and action proposal management. All endpoints are JWT-protected.
 """
 
 from __future__ import annotations
@@ -13,6 +13,11 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
+from argus.ai.actions import (
+    ProposalExpiredError,
+    ProposalNotFoundError,
+    ProposalNotPendingError,
+)
 from argus.ai.tools import ARGUS_TOOLS, requires_approval
 from argus.api.auth import require_auth
 from argus.api.dependencies import AppState, get_app_state
@@ -120,6 +125,43 @@ class AIUsageResponse(BaseModel):
     estimated_cost_usd: float
     call_count: int
     daily_breakdown: list[dict[str, Any]] | None = None
+
+
+class RejectRequest(BaseModel):
+    """Request body for POST /actions/{id}/reject."""
+
+    reason: str = ""
+
+
+class ActionProposalResponse(BaseModel):
+    """Response body for action proposal endpoints."""
+
+    id: str
+    conversation_id: str
+    message_id: str | None
+    tool_name: str
+    tool_use_id: str
+    tool_input: dict[str, Any]
+    status: str
+    result: dict[str, Any] | None = None
+    failure_reason: str | None = None
+    created_at: str
+    expires_at: str
+    resolved_at: str | None = None
+
+
+class ApproveRejectResponse(BaseModel):
+    """Response body for approve/reject endpoints."""
+
+    proposal: ActionProposalResponse
+    status: str
+
+
+class PendingProposalsResponse(BaseModel):
+    """Response body for GET /actions/pending."""
+
+    proposals: list[ActionProposalResponse]
+    count: int
 
 
 # --- Helper Functions ---
@@ -261,14 +303,34 @@ async def post_chat(
         tool_results: list[dict[str, Any]] = []
         for tu in tool_use_blocks:
             tool_name = tu.get("name", "")
+            tool_input = tu.get("input", {})
+            tool_use_id = tu.get("id", "")
+
             if tool_name == "generate_report":
+                # generate_report doesn't require approval (execution in Session 3b)
                 result_content = "Report generation queued."
+                tu["proposal_id"] = None
+            elif requires_approval(tool_name):
+                # Create proposal for tools requiring approval
+                if state.action_manager is not None:
+                    proposal = await state.action_manager.create_proposal(
+                        conversation_id=conversation_id,
+                        message_id=None,  # Message not persisted yet
+                        tool_name=tool_name,
+                        tool_use_id=tool_use_id,
+                        tool_input=tool_input,
+                    )
+                    result_content = f"Proposal #{proposal.id} created. Awaiting operator approval."
+                    tu["proposal_id"] = proposal.id
+                else:
+                    result_content = "Action manager not available."
+                    tu["proposal_id"] = None
             else:
-                # TODO(Session 3a): Wire ActionManager here
-                result_content = "Proposal created. Awaiting operator approval."
+                result_content = "Unknown tool."
+                tu["proposal_id"] = None
 
             tool_results.append({
-                "tool_use_id": tu["id"],
+                "tool_use_id": tool_use_id,
                 "content": result_content,
             })
 
@@ -641,3 +703,153 @@ def _build_system_config_info(state: AppState) -> dict[str, Any] | None:
             config_info["regime"] = str(regime)
 
     return config_info if config_info else None
+
+
+# --- Action Proposal Endpoints ---
+
+
+def _ensure_action_manager(state: AppState) -> None:
+    """Raise 503 if ActionManager is not available.
+
+    Args:
+        state: The application state.
+
+    Raises:
+        HTTPException 503: If ActionManager is not initialized.
+    """
+    if state.action_manager is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Action manager not available",
+        )
+
+
+def _proposal_to_response(proposal: Any) -> ActionProposalResponse:
+    """Convert an ActionProposal to response model.
+
+    Args:
+        proposal: The ActionProposal instance.
+
+    Returns:
+        ActionProposalResponse model.
+    """
+    return ActionProposalResponse(
+        id=proposal.id,
+        conversation_id=proposal.conversation_id,
+        message_id=proposal.message_id,
+        tool_name=proposal.tool_name,
+        tool_use_id=proposal.tool_use_id,
+        tool_input=proposal.tool_input,
+        status=proposal.status,
+        result=proposal.result,
+        failure_reason=proposal.failure_reason,
+        created_at=proposal.created_at.isoformat(),
+        expires_at=proposal.expires_at.isoformat(),
+        resolved_at=proposal.resolved_at.isoformat() if proposal.resolved_at else None,
+    )
+
+
+@router.post("/actions/{proposal_id}/approve", response_model=ApproveRejectResponse)
+async def approve_action(
+    proposal_id: str,
+    _auth: dict = Depends(require_auth),  # noqa: B008
+    state: AppState = Depends(get_app_state),  # noqa: B008
+) -> ApproveRejectResponse:
+    """Approve a pending action proposal.
+
+    Marks the proposal as approved. Execution happens separately.
+
+    Returns:
+        The updated proposal and its new status.
+
+    Raises:
+        404: Proposal not found.
+        409: Proposal is not in pending status.
+        410: Proposal has expired.
+    """
+    _ensure_action_manager(state)
+
+    try:
+        proposal = await state.action_manager.approve_proposal(proposal_id)  # type: ignore
+        return ApproveRejectResponse(
+            proposal=_proposal_to_response(proposal),
+            status="approved",
+        )
+    except ProposalNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Proposal {proposal_id} not found",
+        )
+    except ProposalExpiredError:
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="Proposal expired",
+        )
+    except ProposalNotPendingError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Proposal is {e.current_status}",
+        )
+
+
+@router.post("/actions/{proposal_id}/reject", response_model=ApproveRejectResponse)
+async def reject_action(
+    proposal_id: str,
+    request: RejectRequest | None = None,
+    _auth: dict = Depends(require_auth),  # noqa: B008
+    state: AppState = Depends(get_app_state),  # noqa: B008
+) -> ApproveRejectResponse:
+    """Reject a pending action proposal.
+
+    Marks the proposal as rejected.
+
+    Returns:
+        The updated proposal and its new status.
+
+    Raises:
+        404: Proposal not found.
+        409: Proposal is not in pending status.
+    """
+    _ensure_action_manager(state)
+
+    reason = request.reason if request else ""
+
+    try:
+        proposal = await state.action_manager.reject_proposal(proposal_id, reason)  # type: ignore
+        return ApproveRejectResponse(
+            proposal=_proposal_to_response(proposal),
+            status="rejected",
+        )
+    except ProposalNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Proposal {proposal_id} not found",
+        )
+    except ProposalNotPendingError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Proposal is {e.current_status}",
+        )
+
+
+@router.get("/actions/pending", response_model=PendingProposalsResponse)
+async def get_pending_actions(
+    conversation_id: str | None = None,
+    _auth: dict = Depends(require_auth),  # noqa: B008
+    state: AppState = Depends(get_app_state),  # noqa: B008
+) -> PendingProposalsResponse:
+    """Get all pending action proposals.
+
+    Query params:
+        conversation_id: Optional filter by conversation.
+
+    Returns:
+        List of pending proposals.
+    """
+    _ensure_action_manager(state)
+
+    proposals = await state.action_manager.get_pending_proposals(conversation_id)  # type: ignore
+    return PendingProposalsResponse(
+        proposals=[_proposal_to_response(p) for p in proposals],
+        count=len(proposals),
+    )

@@ -272,7 +272,9 @@ async def _handle_chat_message(
         )
 
         # Process stream events
+        # Track tool_use blocks during streaming
         current_tool_use: dict[str, Any] | None = None
+        current_tool_input_json: list[str] = []
 
         async for event in stream_gen:
             event_type = event.get("type", "")
@@ -290,41 +292,94 @@ async def _handle_chat_message(
 
             elif event_type == "content_block_start":
                 # Check if it's a tool_use block
-                index = event.get("index", 0)
-                # Will be filled in by delta events
+                content_block = event.get("content_block", {})
+                if content_block.get("type") == "tool_use":
+                    current_tool_use = {
+                        "id": content_block.get("id", ""),
+                        "name": content_block.get("name", ""),
+                    }
+                    current_tool_input_json = []
 
             elif event_type == "content_block_delta":
-                delta_type = event.get("delta_type", "")
-                if delta_type == "text_delta" or event.get("text"):
-                    text = event.get("text", "")
+                delta = event.get("delta", {})
+                delta_type = delta.get("type", "") or event.get("delta_type", "")
+
+                if delta_type == "text_delta":
+                    text = delta.get("text", "") or event.get("text", "")
                     if text:
                         full_content_parts.append(text)
                         await websocket.send_json({
                             "type": "token",
                             "content": text,
                         })
-                elif delta_type == "input_json_delta":
-                    # Tool use input being streamed - accumulate
-                    pass
+                elif delta_type == "input_json_delta" and current_tool_use is not None:
+                    # Accumulate tool_use input JSON
+                    partial_json = delta.get("partial_json", "")
+                    if partial_json:
+                        current_tool_input_json.append(partial_json)
 
             elif event_type == "content_block_stop":
-                # Block finished - check if we have tool_use
-                pass
+                # Block finished - finalize tool_use if we have one
+                if current_tool_use is not None:
+                    # Parse accumulated JSON
+                    import json as json_module
+                    try:
+                        input_json_str = "".join(current_tool_input_json)
+                        tool_input = json_module.loads(input_json_str) if input_json_str else {}
+                    except json_module.JSONDecodeError:
+                        tool_input = {}
+
+                    current_tool_use["input"] = tool_input
+
+                    # Handle the tool_use
+                    tool_name = current_tool_use.get("name", "")
+                    tool_use_id = current_tool_use.get("id", "")
+
+                    proposal_id = None
+                    if tool_name == "generate_report":
+                        # generate_report doesn't require approval
+                        pass
+                    elif requires_approval(tool_name) and app_state.action_manager is not None:
+                        # Create proposal
+                        proposal = await app_state.action_manager.create_proposal(
+                            conversation_id=conversation_id,
+                            message_id=None,
+                            tool_name=tool_name,
+                            tool_use_id=tool_use_id,
+                            tool_input=tool_input,
+                        )
+                        proposal_id = proposal.id
+
+                    # Send tool_use event to client
+                    await websocket.send_json({
+                        "type": "tool_use",
+                        "tool_name": tool_name,
+                        "tool_input": tool_input,
+                        "tool_use_id": tool_use_id,
+                        "proposal_id": proposal_id,
+                    })
+
+                    # Add to tool_use_blocks for persistence
+                    tool_use_blocks.append({
+                        "id": tool_use_id,
+                        "name": tool_name,
+                        "input": tool_input,
+                        "proposal_id": proposal_id,
+                    })
+
+                    # Reset
+                    current_tool_use = None
+                    current_tool_input_json = []
 
             elif event_type == "message_delta":
-                # Check stop_reason
+                # Check stop_reason for logging
                 stop_reason = event.get("delta", {}).get("stop_reason")
-                if stop_reason == "tool_use":
-                    # Need to handle tool_use blocks
-                    pass
+                if stop_reason:
+                    logger.debug("Stream stop_reason: %s", stop_reason)
 
             elif event_type == "message_stop":
                 # Stream complete
                 pass
-
-        # Check for tool_use in the collected content
-        # Note: Anthropic streaming returns tool_use differently
-        # For simplicity in this implementation, tool_use detection is limited
 
     except asyncio.TimeoutError:
         await websocket.send_json({

@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 from fastapi import Depends, HTTPException, Request, status
 
 if TYPE_CHECKING:
+    from argus.ai.actions import ActionManager
     from argus.ai.client import ClaudeClient
     from argus.ai.context import SystemContextBuilder
     from argus.ai.conversations import ConversationManager
@@ -59,6 +60,7 @@ class AppState:
         ai_client: Claude API client wrapper.
         prompt_manager: AI prompt construction and token budgets.
         context_builder: AI system context builder.
+        action_manager: AI action proposal lifecycle manager.
     """
 
     event_bus: EventBus
@@ -80,6 +82,7 @@ class AppState:
     ai_client: ClaudeClient | None = None
     prompt_manager: PromptManager | None = None
     context_builder: SystemContextBuilder | None = None
+    action_manager: ActionManager | None = None
 
 
 def get_app_state(request: Request) -> AppState:
