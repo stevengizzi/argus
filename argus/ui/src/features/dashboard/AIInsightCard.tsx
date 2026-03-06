@@ -48,7 +48,7 @@ function AIInsightError({ onRetry }: { onRetry: () => void }) {
       <button
         type="button"
         onClick={onRetry}
-        className="mt-3 text-sm text-argus-accent hover:text-argus-accent-bright transition-colors flex items-center gap-1.5"
+        className="mt-3 text-sm text-argus-accent hover:text-argus-accent-bright hover:underline transition-colors flex items-center gap-1.5 cursor-pointer"
       >
         <RefreshCw className="w-3.5 h-3.5" />
         Retry
@@ -150,7 +150,7 @@ export function AIInsightCard() {
           type="button"
           onClick={() => refetch()}
           disabled={isFetching}
-          className="flex items-center gap-1 text-argus-accent hover:text-argus-accent-bright transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex items-center gap-1 text-argus-accent hover:text-argus-accent-bright hover:underline transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
           aria-label="Refresh insight"
         >
           <RefreshCw
