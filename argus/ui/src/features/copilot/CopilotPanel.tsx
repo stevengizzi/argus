@@ -221,12 +221,11 @@ function MessageList() {
     isNearBottomRef.current = distanceFromBottom <= threshold;
   }, []);
 
-  // Auto-scroll to bottom on new messages (always scroll for new messages)
+  // Auto-scroll to bottom on new messages only if user is near the bottom
   useEffect(() => {
     const container = scrollContainerRef.current;
-    if (container) {
+    if (container && isNearBottomRef.current) {
       container.scrollTop = container.scrollHeight;
-      isNearBottomRef.current = true;
     }
   }, [messages]);
 

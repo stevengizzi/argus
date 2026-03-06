@@ -64,3 +64,16 @@ api:
 # Goal tracking (Sprint 21d — DEC-214)
 goals:
   monthly_target_usd: 5000
+
+# AI Copilot configuration (Sprint 22 — AI Layer MVP)
+# API key: Set ANTHROPIC_API_KEY environment variable
+ai:
+  model: "claude-opus-4-5-20251101"       # DEC-098: Claude Opus for all API calls
+  system_prompt_token_budget: 1500        # Max tokens for system prompt
+  page_context_token_budget: 2000         # Max tokens for page-specific context
+  history_token_budget: 8000              # Max tokens for conversation history
+  rate_limit_requests_per_minute: 20      # Claude API rate limit
+  proposal_ttl_seconds: 300               # Action proposal expiry (5 minutes)
+  insight_refresh_interval_seconds: 60    # Dashboard insight refresh interval
+  cost_per_million_input_tokens: 15.0     # Opus pricing
+  cost_per_million_output_tokens: 75.0    # Opus pricing

@@ -20,6 +20,8 @@ import {
   Play,
   FileText,
   AlertTriangle,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { useCopilotUIStore, type ProposalState } from '../../stores/copilotUI';
 import {
@@ -318,6 +320,7 @@ export function ActionCard({ proposal, onApprove, onReject }: ActionCardProps) {
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
   const [isRejecting, setIsRejecting] = useState(false);
+  const [showReport, setShowReport] = useState(false);
   const hasPlayedNotificationRef = useRef(false);
   const hasPlayedExpiryWarningRef = useRef(proposal.expiryWarningPlayed ?? false);
 
@@ -416,6 +419,28 @@ export function ActionCard({ proposal, onApprove, onReject }: ActionCardProps) {
     }
   }, [proposal.id, onReject]);
 
+  // Keyboard shortcuts for approve/reject
+  useEffect(() => {
+    if (proposal.status !== 'pending') return;
+    if (proposal.toolName === 'generate_report') return; // Reports auto-execute
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'TEXTAREA' || target.tagName === 'INPUT') return;
+
+      if (e.key === 'y' || (e.key === 'Enter' && !showConfirmDialog && !showRejectDialog)) {
+        e.preventDefault();
+        handleApproveClick();
+      } else if (e.key === 'n') {
+        e.preventDefault();
+        handleRejectClick();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [proposal.status, proposal.toolName, showConfirmDialog, showRejectDialog, handleApproveClick, handleRejectClick]);
+
   const isDimmed = proposal.status === 'rejected' || proposal.status === 'expired';
   const isUrgent = proposal.status === 'pending' && secondsRemaining < 60 && secondsRemaining > 0;
   const description = buildDescription(proposal.toolName, proposal.toolInput);
@@ -470,9 +495,44 @@ export function ActionCard({ proposal, onApprove, onReject }: ActionCardProps) {
         )}
 
         {proposal.status === 'executed' && proposal.result && (
-          <div className="text-xs text-green-400 mt-2 bg-green-400/10 rounded px-2 py-1">
-            {proposal.result.message as string || 'Action completed successfully'}
-          </div>
+          <>
+            {/* Report click-through for generate_report */}
+            {proposal.toolName === 'generate_report' && proposal.result.content ? (
+              <div className="mt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowReport(!showReport)}
+                  className="flex items-center gap-1.5 text-sm text-purple-400 hover:text-purple-300 transition-colors"
+                >
+                  {showReport ? (
+                    <>
+                      <ChevronUp className="w-4 h-4" />
+                      Hide Report
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown className="w-4 h-4" />
+                      View Report
+                    </>
+                  )}
+                </button>
+                {showReport && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="mt-2 p-3 bg-argus-bg rounded-lg border border-argus-border text-xs text-argus-text whitespace-pre-wrap max-h-64 overflow-y-auto"
+                  >
+                    {proposal.result.content as string}
+                  </motion.div>
+                )}
+              </div>
+            ) : (
+              <div className="text-xs text-green-400 mt-2 bg-green-400/10 rounded px-2 py-1">
+                {proposal.result.message as string || 'Action completed successfully'}
+              </div>
+            )}
+          </>
         )}
 
         {proposal.status === 'failed' && proposal.failureReason && (
@@ -483,22 +543,29 @@ export function ActionCard({ proposal, onApprove, onReject }: ActionCardProps) {
 
         {/* Action buttons for pending state */}
         {proposal.status === 'pending' && proposal.toolName !== 'generate_report' && (
-          <div className="flex items-center gap-2 mt-3">
-            <button
-              onClick={handleApproveClick}
-              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-sm bg-green-600 hover:bg-green-500 text-white rounded transition-colors"
-            >
-              <Check className="w-3.5 h-3.5" />
-              Approve
-            </button>
-            <button
-              onClick={handleRejectClick}
-              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-sm bg-red-600 hover:bg-red-500 text-white rounded transition-colors"
-            >
-              <X className="w-3.5 h-3.5" />
-              Reject
-            </button>
-          </div>
+          <>
+            <div className="flex items-center gap-2 mt-3">
+              <button
+                type="button"
+                onClick={handleApproveClick}
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-sm bg-green-600 hover:bg-green-500 text-white rounded transition-colors"
+              >
+                <Check className="w-3.5 h-3.5" />
+                Approve
+              </button>
+              <button
+                type="button"
+                onClick={handleRejectClick}
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-sm bg-red-600 hover:bg-red-500 text-white rounded transition-colors"
+              >
+                <X className="w-3.5 h-3.5" />
+                Reject
+              </button>
+            </div>
+            <p className="text-xs text-argus-text-dim text-center mt-1.5">
+              Y to approve · N to reject
+            </p>
+          </>
         )}
       </div>
 

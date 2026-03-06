@@ -19,7 +19,6 @@ if TYPE_CHECKING:
     from argus.ai.conversations import ConversationManager
     from argus.ai.executors import ExecutorRegistry
     from argus.ai.prompts import PromptManager
-    from argus.ai.service import AIService
     from argus.ai.summary import DailySummaryGenerator
     from argus.ai.usage import UsageTracker
     from argus.analytics.debrief_service import DebriefService
@@ -67,7 +66,6 @@ class AppState:
         action_manager: AI action proposal lifecycle manager.
         executor_registry: AI action executor registry.
         ai_summary_generator: AI summary and insight generator.
-        ai_service: Main AI orchestration service.
         ai_cache: AI response cache.
     """
 
@@ -93,7 +91,6 @@ class AppState:
     action_manager: ActionManager | None = None
     executor_registry: ExecutorRegistry | None = None
     ai_summary_generator: DailySummaryGenerator | None = None
-    ai_service: AIService | None = None
     ai_cache: ResponseCache | None = None
 
 

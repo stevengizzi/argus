@@ -7,6 +7,7 @@ Authentication via JWT token in first message.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from datetime import UTC, datetime, date
 from typing import TYPE_CHECKING, Any
@@ -279,7 +280,7 @@ async def _handle_chat_message(
         async for event in stream_gen:
             event_type = event.get("type", "")
 
-            # DEBUG: Log all events to diagnose tool_use processing
+            # Log stream events for diagnostics
             logger.debug("Stream event: type=%s, keys=%s", event_type, list(event.keys()))
             if event_type == "content_block_start":
                 logger.debug(
@@ -341,11 +342,10 @@ async def _handle_chat_message(
                 )
                 if current_tool_use is not None:
                     # Parse accumulated JSON
-                    import json as json_module
                     try:
                         input_json_str = "".join(current_tool_input_json)
-                        tool_input = json_module.loads(input_json_str) if input_json_str else {}
-                    except json_module.JSONDecodeError:
+                        tool_input = json.loads(input_json_str) if input_json_str else {}
+                    except json.JSONDecodeError:
                         tool_input = {}
 
                     current_tool_use["input"] = tool_input
@@ -408,7 +408,7 @@ async def _handle_chat_message(
         return
     except asyncio.CancelledError:
         # Stream was cancelled by client
-        logger.info(f"Stream cancelled for conversation {conversation_id}")
+        logger.info("Stream cancelled for conversation %s", conversation_id)
         raise
 
     # If tool_use blocks were detected, send tool_results and continue conversation
@@ -420,7 +420,6 @@ async def _handle_chat_message(
         )
 
         # Build tool_results
-        import json as json_module
         tool_results: list[dict[str, Any]] = []
         for tu in tool_use_blocks:
             tool_name = tu.get("name", "")
@@ -466,11 +465,11 @@ async def _handle_chat_message(
         # Log the exact messages being sent
         logger.info(
             "send_with_tool_results: messages=%s",
-            json_module.dumps(continuation_messages, indent=2, default=str)[:2000],
+            json.dumps(continuation_messages, indent=2, default=str)[:2000],
         )
         logger.info(
             "send_with_tool_results: tool_results=%s",
-            json_module.dumps(tool_results, indent=2),
+            json.dumps(tool_results, indent=2),
         )
 
         try:

@@ -251,4 +251,97 @@ describe('ActionCard', () => {
     const card = screen.getByTestId('action-card');
     expect(card).toHaveClass('opacity-60');
   });
+
+  it('shows keyboard hint text for pending proposals', () => {
+    const proposal = createProposal();
+
+    render(
+      <ActionCard
+        proposal={proposal}
+        onApprove={mockOnApprove}
+        onReject={mockOnReject}
+      />
+    );
+
+    // Should show keyboard hint
+    expect(screen.getByText('Y to approve · N to reject')).toBeInTheDocument();
+  });
+
+  it('Y key opens confirmation dialog for pending proposal', async () => {
+    const proposal = createProposal();
+
+    render(
+      <ActionCard
+        proposal={proposal}
+        onApprove={mockOnApprove}
+        onReject={mockOnReject}
+      />
+    );
+
+    // Press Y key
+    fireEvent.keyDown(window, { key: 'y' });
+
+    // Confirmation dialog should appear
+    await waitFor(() => {
+      expect(screen.getByText('Confirm Action')).toBeInTheDocument();
+    });
+  });
+
+  it('N key opens reject dialog for pending proposal', async () => {
+    const proposal = createProposal();
+
+    render(
+      <ActionCard
+        proposal={proposal}
+        onApprove={mockOnApprove}
+        onReject={mockOnReject}
+      />
+    );
+
+    // Press N key
+    fireEvent.keyDown(window, { key: 'n' });
+
+    // Reject dialog should appear
+    await waitFor(() => {
+      expect(screen.getByText('Reject Action')).toBeInTheDocument();
+    });
+  });
+
+  it('renders View Report button for executed generate_report', async () => {
+    const proposal = createProposal({
+      toolName: 'generate_report',
+      toolInput: {
+        report_type: 'daily_summary',
+      },
+      status: 'executed',
+      result: {
+        report_type: 'daily_summary',
+        content: '# Daily Summary\n\nThis is the report content.',
+        date: '2026-03-07',
+        saved: true,
+      },
+    });
+
+    render(
+      <ActionCard
+        proposal={proposal}
+        onApprove={mockOnApprove}
+        onReject={mockOnReject}
+      />
+    );
+
+    // Should show View Report button
+    expect(screen.getByText('View Report')).toBeInTheDocument();
+
+    // Click to expand
+    fireEvent.click(screen.getByText('View Report'));
+
+    // Should show report content
+    await waitFor(() => {
+      expect(screen.getByText(/Daily Summary/)).toBeInTheDocument();
+    });
+
+    // Should now show Hide Report button
+    expect(screen.getByText('Hide Report')).toBeInTheDocument();
+  });
 });

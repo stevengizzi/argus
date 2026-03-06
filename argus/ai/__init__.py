@@ -15,7 +15,6 @@ Public classes:
 - ActionExecutor: ABC for action executors
 - ExecutorRegistry: Maps tool names to executor instances
 - DailySummaryGenerator: Generates end-of-day summaries and insights
-- AIService: Main orchestration service for AI features
 
 Tool definitions:
 - ARGUS_TOOLS: List of tool definitions for tool_use
@@ -49,7 +48,6 @@ from argus.ai.executors import (
     ValidationError,
 )
 from argus.ai.prompts import PromptManager
-from argus.ai.service import AIService
 from argus.ai.summary import DailySummaryGenerator
 from argus.ai.tools import ARGUS_TOOLS, TOOLS_REQUIRING_APPROVAL, get_tool_by_name, requires_approval
 from argus.ai.usage import UsageTracker
@@ -90,8 +88,6 @@ __all__ = [
     "PreExecutionCheckError",
     # Summary
     "DailySummaryGenerator",
-    # Service
-    "AIService",
     # Tools
     "ARGUS_TOOLS",
     "TOOLS_REQUIRING_APPROVAL",

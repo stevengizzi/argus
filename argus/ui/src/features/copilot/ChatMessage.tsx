@@ -7,7 +7,7 @@
  * Sprint 22, Session 4a.
  */
 
-import { useState, useCallback, useEffect, memo } from 'react';
+import { useState, useCallback, useEffect, memo, Children, isValidElement, type ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeSanitize from 'rehype-sanitize';
@@ -16,9 +16,26 @@ import { useCopilotUIStore } from '../../stores/copilotUI';
 import type { ChatMessage as ChatMessageType, ToolUseData, ProposalState } from '../../stores/copilotUI';
 import { ActionCard } from './ActionCard';
 import { approveProposal, rejectProposal } from './api';
+import { TickerText } from './TickerText';
 
 interface ChatMessageProps {
   message: ChatMessageType;
+}
+
+/**
+ * Recursively process children to apply TickerText formatting to string nodes.
+ */
+function processTickerChildren(children: ReactNode): ReactNode {
+  return Children.map(children, (child) => {
+    if (typeof child === 'string') {
+      return <TickerText>{child}</TickerText>;
+    }
+    if (isValidElement(child) && child.props.children) {
+      // Clone element with processed children
+      return { ...child, props: { ...child.props, children: processTickerChildren(child.props.children) } };
+    }
+    return child;
+  });
 }
 
 /**
@@ -278,9 +295,9 @@ function AssistantMessage({
               ol: ({ children }) => (
                 <ol className="my-1 ml-4 list-decimal space-y-0.5">{children}</ol>
               ),
-              li: ({ children }) => <li className="text-sm">{children}</li>,
-              // Paragraph spacing
-              p: ({ children }) => <p className="my-1 leading-relaxed">{children}</p>,
+              li: ({ children }) => <li className="text-sm">{processTickerChildren(children)}</li>,
+              // Paragraph spacing with ticker formatting
+              p: ({ children }) => <p className="my-1 leading-relaxed">{processTickerChildren(children)}</p>,
             }}
           >
             {content}

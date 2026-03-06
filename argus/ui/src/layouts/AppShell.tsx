@@ -60,7 +60,7 @@ export function AppShell({ paperMode = true }: AppShellProps) {
   }, [connect, disconnect]);
 
   // Global keyboard shortcuts for mobile (Sidebar handles desktop but mobile needs this)
-  // 1-7 for navigation, 'c' for copilot, Cmd/Ctrl+K for copilot
+  // 1-7 for navigation, Cmd/Ctrl+K for copilot
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Ignore if typing in an input or textarea
@@ -91,12 +91,6 @@ export function AppShell({ paperMode = true }: AppShellProps) {
       const keyNum = parseInt(e.key, 10);
       if (keyNum >= 1 && keyNum <= NAV_ROUTES.length) {
         navigate(NAV_ROUTES[keyNum - 1]);
-        return;
-      }
-
-      // 'c' for copilot toggle
-      if (e.key === 'c') {
-        toggleCopilot();
       }
     };
 

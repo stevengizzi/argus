@@ -58,20 +58,14 @@ goals:
   monthly_target_usd: 5000
 
 # AI Copilot configuration (Sprint 22 — AI Layer MVP)
+# API key: Set ANTHROPIC_API_KEY environment variable
 ai:
-  # Claude model to use. Env var ANTHROPIC_API_KEY must be set.
-  model: "claude-sonnet-4-20250514"
-  # API key read from this env var name
-  api_key_env: "ANTHROPIC_API_KEY"
-
-  # Token budgets
-  system_context_max_tokens: 2000  # Max tokens for system context injection
-  page_context_max_tokens: 1500   # Max tokens for page-specific context
-  history_max_tokens: 4000        # Max tokens for conversation history
-
-  # Rate limits
-  requests_per_minute: 20         # Claude API rate limit
-
-  # TTLs
-  proposal_ttl_seconds: 300       # Action proposal expiry (5 minutes)
-  insight_cache_ttl_seconds: 60   # Dashboard insight cache TTL (1 minute)
+  model: "claude-opus-4-5-20251101"       # DEC-098: Claude Opus for all API calls
+  system_prompt_token_budget: 1500        # Max tokens for system prompt
+  page_context_token_budget: 2000         # Max tokens for page-specific context
+  history_token_budget: 8000              # Max tokens for conversation history
+  rate_limit_requests_per_minute: 20      # Claude API rate limit
+  proposal_ttl_seconds: 300               # Action proposal expiry (5 minutes)
+  insight_refresh_interval_seconds: 60    # Dashboard insight refresh interval
+  cost_per_million_input_tokens: 15.0     # Opus pricing
+  cost_per_million_output_tokens: 75.0    # Opus pricing

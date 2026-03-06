@@ -8,11 +8,27 @@
  * Sprint 22, Session 4a.
  */
 
-import { memo } from 'react';
+import { memo, Children, isValidElement, type ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeSanitize from 'rehype-sanitize';
 import { useCopilotUIStore } from '../../stores/copilotUI';
+import { TickerText } from './TickerText';
+
+/**
+ * Recursively process children to apply TickerText formatting to string nodes.
+ */
+function processTickerChildren(children: ReactNode): ReactNode {
+  return Children.map(children, (child) => {
+    if (typeof child === 'string') {
+      return <TickerText>{child}</TickerText>;
+    }
+    if (isValidElement(child) && child.props.children) {
+      return { ...child, props: { ...child.props, children: processTickerChildren(child.props.children) } };
+    }
+    return child;
+  });
+}
 
 /**
  * Blinking cursor component.
@@ -119,8 +135,8 @@ function StreamingMessageComponent() {
               ol: ({ children }) => (
                 <ol className="my-1 ml-4 list-decimal space-y-0.5">{children}</ol>
               ),
-              li: ({ children }) => <li className="text-sm">{children}</li>,
-              p: ({ children }) => <p className="my-1 leading-relaxed">{children}</p>,
+              li: ({ children }) => <li className="text-sm">{processTickerChildren(children)}</li>,
+              p: ({ children }) => <p className="my-1 leading-relaxed">{processTickerChildren(children)}</p>,
             }}
           >
             {streamingContent}

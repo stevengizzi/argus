@@ -167,6 +167,40 @@ class CopilotWebSocketManager implements ChatWebSocketManager {
   private intentionalClose = false;
   private pendingMessageId: string | null = null;
   private pendingToolUse: ToolUseData[] = [];  // Collect tool_use events during stream
+  private tokenBuffer = '';  // Buffer for smooth token streaming
+  private rafId: number | null = null;  // requestAnimationFrame ID
+
+  /**
+   * Flush buffered tokens to the store.
+   * Called via requestAnimationFrame for smooth UI updates.
+   */
+  private flushTokenBuffer(): void {
+    if (this.tokenBuffer) {
+      useCopilotUIStore.getState().appendStreamingContent(this.tokenBuffer);
+      this.tokenBuffer = '';
+    }
+    this.rafId = null;
+  }
+
+  /**
+   * Schedule a token buffer flush on the next animation frame.
+   */
+  private scheduleTokenFlush(): void {
+    if (this.rafId === null) {
+      this.rafId = requestAnimationFrame(() => this.flushTokenBuffer());
+    }
+  }
+
+  /**
+   * Immediately flush any pending tokens (cancel scheduled rAF).
+   */
+  private immediateFlushTokenBuffer(): void {
+    if (this.rafId !== null) {
+      cancelAnimationFrame(this.rafId);
+      this.rafId = null;
+    }
+    this.flushTokenBuffer();
+  }
 
   connect(): void {
     const token = getToken();
@@ -226,6 +260,9 @@ class CopilotWebSocketManager implements ChatWebSocketManager {
 
   disconnect(): void {
     this.intentionalClose = true;
+
+    // Clean up any pending token buffer
+    this.immediateFlushTokenBuffer();
 
     if (this.reconnectTimeout) {
       clearTimeout(this.reconnectTimeout);
@@ -311,6 +348,29 @@ class CopilotWebSocketManager implements ChatWebSocketManager {
       if (import.meta.env.DEV) {
         console.log(`CopilotWS: Synced ${messages.length} messages from REST`);
       }
+
+      // Sync pending proposals
+      try {
+        const pendingResponse = await fetchPendingProposals(conversationId);
+        if (pendingResponse?.proposals) {
+          for (const proposal of pendingResponse.proposals) {
+            store.setProposal({
+              id: proposal.id,
+              toolName: proposal.tool_name,
+              toolInput: proposal.tool_input,
+              status: proposal.status as 'pending' | 'approved' | 'executed' | 'rejected' | 'expired' | 'failed',
+              expiresAt: proposal.expires_at,
+              result: proposal.result ?? undefined,
+              failureReason: proposal.failure_reason ?? undefined,
+            });
+          }
+          if (import.meta.env.DEV) {
+            console.log(`CopilotWS: Synced ${pendingResponse.proposals.length} proposals`);
+          }
+        }
+      } catch (err) {
+        console.error('CopilotWS: Failed to sync proposals', err);
+      }
     } catch (error) {
       console.error('CopilotWS: Failed to sync conversation', error);
       // Don't block reconnection attempt — just log the error
@@ -345,7 +405,9 @@ class CopilotWebSocketManager implements ChatWebSocketManager {
           break;
 
         case 'token':
-          store.appendStreamingContent(data.content);
+          // Buffer tokens and flush on animation frame for smoother streaming
+          this.tokenBuffer += data.content;
+          this.scheduleTokenFlush();
           break;
 
         case 'tool_use': {
@@ -363,6 +425,8 @@ class CopilotWebSocketManager implements ChatWebSocketManager {
         }
 
         case 'stream_end': {
+          // Flush any remaining buffered tokens immediately
+          this.immediateFlushTokenBuffer();
           const messageId = this.pendingMessageId || crypto.randomUUID();
           const toolUse = this.pendingToolUse.length > 0 ? this.pendingToolUse : undefined;
           this.pendingMessageId = null;
@@ -375,6 +439,8 @@ class CopilotWebSocketManager implements ChatWebSocketManager {
         }
 
         case 'error':
+          // Flush any buffered tokens before handling error
+          this.immediateFlushTokenBuffer();
           store.setError(data.message || 'An error occurred');
           store.setIsStreaming(false);
           this.pendingMessageId = null;

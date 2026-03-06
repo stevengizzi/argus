@@ -60,6 +60,64 @@ class TestAIConfigAutoDetection:
             assert config.api_key == ""
 
 
+class TestAIConfigYamlSync:
+    """Test that YAML config field names match AIConfig model fields."""
+
+    def test_system_yaml_ai_fields_match_aiconfig(self) -> None:
+        """Test that config/system.yaml ai: fields are recognized by AIConfig."""
+        from pathlib import Path
+
+        import yaml
+
+        # Load the YAML config
+        yaml_path = Path(__file__).parent.parent.parent / "config" / "system.yaml"
+        assert yaml_path.exists(), f"Config file not found: {yaml_path}"
+
+        with open(yaml_path) as f:
+            config = yaml.safe_load(f)
+
+        ai_section = config.get("ai", {})
+        assert ai_section, "No 'ai:' section found in config/system.yaml"
+
+        # Get AIConfig field names
+        aiconfig_fields = set(AIConfig.model_fields.keys())
+
+        # Check each YAML key is a valid AIConfig field
+        yaml_keys = set(ai_section.keys())
+        unrecognized = yaml_keys - aiconfig_fields
+        assert not unrecognized, (
+            f"YAML config has unrecognized fields: {unrecognized}. "
+            f"Valid AIConfig fields: {sorted(aiconfig_fields)}"
+        )
+
+    def test_system_live_yaml_ai_fields_match_aiconfig(self) -> None:
+        """Test that config/system_live.yaml ai: fields are recognized by AIConfig."""
+        from pathlib import Path
+
+        import yaml
+
+        # Load the YAML config
+        yaml_path = Path(__file__).parent.parent.parent / "config" / "system_live.yaml"
+        assert yaml_path.exists(), f"Config file not found: {yaml_path}"
+
+        with open(yaml_path) as f:
+            config = yaml.safe_load(f)
+
+        ai_section = config.get("ai", {})
+        assert ai_section, "No 'ai:' section found in config/system_live.yaml"
+
+        # Get AIConfig field names
+        aiconfig_fields = set(AIConfig.model_fields.keys())
+
+        # Check each YAML key is a valid AIConfig field
+        yaml_keys = set(ai_section.keys())
+        unrecognized = yaml_keys - aiconfig_fields
+        assert not unrecognized, (
+            f"YAML config has unrecognized fields: {unrecognized}. "
+            f"Valid AIConfig fields: {sorted(aiconfig_fields)}"
+        )
+
+
 class TestAIConfigBackwardCompat:
     """Test backward compatibility with existing configs."""
 
