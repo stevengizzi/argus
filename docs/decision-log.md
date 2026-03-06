@@ -2926,7 +2926,167 @@ Each entry follows this format:
 
 ---
 
-> [add DEC-264 - DEC-274 here]
+### DEC-264 | Full DEC-170 Scope in Sprint 22
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-06 |
+| **Sprint** | Sprint 22 |
+| **Decision** | Implement the full scope of DEC-170 (AI Copilot with approval workflow, context injection, persistent conversations, daily summaries, insight card, learning journal) in a single sprint rather than phasing across multiple sprints. |
+| **Alternatives Considered** | 1. Phase 1/Phase 2 split (chat only → approval workflow): Rejected because the approval workflow is the architecturally interesting part and testing it requires the full pipeline. 2. Backend-only sprint + frontend sprint: Rejected because validating the UX requires end-to-end testing in the same sprint cycle. |
+| **Rationale** | The Copilot shell was already built (Sprint 21d). The backend and frontend are tightly coupled for this feature — splitting would mean the shell sits unused for another sprint. Steven's "build complete, not phased" principle applies. Sprint 22 is the largest sprint to date (9 sessions). Compaction risk managed via a/b session splits. |
+| **Cross-References** | DEC-170, DEC-212 |
+| **Status** | Active |
+
+---
+
+### DEC-265 | WebSocket for AI Chat Streaming
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-06 |
+| **Sprint** | Sprint 22 |
+| **Decision** | Use WebSocket (`WS /ws/v1/ai/chat`) for AI chat streaming, not Server-Sent Events (SSE). JWT auth token sent in initial message, matching existing `/ws/v1/live` pattern. |
+| **Alternatives Considered** | 1. SSE (Server-Sent Events): Rejected because SSE is unidirectional (server→client only). WebSocket supports bidirectional communication needed for stream cancellation and future server-initiated messages. 2. Long polling: Rejected — adds latency, complexity, and doesn't support streaming. |
+| **Rationale** | ARGUS already has WebSocket infrastructure (`/ws/v1/live`). Reusing the same transport and auth pattern reduces complexity. WebSocket also enables future features like server-initiated alerts (Sprint 23+). |
+| **Constraints** | Must coexist with existing `/ws/v1/live` endpoint. Separate router, separate connection set. |
+| **Cross-References** | DEC-170, DEC-099 |
+| **Status** | Active |
+
+---
+
+### DEC-266 | Calendar-Date Conversation Keying with Tags
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-06 |
+| **Sprint** | Sprint 22 |
+| **Decision** | Key conversations by calendar date (not trading day) with an optional tag field. Valid tags: "pre-market", "session", "research", "debrief", "general" (default). |
+| **Alternatives Considered** | 1. Trading-day keying: Rejected because trading days have ambiguous boundaries (pre-market for Monday starts Sunday night) and weekend research conversations wouldn't belong to any trading day. 2. No tags: Rejected because filtering by conversation type is valuable for the Learning Journal. |
+| **Rationale** | Calendar date is unambiguous. Tags provide flexible categorization without rigid structure. Tags auto-assigned by page context (e.g., Dashboard → "session", Performance → "research"). |
+| **Constraints** | Tag validation enforced in ConversationManager. Invalid tags raise ValueError. |
+| **Cross-References** | DEC-170, DEC-268 |
+| **Status** | Active |
+
+---
+
+### DEC-267 | Action Proposal TTL with DB Persistence
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-06 |
+| **Sprint** | Sprint 22 |
+| **Decision** | Action proposals have a 5-minute TTL (configurable in AIConfig.proposal_ttl_seconds). Proposals are persisted to `ai_action_proposals` SQLite table. Expired proposals cleaned on startup and via periodic 30-second cleanup task. |
+| **Alternatives Considered** | 1. In-memory proposals: Rejected because proposals would be lost on restart, creating safety ambiguity (was it approved before the crash?). 2. Longer TTL (15 min): Rejected because market conditions change rapidly. 5 minutes is enough to review but short enough that stale proposals auto-expire. |
+| **Rationale** | DB persistence ensures audit trail and restart safety. Short TTL prevents stale approvals. Periodic cleanup prevents table growth. |
+| **Constraints** | Shares SQLite write lock with other AI tables and Trade Logger (RSK-031). |
+| **Cross-References** | DEC-272, RSK-029, RSK-031 |
+| **Status** | Active |
+
+---
+
+### DEC-268 | Per-Page Context Injection Hooks
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-06 |
+| **Sprint** | Sprint 22 |
+| **Decision** | Each of the 7 Command Center pages provides context to the AI Copilot via a `useCopilotContext` hook. Context includes page name, selected entity (if any), and key visible data. Context is registered in the Zustand store and included in API calls. |
+| **Alternatives Considered** | 1. Global context only (no per-page): Rejected because Claude's responses are dramatically more useful when it knows what the operator is looking at. 2. URL-based inference: Rejected — fragile, doesn't capture selected entities or visible data. |
+| **Rationale** | The hook pattern is lightweight (2 lines per page), lazy-evaluated via useRef to prevent re-registration, and the context is attached at send-time (not continuously streamed). |
+| **Constraints** | Total page context must stay within 2,000-token budget. |
+| **Cross-References** | DEC-170, DEC-273 |
+| **Status** | Active |
+
+---
+
+### DEC-269 | Demand-Refreshed AI Insight Card
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-06 |
+| **Sprint** | Sprint 22 |
+| **Decision** | Dashboard AI insight card is demand-refreshed: manual click or auto-refresh every 5 minutes during market hours. Cached response with configurable TTL. Graceful "AI not available" state when service is disabled. |
+| **Alternatives Considered** | 1. Always-on auto-refresh: Rejected — unnecessary API cost during non-market hours. 2. Push-based (server sends insight): Rejected — adds complexity; demand-pull is simpler and sufficient. |
+| **Rationale** | During market hours, insights are time-sensitive and worth refreshing. Outside market hours, manual refresh is sufficient. |
+| **Constraints** | Requires `useAIInsight` TanStack Query hook with conditional `refetchInterval`. |
+| **Cross-References** | DEC-170, DEC-274 |
+| **Status** | Active |
+
+---
+
+### DEC-270 | Markdown Rendering Stack
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-06 |
+| **Sprint** | Sprint 22 |
+| **Decision** | Use `react-markdown` + `remark-gfm` + `rehype-sanitize` for rendering AI responses. XSS protection mandatory via rehype-sanitize. |
+| **Alternatives Considered** | 1. Rendering raw HTML: Rejected — XSS vulnerability. 2. Plain text only: Rejected — Claude's responses use markdown heavily (code blocks, tables, lists). 3. marked + DOMPurify: Rejected — react-markdown integrates better with React component model. |
+| **Rationale** | react-markdown is the standard React markdown library. remark-gfm adds GitHub-flavored markdown (tables, strikethrough). rehype-sanitize prevents XSS from any HTML in Claude's responses. |
+| **Constraints** | Bundle size impact: ~30-50KB gzipped (well under 200KB threshold). |
+| **Cross-References** | DEC-170 |
+| **Status** | Active |
+
+---
+
+### DEC-271 | Claude tool_use for Structured Action Proposals
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-06 |
+| **Sprint** | Sprint 22 |
+| **Decision** | Use Claude's native `tool_use` API for structured action proposals. Tools are defined as JSON schemas passed in the API request. When Claude wants to propose an action, it emits a `tool_use` content block. Backend intercepts the block, creates an `ActionProposal`, returns a `tool_result`, and Claude continues its response. |
+| **Alternatives Considered** | 1. JSON-in-free-text parsing: Rejected per adversarial review finding. Fragile regex parsing of JSON embedded in natural language responses. Claude's native tool_use is purpose-built for this and dramatically more reliable. |
+| **Rationale** | tool_use is the Anthropic-recommended approach for structured outputs. It guarantees valid JSON matching the schema. The adversarial review correctly identified that rejecting tool_use in favor of manual parsing was the highest-risk design decision in the original spec. |
+| **Constraints** | Tool definitions must be included in every API call (adds to input token count). |
+| **Cross-References** | DEC-272, DEC-273 |
+| **Status** | Active |
+
+---
+
+### DEC-272 | Five-Type Closed Action Enumeration
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-06 |
+| **Sprint** | Sprint 22 |
+| **Decision** | MVP supports exactly 5 action types: `propose_allocation_change`, `propose_risk_param_change`, `propose_strategy_suspend`, `propose_strategy_resume`, `generate_report`. First 4 require approval. `generate_report` executes immediately. |
+| **Alternatives Considered** | 1. Open-ended actions (Claude proposes anything): Rejected — unbounded action space is a safety risk. 2. Fewer actions (just suspend/resume): Rejected — allocation and risk param changes are high-value for the operator. 3. More actions (annotate_trade, manual_rebalance): Rejected for MVP — annotate_trade is low value, manual_rebalance is high risk with unclear UX. |
+| **Rationale** | These 5 actions cover the operator's primary needs during a trading session. The closed enumeration ensures every possible AI action has been reviewed and has an executor with validation. |
+| **Constraints** | Unrecognized tool calls from Claude are logged and treated as errors (no ActionProposal created). |
+| **Cross-References** | DEC-271, DEC-170 |
+| **Status** | Active |
+
+---
+
+### DEC-273 | System Prompt Template with Token Budgets
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-06 |
+| **Sprint** | Sprint 22 |
+| **Decision** | System prompt template includes: ARGUS description, operator context, active strategy summaries, behavioral guardrails (advisory only, never recommend specific entries/exits, caveat uncertainty, reference actual data, never fabricate). Mandatory tool_use directive section instructs Claude to call tools immediately for configuration changes. Token budgets: system ≤1,500, page context ≤2,000, history ≤8,000, response ≤4,096. |
+| **Alternatives Considered** | 1. No system prompt (Claude defaults): Rejected — Claude needs domain context to be useful. 2. Minimal prompt (just "you are a trading assistant"): Rejected — behavioral guardrails are critical for safety. 3. Dynamic prompt construction (fetched from DB): Rejected for MVP — over-engineering. Prompts managed in code. |
+| **Rationale** | The system prompt is the most important safety mechanism in the AI layer. Explicit guardrails prevent Claude from recommending specific trades or fabricating data. The mandatory tool_use directive prevents Claude from narrating intent instead of calling tools. |
+| **Constraints** | Total context window budget: ~12,000 tokens for system + page + history. Remainder for response. |
+| **Cross-References** | DEC-271, DEC-098 |
+| **Status** | Active |
+
+---
+
+### DEC-274 | Per-Call Cost Tracking
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-06 |
+| **Sprint** | Sprint 22 |
+| **Decision** | Track token usage for every Claude API call in `ai_usage` table. Fields: conversation_id, timestamp, input_tokens, output_tokens, model, estimated_cost_usd. `GET /api/v1/ai/usage` returns daily and monthly totals. `GET /api/v1/ai/status` includes current-month spend and per-day average. |
+| **Alternatives Considered** | 1. Aggregate-only tracking (daily totals): Rejected — per-call granularity enables debugging of cost anomalies. 2. No cost tracking (rely on Anthropic dashboard): Rejected — operator needs in-app visibility without switching to another service. |
+| **Rationale** | Cost is trivial per DEC-098, but tracking from day one enables trend analysis and anomaly detection. The Anthropic dashboard has delayed reporting; in-app tracking is real-time. |
+| **Constraints** | Streaming responses estimate tokens from content length (4 chars ≈ 1 token). Not perfectly accurate but sufficient for cost estimation. |
+| **Cross-References** | DEC-098, RSK-028 |
+| **Status** | Active |
 
 ---
 
@@ -2946,3 +3106,4 @@ Each entry follows this format:
 
 *End of Decision Log v1.0*
 *Next DEC: 276*
+*Last updated: 2026-03-07 (Sprint 22 close-out)*

@@ -31,6 +31,18 @@ that is a signal to do more discovery before committing to the sprint.
     |--------|--------|--------------------|
     | [e.g., Response time] | [e.g., < 200ms p95] | [e.g., load test with k6] |
 
+    ### Config Changes (if applicable)
+    List every new or modified config field introduced by this sprint.
+    For each field, provide the YAML path and the corresponding Pydantic model
+    field name. Verify the names match exactly -- Pydantic silently ignores
+    unrecognized fields and uses defaults.
+
+    | YAML Path | Pydantic Model | Field Name | Default |
+    |-----------|---------------|------------|---------|
+    | [e.g., ai.model] | [e.g., AIConfig] | [e.g., model] | [e.g., "claude-opus-4-5-20251101"] |
+
+    If no config changes, write "No config changes in this sprint."
+
     ## Dependencies
     - [What must be true before this sprint starts]
     - [What external systems, APIs, or data must be available]
@@ -45,3 +57,5 @@ that is a signal to do more discovery before committing to the sprint.
 
     ## Session Count Estimate
     [N] sessions estimated. [Brief rationale for the estimate.]
+    [If frontend sessions with visual review items: +0.5 sessions budgeted
+    for visual-review fix contingency.]

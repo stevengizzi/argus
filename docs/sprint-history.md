@@ -239,16 +239,35 @@
 **Sessions:** 3 implementation + 3 Tier 2 reviews.
 **Notes:** Cleanest focused mini-sprint. All 3 sessions CLEAN self-assessment, all Tier 2 reviews APPROVED. Pre-market scanning now uses FMP gainers/losers/actives endpoints instead of static 10-symbol watchlist.
 
+### Sprint 22 — AI Layer MVP + Copilot Activation (1959 pytest + 377 Vitest, +205/+81)
+**Date:** Mar 6–7, 2026
+**Scope:** Full implementation of DEC-170 (AI Copilot with approval workflow, context injection, persistent conversations, daily summaries, insight card, learning journal) in a single sprint rather than phasing across multiple sprints.
+**S1 (AI Core Module):** ClaudeClient wrapper (tool_use, rate limiting), PromptManager, SystemContextBuilder, ResponseCache, AIConfig, tools.py with 5 tool definitions. 62 new tests.
+**S2a (Chat Persistence):** ConversationManager, UsageTracker, 3 SQLite tables (ai_conversations, ai_messages, ai_usage). 35 new tests.
+**S2b (Chat API + WebSocket):** 6 REST endpoints for conversations/messages/actions, WS /ws/v1/ai/chat for streaming. 30 new tests.
+**S3a (Approval Workflow):** ActionProposal model, ActionManager with DB persistence, approve/reject routes, Event Bus integration. 32 new tests. **COMPACTED.**
+**S3b (Action Executors + AI Content):** 5 ActionExecutors with 4-condition re-check gate, DailySummaryGenerator, AIService (later removed), insight endpoint. 54 new tests. **COMPACTED.**
+**S4a (Copilot Core Chat):** CopilotPanel rewrite, ChatMessage, StreamingMessage with react-markdown, ChatInput. 23 new tests.
+**S4b (Copilot Integration):** useCopilotContext on 7 pages, Cmd/K shortcut, conversation history, WebSocket reconnection. 20 new tests.
+**S5 (Action Cards + Approval UX):** ActionCard component, 6 states (pending, approved, executing, executed, rejected, expired), audio notifications, countdown. 10 new tests.
+**S6 (Dashboard AI + Debrief):** AIInsightCard, ConversationBrowser, Learning Journal integration. 18 new tests.
+**Fix sessions (5):** S4a-fix (auto-focus, modifier keys, auto-scroll), S3b-fix (system prompt directiveness), S2b-fix (stream event extraction), model ID fix, frontend tool_use event fix, consolidated cleanup (10 issues: YAML config field names, dead AIService code, code hygiene, token buffer, ticker formatting, duplicate shortcuts, proposal sync, keyboard shortcuts, auto-scroll, report click-through).
+**Key decisions:** DEC-264 (full scope Sprint 22), DEC-265 (WebSocket streaming), DEC-266 (calendar-date conversation keying), DEC-267 (proposal TTL + DB persistence), DEC-268 (per-page context injection), DEC-269 (demand-refreshed insight card), DEC-270 (markdown rendering stack), DEC-271 (tool_use for proposals), DEC-272 (5-type action enumeration), DEC-273 (system prompt + guardrails), DEC-274 (per-call cost tracking), DEC-275 (compaction risk scoring).
+**Sessions:** 9 implementation + 5 fix + 9 Tier 2 reviews.
+**Notes:** Largest single-sprint scope. Sessions 3a and 3b compacted, leading to DEC-275 (compaction risk scoring system). AIService class built but not wired into routes — removed in cleanup. 3.4× test target exceeded (288 actual vs. 85 planned). ~6,500 lines backend, ~3,000+ lines frontend.
+
 ---
 
 ## Sprint Statistics
 
-- **Total sprints:** 21 full + 8 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.7)
-- **Total sessions:** ~210+ Claude Code sessions
-- **Total tests:** 1,754 pytest + 296 Vitest = 2,050 total
-- **Total decisions:** 261 (DEC-001 through DEC-261)
-- **Calendar days (active dev):** ~20 (Feb 14 – Mar 5, 2026)
-- **Largest sprint:** 21.5 (~25 sessions, scope expansion from 13 planned)
+- **Total sprints:** 22 full + 8 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.7)
+- **Total sessions:** ~230+ Claude Code sessions
+- **Total tests:** 1,959 pytest + 377 Vitest = 2,336 total
+- **Total decisions:** 275 (DEC-001 through DEC-275)
+- **Calendar days (active dev):** ~22 (Feb 14 – Mar 7, 2026)
+- **Largest sprint:** 22 (9 implementation + 5 fix + 9 reviews, largest scope)
 - **Cleanest sprint:** 12.5 (1 session, pure refactor)
-- **Most test-dense:** 21c (105 new pytest) and 21d (119 new Vitest)
+- **Most test-dense:** Sprint 22 (286 new tests) and 21c (105 new pytest backend)
+- **Most Vitest-dense:** 21d (119 new Vitest)
 - **Crisis sprint:** 8 (VectorBT performance — iterrows() → vectorized, 4 conversations)
+- **Most compaction events:** Sprint 22 (Sessions 3a and 3b both compacted, led to DEC-275)

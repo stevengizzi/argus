@@ -1,22 +1,22 @@
 # ARGUS — Claude Code Context
 
 > Dense, actionable context for Claude Code sessions. No history — see `docs/` for that.
-> Last updated: March 5, 2026
+> Last updated: March 7, 2026
 
 ## Active Sprint
 
-**No active sprint.** Sprint 21.7 (FMP Scanner Integration) completed March 5, 2026.
+**No active sprint.** Sprint 22 (AI Layer MVP) completed March 7, 2026.
 
-Next sprint: **22 (AI Layer MVP)** — Claude API integration, AI Copilot activation.
+Next sprint: **23 (NLP Catalyst + Universe Manager)** — SEC EDGAR + FMP news, full-universe monitoring.
 
 ## Current State
 
 - **Active sprint:** None (between sprints)
-- **Next sprint:** 22 (AI Layer MVP)
-- **Tests:** 1,754 pytest + 296 Vitest
+- **Next sprint:** 23 (NLP Catalyst + Universe Manager)
+- **Tests:** 1,959 pytest + 377 Vitest
 - **Strategies:** 4 active (ORB Breakout, ORB Scalp, VWAP Reclaim, Afternoon Momentum)
-- **Infrastructure:** Databento EQUS.MINI (live) + IBKR paper trading (Account U24619949) + FMP Starter (Sprint 21.7, scanning)
-- **Frontend:** 7-page Command Center (all built), Tauri desktop + PWA mobile
+- **Infrastructure:** Databento EQUS.MINI (live) + IBKR paper trading (Account U24619949) + FMP Starter (scanning) + Claude API (Copilot)
+- **Frontend:** 7-page Command Center + AI Copilot (all active), Tauri desktop + PWA mobile
 
 ## Project Structure
 
@@ -29,8 +29,21 @@ argus/
 ├── analytics/      # Trade Logger, PerformanceCalculator
 ├── backtest/       # VectorBT helpers, Replay Harness
 ├── api/            # FastAPI REST + WebSocket, JWT auth
+│   └── websocket/  # ai_chat.py (WS streaming)
 ├── ui/             # React frontend (Vite + TypeScript + Tailwind v4)
-├── ai/             # Claude API integration (Sprint 22+, shell only)
+│   └── features/copilot/  # CopilotPanel, ChatMessage, ActionCard
+├── ai/             # Claude API integration (Sprint 22, active)
+│   ├── client.py   # ClaudeClient (API wrapper, rate limiting, tool_use)
+│   ├── config.py   # AIConfig (token budgets, TTLs, cost rates)
+│   ├── prompts.py  # PromptManager (system prompt, guardrails)
+│   ├── context.py  # SystemContextBuilder (per-page context)
+│   ├── conversations.py  # ConversationManager (SQLite persistence)
+│   ├── usage.py    # UsageTracker (per-call cost tracking)
+│   ├── actions.py  # ActionManager (proposal lifecycle, TTL, re-check)
+│   ├── executors.py # 5 ActionExecutors + ExecutorRegistry
+│   ├── summary.py  # DailySummaryGenerator
+│   ├── cache.py    # ResponseCache (TTL-based)
+│   └── tools.py    # 5 tool_use definitions with JSON schemas
 ├── intelligence/   # Quality Engine, Catalyst, Position Sizer (Sprint 23+, empty)
 ├── config/         # system.yaml, system_live.yaml, strategies/*.yaml
 ├── tests/          # pytest (backend) + Vitest (frontend)
@@ -46,7 +59,7 @@ argus/
 python -m pytest tests/                   # Run all tests
 python -m pytest tests/ -x               # Stop on first failure
 python -m pytest tests/ -x -q            # Fail-fast, quiet
-cd argus/ui && npx vitest run            # Frontend tests (~291)
+cd argus/ui && npx vitest run            # Frontend tests (~377)
 
 # Trading engine
 python -m argus.main                      # Start (paper trading default)
@@ -77,7 +90,16 @@ python scripts/diagnose_databento.py     # Databento EQUS.MINI capabilities
 python scripts/test_session8_integration.py  # 13 integration checks
 python scripts/test_session9_resilience.py   # 4 resilience checks
 python scripts/test_time_stop_eod.py     # Time stop + EOD flatten (IBKR or mock)
+
+# AI Layer
+ANTHROPIC_API_KEY="sk-..." python -m argus.api --dev  # Run with AI enabled
+python -m pytest tests/ai/ -x -q                       # AI module tests only
 ```
+
+**Environment Variables:**
+- `ANTHROPIC_API_KEY` — Required for AI Copilot. Gracefully disabled if unset.
+- `ARGUS_JWT_SECRET` — Required for API authentication.
+- `FMP_API_KEY` — Required for pre-market scanning.
 
 ## Code Style
 

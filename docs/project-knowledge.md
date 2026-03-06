@@ -1,6 +1,6 @@
 # ARGUS — Project Knowledge (Claude Context)
 
-> *Tier A operational context for Claude Code and Claude.ai. Last updated: March 6, 2026.*
+> *Tier A operational context for Claude Code and Claude.ai. Last updated: March 7, 2026.*
 > *Full decision rationale: `docs/decision-log.md` | Sprint details: `docs/sprint-history.md` | DEC index: `docs/dec-index.md`*
 
 ---
@@ -11,10 +11,10 @@ ARGUS is a fully automated, AI-enhanced multi-strategy day trading system for US
 
 ## Current State
 
-**Tests:** 1,754 pytest + 296 Vitest
-**Sprints completed:** 1 through 21.7 (21 full sprints + sub-sprints + FMP integration)
+**Tests:** 1,959 pytest + 377 Vitest
+**Sprints completed:** 1 through 22 (21 full sprints + sub-sprints + FMP integration + AI Layer)
 **Active sprint:** None (between sprints)
-**Next sprint:** 22 (AI Layer MVP)
+**Next sprint:** 23 (NLP Catalyst + Universe Manager)
 **GitHub:** `https://github.com/stevengizzi/argus.git` (public)
 
 ### Sprint History (Summary)
@@ -41,12 +41,13 @@ ARGUS is a fully automated, AI-enhanced multi-strategy day trading system for US
 | 21.5 | Live Integration | 1737+291V | Feb 28–Mar 5 | DEC-230–261 |
 | 21.5.1 | C2 Bug Fixes + UI Polish | (included above) | Mar 5 | DEC-261 |
 | 21.7 | FMP Scanner Integration | 1754+296V | Mar 5 | DEC-258–259 |
+| 22 | AI Layer MVP | 1959+377V | Mar 6–7 | DEC-264–275 |
 
 *Full sprint scopes and session details: `docs/sprint-history.md`*
 
 ### Build Track Queue
 
-21.6 (Backtest Re-Validation, parallel w/ 22) → 22 (AI Layer MVP) → 23 (NLP Catalyst + Universe Manager, DEC-263) → 24 (Setup Quality Engine + Dynamic Sizer) → 25 (Red-to-Green + Pattern Library Foundation) → 26 (Pattern Expansion I) → 27 (Short Selling + Parabolic Short + Pattern Expansion II) → 28 (Learning Loop V1) → 29–31 (BacktestEngine, Sweep Infrastructure, Strategy Templates) → 32–34 (Statistical Validation, ORB Systematic Search ★, Ensemble Analysis) → 35–38 (Cross-Family Search, Ensemble Orchestrator V2, Synapse) → 39–41 (Learning Loop V2, Continuous Discovery, Performance Workbench). Order Flow Model deferred to post-revenue (DEC-238). Full roadmap: `docs/roadmap.md` (DEC-262).
+21.6 (Backtest Re-Validation, parallel) → 23 (NLP Catalyst + Universe Manager, DEC-263) → 24 (Setup Quality Engine + Dynamic Sizer) → 25 (Red-to-Green + Pattern Library Foundation) → 26 (Pattern Expansion I) → 27 (Short Selling + Parabolic Short + Pattern Expansion II) → 28 (Learning Loop V1) → 29–31 (BacktestEngine, Sweep Infrastructure, Strategy Templates) → 32–34 (Statistical Validation, ORB Systematic Search ★, Ensemble Analysis) → 35–38 (Cross-Family Search, Ensemble Orchestrator V2, Synapse) → 39–41 (Learning Loop V2, Continuous Discovery, Performance Workbench). Sprint 22 (AI Layer MVP) complete. Order Flow Model deferred to post-revenue (DEC-238). Full roadmap: `docs/roadmap.md` (DEC-262).
 
 ### Validation Track
 
@@ -62,8 +63,8 @@ Paper trading active with Databento EQUS.MINI + IBKR paper (Account U24619949, D
 
 ### Three-Tier System
 1. **Trading Engine** — Strategies, Orchestrator, Risk Manager, Data Service, Broker abstraction, Order Manager, Trade Logger, Backtesting (VectorBT + Replay Harness)
-2. **Command Center** — 7 pages (all built): Dashboard, Trade Log, Performance, Orchestrator, Pattern Library, The Debrief, System. Tauri desktop + PWA mobile + web. Copilot shell built (Sprint 22 activates).
-3. **AI Layer** (Sprint 22+) — Claude API (Opus, DEC-098), approval workflow, contextual copilot (DEC-170)
+2. **Command Center** — 7 pages (all built): Dashboard, Trade Log, Performance, Orchestrator, Pattern Library, The Debrief, System. Tauri desktop + PWA mobile + web. AI Copilot active.
+3. **AI Layer** (Sprint 22) — Claude API (Opus, DEC-098) via ClaudeClient wrapper; PromptManager with system prompt template and behavioral guardrails (DEC-273); SystemContextBuilder for per-page context injection (DEC-268); tool_use for structured action proposals (DEC-271) with 5 defined tools (DEC-272); ActionManager with DB-persisted proposals and 5-min TTL (DEC-267); 5 ActionExecutors with 4-condition pre-execution re-check; ConversationManager with calendar-date keying and tags (DEC-266); UsageTracker for per-call cost tracking (DEC-274); DailySummaryGenerator; ResponseCache. WS /ws/v1/ai/chat for streaming (DEC-265). All AI features degrade gracefully when ANTHROPIC_API_KEY unset.
 
 ### Key Components
 - **Strategies:** Daily-stateful, session-stateless plugins (DEC-028). 4 active. 14 more planned.
@@ -151,7 +152,7 @@ Per-trade risk: 0.5–1% of strategy allocation. Daily loss limit: 3–5%. Weekl
 | Databento US Equities Standard | $199/mo | Active |
 | FMP Starter (pre-market scanning) | $22/mo | Sprint 21.7 activation (DEC-258) |
 | IBKR commissions | ~$43/day at scale | Paper trading (no cost yet) |
-| Claude API (Sprint 22+) | ~$35–50/mo | Not yet active |
+| Claude API | ~$35–50/mo | Active (Sprint 22, DEC-274) |
 | FMP Premium/Ultimate (NLP, Sprint 23+) | $59–149/mo | Future upgrade from Starter |
 | IQFeed (forex/breadth, future) | ~$160–250/mo | Deferred (DEF-011) |
 | Databento Plus (live L2/L3) | $1,399/mo | Post-revenue (DEC-238) |
@@ -167,6 +168,8 @@ Per-trade risk: 0.5–1% of strategy allocation. Daily loss limit: 3–5%. Weekl
 **Data & Execution:** DEC-088 (Databento threading), DEC-090 (DataSource enum), DEC-094 (BrokerSource enum), DEC-117 (atomic brackets), DEC-237 (no live L2 on Standard), DEC-248 (EQUS.MINI confirmed), DEC-249 (concentration approve-with-modification), DEC-257 (hybrid Databento+FMP architecture), DEC-258 (FMP Starter for scanning), DEC-263 (full-universe strategy-specific monitoring). DEC-251 (absolute risk floor), DEC-252 (price rounding), DEC-261 (ORB exclusion).
 
 **Frontend:** DEC-099 (in-process API), DEC-102 (JWT auth), DEC-104/215 (chart libraries), DEC-109 (design north star), DEC-149 (VectorBT precompute+vectorize), DEC-169 (7-page architecture), DEC-170 (AI Copilot), DEC-199 (navigation + shortcuts).
+
+**AI Layer:** DEC-264 (full scope Sprint 22), DEC-265 (WebSocket streaming), DEC-266 (calendar-date conversation keying), DEC-267 (proposal TTL + DB persistence), DEC-268 (per-page context injection), DEC-269 (demand-refreshed insight card), DEC-270 (markdown rendering stack), DEC-271 (tool_use for proposals), DEC-272 (5-type action enumeration), DEC-273 (system prompt + guardrails), DEC-274 (per-call cost tracking).
 
 **Documentation:** DEC-262 (roadmap consolidation — single canonical roadmap.md), DEC-275 (compaction risk scoring system).
 

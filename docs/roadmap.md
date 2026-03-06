@@ -1,7 +1,7 @@
 # ARGUS — Strategic Roadmap
 
 > From artisanal strategies to ensemble alpha — the complete path
-> **v1.0 — March 6, 2026**
+> **v1.1 — March 7, 2026** (Sprint 22 complete)
 > **Status:** CANONICAL — this is the single source of truth for ARGUS's strategic direction and sprint queue.
 > **Supersedes:** `docs/research/ARGUS_Expanded_Roadmap.md` (Feb 26), `docs/argus_unified_vision_roadmap.md` (Mar 5), `docs/10_PHASE3_SPRINT_PLAN.md` (all forward-looking sections)
 
@@ -170,20 +170,25 @@ Re-validate all pre-Databento strategy parameters using Databento tick-level dat
 
 ### Sprint 22: AI Layer MVP + Copilot Activation (DEC-096, DEC-098, DEC-170)
 **Target:** ~3–4 days
-**Status:** NEXT
+**Status:** ✅ COMPLETE (March 7, 2026)
 
-**Scope:**
-- Claude API integration (`argus/ai/`): Claude Opus model (DEC-098). Prompt management. Response caching. Rate limiting and fallback behavior.
-- AI Copilot activation: Connect Copilot shell (built Sprint 21d) to Claude API. Context injection from current page, selected entity, system state. Conversation history.
-- Approval workflow: AI proposes actions (parameter changes, allocation adjustments) → user approves/rejects from chat. Actions route through Risk Manager gates.
-- AI-generated trade analysis: Post-trade narrative generation. Quality assessment explanation ("Why this grade?").
-- **UI:** Copilot goes live on all 7 pages. Debrief gains AI-generated daily summary. Dashboard gains AI insight card.
-- **Tests:** ~80 new.
+**Scope (delivered):**
+- Claude API integration (`argus/ai/`): ClaudeClient, PromptManager, SystemContextBuilder, ResponseCache, AIConfig, 5 tool_use definitions. Claude Opus model (DEC-098).
+- Approval workflow: ActionManager with DB-persisted proposals, 5-minute TTL, 4-condition pre-execution re-check (DEC-267, DEC-272).
+- Persistent chat: ConversationManager with calendar-date keying and tags (DEC-266), 3 SQLite tables.
+- WebSocket streaming: `WS /ws/v1/ai/chat` with JWT auth, bidirectional (DEC-265).
+- Per-page context injection: `useCopilotContext` hooks on all 7 pages (DEC-268).
+- Per-call cost tracking: UsageTracker, ai_usage table (DEC-274).
+- **UI:** Full Copilot (CopilotPanel, ChatMessage, StreamingMessage, ActionCard). Dashboard AIInsightCard with auto-refresh. Debrief Learning Journal with conversation browser. Markdown rendering with XSS protection (DEC-270).
+- **Tests:** 286 new (205 pytest + 81 Vitest) — 3.4× target.
 
-**Updated prerequisite (DEC-230):** Sprint 22 now follows Sprint 21.5 (live integration). AI Layer built on top of a live system with real Databento data and IBKR paper execution. Copilot tested with real market context from session one.
+**Decisions:** DEC-264 through DEC-275. See `docs/decision-log.md` for full rationale.
+
+**Notes:** Largest single-sprint scope. Sessions 3a and 3b compacted, leading to DEC-275 (compaction risk scoring). AIService built but not wired — removed in cleanup. ~6,500 lines backend, ~3,000+ lines frontend.
 
 ### Sprint 23: NLP Catalyst Pipeline + Universe Manager (DEC-163, DEC-164, DEC-263)
 **Target:** ~4–5 days (scope expanded per DEC-263; may decompose into 23 + 23.5)
+**Status:** NEXT
 
 **Scope:**
 - **Universe Manager** (`argus/data/universe_manager.py`): Replaces static pre-market watchlist with broad-universe monitoring (DEC-263). Pre-market: FMP scan builds initial viable universe (3,000–5,000 symbols, minimal system-level filters — not delisted, not OTC). Market open: Databento subscribes to full viable universe. Full IndicatorEngine (VWAP, ATR, EMAs) runs on every subscribed symbol from market open. Each strategy declares `universe_filter` (sector, market cap, float, price range, volume) and `behavioral_triggers` in structured config. Strategies evaluate every candle against their declared filters with early-exit for non-matching symbols. Catalyst Pipeline feeds into Universe Manager as one awareness input among many.

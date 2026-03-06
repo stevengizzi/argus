@@ -31,6 +31,13 @@ DATABENTO_API_KEY=your_key_here
 
 # API JWT Secret
 ARGUS_JWT_SECRET=your_secure_secret_here
+
+# FMP Scanner (Sprint 21.7+)
+FMP_API_KEY=your_fmp_api_key_here
+
+# Claude API for AI Copilot (Sprint 22+)
+# Optional — AI features disabled if unset
+ANTHROPIC_API_KEY=sk-ant-your_key_here
 ```
 
 ### Step 3: Start ARGUS
@@ -414,4 +421,104 @@ pkill -9 -f "python -m argus.main"
 
 ---
 
-*End of Live Operations Guide v1.0*
+## 8. AI Copilot Operations
+
+*Added in Sprint 22. Requires `ANTHROPIC_API_KEY` environment variable.*
+
+### Overview
+
+The AI Copilot provides Claude-powered analysis, advisory, and action proposals through a structured approval workflow. Key characteristics:
+
+- **Graceful degradation**: All AI features disabled when `ANTHROPIC_API_KEY` unset. Trading engine operates identically.
+- **Advisory only**: Claude never recommends specific entries/exits or places trades autonomously.
+- **Approval workflow**: Configuration changes require explicit operator approval.
+
+### AI-Related Commands
+
+```bash
+# Run with AI enabled (requires ANTHROPIC_API_KEY)
+ANTHROPIC_API_KEY="sk-..." ./scripts/start_live.sh --with-ui
+
+# Check AI status
+curl http://localhost:8000/api/v1/ai/status
+
+# Check AI usage/cost
+curl http://localhost:8000/api/v1/ai/usage
+```
+
+### Using the Copilot
+
+1. **Open Copilot**: Press `Cmd/Ctrl+K` or click the brain icon
+2. **Ask questions**: Type naturally about positions, performance, or strategy behavior
+3. **Context-aware**: Copilot knows which page you're on and what you're viewing
+
+### Action Proposals
+
+When Claude proposes a configuration change, it appears as an **ActionCard**:
+
+| Action Type | What It Does | Approval Required |
+|-------------|--------------|-------------------|
+| `propose_allocation_change` | Adjust strategy capital allocation | Yes |
+| `propose_risk_param_change` | Modify risk parameter | Yes |
+| `propose_strategy_suspend` | Suspend strategy | Yes |
+| `propose_strategy_resume` | Resume suspended strategy | Yes |
+| `generate_report` | Generate analytical report | No (immediate) |
+
+**Approval workflow:**
+1. Review the proposed change in the ActionCard
+2. Click **Approve** or **Reject** (keyboard: `y` / `n`)
+3. If approving, a 4-condition re-check runs:
+   - Target entity still exists
+   - Regime hasn't changed unfavorably
+   - Equity within ±5% of proposal time
+   - No circuit breaker active
+4. If all checks pass, the change is executed
+
+**Proposal TTL**: Proposals expire after 5 minutes if not acted upon.
+
+### Cost Monitoring
+
+AI usage is tracked per-call in the `ai_usage` SQLite table.
+
+```bash
+# View usage summary
+curl http://localhost:8000/api/v1/ai/usage
+
+# Response includes:
+# - Today's input/output tokens
+# - Today's estimated cost
+# - Current month total cost
+# - Per-day average
+```
+
+**Estimated costs** (Claude Opus, DEC-098):
+- Input tokens: $15.00 / 1M tokens
+- Output tokens: $75.00 / 1M tokens
+- Typical monthly: ~$35–50 with normal usage
+
+### Dashboard AI Insight Card
+
+The Dashboard includes an AI insight card that:
+- Auto-refreshes every 5 minutes during market hours
+- Shows "AI not available" when service disabled
+- Can be manually refreshed at any time
+
+### Learning Journal (Debrief)
+
+The Debrief page includes a **Learning Journal** conversation browser:
+- View past AI conversations by date and tag
+- Filter by: `pre-market`, `session`, `research`, `debrief`, `general`
+- Review Claude's analysis from previous trading days
+
+### Troubleshooting
+
+| Issue | Symptom | Solution |
+|-------|---------|----------|
+| AI disabled | "AI not available" in Dashboard | Check `ANTHROPIC_API_KEY` in `.env` |
+| Slow responses | Streaming delay >5s | Check network; Claude API may be under load |
+| Proposal expired | "Proposal expired" error | Re-ask Claude for the recommendation |
+| Rate limited | "Rate limit exceeded" | Wait 60 seconds; reduce request frequency |
+
+---
+
+*End of Live Operations Guide v1.1*

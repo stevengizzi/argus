@@ -42,6 +42,14 @@ During Phase A, work through:
 4. **Session decomposition** -- How many Claude Code sessions? What is the
    scope of each? What is the dependency order?
 
+   For each session, explicitly answer:
+   - **Creates:** What new files does this session produce?
+   - **Modifies:** What existing files does this session change?
+   - **Integrates:** Which prior session's output does this session wire into
+     calling code? (A module that is created but never integrated is dead code.
+     Every "Creates" entry in one session must have a corresponding "Integrates"
+     entry in a later session, unless it is self-contained.)
+
 5. **Compaction risk assessment** -- For each proposed session, score compaction
    risk using the point system below. The score determines whether the session
    must be split.
@@ -73,10 +81,33 @@ During Phase A, work through:
    report. This calibrates future scoring — if the system consistently
    under-predicts, lower the thresholds.
 
-6. **Regression assessment** -- What existing functionality could this sprint
+   **Test count estimation guide:** When estimating per-session test counts,
+   use ~5 tests per new file + ~3 tests per modified file + ~2 tests per new
+   API endpoint as a baseline. Apply a 2× multiplier for sessions that create
+   new infrastructure (DB schemas, API routes, WebSocket handlers) because
+   integration tests accumulate. This prevents the chronic underestimation seen
+   in Sprint 22 (85 estimated vs. 288 actual).
+
+   **Frontend visual-review fix budget:** For frontend sessions that include
+   visual review items, budget an additional 0.5-session fix allowance in the
+   session breakdown. If the visual review discovers no issues, the slot is
+   unused. If it discovers issues, the fix session is already planned and does
+   not require an impromptu triage. This is cheaper than running unplanned fix
+   sessions that bypass the standard prompt template. Mark these in the session
+   breakdown as "Session [N]f (visual-review fixes) — contingency, 0.5 session."
+
+6. **Config changes assessment** -- If this sprint adds or modifies config
+   fields (YAML files + Pydantic models), explicitly list each new field and
+   its corresponding Pydantic model field name. Verify the names match exactly.
+   Add a regression checklist item: "New config fields verified against Pydantic
+   model (no silently ignored keys)." This prevents the class of bug where
+   Pydantic silently drops unrecognized fields and uses defaults instead of
+   operator-specified values.
+
+7. **Regression assessment** -- What existing functionality could this sprint
    break? What invariants must be preserved?
 
-7. **Workflow mode assessment:**
+8. **Workflow mode assessment:**
    - Does this sprint warrant an Adversarial Review? (architectural decisions,
      data model changes, new integrations)
    - Does this sprint need the Iterative Judgment Loop? (visual/UI work)
@@ -101,7 +132,8 @@ Generate the spec-level artifacts one at a time, in this order:
 2. Specification by Contradiction (using templates/spec-by-contradiction.md)
 3. Session Breakdown (list of sessions with scope, dependencies, and compaction
    risk score. Each session must include the scoring table showing points per
-   factor and total. Any session scoring 14+ must be split before proceeding.)
+   factor and total. Any session scoring 14+ must be split before proceeding.
+   Each session must list Creates / Modifies / Integrates columns.)
 4. Sprint-Level Escalation Criteria
 5. Sprint-Level Regression Checklist
 6. Doc Update Checklist
@@ -128,7 +160,7 @@ If compaction occurs mid-generation:
 
 ### Phase C-1: Adversarial Review Gate
 
-If adversarial review was warranted (Phase A, step 7):
+If adversarial review was warranted (Phase A, step 8):
 
 1. **Stop this conversation.** Do not proceed to prompt generation.
 2. Run the adversarial-review protocol in a separate conversation (using the
@@ -162,6 +194,12 @@ With finalized spec-level artifacts in hand, generate prompts:
       The Sprint-Level Regression Checklist and Escalation Criteria should
       be embedded directly in each implementation prompt (the implementer
       does not have the review context file).
+
+      If this sprint adds new config fields, include in the implementation
+      prompt for the relevant session: "Write a test that loads the YAML
+      config file and verifies all keys under the new section are recognized
+      by the Pydantic model (no silently ignored fields)."
+
    b. **Tier 2 Review Prompt** (using templates/review-prompt.md) -- a
       **small, session-specific file** that:
       - Points Claude Code to the Review Context File by path
@@ -241,6 +279,11 @@ Before ending the conversation, verify:
       revisions; prompts were generated from post-revision specs
 - [ ] If adversarial review was warranted: input package was generated with
       relevant architecture sections extracted (developer pastes, not assembles)
+- [ ] Every session's Creates/Modifies/Integrates columns are filled in the
+      Session Breakdown -- no module is created without a session that integrates it
+- [ ] If new config fields are added: YAML field names verified against Pydantic
+      model names; regression checklist includes config validation item
+- [ ] Frontend sessions with visual review items have a budgeted fix slot
 
 ---
 
@@ -252,7 +295,7 @@ A complete sprint package contains:
 1. Design Summary (compaction insurance)
 2. Sprint Spec
 3. Specification by Contradiction
-4. Session Breakdown
+4. Session Breakdown (with Creates/Modifies/Integrates per session)
 5. Sprint-Level Escalation Criteria
 6. Sprint-Level Regression Checklist
 7. Doc Update Checklist

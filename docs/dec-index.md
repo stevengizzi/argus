@@ -1,7 +1,7 @@
 # ARGUS — Decision Index
 
-> 264 decisions (DEC-001 through DEC-263, DEC-275)
-> Generated: March 6, 2026 | Source: `docs/decision-log.md`
+> 275 decisions (DEC-001 through DEC-275)
+> Generated: March 7, 2026 | Source: `docs/decision-log.md`
 > Legend: ● Active | ○ Superseded | △ Amended | ✗ Duplicate entry
 
 
@@ -283,5 +283,15 @@
 - ● **DEC-261**: ORB Family Same-Symbol Mutual Exclusion — ClassVar prevents dual-fire
 - ● **DEC-262**: Roadmap Consolidation — Unified Strategic Direction
 - ● **DEC-263**: Full-Universe Strategy-Specific Monitoring Architecture
-> [add DEC-264 - DEC-274 here]
+- ● **DEC-264**: Full DEC-170 Scope in Sprint 22 — AI Copilot complete in single sprint
+- ● **DEC-265**: WebSocket for AI Chat Streaming — bidirectional, JWT auth
+- ● **DEC-266**: Calendar-Date Conversation Keying with Tags — pre-market, session, research, debrief, general
+- ● **DEC-267**: Action Proposal TTL with DB Persistence — 5-min expiry, SQLite storage
+- ● **DEC-268**: Per-Page Context Injection Hooks — useCopilotContext on all 7 pages
+- ● **DEC-269**: Demand-Refreshed AI Insight Card — auto-refresh during market hours
+- ● **DEC-270**: Markdown Rendering Stack — react-markdown + remark-gfm + rehype-sanitize
+- ● **DEC-271**: Claude tool_use for Structured Action Proposals — native API over JSON parsing
+- ● **DEC-272**: Five-Type Closed Action Enumeration — 4 approval + 1 immediate
+- ● **DEC-273**: System Prompt Template with Token Budgets — guardrails + context limits
+- ● **DEC-274**: Per-Call Cost Tracking — ai_usage table, real-time monitoring
 - ● **DEC-275**: Compaction Risk Scoring System — quantitative point-based session sizing

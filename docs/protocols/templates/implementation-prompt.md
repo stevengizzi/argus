@@ -45,6 +45,23 @@ front-load context, constrain scope, and end with the close-out skill invocation
     - Minimum new test count: [N]
     - Test command: [exact command]
 
+    ## Config Validation (if this session adds config fields)
+    [Include this section when the session adds or modifies YAML config fields
+    that map to Pydantic models. Omit entirely for sessions with no config changes.]
+
+    Write a test that loads the YAML config file and verifies all keys under
+    the new section are recognized by the Pydantic model. Specifically:
+    1. Load [config file path] and extract the [section] keys
+    2. Compare against [PydanticModel].model_fields.keys()
+    3. Assert no keys are present in YAML that are absent from the model
+       (these would be silently ignored by Pydantic and use defaults instead
+       of operator-specified values)
+
+    Expected mapping:
+    | YAML Key | Model Field |
+    |----------|-------------|
+    | [yaml_key] | [model_field] |
+
     ## Visual Review (if applicable)
     [Include this section for any session that modifies UI. Omit entirely for
     backend-only sessions. This tells the developer exactly what to check in
@@ -71,6 +88,7 @@ front-load context, constrain scope, and end with the close-out skill invocation
     - [ ] All requirements implemented
     - [ ] All existing tests pass
     - [ ] New tests written and passing
+    - [ ] Config validation test passing (if applicable)
     - [ ] Visual review items verified (if applicable)
     - [ ] [Any other completion criteria]
 

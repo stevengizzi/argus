@@ -1445,46 +1445,177 @@ The Command Center is a Progressive Web App (PWA) installable on iOS, iPad, and 
 
 ## 7. AI Layer (Tier 3)
 
-### 7.1 Claude API Integration (`ai/claude_service.py`)
+*Implemented in Sprint 22 (March 2026). See DEC-264 through DEC-274.*
 
-```python
-class ClaudeService:
-    async def chat(self, message: str, context: SystemContext) -> ClaudeResponse:
-        """
-        Send a message to Claude with current system context.
-        Context includes: account state, open positions, today's trades, 
-        recent performance, current regime, pending approvals.
-        """
+### 7.1 Architecture Overview
 
-    async def generate_analysis(self, analysis_type: str, params: dict) -> str:
-        """Generate analytical narrative (EOD report, strategy review, etc.)"""
+The AI Layer provides Claude-powered analysis, advisory, and action proposals through a structured approval workflow. Key design principles:
 
-    async def propose_action(self, action: ProposedAction) -> ApprovalRequest:
-        """Submit a Claude-generated action proposal to the approval queue."""
+- **Graceful degradation:** All AI features are disabled when `ANTHROPIC_API_KEY` is unset. Trading engine operates identically.
+- **tool_use over parsing:** Claude's native `tool_use` API for structured outputs (DEC-271), not JSON-in-text parsing.
+- **Closed action enumeration:** 5 defined tools, each with validation and executor (DEC-272).
+- **DB persistence:** All conversations, messages, proposals, and usage tracked in SQLite.
+- **Safety guardrails:** System prompt enforces advisory-only role; never recommends specific entries/exits.
 
-    async def generate_report(self, report_type: str, date_range: DateRange) -> Report:
-        """Generate a formatted report with charts and narrative."""
+### 7.2 Module Structure (`ai/`)
+
+```
+argus/ai/
+├── client.py        # ClaudeClient — API wrapper with rate limiting, tool_use
+├── config.py        # AIConfig — Pydantic model, token budgets, TTLs
+├── prompts.py       # PromptManager — system prompt template, guardrails
+├── context.py       # SystemContextBuilder — per-page context assembly
+├── conversations.py # ConversationManager — SQLite persistence, calendar-date keying
+├── usage.py         # UsageTracker — per-call cost tracking
+├── actions.py       # ActionManager — proposal lifecycle, TTL, 4-condition re-check
+├── executors.py     # 5 ActionExecutors + ExecutorRegistry
+├── summary.py       # DailySummaryGenerator
+├── cache.py         # ResponseCache — TTL-based caching
+└── tools.py         # 5 tool_use definitions with JSON schemas
 ```
 
-### 7.2 Context Builder (`ai/context_builder.py`)
+### 7.3 Claude Client (`ai/client.py`)
 
-Assembles relevant system state into a context payload for each Claude API call. Must be concise (fits within Claude's context window) while providing enough information for informed analysis.
+```python
+class ClaudeClient:
+    async def stream_response(
+        self,
+        messages: list[dict],
+        system_prompt: str,
+        tools: list[dict] | None = None
+    ) -> AsyncGenerator[StreamEvent, None]:
+        """
+        Stream response from Claude API with tool_use support.
+        Yields: TextDelta, ToolUse, ToolResult, MessageComplete events.
+        Rate limited per AIConfig.rate_limit_requests_per_minute.
+        """
+```
+
+When Claude emits a `tool_use` content block, the client yields a `ToolUse` event. The caller creates an `ActionProposal`, stores it in DB, returns a `tool_result` to Claude, and Claude continues its response.
+
+### 7.4 System Context Builder (`ai/context.py`)
+
+Assembles trading context for each Claude API call. Per-page hooks provide contextual data.
 
 ```python
 class SystemContextBuilder:
-    def build_context(self, scope: str = "full") -> SystemContext:
+    def build_system_prompt(
+        self,
+        page_context: dict | None = None,
+        include_strategies: bool = True
+    ) -> str:
         """
-        Scopes:
-        - "full": everything (for deep analysis)
-        - "trading": positions, today's trades, regime (for trade-related questions)
-        - "strategy": specific strategy's history and config (for strategy questions)
-        - "minimal": just account state (for simple queries)
+        Builds system prompt with:
+        - ARGUS description and behavioral guardrails
+        - Active strategy summaries (allocations, states)
+        - Current positions and today's P&L
+        - Page-specific context (selected trade, viewed strategy, etc.)
+        - Mandatory tool_use directive
+
+        Token budgets (DEC-273):
+        - System prompt: ≤1,500 tokens
+        - Page context: ≤2,000 tokens
+        - History: ≤8,000 tokens
+        - Response: ≤4,096 tokens
         """
 ```
 
-### 7.3 Approval Workflow (`ai/approval_workflow.py`)
+### 7.5 Conversation Manager (`ai/conversations.py`)
 
-All Claude-proposed actions go through the same approval pipeline as other system actions. The approval queue is a first-class concept shared between the Orchestrator, Risk Manager, and Claude.
+Manages persistent chat history with calendar-date keying (DEC-266).
+
+**Tables:**
+- `ai_conversations` — id, date, tag, title, created_at
+- `ai_messages` — id, conversation_id, role, content, tool_use_data, timestamp
+- `ai_usage` — id, conversation_id, timestamp, input_tokens, output_tokens, model, estimated_cost_usd
+
+**Tags:** `pre-market`, `session`, `research`, `debrief`, `general` (default). Auto-assigned by page context.
+
+### 7.6 Action Manager (`ai/actions.py`)
+
+Manages the proposal lifecycle with DB persistence and 4-condition pre-execution re-check.
+
+```python
+class ActionManager:
+    async def create_proposal(self, tool_name: str, tool_input: dict) -> ActionProposal:
+        """Create pending proposal with 5-min TTL (DEC-267)."""
+
+    async def approve_proposal(self, proposal_id: str) -> dict:
+        """
+        Re-check 4 conditions before execution:
+        1. Target entity (strategy, risk param) still exists
+        2. Regime hasn't changed to unfavorable
+        3. Equity within ±5% of proposal time
+        4. No circuit breaker active
+        """
+
+    async def reject_proposal(self, proposal_id: str, reason: str) -> None:
+        """Mark proposal rejected with reason."""
+```
+
+**Proposal States:** `pending` → `approved` → `executing` → `executed` | `rejected` | `expired`
+
+### 7.7 Action Executors (`ai/executors.py`)
+
+Five closed-enumeration tools (DEC-272):
+
+| Tool | Requires Approval | Executor |
+|------|-------------------|----------|
+| `propose_allocation_change` | Yes | Updates strategy allocation in config |
+| `propose_risk_param_change` | Yes | Updates risk parameter in config |
+| `propose_strategy_suspend` | Yes | Suspends strategy via Orchestrator |
+| `propose_strategy_resume` | Yes | Resumes strategy via Orchestrator |
+| `generate_report` | No | Immediately generates analytical report |
+
+Each executor validates inputs against schema bounds (e.g., allocation 0–100%, risk params within defined ranges).
+
+### 7.8 WebSocket Streaming (`api/websocket/ai_chat.py`)
+
+`WS /ws/v1/ai/chat` — bidirectional streaming with JWT auth (DEC-265).
+
+**Client → Server:**
+```json
+{"type": "auth", "token": "<JWT>"}
+{"type": "message", "content": "...", "conversation_id": "..."}
+{"type": "cancel"}
+```
+
+**Server → Client:**
+```json
+{"type": "token", "content": "..."}
+{"type": "tool_use", "tool_name": "...", "tool_input": {...}, "proposal_id": "..."}
+{"type": "stream_end", "message": {...}}
+{"type": "error", "message": "..."}
+```
+
+### 7.9 REST Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/v1/ai/conversations` | GET | List conversations (date/tag filter) |
+| `/api/v1/ai/conversations` | POST | Create conversation |
+| `/api/v1/ai/conversations/{id}/messages` | GET | Get messages for conversation |
+| `/api/v1/ai/actions/{id}/approve` | POST | Approve pending proposal |
+| `/api/v1/ai/actions/{id}/reject` | POST | Reject pending proposal |
+| `/api/v1/ai/actions/pending` | GET | List pending proposals |
+| `/api/v1/ai/insight` | GET | Get dashboard AI insight (cached) |
+| `/api/v1/ai/usage` | GET | Get usage/cost summary |
+| `/api/v1/ai/status` | GET | AI service status + monthly spend |
+
+### 7.10 Frontend Components
+
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| `CopilotPanel` | `features/copilot/` | Slide-out chat panel, Cmd/K toggle |
+| `ChatMessage` | `features/copilot/` | Rendered message with markdown |
+| `StreamingMessage` | `features/copilot/` | Token-by-token streaming display |
+| `ActionCard` | `features/copilot/` | Proposal display, approve/reject UI |
+| `AIInsightCard` | `features/dashboard/` | Dashboard insight with auto-refresh |
+| `ConversationBrowser` | `features/debrief/` | Learning Journal integration |
+
+**Markdown rendering:** `react-markdown` + `remark-gfm` + `rehype-sanitize` (DEC-270).
+
+**Context hooks:** Each of 7 pages provides context via `useCopilotContext` (DEC-268).
 
 ---
 

@@ -604,6 +604,71 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 
 ---
 
+### RSK-047 | Claude API Dependency
+| Field | Value |
+|-------|-------|
+| **Identified** | 2026-03-06 (Sprint 22) |
+| **Likelihood** | Medium |
+| **Impact** | Low — trading engine independent |
+| **Category** | External dependency |
+| **Description** | AI Copilot depends on Anthropic's Claude API. Service outages, rate limiting, or API changes could disrupt AI features. |
+| **Mitigation** | All AI features degrade gracefully when `ANTHROPIC_API_KEY` is unset or API unavailable. Trading engine operates identically with or without AI. ResponseCache provides short-term resilience. Rate limiting configured at 10 req/min (DEC-273). |
+| **Cross-References** | DEC-264, DEC-265, DEC-098 |
+
+---
+
+### RSK-048 | AI API Cost Overrun
+| Field | Value |
+|-------|-------|
+| **Identified** | 2026-03-06 (Sprint 22) |
+| **Likelihood** | Low |
+| **Impact** | Low — Opus pricing ~$15/1M input, $75/1M output |
+| **Category** | Cost management |
+| **Description** | Unexpected usage patterns could lead to higher-than-expected Claude API costs. |
+| **Mitigation** | Rate limiting (10 req/min default), response caching, per-call cost tracking in `ai_usage` table. Usage endpoint (`GET /api/v1/ai/usage`) provides real-time visibility. Token budgets enforced: system ≤1,500, page context ≤2,000, history ≤8,000, response ≤4,096 (DEC-273). |
+| **Cross-References** | DEC-274, DEC-273, DEC-098 |
+
+---
+
+### RSK-049 | Stale Approval Execution
+| Field | Value |
+|-------|-------|
+| **Identified** | 2026-03-06 (Sprint 22) |
+| **Likelihood** | Medium |
+| **Impact** | Medium — executing outdated allocation/risk change |
+| **Category** | Safety-critical |
+| **Description** | Operator approves a proposal after conditions have changed (market regime shift, equity drawdown, strategy state change). Executing the proposal could be harmful. |
+| **Mitigation** | 5-minute TTL (DEC-267) limits window for stale approvals. 4-condition pre-execution re-check gate: (1) target entity still exists, (2) regime hasn't changed unfavorably, (3) equity within ±5% of proposal time, (4) no circuit breaker active. Expired proposals auto-cleaned on 30-second interval. |
+| **Cross-References** | DEC-267, DEC-272 |
+
+---
+
+### RSK-050 | tool_use Hallucination
+| Field | Value |
+|-------|-------|
+| **Identified** | 2026-03-06 (Sprint 22) |
+| **Likelihood** | Low |
+| **Impact** | Medium — invalid proposal created |
+| **Category** | AI behavior |
+| **Description** | Claude emits a `tool_use` block with invalid, nonsensical, or out-of-bounds parameters despite JSON schema validation. |
+| **Mitigation** | Strict JSON schema validation in tools.py. Sane range bounds enforced (allocation 0–100%, risk params within defined ranges). Unrecognized tool calls logged as errors, no ActionProposal created. Human approval required for all configuration changes (4 of 5 tools). Audit logging of all proposals and outcomes. |
+| **Cross-References** | DEC-271, DEC-272 |
+
+---
+
+### RSK-051 | aiosqlite Write Contention
+| Field | Value |
+|-------|-------|
+| **Identified** | 2026-03-06 (Sprint 22) |
+| **Likelihood** | Low |
+| **Impact** | Low-Medium — latency spike on trade logging |
+| **Category** | Performance |
+| **Description** | AI tables (`ai_conversations`, `ai_messages`, `ai_usage`, `ai_action_proposals`) share the same SQLite database file as the Trade Logger. High AI activity during active trading could cause write contention. |
+| **Mitigation** | Monitor latency during paper trading. AI tables use `ai_` prefix for clear separation. If contention materializes, separate database file for AI tables is a straightforward migration. aiosqlite uses connection pooling to minimize lock duration. |
+| **Cross-References** | DEC-267 |
+
+---
+
 ## Review Schedule
 
 | Review Type | Frequency | Next Review |
@@ -612,8 +677,6 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 | Assumption spot-check | After significant market events | As needed |
 | Risk re-assessment | After system incidents | As needed |
 | Post-phase review | After each build phase | End of Phase 1 |
-
----
 
 ---
 
@@ -792,4 +855,4 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 
 ---
 
-*End of Risk & Assumptions Register v1.1*
+*End of Risk & Assumptions Register v1.2*
