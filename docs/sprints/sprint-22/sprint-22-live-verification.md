@@ -564,3 +564,18 @@ All 5 failures from initial verification have been fixed:
 - **Conversation dates**: All `date.today()` replaced with `datetime.now(ZoneInfo("America/New_York")).date()`
 
 See `sprint-22-1-review.md` for the full Tier 2 review report.
+
+### Sprint 22.2 — AI Context Data Fixes (2026-03-07)
+
+**Fixes applied:** 6 data assembly bugs in `context.py`, `summary.py`, `routes/ai.py`
+
+| Bug | Effect | Fix |
+|-----|--------|-----|
+| Trade P&L used `realized_pnl` key (column is `net_pnl`) | Copilot saw $0.00 for every trade | `t.get("net_pnl", 0)` |
+| Dashboard positions iterated dict keys, not `.items()` | Positions always `[]` — silent `AttributeError` | Iterate `.items()`, correct attribute names |
+| Insight positions accessed nonexistent `pos.unrealized_pnl` | Insight always reported "No open positions" | Compute from `data_service.get_current_price()` |
+| Debrief date filter used bare `datetime.now()` | Wrong date from Taipei timezone | `datetime.now(ZoneInfo("America/New_York"))` |
+| `/insight` endpoint had no try/except | Unhandled exceptions returned 500 | Graceful `InsightResponse` with error message |
+| `generate_insight` had no top-level error handler | Exceptions from data assembly propagated | Top-level try/except with fallback string |
+
+**Tests added:** 10 new tests (1,977 total pytest)

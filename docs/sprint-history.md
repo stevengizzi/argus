@@ -264,13 +264,28 @@
 **Sessions:** 1 implementation + 1 Tier 2 review.
 **Notes:** Tier 2 review discovered an additional `date.today()` in `conversations.py` (pre-existing bug from Sprint 22), fixed during review session. All verification checklist items 2.14.1, 2.14.9, 2.17.2–4 resolved.
 
+### Sprint 22.2 — AI Context Data Fixes (1977 pytest + 377 Vitest, +10/+0)
+**Date:** Mar 7, 2026
+**Scope:** Fix 6 data assembly bugs in the AI context layer that caused the Copilot to see $0.00 P&L for all trades, empty position lists, and incorrect date filtering.
+**Session 1:** Fix 1: Trade P&L column name (`realized_pnl` → `net_pnl`). Fix 2: Dashboard positions iteration (dict keys → `.items()`, correct `ManagedPosition` attribute names, unrealized P&L computed from live `data_service.get_current_price()`). Fix 3: Insight positions compute unrealized P&L from data service. Fix 4: Debrief date filter uses ET timezone. Fix 5: `/insight` endpoint try/except with graceful error response. Fix 6: `generate_insight` top-level error handling. 10 new tests.
+**Key decisions:** None (implementation bug fixes only).
+**Sessions:** 1 implementation + 1 Tier 2 review.
+**Notes:** All 6 bugs were hidden by silent `except Exception: pass` blocks that caught `AttributeError` and `KeyError` and returned empty/zero defaults. Claude received structurally valid but factually wrong context. The Copilot appeared functional but gave analyses based on incorrect data.
+
+### Sprint 22.3 — Silent Exception Logging (1977 pytest + 377 Vitest, +0/+0)
+**Date:** Mar 7, 2026
+**Scope:** Add `logger.warning` to 12 silent `except Exception: pass` blocks in `context.py` and `summary.py`. Logging-only change — no logic, behavior, or defaults modified. Two inner `get_current_price()` blocks intentionally left silent (expected failures for unsubscribed symbols).
+**Key decisions:** None.
+**Sessions:** 1 implementation (Tier 2 review skipped — no behavioral changes).
+**Notes:** Prevents future data assembly bugs from being silently hidden, as happened with all 6 bugs in Sprint 22.2.
+
 ---
 
 ## Sprint Statistics
 
 - **Total sprints:** 22 full + 8 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.7)
 - **Total sessions:** ~230+ Claude Code sessions
-- **Total tests:** 1,967 pytest + 377 Vitest = 2,344 total
+- **Total tests:** 1,977 pytest + 377 Vitest = 2,354 total
 - **Total decisions:** 276 (DEC-001 through DEC-276)
 - **Calendar days (active dev):** ~22 (Feb 14 – Mar 7, 2026)
 - **Largest sprint:** 22 (9 implementation + 5 fix + 9 reviews, largest scope)

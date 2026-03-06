@@ -3121,4 +3121,4 @@ Each entry follows this format:
 
 *End of Decision Log v1.0*
 *Next DEC: 277*
-*Last updated: 2026-03-07 (Sprint 22.1 close-out)*
+*Last updated: 2026-03-07 (Sprint 22.2 close-out)*

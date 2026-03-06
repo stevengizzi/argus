@@ -13,7 +13,7 @@ Next sprint: **23 (NLP Catalyst + Universe Manager)** — SEC EDGAR + FMP news, 
 
 - **Active sprint:** None (between sprints)
 - **Next sprint:** 23 (NLP Catalyst + Universe Manager)
-- **Tests:** 1,967 pytest + 377 Vitest
+- **Tests:** 1,977 pytest + 377 Vitest
 - **Strategies:** 4 active (ORB Breakout, ORB Scalp, VWAP Reclaim, Afternoon Momentum)
 - **Infrastructure:** Databento EQUS.MINI (live) + IBKR paper trading (Account U24619949) + FMP Starter (scanning) + Claude API (Copilot)
 - **Frontend:** 7-page Command Center + AI Copilot (all active), Tauri desktop + PWA mobile

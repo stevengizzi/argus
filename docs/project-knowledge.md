@@ -11,8 +11,8 @@ ARGUS is a fully automated, AI-enhanced multi-strategy day trading system for US
 
 ## Current State
 
-**Tests:** 1,967 pytest + 377 Vitest
-**Sprints completed:** 1 through 22.1 (21 full sprints + sub-sprints + FMP integration + AI Layer + post-verification fixes)
+**Tests:** 1,977 pytest + 377 Vitest
+**Sprints completed:** 1 through 22.3 (21 full sprints + sub-sprints + FMP integration + AI Layer + post-verification fixes)
 **Active sprint:** None (between sprints)
 **Next sprint:** 23 (NLP Catalyst + Universe Manager)
 **GitHub:** `https://github.com/stevengizzi/argus.git` (public)
@@ -43,6 +43,8 @@ ARGUS is a fully automated, AI-enhanced multi-strategy day trading system for US
 | 21.7 | FMP Scanner Integration | 1754+296V | Mar 5 | DEC-258–259 |
 | 22 | AI Layer MVP | 1959+377V | Mar 6–7 | DEC-264–275 |
 | 22.1 | Post-Verification Fixes | 1967+377V | Mar 7 | DEC-276 |
+| 22.2 | AI Context Data Fixes | 1977+377V | Mar 7 | — |
+| 22.3 | Silent Exception Logging | 1977+377V | Mar 7 | — |
 
 *Full sprint scopes and session details: `docs/sprint-history.md`*
 
