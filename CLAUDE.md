@@ -13,7 +13,7 @@ Next sprint: **23 (NLP Catalyst + Universe Manager)** — SEC EDGAR + FMP news, 
 
 - **Active sprint:** None (between sprints)
 - **Next sprint:** 23 (NLP Catalyst + Universe Manager)
-- **Tests:** 1,959 pytest + 377 Vitest
+- **Tests:** 1,967 pytest + 377 Vitest
 - **Strategies:** 4 active (ORB Breakout, ORB Scalp, VWAP Reclaim, Afternoon Momentum)
 - **Infrastructure:** Databento EQUS.MINI (live) + IBKR paper trading (Account U24619949) + FMP Starter (scanning) + Claude API (Copilot)
 - **Frontend:** 7-page Command Center + AI Copilot (all active), Tauri desktop + PWA mobile
@@ -235,6 +235,7 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 - DEF-030: Live candlestick chart real-time updates (TradeChart loads historical only, no WebSocket subscription). Trigger: Sprint 22+ or UX backlog prioritization.
 - DEF-031: Orders table persistence (orders not persisted to DB, only completed trades). Trigger: when post-hoc order forensics needed beyond log analysis.
 - DEF-032: FMPScannerSource criteria_list filtering. `scan()` accepts `criteria_list` parameter but ignores it (documented in docstring). FMP endpoints are pre-filtered server-side; post-fetch filtering by strategy-specific criteria becomes meaningful when Quality Engine (Sprint 24) provides scoring criteria. Trigger: Sprint 23 (NLP Catalyst) or Sprint 24 (Quality Engine).
+| DEF-033 | Approve→Executed status transition is simulated with setTimeout(1500ms) in ChatMessage.tsx. Real execution status should be pushed via WebSocket (`{"type": "proposal_update", ...}`) after ActionExecutor completes. Requires: WS protocol extension (new message type), executor pipeline event emission, frontend WS handler update. Cosmetic-only impact — proposal is correctly marked `approved` in DB; only the UI status badge is faked. | Next UI polish pass or Sprint 23 if room. |
 
 ## Reference
 

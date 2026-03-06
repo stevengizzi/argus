@@ -1,6 +1,6 @@
 # ARGUS — Decision Index
 
-> 275 decisions (DEC-001 through DEC-275)
+> 275 decisions (DEC-001 through DEC-276)
 > Generated: March 7, 2026 | Source: `docs/decision-log.md`
 > Legend: ● Active | ○ Superseded | △ Amended | ✗ Duplicate entry
 
@@ -295,3 +295,4 @@
 - ● **DEC-273**: System Prompt Template with Token Budgets — guardrails + context limits
 - ● **DEC-274**: Per-Call Cost Tracking — ai_usage table, real-time monitoring
 - ● **DEC-275**: Compaction Risk Scoring System — quantitative point-based session sizing
+- ● **DEC-276**: AI Timestamps Standardized on ET — naive ET strings, no UTC storage

@@ -11,8 +11,8 @@ ARGUS is a fully automated, AI-enhanced multi-strategy day trading system for US
 
 ## Current State
 
-**Tests:** 1,959 pytest + 377 Vitest
-**Sprints completed:** 1 through 22 (21 full sprints + sub-sprints + FMP integration + AI Layer)
+**Tests:** 1,967 pytest + 377 Vitest
+**Sprints completed:** 1 through 22.1 (21 full sprints + sub-sprints + FMP integration + AI Layer + post-verification fixes)
 **Active sprint:** None (between sprints)
 **Next sprint:** 23 (NLP Catalyst + Universe Manager)
 **GitHub:** `https://github.com/stevengizzi/argus.git` (public)
@@ -42,6 +42,7 @@ ARGUS is a fully automated, AI-enhanced multi-strategy day trading system for US
 | 21.5.1 | C2 Bug Fixes + UI Polish | (included above) | Mar 5 | DEC-261 |
 | 21.7 | FMP Scanner Integration | 1754+296V | Mar 5 | DEC-258–259 |
 | 22 | AI Layer MVP | 1959+377V | Mar 6–7 | DEC-264–275 |
+| 22.1 | Post-Verification Fixes | 1967+377V | Mar 7 | DEC-276 |
 
 *Full sprint scopes and session details: `docs/sprint-history.md`*
 
@@ -64,7 +65,7 @@ Paper trading active with Databento EQUS.MINI + IBKR paper (Account U24619949, D
 ### Three-Tier System
 1. **Trading Engine** — Strategies, Orchestrator, Risk Manager, Data Service, Broker abstraction, Order Manager, Trade Logger, Backtesting (VectorBT + Replay Harness)
 2. **Command Center** — 7 pages (all built): Dashboard, Trade Log, Performance, Orchestrator, Pattern Library, The Debrief, System. Tauri desktop + PWA mobile + web. AI Copilot active.
-3. **AI Layer** (Sprint 22) — Claude API (Opus, DEC-098) via ClaudeClient wrapper; PromptManager with system prompt template and behavioral guardrails (DEC-273); SystemContextBuilder for per-page context injection (DEC-268); tool_use for structured action proposals (DEC-271) with 5 defined tools (DEC-272); ActionManager with DB-persisted proposals and 5-min TTL (DEC-267); 5 ActionExecutors with 4-condition pre-execution re-check; ConversationManager with calendar-date keying and tags (DEC-266); UsageTracker for per-call cost tracking (DEC-274); DailySummaryGenerator; ResponseCache. WS /ws/v1/ai/chat for streaming (DEC-265). All AI features degrade gracefully when ANTHROPIC_API_KEY unset.
+3. **AI Layer** (Sprint 22) — Claude API (Opus, DEC-098) via ClaudeClient wrapper; PromptManager with system prompt template and behavioral guardrails (DEC-273); SystemContextBuilder for per-page context injection (DEC-268); tool_use for structured action proposals (DEC-271) with 5 defined tools (DEC-272); ActionManager with DB-persisted proposals and 5-min TTL (DEC-267); 5 ActionExecutors with 4-condition pre-execution re-check; ConversationManager with calendar-date keying and tags (DEC-266); UsageTracker for per-call cost tracking (DEC-274); DailySummaryGenerator for insight card + daily summaries; ResponseCache for insight TTL caching. WS /ws/v1/ai/chat for streaming with actual API usage extraction (DEC-265). All timestamps ET-based (DEC-276). All AI features degrade gracefully when ANTHROPIC_API_KEY unset.
 
 ### Key Components
 - **Strategies:** Daily-stateful, session-stateless plugins (DEC-028). 4 active. 14 more planned.
@@ -169,7 +170,7 @@ Per-trade risk: 0.5–1% of strategy allocation. Daily loss limit: 3–5%. Weekl
 
 **Frontend:** DEC-099 (in-process API), DEC-102 (JWT auth), DEC-104/215 (chart libraries), DEC-109 (design north star), DEC-149 (VectorBT precompute+vectorize), DEC-169 (7-page architecture), DEC-170 (AI Copilot), DEC-199 (navigation + shortcuts).
 
-**AI Layer:** DEC-264 (full scope Sprint 22), DEC-265 (WebSocket streaming), DEC-266 (calendar-date conversation keying), DEC-267 (proposal TTL + DB persistence), DEC-268 (per-page context injection), DEC-269 (demand-refreshed insight card), DEC-270 (markdown rendering stack), DEC-271 (tool_use for proposals), DEC-272 (5-type action enumeration), DEC-273 (system prompt + guardrails), DEC-274 (per-call cost tracking).
+**AI Layer:** DEC-264 (full scope Sprint 22), DEC-265 (WebSocket streaming), DEC-266 (calendar-date conversation keying), DEC-267 (proposal TTL + DB persistence), DEC-268 (per-page context injection), DEC-269 (demand-refreshed insight card), DEC-270 (markdown rendering stack), DEC-271 (tool_use for proposals), DEC-272 (5-type action enumeration), DEC-273 (system prompt + guardrails), DEC-274 (per-call cost tracking), DEC-276 (ET timestamps for AI layer).
 
 **Documentation:** DEC-262 (roadmap consolidation — single canonical roadmap.md), DEC-275 (compaction risk scoring system).
 

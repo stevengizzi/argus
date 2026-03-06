@@ -3084,7 +3084,7 @@ Each entry follows this format:
 | **Decision** | Track token usage for every Claude API call in `ai_usage` table. Fields: conversation_id, timestamp, input_tokens, output_tokens, model, estimated_cost_usd. `GET /api/v1/ai/usage` returns daily and monthly totals. `GET /api/v1/ai/status` includes current-month spend and per-day average. |
 | **Alternatives Considered** | 1. Aggregate-only tracking (daily totals): Rejected — per-call granularity enables debugging of cost anomalies. 2. No cost tracking (rely on Anthropic dashboard): Rejected — operator needs in-app visibility without switching to another service. |
 | **Rationale** | Cost is trivial per DEC-098, but tracking from day one enables trend analysis and anomaly detection. The Anthropic dashboard has delayed reporting; in-app tracking is real-time. |
-| **Constraints** | Streaming responses estimate tokens from content length (4 chars ≈ 1 token). Not perfectly accurate but sufficient for cost estimation. |
+| **Constraints** | Streaming responses extract actual token counts from API events (`message_start` for input, `message_delta` for output). Falls back to content-length estimation (4 chars ≈ 1 token) if API usage data is unavailable. Non-streaming `/chat` responses use exact API-reported counts. All timestamps stored in ET (DEC-276). |
 | **Cross-References** | DEC-098, RSK-028 |
 | **Status** | Active |
 
@@ -3104,6 +3104,21 @@ Each entry follows this format:
 
 ---
 
+### DEC-276 | AI Timestamps Standardized on ET
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-07 |
+| **Sprint** | Sprint 22.1 |
+| **Decision** | All AI-related timestamps and date-keyed operations use ET (America/New_York), stored as naive local datetime strings (no timezone offset). Applies to: `ai_usage.timestamp`, conversation `date` fields in creation paths, and usage query date parameters. |
+| **Alternatives Considered** | 1. UTC with offset (e.g., `2026-03-07T02:30:00+00:00`): Rejected — SQLite's `date()` function cannot reliably extract the date from offset-bearing ISO strings, causing query mismatches. 2. UTC without offset (e.g., `2026-03-07T02:30:00`): Rejected — requires timezone conversion at every query point. This was the original implementation and failed in production: server running in Taipei (UTC+8) stored UTC timestamps, but `date.today()` queries used server-local dates, producing a multi-hour window daily where usage records were invisible. 3. Store both UTC and ET columns: Rejected — over-engineered, doubles write cost for a single use case. |
+| **Rationale** | ARGUS's canonical timezone is ET because US markets operate in ET. Conversation date keying (DEC-266) is designed around trading days, which are ET days. Storing timestamps as naive ET strings means `date(timestamp)` in SQLite directly yields the ET date, matching the query parameters without conversion. The bug this fixes: usage tracking returned all-zero results for any server not in the ET timezone because `date.today()` returned a different date than the UTC-stored timestamps. Applied to `usage.py`, `routes/ai.py`, `websocket/ai_chat.py`, and `conversations.py`. |
+| **Constraints** | All future AI-layer code that stores or queries timestamps must use `datetime.now(ZoneInfo("America/New_York"))`. UTC must not be used for AI timestamp storage. The canonical import is `from zoneinfo import ZoneInfo` with `ZoneInfo("America/New_York")` (not `US/Eastern` or pytz). |
+| **Cross-References** | DEC-266 (calendar-date conversation keying), DEC-274 (per-call cost tracking) |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
-*Next DEC: 276*
-*Last updated: 2026-03-07 (Sprint 22 close-out)*
+*Next DEC: 277*
+*Last updated: 2026-03-07 (Sprint 22.1 close-out)*

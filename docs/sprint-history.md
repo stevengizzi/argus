@@ -256,14 +256,22 @@
 **Sessions:** 9 implementation + 5 fix + 9 Tier 2 reviews.
 **Notes:** Largest single-sprint scope. Sessions 3a and 3b compacted, leading to DEC-275 (compaction risk scoring system). AIService class built but not wired into routes — removed in cleanup. 3.4× test target exceeded (288 actual vs. 85 planned). ~6,500 lines backend, ~3,000+ lines frontend.
 
+### Sprint 22.1 — Post-Verification Fixes (1967 pytest + 377 Vitest, +8/+0)
+**Date:** Mar 7, 2026
+**Scope:** Fix 5 verified failures and 3 code-inspection findings from Sprint 22 automated verification. 4 root-cause bugs: timezone mismatch in usage tracking, DailySummaryGenerator/ResponseCache initialization gap, WS streaming token estimation, conversation date keying.
+**Session 1:** Fix 1: ET timestamps in `usage.py`, `routes/ai.py`, `ai_chat.py`, `conversations.py`. Fix 2: `DailySummaryGenerator` + `ResponseCache` initialization in `server.py`. Fix 3: Stream event usage extraction in `client.py` + actual counts in WS handler. Fix 4: Hardcoded cost constants replaced with config values. 8 new tests.
+**Key decisions:** DEC-276 (AI timestamps standardized on ET).
+**Sessions:** 1 implementation + 1 Tier 2 review.
+**Notes:** Tier 2 review discovered an additional `date.today()` in `conversations.py` (pre-existing bug from Sprint 22), fixed during review session. All verification checklist items 2.14.1, 2.14.9, 2.17.2–4 resolved.
+
 ---
 
 ## Sprint Statistics
 
 - **Total sprints:** 22 full + 8 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.7)
 - **Total sessions:** ~230+ Claude Code sessions
-- **Total tests:** 1,959 pytest + 377 Vitest = 2,336 total
-- **Total decisions:** 275 (DEC-001 through DEC-275)
+- **Total tests:** 1,967 pytest + 377 Vitest = 2,344 total
+- **Total decisions:** 276 (DEC-001 through DEC-276)
 - **Calendar days (active dev):** ~22 (Feb 14 – Mar 7, 2026)
 - **Largest sprint:** 22 (9 implementation + 5 fix + 9 reviews, largest scope)
 - **Cleanest sprint:** 12.5 (1 session, pure refactor)

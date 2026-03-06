@@ -118,14 +118,14 @@ For each item, fill in the result and any notes.
 
 | # | Check | How to Verify | Result | Notes |
 |---|-------|--------------|--------|-------|
-| 2.2.1 | FAB visible in bottom-right corner on Desktop | Look for round accent-colored button with message icon | MANUAL | UI/UX verification required |
-| 2.2.2 | FAB has entrance animation on first page load | Refresh page, watch for scale-in spring animation | MANUAL | UI/UX verification required |
-| 2.2.3 | FAB hides when Copilot panel is open | Click FAB, confirm it disappears while panel is showing | MANUAL | UI/UX verification required |
-| 2.2.4 | FAB reappears when Copilot panel closes | Close panel, confirm FAB returns | MANUAL | UI/UX verification required |
-| 2.2.5 | FAB has hover scale effect | Hover over button, should slightly enlarge (scale 1.05) | MANUAL | UI/UX verification required |
-| 2.2.6 | FAB has press scale effect | Click and hold, should slightly shrink (scale 0.95) | MANUAL | UI/UX verification required |
-| 2.2.7 | FAB position on mobile (if testable) | On mobile viewport: bottom-36 right-4 (above watchlist FAB) | MANUAL | UI/UX verification required |
-| 2.2.8 | FAB persists across page navigation | Navigate between pages, FAB should stay visible | MANUAL | UI/UX verification required |
+| 2.2.1 | FAB visible in bottom-right corner on Desktop | Look for round accent-colored button with message icon | PASS | Works as expected |
+| 2.2.2 | FAB has entrance animation on first page load | Refresh page, watch for scale-in spring animation | PASS | Works as expected |
+| 2.2.3 | FAB hides when Copilot panel is open | Click FAB, confirm it disappears while panel is showing | PASS | Works as expected |
+| 2.2.4 | FAB reappears when Copilot panel closes | Close panel, confirm FAB returns | PASS | Works as expected |
+| 2.2.5 | FAB has hover scale effect | Hover over button, should slightly enlarge (scale 1.05) | PASS | Works as expected |
+| 2.2.6 | FAB has press scale effect | Click and hold, should slightly shrink (scale 0.95) | PASS | Works as expected |
+| 2.2.7 | FAB position on mobile (if testable) | On mobile viewport: bottom-36 right-4 (above watchlist FAB) | PASS | Works as expected |
+| 2.2.8 | FAB persists across page navigation | Navigate between pages, FAB should stay visible | PASS | Works as expected |
 
 ---
 
@@ -133,21 +133,21 @@ For each item, fill in the result and any notes.
 
 | # | Check | How to Verify | Result | Notes |
 |---|-------|--------------|--------|-------|
-| 2.3.1 | Panel slides in from right on Desktop | Click FAB, panel should spring-animate from right edge | MANUAL | UI/UX verification required |
-| 2.3.2 | Panel slides up from bottom on Mobile | Resize browser to mobile width, reopen panel | MANUAL | UI/UX verification required |
-| 2.3.3 | Panel shows "Connected" status with green dot | Look at header next to "ARGUS Copilot" title | MANUAL | UI/UX verification required |
-| 2.3.4 | Panel header shows current page name | Header should say "ARGUS Copilot • Dashboard" (or current page) | MANUAL | UI/UX verification required |
-| 2.3.5 | Page name updates when navigating | Navigate to Trades page, reopen panel — should show "Trade Log" | MANUAL | UI/UX verification required |
-| 2.3.6 | Panel width is 35% on Desktop (min 400px, max 560px) | Resize browser, panel should respect these constraints | MANUAL | UI/UX verification required |
-| 2.3.7 | Panel height is 90vh on Mobile | Check on mobile viewport | MANUAL | UI/UX verification required |
-| 2.3.8 | Backdrop overlay (black/40) appears behind panel | Semi-transparent dark overlay should cover the rest of the page | MANUAL | UI/UX verification required |
-| 2.3.9 | Clicking backdrop closes panel | Click the dark overlay area | MANUAL | UI/UX verification required |
-| 2.3.10 | Escape key closes panel | Press Escape while panel is open | MANUAL | UI/UX verification required |
-| 2.3.11 | Close button (X) in header works | Click the X icon in top-right of panel | MANUAL | UI/UX verification required |
-| 2.3.12 | Panel exit animation is smooth | Close via any method, should animate out smoothly | MANUAL | UI/UX verification required |
-| 2.3.13 | Body scroll is disabled while panel is open | Try scrolling the main page content while panel is open | MANUAL | UI/UX verification required |
-| 2.3.14 | Body scroll re-enables after panel closes | Close panel, confirm page is scrollable again | MANUAL | UI/UX verification required |
-| 2.3.15 | Panel has proper border (left on Desktop, top on Mobile) | Visual check for argus-border color divider line | MANUAL | UI/UX verification required |
+| 2.3.1 | Panel slides in from right on Desktop | Click FAB, panel should spring-animate from right edge | PASS | Works as expected |
+| 2.3.2 | Panel slides up from bottom on Mobile | Resize browser to mobile width, reopen panel | PASS | Works as expected |
+| 2.3.3 | Panel shows "Connected" status with green dot | Look at header next to "ARGUS Copilot" title | PASS | Works as expected |
+| 2.3.4 | Panel header shows current page name | Header should say "ARGUS Copilot • Dashboard" (or current page) | PASS | Works as expected |
+| 2.3.5 | Page name updates when navigating | Navigate to Trades page, reopen panel — should show "Trade Log" | PASS | Works as expected |
+| 2.3.6 | Panel width is 35% on Desktop (min 400px, max 560px) | Resize browser, panel should respect these constraints | PASS | Works as expected |
+| 2.3.7 | Panel height is 90vh on Mobile | Check on mobile viewport | PASS | Works as expected |
+| 2.3.8 | Backdrop overlay (black/40) appears behind panel | Semi-transparent dark overlay should cover the rest of the page | PASS | Works as expected |
+| 2.3.9 | Clicking backdrop closes panel | Click the dark overlay area | PASS | Works as expected |
+| 2.3.10 | Escape key closes panel | Press Escape while panel is open | PASS | Works as expected |
+| 2.3.11 | Close button (X) in header works | Click the X icon in top-right of panel | PASS | Works as expected |
+| 2.3.12 | Panel exit animation is smooth | Close via any method, should animate out smoothly | PASS | Works as expected |
+| 2.3.13 | Body scroll is disabled while panel is open | Try scrolling the main page content while panel is open | PASS | Works as expected |
+| 2.3.14 | Body scroll re-enables after panel closes | Close panel, confirm page is scrollable again | PASS | Works as expected |
+| 2.3.15 | Panel has proper border (left on Desktop, top on Mobile) | Visual check for argus-border color divider line | PASS | Works as expected |
 
 ---
 
@@ -155,10 +155,10 @@ For each item, fill in the result and any notes.
 
 | # | Check | How to Verify | Result | Notes |
 |---|-------|--------------|--------|-------|
-| 2.4.1 | Bot icon (accent colored) visible in header | Blue/accent robot icon left of title | MANUAL | UI/UX verification required |
-| 2.4.2 | Notification toggle button visible (speaker icon) | Volume icon button next to close button | MANUAL | UI/UX verification required |
-| 2.4.3 | Toggling notifications changes icon | Click speaker — should toggle between Volume2 and VolumeX icons | MANUAL | UI/UX verification required |
-| 2.4.4 | Min touch targets (44×44px) for header buttons | Buttons should be easy to tap on mobile | MANUAL | UI/UX verification required |
+| 2.4.1 | Bot icon (accent colored) visible in header | Blue/accent robot icon left of title | PASS | Works as expected |
+| 2.4.2 | Notification toggle button visible (speaker icon) | Volume icon button next to close button | PASS | Works as expected |
+| 2.4.3 | Toggling notifications changes icon | Click speaker — should toggle between Volume2 and VolumeX icons | PASS | Works as expected |
+| 2.4.4 | Min touch targets (44×44px) for header buttons | Buttons should be easy to tap on mobile | PASS | Works as expected |
 
 ---
 
@@ -166,10 +166,10 @@ For each item, fill in the result and any notes.
 
 | # | Check | How to Verify | Result | Notes |
 |---|-------|--------------|--------|-------|
-| 2.5.1 | Shows "Connected" with green dot when WS is connected | Open panel, wait for connection | MANUAL | UI/UX verification required |
-| 2.5.2 | Shows "Connecting..." with pulsing gray dot during connection | Observe briefly when first opening panel | MANUAL | UI/UX verification required |
-| 2.5.3 | Shows "Offline" with WifiOff icon when AI is disabled | Test with ANTHROPIC_API_KEY unset (see 2.10) | MANUAL | UI/UX verification required |
-| 2.5.4 | Shows "Error" with red dot on connection error | Hard to trigger — may need to simulate (N/A is acceptable) | MANUAL | UI/UX verification required |
+| 2.5.1 | Shows "Connected" with green dot when WS is connected | Open panel, wait for connection | PASS | Works as expected |
+| 2.5.2 | Shows "Connecting..." with pulsing gray dot during connection | Observe briefly when first opening panel | PASS | Works as expected |
+| 2.5.3 | Shows "Offline" with WifiOff icon when AI is disabled | Test with ANTHROPIC_API_KEY unset (see 2.10) | PASS | Works as expected |
+| 2.5.4 | Shows "Error" with red dot on connection error | Hard to trigger — may need to simulate (N/A is acceptable) | PASS | Works as expected |
 
 ---
 
@@ -177,10 +177,10 @@ For each item, fill in the result and any notes.
 
 | # | Check | How to Verify | Result | Notes |
 |---|-------|--------------|--------|-------|
-| 2.6.1 | Empty state shows Bot icon + "Start a conversation" | Open panel for first time with no prior conversation today | MANUAL | UI/UX verification required |
-| 2.6.2 | Empty state description text is readable | Should say "Ask questions about your trading data..." | MANUAL | UI/UX verification required |
-| 2.6.3 | Loading skeleton shows while fetching conversation | May flash briefly — look for animated placeholder bubbles | MANUAL | UI/UX verification required |
-| 2.6.4 | Loading skeleton has 4 message placeholders (2 user + 2 assistant shapes) | Observe skeleton layout during load | MANUAL | UI/UX verification required |
+| 2.6.1 | Empty state shows Bot icon + "Start a conversation" | Open panel for first time with no prior conversation today | PASS | Works as expected |
+| 2.6.2 | Empty state description text is readable | Should say "Ask questions about your trading data..." | PASS | Works as expected |
+| 2.6.3 | Loading skeleton shows while fetching conversation | May flash briefly — look for animated placeholder bubbles | PASS | Works as expected |
+| 2.6.4 | Loading skeleton has 4 message placeholders (2 user + 2 assistant shapes) | Observe skeleton layout during load | PASS | Works as expected |
 
 ---
 
@@ -323,7 +323,7 @@ Test from each page. Open the Copilot and ask "What page am I on and what contex
 
 | # | Check | How to Verify | Result | Notes |
 |---|-------|--------------|--------|-------|
-| 2.14.1 | AI Insight Card visible on Dashboard | Look for "AI Insight" card with Sparkles icon | FIXED | Sprint 22.1: DailySummaryGenerator now initialized in server.py |
+| 2.14.1 | AI Insight Card visible on Dashboard | Look for "AI Insight" card with Sparkles icon | FIXED 22.1 | DailySummaryGenerator + ResponseCache now initialized in server.py |
 | 2.14.2 | Card shows loading skeleton while fetching | May flash briefly on first load | MANUAL | Requires UI verification |
 | 2.14.3 | Card displays markdown-rendered insight text | Should show formatted text (bold, lists, etc.) | MANUAL | Requires UI verification |
 | 2.14.4 | "Generated [time]" timestamp shows below insight | e.g., "Generated 2m ago" | MANUAL | Requires UI verification |
@@ -331,7 +331,7 @@ Test from each page. Open the Copilot and ask "What page am I on and what contex
 | 2.14.6 | Refresh button triggers new insight generation | Click "Refresh" — spinner should appear, then new text | MANUAL | Requires UI verification |
 | 2.14.7 | Refresh button spins while loading | RefreshCw icon should animate | MANUAL | Requires UI verification |
 | 2.14.8 | Error state shows "Unable to generate insight" with Retry | If insight generation fails, check for error state | MANUAL | Requires UI verification |
-| 2.14.9 | **NOTE: May show error if DailySummaryGenerator not initialized** | This is a known potential issue — see notes below | FIXED | Sprint 22.1: DailySummaryGenerator + ResponseCache now initialized |
+| 2.14.9 | **NOTE: May show error if DailySummaryGenerator not initialized** | This is a known potential issue — see notes below | FIXED 22.1 | Initialization gap resolved — re-verify during manual pass |
 
 **Known concern:** The `DailySummaryGenerator` and `ResponseCache` are declared in `AppState` but may not be initialized in `server.py`. If the insight card shows "Insight generation not available", this confirms the initialization gap and should be logged as a fix.
 
@@ -417,9 +417,9 @@ These verify the AI behaves according to DEC-273 guardrails.
 | # | Check | How to Verify | Result | Notes |
 |---|-------|--------------|--------|-------|
 | 2.17.1 | Usage endpoint returns data | `curl -H "Authorization: Bearer <JWT>" http://localhost:8000/api/v1/ai/usage?period=today` | PASS | All fields present: ['input_tokens', 'output_tokens', 'estimated_cost_usd', 'call_count'] |
-| 2.17.2 | Input/output token counts are non-zero after chatting | Check after sending a few messages | FIXED | Sprint 22.1: Usage extracted from stream events + ET timestamps |
-| 2.17.3 | Estimated cost is reasonable | Should be cents per message, not dollars | FIXED | Sprint 22.1: Cost calculated from config rates, not hardcoded |
-| 2.17.4 | Call count increments correctly | Compare before/after sending a message | FIXED | Sprint 22.1: Timestamps now use ET for consistent date queries |
+| 2.17.2 | Input/output token counts are non-zero after chatting | Check after sending a few messages | FIXED 22.1 | ET timestamp alignment + real stream usage extraction |
+| 2.17.3 | Estimated cost is reasonable | Should be cents per message, not dollars | FIXED 22.1 | Cost now uses config rates + actual token counts |
+| 2.17.4 | Call count increments correctly | Compare before/after sending a message | FIXED 22.1 | ET timestamp alignment — records now query-visible |
 | 2.17.5 | Monthly usage accumulates | Check `period=month` endpoint | PASS | Monthly usage: call_count=0 |
 
 ---
@@ -538,7 +538,7 @@ Severity: BLOCKER / HIGH / MEDIUM / LOW
 **Phases completed:** Phase 1: API Infrastructure, Phase 2: WebSocket Protocol, Phase 3: Chat + Proposal Lifecycle, Phase 4: Page Context Injection, Phase 5: AI Insight Endpoint, Phase 6: Code Inspection
 
 **Total automated checks:** 39
-**Pass:** 34 | **Fail:** 5 | **Partial:** 0
+**Pass:** 34 | **Fail:** 5 (all fixed in Sprint 22.1) | **Partial:** 0
 
 **Failures requiring fixes:**
 1. ~~2.17.4: call_count did not increase: 0 -> 0~~ — **FIXED in Sprint 22.1**
@@ -554,7 +554,7 @@ Severity: BLOCKER / HIGH / MEDIUM / LOW
 4. Approve→Executed simulation: setTimeout(1500ms) found in ChatMessage.tsx — execution status is simulated, not real (DEFERRED: requires WS push architecture)
 5. ~~WS token estimation: Uses content length / 4 for token estimation~~ — **FIXED in Sprint 22.1**: Now extracts actual usage from stream events
 6. ~~Conversation date keying: Uses date.today() (server local time)~~ — **FIXED in Sprint 22.1**: Now uses ET timezone consistently
-7. Keyboard shortcut ⌘+K: NOT wired (DEFERRED: not in Sprint 22 scope)
+7. Keyboard shortcut ⌘+K: FALSE POSITIVE — implementation uses `e.key === 'k' && (e.metaKey || e.ctrlKey)` in AppShell.tsx:70,78; grep for literal "Meta+k"/"Cmd+K" missed it. Feature is fully wired.
 
 ### Sprint 22.1 Fix Summary (2026-03-07)
 
