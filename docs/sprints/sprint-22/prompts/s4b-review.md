@@ -8,7 +8,78 @@ Sprint-Level Regression Checklist, and Sprint-Level Escalation Criteria:
 
 ## Tier 1 Close-Out Report
 
-[PASTE SESSION 4B CLOSE-OUT REPORT HERE]
+---BEGIN-CLOSE-OUT---
+
+**Session:** Sprint 22.4b — Copilot Integration
+**Date:** 2026-03-06
+**Self-Assessment:** CLEAN
+
+### Change Manifest
+| File | Change Type | Rationale |
+|------|-------------|-----------|
+| `argus/ui/src/hooks/useCopilotContext.ts` | added | Page-aware context hook for Copilot |
+| `argus/ui/src/features/copilot/ConversationHistory.tsx` | added | Conversation history dropdown with pagination |
+| `argus/ui/src/hooks/__tests__/useCopilotContext.test.tsx` | added | Tests for context hook |
+| `argus/ui/src/features/copilot/__tests__/ConversationHistory.test.tsx` | added | Tests for conversation history |
+| `argus/ui/src/stores/copilotUI.ts` | modified | Added context provider registration, reconnection state |
+| `argus/ui/src/features/copilot/CopilotPanel.tsx` | modified | Page name in header, ReconnectingBanner, ConversationHistory |
+| `argus/ui/src/features/copilot/ChatInput.tsx` | modified | Changed to getPageContext function prop |
+| `argus/ui/src/features/copilot/api.ts` | modified | Enhanced reconnection with REST re-fetch |
+| `argus/ui/src/features/copilot/index.ts` | modified | Export ConversationHistory |
+| `argus/ui/src/layouts/AppShell.tsx` | modified | Added Cmd/Ctrl+K keyboard shortcut |
+| `argus/ui/src/pages/DashboardPage.tsx` | modified | Added useCopilotContext hook |
+| `argus/ui/src/pages/TradesPage.tsx` | modified | Added useCopilotContext hook |
+| `argus/ui/src/pages/PerformancePage.tsx` | modified | Added useCopilotContext hook |
+| `argus/ui/src/pages/OrchestratorPage.tsx` | modified | Added useCopilotContext hook |
+| `argus/ui/src/pages/PatternLibraryPage.tsx` | modified | Added useCopilotContext hook |
+| `argus/ui/src/pages/DebriefPage.tsx` | modified | Added useCopilotContext hook |
+| `argus/ui/src/pages/SystemPage.tsx` | modified | Added useCopilotContext hook |
+| `argus/ui/src/stores/__tests__/copilotUI.test.ts` | modified | Added context provider and reconnection tests |
+| `argus/ui/src/features/copilot/__tests__/ChatInput.test.tsx` | modified | Updated for new getPageContext prop |
+| `argus/ui/src/features/copilot/CopilotPanel.test.tsx` | modified | Updated for new header format |
+| `tests/ai/test_config.py` | modified | Fixed model version mismatch (20251101 vs 20250514) |
+
+### Judgment Calls
+- Used `Record<string, unknown>` instead of `any` per project TypeScript rules (CLAUDE.md)
+- Made context evaluation lazy via useRef pattern to prevent re-registration on every render
+- Changed ChatInput to use `getPageContext` function prop instead of separate page/context props to ensure lazy evaluation at send time
+
+### Scope Verification
+| Spec Requirement | Status | Implementation |
+|-----------------|--------|----------------|
+| Create useCopilotContext hook | DONE | `hooks/useCopilotContext.ts` |
+| Add context hooks to all 7 pages | DONE | Import + hook call in each page component |
+| Update CopilotPanel to display page context | DONE | `CopilotPanel.tsx:391` — "ARGUS Copilot • {pageName}" |
+| Keyboard shortcut Cmd/Ctrl+K | DONE | `AppShell.tsx:64-105` |
+| Conversation history with pagination | DONE | `ConversationHistory.tsx` with CONVERSATIONS_PER_PAGE=20 |
+| WebSocket reconnection with REST re-fetch | DONE | `api.ts:scheduleReconnect()` + `syncConversationFromRest()` |
+| Error/degraded state handling | DONE | ErrorBanner, ReconnectingBanner, ConnectionStatus components |
+| ≥6 new tests | DONE | 19 new tests (6 hook + 6 history + 7 store) |
+
+### Regression Checks
+| Check | Result | Notes |
+|-------|--------|-------|
+| All 7 pages render | PASS | All pages have useCopilotContext hook |
+| Existing shortcuts work | PASS | DEC-199 shortcuts preserved, Cmd/Ctrl+K added |
+| Page component diffs minimal | PASS | 2 lines per page (import + hook call) |
+| Panel animation preserved | PASS | AnimatePresence unchanged |
+| All existing tests pass | PASS | 339 frontend, 1966 backend |
+
+### Test Results
+- Tests run: 2305 (339 frontend + 1966 backend)
+- Tests passed: 2305
+- Tests failed: 0
+- New tests added: 19
+- Command used: `cd argus/ui && npx vitest run` and `python -m pytest tests/ -x -q`
+
+### Unfinished Work
+None
+
+### Notes for Reviewer
+- The model version in `tests/ai/test_config.py` was updated from `20250514` to `20251101` to match the actual config value. This was a pre-existing test inconsistency.
+- ChatInput test file was updated to match the new `getPageContext` prop interface.
+
+---END-CLOSE-OUT---
 
 ## Review Scope
 - Diff: `git diff HEAD~1 -- argus/ui/src/hooks/ argus/ui/src/pages/ argus/ui/src/features/copilot/`
