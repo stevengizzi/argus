@@ -71,15 +71,37 @@ def create_app(app_state: AppState) -> FastAPI:
             # Only initialize if not already set (e.g., by main.py)
             if app_state.ai_client is None:
                 try:
+                    from argus.ai.actions import ActionManager
                     from argus.ai.client import ClaudeClient
                     from argus.ai.context import SystemContextBuilder
+                    from argus.ai.conversations import ConversationManager
                     from argus.ai.prompts import PromptManager
+                    from argus.ai.usage import UsageTracker
 
                     app_state.ai_client = ClaudeClient(app_state.config.ai)
                     app_state.prompt_manager = PromptManager(app_state.config.ai)
                     app_state.context_builder = SystemContextBuilder()
+
+                    # Initialize conversation manager, usage tracker, and action manager
+                    # These require the database manager from trade_logger
+                    db = app_state.trade_logger._db
+                    app_state.conversation_manager = ConversationManager(db)
+                    await app_state.conversation_manager.initialize()
+
+                    app_state.usage_tracker = UsageTracker(db)
+                    await app_state.usage_tracker.initialize()
+
+                    app_state.action_manager = ActionManager(
+                        db, app_state.event_bus, app_state.config.ai
+                    )
+                    await app_state.action_manager.initialize()
+                    app_state.action_manager.start_cleanup_task()
+
                     ai_initialized_here = True
-                    logger.info("AI services initialized (ClaudeClient, PromptManager, SystemContextBuilder)")
+                    logger.info(
+                        "AI services initialized (ClaudeClient, PromptManager, "
+                        "SystemContextBuilder, ConversationManager, UsageTracker, ActionManager)"
+                    )
                 except Exception as e:
                     logger.error(f"Failed to initialize AI services: {e}")
         elif app_state.config and app_state.config.ai and not app_state.config.ai.enabled:
@@ -99,9 +121,14 @@ def create_app(app_state: AppState) -> FastAPI:
 
         # Cleanup AI services if we initialized them here
         if ai_initialized_here:
+            if app_state.action_manager is not None:
+                app_state.action_manager.stop_cleanup_task()
             app_state.ai_client = None
             app_state.prompt_manager = None
             app_state.context_builder = None
+            app_state.conversation_manager = None
+            app_state.usage_tracker = None
+            app_state.action_manager = None
             logger.info("AI services cleaned up")
 
     app = FastAPI(

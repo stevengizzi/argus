@@ -34,7 +34,7 @@ class AIConfig(BaseModel):
 
     enabled: bool = False
     api_key: str = ""
-    model: str = "claude-opus-4-5-20250514"
+    model: str = "claude-opus-4-5-20251101"
     max_response_tokens: int = Field(default=4096, ge=1)
     system_prompt_token_budget: int = Field(default=1500, ge=100)
     page_context_token_budget: int = Field(default=2000, ge=100)

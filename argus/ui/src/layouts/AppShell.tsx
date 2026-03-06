@@ -69,6 +69,12 @@ export function AppShell({ paperMode = true }: AppShellProps) {
         return;
       }
 
+      // Ignore single-key shortcuts if any modifier is held
+      const hasModifier = e.metaKey || e.ctrlKey || e.altKey || e.shiftKey;
+      if (hasModifier) {
+        return;
+      }
+
       // Numeric shortcuts for navigation
       const keyNum = parseInt(e.key, 10);
       if (keyNum >= 1 && keyNum <= NAV_ROUTES.length) {

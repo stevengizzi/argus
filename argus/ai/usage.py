@@ -39,7 +39,7 @@ class UsageTracker:
             conversation_id="01ABC...",
             input_tokens=500,
             output_tokens=200,
-            model="claude-opus-4-5-20250514",
+            model="claude-opus-4-5-20251101",
             estimated_cost_usd=0.025,
         )
 
