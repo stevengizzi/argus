@@ -518,3 +518,68 @@ export async function checkAIStatus(): Promise<boolean> {
     return false;
   }
 }
+
+// --- Action Proposal API Types and Methods ---
+
+export interface ActionProposalResponse {
+  id: string;
+  conversation_id: string;
+  message_id: string | null;
+  tool_name: string;
+  tool_use_id: string;
+  tool_input: Record<string, unknown>;
+  status: string;
+  result: Record<string, unknown> | null;
+  failure_reason: string | null;
+  created_at: string;
+  expires_at: string;
+  resolved_at: string | null;
+}
+
+export interface ApproveRejectResponse {
+  proposal: ActionProposalResponse;
+  status: string;
+}
+
+export interface PendingProposalsResponse {
+  proposals: ActionProposalResponse[];
+  count: number;
+}
+
+/**
+ * Approve a pending action proposal.
+ *
+ * Returns the updated proposal. Throws on 404 (not found), 409 (already resolved),
+ * or 410 (expired).
+ */
+export async function approveProposal(proposalId: string): Promise<ApproveRejectResponse> {
+  return fetchWithAuth<ApproveRejectResponse>(`/ai/actions/${proposalId}/approve`, {
+    method: 'POST',
+  });
+}
+
+/**
+ * Reject a pending action proposal.
+ *
+ * @param proposalId - The proposal ID to reject.
+ * @param reason - Optional reason for rejection.
+ */
+export async function rejectProposal(
+  proposalId: string,
+  reason?: string
+): Promise<ApproveRejectResponse> {
+  return fetchWithAuth<ApproveRejectResponse>(`/ai/actions/${proposalId}/reject`, {
+    method: 'POST',
+    body: JSON.stringify({ reason: reason || '' }),
+  });
+}
+
+/**
+ * Fetch all pending proposals, optionally filtered by conversation.
+ */
+export async function fetchPendingProposals(
+  conversationId?: string
+): Promise<PendingProposalsResponse> {
+  const params = conversationId ? `?conversation_id=${conversationId}` : '';
+  return fetchWithAuth<PendingProposalsResponse>(`/ai/actions/pending${params}`);
+}

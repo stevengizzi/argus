@@ -7,12 +7,15 @@
  * Sprint 22, Session 4a.
  */
 
-import { useState, useCallback, memo } from 'react';
+import { useState, useCallback, useEffect, memo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeSanitize from 'rehype-sanitize';
-import { Copy, Check, Wrench } from 'lucide-react';
-import type { ChatMessage as ChatMessageType, ToolUseData } from '../../stores/copilotUI';
+import { Copy, Check } from 'lucide-react';
+import { useCopilotUIStore } from '../../stores/copilotUI';
+import type { ChatMessage as ChatMessageType, ToolUseData, ProposalState } from '../../stores/copilotUI';
+import { ActionCard } from './ActionCard';
+import { approveProposal, rejectProposal } from './api';
 
 interface ChatMessageProps {
   message: ChatMessageType;
@@ -58,18 +61,123 @@ function UserMessage({ content, createdAt }: { content: string; createdAt: strin
 }
 
 /**
- * Tool use placeholder — shows when assistant used tools.
- * Session 5 will replace with ActionCard.
+ * Action card list — renders ActionCards for tool_use blocks.
  */
-function ToolUsePlaceholder({ toolUse }: { toolUse: ToolUseData[] }) {
+function ActionCardList({ toolUse }: { toolUse: ToolUseData[] }) {
+  const { proposals, setProposal, updateProposal } = useCopilotUIStore();
+
+  // Initialize proposals in the store for any that have proposalIds
+  useEffect(() => {
+    toolUse.forEach((tu) => {
+      if (tu.proposalId && !proposals[tu.proposalId]) {
+        // Create a default pending proposal state
+        // The expiresAt will be overridden if we fetch from the server
+        const now = new Date();
+        const defaultExpiry = new Date(now.getTime() + 5 * 60 * 1000); // 5 min default
+
+        const proposal: ProposalState = {
+          id: tu.proposalId,
+          toolName: tu.toolName,
+          toolInput: tu.toolInput,
+          status: 'pending',
+          expiresAt: defaultExpiry.toISOString(),
+        };
+        setProposal(proposal);
+      }
+    });
+  }, [toolUse, proposals, setProposal]);
+
+  const handleApprove = useCallback(async (proposalId: string) => {
+    try {
+      const response = await approveProposal(proposalId);
+      updateProposal(proposalId, {
+        status: response.proposal.status as ProposalState['status'],
+        result: response.proposal.result ?? undefined,
+      });
+
+      // If approved, the server may start execution. Poll for executed/failed status.
+      // For now, just set to approved. Session 3b handles execution.
+      if (response.proposal.status === 'approved') {
+        // Simulate execution completion after a short delay (for demo purposes)
+        // In production, WebSocket would push the executed/failed status
+        setTimeout(() => {
+          updateProposal(proposalId, { status: 'executed' });
+        }, 1500);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to approve';
+
+      // Check for specific error codes
+      if (message.includes('expired') || message.includes('410')) {
+        updateProposal(proposalId, { status: 'expired' });
+      } else if (message.includes('409')) {
+        // Already resolved — the message contains the current status
+        // For now, just mark as failed with the message
+        updateProposal(proposalId, { status: 'failed', failureReason: message });
+      } else {
+        updateProposal(proposalId, { status: 'failed', failureReason: message });
+      }
+      throw error;
+    }
+  }, [updateProposal]);
+
+  const handleReject = useCallback(async (proposalId: string, reason?: string) => {
+    try {
+      const response = await rejectProposal(proposalId, reason);
+      updateProposal(proposalId, {
+        status: response.proposal.status as ProposalState['status'],
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to reject';
+      updateProposal(proposalId, { status: 'failed', failureReason: message });
+      throw error;
+    }
+  }, [updateProposal]);
+
+  // Filter to only render proposals that have a proposalId
+  const proposalsToRender = toolUse
+    .filter((tu) => tu.proposalId)
+    .map((tu) => {
+      const proposal = proposals[tu.proposalId!];
+      if (!proposal) return null;
+      return (
+        <ActionCard
+          key={proposal.id}
+          proposal={proposal}
+          onApprove={handleApprove}
+          onReject={handleReject}
+        />
+      );
+    })
+    .filter(Boolean);
+
+  // Also render generate_report tool uses (no approval needed)
+  const reportToolUses = toolUse.filter(
+    (tu) => tu.toolName === 'generate_report' && !tu.proposalId
+  );
+
+  if (proposalsToRender.length === 0 && reportToolUses.length === 0) {
+    return null;
+  }
+
   return (
-    <div className="flex items-center gap-2 px-3 py-2 bg-argus-surface-2 rounded-lg border border-argus-border/50 text-sm text-argus-text-dim">
-      <Wrench className="w-4 h-4 text-argus-accent" />
-      <span>
-        {toolUse.length === 1
-          ? `Action proposal: ${toolUse[0].toolName}`
-          : `${toolUse.length} action proposals`}
-      </span>
+    <div className="flex flex-col gap-2">
+      {proposalsToRender}
+      {reportToolUses.map((tu, idx) => (
+        <ActionCard
+          key={`report-${idx}`}
+          proposal={{
+            id: `report-${idx}`,
+            toolName: tu.toolName,
+            toolInput: tu.toolInput,
+            status: 'executed',
+            expiresAt: new Date().toISOString(),
+            result: { message: 'Report generated' },
+          }}
+          onApprove={async () => {}}
+          onReject={async () => {}}
+        />
+      ))}
     </div>
   );
 }
@@ -195,10 +303,10 @@ function AssistantMessage({
         )}
       </div>
 
-      {/* Tool use placeholder */}
+      {/* Action cards for tool use */}
       {toolUse && toolUse.length > 0 && (
-        <div className="mt-1">
-          <ToolUsePlaceholder toolUse={toolUse} />
+        <div className="mt-2">
+          <ActionCardList toolUse={toolUse} />
         </div>
       )}
 

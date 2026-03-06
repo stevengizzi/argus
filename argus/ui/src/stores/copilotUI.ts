@@ -19,6 +19,18 @@ export interface ToolUseData {
   proposalId: string | null;
 }
 
+// Proposal state for action cards
+export interface ProposalState {
+  id: string;
+  toolName: string;
+  toolInput: Record<string, unknown>;
+  status: 'pending' | 'approved' | 'executed' | 'rejected' | 'expired' | 'failed';
+  expiresAt: string;
+  result?: Record<string, unknown>;
+  failureReason?: string;
+  expiryWarningPlayed?: boolean;
+}
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
@@ -53,6 +65,10 @@ interface CopilotUIState {
   isReconnecting: boolean;
   reconnectAttempt: number;
 
+  // Proposal state for action cards
+  proposals: Record<string, ProposalState>;
+  notificationsEnabled: boolean;
+
   // Panel actions
   toggle: () => void;
   open: () => void;
@@ -79,6 +95,12 @@ interface CopilotUIState {
   // Reconnection actions
   setIsReconnecting: (reconnecting: boolean) => void;
   setReconnectAttempt: (attempt: number) => void;
+
+  // Proposal actions
+  setProposal: (proposal: ProposalState) => void;
+  updateProposal: (id: string, update: Partial<ProposalState>) => void;
+  removeProposal: (id: string) => void;
+  setNotificationsEnabled: (enabled: boolean) => void;
 
   // Streaming completion — transitions streaming to final message
   finalizeStreamingMessage: (messageId: string, fullContent: string, toolUse?: ToolUseData[]) => void;
@@ -108,6 +130,10 @@ export const useCopilotUIStore = create<CopilotUIState>((set, get) => ({
   // Reconnection state
   isReconnecting: false,
   reconnectAttempt: 0,
+
+  // Proposal state
+  proposals: {},
+  notificationsEnabled: true,
 
   // Panel actions
   toggle: () => set((state) => ({ isOpen: !state.isOpen })),
@@ -150,6 +176,23 @@ export const useCopilotUIStore = create<CopilotUIState>((set, get) => ({
   // Reconnection actions
   setIsReconnecting: (isReconnecting) => set({ isReconnecting }),
   setReconnectAttempt: (reconnectAttempt) => set({ reconnectAttempt }),
+
+  // Proposal actions
+  setProposal: (proposal) => set((state) => ({
+    proposals: { ...state.proposals, [proposal.id]: proposal }
+  })),
+  updateProposal: (id, update) => set((state) => {
+    const existing = state.proposals[id];
+    if (!existing) return {};
+    return {
+      proposals: { ...state.proposals, [id]: { ...existing, ...update } }
+    };
+  }),
+  removeProposal: (id) => set((state) => {
+    const { [id]: _, ...rest } = state.proposals;
+    return { proposals: rest };
+  }),
+  setNotificationsEnabled: (notificationsEnabled) => set({ notificationsEnabled }),
 
   // Streaming completion
   finalizeStreamingMessage: (messageId, fullContent, toolUse) => set((state) => {

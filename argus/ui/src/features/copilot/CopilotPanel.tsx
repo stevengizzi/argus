@@ -11,7 +11,7 @@
 import { useEffect, useCallback, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Bot, AlertCircle, WifiOff, RefreshCw } from 'lucide-react';
+import { X, Bot, AlertCircle, WifiOff, RefreshCw, Volume2, VolumeX } from 'lucide-react';
 import { useCopilotUIStore } from '../../stores/copilotUI';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { ChatMessage } from './ChatMessage';
@@ -271,6 +271,8 @@ export function CopilotPanel() {
   const { isOpen, close, getPageContext } = useCopilotUIStore();
   const aiEnabled = useCopilotUIStore((state) => state.aiEnabled);
   const currentPage = useCopilotUIStore((state) => state.currentPage);
+  const notificationsEnabled = useCopilotUIStore((state) => state.notificationsEnabled);
+  const setNotificationsEnabled = useCopilotUIStore((state) => state.setNotificationsEnabled);
   const location = useLocation();
   const isDesktop = useMediaQuery('(min-width: 1024px)');
   const initializedRef = useRef(false);
@@ -394,13 +396,30 @@ export function CopilotPanel() {
                   </div>
                 </div>
               </div>
-              <button
-                onClick={close}
-                className="p-2 rounded-md hover:bg-argus-surface-2 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
-                aria-label="Close copilot"
-              >
-                <X className="w-5 h-5 text-argus-text-dim" />
-              </button>
+              <div className="flex items-center gap-1">
+                {/* Notification toggle */}
+                <button
+                  onClick={() => setNotificationsEnabled(!notificationsEnabled)}
+                  className="p-2 rounded-md hover:bg-argus-surface-2 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
+                  aria-label={notificationsEnabled ? 'Mute notifications' : 'Enable notifications'}
+                  title={notificationsEnabled ? 'Mute notifications' : 'Enable notifications'}
+                >
+                  {notificationsEnabled ? (
+                    <Volume2 className="w-4 h-4 text-argus-text-dim" />
+                  ) : (
+                    <VolumeX className="w-4 h-4 text-argus-text-dim" />
+                  )}
+                </button>
+
+                {/* Close button */}
+                <button
+                  onClick={close}
+                  className="p-2 rounded-md hover:bg-argus-surface-2 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
+                  aria-label="Close copilot"
+                >
+                  <X className="w-5 h-5 text-argus-text-dim" />
+                </button>
+              </div>
             </div>
 
             {/* Error and reconnecting banners */}

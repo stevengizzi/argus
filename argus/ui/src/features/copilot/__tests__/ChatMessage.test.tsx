@@ -1,7 +1,7 @@
 /**
  * Tests for ChatMessage component.
  *
- * Sprint 22, Session 4a.
+ * Sprint 22, Session 4a. Updated Session 5 for ActionCard integration.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -14,6 +14,37 @@ const mockClipboard = {
   writeText: vi.fn().mockResolvedValue(undefined),
 };
 Object.assign(navigator, { clipboard: mockClipboard });
+
+// Mock the copilot store
+const mockProposals: Record<string, unknown> = {};
+vi.mock('../../../stores/copilotUI', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../stores/copilotUI')>();
+  return {
+    ...actual,
+    useCopilotUIStore: vi.fn((selector) => {
+      const state = {
+        proposals: mockProposals,
+        notificationsEnabled: false,
+        setProposal: vi.fn((p: { id: string }) => { mockProposals[p.id] = p; }),
+        updateProposal: vi.fn(),
+      };
+      return typeof selector === 'function' ? selector(state) : state;
+    }),
+  };
+});
+
+// Mock the notifications utility
+vi.mock('../../../utils/notifications', () => ({
+  playProposalNotification: vi.fn(),
+  playExpiryWarning: vi.fn(),
+  initializeAudioContext: vi.fn(),
+}));
+
+// Mock the API
+vi.mock('../api', () => ({
+  approveProposal: vi.fn().mockResolvedValue({ proposal: { status: 'approved' } }),
+  rejectProposal: vi.fn().mockResolvedValue({ proposal: { status: 'rejected' } }),
+}));
 
 describe('ChatMessage', () => {
   beforeEach(() => {
@@ -98,16 +129,26 @@ describe('ChatMessage', () => {
     expect(mockClipboard.writeText).toHaveBeenCalledWith('Copy me!');
   });
 
-  it('renders tool_use placeholder when toolUse data present', () => {
+  it('renders ActionCard when toolUse data present with proposalId', () => {
+    // Pre-populate the mock proposals store
+    const proposalId = 'prop-123';
+    mockProposals[proposalId] = {
+      id: proposalId,
+      toolName: 'propose_allocation_change',
+      toolInput: { strategy_id: 'orb', new_allocation_pct: 25, reason: 'Testing' },
+      status: 'pending',
+      expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+    };
+
     const message: ChatMessageType = {
       id: '5',
       role: 'assistant',
       content: 'I will help you with that.',
       toolUse: [
         {
-          toolName: 'adjust_allocation',
-          toolInput: { strategy_id: 'orb', new_allocation: 0.25 },
-          proposalId: 'prop-123',
+          toolName: 'propose_allocation_change',
+          toolInput: { strategy_id: 'orb', new_allocation_pct: 25, reason: 'Testing' },
+          proposalId: proposalId,
         },
       ],
       isComplete: true,
@@ -116,8 +157,11 @@ describe('ChatMessage', () => {
 
     render(<ChatMessage message={message} />);
 
-    // Tool use placeholder should be rendered
-    expect(screen.getByText(/Action proposal: adjust_allocation/)).toBeInTheDocument();
+    // ActionCard should be rendered with Allocation Change label
+    expect(screen.getByText('Allocation Change')).toBeInTheDocument();
+
+    // Clean up
+    delete mockProposals[proposalId];
   });
 
   it('displays relative timestamp', () => {
