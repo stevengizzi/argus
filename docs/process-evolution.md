@@ -79,6 +79,20 @@ Live integration introduced a new workflow dimension: real market sessions along
 
 ---
 
+## Phase F — Sprint Package Refinements (Sprint 22, March 2026)
+
+Sprint 22 (AI Layer MVP) was the first sprint fully planned under the metarepo workflow. Three process failures during planning and implementation exposed gaps in the protocols.
+
+**Problem 1: Adversarial review invalidated prompts that were already generated.** The Sprint 22 planning conversation generated all 18 prompts (9 implementation + 9 review) before the adversarial review ran. The adversarial review then found 5 critical issues — SSE replaced by WebSocket, JSON-in-text parsing replaced by tool_use, action types unspecified, system prompt undefined, cost tracking absent. Every prompt had to be regenerated. **Fix:** `sprint-planning.md` now splits artifact generation into two phases. Phase C generates spec-level artifacts (spec, spec-by-contradiction, session breakdown, checklists). Phase C-1 is an explicit adversarial review gate. Phase D generates prompts only after specs are finalized. Prompts are never generated twice.
+
+**Problem 2: Review prompts were 26KB each with 24KB of duplicated content.** Each review prompt embedded the full Sprint Spec, Spec-by-Contradiction, regression checklist, and escalation criteria — identical across all 9 files. This created a maintenance hazard (fixing a spec error meant updating 6+ remaining files) and was wasteful. **Fix:** `review-prompt.md` now uses a reference-based structure. A single Review Context File contains all shared content. Each session review prompt is a small file (~1.5KB) pointing Claude Code to the context file, with only the session-specific scope, focus items, and close-out placeholder.
+
+**Problem 3: Compaction risk assessment was qualitative and under-calibrated.** Sessions 3a (rated "Medium-Low") and 3b (rated "Medium") both compacted. Session 3b compacted before reaching 50% of its requirements. The qualitative "Low / Medium / High" rating based on "files created, files modified, integration surface area" missed the dominant factors: pre-flight context reads and test count. **Fix (DEC-275):** Replaced with a point-based scoring system covering 7 factors. Thresholds: ≤13 proceed, 14+ must split. Retrospective scoring confirmed: Session 3a scored 15 (would have been caught), Session 3b scored 23 (would have been caught and split into 3). Close-out reports now log compaction events with planning score and failure point for ongoing threshold calibration.
+
+**Additional refinement: Visual review in prompts.** Frontend sessions (4a–6) had visual verification items buried in code-level regression checklists with no separation. Added explicit `## Visual Review` sections to both `implementation-prompt.md` and `review-prompt.md` templates. Backend-only sessions omit the section entirely. Frontend sessions list exactly what to check in a browser, what "correct" looks like, and what app state is needed for verification.
+
+---
+
 ## Recurring Friction Points
 
 ### VectorBT Performance and Divergence (Sprints 8, 19, 20)

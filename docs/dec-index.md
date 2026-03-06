@@ -1,6 +1,6 @@
 # ARGUS — Decision Index
 
-> 262 decisions (DEC-001 through DEC-262)
+> 264 decisions (DEC-001 through DEC-263, DEC-275)
 > Generated: March 6, 2026 | Source: `docs/decision-log.md`
 > Legend: ● Active | ○ Superseded | △ Amended | ✗ Duplicate entry
 
@@ -283,3 +283,5 @@
 - ● **DEC-261**: ORB Family Same-Symbol Mutual Exclusion — ClassVar prevents dual-fire
 - ● **DEC-262**: Roadmap Consolidation — Unified Strategic Direction
 - ● **DEC-263**: Full-Universe Strategy-Specific Monitoring Architecture
+> [add DEC-264 - DEC-274 here]
+- ● **DEC-275**: Compaction Risk Scoring System — quantitative point-based session sizing

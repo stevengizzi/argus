@@ -168,7 +168,7 @@ Per-trade risk: 0.5–1% of strategy allocation. Daily loss limit: 3–5%. Weekl
 
 **Frontend:** DEC-099 (in-process API), DEC-102 (JWT auth), DEC-104/215 (chart libraries), DEC-109 (design north star), DEC-149 (VectorBT precompute+vectorize), DEC-169 (7-page architecture), DEC-170 (AI Copilot), DEC-199 (navigation + shortcuts).
 
-**Documentation:** DEC-262 (roadmap consolidation — single canonical roadmap.md).
+**Documentation:** DEC-262 (roadmap consolidation — single canonical roadmap.md), DEC-275 (compaction risk scoring system).
 
 **Superseded (do not use):** DEC-031 (IBKR deferral → DEC-083), DEC-089 (XNAS.ITCH → DEC-248), DEC-097 (activation timing → DEC-143/161), DEC-165 (L2 included → DEC-237), DEC-234 (XNAS+XNYS phased → DEC-248).
 
@@ -181,6 +181,8 @@ Per-trade risk: 0.5–1% of strategy allocation. Daily loss limit: 3–5%. Weekl
 **Sprint methodology:** Sprint spec → session prompts → Claude Code implementation → code review → polish → doc sync. By Sprint 18+, evolved into comprehensive "sprint packages" (spec + prompts + review plans + doc updates in one conversation).
 
 **Review workflow:** Three-tier system — close-out review, Tier 2 implementation review, Tier 3 architectural review in Claude.ai. See `.claude/rules/` for protocols.
+
+**Compaction risk scoring (DEC-275):** Sessions are scored across 7 factors (files created, files modified, context reads, tests, integration wiring, external API debugging, large files) with point thresholds: 0–8 Low, 9–13 Medium, 14–17 High (must split), 18+ Critical (split into 3+). Calibrated against Sprint 22 empirical compaction data. Session Breakdown artifact includes full scoring table per session.
 
 ---
 

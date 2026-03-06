@@ -2926,5 +2926,23 @@ Each entry follows this format:
 
 ---
 
+> [add DEC-264 - DEC-274 here]
+
+---
+
+### DEC-275 | Compaction Risk Scoring System
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-06 |
+| **Sprint** | Sprint 22 (mid-sprint process improvement) |
+| **Decision** | Replace the qualitative compaction risk assessment ("Low / Medium / High based on files created, files modified, integration surface area") with a quantitative point-based scoring system. Each session is scored across 7 factors: new files created (+2 each), files modified (+1 each), pre-flight context reads (+1 each), new tests (+0.5 each), complex integration wiring (+3), external API debugging (+3), and large files exceeding ~150 lines (+2 each). Thresholds: 0–8 Low (proceed), 9–13 Medium (proceed with caution), 14–17 High (must split), 18+ Critical (split into 3+). Each sub-session must independently score ≤13. Session Breakdown artifact must include the full scoring table per session. Compaction events logged in close-out reports with planning score and failure point for threshold calibration. |
+| **Alternatives Considered** | 1. Keep qualitative ratings with stricter reviewer judgment — rejected because Sprint 22 proved the qualitative system consistently under-rates risk; "Medium-Low" and "Medium" sessions both compacted. 2. Fixed heuristic (e.g., "max 2 files created per session") — rejected because file count alone is insufficient; a session creating 1 large file with 10 context reads and 15 tests is higher risk than one creating 3 small files with 2 context reads and 4 tests. |
+| **Rationale** | Sprint 22 Sessions 3a and 3b both compacted despite being rated Medium-Low and Medium respectively. Retrospective analysis: Session 3a scored ~15 (1 large file, 2 mods, 6 context reads, 8 tests, integration wiring). Session 3b scored ~23 (3 files, 1 large, 2 mods, 10 context reads, 15 tests, integration wiring) — it compacted before reaching 50% of requirements. The qualitative assessment missed two critical factors: (a) pre-flight context reads consume significant context window before implementation begins, and (b) test count is a major token consumer that scales with scope. The point system captures all token-consuming factors with weights calibrated against Sprint 22 empirical data. |
+| **Cross-References** | DEC-264 (Sprint 22 scope), DEC-079 (parallel tracks — session design). Protocol updates: `sprint-planning.md`, `implementation-prompt.md`, `review-prompt.md` in Claude.ai project. |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
-*Next DEC: 264*
+*Next DEC: 276*
