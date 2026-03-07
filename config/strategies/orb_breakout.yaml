@@ -50,3 +50,10 @@ backtest_summary:
   total_trades: 137
   data_months: 35
   last_run: "2026-02-17"
+
+# Universe filter for strategy-specific symbol filtering (Sprint 23)
+# Values extracted from get_scanner_criteria() in orb_base.py
+universe_filter:
+  min_price: 10.0        # Avoid penny stocks with erratic behavior
+  max_price: 200.0       # Focus on liquid mid-range stocks
+  min_avg_volume: 1000000  # Momentum stocks need liquidity for clean breakouts

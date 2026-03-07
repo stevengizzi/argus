@@ -15,6 +15,7 @@ from argus.core.config import (
     DataServiceConfig,
     IBKRConfig,
     OrbBreakoutConfig,
+    OrbScalpConfig,
     OrchestratorConfig,
     ScannerConfig,
     StrategyConfig,
@@ -23,6 +24,7 @@ from argus.core.config import (
     UniverseManagerConfig,
     load_config,
     load_orb_config,
+    load_orb_scalp_config,
     load_scanner_config,
     load_strategy_config,
     load_yaml_file,
@@ -746,3 +748,73 @@ universe_manager:
         model_fields = set(UniverseManagerConfig.model_fields.keys())
         unrecognized = yaml_keys - model_fields
         assert unrecognized == set(), f"Unrecognized keys in YAML: {unrecognized}"
+
+
+class TestOrbFamilyUniverseFilter:
+    """Tests for ORB family universe_filter declarations (Sprint 23, Session 2b)."""
+
+    def test_orb_breakout_config_loads_with_filter(self) -> None:
+        """ORB Breakout config loads with universe_filter populated."""
+        config = load_orb_config(Path("config/strategies/orb_breakout.yaml"))
+        assert config.strategy_id == "strat_orb_breakout"
+        assert config.universe_filter is not None
+        assert isinstance(config.universe_filter, UniverseFilterConfig)
+
+    def test_orb_scalp_config_loads_with_filter(self) -> None:
+        """ORB Scalp config loads with universe_filter populated."""
+        config = load_orb_scalp_config(Path("config/strategies/orb_scalp.yaml"))
+        assert config.strategy_id == "strat_orb_scalp"
+        assert config.universe_filter is not None
+        assert isinstance(config.universe_filter, UniverseFilterConfig)
+
+    def test_orb_breakout_filter_values_reasonable(self) -> None:
+        """ORB Breakout filter values are positive and reasonable."""
+        config = load_orb_config(Path("config/strategies/orb_breakout.yaml"))
+        assert config.universe_filter is not None
+        # Values extracted from get_scanner_criteria() in orb_base.py
+        assert config.universe_filter.min_price is not None
+        assert config.universe_filter.min_price > 0
+        assert config.universe_filter.max_price is not None
+        assert config.universe_filter.max_price > config.universe_filter.min_price
+        assert config.universe_filter.min_avg_volume is not None
+        assert config.universe_filter.min_avg_volume > 0
+
+    def test_orb_scalp_filter_values_reasonable(self) -> None:
+        """ORB Scalp filter values are positive and reasonable."""
+        config = load_orb_scalp_config(Path("config/strategies/orb_scalp.yaml"))
+        assert config.universe_filter is not None
+        # Values extracted from get_scanner_criteria() in orb_base.py
+        assert config.universe_filter.min_price is not None
+        assert config.universe_filter.min_price > 0
+        assert config.universe_filter.max_price is not None
+        assert config.universe_filter.max_price > config.universe_filter.min_price
+        assert config.universe_filter.min_avg_volume is not None
+        assert config.universe_filter.min_avg_volume > 0
+
+    def test_orb_breakout_yaml_keys_match_model(self) -> None:
+        """ORB Breakout YAML universe_filter has no unrecognized keys."""
+        yaml_path = Path("config/strategies/orb_breakout.yaml")
+        raw_yaml = yaml.safe_load(yaml_path.read_text())
+
+        # Verify universe_filter section exists
+        assert "universe_filter" in raw_yaml, "universe_filter section missing from YAML"
+
+        # Check for unrecognized keys
+        yaml_keys = set(raw_yaml["universe_filter"].keys())
+        model_fields = set(UniverseFilterConfig.model_fields.keys())
+        unrecognized = yaml_keys - model_fields
+        assert unrecognized == set(), f"Unrecognized keys in universe_filter: {unrecognized}"
+
+    def test_orb_scalp_yaml_keys_match_model(self) -> None:
+        """ORB Scalp YAML universe_filter has no unrecognized keys."""
+        yaml_path = Path("config/strategies/orb_scalp.yaml")
+        raw_yaml = yaml.safe_load(yaml_path.read_text())
+
+        # Verify universe_filter section exists
+        assert "universe_filter" in raw_yaml, "universe_filter section missing from YAML"
+
+        # Check for unrecognized keys
+        yaml_keys = set(raw_yaml["universe_filter"].keys())
+        model_fields = set(UniverseFilterConfig.model_fields.keys())
+        unrecognized = yaml_keys - model_fields
+        assert unrecognized == set(), f"Unrecognized keys in universe_filter: {unrecognized}"
