@@ -67,7 +67,7 @@ logs/
 *.db-wal
 
 # Runtime data (DB, caches, Parquet files)
-data/
+/data/
 
 # Docs
 docs/IBKR-disclosures/
