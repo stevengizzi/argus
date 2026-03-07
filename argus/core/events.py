@@ -398,3 +398,24 @@ class ApprovalDeniedEvent(Event):
 
     action_id: str = ""
     reason: str = ""
+
+
+# ---------------------------------------------------------------------------
+# Universe Events (Sprint 23)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class UniverseUpdateEvent(Event):
+    """Published when the viable trading universe is rebuilt.
+
+    Provides visibility into universe changes for logging and UI.
+    Emitted by UniverseManager after build_viable_universe() completes.
+
+    Attributes:
+        viable_count: Number of symbols in the viable universe.
+        total_fetched: Total symbols fetched before filtering.
+    """
+
+    viable_count: int = 0
+    total_fetched: int = 0

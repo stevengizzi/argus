@@ -100,6 +100,11 @@ class DatabentoDataService(DataService):
         self._symbols_list: list[str] = []
         self._timeframes_list: list[str] = []
 
+        # Viable universe for fast-path discard (Sprint 23)
+        # When set, only symbols in this set are processed
+        # When None, all symbols are processed (backward compatibility)
+        self._viable_universe: set[str] | None = None
+
         # Databento record class references (stored in start() to avoid hot-path imports)
         self._OHLCVMsg: type | None = None
         self._TradeMsg: type | None = None
@@ -355,6 +360,22 @@ class DatabentoDataService(DataService):
 
         logger.info("DatabentoDataService stopped")
 
+    def set_viable_universe(self, symbols: set[str]) -> None:
+        """Set the viable symbol universe for fast-path discard.
+
+        When set, only symbols in this set will be processed. Candles and
+        ticks for non-viable symbols are discarded before any processing
+        or IndicatorEngine creation.
+
+        When set to None (or never called), all symbols are processed
+        as before (backward compatibility).
+
+        Args:
+            symbols: Set of symbols that are viable for trading.
+        """
+        self._viable_universe = symbols
+        logger.info("Viable universe set: %d symbols", len(symbols))
+
     async def get_current_price(self, symbol: str) -> float | None:
         """Return the latest trade price from the in-memory cache.
 
@@ -510,6 +531,11 @@ class DatabentoDataService(DataService):
             )
             return
 
+        # Fast-path discard for non-viable symbols (Sprint 23)
+        # This must be the FIRST check - before any allocation or computation
+        if self._viable_universe is not None and symbol not in self._viable_universe:
+            return
+
         # Skip if we're not tracking this symbol
         # (relevant when subscribing to ALL_SYMBOLS but only trading a subset)
         if self._active_symbols and symbol not in self._active_symbols:
@@ -563,6 +589,10 @@ class DatabentoDataService(DataService):
         """
         symbol = self._resolve_symbol(msg.instrument_id)
         if symbol is None:
+            return
+
+        # Fast-path discard for non-viable symbols (Sprint 23)
+        if self._viable_universe is not None and symbol not in self._viable_universe:
             return
 
         if self._active_symbols and symbol not in self._active_symbols:
@@ -627,7 +657,10 @@ class DatabentoDataService(DataService):
         objects to publish.
         """
         # Get or create indicator engine for this symbol
+        # When viable_universe is set, only create for viable symbols (defense-in-depth)
         if symbol not in self._indicator_engines:
+            if self._viable_universe is not None and symbol not in self._viable_universe:
+                return []  # Non-viable symbol, no indicator processing
             self._indicator_engines[symbol] = IndicatorEngine(symbol)
 
         engine = self._indicator_engines[symbol]

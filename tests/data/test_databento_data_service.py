@@ -1448,3 +1448,311 @@ class TestDatabentoFetchDailyBars:
         result = await service.fetch_daily_bars("SPY", lookback_days=60)
 
         assert result is None
+
+
+class TestViableUniverse:
+    """Tests for viable universe fast-path discard (Sprint 23)."""
+
+    def test_set_viable_universe_stores_symbols(
+        self, mock_databento, event_bus, databento_config, data_config, caplog
+    ):
+        """set_viable_universe() stores the viable symbol set."""
+        import logging
+
+        from argus.data.databento_data_service import DatabentoDataService
+
+        service = DatabentoDataService(
+            event_bus=event_bus,
+            config=databento_config,
+            data_config=data_config,
+        )
+
+        # Initially None
+        assert service._viable_universe is None
+
+        # Set viable universe (capture INFO level logs)
+        viable = {"AAPL", "TSLA", "NVDA"}
+        with caplog.at_level(logging.INFO):
+            service.set_viable_universe(viable)
+
+        assert service._viable_universe == viable
+        assert "Viable universe set: 3 symbols" in caplog.text
+
+    def test_fast_path_discard_non_viable_candle(
+        self, mock_databento, event_bus, databento_config, data_config
+    ):
+        """Candle for non-viable symbol is discarded, no IndicatorEngine created."""
+        from argus.data.databento_data_service import DatabentoDataService
+
+        service = DatabentoDataService(
+            event_bus=event_bus,
+            config=databento_config,
+            data_config=data_config,
+        )
+
+        # Set up mock live client with symbology_map
+        mock_client = MockLiveClient()
+        mock_client._symbology_map = {100: "AAPL", 200: "GOOG"}
+        service._live_client = mock_client
+        service._active_symbols = {"AAPL", "GOOG"}
+
+        # Set viable universe - only AAPL is viable
+        service.set_viable_universe({"AAPL"})
+
+        # Process candle for non-viable GOOG (prices in fixed-point format)
+        msg = MockOHLCVMsg(
+            instrument_id=200,  # GOOG
+            open=150.0 * 1e9,
+            high=155.0 * 1e9,
+            low=149.0 * 1e9,
+            close=154.0 * 1e9,
+            volume=10000,
+            ts_event=int(datetime(2026, 2, 21, 10, 0, tzinfo=UTC).timestamp() * 1e9),
+        )
+
+        service._on_ohlcv(msg)
+
+        # Price cache should NOT have GOOG (fast-path discarded)
+        assert "GOOG" not in service._price_cache
+        # No IndicatorEngine created for GOOG
+        assert "GOOG" not in service._indicator_engines
+
+    def test_fast_path_pass_viable_candle(
+        self, mock_databento, event_bus, databento_config, data_config
+    ):
+        """Candle for viable symbol is processed normally."""
+        from argus.data.databento_data_service import DatabentoDataService
+
+        service = DatabentoDataService(
+            event_bus=event_bus,
+            config=databento_config,
+            data_config=data_config,
+        )
+
+        # Set up mock live client with symbology_map
+        mock_client = MockLiveClient()
+        mock_client._symbology_map = {100: "AAPL"}
+        service._live_client = mock_client
+        service._active_symbols = {"AAPL"}
+
+        # Set viable universe - AAPL is viable
+        service.set_viable_universe({"AAPL", "TSLA"})
+
+        # Process candle for viable AAPL (prices in fixed-point format)
+        msg = MockOHLCVMsg(
+            instrument_id=100,  # AAPL
+            open=150.0 * 1e9,
+            high=155.0 * 1e9,
+            low=149.0 * 1e9,
+            close=154.0 * 1e9,
+            volume=10000,
+            ts_event=int(datetime(2026, 2, 21, 10, 0, tzinfo=UTC).timestamp() * 1e9),
+        )
+
+        service._on_ohlcv(msg)
+
+        # Price cache should have AAPL
+        assert "AAPL" in service._price_cache
+        assert service._price_cache["AAPL"] == 154.0
+        # IndicatorEngine created for AAPL
+        assert "AAPL" in service._indicator_engines
+
+    def test_no_viable_set_processes_all_symbols(
+        self, mock_databento, event_bus, databento_config, data_config
+    ):
+        """When _viable_universe is None, all symbols are processed (backward compat)."""
+        from argus.data.databento_data_service import DatabentoDataService
+
+        service = DatabentoDataService(
+            event_bus=event_bus,
+            config=databento_config,
+            data_config=data_config,
+        )
+
+        # Set up mock live client with symbology_map
+        mock_client = MockLiveClient()
+        mock_client._symbology_map = {100: "AAPL", 200: "GOOG"}
+        service._live_client = mock_client
+        service._active_symbols = {"AAPL", "GOOG"}
+
+        # Do NOT set viable universe - leave as None
+        assert service._viable_universe is None
+
+        # Process candles for both symbols (prices in fixed-point format)
+        msg_aapl = MockOHLCVMsg(
+            instrument_id=100,
+            open=150.0 * 1e9,
+            high=155.0 * 1e9,
+            low=149.0 * 1e9,
+            close=154.0 * 1e9,
+            volume=10000,
+            ts_event=int(datetime(2026, 2, 21, 10, 0, tzinfo=UTC).timestamp() * 1e9),
+        )
+        msg_goog = MockOHLCVMsg(
+            instrument_id=200,
+            open=100.0 * 1e9,
+            high=105.0 * 1e9,
+            low=99.0 * 1e9,
+            close=103.0 * 1e9,
+            volume=5000,
+            ts_event=int(datetime(2026, 2, 21, 10, 1, tzinfo=UTC).timestamp() * 1e9),
+        )
+
+        service._on_ohlcv(msg_aapl)
+        service._on_ohlcv(msg_goog)
+
+        # Both symbols should be in price cache
+        assert "AAPL" in service._price_cache
+        assert "GOOG" in service._price_cache
+        # Both have IndicatorEngines
+        assert "AAPL" in service._indicator_engines
+        assert "GOOG" in service._indicator_engines
+
+    def test_indicator_engine_only_created_for_viable_symbols(
+        self, mock_databento, event_bus, databento_config, data_config
+    ):
+        """IndicatorEngine is only instantiated for viable symbols when set."""
+        from argus.data.databento_data_service import DatabentoDataService
+
+        service = DatabentoDataService(
+            event_bus=event_bus,
+            config=databento_config,
+            data_config=data_config,
+        )
+
+        # Set viable universe
+        service.set_viable_universe({"AAPL"})
+
+        # Create a candle for a non-viable symbol
+        candle = CandleEvent(
+            symbol="GOOG",
+            timestamp=datetime(2026, 2, 21, 10, 0, tzinfo=UTC),
+            open=100.0,
+            high=102.0,
+            low=99.0,
+            close=101.0,
+            volume=1000,
+            timeframe="1m",
+        )
+
+        # Call _update_indicators directly with non-viable symbol
+        events = service._update_indicators("GOOG", candle)
+
+        # Should return empty list (no processing)
+        assert events == []
+        # No IndicatorEngine created for GOOG
+        assert "GOOG" not in service._indicator_engines
+
+    def test_tick_fast_path_discard_non_viable(
+        self, mock_databento, event_bus, databento_config, data_config
+    ):
+        """Tick events for non-viable symbols are also discarded."""
+        from argus.data.databento_data_service import DatabentoDataService
+
+        service = DatabentoDataService(
+            event_bus=event_bus,
+            config=databento_config,
+            data_config=data_config,
+        )
+
+        # Set up mock live client with symbology_map
+        mock_client = MockLiveClient()
+        mock_client._symbology_map = {100: "AAPL", 200: "GOOG"}
+        service._live_client = mock_client
+        service._active_symbols = {"AAPL", "GOOG"}
+
+        # Set viable universe - only AAPL is viable
+        service.set_viable_universe({"AAPL"})
+
+        # Process tick for non-viable GOOG (price in fixed-point format)
+        msg = MockTradeMsg(
+            instrument_id=200,  # GOOG
+            price=150.0 * 1e9,
+            size=100,
+            ts_event=int(datetime(2026, 2, 21, 10, 0, tzinfo=UTC).timestamp() * 1e9),
+        )
+
+        service._on_trade(msg)
+
+        # Price cache should NOT have GOOG (fast-path discarded)
+        assert "GOOG" not in service._price_cache
+
+    def test_tick_fast_path_pass_viable(
+        self, mock_databento, event_bus, databento_config, data_config
+    ):
+        """Tick events for viable symbols are processed normally."""
+        from argus.data.databento_data_service import DatabentoDataService
+
+        service = DatabentoDataService(
+            event_bus=event_bus,
+            config=databento_config,
+            data_config=data_config,
+        )
+
+        # Set up mock live client with symbology_map
+        mock_client = MockLiveClient()
+        mock_client._symbology_map = {100: "AAPL"}
+        service._live_client = mock_client
+        service._active_symbols = {"AAPL"}
+
+        # Set viable universe
+        service.set_viable_universe({"AAPL", "TSLA"})
+
+        # Process tick for viable AAPL (price in fixed-point format)
+        msg = MockTradeMsg(
+            instrument_id=100,  # AAPL
+            price=151.25 * 1e9,
+            size=500,
+            ts_event=int(datetime(2026, 2, 21, 10, 0, tzinfo=UTC).timestamp() * 1e9),
+        )
+
+        service._on_trade(msg)
+
+        # Price cache should have AAPL
+        assert "AAPL" in service._price_cache
+        assert service._price_cache["AAPL"] == 151.25
+
+    def test_viable_universe_initialized_as_none(
+        self, mock_databento, event_bus, databento_config, data_config
+    ):
+        """_viable_universe is initialized as None in constructor."""
+        from argus.data.databento_data_service import DatabentoDataService
+
+        service = DatabentoDataService(
+            event_bus=event_bus,
+            config=databento_config,
+            data_config=data_config,
+        )
+
+        assert service._viable_universe is None
+
+
+class TestUniverseUpdateEvent:
+    """Tests for UniverseUpdateEvent (Sprint 23)."""
+
+    def test_universe_update_event_exists(self):
+        """UniverseUpdateEvent is defined in events module."""
+        from argus.core.events import UniverseUpdateEvent
+
+        # Create an instance
+        event = UniverseUpdateEvent(
+            viable_count=100,
+            total_fetched=500,
+        )
+
+        assert event.viable_count == 100
+        assert event.total_fetched == 500
+        assert event.timestamp is not None
+
+    def test_universe_update_event_is_frozen(self):
+        """UniverseUpdateEvent is immutable (frozen dataclass)."""
+        from argus.core.events import UniverseUpdateEvent
+
+        event = UniverseUpdateEvent(
+            viable_count=100,
+            total_fetched=500,
+        )
+
+        # Should raise FrozenInstanceError
+        with pytest.raises(Exception):  # FrozenInstanceError is subclass of Exception
+            event.viable_count = 200
