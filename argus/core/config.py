@@ -103,6 +103,39 @@ class GoalsConfig(BaseModel):
     monthly_target_usd: float = Field(default=5000.0, ge=0)
 
 
+class UniverseFilterConfig(BaseModel):
+    """Per-strategy universe filtering criteria (Sprint 23).
+
+    Defines the criteria a strategy uses to filter the viable universe
+    for symbols matching its requirements.
+    """
+
+    min_price: float | None = None
+    max_price: float | None = None
+    min_market_cap: float | None = None  # USD
+    max_market_cap: float | None = None  # USD
+    min_float: float | None = None  # shares
+    min_avg_volume: int | None = None
+    sectors: list[str] = Field(default_factory=list)  # empty = all sectors
+    exclude_sectors: list[str] = Field(default_factory=list)  # empty = no exclusions
+
+
+class UniverseManagerConfig(BaseModel):
+    """System-level universe manager configuration (Sprint 23).
+
+    Controls the Universe Manager which builds and maintains the
+    viable trading universe from reference data sources.
+    """
+
+    enabled: bool = False
+    min_price: float = 5.0
+    max_price: float = 10000.0
+    min_avg_volume: int = 100000
+    exclude_otc: bool = True
+    reference_cache_ttl_hours: int = 24
+    fmp_batch_size: int = 50
+
+
 class DataSource(StrEnum):
     """Data service provider selection."""
 
@@ -145,6 +178,8 @@ class SystemConfig(BaseModel):
     goals: GoalsConfig = Field(default_factory=lambda: GoalsConfig())
     # AI Layer configuration (Sprint 22)
     ai: AIConfig = Field(default_factory=lambda: AIConfig())
+    # Universe Manager configuration (Sprint 23)
+    universe_manager: UniverseManagerConfig = Field(default_factory=UniverseManagerConfig)
 
     @field_validator("timezone")
     @classmethod
@@ -473,6 +508,7 @@ class StrategyConfig(BaseModel):
     risk_limits: StrategyRiskLimits = StrategyRiskLimits()
     operating_window: OperatingWindow = OperatingWindow()
     benchmarks: PerformanceBenchmarks = PerformanceBenchmarks()
+    universe_filter: UniverseFilterConfig | None = None
 
 
 # ---------------------------------------------------------------------------

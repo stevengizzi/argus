@@ -19,6 +19,8 @@ from argus.core.config import (
     ScannerConfig,
     StrategyConfig,
     SystemConfig,
+    UniverseFilterConfig,
+    UniverseManagerConfig,
     load_config,
     load_orb_config,
     load_scanner_config,
@@ -567,3 +569,180 @@ class TestOrchestratorConfig:
             OrchestratorConfig(max_combined_correlated_allocation=0)
         with pytest.raises(ValidationError):
             OrchestratorConfig(max_combined_correlated_allocation=1.1)
+
+
+class TestUniverseFilterConfig:
+    """Tests for UniverseFilterConfig (Sprint 23)."""
+
+    def test_universe_filter_config_defaults(self) -> None:
+        """UniverseFilterConfig can be created with all defaults (all None/empty)."""
+        config = UniverseFilterConfig()
+        assert config.min_price is None
+        assert config.max_price is None
+        assert config.min_market_cap is None
+        assert config.max_market_cap is None
+        assert config.min_float is None
+        assert config.min_avg_volume is None
+        assert config.sectors == []
+        assert config.exclude_sectors == []
+
+    def test_universe_filter_config_full(self) -> None:
+        """UniverseFilterConfig validates correctly with all fields set."""
+        config = UniverseFilterConfig(
+            min_price=5.0,
+            max_price=500.0,
+            min_market_cap=1_000_000_000,  # 1B
+            max_market_cap=100_000_000_000,  # 100B
+            min_float=10_000_000,  # 10M shares
+            min_avg_volume=1_000_000,
+            sectors=["Technology", "Healthcare"],
+            exclude_sectors=["Utilities", "Real Estate"],
+        )
+        assert config.min_price == 5.0
+        assert config.max_price == 500.0
+        assert config.min_market_cap == 1_000_000_000
+        assert config.max_market_cap == 100_000_000_000
+        assert config.min_float == 10_000_000
+        assert config.min_avg_volume == 1_000_000
+        assert config.sectors == ["Technology", "Healthcare"]
+        assert config.exclude_sectors == ["Utilities", "Real Estate"]
+
+    def test_universe_filter_config_invalid_types(self) -> None:
+        """UniverseFilterConfig rejects wrong types."""
+        # String where float expected
+        with pytest.raises(ValidationError):
+            UniverseFilterConfig(min_price="invalid")  # type: ignore[arg-type]
+
+        # String where int expected
+        with pytest.raises(ValidationError):
+            UniverseFilterConfig(min_avg_volume="invalid")  # type: ignore[arg-type]
+
+        # String where list expected
+        with pytest.raises(ValidationError):
+            UniverseFilterConfig(sectors="Technology")  # type: ignore[arg-type]
+
+
+class TestUniverseManagerConfig:
+    """Tests for UniverseManagerConfig (Sprint 23)."""
+
+    def test_universe_manager_config_defaults(self) -> None:
+        """UniverseManagerConfig has correct default values."""
+        config = UniverseManagerConfig()
+        assert config.enabled is False
+        assert config.min_price == 5.0
+        assert config.max_price == 10000.0
+        assert config.min_avg_volume == 100000
+        assert config.exclude_otc is True
+        assert config.reference_cache_ttl_hours == 24
+        assert config.fmp_batch_size == 50
+
+    def test_universe_manager_config_custom_values(self) -> None:
+        """UniverseManagerConfig accepts custom values."""
+        config = UniverseManagerConfig(
+            enabled=True,
+            min_price=10.0,
+            max_price=500.0,
+            min_avg_volume=500_000,
+            exclude_otc=False,
+            reference_cache_ttl_hours=12,
+            fmp_batch_size=100,
+        )
+        assert config.enabled is True
+        assert config.min_price == 10.0
+        assert config.max_price == 500.0
+        assert config.min_avg_volume == 500_000
+        assert config.exclude_otc is False
+        assert config.reference_cache_ttl_hours == 12
+        assert config.fmp_batch_size == 100
+
+
+class TestStrategyConfigUniverseFilter:
+    """Tests for StrategyConfig integration with UniverseFilterConfig (Sprint 23)."""
+
+    def test_strategy_config_with_universe_filter(self) -> None:
+        """StrategyConfig accepts universe_filter field."""
+        universe_filter = UniverseFilterConfig(
+            min_price=10.0,
+            max_price=200.0,
+            sectors=["Technology"],
+        )
+        config = StrategyConfig(
+            strategy_id="test_strat",
+            name="Test Strategy",
+            universe_filter=universe_filter,
+        )
+        assert config.universe_filter is not None
+        assert config.universe_filter.min_price == 10.0
+        assert config.universe_filter.max_price == 200.0
+        assert config.universe_filter.sectors == ["Technology"]
+
+    def test_strategy_config_without_universe_filter(self) -> None:
+        """StrategyConfig works without universe_filter (backward compat)."""
+        config = StrategyConfig(strategy_id="test_strat", name="Test Strategy")
+        assert config.universe_filter is None
+        # Verify other fields still work
+        assert config.strategy_id == "test_strat"
+        assert config.name == "Test Strategy"
+        assert config.version == "1.0.0"
+        assert config.enabled is True
+
+
+class TestSystemConfigUniverseManager:
+    """Tests for SystemConfig integration with UniverseManagerConfig (Sprint 23)."""
+
+    def test_system_config_with_universe_manager(self) -> None:
+        """SystemConfig includes universe_manager field with defaults."""
+        config = SystemConfig()
+        assert hasattr(config, "universe_manager")
+        assert isinstance(config.universe_manager, UniverseManagerConfig)
+        # Verify defaults are applied
+        assert config.universe_manager.enabled is False
+        assert config.universe_manager.min_price == 5.0
+
+    def test_system_config_with_custom_universe_manager(self) -> None:
+        """SystemConfig accepts custom universe_manager values."""
+        config = SystemConfig(
+            universe_manager=UniverseManagerConfig(
+                enabled=True,
+                min_price=20.0,
+            )
+        )
+        assert config.universe_manager.enabled is True
+        assert config.universe_manager.min_price == 20.0
+
+    def test_config_yaml_pydantic_field_match(self, tmp_path: Path) -> None:
+        """YAML keys must match UniverseManagerConfig model_fields."""
+        # Create a fixture YAML with universe_manager section
+        # Note: system.yaml content goes directly into the file without "system:" wrapper
+        yaml_content = """
+timezone: America/New_York
+universe_manager:
+  enabled: true
+  min_price: 10.0
+  max_price: 500.0
+  min_avg_volume: 250000
+  exclude_otc: true
+  reference_cache_ttl_hours: 12
+  fmp_batch_size: 75
+"""
+        system_yaml = tmp_path / "system.yaml"
+        system_yaml.write_text(yaml_content)
+
+        # Load and validate
+        config = load_config(tmp_path)
+
+        # Verify loaded correctly
+        assert config.system.universe_manager.enabled is True
+        assert config.system.universe_manager.min_price == 10.0
+        assert config.system.universe_manager.max_price == 500.0
+        assert config.system.universe_manager.min_avg_volume == 250000
+        assert config.system.universe_manager.exclude_otc is True
+        assert config.system.universe_manager.reference_cache_ttl_hours == 12
+        assert config.system.universe_manager.fmp_batch_size == 75
+
+        # Verify no unrecognized keys: parse YAML and check against model fields
+        raw_yaml = yaml.safe_load(yaml_content)
+        yaml_keys = set(raw_yaml["universe_manager"].keys())
+        model_fields = set(UniverseManagerConfig.model_fields.keys())
+        unrecognized = yaml_keys - model_fields
+        assert unrecognized == set(), f"Unrecognized keys in YAML: {unrecognized}"
