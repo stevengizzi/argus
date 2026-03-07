@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+from argus.core.config import StrategyConfig, UniverseFilterConfig
 from argus.data.fmp_reference import FMPReferenceClient, SymbolReferenceData
 from argus.data.scanner import Scanner
 
@@ -84,8 +85,9 @@ class UniverseManager:
         # Internal state
         self._viable_symbols: set[str] = set()
         self._reference_cache: dict[str, SymbolReferenceData] = {}
-        self._routing_table: dict[str, set[str]] = {}  # Populated in Session 3a
+        self._routing_table: dict[str, set[str]] = {}
         self._last_build_time: datetime | None = None
+        self._last_routing_build_time: datetime | None = None
 
     async def build_viable_universe(
         self,
@@ -333,3 +335,220 @@ class UniverseManager:
             SymbolReferenceData if cached, None otherwise.
         """
         return self._reference_cache.get(symbol)
+
+    def build_routing_table(
+        self,
+        strategy_configs: dict[str, StrategyConfig],
+    ) -> None:
+        """Build the routing table mapping symbols to qualifying strategies.
+
+        For each viable symbol, checks each strategy's universe_filter and
+        adds the strategy to the symbol's routing set if all filter criteria
+        pass. Strategies with universe_filter=None match all viable symbols.
+
+        Filter matching rule: when a symbol has None for a field and the
+        filter has a constraint on that field, the symbol PASSES the filter.
+        We don't want to exclude symbols just because FMP didn't return
+        complete data.
+
+        Args:
+            strategy_configs: Dictionary mapping strategy_id to StrategyConfig.
+        """
+        import time
+
+        start_time = time.monotonic()
+
+        # Clear and rebuild
+        self._routing_table.clear()
+
+        # Initialize routing sets for all viable symbols
+        for symbol in self._viable_symbols:
+            self._routing_table[symbol] = set()
+
+        # Track per-strategy match counts for logging
+        strategy_match_counts: dict[str, int] = {}
+
+        for strategy_id, config in strategy_configs.items():
+            match_count = 0
+
+            for symbol in self._viable_symbols:
+                if self._symbol_matches_filter(symbol, config.universe_filter):
+                    self._routing_table[symbol].add(strategy_id)
+                    match_count += 1
+
+            strategy_match_counts[strategy_id] = match_count
+
+        self._last_routing_build_time = datetime.now(ZoneInfo("UTC"))
+        elapsed = time.monotonic() - start_time
+
+        # Log per-strategy match counts
+        for strategy_id, count in strategy_match_counts.items():
+            logger.info(
+                "Routing table: strategy %s matches %d/%d symbols",
+                strategy_id,
+                count,
+                len(self._viable_symbols),
+            )
+
+        logger.info(
+            "Routing table built: %d strategies, %d symbols, %.3fs",
+            len(strategy_configs),
+            len(self._viable_symbols),
+            elapsed,
+        )
+
+    def _symbol_matches_filter(
+        self,
+        symbol: str,
+        universe_filter: UniverseFilterConfig | None,
+    ) -> bool:
+        """Check if a symbol matches a strategy's universe filter.
+
+        Args:
+            symbol: Symbol to check.
+            universe_filter: The filter to apply, or None for match-all.
+
+        Returns:
+            True if the symbol matches all filter criteria.
+        """
+        # No filter means match all viable symbols
+        if universe_filter is None:
+            return True
+
+        # Get reference data for this symbol
+        ref_data = self._reference_cache.get(symbol)
+        if ref_data is None:
+            # No reference data — symbol is viable but we can't filter it
+            # Per spec: symbols with missing data PASS filters
+            return True
+
+        # Check price constraints (None reference data = pass)
+        if universe_filter.min_price is not None:
+            if ref_data.prev_close is not None:
+                if ref_data.prev_close < universe_filter.min_price:
+                    return False
+
+        if universe_filter.max_price is not None:
+            if ref_data.prev_close is not None:
+                if ref_data.prev_close > universe_filter.max_price:
+                    return False
+
+        # Check market cap constraints (None reference data = pass)
+        if universe_filter.min_market_cap is not None:
+            if ref_data.market_cap is not None:
+                if ref_data.market_cap < universe_filter.min_market_cap:
+                    return False
+
+        if universe_filter.max_market_cap is not None:
+            if ref_data.market_cap is not None:
+                if ref_data.market_cap > universe_filter.max_market_cap:
+                    return False
+
+        # Check float shares constraint (None reference data = pass)
+        if universe_filter.min_float is not None:
+            if ref_data.float_shares is not None:
+                if ref_data.float_shares < universe_filter.min_float:
+                    return False
+
+        # Check avg volume constraint (None reference data = pass)
+        if universe_filter.min_avg_volume is not None:
+            if ref_data.avg_volume is not None:
+                if ref_data.avg_volume < universe_filter.min_avg_volume:
+                    return False
+
+        # Check sector inclusion (non-empty list = symbol's sector must be in list)
+        if universe_filter.sectors:
+            # None sector = FAIL (we require a specific sector)
+            if ref_data.sector is None:
+                return False
+            if ref_data.sector not in universe_filter.sectors:
+                return False
+
+        # Check sector exclusion (non-empty list = symbol's sector must NOT be in list)
+        if universe_filter.exclude_sectors:
+            # None sector = PASS (can't exclude what we don't know)
+            if ref_data.sector is not None:
+                if ref_data.sector in universe_filter.exclude_sectors:
+                    return False
+
+        return True
+
+    def route_candle(self, symbol: str) -> set[str]:
+        """Get the set of strategy IDs that should receive candles for this symbol.
+
+        O(1) dictionary lookup.
+
+        Args:
+            symbol: The stock symbol.
+
+        Returns:
+            Set of strategy IDs that match this symbol, empty set if not found.
+        """
+        return self._routing_table.get(symbol, set())
+
+    def get_strategy_universe_size(self, strategy_id: str) -> int:
+        """Get the number of symbols routed to a specific strategy.
+
+        Args:
+            strategy_id: The strategy identifier.
+
+        Returns:
+            Count of symbols in the routing table that include this strategy.
+        """
+        count = 0
+        for strategies in self._routing_table.values():
+            if strategy_id in strategies:
+                count += 1
+        return count
+
+    def get_strategy_symbols(self, strategy_id: str) -> set[str]:
+        """Get all symbols routed to a specific strategy.
+
+        Args:
+            strategy_id: The strategy identifier.
+
+        Returns:
+            Set of symbols that route to this strategy.
+        """
+        return {
+            symbol
+            for symbol, strategies in self._routing_table.items()
+            if strategy_id in strategies
+        }
+
+    def get_universe_stats(self) -> dict:
+        """Get statistics about the universe and routing table.
+
+        Returns:
+            Dictionary with:
+                - total_viable: Number of viable symbols
+                - per_strategy_counts: Dict mapping strategy_id to symbol count
+                - last_build_time: ISO timestamp of last viable universe build
+                - last_routing_build_time: ISO timestamp of last routing table build
+                - cache_age_minutes: Minutes since last viable universe build
+        """
+        # Compute per-strategy counts
+        strategy_counts: dict[str, int] = {}
+        for strategies in self._routing_table.values():
+            for strategy_id in strategies:
+                strategy_counts[strategy_id] = strategy_counts.get(strategy_id, 0) + 1
+
+        # Compute cache age
+        cache_age_minutes: float | None = None
+        if self._last_build_time is not None:
+            delta = datetime.now(ZoneInfo("UTC")) - self._last_build_time
+            cache_age_minutes = delta.total_seconds() / 60.0
+
+        return {
+            "total_viable": len(self._viable_symbols),
+            "per_strategy_counts": strategy_counts,
+            "last_build_time": (
+                self._last_build_time.isoformat() if self._last_build_time else None
+            ),
+            "last_routing_build_time": (
+                self._last_routing_build_time.isoformat()
+                if self._last_routing_build_time
+                else None
+            ),
+            "cache_age_minutes": cache_age_minutes,
+        }

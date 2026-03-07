@@ -42,3 +42,13 @@ backtest_summary:
   total_trades: 59556
   data_months: 35
   last_run: "2026-02-26"
+
+# Universe filter for strategy-specific symbol filtering (Sprint 23)
+# VWAP Reclaim is a mean-reversion strategy that benefits from:
+# - Mid-to-large cap stocks where VWAP is meaningful with institutional flow
+# - Higher liquidity for clean VWAP behavior
+universe_filter:
+  min_price: 10.0
+  max_price: 200.0
+  min_market_cap: 500000000  # 500M - mid-cap minimum for institutional flow
+  min_avg_volume: 1000000

@@ -8,6 +8,7 @@ from pydantic import ValidationError
 
 from argus.core.config import (
     AccountType,
+    AfternoonMomentumConfig,
     ArgusConfig,
     BrokerConfig,
     BrokerSource,
@@ -22,11 +23,14 @@ from argus.core.config import (
     SystemConfig,
     UniverseFilterConfig,
     UniverseManagerConfig,
+    VwapReclaimConfig,
+    load_afternoon_momentum_config,
     load_config,
     load_orb_config,
     load_orb_scalp_config,
     load_scanner_config,
     load_strategy_config,
+    load_vwap_reclaim_config,
     load_yaml_file,
 )
 
@@ -808,6 +812,83 @@ class TestOrbFamilyUniverseFilter:
     def test_orb_scalp_yaml_keys_match_model(self) -> None:
         """ORB Scalp YAML universe_filter has no unrecognized keys."""
         yaml_path = Path("config/strategies/orb_scalp.yaml")
+        raw_yaml = yaml.safe_load(yaml_path.read_text())
+
+        # Verify universe_filter section exists
+        assert "universe_filter" in raw_yaml, "universe_filter section missing from YAML"
+
+        # Check for unrecognized keys
+        yaml_keys = set(raw_yaml["universe_filter"].keys())
+        model_fields = set(UniverseFilterConfig.model_fields.keys())
+        unrecognized = yaml_keys - model_fields
+        assert unrecognized == set(), f"Unrecognized keys in universe_filter: {unrecognized}"
+
+
+class TestVwapAfternoonUniverseFilter:
+    """Tests for VWAP/Afternoon Momentum universe_filter declarations (Sprint 23, Session 2c)."""
+
+    def test_vwap_reclaim_config_loads_with_filter(self) -> None:
+        """VWAP Reclaim config loads with universe_filter populated."""
+        config = load_vwap_reclaim_config(Path("config/strategies/vwap_reclaim.yaml"))
+        assert config.strategy_id == "strat_vwap_reclaim"
+        assert config.universe_filter is not None
+        assert isinstance(config.universe_filter, UniverseFilterConfig)
+
+    def test_afternoon_momentum_config_loads_with_filter(self) -> None:
+        """Afternoon Momentum config loads with universe_filter populated."""
+        config = load_afternoon_momentum_config(
+            Path("config/strategies/afternoon_momentum.yaml")
+        )
+        assert config.strategy_id == "strat_afternoon_momentum"
+        assert config.universe_filter is not None
+        assert isinstance(config.universe_filter, UniverseFilterConfig)
+
+    def test_vwap_reclaim_filter_values_reasonable(self) -> None:
+        """VWAP Reclaim filter values are positive and reasonable."""
+        config = load_vwap_reclaim_config(Path("config/strategies/vwap_reclaim.yaml"))
+        assert config.universe_filter is not None
+        # VWAP Reclaim: mean-reversion with mid-to-large cap preference
+        assert config.universe_filter.min_price is not None
+        assert config.universe_filter.min_price > 0
+        assert config.universe_filter.max_price is not None
+        assert config.universe_filter.max_price > config.universe_filter.min_price
+        assert config.universe_filter.min_avg_volume is not None
+        assert config.universe_filter.min_avg_volume > 0
+        # VWAP benefits from institutional flow
+        assert config.universe_filter.min_market_cap is not None
+        assert config.universe_filter.min_market_cap >= 500_000_000  # Mid-cap minimum
+
+    def test_afternoon_momentum_filter_values_reasonable(self) -> None:
+        """Afternoon Momentum filter values are positive and reasonable."""
+        config = load_afternoon_momentum_config(
+            Path("config/strategies/afternoon_momentum.yaml")
+        )
+        assert config.universe_filter is not None
+        # Afternoon Momentum: active stocks with volume
+        assert config.universe_filter.min_price is not None
+        assert config.universe_filter.min_price > 0
+        assert config.universe_filter.max_price is not None
+        assert config.universe_filter.max_price > config.universe_filter.min_price
+        assert config.universe_filter.min_avg_volume is not None
+        assert config.universe_filter.min_avg_volume > 0
+
+    def test_vwap_reclaim_yaml_keys_match_model(self) -> None:
+        """VWAP Reclaim YAML universe_filter has no unrecognized keys."""
+        yaml_path = Path("config/strategies/vwap_reclaim.yaml")
+        raw_yaml = yaml.safe_load(yaml_path.read_text())
+
+        # Verify universe_filter section exists
+        assert "universe_filter" in raw_yaml, "universe_filter section missing from YAML"
+
+        # Check for unrecognized keys
+        yaml_keys = set(raw_yaml["universe_filter"].keys())
+        model_fields = set(UniverseFilterConfig.model_fields.keys())
+        unrecognized = yaml_keys - model_fields
+        assert unrecognized == set(), f"Unrecognized keys in universe_filter: {unrecognized}"
+
+    def test_afternoon_momentum_yaml_keys_match_model(self) -> None:
+        """Afternoon Momentum YAML universe_filter has no unrecognized keys."""
+        yaml_path = Path("config/strategies/afternoon_momentum.yaml")
         raw_yaml = yaml.safe_load(yaml_path.read_text())
 
         # Verify universe_filter section exists

@@ -1,6 +1,7 @@
 """Tests for UniverseManager.
 
 Sprint 23, Session 1b: Universe Manager Core
+Sprint 23, Session 3a: Routing Table Construction
 """
 
 from __future__ import annotations
@@ -11,6 +12,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from argus.core.config import StrategyConfig, UniverseFilterConfig
 from argus.data.fmp_reference import FMPReferenceClient, SymbolReferenceData
 from argus.data.scanner import Scanner
 from argus.data.universe_manager import UniverseManager, UniverseManagerConfig
@@ -870,3 +872,898 @@ class TestNullDataHandling:
 
         # Should pass - we don't filter out symbols with missing volume data
         assert "NULLVOL" in result
+
+
+# =============================================================================
+# Sprint 23, Session 3a: Routing Table Tests
+# =============================================================================
+
+
+class TestRouteCandleSingleStrategyMatch:
+    """Tests for route_candle with single strategy matching."""
+
+    @pytest.mark.asyncio
+    async def test_route_candle_single_strategy_match(
+        self,
+        mock_reference_client: MagicMock,
+        mock_scanner: MagicMock,
+    ) -> None:
+        """Symbol matches exactly one strategy based on filter."""
+        reference_data = {
+            "TECH": SymbolReferenceData(
+                symbol="TECH",
+                sector="Technology",
+                prev_close=100.0,
+                market_cap=10_000_000_000,
+                avg_volume=5_000_000,
+                exchange="NASDAQ",
+                is_otc=False,
+            ),
+        }
+
+        mock_reference_client.build_reference_cache = AsyncMock(
+            return_value=reference_data
+        )
+
+        config = UniverseManagerConfig(
+            min_price=5.0,
+            max_price=500.0,
+            min_avg_volume=100000,
+            exclude_otc=True,
+        )
+
+        manager = UniverseManager(mock_reference_client, config, mock_scanner)
+        await manager.build_viable_universe(initial_symbols=["TECH"])
+
+        # Create strategies with different filters
+        strategy_configs = {
+            "tech_strategy": StrategyConfig(
+                strategy_id="tech_strategy",
+                name="Tech Strategy",
+                universe_filter=UniverseFilterConfig(
+                    sectors=["Technology"],
+                ),
+            ),
+            "healthcare_strategy": StrategyConfig(
+                strategy_id="healthcare_strategy",
+                name="Healthcare Strategy",
+                universe_filter=UniverseFilterConfig(
+                    sectors=["Healthcare"],
+                ),
+            ),
+        }
+
+        manager.build_routing_table(strategy_configs)
+
+        # TECH should only match tech_strategy
+        routed = manager.route_candle("TECH")
+        assert routed == {"tech_strategy"}
+
+
+class TestRouteCandleMultiStrategyMatch:
+    """Tests for route_candle with multiple strategy matching."""
+
+    @pytest.mark.asyncio
+    async def test_route_candle_multi_strategy_match(
+        self,
+        mock_reference_client: MagicMock,
+        mock_scanner: MagicMock,
+    ) -> None:
+        """Symbol matches multiple strategies with overlapping filters."""
+        reference_data = {
+            "AAPL": SymbolReferenceData(
+                symbol="AAPL",
+                sector="Technology",
+                prev_close=175.0,
+                market_cap=3_000_000_000_000,
+                avg_volume=50_000_000,
+                exchange="NASDAQ",
+                is_otc=False,
+            ),
+        }
+
+        mock_reference_client.build_reference_cache = AsyncMock(
+            return_value=reference_data
+        )
+
+        config = UniverseManagerConfig(
+            min_price=5.0,
+            max_price=500.0,
+            min_avg_volume=100000,
+            exclude_otc=True,
+        )
+
+        manager = UniverseManager(mock_reference_client, config, mock_scanner)
+        await manager.build_viable_universe(initial_symbols=["AAPL"])
+
+        # Both strategies have filters that AAPL matches
+        strategy_configs = {
+            "large_cap": StrategyConfig(
+                strategy_id="large_cap",
+                name="Large Cap Strategy",
+                universe_filter=UniverseFilterConfig(
+                    min_market_cap=1_000_000_000_000,  # > 1T
+                ),
+            ),
+            "tech_focus": StrategyConfig(
+                strategy_id="tech_focus",
+                name="Tech Focus Strategy",
+                universe_filter=UniverseFilterConfig(
+                    sectors=["Technology"],
+                ),
+            ),
+        }
+
+        manager.build_routing_table(strategy_configs)
+
+        # AAPL should match both strategies
+        routed = manager.route_candle("AAPL")
+        assert routed == {"large_cap", "tech_focus"}
+
+
+class TestRouteCandleNoMatch:
+    """Tests for route_candle with no matches."""
+
+    @pytest.mark.asyncio
+    async def test_route_candle_no_match(
+        self,
+        mock_reference_client: MagicMock,
+        mock_scanner: MagicMock,
+    ) -> None:
+        """Symbol matches no strategies → empty set."""
+        reference_data = {
+            "SMALLCAP": SymbolReferenceData(
+                symbol="SMALLCAP",
+                sector="Industrials",
+                prev_close=25.0,
+                market_cap=500_000_000,  # 500M (small cap)
+                avg_volume=1_000_000,
+                exchange="NYSE",
+                is_otc=False,
+            ),
+        }
+
+        mock_reference_client.build_reference_cache = AsyncMock(
+            return_value=reference_data
+        )
+
+        config = UniverseManagerConfig(
+            min_price=5.0,
+            max_price=500.0,
+            min_avg_volume=100000,
+            exclude_otc=True,
+        )
+
+        manager = UniverseManager(mock_reference_client, config, mock_scanner)
+        await manager.build_viable_universe(initial_symbols=["SMALLCAP"])
+
+        # Strategies with filters that exclude SMALLCAP
+        strategy_configs = {
+            "mega_cap": StrategyConfig(
+                strategy_id="mega_cap",
+                name="Mega Cap Strategy",
+                universe_filter=UniverseFilterConfig(
+                    min_market_cap=1_000_000_000_000,  # > 1T
+                ),
+            ),
+            "tech_only": StrategyConfig(
+                strategy_id="tech_only",
+                name="Tech Only Strategy",
+                universe_filter=UniverseFilterConfig(
+                    sectors=["Technology"],
+                ),
+            ),
+        }
+
+        manager.build_routing_table(strategy_configs)
+
+        # SMALLCAP matches neither strategy
+        routed = manager.route_candle("SMALLCAP")
+        assert routed == set()
+
+    @pytest.mark.asyncio
+    async def test_route_candle_unknown_symbol(
+        self,
+        mock_reference_client: MagicMock,
+        mock_scanner: MagicMock,
+    ) -> None:
+        """Unknown symbol returns empty set."""
+        reference_data = {
+            "AAPL": SymbolReferenceData(
+                symbol="AAPL",
+                sector="Technology",
+                prev_close=175.0,
+                market_cap=3_000_000_000_000,
+                avg_volume=50_000_000,
+                exchange="NASDAQ",
+                is_otc=False,
+            ),
+        }
+
+        mock_reference_client.build_reference_cache = AsyncMock(
+            return_value=reference_data
+        )
+
+        config = UniverseManagerConfig(
+            min_price=5.0,
+            max_price=500.0,
+            min_avg_volume=100000,
+            exclude_otc=True,
+        )
+
+        manager = UniverseManager(mock_reference_client, config, mock_scanner)
+        await manager.build_viable_universe(initial_symbols=["AAPL"])
+
+        strategy_configs = {
+            "test_strategy": StrategyConfig(
+                strategy_id="test_strategy",
+                name="Test Strategy",
+                universe_filter=None,  # Matches all
+            ),
+        }
+
+        manager.build_routing_table(strategy_configs)
+
+        # Unknown symbol returns empty set
+        routed = manager.route_candle("UNKNOWN")
+        assert routed == set()
+
+
+class TestSectorIncludeFilter:
+    """Tests for sector inclusion filter."""
+
+    @pytest.mark.asyncio
+    async def test_sector_include_filter(
+        self,
+        mock_reference_client: MagicMock,
+        mock_scanner: MagicMock,
+    ) -> None:
+        """Only symbols in specified sectors match."""
+        reference_data = {
+            "TECH": SymbolReferenceData(
+                symbol="TECH",
+                sector="Technology",
+                prev_close=100.0,
+                avg_volume=5_000_000,
+                exchange="NASDAQ",
+                is_otc=False,
+            ),
+            "HEALTH": SymbolReferenceData(
+                symbol="HEALTH",
+                sector="Healthcare",
+                prev_close=100.0,
+                avg_volume=5_000_000,
+                exchange="NYSE",
+                is_otc=False,
+            ),
+            "ENERGY": SymbolReferenceData(
+                symbol="ENERGY",
+                sector="Energy",
+                prev_close=100.0,
+                avg_volume=5_000_000,
+                exchange="NYSE",
+                is_otc=False,
+            ),
+        }
+
+        mock_reference_client.build_reference_cache = AsyncMock(
+            return_value=reference_data
+        )
+
+        config = UniverseManagerConfig(
+            min_price=5.0,
+            max_price=500.0,
+            min_avg_volume=100000,
+            exclude_otc=True,
+        )
+
+        manager = UniverseManager(mock_reference_client, config, mock_scanner)
+        await manager.build_viable_universe(
+            initial_symbols=list(reference_data.keys())
+        )
+
+        strategy_configs = {
+            "tech_health": StrategyConfig(
+                strategy_id="tech_health",
+                name="Tech and Healthcare",
+                universe_filter=UniverseFilterConfig(
+                    sectors=["Technology", "Healthcare"],
+                ),
+            ),
+        }
+
+        manager.build_routing_table(strategy_configs)
+
+        # TECH and HEALTH should match, ENERGY should not
+        assert "tech_health" in manager.route_candle("TECH")
+        assert "tech_health" in manager.route_candle("HEALTH")
+        assert "tech_health" not in manager.route_candle("ENERGY")
+
+
+class TestSectorExcludeFilter:
+    """Tests for sector exclusion filter."""
+
+    @pytest.mark.asyncio
+    async def test_sector_exclude_filter(
+        self,
+        mock_reference_client: MagicMock,
+        mock_scanner: MagicMock,
+    ) -> None:
+        """Symbols in excluded sectors don't match."""
+        reference_data = {
+            "TECH": SymbolReferenceData(
+                symbol="TECH",
+                sector="Technology",
+                prev_close=100.0,
+                avg_volume=5_000_000,
+                exchange="NASDAQ",
+                is_otc=False,
+            ),
+            "ENERGY": SymbolReferenceData(
+                symbol="ENERGY",
+                sector="Energy",
+                prev_close=100.0,
+                avg_volume=5_000_000,
+                exchange="NYSE",
+                is_otc=False,
+            ),
+            "UTILITY": SymbolReferenceData(
+                symbol="UTILITY",
+                sector="Utilities",
+                prev_close=100.0,
+                avg_volume=5_000_000,
+                exchange="NYSE",
+                is_otc=False,
+            ),
+        }
+
+        mock_reference_client.build_reference_cache = AsyncMock(
+            return_value=reference_data
+        )
+
+        config = UniverseManagerConfig(
+            min_price=5.0,
+            max_price=500.0,
+            min_avg_volume=100000,
+            exclude_otc=True,
+        )
+
+        manager = UniverseManager(mock_reference_client, config, mock_scanner)
+        await manager.build_viable_universe(
+            initial_symbols=list(reference_data.keys())
+        )
+
+        strategy_configs = {
+            "no_utilities": StrategyConfig(
+                strategy_id="no_utilities",
+                name="No Utilities Strategy",
+                universe_filter=UniverseFilterConfig(
+                    exclude_sectors=["Utilities", "Energy"],
+                ),
+            ),
+        }
+
+        manager.build_routing_table(strategy_configs)
+
+        # TECH should match, ENERGY and UTILITY should not
+        assert "no_utilities" in manager.route_candle("TECH")
+        assert "no_utilities" not in manager.route_candle("ENERGY")
+        assert "no_utilities" not in manager.route_candle("UTILITY")
+
+
+class TestMissingReferenceDataPasses:
+    """Tests for missing reference data handling in routing."""
+
+    @pytest.mark.asyncio
+    async def test_missing_reference_data_passes(
+        self,
+        mock_reference_client: MagicMock,
+        mock_scanner: MagicMock,
+    ) -> None:
+        """Symbol with None market_cap passes min_market_cap filter."""
+        reference_data = {
+            "NULLCAP": SymbolReferenceData(
+                symbol="NULLCAP",
+                sector="Technology",
+                prev_close=100.0,
+                market_cap=None,  # Missing market cap data
+                avg_volume=5_000_000,
+                exchange="NASDAQ",
+                is_otc=False,
+            ),
+        }
+
+        mock_reference_client.build_reference_cache = AsyncMock(
+            return_value=reference_data
+        )
+
+        config = UniverseManagerConfig(
+            min_price=5.0,
+            max_price=500.0,
+            min_avg_volume=100000,
+            exclude_otc=True,
+        )
+
+        manager = UniverseManager(mock_reference_client, config, mock_scanner)
+        await manager.build_viable_universe(initial_symbols=["NULLCAP"])
+
+        strategy_configs = {
+            "large_cap": StrategyConfig(
+                strategy_id="large_cap",
+                name="Large Cap Strategy",
+                universe_filter=UniverseFilterConfig(
+                    min_market_cap=1_000_000_000_000,  # > 1T
+                ),
+            ),
+        }
+
+        manager.build_routing_table(strategy_configs)
+
+        # Symbol with None market_cap should PASS the filter
+        assert "large_cap" in manager.route_candle("NULLCAP")
+
+    @pytest.mark.asyncio
+    async def test_null_sector_fails_sector_include(
+        self,
+        mock_reference_client: MagicMock,
+        mock_scanner: MagicMock,
+    ) -> None:
+        """Symbol with None sector fails sector inclusion filter."""
+        reference_data = {
+            "NULLSECTOR": SymbolReferenceData(
+                symbol="NULLSECTOR",
+                sector=None,  # Missing sector
+                prev_close=100.0,
+                avg_volume=5_000_000,
+                exchange="NASDAQ",
+                is_otc=False,
+            ),
+        }
+
+        mock_reference_client.build_reference_cache = AsyncMock(
+            return_value=reference_data
+        )
+
+        config = UniverseManagerConfig(
+            min_price=5.0,
+            max_price=500.0,
+            min_avg_volume=100000,
+            exclude_otc=True,
+        )
+
+        manager = UniverseManager(mock_reference_client, config, mock_scanner)
+        await manager.build_viable_universe(initial_symbols=["NULLSECTOR"])
+
+        strategy_configs = {
+            "tech_only": StrategyConfig(
+                strategy_id="tech_only",
+                name="Tech Only",
+                universe_filter=UniverseFilterConfig(
+                    sectors=["Technology"],
+                ),
+            ),
+        }
+
+        manager.build_routing_table(strategy_configs)
+
+        # Symbol with None sector should FAIL sector inclusion
+        assert "tech_only" not in manager.route_candle("NULLSECTOR")
+
+    @pytest.mark.asyncio
+    async def test_null_sector_passes_sector_exclude(
+        self,
+        mock_reference_client: MagicMock,
+        mock_scanner: MagicMock,
+    ) -> None:
+        """Symbol with None sector passes sector exclusion filter."""
+        reference_data = {
+            "NULLSECTOR": SymbolReferenceData(
+                symbol="NULLSECTOR",
+                sector=None,  # Missing sector
+                prev_close=100.0,
+                avg_volume=5_000_000,
+                exchange="NASDAQ",
+                is_otc=False,
+            ),
+        }
+
+        mock_reference_client.build_reference_cache = AsyncMock(
+            return_value=reference_data
+        )
+
+        config = UniverseManagerConfig(
+            min_price=5.0,
+            max_price=500.0,
+            min_avg_volume=100000,
+            exclude_otc=True,
+        )
+
+        manager = UniverseManager(mock_reference_client, config, mock_scanner)
+        await manager.build_viable_universe(initial_symbols=["NULLSECTOR"])
+
+        strategy_configs = {
+            "no_energy": StrategyConfig(
+                strategy_id="no_energy",
+                name="No Energy",
+                universe_filter=UniverseFilterConfig(
+                    exclude_sectors=["Energy"],
+                ),
+            ),
+        }
+
+        manager.build_routing_table(strategy_configs)
+
+        # Symbol with None sector should PASS sector exclusion
+        assert "no_energy" in manager.route_candle("NULLSECTOR")
+
+
+class TestNoFilterMatchesAll:
+    """Tests for strategy with no universe_filter."""
+
+    @pytest.mark.asyncio
+    async def test_no_filter_matches_all(
+        self,
+        mock_reference_client: MagicMock,
+        mock_scanner: MagicMock,
+    ) -> None:
+        """Strategy with universe_filter=None matches all viable symbols."""
+        reference_data = {
+            "AAPL": SymbolReferenceData(
+                symbol="AAPL",
+                sector="Technology",
+                prev_close=175.0,
+                avg_volume=50_000_000,
+                exchange="NASDAQ",
+                is_otc=False,
+            ),
+            "XOM": SymbolReferenceData(
+                symbol="XOM",
+                sector="Energy",
+                prev_close=100.0,
+                avg_volume=20_000_000,
+                exchange="NYSE",
+                is_otc=False,
+            ),
+            "JNJ": SymbolReferenceData(
+                symbol="JNJ",
+                sector="Healthcare",
+                prev_close=150.0,
+                avg_volume=10_000_000,
+                exchange="NYSE",
+                is_otc=False,
+            ),
+        }
+
+        mock_reference_client.build_reference_cache = AsyncMock(
+            return_value=reference_data
+        )
+
+        config = UniverseManagerConfig(
+            min_price=5.0,
+            max_price=500.0,
+            min_avg_volume=100000,
+            exclude_otc=True,
+        )
+
+        manager = UniverseManager(mock_reference_client, config, mock_scanner)
+        await manager.build_viable_universe(
+            initial_symbols=list(reference_data.keys())
+        )
+
+        strategy_configs = {
+            "all_stocks": StrategyConfig(
+                strategy_id="all_stocks",
+                name="All Stocks Strategy",
+                universe_filter=None,  # No filter = match all
+            ),
+        }
+
+        manager.build_routing_table(strategy_configs)
+
+        # All viable symbols should match
+        assert "all_stocks" in manager.route_candle("AAPL")
+        assert "all_stocks" in manager.route_candle("XOM")
+        assert "all_stocks" in manager.route_candle("JNJ")
+
+
+class TestGetStrategyUniverseSize:
+    """Tests for get_strategy_universe_size method."""
+
+    @pytest.mark.asyncio
+    async def test_get_strategy_universe_size(
+        self,
+        mock_reference_client: MagicMock,
+        mock_scanner: MagicMock,
+    ) -> None:
+        """get_strategy_universe_size returns correct counts per strategy."""
+        reference_data = {
+            "TECH1": SymbolReferenceData(
+                symbol="TECH1",
+                sector="Technology",
+                prev_close=100.0,
+                avg_volume=5_000_000,
+                exchange="NASDAQ",
+                is_otc=False,
+            ),
+            "TECH2": SymbolReferenceData(
+                symbol="TECH2",
+                sector="Technology",
+                prev_close=200.0,
+                avg_volume=3_000_000,
+                exchange="NASDAQ",
+                is_otc=False,
+            ),
+            "HEALTH1": SymbolReferenceData(
+                symbol="HEALTH1",
+                sector="Healthcare",
+                prev_close=150.0,
+                avg_volume=4_000_000,
+                exchange="NYSE",
+                is_otc=False,
+            ),
+        }
+
+        mock_reference_client.build_reference_cache = AsyncMock(
+            return_value=reference_data
+        )
+
+        config = UniverseManagerConfig(
+            min_price=5.0,
+            max_price=500.0,
+            min_avg_volume=100000,
+            exclude_otc=True,
+        )
+
+        manager = UniverseManager(mock_reference_client, config, mock_scanner)
+        await manager.build_viable_universe(
+            initial_symbols=list(reference_data.keys())
+        )
+
+        strategy_configs = {
+            "tech_only": StrategyConfig(
+                strategy_id="tech_only",
+                name="Tech Only",
+                universe_filter=UniverseFilterConfig(
+                    sectors=["Technology"],
+                ),
+            ),
+            "all_sectors": StrategyConfig(
+                strategy_id="all_sectors",
+                name="All Sectors",
+                universe_filter=None,  # No filter
+            ),
+        }
+
+        manager.build_routing_table(strategy_configs)
+
+        # tech_only should have 2 symbols (TECH1, TECH2)
+        assert manager.get_strategy_universe_size("tech_only") == 2
+
+        # all_sectors should have 3 symbols (all)
+        assert manager.get_strategy_universe_size("all_sectors") == 3
+
+        # Unknown strategy should have 0
+        assert manager.get_strategy_universe_size("unknown") == 0
+
+
+class TestGetStrategySymbols:
+    """Tests for get_strategy_symbols method."""
+
+    @pytest.mark.asyncio
+    async def test_get_strategy_symbols(
+        self,
+        mock_reference_client: MagicMock,
+        mock_scanner: MagicMock,
+    ) -> None:
+        """get_strategy_symbols returns correct symbol set per strategy."""
+        reference_data = {
+            "TECH1": SymbolReferenceData(
+                symbol="TECH1",
+                sector="Technology",
+                prev_close=100.0,
+                avg_volume=5_000_000,
+                exchange="NASDAQ",
+                is_otc=False,
+            ),
+            "TECH2": SymbolReferenceData(
+                symbol="TECH2",
+                sector="Technology",
+                prev_close=200.0,
+                avg_volume=3_000_000,
+                exchange="NASDAQ",
+                is_otc=False,
+            ),
+            "HEALTH1": SymbolReferenceData(
+                symbol="HEALTH1",
+                sector="Healthcare",
+                prev_close=150.0,
+                avg_volume=4_000_000,
+                exchange="NYSE",
+                is_otc=False,
+            ),
+        }
+
+        mock_reference_client.build_reference_cache = AsyncMock(
+            return_value=reference_data
+        )
+
+        config = UniverseManagerConfig(
+            min_price=5.0,
+            max_price=500.0,
+            min_avg_volume=100000,
+            exclude_otc=True,
+        )
+
+        manager = UniverseManager(mock_reference_client, config, mock_scanner)
+        await manager.build_viable_universe(
+            initial_symbols=list(reference_data.keys())
+        )
+
+        strategy_configs = {
+            "tech_only": StrategyConfig(
+                strategy_id="tech_only",
+                name="Tech Only",
+                universe_filter=UniverseFilterConfig(
+                    sectors=["Technology"],
+                ),
+            ),
+        }
+
+        manager.build_routing_table(strategy_configs)
+
+        # tech_only should have TECH1 and TECH2
+        tech_symbols = manager.get_strategy_symbols("tech_only")
+        assert tech_symbols == {"TECH1", "TECH2"}
+
+        # Unknown strategy should return empty set
+        assert manager.get_strategy_symbols("unknown") == set()
+
+
+class TestGetUniverseStats:
+    """Tests for get_universe_stats method."""
+
+    @pytest.mark.asyncio
+    async def test_get_universe_stats(
+        self,
+        mock_reference_client: MagicMock,
+        mock_scanner: MagicMock,
+    ) -> None:
+        """get_universe_stats returns correct statistics."""
+        reference_data = {
+            "AAPL": SymbolReferenceData(
+                symbol="AAPL",
+                sector="Technology",
+                prev_close=175.0,
+                avg_volume=50_000_000,
+                exchange="NASDAQ",
+                is_otc=False,
+            ),
+            "XOM": SymbolReferenceData(
+                symbol="XOM",
+                sector="Energy",
+                prev_close=100.0,
+                avg_volume=20_000_000,
+                exchange="NYSE",
+                is_otc=False,
+            ),
+        }
+
+        mock_reference_client.build_reference_cache = AsyncMock(
+            return_value=reference_data
+        )
+
+        config = UniverseManagerConfig(
+            min_price=5.0,
+            max_price=500.0,
+            min_avg_volume=100000,
+            exclude_otc=True,
+        )
+
+        manager = UniverseManager(mock_reference_client, config, mock_scanner)
+        await manager.build_viable_universe(
+            initial_symbols=list(reference_data.keys())
+        )
+
+        strategy_configs = {
+            "tech_only": StrategyConfig(
+                strategy_id="tech_only",
+                name="Tech Only",
+                universe_filter=UniverseFilterConfig(
+                    sectors=["Technology"],
+                ),
+            ),
+            "all_stocks": StrategyConfig(
+                strategy_id="all_stocks",
+                name="All Stocks",
+                universe_filter=None,
+            ),
+        }
+
+        manager.build_routing_table(strategy_configs)
+
+        stats = manager.get_universe_stats()
+
+        # Verify structure
+        assert "total_viable" in stats
+        assert "per_strategy_counts" in stats
+        assert "last_build_time" in stats
+        assert "last_routing_build_time" in stats
+        assert "cache_age_minutes" in stats
+
+        # Verify values
+        assert stats["total_viable"] == 2
+        assert stats["per_strategy_counts"]["tech_only"] == 1
+        assert stats["per_strategy_counts"]["all_stocks"] == 2
+        assert stats["last_build_time"] is not None
+        assert stats["last_routing_build_time"] is not None
+        assert stats["cache_age_minutes"] is not None
+        assert stats["cache_age_minutes"] >= 0
+
+
+class TestRoutingTableRebuild:
+    """Tests for routing table rebuild capability."""
+
+    @pytest.mark.asyncio
+    async def test_routing_table_rebuildable(
+        self,
+        mock_reference_client: MagicMock,
+        mock_scanner: MagicMock,
+    ) -> None:
+        """Routing table can be rebuilt with new strategy configs."""
+        reference_data = {
+            "AAPL": SymbolReferenceData(
+                symbol="AAPL",
+                sector="Technology",
+                prev_close=175.0,
+                avg_volume=50_000_000,
+                exchange="NASDAQ",
+                is_otc=False,
+            ),
+        }
+
+        mock_reference_client.build_reference_cache = AsyncMock(
+            return_value=reference_data
+        )
+
+        config = UniverseManagerConfig(
+            min_price=5.0,
+            max_price=500.0,
+            min_avg_volume=100000,
+            exclude_otc=True,
+        )
+
+        manager = UniverseManager(mock_reference_client, config, mock_scanner)
+        await manager.build_viable_universe(initial_symbols=["AAPL"])
+
+        # First build with one strategy
+        strategy_configs_v1 = {
+            "strategy_a": StrategyConfig(
+                strategy_id="strategy_a",
+                name="Strategy A",
+                universe_filter=None,
+            ),
+        }
+
+        manager.build_routing_table(strategy_configs_v1)
+        assert manager.route_candle("AAPL") == {"strategy_a"}
+
+        # Rebuild with different strategies
+        strategy_configs_v2 = {
+            "strategy_b": StrategyConfig(
+                strategy_id="strategy_b",
+                name="Strategy B",
+                universe_filter=None,
+            ),
+            "strategy_c": StrategyConfig(
+                strategy_id="strategy_c",
+                name="Strategy C",
+                universe_filter=UniverseFilterConfig(
+                    sectors=["Healthcare"],  # Won't match AAPL
+                ),
+            ),
+        }
+
+        manager.build_routing_table(strategy_configs_v2)
+
+        # Should now route to strategy_b only (strategy_c doesn't match)
+        assert manager.route_candle("AAPL") == {"strategy_b"}
