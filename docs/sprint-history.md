@@ -279,18 +279,50 @@
 **Sessions:** 1 implementation (Tier 2 review skipped — no behavioral changes).
 **Notes:** Prevents future data assembly bugs from being silently hidden, as happened with all 6 bugs in Sprint 22.2.
 
+### Sprint 23 — Universe Manager (2099 pytest + 392 Vitest, +122/+15)
+**Date:** Mar 7–8, 2026
+**Scope:** Replace static pre-market watchlist (15 symbols) with Universe Manager that monitors broad US equity universe via Databento ALL_SYMBOLS, caches FMP reference data (sector, market cap, float), and routes candle events to strategies based on declarative `universe_filter` YAML configs.
+
+**Session 1a:** FMP Reference Data Client — `argus/data/fmp_reference.py`. SymbolReferenceData dataclass, FMPReferenceClient with batched Company Profile + Share Float fetching, OTC detection, cache management. 33 new tests.
+**Session 1b:** Universe Manager Core — `argus/data/universe_manager.py`. UniverseManager class with `build_viable_universe()`, system-level filters (OTC, price, volume), reference cache management. 22 new tests.
+**Session 2a:** Universe Filter Config Model — `UniverseFilterConfig` and `UniverseManagerConfig` Pydantic models in `config.py`, wired into StrategyConfig and SystemConfig. 10 new tests.
+**Session 2b:** ORB Family Filter Declarations — `universe_filter` sections added to `orb_breakout.yaml` and `orb_scalp.yaml` with values extracted from `get_scanner_criteria()`. 6 new tests.
+**Session 2c:** VWAP + Afternoon Filter Declarations — `universe_filter` sections added to `vwap_reclaim.yaml` (with min_market_cap=500M for institutional flow) and `afternoon_momentum.yaml`. 6 new tests.
+**Session 3a:** Routing Table Construction — O(1) routing table, per-strategy symbol lookup, `route_candle()` via dict.get. 14 new tests.
+**Session 3b:** Databento Fast-Path + Events — Fast-path discard in `_on_ohlcv` and `_on_trade` before `_active_symbols` check, IndicatorEngine guard, `UniverseUpdateEvent`. 10 new tests.
+**Session 4a:** Universe Manager System Config — `universe_manager:` section in system.yaml and system_live.yaml, temporary dataclass replaced with real Pydantic model. 6 new tests.
+**Session 4b:** Main.py Startup Wiring (critical integration) — Universe Manager wired into 12-phase startup sequence, candle routing via routing table when enabled, backward compatibility preserved. 8 new tests.
+**Session 5a:** Backend API Endpoints — GET `/api/v1/universe/status` and `/api/v1/universe/symbols` with JWT auth and graceful disabled state. 7 new tests.
+**Session 5b:** Frontend Dashboard Panel — UniverseStatusCard component with enabled/disabled/loading/error states, TanStack Query hook with 60s polling, 15 Vitest tests.
+**Session 5f:** Visual review fix — AI Insight and Universe Status cards side-by-side on desktop/tablet, stacked on mobile.
+
+**Pre-session fixes:** `.gitignore` root-anchored (`data/` → `/data/`), `test_risk_manager_wired_to_order_manager` missing ActionManager mock.
+**Key decisions:** DEC-277 (fail-closed on missing reference data).
+**Sessions:** 11 implementation + 1 visual-review fix + 2 pre-session fixes + Tier 2 reviews.
+**Notes:** Cleanest sprint to date — zero regressions across all 11 sessions. VWAP Reclaim uniquely includes min_market_cap=500M based on institutional flow thesis. Config-gated (enabled: false default) for safe deployment. NLP Catalyst Pipeline deferred to Sprint 23.5.
+
+### Sprint 23.05 — Post-Sprint Fixes (2101 pytest + 392 Vitest, +2/+0)
+**Date:** Mar 8, 2026
+**Scope:** Fix 3 pre-existing test failures (UTC/ET timezone mismatch per DEC-276) and implement fail-closed behavior for missing reference data (DEC-277).
+
+**Session A:** Fixed `test_record_usage_custom_endpoint` (UTC→ET date query), `test_get_decisions_paginated` and `test_get_decisions_with_pagination` (UTC→ET in fixture). All same root cause: tests queried by UTC date but data stored with ET dates per DEC-276.
+**Session C:** Implemented DEC-277 — `_apply_system_filters()` excludes symbols with None prev_close or avg_volume, `_symbol_matches_filter()` excludes symbols with no cached reference data. 4 new tests.
+**Key decisions:** DEC-277 (fail-closed on missing reference data).
+**Sessions:** 2 implementation.
+**Notes:** Session B was investigation-only (no code changes) that led to DEC-277. Pre-existing failures only manifested after 7 PM ET when UTC and ET dates diverge.
+
 ---
 
 ## Sprint Statistics
 
-- **Total sprints:** 22 full + 8 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.7)
-- **Total sessions:** ~230+ Claude Code sessions
-- **Total tests:** 1,977 pytest + 377 Vitest = 2,354 total
-- **Total decisions:** 276 (DEC-001 through DEC-276)
-- **Calendar days (active dev):** ~22 (Feb 14 – Mar 7, 2026)
+- **Total sprints:** 23 full + 10 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.7, 22.1–22.3, 23.05)
+- **Total sessions:** ~250+ Claude Code sessions
+- **Total tests:** 2,101 pytest + 392 Vitest = 2,493 total
+- **Total decisions:** 277 (DEC-001 through DEC-277)
+- **Calendar days (active dev):** ~23 (Feb 14 – Mar 8, 2026)
 - **Largest sprint:** 22 (9 implementation + 5 fix + 9 reviews, largest scope)
-- **Cleanest sprint:** 12.5 (1 session, pure refactor)
-- **Most test-dense:** Sprint 22 (286 new tests) and 21c (105 new pytest backend)
+- **Cleanest sprint:** 23 (11 sessions, 0 regressions, 0 scope gaps requiring follow-up)
+- **Most test-dense:** Sprint 22 (286 new tests) and Sprint 23 (141 new tests across 23+23.05)
 - **Most Vitest-dense:** 21d (119 new Vitest)
 - **Crisis sprint:** 8 (VectorBT performance — iterrows() → vectorized, 4 conversations)
 - **Most compaction events:** Sprint 22 (Sessions 3a and 3b both compacted, led to DEC-275)

@@ -1,22 +1,22 @@
 # ARGUS — Claude Code Context
 
 > Dense, actionable context for Claude Code sessions. No history — see `docs/` for that.
-> Last updated: March 7, 2026
+> Last updated: March 8, 2026
 
 ## Active Sprint
 
-**No active sprint.** Sprint 22 (AI Layer MVP) completed March 7, 2026.
+**No active sprint.** Sprint 23 (Universe Manager) completed March 8, 2026.
 
-Next sprint: **23 (NLP Catalyst + Universe Manager)** — SEC EDGAR + FMP news, full-universe monitoring.
+Next sprint: **23.5 (NLP Catalyst Pipeline)** — SEC EDGAR + FMP news, catalyst classification, pre-market intelligence brief.
 
 ## Current State
 
 - **Active sprint:** None (between sprints)
-- **Next sprint:** 23 (NLP Catalyst + Universe Manager)
-- **Tests:** 1,977 pytest + 377 Vitest
+- **Next sprint:** 23.5 (NLP Catalyst Pipeline)
+- **Tests:** 2,101 pytest + 392 Vitest
 - **Strategies:** 4 active (ORB Breakout, ORB Scalp, VWAP Reclaim, Afternoon Momentum)
-- **Infrastructure:** Databento EQUS.MINI (live) + IBKR paper trading (Account U24619949) + FMP Starter (scanning) + Claude API (Copilot)
-- **Frontend:** 7-page Command Center + AI Copilot (all active), Tauri desktop + PWA mobile
+- **Infrastructure:** Databento EQUS.MINI (live) + IBKR paper trading (Account U24619949) + FMP Starter (scanning + reference data) + Claude API (Copilot) + Universe Manager (config-gated, disabled by default)
+- **Frontend:** 7-page Command Center + AI Copilot + Universe Status Card (all active), Tauri desktop + PWA mobile
 
 ## Project Structure
 
@@ -24,7 +24,7 @@ Next sprint: **23 (NLP Catalyst + Universe Manager)** — SEC EDGAR + FMP news, 
 argus/
 ├── core/           # Orchestrator, Risk Manager, Portfolio, Event Bus
 ├── strategies/     # BaseStrategy, OrbBaseStrategy, 4 strategy implementations
-├── data/           # DataService (Databento/Alpaca/Replay/Backtest), Scanner, IndicatorEngine
+├── data/           # DataService (Databento/Alpaca/Replay/Backtest), Scanner, IndicatorEngine, UniverseManager, FMPReferenceClient
 ├── execution/      # Broker (IBKR/Alpaca/Simulated), Order Manager
 ├── analytics/      # Trade Logger, PerformanceCalculator
 ├── backtest/       # VectorBT helpers, Replay Harness
@@ -59,7 +59,7 @@ argus/
 python -m pytest tests/                   # Run all tests
 python -m pytest tests/ -x               # Stop on first failure
 python -m pytest tests/ -x -q            # Fail-fast, quiet
-cd argus/ui && npx vitest run            # Frontend tests (~377)
+cd argus/ui && npx vitest run            # Frontend tests (~392)
 
 # Trading engine
 python -m argus.main                      # Start (paper trading default)
@@ -143,6 +143,9 @@ python -m pytest tests/ai/ -x -q                       # AI module tests only
 - Databento threading: callbacks on reader thread → `call_soon_threadsafe()` (DEC-088)
 - Historical data has ~15min intraday lag (DEC-244), multi-day daily bar lag (DEC-247)
 - IndicatorEngine shared by all DataService implementations (DEC-092)
+- Universe Manager: config-gated (`universe_manager.enabled`), fail-closed on missing reference data (DEC-277)
+- Fast-path discard in DatabentoDataService drops non-viable symbols before IndicatorEngine (Sprint 23)
+- Strategy universe filters are declarative YAML only — never modify strategy Python code for filter changes
 
 ### Frontend
 - React + TypeScript, TanStack Query, Zustand, Framer Motion
@@ -234,16 +237,16 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 | DEF-029 | Persist Live Candle Data to Database for Post-Session Replay | Live candle data flows through the Event Bus but isn't persisted to the database. The Performance page Replay tab shows "Bar data not available for this trade" because there are no stored bars around the trade's timestamps. Need a new `candle_bars` table (symbol, timestamp, open, high, low, close, volume) with writes from the DataService callback. ~3,900 rows/day (10 symbols × 390 bars). Required for post-session review, The Debrief page EOD analysis, and replay visualizations. |
 - DEF-030: Live candlestick chart real-time updates (TradeChart loads historical only, no WebSocket subscription). Trigger: Sprint 22+ or UX backlog prioritization.
 - DEF-031: Orders table persistence (orders not persisted to DB, only completed trades). Trigger: when post-hoc order forensics needed beyond log analysis.
-- DEF-032: FMPScannerSource criteria_list filtering. `scan()` accepts `criteria_list` parameter but ignores it (documented in docstring). FMP endpoints are pre-filtered server-side; post-fetch filtering by strategy-specific criteria becomes meaningful when Quality Engine (Sprint 24) provides scoring criteria. Trigger: Sprint 23 (NLP Catalyst) or Sprint 24 (Quality Engine).
+- DEF-032: FMPScannerSource criteria_list filtering. `scan()` accepts `criteria_list` parameter but ignores it (documented in docstring). FMP endpoints are pre-filtered server-side; post-fetch filtering by strategy-specific criteria becomes meaningful when Quality Engine (Sprint 24) provides scoring criteria. Trigger: Sprint 23.5 (NLP Catalyst) or Sprint 24 (Quality Engine).
 | DEF-033 | Approve→Executed status transition is simulated with setTimeout(1500ms) in ChatMessage.tsx. Real execution status should be pushed via WebSocket (`{"type": "proposal_update", ...}`) after ActionExecutor completes. Requires: WS protocol extension (new message type), executor pipeline event emission, frontend WS handler update. Cosmetic-only impact — proposal is correctly marked `approved` in DB; only the UI status badge is faked. | Next UI polish pass or Sprint 23 if room. |
 
 ## Reference
 
 | Document | What It Covers |
 |----------|---------------|
-| `docs/decision-log.md` | All 263 DEC entries with full rationale |
+| `docs/decision-log.md` | All 277 DEC entries with full rationale |
 | `docs/dec-index.md` | Quick-reference index with status markers |
-| `docs/sprint-history.md` | Complete sprint history (1–21.7) |
+| `docs/sprint-history.md` | Complete sprint history (1–23.05) |
 | `docs/process-evolution.md` | Workflow evolution narrative |
 | `docs/live-operations.md` | Live trading procedures |
 | `docs/strategies/STRATEGY_*.md` | Per-strategy spec sheets |

@@ -188,16 +188,31 @@ Re-validate all pre-Databento strategy parameters using Databento tick-level dat
 
 ### Sprint 23: NLP Catalyst Pipeline + Universe Manager (DEC-163, DEC-164, DEC-263)
 **Target:** ~4–5 days (scope expanded per DEC-263; may decompose into 23 + 23.5)
+**Status:** ✅ PARTIAL (Mar 7–8, 2026) — Universe Manager complete. NLP Catalyst Pipeline deferred to Sprint 23.5.
+
+**Scope (delivered — Universe Manager):**
+- **Universe Manager** (`argus/data/universe_manager.py`): Replaces static pre-market watchlist with broad-universe monitoring (DEC-263). FMPReferenceClient fetches Company Profile + Share Float in batches. UniverseManager applies system-level filters (OTC, price, volume; fail-closed on missing data per DEC-277). Pre-computed routing table maps symbols to qualifying strategies via declarative `universe_filter` YAML configs. O(1) route_candle lookup. Fast-path discard in DatabentoDataService drops non-viable symbols before IndicatorEngine. Config-gated: `universe_manager.enabled` in system.yaml.
+- **Strategy universe filter declarations:** All 4 active strategies (ORB Breakout, ORB Scalp, VWAP Reclaim, Afternoon Momentum) updated with explicit `universe_filter` YAML config extracted from `get_scanner_criteria()`. VWAP Reclaim uniquely includes min_market_cap=500M based on institutional flow thesis.
+- **UI:** Dashboard gains UniverseStatusCard panel (enabled/disabled/loading/error states). 2 API endpoints (`/api/v1/universe/status`, `/api/v1/universe/symbols`).
+- **Tests:** 126 pytest + 15 Vitest new tests. DEC-277 (fail-closed on missing reference data).
+
+**Scope (deferred to Sprint 23.5 — NLP Catalyst Pipeline):**
+- **CatalystPipeline** (`argus/intelligence/catalyst.py`): SEC EDGAR filing monitor (10-K, 10-Q, 8-K, insider trades). FMP news feed. Claude API for catalyst classification and quality grading.
+- **CatalystEvent** on Event Bus: `(symbol, catalyst_type, quality_grade, summary, source, timestamp)`.
+- **Pre-market intelligence brief:** Morning scan results + catalyst research + watchlist generation.
+- **UI:** Dashboard catalyst badges, Orchestrator catalyst alert panel, Debrief intelligence brief view.
+
+### Sprint 23.5: NLP Catalyst Pipeline (DEC-163, DEC-164)
+**Target:** ~3–4 days
 **Status:** NEXT
 
 **Scope:**
-- **Universe Manager** (`argus/data/universe_manager.py`): Replaces static pre-market watchlist with broad-universe monitoring (DEC-263). Pre-market: FMP scan builds initial viable universe (3,000–5,000 symbols, minimal system-level filters — not delisted, not OTC). Market open: Databento subscribes to full viable universe. Full IndicatorEngine (VWAP, ATR, EMAs) runs on every subscribed symbol from market open. Each strategy declares `universe_filter` (sector, market cap, float, price range, volume) and `behavioral_triggers` in structured config. Strategies evaluate every candle against their declared filters with early-exit for non-matching symbols. Catalyst Pipeline feeds into Universe Manager as one awareness input among many.
-- **Strategy universe filter declarations:** Update all 4 active strategies (ORB Breakout, ORB Scalp, VWAP Reclaim, Afternoon Momentum) with explicit `universe_filter` YAML config. Extract implicit filter logic from strategy code into declarative specs.
 - **CatalystPipeline** (`argus/intelligence/catalyst.py`): SEC EDGAR filing monitor (10-K, 10-Q, 8-K, insider trades). FMP news feed. Claude API for catalyst classification and quality grading.
 - **CatalystEvent** on Event Bus: `(symbol, catalyst_type, quality_grade, summary, source, timestamp)`.
-- **Pre-market intelligence brief:** Morning scan results + catalyst research + watchlist generation, structured summary saved to Debrief. This is the Universe Manager's first invocation each day, not a separate system.
-- **UI:** Dashboard gains catalyst badges on watchlist entries. Orchestrator gains catalyst alert panel. Debrief gains Pre-Market Intelligence Brief view and research library. System gains API health monitoring for external services.
-- **Tests:** ~100 new (Universe Manager routing, filter declarations, broad subscription handling, catalyst pipeline).
+- **Pre-market intelligence brief:** Morning scan results + catalyst research + watchlist generation, structured summary saved to Debrief.
+- **UI:** Dashboard gains catalyst badges on watchlist entries. Orchestrator gains catalyst alert panel. Debrief gains Pre-Market Intelligence Brief view and research library.
+- **FMP plan upgrade** from Starter ($22/mo) to Premium/Ultimate ($59–149/mo) for news endpoints.
+- **Tests:** ~60–80 new.
 
 ### Sprint 24: Setup Quality Engine + Dynamic Position Sizer (DEC-163, DEC-239)
 **Target:** ~3–4 days

@@ -331,11 +331,24 @@ Differences between VectorBT backtest and production implementation:
 
 ---
 
+## Universe Filter (Sprint 23)
+
+Declared in `config/strategies/afternoon_momentum.yaml` under `universe_filter:`. These filters are used by the Universe Manager for O(1) symbol routing.
+
+| Filter | Value | Source |
+|--------|-------|--------|
+| min_price | 10.0 | Extracted from `get_scanner_criteria()` |
+| max_price | 200.0 | Extracted from `get_scanner_criteria()` |
+| min_avg_volume | 1,000,000 | Extracted from `get_scanner_criteria()` |
+
+---
+
 ## Version History
 
 | Version | Date | Changes | Rationale |
 |---------|------|---------|-----------|
 | 1.0.0 | 2026-02-26 | Initial specification | Sprint 20 design |
+| 1.0.1 | 2026-03-08 | Added Universe Filter section | Sprint 23 Universe Manager integration |
 
 ---
 

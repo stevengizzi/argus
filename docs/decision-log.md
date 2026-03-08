@@ -3119,6 +3119,21 @@ Each entry follows this format:
 
 ---
 
+### DEC-277 | Fail-Closed on Missing Reference Data in System Filters
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-08 |
+| **Sprint** | Sprint 23.05 |
+| **Decision** | Symbols with `None` values for `prev_close` or `avg_volume` are excluded at the system filter level in `UniverseManager._apply_system_filters()`. Symbols with no cached reference data are excluded from strategy routing in `_symbol_matches_filter()`. The semantic intent of "minimum price" and "minimum volume" filters requires data to evaluate — absence of data is not a pass condition. |
+| **Alternatives Considered** | 1. Fail-open with logging (monitor then decide): Rejected — investigation confirmed a concrete exploit path where ORB strategies accept None ATR and Risk Manager does not check reference data, so no downstream guard exists. Deferring the decision risks live capital on unknown symbols. 2. Guard at routing table level only: Rejected — system filters are the earliest gate. Letting unknown symbols into the viable universe wastes memory and creates false coverage. 3. Guard at strategy level: Rejected — requires modifying all 4 strategy Python files (do-not-modify scope boundary) and creates N-strategy maintenance burden vs. one centralized check. |
+| **Rationale** | Sprint 23 Session 1b judgment call allowed None values to pass system filters (rationale: missing data shouldn't auto-disqualify). Post-sprint investigation traced the full path: symbol with all-None reference data → passes system filters → routed to all strategies → ORB accepts None ATR → signal generated → Risk Manager approves (no reference data checks) → order placed on unknown symbol. Worst case: trading low-float traps, illiquid symbols, or untrackable sector exposure. Trading context demands fail-closed on unknowns. |
+| **Constraints** | Cannot modify strategy Python files (Sprint 23 scope boundary). System filter and routing table are the only gates within scope. |
+| **Cross-References** | DEC-263 (full-universe monitoring architecture) |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
-*Next DEC: 277*
-*Last updated: 2026-03-07 (Sprint 22.2 close-out)*
+*Next DEC: 278*
+*Last updated: 2026-03-08 (Sprint 23.05 doc-sync)*

@@ -107,6 +107,7 @@ IndicatorEvent(symbol, indicator_name, value, timestamp)
 
 # Scanner events
 WatchlistEvent(date, symbols: list[WatchlistItem])
+UniverseUpdateEvent(viable_count, routing_table_size, cache_age_minutes, per_strategy_counts)
 
 # Strategy events
 SignalEvent(strategy_id, symbol, side, entry_price, stop_price, target_prices, share_count, rationale)
@@ -230,7 +231,19 @@ class IndicatorEngine:
 ### 3.2b Data Flow Architecture
 
 ```
-Live Trading:
+Live Trading (Universe Manager enabled):
+  FMP REST API ──────> FMPReferenceClient ──> UniverseManager (system filters, routing table)
+                                                      │
+  Databento US Equities ──TCP──> DatabentoDataService ─┤─ fast-path discard (non-viable)
+                                        │              │
+                                        │         EventBus (viable symbols only)
+                                        │              │
+                                        ├── CandleEvents (1m bars)     ├── Strategy 1 (via routing table)
+                                        ├── TickEvents (every trade)   ├── Strategy 2 (via routing table)
+                                        ├── IndicatorEvents (VWAP,ATR) ├── ...
+                                        └── L2 Depth (post-revenue)    └── Strategy 30+
+
+Live Trading (Universe Manager disabled / legacy):
   Databento US Equities ──TCP──> DatabentoDataService ──EventBus──> All Strategies
                                         │                              │
                                         ├── CandleEvents (1m bars)     ├── Strategy 1
@@ -263,7 +276,7 @@ Future (when needed):
 - `reconnect_max_retries`: 10
 - `reconnect_base_delay_seconds`: 1.0
 
-**Implementation Status:** Sprint 12 ✅ COMPLETE (Feb 21), updated Sprint 21.5 (Mar 2–3). DatabentoConfig, DatabentoDataService (live streaming, reconnection with exponential backoff, indicators, stale data monitor, historical/Parquet cache). DataFetcher Databento backend with manifest tracking. DatabentoScanner (V1 watchlist with historical data lag resilience, DEC-247). DataSource enum for config-driven provider selection. Shared normalization via `argus/data/databento_utils.py` (DEC-091). Threading model: Databento reader thread → `call_soon_threadsafe()` → asyncio Event Bus (DEC-088). Production dataset: EQUS.MINI (DEC-248, supersedes XNAS.ITCH DEC-089) — consolidated US equities covering all exchanges in single feed. Symbol resolution uses Databento library's built-in `symbology_map` (DEC-242). Prices in fixed-point format ×1e9 (DEC-243). DatabentoSymbolMap removed (replaced by built-in mapping). Live streaming + all required schemas (ohlcv-1m, ohlcv-1d, trades, tbbo) verified on Standard plan. See `argus_market_data_research_report.md` Section 14. **Scanning data source (Sprint 21.7):** FMP Starter ($22/mo, DEC-258) provides pre-market daily bars and screener endpoints for gap/volume scanning, replacing the broken Databento historical daily bar path (DEC-247). Hybrid architecture: Databento for live streaming + backtesting, FMP for scanning (DEC-257).
+**Implementation Status:** Sprint 12 ✅ COMPLETE (Feb 21), updated Sprint 21.5 (Mar 2–3). DatabentoConfig, DatabentoDataService (live streaming, reconnection with exponential backoff, indicators, stale data monitor, historical/Parquet cache). DataFetcher Databento backend with manifest tracking. DatabentoScanner (V1 watchlist with historical data lag resilience, DEC-247). DataSource enum for config-driven provider selection. Shared normalization via `argus/data/databento_utils.py` (DEC-091). Threading model: Databento reader thread → `call_soon_threadsafe()` → asyncio Event Bus (DEC-088). Production dataset: EQUS.MINI (DEC-248, supersedes XNAS.ITCH DEC-089) — consolidated US equities covering all exchanges in single feed. Symbol resolution uses Databento library's built-in `symbology_map` (DEC-242). Prices in fixed-point format ×1e9 (DEC-243). DatabentoSymbolMap removed (replaced by built-in mapping). Live streaming + all required schemas (ohlcv-1m, ohlcv-1d, trades, tbbo) verified on Standard plan. See `argus_market_data_research_report.md` Section 14. **Scanning data source (Sprint 21.7):** FMP Starter ($22/mo, DEC-258) provides pre-market daily bars and screener endpoints for gap/volume scanning, replacing the broken Databento historical daily bar path (DEC-247). Hybrid architecture: Databento for live streaming + backtesting, FMP for scanning (DEC-257). **Universe Manager integration (Sprint 23):** DatabentoDataService gains `set_viable_universe()` method and fast-path discard in `_on_ohlcv` and `_on_trade` — non-viable symbols are dropped before `_active_symbols` check and before IndicatorEngine processing. Backward compatible: when viable_universe is None (UM disabled), all symbols pass.
 
 
 ### 3.3 Broker Abstraction (`execution/broker.py`)
@@ -747,17 +760,68 @@ class FMPScannerSource(Scanner):
 - `scan_source: str` — "fmp", "fmp_fallback", or "static"
 - `selection_reason: str` — Human-readable selection rationale
 
-### 3.7d Universe Manager (Sprint 23+, DEC-263)
+### 3.7d Universe Manager (`data/universe_manager.py`, `data/fmp_reference.py`) — Sprint 23 ✅
 
-**Planned:** The current scanner architecture (pre-market scan → static watchlist → Databento subscription) evolves into a Universe Manager that provides broad-universe monitoring with strategy-specific filters.
+Replaces the static pre-market watchlist with broad-universe monitoring. Config-gated: `universe_manager.enabled` in system.yaml. When disabled, existing scanner flow is unchanged.
 
-**Architecture:** Each strategy declares a `universe_filter` in YAML config (sector, market cap, float, price range, average volume) and `behavioral_triggers` (the price action conditions requiring live indicator data). The Universe Manager subscribes to the broadest viable universe via Databento EQUS.MINI (3,000–5,000 symbols). The IndicatorEngine runs full indicator computation (VWAP, ATR, EMAs) on every subscribed symbol from market open — no lazy computation or tiered processing. Strategies evaluate every candle close against their declared universe filters with early-exit for non-matching symbols.
+**FMPReferenceClient** (`data/fmp_reference.py`):
+```python
+class FMPReferenceClient:
+    def __init__(self, config: FMPReferenceConfig) -> None
+    async def start(self) -> None          # Validate API key
+    async def stop(self) -> None
+    async def fetch_reference_data(self, symbols: list[str]) -> dict[str, SymbolReferenceData]
+    async def fetch_float_data(self, symbols: list[str]) -> dict[str, float]
+    async def build_reference_cache(self, symbols: list[str]) -> dict[str, SymbolReferenceData]
+    def get_cached(self, symbol: str) -> SymbolReferenceData | None
+    def is_cache_fresh(self) -> bool
+```
 
-**Processing budget:** ~8,000–12,000 ticks/sec across full universe. Per-tick work (VWAP sums, candle high/low, volume) ~1–2μs/event → ~2% CPU. Per-candle work (ATR, EMAs, strategy evaluation) ~4,000 updates/min → negligible. Total: ~2–4% of one CPU core in pure Python with ~97% headroom.
+Fetches Company Profile + Share Float in batches for ~3,000–5,000 viable symbols. OTC exchange detection via frozenset lookup. Graceful degradation when float data unavailable.
 
-**Inputs:** Pre-market FMP scan (first invocation), NLP Catalyst Pipeline (enrichment), continuous intra-day behavioral monitoring (technical screening on full indicator data).
+**SymbolReferenceData** dataclass: `symbol, name, sector, industry, market_cap, avg_volume, prev_close, float_shares, exchange, is_otc, is_etf, last_updated`.
 
-**Scaling:** At Phase 9+ ensemble scale (200–800 micro-strategies), per-candle strategy evaluation scales with micro-strategy count. Cython optimization of IndicatorEngine hot path deferred until profiling demonstrates need (DEC-263).
+**UniverseManager** (`data/universe_manager.py`):
+```python
+class UniverseManager:
+    def __init__(self, config: UniverseManagerConfig, fmp_client: FMPReferenceClient) -> None
+    async def build_viable_universe(self, symbols: list[str]) -> set[str]
+    async def build_viable_universe_fallback(self, scanner_symbols: list[str]) -> set[str]
+    def build_routing_table(self, strategy_configs: dict[str, Any]) -> None
+    def route_candle(self, symbol: str) -> set[str]    # O(1) dict.get
+    def get_strategy_symbols(self, strategy_id: str) -> set[str]
+    def get_strategy_universe_size(self, strategy_id: str) -> int
+    def get_universe_stats(self) -> dict
+```
+
+**System-level filters** (in `_apply_system_filters`): OTC exclusion, min/max price, min average volume. **Fail-closed on missing data (DEC-277):** symbols with None `prev_close` or `avg_volume` are excluded. Symbols with no cached reference data are excluded from routing.
+
+**Routing table:** Pre-computed dict mapping each symbol to qualifying strategy IDs based on declarative `universe_filter` YAML configs per strategy. Each strategy declares: `min_price`, `max_price`, `min_market_cap`, `max_market_cap`, `min_float`, `max_float`, `min_avg_volume`, `sectors` (inclusion list), `exclude_sectors`. O(1) `route_candle()` lookup via `dict.get()`.
+
+**Config:**
+```yaml
+# system.yaml
+universe_manager:
+  enabled: false          # Config gate — disabled by default
+  min_price: 5.0
+  max_price: 500.0
+  min_avg_volume: 500000
+  exclude_otc: true
+  reference_cache_ttl_hours: 24
+  fmp_batch_size: 100
+
+# Per-strategy (e.g., config/strategies/orb_breakout.yaml)
+universe_filter:
+  min_price: 10.0
+  max_price: 200.0
+  min_avg_volume: 1000000
+```
+
+**Startup wiring (main.py):** Phase 7.5 (FMPReferenceClient start), Phase 8 (build viable universe after scanner), Phase 9.5 (build routing table after strategies loaded), Phase 10.5 (set viable universe on DatabentoDataService), Phase 11 (start streaming).
+
+**Processing budget:** ~8,000–12,000 ticks/sec across full universe. Per-tick fast-path discard ~O(1) set lookup. Per-candle routing ~O(1) dict lookup. Total: ~2–4% of one CPU core in pure Python with ~97% headroom.
+
+**Implementation Status:** Sprint 23 ✅ COMPLETE (Mar 7–8, 2026). 126 pytest + 15 Vitest new tests. FMPReferenceClient, UniverseManager, UniverseFilterConfig, UniverseManagerConfig, fast-path discard in DatabentoDataService, UniverseUpdateEvent, 2 API endpoints, Dashboard UniverseStatusCard. DEC-277 (fail-closed on missing reference data).
 
 ### 3.8 Health Monitor (`core/health.py`)
 
@@ -799,18 +863,23 @@ health:
 
 ### 3.9 System Entry Point (`main.py`)
 
-Wires all components together with a 10-phase startup sequence:
+Wires all components together with a 12-phase startup sequence:
 
 1. Config + Clock + EventBus
 2. Database + TradeLogger
 3. Broker connection
 4. HealthMonitor
 5. RiskManager (with state reconstruction)
-6. AlpacaDataService
-7. AlpacaScanner (pre-market scan)
-8. OrbBreakoutStrategy (with mid-day reconstruction if applicable)
-9. OrderManager (with broker position reconstruction)
-10. Start data streaming
+6. DataService (Databento or Alpaca)
+7. Scanner (pre-market scan)
+7.5. FMPReferenceClient start (if Universe Manager enabled)
+8. Build viable universe (if UM enabled, using scanner symbols)
+9. Strategies (with mid-day reconstruction if applicable)
+9.5. Build routing table (if UM enabled, from strategy configs)
+10. OrderManager (with broker position reconstruction)
+10.5. Set viable universe on DataService (if UM enabled)
+11. Start data streaming
+12. API server (in-process FastAPI)
 
 Shutdown runs in reverse order. SIGINT/SIGTERM trigger graceful shutdown.
 
@@ -1101,6 +1170,10 @@ WS   /api/v1/ai/chat                    # Copilot chat (WebSocket)
 POST /api/v1/ai/briefing/generate       # Generate pre-market briefing
 POST /api/v1/ai/report/generate         # Generate analysis report
 POST /api/v1/ai/analyze/trade/{id}      # Analyze specific trade
+
+# Universe Manager endpoints (Sprint 23)
+GET  /api/v1/universe/status              # Viable count, routing table size, per-strategy counts, data age
+GET  /api/v1/universe/symbols             # Paginated symbol list with strategy filter
 
 # Debrief endpoints (Sprint 21c)
 GET/POST         /api/v1/debrief/briefings           # List / create briefings

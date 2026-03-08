@@ -315,6 +315,18 @@ Interactive reports: `reports/orb_baseline_defaults.html`, `reports/orb_baseline
 
 ---
 
+## Universe Filter (Sprint 23)
+
+Declared in `config/strategies/orb_breakout.yaml` under `universe_filter:`. These filters are used by the Universe Manager for O(1) symbol routing.
+
+| Filter | Value | Source |
+|--------|-------|--------|
+| min_price | 10.0 | Extracted from `get_scanner_criteria()` |
+| max_price | 200.0 | Extracted from `get_scanner_criteria()` |
+| min_avg_volume | 1,000,000 | Extracted from `get_scanner_criteria()` |
+
+---
+
 ## Version History
 
 | Version | Date | Changes | Rationale |
@@ -322,6 +334,7 @@ Interactive reports: `reports/orb_baseline_defaults.html`, `reports/orb_baseline
 | 1.0.0 | 2026-02-15 | Initial implementation | Sprint 3 — foundational strategy with default parameters |
 | 1.1.0 | 2026-02-17 | Parameters revised: or 15→5, hold 30→15, ATR disabled | Phase 2 backtesting (DEC-076). Sweep + sensitivity analysis. |
 | 1.2.0 | 2026-02-18 | Extended validation + earliest_entry fix | Sprint 11 confirmed DEC-076 across 35 months. DEC-078 fixed earliest_entry 9:45→9:35. |
+| 1.2.1 | 2026-03-08 | Added Universe Filter section | Sprint 23 Universe Manager integration |
 
 ---
 

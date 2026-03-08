@@ -1,7 +1,7 @@
 # ARGUS — Decision Index
 
-> 275 decisions (DEC-001 through DEC-276)
-> Generated: March 7, 2026 | Source: `docs/decision-log.md`
+> 277 decisions (DEC-001 through DEC-277)
+> Generated: March 8, 2026 | Source: `docs/decision-log.md`
 > Legend: ● Active | ○ Superseded | △ Amended | ✗ Duplicate entry
 
 
@@ -296,3 +296,4 @@
 - ● **DEC-274**: Per-Call Cost Tracking — ai_usage table, real-time monitoring
 - ● **DEC-275**: Compaction Risk Scoring System — quantitative point-based session sizing
 - ● **DEC-276**: AI Timestamps Standardized on ET — naive ET strings, no UTC storage
+- ● **DEC-277**: Fail-Closed on Missing Reference Data — system filters and routing exclude symbols with None prev_close/avg_volume

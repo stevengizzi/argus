@@ -268,11 +268,24 @@ Position size formula: `shares = (allocated_capital × 0.01) / (entry_price − 
 
 ---
 
+## Universe Filter (Sprint 23)
+
+Declared in `config/strategies/orb_scalp.yaml` under `universe_filter:`. These filters are used by the Universe Manager for O(1) symbol routing.
+
+| Filter | Value | Source |
+|--------|-------|--------|
+| min_price | 10.0 | Extracted from `get_scanner_criteria()` |
+| max_price | 200.0 | Extracted from `get_scanner_criteria()` |
+| min_avg_volume | 1,000,000 | Extracted from `get_scanner_criteria()` |
+
+---
+
 ## Version History
 
 | Version | Date | Changes | Rationale |
 |---------|------|---------|-----------|
 | 1.0.0 | 2026-02-25 | Initial implementation (Sprint 18) | DEC-123: Single target exit, 0.3R default, 120s hold, midpoint stop. Shared base class with OrbBreakoutStrategy (DEC-120). |
+| 1.0.1 | 2026-03-08 | Added Universe Filter section | Sprint 23 Universe Manager integration |
 
 ---
 
