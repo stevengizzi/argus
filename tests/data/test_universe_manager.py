@@ -799,15 +799,15 @@ class TestUniverseManagerConfig:
 
 
 class TestNullDataHandling:
-    """Tests for handling None values in reference data."""
+    """Tests for handling None values in reference data (fail-closed per DEC-277)."""
 
     @pytest.mark.asyncio
-    async def test_null_price_passes_filter(
+    async def test_system_filter_excludes_none_prev_close(
         self,
         mock_reference_client: MagicMock,
         mock_scanner: MagicMock,
     ) -> None:
-        """Symbol with None prev_close passes price filter (data unavailable)."""
+        """Symbol with None prev_close is excluded (fail-closed, DEC-277)."""
         reference_data = {
             "NULLPRICE": SymbolReferenceData(
                 symbol="NULLPRICE",
@@ -834,16 +834,17 @@ class TestNullDataHandling:
             initial_symbols=list(reference_data.keys())
         )
 
-        # Should pass - we don't filter out symbols with missing price data
-        assert "NULLPRICE" in result
+        # Fail-closed: symbol with missing prev_close is excluded
+        assert "NULLPRICE" not in result
+        assert result == set()
 
     @pytest.mark.asyncio
-    async def test_null_volume_passes_filter(
+    async def test_system_filter_excludes_none_avg_volume(
         self,
         mock_reference_client: MagicMock,
         mock_scanner: MagicMock,
     ) -> None:
-        """Symbol with None avg_volume passes volume filter (data unavailable)."""
+        """Symbol with None avg_volume is excluded (fail-closed, DEC-277)."""
         reference_data = {
             "NULLVOL": SymbolReferenceData(
                 symbol="NULLVOL",
@@ -870,8 +871,55 @@ class TestNullDataHandling:
             initial_symbols=list(reference_data.keys())
         )
 
-        # Should pass - we don't filter out symbols with missing volume data
-        assert "NULLVOL" in result
+        # Fail-closed: symbol with missing avg_volume is excluded
+        assert "NULLVOL" not in result
+        assert result == set()
+
+    @pytest.mark.asyncio
+    async def test_system_filter_excludes_both_none(
+        self,
+        mock_reference_client: MagicMock,
+        mock_scanner: MagicMock,
+    ) -> None:
+        """Symbol with both None prev_close and avg_volume is excluded once."""
+        reference_data = {
+            "NULLBOTH": SymbolReferenceData(
+                symbol="NULLBOTH",
+                prev_close=None,  # No price data
+                avg_volume=None,  # No volume data
+                exchange="NYSE",
+                is_otc=False,
+            ),
+            "GOOD": SymbolReferenceData(
+                symbol="GOOD",
+                prev_close=50.0,
+                avg_volume=500000,
+                exchange="NYSE",
+                is_otc=False,
+            ),
+        }
+
+        mock_reference_client.build_reference_cache = AsyncMock(
+            return_value=reference_data
+        )
+
+        config = UniverseManagerConfig(
+            min_price=5.0,
+            max_price=500.0,
+            min_avg_volume=100000,
+            exclude_otc=True,
+        )
+
+        manager = UniverseManager(mock_reference_client, config, mock_scanner)
+        result = await manager.build_viable_universe(
+            initial_symbols=list(reference_data.keys())
+        )
+
+        # Fail-closed: symbol with missing data is excluded (not double-counted)
+        assert "NULLBOTH" not in result
+        # But GOOD symbol should still pass
+        assert "GOOD" in result
+        assert result == {"GOOD"}
 
 
 # =============================================================================
@@ -1251,16 +1299,16 @@ class TestSectorExcludeFilter:
         assert "no_utilities" not in manager.route_candle("UTILITY")
 
 
-class TestMissingReferenceDataPasses:
-    """Tests for missing reference data handling in routing."""
+class TestMissingReferenceDataRouting:
+    """Tests for missing reference data handling in routing (DEC-277)."""
 
     @pytest.mark.asyncio
-    async def test_missing_reference_data_passes(
+    async def test_missing_reference_data_passes_optional_fields(
         self,
         mock_reference_client: MagicMock,
         mock_scanner: MagicMock,
     ) -> None:
-        """Symbol with None market_cap passes min_market_cap filter."""
+        """Symbol with None market_cap passes min_market_cap filter (optional field)."""
         reference_data = {
             "NULLCAP": SymbolReferenceData(
                 symbol="NULLCAP",
@@ -1299,8 +1347,71 @@ class TestMissingReferenceDataPasses:
 
         manager.build_routing_table(strategy_configs)
 
-        # Symbol with None market_cap should PASS the filter
+        # Symbol with None market_cap should PASS the filter (market_cap is optional)
         assert "large_cap" in manager.route_candle("NULLCAP")
+
+    @pytest.mark.asyncio
+    async def test_routing_no_reference_data_excludes(
+        self,
+        mock_reference_client: MagicMock,
+        mock_scanner: MagicMock,
+    ) -> None:
+        """Symbol with no cached reference data is not routed to any strategy (DEC-277)."""
+        # Create reference data for AAPL but not for UNKNOWN
+        reference_data = {
+            "AAPL": SymbolReferenceData(
+                symbol="AAPL",
+                sector="Technology",
+                prev_close=175.0,
+                avg_volume=50_000_000,
+                exchange="NASDAQ",
+                is_otc=False,
+            ),
+        }
+
+        mock_reference_client.build_reference_cache = AsyncMock(
+            return_value=reference_data
+        )
+
+        config = UniverseManagerConfig(
+            min_price=5.0,
+            max_price=500.0,
+            min_avg_volume=100000,
+            exclude_otc=True,
+        )
+
+        manager = UniverseManager(mock_reference_client, config, mock_scanner)
+        await manager.build_viable_universe(initial_symbols=["AAPL"])
+
+        # Manually add a symbol to viable set that has no reference data
+        # (simulating a fallback scenario where symbol is viable but cache incomplete)
+        manager._viable_symbols.add("UNKNOWN")
+
+        strategy_configs = {
+            "test_strategy": StrategyConfig(
+                strategy_id="test_strategy",
+                name="Test Strategy",
+                universe_filter=UniverseFilterConfig(
+                    min_price=10.0,  # Has a filter, so will check reference data
+                ),
+            ),
+            "no_filter_strategy": StrategyConfig(
+                strategy_id="no_filter_strategy",
+                name="No Filter Strategy",
+                universe_filter=None,  # No filter = matches all viable
+            ),
+        }
+
+        manager.build_routing_table(strategy_configs)
+
+        # AAPL should route to both strategies
+        assert "test_strategy" in manager.route_candle("AAPL")
+        assert "no_filter_strategy" in manager.route_candle("AAPL")
+
+        # UNKNOWN has no reference data - should NOT route to strategy with filter
+        assert "test_strategy" not in manager.route_candle("UNKNOWN")
+        # But UNKNOWN DOES route to no_filter_strategy (universe_filter=None matches all viable)
+        assert "no_filter_strategy" in manager.route_candle("UNKNOWN")
 
     @pytest.mark.asyncio
     async def test_null_sector_fails_sector_include(

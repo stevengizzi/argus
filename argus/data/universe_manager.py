@@ -190,6 +190,7 @@ class UniverseManager:
         """Apply system-level filters to reference data.
 
         Filters:
+        - Missing data: Exclude symbols with None prev_close or avg_volume (fail-closed)
         - exclude_otc: Exclude OTC-traded symbols
         - min_price / max_price: Filter on previous close price
         - min_avg_volume: Filter on average trading volume
@@ -201,30 +202,32 @@ class UniverseManager:
             Set of symbols that pass all filters.
         """
         viable: set[str] = set()
+        excluded_missing_data = 0
         excluded_otc = 0
         excluded_price = 0
         excluded_volume = 0
 
         for symbol, data in reference_data.items():
+            # Fail-closed: exclude symbols missing essential reference data (DEC-277)
+            if data.prev_close is None or data.avg_volume is None:
+                excluded_missing_data += 1
+                continue
+
             # OTC filter
             if self._config.exclude_otc and data.is_otc:
                 excluded_otc += 1
                 continue
 
-            # Price filter (skip if prev_close is None)
-            if data.prev_close is not None:
-                if data.prev_close < self._config.min_price:
-                    excluded_price += 1
-                    continue
-                if data.prev_close > self._config.max_price:
-                    excluded_price += 1
-                    continue
+            # Price filter
+            if data.prev_close < self._config.min_price:
+                excluded_price += 1
+                continue
+            if data.prev_close > self._config.max_price:
+                excluded_price += 1
+                continue
 
-            # Volume filter (skip if avg_volume is None)
-            if (
-                data.avg_volume is not None
-                and data.avg_volume < self._config.min_avg_volume
-            ):
+            # Volume filter
+            if data.avg_volume < self._config.min_avg_volume:
                 excluded_volume += 1
                 continue
 
@@ -232,8 +235,10 @@ class UniverseManager:
             viable.add(symbol)
 
         # Log filter statistics
-        logger.debug(
-            "Filter stats: excluded_otc=%d, excluded_price=%d, excluded_volume=%d",
+        logger.info(
+            "Filter stats: excluded_missing_data=%d, excluded_otc=%d, "
+            "excluded_price=%d, excluded_volume=%d",
+            excluded_missing_data,
             excluded_otc,
             excluded_price,
             excluded_volume,
@@ -391,9 +396,8 @@ class UniverseManager:
         # Get reference data for this symbol
         ref_data = self._reference_cache.get(symbol)
         if ref_data is None:
-            # No reference data — symbol is viable but we can't filter it
-            # Per spec: symbols with missing data PASS filters
-            return True
+            # Fail-closed: no reference data means symbol is excluded (DEC-277)
+            return False
 
         # Check price constraints (None reference data = pass)
         if universe_filter.min_price is not None:
