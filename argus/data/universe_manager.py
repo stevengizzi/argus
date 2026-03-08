@@ -10,41 +10,14 @@ Sprint 23: NLP Catalyst + Universe Manager
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from argus.core.config import StrategyConfig, UniverseFilterConfig
+from argus.core.config import StrategyConfig, UniverseFilterConfig, UniverseManagerConfig
 from argus.data.fmp_reference import FMPReferenceClient, SymbolReferenceData
 from argus.data.scanner import Scanner
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class UniverseManagerConfig:
-    """Temporary configuration for UniverseManager.
-
-    This dataclass will be replaced by a Pydantic model in Session 4a.
-    Designed for trivial swap when the real config is integrated.
-
-    Attributes:
-        enabled: Whether the Universe Manager is active.
-        min_price: Minimum previous close price for viable symbols.
-        max_price: Maximum previous close price for viable symbols.
-        min_avg_volume: Minimum average daily volume for viable symbols.
-        exclude_otc: Whether to exclude OTC-traded symbols.
-        reference_cache_ttl_hours: Hours before reference cache is stale.
-        fmp_batch_size: Number of symbols per FMP batch request.
-    """
-
-    enabled: bool = False
-    min_price: float = 5.0
-    max_price: float = 10000.0
-    min_avg_volume: int = 100000
-    exclude_otc: bool = True
-    reference_cache_ttl_hours: int = 24
-    fmp_batch_size: int = 50
 
 
 class UniverseManager:

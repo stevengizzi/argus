@@ -69,3 +69,15 @@ ai:
   insight_refresh_interval_seconds: 60    # Dashboard insight refresh interval
   cost_per_million_input_tokens: 15.0     # Opus pricing
   cost_per_million_output_tokens: 75.0    # Opus pricing
+
+# Universe Manager (Sprint 23 — DEC-263)
+# Broad-universe monitoring with strategy-specific filtering
+# Set enabled: true to activate. Requires FMP_API_KEY.
+universe_manager:
+  enabled: false          # Start disabled — operator activates when ready
+  min_price: 5.0          # System-level: exclude penny stocks
+  max_price: 10000.0      # System-level: exclude extreme price outliers
+  min_avg_volume: 100000  # System-level: minimum average daily volume
+  exclude_otc: true       # System-level: exclude OTC symbols
+  reference_cache_ttl_hours: 24  # FMP reference data cache lifetime
+  fmp_batch_size: 50      # Symbols per FMP batch API call

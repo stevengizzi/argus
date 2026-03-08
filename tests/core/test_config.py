@@ -899,3 +899,151 @@ class TestVwapAfternoonUniverseFilter:
         model_fields = set(UniverseFilterConfig.model_fields.keys())
         unrecognized = yaml_keys - model_fields
         assert unrecognized == set(), f"Unrecognized keys in universe_filter: {unrecognized}"
+
+
+class TestUniverseManagerSystemYamlIntegration:
+    """Tests for UniverseManagerConfig integration with system.yaml (Sprint 23, Session 4a).
+
+    Verifies that:
+    1. system.yaml loads with the universe_manager section
+    2. Default values match between YAML and Pydantic model
+    3. Missing universe_manager section falls back to defaults
+    4. No YAML keys are silently ignored (YAML↔Pydantic match)
+    5. UniverseManager accepts the real Pydantic config
+    6. system_live.yaml also loads successfully
+    """
+
+    def test_system_yaml_loads_with_universe_manager(self) -> None:
+        """Actual config/system.yaml loads with universe_manager section."""
+        config = load_config(Path("config"))
+
+        # Verify universe_manager section loaded
+        assert hasattr(config.system, "universe_manager")
+        assert isinstance(config.system.universe_manager, UniverseManagerConfig)
+
+        # Verify section exists in raw YAML
+        raw_yaml = yaml.safe_load(Path("config/system.yaml").read_text())
+        assert "universe_manager" in raw_yaml, "universe_manager section missing from system.yaml"
+
+    def test_system_yaml_universe_manager_defaults(self) -> None:
+        """system.yaml universe_manager values match Pydantic defaults."""
+        config = load_config(Path("config"))
+        um = config.system.universe_manager
+
+        # These should match the YAML values which should match defaults
+        # (Session 4a sets YAML to defaults for safe initial deployment)
+        assert um.enabled is False  # Start disabled
+        assert um.min_price == 5.0
+        assert um.max_price == 10000.0
+        assert um.min_avg_volume == 100000
+        assert um.exclude_otc is True
+        assert um.reference_cache_ttl_hours == 24
+        assert um.fmp_batch_size == 50
+
+    def test_system_yaml_missing_universe_manager(self, tmp_path: Path) -> None:
+        """Missing universe_manager section in YAML → defaults apply."""
+        # Create minimal system.yaml without universe_manager section
+        yaml_content = """
+timezone: America/New_York
+market_open: "09:30"
+market_close: "16:00"
+log_level: INFO
+"""
+        (tmp_path / "system.yaml").write_text(yaml_content)
+
+        # Load config - should use defaults
+        config = load_config(tmp_path)
+
+        # Verify defaults are applied
+        assert config.system.universe_manager.enabled is False
+        assert config.system.universe_manager.min_price == 5.0
+        assert config.system.universe_manager.max_price == 10000.0
+        assert config.system.universe_manager.min_avg_volume == 100000
+        assert config.system.universe_manager.exclude_otc is True
+        assert config.system.universe_manager.reference_cache_ttl_hours == 24
+        assert config.system.universe_manager.fmp_batch_size == 50
+
+    def test_universe_manager_yaml_keys_match_pydantic(self) -> None:
+        """All keys in system.yaml universe_manager section match Pydantic model fields.
+
+        This prevents silent key ignoring where a typo in YAML is ignored.
+        """
+        yaml_path = Path("config/system.yaml")
+        raw_yaml = yaml.safe_load(yaml_path.read_text())
+
+        # Verify universe_manager section exists
+        assert "universe_manager" in raw_yaml, "universe_manager section missing from system.yaml"
+
+        # Get keys from YAML
+        yaml_keys = set(raw_yaml["universe_manager"].keys())
+
+        # Get model field names
+        model_fields = set(UniverseManagerConfig.model_fields.keys())
+
+        # Check for keys in YAML that aren't in the model (would be silently ignored)
+        unrecognized = yaml_keys - model_fields
+        assert unrecognized == set(), (
+            f"Unrecognized keys in universe_manager YAML (silently ignored): {unrecognized}. "
+            f"Valid keys: {sorted(model_fields)}"
+        )
+
+    def test_universe_manager_config_swap_in_manager(self) -> None:
+        """UniverseManager accepts the real UniverseManagerConfig from config.py.
+
+        This verifies the Session 4a swap from temporary dataclass to real Pydantic model.
+        """
+        from unittest.mock import MagicMock
+
+        from argus.data.universe_manager import UniverseManager
+
+        # Create real config from Pydantic model
+        config = UniverseManagerConfig(
+            enabled=True,
+            min_price=10.0,
+            max_price=200.0,
+            min_avg_volume=500000,
+            exclude_otc=True,
+            reference_cache_ttl_hours=12,
+            fmp_batch_size=100,
+        )
+
+        # Create mock dependencies
+        mock_reference_client = MagicMock()
+        mock_reference_client._cache = {}
+        mock_scanner = MagicMock()
+
+        # UniverseManager should accept the real config
+        manager = UniverseManager(mock_reference_client, config, mock_scanner)
+
+        # Verify config was stored correctly
+        assert manager._config.enabled is True
+        assert manager._config.min_price == 10.0
+        assert manager._config.max_price == 200.0
+        assert manager._config.min_avg_volume == 500000
+        assert manager._config.exclude_otc is True
+        assert manager._config.reference_cache_ttl_hours == 12
+        assert manager._config.fmp_batch_size == 100
+
+    def test_system_live_yaml_loads(self) -> None:
+        """config/system_live.yaml loads successfully with universe_manager."""
+        system_live_path = Path("config/system_live.yaml")
+
+        # Skip if file doesn't exist (optional file)
+        if not system_live_path.exists():
+            pytest.skip("system_live.yaml not present")
+
+        # Load using custom system config file
+        config = load_config(Path("config"), system_config_file=system_live_path)
+
+        # Verify universe_manager section loaded
+        assert hasattr(config.system, "universe_manager")
+        assert isinstance(config.system.universe_manager, UniverseManagerConfig)
+
+        # Verify it's disabled by default in live config too
+        assert config.system.universe_manager.enabled is False
+
+        # Verify raw YAML has the section
+        raw_yaml = yaml.safe_load(system_live_path.read_text())
+        assert "universe_manager" in raw_yaml, (
+            "universe_manager section missing from system_live.yaml"
+        )
