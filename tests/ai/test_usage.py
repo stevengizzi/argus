@@ -72,7 +72,8 @@ class TestUsageTrackerRecord:
         )
 
         # Verify by getting daily usage
-        today = datetime.now(ZoneInfo("UTC")).date().isoformat()
+        # Use ET timezone to match how UsageTracker stores timestamps (DEC-276)
+        today = datetime.now(ZoneInfo("America/New_York")).date().isoformat()
         usage = await usage_tracker.get_daily_usage(today)
         assert usage["call_count"] == 1
 

@@ -12,6 +12,7 @@ import asyncio
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -191,7 +192,9 @@ async def app_state_with_decisions(
 ) -> AppState:
     """Provide AppState with seeded orchestrator decisions."""
     trade_logger = app_state_with_orchestrator.trade_logger
-    now = datetime.now(UTC)
+    # Use ET timezone to match endpoint's default date behavior (DEC-276)
+    et_tz = ZoneInfo("America/New_York")
+    now = datetime.now(et_tz)
     today = now.date().isoformat()
     yesterday = (now - timedelta(days=1)).date().isoformat()
 
