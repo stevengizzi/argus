@@ -24,6 +24,7 @@ from argus.api.routes.positions import router as positions_router
 from argus.api.routes.session import router as session_router
 from argus.api.routes.strategies import router as strategies_router
 from argus.api.routes.trades import router as trades_router
+from argus.api.routes.universe import router as universe_router
 from argus.api.routes.watchlist import router as watchlist_router
 
 # Main API router that aggregates all route modules
@@ -49,3 +50,4 @@ api_router.include_router(documents_router, prefix="/debrief/documents", tags=["
 api_router.include_router(journal_router, prefix="/debrief/journal", tags=["debrief"])
 api_router.include_router(debrief_search_router, prefix="/debrief", tags=["debrief"])
 api_router.include_router(ai_router, prefix="/ai", tags=["ai"])
+api_router.include_router(universe_router, prefix="/universe", tags=["universe"])
