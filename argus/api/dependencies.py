@@ -31,6 +31,7 @@ if TYPE_CHECKING:
     from argus.core.orchestrator import Orchestrator
     from argus.core.risk_manager import RiskManager
     from argus.data.service import DataService
+    from argus.data.universe_manager import UniverseManager
     from argus.execution.broker import Broker
     from argus.execution.order_manager import OrderManager
     from argus.strategies.base_strategy import BaseStrategy
@@ -67,6 +68,7 @@ class AppState:
         executor_registry: AI action executor registry.
         ai_summary_generator: AI summary and insight generator.
         ai_cache: AI response cache.
+        universe_manager: Universe Manager for viable universe and routing.
     """
 
     event_bus: EventBus
@@ -92,6 +94,7 @@ class AppState:
     executor_registry: ExecutorRegistry | None = None
     ai_summary_generator: DailySummaryGenerator | None = None
     ai_cache: ResponseCache | None = None
+    universe_manager: UniverseManager | None = None
 
 
 def get_app_state(request: Request) -> AppState:

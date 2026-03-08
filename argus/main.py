@@ -58,8 +58,10 @@ from argus.data.alpaca_data_service import AlpacaDataService
 from argus.data.alpaca_scanner import AlpacaScanner
 from argus.data.databento_data_service import DatabentoDataService
 from argus.data.databento_scanner import DatabentoScanner, DatabentoScannerConfig
+from argus.data.fmp_reference import FMPReferenceClient, FMPReferenceConfig
 from argus.data.fmp_scanner import FMPScannerConfig, FMPScannerSource
 from argus.data.scanner import StaticScanner
+from argus.data.universe_manager import UniverseManager
 from argus.ai.actions import ActionManager
 from argus.ai.conversations import ConversationManager
 from argus.ai.usage import UsageTracker
@@ -123,6 +125,8 @@ class ArgusSystem:
         self._api_task: asyncio.Task[None] | None = None
         self._config: object | None = None  # Store config for API access
         self._cached_watchlist: list = []  # Scanner results for API watchlist endpoint
+        self._universe_manager: UniverseManager | None = None  # Sprint 23: Universe Manager
+        self._strategies: dict = {}  # Strategy dict for candle routing
 
     async def start(self) -> None:
         """Initialize and start all components in dependency order.
@@ -306,6 +310,54 @@ class ArgusSystem:
                 "scanner", ComponentStatus.HEALTHY, message=f"{len(symbols)} symbols"
             )
 
+        # --- Phase 7.5: Universe Manager (Sprint 23) ---
+        # Only enabled when universe_manager.enabled=True AND not simulated broker
+        use_universe_manager = (
+            config.system.universe_manager.enabled
+            and config.system.broker_source != BrokerSource.SIMULATED
+        )
+
+        if use_universe_manager:
+            logger.info("[7.5/12] Building Universe Manager...")
+            try:
+                # Create FMP reference client
+                fmp_ref_config = FMPReferenceConfig(
+                    batch_size=config.system.universe_manager.fmp_batch_size,
+                    cache_ttl_hours=config.system.universe_manager.reference_cache_ttl_hours,
+                )
+                fmp_client = FMPReferenceClient(fmp_ref_config)
+                await fmp_client.start()
+
+                # Create Universe Manager
+                self._universe_manager = UniverseManager(
+                    reference_client=fmp_client,
+                    config=config.system.universe_manager,
+                    scanner=self._scanner,
+                )
+
+                # Build viable universe with scanner symbols as fallback
+                viable_symbols = await self._universe_manager.build_viable_universe(symbols)
+                if not viable_symbols:
+                    # FMP failed or filtered everything — use scanner symbols directly
+                    logger.warning("FMP-based filtering failed, using scanner fallback")
+                    viable_symbols = await self._universe_manager.build_viable_universe_fallback(
+                        symbols
+                    )
+
+                logger.info(
+                    "Universe Manager built: %d viable symbols from %d scanned",
+                    len(viable_symbols),
+                    len(symbols),
+                )
+
+            except Exception as e:
+                logger.error("Failed to build Universe Manager: %s. Falling back to scanner.", e)
+                # Graceful degradation — continue without Universe Manager
+                self._universe_manager = None
+                use_universe_manager = False
+        else:
+            logger.info("Universe Manager disabled or simulated broker mode")
+
         # --- Phase 8: Strategy Instances ---
         # Create strategy instances but do NOT activate (Orchestrator handles activation)
         logger.info("[8/12] Creating strategy instances...")
@@ -318,7 +370,8 @@ class ArgusSystem:
             data_service=self._data_service,
             clock=self._clock,
         )
-        orb_strategy.set_watchlist(symbols)
+        if not use_universe_manager:
+            orb_strategy.set_watchlist(symbols)
         strategies_created.append("OrbBreakout")
 
         # ORB Scalp (optional — only if config file exists)
@@ -331,7 +384,8 @@ class ArgusSystem:
                 data_service=self._data_service,
                 clock=self._clock,
             )
-            scalp_strategy.set_watchlist(symbols)
+            if not use_universe_manager:
+                scalp_strategy.set_watchlist(symbols)
             strategies_created.append("OrbScalp")
 
         # VWAP Reclaim (optional — only if config file exists)
@@ -344,7 +398,8 @@ class ArgusSystem:
                 data_service=self._data_service,
                 clock=self._clock,
             )
-            vwap_reclaim_strategy.set_watchlist(symbols)
+            if not use_universe_manager:
+                vwap_reclaim_strategy.set_watchlist(symbols)
             strategies_created.append("VwapReclaim")
 
         # Afternoon Momentum (optional — only if config file exists)
@@ -357,7 +412,8 @@ class ArgusSystem:
                 data_service=self._data_service,
                 clock=self._clock,
             )
-            afternoon_strategy.set_watchlist(symbols)
+            if not use_universe_manager:
+                afternoon_strategy.set_watchlist(symbols)
             strategies_created.append("AfternoonMomentum")
 
         # Note: is_active and allocated_capital set by Orchestrator in Phase 9
@@ -423,6 +479,18 @@ class ArgusSystem:
                 "strategy_afternoon_momentum", ComponentStatus.HEALTHY, "Afternoon Momentum running"
             )
 
+        # Store strategies reference for candle routing
+        self._strategies = strategies
+
+        # --- Phase 9.5: Build Routing Table (Sprint 23) ---
+        if use_universe_manager and self._universe_manager is not None:
+            logger.info("[9.5/12] Building routing table...")
+            # Build strategy configs dict for routing table
+            strategy_configs = {
+                sid: strat.config for sid, strat in strategies.items() if hasattr(strat, "config")
+            }
+            self._universe_manager.build_routing_table(strategy_configs)
+
         # --- Phase 10: Order Manager ---
         logger.info("[10/12] Starting order manager...")
         order_manager_yaml = load_yaml_file(self._config_dir / "order_manager.yaml")
@@ -455,6 +523,17 @@ class ArgusSystem:
 
         # --- Phase 11: Start streaming ---
         logger.info("[11/12] Starting data streams...")
+
+        # When Universe Manager is active, set viable universe on data service
+        # for fast-path discard (Sprint 23)
+        if use_universe_manager and self._universe_manager is not None:
+            if hasattr(self._data_service, "set_viable_universe"):
+                self._data_service.set_viable_universe(self._universe_manager.viable_symbols)
+                logger.info(
+                    "Viable universe set on data service: %d symbols",
+                    self._universe_manager.viable_count,
+                )
+
         if symbols and not self._dry_run:
             await self._data_service.start(symbols=symbols, timeframes=["1m"])
             self._health_monitor.update_component(
@@ -502,6 +581,7 @@ class ArgusSystem:
                     conversation_manager=self._conversation_manager,
                     usage_tracker=self._usage_tracker,
                     action_manager=self._action_manager,
+                    universe_manager=self._universe_manager,
                 )
 
                 # Start ActionManager cleanup task if AI is enabled
@@ -552,9 +632,11 @@ class ArgusSystem:
     async def _on_candle_for_strategies(self, event: CandleEvent) -> None:
         """Route CandleEvents to active strategies (DEC-125).
 
-        Called for every CandleEvent. Routes to strategies that are:
-        1. Active (is_active = True)
-        2. Tracking the symbol (symbol in watchlist)
+        Called for every CandleEvent. Routes to strategies via one of two paths:
+
+        1. Universe Manager path (Sprint 23): Uses routing table for O(1) lookup
+           of which strategies should receive this symbol.
+        2. Legacy path: Iterates all strategies, checks watchlist membership.
 
         If a strategy emits a SignalEvent, it's sent through the Risk Manager
         for approval and the result is published to the Event Bus.
@@ -562,19 +644,33 @@ class ArgusSystem:
         Args:
             event: The candle event to route.
         """
-        if self._orchestrator is None or self._risk_manager is None:
+        if self._risk_manager is None:
             return
 
-        for strategy in self._orchestrator.get_strategies().values():
-            if not strategy.is_active:
-                continue
-            if event.symbol not in strategy.watchlist:
-                continue
+        if self._universe_manager is not None and self._universe_manager.is_built:
+            # Sprint 23: Universe Manager routing path
+            matching_strategy_ids = self._universe_manager.route_candle(event.symbol)
+            for strategy_id in matching_strategy_ids:
+                strategy = self._strategies.get(strategy_id)
+                if strategy is not None and strategy.is_active:
+                    signal = await strategy.on_candle(event)
+                    if signal is not None:
+                        result = await self._risk_manager.evaluate_signal(signal)
+                        await self._event_bus.publish(result)
+        else:
+            # Legacy path: iterate all strategies, check watchlist
+            if self._orchestrator is None:
+                return
+            for strategy in self._orchestrator.get_strategies().values():
+                if not strategy.is_active:
+                    continue
+                if event.symbol not in strategy.watchlist:
+                    continue
 
-            signal = await strategy.on_candle(event)
-            if signal is not None:
-                result = await self._risk_manager.evaluate_signal(signal)
-                await self._event_bus.publish(result)
+                signal = await strategy.on_candle(event)
+                if signal is not None:
+                    result = await self._risk_manager.evaluate_signal(signal)
+                    await self._event_bus.publish(result)
 
     async def _on_position_closed_for_strategies(self, event: PositionClosedEvent) -> None:
         """Route PositionClosedEvents to originating strategy.

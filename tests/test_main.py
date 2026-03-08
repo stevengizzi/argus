@@ -1197,6 +1197,7 @@ max_hold_seconds: 120
             patch("argus.main.DatabaseManager") as mock_db_class,
             patch("argus.main.ConversationManager") as mock_conv_class,
             patch("argus.main.UsageTracker") as mock_usage_class,
+            patch("argus.main.ActionManager") as mock_action_class,
             patch("argus.main.AlpacaBroker") as mock_broker_class,
             patch("argus.main.HealthMonitor") as mock_health_class,
             patch("argus.main.RiskManager") as mock_risk_class,
@@ -1211,6 +1212,7 @@ max_hold_seconds: 120
                 mock_db_class,
                 mock_conv_class,
                 mock_usage_class,
+                mock_action_class,
                 mock_broker_class,
                 mock_health_class,
                 mock_data_class,
@@ -1561,3 +1563,720 @@ class TestAutoShutdown:
         assert hasattr(config, "auto_shutdown_delay_seconds")
         assert config.auto_shutdown_after_eod is True  # Default
         assert config.auto_shutdown_delay_seconds == 60  # Default
+
+
+class TestUniverseManagerWiring:
+    """Tests for Sprint 23 Session 4b — Universe Manager wiring in main.py."""
+
+    @pytest.fixture
+    def um_enabled_config_dir(self, mock_config_dir: Path) -> Path:
+        """Create a config directory with Universe Manager enabled."""
+        # Update system.yaml to enable Universe Manager and use Databento
+        (mock_config_dir / "system.yaml").write_text("""
+timezone: "America/New_York"
+market_open: "09:30"
+market_close: "16:00"
+log_level: "INFO"
+heartbeat_interval_seconds: 60
+data_dir: "data"
+data_source: "databento"
+broker_source: "ibkr"
+
+health:
+  heartbeat_interval_seconds: 60
+  heartbeat_url_env: ""
+  alert_webhook_url_env: ""
+  daily_check_enabled: false
+  weekly_reconciliation_enabled: false
+
+ai:
+  enabled: false
+
+universe_manager:
+  enabled: true
+  min_price: 5.0
+  max_price: 10000.0
+  min_avg_volume: 100000
+  exclude_otc: true
+  fmp_batch_size: 50
+""")
+        return mock_config_dir
+
+    @pytest.mark.asyncio
+    async def test_startup_with_um_enabled(
+        self, um_enabled_config_dir: Path, mock_env_vars: None, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Verify Universe Manager path executes when enabled + non-simulated broker."""
+        from argus.main import ArgusSystem
+
+        monkeypatch.setenv("DATABENTO_API_KEY", "test_db_key")
+        monkeypatch.setenv("FMP_API_KEY", "test_fmp_key")
+
+        system = ArgusSystem(config_dir=um_enabled_config_dir, dry_run=True)
+        um_build_called = False
+
+        with (
+            patch("argus.main.DatabaseManager") as mock_db_class,
+            patch("argus.main.ConversationManager") as mock_conv_class,
+            patch("argus.main.UsageTracker") as mock_usage_class,
+            patch("argus.main.ActionManager") as mock_action_class,
+            patch("argus.execution.ibkr_broker.IBKRBroker") as mock_broker_class,
+            patch("argus.main.HealthMonitor") as mock_health_class,
+            patch("argus.main.RiskManager") as mock_risk_class,
+            patch("argus.main.DatabentoDataService") as mock_data_class,
+            patch("argus.main.StaticScanner") as mock_scanner_class,
+            patch("argus.main.OrbBreakoutStrategy") as mock_orb_class,
+            patch("argus.main.Orchestrator") as mock_orchestrator_class,
+            patch("argus.main.OrderManager") as mock_om_class,
+            patch("argus.main.FMPReferenceClient") as mock_fmp_class,
+            patch("argus.main.UniverseManager") as mock_um_class,
+        ):
+            # Setup all mocks
+            for cls in [
+                mock_db_class,
+                mock_conv_class,
+                mock_usage_class,
+                mock_action_class,
+                mock_broker_class,
+                mock_health_class,
+                mock_risk_class,
+                mock_data_class,
+                mock_scanner_class,
+                mock_om_class,
+            ]:
+                instance = MagicMock()
+                instance.initialize = AsyncMock()
+                instance.start = AsyncMock()
+                instance.connect = AsyncMock()
+                instance.stop = AsyncMock()
+                instance.close = AsyncMock()
+                instance.get_account = AsyncMock(return_value=MagicMock(equity=100000))
+                instance.scan = AsyncMock(return_value=[])
+                instance.reconstruct_from_broker = AsyncMock()
+                instance.reconstruct_state = AsyncMock()
+                instance.update_component = MagicMock()
+                instance.send_warning_alert = AsyncMock()
+                instance.set_order_manager = MagicMock()
+                instance.set_viable_universe = MagicMock()
+                cls.return_value = instance
+
+            # Setup FMP mock
+            mock_fmp = MagicMock()
+            mock_fmp.start = AsyncMock()
+            mock_fmp_class.return_value = mock_fmp
+
+            # Setup Universe Manager mock
+            def um_build(*args, **kwargs):
+                nonlocal um_build_called
+                um_build_called = True
+                return {"AAPL", "MSFT"}
+
+            mock_um = MagicMock()
+            mock_um.build_viable_universe = AsyncMock(side_effect=um_build)
+            mock_um.build_routing_table = MagicMock()
+            mock_um.viable_symbols = {"AAPL", "MSFT"}
+            mock_um.viable_count = 2
+            mock_um.is_built = True
+            mock_um_class.return_value = mock_um
+
+            # Setup strategy mock
+            orb_strategy = MagicMock()
+            orb_strategy.set_watchlist = MagicMock()
+            orb_strategy.strategy_id = "orb_breakout"
+            orb_strategy.is_active = True
+            orb_strategy.config = MagicMock()
+            mock_orb_class.return_value = orb_strategy
+
+            mock_orchestrator = MagicMock()
+            mock_orchestrator.start = AsyncMock()
+            mock_orchestrator.stop = AsyncMock()
+            mock_orchestrator.run_pre_market = AsyncMock()
+            mock_orchestrator.register_strategy = MagicMock()
+            mock_orchestrator.get_strategies = MagicMock(
+                return_value={"orb_breakout": orb_strategy}
+            )
+            mock_orchestrator_class.return_value = mock_orchestrator
+
+            with contextlib.suppress(Exception):
+                await system.start()
+
+            # Verify Universe Manager was used
+            assert um_build_called, "Universe Manager build_viable_universe was not called"
+            mock_um.build_routing_table.assert_called()
+
+    @pytest.mark.asyncio
+    async def test_startup_with_um_disabled(
+        self, mock_config_dir: Path, mock_env_vars: None
+    ) -> None:
+        """Verify old scanner path executes when Universe Manager is disabled."""
+        from argus.main import ArgusSystem
+
+        system = ArgusSystem(config_dir=mock_config_dir, dry_run=True)
+        watchlist_set = False
+
+        with (
+            patch("argus.main.DatabaseManager") as mock_db_class,
+            patch("argus.main.ConversationManager") as mock_conv_class,
+            patch("argus.main.UsageTracker") as mock_usage_class,
+            patch("argus.main.ActionManager") as mock_action_class,
+            patch("argus.main.AlpacaBroker") as mock_broker_class,
+            patch("argus.main.HealthMonitor") as mock_health_class,
+            patch("argus.main.RiskManager") as mock_risk_class,
+            patch("argus.main.AlpacaDataService") as mock_data_class,
+            patch("argus.main.AlpacaScanner") as mock_scanner_class,
+            patch("argus.main.OrbBreakoutStrategy") as mock_orb_class,
+            patch("argus.main.Orchestrator") as mock_orchestrator_class,
+            patch("argus.main.OrderManager") as mock_om_class,
+        ):
+            # Setup all mocks
+            for cls in [
+                mock_db_class,
+                mock_conv_class,
+                mock_usage_class,
+                mock_action_class,
+                mock_broker_class,
+                mock_health_class,
+                mock_risk_class,
+                mock_data_class,
+                mock_scanner_class,
+                mock_om_class,
+            ]:
+                instance = MagicMock()
+                instance.initialize = AsyncMock()
+                instance.start = AsyncMock()
+                instance.connect = AsyncMock()
+                instance.stop = AsyncMock()
+                instance.close = AsyncMock()
+                instance.get_account = AsyncMock(return_value=MagicMock(equity=100000))
+                instance.scan = AsyncMock(return_value=[])
+                instance.reconstruct_from_broker = AsyncMock()
+                instance.reconstruct_state = AsyncMock()
+                instance.update_component = MagicMock()
+                instance.send_warning_alert = AsyncMock()
+                instance.set_order_manager = MagicMock()
+                cls.return_value = instance
+
+            # Setup strategy mock that tracks watchlist
+            def track_watchlist(symbols):
+                nonlocal watchlist_set
+                watchlist_set = True
+
+            orb_strategy = MagicMock()
+            orb_strategy.set_watchlist = MagicMock(side_effect=track_watchlist)
+            orb_strategy.strategy_id = "orb_breakout"
+            orb_strategy.is_active = True
+            mock_orb_class.return_value = orb_strategy
+
+            mock_orchestrator = MagicMock()
+            mock_orchestrator.start = AsyncMock()
+            mock_orchestrator.stop = AsyncMock()
+            mock_orchestrator.run_pre_market = AsyncMock()
+            mock_orchestrator.register_strategy = MagicMock()
+            mock_orchestrator.get_strategies = MagicMock(
+                return_value={"orb_breakout": orb_strategy}
+            )
+            mock_orchestrator_class.return_value = mock_orchestrator
+
+            with contextlib.suppress(Exception):
+                await system.start()
+
+            # Verify old path was used (set_watchlist called)
+            assert watchlist_set, "set_watchlist was not called (old path should have been used)"
+
+    @pytest.mark.asyncio
+    async def test_startup_um_enabled_fmp_fails(
+        self, um_enabled_config_dir: Path, mock_env_vars: None, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Verify graceful degradation to scanner symbols when FMP fails."""
+        from argus.main import ArgusSystem
+
+        monkeypatch.setenv("DATABENTO_API_KEY", "test_db_key")
+        monkeypatch.setenv("FMP_API_KEY", "test_fmp_key")
+
+        system = ArgusSystem(config_dir=um_enabled_config_dir, dry_run=True)
+        fallback_called = False
+
+        with (
+            patch("argus.main.DatabaseManager") as mock_db_class,
+            patch("argus.main.ConversationManager") as mock_conv_class,
+            patch("argus.main.UsageTracker") as mock_usage_class,
+            patch("argus.main.ActionManager") as mock_action_class,
+            patch("argus.execution.ibkr_broker.IBKRBroker") as mock_broker_class,
+            patch("argus.main.HealthMonitor") as mock_health_class,
+            patch("argus.main.RiskManager") as mock_risk_class,
+            patch("argus.main.DatabentoDataService") as mock_data_class,
+            patch("argus.main.StaticScanner") as mock_scanner_class,
+            patch("argus.main.OrbBreakoutStrategy") as mock_orb_class,
+            patch("argus.main.Orchestrator") as mock_orchestrator_class,
+            patch("argus.main.OrderManager") as mock_om_class,
+            patch("argus.main.FMPReferenceClient") as mock_fmp_class,
+            patch("argus.main.UniverseManager") as mock_um_class,
+        ):
+            # Setup all mocks
+            for cls in [
+                mock_db_class,
+                mock_conv_class,
+                mock_usage_class,
+                mock_action_class,
+                mock_broker_class,
+                mock_health_class,
+                mock_risk_class,
+                mock_data_class,
+                mock_scanner_class,
+                mock_om_class,
+            ]:
+                instance = MagicMock()
+                instance.initialize = AsyncMock()
+                instance.start = AsyncMock()
+                instance.connect = AsyncMock()
+                instance.stop = AsyncMock()
+                instance.close = AsyncMock()
+                instance.get_account = AsyncMock(return_value=MagicMock(equity=100000))
+                instance.scan = AsyncMock(return_value=[])
+                instance.reconstruct_from_broker = AsyncMock()
+                instance.reconstruct_state = AsyncMock()
+                instance.update_component = MagicMock()
+                instance.send_warning_alert = AsyncMock()
+                instance.set_order_manager = MagicMock()
+                instance.set_viable_universe = MagicMock()
+                cls.return_value = instance
+
+            # Setup FMP mock
+            mock_fmp = MagicMock()
+            mock_fmp.start = AsyncMock()
+            mock_fmp_class.return_value = mock_fmp
+
+            # Setup Universe Manager mock - first call returns empty (FMP failed)
+            def um_fallback(*args, **kwargs):
+                nonlocal fallback_called
+                fallback_called = True
+                return {"AAPL", "MSFT"}
+
+            mock_um = MagicMock()
+            mock_um.build_viable_universe = AsyncMock(return_value=set())  # Empty = failed
+            mock_um.build_viable_universe_fallback = AsyncMock(side_effect=um_fallback)
+            mock_um.build_routing_table = MagicMock()
+            mock_um.viable_symbols = {"AAPL", "MSFT"}
+            mock_um.viable_count = 2
+            mock_um.is_built = True
+            mock_um_class.return_value = mock_um
+
+            # Setup strategy mock
+            orb_strategy = MagicMock()
+            orb_strategy.set_watchlist = MagicMock()
+            orb_strategy.strategy_id = "orb_breakout"
+            orb_strategy.is_active = True
+            orb_strategy.config = MagicMock()
+            mock_orb_class.return_value = orb_strategy
+
+            mock_orchestrator = MagicMock()
+            mock_orchestrator.start = AsyncMock()
+            mock_orchestrator.stop = AsyncMock()
+            mock_orchestrator.run_pre_market = AsyncMock()
+            mock_orchestrator.register_strategy = MagicMock()
+            mock_orchestrator.get_strategies = MagicMock(
+                return_value={"orb_breakout": orb_strategy}
+            )
+            mock_orchestrator_class.return_value = mock_orchestrator
+
+            with contextlib.suppress(Exception):
+                await system.start()
+
+            # Verify fallback was called
+            assert fallback_called, "build_viable_universe_fallback was not called"
+
+    @pytest.mark.asyncio
+    async def test_candle_routing_um_active(
+        self, mock_config_dir: Path, mock_env_vars: None
+    ) -> None:
+        """Verify candle dispatched only to matching strategies via routing table."""
+        from argus.core.events import CandleEvent
+        from argus.main import ArgusSystem
+
+        system = ArgusSystem(config_dir=mock_config_dir, dry_run=True)
+
+        # Create mock Universe Manager with routing table
+        mock_um = MagicMock()
+        mock_um.is_built = True
+        mock_um.route_candle = MagicMock(return_value={"strategy_a"})  # Only strategy_a matches
+        system._universe_manager = mock_um
+
+        # Create mock strategies
+        strategy_a = MagicMock()
+        strategy_a.is_active = True
+        strategy_a.on_candle = AsyncMock(return_value=None)
+
+        strategy_b = MagicMock()
+        strategy_b.is_active = True
+        strategy_b.on_candle = AsyncMock(return_value=None)
+
+        system._strategies = {"strategy_a": strategy_a, "strategy_b": strategy_b}
+        system._risk_manager = MagicMock()
+
+        # Create candle event
+        from datetime import UTC, datetime
+
+        candle = CandleEvent(
+            symbol="AAPL",
+            timestamp=datetime.now(UTC),
+            open=150.0,
+            high=151.0,
+            low=149.0,
+            close=150.5,
+            volume=1000000,
+            timeframe="1m",
+        )
+
+        # Route candle
+        await system._on_candle_for_strategies(candle)
+
+        # Verify only strategy_a was called (the one in routing table)
+        strategy_a.on_candle.assert_called_once_with(candle)
+        strategy_b.on_candle.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_candle_routing_um_disabled(
+        self, mock_config_dir: Path, mock_env_vars: None
+    ) -> None:
+        """Verify candle dispatched via old watchlist path when UM disabled."""
+        from argus.core.events import CandleEvent
+        from argus.main import ArgusSystem
+
+        system = ArgusSystem(config_dir=mock_config_dir, dry_run=True)
+
+        # No Universe Manager
+        system._universe_manager = None
+
+        # Create mock strategies
+        strategy_a = MagicMock()
+        strategy_a.is_active = True
+        strategy_a.watchlist = ["AAPL"]
+        strategy_a.on_candle = AsyncMock(return_value=None)
+
+        strategy_b = MagicMock()
+        strategy_b.is_active = True
+        strategy_b.watchlist = ["MSFT"]
+        strategy_b.on_candle = AsyncMock(return_value=None)
+
+        mock_orchestrator = MagicMock()
+        mock_orchestrator.get_strategies = MagicMock(
+            return_value={"strategy_a": strategy_a, "strategy_b": strategy_b}
+        )
+        system._orchestrator = mock_orchestrator
+        system._risk_manager = MagicMock()
+
+        # Create candle event for AAPL
+        from datetime import UTC, datetime
+
+        candle = CandleEvent(
+            symbol="AAPL",
+            timestamp=datetime.now(UTC),
+            open=150.0,
+            high=151.0,
+            low=149.0,
+            close=150.5,
+            volume=1000000,
+            timeframe="1m",
+        )
+
+        # Route candle
+        await system._on_candle_for_strategies(candle)
+
+        # Verify only strategy_a was called (AAPL in its watchlist)
+        strategy_a.on_candle.assert_called_once_with(candle)
+        strategy_b.on_candle.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_backtest_mode_ignores_um(
+        self, mock_config_dir: Path, mock_env_vars: None
+    ) -> None:
+        """Verify simulated broker mode ignores Universe Manager config."""
+        # Update config to enable UM but use simulated broker
+        (mock_config_dir / "system.yaml").write_text("""
+timezone: "America/New_York"
+market_open: "09:30"
+market_close: "16:00"
+log_level: "INFO"
+heartbeat_interval_seconds: 60
+data_dir: "data"
+data_source: "alpaca"
+broker_source: "simulated"
+
+health:
+  heartbeat_interval_seconds: 60
+  heartbeat_url_env: ""
+  alert_webhook_url_env: ""
+  daily_check_enabled: false
+  weekly_reconciliation_enabled: false
+
+ai:
+  enabled: false
+
+universe_manager:
+  enabled: true
+  min_price: 5.0
+  max_price: 10000.0
+""")
+
+        from argus.main import ArgusSystem
+
+        system = ArgusSystem(config_dir=mock_config_dir, dry_run=True)
+        um_used = False
+
+        with (
+            patch("argus.main.DatabaseManager") as mock_db_class,
+            patch("argus.main.ConversationManager") as mock_conv_class,
+            patch("argus.main.UsageTracker") as mock_usage_class,
+            patch("argus.main.ActionManager") as mock_action_class,
+            patch("argus.execution.simulated_broker.SimulatedBroker") as mock_broker_class,
+            patch("argus.main.HealthMonitor") as mock_health_class,
+            patch("argus.main.RiskManager") as mock_risk_class,
+            patch("argus.main.AlpacaDataService") as mock_data_class,
+            patch("argus.main.StaticScanner") as mock_scanner_class,
+            patch("argus.main.OrbBreakoutStrategy") as mock_orb_class,
+            patch("argus.main.Orchestrator") as mock_orchestrator_class,
+            patch("argus.main.OrderManager") as mock_om_class,
+            patch("argus.main.UniverseManager") as mock_um_class,
+        ):
+            # Track if UniverseManager was instantiated
+            def track_um(*args, **kwargs):
+                nonlocal um_used
+                um_used = True
+                return MagicMock()
+
+            mock_um_class.side_effect = track_um
+
+            # Setup all mocks
+            for cls in [
+                mock_db_class,
+                mock_conv_class,
+                mock_usage_class,
+                mock_action_class,
+                mock_broker_class,
+                mock_health_class,
+                mock_risk_class,
+                mock_data_class,
+                mock_scanner_class,
+                mock_om_class,
+            ]:
+                instance = MagicMock()
+                instance.initialize = AsyncMock()
+                instance.start = AsyncMock()
+                instance.connect = AsyncMock()
+                instance.stop = AsyncMock()
+                instance.close = AsyncMock()
+                instance.get_account = AsyncMock(return_value=MagicMock(equity=100000))
+                instance.scan = AsyncMock(return_value=[])
+                instance.reconstruct_from_broker = AsyncMock()
+                instance.reconstruct_state = AsyncMock()
+                instance.update_component = MagicMock()
+                instance.send_warning_alert = AsyncMock()
+                instance.set_order_manager = MagicMock()
+                cls.return_value = instance
+
+            orb_strategy = MagicMock()
+            orb_strategy.set_watchlist = MagicMock()
+            orb_strategy.strategy_id = "orb_breakout"
+            orb_strategy.is_active = True
+            mock_orb_class.return_value = orb_strategy
+
+            mock_orchestrator = MagicMock()
+            mock_orchestrator.start = AsyncMock()
+            mock_orchestrator.stop = AsyncMock()
+            mock_orchestrator.run_pre_market = AsyncMock()
+            mock_orchestrator.register_strategy = MagicMock()
+            mock_orchestrator.get_strategies = MagicMock(
+                return_value={"orb_breakout": orb_strategy}
+            )
+            mock_orchestrator_class.return_value = mock_orchestrator
+
+            with contextlib.suppress(Exception):
+                await system.start()
+
+            # Verify UniverseManager was NOT used (simulated broker)
+            assert not um_used, "UniverseManager should not be used in simulated broker mode"
+
+    @pytest.mark.asyncio
+    async def test_universe_manager_in_app_state(
+        self, um_enabled_config_dir: Path, mock_env_vars: None, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Verify Universe Manager is accessible via AppState."""
+        from argus.main import ArgusSystem
+
+        monkeypatch.setenv("DATABENTO_API_KEY", "test_db_key")
+        monkeypatch.setenv("FMP_API_KEY", "test_fmp_key")
+        monkeypatch.setenv("ARGUS_JWT_SECRET", "test_secret")
+
+        # Update config to enable API
+        (um_enabled_config_dir / "system.yaml").write_text("""
+timezone: "America/New_York"
+market_open: "09:30"
+market_close: "16:00"
+log_level: "INFO"
+data_dir: "data"
+data_source: "databento"
+broker_source: "ibkr"
+
+health:
+  heartbeat_interval_seconds: 60
+  heartbeat_url_env: ""
+  alert_webhook_url_env: ""
+  daily_check_enabled: false
+
+ai:
+  enabled: false
+
+api:
+  enabled: true
+  host: "127.0.0.1"
+  port: 8000
+  jwt_secret_env: "ARGUS_JWT_SECRET"
+
+universe_manager:
+  enabled: true
+  min_price: 5.0
+  max_price: 10000.0
+""")
+
+        system = ArgusSystem(config_dir=um_enabled_config_dir, dry_run=True, enable_api=True)
+        captured_app_state = None
+
+        with (
+            patch("argus.main.DatabaseManager") as mock_db_class,
+            patch("argus.main.ConversationManager") as mock_conv_class,
+            patch("argus.main.UsageTracker") as mock_usage_class,
+            patch("argus.main.ActionManager") as mock_action_class,
+            patch("argus.execution.ibkr_broker.IBKRBroker") as mock_broker_class,
+            patch("argus.main.HealthMonitor") as mock_health_class,
+            patch("argus.main.RiskManager") as mock_risk_class,
+            patch("argus.main.DatabentoDataService") as mock_data_class,
+            patch("argus.main.StaticScanner") as mock_scanner_class,
+            patch("argus.main.OrbBreakoutStrategy") as mock_orb_class,
+            patch("argus.main.Orchestrator") as mock_orchestrator_class,
+            patch("argus.main.OrderManager") as mock_om_class,
+            patch("argus.main.FMPReferenceClient") as mock_fmp_class,
+            patch("argus.main.UniverseManager") as mock_um_class,
+            patch("argus.api.server.create_app") as mock_create_app,
+            patch("argus.api.server.run_server") as mock_run_server,
+            patch("argus.api.websocket.get_bridge") as mock_get_bridge,
+        ):
+            # Setup all mocks
+            for cls in [
+                mock_db_class,
+                mock_conv_class,
+                mock_usage_class,
+                mock_action_class,
+                mock_broker_class,
+                mock_health_class,
+                mock_risk_class,
+                mock_data_class,
+                mock_scanner_class,
+                mock_om_class,
+            ]:
+                instance = MagicMock()
+                instance.initialize = AsyncMock()
+                instance.start = AsyncMock()
+                instance.connect = AsyncMock()
+                instance.stop = AsyncMock()
+                instance.close = AsyncMock()
+                instance.get_account = AsyncMock(return_value=MagicMock(equity=100000))
+                instance.scan = AsyncMock(return_value=[])
+                instance.reconstruct_from_broker = AsyncMock()
+                instance.reconstruct_state = AsyncMock()
+                instance.update_component = MagicMock()
+                instance.send_warning_alert = AsyncMock()
+                instance.set_order_manager = MagicMock()
+                instance.set_viable_universe = MagicMock()
+                cls.return_value = instance
+
+            # Setup FMP mock
+            mock_fmp = MagicMock()
+            mock_fmp.start = AsyncMock()
+            mock_fmp_class.return_value = mock_fmp
+
+            # Setup Universe Manager mock
+            mock_um = MagicMock()
+            mock_um.build_viable_universe = AsyncMock(return_value={"AAPL", "MSFT"})
+            mock_um.build_routing_table = MagicMock()
+            mock_um.viable_symbols = {"AAPL", "MSFT"}
+            mock_um.viable_count = 2
+            mock_um.is_built = True
+            mock_um_class.return_value = mock_um
+
+            orb_strategy = MagicMock()
+            orb_strategy.set_watchlist = MagicMock()
+            orb_strategy.strategy_id = "orb_breakout"
+            orb_strategy.is_active = True
+            orb_strategy.config = MagicMock()
+            mock_orb_class.return_value = orb_strategy
+
+            mock_orchestrator = MagicMock()
+            mock_orchestrator.start = AsyncMock()
+            mock_orchestrator.stop = AsyncMock()
+            mock_orchestrator.run_pre_market = AsyncMock()
+            mock_orchestrator.register_strategy = MagicMock()
+            mock_orchestrator.get_strategies = MagicMock(
+                return_value={"orb_breakout": orb_strategy}
+            )
+            mock_orchestrator_class.return_value = mock_orchestrator
+
+            # Capture AppState
+            def capture_app_state(app_state):
+                nonlocal captured_app_state
+                captured_app_state = app_state
+                return MagicMock()
+
+            mock_create_app.side_effect = capture_app_state
+            mock_run_server.return_value = AsyncMock()
+            mock_get_bridge.return_value = MagicMock()
+
+            with contextlib.suppress(Exception):
+                await system.start()
+
+            # Verify AppState has universe_manager
+            assert captured_app_state is not None
+            assert captured_app_state.universe_manager is mock_um
+
+    @pytest.mark.asyncio
+    async def test_strategy_not_called_for_non_matching_symbol(
+        self, mock_config_dir: Path, mock_env_vars: None
+    ) -> None:
+        """Verify strategy.on_candle NOT called for symbol outside its filter."""
+        from argus.core.events import CandleEvent
+        from argus.main import ArgusSystem
+
+        system = ArgusSystem(config_dir=mock_config_dir, dry_run=True)
+
+        # Create mock Universe Manager with routing table that returns empty for AAPL
+        mock_um = MagicMock()
+        mock_um.is_built = True
+        mock_um.route_candle = MagicMock(return_value=set())  # No strategies match AAPL
+        system._universe_manager = mock_um
+
+        # Create mock strategy
+        strategy_a = MagicMock()
+        strategy_a.is_active = True
+        strategy_a.on_candle = AsyncMock(return_value=None)
+
+        system._strategies = {"strategy_a": strategy_a}
+        system._risk_manager = MagicMock()
+
+        # Create candle event
+        from datetime import UTC, datetime
+
+        candle = CandleEvent(
+            symbol="AAPL",
+            timestamp=datetime.now(UTC),
+            open=150.0,
+            high=151.0,
+            low=149.0,
+            close=150.5,
+            volume=1000000,
+            timeframe="1m",
+        )
+
+        # Route candle
+        await system._on_candle_for_strategies(candle)
+
+        # Verify strategy was NOT called (routing table returned empty)
+        strategy_a.on_candle.assert_not_called()
