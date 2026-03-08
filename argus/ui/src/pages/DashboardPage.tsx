@@ -208,14 +208,17 @@ export function DashboardPage() {
             </motion.div>
           </motion.div>
 
-          {/* AI Insight card */}
-          <motion.div variants={staggerItem}>
-            <AIInsightCard />
-          </motion.div>
-
-          {/* Universe status card */}
-          <motion.div variants={staggerItem}>
-            <UniverseStatusCard />
+          {/* AI Insight + Universe Status row */}
+          <motion.div
+            className="grid grid-cols-2 gap-6"
+            variants={staggerItemWithChildren(0.08)}
+          >
+            <motion.div variants={staggerItem} className="h-full">
+              <AIInsightCard />
+            </motion.div>
+            <motion.div variants={staggerItem} className="h-full">
+              <UniverseStatusCard />
+            </motion.div>
           </motion.div>
 
           <motion.div variants={staggerItem}>
@@ -296,14 +299,17 @@ export function DashboardPage() {
           </motion.div>
         </motion.div>
 
-        {/* AI Insight card */}
-        <motion.div variants={staggerItem}>
-          <AIInsightCard />
-        </motion.div>
-
-        {/* Universe status card */}
-        <motion.div variants={staggerItem}>
-          <UniverseStatusCard />
+        {/* AI Insight + Universe Status row */}
+        <motion.div
+          className="grid grid-cols-2 gap-5"
+          variants={staggerItemWithChildren(0.08)}
+        >
+          <motion.div variants={staggerItem} className="h-full">
+            <AIInsightCard />
+          </motion.div>
+          <motion.div variants={staggerItem} className="h-full">
+            <UniverseStatusCard />
+          </motion.div>
         </motion.div>
 
         <motion.div variants={staggerItem}>

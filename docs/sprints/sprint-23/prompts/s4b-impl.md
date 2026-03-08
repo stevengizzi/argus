@@ -72,11 +72,13 @@ Wire the Universe Manager into the startup sequence, replacing the scanner→set
 - Do NOT modify the AI layer
 - Preserve exact existing behavior when universe_manager.enabled=false
 - The data_service.start() call may need Databento config to specify ALL_SYMBOLS — verify config/system.yaml `databento.symbols` field supports this
+- Any new tests added to `tests/test_main.py` MUST mock `ActionManager` (patch `argus.main.ActionManager`). The `.env` file contains `ANTHROPIC_API_KEY`, which triggers `AIConfig.auto_detect_enabled()` at import time, causing unmocked `ActionManager.initialize()` to fail silently and break downstream wiring assertions.
 
 ## Canary Tests
 Before making changes, verify:
 - Existing startup flow works: `python -m pytest tests/ -k "startup or main" -v` (if such tests exist)
 - All strategy tests pass: `python -m pytest tests/strategies/ -v`
+- Verify `test_risk_manager_wired_to_order_manager` passes: `python -m pytest tests/test_main.py::TestMultiStrategyWiring::test_risk_manager_wired_to_order_manager -xvs`. This was fixed pre-session (missing ActionManager mock). If it fails, stop and investigate before proceeding.
 
 ## Test Targets
 - New tests:
