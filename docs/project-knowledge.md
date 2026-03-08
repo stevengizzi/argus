@@ -1,6 +1,6 @@
 # ARGUS — Project Knowledge (Claude Context)
 
-> *Tier A operational context for Claude Code and Claude.ai. Last updated: March 8, 2026.*
+> *Tier A operational context for Claude Code and Claude.ai. Last updated: March 9, 2026.*
 > *Full decision rationale: `docs/decision-log.md` | Sprint details: `docs/sprint-history.md` | DEC index: `docs/dec-index.md`*
 
 ---
@@ -12,7 +12,7 @@ ARGUS is a fully automated, AI-enhanced multi-strategy day trading system for US
 ## Current State
 
 **Tests:** 2,101 pytest + 392 Vitest
-**Sprints completed:** 1 through 23.05 (22 full sprints + sub-sprints + Universe Manager + post-sprint fixes)
+**Sprints completed:** 1 through 23.1 (23 full sprints + sub-sprints + Universe Manager + autonomous runner integration)
 **Active sprint:** None (between sprints)
 **Next sprint:** 23.5 (NLP Catalyst Pipeline)
 **GitHub:** `https://github.com/stevengizzi/argus.git` (public)
@@ -47,6 +47,7 @@ ARGUS is a fully automated, AI-enhanced multi-strategy day trading system for US
 | 22.3 | Silent Exception Logging | 1977+377V | Mar 7 | — |
 | 23 | Universe Manager | 2099+392V | Mar 7–8 | DEC-277 |
 | 23.05 | Post-Sprint Fixes | 2101+392V | Mar 8 | — |
+| 23.1 | Autonomous Runner Protocol Integration | 2101+392V | Mar 9 | DEC-278–297 |
 
 *Full sprint scopes and session details: `docs/sprint-history.md`*
 
@@ -187,7 +188,31 @@ Per-trade risk: 0.5–1% of strategy allocation. Daily loss limit: 3–5%. Weekl
 
 ## Workflow
 
-**Two-Claude architecture:** Claude.ai (this instance) handles strategic design, code review, documentation, and decisions. Claude Code handles implementation. Git is the bridge. All significant decisions logged with sequential DEC numbers. Deferred items tracked in CLAUDE.md.
+**Three-tier architecture:** Claude.ai handles strategic design, architectural
+review, and planning. Claude Code handles implementation and review execution.
+The Autonomous Sprint Runner (Python orchestrator) coordinates the execution
+loop between Claude Code sessions, making deterministic proceed/halt decisions
+based on structured output. Git is the bridge between all tiers.
+
+In **autonomous mode**, the runner drives the full execution loop. Claude.ai is
+invoked only for sprint planning, adversarial review, Tier 3 escalation
+resolution, and strategic check-ins. In **human-in-the-loop mode**, the
+developer manually drives sessions while the runner optionally provides
+structured logging and record-keeping.
+
+All significant decisions logged with sequential DEC numbers. Deferred items tracked in CLAUDE.md.
+
+**Autonomous Runner (DEC-278):** Python-based orchestrator at
+`scripts/sprint-runner.py`. Reads sprint package, invokes Claude Code CLI per
+session, parses structured close-out and review verdicts, makes rule-based
+proceed/halt decisions, and maintains full run-log on disk. Supports resume
+from any checkpoint. Notifications via ntfy.sh (DEC-279). Tier 2.5 automated
+triage for scope gaps and prior-session bugs (DEC-282). Spec conformance check
+at session boundaries (DEC-283). Cost tracking with configurable ceiling
+(DEC-287). Independent test verification (DEC-291), pre-session file validation
+(DEC-292), compaction detection heuristic (DEC-293), and session boundary diff
+validation (DEC-294) provide defense-in-depth between sessions. See
+`docs/protocols/autonomous-sprint-runner.md`.
 
 **Sprint methodology:** Sprint spec → session prompts → Claude Code implementation → code review → polish → doc sync. By Sprint 18+, evolved into comprehensive "sprint packages" (spec + prompts + review plans + doc updates in one conversation).
 

@@ -51,6 +51,15 @@ For each of the following, assess PASS or FAIL:
 - Evaluate every item on the sprint-level escalation criteria list
 - If ANY escalation criterion is met, the verdict MUST be ESCALATE
 
+**Verdict Determination**
+Based on all assessments above, determine the verdict:
+- **CLEAR:** All categories PASS. No findings with severity HIGH or CRITICAL.
+- **CONCERNS:** All critical functions work, but one or more MEDIUM-severity
+  findings exist (correctness concerns, test coverage gaps, error handling
+  issues that don't rise to spec violation or escalation).
+- **ESCALATE:** ANY CRITICAL finding, ANY escalation criterion triggered,
+  regression checklist failure, or "do not modify" constraint violation.
+
 ### Step 3: Produce Review Report
 Produce the following report between the markers shown. This exact format is required
 for downstream parsing.
@@ -64,7 +73,7 @@ language hint) so the user can copy/paste it with table formatting preserved.
 **Reviewing:** [Sprint X.Y] — [session description]
 **Reviewer:** Tier 2 Automated Review
 **Date:** [ISO date]
-**Verdict:** [CLEAR | ESCALATE]
+**Verdict:** [CLEAR | CONCERNS | ESCALATE]
 
 ### Assessment Summary
 | Category | Result | Notes |
@@ -82,6 +91,7 @@ references where relevant.]
 
 ### Recommendation
 [If CLEAR: "Proceed to next session."
+ If CONCERNS: description of medium-severity concerns and recommended actions.
  If ESCALATE: specific description of what needs Tier 3 review and why.]
 
 ---END-REVIEW---
@@ -91,3 +101,62 @@ references where relevant.]
 This is a review session. If you find issues, document them in the review report.
 Do NOT fix them. Fixes happen in the next planned session or an impromptu session,
 with their own close-out and review cycle.
+
+## Structured Review Verdict
+
+After producing the human-readable review report above, append a machine-
+parseable JSON block. This block is used by the autonomous runner for automated
+decision-making.
+
+Fence the block with:
+
+    ```json:structured-verdict
+    {
+      "schema_version": "1.0",
+      "sprint": "[sprint number]",
+      "session": "[session ID]",
+      "verdict": "CLEAR | CONCERNS | ESCALATE",
+      "findings": [
+        {
+          "description": "...",
+          "severity": "INFO | LOW | MEDIUM | HIGH | CRITICAL",
+          "category": "SPEC_VIOLATION | SCOPE_BOUNDARY_VIOLATION | REGRESSION | TEST_COVERAGE_GAP | ERROR_HANDLING | PERFORMANCE | NAMING_CONVENTION | ARCHITECTURE | SECURITY | OTHER",
+          "file": "path (optional)",
+          "recommendation": "..."
+        }
+      ],
+      "spec_conformance": {
+        "status": "CONFORMANT | MINOR_DEVIATION | MAJOR_DEVIATION",
+        "notes": "...",
+        "spec_by_contradiction_violations": []
+      },
+      "files_reviewed": ["path1", "path2"],
+      "files_not_modified_check": {
+        "passed": true | false,
+        "violations": []
+      },
+      "tests_verified": {
+        "all_pass": true | false,
+        "count": [N],
+        "new_tests_adequate": true | false,
+        "test_quality_notes": "..."
+      },
+      "regression_checklist": {
+        "all_passed": true | false,
+        "results": [
+          {"check": "...", "passed": true | false, "notes": "..."}
+        ]
+      },
+      "escalation_triggers": [],
+      "recommended_actions": []
+    }
+    ```
+
+Rules for the structured verdict:
+- Always produce it, even in human-in-the-loop mode
+- The verdict must match the overall assessment in the human-readable report
+- CLEAR: no findings with severity HIGH or CRITICAL
+- CONCERNS: one or more MEDIUM findings, no CRITICAL
+- ESCALATE: any CRITICAL finding, or specific escalation criteria met
+- files_not_modified_check.passed must be false if any protected file was changed
+- regression_checklist must reflect actual test execution, not assumptions

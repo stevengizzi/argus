@@ -85,3 +85,67 @@ After generating the close-out report:
 3. Push to remote: `git push`
 
 Do NOT push if self-assessment is FLAGGED — wait for developer review of the close-out.
+
+## Structured Close-Out Appendix
+
+After producing the human-readable close-out report above, append a machine-
+parseable JSON block. This block is used by the autonomous runner for automated
+decision-making and by the run-log for structured record-keeping.
+
+Fence the block with:
+
+    ```json:structured-closeout
+    {
+      "schema_version": "1.0",
+      "sprint": "[sprint number]",
+      "session": "[session ID]",
+      "verdict": "COMPLETE | INCOMPLETE | BLOCKED",
+      "tests": {
+        "before": [N],
+        "after": [N],
+        "new": [N],
+        "all_pass": true | false
+      },
+      "files_created": ["path1", "path2"],
+      "files_modified": ["path1", "path2"],
+      "files_should_not_have_modified": [],
+      "scope_additions": [
+        {"description": "...", "justification": "..."}
+      ],
+      "scope_gaps": [
+        {
+          "description": "...",
+          "category": "SMALL_GAP | SUBSTANTIAL_GAP",
+          "severity": "LOW | MEDIUM | HIGH",
+          "blocks_sessions": ["S3a"],
+          "suggested_action": "..."
+        }
+      ],
+      "prior_session_bugs": [
+        {
+          "description": "...",
+          "affected_session": "S1a",
+          "affected_files": ["path"],
+          "severity": "LOW | MEDIUM | HIGH",
+          "blocks_sessions": []
+        }
+      ],
+      "deferred_observations": ["observation 1", "observation 2"],
+      "doc_impacts": [
+        {"document": "architecture.md", "change_description": "..."}
+      ],
+      "dec_entries_needed": [
+        {"title": "...", "context": "..."}
+      ],
+      "warnings": [],
+      "implementation_notes": "Free-text notes about decisions made during implementation"
+    }
+    ```
+
+Rules for the structured appendix:
+- Always produce it, even in human-in-the-loop mode (for record-keeping)
+- The verdict field must match the overall assessment in the human-readable report
+- files_should_not_have_modified must be empty for a clean session
+- Every scope gap must have a category (SMALL_GAP or SUBSTANTIAL_GAP)
+- Prior-session bugs should identify the affected session by ID
+- The appendix must be valid JSON (no trailing commas, proper quoting)

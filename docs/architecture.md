@@ -1108,6 +1108,15 @@ Interface:
 #### CopilotRouter (`ai/copilot_router.py`)
 Handles chat messages with context injection. Manages conversation history. Routes action proposals through approval workflow.
 
+### 3.Z Sprint Runner (Autonomous Execution Layer)
+- **Location:** `scripts/sprint-runner.py`
+- **Purpose:** Orchestrates sprint execution by invoking Claude Code CLI
+- **Dependencies:** Claude Code CLI, git, ntfy.sh (optional)
+- **State:** `docs/sprints/sprint-{N}/run-log/run-state.json`
+- **Config:** `config/runner.yaml`
+- **Mode:** Autonomous (full loop) or human-in-the-loop (logging only)
+- **Key protocols:** Tier 2.5 triage, spec conformance check, notification
+
 ---
 
 ## 4. Command Center API (`argus/api/`)
@@ -1443,6 +1452,12 @@ docs/backtesting/
 ├── DATA_INVENTORY.md
 ├── BACKTEST_RUN_LOG.md
 └── PARAMETER_VALIDATION_REPORT.md
+docs/sprints/sprint-{N}/
+└── run-log/                       # Autonomous runner output (see run-log-spec)
+scripts/
+└── sprint-runner.py              # Autonomous sprint orchestrator
+config/
+└── runner.yaml                   # Runner configuration
 
 ### Future Module: `argus/intelligence/`
 Planned for Build Track near-term (Tier 1, Sprint 17) and Build Track later (Tiers 2–3). Will contain:

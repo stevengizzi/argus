@@ -311,15 +311,27 @@
 **Sessions:** 2 implementation.
 **Notes:** Session B was investigation-only (no code changes) that led to DEC-277. Pre-existing failures only manifested after 7 PM ET when UTC and ET dates diverge.
 
+### Sprint 23.1 — Autonomous Runner Protocol Integration (2101 pytest + 392 Vitest, +0/+0)
+**Date:** Mar 9, 2026
+**Scope:** Documentation-only sprint integrating autonomous sprint runner protocols, schemas, templates, and guides into the repository.
+
+**Session 1:** Created 15 new documentation files: 5 protocol files (autonomous-sprint-runner.md, in-flight-triage-update.md, run-log-spec.md, sprint-planning-update.md, triage-prompt.md), 4 schema files (runner-config-schema.md, run-state-schema.md, structured-closeout-schema.md, structured-review-verdict-schema.md), 4 template files (fix-session-template.md, runner-config-template.yaml, triage-verdict-template.md, work-journal-template.md), 2 guide files (autonomous-process-guide.md, human-in-loop-guide.md).
+
+**Session 2:** Modified 8 existing files to integrate runner support. Updated close-out skill with structured JSON appendix. Updated review skill with CONCERNS verdict and structured JSON appendix. Updated reviewer agent with CONCERNS support. Updated project-knowledge.md with three-tier architecture description. Updated architecture.md with Sprint Runner component. Appended 20 DEC entries (DEC-278–297) covering runner architecture, Tier 2.5 triage, spec conformance, run-log, git hygiene, retry policy, cost tracking, test verification, and more.
+
+**Key decisions:** DEC-278–297 (20 decisions covering autonomous runner architecture and enhancements).
+**Sessions:** 2 implementation + Tier 2 reviews.
+**Notes:** Documentation-only sprint — no Python, TypeScript, or test files modified. All source code remains unchanged. First sprint to formalize the autonomous execution capability that enables overnight sprint execution.
+
 ---
 
 ## Sprint Statistics
 
-- **Total sprints:** 23 full + 10 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.7, 22.1–22.3, 23.05)
+- **Total sprints:** 23 full + 11 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.7, 22.1–22.3, 23.05, 23.1)
 - **Total sessions:** ~250+ Claude Code sessions
 - **Total tests:** 2,101 pytest + 392 Vitest = 2,493 total
-- **Total decisions:** 277 (DEC-001 through DEC-277)
-- **Calendar days (active dev):** ~23 (Feb 14 – Mar 8, 2026)
+- **Total decisions:** 297 (DEC-001 through DEC-297)
+- **Calendar days (active dev):** ~24 (Feb 14 – Mar 9, 2026)
 - **Largest sprint:** 22 (9 implementation + 5 fix + 9 reviews, largest scope)
 - **Cleanest sprint:** 23 (11 sessions, 0 regressions, 0 scope gaps requiring follow-up)
 - **Most test-dense:** Sprint 22 (286 new tests) and Sprint 23 (141 new tests across 23+23.05)

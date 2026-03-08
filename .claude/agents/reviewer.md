@@ -25,7 +25,10 @@ You will receive:
 
 ## Output
 Produce the review report as specified in the review skill, between
----BEGIN-REVIEW--- and ---END-REVIEW--- markers.
+---BEGIN-REVIEW--- and ---END-REVIEW--- markers. Your verdict will be one of:
+- CLEAR: No issues found, proceed to next session
+- CONCERNS: Medium-severity issues that should be documented but don't block
+- ESCALATE: Critical issues requiring Tier 3 architectural review
 
 ## Critical Reminders
 - You do NOT fix issues. You document them.
@@ -33,3 +36,8 @@ Produce the review report as specified in the review skill, between
   are cheap; missed issues are expensive.
 - Your verdict must be ESCALATE if ANY escalation criterion is triggered.
   Do not rationalize away triggers.
+- CONCERNS is for medium-severity findings that don't meet escalation criteria
+  but should be documented. Use it when the implementation works but has
+  non-trivial issues worth noting for the developer or Tier 2.5 triage.
+- When in doubt between CLEAR and CONCERNS, prefer CONCERNS — false positives
+  are cheap (triage handles them); missed issues are expensive.

@@ -1,7 +1,7 @@
 # ARGUS — Decision Index
 
-> 277 decisions (DEC-001 through DEC-277)
-> Generated: March 8, 2026 | Source: `docs/decision-log.md`
+> 297 decisions (DEC-001 through DEC-297)
+> Generated: March 9, 2026 | Source: `docs/decision-log.md`
 > Legend: ● Active | ○ Superseded | △ Amended | ✗ Duplicate entry
 
 
@@ -297,3 +297,26 @@
 - ● **DEC-275**: Compaction Risk Scoring System — quantitative point-based session sizing
 - ● **DEC-276**: AI Timestamps Standardized on ET — naive ET strings, no UTC storage
 - ● **DEC-277**: Fail-Closed on Missing Reference Data — system filters and routing exclude symbols with None prev_close/avg_volume
+
+## Phase F — Autonomous Sprint Runner (Sprint 23.1)
+
+- ● **DEC-278**: Autonomous Sprint Runner Architecture — Python orchestrator, deterministic state machine, CLI invocation
+- ● **DEC-279**: Notification via ntfy.sh — mobile push notifications, 5 priority tiers
+- ● **DEC-280**: Structured Close-Out Appendix — machine-parseable JSON appended to close-out reports
+- ● **DEC-281**: Structured Review Verdict — machine-parseable JSON with CLEAR/CONCERNS/ESCALATE
+- ● **DEC-282**: Tier 2.5 Automated Triage Layer — Claude Code triage session for scope gaps and prior-session bugs
+- ● **DEC-283**: Spec Conformance Check at Session Boundaries — cumulative diff vs sprint spec
+- ● **DEC-284**: Run-Log Architecture — all output to disk immediately, JSONL append-only
+- ● **DEC-285**: Git Hygiene Protocol — per-session commits, checkpoints, rollback on escalate
+- ● **DEC-286**: Runner Retry Policy — 2 retries for transient failures, LLM-compliance differentiation
+- ● **DEC-287**: Cost Tracking and Ceiling — token usage tracking, configurable cost ceiling
+- ● **DEC-288**: Dynamic Test Baseline Patching — adjust pre-flight test counts based on prior session
+- ● **DEC-289**: Session Parallelizable Flag — planning-time flag for agent teams enablement
+- ● **DEC-290**: Claude.ai Role in Autonomous Mode — exception handler and strategic layer
+- ● **DEC-291**: Independent Test Verification — runner runs tests to verify close-out claims
+- ● **DEC-292**: Pre-Session File Existence Validation — verify prior session Creates exist
+- ● **DEC-293**: Compaction Detection Heuristic — track output size, flag compaction-likely sessions
+- ● **DEC-294**: Session Boundary Diff Validation — git diff vs planned Creates/Modifies
+- ● **DEC-295**: Exponential Retry Backoff — 4× multiplier, rate-limit detection
+- ● **DEC-296**: Planning-Time Mode Declaration — autonomous/human-in-the-loop/undecided
+- ● **DEC-297**: Review Context File Hash Verification — SHA-256 integrity check

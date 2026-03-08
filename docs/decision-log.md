@@ -3134,6 +3134,306 @@ Each entry follows this format:
 
 ---
 
+### DEC-278 | Autonomous Sprint Runner Architecture
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-07 |
+| **Sprint** | Pre-Sprint 23.5 |
+| **Decision** | Build a Python-based orchestrator (`scripts/sprint-runner.py`) that drives the sprint execution loop by invoking Claude Code CLI programmatically. The runner is a deterministic state machine — it does not use LLM tokens for coordination logic. It reads sprint package files from disk, invokes Claude Code for each session, parses structured output, makes rule-based proceed/halt decisions, and maintains full state on disk for resume-from-checkpoint capability. Supports two modes: autonomous (full loop) and human-in-the-loop (optional structured logging). |
+| **Alternatives Considered** | 1. LLM-based orchestrator: Rejected — coordination logic is deterministic, wastes tokens. 2. Agent teams as orchestrator: Rejected — sprint sessions are sequential, not parallel. 3. Third-party framework (LangChain, CrewAI): Rejected — unnecessary dependency complexity. |
+| **Rationale** | Sprint packages are already machine-readable. A Python script is the simplest, most reliable, and most debuggable solution. Zero LLM cost for coordination, immune to compaction. |
+| **Constraints** | Must work with Claude Code CLI, support resume from any checkpoint, preserve all session output for audit trail. |
+| **Cross-References** | DEC-275 (compaction risk scoring), DEC-290 (Claude.ai role) |
+| **Status** | Active |
+
+---
+
+### DEC-279 | Notification via ntfy.sh
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-07 |
+| **Sprint** | Pre-Sprint 23.5 |
+| **Decision** | Use ntfy.sh as the primary notification channel for runner events. Mobile push notifications via the ntfy app on iPhone. Single HTTP POST per notification, no API keys, no OAuth. Five notification tiers: HALTED (high priority), SESSION_COMPLETE (normal), PHASE_TRANSITION (low), WARNING (low), COMPLETED (normal). HALTED and COMPLETED cannot be disabled. |
+| **Alternatives Considered** | 1. Slack webhook only: Rejected — requires app setup and running Slack client. 2. Email only: Rejected — lacks urgency tiers. 3. SMS via Twilio: Rejected — cost and complexity. |
+| **Rationale** | Runner operates while developer is away. ntfy.sh provides reliable mobile push with simplest possible integration. |
+| **Constraints** | Must work on iPhone, support priority levels, not require running a server. |
+| **Cross-References** | DEC-278 (runner architecture) |
+| **Status** | Active |
+
+---
+
+### DEC-280 | Structured Close-Out Appendix
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-07 |
+| **Sprint** | Pre-Sprint 23.5 |
+| **Decision** | Extend the close-out skill to produce a machine-parseable JSON block appended to the existing human-readable close-out report. The JSON block is fenced with ` ```json:structured-closeout ` for reliable extraction. Contains: session identifier, verdict enum, test counts, files created/modified, scope additions, scope gaps, prior-session bugs, deferred observations, doc impacts, DEC entries needed. |
+| **Alternatives Considered** | 1. Separate structured file: Rejected — creates two artifacts. 2. YAML instead of JSON: Rejected — JSON more reliably parseable. 3. Replace human-readable entirely: Rejected — human readability essential. |
+| **Rationale** | Runner needs machine-parseable outcomes for proceed/halt decisions. Structured appendix gives reliable data while preserving human-readable report. |
+| **Constraints** | Must not break existing close-out format, extractable via regex, validate against schema. |
+| **Cross-References** | DEC-278 (runner architecture), DEC-282 (Tier 2.5 triage) |
+| **Status** | Active |
+
+---
+
+### DEC-281 | Structured Review Verdict
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-07 |
+| **Sprint** | Pre-Sprint 23.5 |
+| **Decision** | Extend the review skill to produce a machine-parseable JSON block appended to the existing human-readable review report. Fenced with ` ```json:structured-verdict `. Contains: verdict enum (CLEAR / CONCERNS / ESCALATE), findings array with severity and category, files reviewed, spec-conformance assessment, recommended actions. |
+| **Alternatives Considered** | 1. Parse verdict from prose: Rejected — fragile and error-prone. 2. Structured-only output: Rejected — human readability needed for manual mode. |
+| **Rationale** | Same as DEC-280. Runner needs reliable signal for proceed vs halt. |
+| **Constraints** | Must not break existing review format. CLEAR/CONCERNS/ESCALATE enum unambiguous. |
+| **Cross-References** | DEC-280 (structured close-out), DEC-278 (runner) |
+| **Status** | Active |
+
+---
+
+### DEC-282 | Tier 2.5 Automated Triage Layer
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-07 |
+| **Sprint** | Pre-Sprint 23.5 |
+| **Decision** | Insert an automated triage step between Tier 2 review and human escalation. When structured close-out contains non-empty scope_gaps or prior_session_bugs, runner invokes a separate Claude Code session with a triage prompt. Triage session classifies issues using Category 1–4 system and recommends: insert fix session, defer to post-sprint, or halt for human decision. Read-only session (no file modifications). |
+| **Alternatives Considered** | 1. Rule-based classification only: Rejected — scope gap severity requires language understanding. 2. Always halt for human triage: Rejected — eliminates autonomy benefit. 3. Never halt: Rejected — Category 3–4 issues require human judgment. |
+| **Rationale** | Tier 2.5 handles middle-severity cases that don't warrant waking the developer but aren't simple enough for regex rules. Uses LLM judgment in constrained, auditable way. |
+| **Constraints** | Read-only, receives sprint spec for context, produces structured output, logged to issues.jsonl. |
+| **Cross-References** | DEC-278 (runner), DEC-280 (structured close-out) |
+| **Status** | Active |
+
+---
+
+### DEC-283 | Spec Conformance Check at Session Boundaries
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-07 |
+| **Sprint** | Pre-Sprint 23.5 |
+| **Decision** | After each session receives a CLEAR verdict, runner invokes spec conformance check via Claude Code subagent. Check compares cumulative git diff (sprint start to current HEAD) against sprint spec and spec-by-contradiction. Output: CONFORMANT / DRIFT-MINOR / DRIFT-MAJOR. CONFORMANT and DRIFT-MINOR: proceed. DRIFT-MAJOR: halt and notify. |
+| **Alternatives Considered** | 1. No conformance check: Rejected — small deviations compound. 2. Check only at sprint end: Rejected — drift caught early is cheap to fix. 3. AST-based automated checking: Rejected — too complex, naming drift requires semantic understanding. |
+| **Rationale** | Session reviews verify individual sessions. Conformance checks verify cumulative result matches overall sprint design. Catches emergent drift. |
+| **Constraints** | Uses cumulative diff, references both spec and spec-by-contradiction, lightweight execution. |
+| **Cross-References** | DEC-278 (runner), DEC-281 (structured verdict) |
+| **Status** | Active |
+
+---
+
+### DEC-284 | Run-Log Architecture
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-07 |
+| **Sprint** | Pre-Sprint 23.5 |
+| **Decision** | Every byte of runner output written to disk immediately in structured run-log directory. Structure: `run-state.json`, `session-{id}/` with implementation output, closeout, review, git-diff, `issues.jsonl`, `scope-changes.jsonl`, `doc-sync-queue.jsonl`, `work-journal.md`. All .jsonl files append-only. Work-journal.md auto-generated from structured data. |
+| **Alternatives Considered** | 1. In-memory state: Rejected — crash loses all progress. 2. Database (SQLite): Rejected — overkill, JSONL simpler and git-friendly. 3. Claude.ai conversation as state: Rejected — subject to compaction, not machine-parseable. |
+| **Rationale** | Solves compaction problem permanently. No LLM invocation needs full sprint history — state lives on disk. Each session gets fresh context window. |
+| **Constraints** | All writes atomic (temp → rename), committed to git after each session, JSONL one object per line. |
+| **Cross-References** | DEC-278 (runner), DEC-275 (compaction risk scoring) |
+| **Status** | Active |
+
+---
+
+### DEC-285 | Git Hygiene Protocol for Autonomous Runner
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-07 |
+| **Sprint** | Pre-Sprint 23.5 |
+| **Decision** | Runner manages git state: before each session create branch checkpoint, after CLEAR verdict + conformance check commit with `[Sprint N] Session {id}: {title}`, after ESCALATE rollback to checkpoint, fix sessions get own commits, resume validates current SHA matches run-state.json. All diffs saved as .patch files regardless of verdict. |
+| **Alternatives Considered** | 1. One big commit at sprint end: Rejected — loses per-session atomicity. 2. Feature branches per session: Rejected — unnecessary proliferation for sequential work. |
+| **Rationale** | Clean git state prerequisite for session isolation. Per-session commits provide clean audit trail. |
+| **Constraints** | Never leave repo dirty between sessions, preserve all work via .patch files. |
+| **Cross-References** | DEC-278 (runner), DEC-284 (run-log) |
+| **Status** | Active |
+
+---
+
+### DEC-286 | Runner Retry Policy
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-07 |
+| **Sprint** | Pre-Sprint 23.5 |
+| **Decision** | Runner retries session up to 2 times when failure appears transient: no output, test suite timeout, git operation failure, CLI non-zero exit without structured output. Uses exponential backoff (DEC-295). LLM-compliance failures (output present but structured JSON missing) get reinforcement instruction on first retry. After 2 retries, halt and notify. Non-transient failures (test assertions, ESCALATE verdict) never retried. |
+| **Alternatives Considered** | 1. No retries: Rejected — transient failures cause unnecessary interruption. 2. Unlimited retries: Rejected — burns tokens on broken sessions. 3. Retry with modified prompt: Rejected — runner should not modify prompts. |
+| **Rationale** | Transient failures common with API calls and test suites. Two retries survives momentary hiccups. |
+| **Constraints** | Retry count configurable, each retry starts from clean git state. |
+| **Cross-References** | DEC-278 (runner), DEC-285 (git hygiene), DEC-295 (exponential backoff) |
+| **Status** | Active |
+
+---
+
+### DEC-287 | Cost Tracking and Ceiling
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-07 |
+| **Sprint** | Pre-Sprint 23.5 |
+| **Decision** | Runner tracks estimated token usage per session (from CLI output), maintains running cost estimate in run-state.json. Configurable cost ceiling triggers HALTED notification if cumulative cost exceeds threshold. Uses API token pricing as proxy even on subscription plan. |
+| **Alternatives Considered** | 1. No cost tracking: Rejected — no visibility into consumption. 2. Hard kill: Rejected — halt with notification gives option to continue. |
+| **Rationale** | Autonomous execution removes natural cost awareness. Runner needs circuit breaker for runaway consumption. |
+| **Constraints** | Default ceiling $50/sprint, token counts from CLI stdout/stderr. |
+| **Cross-References** | DEC-278 (runner), DEC-274 (AI layer cost tracking) |
+| **Status** | Active |
+
+---
+
+### DEC-288 | Dynamic Test Baseline Patching
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-07 |
+| **Sprint** | Pre-Sprint 23.5 |
+| **Decision** | In autonomous mode, runner dynamically patches pre-flight test count based on previous session's actual count from structured close-out. Original planning-time count preserved for audit; runner adds comment with adjusted count. In human-in-the-loop mode, developer manually notes current count. |
+| **Alternatives Considered** | 1. Static counts only: Rejected — session 1 adds tests, making session 2's static count incorrect. 2. Remove test count entirely: Rejected — knowing expected count is valuable sanity check. |
+| **Rationale** | Sequential sessions accumulate tests. Static prompts can't predict exact count. Dynamic patching keeps pre-flight checks meaningful. |
+| **Constraints** | Original count preserved, patching uses structured close-out test.after field. |
+| **Cross-References** | DEC-278 (runner), DEC-280 (structured close-out) |
+| **Status** | Active |
+
+---
+
+### DEC-289 | Session Parallelizable Flag
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-07 |
+| **Sprint** | Pre-Sprint 23.5 |
+| **Decision** | Add `parallelizable` field (boolean, default: false) to Session Breakdown artifact. When true, runner may invoke Claude Code with agent teams enabled for internal parallelism. Requires Creates list with clearly independent outputs that don't modify same files. Sprint planner must justify flag. In human-in-the-loop mode, flag is informational only. |
+| **Alternatives Considered** | 1. Always use agent teams: Rejected — 3–4× more tokens, coordination overhead. 2. Never use: Rejected — some sessions benefit from parallel execution. 3. Runtime decision: Rejected — parallelizability is planning decision. |
+| **Rationale** | Agent teams powerful but expensive. Explicit planning-time decision ensures justified use. |
+| **Constraints** | Default false, sessions scoring 14+ on compaction risk should NOT be parallelized. |
+| **Cross-References** | DEC-278 (runner), DEC-275 (compaction risk scoring) |
+| **Status** | Active |
+
+---
+
+### DEC-290 | Claude.ai Role in Autonomous Mode
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-07 |
+| **Sprint** | Pre-Sprint 23.5 |
+| **Decision** | In autonomous mode, Claude.ai shifts to exception handler and strategic layer. Stays in Claude.ai: sprint planning, adversarial review, Tier 3 review, strategic check-ins, codebase audits, discovery. Moves to runner + Claude Code: work journal triage (→ structured close-out + Tier 2.5), fix session generation, session-to-session orchestration, doc-sync execution. Implementation and review sessions stay in Claude Code unchanged. |
+| **Alternatives Considered** | 1. Remove Claude.ai entirely: Rejected — planning/adversarial review need multi-turn exploratory reasoning. 2. Keep Claude.ai in real-time loop: Rejected — mechanical parts waste tokens and developer time. |
+| **Rationale** | Claude.ai strengths are exploratory reasoning, design iteration, adversarial analysis — planning-time and exception-time activities. Execution loop is mechanical coordination. |
+| **Constraints** | Claude.ai remains venue for all architectural decisions. Runner never makes decisions requiring DEC entry. |
+| **Cross-References** | DEC-278 (runner), DEC-282 (Tier 2.5 triage) |
+| **Status** | Active |
+
+---
+
+### DEC-291 | Independent Test Verification at Session Boundaries
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-09 |
+| **Sprint** | Pre-Sprint 23.5 |
+| **Decision** | Runner independently runs test suite after implementation completes and before invoking review, comparing actual results against structured close-out's claimed test counts. If close-out claims `all_pass: true` but runner's run shows failures, or count diverges beyond tolerance (default: 0), session is flagged. Addresses compaction risk where LLM produces close-out from memory of earlier test run rather than final state. |
+| **Alternatives Considered** | 1. Trust close-out entirely: Rejected — compaction-induced false positives are known failure mode. 2. Re-run tests in review: Rejected — review trusts close-out for baseline. |
+| **Rationale** | Close-out produced by same LLM that did implementation. In compaction scenario, both may be degraded. Independent test run by orchestrator (Python, not LLM) is ground-truth check immune to compaction. |
+| **Constraints** | Uses same commands as pre-flight (pytest + vitest), tolerance configurable. |
+| **Cross-References** | DEC-278 (runner), DEC-280 (structured close-out), DEC-275 (compaction risk) |
+| **Status** | Active |
+
+---
+
+### DEC-292 | Pre-Session File Existence Validation
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-09 |
+| **Sprint** | Pre-Sprint 23.5 |
+| **Decision** | Before running each session, runner validates that all files listed in prior sessions' Creates columns actually exist on disk. Also validates current session's pre-flight "Read these files" list exists and is non-empty. If validation fails: halt with specific message identifying missing files and which session was supposed to create them. |
+| **Alternatives Considered** | 1. Trust CLEAR verdict means all files exist: Rejected — CLEAR means review passed, not every planned artifact produced. |
+| **Rationale** | File existence is trivially checkable (zero LLM cost), catches failures that would otherwise cause next session to fail mid-implementation. |
+| **Constraints** | Checks existence and non-zero size, not content correctness. Uses session breakdown Creates columns as source of truth. |
+| **Cross-References** | DEC-278 (runner) |
+| **Status** | Active |
+
+---
+
+### DEC-293 | Compaction Detection Heuristic
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-09 |
+| **Sprint** | Pre-Sprint 23.5 |
+| **Decision** | Runner tracks implementation output size (bytes) per session, flags sessions exceeding threshold (default: 100KB) as "compaction-likely." For compaction-likely sessions: independent test verification mandatory, output size logged in run-state.json, WARNING notification sent. Data used to calibrate DEC-275's compaction risk scoring over time. |
+| **Alternatives Considered** | 1. No compaction tracking: Rejected — runner has empirical data planning-time system lacks. 2. Automatic session splitting: Rejected — splitting requires planning-time decisions. |
+| **Rationale** | Planning-time scoring based on estimates. Runner provides post-implementation ground truth for feedback loop improving future scoring accuracy. |
+| **Constraints** | Threshold configurable, data logged for calibration, does not trigger halts by itself. |
+| **Cross-References** | DEC-278 (runner), DEC-275 (compaction risk scoring), DEC-291 (test verification) |
+| **Status** | Active |
+
+---
+
+### DEC-294 | Session Boundary Diff Validation
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-09 |
+| **Sprint** | Pre-Sprint 23.5 |
+| **Decision** | After implementation completes and before review, runner performs `git diff --stat HEAD` and compares changed files against session breakdown's planned Creates/Modifies columns. Catches gross failures: file should have been created but wasn't, file shouldn't have been touched but was, no changes at all. If diff shows files on "do not modify" list were changed, escalate immediately without invoking review (saves tokens). Missing expected files logged as review context but don't halt. |
+| **Alternatives Considered** | 1. Rely entirely on review: Rejected — review costs tokens, free filesystem check pre-empts obvious escalations. |
+| **Rationale** | File-level diff checking is instantaneous, catches highest-severity errors (scope violations, missing deliverables) before spending tokens on review. |
+| **Constraints** | Filesystem-only (no LLM cost), "do not modify" violations trigger immediate ESCALATE, missing expected files logged not auto-escalated. |
+| **Cross-References** | DEC-278 (runner), DEC-283 (spec conformance) |
+| **Status** | Active |
+
+---
+
+### DEC-295 | Exponential Retry Backoff
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-09 |
+| **Sprint** | Pre-Sprint 23.5 |
+| **Decision** | Runner retries use exponential backoff: first retry at `retry_delay_seconds` (default: 30s), second at `retry_delay_seconds × 4` (default: 120s). If CLI output contains rate-limit error with "retry after" duration, that duration used instead of configured delay. Amends DEC-286. |
+| **Alternatives Considered** | 1. Flat delay: Rejected — 30s often insufficient for hourly rate limits but wasteful for 5-second transient hiccups. 2. Parse API headers for exact retry-after: Rejected — runner invokes CLI, rate limit info may be in stderr text. |
+| **Rationale** | Exponential backoff is standard approach for rate-limited APIs. Simple to implement, significantly improves second retry success odds. |
+| **Constraints** | Backoff multiplier 4×, rate-limit detection via grep for "rate limit" or "429" in stderr. |
+| **Cross-References** | DEC-286 (retry policy), DEC-278 (runner) |
+| **Status** | Active |
+
+---
+
+### DEC-296 | Planning-Time Mode Declaration
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-09 |
+| **Sprint** | Pre-Sprint 23.5 |
+| **Decision** | Sprint planning Phase A adds mode declaration step: "Declare execution mode: autonomous / human-in-the-loop / undecided." Affects downstream artifact generation. Autonomous: skip work journal handoff, generate runner config, parallelizable assessment mandatory. Human-in-the-loop: skip runner config, generate work journal handoff, parallelizable flags informational only. Undecided (default): generate both. |
+| **Alternatives Considered** | 1. Always generate everything: Rejected — wastes planning effort on unused artifacts. 2. Decide mode after planning: Rejected — mode affects artifact generation during planning. |
+| **Rationale** | Current protocol generates all artifacts regardless of mode. Once dual-mode common, this creates unnecessary work. Early mode declaration allows skipping irrelevant artifacts. |
+| **Constraints** | Default "undecided" (safe for transition), mode declaration doesn't affect spec-level artifacts. |
+| **Cross-References** | DEC-278 (runner), DEC-290 (Claude.ai role) |
+| **Status** | Active |
+
+---
+
+### DEC-297 | Review Context File Hash Verification
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-09 |
+| **Sprint** | Pre-Sprint 23.5 |
+| **Decision** | Runner computes SHA-256 hash of review context file at sprint start, stores in run-state.json. Before each review invocation, re-hashes and compares. If hash changed: log WARNING, proceed with review (change may be intentional during halt resolution), include warning in session's run-log entry. Prevents subtle bug class where review checks against spec different from what implementation was coded against. |
+| **Alternatives Considered** | 1. Halt on any change: Rejected — legitimate spec revisions during halt resolution would require manual override. 2. No verification: Rejected — review context file is spec-of-record, undetected changes undermine review process. |
+| **Rationale** | Review context file is referenced by all review prompts. Verifying integrity is cheap (one hash per session) defense-in-depth measure. |
+| **Constraints** | SHA-256, stored in run-state.json under `review_context_hash`, change detection is WARNING not HALT. |
+| **Cross-References** | DEC-278 (runner), DEC-284 (run-log) |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
-*Next DEC: 278*
-*Last updated: 2026-03-08 (Sprint 23.05 doc-sync)*
+*Next DEC: 298*
+*Last updated: 2026-03-09 (Sprint 23.1 doc-sync)*

@@ -120,7 +120,70 @@ Sprint-Level Regression Checklist, and Sprint-Level Escalation Criteria:
 `docs/sprints/sprint-23.1/review-context.md`
 
 ## Tier 1 Close-Out Report
-[PASTE THE CLOSE-OUT REPORT HERE AFTER THE IMPLEMENTATION SESSION]
+---BEGIN-CLOSE-OUT---
+
+**Session:** Sprint 23.1 — Session 2: Modify Existing Files + DEC Entries
+**Date:** 2026-03-09
+**Self-Assessment:** CLEAN
+
+### Change Manifest
+| File | Change Type | Rationale |
+|------|-------------|-----------|
+| .claude/skills/close-out.md | modified | Added "Structured Close-Out Appendix" section at end |
+| .claude/skills/review.md | modified | Added CONCERNS verdict support (Step 2, Step 3) and "Structured Review Verdict" section |
+| .claude/agents/reviewer.md | modified | Updated Output and Critical Reminders with CONCERNS support |
+| docs/project-knowledge.md | modified | Replaced Two-Claude architecture with three-tier, added Autonomous Runner subsection, updated sprint history table |
+| docs/architecture.md | modified | Added Sprint Runner component (3.Z) and file structure additions |
+| docs/decision-log.md | modified | Appended 20 DEC entries (DEC-278 through DEC-297), updated footer |
+| docs/dec-index.md | modified | Added Phase F section with 20 new entries, updated header counts |
+| docs/sprint-history.md | modified | Added Sprint 23.1 entry, updated statistics |
+
+### Judgment Calls
+None — all decisions were pre-specified in the implementation prompt and source modification files.
+
+### Scope Verification
+| Spec Requirement | Status | Implementation |
+|-----------------|--------|----------------|
+| close-out.md structured appendix section | DONE | Appended at end of file |
+| review.md Verdict Determination subsection in Step 2 | DONE | Added after Escalation Criteria Check |
+| review.md verdict line update (CLEAR \| CONCERNS \| ESCALATE) | DONE | Line 76 updated |
+| review.md recommendation template update | DONE | Added CONCERNS guidance |
+| review.md Structured Review Verdict section | DONE | Appended at end of file |
+| reviewer.md Output section update | DONE | Added CLEAR/CONCERNS/ESCALATE descriptions |
+| reviewer.md Critical Reminders update | DONE | Added 2 new CONCERNS-related reminders |
+| project-knowledge.md three-tier architecture | DONE | Replaced Two-Claude paragraph, added runner subsection |
+| architecture.md Sprint Runner component | DONE | Added 3.Z section and file structure entries |
+| decision-log.md 20 DEC entries | DONE | DEC-278 through DEC-297 appended |
+| dec-index.md 20 new entries | DONE | Phase F section with all 20 entries |
+| sprint-history.md Sprint 23.1 | DONE | Entry added, statistics updated |
+
+### Regression Checks
+| Check | Result | Notes |
+|-------|--------|-------|
+| No source code modified | PASS | git diff shows only docs/ and .claude/ paths |
+| close-out.md has new section | PASS | "Structured Close-Out Appendix" found |
+| review.md has CONCERNS in prose | PASS | 5 occurrences (Step 2, Step 3, recommendations) |
+| review.md has structured section | PASS | "Structured Review Verdict" found |
+| reviewer.md has CONCERNS | PASS | 3 occurrences in Output and Critical Reminders |
+| DEC-297 present | PASS | Found in decision-log.md |
+| DEC index complete | PASS | 20 new entries under Phase F |
+| Sprint history updated | PASS | Sprint 23.1 entry present |
+| All tests pass | PASS | 2101 pytest + 392 Vitest |
+
+### Test Results
+- Tests run: 2493 (2101 pytest + 392 Vitest)
+- Tests passed: 2493
+- Tests failed: 0
+- New tests added: 0
+- Command used: `python -m pytest --tb=short -q && cd argus/ui && npx vitest run`
+
+### Unfinished Work
+None — all spec items complete.
+
+### Notes for Reviewer
+None — this was a documentation-only session with no source code changes.
+
+---END-CLOSE-OUT---
 
 ## Review Scope
 - Diff to review: `git diff HEAD~1`
