@@ -14,6 +14,10 @@ in the Review Context File and is referenced by path -- not duplicated here.
 
     Follow the review skill in .claude/skills/review.md.
 
+    Your review report MUST include a structured JSON verdict at the end,
+    fenced with ```json:structured-verdict. See the review skill for the
+    full schema and requirements.
+
     ## Review Context
     Read the following file for the Sprint Spec, Specification by Contradiction,
     Sprint-Level Regression Checklist, and Sprint-Level Escalation Criteria:
@@ -55,7 +59,13 @@ in the Review Context File and is referenced by path -- not duplicated here.
     "correct" looks like, without reading the rest of the review prompt. If a
     session is backend-only, omit this section entirely.]
 
+    [PLANNING NOTE: The review skill supports three verdicts: CLEAR (proceed),
+    CONCERNS (medium issues, may need triage in autonomous mode), and ESCALATE
+    (requires human). Session-specific review focus items should cover the
+    scenarios most likely to produce CONCERNS for that particular session.]
+
     ## Additional Context
     [Any session-specific context the reviewer needs -- e.g., "This is attempt 2
     at fixing the auth bug, check if diagnostic-first was followed" or "This
     session follows Session 1 which set up the data model"]
+    

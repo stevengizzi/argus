@@ -15,6 +15,9 @@ front-load context, constrain scope, and end with the close-out skill invocation
        - [file path 3]
     2. Run the test suite: [exact test command]
        Expected: [N] tests, all passing
+       Note: In autonomous mode, the expected test count is dynamically adjusted
+       by the runner based on the previous session's actual results. The count
+       above is the planning-time estimate.
     3. Verify you are on the correct branch: [branch name]
     4. [Any other pre-conditions]
 
@@ -102,6 +105,10 @@ front-load context, constrain scope, and end with the close-out skill invocation
     ## Close-Out
     After all work is complete, follow the close-out skill in .claude/skills/close-out.md.
 
+    The close-out report MUST include a structured JSON appendix at the end,
+    fenced with ```json:structured-closeout. See the close-out skill for the
+    full schema and requirements.
+
     [OPTIONAL: After close-out, invoke the reviewer subagent:
     @reviewer -- provide the sprint spec, close-out report, and the regression
     checklist below.]
@@ -111,3 +118,4 @@ front-load context, constrain scope, and end with the close-out skill invocation
 
     ## Sprint-Level Escalation Criteria (for Tier 2 reviewer)
     [Paste the sprint-level escalation criteria here]
+    

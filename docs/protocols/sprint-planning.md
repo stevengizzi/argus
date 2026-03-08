@@ -30,6 +30,17 @@ Start the conversation with the sprint context:
 
 During Phase A, work through:
 
+0.5 **Execution mode declaration** -- Declare the intended execution mode:
+    autonomous / human-in-the-loop / undecided.
+
+    - **Autonomous:** Skip work journal handoff prompt in Phase D. Generate
+      runner config as a sprint artifact. Parallelizable assessment in step
+      5.5 is mandatory.
+    - **Human-in-the-loop:** Skip runner config generation. Generate work
+      journal handoff prompt. Parallelizable flags are informational only.
+    - **Undecided (default):** Generate both work journal handoff and runner
+      config. Safe default for sprints where the mode has not been decided.
+
 1. **Requirements clarification** -- What exactly does this sprint deliver?
    What are the acceptance criteria? Are there performance benchmarks?
 
@@ -96,6 +107,24 @@ During Phase A, work through:
    sessions that bypass the standard prompt template. Mark these in the session
    breakdown as "Session [N]f (visual-review fixes) — contingency, 0.5 session."
 
+5.5 **Runner compatibility assessment** -- For each session:
+
+   a. Confirm the session has machine-parseable acceptance criteria (testable
+      assertions, not subjective judgments).
+
+   b. Assign `parallelizable` flag (default: false). Set to true ONLY when:
+      - The Creates list has 2+ clearly independent outputs
+      - No two outputs modify the same files
+      - The session is NOT already at compaction risk 14+
+      Justify the flag in the session breakdown.
+
+   c. Confirm the implementation prompt template includes the structured
+      close-out requirement (referencing the close-out skill's structured
+      appendix section).
+
+   d. Confirm the review prompt template includes the structured verdict
+      requirement (referencing the review skill's structured verdict section).
+
 6. **Config changes assessment** -- If this sprint adds or modifies config
    fields (YAML files + Pydantic models), explicitly list each new field and
    its corresponding Pydantic model field name. Verify the names match exactly.
@@ -133,7 +162,7 @@ Generate the spec-level artifacts one at a time, in this order:
 3. Session Breakdown (list of sessions with scope, dependencies, and compaction
    risk score. Each session must include the scoring table showing points per
    factor and total. Any session scoring 14+ must be split before proceeding.
-   Each session must list Creates / Modifies / Integrates columns.)
+   Each session must list Creates / Modifies / Integrates / Parallelizable columns.))
 4. Sprint-Level Escalation Criteria
 5. Sprint-Level Regression Checklist
 6. Doc Update Checklist
@@ -301,6 +330,13 @@ Before ending the conversation, verify:
 - [ ] Frontend sessions with visual review items have a budgeted fix slot
 - [ ] Work journal handoff prompt is self-contained (no "paste X here" —
       all sprint context embedded)
+- [ ] Every implementation prompt includes structured close-out requirement
+- [ ] Every review prompt includes structured verdict requirement
+- [ ] Parallelizable flags are set with justification for all `true` values
+- [ ] No session flagged as parallelizable also scores 14+ on compaction risk
+- [ ] If autonomous mode planned: runner config has been reviewed
+- [ ] If autonomous mode planned: session order in runner config matches
+      session breakdown dependency chain
 
 ---
 
@@ -324,3 +360,4 @@ A complete sprint package contains:
 11. Implementation Prompts (one per session)
 12. Tier 2 Review Prompts (one per session, references Review Context File)
 13. Work Journal Handoff Prompt (for in-flight triage conversation)
+14. Runner Configuration (runner-config.yaml, if autonomous mode planned)

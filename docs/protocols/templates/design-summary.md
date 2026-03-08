@@ -51,6 +51,12 @@ alone must be sufficient to regenerate the full sprint package.
     - [Estimated test count using: ~5/new file + ~3/modified file + ~2/endpoint,
       with 2× multiplier for infrastructure sessions]
 
+    **Runner Compatibility:**
+    - Mode: [autonomous / human-in-the-loop / either]
+    - Parallelizable sessions: [list, or "none"]
+    - Estimated token budget: [rough estimate based on session count × avg tokens]
+    - Runner-specific escalation notes: [any additional halting conditions]
+
     **Dependencies:**
     - [What must exist before sessions can run]
 
@@ -69,3 +75,5 @@ alone must be sufficient to regenerate the full sprint package.
     6. Escalation Criteria
     7. Regression Checklist
     8. Doc Update Checklist
+    9. Runner Configuration (if autonomous mode)
+    

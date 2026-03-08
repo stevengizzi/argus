@@ -132,3 +132,36 @@ The work journal will:
 
 5. **Building Category 4 ideas mid-sprint.** The sprint scope was planned for
    a reason. Feature ideas go in deferred observations, not in code.
+
+---
+
+## Autonomous Runner Mode
+
+When the sprint is executing under the autonomous runner, the in-flight triage
+workflow changes as follows:
+
+### What Changes
+- The **Work Journal conversation** is replaced by the runner's `issues.jsonl`
+  and auto-generated `work-journal.md`. Issues are classified automatically
+  by the Tier 2.5 triage subagent.
+- **Category 1 and 2 issues** with clear fixes are handled by auto-inserted
+  fix sessions. The runner generates fix prompts from templates.
+- **Category 3 Small issues** are handled by auto-inserted micro-fix sessions.
+- **Category 3 Substantial and Category 4 issues** cause the runner to HALT
+  and notify the developer.
+
+### What Stays the Same
+- The Category 1-4 classification system is unchanged
+- Fix sessions still go through implementation → review → conformance
+- Each fix has its own close-out report
+- Doc sync still happens after all sessions complete
+- The developer still reviews all accumulated issues post-sprint
+
+### Anti-Patterns (Runner-Specific)
+1. **Disabling Tier 2.5 triage to avoid halts.** The triage layer exists
+   because autonomous execution cannot make architectural judgments. Disabling
+   it converts "safe autonomous" into "reckless autonomous."
+2. **Setting max_auto_fixes too high.** More than 3 auto-inserted fix sessions
+   per sprint suggests the planning was insufficient. Halt and re-plan.
+3. **Not reviewing the issues log post-sprint.** Auto-resolved issues still
+   need human review to catch systematic patterns.
