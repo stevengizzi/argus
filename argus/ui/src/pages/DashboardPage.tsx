@@ -48,6 +48,7 @@ import {
   StrategyDeploymentBar,
   GoalTracker,
   PreMarketLayout,
+  UniverseStatusCard,
 } from '../features/dashboard';
 import { WatchlistSidebar } from '../features/watchlist';
 import { staggerContainer, staggerItem, staggerItemWithChildren } from '../utils/motion';
@@ -137,6 +138,9 @@ export function DashboardPage() {
           {/* AI Insight card */}
           <motion.div variants={staggerItem}><AIInsightCard /></motion.div>
 
+          {/* Universe status card */}
+          <motion.div variants={staggerItem}><UniverseStatusCard /></motion.div>
+
           <motion.div variants={staggerItem}><OpenPositions /></motion.div>
           <motion.div variants={staggerItem}><RecentTrades /></motion.div>
           <motion.div variants={staggerItem}><HealthMini /></motion.div>
@@ -207,6 +211,11 @@ export function DashboardPage() {
           {/* AI Insight card */}
           <motion.div variants={staggerItem}>
             <AIInsightCard />
+          </motion.div>
+
+          {/* Universe status card */}
+          <motion.div variants={staggerItem}>
+            <UniverseStatusCard />
           </motion.div>
 
           <motion.div variants={staggerItem}>
@@ -290,6 +299,11 @@ export function DashboardPage() {
         {/* AI Insight card */}
         <motion.div variants={staggerItem}>
           <AIInsightCard />
+        </motion.div>
+
+        {/* Universe status card */}
+        <motion.div variants={staggerItem}>
+          <UniverseStatusCard />
         </motion.div>
 
         <motion.div variants={staggerItem}>

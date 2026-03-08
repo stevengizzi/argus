@@ -70,3 +70,6 @@ export {
   useConversation,
   type ConversationFilters,
 } from './useAI';
+
+// Universe Manager hooks (Sprint 23)
+export { useUniverseStatus } from './useUniverseStatus';

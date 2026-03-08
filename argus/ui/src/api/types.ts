@@ -639,3 +639,13 @@ export interface ConversationDetailResponse {
 
 // AI — Conversation tag types for color coding
 export type ConversationTag = 'session' | 'research' | 'debrief' | 'pre-market' | 'general';
+
+// Universe Manager (Sprint 23)
+export interface UniverseStatusResponse {
+  enabled: boolean;
+  total_symbols: number | null;
+  viable_count: number | null;
+  per_strategy_counts: Record<string, number> | null;
+  last_refresh: string | null;
+  reference_data_age_minutes: number | null;
+}

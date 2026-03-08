@@ -27,6 +27,7 @@ export { StrategyDeploymentBar } from './StrategyDeploymentBar';
 export { GoalTracker } from './GoalTracker';
 export { MarketCountdown } from './MarketCountdown';
 export { PreMarketLayout } from './PreMarketLayout';
+export { UniverseStatusCard } from './UniverseStatusCard';
 
 // Skeleton exports
 export {

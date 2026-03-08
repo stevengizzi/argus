@@ -40,6 +40,7 @@ import type {
   TradeReplayResponse,
   TradesBatchResponse,
   TradesResponse,
+  UniverseStatusResponse,
   WatchlistResponse,
 } from './types';
 
@@ -606,4 +607,9 @@ export async function getConversation(
   return fetchWithAuth<ConversationDetailResponse>(
     `/ai/conversations/${conversationId}${query ? `?${query}` : ''}`
   );
+}
+
+// Universe Manager endpoints (Sprint 23)
+export async function getUniverseStatus(): Promise<UniverseStatusResponse> {
+  return fetchWithAuth<UniverseStatusResponse>('/universe/status');
 }
