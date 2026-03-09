@@ -669,6 +669,21 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 
 ---
 
+### RSK-052 | FMP Endpoint Deprecation Risk
+| Field | Value |
+|-------|-------|
+| **Identified** | 2026-03-09 (Sprint 23.3) |
+| **Likelihood** | Medium |
+| **Impact** | High — breaks Universe Manager and Scanner at startup |
+| **Category** | External Dependency |
+| **Description** | FMP deprecated all legacy v3/v4 endpoints for accounts created after August 2025 with no advance notice. The `/stable/` endpoints could similarly change. ARGUS depends on FMP for both scanning (Sprint 21.7) and universe construction (Sprint 23/23.3). |
+| **Mitigation** | (1) Monitor FMP changelog and documentation for deprecation notices. (2) FMP API URLs centralized in `fmp_scanner.py` and `fmp_reference.py` — migration requires two files. (3) Fallback: Universe Manager degrades to scanner symbols if stock-list fails. |
+| **Trigger** | FMP returns unexpected errors or changes field names in stable API. |
+| **Cross-References** | DEC-258, DEC-263, DEC-298, DEC-299 |
+| **Status** | Open |
+
+---
+
 ## Review Schedule
 
 | Review Type | Frequency | Next Review |

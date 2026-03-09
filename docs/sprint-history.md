@@ -354,15 +354,37 @@
 **Review outcomes:** 4 CLEAR, 2 CONCERNS (S4: ruff lint — fixed same session; 23.2.1: skip-dep validation — resolved with fix session).
 **Notes:** All 6 implementation sessions CLEAN self-assessment. Two CONCERNS verdicts both resolved within the sprint. Heaviest session was S5 (triage + conformance + cost, ~24 compaction risk points). Judgment calls: triage subagent failure → HALT (conservative), conformance subagent failure → CONFORMANT (permissive) — asymmetric by design since triage failures are safety-critical. urllib.request used for notifications (stdlib, simpler than aiohttp). Parallel session git commits serialized via sequential commit after asyncio.gather. Known issue: Pydantic serialization warnings on `review_verdict` field (cosmetic, tracked as DEF-034).
 
+### Sprint 23.3 — Impromptu: Wide Pipe + Runner Permissions (2302 pytest + 392 Vitest, +13/+0)
+**Date:** Mar 9–10, 2026
+**Scope:** Universe Manager Wide Pipe (full FMP stock-list instead of 15-symbol scanner watchlist) + Warm-Up Fix + Runner Permission Bypass + Session Timeout Fix. Impromptu sprint addressing live deployment discoveries.
+
+**Session 1 (S1): Universe Manager Wide Pipe + Warm-Up Fix**
+- Added `fetch_stock_list()` to FMPReferenceClient retrieving `/stable/stock-list` (~8,000 symbols)
+- Updated `fetch_reference_data()` with async concurrency (semaphore=5, 0.2s spacing, 3 retries with exponential backoff), progress logging
+- Rewired `main.py` to use full stock-list → `build_viable_universe()` → ~3,000–4,000 viable symbols → warm-up
+- Migrated FMPReferenceClient from legacy `/api/v3/` and `/api/v4/` to `/stable/` endpoints (DEC-298)
+- Field name mappings: `mktCap` → `marketCap`, `exchangeShortName` → `exchange`, `volAvg` → `averageVolume`
+- 12 new pytest tests
+
+**Session 2 (S2): Runner Permissions + Timeout Fix**
+- Added `--dangerously-skip-permissions` flag for autonomous mode in `executor.py`
+- Set session timeout to 1800s (30 minutes) for long-running sessions
+- 2 new pytest tests
+
+**Key decisions:** DEC-298 (FMP stable API migration), DEC-299 (full-universe input pipe via FMP stock-list)
+**Sessions:** 2 implementation
+**Test counts:** S1(+12), S2(+2) = +14 new pytest (but reported as +13 due to test consolidation)
+**Notes:** Impromptu sprint triggered by live deployment testing. FMP legacy endpoint deprecation discovered at runtime — hotfix applied same day. DEC-263 full-universe pipe now complete. ~27 min pre-market load time accepted as pre-market fetch has no hard deadline.
+
 ---
 
 ## Sprint Statistics
 
-- **Total sprints:** 23 full + 12 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.7, 22.1–22.3, 23.05, 23.1, 23.2)
-- **Total sessions:** ~260+ Claude Code sessions
-- **Total tests:** 2,289 pytest + 392 Vitest = 2,681 total
-- **Total decisions:** 297 (DEC-001 through DEC-297)
-- **Calendar days (active dev):** ~24 (Feb 14 – Mar 9, 2026)
+- **Total sprints:** 23 full + 13 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3)
+- **Total sessions:** ~262+ Claude Code sessions
+- **Total tests:** 2,302 pytest + 392 Vitest = 2,694 total
+- **Total decisions:** 299 (DEC-001 through DEC-299)
+- **Calendar days (active dev):** ~25 (Feb 14 – Mar 10, 2026)
 - **Largest sprint:** 22 (9 implementation + 5 fix + 9 reviews, largest scope)
 - **Cleanest sprint:** 23 (11 sessions, 0 regressions, 0 scope gaps requiring follow-up)
 - **Most test-dense:** Sprint 22 (286 new tests), Sprint 23.2 (188 new tests), Sprint 23 (141 new tests across 23+23.05)

@@ -1,6 +1,6 @@
 # ARGUS — Project Knowledge (Claude Context)
 
-> *Tier A operational context for Claude Code and Claude.ai. Last updated: March 9, 2026 (Sprint 23.2 doc sync).*
+> *Tier A operational context for Claude Code and Claude.ai. Last updated: March 10, 2026 (Sprint 23.3 doc sync).*
 > *Full decision rationale: `docs/decision-log.md` | Sprint details: `docs/sprint-history.md` | DEC index: `docs/dec-index.md`*
 
 ---
@@ -11,8 +11,8 @@ ARGUS is a fully automated, AI-enhanced multi-strategy day trading system for US
 
 ## Current State
 
-**Tests:** 2,289 pytest + 392 Vitest
-**Sprints completed:** 1 through 23.2 (23 full sprints + sub-sprints + Universe Manager + Autonomous Sprint Runner)
+**Tests:** 2,302 pytest + 392 Vitest
+**Sprints completed:** 1 through 23.3 (23 full sprints + sub-sprints + Universe Manager + Autonomous Sprint Runner + Wide Pipe)
 **Active sprint:** None (between sprints)
 **Next sprint:** 23.5 (NLP Catalyst Pipeline)
 **GitHub:** `https://github.com/stevengizzi/argus.git` (public)
@@ -49,12 +49,13 @@ ARGUS is a fully automated, AI-enhanced multi-strategy day trading system for US
 | 23.05 | Post-Sprint Fixes | 2101+392V | Mar 8 | — |
 | 23.1 | Autonomous Runner Protocol Integration | 2101+392V | Mar 9 | DEC-278–297 |
 | 23.2 | Autonomous Sprint Runner Implementation | 2289+392V | Mar 9 | DEC-278–297 (implemented) |
+| 23.3 | Impromptu: Wide Pipe + Runner Perms | 2302+392V | Mar 9–10 | DEC-298–299 |
 
 *Full sprint scopes and session details: `docs/sprint-history.md`*
 
 ### Build Track Queue
 
-21.6 (Backtest Re-Validation, parallel) → 23.5 (NLP Catalyst Pipeline, DEC-164) → 24 (Setup Quality Engine + Dynamic Sizer) → 25 (Red-to-Green + Pattern Library Foundation) → 26 (Pattern Expansion I) → 27 (Short Selling + Parabolic Short + Pattern Expansion II) → 28 (Learning Loop V1) → 29–31 (BacktestEngine, Sweep Infrastructure, Strategy Templates) → 32–34 (Statistical Validation, ORB Systematic Search ★, Ensemble Analysis) → 35–38 (Cross-Family Search, Ensemble Orchestrator V2, Synapse) → 39–41 (Learning Loop V2, Continuous Discovery, Performance Workbench). Sprint 23 (Universe Manager) complete. NLP Catalyst deferred to Sprint 23.5. Order Flow Model deferred to post-revenue (DEC-238). Full roadmap: `docs/roadmap.md` (DEC-262).
+21.6 (Backtest Re-Validation, parallel) → 23.5 (NLP Catalyst Pipeline, DEC-164) → 24 (Setup Quality Engine + Dynamic Sizer) → 25 (Red-to-Green + Pattern Library Foundation) → 26 (Pattern Expansion I) → 27 (Short Selling + Parabolic Short + Pattern Expansion II) → 28 (Learning Loop V1) → 29–31 (BacktestEngine, Sweep Infrastructure, Strategy Templates) → 32–34 (Statistical Validation, ORB Systematic Search ★, Ensemble Analysis) → 35–38 (Cross-Family Search, Ensemble Orchestrator V2, Synapse) → 39–41 (Learning Loop V2, Continuous Discovery, Performance Workbench). Sprint 23 (Universe Manager) complete. DEC-263 full-universe pipe completed in Sprint 23.3. NLP Catalyst deferred to Sprint 23.5. Order Flow Model deferred to post-revenue (DEC-238). Full roadmap: `docs/roadmap.md` (DEC-262).
 
 ### Validation Track
 
@@ -78,7 +79,7 @@ Paper trading active with Databento EQUS.MINI + IBKR paper (Account U24619949, D
 - **Orchestrator:** Rules-based V1 (DEC-118). Equal-weight allocation, regime monitoring (SPY vol as VIX proxy), performance throttling, pre-market routine.
 - **Risk Manager:** Three-level gating (strategy, cross-strategy, account). Approve-with-modification for share reduction and target tightening; never modify stops or entry (DEC-027). Concentration limit approve-with-modification with 0.25R floor (DEC-249).
 - **Data Service:** Databento EQUS.MINI primary (DEC-248). Event Bus sole streaming mechanism (DEC-029). Databento callbacks on reader thread, bridged via `call_soon_threadsafe()` (DEC-088). Universe Manager (Sprint 23) adds fast-path discard for non-viable symbols and ALL_SYMBOLS Databento mode.
-- **Universe Manager (Sprint 23):** FMPReferenceClient fetches Company Profile + Share Float in batches for ~3,000–5,000 symbols. UniverseManager applies system-level filters (OTC, price, volume; fail-closed on missing data per DEC-277), builds pre-computed routing table mapping symbols to qualifying strategies via declarative `universe_filter` YAML configs. O(1) route_candle lookup. Fast-path discard in DatabentoDataService drops non-viable symbols before IndicatorEngine. Config-gated: `universe_manager.enabled` in system.yaml. Backward compatible (disabled = existing scanner flow).
+- **Universe Manager (Sprint 23):** FMPReferenceClient fetches Company Profile + Share Float in batches for ~3,000–5,000 symbols. UniverseManager applies system-level filters (OTC, price, volume; fail-closed on missing data per DEC-277), builds pre-computed routing table mapping symbols to qualifying strategies via declarative `universe_filter` YAML configs. O(1) route_candle lookup. Fast-path discard in DatabentoDataService drops non-viable symbols before IndicatorEngine. Config-gated: `universe_manager.enabled` in system.yaml. Backward compatible (disabled = existing scanner flow). Full-universe input pipe active (DEC-299): ~8,000 symbols fetched from FMP stock-list, ~3,000–4,000 viable after system filters.
 - **Broker Abstraction:** IBKRBroker (live, via `ib_async`), AlpacaBroker (incubator), SimulatedBroker (backtest). Atomic bracket orders (DEC-117). Config-driven selection via BrokerSource enum (DEC-094).
 - **Backtesting:** VectorBT (parameter sweeps, precompute+vectorize mandated DEC-149) + Replay Harness (production code replay). Walk-forward validation mandatory, WFE > 0.3 (DEC-047).
 - **Event Bus:** FIFO per subscriber, monotonic sequence numbers, no priority queues. In-process asyncio only (DEC-025).
@@ -173,7 +174,7 @@ Per-trade risk: 0.5–1% of strategy allocation. Daily loss limit: 3–5%. Weekl
 
 **Foundational:** DEC-025 (Event Bus FIFO), DEC-027 (Risk Manager modifications), DEC-028 (strategy statefulness), DEC-029 (Event Bus sole streaming), DEC-032 (Pydantic config), DEC-047 (walk-forward mandatory), DEC-079 (parallel tracks), DEC-082 (Databento primary), DEC-083 (IBKR sole broker), DEC-098 (Claude Opus), DEC-132 (re-validation required).
 
-**Data & Execution:** DEC-088 (Databento threading), DEC-090 (DataSource enum), DEC-094 (BrokerSource enum), DEC-117 (atomic brackets), DEC-237 (no live L2 on Standard), DEC-248 (EQUS.MINI confirmed), DEC-249 (concentration approve-with-modification), DEC-257 (hybrid Databento+FMP architecture), DEC-258 (FMP Starter for scanning), DEC-263 (full-universe strategy-specific monitoring). DEC-251 (absolute risk floor), DEC-252 (price rounding), DEC-261 (ORB exclusion).
+**Data & Execution:** DEC-088 (Databento threading), DEC-090 (DataSource enum), DEC-094 (BrokerSource enum), DEC-117 (atomic brackets), DEC-237 (no live L2 on Standard), DEC-248 (EQUS.MINI confirmed), DEC-249 (concentration approve-with-modification), DEC-257 (hybrid Databento+FMP architecture), DEC-258 (FMP Starter for scanning), DEC-263 (full-universe strategy-specific monitoring), DEC-298 (FMP stable API migration), DEC-299 (full-universe input pipe via stock-list). DEC-251 (absolute risk floor), DEC-252 (price rounding), DEC-261 (ORB exclusion).
 
 **Frontend:** DEC-099 (in-process API), DEC-102 (JWT auth), DEC-104/215 (chart libraries), DEC-109 (design north star), DEC-149 (VectorBT precompute+vectorize), DEC-169 (7-page architecture), DEC-170 (AI Copilot), DEC-199 (navigation + shortcuts).
 

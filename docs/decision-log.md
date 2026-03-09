@@ -3434,6 +3434,38 @@ Each entry follows this format:
 
 ---
 
+### DEC-298 | FMP Stable API Migration (Legacy v3/v4 → Stable Endpoints)
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-09 |
+| **Sprint** | Impromptu 23.3 |
+| **Decision** | Migrate FMPReferenceClient from legacy `/api/v3/` and `/api/v4/` endpoints to FMP's `/stable/` endpoint family. Profile fetches change from path-based (`/api/v3/profile/AAPL`) to query-param-based (`/stable/profile?symbol=AAPL`). Batch profile requests (comma-separated symbols) replaced with per-symbol calls because the stable API on Starter tier does not support batch. Field name mappings updated: `mktCap` → `marketCap`, `exchangeShortName` → `exchange`, `volAvg` → `averageVolume`. |
+| **Alternatives Considered** | 1. Stay on legacy endpoints: Not viable — FMP returns "Legacy Endpoint" errors for accounts created after August 31, 2025. ARGUS account activated March 2026. 2. Upgrade to FMP Premium for batch support: Rejected for now — $59/mo vs $22/mo, and per-symbol calls work within rate limits. Deferred as DEF-035. |
+| **Rationale** | Discovered during live deployment testing on March 9, 2026. The FMP Scanner (`fmp_scanner.py`) was already on `/stable/` endpoints, but FMPReferenceClient was not. Hotfix applied during live session and committed to `main`. |
+| **Constraints** | FMP unilaterally deprecated legacy endpoints for new accounts. No migration notice was received — discovered at runtime. |
+| **Supersedes** | N/A |
+| **Cross-References** | DEC-258, DEC-263, RSK-052, DEF-035 |
+| **Status** | Active |
+
+---
+
+### DEC-299 | Full-Universe Input Pipe via FMP Stock-List Endpoint
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-09 |
+| **Sprint** | Impromptu 23.3 |
+| **Decision** | Feed the Universe Manager the complete FMP stock-list (~8,000 symbols) instead of the FMP Scanner's 15-symbol pre-market watchlist. Pipeline: `fetch_stock_list()` retrieves `/stable/stock-list` (~8,000 symbols) → `fetch_reference_data()` fetches per-symbol profiles with async concurrency (semaphore=5, 0.2s spacing, 3 retries with exponential backoff) → `build_viable_universe()` applies system-level filters → ~3,000–4,000 viable symbols. Total pre-market load: ~27 minutes. No pre-filtering of the stock-list — all filtering uses actual reference data inside `build_viable_universe()`. Fallback to scanner symbols if stock-list endpoint fails. |
+| **Alternatives Considered** | 1. Symbol-pattern pre-filter (exclude OTC-looking tickers by regex): Rejected — cannot reliably determine security type from ticker symbol alone. False-positive risk on legitimate equities (e.g., `BRK-B` contains `-`, `BLDR` ends in `R`). System-level filters already handle this using actual exchange and volume data. 2. FMP exchange-specific endpoint: Not confirmed available on Starter tier. Timing constraint was relaxed (can start earlier), removing motivation. |
+| **Rationale** | DEC-263 specified full-universe monitoring with ~3,000–5,000 viable symbols. Sprint 23 built the infrastructure correctly but `main.py` was wired to pass only 15 scanner symbols. This completes the DEC-263 architecture. The 27-minute load time was accepted because pre-market fetch time is not a hard constraint. |
+| **Constraints** | FMP Starter tier ($22/mo): 300 API calls/min, no batch endpoints. |
+| **Supersedes** | N/A |
+| **Cross-References** | DEC-263, DEC-277, DEC-298, RSK-052, DEF-035, DEF-036 |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
-*Next DEC: 298*
-*Last updated: 2026-03-09 (Sprint 23.2 doc-sync — DEC-278–297 implemented)*
+*Next DEC: 300*
+*Last updated: 2026-03-10 (Sprint 23.3 doc-sync — DEC-298–299)*

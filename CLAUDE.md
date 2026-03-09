@@ -1,7 +1,7 @@
 # ARGUS — Claude Code Context
 
 > Dense, actionable context for Claude Code sessions. No history — see `docs/` for that.
-> Last updated: March 9, 2026
+> Last updated: March 10, 2026
 
 ## Active Sprint
 
@@ -13,7 +13,7 @@ Next sprint: **23.5 (NLP Catalyst Pipeline)** — SEC EDGAR + FMP news, catalyst
 
 - **Active sprint:** None (between sprints)
 - **Next sprint:** 23.5 (NLP Catalyst Pipeline)
-- **Tests:** 2,289 pytest + 392 Vitest
+- **Tests:** 2,302 pytest + 392 Vitest
 - **Strategies:** 4 active (ORB Breakout, ORB Scalp, VWAP Reclaim, Afternoon Momentum)
 - **Infrastructure:** Databento EQUS.MINI (live) + IBKR paper trading (Account U24619949) + FMP Starter (scanning + reference data) + Claude API (Copilot) + Universe Manager (config-gated, disabled by default)
 - **Frontend:** 7-page Command Center + AI Copilot + Universe Status Card (all active), Tauri desktop + PWA mobile
@@ -240,19 +240,22 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 | ~~DEF-027~~ | ~~Journal trade linking UI~~ | — | **RESOLVED** (DEC-201): Full search UI with TradeSearchInput shipped in Sprint 21c. |
 | DEF-028 | CalendarPnlView strategy filter | Performance Workbench implementation (DEC-229) OR user requests during paper trading | CalendarPnlView renders all-strategy aggregated P&L. Strategy-specific calendar filtering deferred because calendar needs a different data query path than other charts (daily aggregation by strategy). Low priority — user can already filter by strategy in Overview and Heatmaps tabs. |
 | DEF-029 | Persist Live Candle Data to Database for Post-Session Replay | Live candle data flows through the Event Bus but isn't persisted to the database. The Performance page Replay tab shows "Bar data not available for this trade" because there are no stored bars around the trade's timestamps. Need a new `candle_bars` table (symbol, timestamp, open, high, low, close, volume) with writes from the DataService callback. ~3,900 rows/day (10 symbols × 390 bars). Required for post-session review, The Debrief page EOD analysis, and replay visualizations. |
-- DEF-030: Live candlestick chart real-time updates (TradeChart loads historical only, no WebSocket subscription). Trigger: Sprint 22+ or UX backlog prioritization.
-- DEF-031: Orders table persistence (orders not persisted to DB, only completed trades). Trigger: when post-hoc order forensics needed beyond log analysis.
-- DEF-032: FMPScannerSource criteria_list filtering. `scan()` accepts `criteria_list` parameter but ignores it (documented in docstring). FMP endpoints are pre-filtered server-side; post-fetch filtering by strategy-specific criteria becomes meaningful when Quality Engine (Sprint 24) provides scoring criteria. Trigger: Sprint 23.5 (NLP Catalyst) or Sprint 24 (Quality Engine).
+| DEF-030 | Live candlestick chart real-time updates | Sprint 22+ or UX backlog prioritization | TradeChart loads historical only, no WebSocket subscription. |
+| DEF-031 | Orders table persistence | When post-hoc order forensics needed beyond log analysis | Orders not persisted to DB, only completed trades. |
+| DEF-032 | FMPScannerSource criteria_list filtering | Sprint 23.5 (NLP Catalyst) or Sprint 24 (Quality Engine) | `scan()` accepts `criteria_list` parameter but ignores it (documented in docstring). FMP endpoints are pre-filtered server-side; post-fetch filtering by strategy-specific criteria becomes meaningful when Quality Engine provides scoring criteria. |
 | DEF-033 | Approve→Executed status transition is simulated with setTimeout(1500ms) in ChatMessage.tsx. Real execution status should be pushed via WebSocket (`{"type": "proposal_update", ...}`) after ActionExecutor completes. Requires: WS protocol extension (new message type), executor pipeline event emission, frontend WS handler update. Cosmetic-only impact — proposal is correctly marked `approved` in DB; only the UI status badge is faked. | Next UI polish pass or Sprint 23 if room. |
 | DEF-034 | Pydantic serialization warnings on `review_verdict` field | Next sprint runner polish pass | `SessionResult.review_verdict` accepts string where enum is expected, producing `PydanticSerializationUnexpectedValue` warnings during test runs. Cosmetic — does not affect functionality. Recurring across Sprint 23.2 S3–S6 tests. Fix: either use `ReviewVerdict` enum values directly or add `use_enum_values=True` to model config. |
+| DEF-035 | FMP Premium Upgrade ($59/mo) | Sprint 23.5 or when batch-quote speed becomes a bottleneck | FMP Premium enables batch-quote endpoints (27 min → ~2 min load) and NLP endpoints for Sprint 23.5. Priority: MEDIUM. |
+| DEF-036 | Stock-List Response Caching | Unscheduled | Cache yesterday's viable universe, diff against fresh stock-list, only fetch new/changed profiles. Could reduce load from ~27 min to ~2–3 min. Priority: LOW. |
+| DEF-037 | FMP API Key Redaction in Error Logs | Next cleanup sprint | FMP API URLs with API key appear in error logs. Should redact `apikey=XXX` before logging. Priority: MEDIUM. |
 
 ## Reference
 
 | Document | What It Covers |
 |----------|---------------|
-| `docs/decision-log.md` | All 297 DEC entries with full rationale |
+| `docs/decision-log.md` | All 299 DEC entries with full rationale |
 | `docs/dec-index.md` | Quick-reference index with status markers |
-| `docs/sprint-history.md` | Complete sprint history (1–23.2) |
+| `docs/sprint-history.md` | Complete sprint history (1–23.3) |
 | `docs/process-evolution.md` | Workflow evolution narrative |
 | `docs/live-operations.md` | Live trading procedures |
 | `docs/strategies/STRATEGY_*.md` | Per-strategy spec sheets |

@@ -1,7 +1,7 @@
 # ARGUS — Decision Index
 
-> 297 decisions (DEC-001 through DEC-297)
-> Generated: March 9, 2026 | Source: `docs/decision-log.md`
+> 299 decisions (DEC-001 through DEC-299)
+> Generated: March 10, 2026 | Source: `docs/decision-log.md`
 > Legend: ● Active | ○ Superseded | △ Amended | ✗ Duplicate entry
 
 
@@ -320,3 +320,5 @@
 - ● **DEC-295**: Exponential Retry Backoff — 4× multiplier, rate-limit detection
 - ● **DEC-296**: Planning-Time Mode Declaration — autonomous/human-in-the-loop/undecided
 - ● **DEC-297**: Review Context File Hash Verification — SHA-256 integrity check
+- ● **DEC-298**: FMP Stable API Migration — Legacy v3/v4 → Stable Endpoints
+- ● **DEC-299**: Full-Universe Input Pipe via FMP Stock-List — ~8,000 symbols → ~3,000–4,000 viable
