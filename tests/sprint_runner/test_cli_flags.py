@@ -487,3 +487,155 @@ class TestModeOverride:
         )
 
         assert runner.config.execution.mode == "human-in-the-loop"
+
+
+# ---------------------------------------------------------------------------
+# Skip Session Dependency Validation Tests
+# ---------------------------------------------------------------------------
+
+
+class TestSkipSessionDependencyValidation:
+    """Tests for skip-session dependency validation."""
+
+    @pytest.mark.asyncio
+    async def test_skip_session_no_dependency_conflict_passes(
+        self, temp_repo: Path, runner_config: RunnerConfig
+    ) -> None:
+        """Skip session with no dependency conflict passes validation."""
+        from scripts.sprint_runner.config import SessionMetadata
+
+        # Configure S3 to depend on S2, skip S1 (no conflict)
+        runner_config.session_metadata = {
+            "S1": SessionMetadata(title="S1"),
+            "S2": SessionMetadata(title="S2"),
+            "S3": SessionMetadata(title="S3", depends_on=["S2"]),
+        }
+
+        runner = SprintRunner(
+            config=runner_config,
+            repo_root=temp_repo,
+            skip_sessions=["S1"],  # S1 has no dependents
+            stop_after="S2",
+            dry_run=True,
+        )
+
+        impl_output = make_closeout_output()
+        review_output = make_verdict_output()
+
+        with patch.object(
+            runner.executor,
+            "run_session",
+            new_callable=AsyncMock,
+            side_effect=[
+                ExecutionResult(
+                    output=impl_output, exit_code=0, duration_seconds=10, output_size_bytes=1000
+                ),
+                ExecutionResult(
+                    output=review_output, exit_code=0, duration_seconds=5, output_size_bytes=500
+                ),
+            ],
+        ), patch(
+            "scripts.sprint_runner.main.run_tests",
+            return_value=(100, True),
+        ), mock_git_ops():
+            result = await runner.run()
+
+        # Should halt on manual pause (stop_after), not on dependency validation
+        assert result.status == RunStatus.HALTED
+        assert "pause" in result.halt_reason.lower()
+
+    @pytest.mark.asyncio
+    async def test_skip_session_unsatisfied_dependency_halts(
+        self, temp_repo: Path, runner_config: RunnerConfig
+    ) -> None:
+        """Skip session that another session depends on halts with error."""
+        from scripts.sprint_runner.config import SessionMetadata
+
+        # Configure S3 to depend on S2, skip S2 (conflict!)
+        runner_config.session_metadata = {
+            "S1": SessionMetadata(title="S1"),
+            "S2": SessionMetadata(title="S2"),
+            "S3": SessionMetadata(title="S3", depends_on=["S2"]),
+        }
+
+        runner = SprintRunner(
+            config=runner_config,
+            repo_root=temp_repo,
+            skip_sessions=["S2"],  # S3 depends on S2 - conflict!
+            dry_run=True,
+        )
+
+        with patch(
+            "scripts.sprint_runner.main.run_tests",
+            return_value=(100, True),
+        ), mock_git_ops():
+            result = await runner.run()
+
+        # Should halt due to dependency validation failure
+        assert result.status == RunStatus.HALTED
+        assert "S3" in result.halt_reason
+        assert "S2" in result.halt_reason
+        assert "depends" in result.halt_reason.lower()
+
+    @pytest.mark.asyncio
+    async def test_skip_session_completed_dependency_passes(
+        self, temp_repo: Path, runner_config: RunnerConfig
+    ) -> None:
+        """Skip session that is already COMPLETED allows dependent to run."""
+        from scripts.sprint_runner.config import SessionMetadata
+        from scripts.sprint_runner.state import SessionPlanStatus
+
+        # Configure S3 to depend on S2
+        runner_config.session_metadata = {
+            "S1": SessionMetadata(title="S1"),
+            "S2": SessionMetadata(title="S2"),
+            "S3": SessionMetadata(title="S3", depends_on=["S2"]),
+        }
+
+        runner = SprintRunner(
+            config=runner_config,
+            repo_root=temp_repo,
+            skip_sessions=["S2"],  # S2 is skipped but will be marked COMPLETE
+            stop_after="S3",
+            dry_run=True,
+        )
+
+        impl_output = make_closeout_output()
+        review_output = make_verdict_output()
+
+        # Create initial state with S2 already COMPLETE
+        with patch(
+            "scripts.sprint_runner.main.run_tests",
+            return_value=(100, True),
+        ), mock_git_ops():
+            # Initialize runner to create state
+            runner._startup()
+            # Mark S2 as COMPLETE before validation runs
+            for session in runner.state.session_plan:
+                if session.session_id == "S2":
+                    session.status = SessionPlanStatus.COMPLETE
+            runner.state.save(runner.state_file)
+
+        # Now run with S2 already complete
+        with patch.object(
+            runner.executor,
+            "run_session",
+            new_callable=AsyncMock,
+            side_effect=[
+                ExecutionResult(
+                    output=impl_output, exit_code=0, duration_seconds=10, output_size_bytes=1000
+                ),
+                ExecutionResult(
+                    output=review_output, exit_code=0, duration_seconds=5, output_size_bytes=500
+                ),
+            ] * 2,  # S1 and S3
+        ), patch(
+            "scripts.sprint_runner.main.run_tests",
+            return_value=(100, True),
+        ), mock_git_ops():
+            result = await runner.run()
+
+        # Should pass dependency validation since S2 is COMPLETE
+        # Result should be HALTED due to stop_after, not dependency error
+        assert result.status == RunStatus.HALTED
+        assert "pause" in result.halt_reason.lower() or "S3" not in result.halt_reason

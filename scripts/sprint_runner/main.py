@@ -355,6 +355,11 @@ class SprintRunner:
             self.state.save(self.state_file)
             print(f"{Colors.GREEN}Baseline: {test_count} tests passing{Colors.RESET}\n")
 
+        # Validate skip-session dependencies before entering loop
+        skip_result = self._validate_skip_dependencies()
+        if skip_result.status == RunStatus.HALTED:
+            return skip_result
+
         sessions_completed = 0
         processed_sessions: set[str] = set()
 
@@ -554,6 +559,45 @@ class SprintRunner:
 
         # Send HALTED notification
         self._send_halted_notification(reason)
+
+    def _validate_skip_dependencies(self) -> LoopResult:
+        """Validate that skipped sessions don't break dependencies.
+
+        Checks that no non-skipped session depends on a skipped session,
+        unless the skipped session is already COMPLETED.
+
+        Returns:
+            LoopResult (RUNNING to continue, HALTED if dependency is unsatisfied).
+        """
+        if not self.skip_sessions or self.state is None:
+            return LoopResult(status=RunStatus.RUNNING)
+
+        skip_set = set(self.skip_sessions)
+
+        # Build map of session statuses for quick lookup
+        session_status: dict[str, SessionPlanStatus] = {}
+        for session in self.state.session_plan:
+            session_status[session.session_id] = session.status
+
+        # Check each non-skipped session's dependencies
+        for session in self.state.session_plan:
+            if session.session_id in skip_set:
+                continue  # This session is being skipped, skip checking it
+
+            for dep_id in session.depends_on:
+                if dep_id in skip_set:
+                    # Dependency is being skipped - check if it's already complete
+                    dep_status = session_status.get(dep_id)
+                    if dep_status != SessionPlanStatus.COMPLETE:
+                        reason = (
+                            f"Session {session.session_id} depends on {dep_id}, "
+                            f"which is being skipped but is not COMPLETE "
+                            f"(status: {dep_status})"
+                        )
+                        self._halt(reason)
+                        return LoopResult(status=RunStatus.HALTED, halt_reason=reason)
+
+        return LoopResult(status=RunStatus.RUNNING)
 
     async def _execute_session(self, session: SessionPlanEntry) -> LoopResult:
         """Execute a single session through the full pipeline.
