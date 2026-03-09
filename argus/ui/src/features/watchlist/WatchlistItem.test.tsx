@@ -6,13 +6,40 @@
  * - Compact single-letter strategy badges
  * - VWAP distance display with arrows
  * - Short state labels (Above, Below, Entered)
+ *
+ * Sprint 23.5 Session 5 — Added QueryClientProvider wrapper for useCatalysts hook
  */
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type { ReactNode } from 'react';
 import { WatchlistItem, MiniSparkline } from './WatchlistItem';
 import { CompactStrategyBadge } from '../../components/Badge';
 import type { WatchlistItem as WatchlistItemType } from '../../api/types';
+
+// Mock the useCatalysts hook to avoid network calls
+vi.mock('../../hooks/useCatalysts', () => ({
+  useCatalystsBySymbol: vi.fn(() => ({
+    data: { catalysts: [], count: 0, symbol: 'TSLA' },
+    isLoading: false,
+    error: null,
+  })),
+}));
+
+// Create QueryClient wrapper for tests
+let queryClient: QueryClient;
+
+const createWrapper = () => {
+  queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+    },
+  });
+  return ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+  );
+};
 
 // Mock watchlist item data with VWAP tracking
 const mockItem: WatchlistItemType = {
@@ -30,8 +57,12 @@ const mockItem: WatchlistItemType = {
 };
 
 describe('WatchlistItem', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it('renders symbol and price', () => {
-    render(<WatchlistItem item={mockItem} />);
+    render(<WatchlistItem item={mockItem} />, { wrapper: createWrapper() });
 
     expect(screen.getByText('TSLA')).toBeInTheDocument();
     // formatPrice returns price without $ prefix
@@ -39,7 +70,7 @@ describe('WatchlistItem', () => {
   });
 
   it('renders gap badge with correct styling for positive gap', () => {
-    render(<WatchlistItem item={mockItem} />);
+    render(<WatchlistItem item={mockItem} />, { wrapper: createWrapper() });
 
     const gapBadge = screen.getByText('+5.2%');
     expect(gapBadge).toBeInTheDocument();
@@ -52,7 +83,7 @@ describe('WatchlistItem', () => {
       ...mockItem,
       gap_pct: -3.5,
     };
-    render(<WatchlistItem item={negativeItem} />);
+    render(<WatchlistItem item={negativeItem} />, { wrapper: createWrapper() });
 
     const gapBadge = screen.getByText('-3.5%');
     expect(gapBadge).toBeInTheDocument();
@@ -61,7 +92,7 @@ describe('WatchlistItem', () => {
   });
 
   it('renders compact strategy badges', () => {
-    render(<WatchlistItem item={mockItem} />);
+    render(<WatchlistItem item={mockItem} />, { wrapper: createWrapper() });
 
     // Should render compact badges (single letters with titles)
     // ORB shows as "O", VWAP shows as "V"
@@ -70,7 +101,7 @@ describe('WatchlistItem', () => {
   });
 
   it('shows VWAP state label for above_vwap state', () => {
-    render(<WatchlistItem item={mockItem} />);
+    render(<WatchlistItem item={mockItem} />, { wrapper: createWrapper() });
 
     // Short label "Above" should be visible
     expect(screen.getByText('Above')).toBeInTheDocument();
@@ -82,7 +113,7 @@ describe('WatchlistItem', () => {
       vwap_state: 'below_vwap',
       vwap_distance_pct: -0.0055,
     };
-    render(<WatchlistItem item={belowItem} />);
+    render(<WatchlistItem item={belowItem} />, { wrapper: createWrapper() });
 
     expect(screen.getByText('Below')).toBeInTheDocument();
   });
@@ -93,7 +124,7 @@ describe('WatchlistItem', () => {
       vwap_state: 'entered',
       vwap_distance_pct: 0.0032,
     };
-    render(<WatchlistItem item={enteredItem} />);
+    render(<WatchlistItem item={enteredItem} />, { wrapper: createWrapper() });
 
     expect(screen.getByText('Entered')).toBeInTheDocument();
   });
@@ -104,14 +135,14 @@ describe('WatchlistItem', () => {
       vwap_state: 'watching',
       vwap_distance_pct: null,
     };
-    render(<WatchlistItem item={watchingItem} />);
+    render(<WatchlistItem item={watchingItem} />, { wrapper: createWrapper() });
 
     // "Watching" label should not appear (show: false in config)
     expect(screen.queryByText('Watching')).not.toBeInTheDocument();
   });
 
   it('shows VWAP distance with up arrow for positive distance', () => {
-    render(<WatchlistItem item={mockItem} />);
+    render(<WatchlistItem item={mockItem} />, { wrapper: createWrapper() });
 
     // 0.0045 = 0.45% → "0.4%"
     // Check that up arrow exists
@@ -125,7 +156,7 @@ describe('WatchlistItem', () => {
       vwap_state: 'below_vwap',
       vwap_distance_pct: -0.0055,
     };
-    render(<WatchlistItem item={belowItem} />);
+    render(<WatchlistItem item={belowItem} />, { wrapper: createWrapper() });
 
     // -0.0055 = -0.55% → "0.5%" (JS floating point: 0.55.toFixed(1) = "0.5")
     expect(screen.getByText('↓', { exact: false })).toBeInTheDocument();
@@ -138,7 +169,7 @@ describe('WatchlistItem', () => {
       vwap_state: 'watching',
       vwap_distance_pct: null,
     };
-    render(<WatchlistItem item={noDistanceItem} />);
+    render(<WatchlistItem item={noDistanceItem} />, { wrapper: createWrapper() });
 
     // No arrows should appear
     expect(screen.queryByText(/↑/)).not.toBeInTheDocument();
@@ -151,7 +182,7 @@ describe('WatchlistItem', () => {
       vwap_state: 'entered',
       vwap_distance_pct: 0.0032,
     };
-    render(<WatchlistItem item={enteredItem} />);
+    render(<WatchlistItem item={enteredItem} />, { wrapper: createWrapper() });
 
     const container = screen.getByRole('button');
     expect(container).toHaveClass('border-l-[3px]');
@@ -159,7 +190,7 @@ describe('WatchlistItem', () => {
   });
 
   it('has transparent left border for non-entered states (alignment)', () => {
-    render(<WatchlistItem item={mockItem} />);
+    render(<WatchlistItem item={mockItem} />, { wrapper: createWrapper() });
 
     const container = screen.getByRole('button');
     // All items have the border width for alignment, but non-entered are transparent
@@ -170,7 +201,7 @@ describe('WatchlistItem', () => {
 
   it('calls onClick when clicked', () => {
     const handleClick = vi.fn();
-    render(<WatchlistItem item={mockItem} onClick={handleClick} />);
+    render(<WatchlistItem item={mockItem} onClick={handleClick} />, { wrapper: createWrapper() });
 
     const container = screen.getByRole('button');
     fireEvent.click(container);
@@ -180,7 +211,7 @@ describe('WatchlistItem', () => {
 
   it('calls onClick when Enter key is pressed', () => {
     const handleClick = vi.fn();
-    render(<WatchlistItem item={mockItem} onClick={handleClick} />);
+    render(<WatchlistItem item={mockItem} onClick={handleClick} />, { wrapper: createWrapper() });
 
     const container = screen.getByRole('button');
     fireEvent.keyDown(container, { key: 'Enter' });
@@ -194,7 +225,7 @@ describe('WatchlistItem', () => {
       strategies: ['orb_breakout'],
       vwap_distance_pct: null,
     };
-    render(<WatchlistItem item={nonVwapItem} />);
+    render(<WatchlistItem item={nonVwapItem} />, { wrapper: createWrapper() });
 
     // Should not have VWAP state indicator
     expect(screen.queryByText('Above')).not.toBeInTheDocument();

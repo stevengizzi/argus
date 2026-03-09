@@ -73,3 +73,11 @@ export {
 
 // Universe Manager hooks (Sprint 23)
 export { useUniverseStatus } from './useUniverseStatus';
+
+// Intelligence hooks (Sprint 23.5)
+export {
+  useCatalystsBySymbol,
+  useRecentCatalysts,
+  type CatalystItem,
+  type CatalystsResponse,
+} from './useCatalysts';

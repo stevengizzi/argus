@@ -17,6 +17,7 @@ import { Gauge } from 'lucide-react';
 import { AnimatedPage } from '../components/AnimatedPage';
 import { Card } from '../components/Card';
 import { CapitalAllocation } from '../components/CapitalAllocation';
+import { CatalystAlertPanel } from '../components/CatalystAlertPanel';
 import {
   RegimePanel,
   StrategyCoverageTimeline,
@@ -151,9 +152,12 @@ export function OrchestratorPage() {
           <StrategyOperationsGrid />
         </motion.div>
 
-        {/* Section 4: Decision Timeline */}
+        {/* Section 4: Decision Timeline + Catalyst Alerts */}
         <motion.div variants={staggerItem}>
-          <DecisionTimeline />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <DecisionTimeline />
+            <CatalystAlertPanel />
+          </div>
         </motion.div>
 
         {/* Section 5: Global Controls */}

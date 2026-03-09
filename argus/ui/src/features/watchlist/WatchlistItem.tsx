@@ -10,6 +10,8 @@
 
 import type { WatchlistItem as WatchlistItemType, VwapState } from '../../api/types';
 import { CompactStrategyBadge } from '../../components/Badge';
+import { CatalystBadge } from '../../components/CatalystBadge';
+import { useCatalystsBySymbol } from '../../hooks/useCatalysts';
 import { formatPrice } from '../../utils/format';
 
 interface WatchlistItemProps {
@@ -28,6 +30,10 @@ const vwapStateConfig: Record<VwapState, { dot: string; label: string; show: boo
 export function WatchlistItem({ item, onClick }: WatchlistItemProps) {
   const { symbol, current_price, gap_pct, strategies, vwap_state, vwap_distance_pct } = item;
   const vwapConfig = vwapStateConfig[vwap_state];
+
+  // Fetch catalyst data for this symbol
+  const { data: catalystData, isLoading: catalystsLoading } = useCatalystsBySymbol(symbol);
+  const catalysts = !catalystsLoading && catalystData ? catalystData.catalysts : [];
   const isPositiveGap = gap_pct > 0;
   const isEntered = vwap_state === 'entered';
   const isVwapTracked = strategies.includes('vwap_reclaim') || strategies.includes('strat_vwap_reclaim');
@@ -66,10 +72,11 @@ export function WatchlistItem({ item, onClick }: WatchlistItemProps) {
       tabIndex={0}
       onKeyDown={(e) => e.key === 'Enter' && handleClick()}
     >
-      {/* Row 1: Symbol, price, gap badge */}
+      {/* Row 1: Symbol, catalyst badge, price, gap badge */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="font-semibold text-argus-text text-sm">{symbol}</span>
+          <CatalystBadge catalysts={catalysts} />
           <span className="text-xs text-argus-text-dim">{formatPrice(current_price)}</span>
         </div>
 
