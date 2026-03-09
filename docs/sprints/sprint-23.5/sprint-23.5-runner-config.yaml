@@ -1,0 +1,235 @@
+# Sprint 23.5 Runner Configuration
+# Follows canonical runner-config-schema.md (Sprint 23.1)
+
+# --------------------------------------------------------------------------
+# Sprint Package Location
+# --------------------------------------------------------------------------
+sprint:
+  directory: "docs/sprints/sprint-23.5"
+  session_order:
+    - "S1"
+    - "S2"
+    - "S3"
+    - "S4"
+    - "S5"
+    - "S6"
+    - "S6f"
+  review_context_file: "docs/sprints/sprint-23.5/review-context.md"
+
+# --------------------------------------------------------------------------
+# Execution Mode
+# --------------------------------------------------------------------------
+execution:
+  mode: "autonomous"
+  max_retries: 2
+  retry_delay_seconds: 30
+  session_timeout_seconds: 0
+  enable_agent_teams: false
+  model_override: null
+  test_count_tolerance: 0
+  compaction_threshold_bytes: 102400
+
+# --------------------------------------------------------------------------
+# Git
+# --------------------------------------------------------------------------
+git:
+  branch: "sprint-23.5"
+  commit_message_format: "[Sprint {sprint}] Session {session_id}: {title}"
+  auto_commit: true
+  save_patches: true
+
+# --------------------------------------------------------------------------
+# Notifications
+# --------------------------------------------------------------------------
+notifications:
+  tiers:
+    HALTED: true
+    SESSION_COMPLETE: true
+    PHASE_TRANSITION: true
+    WARNING: true
+    COMPLETED: true
+  primary:
+    type: "ntfy"
+    endpoint: "https://ntfy.sh/argus-sprint-runner"
+    auth_token: null
+  secondary: []
+  quiet_hours:
+    enabled: true
+    start_utc: "07:00"
+    end_utc: "13:00"
+  halted_reminder_minutes: 60
+
+# --------------------------------------------------------------------------
+# Cost Tracking
+# --------------------------------------------------------------------------
+cost:
+  ceiling_usd: 50.0
+  rates:
+    input_per_million: 3.0
+    output_per_million: 15.0
+    cached_input_per_million: 0.30
+  halt_on_ceiling: true
+
+# --------------------------------------------------------------------------
+# Run Log
+# --------------------------------------------------------------------------
+run_log:
+  base_directory: "docs/sprints/sprint-23.5"
+  auto_generate_journal: true
+  commit_run_log: true
+
+# --------------------------------------------------------------------------
+# Tier 2.5 Triage
+# --------------------------------------------------------------------------
+triage:
+  enabled: true
+  prompt_template: "docs/protocols/templates/tier-2.5-triage-prompt.md"
+  auto_insert_fixes: true
+  max_auto_fixes: 3
+  fix_prompt_template: "docs/protocols/templates/fix-prompt.md"
+
+# --------------------------------------------------------------------------
+# Spec Conformance Check
+# --------------------------------------------------------------------------
+conformance:
+  enabled: true
+  prompt_template: "docs/protocols/templates/spec-conformance-prompt.md"
+  drift_minor_action: "warn"
+  drift_major_action: "halt"
+
+# --------------------------------------------------------------------------
+# Doc Sync
+# --------------------------------------------------------------------------
+doc_sync:
+  enabled: true
+  prompt_template: "docs/protocols/templates/doc-sync-automation-prompt.md"
+  target_documents:
+    - "docs/project-knowledge.md"
+    - "docs/architecture.md"
+    - "docs/decision-log.md"
+    - "docs/dec-index.md"
+    - "docs/sprint-history.md"
+    - "CLAUDE.md"
+
+# --------------------------------------------------------------------------
+# Session Metadata (Extension: per-session details for enhanced decisions)
+# --------------------------------------------------------------------------
+session_metadata:
+  S1:
+    title: "Foundation — Models, CatalystEvent, Config"
+    compaction_score: 14
+    expected_test_delta: 6
+    test_command: "python -m pytest tests/intelligence/ -v"
+    parallelizable: false
+    depends_on: []
+    auto_split: null
+  S2:
+    title: "Data Source Clients — SEC EDGAR, FMP News, Finnhub"
+    compaction_score: 26
+    expected_test_delta: 18
+    test_command: "python -m pytest tests/intelligence/test_sources/ -v"
+    parallelizable: false
+    depends_on: ["S1"]
+    auto_split:
+      trigger: "compaction"
+      splits:
+        - id: "S2a"
+          title: "CatalystSource ABC + SEC EDGAR Client"
+          scope: "Create sources/__init__.py and sources/sec_edgar.py only"
+        - id: "S2b"
+          title: "FMP News + Finnhub Clients"
+          scope: "Create sources/fmp_news.py and sources/finnhub.py only"
+  S3:
+    title: "Classifier + Storage + Pipeline Wiring"
+    compaction_score: 27
+    expected_test_delta: 16
+    test_command: "python -m pytest tests/intelligence/test_classifier.py tests/intelligence/test_storage.py tests/intelligence/test_pipeline.py -v"
+    parallelizable: false
+    depends_on: ["S2"]
+    auto_split:
+      trigger: "compaction"
+      splits:
+        - id: "S3a"
+          title: "CatalystClassifier + Classification Cache"
+          scope: "Create classifier.py only"
+        - id: "S3b"
+          title: "CatalystStorage + CatalystPipeline Wiring"
+          scope: "Create storage.py, modify __init__.py"
+  S4:
+    title: "API Routes + Briefing Generator"
+    compaction_score: 24
+    expected_test_delta: 12
+    test_command: "python -m pytest tests/api/test_intelligence_routes.py tests/intelligence/test_briefing.py -v"
+    parallelizable: false
+    depends_on: ["S3"]
+    auto_split:
+      trigger: "compaction"
+      splits:
+        - id: "S4a"
+          title: "Intelligence API Routes"
+          scope: "Create intelligence_routes.py, modify app.py"
+        - id: "S4b"
+          title: "BriefingGenerator + POST endpoint"
+          scope: "Create briefing.py, add POST generate endpoint"
+  S5:
+    title: "Dashboard Catalyst Badges + Orchestrator Alert Panel"
+    compaction_score: 17
+    expected_test_delta: 10
+    test_command: "cd argus/ui && npx vitest run"
+    parallelizable: true
+    parallel_group: "frontend"
+    depends_on: ["S4"]
+    has_visual_review: true
+    auto_split:
+      trigger: "compaction"
+      splits:
+        - id: "S5a"
+          title: "useCatalysts Hook + CatalystBadge on Dashboard"
+          scope: "Create hook and badge, modify DashboardPage only"
+        - id: "S5b"
+          title: "CatalystAlertPanel on Orchestrator"
+          scope: "Create alert panel, modify OrchestratorPage only"
+  S6:
+    title: "Debrief Intelligence Brief View"
+    compaction_score: 12
+    expected_test_delta: 6
+    test_command: "cd argus/ui && npx vitest run"
+    parallelizable: true
+    parallel_group: "frontend"
+    depends_on: ["S4"]
+    has_visual_review: true
+    auto_split: null
+  S6f:
+    title: "Visual-Review Fixes (Contingency)"
+    compaction_score: 0
+    expected_test_delta: 0
+    test_command: "cd argus/ui && npx vitest run"
+    parallelizable: false
+    depends_on: ["S5", "S6"]
+    has_visual_review: true
+    contingency: true
+
+# --------------------------------------------------------------------------
+# Protected Files (Extension: diff validation per DEC-294)
+# --------------------------------------------------------------------------
+protected_files:
+  - "argus/ai/"
+  - "argus/strategies/"
+  - "argus/core/risk_manager.py"
+  - "argus/core/orchestrator.py"
+  - "argus/execution/"
+  - "argus/data/universe_manager.py"
+  - "argus/data/fmp_scanner.py"
+  - "argus/data/fmp_reference.py"
+  - "argus/data/databento_data_service.py"
+  - "argus/analytics/"
+
+# --------------------------------------------------------------------------
+# Forbidden Patterns (Extension: pre-commit grep checks)
+# --------------------------------------------------------------------------
+forbidden_patterns:
+  - pattern: "subscribe.*CatalystEvent"
+    reason: "No CatalystEvent subscribers allowed in this sprint"
+  - pattern: "import requests"
+    scope: "argus/intelligence/"
+    reason: "Use aiohttp, not requests (async pipeline)"

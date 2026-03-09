@@ -1,11 +1,11 @@
 # ARGUS — Claude Code Context
 
 > Dense, actionable context for Claude Code sessions. No history — see `docs/` for that.
-> Last updated: March 8, 2026
+> Last updated: March 9, 2026
 
 ## Active Sprint
 
-**No active sprint.** Sprint 23 (Universe Manager) completed March 8, 2026.
+**No active sprint.** Sprint 23.2 (Autonomous Sprint Runner Implementation) completed March 9, 2026.
 
 Next sprint: **23.5 (NLP Catalyst Pipeline)** — SEC EDGAR + FMP news, catalyst classification, pre-market intelligence brief.
 
@@ -13,7 +13,7 @@ Next sprint: **23.5 (NLP Catalyst Pipeline)** — SEC EDGAR + FMP news, catalyst
 
 - **Active sprint:** None (between sprints)
 - **Next sprint:** 23.5 (NLP Catalyst Pipeline)
-- **Tests:** 2,101 pytest + 392 Vitest
+- **Tests:** 2,289 pytest + 392 Vitest
 - **Strategies:** 4 active (ORB Breakout, ORB Scalp, VWAP Reclaim, Afternoon Momentum)
 - **Infrastructure:** Databento EQUS.MINI (live) + IBKR paper trading (Account U24619949) + FMP Starter (scanning + reference data) + Claude API (Copilot) + Universe Manager (config-gated, disabled by default)
 - **Frontend:** 7-page Command Center + AI Copilot + Universe Status Card (all active), Tauri desktop + PWA mobile
@@ -94,6 +94,11 @@ python scripts/test_time_stop_eod.py     # Time stop + EOD flatten (IBKR or mock
 # AI Layer
 ANTHROPIC_API_KEY="sk-..." python -m argus.api --dev  # Run with AI enabled
 python -m pytest tests/ai/ -x -q                       # AI module tests only
+
+# Autonomous Sprint Runner (Sprint 23.2)
+python scripts/sprint-runner.py --help                # Show all CLI options
+python scripts/sprint-runner.py run path/to/sprint-package.yaml  # Execute sprint
+python scripts/sprint-runner.py resume --run-dir path/to/run  # Resume from checkpoint
 ```
 
 **Environment Variables:**
@@ -239,14 +244,15 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 - DEF-031: Orders table persistence (orders not persisted to DB, only completed trades). Trigger: when post-hoc order forensics needed beyond log analysis.
 - DEF-032: FMPScannerSource criteria_list filtering. `scan()` accepts `criteria_list` parameter but ignores it (documented in docstring). FMP endpoints are pre-filtered server-side; post-fetch filtering by strategy-specific criteria becomes meaningful when Quality Engine (Sprint 24) provides scoring criteria. Trigger: Sprint 23.5 (NLP Catalyst) or Sprint 24 (Quality Engine).
 | DEF-033 | Approve→Executed status transition is simulated with setTimeout(1500ms) in ChatMessage.tsx. Real execution status should be pushed via WebSocket (`{"type": "proposal_update", ...}`) after ActionExecutor completes. Requires: WS protocol extension (new message type), executor pipeline event emission, frontend WS handler update. Cosmetic-only impact — proposal is correctly marked `approved` in DB; only the UI status badge is faked. | Next UI polish pass or Sprint 23 if room. |
+| DEF-034 | Pydantic serialization warnings on `review_verdict` field | Next sprint runner polish pass | `SessionResult.review_verdict` accepts string where enum is expected, producing `PydanticSerializationUnexpectedValue` warnings during test runs. Cosmetic — does not affect functionality. Recurring across Sprint 23.2 S3–S6 tests. Fix: either use `ReviewVerdict` enum values directly or add `use_enum_values=True` to model config. |
 
 ## Reference
 
 | Document | What It Covers |
 |----------|---------------|
-| `docs/decision-log.md` | All 277 DEC entries with full rationale |
+| `docs/decision-log.md` | All 297 DEC entries with full rationale |
 | `docs/dec-index.md` | Quick-reference index with status markers |
-| `docs/sprint-history.md` | Complete sprint history (1–23.05) |
+| `docs/sprint-history.md` | Complete sprint history (1–23.2) |
 | `docs/process-evolution.md` | Workflow evolution narrative |
 | `docs/live-operations.md` | Live trading procedures |
 | `docs/strategies/STRATEGY_*.md` | Per-strategy spec sheets |

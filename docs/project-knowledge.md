@@ -1,6 +1,6 @@
 # ARGUS — Project Knowledge (Claude Context)
 
-> *Tier A operational context for Claude Code and Claude.ai. Last updated: March 9, 2026.*
+> *Tier A operational context for Claude Code and Claude.ai. Last updated: March 9, 2026 (Sprint 23.2 doc sync).*
 > *Full decision rationale: `docs/decision-log.md` | Sprint details: `docs/sprint-history.md` | DEC index: `docs/dec-index.md`*
 
 ---
@@ -11,8 +11,8 @@ ARGUS is a fully automated, AI-enhanced multi-strategy day trading system for US
 
 ## Current State
 
-**Tests:** 2,101 pytest + 392 Vitest
-**Sprints completed:** 1 through 23.1 (23 full sprints + sub-sprints + Universe Manager + autonomous runner integration)
+**Tests:** 2,289 pytest + 392 Vitest
+**Sprints completed:** 1 through 23.2 (23 full sprints + sub-sprints + Universe Manager + Autonomous Sprint Runner)
 **Active sprint:** None (between sprints)
 **Next sprint:** 23.5 (NLP Catalyst Pipeline)
 **GitHub:** `https://github.com/stevengizzi/argus.git` (public)
@@ -48,6 +48,7 @@ ARGUS is a fully automated, AI-enhanced multi-strategy day trading system for US
 | 23 | Universe Manager | 2099+392V | Mar 7–8 | DEC-277 |
 | 23.05 | Post-Sprint Fixes | 2101+392V | Mar 8 | — |
 | 23.1 | Autonomous Runner Protocol Integration | 2101+392V | Mar 9 | DEC-278–297 |
+| 23.2 | Autonomous Sprint Runner Implementation | 2289+392V | Mar 9 | DEC-278–297 (implemented) |
 
 *Full sprint scopes and session details: `docs/sprint-history.md`*
 
@@ -202,17 +203,18 @@ structured logging and record-keeping.
 
 All significant decisions logged with sequential DEC numbers. Deferred items tracked in CLAUDE.md.
 
-**Autonomous Runner (DEC-278):** Python-based orchestrator at
-`scripts/sprint-runner.py`. Reads sprint package, invokes Claude Code CLI per
-session, parses structured close-out and review verdicts, makes rule-based
+**Autonomous Runner (DEC-278, Sprint 23.2):** Python-based orchestrator at
+`scripts/sprint-runner.py` with implementation in `scripts/sprint_runner/`
+package (12 modules, 188 tests). Reads sprint package, invokes Claude Code CLI
+per session, parses structured close-out and review verdicts, makes rule-based
 proceed/halt decisions, and maintains full run-log on disk. Supports resume
-from any checkpoint. Notifications via ntfy.sh (DEC-279). Tier 2.5 automated
-triage for scope gaps and prior-session bugs (DEC-282). Spec conformance check
-at session boundaries (DEC-283). Cost tracking with configurable ceiling
-(DEC-287). Independent test verification (DEC-291), pre-session file validation
-(DEC-292), compaction detection heuristic (DEC-293), and session boundary diff
-validation (DEC-294) provide defense-in-depth between sessions. See
-`docs/protocols/autonomous-sprint-runner.md`.
+from any checkpoint and parallel session execution. Notifications via ntfy.sh
+(DEC-279). Tier 2.5 automated triage for scope gaps and prior-session bugs
+(DEC-282). Spec conformance check at session boundaries (DEC-283). Cost tracking
+with configurable ceiling (DEC-287). Independent test verification (DEC-291),
+pre-session file validation (DEC-292), compaction detection heuristic (DEC-293),
+and session boundary diff validation (DEC-294) provide defense-in-depth between
+sessions. See `docs/protocols/autonomous-sprint-runner.md`.
 
 **Sprint methodology:** Sprint spec → session prompts → Claude Code implementation → code review → polish → doc sync. By Sprint 18+, evolved into comprehensive "sprint packages" (spec + prompts + review plans + doc updates in one conversation).
 

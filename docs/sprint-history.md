@@ -323,18 +323,49 @@
 **Sessions:** 2 implementation + Tier 2 reviews.
 **Notes:** Documentation-only sprint — no Python, TypeScript, or test files modified. All source code remains unchanged. First sprint to formalize the autonomous execution capability that enables overnight sprint execution.
 
+### Sprint 23.2 — Autonomous Sprint Runner Implementation (2289 pytest + 392 Vitest, +188/+0)
+**Date:** Mar 9, 2026
+**Scope:** Full implementation of the autonomous sprint runner (DEC-278–297) as a Python orchestrator with 12 modules and 188 tests. Entry point at `scripts/sprint-runner.py` with package at `scripts/sprint_runner/`.
+
+**Session 1 (S1):** Core infrastructure — `config.py` (RunnerConfig Pydantic model, SprintPackage, SessionSpec), `state.py` (RunState, SessionResult), `lock.py` (file-based locking). 28 new tests.
+**Session 2 (S2):** Execution core — `executor.py` (SessionExecutor, Claude Code CLI invocation, output parsing), `git_ops.py` (GitOperations, per-session commits, checkpoint management). 44 new tests.
+**Session 3 (S3):** Main loop foundation — `main.py` initial structure (SprintRunner class, session iteration, proceed/halt logic). 16 new tests.
+**Session 4 (S4):** Notifications + loop completion — `notifications.py` (ntfy.sh integration, 5 priority tiers), main loop state transitions and resume logic. 27 new tests. Ruff lint issue fixed (unused import).
+**Session 5 (S5):** Triage + conformance + cost — `triage.py` (Tier 2.5 automated triage, scope gap detection), `conformance.py` (spec conformance checking), `cost.py` (token usage tracking, cost ceiling). 34 new tests. Heaviest session by scope score (~24 points).
+**Session 6 (S6):** Parallel execution + CLI + resume — `parallel.py` (parallel session execution via asyncio gather), full CLI interface with all flags, resume from checkpoint, output file validation. 36 new tests.
+**Sprint 23.2.1 (fix):** Skip-session dependency validation — ensures skipped sessions don't break file existence validation for subsequent sessions. 3 new tests.
+
+**Modules implemented:**
+- `config.py` — RunnerConfig, SprintPackage, SessionSpec, ReviewContext Pydantic models
+- `state.py` — RunState, SessionResult, persistence to run-state.json
+- `lock.py` — File-based lock preventing concurrent runner instances
+- `executor.py` — SessionExecutor, Claude Code CLI subprocess management
+- `git_ops.py` — GitOperations, per-session commits, branch checkpoints
+- `notifications.py` — ntfy.sh mobile push notifications, 5 priority tiers
+- `triage.py` — Tier 2.5 automated triage for scope gaps and prior-session bugs
+- `conformance.py` — Spec conformance checking at session boundaries
+- `cost.py` — Token usage tracking, configurable cost ceiling enforcement
+- `parallel.py` — Parallel session execution with serialized git commits
+- `main.py` — SprintRunner orchestrator, 77KB main loop with all defense-in-depth checks
+
+**Key decisions:** DEC-278–297 (implemented — all 20 decisions from Sprint 23.1 now have working code).
+**Sessions:** 6 implementation + 1 fix (23.2.1) + 6 Tier 2 reviews.
+**Test counts per session:** S1(+28), S2(+44), S3(+16), S4(+27), S5(+34), S6(+36), 23.2.1(+3) = 188 new pytest.
+**Review outcomes:** 4 CLEAR, 2 CONCERNS (S4: ruff lint — fixed same session; 23.2.1: skip-dep validation — resolved with fix session).
+**Notes:** All 6 implementation sessions CLEAN self-assessment. Two CONCERNS verdicts both resolved within the sprint. Heaviest session was S5 (triage + conformance + cost, ~24 compaction risk points). Judgment calls: triage subagent failure → HALT (conservative), conformance subagent failure → CONFORMANT (permissive) — asymmetric by design since triage failures are safety-critical. urllib.request used for notifications (stdlib, simpler than aiohttp). Parallel session git commits serialized via sequential commit after asyncio.gather. Known issue: Pydantic serialization warnings on `review_verdict` field (cosmetic, tracked as DEF-034).
+
 ---
 
 ## Sprint Statistics
 
-- **Total sprints:** 23 full + 11 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.7, 22.1–22.3, 23.05, 23.1)
-- **Total sessions:** ~250+ Claude Code sessions
-- **Total tests:** 2,101 pytest + 392 Vitest = 2,493 total
+- **Total sprints:** 23 full + 12 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.7, 22.1–22.3, 23.05, 23.1, 23.2)
+- **Total sessions:** ~260+ Claude Code sessions
+- **Total tests:** 2,289 pytest + 392 Vitest = 2,681 total
 - **Total decisions:** 297 (DEC-001 through DEC-297)
 - **Calendar days (active dev):** ~24 (Feb 14 – Mar 9, 2026)
 - **Largest sprint:** 22 (9 implementation + 5 fix + 9 reviews, largest scope)
 - **Cleanest sprint:** 23 (11 sessions, 0 regressions, 0 scope gaps requiring follow-up)
-- **Most test-dense:** Sprint 22 (286 new tests) and Sprint 23 (141 new tests across 23+23.05)
+- **Most test-dense:** Sprint 22 (286 new tests), Sprint 23.2 (188 new tests), Sprint 23 (141 new tests across 23+23.05)
 - **Most Vitest-dense:** 21d (119 new Vitest)
 - **Crisis sprint:** 8 (VectorBT performance — iterrows() → vectorized, 4 conversations)
 - **Most compaction events:** Sprint 22 (Sessions 3a and 3b both compacted, led to DEC-275)

@@ -1,7 +1,7 @@
 # ARGUS — Strategic Roadmap
 
 > From artisanal strategies to ensemble alpha — the complete path
-> **v1.1 — March 7, 2026** (Sprint 22 complete)
+> **v1.2 — March 9, 2026** (Sprint 23.2 complete — Autonomous Sprint Runner implemented)
 > **Status:** CANONICAL — this is the single source of truth for ARGUS's strategic direction and sprint queue.
 > **Supersedes:** `docs/research/ARGUS_Expanded_Roadmap.md` (Feb 26), `docs/argus_unified_vision_roadmap.md` (Mar 5), `docs/10_PHASE3_SPRINT_PLAN.md` (all forward-looking sections)
 
@@ -78,7 +78,7 @@ These foundations are correct and remain:
 
 ARGUS completed 21 sprints + sub-sprints in ~17 calendar days of active development (Feb 14 – Mar 5). Average sprint: ~0.8 calendar days. However, sprint complexity has been increasing — early sprints (1–5) were dense single-day affairs, while later sprints (21a–21d, 21.5) span multiple days. The roadmap below assumes sprint durations of 1–4 days each depending on complexity, with some parallelism where noted.
 
-**Current state:** Sprint 22 complete. 1,977 pytest + 377 Vitest. Four active strategies. Live Databento + IBKR paper trading. Seven-page Command Center + Copilot shell. FMP Scanner integrated.
+**Current state:** Sprint 23.2 complete. 2,289 pytest + 392 Vitest. Four active strategies. Live Databento + IBKR paper trading. Seven-page Command Center + AI Copilot active. FMP Scanner + Universe Manager integrated. Autonomous Sprint Runner implemented (DEC-278–297).
 
 ---
 
