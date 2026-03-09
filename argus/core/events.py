@@ -298,6 +298,27 @@ class RegimeChangeEvent(Event):
 
 
 @dataclass(frozen=True)
+class CatalystEvent(Event):
+    """A classified catalyst event for a symbol.
+
+    Published by the intelligence layer after classifying a raw
+    news item or SEC filing. Subscribers (strategies, UI) receive
+    this to incorporate catalyst context into decisions.
+    """
+
+    symbol: str = ""
+    catalyst_type: str = ""  # category from classification
+    quality_score: float = 0.0  # 0-100
+    headline: str = ""
+    summary: str = ""
+    source: str = ""  # "sec_edgar", "fmp_news", "finnhub"
+    source_url: str | None = None
+    filing_type: str | None = None
+    published_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    classified_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+
+@dataclass(frozen=True)
 class ShutdownRequestedEvent(Event):
     """Request graceful system shutdown.
 
