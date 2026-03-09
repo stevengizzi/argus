@@ -10,7 +10,7 @@ Your review report MUST include a structured JSON verdict at the end, fenced wit
 ## Review Context
 Read the following file for the Sprint Spec, Specification by Contradiction, Sprint-Level Regression Checklist, and Sprint-Level Escalation Criteria:
 
-`docs/sprints/sprint-23.5/review-context.md`
+`docs/sprints/sprint-23.5/sprint-23.5-review-context.md`
 
 ## Tier 1 Close-Out Report
 [PASTE THE CLOSE-OUT REPORT HERE AFTER THE IMPLEMENTATION SESSION]

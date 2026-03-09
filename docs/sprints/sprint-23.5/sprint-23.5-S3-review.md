@@ -8,7 +8,7 @@ Follow the review skill in `.claude/skills/review.md`.
 Your review report MUST include a structured JSON verdict at the end, fenced with ```json:structured-verdict. See the review skill for the full schema and requirements.
 
 ## Review Context
-Read `docs/sprints/sprint-23.5/review-context.md`
+Read `docs/sprints/sprint-23.5/sprint-23.5-review-context.md`
 
 ## Tier 1 Close-Out Report
 [PASTE THE CLOSE-OUT REPORT HERE AFTER THE IMPLEMENTATION SESSION]

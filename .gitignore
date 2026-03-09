@@ -78,3 +78,7 @@ argus/ui/dist/
 
 # Asset source files (icons extracted to public/)
 argus_icon_set.zip
+
+# Sprint Runner runtime artifacts
+.sprint-runner.lock
+run-state.json

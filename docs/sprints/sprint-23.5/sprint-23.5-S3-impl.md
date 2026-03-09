@@ -129,7 +129,7 @@ After all work is complete, follow the close-out skill in `.claude/skills/close-
 The close-out report MUST include a structured JSON appendix at the end, fenced with ```json:structured-closeout. See the close-out skill for the full schema and requirements.
 
 ## Sprint-Level Regression Checklist (for Tier 2 reviewer)
-R1–R25 from `docs/sprints/sprint-23.5/review-context.md`
+R1–R25 from `docs/sprints/sprint-23.5/sprint-23.5-review-context.md`
 
 ## Sprint-Level Escalation Criteria (for Tier 2 reviewer)
-Items 1–15 from `docs/sprints/sprint-23.5/review-context.md`
+Items 1–15 from `docs/sprints/sprint-23.5/sprint-23.5-review-context.md`
