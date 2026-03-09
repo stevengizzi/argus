@@ -132,34 +132,92 @@ class FMPReferenceClient:
         self._api_key = None
         logger.info("FMPReferenceClient stopped")
 
+    async def fetch_stock_list(self) -> list[str]:
+        """Fetch complete stock list from FMP.
+
+        Calls the FMP stable stock-list endpoint to get all available symbols.
+        This is the starting point for Universe Manager's full-universe mode.
+
+        FMP Stock List Endpoint:
+            GET /stable/stock-list?apikey=KEY
+
+        Returns:
+            List of symbol strings. Empty list on failure.
+        """
+        if self._api_key is None:
+            logger.error("FMPReferenceClient not started - call start() first")
+            return []
+
+        url = f"{self._config.base_url}/stock-list"
+        params = {"apikey": self._api_key}
+
+        try:
+            async with aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=self._config.request_timeout_seconds)
+            ) as session:
+                async with session.get(url, params=params) as response:
+                    if response.status != 200:
+                        logger.error(
+                            "FMP stock-list request failed: status=%d",
+                            response.status,
+                        )
+                        return []
+
+                    data = await response.json()
+
+                    if not isinstance(data, list):
+                        logger.error("FMP stock-list returned invalid data type")
+                        return []
+
+                    # Extract symbol field from each object
+                    symbols = [
+                        item.get("symbol")
+                        for item in data
+                        if isinstance(item, dict) and item.get("symbol")
+                    ]
+
+                    logger.info("Fetched %d symbols from FMP stock-list", len(symbols))
+                    return symbols
+
+        except aiohttp.ClientError as e:
+            logger.error("FMP stock-list network error: %s", e)
+            return []
+        except Exception as e:
+            logger.error("FMP stock-list unexpected error: %s", e)
+            return []
+
     async def fetch_reference_data(
         self, symbols: list[str]
     ) -> dict[str, SymbolReferenceData]:
-        """Fetch company profile data for symbols in batches.
+        """Fetch company profile data for symbols with async concurrency.
 
-        Splits symbols into batches and fetches company profiles from FMP.
-        Handles partial failures gracefully - failed batches are logged but
-        don't prevent other batches from being processed.
+        Uses concurrent requests with rate limiting to efficiently fetch
+        profile data for large symbol lists (up to ~8,000). Handles partial
+        failures gracefully - failed symbols are logged but don't prevent
+        other symbols from being processed.
 
-        FMP Batch Profile Endpoint:
-            GET /api/v3/profile/{sym1,sym2,...}?apikey=KEY
+        FMP Stable Profile Endpoint:
+            GET /stable/profile?symbol={sym}&apikey=KEY
 
-        FMP Response Fields:
-            - symbol: Stock ticker
-            - sector: GICS sector
-            - industry: Industry classification
-            - mktCap: Market capitalization
-            - exchangeShortName: Exchange (NASDAQ, NYSE, OTC, etc.)
-            - price: Current/previous close price
-            - volAvg: Average volume
+        Rate limiting strategy:
+            - Semaphore limits to 5 concurrent requests
+            - 0.2s minimum spacing per call (well under 300/min)
+            - Exponential backoff retry on transient errors (429, 5xx)
+
+        Progress logging every 500 symbols shows:
+            - Completed count / total (percentage)
+            - Succeeded vs failed counts
+            - Elapsed time
 
         Args:
             symbols: List of stock symbols to fetch.
 
         Returns:
             Dictionary mapping symbol to SymbolReferenceData.
-            Symbols that failed to fetch are not included.
+            Symbols that failed to fetch are not included (fail-closed, DEC-277).
         """
+        import time
+
         if not symbols:
             return {}
 
@@ -167,109 +225,180 @@ class FMPReferenceClient:
             logger.error("FMPReferenceClient not started - call start() first")
             return {}
 
-        # Split into batches
-        batches = [
-            symbols[i : i + self._config.batch_size]
-            for i in range(0, len(symbols), self._config.batch_size)
-        ]
+        total = len(symbols)
+        logger.info("Starting reference data fetch for %d symbols", total)
 
-        logger.debug(
-            "Fetching reference data for %d symbols in %d batches",
-            len(symbols),
-            len(batches),
-        )
-
+        # Tracking counters
         results: dict[str, SymbolReferenceData] = {}
+        succeeded = 0
+        failed = 0
+        processed = 0
+        start_time = time.monotonic()
+
+        # Semaphore for concurrent request limiting
+        semaphore = asyncio.Semaphore(5)
+
+        # Lock for thread-safe counter updates
+        counter_lock = asyncio.Lock()
+
+        async def fetch_single(
+            session: aiohttp.ClientSession,
+            symbol: str,
+        ) -> SymbolReferenceData | None:
+            """Fetch profile for a single symbol with rate limiting and retries."""
+            nonlocal succeeded, failed, processed
+
+            async with semaphore:
+                # Rate limiting: 0.2s minimum spacing
+                await asyncio.sleep(0.2)
+
+                result = await self._fetch_single_profile_with_retry(session, symbol)
+
+                # Update counters
+                async with counter_lock:
+                    processed += 1
+                    if result is not None:
+                        succeeded += 1
+                    else:
+                        failed += 1
+
+                    # Progress logging every 500 symbols
+                    if processed % 500 == 0 or processed == total:
+                        elapsed = time.monotonic() - start_time
+                        pct = (processed / total) * 100
+                        mins = int(elapsed // 60)
+                        secs = int(elapsed % 60)
+                        logger.info(
+                            "Fetching reference data: %d/%d (%.0f%%) — "
+                            "%d succeeded, %d failed [%dm %ds elapsed]",
+                            processed,
+                            total,
+                            pct,
+                            succeeded,
+                            failed,
+                            mins,
+                            secs,
+                        )
+
+                return result
 
         async with aiohttp.ClientSession(
             timeout=aiohttp.ClientTimeout(total=self._config.request_timeout_seconds)
         ) as session:
-            for batch_idx, batch in enumerate(batches):
-                try:
-                    batch_results = await self._fetch_batch(session, batch)
-                    results.update(batch_results)
-                    logger.debug(
-                        "Batch %d/%d: fetched %d symbols",
-                        batch_idx + 1,
-                        len(batches),
-                        len(batch_results),
-                    )
-                except Exception as e:
-                    logger.warning(
-                        "Batch %d/%d failed: %s",
-                        batch_idx + 1,
-                        len(batches),
-                        e,
-                    )
-                    # Continue with other batches
+            # Create tasks for all symbols
+            tasks = [fetch_single(session, sym) for sym in symbols]
 
-                # Rate limiting: FMP allows 300 calls/min (~5/sec)
-                # Sleep briefly between batches to stay well under limit
-                if batch_idx < len(batches) - 1:
-                    await asyncio.sleep(0.25)
+            # Gather results (exceptions are returned, not raised)
+            fetched = await asyncio.gather(*tasks, return_exceptions=True)
+
+            # Collect successful results
+            for sym, result in zip(symbols, fetched):
+                if isinstance(result, SymbolReferenceData):
+                    results[sym] = result
+
+        # Final summary
+        elapsed = time.monotonic() - start_time
+        mins = int(elapsed // 60)
+        secs = int(elapsed % 60)
+        logger.info(
+            "Reference data fetch complete: %d/%d succeeded in %dm %ds (%d failed)",
+            len(results),
+            total,
+            mins,
+            secs,
+            total - len(results),
+        )
 
         return results
 
-    async def _fetch_batch(
-        self, session: aiohttp.ClientSession, symbols: list[str]
-    ) -> dict[str, SymbolReferenceData]:
-        """Fetch a batch of company profiles (per-symbol on stable API).
+    async def _fetch_single_profile_with_retry(
+        self, session: aiohttp.ClientSession, symbol: str
+    ) -> SymbolReferenceData | None:
+        """Fetch profile for a single symbol with retry logic.
 
-        The FMP stable API does not support comma-separated batch profile
-        requests on Starter plans, so symbols are fetched individually.
+        Retries on transient errors (HTTP 429, 5xx, network timeout) with
+        exponential backoff (2s, 4s, 8s). Non-retryable errors (4xx other
+        than 429) fail immediately.
 
         Args:
             session: aiohttp client session.
-            symbols: Batch of symbols to fetch.
+            symbol: Stock symbol to fetch.
 
         Returns:
-            Dictionary mapping symbol to SymbolReferenceData.
+            SymbolReferenceData if successful, None on failure.
         """
-        results: dict[str, SymbolReferenceData] = {}
+        url = f"{self._config.base_url}/profile"
+        params = {"symbol": symbol, "apikey": self._api_key}
 
-        for symbol in symbols:
-            last_error: Exception | None = None
+        for attempt in range(self._config.max_retries):
+            try:
+                async with session.get(url, params=params) as response:
+                    status = response.status
 
-            for attempt in range(self._config.max_retries):
-                try:
-                    url = f"{self._config.base_url}/profile"
-                    params = {"symbol": symbol, "apikey": self._api_key}
-
-                    async with session.get(url, params=params) as response:
-                        logger.debug(
-                            "FMP profile request: %s, status=%d",
-                            symbol,
-                            response.status,
-                        )
-                        response.raise_for_status()
+                    # Success
+                    if status == 200:
                         data = await response.json()
-
                         if isinstance(data, list) and data:
                             parsed = self._parse_profile_response(data)
-                            results.update(parsed)
-                        break  # Success, move to next symbol
+                            return parsed.get(symbol)
+                        return None
 
-                except aiohttp.ClientError as e:
-                    last_error = e
-                    if attempt < self._config.max_retries - 1:
-                        wait_time = 2**attempt
+                    # Transient errors: 429 (rate limit) or 5xx (server error)
+                    if status == 429 or status >= 500:
+                        if attempt < self._config.max_retries - 1:
+                            wait_time = 2 ** (attempt + 1)  # 2s, 4s, 8s
+                            logger.debug(
+                                "FMP %d for %s (attempt %d/%d), retrying in %ds",
+                                status,
+                                symbol,
+                                attempt + 1,
+                                self._config.max_retries,
+                                wait_time,
+                            )
+                            await asyncio.sleep(wait_time)
+                            continue
+
+                    # Non-retryable 4xx errors (except 429) — fail immediately
+                    if 400 <= status < 500:
                         logger.debug(
-                            "FMP request for %s failed (attempt %d/%d), retrying in %ds: %s",
+                            "FMP %d for %s — non-retryable, skipping",
+                            status,
                             symbol,
-                            attempt + 1,
-                            self._config.max_retries,
-                            wait_time,
-                            e,
                         )
-                        await asyncio.sleep(wait_time)
+                        return None
 
-            if last_error and symbol not in results:
-                logger.debug("Failed to fetch profile for %s: %s", symbol, last_error)
+            except asyncio.TimeoutError:
+                # Network timeout — retryable
+                if attempt < self._config.max_retries - 1:
+                    wait_time = 2 ** (attempt + 1)
+                    logger.debug(
+                        "FMP timeout for %s (attempt %d/%d), retrying in %ds",
+                        symbol,
+                        attempt + 1,
+                        self._config.max_retries,
+                        wait_time,
+                    )
+                    await asyncio.sleep(wait_time)
+                    continue
 
-            # Rate limiting between individual requests
-            await asyncio.sleep(0.25)
+            except aiohttp.ClientError as e:
+                # Network error — retryable
+                if attempt < self._config.max_retries - 1:
+                    wait_time = 2 ** (attempt + 1)
+                    logger.debug(
+                        "FMP network error for %s (attempt %d/%d): %s, retrying in %ds",
+                        symbol,
+                        attempt + 1,
+                        self._config.max_retries,
+                        e,
+                        wait_time,
+                    )
+                    await asyncio.sleep(wait_time)
+                    continue
 
-        return results
+        # All retries exhausted
+        logger.warning("Failed to fetch profile for %s after %d attempts", symbol, self._config.max_retries)
+        return None
 
     def _parse_profile_response(
         self, data: list[dict]

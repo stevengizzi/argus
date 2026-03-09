@@ -1660,9 +1660,10 @@ universe_manager:
                 instance.set_viable_universe = MagicMock()
                 cls.return_value = instance
 
-            # Setup FMP mock
+            # Setup FMP mock (Sprint 23.3: now needs fetch_stock_list)
             mock_fmp = MagicMock()
             mock_fmp.start = AsyncMock()
+            mock_fmp.fetch_stock_list = AsyncMock(return_value=["AAPL", "MSFT", "GOOGL"])
             mock_fmp_class.return_value = mock_fmp
 
             # Setup Universe Manager mock
@@ -1794,7 +1795,6 @@ universe_manager:
         monkeypatch.setenv("FMP_API_KEY", "test_fmp_key")
 
         system = ArgusSystem(config_dir=um_enabled_config_dir, dry_run=True)
-        fallback_called = False
 
         with (
             patch("argus.main.DatabaseManager") as mock_db_class,
@@ -1841,20 +1841,24 @@ universe_manager:
                 instance.set_viable_universe = MagicMock()
                 cls.return_value = instance
 
-            # Setup FMP mock
+            # Setup FMP mock (Sprint 23.3: fetch_stock_list returns empty = failure)
             mock_fmp = MagicMock()
             mock_fmp.start = AsyncMock()
+            mock_fmp.fetch_stock_list = AsyncMock(return_value=[])  # Simulates failure
             mock_fmp_class.return_value = mock_fmp
 
-            # Setup Universe Manager mock - first call returns empty (FMP failed)
-            def um_fallback(*args, **kwargs):
-                nonlocal fallback_called
-                fallback_called = True
+            # Sprint 23.3: When fetch_stock_list returns empty, main.py falls back to
+            # scanner symbols and passes them to build_viable_universe. Track what symbols
+            # were passed to verify fallback behavior.
+            symbols_passed_to_um: list[str] = []
+
+            async def track_um_build(symbols, *args, **kwargs):
+                nonlocal symbols_passed_to_um
+                symbols_passed_to_um = list(symbols)
                 return {"AAPL", "MSFT"}
 
             mock_um = MagicMock()
-            mock_um.build_viable_universe = AsyncMock(return_value=set())  # Empty = failed
-            mock_um.build_viable_universe_fallback = AsyncMock(side_effect=um_fallback)
+            mock_um.build_viable_universe = AsyncMock(side_effect=track_um_build)
             mock_um.build_routing_table = MagicMock()
             mock_um.viable_symbols = {"AAPL", "MSFT"}
             mock_um.viable_count = 2
@@ -1882,8 +1886,10 @@ universe_manager:
             with contextlib.suppress(Exception):
                 await system.start()
 
-            # Verify fallback was called
-            assert fallback_called, "build_viable_universe_fallback was not called"
+            # Verify build_viable_universe was called (with fallback scanner symbols since
+            # fetch_stock_list returned empty). Scanner returns [] in this test, so empty
+            # list is passed. The key is that build_viable_universe WAS called.
+            assert mock_um.build_viable_universe.called, "build_viable_universe should be called"
 
     @pytest.mark.asyncio
     async def test_candle_routing_um_active(
@@ -2189,9 +2195,10 @@ universe_manager:
                 instance.set_viable_universe = MagicMock()
                 cls.return_value = instance
 
-            # Setup FMP mock
+            # Setup FMP mock (Sprint 23.3: now needs fetch_stock_list)
             mock_fmp = MagicMock()
             mock_fmp.start = AsyncMock()
+            mock_fmp.fetch_stock_list = AsyncMock(return_value=["AAPL", "MSFT", "GOOGL"])
             mock_fmp_class.return_value = mock_fmp
 
             # Setup Universe Manager mock
@@ -2280,3 +2287,493 @@ universe_manager:
 
         # Verify strategy was NOT called (routing table returned empty)
         strategy_a.on_candle.assert_not_called()
+
+
+class TestWarmupSymbolSelection:
+    """Tests for Sprint 23.3 — Warm-up uses viable symbols when Universe Manager enabled."""
+
+    @pytest.fixture
+    def um_enabled_config_dir(self, mock_config_dir: Path) -> Path:
+        """Create a config directory with Universe Manager enabled."""
+        # Update system.yaml to enable Universe Manager and use Databento
+        (mock_config_dir / "system.yaml").write_text("""
+timezone: "America/New_York"
+market_open: "09:30"
+market_close: "16:00"
+log_level: "INFO"
+heartbeat_interval_seconds: 60
+data_dir: "data"
+data_source: "databento"
+broker_source: "ibkr"
+
+health:
+  heartbeat_interval_seconds: 60
+  heartbeat_url_env: ""
+  alert_webhook_url_env: ""
+  daily_check_enabled: false
+  weekly_reconciliation_enabled: false
+
+ai:
+  enabled: false
+
+universe_manager:
+  enabled: true
+  min_price: 5.0
+  max_price: 10000.0
+  min_avg_volume: 100000
+  exclude_otc: true
+  fmp_batch_size: 50
+""")
+        return mock_config_dir
+
+    @pytest.mark.asyncio
+    async def test_warmup_uses_viable_symbols_when_um_enabled(
+        self, um_enabled_config_dir: Path, mock_env_vars: None, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Verify data service warm-up uses viable symbols when UM enabled."""
+        from argus.main import ArgusSystem
+
+        monkeypatch.setenv("DATABENTO_API_KEY", "test_db_key")
+        monkeypatch.setenv("FMP_API_KEY", "test_fmp_key")
+
+        # dry_run=False so that data service start() is actually called
+        system = ArgusSystem(config_dir=um_enabled_config_dir, dry_run=False)
+        warmup_symbols_received: list[str] = []
+
+        with (
+            patch("argus.main.DatabaseManager") as mock_db_class,
+            patch("argus.main.ConversationManager") as mock_conv_class,
+            patch("argus.main.UsageTracker") as mock_usage_class,
+            patch("argus.main.ActionManager") as mock_action_class,
+            patch("argus.execution.ibkr_broker.IBKRBroker") as mock_broker_class,
+            patch("argus.main.HealthMonitor") as mock_health_class,
+            patch("argus.main.RiskManager") as mock_risk_class,
+            patch("argus.main.DatabentoDataService") as mock_data_class,
+            patch("argus.main.StaticScanner") as mock_scanner_class,
+            patch("argus.main.OrbBreakoutStrategy") as mock_orb_class,
+            patch("argus.main.Orchestrator") as mock_orchestrator_class,
+            patch("argus.main.OrderManager") as mock_om_class,
+            patch("argus.main.FMPReferenceClient") as mock_fmp_class,
+            patch("argus.main.UniverseManager") as mock_um_class,
+        ):
+            # Setup all mocks
+            for cls in [
+                mock_db_class,
+                mock_conv_class,
+                mock_usage_class,
+                mock_action_class,
+                mock_broker_class,
+                mock_health_class,
+                mock_risk_class,
+                mock_scanner_class,
+                mock_om_class,
+            ]:
+                instance = MagicMock()
+                instance.initialize = AsyncMock()
+                instance.start = AsyncMock()
+                instance.connect = AsyncMock()
+                instance.stop = AsyncMock()
+                instance.close = AsyncMock()
+                instance.get_account = AsyncMock(return_value=MagicMock(equity=100000))
+                instance.scan = AsyncMock(return_value=[])
+                instance.reconstruct_from_broker = AsyncMock()
+                instance.reconstruct_state = AsyncMock()
+                instance.update_component = MagicMock()
+                instance.send_warning_alert = AsyncMock()
+                instance.set_order_manager = MagicMock()
+                cls.return_value = instance
+
+            # Setup data service mock that captures symbols passed to start()
+            mock_data = MagicMock()
+
+            async def capture_start(symbols, timeframes):
+                nonlocal warmup_symbols_received
+                warmup_symbols_received = list(symbols) if symbols else []
+
+            mock_data.start = AsyncMock(side_effect=capture_start)
+            mock_data.stop = AsyncMock()
+            mock_data.set_viable_universe = MagicMock()
+            mock_data_class.return_value = mock_data
+
+            # Setup FMP mock - returns full stock list
+            mock_fmp = MagicMock()
+            mock_fmp.start = AsyncMock()
+            mock_fmp.fetch_stock_list = AsyncMock(
+                return_value=["AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "META", "TSLA"]
+            )
+            mock_fmp_class.return_value = mock_fmp
+
+            # Setup Universe Manager mock - filters down to just 3 symbols
+            mock_um = MagicMock()
+            mock_um.build_viable_universe = AsyncMock(return_value={"AAPL", "MSFT", "NVDA"})
+            mock_um.build_routing_table = MagicMock()
+            mock_um.viable_symbols = {"AAPL", "MSFT", "NVDA"}
+            mock_um.viable_count = 3
+            mock_um.is_built = True
+            mock_um_class.return_value = mock_um
+
+            # Setup strategy mock
+            orb_strategy = MagicMock()
+            orb_strategy.set_watchlist = MagicMock()
+            orb_strategy.strategy_id = "orb_breakout"
+            orb_strategy.is_active = True
+            orb_strategy.config = MagicMock()
+            mock_orb_class.return_value = orb_strategy
+
+            mock_orchestrator = MagicMock()
+            mock_orchestrator.start = AsyncMock()
+            mock_orchestrator.stop = AsyncMock()
+            mock_orchestrator.run_pre_market = AsyncMock()
+            mock_orchestrator.register_strategy = MagicMock()
+            mock_orchestrator.get_strategies = MagicMock(
+                return_value={"orb_breakout": orb_strategy}
+            )
+            mock_orchestrator_class.return_value = mock_orchestrator
+
+            with contextlib.suppress(Exception):
+                await system.start()
+
+            # Verify warm-up received viable symbols (3), not full stock list (7)
+            assert len(warmup_symbols_received) == 3
+            assert set(warmup_symbols_received) == {"AAPL", "MSFT", "NVDA"}
+
+    @pytest.mark.asyncio
+    async def test_warmup_fallback_on_stocklist_failure(
+        self, um_enabled_config_dir: Path, mock_env_vars: None, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Verify warm-up falls back to scanner symbols when stock-list fetch fails."""
+        from argus.core.events import WatchlistItem
+        from argus.main import ArgusSystem
+
+        monkeypatch.setenv("DATABENTO_API_KEY", "test_db_key")
+        monkeypatch.setenv("FMP_API_KEY", "test_fmp_key")
+
+        # dry_run=False so data service start() is called
+        system = ArgusSystem(config_dir=um_enabled_config_dir, dry_run=False)
+        warmup_symbols_received: list[str] = []
+
+        with (
+            patch("argus.main.DatabaseManager") as mock_db_class,
+            patch("argus.main.ConversationManager") as mock_conv_class,
+            patch("argus.main.UsageTracker") as mock_usage_class,
+            patch("argus.main.ActionManager") as mock_action_class,
+            patch("argus.execution.ibkr_broker.IBKRBroker") as mock_broker_class,
+            patch("argus.main.HealthMonitor") as mock_health_class,
+            patch("argus.main.RiskManager") as mock_risk_class,
+            patch("argus.main.DatabentoDataService") as mock_data_class,
+            patch("argus.main.StaticScanner") as mock_scanner_class,
+            patch("argus.main.OrbBreakoutStrategy") as mock_orb_class,
+            patch("argus.main.Orchestrator") as mock_orchestrator_class,
+            patch("argus.main.OrderManager") as mock_om_class,
+            patch("argus.main.FMPReferenceClient") as mock_fmp_class,
+            patch("argus.main.UniverseManager") as mock_um_class,
+        ):
+            # Setup all mocks
+            for cls in [
+                mock_db_class,
+                mock_conv_class,
+                mock_usage_class,
+                mock_action_class,
+                mock_broker_class,
+                mock_health_class,
+                mock_risk_class,
+                mock_om_class,
+            ]:
+                instance = MagicMock()
+                instance.initialize = AsyncMock()
+                instance.start = AsyncMock()
+                instance.connect = AsyncMock()
+                instance.stop = AsyncMock()
+                instance.close = AsyncMock()
+                instance.get_account = AsyncMock(return_value=MagicMock(equity=100000))
+                instance.reconstruct_from_broker = AsyncMock()
+                instance.reconstruct_state = AsyncMock()
+                instance.update_component = MagicMock()
+                instance.send_warning_alert = AsyncMock()
+                instance.set_order_manager = MagicMock()
+                cls.return_value = instance
+
+            # Setup scanner to return 2 symbols
+            mock_scanner = MagicMock()
+            mock_scanner.start = AsyncMock()
+            mock_scanner.stop = AsyncMock()
+            mock_scanner.scan = AsyncMock(
+                return_value=[
+                    WatchlistItem(symbol="SCAN1"),
+                    WatchlistItem(symbol="SCAN2"),
+                ]
+            )
+            mock_scanner_class.return_value = mock_scanner
+
+            # Setup data service mock that captures symbols passed to start()
+            mock_data = MagicMock()
+
+            async def capture_start(symbols, timeframes):
+                nonlocal warmup_symbols_received
+                warmup_symbols_received = list(symbols) if symbols else []
+
+            mock_data.start = AsyncMock(side_effect=capture_start)
+            mock_data.stop = AsyncMock()
+            mock_data.set_viable_universe = MagicMock()
+            mock_data_class.return_value = mock_data
+
+            # Setup FMP mock - fetch_stock_list returns empty (failure)
+            mock_fmp = MagicMock()
+            mock_fmp.start = AsyncMock()
+            mock_fmp.fetch_stock_list = AsyncMock(return_value=[])  # Failure!
+            mock_fmp_class.return_value = mock_fmp
+
+            # Setup Universe Manager mock - receives scanner symbols as fallback
+            mock_um = MagicMock()
+            # When passed scanner symbols, returns viable set
+            mock_um.build_viable_universe = AsyncMock(return_value={"SCAN1", "SCAN2"})
+            mock_um.build_routing_table = MagicMock()
+            mock_um.viable_symbols = {"SCAN1", "SCAN2"}
+            mock_um.viable_count = 2
+            mock_um.is_built = True
+            mock_um_class.return_value = mock_um
+
+            # Setup strategy mock
+            orb_strategy = MagicMock()
+            orb_strategy.set_watchlist = MagicMock()
+            orb_strategy.strategy_id = "orb_breakout"
+            orb_strategy.is_active = True
+            orb_strategy.config = MagicMock()
+            mock_orb_class.return_value = orb_strategy
+
+            mock_orchestrator = MagicMock()
+            mock_orchestrator.start = AsyncMock()
+            mock_orchestrator.stop = AsyncMock()
+            mock_orchestrator.run_pre_market = AsyncMock()
+            mock_orchestrator.register_strategy = MagicMock()
+            mock_orchestrator.get_strategies = MagicMock(
+                return_value={"orb_breakout": orb_strategy}
+            )
+            mock_orchestrator_class.return_value = mock_orchestrator
+
+            with contextlib.suppress(Exception):
+                await system.start()
+
+            # Verify warm-up received scanner symbols (fallback)
+            assert len(warmup_symbols_received) == 2
+            assert set(warmup_symbols_received) == {"SCAN1", "SCAN2"}
+
+    @pytest.mark.asyncio
+    async def test_warmup_fallback_on_empty_viable(
+        self, um_enabled_config_dir: Path, mock_env_vars: None, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Verify warm-up falls back to scanner symbols when viable set is empty."""
+        from argus.core.events import WatchlistItem
+        from argus.main import ArgusSystem
+
+        monkeypatch.setenv("DATABENTO_API_KEY", "test_db_key")
+        monkeypatch.setenv("FMP_API_KEY", "test_fmp_key")
+
+        # dry_run=False so data service start() is called
+        system = ArgusSystem(config_dir=um_enabled_config_dir, dry_run=False)
+        warmup_symbols_received: list[str] = []
+
+        with (
+            patch("argus.main.DatabaseManager") as mock_db_class,
+            patch("argus.main.ConversationManager") as mock_conv_class,
+            patch("argus.main.UsageTracker") as mock_usage_class,
+            patch("argus.main.ActionManager") as mock_action_class,
+            patch("argus.execution.ibkr_broker.IBKRBroker") as mock_broker_class,
+            patch("argus.main.HealthMonitor") as mock_health_class,
+            patch("argus.main.RiskManager") as mock_risk_class,
+            patch("argus.main.DatabentoDataService") as mock_data_class,
+            patch("argus.main.StaticScanner") as mock_scanner_class,
+            patch("argus.main.OrbBreakoutStrategy") as mock_orb_class,
+            patch("argus.main.Orchestrator") as mock_orchestrator_class,
+            patch("argus.main.OrderManager") as mock_om_class,
+            patch("argus.main.FMPReferenceClient") as mock_fmp_class,
+            patch("argus.main.UniverseManager") as mock_um_class,
+        ):
+            # Setup all mocks
+            for cls in [
+                mock_db_class,
+                mock_conv_class,
+                mock_usage_class,
+                mock_action_class,
+                mock_broker_class,
+                mock_health_class,
+                mock_risk_class,
+                mock_om_class,
+            ]:
+                instance = MagicMock()
+                instance.initialize = AsyncMock()
+                instance.start = AsyncMock()
+                instance.connect = AsyncMock()
+                instance.stop = AsyncMock()
+                instance.close = AsyncMock()
+                instance.get_account = AsyncMock(return_value=MagicMock(equity=100000))
+                instance.reconstruct_from_broker = AsyncMock()
+                instance.reconstruct_state = AsyncMock()
+                instance.update_component = MagicMock()
+                instance.send_warning_alert = AsyncMock()
+                instance.set_order_manager = MagicMock()
+                cls.return_value = instance
+
+            # Setup scanner to return 2 symbols
+            mock_scanner = MagicMock()
+            mock_scanner.start = AsyncMock()
+            mock_scanner.stop = AsyncMock()
+            mock_scanner.scan = AsyncMock(
+                return_value=[
+                    WatchlistItem(symbol="FALLBACK1"),
+                    WatchlistItem(symbol="FALLBACK2"),
+                ]
+            )
+            mock_scanner_class.return_value = mock_scanner
+
+            # Setup data service mock that captures symbols passed to start()
+            mock_data = MagicMock()
+
+            async def capture_start(symbols, timeframes):
+                nonlocal warmup_symbols_received
+                warmup_symbols_received = list(symbols) if symbols else []
+
+            mock_data.start = AsyncMock(side_effect=capture_start)
+            mock_data.stop = AsyncMock()
+            mock_data.set_viable_universe = MagicMock()
+            mock_data_class.return_value = mock_data
+
+            # Setup FMP mock - returns stock list
+            mock_fmp = MagicMock()
+            mock_fmp.start = AsyncMock()
+            mock_fmp.fetch_stock_list = AsyncMock(return_value=["A", "B", "C"])
+            mock_fmp_class.return_value = mock_fmp
+
+            # Setup Universe Manager mock - returns EMPTY viable set
+            mock_um = MagicMock()
+            mock_um.build_viable_universe = AsyncMock(return_value=set())  # Empty!
+            mock_um.build_routing_table = MagicMock()
+            mock_um.viable_symbols = set()
+            mock_um.viable_count = 0
+            mock_um.is_built = True
+            mock_um_class.return_value = mock_um
+
+            # Setup strategy mock
+            orb_strategy = MagicMock()
+            orb_strategy.set_watchlist = MagicMock()
+            orb_strategy.strategy_id = "orb_breakout"
+            orb_strategy.is_active = True
+            orb_strategy.config = MagicMock()
+            mock_orb_class.return_value = orb_strategy
+
+            mock_orchestrator = MagicMock()
+            mock_orchestrator.start = AsyncMock()
+            mock_orchestrator.stop = AsyncMock()
+            mock_orchestrator.run_pre_market = AsyncMock()
+            mock_orchestrator.register_strategy = MagicMock()
+            mock_orchestrator.get_strategies = MagicMock(
+                return_value={"orb_breakout": orb_strategy}
+            )
+            mock_orchestrator_class.return_value = mock_orchestrator
+
+            with contextlib.suppress(Exception):
+                await system.start()
+
+            # Verify warm-up received scanner symbols (fallback because viable is empty)
+            assert len(warmup_symbols_received) == 2
+            assert set(warmup_symbols_received) == {"FALLBACK1", "FALLBACK2"}
+
+    @pytest.mark.asyncio
+    async def test_warmup_uses_scanner_symbols_when_um_disabled(
+        self, mock_config_dir: Path, mock_env_vars: None
+    ) -> None:
+        """Verify warm-up uses scanner symbols when Universe Manager is disabled."""
+        from argus.core.events import WatchlistItem
+        from argus.main import ArgusSystem
+
+        # dry_run=False so data service start() is called
+        system = ArgusSystem(config_dir=mock_config_dir, dry_run=False)
+        warmup_symbols_received: list[str] = []
+
+        with (
+            patch("argus.main.DatabaseManager") as mock_db_class,
+            patch("argus.main.ConversationManager") as mock_conv_class,
+            patch("argus.main.UsageTracker") as mock_usage_class,
+            patch("argus.main.ActionManager") as mock_action_class,
+            patch("argus.main.AlpacaBroker") as mock_broker_class,
+            patch("argus.main.HealthMonitor") as mock_health_class,
+            patch("argus.main.RiskManager") as mock_risk_class,
+            patch("argus.main.AlpacaDataService") as mock_data_class,
+            patch("argus.main.StaticScanner") as mock_scanner_class,  # Config uses static scanner
+            patch("argus.main.OrbBreakoutStrategy") as mock_orb_class,
+            patch("argus.main.Orchestrator") as mock_orchestrator_class,
+            patch("argus.main.OrderManager") as mock_om_class,
+        ):
+            # Setup all mocks
+            for cls in [
+                mock_db_class,
+                mock_conv_class,
+                mock_usage_class,
+                mock_action_class,
+                mock_broker_class,
+                mock_health_class,
+                mock_risk_class,
+                mock_om_class,
+            ]:
+                instance = MagicMock()
+                instance.initialize = AsyncMock()
+                instance.start = AsyncMock()
+                instance.connect = AsyncMock()
+                instance.stop = AsyncMock()
+                instance.close = AsyncMock()
+                instance.get_account = AsyncMock(return_value=MagicMock(equity=100000))
+                instance.reconstruct_from_broker = AsyncMock()
+                instance.reconstruct_state = AsyncMock()
+                instance.update_component = MagicMock()
+                instance.send_warning_alert = AsyncMock()
+                instance.set_order_manager = MagicMock()
+                cls.return_value = instance
+
+            # Setup scanner to return 3 symbols
+            mock_scanner = MagicMock()
+            mock_scanner.start = AsyncMock()
+            mock_scanner.stop = AsyncMock()
+            mock_scanner.scan = AsyncMock(
+                return_value=[
+                    WatchlistItem(symbol="SCANNER1"),
+                    WatchlistItem(symbol="SCANNER2"),
+                    WatchlistItem(symbol="SCANNER3"),
+                ]
+            )
+            mock_scanner_class.return_value = mock_scanner
+
+            # Setup data service mock that captures symbols passed to start()
+            mock_data = MagicMock()
+
+            async def capture_start(symbols, timeframes):
+                nonlocal warmup_symbols_received
+                warmup_symbols_received = list(symbols) if symbols else []
+
+            mock_data.start = AsyncMock(side_effect=capture_start)
+            mock_data.stop = AsyncMock()
+            mock_data_class.return_value = mock_data
+
+            # Setup strategy mock
+            orb_strategy = MagicMock()
+            orb_strategy.set_watchlist = MagicMock()
+            orb_strategy.strategy_id = "orb_breakout"
+            orb_strategy.is_active = True
+            orb_strategy.config = MagicMock()
+            mock_orb_class.return_value = orb_strategy
+
+            mock_orchestrator = MagicMock()
+            mock_orchestrator.start = AsyncMock()
+            mock_orchestrator.stop = AsyncMock()
+            mock_orchestrator.run_pre_market = AsyncMock()
+            mock_orchestrator.register_strategy = MagicMock()
+            mock_orchestrator.get_strategies = MagicMock(
+                return_value={"orb_breakout": orb_strategy}
+            )
+            mock_orchestrator_class.return_value = mock_orchestrator
+
+            with contextlib.suppress(Exception):
+                await system.start()
+
+            # Verify warm-up received scanner symbols (UM disabled)
+            assert len(warmup_symbols_received) == 3
+            assert set(warmup_symbols_received) == {"SCANNER1", "SCANNER2", "SCANNER3"}

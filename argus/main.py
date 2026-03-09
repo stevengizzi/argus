@@ -317,6 +317,9 @@ class ArgusSystem:
             and config.system.broker_source != BrokerSource.SIMULATED
         )
 
+        # Track symbols for warm-up (may be scanner symbols or viable symbols)
+        warmup_symbols: list[str] = symbols
+
         if use_universe_manager:
             logger.info("[7.5/12] Building Universe Manager...")
             try:
@@ -335,26 +338,44 @@ class ArgusSystem:
                     scanner=self._scanner,
                 )
 
-                # Build viable universe with scanner symbols as fallback
-                viable_symbols = await self._universe_manager.build_viable_universe(symbols)
-                if not viable_symbols:
-                    # FMP failed or filtered everything — use scanner symbols directly
-                    logger.warning("FMP-based filtering failed, using scanner fallback")
-                    viable_symbols = await self._universe_manager.build_viable_universe_fallback(
-                        symbols
-                    )
+                # Fetch full stock list from FMP (Sprint 23.3 — wide pipe)
+                all_symbols = await fmp_client.fetch_stock_list()
 
-                logger.info(
-                    "Universe Manager built: %d viable symbols from %d scanned",
-                    len(viable_symbols),
-                    len(symbols),
-                )
+                # Fall back to scanner symbols if stock-list fetch failed
+                if not all_symbols:
+                    logger.warning(
+                        "FMP stock-list fetch failed — falling back to scanner symbols "
+                        "(%d symbols). Universe Manager will operate with reduced universe.",
+                        len(symbols),
+                    )
+                    all_symbols = symbols
+
+                # Build viable universe from full stock list (or fallback)
+                viable_symbols = await self._universe_manager.build_viable_universe(all_symbols)
+
+                # Handle empty viable set (all symbols filtered out)
+                if not viable_symbols:
+                    logger.error(
+                        "Viable universe is empty after filtering %d symbols. "
+                        "Falling back to scanner symbols for warm-up.",
+                        len(all_symbols),
+                    )
+                    warmup_symbols = symbols
+                else:
+                    # Use viable symbols for warm-up
+                    warmup_symbols = list(viable_symbols)
+                    logger.info(
+                        "Universe Manager built: %d viable symbols from %d total",
+                        len(viable_symbols),
+                        len(all_symbols),
+                    )
 
             except Exception as e:
                 logger.error("Failed to build Universe Manager: %s. Falling back to scanner.", e)
                 # Graceful degradation — continue without Universe Manager
                 self._universe_manager = None
                 use_universe_manager = False
+                warmup_symbols = symbols
         else:
             logger.info("Universe Manager disabled or simulated broker mode")
 
@@ -534,10 +555,12 @@ class ArgusSystem:
                     self._universe_manager.viable_count,
                 )
 
-        if symbols and not self._dry_run:
-            await self._data_service.start(symbols=symbols, timeframes=["1m"])
+        # Start data service with appropriate symbols for warm-up
+        # When UM enabled: uses viable symbols; when disabled: uses scanner symbols
+        if warmup_symbols and not self._dry_run:
+            await self._data_service.start(symbols=warmup_symbols, timeframes=["1m"])
             self._health_monitor.update_component(
-                "data_service", ComponentStatus.HEALTHY, message=f"Streaming {len(symbols)} symbols"
+                "data_service", ComponentStatus.HEALTHY, message=f"Streaming {len(warmup_symbols)} symbols"
             )
         elif self._dry_run:
             logger.info("DRY RUN: Data streams not started.")
