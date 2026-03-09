@@ -82,7 +82,7 @@ ai:
 # Broad-universe monitoring with strategy-specific filtering
 # Set enabled: true to activate. Requires FMP_API_KEY.
 universe_manager:
-  enabled: false          # Start disabled — operator activates when ready
+  enabled: true          # Start disabled — operator activates when ready
   min_price: 5.0          # System-level: exclude penny stocks
   max_price: 10000.0      # System-level: exclude extreme price outliers
   min_avg_volume: 100000  # System-level: minimum average daily volume
