@@ -5,9 +5,9 @@ the Universe Manager. Provides company sector, market cap, float shares,
 and other reference data needed for position sizing and filtering.
 
 FMP API Endpoints Used:
-- Batch Company Profile: GET /api/v3/profile/{sym1,sym2,...}?apikey=KEY
+- Company Profile: GET /stable/profile?symbol={sym}&apikey=KEY
   Returns: symbol, sector, industry, mktCap, exchangeShortName, price, volAvg
-- Share Float: GET /api/v4/shares_float?symbol={sym}&apikey=KEY
+- Share Float: GET /stable/shares-float?symbol={sym}&apikey=KEY
   Returns: floatShares
 
 Sprint 23: NLP Catalyst + Universe Manager
@@ -72,7 +72,7 @@ class FMPReferenceConfig:
         request_timeout_seconds: HTTP request timeout in seconds.
     """
 
-    base_url: str = "https://financialmodelingprep.com/api/v3"
+    base_url: str = "https://financialmodelingprep.com/stable"
     api_key_env_var: str = "FMP_API_KEY"
     batch_size: int = 50
     cache_ttl_hours: int = 24
@@ -213,7 +213,10 @@ class FMPReferenceClient:
     async def _fetch_batch(
         self, session: aiohttp.ClientSession, symbols: list[str]
     ) -> dict[str, SymbolReferenceData]:
-        """Fetch a single batch of company profiles.
+        """Fetch a batch of company profiles (per-symbol on stable API).
+
+        The FMP stable API does not support comma-separated batch profile
+        requests on Starter plans, so symbols are fetched individually.
 
         Args:
             session: aiohttp client session.
@@ -221,49 +224,52 @@ class FMPReferenceClient:
 
         Returns:
             Dictionary mapping symbol to SymbolReferenceData.
-
-        Raises:
-            aiohttp.ClientError: On network or API errors after retries.
         """
-        symbol_str = ",".join(symbols)
-        url = f"{self._config.base_url}/profile/{symbol_str}"
-        params = {"apikey": self._api_key}
+        results: dict[str, SymbolReferenceData] = {}
 
-        last_error: Exception | None = None
+        for symbol in symbols:
+            last_error: Exception | None = None
 
-        for attempt in range(self._config.max_retries):
-            try:
-                async with session.get(url, params=params) as response:
-                    logger.debug(
-                        "FMP batch profile request: %d symbols, status=%d",
-                        len(symbols),
-                        response.status,
-                    )
-                    response.raise_for_status()
-                    data = await response.json()
+            for attempt in range(self._config.max_retries):
+                try:
+                    url = f"{self._config.base_url}/profile"
+                    params = {"symbol": symbol, "apikey": self._api_key}
 
-                    if not isinstance(data, list):
-                        logger.warning("Unexpected FMP response format: %s", type(data))
-                        return {}
+                    async with session.get(url, params=params) as response:
+                        logger.debug(
+                            "FMP profile request: %s, status=%d",
+                            symbol,
+                            response.status,
+                        )
+                        response.raise_for_status()
+                        data = await response.json()
 
-                    return self._parse_profile_response(data)
+                        if isinstance(data, list) and data:
+                            parsed = self._parse_profile_response(data)
+                            results.update(parsed)
+                        break  # Success, move to next symbol
 
-            except aiohttp.ClientError as e:
-                last_error = e
-                if attempt < self._config.max_retries - 1:
-                    wait_time = 2**attempt  # Exponential backoff
-                    logger.debug(
-                        "FMP request failed (attempt %d/%d), retrying in %ds: %s",
-                        attempt + 1,
-                        self._config.max_retries,
-                        wait_time,
-                        e,
-                    )
-                    await asyncio.sleep(wait_time)
+                except aiohttp.ClientError as e:
+                    last_error = e
+                    if attempt < self._config.max_retries - 1:
+                        wait_time = 2**attempt
+                        logger.debug(
+                            "FMP request for %s failed (attempt %d/%d), retrying in %ds: %s",
+                            symbol,
+                            attempt + 1,
+                            self._config.max_retries,
+                            wait_time,
+                            e,
+                        )
+                        await asyncio.sleep(wait_time)
 
-        if last_error:
-            raise last_error
-        return {}
+            if last_error and symbol not in results:
+                logger.debug("Failed to fetch profile for %s: %s", symbol, last_error)
+
+            # Rate limiting between individual requests
+            await asyncio.sleep(0.25)
+
+        return results
 
     def _parse_profile_response(
         self, data: list[dict]
@@ -284,17 +290,17 @@ class FMPReferenceClient:
                 if not symbol:
                     continue
 
-                exchange = item.get("exchangeShortName")
+                exchange = item.get("exchange")
                 is_otc = self._is_otc_exchange(exchange)
 
                 results[symbol] = SymbolReferenceData(
                     symbol=symbol,
                     sector=item.get("sector") or None,
                     industry=item.get("industry") or None,
-                    market_cap=self._safe_float(item.get("mktCap")),
+                    market_cap=self._safe_float(item.get("marketCap")),
                     exchange=exchange,
                     prev_close=self._safe_float(item.get("price")),
-                    avg_volume=self._safe_float(item.get("volAvg")),
+                    avg_volume=self._safe_float(item.get("averageVolume")),
                     is_otc=is_otc,
                 )
 
@@ -389,7 +395,7 @@ class FMPReferenceClient:
             Float shares or None if not available.
         """
         # v4 API endpoint for share float
-        url = "https://financialmodelingprep.com/api/v4/shares_float"
+        url = f"{self._config.base_url}/shares-float"
         params = {"symbol": symbol, "apikey": self._api_key}
 
         async with session.get(url, params=params) as response:
