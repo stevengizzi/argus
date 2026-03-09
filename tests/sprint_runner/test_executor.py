@@ -196,6 +196,84 @@ class TestClaudeCodeExecutor:
         assert result.compaction_likely is True
         assert result.output_size_bytes == 2000
 
+    @pytest.mark.asyncio
+    async def test_session_timeout_enforced(self) -> None:
+        """Verify timeout config is read and applied to subprocess.
+
+        When session_timeout_seconds > 0, asyncio.wait_for should be called
+        with the configured timeout value.
+        """
+        config = ExecutionConfig(
+            mode="autonomous",
+            session_timeout_seconds=1800,  # 30 minutes
+            compaction_threshold_bytes=100000,
+        )
+        executor = ClaudeCodeExecutor(config)
+        executor._cli_verified = True
+
+        mock_process = MagicMock()
+        mock_process.returncode = 0
+        mock_process.communicate = AsyncMock(return_value=(b"output", b""))
+
+        with patch("scripts.sprint_runner.executor.asyncio.create_subprocess_exec") as mock_exec:
+            with patch("scripts.sprint_runner.executor.asyncio.wait_for") as mock_wait_for:
+                mock_exec.return_value = mock_process
+                # wait_for should return the communicate result
+                mock_wait_for.return_value = (b"output", b"")
+
+                await executor.run_session("test prompt")
+
+                # Verify wait_for was called with the configured timeout
+                mock_wait_for.assert_called_once()
+                call_args = mock_wait_for.call_args
+                assert call_args.kwargs.get("timeout") == 1800
+
+    @pytest.mark.asyncio
+    async def test_autonomous_mode_permission_handling(self) -> None:
+        """Verify --dangerously-skip-permissions flag is applied in autonomous mode.
+
+        In autonomous mode, the flag should be present since nobody is there to
+        approve permission prompts interactively. In human-in-the-loop mode, the
+        flag should NOT be present.
+        """
+        # Test autonomous mode - should include skip-permissions flag
+        autonomous_config = ExecutionConfig(
+            mode="autonomous",
+            session_timeout_seconds=0,
+            compaction_threshold_bytes=100000,
+        )
+        autonomous_executor = ClaudeCodeExecutor(autonomous_config)
+        autonomous_executor._cli_verified = True
+
+        mock_process = MagicMock()
+        mock_process.returncode = 0
+        mock_process.communicate = AsyncMock(return_value=(b"output", b""))
+
+        with patch("scripts.sprint_runner.executor.asyncio.create_subprocess_exec") as mock_exec:
+            mock_exec.return_value = mock_process
+            await autonomous_executor.run_session("test prompt")
+
+            # Verify create_subprocess_exec was called with skip-permissions flag
+            call_args = mock_exec.call_args[0]  # positional args
+            assert "--dangerously-skip-permissions" in call_args
+
+        # Test human-in-the-loop mode - should NOT include skip-permissions flag
+        hitl_config = ExecutionConfig(
+            mode="human-in-the-loop",
+            session_timeout_seconds=0,
+            compaction_threshold_bytes=100000,
+        )
+        hitl_executor = ClaudeCodeExecutor(hitl_config)
+        hitl_executor._cli_verified = True
+
+        with patch("scripts.sprint_runner.executor.asyncio.create_subprocess_exec") as mock_exec:
+            mock_exec.return_value = mock_process
+            await hitl_executor.run_session("test prompt")
+
+            # Verify create_subprocess_exec was called WITHOUT skip-permissions flag
+            call_args = mock_exec.call_args[0]  # positional args
+            assert "--dangerously-skip-permissions" not in call_args
+
 
 # ---------------------------------------------------------------------------
 # Structured Extraction Tests

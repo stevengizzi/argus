@@ -23,7 +23,7 @@ execution:
   mode: "autonomous"
   max_retries: 2
   retry_delay_seconds: 30
-  session_timeout_seconds: 0
+  session_timeout_seconds: 1800  # 30 minutes — prevents indefinite hangs on permission prompts
   enable_agent_teams: false
   model_override: null
   test_count_tolerance: 0

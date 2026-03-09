@@ -272,12 +272,16 @@ class ClaudeCodeExecutor:
         start_time = time.monotonic()
 
         try:
+            # Build CLI args list
+            # In autonomous mode, skip permission prompts since nobody is present to approve.
+            # In human-in-the-loop mode, allow normal permission prompts for interactive approval.
+            cli_args = ["claude", "--print", "--output-format", "text"]
+            if self.config.mode == "autonomous":
+                cli_args.append("--dangerously-skip-permissions")
+            cli_args.append(prompt)
+
             proc = await asyncio.create_subprocess_exec(
-                "claude",
-                "--print",
-                "--output-format",
-                "text",
-                prompt,
+                *cli_args,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
             )
