@@ -16,6 +16,7 @@ from argus.api.routes.dashboard import router as dashboard_router
 from argus.api.routes.debrief_search import router as debrief_search_router
 from argus.api.routes.documents import router as documents_router
 from argus.api.routes.health import router as health_router
+from argus.api.routes.intelligence import router as intelligence_router
 from argus.api.routes.journal import router as journal_router
 from argus.api.routes.market import router as market_router
 from argus.api.routes.orchestrator import router as orchestrator_router
@@ -51,3 +52,4 @@ api_router.include_router(journal_router, prefix="/debrief/journal", tags=["debr
 api_router.include_router(debrief_search_router, prefix="/debrief", tags=["debrief"])
 api_router.include_router(ai_router, prefix="/ai", tags=["ai"])
 api_router.include_router(universe_router, prefix="/universe", tags=["universe"])
+api_router.include_router(intelligence_router, tags=["intelligence"])

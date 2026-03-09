@@ -34,6 +34,8 @@ if TYPE_CHECKING:
     from argus.data.universe_manager import UniverseManager
     from argus.execution.broker import Broker
     from argus.execution.order_manager import OrderManager
+    from argus.intelligence.briefing import BriefingGenerator
+    from argus.intelligence.storage import CatalystStorage
     from argus.strategies.base_strategy import BaseStrategy
 
 
@@ -69,6 +71,8 @@ class AppState:
         ai_summary_generator: AI summary and insight generator.
         ai_cache: AI response cache.
         universe_manager: Universe Manager for viable universe and routing.
+        catalyst_storage: Storage for catalyst events and briefs.
+        briefing_generator: Pre-market brief generator.
     """
 
     event_bus: EventBus
@@ -95,6 +99,8 @@ class AppState:
     ai_summary_generator: DailySummaryGenerator | None = None
     ai_cache: ResponseCache | None = None
     universe_manager: UniverseManager | None = None
+    catalyst_storage: CatalystStorage | None = None
+    briefing_generator: BriefingGenerator | None = None
 
 
 def get_app_state(request: Request) -> AppState:
