@@ -15,6 +15,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from .config import RunnerConfig
+from .conformance import ConformanceChecker
+from .cost import CostTracker
 from .executor import (
     ClaudeCodeExecutor,
     StructuredCloseout,
@@ -39,6 +41,7 @@ from .git_ops import (
 from .lock import LockError, LockFile
 from .notifications import NotificationData, NotificationManager
 from .state import (
+    ConformanceVerdict as ConformanceVerdictEnum,
     RunPhase,
     RunState,
     RunStatus,
@@ -46,6 +49,7 @@ from .state import (
     SessionPlanStatus,
     SessionResult,
 )
+from .triage import TriageManager, TriageVerdict
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -125,6 +129,20 @@ class SprintRunner:
 
         # Notification manager
         self.notifications = NotificationManager(config.notifications)
+
+        # Triage manager
+        self.triage_manager = TriageManager(self.executor, config.triage, repo_root)
+
+        # Conformance checker
+        self.conformance_checker = ConformanceChecker(
+            self.executor, config.conformance, repo_root
+        )
+
+        # Cost tracker
+        self.cost_tracker = CostTracker(config.cost)
+
+        # Sprint directory for loading spec files
+        self.sprint_dir = Path(config.sprint.directory)
 
     @property
     def state_file(self) -> Path:
@@ -429,22 +447,32 @@ class SprintRunner:
 
         # Step 6: Verdict extraction done in _run_review
 
-        # Step 7: Decision gate
+        # Step 7: Decision gate (including triage for CONCERNS)
         self.state.current_phase = RunPhase.VERDICT_PARSE
         self.state.save(self.state_file)
 
-        decision_result = self._decision_gate(verdict, session_result)
+        decision_result = await self._decision_gate(
+            verdict, closeout, session, session_result
+        )
         if decision_result.status == RunStatus.HALTED:
             return decision_result
 
-        # Step 8: Cost check
-        cost_result = self._check_cost(session_result)
+        # Step 8: Cost check (now using CostTracker)
+        cost_result = self._check_cost(session_result, output)
         if cost_result.status == RunStatus.HALTED:
             return cost_result
 
-        # TODO: S5 — conformance check placeholder
+        # Step 9: Conformance check (after CLEAR/resolved verdict)
+        self.state.current_phase = RunPhase.CONFORMANCE_CHECK
+        self.state.save(self.state_file)
 
-        # Git commit (after CLEAR)
+        conformance_result = await self._run_conformance_check(
+            session, closeout, session_result
+        )
+        if conformance_result.status == RunStatus.HALTED:
+            return conformance_result
+
+        # Git commit (after CLEAR + CONFORMANT)
         self.state.current_phase = RunPhase.GIT_COMMIT
         self.state.save(self.state_file)
 
@@ -796,18 +824,26 @@ class SprintRunner:
         self._save_verdict_json(session.session_id, verdict)
         return verdict
 
-    def _decision_gate(
-        self, verdict: StructuredVerdict, session_result: SessionResult
+    async def _decision_gate(
+        self,
+        verdict: StructuredVerdict,
+        closeout: StructuredCloseout,
+        session: SessionPlanEntry,
+        session_result: SessionResult,
     ) -> LoopResult:
-        """Decision gate (Step 7).
+        """Decision gate (Step 7) with triage integration.
 
         Args:
             verdict: The review verdict.
+            closeout: The structured closeout.
+            session: The session entry.
             session_result: The session result.
 
         Returns:
             LoopResult (RUNNING to proceed, HALTED on escalate).
         """
+        assert self.state is not None
+
         # Automatic escalation checks
         spec_conformance = verdict.spec_conformance
         if isinstance(spec_conformance, dict):
@@ -844,53 +880,344 @@ class SprintRunner:
                 halt_reason="Review escalated",
             )
 
-        if verdict.verdict == "CONCERNS":
-            # TODO: S5 — wire triage
-            # For now, CONCERNS halts the runner
-            self._halt("Review raised concerns (triage not yet implemented)")
-            return LoopResult(
-                status=RunStatus.HALTED,
-                halt_reason="Review raised concerns (triage not yet implemented)",
-            )
+        # Check if triage is needed
+        needs_triage = False
+        triage_reason = ""
 
-        # CLEAR — proceed
-        # TODO: S5 — conformance check
+        if verdict.verdict == "CONCERNS":
+            needs_triage = True
+            triage_reason = "CONCERNS verdict"
+        elif verdict.verdict == "CLEAR":
+            # Check for scope_gaps or prior_session_bugs in closeout
+            if closeout.scope_gaps:
+                needs_triage = True
+                triage_reason = "scope_gaps in closeout"
+            elif closeout.prior_session_bugs:
+                needs_triage = True
+                triage_reason = "prior_session_bugs in closeout"
+
+        if needs_triage:
+            if not self.config.triage.enabled:
+                # Triage disabled but concerns exist — halt
+                self._halt(f"Concerns detected ({triage_reason}) but triage is disabled")
+                return LoopResult(
+                    status=RunStatus.HALTED,
+                    halt_reason=f"Concerns detected ({triage_reason}) but triage is disabled",
+                )
+
+            # Check max auto-fixes limit
+            if self.triage_manager.check_max_auto_fixes_exceeded():
+                self._halt(
+                    f"Max auto-fixes ({self.config.triage.max_auto_fixes}) exceeded"
+                )
+                return LoopResult(
+                    status=RunStatus.HALTED,
+                    halt_reason=f"Max auto-fixes exceeded",
+                )
+
+            # Run triage
+            self.state.current_phase = RunPhase.TRIAGE
+            self.state.save(self.state_file)
+            self._send_phase_transition("Triage", f"Running triage ({triage_reason})")
+
+            triage_result = await self._run_triage(
+                closeout, verdict, session, session_result
+            )
+            if triage_result.status == RunStatus.HALTED:
+                return triage_result
+
+        # CLEAR (or resolved) — proceed
         return LoopResult(status=RunStatus.RUNNING)
 
-    def _check_cost(self, session_result: SessionResult) -> LoopResult:
-        """Cost check (Step 8).
+    async def _run_triage(
+        self,
+        closeout: StructuredCloseout,
+        verdict: StructuredVerdict,
+        session: SessionPlanEntry,
+        session_result: SessionResult,
+    ) -> LoopResult:
+        """Run Tier 2.5 triage.
+
+        Args:
+            closeout: The structured closeout.
+            verdict: The review verdict.
+            session: The session entry.
+            session_result: The session result.
+
+        Returns:
+            LoopResult based on triage recommendation.
+        """
+        assert self.state is not None
+
+        # Load sprint spec files
+        sprint_spec = self._load_sprint_spec()
+        spec_by_contradiction = self._load_spec_by_contradiction()
+        session_breakdown = self._load_session_breakdown()
+
+        # Get next/dependent sessions
+        next_sessions = self._get_next_sessions(session.session_id)
+        dependent_sessions = self._get_dependent_sessions(session.session_id)
+
+        triage_verdict = await self.triage_manager.run_triage(
+            closeout=closeout.raw,
+            verdict=verdict.raw if verdict else None,
+            sprint_spec=sprint_spec,
+            spec_by_contradiction=spec_by_contradiction,
+            session_breakdown=session_breakdown,
+            sprint=self.state.sprint,
+            session=session.session_id,
+            next_sessions=next_sessions,
+            dependent_sessions=dependent_sessions,
+        )
+
+        # Save triage verdict
+        self._save_to_run_log(
+            session.session_id,
+            "triage-verdict.json",
+            json.dumps(triage_verdict.raw, indent=2),
+        )
+        session_result.triage_verdict = triage_verdict.overall_recommendation
+
+        # Route on recommendation
+        if triage_verdict.overall_recommendation == "HALT":
+            self._halt("Triage recommended HALT")
+            return LoopResult(
+                status=RunStatus.HALTED,
+                halt_reason="Triage recommended HALT",
+            )
+
+        if triage_verdict.overall_recommendation == "INSERT_FIXES_THEN_PROCEED":
+            if self.config.triage.auto_insert_fixes:
+                # Insert fix sessions
+                inserted = self.triage_manager.insert_fix_sessions(
+                    triage_verdict,
+                    self.state,
+                    session.session_id,
+                    self.sprint_dir,
+                )
+                session_result.fix_sessions_inserted = inserted
+                self.state.issues_count.fix_sessions_inserted += len(inserted)
+                self.state.save(self.state_file)
+
+                if inserted:
+                    self.warnings.append(
+                        f"Inserted fix sessions: {', '.join(inserted)}"
+                    )
+
+        # PROCEED or INSERT_FIXES_THEN_PROCEED (after insertion)
+        return LoopResult(status=RunStatus.RUNNING)
+
+    def _load_sprint_spec(self) -> str:
+        """Load sprint spec content."""
+        spec_path = self.sprint_dir / "sprint-spec.md"
+        if spec_path.exists():
+            return spec_path.read_text()
+        return "(sprint spec not found)"
+
+    def _load_spec_by_contradiction(self) -> str:
+        """Load spec-by-contradiction content."""
+        spec_path = self.sprint_dir / "spec-by-contradiction.md"
+        if spec_path.exists():
+            return spec_path.read_text()
+        return "(spec-by-contradiction not found)"
+
+    def _load_session_breakdown(self) -> str:
+        """Load session breakdown content."""
+        breakdown_path = self.sprint_dir / "session-breakdown.md"
+        if breakdown_path.exists():
+            return breakdown_path.read_text()
+        return "(session breakdown not found)"
+
+    def _get_next_sessions(self, current_session_id: str) -> list[str]:
+        """Get list of sessions after the current one."""
+        if self.state is None:
+            return []
+
+        found = False
+        next_sessions = []
+        for session in self.state.session_plan:
+            if found:
+                next_sessions.append(session.session_id)
+            if session.session_id == current_session_id:
+                found = True
+        return next_sessions
+
+    def _get_dependent_sessions(self, current_session_id: str) -> list[str]:
+        """Get list of sessions that depend on the current one."""
+        if self.state is None:
+            return []
+
+        dependent = []
+        for session in self.state.session_plan:
+            if current_session_id in session.depends_on:
+                dependent.append(session.session_id)
+        return dependent
+
+    def _check_cost(self, session_result: SessionResult, output: str) -> LoopResult:
+        """Cost check (Step 8) using CostTracker.
 
         Args:
             session_result: The session result.
+            output: The session output string.
 
         Returns:
             LoopResult (RUNNING to continue, HALTED if ceiling exceeded).
         """
         assert self.state is not None
 
-        # Estimate cost from output size (rough heuristic)
-        # ~4 chars per token, using output_per_million rate
-        output_tokens = (session_result.output_size_bytes or 0) // 4
-        cost_usd = output_tokens * self.config.cost.rates.output_per_million / 1_000_000
+        # Update cost tracking using CostTracker
+        self.cost_tracker.update(
+            session_id=self.state.current_session or "",
+            output=output,
+            run_state=self.state,
+        )
 
-        session_result.token_usage_estimate = output_tokens
-        session_result.cost_estimate_usd = cost_usd
-
-        self.state.cost.total_tokens_estimate += output_tokens
-        self.state.cost.total_cost_estimate_usd += cost_usd
-
-        if self.state.cost.total_cost_estimate_usd > self.state.cost.ceiling_usd:
-            self._halt(
-                f"Cost ceiling exceeded: ${self.state.cost.total_cost_estimate_usd:.2f} > "
-                f"${self.state.cost.ceiling_usd:.2f}"
-            )
+        # Check ceiling
+        if self.cost_tracker.check_ceiling(self.state):
             cost = self.state.cost.total_cost_estimate_usd
+            ceiling = self.state.cost.ceiling_usd
+            self._halt(f"Cost ceiling exceeded: ${cost:.2f} > ${ceiling:.2f}")
             return LoopResult(
                 status=RunStatus.HALTED,
                 halt_reason=f"Cost ceiling exceeded: ${cost:.2f}",
             )
 
         return LoopResult(status=RunStatus.RUNNING)
+
+    async def _run_conformance_check(
+        self,
+        session: SessionPlanEntry,
+        closeout: StructuredCloseout,
+        session_result: SessionResult,
+    ) -> LoopResult:
+        """Run spec conformance check (Step 9).
+
+        Args:
+            session: The session entry.
+            closeout: The structured closeout.
+            session_result: The session result.
+
+        Returns:
+            LoopResult (RUNNING to continue, HALTED on DRIFT-MAJOR).
+        """
+        assert self.state is not None
+
+        if not self.config.conformance.enabled:
+            return LoopResult(status=RunStatus.RUNNING)
+
+        self._send_phase_transition("Conformance check", "Verifying spec alignment")
+
+        # Load sprint spec files
+        sprint_spec = self._load_sprint_spec()
+        spec_by_contradiction = self._load_spec_by_contradiction()
+        session_breakdown = self._load_session_breakdown()
+
+        # Get completed sessions
+        completed_sessions = [
+            s.session_id
+            for s in self.state.session_plan
+            if s.status == SessionPlanStatus.COMPLETE
+        ]
+        completed_sessions.append(session.session_id)
+
+        # Get cumulative files
+        cumulative_created = self._get_cumulative_files_created()
+        cumulative_modified = self._get_cumulative_files_modified()
+
+        # Get cumulative diff from sprint start
+        cumulative_diff = self._get_cumulative_diff()
+
+        conformance_verdict = await self.conformance_checker.check(
+            sprint_spec=sprint_spec,
+            spec_by_contradiction=spec_by_contradiction,
+            session_breakdown=session_breakdown,
+            completed_sessions=completed_sessions,
+            cumulative_files_created=cumulative_created,
+            cumulative_files_modified=cumulative_modified,
+            cumulative_diff=cumulative_diff,
+            current_closeout=closeout.raw,
+            sprint=self.state.sprint,
+            session=session.session_id,
+        )
+
+        # Save conformance verdict
+        self._save_to_run_log(
+            session.session_id,
+            "conformance-verdict.json",
+            json.dumps(conformance_verdict.raw, indent=2),
+        )
+
+        # Map verdict to enum
+        if conformance_verdict.verdict == "CONFORMANT":
+            session_result.conformance_verdict = ConformanceVerdictEnum.CONFORMANT
+        elif conformance_verdict.verdict == "DRIFT-MINOR":
+            session_result.conformance_verdict = ConformanceVerdictEnum.DRIFT_MINOR
+            self.warnings.append(
+                f"Conformance: DRIFT-MINOR - {conformance_verdict.drift_summary}"
+            )
+        elif conformance_verdict.verdict == "DRIFT-MAJOR":
+            session_result.conformance_verdict = ConformanceVerdictEnum.DRIFT_MAJOR
+
+        # Check if should halt
+        if self.conformance_checker.should_halt(conformance_verdict):
+            self._halt(f"Conformance check: {conformance_verdict.verdict}")
+            return LoopResult(
+                status=RunStatus.HALTED,
+                halt_reason=f"Conformance check: {conformance_verdict.verdict}",
+            )
+
+        return LoopResult(status=RunStatus.RUNNING)
+
+    def _get_cumulative_files_created(self) -> list[str]:
+        """Get all files created across completed sessions."""
+        if self.state is None:
+            return []
+
+        files = []
+        for session_id, result in self.state.session_results.items():
+            # Try to load closeout for this session
+            closeout_path = self._get_session_log_dir(session_id) / "closeout-structured.json"
+            if closeout_path.exists():
+                try:
+                    data = json.loads(closeout_path.read_text())
+                    files.extend(data.get("files_created", []))
+                except (json.JSONDecodeError, OSError):
+                    pass
+        return list(set(files))
+
+    def _get_cumulative_files_modified(self) -> list[str]:
+        """Get all files modified across completed sessions."""
+        if self.state is None:
+            return []
+
+        files = []
+        for session_id, result in self.state.session_results.items():
+            # Try to load closeout for this session
+            closeout_path = self._get_session_log_dir(session_id) / "closeout-structured.json"
+            if closeout_path.exists():
+                try:
+                    data = json.loads(closeout_path.read_text())
+                    files.extend(data.get("files_modified", []))
+                except (json.JSONDecodeError, OSError):
+                    pass
+        return list(set(files))
+
+    def _get_cumulative_diff(self) -> str:
+        """Get cumulative diff from sprint start to current HEAD."""
+        if self.state is None or not self.state.git_state.sprint_start_sha:
+            return ""
+
+        from .git_ops import _run_git
+
+        result = _run_git(
+            "diff",
+            self.state.git_state.sprint_start_sha,
+            "HEAD",
+            cwd=self.repo_root,
+        )
+        if result.returncode == 0:
+            return result.stdout
+        return ""
 
     # -----------------------------------------------------------------------
     # Notification Helpers

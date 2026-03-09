@@ -10,6 +10,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from scripts.sprint_runner.config import (
+    ConformanceConfig,
     CostConfig,
     CostRates,
     ExecutionConfig,
@@ -18,6 +19,7 @@ from scripts.sprint_runner.config import (
     RunLogConfig,
     RunnerConfig,
     SprintConfig,
+    TriageConfig,
 )
 from scripts.sprint_runner.executor import ExecutionResult
 from scripts.sprint_runner.main import CLOSEOUT_PLACEHOLDER, SprintRunner
@@ -196,6 +198,9 @@ def runner_config(temp_repo: Path) -> RunnerConfig:
             ),
         ),
         run_log=RunLogConfig(base_directory=""),
+        # Disable triage and conformance for tests (no templates available)
+        triage=TriageConfig(enabled=False),
+        conformance=ConformanceConfig(enabled=False),
         protected_files=[],
     )
 
