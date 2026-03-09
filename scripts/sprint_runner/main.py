@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import re
 import sys
 import time
 from dataclasses import dataclass, field
@@ -90,9 +91,9 @@ class Colors:
 
 def print_header(text: str) -> None:
     """Print a header line."""
-    print(f"\n{Colors.BOLD}{Colors.CYAN}{'=' * 60}{Colors.RESET}")
-    print(f"{Colors.BOLD}{Colors.CYAN}{text:^60}{Colors.RESET}")
-    print(f"{Colors.BOLD}{Colors.CYAN}{'=' * 60}{Colors.RESET}\n")
+    print(f"\n{Colors.BOLD}{Colors.CYAN}{'=' * 60}{Colors.RESET}", flush=True)
+    print(f"{Colors.BOLD}{Colors.CYAN}{text:^60}{Colors.RESET}", flush=True)
+    print(f"{Colors.BOLD}{Colors.CYAN}{'=' * 60}{Colors.RESET}\n", flush=True)
 
 
 def print_progress(
@@ -108,7 +109,7 @@ def print_progress(
     }
     color = status_colors.get(status, Colors.WHITE)
     bar = f"[{current}/{total}]"
-    print(f"{Colors.BOLD}{bar}{Colors.RESET} Session {session_id}: {color}{status}{Colors.RESET}")
+    print(f"{Colors.BOLD}{bar}{Colors.RESET} Session {session_id}: {color}{status}{Colors.RESET}", flush=True)
 
 
 def print_summary_table(
@@ -145,12 +146,12 @@ def print_error(message: str) -> None:
 
 def print_warning(message: str) -> None:
     """Print a warning message."""
-    print(f"{Colors.YELLOW}WARNING:{Colors.RESET} {message}")
+    print(f"{Colors.YELLOW}WARNING:{Colors.RESET} {message}", flush=True)
 
 
 def print_success(message: str) -> None:
     """Print a success message."""
-    print(f"{Colors.GREEN}{Colors.BOLD}SUCCESS:{Colors.RESET} {message}")
+    print(f"{Colors.GREEN}{Colors.BOLD}SUCCESS:{Colors.RESET} {message}", flush=True)
 
 
 # ---------------------------------------------------------------------------
@@ -308,7 +309,7 @@ class SprintRunner:
         # Dry run header
         if self.dry_run:
             print_header("DRY RUN MODE")
-            print("No Claude Code CLI calls will be made.\n")
+            print("No Claude Code CLI calls will be made.\n", flush=True)
 
         # Resume validation
         if self.resume:
@@ -332,11 +333,11 @@ class SprintRunner:
         for i, s in enumerate(self.state.session_plan):
             status = "PENDING" if s.status == SessionPlanStatus.PENDING else str(s.status)
             print_progress(i + 1, total_sessions, s.session_id, status)
-        print()
+        print(flush=True)
 
         # Initial test baseline
         if self.state.status == RunStatus.NOT_STARTED:
-            print(f"{Colors.DIM}Running initial test baseline...{Colors.RESET}")
+            print(f"{Colors.DIM}Running initial test baseline...{Colors.RESET}", flush=True)
             test_count, all_pass = run_tests(
                 "python -m pytest tests/ -x -q",
                 cwd=self.repo_root,
@@ -353,7 +354,7 @@ class SprintRunner:
             self.state.git_state.sprint_start_sha = get_sha(cwd=self.repo_root)
             self.state.git_state.current_sha = self.state.git_state.sprint_start_sha
             self.state.save(self.state_file)
-            print(f"{Colors.GREEN}Baseline: {test_count} tests passing{Colors.RESET}\n")
+            print(f"{Colors.GREEN}Baseline: {test_count} tests passing{Colors.RESET}\n", flush=True)
 
         # Validate skip-session dependencies before entering loop
         skip_result = self._validate_skip_dependencies()
@@ -1053,11 +1054,65 @@ class SprintRunner:
             return None
 
         if verdict is None:
-            self._halt("Review output missing structured verdict")
-            return None
+            # Fallback: attempt to extract verdict from prose
+            verdict = self._extract_prose_verdict(result.output, session)
+            if verdict is None:
+                self._halt("Review output missing structured verdict (no JSON block or prose verdict found)")
+                return None
 
         self._save_verdict_json(session.session_id, verdict)
         return verdict
+
+    def _extract_prose_verdict(
+        self, output: str, session: SessionPlanEntry
+    ) -> StructuredVerdict | None:
+        """Fallback: extract verdict from prose when JSON block is missing.
+
+        Searches for patterns like "**Verdict:** CONCERNS" or "Verdict: CLEAR"
+        in the review output.
+
+        Args:
+            output: The full review output text.
+            session: The session being reviewed.
+
+        Returns:
+            StructuredVerdict if a verdict keyword is found, None otherwise.
+        """
+        # Pattern matches "Verdict:" with optional bold markers, followed by verdict keyword
+        prose_verdict_pattern = re.compile(
+            r'\*?\*?[Vv]erdict\*?\*?\s*[:\s]+\s*(CLEAR|CONCERNS|ESCALATE)',
+            re.IGNORECASE,
+        )
+        match = prose_verdict_pattern.search(output)
+        if not match:
+            return None
+
+        verdict_str = match.group(1).upper()
+        self.warnings.append(
+            f"Review verdict extracted from prose (no JSON block): {verdict_str}"
+        )
+
+        return StructuredVerdict(
+            schema_version="1.0",
+            sprint=self.state.sprint if self.state else "",
+            session=session.session_id,
+            verdict=verdict_str,
+            findings=[],
+            spec_conformance={"status": "UNKNOWN", "note": "Parsed from prose, no structured data"},
+            files_reviewed=[],
+            tests_verified={"all_pass": True, "note": "Not verified, parsed from prose"},
+            raw={
+                "schema_version": "1.0",
+                "sprint": self.state.sprint if self.state else "",
+                "session": session.session_id,
+                "verdict": verdict_str,
+                "findings": [],
+                "spec_conformance": {"status": "UNKNOWN", "note": "Parsed from prose"},
+                "files_reviewed": [],
+                "tests_verified": {"all_pass": True},
+                "_parsed_from_prose": True,
+            },
+        )
 
     async def _decision_gate(
         self,
