@@ -81,3 +81,9 @@ export {
   type CatalystItem,
   type CatalystsResponse,
 } from './useCatalysts';
+export {
+  useIntelligenceBriefing,
+  useIntelligenceBriefingHistory,
+  useGenerateIntelligenceBriefing,
+  type IntelligenceBrief,
+} from './useIntelligenceBriefings';

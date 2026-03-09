@@ -1,7 +1,8 @@
 /**
  * The Debrief page — institutional knowledge layer.
  *
- * Four sections:
+ * Five sections:
+ * - Intelligence Brief: Pre-market AI-generated intelligence briefs
  * - Briefings: Pre-market and end-of-day structured reports
  * - Research: Unified view of all project documentation
  * - Journal: Typed entries for observations, trade annotations, and notes
@@ -10,6 +11,7 @@
  * Uses SegmentedTab for section switching with Framer Motion transitions.
  *
  * Keyboard shortcuts:
+ * - 'i' → switch to Intelligence Brief tab
  * - 'b' → switch to Briefings tab
  * - 'r' → switch to Research tab
  * - 'j' → switch to Journal tab
@@ -18,6 +20,7 @@
  * - Escape → close editor/form
  *
  * Sprint 22 Session 6: Added Learning Journal section.
+ * Sprint 23.5 Session 6: Added Intelligence Brief section.
  */
 
 import { useEffect } from 'react';
@@ -30,10 +33,12 @@ import { useDebriefUI, type DebriefSection } from '../stores/debriefUI';
 import { BriefingList } from '../features/debrief/briefings';
 import { ResearchLibrary } from '../features/debrief/research';
 import { JournalList, ConversationBrowser } from '../features/debrief/journal';
+import { IntelligenceBriefView } from '../components/IntelligenceBriefView';
 import { DURATION, EASE } from '../utils/motion';
 import { useCopilotContext } from '../hooks/useCopilotContext';
 
 const SECTIONS: SegmentedTabSegment[] = [
+  { label: 'Intelligence Brief', value: 'intelligence_brief' },
   { label: 'Briefings', value: 'briefings' },
   { label: 'Research', value: 'research' },
   { label: 'Journal', value: 'journal' },
@@ -92,6 +97,9 @@ export function DebriefPage() {
       }
 
       switch (e.key.toLowerCase()) {
+        case 'i':
+          setActiveSection('intelligence_brief');
+          break;
         case 'b':
           setActiveSection('briefings');
           break;
@@ -181,6 +189,7 @@ export function DebriefPage() {
           exit="exit"
         >
           <ErrorBoundary name={activeSection}>
+            {activeSection === 'intelligence_brief' && <IntelligenceBriefView />}
             {activeSection === 'briefings' && <BriefingList />}
             {activeSection === 'research' && <ResearchLibrary />}
             {activeSection === 'journal' && <JournalList />}
