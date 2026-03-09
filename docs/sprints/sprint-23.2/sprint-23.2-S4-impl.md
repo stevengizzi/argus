@@ -3,6 +3,7 @@
 ## Pre-Flight Checks
 1. Read: `scripts/sprint_runner/main.py` (S3 — find TODO notification placeholders), `docs/protocols/notification-protocol.md` (full spec)
 2. Run: `python -m pytest tests/ -x -q` — all passing
+3. Before starting S4 work, fix ruff errors in scripts/sprint_runner/main.py: sort import block (line 7), fix 7 line-length violations, remove unused prior_result variable (line 518). Run ruff check scripts/sprint_runner/ to confirm clean.
 
 ## Objective
 Implement the notification system: ntfy.sh primary, Slack/email secondary, all 5 tiers, quiet hours, reminder escalation. Wire into the main loop's TODO placeholders.
