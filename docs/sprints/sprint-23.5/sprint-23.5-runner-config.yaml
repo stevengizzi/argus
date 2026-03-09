@@ -54,7 +54,7 @@ notifications:
     auth_token: null
   secondary: []
   quiet_hours:
-    enabled: true
+    enabled: false
     start_utc: "07:00"
     end_utc: "13:00"
   halted_reminder_minutes: 60
@@ -117,7 +117,7 @@ doc_sync:
 session_metadata:
   S1:
     title: "Foundation — Models, CatalystEvent, Config"
-    compaction_score: 14
+    compaction_score: 5
     expected_test_delta: 6
     test_command: "python -m pytest tests/intelligence/ -v"
     parallelizable: false
@@ -125,7 +125,7 @@ session_metadata:
     auto_split: null
   S2:
     title: "Data Source Clients — SEC EDGAR, FMP News, Finnhub"
-    compaction_score: 26
+    compaction_score: 9
     expected_test_delta: 18
     test_command: "python -m pytest tests/intelligence/test_sources/ -v"
     parallelizable: false
@@ -141,7 +141,7 @@ session_metadata:
           scope: "Create sources/fmp_news.py and sources/finnhub.py only"
   S3:
     title: "Classifier + Storage + Pipeline Wiring"
-    compaction_score: 27
+    compaction_score: 9
     expected_test_delta: 16
     test_command: "python -m pytest tests/intelligence/test_classifier.py tests/intelligence/test_storage.py tests/intelligence/test_pipeline.py -v"
     parallelizable: false
@@ -157,7 +157,7 @@ session_metadata:
           scope: "Create storage.py, modify __init__.py"
   S4:
     title: "API Routes + Briefing Generator"
-    compaction_score: 24
+    compaction_score: 8
     expected_test_delta: 12
     test_command: "python -m pytest tests/api/test_intelligence_routes.py tests/intelligence/test_briefing.py -v"
     parallelizable: false
@@ -173,7 +173,7 @@ session_metadata:
           scope: "Create briefing.py, add POST generate endpoint"
   S5:
     title: "Dashboard Catalyst Badges + Orchestrator Alert Panel"
-    compaction_score: 17
+    compaction_score: 6
     expected_test_delta: 10
     test_command: "cd argus/ui && npx vitest run"
     parallelizable: true
@@ -191,7 +191,7 @@ session_metadata:
           scope: "Create alert panel, modify OrchestratorPage only"
   S6:
     title: "Debrief Intelligence Brief View"
-    compaction_score: 12
+    compaction_score: 4
     expected_test_delta: 6
     test_command: "cd argus/ui && npx vitest run"
     parallelizable: true
@@ -207,7 +207,7 @@ session_metadata:
     parallelizable: false
     depends_on: ["S5", "S6"]
     has_visual_review: true
-    contingency: true
+    contingency: "Visual-review fixes — only runs if S5/S6 reviews find issues"
 
 # --------------------------------------------------------------------------
 # Protected Files (Extension: diff validation per DEC-294)
@@ -229,7 +229,7 @@ protected_files:
 # --------------------------------------------------------------------------
 forbidden_patterns:
   - pattern: "subscribe.*CatalystEvent"
-    reason: "No CatalystEvent subscribers allowed in this sprint"
+    message: "No CatalystEvent subscribers allowed in this sprint"
   - pattern: "import requests"
     scope: "argus/intelligence/"
-    reason: "Use aiohttp, not requests (async pipeline)"
+    message: "Use aiohttp, not requests (async pipeline)"
