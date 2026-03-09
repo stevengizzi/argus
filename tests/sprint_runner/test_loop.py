@@ -13,6 +13,7 @@ from scripts.sprint_runner.config import (
     ConformanceConfig,
     CostConfig,
     CostRates,
+    DocSyncConfig,
     ExecutionConfig,
     GitConfig,
     NotificationsConfig,
@@ -198,9 +199,10 @@ def runner_config(temp_repo: Path) -> RunnerConfig:
             ),
         ),
         run_log=RunLogConfig(base_directory=""),
-        # Disable triage and conformance for tests (no templates available)
+        # Disable triage, conformance, and doc_sync for tests (no templates available)
         triage=TriageConfig(enabled=False),
         conformance=ConformanceConfig(enabled=False),
+        doc_sync=DocSyncConfig(enabled=False),
         protected_files=[],
     )
 

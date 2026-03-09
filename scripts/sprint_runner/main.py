@@ -10,11 +10,13 @@ import argparse
 import asyncio
 import json
 import sys
-from dataclasses import dataclass
+import time
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
 from .config import RunnerConfig
+from .parallel import find_parallel_group, run_parallel_group
 from .conformance import ConformanceChecker
 from .cost import CostTracker
 from .executor import (
@@ -58,6 +60,97 @@ from .triage import TriageManager, TriageVerdict
 
 TEST_BASELINE_PLACEHOLDER = "{{TEST_BASELINE}}"
 CLOSEOUT_PLACEHOLDER = "[PASTE THE CLOSE-OUT REPORT HERE AFTER THE IMPLEMENTATION SESSION]"
+
+
+# ---------------------------------------------------------------------------
+# Terminal Output Helpers
+# ---------------------------------------------------------------------------
+
+
+class Colors:
+    """ANSI color codes for terminal output."""
+
+    RESET = "\033[0m"
+    BOLD = "\033[1m"
+    DIM = "\033[2m"
+
+    RED = "\033[31m"
+    GREEN = "\033[32m"
+    YELLOW = "\033[33m"
+    BLUE = "\033[34m"
+    MAGENTA = "\033[35m"
+    CYAN = "\033[36m"
+    WHITE = "\033[37m"
+
+    BG_RED = "\033[41m"
+    BG_GREEN = "\033[42m"
+    BG_YELLOW = "\033[43m"
+    BG_BLUE = "\033[44m"
+
+
+def print_header(text: str) -> None:
+    """Print a header line."""
+    print(f"\n{Colors.BOLD}{Colors.CYAN}{'=' * 60}{Colors.RESET}")
+    print(f"{Colors.BOLD}{Colors.CYAN}{text:^60}{Colors.RESET}")
+    print(f"{Colors.BOLD}{Colors.CYAN}{'=' * 60}{Colors.RESET}\n")
+
+
+def print_progress(
+    current: int, total: int, session_id: str, status: str
+) -> None:
+    """Print a progress line."""
+    status_colors = {
+        "PENDING": Colors.DIM,
+        "RUNNING": Colors.YELLOW,
+        "COMPLETE": Colors.GREEN,
+        "FAILED": Colors.RED,
+        "SKIPPED": Colors.MAGENTA,
+    }
+    color = status_colors.get(status, Colors.WHITE)
+    bar = f"[{current}/{total}]"
+    print(f"{Colors.BOLD}{bar}{Colors.RESET} Session {session_id}: {color}{status}{Colors.RESET}")
+
+
+def print_summary_table(
+    sessions: list[tuple[str, str, int | None, str | None]]
+) -> None:
+    """Print a summary table of session results.
+
+    Args:
+        sessions: List of (session_id, verdict, test_delta, duration).
+    """
+    print(f"\n{Colors.BOLD}{'Session':<12} {'Verdict':<12} {'Tests':<12} {'Duration':<12}{Colors.RESET}")
+    print("-" * 48)
+    for session_id, verdict, test_delta, duration in sessions:
+        verdict_color = {
+            "CLEAR": Colors.GREEN,
+            "CONCERNS": Colors.YELLOW,
+            "ESCALATE": Colors.RED,
+            "COMPLETE": Colors.GREEN,
+            "SKIPPED": Colors.MAGENTA,
+        }.get(verdict, Colors.WHITE)
+
+        delta_str = f"+{test_delta}" if test_delta and test_delta > 0 else str(test_delta or "-")
+        duration_str = duration or "-"
+        print(
+            f"{session_id:<12} {verdict_color}{verdict:<12}{Colors.RESET} "
+            f"{delta_str:<12} {duration_str:<12}"
+        )
+
+
+def print_error(message: str) -> None:
+    """Print an error message."""
+    print(f"{Colors.RED}{Colors.BOLD}ERROR:{Colors.RESET} {message}", file=sys.stderr)
+
+
+def print_warning(message: str) -> None:
+    """Print a warning message."""
+    print(f"{Colors.YELLOW}WARNING:{Colors.RESET} {message}")
+
+
+def print_success(message: str) -> None:
+    """Print a success message."""
+    print(f"{Colors.GREEN}{Colors.BOLD}SUCCESS:{Colors.RESET} {message}")
 
 
 # ---------------------------------------------------------------------------
@@ -212,16 +305,38 @@ class SprintRunner:
         Returns:
             LoopResult with final status and any halt reason.
         """
+        # Dry run header
+        if self.dry_run:
+            print_header("DRY RUN MODE")
+            print("No Claude Code CLI calls will be made.\n")
+
+        # Resume validation
+        if self.resume:
+            valid, error = self._validate_resume_state()
+            if not valid:
+                print_error(error)
+                return LoopResult(status=RunStatus.HALTED, halt_reason=error)
+
         # Startup sequence
         try:
             self._startup()
         except (LockError, FileValidationError) as e:
+            print_error(str(e))
             return LoopResult(status=RunStatus.HALTED, halt_reason=str(e))
 
         assert self.state is not None
 
+        # Print session plan
+        total_sessions = len(self.state.session_plan)
+        print_header(f"Sprint {self.state.sprint} - {total_sessions} Sessions")
+        for i, s in enumerate(self.state.session_plan):
+            status = "PENDING" if s.status == SessionPlanStatus.PENDING else str(s.status)
+            print_progress(i + 1, total_sessions, s.session_id, status)
+        print()
+
         # Initial test baseline
         if self.state.status == RunStatus.NOT_STARTED:
+            print(f"{Colors.DIM}Running initial test baseline...{Colors.RESET}")
             test_count, all_pass = run_tests(
                 "python -m pytest tests/ -x -q",
                 cwd=self.repo_root,
@@ -238,37 +353,105 @@ class SprintRunner:
             self.state.git_state.sprint_start_sha = get_sha(cwd=self.repo_root)
             self.state.git_state.current_sha = self.state.git_state.sprint_start_sha
             self.state.save(self.state_file)
+            print(f"{Colors.GREEN}Baseline: {test_count} tests passing{Colors.RESET}\n")
 
         sessions_completed = 0
+        processed_sessions: set[str] = set()
 
         # Session loop
-        for session in self.state.session_plan:
+        i = 0
+        while i < len(self.state.session_plan):
+            session = self.state.session_plan[i]
+
             if session.status in (SessionPlanStatus.COMPLETE, SessionPlanStatus.SKIPPED):
                 sessions_completed += 1
+                i += 1
                 continue
 
+            # Handle --from-session: skip and mark prior sessions
             if self.from_session and session.session_id != self.from_session:
                 if session.status == SessionPlanStatus.PENDING:
+                    session.status = SessionPlanStatus.SKIPPED
+                    self.state.save(self.state_file)
+                    print_progress(
+                        i + 1, total_sessions, session.session_id, "SKIPPED"
+                    )
+                    i += 1
                     continue
             elif self.from_session and session.session_id == self.from_session:
                 self.from_session = None  # Found it, process from here
 
+            # Handle --skip-session
             if session.session_id in self.skip_sessions:
                 session.status = SessionPlanStatus.SKIPPED
                 self.state.save(self.state_file)
+                print_progress(i + 1, total_sessions, session.session_id, "SKIPPED")
+                i += 1
                 continue
+
+            # Check for parallel group
+            parallel_sessions = find_parallel_group(
+                self.state.session_plan,
+                self.state.session_results,
+                self.config.session_metadata,
+            )
+
+            if parallel_sessions and len(parallel_sessions) >= 2:
+                # Filter to sessions not yet processed
+                parallel_sessions = [
+                    s for s in parallel_sessions
+                    if s.session_id not in processed_sessions
+                ]
+
+                if len(parallel_sessions) >= 2:
+                    result = await self._handle_parallel_sessions(parallel_sessions)
+
+                    if result.status == RunStatus.HALTED:
+                        self._print_run_summary()
+                        return result
+
+                    for ps in parallel_sessions:
+                        processed_sessions.add(ps.session_id)
+                        sessions_completed += 1
+
+                    # Skip to next unprocessed session
+                    while i < len(self.state.session_plan):
+                        if self.state.session_plan[i].session_id in processed_sessions:
+                            i += 1
+                        else:
+                            break
+                    continue
+
+            # Print progress
+            print_progress(i + 1, total_sessions, session.session_id, "RUNNING")
 
             # Execute session
             result = await self._execute_session(session)
+            processed_sessions.add(session.session_id)
 
             if result.status == RunStatus.HALTED:
+                # Check if auto-split applies
+                session_result = self.state.session_results.get(session.session_id)
+                if session_result and self._handle_auto_split(session, session_result):
+                    # Auto-split inserted sub-sessions, rollback and re-execute
+                    if self.state.git_state.checkpoint_sha:
+                        rollback(self.state.git_state.checkpoint_sha, cwd=self.repo_root)
+                    # Re-scan from current position (sub-sessions were inserted)
+                    total_sessions = len(self.state.session_plan)
+                    continue
+
+                print_progress(i + 1, total_sessions, session.session_id, "FAILED")
+                self._print_run_summary()
                 return result
 
+            print_progress(i + 1, total_sessions, session.session_id, "COMPLETE")
             sessions_completed += 1
+            i += 1
 
             # Check --stop-after
             if self.stop_after and session.session_id == self.stop_after:
                 self._halt("Manual pause requested")
+                self._print_run_summary()
                 return LoopResult(
                     status=RunStatus.HALTED,
                     halt_reason="Manual pause requested",
@@ -279,12 +462,16 @@ class SprintRunner:
             # Check --pause
             if self.pause:
                 self._halt("Manual pause requested")
+                self._print_run_summary()
                 return LoopResult(
                     status=RunStatus.HALTED,
                     halt_reason="Manual pause requested",
                     sessions_completed=sessions_completed,
                     warnings=self.warnings if self.warnings else None,
                 )
+
+        # Post-loop: run doc sync
+        await self._run_doc_sync()
 
         # Post-loop: set final status
         if self.warnings:
@@ -299,6 +486,10 @@ class SprintRunner:
 
         # Send sprint completion notification
         self._send_completed_notification(sessions_completed)
+
+        # Print summary
+        self._print_run_summary()
+        print_success(f"Sprint completed with {sessions_completed} sessions")
 
         return LoopResult(
             status=self.state.status,
@@ -1373,6 +1564,385 @@ class SprintRunner:
             return f"{minutes}m"
         except Exception:
             return "unknown"
+
+    # -----------------------------------------------------------------------
+    # Auto-Split Helpers
+    # -----------------------------------------------------------------------
+
+    def _handle_auto_split(
+        self, session: SessionPlanEntry, session_result: SessionResult
+    ) -> bool:
+        """Handle auto-split on compaction detection.
+
+        If compaction_likely is True AND session_metadata has auto_split config,
+        insert sub-sessions into the session plan and return True to indicate
+        the session should be re-executed from the first sub-session.
+
+        Args:
+            session: The session that triggered compaction.
+            session_result: The session result with compaction info.
+
+        Returns:
+            True if auto-split was applied and sub-sessions inserted.
+        """
+        if not session_result.compaction_likely:
+            return False
+
+        if self.config.session_metadata is None:
+            return False
+
+        meta = self.config.session_metadata.get(session.session_id)
+        if meta is None or meta.auto_split is None:
+            return False
+
+        auto_split = meta.auto_split
+        if not auto_split.splits:
+            return False
+
+        # Insert sub-sessions
+        assert self.state is not None
+        inserted_ids = self._insert_auto_split_sessions(
+            session, auto_split.splits
+        )
+
+        if inserted_ids:
+            self.warnings.append(
+                f"Auto-split triggered for {session.session_id}: "
+                f"inserted {', '.join(inserted_ids)}"
+            )
+            return True
+
+        return False
+
+    def _insert_auto_split_sessions(
+        self, parent_session: SessionPlanEntry, splits: list
+    ) -> list[str]:
+        """Insert auto-split sub-sessions into the session plan.
+
+        Args:
+            parent_session: The parent session being split.
+            splits: List of SplitDef with id, title, scope.
+
+        Returns:
+            List of inserted session IDs.
+        """
+        assert self.state is not None
+
+        inserted_ids: list[str] = []
+
+        # Find insertion point (after parent session)
+        insert_idx = -1
+        for i, s in enumerate(self.state.session_plan):
+            if s.session_id == parent_session.session_id:
+                insert_idx = i + 1
+                break
+
+        if insert_idx < 0:
+            return inserted_ids
+
+        # Mark parent as SKIPPED (replaced by sub-sessions)
+        parent_session.status = SessionPlanStatus.SKIPPED
+
+        # Create and insert sub-sessions
+        for split_def in splits:
+            sub_session_id = f"{parent_session.session_id}-{split_def.id}"
+
+            # Generate prompt file path
+            prompt_file = str(
+                self.sprint_dir / f"sprint-{self.state.sprint}-{sub_session_id}-impl.md"
+            )
+            review_file = str(
+                self.sprint_dir / f"sprint-{self.state.sprint}-{sub_session_id}-review.md"
+            )
+
+            sub_session = SessionPlanEntry(
+                session_id=sub_session_id,
+                title=split_def.title,
+                status=SessionPlanStatus.INSERTED,
+                depends_on=[parent_session.session_id] if inserted_ids else [],
+                prompt_file=prompt_file,
+                review_prompt_file=review_file,
+                inserted_by=parent_session.session_id,
+            )
+
+            self.state.session_plan.insert(insert_idx, sub_session)
+            insert_idx += 1
+            inserted_ids.append(sub_session_id)
+
+        self.state.save(self.state_file)
+        return inserted_ids
+
+    # -----------------------------------------------------------------------
+    # Doc Sync Automation
+    # -----------------------------------------------------------------------
+
+    async def _run_doc_sync(self) -> bool:
+        """Run doc sync automation after all sessions complete.
+
+        Loads doc-sync prompt template, builds prompt with accumulated issues
+        and doc update checklist, invokes Claude Code, and saves output.
+        Does NOT auto-commit - logs notification for developer review.
+
+        Returns:
+            True if doc sync ran successfully.
+        """
+        if not self.config.doc_sync.enabled:
+            return True
+
+        if self.state is None:
+            return False
+
+        print_progress(
+            len(self.state.session_plan),
+            len(self.state.session_plan),
+            "DOC-SYNC",
+            "RUNNING",
+        )
+
+        # Load doc-sync prompt template
+        template_path = Path(self.config.doc_sync.prompt_template)
+        if not template_path.exists():
+            print_warning(f"Doc-sync template not found: {template_path}")
+            return False
+
+        template = template_path.read_text()
+
+        # Build prompt with accumulated issues
+        accumulated_issues = self._gather_accumulated_issues()
+        target_docs = "\n".join(f"- {d}" for d in self.config.doc_sync.target_documents)
+
+        prompt = template.replace("{{ACCUMULATED_ISSUES}}", accumulated_issues)
+        prompt = prompt.replace("{{TARGET_DOCUMENTS}}", target_docs)
+        prompt = prompt.replace("{{SPRINT}}", self.state.sprint)
+
+        # Set phase
+        self.state.current_phase = RunPhase.DOC_SYNC
+        self.state.save(self.state_file)
+
+        # Run doc sync session
+        result = await self.executor.run_session(prompt, dry_run=self.dry_run)
+
+        # Save output
+        log_dir = self.run_log_base / "run-log" / "doc-sync"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        (log_dir / "doc-sync-output.md").write_text(result.output)
+
+        print_warning(
+            "Doc-sync output ready for review. "
+            f"See {log_dir / 'doc-sync-output.md'}"
+        )
+
+        return True
+
+    def _gather_accumulated_issues(self) -> str:
+        """Gather accumulated issues from all sessions for doc-sync.
+
+        Returns:
+            Formatted string of accumulated issues.
+        """
+        if self.state is None:
+            return ""
+
+        issues: list[str] = []
+
+        # Collect scope gaps
+        for session_id in self.state.session_results:
+            closeout_path = self._get_session_log_dir(session_id) / "closeout-structured.json"
+            if closeout_path.exists():
+                try:
+                    data = json.loads(closeout_path.read_text())
+                    if data.get("scope_gaps"):
+                        for gap in data["scope_gaps"]:
+                            issues.append(f"[{session_id}] SCOPE_GAP: {gap}")
+                    if data.get("dec_entries_needed"):
+                        for dec in data["dec_entries_needed"]:
+                            issues.append(f"[{session_id}] DEC_ENTRY: {dec}")
+                    if data.get("doc_impacts"):
+                        for doc in data["doc_impacts"]:
+                            issues.append(f"[{session_id}] DOC_IMPACT: {doc}")
+                except (json.JSONDecodeError, OSError):
+                    pass
+
+        # Add warnings
+        for warning in self.warnings:
+            issues.append(f"[WARNING] {warning}")
+
+        if not issues:
+            return "(No accumulated issues)"
+
+        return "\n".join(issues)
+
+    # -----------------------------------------------------------------------
+    # Summary Output
+    # -----------------------------------------------------------------------
+
+    def _print_run_summary(self) -> None:
+        """Print a summary table of the run results."""
+        if self.state is None:
+            return
+
+        sessions_data: list[tuple[str, str, int | None, str | None]] = []
+
+        for session in self.state.session_plan:
+            result = self.state.session_results.get(session.session_id)
+
+            if session.status == SessionPlanStatus.SKIPPED:
+                verdict = "SKIPPED"
+            elif result and result.review_verdict:
+                verdict = str(result.review_verdict)
+            elif session.status == SessionPlanStatus.COMPLETE:
+                verdict = "COMPLETE"
+            else:
+                verdict = str(session.status)
+
+            test_delta = None
+            if result and result.tests_before is not None and result.tests_after is not None:
+                test_delta = result.tests_after - result.tests_before
+
+            duration_str = None
+            if result and result.duration_seconds:
+                mins = result.duration_seconds // 60
+                secs = result.duration_seconds % 60
+                duration_str = f"{mins}m {secs}s"
+
+            sessions_data.append((session.session_id, verdict, test_delta, duration_str))
+
+        print_header(f"Sprint {self.state.sprint} Summary")
+        print_summary_table(sessions_data)
+
+        # Overall stats
+        total_tests_delta = self.state.test_baseline.current - self.state.test_baseline.initial
+        total_cost = self.state.cost.total_cost_estimate_usd
+        print(f"\n{Colors.BOLD}Overall:{Colors.RESET}")
+        print(f"  Tests: {self.state.test_baseline.initial} -> {self.state.test_baseline.current} (+{total_tests_delta})")
+        print(f"  Cost: ${total_cost:.2f} / ${self.state.cost.ceiling_usd:.2f}")
+        print(f"  Status: {self.state.status}")
+
+        if self.warnings:
+            print(f"\n{Colors.YELLOW}Warnings ({len(self.warnings)}):{Colors.RESET}")
+            for w in self.warnings[:5]:  # Show first 5
+                print(f"  - {w}")
+            if len(self.warnings) > 5:
+                print(f"  ... and {len(self.warnings) - 5} more")
+
+    # -----------------------------------------------------------------------
+    # Parallel Execution Helpers
+    # -----------------------------------------------------------------------
+
+    async def _handle_parallel_sessions(
+        self, parallel_sessions: list[SessionPlanEntry]
+    ) -> LoopResult:
+        """Execute parallel sessions as a group.
+
+        Args:
+            parallel_sessions: Sessions to run in parallel.
+
+        Returns:
+            LoopResult with combined status.
+        """
+        session_ids = [s.session_id for s in parallel_sessions]
+        print(
+            f"{Colors.CYAN}Running {len(parallel_sessions)} sessions in parallel: "
+            f"{', '.join(session_ids)}{Colors.RESET}"
+        )
+
+        result = await run_parallel_group(parallel_sessions, self)
+
+        if not result.all_success:
+            self._halt(result.halt_reason or "Parallel session failed")
+            return LoopResult(
+                status=RunStatus.HALTED,
+                halt_reason=result.halt_reason,
+            )
+
+        return LoopResult(
+            status=RunStatus.RUNNING,
+            sessions_completed=len(parallel_sessions),
+        )
+
+    # -----------------------------------------------------------------------
+    # Resume Logic
+    # -----------------------------------------------------------------------
+
+    def _validate_resume_state(self) -> tuple[bool, str]:
+        """Validate state for resume operation.
+
+        Returns:
+            Tuple of (valid, error_message). If valid, error_message is empty.
+        """
+        if not self.state_file.exists():
+            return False, "No run-state.json found. Cannot resume."
+
+        try:
+            state = RunState.load(self.state_file)
+        except Exception as e:
+            return False, f"Failed to load run-state.json: {e}"
+
+        # Validate schema version
+        if state.schema_version != "1.0":
+            return False, f"Unsupported schema version: {state.schema_version}"
+
+        # Validate git SHA matches
+        current_sha = get_sha(cwd=self.repo_root)
+        if state.git_state.current_sha and current_sha != state.git_state.current_sha:
+            return False, (
+                f"Git SHA mismatch. State expects {state.git_state.current_sha}, "
+                f"but current HEAD is {current_sha}. "
+                "Resolve git state before resuming."
+            )
+
+        # Validate test baseline within tolerance
+        test_count, all_pass = run_tests(
+            "python -m pytest tests/ -x -q", cwd=self.repo_root
+        )
+        tolerance = self.config.execution.test_count_tolerance
+        if abs(test_count - state.test_baseline.current) > tolerance:
+            return False, (
+                f"Test count mismatch. State expects {state.test_baseline.current}, "
+                f"but found {test_count}. Delta exceeds tolerance ({tolerance})."
+            )
+
+        if not all_pass:
+            return False, "Test suite has failures. Fix before resuming."
+
+        return True, ""
+
+    def _determine_resume_point(self) -> tuple[str | None, RunPhase | None]:
+        """Determine where to resume from based on current state.
+
+        Returns:
+            Tuple of (session_id, phase) to resume from.
+            If None, None, start from beginning.
+        """
+        if self.state is None:
+            return None, None
+
+        current_session = self.state.current_session
+        current_phase = self.state.current_phase
+
+        if not current_session:
+            return None, None
+
+        # Check if implementation output exists
+        impl_output_path = (
+            self._get_session_log_dir(current_session) / "implementation-output.md"
+        )
+
+        if current_phase == RunPhase.IMPLEMENTATION:
+            # Rollback and re-run full session
+            return current_session, RunPhase.PRE_FLIGHT
+
+        if current_phase in (RunPhase.REVIEW, RunPhase.VERDICT_PARSE):
+            # Check if implementation output exists
+            if impl_output_path.exists():
+                # Resume from review
+                return current_session, RunPhase.REVIEW
+            else:
+                # Re-run from implementation
+                return current_session, RunPhase.PRE_FLIGHT
+
+        # For later phases, re-run the session
+        return current_session, RunPhase.PRE_FLIGHT
 
 
 # ---------------------------------------------------------------------------
