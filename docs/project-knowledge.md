@@ -1,6 +1,6 @@
 # ARGUS — Project Knowledge (Claude Context)
 
-> *Tier A operational context for Claude Code and Claude.ai. Last updated: March 10, 2026 (Sprint 23.3 doc sync).*
+> *Tier A operational context for Claude Code and Claude.ai. Last updated: March 10, 2026 (Sprint 23.5 doc sync).*
 > *Full decision rationale: `docs/decision-log.md` | Sprint details: `docs/sprint-history.md` | DEC index: `docs/dec-index.md`*
 
 ---
@@ -11,10 +11,10 @@ ARGUS is a fully automated, AI-enhanced multi-strategy day trading system for US
 
 ## Current State
 
-**Tests:** 2,302 pytest + 392 Vitest
-**Sprints completed:** 1 through 23.3 (23 full sprints + sub-sprints + Universe Manager + Autonomous Sprint Runner + Wide Pipe)
+**Tests:** 2,396 pytest + 435 Vitest
+**Sprints completed:** 1 through 23.5 (23 full sprints + sub-sprints + Universe Manager + Autonomous Sprint Runner + Wide Pipe + NLP Catalyst)
 **Active sprint:** None (between sprints)
-**Next sprint:** 23.5 (NLP Catalyst Pipeline)
+**Next sprint:** 24 (Setup Quality Engine + Dynamic Sizer)
 **GitHub:** `https://github.com/stevengizzi/argus.git` (public)
 
 ### Sprint History (Summary)
@@ -50,12 +50,13 @@ ARGUS is a fully automated, AI-enhanced multi-strategy day trading system for US
 | 23.1 | Autonomous Runner Protocol Integration | 2101+392V | Mar 9 | DEC-278–297 |
 | 23.2 | Autonomous Sprint Runner Implementation | 2289+392V | Mar 9 | DEC-278–297 (implemented) |
 | 23.3 | Impromptu: Wide Pipe + Runner Perms | 2302+392V | Mar 9–10 | DEC-298–299 |
+| 23.5 | NLP Catalyst Pipeline | 2396+435V | Mar 10 | DEC-300–307 |
 
 *Full sprint scopes and session details: `docs/sprint-history.md`*
 
 ### Build Track Queue
 
-21.6 (Backtest Re-Validation, parallel) → 23.5 (NLP Catalyst Pipeline, DEC-164) → 24 (Setup Quality Engine + Dynamic Sizer) → 25 (Red-to-Green + Pattern Library Foundation) → 26 (Pattern Expansion I) → 27 (Short Selling + Parabolic Short + Pattern Expansion II) → 28 (Learning Loop V1) → 29–31 (BacktestEngine, Sweep Infrastructure, Strategy Templates) → 32–34 (Statistical Validation, ORB Systematic Search ★, Ensemble Analysis) → 35–38 (Cross-Family Search, Ensemble Orchestrator V2, Synapse) → 39–41 (Learning Loop V2, Continuous Discovery, Performance Workbench). Sprint 23 (Universe Manager) complete. DEC-263 full-universe pipe completed in Sprint 23.3. NLP Catalyst deferred to Sprint 23.5. Order Flow Model deferred to post-revenue (DEC-238). Full roadmap: `docs/roadmap.md` (DEC-262).
+21.6 (Backtest Re-Validation, parallel) → 24 (Setup Quality Engine + Dynamic Sizer) → 25 (Red-to-Green + Pattern Library Foundation) → 26 (Pattern Expansion I) → 27 (Short Selling + Parabolic Short + Pattern Expansion II) → 28 (Learning Loop V1) → 29–31 (BacktestEngine, Sweep Infrastructure, Strategy Templates) → 32–34 (Statistical Validation, ORB Systematic Search ★, Ensemble Analysis) → 35–38 (Cross-Family Search, Ensemble Orchestrator V2, Synapse) → 39–41 (Learning Loop V2, Continuous Discovery, Performance Workbench). Sprint 23.5 (NLP Catalyst Pipeline) complete. Order Flow Model deferred to post-revenue (DEC-238). Full roadmap: `docs/roadmap.md` (DEC-262).
 
 ### Validation Track
 
@@ -63,7 +64,7 @@ Paper trading active with Databento EQUS.MINI + IBKR paper (Account U24619949, D
 
 ### Expanded Vision (DEC-163, DEC-262)
 
-15+ artisanal patterns → ensemble systematic search → self-improving trading intelligence platform. Near-term (Phase 5–6): Setup Quality Engine (0–100 scoring, DEC-239), NLP Catalyst Pipeline (SEC EDGAR + FMP + Claude API, DEC-164), Dynamic Position Sizer, Learning Loop V1, Short Selling Infrastructure, Universe Manager with full-universe monitoring (DEC-263, **Sprint 23 ✅**). Mid-term (Phase 7–8): BacktestEngine, parameterized strategy templates, systematic parameter search, controlled experiment (go/no-go gate). Long-term (Phase 9–10): Ensemble Orchestrator V2, Synapse visualization, Continuous Discovery Pipeline, Performance Workbench. Order Flow Model deferred to post-revenue (DEC-238, requires Databento Plus $1,399/mo). Full roadmap: `docs/roadmap.md`.
+15+ artisanal patterns → ensemble systematic search → self-improving trading intelligence platform. Near-term (Phase 5–6): Setup Quality Engine (0–100 scoring, DEC-239), NLP Catalyst Pipeline (SEC EDGAR + FMP + Finnhub + Claude API, **Sprint 23.5 ✅**), Dynamic Position Sizer, Learning Loop V1, Short Selling Infrastructure, Universe Manager with full-universe monitoring (DEC-263, **Sprint 23 ✅**). Mid-term (Phase 7–8): BacktestEngine, parameterized strategy templates, systematic parameter search, controlled experiment (go/no-go gate). Long-term (Phase 9–10): Ensemble Orchestrator V2, Synapse visualization, Continuous Discovery Pipeline, Performance Workbench. Order Flow Model deferred to post-revenue (DEC-238, requires Databento Plus $1,399/mo). Full roadmap: `docs/roadmap.md`.
 
 ---
 
@@ -73,6 +74,7 @@ Paper trading active with Databento EQUS.MINI + IBKR paper (Account U24619949, D
 1. **Trading Engine** — Strategies, Orchestrator, Risk Manager, Data Service, Broker abstraction, Order Manager, Trade Logger, Backtesting (VectorBT + Replay Harness)
 2. **Command Center** — 7 pages (all built): Dashboard, Trade Log, Performance, Orchestrator, Pattern Library, The Debrief, System. Tauri desktop + PWA mobile + web. AI Copilot active.
 3. **AI Layer** (Sprint 22) — Claude API (Opus, DEC-098) via ClaudeClient wrapper; PromptManager with system prompt template and behavioral guardrails (DEC-273); SystemContextBuilder for per-page context injection (DEC-268); tool_use for structured action proposals (DEC-271) with 5 defined tools (DEC-272); ActionManager with DB-persisted proposals and 5-min TTL (DEC-267); 5 ActionExecutors with 4-condition pre-execution re-check; ConversationManager with calendar-date keying and tags (DEC-266); UsageTracker for per-call cost tracking (DEC-274); DailySummaryGenerator for insight card + daily summaries; ResponseCache for insight TTL caching. WS /ws/v1/ai/chat for streaming with actual API usage extraction (DEC-265). All timestamps ET-based (DEC-276). All AI features degrade gracefully when ANTHROPIC_API_KEY unset.
+4. **Intelligence Layer** (Sprint 23.5) — CatalystPipeline orchestrates three data sources: SECEdgarSource (8-K, Form 4), FMPNewsSource (stock news, press releases), FinnhubSource (company news, analyst recommendations). CatalystClassifier uses Claude API with rule-based fallback (DEC-301). CatalystStorage with SQLite persistence and headline hash deduplication (DEC-302). BriefingGenerator produces pre-market intelligence briefs with $5/day cost ceiling (DEC-303). Config-gated via `catalyst.enabled` (DEC-300). Frontend: CatalystBadge, CatalystAlertPanel, IntelligenceBriefView with TanStack Query hooks.
 
 ### Key Components
 - **Strategies:** Daily-stateful, session-stateless plugins (DEC-028). 4 active. 14 more planned.
@@ -107,7 +109,7 @@ argus/
 ├── ui/             # React frontend (Vite + TypeScript)
 ├── api/            # FastAPI REST + WebSocket
 ├── ai/             # Claude API integration (Sprint 22+)
-├── intelligence/   # Quality Engine, Catalyst, Position Sizer (Sprint 23+)
+├── intelligence/   # CatalystPipeline, CatalystClassifier, CatalystStorage, BriefingGenerator (Sprint 23.5)
 ├── config/         # YAML config files (system.yaml, system_live.yaml, strategies/)
 └── tests/          # pytest + Vitest
 ```
@@ -162,7 +164,7 @@ Per-trade risk: 0.5–1% of strategy allocation. Daily loss limit: 3–5%. Weekl
 | FMP Starter (pre-market scanning) | $22/mo | Sprint 21.7 activation (DEC-258) |
 | IBKR commissions | ~$43/day at scale | Paper trading (no cost yet) |
 | Claude API | ~$35–50/mo | Active (Sprint 22, DEC-274) |
-| FMP Premium/Ultimate (NLP, Sprint 23+) | $59–149/mo | Future upgrade from Starter |
+| Finnhub Free | $0/mo | Sprint 23.5 activation (DEC-306) |
 | IQFeed (forex/breadth, future) | ~$160–250/mo | Deferred (DEF-011) |
 | Databento Plus (live L2/L3) | $1,399/mo | Post-revenue (DEC-238) |
 
@@ -181,6 +183,8 @@ Per-trade risk: 0.5–1% of strategy allocation. Daily loss limit: 3–5%. Weekl
 **AI Layer:** DEC-264 (full scope Sprint 22), DEC-265 (WebSocket streaming), DEC-266 (calendar-date conversation keying), DEC-267 (proposal TTL + DB persistence), DEC-268 (per-page context injection), DEC-269 (demand-refreshed insight card), DEC-270 (markdown rendering stack), DEC-271 (tool_use for proposals), DEC-272 (5-type action enumeration), DEC-273 (system prompt + guardrails), DEC-274 (per-call cost tracking), DEC-276 (ET timestamps for AI layer).
 
 **Universe Manager:** DEC-263 (full-universe monitoring architecture), DEC-277 (fail-closed on missing reference data).
+
+**NLP Catalyst Pipeline:** DEC-300 (config-gated feature), DEC-301 (rule-based fallback classifier), DEC-302 (headline hash deduplication), DEC-303 (daily cost ceiling enforcement), DEC-304 (three-source architecture), DEC-305 (TanStack Query hooks), DEC-306 (Finnhub free tier for news), DEC-307 (Intelligence Brief view).
 
 **Documentation:** DEC-262 (roadmap consolidation — single canonical roadmap.md), DEC-275 (compaction risk scoring system).
 

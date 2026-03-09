@@ -684,6 +684,51 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 
 ---
 
+### RSK-053 | Finnhub Free Tier Reliability
+| Field | Value |
+|-------|-------|
+| **Date Identified** | 2026-03-10 |
+| **Category** | External Dependency |
+| **Description** | Finnhub free tier (60 calls/min) used for company news and analyst recommendations in CatalystPipeline. Free tier may have lower reliability guarantees, potential for unannounced rate limit changes, or service degradation during high-traffic periods. |
+| **Likelihood** | Medium |
+| **Impact** | Low — CatalystPipeline has two other sources (SEC EDGAR, FMP News). Finnhub failure degrades coverage but doesn't break the system. |
+| **Mitigation** | Source isolation: each CatalystSource has independent timeout/retry handling. Pipeline continues with remaining sources if one fails. Consider Finnhub paid tier ($0/mo → $50/mo) if reliability issues surface in production. |
+| **Owner** | Steven |
+| **Status** | Open |
+| **Cross-References** | DEC-304, DEC-306 |
+
+---
+
+### RSK-054 | Claude API Classification Cost Spike
+| Field | Value |
+|-------|-------|
+| **Date Identified** | 2026-03-10 |
+| **Category** | Cost Management |
+| **Description** | CatalystClassifier uses Claude API for headline classification. Unexpected news volume spike (e.g., market crash, major event) could trigger many classification calls, potentially exceeding expected API costs. |
+| **Likelihood** | Low (most days have predictable news volume) |
+| **Impact** | Low — $5/day ceiling (DEC-303) enforced via UsageTracker. Ceiling breach triggers rule-based fallback, not cost overrun. |
+| **Mitigation** | Daily cost ceiling hard-coded at $5/day with automatic fallback to rule-based classifier. UsageTracker monitors and logs all API costs. Ceiling configurable in system.yaml if adjustment needed. |
+| **Owner** | Steven |
+| **Status** | Open |
+| **Cross-References** | DEC-301, DEC-303, DEC-274 |
+
+---
+
+### RSK-055 | SEC EDGAR Rate Limiting
+| Field | Value |
+|-------|-------|
+| **Date Identified** | 2026-03-10 |
+| **Category** | External Dependency |
+| **Description** | SEC EDGAR has rate limits (10 requests/second for authenticated, lower for unauthenticated). High-volume scans during pre-market could trigger rate limiting, delaying catalyst data availability. |
+| **Likelihood** | Low (ARGUS scans ~10-15 symbols, well within limits) |
+| **Impact** | Low — SEC filings are time-insensitive (8-K filings are typically hours/days old). Delays of seconds or minutes don't affect trading decisions. |
+| **Mitigation** | SECEdgarSource implements exponential backoff on 429 responses. User-Agent header includes contact email per SEC guidelines. Consider adding API key for authenticated access if volume increases significantly. |
+| **Owner** | Steven |
+| **Status** | Open |
+| **Cross-References** | DEC-304 |
+
+---
+
 ## Review Schedule
 
 | Review Type | Frequency | Next Review |
@@ -870,4 +915,4 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 
 ---
 
-*End of Risk & Assumptions Register v1.2*
+*End of Risk & Assumptions Register v1.3*

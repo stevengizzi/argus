@@ -5,18 +5,18 @@
 
 ## Active Sprint
 
-**No active sprint.** Sprint 23.2 (Autonomous Sprint Runner Implementation) completed March 9, 2026.
+**No active sprint.** Sprint 23.5 (NLP Catalyst Pipeline) completed March 10, 2026.
 
-Next sprint: **23.5 (NLP Catalyst Pipeline)** — SEC EDGAR + FMP news, catalyst classification, pre-market intelligence brief.
+Next sprint: **24 (Setup Quality Engine + Dynamic Sizer)** — composite 0–100 quality scoring, grade-based position sizing.
 
 ## Current State
 
 - **Active sprint:** None (between sprints)
-- **Next sprint:** 23.5 (NLP Catalyst Pipeline)
-- **Tests:** 2,302 pytest + 392 Vitest
+- **Next sprint:** 24 (Setup Quality Engine + Dynamic Sizer)
+- **Tests:** 2,396 pytest + 435 Vitest
 - **Strategies:** 4 active (ORB Breakout, ORB Scalp, VWAP Reclaim, Afternoon Momentum)
-- **Infrastructure:** Databento EQUS.MINI (live) + IBKR paper trading (Account U24619949) + FMP Starter (scanning + reference data) + Claude API (Copilot) + Universe Manager (config-gated, disabled by default)
-- **Frontend:** 7-page Command Center + AI Copilot + Universe Status Card (all active), Tauri desktop + PWA mobile
+- **Infrastructure:** Databento EQUS.MINI (live) + IBKR paper trading (Account U24619949) + FMP Starter (scanning + reference data) + Finnhub (news + analyst recs) + Claude API (Copilot + Catalyst Classification) + Universe Manager (config-gated) + Catalyst Pipeline (config-gated)
+- **Frontend:** 7-page Command Center + AI Copilot + Universe Status Card + Intelligence Brief View (all active), Tauri desktop + PWA mobile
 
 ## Project Structure
 
@@ -44,7 +44,7 @@ argus/
 │   ├── summary.py  # DailySummaryGenerator
 │   ├── cache.py    # ResponseCache (TTL-based)
 │   └── tools.py    # 5 tool_use definitions with JSON schemas
-├── intelligence/   # Quality Engine, Catalyst, Position Sizer (Sprint 23+, empty)
+├── intelligence/   # CatalystPipeline, CatalystClassifier, CatalystStorage, BriefingGenerator (Sprint 23.5)
 ├── config/         # system.yaml, system_live.yaml, strategies/*.yaml
 ├── tests/          # pytest (backend) + Vitest (frontend)
 ├── docs/           # Decision log, sprint history, strategy specs, research reports
@@ -59,7 +59,7 @@ argus/
 python -m pytest tests/                   # Run all tests
 python -m pytest tests/ -x               # Stop on first failure
 python -m pytest tests/ -x -q            # Fail-fast, quiet
-cd argus/ui && npx vitest run            # Frontend tests (~392)
+cd argus/ui && npx vitest run            # Frontend tests (~435)
 
 # Trading engine
 python -m argus.main                      # Start (paper trading default)
@@ -245,7 +245,7 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 | DEF-032 | FMPScannerSource criteria_list filtering | Sprint 23.5 (NLP Catalyst) or Sprint 24 (Quality Engine) | `scan()` accepts `criteria_list` parameter but ignores it (documented in docstring). FMP endpoints are pre-filtered server-side; post-fetch filtering by strategy-specific criteria becomes meaningful when Quality Engine provides scoring criteria. |
 | DEF-033 | Approve→Executed status transition is simulated with setTimeout(1500ms) in ChatMessage.tsx. Real execution status should be pushed via WebSocket (`{"type": "proposal_update", ...}`) after ActionExecutor completes. Requires: WS protocol extension (new message type), executor pipeline event emission, frontend WS handler update. Cosmetic-only impact — proposal is correctly marked `approved` in DB; only the UI status badge is faked. | Next UI polish pass or Sprint 23 if room. |
 | DEF-034 | Pydantic serialization warnings on `review_verdict` field | Next sprint runner polish pass | `SessionResult.review_verdict` accepts string where enum is expected, producing `PydanticSerializationUnexpectedValue` warnings during test runs. Cosmetic — does not affect functionality. Recurring across Sprint 23.2 S3–S6 tests. Fix: either use `ReviewVerdict` enum values directly or add `use_enum_values=True` to model config. |
-| DEF-035 | FMP Premium Upgrade ($59/mo) | Sprint 23.5 or when batch-quote speed becomes a bottleneck | FMP Premium enables batch-quote endpoints (27 min → ~2 min load) and NLP endpoints for Sprint 23.5. Priority: MEDIUM. |
+| DEF-035 | FMP Premium Upgrade ($59/mo) | When batch-quote speed becomes a bottleneck | FMP Premium enables batch-quote endpoints (27 min → ~2 min load). Sprint 23.5 completed without upgrade — Finnhub free tier covers news needs. Priority: LOW. |
 | DEF-036 | Stock-List Response Caching | Unscheduled | Cache yesterday's viable universe, diff against fresh stock-list, only fetch new/changed profiles. Could reduce load from ~27 min to ~2–3 min. Priority: LOW. |
 | DEF-037 | FMP API Key Redaction in Error Logs | Next cleanup sprint | FMP API URLs with API key appear in error logs. Should redact `apikey=XXX` before logging. Priority: MEDIUM. |
 

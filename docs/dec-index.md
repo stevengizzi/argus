@@ -322,3 +322,14 @@
 - ● **DEC-297**: Review Context File Hash Verification — SHA-256 integrity check
 - ● **DEC-298**: FMP Stable API Migration — Legacy v3/v4 → Stable Endpoints
 - ● **DEC-299**: Full-Universe Input Pipe via FMP Stock-List — ~8,000 symbols → ~3,000–4,000 viable
+
+## Phase G — NLP Catalyst Pipeline (Sprint 23.5)
+
+- ● **DEC-300**: Config-Gated Catalyst Pipeline Feature Flag — `catalyst.enabled` (default: false)
+- ● **DEC-301**: Rule-Based Fallback Classifier — keyword matching when Claude API unavailable/ceiling reached
+- ● **DEC-302**: Headline Hash Deduplication — SHA-256 of symbol+headline+source, UNIQUE constraint
+- ● **DEC-303**: Daily Cost Ceiling Enforcement — $5/day via UsageTracker, fallback on breach
+- ● **DEC-304**: Three-Source Architecture — SECEdgarSource, FMPNewsSource, FinnhubSource
+- ● **DEC-305**: TanStack Query Hooks — useCatalysts, useIntelligenceBriefings, useIntelligenceBriefing
+- ● **DEC-306**: Finnhub Free Tier for News — company news + analyst recommendations, 60 calls/min
+- ● **DEC-307**: Intelligence Brief View — fourth tab in The Debrief, BriefingCard component

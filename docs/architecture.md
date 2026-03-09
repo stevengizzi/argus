@@ -1058,21 +1058,34 @@ Events published: `OrderFlowEvent(symbol, imbalance_ratio, ask_thin_rate, tape_s
 Throttling: configurable interval (default 100ms)
 **Status:** Deferred to post-revenue. Historical backtesting can proceed on Standard plan.
 
-#### CatalystService (`intelligence/catalyst_service.py`)
-Ingests and classifies news/filing data from free sources (DEC-164).
+#### CatalystPipeline (`intelligence/catalyst/pipeline.py`) — Sprint 23.5 ✅
 
-Sources: SEC EDGAR (8-K, Form 4), Finnhub (news, calendars), FMP (earnings, press releases)
+Orchestrates catalyst ingestion, classification, and storage from three data sources (DEC-164, DEC-304).
+
+**Data Sources:**
+- `SECEdgarSource` (`intelligence/catalyst/sources/sec_edgar.py`): 8-K filings, Form 4 insider transactions
+- `FMPNewsSource` (`intelligence/catalyst/sources/fmp_news.py`): Stock news, press releases
+- `FinnhubSource` (`intelligence/catalyst/sources/finnhub.py`): Company news, analyst recommendations (DEC-306)
+
+**Core Components:**
+- `CatalystClassifier` (`intelligence/catalyst/classifier.py`): Claude API classification with rule-based fallback (DEC-301). Categories: earnings, insider, guidance, analyst, regulatory, partnership, product, restructuring, other.
+- `CatalystStorage` (`intelligence/catalyst/storage.py`): SQLite persistence with headline hash (SHA-256) deduplication (DEC-302).
+- `BriefingGenerator` (`intelligence/catalyst/briefing.py`): Pre-market intelligence brief generation with $5/day cost ceiling via UsageTracker (DEC-303).
+
 Interface:
-- `fetch_catalysts(symbol) -> list[CatalystEvent]`
-- `classify_catalyst(headline, symbol) -> CatalystClassification` (uses Claude API)
-- `get_calendar_events(date) -> list[CalendarEvent]`
+- `async run(symbols: list[str]) -> list[Catalyst]`
+- `async classify(headline: str, symbol: str) -> CatalystClassification`
+- `async generate_briefing(symbols: list[str]) -> IntelligenceBrief`
+
+Config: `catalyst.enabled` in system.yaml (default: false). Config-gated (DEC-300).
 
 Events published: `CatalystEvent(symbol, category, quality_score, headline, source, timestamp)`
 
-#### PreMarketEngine (`intelligence/premarket_engine.py`)
-Automated 4:00 AM → 9:25 AM pipeline.
+#### PreMarketEngine (`intelligence/premarket_engine.py`) — NOT YET IMPLEMENTED
 
-Interface:
+Automated 4:00 AM → 9:25 AM pipeline. **Status:** Planned for Sprint 24+. CatalystPipeline (Sprint 23.5) provides the briefing generation component.
+
+Interface (planned):
 - `start() -> None` — begin pre-market scanning
 - `generate_briefing() -> PreMarketBriefing`
 - `lock_watchlist() -> Watchlist` — lock at 9:25 AM
@@ -1163,16 +1176,21 @@ POST   /api/v1/orchestrator/rebalance  — Trigger manual rebalance
 GET    /api/v1/session-summary         — Session recap (P&L, wins/losses, best/worst trade, regime, strategies). Query: ?date=YYYY-MM-DD
 GET    /api/v1/dashboard/summary       — Aggregate endpoint returning all Dashboard card data (account, today_stats, goals, market, regime, deployment, orchestrator) in single response. Sprint 21d (DEC-222).
 
-# Intelligence endpoints (Sprint 23–30)
-GET  /api/v1/catalysts/{symbol}          # Catalysts for a symbol
-GET  /api/v1/premarket/briefing          # Current pre-market briefing
-GET  /api/v1/premarket/watchlist         # Ranked pre-market watchlist
-GET  /api/v1/orderflow/{symbol}          # Current order flow state + 1-min history
-GET  /api/v1/quality/{symbol}            # Current quality score
-GET  /api/v1/quality/history             # Quality score history
-GET  /api/v1/quality/distribution        # Today's grade distribution
-GET  /api/v1/learning/calibration        # Predicted vs actual by grade
-GET  /api/v1/learning/insights           # Top recent findings
+# Intelligence endpoints — Sprint 23.5 ✅ (Catalyst), Sprint 24+ (remaining)
+GET  /api/v1/catalysts                   # List all catalysts (with filters: symbol, category, since) — Sprint 23.5 ✅
+GET  /api/v1/catalysts/{symbol}          # Catalysts for a symbol — Sprint 23.5 ✅
+POST /api/v1/catalysts/refresh           # Trigger catalyst pipeline refresh — Sprint 23.5 ✅
+GET  /api/v1/intelligence/briefings      # List intelligence briefings — Sprint 23.5 ✅
+GET  /api/v1/intelligence/briefings/{id} # Get specific briefing — Sprint 23.5 ✅
+POST /api/v1/intelligence/briefings/generate  # Generate new briefing — Sprint 23.5 ✅
+GET  /api/v1/premarket/briefing          # Current pre-market briefing (planned Sprint 24+)
+GET  /api/v1/premarket/watchlist         # Ranked pre-market watchlist (planned Sprint 24+)
+GET  /api/v1/orderflow/{symbol}          # Current order flow state + 1-min history (post-revenue)
+GET  /api/v1/quality/{symbol}            # Current quality score (Sprint 24)
+GET  /api/v1/quality/history             # Quality score history (Sprint 24)
+GET  /api/v1/quality/distribution        # Today's grade distribution (Sprint 24)
+GET  /api/v1/learning/calibration        # Predicted vs actual by grade (Sprint 28+)
+GET  /api/v1/learning/insights           # Top recent findings (Sprint 28+)
 
 # AI Copilot endpoints (Sprint 22)
 WS   /api/v1/ai/chat                    # Copilot chat (WebSocket)

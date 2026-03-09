@@ -78,7 +78,7 @@ These foundations are correct and remain:
 
 ARGUS completed 21 sprints + sub-sprints in ~17 calendar days of active development (Feb 14 – Mar 5). Average sprint: ~0.8 calendar days. However, sprint complexity has been increasing — early sprints (1–5) were dense single-day affairs, while later sprints (21a–21d, 21.5) span multiple days. The roadmap below assumes sprint durations of 1–4 days each depending on complexity, with some parallelism where noted.
 
-**Current state:** Sprint 23.2 complete. 2,289 pytest + 392 Vitest. Four active strategies. Live Databento + IBKR paper trading. Seven-page Command Center + AI Copilot active. FMP Scanner + Universe Manager integrated. Autonomous Sprint Runner implemented (DEC-278–297).
+**Current state:** Sprint 23.5 complete. 2,396 pytest + 435 Vitest. Four active strategies. Live Databento + IBKR paper trading. Seven-page Command Center + AI Copilot active. FMP Scanner + Universe Manager integrated. Autonomous Sprint Runner implemented (DEC-278–297). NLP Catalyst Pipeline complete (DEC-300–307).
 
 ---
 
@@ -202,20 +202,28 @@ Re-validate all pre-Databento strategy parameters using Databento tick-level dat
 - **Pre-market intelligence brief:** Morning scan results + catalyst research + watchlist generation.
 - **UI:** Dashboard catalyst badges, Orchestrator catalyst alert panel, Debrief intelligence brief view.
 
-### Sprint 23.5: NLP Catalyst Pipeline (DEC-163, DEC-164)
+### Sprint 23.5: NLP Catalyst Pipeline (DEC-163, DEC-164, DEC-300–307)
 **Target:** ~3–4 days
-**Status:** NEXT
+**Status:** ✅ COMPLETE (Mar 10, 2026)
 
-**Scope:**
-- **CatalystPipeline** (`argus/intelligence/catalyst.py`): SEC EDGAR filing monitor (10-K, 10-Q, 8-K, insider trades). FMP news feed. Claude API for catalyst classification and quality grading.
-- **CatalystEvent** on Event Bus: `(symbol, catalyst_type, quality_grade, summary, source, timestamp)`.
-- **Pre-market intelligence brief:** Morning scan results + catalyst research + watchlist generation, structured summary saved to Debrief.
-- **UI:** Dashboard gains catalyst badges on watchlist entries. Orchestrator gains catalyst alert panel. Debrief gains Pre-Market Intelligence Brief view and research library.
-- **FMP plan upgrade** from Starter ($22/mo) to Premium/Ultimate ($59–149/mo) for news endpoints.
-- **Tests:** ~60–80 new.
+**Scope (delivered):**
+- **CatalystPipeline** (`argus/intelligence/catalyst/pipeline.py`): Three-source architecture (DEC-304) — SECEdgarSource (8-K, Form 4), FMPNewsSource (stock news, press releases), FinnhubSource (company news, analyst recommendations).
+- **CatalystClassifier** (`argus/intelligence/catalyst/classifier.py`): Claude API classification with rule-based fallback (DEC-301). Nine categories: earnings, insider, guidance, analyst, regulatory, partnership, product, restructuring, other.
+- **CatalystStorage** (`argus/intelligence/catalyst/storage.py`): SQLite persistence with headline hash (SHA-256) deduplication (DEC-302).
+- **BriefingGenerator** (`argus/intelligence/catalyst/briefing.py`): Pre-market intelligence briefs with $5/day cost ceiling enforcement via UsageTracker (DEC-303).
+- **CatalystEvent** on Event Bus: `(symbol, category, quality_score, headline, source, timestamp)`.
+- **API routes:** `/api/v1/catalysts`, `/api/v1/catalysts/{symbol}`, `/api/v1/catalysts/refresh`, `/api/v1/intelligence/briefings`, `/api/v1/intelligence/briefings/{id}`, `/api/v1/intelligence/briefings/generate`.
+- **UI:** CatalystBadge (category-colored), CatalystAlertPanel, IntelligenceBriefView (fourth tab in The Debrief), BriefingCard with expand/collapse.
+- **TanStack Query hooks** (DEC-305): `useCatalysts`, `useIntelligenceBriefings`, `useIntelligenceBriefing`.
+- **Config-gated** via `catalyst.enabled` (DEC-300, default: false).
+- **FMP plan upgrade deferred** — free tier + Finnhub free tier sufficient for V1.
+- **Tests:** 94 pytest + 43 Vitest new tests.
+
+**Notes:** No FMP plan upgrade required — Finnhub free tier provides analyst recommendations at no cost. Rule-based fallback ensures graceful degradation when Claude API unavailable or daily cost ceiling reached.
 
 ### Sprint 24: Setup Quality Engine + Dynamic Position Sizer (DEC-163, DEC-239)
 **Target:** ~3–4 days
+**Status:** NEXT
 
 **Scope:**
 - **SetupQualityEngine** (`argus/intelligence/quality_engine.py`): Composite 0–100 scoring from 5 weighted inputs (DEC-239): pattern strength (25%), catalyst quality (20%), volume profile (20%), historical match (15%), regime alignment (20%). Order Flow dimension added post-revenue when Databento Plus activated — rebalances to 6 dimensions with Order Flow at 20%. Configurable weights via YAML.

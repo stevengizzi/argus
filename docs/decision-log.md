@@ -3466,6 +3466,126 @@ Each entry follows this format:
 
 ---
 
+### DEC-300 | Config-Gated Catalyst Pipeline Feature Flag
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-10 |
+| **Sprint** | 23.5 |
+| **Decision** | CatalystPipeline and all intelligence layer components are gated by `catalyst.enabled` config flag (default: `false`). When disabled: no API calls to SEC EDGAR, FMP News, Finnhub, or Claude API for classification. UI components (CatalystBadge, CatalystAlertPanel, IntelligenceBriefView) render gracefully with "No catalysts" state. Pattern follows Universe Manager's config-gated approach (DEC-277). |
+| **Alternatives Considered** | 1. Always enabled: Rejected — external API costs accumulate even during development/testing. 2. Environment variable: Rejected — YAML config is established pattern for feature flags. |
+| **Rationale** | Allows staged rollout and cost control. Development can proceed without incurring Claude API costs. Production activation is a single config change. |
+| **Constraints** | Default `false` prevents accidental cost accumulation. |
+| **Cross-References** | DEC-277 (Universe Manager config-gating), DEC-274 (cost tracking) |
+| **Status** | Active |
+
+---
+
+### DEC-301 | Rule-Based Fallback Classifier for Catalyst Classification
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-10 |
+| **Sprint** | 23.5 |
+| **Decision** | CatalystClassifier uses Claude API as primary classification engine with keyword-based rule fallback when: (1) ANTHROPIC_API_KEY unset, (2) daily cost ceiling reached ($5/day), (3) API call fails after 3 retries. Fallback rules match keywords against headlines: "earnings" → `earnings`, "insider" or "Form 4" → `insider`, "guidance" → `guidance`, "analyst" or "upgrade" or "downgrade" → `analyst`, "FDA" or "SEC" → `regulatory`, "partnership" or "acquisition" → `partnership`, "launch" or "product" → `product`, "restructuring" or "layoff" → `restructuring`, else → `other`. |
+| **Alternatives Considered** | 1. Fail closed (no classification): Rejected — catalyst data still valuable even with reduced classification accuracy. 2. Cache Claude responses for similar headlines: Considered for future — adds complexity, headlines rarely repeat exactly. |
+| **Rationale** | Graceful degradation is core ARGUS principle (AI layer). Rule-based fallback achieves ~70% accuracy based on headline analysis, sufficient for non-critical catalyst tagging. |
+| **Constraints** | Fallback rules are conservative — prefer `other` over false positives. |
+| **Cross-References** | DEC-273 (AI graceful degradation), DEC-303 (cost ceiling) |
+| **Status** | Active |
+
+---
+
+### DEC-302 | Headline Hash Deduplication for Catalyst Storage
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-10 |
+| **Sprint** | 23.5 |
+| **Decision** | CatalystStorage deduplicates catalysts using SHA-256 hash of `symbol + headline + source`. Hash stored in `headline_hash` column with UNIQUE constraint. Insert operations use `INSERT OR IGNORE` to silently skip duplicates. Deduplication prevents: (1) same headline appearing from multiple API calls, (2) headline republished across sources, (3) re-fetching during pipeline retries. |
+| **Alternatives Considered** | 1. UNIQUE on (symbol, headline, source): Rejected — headline text can be long, hash is fixed 64 chars. 2. No deduplication: Rejected — API sources frequently return overlapping news, would pollute UI with duplicates. |
+| **Rationale** | News aggregators and SEC filings often surface the same information. Hash-based deduplication is O(1) lookup, space-efficient, and collision-resistant for practical purposes. |
+| **Constraints** | Hash collision probability negligible for expected volume (<10K catalysts/day). |
+| **Cross-References** | DEC-034 (SQLite persistence) |
+| **Status** | Active |
+
+---
+
+### DEC-303 | Daily Cost Ceiling Enforcement for Catalyst Classification
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-10 |
+| **Sprint** | 23.5 |
+| **Decision** | BriefingGenerator enforces $5/day ceiling on Claude API costs for catalyst classification. Ceiling enforced via UsageTracker integration: before each Claude API call, check `usage_tracker.get_daily_cost()` against `catalyst.daily_cost_ceiling`. When ceiling reached: log warning, switch to rule-based fallback for remainder of day, include "cost ceiling reached" notice in briefing metadata. Ceiling resets at midnight ET. |
+| **Alternatives Considered** | 1. No ceiling: Rejected — unbounded API costs unacceptable. 2. Hard cutoff (no fallback): Rejected — defeats purpose of intelligence layer if it just stops working. 3. Per-symbol ceiling: Rejected — adds complexity, daily aggregate is simpler to reason about. |
+| **Rationale** | $5/day = ~$150/month worst case, acceptable for intelligence layer value. Ceiling is configurable in system.yaml. UsageTracker already tracks per-call costs (DEC-274). |
+| **Constraints** | Default ceiling: $5/day. Configurable via `catalyst.daily_cost_ceiling`. |
+| **Cross-References** | DEC-274 (UsageTracker), DEC-301 (fallback classifier) |
+| **Status** | Active |
+
+---
+
+### DEC-304 | Three-Source Architecture for Catalyst Data
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-10 |
+| **Sprint** | 23.5 |
+| **Decision** | CatalystPipeline ingests from three data sources via abstract `CatalystSource` interface: (1) SECEdgarSource — 8-K filings (material events) and Form 4 (insider transactions) from SEC EDGAR, (2) FMPNewsSource — stock news and press releases from FMP API (already paid via Starter tier), (3) FinnhubSource — company news and analyst recommendations from Finnhub free tier. Each source implements `async fetch(symbols: list[str]) -> list[RawCatalyst]`. Pipeline runs sources in parallel with individual timeout/retry handling. |
+| **Alternatives Considered** | 1. Single source (FMP only): Rejected — FMP news coverage is incomplete, SEC filings are authoritative. 2. Paid news API (Benzinga, IEX Cloud): Deferred — free sources sufficient for V1. 3. Web scraping: Rejected — fragile, TOS concerns. |
+| **Rationale** | Diversified sources improve coverage. SEC EDGAR is authoritative for regulatory filings. FMP already in stack (DEC-258). Finnhub free tier adds analyst recommendations at no cost. Abstract interface allows adding sources later. |
+| **Constraints** | All sources must handle rate limits gracefully. Source failures are isolated (other sources continue). |
+| **Cross-References** | DEC-258 (FMP integration), DEC-306 (Finnhub), DEC-164 (NLP catalyst plan) |
+| **Status** | Active |
+
+---
+
+### DEC-305 | TanStack Query Hooks for Catalyst and Briefing Data
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-10 |
+| **Sprint** | 23.5 |
+| **Decision** | Frontend catalyst data access via TanStack Query hooks: `useCatalysts(symbol?, category?, since?)` for catalyst list with filters, `useIntelligenceBriefings(limit?, since?)` for briefing list, `useIntelligenceBriefing(id)` for single briefing. Hooks follow established patterns (DEC-222): stale time 60s for catalysts, 5min for briefings; retry 3 times with exponential backoff; placeholder data from Zustand store during loading. Query keys: `['catalysts', filters]`, `['intelligence-briefings', params]`, `['intelligence-briefing', id]`. |
+| **Alternatives Considered** | 1. Direct fetch in components: Rejected — established TanStack Query pattern provides caching, deduplication, background refresh. 2. Zustand-only: Rejected — TanStack Query handles server state better. |
+| **Rationale** | Consistent with existing hooks (useTrades, usePositions, useOrchestratorStatus). Catalyst data is server-authoritative, fits TanStack Query model. |
+| **Constraints** | Follows existing hook patterns in `src/hooks/`. |
+| **Cross-References** | DEC-222 (aggregate endpoint pattern), DEC-130 (frontend testing) |
+| **Status** | Active |
+
+---
+
+### DEC-306 | Finnhub Free Tier for News and Analyst Data
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-10 |
+| **Sprint** | 23.5 |
+| **Decision** | Add Finnhub as third catalyst data source using free tier. Endpoints: `/company-news` (company-specific news), `/recommendation` (analyst recommendations). Rate limit: 60 calls/minute on free tier. API key stored in environment variable `FINNHUB_API_KEY`. Source gracefully degrades if API key unset (logs warning, returns empty list). |
+| **Alternatives Considered** | 1. Finnhub paid tier: Not needed — free tier covers news and recommendations. 2. Skip Finnhub entirely: Rejected — analyst recommendations are valuable signal not available from other sources. 3. IQFeed: Deferred (DEF-011) — $160–250/mo, overkill for news. |
+| **Rationale** | Finnhub free tier provides analyst recommendations (upgrade/downgrade/initiate) not available from SEC EDGAR or FMP. Zero incremental cost. API is well-documented and reliable. |
+| **Constraints** | 60 calls/min rate limit. Free tier may have reliability concerns (RSK-053). |
+| **Cross-References** | DEC-304 (three-source architecture), DEF-011 (IQFeed deferral), RSK-053 |
+| **Status** | Active |
+
+---
+
+### DEC-307 | Intelligence Brief View in The Debrief Page
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-10 |
+| **Sprint** | 23.5 |
+| **Decision** | Add IntelligenceBriefView as new section in The Debrief page. Three-column layout: (1) briefing list with date/time and status badges, (2) briefing detail with formatted markdown content, (3) catalyst summary panel showing symbols covered and category breakdown. BriefingCard component renders individual briefings with expand/collapse. Generate button triggers `/api/v1/intelligence/briefings/generate` endpoint. View integrated into existing SegmentedTab structure as fourth tab ("Intelligence"). |
+| **Alternatives Considered** | 1. Separate Intelligence page: Rejected — aligns with The Debrief's mission (pre-market prep, EOD review). 2. Modal instead of tab: Rejected — briefings are substantial content, deserve full tab real estate. 3. Dashboard widget only: Rejected — dashboard is for glanceable summaries, detailed briefings belong in Debrief. |
+| **Rationale** | The Debrief page already houses pre-market briefings (manual markdown). Intelligence briefings are auto-generated pre-market content — natural fit. Keeps intelligence features discoverable alongside existing debrief workflows. |
+| **Constraints** | Tab keyboard shortcut: `i` (after existing b/r/j). |
+| **Cross-References** | DEC-196 (The Debrief design), DEC-305 (TanStack Query hooks) |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
-*Next DEC: 300*
-*Last updated: 2026-03-10 (Sprint 23.3 doc-sync — DEC-298–299)*
+*Next DEC: 308*
+*Last updated: 2026-03-10 (Sprint 23.5 doc-sync — DEC-300–307)*

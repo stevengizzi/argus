@@ -376,14 +376,63 @@
 **Test counts:** S1(+12), S2(+2) = +14 new pytest (but reported as +13 due to test consolidation)
 **Notes:** Impromptu sprint triggered by live deployment testing. FMP legacy endpoint deprecation discovered at runtime — hotfix applied same day. DEC-263 full-universe pipe now complete. ~27 min pre-market load time accepted as pre-market fetch has no hard deadline.
 
+### Sprint 23.5 — NLP Catalyst Pipeline (2396 pytest + 435 Vitest, +94/+43)
+**Date:** Mar 10, 2026
+**Scope:** NLP Catalyst Pipeline (DEC-164) — three data sources (SEC EDGAR, FMP News, Finnhub), Claude API classification with rule-based fallback, headline hash deduplication, daily cost ceiling enforcement, intelligence briefing generation, frontend components (CatalystBadge, CatalystAlertPanel, IntelligenceBriefView, BriefingCard).
+
+**Session 1 (S1): Data Sources + CatalystSource Interface**
+- Created `argus/intelligence/catalyst/` package structure
+- Implemented abstract `CatalystSource` base class
+- Built `SECEdgarSource` for 8-K filings and Form 4 insider transactions
+- Built `FMPNewsSource` for stock news and press releases
+- Built `FinnhubSource` for company news and analyst recommendations
+- 18 new pytest tests
+
+**Session 2 (S2): CatalystClassifier + Rule-Based Fallback**
+- Implemented `CatalystClassifier` with Claude API integration
+- Added keyword-based rule fallback for graceful degradation (DEC-301)
+- Classification categories: earnings, insider, guidance, analyst, regulatory, partnership, product, restructuring, other
+- 14 new pytest tests
+
+**Session 3 (S3): CatalystStorage + Pipeline Orchestration**
+- Implemented `CatalystStorage` with SQLite persistence
+- Headline hash (SHA-256) deduplication with UNIQUE constraint (DEC-302)
+- Built `CatalystPipeline` orchestrating sources, classifier, storage
+- Config-gated via `catalyst.enabled` (DEC-300)
+- 16 new pytest tests
+
+**Session 4 (S4): BriefingGenerator + API Routes**
+- Implemented `BriefingGenerator` for pre-market intelligence briefs
+- Daily cost ceiling enforcement ($5/day) via UsageTracker (DEC-303)
+- Added `/api/v1/catalysts` and `/api/v1/intelligence/briefings` routes
+- 22 new pytest tests
+
+**Session 5 (S5): Frontend Components + TanStack Query Hooks**
+- Created `CatalystBadge` component with category-colored badges
+- Created `CatalystAlertPanel` for real-time catalyst notifications
+- Created TanStack Query hooks: `useCatalysts`, `useIntelligenceBriefings`, `useIntelligenceBriefing` (DEC-305)
+- 24 new pytest tests, 25 new Vitest tests
+
+**Session 6 (S6): IntelligenceBriefView + BriefingCard**
+- Built `IntelligenceBriefView` as fourth tab in The Debrief page (DEC-307)
+- Created `BriefingCard` component with expand/collapse and markdown rendering
+- Three-column layout: briefing list, detail view, catalyst summary
+- Keyboard shortcut: `i` for Intelligence tab
+- 18 new Vitest tests
+
+**Key decisions:** DEC-300 (config-gated), DEC-301 (rule-based fallback), DEC-302 (headline hash dedup), DEC-303 (cost ceiling), DEC-304 (three-source architecture), DEC-305 (TanStack Query hooks), DEC-306 (Finnhub free tier), DEC-307 (Intelligence Brief view)
+**Sessions:** 6 implementation
+**Test counts:** S1(+18), S2(+14), S3(+16), S4(+22), S5(+24/+25V), S6(+0/+18V) = 94 new pytest, 43 new Vitest
+**Notes:** Three free data sources (SEC EDGAR, FMP News, Finnhub) provide broad catalyst coverage at no incremental cost. Rule-based fallback ensures graceful degradation when Claude API unavailable or cost ceiling reached. Finnhub free tier reliability noted as risk (RSK-053). SEC EDGAR rate limiting noted as risk (RSK-055).
+
 ---
 
 ## Sprint Statistics
 
-- **Total sprints:** 23 full + 13 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3)
-- **Total sessions:** ~262+ Claude Code sessions
-- **Total tests:** 2,302 pytest + 392 Vitest = 2,694 total
-- **Total decisions:** 299 (DEC-001 through DEC-299)
+- **Total sprints:** 23 full + 14 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5)
+- **Total sessions:** ~268+ Claude Code sessions
+- **Total tests:** 2,396 pytest + 435 Vitest = 2,831 total
+- **Total decisions:** 307 (DEC-001 through DEC-307)
 - **Calendar days (active dev):** ~25 (Feb 14 – Mar 10, 2026)
 - **Largest sprint:** 22 (9 implementation + 5 fix + 9 reviews, largest scope)
 - **Cleanest sprint:** 23 (11 sessions, 0 regressions, 0 scope gaps requiring follow-up)

@@ -440,40 +440,68 @@ On Performance page:
 
 ---
 
-## Sprint 23 — Catalyst Pipeline UI (DEC-164, DEC-168)
+## Sprint 23.5 — Catalyst Pipeline UI (DEC-164, DEC-168, DEC-300–307)
 
-### 23-A. Dashboard Pre-Market Mode — Live Data [P1]
+### 23-A. CatalystBadge Component [P0] ✅ Sprint 23.5
+
+**Category-colored badges for catalyst types.**
+CatalystBadge component displays catalyst category with semantic colors: earnings (blue), insider (purple), guidance (green), analyst (amber), regulatory (red), partnership (teal), product (pink), restructuring (gray). Used in CatalystAlertPanel and IntelligenceBriefView.
+
+*Delivered: Sprint 23.5 S5.*
+
+### 23-B. CatalystAlertPanel [P1] ✅ Sprint 23.5
+
+**Real-time catalyst notifications panel.**
+Alert panel showing latest catalysts with category badges, headlines, and timestamps. Supports filtering by category. Progressive disclosure: badge → headline → full catalyst detail.
+
+*Delivered: Sprint 23.5 S5.*
+
+### 23-C. IntelligenceBriefView [P1] ✅ Sprint 23.5 (DEC-307)
+
+**Intelligence tab in The Debrief page.**
+Fourth tab in The Debrief showing pre-market intelligence briefings. Three-column layout: briefing list (left), detail view (center), catalyst summary (right). BriefingCard component with expand/collapse and markdown rendering. Generate button triggers new briefing creation.
+
+*Delivered: Sprint 23.5 S6.*
+
+### 23-D. TanStack Query Hooks [P0] ✅ Sprint 23.5 (DEC-305)
+
+**Data hooks for catalyst and briefing data.**
+`useCatalysts(symbol?, category?, since?)`, `useIntelligenceBriefings(limit?, since?)`, `useIntelligenceBriefing(id)`. Follows established patterns: 60s stale time for catalysts, 5min for briefings, retry with exponential backoff.
+
+*Delivered: Sprint 23.5 S5.*
+
+### 23-E. Dashboard Pre-Market Mode — Live Data [P1] — DEFERRED
 
 **Pre-market layout populated with real data.**
-Dashboard pre-market mode (shell from 21d) now shows live ranked watchlist from PreMarketEngine, catalyst summaries from CatalystService, regime forecast from RegimeClassifier. Push notification with 3-line summary.
+Dashboard pre-market mode (shell from 21d) to show live ranked watchlist from PreMarketEngine, catalyst summaries from CatalystPipeline, regime forecast from RegimeClassifier. Deferred until PreMarketEngine implemented (Sprint 24+).
 
 *Effort: ~4 hours. Data wiring to existing pre-market shell.*
 
-### 23-B. Watchlist Catalyst Badges [P0]
+### 23-F. Watchlist Catalyst Badges [P1] — DEFERRED
 
-**Catalyst type icons on watchlist items.**
-Each watchlist symbol gains a compact catalyst badge: FDA 💊, ERN 📊, UPG ⬆️, M&A 🤝, INS 👤, etc. Hover/tap shows headline. Progressive disclosure: badge → tooltip → stock detail panel catalyst section.
+**Catalyst badges on watchlist items.**
+Each watchlist symbol gains catalyst badge showing latest catalyst category. Deferred until watchlist + catalyst data integration (Sprint 24+).
 
-*Effort: ~3 hours. Badge component + CatalystService data wiring.*
+*Effort: ~3 hours. Badge integration with existing watchlist.*
 
-### 23-C. Trade Detail Panel — Catalyst Section [P1]
+### 23-G. Trade Detail Panel — Catalyst Section [P1] — DEFERRED
 
 **Catalyst context in trade deep-dive.**
-New section in Stock/Asset Detail Panel: catalyst headline, category, quality score (1–10), source link, timestamp. Shows what news drove the setup.
+New section in Stock/Asset Detail Panel: catalyst headline, category, quality score, source link. Deferred until trade-catalyst linking implemented (Sprint 24+).
 
 *Effort: ~3 hours. New section in existing panel.*
 
-### 23-D. Performance — By Catalyst Type [P1]
+### 23-H. Performance — By Catalyst Type [P1] — DEFERRED
 
 **Which catalysts produce the best trades?**
-New chart on Performance page: win rate, avg R, total P&L broken down by catalyst category (FDA, Earnings, Analyst, etc.). Table + bar chart.
+New chart on Performance page: win rate, avg R, total P&L broken down by catalyst category. Deferred until sufficient catalyst-tagged trades exist.
 
 *Effort: ~4 hours. New chart + API aggregation.*
 
-### 23-E. Floating Action Context [P1]
+### 23-I. Floating Action Context [P1] — DEFERRED
 
 **Contextual action toolbar.**
-When hovering/selecting a position or trade, a floating toolbar appears: close position, view chart, copy symbol, add to watchlist, open detail, add annotation. More discoverable than right-click.
+When hovering/selecting a position or trade, floating toolbar appears. Deferred to UX polish sprint.
 
 *Effort: ~4 hours. Floating toolbar with position-aware placement.*
 
@@ -641,7 +669,7 @@ Refactor Performance page from fixed 5-tab layout to customizable widget grid us
 | **21d** ✅ | Dashboard + Performance analytics + System + Nav + Copilot shell | ~68h | Architecture + analytics |
 | **22** | Copilot activation, AI insight cards, briefings, EOD, optimization landscape, projections | ~54h | AI-enhanced visualization |
 | **22+** | Strategy Activity Feed | ~8–12h | Real-time strategy reasoning visibility |
-| **23** | Catalyst badges, pre-market live data, floating actions, persistent state | ~21h | Catalyst intelligence UI |
+| **23.5** ✅ | CatalystBadge, CatalystAlertPanel, IntelligenceBriefView, TanStack Query hooks | ~12h | Catalyst intelligence UI foundation |
 | **23+** | Sunburst, regime timeline, symbol heatmap, configurable grid, notifications | ~36h | Refinement & customization |
 | **24** | Flow indicator, L2 heatmap, entry snapshot | ~14h | Order flow UI |
 | **25** | Quality badges, breakdown radar, performance by grade, allocation by quality | ~19h | Quality scoring UI |
