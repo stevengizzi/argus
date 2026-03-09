@@ -1039,8 +1039,8 @@ log_level: INFO
         assert hasattr(config.system, "universe_manager")
         assert isinstance(config.system.universe_manager, UniverseManagerConfig)
 
-        # Verify it's disabled by default in live config too
-        assert config.system.universe_manager.enabled is False
+        # Verify universe_manager is enabled in live config (Sprint 23.3)
+        assert config.system.universe_manager.enabled is True
 
         # Verify raw YAML has the section
         raw_yaml = yaml.safe_load(system_live_path.read_text())
