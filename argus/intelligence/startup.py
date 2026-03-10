@@ -9,10 +9,15 @@ Sprint 23.6 Session 3a — DEC-164
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import time
+from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import datetime, time as dt_time
 from pathlib import Path
 from typing import TYPE_CHECKING
+from zoneinfo import ZoneInfo
 
 from argus.intelligence import CatalystPipeline
 from argus.intelligence.briefing import BriefingGenerator
@@ -164,3 +169,83 @@ async def shutdown_intelligence(components: IntelligenceComponents) -> None:
     await components.storage.close()
 
     logger.info("Intelligence pipeline shutdown complete")
+
+
+async def run_polling_loop(
+    pipeline: CatalystPipeline,
+    config: CatalystConfig,
+    get_symbols: Callable[[], list[str]],
+    market_open: str = "09:30",
+    market_close: str = "16:00",
+) -> None:
+    """Run the catalyst polling loop indefinitely.
+
+    Polls the pipeline at configurable intervals, with market-hours-aware
+    interval switching. Handles errors gracefully without crashing.
+
+    Args:
+        pipeline: The CatalystPipeline instance to poll.
+        config: Catalyst configuration with polling intervals.
+        get_symbols: Callback that returns the current list of symbols to poll.
+        market_open: Market open time in HH:MM format (ET).
+        market_close: Market close time in HH:MM format (ET).
+    """
+    et_tz = ZoneInfo("America/New_York")
+    open_hour, open_minute = map(int, market_open.split(":"))
+    close_hour, close_minute = map(int, market_close.split(":"))
+    open_time = dt_time(open_hour, open_minute)
+    close_time = dt_time(close_hour, close_minute)
+
+    # Overlap protection lock
+    poll_lock = asyncio.Lock()
+
+    logger.info(
+        "Polling loop started (premarket=%ds, session=%ds, market=%s-%s ET)",
+        config.polling_interval_premarket_seconds,
+        config.polling_interval_session_seconds,
+        market_open,
+        market_close,
+    )
+
+    while True:
+        poll_start = time.monotonic()
+
+        # Determine interval based on current ET time
+        now_et = datetime.now(et_tz)
+        current_time = now_et.time()
+        is_market_hours = open_time <= current_time < close_time
+
+        if is_market_hours:
+            interval = config.polling_interval_session_seconds
+        else:
+            interval = config.polling_interval_premarket_seconds
+
+        # Attempt poll with overlap protection
+        if poll_lock.locked():
+            logger.warning("Previous poll still running, skipping this cycle")
+        else:
+            async with poll_lock:
+                try:
+                    symbols = get_symbols()
+                    if not symbols:
+                        logger.warning("No symbols returned from get_symbols(), skipping poll")
+                    else:
+                        await pipeline.run_poll(symbols)
+                except asyncio.CancelledError:
+                    logger.info("Polling loop cancelled")
+                    raise
+                except Exception as e:
+                    logger.error("Poll cycle failed: %s", e)
+
+        # Calculate sleep time
+        poll_duration = time.monotonic() - poll_start
+        sleep_time = interval - poll_duration
+
+        if sleep_time <= 0:
+            logger.warning(
+                "Poll cycle took %.1fs, exceeding interval of %ds",
+                poll_duration,
+                interval,
+            )
+        else:
+            await asyncio.sleep(sleep_time)

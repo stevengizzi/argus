@@ -123,9 +123,13 @@ def create_app(app_state: AppState) -> FastAPI:
         # Initialize intelligence pipeline if enabled
         intelligence_initialized_here = False
         intelligence_components = None
+        polling_task: asyncio.Task[None] | None = None
         if app_state.config and app_state.config.catalyst and app_state.config.catalyst.enabled:
             try:
-                from argus.intelligence.startup import create_intelligence_components
+                from argus.intelligence.startup import (
+                    create_intelligence_components,
+                    run_polling_loop,
+                )
 
                 intelligence_components = await create_intelligence_components(
                     config=app_state.config.catalyst,
@@ -144,6 +148,29 @@ def create_app(app_state: AppState) -> FastAPI:
                         "Intelligence pipeline initialized (%d sources)",
                         len(intelligence_components.sources),
                     )
+
+                    # Create get_symbols callback for polling
+                    def get_symbols() -> list[str]:
+                        # Prefer universe manager viable symbols
+                        if (
+                            app_state.universe_manager is not None
+                            and app_state.universe_manager.viable_count > 0
+                        ):
+                            return list(app_state.universe_manager.viable_symbols)
+                        # Fallback to cached watchlist
+                        if app_state.cached_watchlist:
+                            return [item.symbol for item in app_state.cached_watchlist]
+                        return []
+
+                    # Start polling loop task
+                    polling_task = asyncio.create_task(
+                        run_polling_loop(
+                            pipeline=intelligence_components.pipeline,
+                            config=app_state.config.catalyst,
+                            get_symbols=get_symbols,
+                        )
+                    )
+                    logger.info("Intelligence polling loop started")
             except Exception as e:
                 logger.error(f"Failed to initialize intelligence pipeline: {e}")
         elif (
@@ -181,6 +208,15 @@ def create_app(app_state: AppState) -> FastAPI:
 
         # Cleanup intelligence pipeline if we initialized it here
         if intelligence_initialized_here and intelligence_components is not None:
+            # Cancel polling task first
+            if polling_task is not None:
+                polling_task.cancel()
+                try:
+                    await polling_task
+                except asyncio.CancelledError:
+                    pass
+                logger.info("Intelligence polling loop stopped")
+
             try:
                 from argus.intelligence.startup import shutdown_intelligence
 
