@@ -1259,3 +1259,280 @@ class TestSymbolReferenceDataSerialization:
         assert data.industry is None
         assert data.market_cap is None
         assert data.is_otc is False
+
+
+class TestFMPReferenceClientIncrementalFetch:
+    """Tests for fetch_reference_data_incremental method (Sprint 23.6 S4b)."""
+
+    @pytest.fixture
+    def tmp_cache_path(self, tmp_path: Any) -> str:
+        """Create a temporary cache file path."""
+        return str(tmp_path / "test_cache.json")
+
+    @pytest.fixture
+    def config_with_tmp_cache(self, tmp_cache_path: str) -> FMPReferenceConfig:
+        """Config with temporary cache file path."""
+        return FMPReferenceConfig(cache_file=tmp_cache_path, cache_max_age_hours=24)
+
+    @pytest.fixture
+    def client_with_tmp_cache(
+        self, config_with_tmp_cache: FMPReferenceConfig
+    ) -> FMPReferenceClient:
+        """Client configured with temporary cache file."""
+        c = FMPReferenceClient(config_with_tmp_cache)
+        c._api_key = "test_key"
+        return c
+
+    async def test_incremental_fetch_all_cached(
+        self, client_with_tmp_cache: FMPReferenceClient, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """All symbols in fresh cache → no network calls, returns cached."""
+        import logging
+
+        caplog.set_level(logging.INFO)
+
+        # Pre-populate cache with fresh data
+        client_with_tmp_cache._cache = {
+            "AAPL": SymbolReferenceData(symbol="AAPL", sector="Technology"),
+            "MSFT": SymbolReferenceData(symbol="MSFT", sector="Technology"),
+        }
+        client_with_tmp_cache.save_cache()
+
+        # Track if fetch_reference_data is called
+        fetch_called = False
+        original_fetch = client_with_tmp_cache.fetch_reference_data
+
+        async def mock_fetch(symbols: list[str]) -> dict[str, SymbolReferenceData]:
+            nonlocal fetch_called
+            fetch_called = True
+            return await original_fetch(symbols)
+
+        with patch.object(
+            client_with_tmp_cache, "fetch_reference_data", side_effect=mock_fetch
+        ):
+            result = await client_with_tmp_cache.fetch_reference_data_incremental(
+                ["AAPL", "MSFT"]
+            )
+
+        # Should return cached data without network call
+        assert len(result) == 2
+        assert "AAPL" in result
+        assert "MSFT" in result
+        assert not fetch_called
+        assert "All reference data cached and fresh" in caplog.text
+
+    async def test_incremental_fetch_some_stale(
+        self, client_with_tmp_cache: FMPReferenceClient, tmp_cache_path: str
+    ) -> None:
+        """Half stale → fetches only stale, merges with fresh."""
+        import json
+        from pathlib import Path
+
+        # Create cache with one fresh and one stale entry
+        now = datetime.now(ZoneInfo("UTC"))
+        old_time = now - timedelta(hours=48)  # 48 hours ago (stale)
+
+        cache_data = {
+            "AAPL": {
+                "symbol": "AAPL",
+                "sector": "Technology",
+                "is_otc": False,
+                "fetched_at": now.isoformat(),
+                "cached_at": now.isoformat(),  # Fresh
+            },
+            "MSFT": {
+                "symbol": "MSFT",
+                "sector": "Technology",
+                "is_otc": False,
+                "fetched_at": old_time.isoformat(),
+                "cached_at": old_time.isoformat(),  # Stale
+            },
+        }
+
+        Path(tmp_cache_path).write_text(json.dumps(cache_data))
+
+        # Mock fetch_reference_data to only return MSFT
+        async def mock_fetch(symbols: list[str]) -> dict[str, SymbolReferenceData]:
+            # Should only be called with stale symbols
+            assert symbols == ["MSFT"], f"Expected ['MSFT'], got {symbols}"
+            return {
+                "MSFT": SymbolReferenceData(
+                    symbol="MSFT", sector="Technology", market_cap=2_500_000_000_000
+                ),
+            }
+
+        with patch.object(
+            client_with_tmp_cache, "fetch_reference_data", side_effect=mock_fetch
+        ):
+            result = await client_with_tmp_cache.fetch_reference_data_incremental(
+                ["AAPL", "MSFT"]
+            )
+
+        # Should have both symbols
+        assert len(result) == 2
+        assert "AAPL" in result
+        assert "MSFT" in result
+
+        # MSFT should have fresh data (with market_cap)
+        assert result["MSFT"].market_cap == 2_500_000_000_000
+
+    async def test_incremental_fetch_no_cache(
+        self, client_with_tmp_cache: FMPReferenceClient, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """No cache file → full fetch (existing behavior)."""
+        import logging
+
+        caplog.set_level(logging.INFO)
+
+        # Don't save any cache - file doesn't exist
+        symbols_fetched: list[str] = []
+
+        async def mock_fetch(symbols: list[str]) -> dict[str, SymbolReferenceData]:
+            symbols_fetched.extend(symbols)
+            return {
+                sym: SymbolReferenceData(symbol=sym, sector="Technology")
+                for sym in symbols
+            }
+
+        with patch.object(
+            client_with_tmp_cache, "fetch_reference_data", side_effect=mock_fetch
+        ):
+            result = await client_with_tmp_cache.fetch_reference_data_incremental(
+                ["AAPL", "MSFT", "NVDA"]
+            )
+
+        # Should have fetched all symbols
+        assert len(result) == 3
+        assert sorted(symbols_fetched) == ["AAPL", "MSFT", "NVDA"]
+        # Should log about cache miss
+        assert "No cache file found" in caplog.text
+
+    async def test_incremental_fetch_saves_cache(
+        self, client_with_tmp_cache: FMPReferenceClient, tmp_cache_path: str
+    ) -> None:
+        """After fetch, cache file updated."""
+        import json
+        from pathlib import Path
+
+        async def mock_fetch(symbols: list[str]) -> dict[str, SymbolReferenceData]:
+            return {
+                sym: SymbolReferenceData(symbol=sym, sector="Technology")
+                for sym in symbols
+            }
+
+        with patch.object(
+            client_with_tmp_cache, "fetch_reference_data", side_effect=mock_fetch
+        ):
+            await client_with_tmp_cache.fetch_reference_data_incremental(
+                ["AAPL", "MSFT"]
+            )
+
+        # Cache file should exist and contain both symbols
+        cache_path = Path(tmp_cache_path)
+        assert cache_path.exists()
+
+        with open(cache_path) as f:
+            data = json.load(f)
+
+        assert "AAPL" in data
+        assert "MSFT" in data
+
+    async def test_incremental_fetch_merge_correctness(
+        self, client_with_tmp_cache: FMPReferenceClient, tmp_cache_path: str
+    ) -> None:
+        """Merged result has both cached and fresh entries."""
+        import json
+        from pathlib import Path
+
+        # Create cache with two entries, one will be "stale" (missing from request)
+        now = datetime.now(ZoneInfo("UTC"))
+
+        cache_data = {
+            "AAPL": {
+                "symbol": "AAPL",
+                "sector": "Technology",
+                "market_cap": 3_000_000_000_000,  # Original value
+                "is_otc": False,
+                "fetched_at": now.isoformat(),
+                "cached_at": now.isoformat(),
+            },
+        }
+
+        Path(tmp_cache_path).write_text(json.dumps(cache_data))
+
+        # Add new symbol NVDA that's not in cache
+        async def mock_fetch(symbols: list[str]) -> dict[str, SymbolReferenceData]:
+            # Should only fetch the new/stale symbols
+            return {
+                sym: SymbolReferenceData(
+                    symbol=sym, sector="Technology", market_cap=1_500_000_000_000
+                )
+                for sym in symbols
+            }
+
+        with patch.object(
+            client_with_tmp_cache, "fetch_reference_data", side_effect=mock_fetch
+        ):
+            result = await client_with_tmp_cache.fetch_reference_data_incremental(
+                ["AAPL", "NVDA"]
+            )
+
+        # Should have both symbols
+        assert len(result) == 2
+        assert "AAPL" in result
+        assert "NVDA" in result
+
+        # AAPL should have original cached market_cap (not overwritten)
+        assert result["AAPL"].market_cap == 3_000_000_000_000
+
+        # NVDA should have fresh data
+        assert result["NVDA"].market_cap == 1_500_000_000_000
+
+    async def test_incremental_fetch_empty_delta_skips_network(
+        self, client_with_tmp_cache: FMPReferenceClient
+    ) -> None:
+        """Verify no HTTP calls when delta is empty."""
+        # Pre-populate cache with fresh data
+        client_with_tmp_cache._cache = {
+            "AAPL": SymbolReferenceData(symbol="AAPL", sector="Technology"),
+        }
+        client_with_tmp_cache.save_cache()
+
+        # Mock that should never be called
+        async def mock_fetch(symbols: list[str]) -> dict[str, SymbolReferenceData]:
+            raise AssertionError("fetch_reference_data should not be called")
+
+        with patch.object(
+            client_with_tmp_cache, "fetch_reference_data", side_effect=mock_fetch
+        ):
+            # Should succeed without calling fetch (cache is fresh)
+            result = await client_with_tmp_cache.fetch_reference_data_incremental(
+                ["AAPL"]
+            )
+
+        assert len(result) == 1
+        assert "AAPL" in result
+
+    async def test_warm_up_fallback_on_error(
+        self, client_with_tmp_cache: FMPReferenceClient, tmp_cache_path: str
+    ) -> None:
+        """Cache corrupt + fetch error → returns cached data if available, no crash."""
+        from pathlib import Path
+
+        # Write corrupt cache file
+        Path(tmp_cache_path).write_text("{ invalid json }")
+
+        # Mock fetch to fail
+        async def mock_fetch_fail(symbols: list[str]) -> dict[str, SymbolReferenceData]:
+            raise Exception("Network error")
+
+        with patch.object(
+            client_with_tmp_cache, "fetch_reference_data", side_effect=mock_fetch_fail
+        ):
+            # Should not crash, returns empty dict
+            result = await client_with_tmp_cache.fetch_reference_data_incremental(
+                ["AAPL", "MSFT"]
+            )
+
+        # Corrupt cache + fetch failure = empty result (graceful degradation)
+        assert result == {}

@@ -99,9 +99,11 @@ class UniverseManager:
                 )
                 return set()
 
-        # Fetch reference data for all symbols
+        # Fetch reference data for all symbols (incremental - uses cache)
         try:
-            reference_data = await self._reference_client.build_reference_cache(symbols)
+            reference_data = await self._reference_client.fetch_reference_data_incremental(
+                symbols
+            )
         except Exception as e:
             logger.error("Failed to fetch reference data: %s", e)
             return set()

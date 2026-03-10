@@ -918,3 +918,88 @@ class FMPReferenceClient:
                 stale.append(symbol)
 
         return stale
+
+    async def fetch_reference_data_incremental(
+        self, all_symbols: list[str]
+    ) -> dict[str, SymbolReferenceData]:
+        """Fetch reference data incrementally using cache.
+
+        Loads existing cache, identifies stale/missing symbols, fetches only
+        the delta, merges with cached data, and saves the updated cache.
+        Reduces warm-up time from ~27 minutes to ~2-5 minutes on subsequent runs.
+
+        Args:
+            all_symbols: Complete list of symbols to ensure data for.
+
+        Returns:
+            Dictionary mapping symbol to SymbolReferenceData.
+            Returns empty dict if both cache load and full fetch fail.
+        """
+        # Load existing cache
+        try:
+            cached = self.load_cache()
+        except Exception as e:
+            logger.warning("Failed to load cache: %s — proceeding with full fetch", e)
+            cached = {}
+
+        # Identify stale/missing symbols
+        stale_symbols = self.get_stale_symbols(
+            cached, all_symbols, self._config.cache_max_age_hours
+        )
+
+        # If no stale symbols, return cached data directly
+        if not stale_symbols:
+            logger.info(
+                "All reference data cached and fresh (%d symbols)",
+                len(cached),
+            )
+            # Update internal cache to reflect loaded data
+            self._cache = cached
+            return cached
+
+        logger.info(
+            "Incremental fetch: %d stale/missing symbols out of %d total",
+            len(stale_symbols),
+            len(all_symbols),
+        )
+
+        # Fetch only the stale/missing symbols
+        try:
+            fresh_data = await self.fetch_reference_data(stale_symbols)
+        except Exception as e:
+            logger.error("Failed to fetch stale symbols: %s", e)
+            # Return cached data as fallback (partial data is better than none)
+            if cached:
+                logger.info(
+                    "Using cached data as fallback (%d symbols)",
+                    len(cached),
+                )
+                self._cache = cached
+                return cached
+            return {}
+
+        # Merge fresh fetches with valid cached entries
+        # Start with cached entries that are NOT stale
+        stale_set = set(stale_symbols)
+        merged: dict[str, SymbolReferenceData] = {}
+
+        for symbol, data in cached.items():
+            if symbol not in stale_set:
+                merged[symbol] = data
+
+        # Add fresh data (overwrite any stale entries)
+        for symbol, data in fresh_data.items():
+            merged[symbol] = data
+
+        logger.info(
+            "Incremental fetch complete: %d cached + %d fresh = %d total",
+            len(merged) - len(fresh_data),
+            len(fresh_data),
+            len(merged),
+        )
+
+        # Update internal cache and save to disk
+        self._cache = merged
+        self.save_cache()
+
+        return merged

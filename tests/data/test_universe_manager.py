@@ -94,7 +94,7 @@ class TestBuildViableUniverseSuccess:
     ) -> None:
         """build_viable_universe applies filters and returns viable symbols."""
         # Setup mock to return sample data
-        mock_reference_client.build_reference_cache = AsyncMock(
+        mock_reference_client.fetch_reference_data_incremental = AsyncMock(
             return_value=sample_reference_data
         )
 
@@ -111,7 +111,7 @@ class TestBuildViableUniverseSuccess:
         assert "NVDA" in result
 
         # Verify reference client was called
-        mock_reference_client.build_reference_cache.assert_called_once_with(
+        mock_reference_client.fetch_reference_data_incremental.assert_called_once_with(
             initial_symbols
         )
 
@@ -161,7 +161,7 @@ class TestBuildViableUniverseSuccess:
             ),
         }
 
-        mock_reference_client.build_reference_cache = AsyncMock(
+        mock_reference_client.fetch_reference_data_incremental = AsyncMock(
             return_value=reference_data
         )
 
@@ -215,7 +215,7 @@ class TestSystemFilterExcludeOtc:
             ),
         }
 
-        mock_reference_client.build_reference_cache = AsyncMock(
+        mock_reference_client.fetch_reference_data_incremental = AsyncMock(
             return_value=reference_data
         )
 
@@ -260,7 +260,7 @@ class TestSystemFilterExcludeOtc:
             ),
         }
 
-        mock_reference_client.build_reference_cache = AsyncMock(
+        mock_reference_client.fetch_reference_data_incremental = AsyncMock(
             return_value=reference_data
         )
 
@@ -315,7 +315,7 @@ class TestSystemFilterPriceRange:
             ),
         }
 
-        mock_reference_client.build_reference_cache = AsyncMock(
+        mock_reference_client.fetch_reference_data_incremental = AsyncMock(
             return_value=reference_data
         )
 
@@ -358,7 +358,7 @@ class TestSystemFilterPriceRange:
             ),
         }
 
-        mock_reference_client.build_reference_cache = AsyncMock(
+        mock_reference_client.fetch_reference_data_incremental = AsyncMock(
             return_value=reference_data
         )
 
@@ -406,7 +406,7 @@ class TestSystemFilterMinVolume:
             ),
         }
 
-        mock_reference_client.build_reference_cache = AsyncMock(
+        mock_reference_client.fetch_reference_data_incremental = AsyncMock(
             return_value=reference_data
         )
 
@@ -442,7 +442,7 @@ class TestSystemFilterMinVolume:
             ),
         }
 
-        mock_reference_client.build_reference_cache = AsyncMock(
+        mock_reference_client.fetch_reference_data_incremental = AsyncMock(
             return_value=reference_data
         )
 
@@ -473,8 +473,8 @@ class TestBuildViableUniverseFmpFailure:
         default_config: UniverseManagerConfig,
     ) -> None:
         """Fallback to scanner symbols when FMP reference client fails."""
-        # Setup mock to raise exception
-        mock_reference_client.build_reference_cache = AsyncMock(
+        # Setup mock to raise exception (incremental path fails)
+        mock_reference_client.fetch_reference_data_incremental = AsyncMock(
             side_effect=Exception("FMP API error")
         )
 
@@ -486,7 +486,7 @@ class TestBuildViableUniverseFmpFailure:
         )
         assert result == set()
 
-        # Now test fallback method
+        # Now test fallback method (uses build_reference_cache, not incremental)
         mock_reference_client.build_reference_cache = AsyncMock(return_value={})
         scanner_symbols = ["TSLA", "NVDA", "AMD"]
 
@@ -505,6 +505,7 @@ class TestBuildViableUniverseFmpFailure:
     ) -> None:
         """Fallback fetches partial reference data successfully."""
         # Simulate partial success - only some symbols have data
+        # Fallback uses build_reference_cache (not incremental)
         partial_data = {
             "TSLA": SymbolReferenceData(
                 symbol="TSLA",
@@ -544,7 +545,7 @@ class TestViableUniverseProperties:
         sample_reference_data: dict[str, SymbolReferenceData],
     ) -> None:
         """Verify count, is_built, last_build_time properties."""
-        mock_reference_client.build_reference_cache = AsyncMock(
+        mock_reference_client.fetch_reference_data_incremental = AsyncMock(
             return_value=sample_reference_data
         )
 
@@ -575,7 +576,7 @@ class TestViableUniverseProperties:
         sample_reference_data: dict[str, SymbolReferenceData],
     ) -> None:
         """viable_symbols returns a copy, not the internal set."""
-        mock_reference_client.build_reference_cache = AsyncMock(
+        mock_reference_client.fetch_reference_data_incremental = AsyncMock(
             return_value=sample_reference_data
         )
 
@@ -600,7 +601,7 @@ class TestViableUniverseProperties:
         sample_reference_data: dict[str, SymbolReferenceData],
     ) -> None:
         """reference_cache returns a copy, not the internal dict."""
-        mock_reference_client.build_reference_cache = AsyncMock(
+        mock_reference_client.fetch_reference_data_incremental = AsyncMock(
             return_value=sample_reference_data
         )
 
@@ -629,7 +630,7 @@ class TestGetReferenceData:
         sample_reference_data: dict[str, SymbolReferenceData],
     ) -> None:
         """Lookup cached reference data for viable symbol."""
-        mock_reference_client.build_reference_cache = AsyncMock(
+        mock_reference_client.fetch_reference_data_incremental = AsyncMock(
             return_value=sample_reference_data
         )
 
@@ -654,7 +655,7 @@ class TestGetReferenceData:
         sample_reference_data: dict[str, SymbolReferenceData],
     ) -> None:
         """get_reference_data returns None for unknown symbol."""
-        mock_reference_client.build_reference_cache = AsyncMock(
+        mock_reference_client.fetch_reference_data_incremental = AsyncMock(
             return_value=sample_reference_data
         )
 
@@ -697,7 +698,7 @@ class TestEmptyUniverse:
             ),
         }
 
-        mock_reference_client.build_reference_cache = AsyncMock(
+        mock_reference_client.fetch_reference_data_incremental = AsyncMock(
             return_value=reference_data
         )
 
@@ -731,7 +732,7 @@ class TestEmptyUniverse:
         caplog: pytest.LogCaptureFixture,
     ) -> None:
         """Empty reference data returns empty set."""
-        mock_reference_client.build_reference_cache = AsyncMock(return_value={})
+        mock_reference_client.fetch_reference_data_incremental = AsyncMock(return_value={})
 
         manager = UniverseManager(mock_reference_client, default_config, mock_scanner)
 
@@ -818,7 +819,7 @@ class TestNullDataHandling:
             ),
         }
 
-        mock_reference_client.build_reference_cache = AsyncMock(
+        mock_reference_client.fetch_reference_data_incremental = AsyncMock(
             return_value=reference_data
         )
 
@@ -855,7 +856,7 @@ class TestNullDataHandling:
             ),
         }
 
-        mock_reference_client.build_reference_cache = AsyncMock(
+        mock_reference_client.fetch_reference_data_incremental = AsyncMock(
             return_value=reference_data
         )
 
@@ -899,7 +900,7 @@ class TestNullDataHandling:
             ),
         }
 
-        mock_reference_client.build_reference_cache = AsyncMock(
+        mock_reference_client.fetch_reference_data_incremental = AsyncMock(
             return_value=reference_data
         )
 
@@ -949,7 +950,7 @@ class TestRouteCandleSingleStrategyMatch:
             ),
         }
 
-        mock_reference_client.build_reference_cache = AsyncMock(
+        mock_reference_client.fetch_reference_data_incremental = AsyncMock(
             return_value=reference_data
         )
 
@@ -1010,7 +1011,7 @@ class TestRouteCandleMultiStrategyMatch:
             ),
         }
 
-        mock_reference_client.build_reference_cache = AsyncMock(
+        mock_reference_client.fetch_reference_data_incremental = AsyncMock(
             return_value=reference_data
         )
 
@@ -1071,7 +1072,7 @@ class TestRouteCandleNoMatch:
             ),
         }
 
-        mock_reference_client.build_reference_cache = AsyncMock(
+        mock_reference_client.fetch_reference_data_incremental = AsyncMock(
             return_value=reference_data
         )
 
@@ -1128,7 +1129,7 @@ class TestRouteCandleNoMatch:
             ),
         }
 
-        mock_reference_client.build_reference_cache = AsyncMock(
+        mock_reference_client.fetch_reference_data_incremental = AsyncMock(
             return_value=reference_data
         )
 
@@ -1194,7 +1195,7 @@ class TestSectorIncludeFilter:
             ),
         }
 
-        mock_reference_client.build_reference_cache = AsyncMock(
+        mock_reference_client.fetch_reference_data_incremental = AsyncMock(
             return_value=reference_data
         )
 
@@ -1265,7 +1266,7 @@ class TestSectorExcludeFilter:
             ),
         }
 
-        mock_reference_client.build_reference_cache = AsyncMock(
+        mock_reference_client.fetch_reference_data_incremental = AsyncMock(
             return_value=reference_data
         )
 
@@ -1321,7 +1322,7 @@ class TestMissingReferenceDataRouting:
             ),
         }
 
-        mock_reference_client.build_reference_cache = AsyncMock(
+        mock_reference_client.fetch_reference_data_incremental = AsyncMock(
             return_value=reference_data
         )
 
@@ -1369,7 +1370,7 @@ class TestMissingReferenceDataRouting:
             ),
         }
 
-        mock_reference_client.build_reference_cache = AsyncMock(
+        mock_reference_client.fetch_reference_data_incremental = AsyncMock(
             return_value=reference_data
         )
 
@@ -1431,7 +1432,7 @@ class TestMissingReferenceDataRouting:
             ),
         }
 
-        mock_reference_client.build_reference_cache = AsyncMock(
+        mock_reference_client.fetch_reference_data_incremental = AsyncMock(
             return_value=reference_data
         )
 
@@ -1478,7 +1479,7 @@ class TestMissingReferenceDataRouting:
             ),
         }
 
-        mock_reference_client.build_reference_cache = AsyncMock(
+        mock_reference_client.fetch_reference_data_incremental = AsyncMock(
             return_value=reference_data
         )
 
@@ -1545,7 +1546,7 @@ class TestNoFilterMatchesAll:
             ),
         }
 
-        mock_reference_client.build_reference_cache = AsyncMock(
+        mock_reference_client.fetch_reference_data_incremental = AsyncMock(
             return_value=reference_data
         )
 
@@ -1614,7 +1615,7 @@ class TestGetStrategyUniverseSize:
             ),
         }
 
-        mock_reference_client.build_reference_cache = AsyncMock(
+        mock_reference_client.fetch_reference_data_incremental = AsyncMock(
             return_value=reference_data
         )
 
@@ -1694,7 +1695,7 @@ class TestGetStrategySymbols:
             ),
         }
 
-        mock_reference_client.build_reference_cache = AsyncMock(
+        mock_reference_client.fetch_reference_data_incremental = AsyncMock(
             return_value=reference_data
         )
 
@@ -1759,7 +1760,7 @@ class TestGetUniverseStats:
             ),
         }
 
-        mock_reference_client.build_reference_cache = AsyncMock(
+        mock_reference_client.fetch_reference_data_incremental = AsyncMock(
             return_value=reference_data
         )
 
@@ -1832,7 +1833,7 @@ class TestRoutingTableRebuild:
             ),
         }
 
-        mock_reference_client.build_reference_cache = AsyncMock(
+        mock_reference_client.fetch_reference_data_incremental = AsyncMock(
             return_value=reference_data
         )
 
@@ -1878,3 +1879,72 @@ class TestRoutingTableRebuild:
 
         # Should now route to strategy_b only (strategy_c doesn't match)
         assert manager.route_candle("AAPL") == {"strategy_b"}
+
+
+# =============================================================================
+# Sprint 23.6, Session 4b: Incremental Warm-Up Wiring Tests
+# =============================================================================
+
+
+class TestIncrementalWarmUpWiring:
+    """Tests for incremental warm-up wiring (Sprint 23.6 S4b)."""
+
+    @pytest.mark.asyncio
+    async def test_warm_up_uses_incremental(
+        self,
+        mock_reference_client: MagicMock,
+        mock_scanner: MagicMock,
+        default_config: UniverseManagerConfig,
+        sample_reference_data: dict[str, SymbolReferenceData],
+    ) -> None:
+        """build_viable_universe calls fetch_reference_data_incremental."""
+        # Setup mock to return sample data via incremental path
+        mock_reference_client.fetch_reference_data_incremental = AsyncMock(
+            return_value=sample_reference_data
+        )
+        # The old method should NOT be called
+        mock_reference_client.build_reference_cache = AsyncMock(
+            side_effect=AssertionError("build_reference_cache should not be called")
+        )
+
+        manager = UniverseManager(mock_reference_client, default_config, mock_scanner)
+
+        # Build universe with initial symbols
+        initial_symbols = ["AAPL", "MSFT", "NVDA"]
+        result = await manager.build_viable_universe(initial_symbols=initial_symbols)
+
+        # All 3 symbols should pass filters
+        assert len(result) == 3
+
+        # Verify incremental fetch was called (not build_reference_cache)
+        mock_reference_client.fetch_reference_data_incremental.assert_called_once_with(
+            initial_symbols
+        )
+
+    @pytest.mark.asyncio
+    async def test_warm_up_fallback_on_incremental_error(
+        self,
+        mock_reference_client: MagicMock,
+        mock_scanner: MagicMock,
+        default_config: UniverseManagerConfig,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Incremental fetch error → empty universe (graceful degradation), no crash."""
+        # Setup mock to raise exception (simulating cache corrupt + network error)
+        mock_reference_client.fetch_reference_data_incremental = AsyncMock(
+            side_effect=Exception("Cache and network both failed")
+        )
+
+        manager = UniverseManager(mock_reference_client, default_config, mock_scanner)
+
+        with caplog.at_level(logging.WARNING):
+            # Should not raise, just return empty set
+            result = await manager.build_viable_universe(
+                initial_symbols=["AAPL", "MSFT"]
+            )
+
+        # Empty universe on total failure
+        assert result == set()
+
+        # Error should be logged
+        assert "Failed to fetch reference data" in caplog.text
