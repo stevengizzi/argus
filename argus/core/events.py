@@ -11,6 +11,10 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
+from zoneinfo import ZoneInfo
+
+# ET timezone for intelligence layer (DEC-276)
+_ET = ZoneInfo("America/New_York")
 
 # ---------------------------------------------------------------------------
 # Enums
@@ -314,8 +318,9 @@ class CatalystEvent(Event):
     source: str = ""  # "sec_edgar", "fmp_news", "finnhub"
     source_url: str | None = None
     filing_type: str | None = None
-    published_at: datetime = field(default_factory=lambda: datetime.now(UTC))
-    classified_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    # ET per DEC-276 (intelligence layer convention)
+    published_at: datetime = field(default_factory=lambda: datetime.now(_ET))
+    classified_at: datetime = field(default_factory=lambda: datetime.now(_ET))
 
 
 @dataclass(frozen=True)

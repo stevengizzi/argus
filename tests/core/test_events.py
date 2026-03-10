@@ -1,9 +1,13 @@
 """Tests for event dataclass definitions."""
 
+from datetime import UTC, datetime
+from zoneinfo import ZoneInfo
+
 import pytest
 
 from argus.core.events import (
     CandleEvent,
+    CatalystEvent,
     Event,
     ExitReason,
     PositionClosedEvent,
@@ -75,3 +79,34 @@ class TestEventDataclasses:
             exit_reason=ExitReason.STOP_LOSS,
         )
         assert event.exit_reason.value == "stop_loss"
+
+
+class TestCatalystEvent:
+    """Tests for CatalystEvent timezone handling."""
+
+    def test_catalyst_event_defaults_et(self) -> None:
+        """CatalystEvent() with no args produces ET-aware datetimes."""
+        event = CatalystEvent()
+
+        # Both timestamps should be timezone-aware
+        assert event.published_at.tzinfo is not None
+        assert event.classified_at.tzinfo is not None
+
+        # Both should be in America/New_York timezone
+        et_zone = ZoneInfo("America/New_York")
+        assert str(event.published_at.tzinfo) == str(et_zone)
+        assert str(event.classified_at.tzinfo) == str(et_zone)
+
+    def test_catalyst_event_explicit_override(self) -> None:
+        """Explicit timestamp still works (no regression)."""
+        utc_time = datetime.now(UTC)
+        event = CatalystEvent(
+            symbol="AAPL",
+            published_at=utc_time,
+            classified_at=utc_time,
+        )
+
+        # Should use the explicitly provided UTC time
+        assert event.published_at == utc_time
+        assert event.classified_at == utc_time
+        assert event.published_at.tzinfo == UTC

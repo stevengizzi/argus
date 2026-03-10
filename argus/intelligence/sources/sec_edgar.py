@@ -76,10 +76,14 @@ class SECEdgarClient(CatalystSource):
 
         Creates aiohttp session with required User-Agent header.
         Pre-loads the ticker→CIK mapping for efficient lookups.
+
+        Raises:
+            ValueError: If user_agent_email is empty or whitespace-only.
         """
-        if not self._config.user_agent_email:
-            logger.warning(
-                "SEC EDGAR user_agent_email not configured - requests may be blocked"
+        if not self._config.user_agent_email.strip():
+            raise ValueError(
+                "SEC EDGAR source enabled but user_agent_email is empty. "
+                "Set catalyst.sources.sec_edgar.user_agent_email in config."
             )
 
         user_agent = f"ARGUS Trading System ({self._config.user_agent_email})"

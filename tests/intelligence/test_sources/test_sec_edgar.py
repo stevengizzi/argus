@@ -313,3 +313,50 @@ class TestSECEdgarClient:
 
         assert "User-Agent" in captured_headers
         assert "test@example.com" in captured_headers["User-Agent"]
+
+    @pytest.mark.asyncio
+    async def test_sec_edgar_start_empty_email_raises(self) -> None:
+        """start() with user_agent_email='' raises ValueError."""
+        config = SECEdgarConfig(user_agent_email="")
+        client = SECEdgarClient(config)
+
+        with pytest.raises(ValueError) as exc_info:
+            await client.start()
+
+        assert "user_agent_email is empty" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_sec_edgar_start_whitespace_email_raises(self) -> None:
+        """start() with user_agent_email='  ' raises ValueError."""
+        config = SECEdgarConfig(user_agent_email="   ")
+        client = SECEdgarClient(config)
+
+        with pytest.raises(ValueError) as exc_info:
+            await client.start()
+
+        assert "user_agent_email is empty" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_sec_edgar_start_valid_email_succeeds(self) -> None:
+        """start() with valid email does not raise."""
+        config = SECEdgarConfig(user_agent_email="valid@example.com")
+        client = SECEdgarClient(config)
+
+        # Mock the session creation and CIK map refresh
+        mock_response = _create_mock_response(200, _make_tickers_response())
+
+        with patch.object(
+            aiohttp,
+            "ClientSession",
+            return_value=MagicMock(
+                get=lambda url: _MockContextManager(mock_response),
+                close=AsyncMock(),
+            ),
+        ):
+            # Should not raise
+            await client.start()
+
+            # Should have loaded CIK map
+            assert len(client._cik_map) > 0
+
+            await client.stop()
