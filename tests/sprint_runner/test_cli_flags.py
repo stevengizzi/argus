@@ -20,8 +20,9 @@ from scripts.sprint_runner.config import (
     SprintConfig,
     TriageConfig,
 )
+from scripts.sprint_runner.cli import build_argument_parser
 from scripts.sprint_runner.executor import ExecutionResult
-from scripts.sprint_runner.main import SprintRunner, create_parser
+from scripts.sprint_runner.main import SprintRunner
 from scripts.sprint_runner.state import RunStatus, SessionPlanStatus
 
 
@@ -197,14 +198,14 @@ class TestCLIParser:
 
     def test_parser_requires_config(self) -> None:
         """Parser requires --config argument."""
-        parser = create_parser()
+        parser = build_argument_parser()
 
         with pytest.raises(SystemExit):
             parser.parse_args([])
 
     def test_parser_accepts_all_flags(self) -> None:
         """Parser accepts all supported flags."""
-        parser = create_parser()
+        parser = build_argument_parser()
 
         args = parser.parse_args([
             "--config", "config.yaml",
@@ -228,7 +229,7 @@ class TestCLIParser:
 
     def test_skip_session_can_be_repeated(self) -> None:
         """--skip-session can be specified multiple times."""
-        parser = create_parser()
+        parser = build_argument_parser()
 
         args = parser.parse_args([
             "--config", "config.yaml",
@@ -240,7 +241,7 @@ class TestCLIParser:
 
     def test_mode_only_accepts_valid_values(self) -> None:
         """--mode only accepts valid values."""
-        parser = create_parser()
+        parser = build_argument_parser()
 
         with pytest.raises(SystemExit):
             parser.parse_args([

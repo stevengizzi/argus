@@ -84,6 +84,7 @@ class ConformanceVerdict:
     integration_check: IntegrationCheck
     drift_summary: str
     raw: dict[str, Any] = field(default_factory=dict)
+    is_fallback: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -396,6 +397,7 @@ class ConformanceChecker:
                     integration_check=IntegrationCheck(),
                     drift_summary="Check failed to produce verdict; defaulting to CONFORMANT",
                     raw={"error": "no_parseable_verdict"},
+                    is_fallback=True,
                 )
 
             return _parse_conformance_verdict(data)
@@ -418,6 +420,7 @@ class ConformanceChecker:
                 integration_check=IntegrationCheck(),
                 drift_summary=f"Check failed: {e}; defaulting to CONFORMANT",
                 raw={"error": str(e)},
+                is_fallback=True,
             )
 
     def should_halt(self, verdict: ConformanceVerdict) -> bool:

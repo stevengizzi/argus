@@ -6,18 +6,25 @@ via Claude Code CLI invocations.
 
 from __future__ import annotations
 
-import argparse
 import asyncio
 import json
 import re
 import sys
-import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+from .cli import (
+    Colors,
+    build_argument_parser,
+    print_error,
+    print_header,
+    print_progress,
+    print_success,
+    print_summary_table,
+    print_warning,
+)
 from .config import RunnerConfig
-from .parallel import find_parallel_group, run_parallel_group
 from .conformance import ConformanceChecker
 from .cost import CostTracker
 from .executor import (
@@ -43,8 +50,11 @@ from .git_ops import (
 )
 from .lock import LockError, LockFile
 from .notifications import NotificationData, NotificationManager
+from .parallel import find_parallel_group, run_parallel_group
 from .state import (
     ConformanceVerdict as ConformanceVerdictEnum,
+)
+from .state import (
     RunPhase,
     RunState,
     RunStatus,
@@ -52,7 +62,7 @@ from .state import (
     SessionPlanStatus,
     SessionResult,
 )
-from .triage import TriageManager, TriageVerdict
+from .triage import TriageManager
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -61,97 +71,6 @@ from .triage import TriageManager, TriageVerdict
 
 TEST_BASELINE_PLACEHOLDER = "{{TEST_BASELINE}}"
 CLOSEOUT_PLACEHOLDER = "[PASTE THE CLOSE-OUT REPORT HERE AFTER THE IMPLEMENTATION SESSION]"
-
-
-# ---------------------------------------------------------------------------
-# Terminal Output Helpers
-# ---------------------------------------------------------------------------
-
-
-class Colors:
-    """ANSI color codes for terminal output."""
-
-    RESET = "\033[0m"
-    BOLD = "\033[1m"
-    DIM = "\033[2m"
-
-    RED = "\033[31m"
-    GREEN = "\033[32m"
-    YELLOW = "\033[33m"
-    BLUE = "\033[34m"
-    MAGENTA = "\033[35m"
-    CYAN = "\033[36m"
-    WHITE = "\033[37m"
-
-    BG_RED = "\033[41m"
-    BG_GREEN = "\033[42m"
-    BG_YELLOW = "\033[43m"
-    BG_BLUE = "\033[44m"
-
-
-def print_header(text: str) -> None:
-    """Print a header line."""
-    print(f"\n{Colors.BOLD}{Colors.CYAN}{'=' * 60}{Colors.RESET}", flush=True)
-    print(f"{Colors.BOLD}{Colors.CYAN}{text:^60}{Colors.RESET}", flush=True)
-    print(f"{Colors.BOLD}{Colors.CYAN}{'=' * 60}{Colors.RESET}\n", flush=True)
-
-
-def print_progress(
-    current: int, total: int, session_id: str, status: str
-) -> None:
-    """Print a progress line."""
-    status_colors = {
-        "PENDING": Colors.DIM,
-        "RUNNING": Colors.YELLOW,
-        "COMPLETE": Colors.GREEN,
-        "FAILED": Colors.RED,
-        "SKIPPED": Colors.MAGENTA,
-    }
-    color = status_colors.get(status, Colors.WHITE)
-    bar = f"[{current}/{total}]"
-    print(f"{Colors.BOLD}{bar}{Colors.RESET} Session {session_id}: {color}{status}{Colors.RESET}", flush=True)
-
-
-def print_summary_table(
-    sessions: list[tuple[str, str, int | None, str | None]]
-) -> None:
-    """Print a summary table of session results.
-
-    Args:
-        sessions: List of (session_id, verdict, test_delta, duration).
-    """
-    print(f"\n{Colors.BOLD}{'Session':<12} {'Verdict':<12} {'Tests':<12} {'Duration':<12}{Colors.RESET}")
-    print("-" * 48)
-    for session_id, verdict, test_delta, duration in sessions:
-        verdict_color = {
-            "CLEAR": Colors.GREEN,
-            "CONCERNS": Colors.YELLOW,
-            "ESCALATE": Colors.RED,
-            "COMPLETE": Colors.GREEN,
-            "SKIPPED": Colors.MAGENTA,
-        }.get(verdict, Colors.WHITE)
-
-        delta_str = f"+{test_delta}" if test_delta and test_delta > 0 else str(test_delta or "-")
-        duration_str = duration or "-"
-        print(
-            f"{session_id:<12} {verdict_color}{verdict:<12}{Colors.RESET} "
-            f"{delta_str:<12} {duration_str:<12}"
-        )
-
-
-def print_error(message: str) -> None:
-    """Print an error message."""
-    print(f"{Colors.RED}{Colors.BOLD}ERROR:{Colors.RESET} {message}", file=sys.stderr)
-
-
-def print_warning(message: str) -> None:
-    """Print a warning message."""
-    print(f"{Colors.YELLOW}WARNING:{Colors.RESET} {message}", flush=True)
-
-
-def print_success(message: str) -> None:
-    """Print a success message."""
-    print(f"{Colors.GREEN}{Colors.BOLD}SUCCESS:{Colors.RESET} {message}", flush=True)
 
 
 # ---------------------------------------------------------------------------
@@ -493,6 +412,9 @@ class SprintRunner:
         # Send sprint completion notification
         self._send_completed_notification(sessions_completed)
 
+        # Check conformance fallback threshold
+        self._check_conformance_fallback_warning()
+
         # Print summary
         self._print_run_summary()
         print_success(f"Sprint completed with {sessions_completed} sessions")
@@ -557,6 +479,9 @@ class SprintRunner:
                 rollback(self.state.git_state.checkpoint_sha, cwd=self.repo_root)
 
         self.lock.release()
+
+        # Check conformance fallback threshold
+        self._check_conformance_fallback_warning()
 
         # Send HALTED notification
         self._send_halted_notification(reason)
@@ -1057,7 +982,8 @@ class SprintRunner:
             # Fallback: attempt to extract verdict from prose
             verdict = self._extract_prose_verdict(result.output, session)
             if verdict is None:
-                self._halt("Review output missing structured verdict (no JSON block or prose verdict found)")
+                msg = "Review output missing structured verdict (no JSON block or prose found)"
+                self._halt(msg)
                 return None
 
         self._save_verdict_json(session.session_id, verdict)
@@ -1202,7 +1128,7 @@ class SprintRunner:
                 )
                 return LoopResult(
                     status=RunStatus.HALTED,
-                    halt_reason=f"Max auto-fixes exceeded",
+                    halt_reason="Max auto-fixes exceeded",
                 )
 
             # Run triage
@@ -1437,6 +1363,11 @@ class SprintRunner:
             json.dumps(conformance_verdict.raw, indent=2),
         )
 
+        # Track fallback usage
+        if conformance_verdict.is_fallback:
+            self.state.conformance_fallback_count += 1
+            self.state.save(self.state_file)
+
         # Map verdict to enum
         if conformance_verdict.verdict == "CONFORMANT":
             session_result.conformance_verdict = ConformanceVerdictEnum.CONFORMANT
@@ -1457,6 +1388,21 @@ class SprintRunner:
             )
 
         return LoopResult(status=RunStatus.RUNNING)
+
+    def _check_conformance_fallback_warning(self) -> None:
+        """Log warning if conformance fallback count exceeds threshold.
+
+        Should be called after all sessions complete or at halt.
+        """
+        if self.state is None:
+            return
+
+        if self.state.conformance_fallback_count > 2:
+            print_warning(
+                f"Conformance check defaulted to CONFORMANT "
+                f"{self.state.conformance_fallback_count} times this run. "
+                "Check conformance subagent reliability."
+            )
 
     def _get_cumulative_files_created(self) -> list[str]:
         """Get all files created across completed sessions."""
@@ -1912,8 +1858,10 @@ class SprintRunner:
         # Overall stats
         total_tests_delta = self.state.test_baseline.current - self.state.test_baseline.initial
         total_cost = self.state.cost.total_cost_estimate_usd
+        initial = self.state.test_baseline.initial
+        current = self.state.test_baseline.current
         print(f"\n{Colors.BOLD}Overall:{Colors.RESET}")
-        print(f"  Tests: {self.state.test_baseline.initial} -> {self.state.test_baseline.current} (+{total_tests_delta})")
+        print(f"  Tests: {initial} -> {current} (+{total_tests_delta})")
         print(f"  Cost: ${total_cost:.2f} / ${self.state.cost.ceiling_usd:.2f}")
         print(f"  Status: {self.state.status}")
 
@@ -2049,74 +1997,7 @@ class SprintRunner:
 # ---------------------------------------------------------------------------
 
 
-def create_parser() -> argparse.ArgumentParser:
-    """Create the argument parser.
-
-    Returns:
-        Configured ArgumentParser.
-    """
-    parser = argparse.ArgumentParser(
-        prog="sprint-runner",
-        description="ARGUS Autonomous Sprint Runner — drives sprint execution via Claude Code CLI",
-    )
-
-    parser.add_argument(
-        "--config",
-        required=True,
-        help="Path to the runner configuration YAML file",
-    )
-
-    parser.add_argument(
-        "--resume",
-        action="store_true",
-        help="Resume from existing run state (clears stale lock if needed)",
-    )
-
-    parser.add_argument(
-        "--pause",
-        action="store_true",
-        help="Pause the runner after the current session completes",
-    )
-
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Validate configuration and print session plan without executing",
-    )
-
-    parser.add_argument(
-        "--from-session",
-        type=str,
-        metavar="SESSION_ID",
-        help="Start from a specific session (skip prior sessions)",
-    )
-
-    parser.add_argument(
-        "--skip-session",
-        type=str,
-        action="append",
-        metavar="SESSION_ID",
-        help="Skip specific session(s) (can be specified multiple times)",
-    )
-
-    parser.add_argument(
-        "--stop-after",
-        type=str,
-        metavar="SESSION_ID",
-        help="Stop after completing the specified session",
-    )
-
-    parser.add_argument(
-        "--mode",
-        type=str,
-        choices=["autonomous", "human-in-the-loop"],
-        help="Override execution mode from config",
-    )
-
-    return parser
-
-
-async def async_main(args: argparse.Namespace) -> int:
+async def async_main(args) -> int:
     """Async main entry point.
 
     Args:
@@ -2176,7 +2057,7 @@ def main() -> int:
     Returns:
         Exit code (0 for success, non-zero for errors).
     """
-    parser = create_parser()
+    parser = build_argument_parser()
     args = parser.parse_args()
 
     return asyncio.run(async_main(args))

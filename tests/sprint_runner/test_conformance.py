@@ -368,3 +368,245 @@ class TestConformanceChecker:
         assert result.raw.get("disabled") is True
         # Executor should not have been called
         mock_executor.run_session.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Conformance Fallback Tests
+# ---------------------------------------------------------------------------
+
+
+class TestConformanceFallbackFlag:
+    """Tests for conformance fallback flag functionality."""
+
+    @pytest.mark.asyncio
+    async def test_conformance_fallback_sets_flag_on_parse_failure(
+        self, conformance_checker: ConformanceChecker, mock_executor: ClaudeCodeExecutor
+    ) -> None:
+        """When conformance check fails to parse verdict, is_fallback is True."""
+        mock_executor.run_session.return_value = ExecutionResult(
+            output="No JSON block here - unparseable output",
+            exit_code=0,
+            duration_seconds=1.0,
+            output_size_bytes=40
+        )
+
+        result = await conformance_checker.check(
+            sprint_spec="",
+            spec_by_contradiction="",
+            session_breakdown="",
+            completed_sessions=["S1"],
+            cumulative_files_created=[],
+            cumulative_files_modified=[],
+            cumulative_diff="",
+            current_closeout={},
+            sprint="23",
+            session="S1",
+        )
+
+        assert result.verdict == "CONFORMANT"
+        assert result.is_fallback is True
+        assert "error" in result.raw
+
+    @pytest.mark.asyncio
+    async def test_conformance_fallback_sets_flag_on_exception(
+        self, conformance_checker: ConformanceChecker, mock_executor: ClaudeCodeExecutor
+    ) -> None:
+        """When conformance check raises exception, is_fallback is True."""
+        mock_executor.run_session.side_effect = Exception("Network error")
+
+        result = await conformance_checker.check(
+            sprint_spec="",
+            spec_by_contradiction="",
+            session_breakdown="",
+            completed_sessions=["S1"],
+            cumulative_files_created=[],
+            cumulative_files_modified=[],
+            cumulative_diff="",
+            current_closeout={},
+            sprint="23",
+            session="S1",
+        )
+
+        assert result.verdict == "CONFORMANT"
+        assert result.is_fallback is True
+        assert "error" in result.raw
+
+    @pytest.mark.asyncio
+    async def test_successful_conformance_has_fallback_false(
+        self, conformance_checker: ConformanceChecker, mock_executor: ClaudeCodeExecutor
+    ) -> None:
+        """Successful conformance check has is_fallback=False."""
+        mock_output = '''
+```json:conformance-verdict
+{
+  "schema_version": "1.0",
+  "sprint": "23",
+  "session": "S1",
+  "cumulative_sessions_checked": ["S1"],
+  "verdict": "CONFORMANT",
+  "findings": [],
+  "file_scope_check": {},
+  "spec_by_contradiction_check": {"clean": true},
+  "integration_check": {},
+  "drift_summary": "All conformant"
+}
+```
+'''
+        mock_executor.run_session.return_value = ExecutionResult(
+            output=mock_output, exit_code=0, duration_seconds=1.0, output_size_bytes=len(mock_output)
+        )
+
+        result = await conformance_checker.check(
+            sprint_spec="",
+            spec_by_contradiction="",
+            session_breakdown="",
+            completed_sessions=["S1"],
+            cumulative_files_created=[],
+            cumulative_files_modified=[],
+            cumulative_diff="",
+            current_closeout={},
+            sprint="23",
+            session="S1",
+        )
+
+        assert result.verdict == "CONFORMANT"
+        assert result.is_fallback is False
+
+    def test_conformance_verdict_default_is_fallback_false(self) -> None:
+        """ConformanceVerdict default is_fallback is False."""
+        verdict = ConformanceVerdict(
+            schema_version="1.0",
+            sprint="23",
+            session="S1",
+            cumulative_sessions_checked=["S1"],
+            verdict="CONFORMANT",
+            findings=[],
+            file_scope_check=FileScopeCheck(),
+            spec_by_contradiction_check=SpecContradictionCheck(),
+            integration_check=IntegrationCheck(),
+            drift_summary="OK",
+        )
+        assert verdict.is_fallback is False
+
+
+class TestConformanceFallbackCount:
+    """Tests for conformance fallback count tracking in RunState."""
+
+    def test_conformance_fallback_count_field_exists(self) -> None:
+        """RunState has conformance_fallback_count field defaulting to 0."""
+        from scripts.sprint_runner.state import GitState, RunState
+
+        state = RunState(
+            sprint="23",
+            git_state=GitState(branch="main"),
+        )
+        assert hasattr(state, "conformance_fallback_count")
+        assert state.conformance_fallback_count == 0
+
+    def test_conformance_fallback_count_increments(self) -> None:
+        """conformance_fallback_count can be incremented."""
+        from scripts.sprint_runner.state import GitState, RunState
+
+        state = RunState(
+            sprint="23",
+            git_state=GitState(branch="main"),
+        )
+
+        assert state.conformance_fallback_count == 0
+        state.conformance_fallback_count += 1
+        assert state.conformance_fallback_count == 1
+        state.conformance_fallback_count += 1
+        assert state.conformance_fallback_count == 2
+
+    def test_conformance_fallback_count_persists_through_save_load(
+        self, tmp_path: Path
+    ) -> None:
+        """conformance_fallback_count persists through save/load cycle."""
+        from scripts.sprint_runner.state import GitState, RunState
+
+        state = RunState(
+            sprint="23",
+            git_state=GitState(branch="main"),
+            conformance_fallback_count=5,
+        )
+
+        state_path = tmp_path / "state.json"
+        state.save(state_path)
+
+        loaded = RunState.load(state_path)
+        assert loaded.conformance_fallback_count == 5
+
+
+class TestConformanceFallbackWarningThreshold:
+    """Tests for conformance fallback warning threshold behavior."""
+
+    def test_conformance_fallback_warning_threshold_not_triggered_at_2(
+        self, capsys, tmp_path: Path
+    ) -> None:
+        """Warning is NOT logged when count is 2 or less."""
+        from scripts.sprint_runner.state import GitState, RunState
+        from scripts.sprint_runner.main import SprintRunner
+        from scripts.sprint_runner.config import (
+            RunnerConfig, SprintConfig, ExecutionConfig, GitConfig,
+            NotificationsConfig, CostConfig,
+        )
+
+        # Create minimal config
+        sprint_dir = tmp_path / "sprint-23"
+        sprint_dir.mkdir()
+
+        config = RunnerConfig(
+            sprint=SprintConfig(directory=str(sprint_dir), session_order=[]),
+            execution=ExecutionConfig(mode="autonomous"),
+            git=GitConfig(branch="sprint-23"),
+            notifications=NotificationsConfig(),
+            cost=CostConfig(),
+        )
+
+        runner = SprintRunner(config, tmp_path)
+        runner.state = RunState(
+            sprint="23",
+            git_state=GitState(branch="sprint-23"),
+            conformance_fallback_count=2,
+        )
+
+        runner._check_conformance_fallback_warning()
+
+        captured = capsys.readouterr()
+        assert "Conformance check defaulted to CONFORMANT" not in captured.out
+
+    def test_conformance_fallback_warning_triggered_at_3(
+        self, capsys, tmp_path: Path
+    ) -> None:
+        """Warning IS logged when count exceeds 2."""
+        from scripts.sprint_runner.state import GitState, RunState
+        from scripts.sprint_runner.main import SprintRunner
+        from scripts.sprint_runner.config import (
+            RunnerConfig, SprintConfig, ExecutionConfig, GitConfig,
+            NotificationsConfig, CostConfig,
+        )
+
+        # Create minimal config
+        sprint_dir = tmp_path / "sprint-23"
+        sprint_dir.mkdir()
+
+        config = RunnerConfig(
+            sprint=SprintConfig(directory=str(sprint_dir), session_order=[]),
+            execution=ExecutionConfig(mode="autonomous"),
+            git=GitConfig(branch="sprint-23"),
+            notifications=NotificationsConfig(),
+            cost=CostConfig(),
+        )
+
+        runner = SprintRunner(config, tmp_path)
+        runner.state = RunState(
+            sprint="23",
+            git_state=GitState(branch="sprint-23"),
+            conformance_fallback_count=3,
+        )
+
+        runner._check_conformance_fallback_warning()
+
+        captured = capsys.readouterr()
+        assert "Conformance check defaulted to CONFORMANT 3 times" in captured.out
+        assert "conformance subagent reliability" in captured.out

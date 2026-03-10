@@ -213,6 +213,7 @@ class RunState(BaseModel):
     timestamps: Timestamps = Field(default_factory=Timestamps)
     review_context_hash: str | None = None
     notifications_sent: list[NotificationSent] = Field(default_factory=list)
+    conformance_fallback_count: int = 0
 
     def save(self, path: str | Path) -> None:
         """Save state to file with atomic write.
