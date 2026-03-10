@@ -864,3 +864,398 @@ class TestFMPReferenceClientRetryBehavior:
         log_text = caplog.text
         assert "500/600" in log_text or "Fetching reference data" in log_text
         assert "Reference data fetch complete" in log_text
+
+
+class TestFMPReferenceClientFileCacheOperations:
+    """Tests for file-based cache operations (Sprint 23.6 S4a)."""
+
+    @pytest.fixture
+    def tmp_cache_path(self, tmp_path: Any) -> str:
+        """Create a temporary cache file path."""
+        return str(tmp_path / "test_cache.json")
+
+    @pytest.fixture
+    def config_with_tmp_cache(self, tmp_cache_path: str) -> FMPReferenceConfig:
+        """Config with temporary cache file path."""
+        return FMPReferenceConfig(cache_file=tmp_cache_path)
+
+    @pytest.fixture
+    def client_with_tmp_cache(
+        self, config_with_tmp_cache: FMPReferenceConfig
+    ) -> FMPReferenceClient:
+        """Client configured with temporary cache file."""
+        return FMPReferenceClient(config_with_tmp_cache)
+
+    def test_save_cache_creates_file(
+        self, client_with_tmp_cache: FMPReferenceClient, tmp_cache_path: str
+    ) -> None:
+        """Test that save_cache creates a file with correct content."""
+        import json
+        from pathlib import Path
+
+        # Populate internal cache
+        client_with_tmp_cache._cache = {
+            "AAPL": SymbolReferenceData(symbol="AAPL", sector="Technology"),
+            "MSFT": SymbolReferenceData(symbol="MSFT", sector="Technology"),
+        }
+
+        client_with_tmp_cache.save_cache()
+
+        # Verify file exists
+        cache_path = Path(tmp_cache_path)
+        assert cache_path.exists()
+
+        # Verify content
+        with open(cache_path) as f:
+            data = json.load(f)
+
+        assert len(data) == 2
+        assert "AAPL" in data
+        assert "MSFT" in data
+        assert data["AAPL"]["symbol"] == "AAPL"
+        assert data["AAPL"]["sector"] == "Technology"
+
+    def test_load_cache_round_trip(
+        self, client_with_tmp_cache: FMPReferenceClient
+    ) -> None:
+        """Test that save then load preserves data."""
+        # Populate and save
+        original_data = {
+            "AAPL": SymbolReferenceData(
+                symbol="AAPL",
+                sector="Technology",
+                industry="Consumer Electronics",
+                market_cap=3_000_000_000_000.0,
+                float_shares=15_000_000_000.0,
+                exchange="NASDAQ",
+                prev_close=175.50,
+                avg_volume=50_000_000.0,
+                is_otc=False,
+            ),
+            "NVDA": SymbolReferenceData(
+                symbol="NVDA",
+                sector="Technology",
+                industry="Semiconductors",
+                market_cap=2_000_000_000_000.0,
+            ),
+        }
+        client_with_tmp_cache._cache = original_data
+        client_with_tmp_cache.save_cache()
+
+        # Load into fresh client
+        loaded = client_with_tmp_cache.load_cache()
+
+        # Verify round-trip
+        assert len(loaded) == 2
+        assert "AAPL" in loaded
+        assert "NVDA" in loaded
+
+        aapl = loaded["AAPL"]
+        assert aapl.symbol == "AAPL"
+        assert aapl.sector == "Technology"
+        assert aapl.industry == "Consumer Electronics"
+        assert aapl.market_cap == 3_000_000_000_000.0
+        assert aapl.float_shares == 15_000_000_000.0
+        assert aapl.exchange == "NASDAQ"
+        assert aapl.prev_close == 175.50
+        assert aapl.avg_volume == 50_000_000.0
+        assert aapl.is_otc is False
+
+    def test_load_cache_missing_file(
+        self, client_with_tmp_cache: FMPReferenceClient, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Test that missing file returns empty dict and logs INFO."""
+        import logging
+
+        caplog.set_level(logging.INFO)
+
+        # Don't save anything - file doesn't exist
+        result = client_with_tmp_cache.load_cache()
+
+        assert result == {}
+        assert "No cache file found" in caplog.text
+
+    def test_load_cache_corrupt_file(
+        self,
+        client_with_tmp_cache: FMPReferenceClient,
+        tmp_cache_path: str,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Test that malformed JSON returns empty dict and logs WARNING."""
+        import logging
+        from pathlib import Path
+
+        caplog.set_level(logging.WARNING)
+
+        # Write invalid JSON
+        Path(tmp_cache_path).write_text("{ invalid json }")
+
+        result = client_with_tmp_cache.load_cache()
+
+        assert result == {}
+        assert "corrupt" in caplog.text.lower() or "invalid JSON" in caplog.text
+
+    def test_load_cache_truncated_file(
+        self,
+        client_with_tmp_cache: FMPReferenceClient,
+        tmp_cache_path: str,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Test that truncated/partial JSON returns empty dict and logs WARNING."""
+        import logging
+        from pathlib import Path
+
+        caplog.set_level(logging.WARNING)
+
+        # Write truncated JSON
+        Path(tmp_cache_path).write_text('{"AAPL": {"symbol": "AAPL", "sector":')
+
+        result = client_with_tmp_cache.load_cache()
+
+        assert result == {}
+        assert "corrupt" in caplog.text.lower() or "invalid JSON" in caplog.text
+
+    def test_save_cache_atomic_write(
+        self, client_with_tmp_cache: FMPReferenceClient, tmp_cache_path: str
+    ) -> None:
+        """Test that save uses atomic write (file is always valid after save)."""
+        import json
+        from pathlib import Path
+
+        # Save data
+        client_with_tmp_cache._cache = {
+            "AAPL": SymbolReferenceData(symbol="AAPL"),
+        }
+        client_with_tmp_cache.save_cache()
+
+        # Verify no temp file remains
+        temp_path = Path(tmp_cache_path).with_suffix(".json.tmp")
+        assert not temp_path.exists()
+
+        # Verify file is valid JSON
+        with open(tmp_cache_path) as f:
+            data = json.load(f)
+        assert "AAPL" in data
+
+    def test_cache_includes_cached_at(
+        self, client_with_tmp_cache: FMPReferenceClient, tmp_cache_path: str
+    ) -> None:
+        """Test that each cached entry includes cached_at timestamp."""
+        import json
+
+        # Save data
+        client_with_tmp_cache._cache = {
+            "AAPL": SymbolReferenceData(symbol="AAPL"),
+            "MSFT": SymbolReferenceData(symbol="MSFT"),
+        }
+        client_with_tmp_cache.save_cache()
+
+        # Load raw JSON and check for cached_at
+        with open(tmp_cache_path) as f:
+            data = json.load(f)
+
+        for symbol in ["AAPL", "MSFT"]:
+            assert "cached_at" in data[symbol], f"Missing cached_at for {symbol}"
+            # Verify it's a valid ISO timestamp
+            cached_at = data[symbol]["cached_at"]
+            assert isinstance(cached_at, str)
+            # Should be parseable as ISO datetime
+            from datetime import datetime
+
+            datetime.fromisoformat(cached_at)
+
+
+class TestFMPReferenceClientStalenessChecking:
+    """Tests for cache staleness checking (Sprint 23.6 S4a)."""
+
+    @pytest.fixture
+    def tmp_cache_path(self, tmp_path: Any) -> str:
+        """Create a temporary cache file path."""
+        return str(tmp_path / "test_cache.json")
+
+    @pytest.fixture
+    def config_with_tmp_cache(self, tmp_cache_path: str) -> FMPReferenceConfig:
+        """Config with temporary cache file path."""
+        return FMPReferenceConfig(cache_file=tmp_cache_path, cache_max_age_hours=24)
+
+    @pytest.fixture
+    def client_with_tmp_cache(
+        self, config_with_tmp_cache: FMPReferenceConfig
+    ) -> FMPReferenceClient:
+        """Client configured with temporary cache file."""
+        return FMPReferenceClient(config_with_tmp_cache)
+
+    def test_get_stale_symbols_all_fresh(
+        self, client_with_tmp_cache: FMPReferenceClient
+    ) -> None:
+        """Test that fresh entries are not marked stale, only missing symbols returned."""
+        # Save recent data
+        client_with_tmp_cache._cache = {
+            "AAPL": SymbolReferenceData(symbol="AAPL"),
+            "MSFT": SymbolReferenceData(symbol="MSFT"),
+        }
+        client_with_tmp_cache.save_cache()
+
+        # Load cache to populate cached_at timestamps
+        cached = client_with_tmp_cache.load_cache()
+
+        # Check staleness - NVDA is missing, others are fresh
+        all_symbols = ["AAPL", "MSFT", "NVDA"]
+        stale = client_with_tmp_cache.get_stale_symbols(
+            cached=cached,
+            all_symbols=all_symbols,
+            max_age_hours=24,
+        )
+
+        # Only NVDA should be stale (missing)
+        assert stale == ["NVDA"]
+
+    def test_get_stale_symbols_some_stale(
+        self, client_with_tmp_cache: FMPReferenceClient, tmp_cache_path: str
+    ) -> None:
+        """Test that entries older than max_age are marked stale."""
+        import json
+        from pathlib import Path
+
+        # Create cache with one old entry
+        now = datetime.now(ZoneInfo("UTC"))
+        old_time = now - timedelta(hours=48)  # 48 hours ago
+
+        cache_data = {
+            "AAPL": {
+                "symbol": "AAPL",
+                "sector": "Technology",
+                "is_otc": False,
+                "fetched_at": now.isoformat(),
+                "cached_at": now.isoformat(),  # Fresh
+            },
+            "MSFT": {
+                "symbol": "MSFT",
+                "sector": "Technology",
+                "is_otc": False,
+                "fetched_at": old_time.isoformat(),
+                "cached_at": old_time.isoformat(),  # Stale (48h old)
+            },
+        }
+
+        Path(tmp_cache_path).write_text(json.dumps(cache_data))
+
+        # Load and check staleness
+        cached = client_with_tmp_cache.load_cache()
+        stale = client_with_tmp_cache.get_stale_symbols(
+            cached=cached,
+            all_symbols=["AAPL", "MSFT"],
+            max_age_hours=24,
+        )
+
+        # MSFT should be stale (older than 24h)
+        assert "MSFT" in stale
+        # AAPL should not be stale
+        assert "AAPL" not in stale
+
+    def test_get_stale_symbols_all_missing(
+        self, client_with_tmp_cache: FMPReferenceClient
+    ) -> None:
+        """Test that empty cache returns all symbols as stale."""
+        # Don't save anything - empty cache
+        cached = client_with_tmp_cache.load_cache()
+
+        all_symbols = ["AAPL", "MSFT", "NVDA", "GOOGL"]
+        stale = client_with_tmp_cache.get_stale_symbols(
+            cached=cached,
+            all_symbols=all_symbols,
+            max_age_hours=24,
+        )
+
+        # All should be stale (all missing)
+        assert sorted(stale) == sorted(all_symbols)
+
+
+class TestSymbolReferenceDataSerialization:
+    """Tests for SymbolReferenceData to_dict/from_dict (Sprint 23.6 S4a)."""
+
+    def test_to_dict_includes_all_fields(self) -> None:
+        """Test that to_dict includes all data fields plus cached_at."""
+        now = datetime.now(ZoneInfo("UTC"))
+        data = SymbolReferenceData(
+            symbol="AAPL",
+            sector="Technology",
+            industry="Consumer Electronics",
+            market_cap=3_000_000_000_000.0,
+            float_shares=15_000_000_000.0,
+            exchange="NASDAQ",
+            prev_close=175.50,
+            avg_volume=50_000_000.0,
+            is_otc=False,
+            fetched_at=now,
+        )
+
+        result = data.to_dict()
+
+        assert result["symbol"] == "AAPL"
+        assert result["sector"] == "Technology"
+        assert result["industry"] == "Consumer Electronics"
+        assert result["market_cap"] == 3_000_000_000_000.0
+        assert result["float_shares"] == 15_000_000_000.0
+        assert result["exchange"] == "NASDAQ"
+        assert result["prev_close"] == 175.50
+        assert result["avg_volume"] == 50_000_000.0
+        assert result["is_otc"] is False
+        assert "fetched_at" in result
+        assert "cached_at" in result
+
+    def test_to_dict_with_custom_cached_at(self) -> None:
+        """Test that to_dict uses provided cached_at."""
+        custom_time = datetime(2025, 1, 15, 12, 0, 0, tzinfo=ZoneInfo("UTC"))
+        data = SymbolReferenceData(symbol="AAPL")
+
+        result = data.to_dict(cached_at=custom_time)
+
+        assert result["cached_at"] == "2025-01-15T12:00:00+00:00"
+
+    def test_from_dict_reconstructs_data(self) -> None:
+        """Test that from_dict correctly reconstructs SymbolReferenceData."""
+        dict_data = {
+            "symbol": "AAPL",
+            "sector": "Technology",
+            "industry": "Consumer Electronics",
+            "market_cap": 3_000_000_000_000.0,
+            "float_shares": 15_000_000_000.0,
+            "exchange": "NASDAQ",
+            "prev_close": 175.50,
+            "avg_volume": 50_000_000.0,
+            "is_otc": False,
+            "fetched_at": "2025-01-15T12:00:00+00:00",
+            "cached_at": "2025-01-15T13:00:00+00:00",
+        }
+
+        data, cached_at = SymbolReferenceData.from_dict(dict_data)
+
+        assert data.symbol == "AAPL"
+        assert data.sector == "Technology"
+        assert data.industry == "Consumer Electronics"
+        assert data.market_cap == 3_000_000_000_000.0
+        assert data.float_shares == 15_000_000_000.0
+        assert data.exchange == "NASDAQ"
+        assert data.prev_close == 175.50
+        assert data.avg_volume == 50_000_000.0
+        assert data.is_otc is False
+        assert data.fetched_at == datetime(
+            2025, 1, 15, 12, 0, 0, tzinfo=ZoneInfo("UTC")
+        )
+        assert cached_at == "2025-01-15T13:00:00+00:00"
+
+    def test_from_dict_handles_missing_optional_fields(self) -> None:
+        """Test that from_dict handles missing optional fields."""
+        dict_data = {
+            "symbol": "AAPL",
+            # All other fields missing
+        }
+
+        data, cached_at = SymbolReferenceData.from_dict(dict_data)
+
+        assert data.symbol == "AAPL"
+        assert data.sector is None
+        assert data.industry is None
+        assert data.market_cap is None
+        assert data.is_otc is False

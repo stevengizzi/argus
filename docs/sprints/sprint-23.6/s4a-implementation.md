@@ -12,6 +12,17 @@ Before making any changes:
 ## Objective
 Add file-based caching to FMPReferenceClient so reference data persists across restarts. This session builds the cache layer; Session 4b wires it into the warm-up flow.
 
+## Minor Issues from Previous Session Review
+
+From Session 3c review:
+
+**CONCERNS**: The implementation is functionally correct and all spec requirements are met. However, 2 lint violations should be fixed in the next session (this session - 4a):
+
+1. Run `ruff check --fix argus/intelligence/startup.py` to fix import sorting
+2. Replace try-except-pass in server.py:214-217 with `with contextlib.suppress(asyncio.CancelledError):`
+
+These are minor issues that don't block proceeding, but should be addressed to maintain code quality standards.
+
 ## Requirements
 
 1. **In `argus/data/fmp_reference.py`**, add config fields to `FMPReferenceConfig`:

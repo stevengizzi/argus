@@ -16,10 +16,13 @@ Sprint 23: NLP Catalyst + Universe Manager
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
+from typing import Any
 from zoneinfo import ZoneInfo
 
 import aiohttp
@@ -58,6 +61,68 @@ class SymbolReferenceData:
     is_otc: bool = False
     fetched_at: datetime = field(default_factory=lambda: datetime.now(ZoneInfo("UTC")))
 
+    def to_dict(self, cached_at: datetime | None = None) -> dict[str, Any]:
+        """Serialize to dictionary for JSON caching.
+
+        Args:
+            cached_at: Timestamp when this entry is being cached.
+                If None, uses current UTC time.
+
+        Returns:
+            Dictionary with all fields plus cached_at timestamp.
+        """
+        if cached_at is None:
+            cached_at = datetime.now(ZoneInfo("UTC"))
+
+        return {
+            "symbol": self.symbol,
+            "sector": self.sector,
+            "industry": self.industry,
+            "market_cap": self.market_cap,
+            "float_shares": self.float_shares,
+            "exchange": self.exchange,
+            "prev_close": self.prev_close,
+            "avg_volume": self.avg_volume,
+            "is_otc": self.is_otc,
+            "fetched_at": self.fetched_at.isoformat(),
+            "cached_at": cached_at.isoformat(),
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> tuple[SymbolReferenceData, str]:
+        """Reconstruct from dictionary loaded from cache.
+
+        Args:
+            data: Dictionary with serialized fields.
+
+        Returns:
+            Tuple of (SymbolReferenceData, cached_at ISO string).
+            The cached_at string is returned separately as cache metadata.
+        """
+        fetched_at_str = data.get("fetched_at")
+        if fetched_at_str:
+            fetched_at = datetime.fromisoformat(fetched_at_str)
+        else:
+            fetched_at = datetime.now(ZoneInfo("UTC"))
+
+        cached_at = data.get("cached_at", datetime.now(ZoneInfo("UTC")).isoformat())
+
+        return (
+            cls(
+                symbol=data["symbol"],
+                sector=data.get("sector"),
+                industry=data.get("industry"),
+                market_cap=data.get("market_cap"),
+                float_shares=data.get("float_shares"),
+                exchange=data.get("exchange"),
+                prev_close=data.get("prev_close"),
+                avg_volume=data.get("avg_volume"),
+                is_otc=data.get("is_otc", False),
+                fetched_at=fetched_at,
+            ),
+            cached_at,
+        )
+
 
 @dataclass
 class FMPReferenceConfig:
@@ -70,6 +135,8 @@ class FMPReferenceConfig:
         cache_ttl_hours: Hours before cache is considered stale.
         max_retries: Maximum retry attempts for failed requests.
         request_timeout_seconds: HTTP request timeout in seconds.
+        cache_file: Path to the file-based cache JSON file.
+        cache_max_age_hours: Maximum age for cached entries before considered stale.
     """
 
     base_url: str = "https://financialmodelingprep.com/stable"
@@ -78,6 +145,8 @@ class FMPReferenceConfig:
     cache_ttl_hours: int = 24
     max_retries: int = 3
     request_timeout_seconds: float = 30.0
+    cache_file: str = "data/reference_cache.json"
+    cache_max_age_hours: int = 24
 
 
 class FMPReferenceClient:
@@ -113,6 +182,7 @@ class FMPReferenceClient:
         self._api_key: str | None = None
         self._cache: dict[str, SymbolReferenceData] = {}
         self._cache_built_at: datetime | None = None
+        self._cached_at_timestamps: dict[str, str] = {}
 
     async def start(self) -> None:
         """Initialize the client and validate API key.
@@ -705,3 +775,146 @@ class FMPReferenceClient:
             Number of cached symbols.
         """
         return len(self._cache)
+
+    def save_cache(self) -> None:
+        """Save the internal reference cache to a JSON file.
+
+        Serializes the internal _cache dict to JSON format with per-symbol
+        cached_at timestamps. Uses atomic write (temp file + os.replace)
+        to prevent corruption.
+
+        Creates parent directories if they don't exist.
+        Logs INFO with file path and symbol count on success.
+        """
+        cache_path = Path(self._config.cache_file)
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Serialize cache with current timestamp as cached_at
+        cached_at = datetime.now(ZoneInfo("UTC"))
+        serialized: dict[str, dict[str, Any]] = {}
+
+        for symbol, data in self._cache.items():
+            serialized[symbol] = data.to_dict(cached_at=cached_at)
+
+        # Atomic write: write to temp file, then replace
+        temp_path = cache_path.with_suffix(".json.tmp")
+
+        try:
+            with open(temp_path, "w", encoding="utf-8") as f:
+                json.dump(serialized, f, indent=2)
+
+            os.replace(temp_path, cache_path)
+
+            logger.info(
+                "Reference cache saved: %d symbols to %s",
+                len(serialized),
+                cache_path,
+            )
+        except OSError as e:
+            logger.error("Failed to save reference cache: %s", e)
+            # Clean up temp file if it exists
+            if temp_path.exists():
+                temp_path.unlink()
+
+    def load_cache(self) -> dict[str, SymbolReferenceData]:
+        """Load reference cache from JSON file.
+
+        Reads the cache file and reconstructs SymbolReferenceData objects.
+        Stores cached_at timestamps internally for staleness checking.
+
+        Returns:
+            Dictionary mapping symbol to SymbolReferenceData.
+            Returns empty dict if file doesn't exist or is corrupt.
+        """
+        cache_path = Path(self._config.cache_file)
+
+        # Initialize internal cached_at storage
+        self._cached_at_timestamps: dict[str, str] = {}
+
+        if not cache_path.exists():
+            logger.info("No cache file found at %s", cache_path)
+            return {}
+
+        try:
+            with open(cache_path, encoding="utf-8") as f:
+                raw_data = json.load(f)
+
+            if not isinstance(raw_data, dict):
+                logger.warning("Cache file has invalid format (expected dict)")
+                return {}
+
+            result: dict[str, SymbolReferenceData] = {}
+
+            for symbol, entry in raw_data.items():
+                if not isinstance(entry, dict):
+                    continue
+
+                try:
+                    data, cached_at = SymbolReferenceData.from_dict(entry)
+                    result[symbol] = data
+                    self._cached_at_timestamps[symbol] = cached_at
+                except (KeyError, TypeError, ValueError) as e:
+                    logger.debug("Failed to parse cache entry for %s: %s", symbol, e)
+                    continue
+
+            logger.info("Loaded %d symbols from cache file %s", len(result), cache_path)
+            return result
+
+        except json.JSONDecodeError as e:
+            logger.warning("Cache file is corrupt (invalid JSON): %s", e)
+            return {}
+        except OSError as e:
+            logger.warning("Failed to read cache file: %s", e)
+            return {}
+
+    def get_stale_symbols(
+        self,
+        cached: dict[str, SymbolReferenceData],
+        all_symbols: list[str],
+        max_age_hours: int,
+    ) -> list[str]:
+        """Identify symbols that need refreshing.
+
+        Returns symbols that are either:
+        - Not present in the cache
+        - In the cache but older than max_age_hours
+
+        Must be called after load_cache() which populates internal
+        cached_at timestamps.
+
+        Args:
+            cached: Dictionary of cached symbol data (from load_cache).
+            all_symbols: Complete list of symbols to check.
+            max_age_hours: Maximum age in hours before data is stale.
+
+        Returns:
+            List of symbols that need refreshing.
+        """
+        now = datetime.now(ZoneInfo("UTC"))
+        max_age_seconds = max_age_hours * 3600
+        stale: list[str] = []
+
+        for symbol in all_symbols:
+            # Check if missing from cache
+            if symbol not in cached:
+                stale.append(symbol)
+                continue
+
+            # Check if older than max_age
+            cached_at_str = self._cached_at_timestamps.get(symbol)
+            if cached_at_str is None:
+                # No cached_at timestamp means we can't verify age
+                stale.append(symbol)
+                continue
+
+            try:
+                cached_at = datetime.fromisoformat(cached_at_str)
+                age_seconds = (now - cached_at).total_seconds()
+
+                if age_seconds > max_age_seconds:
+                    stale.append(symbol)
+            except ValueError:
+                # Invalid timestamp format
+                stale.append(symbol)
+
+        return stale

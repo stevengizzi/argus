@@ -17,6 +17,7 @@ Usage:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -211,10 +212,8 @@ def create_app(app_state: AppState) -> FastAPI:
             # Cancel polling task first
             if polling_task is not None:
                 polling_task.cancel()
-                try:
+                with contextlib.suppress(asyncio.CancelledError):
                     await polling_task
-                except asyncio.CancelledError:
-                    pass
                 logger.info("Intelligence polling loop stopped")
 
             try:
