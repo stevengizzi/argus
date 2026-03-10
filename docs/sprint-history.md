@@ -425,7 +425,7 @@
 **Test counts:** S1(+18), S2(+14), S3(+16), S4(+22), S5(+24/+25V), S6(+0/+18V) = 94 new pytest, 43 new Vitest
 **Notes:** Three free data sources (SEC EDGAR, FMP News, Finnhub) provide broad catalyst coverage at no incremental cost. Rule-based fallback ensures graceful degradation when Claude API unavailable or cost ceiling reached. Finnhub free tier reliability noted as risk (RSK-053). SEC EDGAR rate limiting noted as risk (RSK-055).
 
-### Sprint 23.6 — Tier 3 Remediation + Pipeline Integration + Warm-Up Optimization 90 pytest + 435 Vitest, +83/+0)
+### Sprint 23.6 — Tier 3 Remediation + Pipeline Integration + Warm-Up Optimization (2490 pytest + 435 Vitest, +83/+0)
 **Date:** Mar 10, 2026
 **Scope:** Address all findings from the Tier 3 architectural review of Sprints 23–23.5: storage/query defects, CatalystEvent timezone alignment, SEC EDGAR email validation, FMP canary test, semantic deduplication, batch-then-publish ordering, intelligence startup factory, app lifecycle wiring, polling loop, reference data file cache, incremental warm-up, runner CLI extraction, conformance fallback monitoring.
 
