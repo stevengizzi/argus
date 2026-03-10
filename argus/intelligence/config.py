@@ -104,5 +104,6 @@ class CatalystConfig(BaseModel):
     max_batch_size: int = 20
     daily_cost_ceiling_usd: float = 5.0
     classification_cache_ttl_hours: int = 24
+    dedup_window_minutes: int = 30
     sources: SourcesConfig = SourcesConfig()
     briefing: BriefingConfig = BriefingConfig()

@@ -106,10 +106,113 @@ class TestFMPReferenceClientStart:
         self, client: FMPReferenceClient
     ) -> None:
         """Test that start() succeeds when API key is set."""
-        with patch.dict("os.environ", {"FMP_API_KEY": "test_key"}):
+        # Mock the canary test to avoid actual API calls
+        with patch.dict("os.environ", {"FMP_API_KEY": "test_key"}), patch.object(
+            client, "_run_canary_test", new_callable=AsyncMock
+        ):
             await client.start()
 
         assert client._api_key == "test_key"
+
+    async def test_fmp_canary_success(
+        self, config: FMPReferenceConfig, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Test canary test logs INFO when AAPL response has expected keys."""
+        import logging
+
+        caplog.set_level(logging.INFO)
+
+        client = FMPReferenceClient(config)
+
+        # Mock response with all required keys
+        mock_profile_response = [
+            {
+                "symbol": "AAPL",
+                "companyName": "Apple Inc.",
+                "marketCap": 3_000_000_000_000,
+                "price": 175.50,
+            }
+        ]
+
+        mock_response = AsyncMock()
+        mock_response.status = 200
+        mock_response.json = AsyncMock(return_value=mock_profile_response)
+
+        mock_session = AsyncMock()
+        mock_session.get = MagicMock(return_value=AsyncContextManager(mock_response))
+
+        with patch.dict("os.environ", {"FMP_API_KEY": "test_key"}), patch(
+            "aiohttp.ClientSession"
+        ) as mock_client_session:
+            mock_client_session.return_value = AsyncContextManager(mock_session)
+            await client.start()
+
+        # Should log INFO about canary test passing
+        assert "FMP canary test passed" in caplog.text
+
+    async def test_fmp_canary_missing_keys(
+        self, config: FMPReferenceConfig, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Test canary test logs WARNING when response is missing required keys."""
+        import logging
+
+        caplog.set_level(logging.WARNING)
+
+        client = FMPReferenceClient(config)
+
+        # Mock response missing 'marketCap' and 'price'
+        mock_profile_response = [
+            {
+                "symbol": "AAPL",
+                "companyName": "Apple Inc.",
+                # Missing marketCap and price
+            }
+        ]
+
+        mock_response = AsyncMock()
+        mock_response.status = 200
+        mock_response.json = AsyncMock(return_value=mock_profile_response)
+
+        mock_session = AsyncMock()
+        mock_session.get = MagicMock(return_value=AsyncContextManager(mock_response))
+
+        with patch.dict("os.environ", {"FMP_API_KEY": "test_key"}), patch(
+            "aiohttp.ClientSession"
+        ) as mock_client_session:
+            mock_client_session.return_value = AsyncContextManager(mock_session)
+            # Should NOT raise
+            await client.start()
+
+        # Should log WARNING about missing keys
+        assert "canary test failed" in caplog.text.lower()
+        assert "missing keys" in caplog.text.lower()
+
+    async def test_fmp_canary_api_error(
+        self, config: FMPReferenceConfig, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Test canary test logs WARNING on HTTP error but does not raise."""
+        import logging
+
+        caplog.set_level(logging.WARNING)
+
+        client = FMPReferenceClient(config)
+
+        # Mock HTTP error response
+        mock_response = AsyncMock()
+        mock_response.status = 500
+
+        mock_session = AsyncMock()
+        mock_session.get = MagicMock(return_value=AsyncContextManager(mock_response))
+
+        with patch.dict("os.environ", {"FMP_API_KEY": "test_key"}), patch(
+            "aiohttp.ClientSession"
+        ) as mock_client_session:
+            mock_client_session.return_value = AsyncContextManager(mock_session)
+            # Should NOT raise
+            await client.start()
+
+        # Should log WARNING about canary test failure
+        assert "canary test failed" in caplog.text.lower()
 
 
 class TestFMPReferenceClientFetchReferenceData:

@@ -47,8 +47,9 @@ class CatalystPipeline:
         1. Fetch raw items from all enabled sources concurrently
         2. Flatten and deduplicate across sources by headline hash
         3. Classify batch via CatalystClassifier (Claude + fallback)
-        4. Store each classified catalyst in SQLite
-        5. Publish CatalystEvent on Event Bus for each item
+        4. Semantic dedup by (symbol, category) within time window
+        5. Batch store classified catalysts in SQLite (single transaction)
+        6. Publish CatalystEvent on Event Bus (per-item error handling)
 
     Usage:
         pipeline = CatalystPipeline(
@@ -182,35 +183,116 @@ class CatalystPipeline:
             fallback_count,
         )
 
-        # Step 4 & 5: Store and publish events
-        for catalyst in classified:
-            # Store
-            await self._storage.store_catalyst(catalyst)
-
-            # Publish CatalystEvent
-            event = CatalystEvent(
-                symbol=catalyst.symbol,
-                catalyst_type=catalyst.category,
-                quality_score=catalyst.quality_score,
-                headline=catalyst.headline,
-                summary=catalyst.summary,
-                source=catalyst.source,
-                source_url=catalyst.source_url,
-                filing_type=catalyst.filing_type,
-                published_at=catalyst.published_at,
-                classified_at=catalyst.classified_at,
+        # Step 4: Semantic dedup by (symbol, category) within time window
+        deduped = self._semantic_dedup(classified)
+        semantic_dedup_count = len(classified) - len(deduped)
+        if semantic_dedup_count > 0:
+            logger.debug(
+                "Semantic dedup removed %d items (same symbol+category within %d min)",
+                semantic_dedup_count,
+                self._config.dedup_window_minutes,
             )
-            await self._event_bus.publish(event)
+
+        # Step 5: Batch store (single transaction)
+        await self._storage.store_catalysts_batch(deduped)
+
+        # Step 6: Publish events (separate pass, per-item error handling)
+        publish_count = 0
+        for catalyst in deduped:
+            try:
+                event = CatalystEvent(
+                    symbol=catalyst.symbol,
+                    catalyst_type=catalyst.category,
+                    quality_score=catalyst.quality_score,
+                    headline=catalyst.headline,
+                    summary=catalyst.summary,
+                    source=catalyst.source,
+                    source_url=catalyst.source_url,
+                    filing_type=catalyst.filing_type,
+                    published_at=catalyst.published_at,
+                    classified_at=catalyst.classified_at,
+                )
+                await self._event_bus.publish(event)
+                publish_count += 1
+            except Exception as e:
+                logger.warning(
+                    "Failed to publish CatalystEvent for %s: %s",
+                    catalyst.symbol,
+                    e,
+                )
 
         logger.info(
-            "Pipeline cycle: %d fetched, %d dedups, %d classified, %d published",
+            "Pipeline cycle: %d fetched, %d headline dedups, %d classified, "
+            "%d semantic dedups, %d stored, %d published",
             len(all_raw_items),
             dedup_count,
             len(classified),
-            len(classified),
+            semantic_dedup_count,
+            len(deduped),
+            publish_count,
         )
 
-        return classified
+        return deduped
+
+    def _semantic_dedup(
+        self, catalysts: list[ClassifiedCatalyst]
+    ) -> list[ClassifiedCatalyst]:
+        """Remove semantically duplicate catalysts within a time window.
+
+        Groups catalysts by (symbol, category) and within each group, removes
+        items published within dedup_window_minutes of each other, keeping
+        the one with the highest quality_score.
+
+        Args:
+            catalysts: List of classified catalysts.
+
+        Returns:
+            Deduplicated list of catalysts.
+        """
+        if not catalysts:
+            return []
+
+        window_minutes = self._config.dedup_window_minutes
+
+        # Group by (symbol, category)
+        groups: dict[tuple[str, str], list[ClassifiedCatalyst]] = {}
+        for catalyst in catalysts:
+            key = (catalyst.symbol, catalyst.category)
+            if key not in groups:
+                groups[key] = []
+            groups[key].append(catalyst)
+
+        result: list[ClassifiedCatalyst] = []
+
+        for _, group in groups.items():
+            # Sort by published_at chronologically
+            sorted_group = sorted(group, key=lambda c: c.published_at)
+
+            # Walk through, keeping best in each window
+            kept: list[ClassifiedCatalyst] = []
+
+            for catalyst in sorted_group:
+                if not kept:
+                    kept.append(catalyst)
+                    continue
+
+                last_kept = kept[-1]
+                time_diff = (
+                    catalyst.published_at - last_kept.published_at
+                ).total_seconds() / 60
+
+                if time_diff <= window_minutes:
+                    # Within window — keep the one with higher quality_score
+                    if catalyst.quality_score > last_kept.quality_score:
+                        kept[-1] = catalyst
+                    # If equal or lower, keep the first (already in kept)
+                else:
+                    # Outside window — keep both
+                    kept.append(catalyst)
+
+            result.extend(kept)
+
+        return result
 
 
 __all__ = [

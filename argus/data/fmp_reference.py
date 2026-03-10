@@ -127,6 +127,67 @@ class FMPReferenceClient:
             )
         logger.info("FMPReferenceClient started")
 
+        # Canary test: validate API schema with AAPL profile
+        await self._run_canary_test()
+
+    async def _run_canary_test(self) -> None:
+        """Run canary test to validate FMP API schema.
+
+        Fetches profile for AAPL and verifies expected keys are present.
+        Logs INFO on success, WARNING on failure. Non-blocking — does not raise.
+        """
+        required_keys = {"symbol", "companyName", "marketCap", "price"}
+
+        try:
+            async with aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=self._config.request_timeout_seconds)
+            ) as session:
+                result = await self._fetch_single_profile_with_retry(session, "AAPL")
+
+                if result is None:
+                    logger.warning(
+                        "FMP canary test failed — no data returned for AAPL"
+                    )
+                    return
+
+                # Re-fetch raw response to check for required keys
+                url = f"{self._config.base_url}/profile"
+                params = {"symbol": "AAPL", "apikey": self._api_key}
+
+                async with session.get(url, params=params) as response:
+                    if response.status != 200:
+                        logger.warning(
+                            "FMP canary test failed — HTTP %d for AAPL profile",
+                            response.status,
+                        )
+                        return
+
+                    data = await response.json()
+                    if not isinstance(data, list) or not data:
+                        logger.warning(
+                            "FMP canary test failed — unexpected response format"
+                        )
+                        return
+
+                    profile = data[0]
+                    missing_keys = required_keys - set(profile.keys())
+
+                    if missing_keys:
+                        logger.warning(
+                            "FMP canary test failed — missing keys: %s",
+                            sorted(missing_keys),
+                        )
+                        return
+
+                    logger.info("FMP canary test passed — API schema validated")
+
+        except aiohttp.ClientError as e:
+            logger.warning("FMP canary test failed — network error: %s", e)
+        except TimeoutError:
+            logger.warning("FMP canary test failed — request timeout")
+        except Exception as e:
+            logger.warning("FMP canary test failed — unexpected error: %s", e)
+
     async def stop(self) -> None:
         """Clean up client resources."""
         self._api_key = None
