@@ -120,6 +120,39 @@ def create_app(app_state: AppState) -> FastAPI:
         elif app_state.config and app_state.config.ai and not app_state.config.ai.enabled:
             logger.info("AI services disabled — no API key")
 
+        # Initialize intelligence pipeline if enabled
+        intelligence_initialized_here = False
+        intelligence_components = None
+        if app_state.config and app_state.config.catalyst and app_state.config.catalyst.enabled:
+            try:
+                from argus.intelligence.startup import create_intelligence_components
+
+                intelligence_components = await create_intelligence_components(
+                    config=app_state.config.catalyst,
+                    event_bus=app_state.event_bus,
+                    ai_client=app_state.ai_client,  # May be None if AI disabled
+                    usage_tracker=app_state.usage_tracker,  # May be None
+                    data_dir=app_state.config.data_dir,
+                )
+
+                if intelligence_components is not None:
+                    await intelligence_components.pipeline.start()
+                    app_state.catalyst_storage = intelligence_components.storage
+                    app_state.briefing_generator = intelligence_components.briefing_generator
+                    intelligence_initialized_here = True
+                    logger.info(
+                        "Intelligence pipeline initialized (%d sources)",
+                        len(intelligence_components.sources),
+                    )
+            except Exception as e:
+                logger.error(f"Failed to initialize intelligence pipeline: {e}")
+        elif (
+            app_state.config
+            and app_state.config.catalyst
+            and not app_state.config.catalyst.enabled
+        ):
+            logger.info("Intelligence pipeline disabled")
+
         # Start WebSocket bridge for event streaming
         from argus.api.websocket import get_bridge
 
@@ -145,6 +178,18 @@ def create_app(app_state: AppState) -> FastAPI:
             app_state.ai_summary_generator = None
             app_state.ai_cache = None
             logger.info("AI services cleaned up")
+
+        # Cleanup intelligence pipeline if we initialized it here
+        if intelligence_initialized_here and intelligence_components is not None:
+            try:
+                from argus.intelligence.startup import shutdown_intelligence
+
+                await shutdown_intelligence(intelligence_components)
+            except Exception as e:
+                logger.error(f"Failed to shutdown intelligence pipeline: {e}")
+            app_state.catalyst_storage = None
+            app_state.briefing_generator = None
+            logger.info("Intelligence pipeline cleaned up")
 
     app = FastAPI(
         title="Argus Command Center API",

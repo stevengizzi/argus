@@ -14,6 +14,7 @@ import yaml
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from argus.ai.config import AIConfig
+from argus.intelligence.config import CatalystConfig
 
 # ---------------------------------------------------------------------------
 # Enums
@@ -180,6 +181,8 @@ class SystemConfig(BaseModel):
     ai: AIConfig = Field(default_factory=lambda: AIConfig())
     # Universe Manager configuration (Sprint 23)
     universe_manager: UniverseManagerConfig = Field(default_factory=UniverseManagerConfig)
+    # NLP Catalyst Pipeline configuration (Sprint 23.5 — DEC-164)
+    catalyst: CatalystConfig = Field(default_factory=CatalystConfig)
 
     @field_validator("timezone")
     @classmethod
