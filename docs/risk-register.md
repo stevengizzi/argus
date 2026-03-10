@@ -677,9 +677,9 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 | **Impact** | High — breaks Universe Manager and Scanner at startup |
 | **Category** | External Dependency |
 | **Description** | FMP deprecated all legacy v3/v4 endpoints for accounts created after August 2025 with no advance notice. The `/stable/` endpoints could similarly change. ARGUS depends on FMP for both scanning (Sprint 21.7) and universe construction (Sprint 23/23.3). |
-| **Mitigation** | (1) Monitor FMP changelog and documentation for deprecation notices. (2) FMP API URLs centralized in `fmp_scanner.py` and `fmp_reference.py` — migration requires two files. (3) Fallback: Universe Manager degrades to scanner symbols if stock-list fails. |
+| **Mitigation** | (1) Monitor FMP changelog and documentation for deprecation notices. (2) FMP API URLs centralized in `fmp_scanner.py` and `fmp_reference.py` — migration requires two files. (3) Fallback: Universe Manager degrades to scanner symbols if stock-list fails. (4) FMP canary test at startup validates expected response keys (DEC-313). |
 | **Trigger** | FMP returns unexpected errors or changes field names in stable API. |
-| **Cross-References** | DEC-258, DEC-263, DEC-298, DEC-299 |
+| **Cross-References** | DEC-258, DEC-263, DEC-298, DEC-299, DEC-313 |
 | **Status** | Open |
 
 ---
@@ -726,6 +726,21 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 | **Owner** | Steven |
 | **Status** | Open |
 | **Cross-References** | DEC-304 |
+
+---
+
+### RSK-056 | External API Concentration Risk
+| Field | Value |
+|-------|-------|
+| **Identified** | 2026-03-10 (Sprint 23.6) |
+| **Likelihood** | Medium |
+| **Impact** | High — FMP is single point of failure for Universe Manager, Catalyst news, and scanning |
+| **Category** | External Dependency |
+| **Description** | ARGUS depends on three free/low-cost external APIs for intelligence: FMP ($22/mo), Finnhub (free), SEC EDGAR (free). FMP is the highest-risk dependency — it powers Universe Manager reference data, catalyst news ingestion, and pre-market scanning. A sustained FMP outage would degrade universe construction and catalyst coverage simultaneously. |
+| **Mitigation** | (1) Graceful degradation per source — each CatalystSource has independent error handling. (2) FMP canary test (DEC-313) provides early warning. (3) Reference data file cache (DEC-314) enables startup without FMP for cached symbols. (4) Universe Manager fallback to scanner symbols if stock-list fails. (5) Consider backup data provider (Polygon.io, Alpha Vantage) if FMP reliability degrades. |
+| **Trigger** | FMP outage lasting >2 hours during pre-market or market hours. |
+| **Cross-References** | DEC-258 (FMP integration), DEC-298 (stable API migration), DEC-313 (canary test), DEC-314 (cache), RSK-052 (endpoint deprecation) |
+| **Status** | Open |
 
 ---
 
@@ -915,4 +930,4 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 
 ---
 
-*End of Risk & Assumptions Register v1.3*
+*End of Risk & Assumptions Register v1.4*

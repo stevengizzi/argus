@@ -1,6 +1,6 @@
 # ARGUS — Decision Index
 
-> 299 decisions (DEC-001 through DEC-299)
+> 315 decisions (DEC-001 through DEC-315)
 > Generated: March 10, 2026 | Source: `docs/decision-log.md`
 > Legend: ● Active | ○ Superseded | △ Amended | ✗ Duplicate entry
 
@@ -333,3 +333,14 @@
 - ● **DEC-305**: TanStack Query Hooks — useCatalysts, useIntelligenceBriefings, useIntelligenceBriefing
 - ● **DEC-306**: Finnhub Free Tier for News — company news + analyst recommendations, 60 calls/min
 - ● **DEC-307**: Intelligence Brief View — fourth tab in The Debrief, BriefingCard component
+
+## Phase H — Pipeline Integration + Warm-Up Optimization (Sprint 23.6)
+
+- ● **DEC-308**: CatalystPipeline Initialization Deferred — build in 23.5, integrate in 23.6
+- ● **DEC-309**: Separate catalyst.db SQLite — isolation from trading data
+- ● **DEC-310**: CatalystConfig in SystemConfig — lifespan handler access
+- ● **DEC-311**: Semantic Deduplication — (symbol, category, time_window) grouping
+- ● **DEC-312**: Batch-Then-Publish Ordering — persist before notify
+- ● **DEC-313**: FMP Canary Test — early warning for API schema changes
+- ● **DEC-314**: Reference Data File Cache — JSON cache, incremental warm-up
+- ● **DEC-315**: Intelligence Polling Loop — asyncio task, market-hours-aware intervals

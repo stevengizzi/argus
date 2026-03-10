@@ -775,9 +775,15 @@ class FMPReferenceClient:
     async def build_reference_cache(self, symbols: list[str]) -> dict[str, SymbolReferenceData]
     def get_cached(self, symbol: str) -> SymbolReferenceData | None
     def is_cache_fresh(self) -> bool
+    async def fetch_reference_data_incremental(self, symbols: list[str]) -> dict[str, SymbolReferenceData]
+    def save_cache(self) -> None          # Atomic write: JSON temp file + os.replace()
+    def load_cache(self) -> dict[str, SymbolReferenceData]
+    def get_stale_symbols(self, symbols: list[str]) -> list[str]
 ```
 
 Fetches Company Profile + Share Float in batches for ~3,000–5,000 viable symbols. OTC exchange detection via frozenset lookup. Graceful degradation when float data unavailable.
+
+**Reference Data File Cache (DEC-314):** JSON file (`fmp_reference_cache.json`) with per-symbol `cached_at` timestamps. Incremental warm-up: `fetch_reference_data_incremental()` loads cache → diffs stale/missing symbols → fetches only delta → merges → saves. Reduces ~27-minute warm-up to ~2–5 minutes on subsequent runs. Atomic write via temp file + `os.replace()`. Corrupt file fallback returns empty dict. Configurable max age via `cache_max_age_hours` (default 24). FMP canary test at startup (`_run_canary_test()`) validates expected response keys — non-blocking WARNING on failure (DEC-313).
 
 **SymbolReferenceData** dataclass: `symbol, name, sector, industry, market_cap, avg_volume, prev_close, float_shares, exchange, is_otc, is_etf, last_updated`.
 
@@ -821,7 +827,7 @@ universe_filter:
 
 **Processing budget:** ~8,000–12,000 ticks/sec across full universe. Per-tick fast-path discard ~O(1) set lookup. Per-candle routing ~O(1) dict lookup. Total: ~2–4% of one CPU core in pure Python with ~97% headroom.
 
-**Implementation Status:** Sprint 23 ✅ COMPLETE (Mar 7–8, 2026). 126 pytest + 15 Vitest new tests. FMPReferenceClient, UniverseManager, UniverseFilterConfig, UniverseManagerConfig, fast-path discard in DatabentoDataService, UniverseUpdateEvent, 2 API endpoints, Dashboard UniverseStatusCard. DEC-277 (fail-closed on missing reference data).
+**Implementation Status:** Sprint 23 ✅ COMPLETE (Mar 7–8, 2026), updated Sprint 23.6 (Mar 10). FMPReferenceClient gains reference data file cache (DEC-314), canary test (DEC-313), and incremental warm-up. DEC-277 (fail-closed on missing reference data).
 
 ### 3.8 Health Monitor (`core/health.py`)
 
@@ -1080,6 +1086,36 @@ Interface:
 Config: `catalyst.enabled` in system.yaml (default: false). Config-gated (DEC-300).
 
 Events published: `CatalystEvent(symbol, category, quality_score, headline, source, timestamp)`
+
+#### Intelligence Startup & Runtime (Sprint 23.6) ✅
+
+**Startup Factory** (`intelligence/startup.py`, DEC-308):
+- `IntelligenceComponents` dataclass: pipeline, storage, classifier, briefing_generator, sources
+- `create_intelligence_components(config, event_bus, ai_client, usage_tracker, data_dir)` → builds all components from CatalystConfig; returns None when disabled
+- `shutdown_intelligence(components)` → calls `pipeline.stop()` + `storage.close()`
+
+**App Lifecycle Wiring** (DEC-310):
+- `CatalystConfig` added to `SystemConfig` with `Field(default_factory=CatalystConfig)`
+- Intelligence initialized in FastAPI lifespan handler after AI services, before WebSocket bridge
+- AppState gains `catalyst_storage` and `briefing_generator` fields
+- Graceful shutdown calls `shutdown_intelligence()` in reverse order
+
+**Polling Loop** (`intelligence/startup.py`, DEC-315):
+- `run_polling_loop(pipeline, config, get_symbols)` — asyncio task
+- Market-hours interval: `poll_interval_seconds` (default 300) during 9:30–16:00 ET
+- Off-hours interval: `poll_interval_off_hours_seconds` (default 1800)
+- Symbols from Universe Manager viable_symbols (preferred) or cached_watchlist (fallback)
+- Overlap protection: `asyncio.Lock()` prevents concurrent polls
+- Graceful shutdown: `CancelledError` caught and re-raised
+
+**Pipeline Enhancements** (Sprint 23.6):
+- Semantic dedup: `_semantic_dedup()` groups by (symbol, category) within configurable time window (DEC-311)
+- Batch-then-publish: `store_catalysts_batch()` single transaction, then per-item Event Bus publish (DEC-312)
+- `fetched_at` column in catalyst_events table (ALTER TABLE migration for existing DBs)
+- `get_total_count()` via `SELECT COUNT(*)` (replaces N-row fetch for pagination)
+- SEC EDGAR `start()` validates `user_agent_email` config — raises ValueError if empty
+
+Storage: separate `catalyst.db` SQLite file (DEC-309), path: `{data_dir}/catalyst.db`.
 
 #### PreMarketEngine (`intelligence/premarket_engine.py`) — NOT YET IMPLEMENTED
 

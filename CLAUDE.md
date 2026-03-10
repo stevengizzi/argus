@@ -5,7 +5,7 @@
 
 ## Active Sprint
 
-**No active sprint.** Sprint 23.5 (NLP Catalyst Pipeline) completed March 10, 2026.
+**No active sprint.** Sprint 23.6 (Tier 3 Remediation + Pipeline Integration) completed March 10, 2026.
 
 Next sprint: **24 (Setup Quality Engine + Dynamic Sizer)** — composite 0–100 quality scoring, grade-based position sizing.
 
@@ -13,9 +13,9 @@ Next sprint: **24 (Setup Quality Engine + Dynamic Sizer)** — composite 0–100
 
 - **Active sprint:** None (between sprints)
 - **Next sprint:** 24 (Setup Quality Engine + Dynamic Sizer)
-- **Tests:** 2,396 pytest + 435 Vitest
+- **Tests:** 2,490 pytest + 435 Vitest
 - **Strategies:** 4 active (ORB Breakout, ORB Scalp, VWAP Reclaim, Afternoon Momentum)
-- **Infrastructure:** Databento EQUS.MINI (live) + IBKR paper trading (Account U24619949) + FMP Starter (scanning + reference data) + Finnhub (news + analyst recs) + Claude API (Copilot + Catalyst Classification) + Universe Manager (config-gated) + Catalyst Pipeline (config-gated)
+- **Infrastructure:** Databento EQUS.MINI (live) + IBKR paper trading (Account U24619949) + FMP Starter (scanning + reference data) + Finnhub (news + analyst recs) + Claude API (Copilot + Catalyst Classification) + Universe Manager (config-gated) + Catalyst Pipeline (config-gated) + Intelligence Polling Loop (config-gated) + Reference Data Cache
 - **Frontend:** 7-page Command Center + AI Copilot + Universe Status Card + Intelligence Brief View (all active), Tauri desktop + PWA mobile
 
 ## Project Structure
@@ -44,7 +44,7 @@ argus/
 │   ├── summary.py  # DailySummaryGenerator
 │   ├── cache.py    # ResponseCache (TTL-based)
 │   └── tools.py    # 5 tool_use definitions with JSON schemas
-├── intelligence/   # CatalystPipeline, CatalystClassifier, CatalystStorage, BriefingGenerator (Sprint 23.5)
+├── intelligence/   # CatalystPipeline, CatalystClassifier, CatalystStorage, BriefingGenerator, startup factory, polling loop (Sprints 23.5 + 23.6)
 ├── config/         # system.yaml, system_live.yaml, strategies/*.yaml
 ├── tests/          # pytest (backend) + Vitest (frontend)
 ├── docs/           # Decision log, sprint history, strategy specs, research reports
@@ -246,16 +246,19 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 | DEF-033 | Approve→Executed status transition is simulated with setTimeout(1500ms) in ChatMessage.tsx. Real execution status should be pushed via WebSocket (`{"type": "proposal_update", ...}`) after ActionExecutor completes. Requires: WS protocol extension (new message type), executor pipeline event emission, frontend WS handler update. Cosmetic-only impact — proposal is correctly marked `approved` in DB; only the UI status badge is faked. | Next UI polish pass or Sprint 23 if room. |
 | DEF-034 | Pydantic serialization warnings on `review_verdict` field | Next sprint runner polish pass | `SessionResult.review_verdict` accepts string where enum is expected, producing `PydanticSerializationUnexpectedValue` warnings during test runs. Cosmetic — does not affect functionality. Recurring across Sprint 23.2 S3–S6 tests. Fix: either use `ReviewVerdict` enum values directly or add `use_enum_values=True` to model config. |
 | DEF-035 | FMP Premium Upgrade ($59/mo) | When batch-quote speed becomes a bottleneck | FMP Premium enables batch-quote endpoints (27 min → ~2 min load). Sprint 23.5 completed without upgrade — Finnhub free tier covers news needs. Priority: LOW. |
-| DEF-036 | Stock-List Response Caching | Unscheduled | Cache yesterday's viable universe, diff against fresh stock-list, only fetch new/changed profiles. Could reduce load from ~27 min to ~2–3 min. Priority: LOW. |
+| ~~DEF-036~~ | ~~Stock-List Response Caching~~ | — | **RESOLVED** (Sprint 23.6): Reference data file cache with JSON persistence, per-symbol staleness, and incremental warm-up implemented (DEC-314). Reduces ~27 min to ~2–5 min. |
 | DEF-037 | FMP API Key Redaction in Error Logs | Next cleanup sprint | FMP API URLs with API key appear in error logs. Should redact `apikey=XXX` before logging. Priority: MEDIUM. |
+| DEF-038 | Fuzzy/Embedding-Based Catalyst Dedup | Sprint 28+ or when duplicate catalyst volume is high | Current semantic dedup uses (symbol, category, time_window) grouping (DEC-311). Embedding-based similarity matching would catch semantic duplicates with different headlines. Requires embedding model integration. Priority: LOW — rule-based dedup handles the common case. |
+| DEF-039 | Runner Conformance Check Reliability Audit | When conformance_fallback_count consistently >2 per sprint run | Sprint 23.6 added conformance fallback tracking. If fallback counter shows frequent failures, investigate structured output parsing reliability and tighten the conformance check. Priority: LOW — monitoring only. |
+| DEF-040 | Runner main.py Further Decomposition | Runner exceeds ~2,500 lines | Sprint 23.6 S5 extracted CLI helpers (~120 lines). main.py still 2,067 lines. Further extraction candidates: session execution loop, parallel session handling, notification logic. Priority: LOW. |
 
 ## Reference
 
 | Document | What It Covers |
 |----------|---------------|
-| `docs/decision-log.md` | All 299 DEC entries with full rationale |
+| `docs/decision-log.md` | All 315 DEC entries with full rationale |
 | `docs/dec-index.md` | Quick-reference index with status markers |
-| `docs/sprint-history.md` | Complete sprint history (1–23.3) |
+| `docs/sprint-history.md` | Complete sprint history (1–23.6) |
 | `docs/process-evolution.md` | Workflow evolution narrative |
 | `docs/live-operations.md` | Live trading procedures |
 | `docs/strategies/STRATEGY_*.md` | Per-strategy spec sheets |

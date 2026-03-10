@@ -425,14 +425,83 @@
 **Test counts:** S1(+18), S2(+14), S3(+16), S4(+22), S5(+24/+25V), S6(+0/+18V) = 94 new pytest, 43 new Vitest
 **Notes:** Three free data sources (SEC EDGAR, FMP News, Finnhub) provide broad catalyst coverage at no incremental cost. Rule-based fallback ensures graceful degradation when Claude API unavailable or cost ceiling reached. Finnhub free tier reliability noted as risk (RSK-053). SEC EDGAR rate limiting noted as risk (RSK-055).
 
+### Sprint 23.6 — Tier 3 Remediation + Pipeline Integration + Warm-Up Optimization 90 pytest + 435 Vitest, +83/+0)
+**Date:** Mar 10, 2026
+**Scope:** Address all findings from the Tier 3 architectural review of Sprints 23–23.5: storage/query defects, CatalystEvent timezone alignment, SEC EDGAR email validation, FMP canary test, semantic deduplication, batch-then-publish ordering, intelligence startup factory, app lifecycle wiring, polling loop, reference data file cache, incremental warm-up, runner CLI extraction, conformance fallback monitoring.
+
+**Session 1 (S1): Storage Schema & Query Fixes**
+- Added `get_total_count()` with `SELECT COUNT(*)` (replaces fetching 10K rows)
+- Added `store_catalysts_batch()` for transactional batch inserts
+- Added `fetched_at` column to `catalyst_events` with ALTER TABLE migration
+- Pushed `since` datetime filter to SQL WHERE clause in `get_catalysts_by_symbol`
+- 12 new pytest tests
+
+**Session 2a (S2a): Event & Source Fixes**
+- Changed CatalystEvent `published_at`/`classified_at` defaults from UTC to ET (DEC-276)
+- Added `user_agent_email` validation in SEC EDGAR `start()` — raises ValueError if empty/whitespace
+- 5 new pytest tests
+
+**Session 2b (S2b): Pipeline Batch Store + FMP Canary + Semantic Dedup + Publish Ordering**
+- Added `dedup_window_minutes` config field (default 30)
+- FMP canary test at startup validates expected response keys (DEC-313)
+- Post-classification semantic dedup by (symbol, category, time_window) — highest quality_score wins (DEC-311)
+- Pipeline batch store + separate publish phase with per-item error handling (DEC-312)
+- 11 new pytest tests
+
+**Session 3a (S3a): Intelligence Startup Factory**
+- Created `argus/intelligence/startup.py` with `IntelligenceComponents` dataclass
+- `create_intelligence_components()` factory builds all pipeline components from config
+- Returns None when disabled; `shutdown_intelligence()` cleanup helper
+- 8 new pytest tests
+
+**Session 3b (S3b): App Lifecycle Wiring**
+- Added `CatalystConfig` to `SystemConfig` (DEC-310)
+- Intelligence components initialized in FastAPI lifespan handler when enabled
+- `pipeline.start()` called; AppState fields populated; graceful shutdown via `shutdown_intelligence()`
+- Config YAML key validation test
+- 9 new pytest tests
+
+**Session 3c (S3c): Polling Loop**
+- `run_polling_loop()` with market-hours-aware interval switching (9:30–16:00 ET)
+- Symbols from Universe Manager viable_symbols or cached watchlist fallback
+- Overlap protection via `asyncio.Lock()`; graceful CancelledError handling
+- Polling task started/stopped in lifespan handler
+- 6 new pytest tests
+
+**Session 4a (S4a): Reference Data Cache Layer**
+- JSON file cache with per-symbol `cached_at` timestamps
+- `save_cache()` with atomic write (temp file + `os.replace()`)
+- `load_cache()` with corrupt-file fallback; `get_stale_symbols()` for incremental diffs
+- `SymbolReferenceData.to_dict()`/`from_dict()` serialization
+- Fixed S3c lint issues (import sorting, contextlib.suppress)
+- 14 new pytest tests
+
+**Session 4b (S4b): Incremental Warm-Up Wiring**
+- `fetch_reference_data_incremental()`: load cache → diff stale → fetch delta → merge → save
+- `build_viable_universe()` wired to use incremental fetch
+- Reduces ~27-minute warm-up to ~2–5 minutes on subsequent runs (DEC-314)
+- 9 new pytest tests
+
+**Session 5 (S5): Runner CLI Extraction + Conformance Monitoring**
+- Extracted `Colors`, `print_*` helpers, `build_argument_parser()` from `main.py` to `cli.py`
+- `main.py` reduced from 2,187 to 2,067 lines (~120 line reduction)
+- `conformance_fallback_count` in RunState; `is_fallback` flag in ConformanceVerdict
+- WARNING logged when fallback count exceeds 2 per run
+- 9 new runner tests (201 → 210)
+
+**Key decisions:** DEC-308 (deferred initialization), DEC-309 (separate catalyst.db), DEC-310 (CatalystConfig in SystemConfig), DEC-311 (semantic dedup), DEC-312 (batch-then-publish), DEC-313 (FMP canary), DEC-314 (reference data cache), DEC-315 (polling loop)
+**Sessions:** 9 implementation (S1, S2a, S2b, S3a, S3b, S3c, S4a, S4b, S5)
+**Test counts:** S1(+12), S2a(+5), S2b(+11), S3a(+8), S3b(+9), S3c(+6), S4a(+14), S4b(+9), S5(+9) = +83 new pytest, +0 Vitest
+**Notes:** Tier 3 review remediation sprint. All 9 sessions CLEAR at Tier 2 review (S3c had CONCERNS for 2 lint issues, fixed in S4a). No architectural escalations. DEF-036 (stock-list caching) resolved by reference data cache. Runner now 13 modules, 210 tests.
+
 ---
 
 ## Sprint Statistics
 
-- **Total sprints:** 23 full + 14 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5)
-- **Total sessions:** ~268+ Claude Code sessions
-- **Total tests:** 2,396 pytest + 435 Vitest = 2,831 total
-- **Total decisions:** 307 (DEC-001 through DEC-307)
+- **Total sprints:** 23 full + 15 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6)
+- **Total sessions:** ~277+ Claude Code sessions
+- **Total tests:** 2,490 pytest + 435 Vitest = 2,914 total
+- **Total decisions:** 315 (DEC-001 through DEC-315)
 - **Calendar days (active dev):** ~25 (Feb 14 – Mar 10, 2026)
 - **Largest sprint:** 22 (9 implementation + 5 fix + 9 reviews, largest scope)
 - **Cleanest sprint:** 23 (11 sessions, 0 regressions, 0 scope gaps requiring follow-up)

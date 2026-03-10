@@ -3586,6 +3586,120 @@ Each entry follows this format:
 
 ---
 
+### DEC-308 | CatalystPipeline Initialization Deferred to Sprint 23.6
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-10 |
+| **Sprint** | 23.6 |
+| **Decision** | CatalystPipeline was built in Sprint 23.5 but not wired into the running application. Sprint 23.6 adds the startup factory, lifespan wiring, and polling loop as a separate integration sprint. This separates component construction from system integration. |
+| **Alternatives Considered** | 1. Wire in Sprint 23.5: Rejected — Sprint 23.5 was already at 6 sessions; adding integration would risk compaction and mixing concerns. 2. Wire in Sprint 24: Rejected — Sprint 24 (Quality Engine) depends on catalyst data flowing; must be live before then. |
+| **Rationale** | Follows the "build components first, integrate second" pattern established by Universe Manager (Sprint 23 build + Sprint 23.3 wide pipe). Keeps each sprint focused. Tier 3 review specifically flagged the missing integration. |
+| **Constraints** | CatalystPipeline components must remain backward-compatible with Sprint 23.5 tests. |
+| **Cross-References** | DEC-300 (config-gated feature), DEC-164 (NLP catalyst plan) |
+| **Status** | Active |
+
+---
+
+### DEC-309 | Separate catalyst.db SQLite Database
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-10 |
+| **Sprint** | 23.6 |
+| **Decision** | Catalyst data stored in a separate `catalyst.db` SQLite file (path: `{data_dir}/catalyst.db`) rather than the main ARGUS database. |
+| **Alternatives Considered** | 1. Main database: Rejected — adds WAL contention with trade logging, couples catalyst lifecycle to trading data. 2. PostgreSQL: Rejected — premature for single-user system, adds operational complexity. |
+| **Rationale** | Isolation from trading data, independent lifecycle (can be deleted/rebuilt without affecting trades), avoids WAL contention during high-frequency catalyst inserts. Pattern matches Databento's Parquet cache — separate storage for separate concerns. |
+| **Cross-References** | DEC-034 (SQLite persistence), DEC-302 (headline hash dedup) |
+| **Status** | Active |
+
+---
+
+### DEC-310 | CatalystConfig Added to SystemConfig
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-10 |
+| **Sprint** | 23.6 |
+| **Decision** | `CatalystConfig` added as a field on `SystemConfig` with `Field(default_factory=CatalystConfig)`. Intelligence components initialized in FastAPI lifespan handler when `catalyst.enabled: true`. AppState gains `catalyst_storage` and `briefing_generator` fields. |
+| **Alternatives Considered** | 1. Separate config file: Rejected — follows established pattern of embedding feature configs in SystemConfig (AIConfig, UniverseManagerConfig). 2. Environment variable gating: Rejected — YAML config is the standard mechanism (DEC-032). |
+| **Rationale** | Consistent with AIConfig and UniverseManagerConfig patterns. Enables lifespan handler access via `app_state.config.catalyst`. Default-factory means zero-config for disabled state. |
+| **Cross-References** | DEC-032 (Pydantic config), DEC-300 (config-gated feature) |
+| **Status** | Active |
+
+---
+
+### DEC-311 | Post-Classification Semantic Deduplication
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-10 |
+| **Sprint** | 23.6 |
+| **Decision** | After classification, CatalystPipeline deduplicates catalysts by `(symbol, category, dedup_window_minutes)` grouping. Within each group, the catalyst with the highest `quality_score` is retained; others are dropped. Window defaults to 30 minutes, configurable via `catalyst.dedup_window_minutes`. |
+| **Alternatives Considered** | 1. Pre-classification headline similarity: Rejected — requires NLP infrastructure (embedding model) not yet in stack. 2. No dedup beyond headline hash: Rejected — Tier 3 review flagged that different headlines about the same event produce near-duplicate catalysts. 3. Embedding-based dedup: Deferred to DEF-038. |
+| **Rationale** | Simple, deterministic rule that catches the most common duplicate pattern (same symbol, same category, close in time) without requiring NLP. Configurable window accommodates different event types. |
+| **Cross-References** | DEC-302 (headline hash dedup — complementary), DEF-038 (future embedding-based dedup) |
+| **Status** | Active |
+
+---
+
+### DEC-312 | Batch-Then-Publish Pipeline Ordering
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-10 |
+| **Sprint** | 23.6 |
+| **Decision** | CatalystPipeline stores all classified catalysts via `store_catalysts_batch()` in a single transaction, then publishes CatalystEvents in a separate pass with per-item error handling. A failed publish does not lose data. |
+| **Alternatives Considered** | 1. Store-and-publish per item: Rejected — N commits for N catalysts, and a publish failure mid-batch could leave the Event Bus in an inconsistent state relative to storage. 2. Publish before store: Rejected — publish failure could lose data. |
+| **Rationale** | Data persistence is the priority. Event Bus subscribers (future Quality Engine, Orchestrator) can tolerate brief delays; they cannot tolerate missing data. Per-item error handling in the publish loop prevents one bad CatalystEvent from blocking others. |
+| **Cross-References** | DEC-025 (Event Bus FIFO), DEC-302 (storage dedup) |
+| **Status** | Active |
+
+---
+
+### DEC-313 | FMP Canary Test at Startup
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-10 |
+| **Sprint** | 23.6 |
+| **Decision** | `FMPReferenceClient.start()` performs a canary test — fetches one known symbol (AAPL) and validates that expected response keys (`symbol`, `mktCap`, `volAvg`, `price`, `exchangeShortName`, `isEtf`, `sector`, `industry`) are present. Non-blocking: logs WARNING and continues if canary fails. |
+| **Alternatives Considered** | 1. Blocking canary (raise on failure): Rejected — prevents startup for a non-critical issue. FMP may have transient issues. 2. No canary: Rejected — Tier 3 review flagged that FMP schema changes (RSK-052) were only discovered at runtime during Sprint 23.3 with no early warning. |
+| **Rationale** | Early warning for API schema changes. RSK-052 materialized in Sprint 23.3 when FMP deprecated legacy endpoints. Canary catches field-name changes before they corrupt the reference cache. Non-blocking because FMP issues should degrade gracefully, not prevent trading. |
+| **Cross-References** | DEC-298 (FMP stable API migration), RSK-052 (FMP endpoint deprecation risk) |
+| **Status** | Active |
+
+---
+
+### DEC-314 | Reference Data File Cache for Incremental Warm-Up
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-10 |
+| **Sprint** | 23.6 |
+| **Decision** | FMPReferenceClient gains JSON file cache (`fmp_reference_cache.json`) with per-symbol `cached_at` timestamps, configurable max age (`cache_max_age_hours`, default 24), atomic writes via temp-file + `os.replace()`, and corrupt-file fallback (returns empty dict with WARNING). Incremental warm-up: load cache → identify stale/missing symbols → fetch only those → merge → save. Reduces ~27-minute warm-up to ~2–5 minutes on subsequent runs. |
+| **Alternatives Considered** | 1. SQLite cache: Rejected — JSON file simpler for key-value reference data, no WAL contention. 2. Redis: Rejected — adds infrastructure dependency for a single-user system. 3. No cache (always full fetch): Rejected — 27 minutes is unacceptable for daily restarts. |
+| **Rationale** | Reference data (company profiles, float shares) changes slowly — daily cache freshness is sufficient. JSON is human-inspectable for debugging. Atomic write prevents corruption from interrupted writes. Per-symbol staleness enables partial refreshes when a few symbols change. |
+| **Constraints** | Cache file path configurable via `fmp_reference.cache_file` config. Default: `{data_dir}/fmp_reference_cache.json`. |
+| **Cross-References** | DEF-036 (stock-list response caching — RESOLVED by this), DEC-299 (full-universe input pipe) |
+| **Status** | Active |
+
+---
+
+### DEC-315 | Intelligence Polling Loop via asyncio Task
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-10 |
+| **Sprint** | 23.6 |
+| **Decision** | `run_polling_loop()` in `argus/intelligence/startup.py` runs as an asyncio task started in the FastAPI lifespan handler. Market-hours-aware interval switching: `poll_interval_seconds` (default 300s) during market hours (9:30–16:00 ET), `poll_interval_off_hours_seconds` (default 1800s) outside. Symbols sourced from Universe Manager viable_symbols (preferred) or cached_watchlist (fallback). Each poll: get symbols → `pipeline.run_poll(symbols)` → sleep. Overlap protection via `asyncio.Lock()`. Graceful shutdown via `CancelledError`. |
+| **Alternatives Considered** | 1. APScheduler: Rejected — adds dependency for a simple interval timer. asyncio.sleep() is sufficient. 2. Cron-style scheduling: Rejected — interval-based is simpler and more responsive. 3. Event-driven (poll on new candle): Rejected — catalyst sources are external APIs, not tick-driven. |
+| **Rationale** | Market hours need more frequent updates (new filings, earnings). Off-hours can poll less frequently. Universe Manager symbols provide broad coverage; cached_watchlist fallback handles the case where Universe Manager is disabled. Lock prevents overlapping polls if one takes longer than the interval. |
+| **Cross-References** | DEC-300 (config-gated), DEC-308 (initialization lifecycle) |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
-*Next DEC: 308*
-*Last updated: 2026-03-10 (Sprint 23.5 doc-sync — DEC-300–307)*
+*Next DEC: 316*
+*Last updated: 2026-03-10 (Sprint 23.6 doc-sync — DEC-308–315)*
