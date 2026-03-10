@@ -10,6 +10,7 @@ Sprint 23.5 Session 3 — DEC-164
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 from datetime import datetime
@@ -65,7 +66,8 @@ class CatalystStorage:
             classified_at TEXT NOT NULL,
             classified_by TEXT NOT NULL,
             trading_relevance TEXT NOT NULL,
-            created_at TEXT NOT NULL
+            created_at TEXT NOT NULL,
+            fetched_at TEXT
         )
     """
 
@@ -146,6 +148,14 @@ class CatalystStorage:
         for index_sql in self._CATALYST_EVENTS_INDICES_SQL:
             await self._connection.execute(index_sql)
 
+        # Migration: Add fetched_at column to existing databases
+        # Suppress exception because ALTER TABLE fails if column already exists
+        # and there's no portable "ADD COLUMN IF NOT EXISTS" in SQLite
+        with contextlib.suppress(Exception):
+            await self._connection.execute(
+                "ALTER TABLE catalyst_events ADD COLUMN fetched_at TEXT"
+            )
+
         await self._connection.execute(self._CACHE_TABLE_SQL)
         for index_sql in self._CACHE_INDICES_SQL:
             await self._connection.execute(index_sql)
@@ -198,8 +208,9 @@ class CatalystStorage:
             INSERT INTO catalyst_events (
                 id, symbol, catalyst_type, quality_score, headline, summary,
                 source, source_url, filing_type, headline_hash, published_at,
-                classified_at, classified_by, trading_relevance, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                classified_at, classified_by, trading_relevance, created_at,
+                fetched_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
         await conn.execute(
             sql,
@@ -219,6 +230,7 @@ class CatalystStorage:
                 catalyst.classified_by,
                 catalyst.trading_relevance,
                 now,
+                catalyst.fetched_at.isoformat(),
             ),
         )
         await conn.commit()
@@ -227,25 +239,38 @@ class CatalystStorage:
         return catalyst_id
 
     async def get_catalysts_by_symbol(
-        self, symbol: str, limit: int = 50
+        self, symbol: str, limit: int = 50, since: datetime | None = None
     ) -> list[ClassifiedCatalyst]:
         """Get catalysts for a specific symbol.
 
         Args:
             symbol: Stock ticker symbol.
             limit: Maximum number of results.
+            since: Optional datetime filter for published_at (returns catalysts
+                published at or after this time).
 
         Returns:
             List of classified catalysts, ordered by created_at DESC.
         """
         conn = self._ensure_connected()
-        sql = """
-            SELECT * FROM catalyst_events
-            WHERE symbol = ?
-            ORDER BY created_at DESC
-            LIMIT ?
-        """
-        cursor = await conn.execute(sql, (symbol, limit))
+
+        if since is not None:
+            sql = """
+                SELECT * FROM catalyst_events
+                WHERE symbol = ? AND published_at >= ?
+                ORDER BY created_at DESC
+                LIMIT ?
+            """
+            cursor = await conn.execute(sql, (symbol, since.isoformat(), limit))
+        else:
+            sql = """
+                SELECT * FROM catalyst_events
+                WHERE symbol = ?
+                ORDER BY created_at DESC
+                LIMIT ?
+            """
+            cursor = await conn.execute(sql, (symbol, limit))
+
         rows = await cursor.fetchall()
         return [self._row_to_catalyst(row) for row in rows]
 
@@ -271,6 +296,73 @@ class CatalystStorage:
         rows = await cursor.fetchall()
         return [self._row_to_catalyst(row) for row in rows]
 
+    async def get_total_count(self) -> int:
+        """Get the total count of catalyst events.
+
+        Returns:
+            The total number of catalyst events in the database.
+        """
+        conn = self._ensure_connected()
+        cursor = await conn.execute("SELECT COUNT(*) FROM catalyst_events")
+        row = await cursor.fetchone()
+        return row[0] if row else 0
+
+    async def store_catalysts_batch(
+        self, catalysts: list[ClassifiedCatalyst]
+    ) -> list[str]:
+        """Store multiple catalysts in a single transaction.
+
+        Args:
+            catalysts: The list of classified catalysts to store.
+
+        Returns:
+            List of generated ULID IDs for the stored catalysts.
+        """
+        if not catalysts:
+            return []
+
+        conn = self._ensure_connected()
+        now = datetime.now(_ET).isoformat()
+        catalyst_ids: list[str] = []
+
+        sql = """
+            INSERT INTO catalyst_events (
+                id, symbol, catalyst_type, quality_score, headline, summary,
+                source, source_url, filing_type, headline_hash, published_at,
+                classified_at, classified_by, trading_relevance, created_at,
+                fetched_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """
+
+        for catalyst in catalysts:
+            catalyst_id = generate_id()
+            catalyst_ids.append(catalyst_id)
+            await conn.execute(
+                sql,
+                (
+                    catalyst_id,
+                    catalyst.symbol,
+                    catalyst.category,
+                    catalyst.quality_score,
+                    catalyst.headline,
+                    catalyst.summary,
+                    catalyst.source,
+                    catalyst.source_url,
+                    catalyst.filing_type,
+                    catalyst.headline_hash,
+                    catalyst.published_at.isoformat(),
+                    catalyst.classified_at.isoformat(),
+                    catalyst.classified_by,
+                    catalyst.trading_relevance,
+                    now,
+                    catalyst.fetched_at.isoformat(),
+                ),
+            )
+
+        await conn.commit()
+        logger.debug("Stored batch of %d catalysts", len(catalysts))
+        return catalyst_ids
+
     def _row_to_catalyst(self, row: aiosqlite.Row) -> ClassifiedCatalyst:
         """Convert a database row to a ClassifiedCatalyst.
 
@@ -281,12 +373,14 @@ class CatalystStorage:
             A ClassifiedCatalyst instance.
         """
         r: dict[str, Any] = dict(row)
+        # Use fetched_at from row if present, fall back to created_at for old data
+        fetched_at_str = r.get("fetched_at") or r["created_at"]
         return ClassifiedCatalyst(
             headline=r["headline"],
             symbol=r["symbol"],
             source=r["source"],
             published_at=datetime.fromisoformat(r["published_at"]),
-            fetched_at=datetime.fromisoformat(r["created_at"]),  # Use created_at as fetched_at
+            fetched_at=datetime.fromisoformat(fetched_at_str),
             category=r["catalyst_type"],
             quality_score=float(r["quality_score"]),
             summary=r["summary"],

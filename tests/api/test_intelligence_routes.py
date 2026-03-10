@@ -528,3 +528,131 @@ class TestServiceAvailability:
                 assert "Catalyst storage not available" in response.json()["detail"]
 
             await db.close()
+
+
+class TestSprint236Fixes:
+    """Tests for Sprint 23.6 fixes (C2, S1, S2, M3)."""
+
+    @pytest.mark.asyncio
+    async def test_recent_catalysts_total_count(
+        self,
+        client: AsyncClient,
+        auth_headers: dict[str, str],
+        catalyst_storage: CatalystStorage,
+    ) -> None:
+        """Verify response total field uses COUNT(*) query, not len()."""
+        # Store exactly 5 catalysts
+        for i in range(5):
+            cat = make_catalyst(f"SYM{i}", f"News {i}", "news_sentiment", 50 + i)
+            await catalyst_storage.store_catalyst(cat)
+
+        # Request with limit=2
+        response = await client.get(
+            "/api/v1/catalysts/recent?limit=2&offset=0",
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["count"] == 2  # Only 2 returned
+        assert data["total"] == 5  # But total should be 5 (from COUNT query)
+
+    @pytest.mark.asyncio
+    async def test_catalysts_by_symbol_since_parameter(
+        self,
+        client: AsyncClient,
+        auth_headers: dict[str, str],
+        catalyst_storage: CatalystStorage,
+    ) -> None:
+        """Verify since parameter filters correctly via API."""
+        now = datetime.now(_ET)
+
+        # Store 3 catalysts with different published_at times
+        times = [
+            now - timedelta(hours=3),  # Oldest
+            now - timedelta(hours=2),  # Middle
+            now - timedelta(hours=1),  # Newest
+        ]
+
+        for i, pub_time in enumerate(times):
+            cat = ClassifiedCatalyst(
+                headline=f"MSFT news {i}",
+                symbol="MSFT",
+                source="test",
+                published_at=pub_time,
+                fetched_at=now,
+                category="news_sentiment",
+                quality_score=50.0,
+                summary=f"Summary {i}",
+                trading_relevance="medium",
+                classified_by="fallback",
+                classified_at=now,
+                headline_hash=compute_headline_hash(f"MSFT news {i}"),
+            )
+            await catalyst_storage.store_catalyst(cat)
+
+        # Query with since = 2.5 hours ago (should return 2 newest)
+        since_time = (now - timedelta(hours=2, minutes=30)).isoformat()
+        response = await client.get(
+            f"/api/v1/catalysts/MSFT?since={since_time}",
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["count"] == 2
+        assert data["symbol"] == "MSFT"
+
+    @pytest.mark.asyncio
+    async def test_schema_migration_alter_table(self) -> None:
+        """Create DB without fetched_at column, re-initialize, verify column added."""
+        import tempfile
+        from pathlib import Path
+
+        import aiosqlite
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "test_migration.db"
+
+            # Create DB with old schema (no fetched_at column)
+            async with aiosqlite.connect(str(db_path)) as conn:
+                await conn.execute("""
+                    CREATE TABLE catalyst_events (
+                        id TEXT PRIMARY KEY,
+                        symbol TEXT NOT NULL,
+                        catalyst_type TEXT NOT NULL,
+                        quality_score REAL NOT NULL,
+                        headline TEXT NOT NULL,
+                        summary TEXT NOT NULL,
+                        source TEXT NOT NULL,
+                        source_url TEXT,
+                        filing_type TEXT,
+                        headline_hash TEXT NOT NULL,
+                        published_at TEXT NOT NULL,
+                        classified_at TEXT NOT NULL,
+                        classified_by TEXT NOT NULL,
+                        trading_relevance TEXT NOT NULL,
+                        created_at TEXT NOT NULL
+                    )
+                """)
+                await conn.commit()
+
+            # Verify column doesn't exist initially
+            async with aiosqlite.connect(str(db_path)) as conn:
+                cursor = await conn.execute("PRAGMA table_info(catalyst_events)")
+                columns = await cursor.fetchall()
+                column_names = [col[1] for col in columns]
+                assert "fetched_at" not in column_names
+
+            # Initialize storage (should run migration)
+            storage = CatalystStorage(db_path)
+            await storage.initialize()
+
+            # Verify column now exists
+            conn = storage._ensure_connected()
+            cursor = await conn.execute("PRAGMA table_info(catalyst_events)")
+            columns = await cursor.fetchall()
+            column_names = [col[1] for col in columns]
+            assert "fetched_at" in column_names
+
+            await storage.close()

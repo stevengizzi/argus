@@ -195,12 +195,7 @@ async def get_recent_catalysts(
         limit=limit, offset=offset
     )
 
-    # For total count, we fetch a larger set without offset
-    # This is a simple approach; for large datasets, a separate count query would be better
-    all_catalysts = await state.catalyst_storage.get_recent_catalysts(  # type: ignore
-        limit=10000, offset=0
-    )
-    total = len(all_catalysts)
+    total = await state.catalyst_storage.get_total_count()  # type: ignore
 
     return RecentCatalystsResponse(
         catalysts=[_catalyst_to_response(c) for c in catalysts],
@@ -231,26 +226,23 @@ async def get_catalysts_by_symbol(
     """
     _ensure_catalyst_storage(state)
 
-    catalysts = await state.catalyst_storage.get_catalysts_by_symbol(  # type: ignore
-        symbol.upper(), limit=limit
-    )
-
-    # Filter by since if provided
+    # Parse since datetime if provided
+    since_dt: datetime | None = None
     if since is not None:
         try:
             since_dt = datetime.fromisoformat(since.replace("Z", "+00:00"))
             # Ensure timezone aware
             if since_dt.tzinfo is None:
                 since_dt = since_dt.replace(tzinfo=_ET)
-            catalysts = [
-                c for c in catalysts
-                if _make_aware(c.published_at) >= since_dt
-            ]
         except ValueError as e:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Invalid datetime format for 'since': {since}",
             ) from e
+
+    catalysts = await state.catalyst_storage.get_catalysts_by_symbol(  # type: ignore
+        symbol.upper(), limit=limit, since=since_dt
+    )
 
     return CatalystsBySymbolResponse(
         catalysts=[_catalyst_to_response(c) for c in catalysts],
