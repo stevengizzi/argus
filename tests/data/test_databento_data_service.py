@@ -8,7 +8,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import sys
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -919,62 +919,48 @@ class TestIndicatorComputation:
 
 
 class TestWarmUpIndicators:
-    """Tests for indicator warm-up during startup."""
+    """Tests for indicator warm-up and computation."""
 
-    @pytest.mark.asyncio
-    async def test_warm_up_populates_indicator_cache(
-        self, mock_databento, event_bus, databento_config, data_config, fixed_clock
+    def test_indicator_computation_populates_cache(
+        self, mock_databento, event_bus, databento_config, data_config
     ):
-        """Warm-up populates indicator cache with VWAP and SMAs."""
-        import pandas as pd
+        """Indicator computation populates cache with VWAP and SMAs.
 
+        Tests that feeding candles through _update_indicators correctly
+        populates the indicator cache. This is the core functionality that
+        both lazy warm-up and live stream processing rely on.
+        """
         from argus.data.databento_data_service import DatabentoDataService
 
         service = DatabentoDataService(
             event_bus=event_bus,
             config=databento_config,
             data_config=data_config,
-            clock=fixed_clock,
         )
 
-        # Create historical data with 20 candles (enough for SMA-9 and RVOL baseline)
-        timestamps = pd.date_range(
-            start="2026-02-21 09:30:00",
-            periods=20,
-            freq="1min",
-            tz="UTC",
-        )
-        historical_df = pd.DataFrame(
-            {
-                "ts_event": timestamps,
-                "timestamp": timestamps,
-                "open": [100.0 + i * 0.1 for i in range(20)],
-                "high": [101.0 + i * 0.1 for i in range(20)],
-                "low": [99.0 + i * 0.1 for i in range(20)],
-                "close": [100.5 + i * 0.1 for i in range(20)],
-                "volume": [1000 + i * 10 for i in range(20)],
-            }
-        )
-
-        # Mock get_historical_candles to return our test data
-        async def mock_get_historical_candles(
-            symbol: str, timeframe: str, start, end
-        ) -> pd.DataFrame:
-            return historical_df
-
-        service.get_historical_candles = mock_get_historical_candles
-
-        # Run warm-up
-        await service._warm_up_indicators(["AAPL"])
+        # Feed 20 candles through _update_indicators (enough for SMA-9 and RVOL)
+        base_time = datetime(2026, 2, 21, 9, 30, 0, tzinfo=UTC)
+        for i in range(20):
+            candle = CandleEvent(
+                symbol="AAPL",
+                timestamp=base_time + timedelta(minutes=i),
+                open=100.0 + i * 0.1,
+                high=101.0 + i * 0.1,
+                low=99.0 + i * 0.1,
+                close=100.5 + i * 0.1,
+                volume=1000 + i * 10,
+                timeframe="1m",
+            )
+            service._update_indicators("AAPL", candle)
 
         # Verify VWAP is cached
         vwap = service._indicator_cache.get(("AAPL", "vwap"))
-        assert vwap is not None, "VWAP should be in indicator cache after warm-up"
+        assert vwap is not None, "VWAP should be in indicator cache"
         assert vwap > 0, "VWAP should be positive"
 
         # Verify SMA-9 is cached (need at least 9 candles, we have 20)
         sma_9 = service._indicator_cache.get(("AAPL", "sma_9"))
-        assert sma_9 is not None, "SMA-9 should be in indicator cache after warm-up"
+        assert sma_9 is not None, "SMA-9 should be in indicator cache"
         assert sma_9 > 0, "SMA-9 should be positive"
 
         # Verify indicator engine was created
@@ -1756,3 +1742,360 @@ class TestUniverseUpdateEvent:
         # Should raise FrozenInstanceError
         with pytest.raises(Exception):  # FrozenInstanceError is subclass of Exception
             event.viable_count = 200
+
+
+class TestTimeAwareWarmUp:
+    """Tests for time-aware indicator warm-up (Sprint 23.7)."""
+
+    @pytest.fixture
+    def premarket_clock(self):
+        """Create a FixedClock set to 9:00 AM ET (pre-market)."""
+        # March 2026 uses EDT (UTC-4): 9:00 AM EDT = 13:00 UTC
+        return FixedClock(datetime(2026, 3, 11, 13, 0, 0, tzinfo=UTC))
+
+    @pytest.fixture
+    def midsession_clock(self):
+        """Create a FixedClock set to 10:30 AM ET (mid-session)."""
+        # March 2026 uses EDT (UTC-4): 10:30 AM EDT = 14:30 UTC
+        return FixedClock(datetime(2026, 3, 11, 14, 30, 0, tzinfo=UTC))
+
+    @pytest.fixture
+    def market_open_clock(self):
+        """Create a FixedClock set to exactly 9:30:00 AM ET (boundary)."""
+        # March 2026 uses EDT (UTC-4): 9:30 AM EDT = 13:30 UTC
+        return FixedClock(datetime(2026, 3, 11, 13, 30, 0, tzinfo=UTC))
+
+    @pytest.mark.asyncio
+    async def test_premarket_boot_skips_warmup(
+        self, mock_databento, event_bus, databento_config, data_config, premarket_clock, caplog
+    ):
+        """Pre-market boot (before 9:30 AM ET) skips indicator warm-up."""
+        import logging
+
+        from argus.data.databento_data_service import DatabentoDataService
+
+        service = DatabentoDataService(
+            event_bus=event_bus,
+            config=databento_config,
+            data_config=data_config,
+            clock=premarket_clock,
+        )
+
+        # Track if get_historical_candles is called
+        historical_called = []
+
+        async def mock_get_historical(symbol, timeframe, start, end):
+            historical_called.append(symbol)
+            return MagicMock()
+
+        service.get_historical_candles = mock_get_historical
+
+        with caplog.at_level(logging.INFO):
+            await service._warm_up_indicators(["AAPL", "TSLA", "NVDA"])
+
+        # Should NOT have called historical fetch
+        assert len(historical_called) == 0
+        # Should log pre-market skip message
+        assert "Pre-market boot" in caplog.text
+        assert "skipping indicator warm-up" in caplog.text
+        # Should NOT be in mid-session mode
+        assert service._mid_session_mode is False
+        assert len(service._symbols_needing_warmup) == 0
+
+    @pytest.mark.asyncio
+    async def test_midsession_boot_enables_lazy_warmup(
+        self, mock_databento, event_bus, databento_config, data_config, midsession_clock, caplog
+    ):
+        """Mid-session boot (after 9:30 AM ET) enables lazy per-symbol warm-up."""
+        import logging
+
+        from argus.data.databento_data_service import DatabentoDataService
+
+        service = DatabentoDataService(
+            event_bus=event_bus,
+            config=databento_config,
+            data_config=data_config,
+            clock=midsession_clock,
+        )
+
+        with caplog.at_level(logging.INFO):
+            await service._warm_up_indicators(["AAPL", "TSLA", "NVDA"])
+
+        # Should be in mid-session mode
+        assert service._mid_session_mode is True
+        # Should have all symbols pending warm-up
+        assert service._symbols_needing_warmup == {"AAPL", "TSLA", "NVDA"}
+        # Should log mid-session message
+        assert "Mid-session boot" in caplog.text
+        assert "lazy per-symbol warm-up" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_boundary_930_treated_as_premarket(
+        self, mock_databento, event_bus, databento_config, data_config, market_open_clock, caplog
+    ):
+        """Exactly 9:30:00 AM ET is treated as pre-market (no warm-up)."""
+        import logging
+
+        from argus.data.databento_data_service import DatabentoDataService
+
+        service = DatabentoDataService(
+            event_bus=event_bus,
+            config=databento_config,
+            data_config=data_config,
+            clock=market_open_clock,
+        )
+
+        with caplog.at_level(logging.INFO):
+            await service._warm_up_indicators(["AAPL"])
+
+        # Boundary case: exactly 9:30 is pre-market
+        assert service._mid_session_mode is False
+        assert len(service._symbols_needing_warmup) == 0
+        assert "Pre-market boot" in caplog.text
+
+    def test_lazy_warmup_triggered_on_first_candle(
+        self, mock_databento, event_bus, databento_config, data_config, midsession_clock
+    ):
+        """Lazy warm-up is triggered on first candle for un-warmed symbol."""
+        from argus.data.databento_data_service import DatabentoDataService
+
+        service = DatabentoDataService(
+            event_bus=event_bus,
+            config=databento_config,
+            data_config=data_config,
+            clock=midsession_clock,
+        )
+
+        # Set up mid-session mode
+        service._mid_session_mode = True
+        service._symbols_needing_warmup = {"AAPL", "TSLA"}
+        service._active_symbols = {"AAPL", "TSLA"}
+
+        # Track lazy warmup calls
+        lazy_warmup_called = []
+
+        def mock_lazy_warmup(symbol):
+            lazy_warmup_called.append(symbol)
+
+        service._lazy_warmup_symbol = mock_lazy_warmup
+
+        # Set up mock live client with symbology_map
+        mock_client = MockLiveClient()
+        mock_client._symbology_map = {100: "AAPL"}
+        service._live_client = mock_client
+
+        # Process first candle for AAPL (prices in fixed-point format)
+        msg = MockOHLCVMsg(
+            instrument_id=100,
+            open=150.0 * 1e9,
+            high=155.0 * 1e9,
+            low=149.0 * 1e9,
+            close=154.0 * 1e9,
+            volume=10000,
+            ts_event=int(datetime(2026, 3, 11, 15, 30, tzinfo=UTC).timestamp() * 1e9),
+        )
+
+        service._on_ohlcv(msg)
+
+        # Lazy warmup should have been called for AAPL
+        assert lazy_warmup_called == ["AAPL"]
+        # AAPL should be removed from pending set
+        assert "AAPL" not in service._symbols_needing_warmup
+        assert "TSLA" in service._symbols_needing_warmup
+
+    def test_lazy_warmup_not_triggered_on_second_candle(
+        self, mock_databento, event_bus, databento_config, data_config, midsession_clock
+    ):
+        """Second candle for same symbol does NOT trigger lazy warm-up."""
+        from argus.data.databento_data_service import DatabentoDataService
+
+        service = DatabentoDataService(
+            event_bus=event_bus,
+            config=databento_config,
+            data_config=data_config,
+            clock=midsession_clock,
+        )
+
+        # Set up mid-session mode with AAPL already warmed
+        service._mid_session_mode = True
+        service._symbols_needing_warmup = {"TSLA"}  # AAPL not in set (already warmed)
+        service._active_symbols = {"AAPL"}
+
+        # Track lazy warmup calls
+        lazy_warmup_called = []
+
+        def mock_lazy_warmup(symbol):
+            lazy_warmup_called.append(symbol)
+
+        service._lazy_warmup_symbol = mock_lazy_warmup
+
+        # Set up mock live client with symbology_map
+        mock_client = MockLiveClient()
+        mock_client._symbology_map = {100: "AAPL"}
+        service._live_client = mock_client
+
+        # Process second candle for AAPL (prices in fixed-point format)
+        msg = MockOHLCVMsg(
+            instrument_id=100,
+            open=150.0 * 1e9,
+            high=155.0 * 1e9,
+            low=149.0 * 1e9,
+            close=154.0 * 1e9,
+            volume=10000,
+            ts_event=int(datetime(2026, 3, 11, 15, 31, tzinfo=UTC).timestamp() * 1e9),
+        )
+
+        service._on_ohlcv(msg)
+
+        # Lazy warmup should NOT have been called
+        assert lazy_warmup_called == []
+
+    def test_lazy_warmup_failure_marks_symbol_warmed(
+        self, mock_databento, event_bus, databento_config, data_config, midsession_clock, caplog
+    ):
+        """Failed lazy warm-up marks symbol as warmed (no retry loop)."""
+        import logging
+
+        from argus.data.databento_data_service import DatabentoDataService
+
+        service = DatabentoDataService(
+            event_bus=event_bus,
+            config=databento_config,
+            data_config=data_config,
+            clock=midsession_clock,
+        )
+
+        # Set up mid-session mode
+        service._mid_session_mode = True
+        service._symbols_needing_warmup = {"AAPL"}
+        service._active_symbols = {"AAPL"}
+
+        # Create a mock hist_client that raises an error
+        mock_hist = MagicMock()
+        mock_hist.timeseries.get_range.side_effect = Exception("Network error")
+        service._hist_client = mock_hist
+
+        # Set up mock live client with symbology_map
+        mock_client = MockLiveClient()
+        mock_client._symbology_map = {100: "AAPL"}
+        service._live_client = mock_client
+
+        # Process first candle for AAPL (prices in fixed-point format)
+        msg = MockOHLCVMsg(
+            instrument_id=100,
+            open=150.0 * 1e9,
+            high=155.0 * 1e9,
+            low=149.0 * 1e9,
+            close=154.0 * 1e9,
+            volume=10000,
+            ts_event=int(datetime(2026, 3, 11, 15, 30, tzinfo=UTC).timestamp() * 1e9),
+        )
+
+        with caplog.at_level(logging.WARNING):
+            service._on_ohlcv(msg)
+
+        # Symbol should be removed from pending (marked as warmed)
+        assert "AAPL" not in service._symbols_needing_warmup
+        # Warning should be logged
+        assert "Lazy warm-up for AAPL failed" in caplog.text
+        # Candle should still be processed (price cache updated)
+        assert "AAPL" in service._price_cache
+
+    def test_premarket_candles_processed_without_backfill(
+        self, mock_databento, event_bus, databento_config, data_config, premarket_clock
+    ):
+        """Pre-market boot processes candles without lazy backfill."""
+        from argus.data.databento_data_service import DatabentoDataService
+
+        service = DatabentoDataService(
+            event_bus=event_bus,
+            config=databento_config,
+            data_config=data_config,
+            clock=premarket_clock,
+        )
+
+        # NOT in mid-session mode (pre-market)
+        service._mid_session_mode = False
+        service._active_symbols = {"AAPL"}
+
+        # Track lazy warmup calls (should not be called)
+        lazy_warmup_called = []
+
+        def mock_lazy_warmup(symbol):
+            lazy_warmup_called.append(symbol)
+
+        service._lazy_warmup_symbol = mock_lazy_warmup
+
+        # Set up mock live client with symbology_map
+        mock_client = MockLiveClient()
+        mock_client._symbology_map = {100: "AAPL"}
+        service._live_client = mock_client
+
+        # Process candle (prices in fixed-point format)
+        msg = MockOHLCVMsg(
+            instrument_id=100,
+            open=150.0 * 1e9,
+            high=155.0 * 1e9,
+            low=149.0 * 1e9,
+            close=154.0 * 1e9,
+            volume=10000,
+            ts_event=int(datetime(2026, 3, 11, 14, 0, tzinfo=UTC).timestamp() * 1e9),
+        )
+
+        service._on_ohlcv(msg)
+
+        # Lazy warmup should NOT have been called (pre-market mode)
+        assert lazy_warmup_called == []
+        # Candle should still be processed
+        assert "AAPL" in service._price_cache
+        assert service._price_cache["AAPL"] == 154.0
+
+    @pytest.mark.asyncio
+    async def test_midsession_boot_no_blocking_warmup(
+        self, mock_databento, event_bus, databento_config, data_config, midsession_clock
+    ):
+        """Mid-session boot does NOT run blocking per-symbol warm-up loop."""
+        import pandas as pd
+
+        from argus.data.databento_data_service import DatabentoDataService
+
+        service = DatabentoDataService(
+            event_bus=event_bus,
+            config=databento_config,
+            data_config=data_config,
+            clock=midsession_clock,
+        )
+
+        # Track if get_historical_candles is called (blocking warmup)
+        historical_called = []
+
+        async def mock_get_historical(symbol, timeframe, start, end):
+            historical_called.append(symbol)
+            return pd.DataFrame()
+
+        service.get_historical_candles = mock_get_historical
+
+        await service._warm_up_indicators(["AAPL", "TSLA", "NVDA"])
+
+        # get_historical_candles should NOT have been called
+        # (blocking warm-up loop not executed)
+        assert len(historical_called) == 0
+        # But mid-session mode should be set
+        assert service._mid_session_mode is True
+        assert len(service._symbols_needing_warmup) == 3
+
+    def test_warmup_state_initialized_correctly(
+        self, mock_databento, event_bus, databento_config, data_config
+    ):
+        """Time-aware warm-up state variables are initialized correctly."""
+        from argus.data.databento_data_service import DatabentoDataService
+
+        service = DatabentoDataService(
+            event_bus=event_bus,
+            config=databento_config,
+            data_config=data_config,
+        )
+
+        assert service._mid_session_mode is False
+        assert service._symbols_needing_warmup == set()
+        assert hasattr(service, "_warmup_lock")

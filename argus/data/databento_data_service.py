@@ -12,10 +12,12 @@ import asyncio
 import contextlib
 import logging
 import os
+import threading
 import time
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, time as dt_time, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 
@@ -116,6 +118,13 @@ class DatabentoDataService(DataService):
         self._heartbeat_interval_seconds: float = 300.0  # 5 minutes
         self._candles_since_heartbeat: int = 0
         self._symbols_seen_since_heartbeat: set[str] = set()
+
+        # Time-aware warm-up state (Sprint 23.7)
+        # Mid-session mode: lazy per-symbol backfill on first candle
+        # Pre-market mode: no backfill (indicators build from live stream)
+        self._mid_session_mode: bool = False
+        self._symbols_needing_warmup: set[str] = set()
+        self._warmup_lock = threading.Lock()  # Thread-safe access from reader thread
 
     # ──────────────────────────────────────────────
     # DataService ABC Implementation
@@ -541,6 +550,18 @@ class DatabentoDataService(DataService):
         if self._active_symbols and symbol not in self._active_symbols:
             return
 
+        # Lazy warm-up for mid-session boot (Sprint 23.7)
+        # On first candle per symbol, fetch today's historical data before processing
+        if self._mid_session_mode:
+            needs_warmup = False
+            with self._warmup_lock:
+                if symbol in self._symbols_needing_warmup:
+                    needs_warmup = True
+                    self._symbols_needing_warmup.discard(symbol)
+
+            if needs_warmup:
+                self._lazy_warmup_symbol(symbol)
+
         # Track for periodic heartbeat logging
         self._candles_since_heartbeat += 1
         self._symbols_seen_since_heartbeat.add(symbol)
@@ -745,60 +766,121 @@ class DatabentoDataService(DataService):
     async def _warm_up_indicators(self, symbols: list[str]) -> None:
         """Fetch recent historical bars to warm up indicator engines.
 
-        Fetches enough historical bars (at least 50 for SMA(50)) for each
-        symbol and feeds them through _update_indicators(). Events are
-        discarded during warm-up (not published to Event Bus).
+        Time-aware behavior (Sprint 23.7):
+        - Pre-market (current time <= 9:30 AM ET): Skip warm-up entirely.
+          Indicators will build naturally from the live stream.
+        - Mid-session (current time > 9:30 AM ET): Enable lazy per-symbol
+          backfill mode. On first candle per symbol, fetch today's historical
+          data from 9:30 AM to now before processing.
 
-        Uses get_historical_candles() or queries Databento Historical directly.
-        This runs once at startup before live streaming begins.
+        This replaces the blocking per-symbol warm-up loop, enabling ARGUS
+        to start in seconds with a 6,000+ symbol universe.
         """
-        logger.info("Warming up indicators for %d symbols", len(symbols))
+        # Determine current time in ET for warm-up decision
+        et_tz = ZoneInfo("America/New_York")
+        now_et = self._clock.now().astimezone(et_tz)
+        market_open = dt_time(9, 30, 0)
 
-        # Fetch last 60 1m candles for each symbol.
-        # Use a 20-minute buffer because Databento historical data has ~15min lag.
-        # Warmup data will be slightly stale but that's acceptable for indicator seeding.
-        end = self._clock.now() - timedelta(minutes=20)
-        start = end - timedelta(minutes=60)
+        if now_et.time() <= market_open:
+            # Pre-market boot: skip warm-up, indicators build from live stream
+            logger.info(
+                "Pre-market boot — skipping indicator warm-up "
+                "(indicators will build from live stream)"
+            )
+            return
 
-        for symbol in symbols:
-            try:
-                df = await self.get_historical_candles(symbol, "1m", start, end)
+        # Mid-session boot: enable lazy per-symbol backfill
+        logger.info(
+            "Mid-session boot — enabling lazy per-symbol warm-up for %d symbols",
+            len(symbols),
+        )
+        with self._warmup_lock:
+            self._mid_session_mode = True
+            self._symbols_needing_warmup = set(symbols)
 
-                if df.empty:
-                    logger.warning("No historical data for %s, skipping warm-up", symbol)
-                    continue
+    def _lazy_warmup_symbol(self, symbol: str) -> None:
+        """Lazy warm-up for a single symbol during mid-session boot.
 
-                # Feed historical candles through _update_indicators()
-                # (reuses live indicator logic — events are discarded during warm-up)
-                for _, row in df.iterrows():
-                    candle = CandleEvent(
-                        symbol=symbol,
-                        timestamp=row["timestamp"],
-                        open=row["open"],
-                        high=row["high"],
-                        low=row["low"],
-                        close=row["close"],
-                        volume=int(row["volume"]),
-                        timeframe="1m",
+        Fetches historical 1m OHLCV from 9:30 AM ET today to now and feeds
+        through the IndicatorEngine. Called from the reader thread on first
+        candle received for an un-warmed symbol.
+
+        This is a blocking synchronous call. Thread-safe with respect to the
+        warm-up tracking state via self._warmup_lock.
+
+        On failure: logs warning, marks symbol as warmed anyway (no retry).
+        """
+        import databento as db
+
+        start_time = time.monotonic()
+        et_tz = ZoneInfo("America/New_York")
+
+        try:
+            # Ensure historical client exists
+            if self._hist_client is None:
+                api_key = os.getenv(self._config.api_key_env_var)
+                if not api_key:
+                    logger.warning(
+                        "Lazy warm-up for %s failed: API key not found", symbol
                     )
-                    # Update indicators — ignore returned events during warm-up
-                    self._update_indicators(symbol, candle)
+                    return
+                self._hist_client = db.Historical(key=api_key)
 
-                engine = self._indicator_engines.get(symbol)
-                vwap_str = f"{engine.vwap:.2f}" if engine and engine.vwap else "N/A"
-                atr_str = f"{engine.atr_14:.2f}" if engine and engine.atr_14 else "N/A"
-                logger.debug(
-                    "Warmed up %s with %d candles. VWAP: %s, ATR: %s",
-                    symbol,
-                    len(df),
-                    vwap_str,
-                    atr_str,
+            # Calculate time range: 9:30 AM ET today to now
+            now_et = self._clock.now().astimezone(et_tz)
+            today = now_et.date()
+            market_open_et = datetime.combine(
+                today, dt_time(9, 30, 0), tzinfo=et_tz
+            )
+
+            # Fetch historical 1m candles
+            data = self._hist_client.timeseries.get_range(
+                dataset=self._config.dataset,
+                symbols=symbol,
+                schema="ohlcv-1m",
+                start=market_open_et.isoformat(),
+                end=now_et.isoformat(),
+                stype_in=self._config.stype_in,
+            )
+
+            df = data.to_df()
+
+            if df.empty:
+                logger.warning(
+                    "Lazy warm-up for %s: no historical data available", symbol
                 )
+                return
 
-            except Exception as e:
-                logger.error("Failed to warm up %s: %s", symbol, e)
+            # Normalize and feed through indicator engine
+            df = self._normalize_historical_df(df)
 
-        logger.info("Indicator warm-up complete")
+            for _, row in df.iterrows():
+                candle = CandleEvent(
+                    symbol=symbol,
+                    timestamp=row["timestamp"],
+                    open=row["open"],
+                    high=row["high"],
+                    low=row["low"],
+                    close=row["close"],
+                    volume=int(row["volume"]),
+                    timeframe="1m",
+                )
+                # Update indicators — discard returned events during warm-up
+                self._update_indicators(symbol, candle)
+
+            elapsed = time.monotonic() - start_time
+            logger.info(
+                "Lazy warm-up for %s: fetched %d historical candles (%.2fs)",
+                symbol,
+                len(df),
+                elapsed,
+            )
+
+        except Exception as e:
+            elapsed = time.monotonic() - start_time
+            logger.warning(
+                "Lazy warm-up for %s failed: %s (%.2fs)", symbol, e, elapsed
+            )
 
     # ──────────────────────────────────────────────
     # Stale Data Monitor (RSK-021 mitigation)
