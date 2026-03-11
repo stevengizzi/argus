@@ -3700,6 +3700,48 @@ Each entry follows this format:
 
 ---
 
+### DEC-316 | Time-Aware Indicator Warm-Up
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-11 |
+| **Sprint** | 23.7 |
+| **Decision** | Replace blocking per-symbol indicator warm-up with time-aware approach. Pre-market boot (at or before 9:30 AM ET) skips warm-up entirely — indicators build naturally from the live stream. Mid-session boot (after 9:30 AM ET) enables lazy mode: each symbol is backfilled from market open (9:30 ET) on first live candle arrival, synchronously on the Databento reader thread before candle dispatch. Warm-up tracking set protected by `threading.Lock`. Failed backfills mark the symbol as warmed (no retry loop) — fail-closed via existing indicator validity checks. |
+| **Alternatives Considered** | 1. Batch ALL_SYMBOLS historical request: Rejected — unknown Databento API behavior for ALL_SYMBOLS in historical context; large response size risk for 6,000+ symbols × N minutes of 1-min candles. 2. Warm up only scanner symbols: Rejected — loses indicator state for all universe symbols on mid-session restart. 3. Keep blocking warm-up with parallelism: Rejected — still O(N) individual API calls; parallelism helps but doesn't solve the fundamental scaling problem (6,000+ calls would still take hours). |
+| **Rationale** | The warm-up was designed for 8–15 scanner symbols. With Sprint 23's full-universe pipe producing 6,005+ viable symbols, the blocking warm-up made 6,000+ sequential Databento historical API calls, taking 12+ hours. The system could not reach RUNNING state before market close. Pre-market boot (the normal operating mode from Taipei) needs no warm-up because the live stream delivers candles from 9:30 and indicators build naturally. Mid-session boot (crash recovery) uses lazy per-symbol backfill to spread the cost across only symbols that actually produce live candles. Lazy backfill runs synchronously on the reader thread, preserving FIFO ordering (DEC-025). Thread safety via `threading.Lock` for warm-up tracking set, consistent with DEC-088 threading model. |
+| **Cross-References** | DEC-025 (Event Bus FIFO), DEC-088 (Databento threading), DEC-263 (full-universe monitoring) |
+| **Status** | Active |
+
+---
+
+### DEC-317 | Periodic Reference Cache Saves
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-11 |
+| **Sprint** | 23.7 |
+| **Decision** | Save reference data cache to disk every 1,000 successfully fetched symbols during fetch and on shutdown signal. Uses existing atomic write mechanism (temp file + `os.replace()`). Internal `_cache` dict pre-populated with valid (non-stale) entries before incremental fetch begins, so checkpoints include both previously cached and newly fetched data. Shutdown flag (`_shutdown_requested`) checked in fetch loop triggers final save of current progress. |
+| **Alternatives Considered** | 1. Save only on clean completion: Previous behavior — lost all progress on interrupt (observed: 75 minutes of fetching lost on Ctrl+C, requiring full 2-hour re-fetch). |
+| **Rationale** | Cold-start reference fetch takes ~2 hours for ~37,000 symbols. The cache (DEC-314) only saved on successful completion, meaning any interruption lost all progress. With periodic saves every 1,000 symbols, at most ~3 minutes of fetch time is lost on interrupt. |
+| **Cross-References** | DEC-314 (reference data file cache) |
+| **Status** | Active |
+
+---
+
+### DEC-318 | API Server Port Guard and Double-Bind Fix
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-11 |
+| **Sprint** | 23.7 |
+| **Decision** | Fix root cause of API server double-bind (duplicate WebSocket bridge start in both `main.py` and FastAPI lifespan handler — removed from lifespan) and add port-availability guard as defense in depth. `check_port_available()` uses `socket.bind()` to verify port before `uvicorn.run()`. On port conflict, system continues in headless mode (no API server) via `PortInUseError` handling in `main.py`, rather than crashing. |
+| **Alternatives Considered** | 1. Guard only (no root cause fix): Rejected — masks the underlying bug; duplicate WS bridge initialization could cause other issues. 2. Root cause fix only (no guard): Rejected — doesn't protect against external port conflicts (e.g., stale ARGUS process from previous run). |
+| **Rationale** | Observed on March 10 Boot 2: uvicorn started successfully, then a second uvicorn process attempted to bind port 8000 and crashed with `[Errno 48]`. Root cause: the FastAPI lifespan handler was starting the WebSocket bridge, but `main.py` also starts it, causing duplicate initialization. Known TOCTOU race in port check is acceptable as defense-in-depth since root cause is also fixed. |
+| **Cross-References** | None |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
-*Next DEC: 316*
-*Last updated: 2026-03-10 (Sprint 23.6 doc-sync — DEC-308–315)*
+*Next DEC: 319*
+*Last updated: 2026-03-11 (Sprint 23.7 doc-sync — DEC-316–318)*

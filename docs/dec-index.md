@@ -344,3 +344,9 @@
 - ● **DEC-313**: FMP Canary Test — early warning for API schema changes
 - ● **DEC-314**: Reference Data File Cache — JSON cache, incremental warm-up
 - ● **DEC-315**: Intelligence Polling Loop — asyncio task, market-hours-aware intervals
+
+## Phase I — Startup Scaling Fixes (Sprint 23.7)
+
+- ● **DEC-316**: Time-Aware Indicator Warm-Up — skip pre-market, lazy per-symbol mid-session
+- ● **DEC-317**: Periodic Reference Cache Saves — every 1,000 symbols + on shutdown signal
+- ● **DEC-318**: API Server Port Guard + Double-Bind Fix — removed duplicate WS bridge start, socket check

@@ -496,13 +496,43 @@
 
 ---
 
+### Sprint 23.7 — Startup Scaling Fixes (2511 pytest + 435 Vitest, +21/+0)
+
+**Trigger:** Live QA campaign (post-Sprint 23.6) discovered 3 bugs preventing full-universe boot.
+**Type:** Impromptu triage. **Urgency:** URGENT — system could not reach RUNNING state with `universe_manager.enabled: true`.
+
+**Session 1 (S1): Time-Aware Indicator Warm-Up**
+- Replaced blocking per-symbol warm-up (12+ hours for 6,005 symbols) with time-aware approach
+- Pre-market boot (≤9:30 AM ET): warm-up skipped entirely — live stream builds indicators from open
+- Mid-session boot (>9:30 AM ET): lazy per-symbol backfill on first candle arrival
+- Backfill runs synchronously on reader thread before candle dispatch (preserves DEC-025 FIFO)
+- Thread-safe warm-up tracking via `threading.Lock` (consistent with DEC-088)
+- Failed backfills mark symbol as warmed (no retry loop) — fail-closed via indicator validity
+- 9 new pytest tests
+
+**Session 2 (S2): Reference Cache Resilience + API Double-Bind Fix**
+- Periodic cache saves every 1,000 successfully fetched symbols during reference data fetch
+- Shutdown signal handler saves partial cache before exit
+- Internal `_cache` pre-populated with non-stale entries so checkpoints include old + new data
+- API server double-bind root cause: duplicate WebSocket bridge start in lifespan handler — removed
+- Port-availability guard via `socket.bind()` check before `uvicorn.run()`
+- Headless mode fallback on port conflict (system continues without API server)
+- 12 new pytest tests
+
+**Key decisions:** DEC-316 (time-aware warm-up), DEC-317 (periodic cache saves), DEC-318 (port guard)
+**Sessions:** 2 implementation (S1, S2)
+**Test counts:** S1(+9), S2(+12) = +21 new pytest, +0 Vitest
+**Notes:** Both sessions CLEAN at Tier 1, CLEAR at Tier 2. No escalations. Tier 2 S2 noted cosmetic test count discrepancy in close-out (reported 14, actual 12). TOCTOU race in port guard noted as acceptable defense-in-depth.
+
+---
+
 ## Sprint Statistics
 
-- **Total sprints:** 23 full + 15 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6)
-- **Total sessions:** ~277+ Claude Code sessions
-- **Total tests:** 2,490 pytest + 435 Vitest = 2,914 total
-- **Total decisions:** 315 (DEC-001 through DEC-315)
-- **Calendar days (active dev):** ~25 (Feb 14 – Mar 10, 2026)
+- **Total sprints:** 23 full + 16 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7)
+- **Total sessions:** ~279+ Claude Code sessions
+- **Total tests:** 2,511 pytest + 435 Vitest = 2,946 total
+- **Total decisions:** 318 (DEC-001 through DEC-318)
+- **Calendar days (active dev):** ~26 (Feb 14 – Mar 11, 2026)
 - **Largest sprint:** 22 (9 implementation + 5 fix + 9 reviews, largest scope)
 - **Cleanest sprint:** 23 (11 sessions, 0 regressions, 0 scope gaps requiring follow-up)
 - **Most test-dense:** Sprint 22 (286 new tests), Sprint 23.2 (188 new tests), Sprint 23 (141 new tests across 23+23.05)

@@ -1,11 +1,11 @@
 # ARGUS — Claude Code Context
 
 > Dense, actionable context for Claude Code sessions. No history — see `docs/` for that.
-> Last updated: March 10, 2026
+> Last updated: March 11, 2026
 
 ## Active Sprint
 
-**No active sprint.** Sprint 23.6 (Tier 3 Remediation + Pipeline Integration) completed March 10, 2026.
+**No active sprint.** Sprint 23.7 (Startup Scaling Fixes) completed March 11, 2026. Live QA campaign in progress.
 
 Next sprint: **24 (Setup Quality Engine + Dynamic Sizer)** — composite 0–100 quality scoring, grade-based position sizing.
 
@@ -13,7 +13,7 @@ Next sprint: **24 (Setup Quality Engine + Dynamic Sizer)** — composite 0–100
 
 - **Active sprint:** None (between sprints)
 - **Next sprint:** 24 (Setup Quality Engine + Dynamic Sizer)
-- **Tests:** 2,490 pytest + 435 Vitest
+- **Tests:** 2,511 pytest + 435 Vitest
 - **Strategies:** 4 active (ORB Breakout, ORB Scalp, VWAP Reclaim, Afternoon Momentum)
 - **Infrastructure:** Databento EQUS.MINI (live) + IBKR paper trading (Account U24619949) + FMP Starter (scanning + reference data) + Finnhub (news + analyst recs) + Claude API (Copilot + Catalyst Classification) + Universe Manager (config-gated) + Catalyst Pipeline (config-gated) + Intelligence Polling Loop (config-gated) + Reference Data Cache
 - **Frontend:** 7-page Command Center + AI Copilot + Universe Status Card + Intelligence Brief View (all active), Tauri desktop + PWA mobile
