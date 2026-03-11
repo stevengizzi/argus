@@ -616,20 +616,40 @@ class ArgusSystem:
                 ws_bridge = get_bridge()
                 ws_bridge.start(self._event_bus, self._order_manager, config.system.api)
 
-                # Start API server
-                self._api_task = await run_server(
-                    api_app, config.system.api.host, config.system.api.port
-                )
-                logger.info(
-                    "API server started on %s:%d",
-                    config.system.api.host,
-                    config.system.api.port,
-                )
-                self._health_monitor.update_component(
-                    "api_server",
-                    ComponentStatus.HEALTHY,
-                    message=f"http://{config.system.api.host}:{config.system.api.port}",
-                )
+                # Start API server with port-availability guard
+                try:
+                    self._api_task = await run_server(
+                        api_app, config.system.api.host, config.system.api.port
+                    )
+                    logger.info(
+                        "API server started on %s:%d",
+                        config.system.api.host,
+                        config.system.api.port,
+                    )
+                    self._health_monitor.update_component(
+                        "api_server",
+                        ComponentStatus.HEALTHY,
+                        message=f"http://{config.system.api.host}:{config.system.api.port}",
+                    )
+                except Exception as e:
+                    # Import here to avoid circular import
+                    from argus.api.server import PortInUseError
+
+                    if isinstance(e, PortInUseError):
+                        # Port already in use — system continues in headless mode
+                        logger.warning(
+                            "API server not started: %s. System running in headless mode.",
+                            e,
+                        )
+                        self._health_monitor.update_component(
+                            "api_server",
+                            ComponentStatus.DEGRADED,
+                            message=f"Port {config.system.api.port} in use — headless mode",
+                        )
+                        # Stop the WebSocket bridge since we have no API server
+                        ws_bridge.stop()
+                    else:
+                        raise
         else:
             logger.info("API server disabled by configuration or --no-api flag")
             self._health_monitor.update_component(
@@ -855,6 +875,13 @@ class ArgusSystem:
         if self._scanner:
             logger.info("Stopping scanner...")
             await self._scanner.stop()
+
+        # 1a. Stop Universe Manager (saves reference cache)
+        if self._universe_manager is not None:
+            logger.info("Stopping Universe Manager...")
+            ref_client = self._universe_manager._reference_client
+            if ref_client is not None:
+                await ref_client.stop()
 
         # 2. Stop data streams
         if self._data_service:

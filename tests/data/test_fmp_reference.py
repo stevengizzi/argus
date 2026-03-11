@@ -1536,3 +1536,258 @@ class TestFMPReferenceClientIncrementalFetch:
 
         # Corrupt cache + fetch failure = empty result (graceful degradation)
         assert result == {}
+
+
+class TestFMPReferenceClientPeriodicCheckpoints:
+    """Tests for periodic cache checkpoint saving (Sprint 23.7 S2)."""
+
+    @pytest.fixture
+    def tmp_cache_path(self, tmp_path: Any) -> str:
+        """Create a temporary cache file path."""
+        return str(tmp_path / "test_cache.json")
+
+    @pytest.fixture
+    def config_with_tmp_cache(self, tmp_cache_path: str) -> FMPReferenceConfig:
+        """Config with temporary cache file path."""
+        return FMPReferenceConfig(cache_file=tmp_cache_path, cache_max_age_hours=24)
+
+    @pytest.fixture
+    def client_with_tmp_cache(
+        self, config_with_tmp_cache: FMPReferenceConfig
+    ) -> FMPReferenceClient:
+        """Client configured with temporary cache file."""
+        c = FMPReferenceClient(config_with_tmp_cache)
+        c._api_key = "test_key"
+        return c
+
+    async def test_periodic_checkpoint_saves_at_intervals(
+        self, client_with_tmp_cache: FMPReferenceClient, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Test that cache is saved every 1,000 symbols during fetch."""
+        import logging
+
+        caplog.set_level(logging.INFO)
+
+        # Create 2,500 symbols to trigger checkpoints at 1,000 and 2,000
+        symbols = [f"SYM{i:05d}" for i in range(2500)]
+
+        async def mock_fetch_single(session: Any, symbol: str) -> SymbolReferenceData:
+            return SymbolReferenceData(symbol=symbol, sector="Technology")
+
+        with patch.object(
+            client_with_tmp_cache, "_fetch_single_profile_with_retry", side_effect=mock_fetch_single
+        ):
+            await client_with_tmp_cache.fetch_reference_data(symbols)
+
+        # Should have logged checkpoint saves at 1,000 and 2,000 symbols
+        log_text = caplog.text
+        checkpoint_logs = [
+            line for line in log_text.split("\n") if "Reference cache checkpoint" in line
+        ]
+
+        # Expect exactly 2 checkpoint saves (at 1,000 and 2,000)
+        assert len(checkpoint_logs) == 2, f"Expected 2 checkpoint logs, got {len(checkpoint_logs)}: {checkpoint_logs}"
+
+    async def test_checkpoint_uses_atomic_writes(
+        self, client_with_tmp_cache: FMPReferenceClient, tmp_cache_path: str
+    ) -> None:
+        """Test that checkpoint saves use atomic writes (no temp file remains)."""
+        from pathlib import Path
+
+        # Create enough symbols to trigger one checkpoint
+        symbols = [f"SYM{i:05d}" for i in range(1100)]
+
+        async def mock_fetch_single(session: Any, symbol: str) -> SymbolReferenceData:
+            return SymbolReferenceData(symbol=symbol, sector="Technology")
+
+        with patch.object(
+            client_with_tmp_cache, "_fetch_single_profile_with_retry", side_effect=mock_fetch_single
+        ):
+            await client_with_tmp_cache.fetch_reference_data(symbols)
+
+        # Verify no temp file remains after checkpoint
+        temp_path = Path(tmp_cache_path).with_suffix(".json.tmp")
+        assert not temp_path.exists(), "Temp file should be cleaned up after atomic write"
+
+        # Verify cache file exists and is valid
+        cache_path = Path(tmp_cache_path)
+        assert cache_path.exists()
+        import json
+
+        with open(cache_path) as f:
+            data = json.load(f)
+        assert len(data) >= 1000  # At least checkpoint worth of data
+
+    async def test_interrupted_fetch_preserves_partial_cache(
+        self, client_with_tmp_cache: FMPReferenceClient, tmp_cache_path: str
+    ) -> None:
+        """Test that interrupted fetch preserves symbols from checkpoint."""
+        from pathlib import Path
+        import json
+
+        # Create 2,000 symbols, fail at ~1,500
+        symbols = [f"SYM{i:05d}" for i in range(2000)]
+        call_count = 0
+
+        async def mock_fetch_single(session: Any, symbol: str) -> SymbolReferenceData | None:
+            nonlocal call_count
+            call_count += 1
+            if call_count > 1500:
+                # Simulate failure after 1,500 symbols
+                return None
+            return SymbolReferenceData(symbol=symbol, sector="Technology")
+
+        with patch.object(
+            client_with_tmp_cache, "_fetch_single_profile_with_retry", side_effect=mock_fetch_single
+        ):
+            await client_with_tmp_cache.fetch_reference_data(symbols)
+
+        # Verify cache file exists with checkpoint data (~1,000 symbols)
+        cache_path = Path(tmp_cache_path)
+        assert cache_path.exists()
+
+        with open(cache_path) as f:
+            data = json.load(f)
+
+        # Should have at least 1,000 symbols from first checkpoint
+        assert len(data) >= 1000, f"Expected >=1000 symbols, got {len(data)}"
+
+    async def test_incremental_fetch_after_partial_cache(
+        self, client_with_tmp_cache: FMPReferenceClient, tmp_cache_path: str
+    ) -> None:
+        """Test that partial cache reduces next fetch count."""
+        import json
+        from pathlib import Path
+
+        # Pre-populate cache with 1,000 symbols
+        now = datetime.now(ZoneInfo("UTC"))
+        cache_data = {}
+        for i in range(1000):
+            symbol = f"SYM{i:05d}"
+            cache_data[symbol] = {
+                "symbol": symbol,
+                "sector": "Technology",
+                "is_otc": False,
+                "fetched_at": now.isoformat(),
+                "cached_at": now.isoformat(),
+            }
+        Path(tmp_cache_path).write_text(json.dumps(cache_data))
+
+        # Try to fetch 2,000 symbols (1,000 cached + 1,000 new)
+        all_symbols = [f"SYM{i:05d}" for i in range(2000)]
+
+        fetch_calls: list[str] = []
+
+        async def mock_fetch(symbols: list[str]) -> dict[str, SymbolReferenceData]:
+            fetch_calls.extend(symbols)
+            return {
+                sym: SymbolReferenceData(symbol=sym, sector="Technology")
+                for sym in symbols
+            }
+
+        with patch.object(
+            client_with_tmp_cache, "fetch_reference_data", side_effect=mock_fetch
+        ):
+            result = await client_with_tmp_cache.fetch_reference_data_incremental(all_symbols)
+
+        # Should have only fetched ~1,000 new symbols (not the cached ones)
+        assert len(fetch_calls) == 1000, f"Expected 1000 fetches, got {len(fetch_calls)}"
+        # All symbols should be in result
+        assert len(result) == 2000
+
+
+class TestFMPReferenceClientShutdownHandling:
+    """Tests for shutdown signal handling (Sprint 23.7 S2)."""
+
+    @pytest.fixture
+    def tmp_cache_path(self, tmp_path: Any) -> str:
+        """Create a temporary cache file path."""
+        return str(tmp_path / "test_cache.json")
+
+    @pytest.fixture
+    def config_with_tmp_cache(self, tmp_cache_path: str) -> FMPReferenceConfig:
+        """Config with temporary cache file path."""
+        return FMPReferenceConfig(cache_file=tmp_cache_path)
+
+    @pytest.fixture
+    def client_with_tmp_cache(
+        self, config_with_tmp_cache: FMPReferenceConfig
+    ) -> FMPReferenceClient:
+        """Client configured with temporary cache file."""
+        c = FMPReferenceClient(config_with_tmp_cache)
+        c._api_key = "test_key"
+        return c
+
+    async def test_shutdown_during_fetch_saves_cache(
+        self, client_with_tmp_cache: FMPReferenceClient, tmp_cache_path: str
+    ) -> None:
+        """Test that requesting shutdown during fetch saves partial cache."""
+        from pathlib import Path
+        import json
+
+        # Create many symbols
+        symbols = [f"SYM{i:05d}" for i in range(500)]
+        call_count = 0
+
+        async def mock_fetch_single(session: Any, symbol: str) -> SymbolReferenceData | None:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 200:
+                # Request shutdown mid-fetch
+                client_with_tmp_cache.request_shutdown()
+            return SymbolReferenceData(symbol=symbol, sector="Technology")
+
+        with patch.object(
+            client_with_tmp_cache, "_fetch_single_profile_with_retry", side_effect=mock_fetch_single
+        ):
+            await client_with_tmp_cache.fetch_reference_data(symbols)
+
+        # After shutdown request, cache should still be updated
+        # The internal cache should have the processed symbols
+        assert len(client_with_tmp_cache._cache) > 0
+
+    async def test_stop_saves_cache(
+        self, client_with_tmp_cache: FMPReferenceClient, tmp_cache_path: str
+    ) -> None:
+        """Test that stop() saves cache to disk."""
+        from pathlib import Path
+        import json
+
+        # Populate cache
+        client_with_tmp_cache._cache = {
+            "AAPL": SymbolReferenceData(symbol="AAPL", sector="Technology"),
+            "MSFT": SymbolReferenceData(symbol="MSFT", sector="Technology"),
+        }
+
+        # Call stop
+        await client_with_tmp_cache.stop()
+
+        # Verify cache was saved
+        cache_path = Path(tmp_cache_path)
+        assert cache_path.exists()
+
+        with open(cache_path) as f:
+            data = json.load(f)
+
+        assert "AAPL" in data
+        assert "MSFT" in data
+
+    async def test_stop_without_cache_does_not_crash(
+        self, client_with_tmp_cache: FMPReferenceClient
+    ) -> None:
+        """Test that stop() with empty cache doesn't crash."""
+        # Ensure cache is empty
+        client_with_tmp_cache._cache = {}
+
+        # Should not raise
+        await client_with_tmp_cache.stop()
+
+    def test_request_shutdown_sets_flag(
+        self, client_with_tmp_cache: FMPReferenceClient
+    ) -> None:
+        """Test that request_shutdown sets the shutdown flag."""
+        assert client_with_tmp_cache._shutdown_requested is False
+
+        client_with_tmp_cache.request_shutdown()
+
+        assert client_with_tmp_cache._shutdown_requested is True

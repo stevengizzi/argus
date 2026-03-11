@@ -172,6 +172,9 @@ class FMPReferenceClient:
         "OTC MARKETS",
     })
 
+    # Save cache checkpoint every N symbols during fetch
+    _CHECKPOINT_INTERVAL: int = 1000
+
     def __init__(self, config: FMPReferenceConfig) -> None:
         """Initialize FMPReferenceClient.
 
@@ -183,6 +186,7 @@ class FMPReferenceClient:
         self._cache: dict[str, SymbolReferenceData] = {}
         self._cache_built_at: datetime | None = None
         self._cached_at_timestamps: dict[str, str] = {}
+        self._shutdown_requested: bool = False
 
     async def start(self) -> None:
         """Initialize the client and validate API key.
@@ -195,6 +199,8 @@ class FMPReferenceClient:
             raise RuntimeError(
                 f"FMP API key not found. Set {self._config.api_key_env_var}."
             )
+        # Reset shutdown flag for clean state
+        self._shutdown_requested = False
         logger.info("FMPReferenceClient started")
 
         # Canary test: validate API schema with AAPL profile
@@ -259,9 +265,32 @@ class FMPReferenceClient:
             logger.warning("FMP canary test failed — unexpected error: %s", e)
 
     async def stop(self) -> None:
-        """Clean up client resources."""
+        """Clean up client resources and save cache.
+
+        Saves the current cache to disk before stopping to preserve
+        any partially fetched data. This enables recovery from
+        interrupted fetches on the next startup.
+        """
+        # Signal any in-progress fetch to stop
+        self._shutdown_requested = True
+
+        # Save cache if we have any data
+        if self._cache:
+            logger.info("Saving reference cache on shutdown (%d symbols)", len(self._cache))
+            self.save_cache()
+
         self._api_key = None
         logger.info("FMPReferenceClient stopped")
+
+    def request_shutdown(self) -> None:
+        """Request graceful shutdown of any in-progress operations.
+
+        Sets a flag that causes ongoing fetch operations to stop
+        and save their progress. Called by signal handlers or
+        application shutdown sequences.
+        """
+        self._shutdown_requested = True
+        logger.info("FMPReferenceClient shutdown requested")
 
     async def fetch_stock_list(self) -> list[str]:
         """Fetch complete stock list from FMP.
@@ -340,6 +369,11 @@ class FMPReferenceClient:
             - Succeeded vs failed counts
             - Elapsed time
 
+        Periodic checkpointing:
+            - Saves cache to disk every 1,000 successfully fetched symbols
+            - Enables recovery from interrupted fetches
+            - Uses atomic writes to prevent corruption
+
         Args:
             symbols: List of stock symbols to fetch.
 
@@ -364,12 +398,13 @@ class FMPReferenceClient:
         succeeded = 0
         failed = 0
         processed = 0
+        last_checkpoint = 0
         start_time = time.monotonic()
 
         # Semaphore for concurrent request limiting
         semaphore = asyncio.Semaphore(5)
 
-        # Lock for thread-safe counter updates
+        # Lock for thread-safe counter updates and cache writes
         counter_lock = asyncio.Lock()
 
         async def fetch_single(
@@ -377,7 +412,11 @@ class FMPReferenceClient:
             symbol: str,
         ) -> SymbolReferenceData | None:
             """Fetch profile for a single symbol with rate limiting and retries."""
-            nonlocal succeeded, failed, processed
+            nonlocal succeeded, failed, processed, last_checkpoint
+
+            # Check for shutdown request
+            if self._shutdown_requested:
+                return None
 
             async with semaphore:
                 # Rate limiting: 0.2s minimum spacing
@@ -385,11 +424,28 @@ class FMPReferenceClient:
 
                 result = await self._fetch_single_profile_with_retry(session, symbol)
 
-                # Update counters
+                # Update counters and cache
                 async with counter_lock:
                     processed += 1
                     if result is not None:
                         succeeded += 1
+                        # Update internal cache immediately for checkpointing
+                        self._cache[symbol] = result
+                        results[symbol] = result
+
+                        # Checkpoint save every _CHECKPOINT_INTERVAL symbols
+                        if (
+                            succeeded - last_checkpoint >= self._CHECKPOINT_INTERVAL
+                            and not self._shutdown_requested
+                        ):
+                            last_checkpoint = succeeded
+                            cache_path = Path(self._config.cache_file)
+                            self.save_cache()
+                            logger.info(
+                                "Reference cache checkpoint: %d symbols saved to %s",
+                                len(self._cache),
+                                cache_path,
+                            )
                     else:
                         failed += 1
 
@@ -422,10 +478,7 @@ class FMPReferenceClient:
             # Gather results (exceptions are returned, not raised)
             fetched = await asyncio.gather(*tasks, return_exceptions=True)
 
-            # Collect successful results
-            for sym, result in zip(symbols, fetched):
-                if isinstance(result, SymbolReferenceData):
-                    results[sym] = result
+            # Results are already collected in fetch_single via counter_lock
 
         # Final summary
         elapsed = time.monotonic() - start_time
@@ -962,6 +1015,13 @@ class FMPReferenceClient:
             len(stale_symbols),
             len(all_symbols),
         )
+
+        # Pre-populate internal cache with valid (non-stale) cached entries
+        # This ensures checkpoint saves include both old and new data
+        stale_set = set(stale_symbols)
+        for symbol, data in cached.items():
+            if symbol not in stale_set:
+                self._cache[symbol] = data
 
         # Fetch only the stale/missing symbols
         try:

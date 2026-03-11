@@ -73,3 +73,87 @@ async def test_static_not_mounted_when_empty(app_state):
         response = await test_client.get("/")
         # Root should be 404 (no static mount) or 307 redirect
         assert response.status_code in (404, 307)
+
+
+class TestPortAvailabilityGuard:
+    """Tests for port-availability guard in run_server (Sprint 23.7 S2)."""
+
+    def test_check_port_available_when_free(self) -> None:
+        """Test check_port_available returns True when port is free."""
+        from argus.api.server import check_port_available
+
+        # Use a high port that's likely to be free
+        result = check_port_available("127.0.0.1", 59999)
+
+        assert result is True
+
+    def test_check_port_available_when_occupied(self) -> None:
+        """Test check_port_available returns False when port is in use."""
+        import socket
+
+        from argus.api.server import check_port_available
+
+        # Bind a port first
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.bind(("127.0.0.1", 59998))
+        sock.listen(1)
+
+        try:
+            # Now check_port_available should return False
+            result = check_port_available("127.0.0.1", 59998)
+            assert result is False
+        finally:
+            sock.close()
+
+    @pytest.mark.asyncio
+    async def test_run_server_raises_on_port_in_use(
+        self, app_state, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Test run_server raises PortInUseError when port is occupied."""
+        import logging
+        import socket
+
+        from argus.api.server import PortInUseError, create_app, run_server
+
+        caplog.set_level(logging.CRITICAL)
+
+        app = create_app(app_state)
+
+        # Bind a port first
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.bind(("127.0.0.1", 59997))
+        sock.listen(1)
+
+        try:
+            with pytest.raises(PortInUseError) as exc_info:
+                await run_server(app, "127.0.0.1", 59997)
+
+            assert "59997" in str(exc_info.value)
+            assert "already in use" in caplog.text.lower()
+        finally:
+            sock.close()
+
+    @pytest.mark.asyncio
+    async def test_run_server_succeeds_when_port_free(self, app_state) -> None:
+        """Test run_server returns a task when port is available."""
+        import asyncio
+
+        from argus.api.server import create_app, run_server
+
+        app = create_app(app_state)
+
+        # Use a high port that's likely to be free
+        task = await run_server(app, "127.0.0.1", 59996)
+
+        try:
+            # Verify we got a task back
+            assert isinstance(task, asyncio.Task)
+        finally:
+            # Clean up
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass

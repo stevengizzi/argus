@@ -181,12 +181,11 @@ def create_app(app_state: AppState) -> FastAPI:
         ):
             logger.info("Intelligence pipeline disabled")
 
-        # Start WebSocket bridge for event streaming
+        # Note: WebSocket bridge is started by main.py before calling run_server().
+        # We only need to get a reference to it here for cleanup.
         from argus.api.websocket import get_bridge
 
         bridge = get_bridge()
-        if app_state.config and app_state.config.api:
-            bridge.start(app_state.event_bus, app_state.order_manager, app_state.config.api)
 
         yield
 
@@ -268,8 +267,42 @@ def create_app(app_state: AppState) -> FastAPI:
     return app
 
 
+class PortInUseError(Exception):
+    """Raised when the requested port is already in use."""
+
+    pass
+
+
+def check_port_available(host: str, port: int) -> bool:
+    """Check if a port is available for binding.
+
+    Attempts to bind a socket to the specified host:port. If successful,
+    the port is available. The socket is closed immediately after the check.
+
+    Args:
+        host: Host address to check.
+        port: Port number to check.
+
+    Returns:
+        True if port is available, False if already in use.
+    """
+    import socket
+
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    try:
+        sock.bind((host, port))
+        sock.close()
+        return True
+    except OSError:
+        return False
+
+
 async def run_server(app: FastAPI, host: str, port: int) -> asyncio.Task[None]:
     """Start uvicorn programmatically in the existing event loop.
+
+    Checks port availability before starting to provide a clear error message
+    if another instance is already running on the same port.
 
     Args:
         app: The FastAPI application instance.
@@ -278,8 +311,22 @@ async def run_server(app: FastAPI, host: str, port: int) -> asyncio.Task[None]:
 
     Returns:
         The asyncio.Task running the server, so caller can cancel on shutdown.
+
+    Raises:
+        PortInUseError: If the port is already in use.
     """
     import uvicorn
+
+    # Defense in depth: check port availability before starting uvicorn
+    if not check_port_available(host, port):
+        logger.critical(
+            "Port %d already in use — cannot start API server. "
+            "Is another ARGUS instance running?",
+            port,
+        )
+        raise PortInUseError(
+            f"Port {port} already in use. Is another ARGUS instance running?"
+        )
 
     config = uvicorn.Config(app, host=host, port=port, log_level="info")
     server = uvicorn.Server(config)
