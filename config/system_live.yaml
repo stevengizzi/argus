@@ -78,6 +78,40 @@ ai:
   cost_per_million_input_tokens: 15.0     # Opus pricing
   cost_per_million_output_tokens: 75.0    # Opus pricing
 
+# NLP Catalyst Pipeline (Sprint 23.5 — DEC-164)
+# Ingests news/filings from SEC EDGAR, FMP, Finnhub.
+# Classifies catalyst quality via Claude API.
+# Requires: FINNHUB_API_KEY, FMP_API_KEY, ANTHROPIC_API_KEY
+catalyst:
+  enabled: true
+  polling_interval_premarket_seconds: 900   # 15 minutes
+  polling_interval_session_seconds: 1800    # 30 minutes
+  max_batch_size: 20
+  daily_cost_ceiling_usd: 5.0              # DEC-303: $5/day cost ceiling
+  classification_cache_ttl_hours: 24
+  dedup_window_minutes: 30
+  sources:
+    sec_edgar:
+      enabled: true
+      filing_types:
+        - "8-K"
+        - "4"
+      user_agent_email: "gizzimusic@gmail.com"     # Required: your email for SEC fair access
+      rate_limit_per_second: 10.0
+    fmp_news:
+      enabled: true
+      api_key_env_var: "FMP_API_KEY"
+      endpoints:
+        - "stock_news"
+        - "press_releases"
+    finnhub:
+      enabled: true
+      api_key_env_var: "FINNHUB_API_KEY"
+      rate_limit_per_minute: 60
+  briefing:
+    model: null             # null inherits from ai.model (Claude Opus)
+    max_symbols: 30
+
 # Universe Manager (Sprint 23 — DEC-263)
 # Broad-universe monitoring with strategy-specific filtering
 # Set enabled: true to activate. Requires FMP_API_KEY.
