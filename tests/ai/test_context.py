@@ -71,7 +71,7 @@ class TestSystemContextBuilder:
         assert "current_time" in system
         assert "utc" in system["current_time"]
         assert "et" in system["current_time"]
-        assert "taipei" in system["current_time"]
+        assert "cape_town" in system["current_time"]
 
     @pytest.mark.asyncio
     async def test_system_state_includes_strategy_count(
@@ -421,18 +421,18 @@ class TestDebriefDateFilter:
         from unittest.mock import patch
         from zoneinfo import ZoneInfo
 
-        # Mock a time where Taipei date (UTC+8) differs from ET date (UTC-5)
-        # At 3:00 AM Taipei (March 7), it's 2:00 PM ET (March 6)
-        mock_time = datetime(2026, 3, 7, 3, 0, 0, tzinfo=ZoneInfo("Asia/Taipei"))
+        # Mock a time where Cape Town date (UTC+2) differs from ET date (UTC-5)
+        # At 1:00 AM Cape Town (March 7), it's 6:00 PM ET (March 6)
+        mock_time = datetime(2026, 3, 7, 1, 0, 0, tzinfo=ZoneInfo("Africa/Johannesburg"))
         et_date = mock_time.astimezone(ZoneInfo("America/New_York")).strftime("%Y-%m-%d")
         assert et_date == "2026-03-06"  # Confirm it's previous day in ET
 
         mock_trade_logger = MagicMock()
         mock_trade_logger.get_todays_pnl = AsyncMock(return_value=100.0)
-        # Trade that matches ET date (March 6), not Taipei date (March 7)
+        # Trade that matches ET date (March 6), not Cape Town date (March 7)
         mock_trade_logger.query_trades = AsyncMock(return_value=[
             {"symbol": "AAPL", "exit_time": "2026-03-06T14:30:00"},  # ET date
-            {"symbol": "TSLA", "exit_time": "2026-03-07T10:00:00"},  # Taipei date
+            {"symbol": "TSLA", "exit_time": "2026-03-07T10:00:00"},  # Cape Town date
         ])
 
         state = MockAppState()

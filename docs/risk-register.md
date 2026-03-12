@@ -552,11 +552,11 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 
 ---
 
-### RSK-039 — Taipei Latency Impact on Execution Quality
+### RSK-039 — Cape Town Latency Impact on Execution Quality
 
 | Field | Value |
 |-------|-------|
-| **Risk** | ~150–200ms latency to US exchanges from Taipei may cause slippage on fast-moving entries, particularly ORB strategies during the opening range. |
+| **Risk** | ~200–250ms latency to US exchanges from Cape Town may cause slippage on fast-moving entries, particularly ORB strategies during the opening range. |
 | **Severity** | Medium |
 | **Likelihood** | Medium |
 | **Mitigation** | Longer-duration strategies (VWAP Reclaim, Afternoon Momentum) are structurally advantaged. Monitor fill quality per strategy. Consider deactivating ORB Scalp if fill rates are poor. |
@@ -778,7 +778,7 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 | **Basis** | AWS SLA guarantees 99.99% for EC2. us-east-1 is their most mature region. |
 | **If Wrong** | Positions unmanaged during outage. Broker-side stops remain active but no dynamic management. |
 | **Contingency** | All stops placed at broker level. Dead man's switch alerts user if system goes silent. Recovery procedure targets <5 minutes. Consider multi-AZ if single instance proves unreliable. |
-| **Closed** | 2026-03-06 — ARGUS now runs locally from Taipei, not on AWS VPS. Assumption no longer applies. |
+| **Closed** | 2026-03-06 — ARGUS now runs locally (previously Taipei, currently Cape Town), not on AWS VPS. Assumption no longer applies. |
 
 ---
 

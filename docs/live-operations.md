@@ -350,41 +350,59 @@ pkill -9 -f "uvicorn"
 
 ---
 
-## 8. Taipei Timezone Reference
+## 8. Cape Town Timezone Reference
 
-For operating from Taipei (UTC+8), use this schedule:
+For operating from Cape Town (SAST, UTC+2), use this schedule. Note: South Africa does not observe DST, but the US does — so your schedule shifts by 1 hour twice a year.
 
-| Event | Eastern Time (ET) | Taipei Time (UTC+8) |
-|-------|-------------------|---------------------|
-| System startup recommended | 9:15 AM | 10:15 PM (same day) |
-| US Market pre-open | 9:00 AM | 10:00 PM |
-| **US Market open** | **9:30 AM** | **10:30 PM** |
-| ORB window (5-min) | 9:35 AM | 10:35 PM |
-| ORB Breakout active | 9:35 AM – 11:30 AM | 10:35 PM – 12:30 AM |
-| VWAP Reclaim active | 10:00 AM – 12:00 PM | 11:00 PM – 1:00 AM |
-| Afternoon Momentum active | 2:00 PM – 3:30 PM | 3:00 AM – 4:30 AM |
-| EOD flatten begins | 3:55 PM | 4:55 AM |
-| **US Market close** | **4:00 PM** | **5:00 AM** |
-| IB Gateway nightly disconnect | ~11:45 PM | ~12:45 PM (next day) |
+### During US EDT (March–November): Cape Town is ET+6
 
-### Typical Operating Schedule (Taipei)
+| Event | Eastern Time (ET) | Cape Town Time (SAST) |
+|-------|-------------------|----------------------|
+| System startup recommended | 9:15 AM | 3:15 PM |
+| US Market pre-open | 9:00 AM | 3:00 PM |
+| **US Market open** | **9:30 AM** | **3:30 PM** |
+| ORB window (5-min) | 9:35 AM | 3:35 PM |
+| ORB Breakout active | 9:35 AM – 11:30 AM | 3:35 PM – 5:30 PM |
+| VWAP Reclaim active | 10:00 AM – 12:00 PM | 4:00 PM – 6:00 PM |
+| Afternoon Momentum active | 2:00 PM – 3:30 PM | 8:00 PM – 9:30 PM |
+| EOD flatten begins | 3:55 PM | 9:55 PM |
+| **US Market close** | **4:00 PM** | **10:00 PM** |
+| IB Gateway nightly disconnect | ~11:45 PM | ~5:45 AM (next day) |
 
-| Time (Taipei) | Activity |
-|---------------|----------|
-| 10:15 PM | Start IB Gateway, start ARGUS |
-| 10:30 PM | Market opens - monitoring begins |
-| 10:35 PM – 12:30 AM | ORB strategies active - peak activity |
-| 12:30 AM – 3:00 AM | Midday lull - periodic checks |
-| 3:00 AM – 4:30 AM | Afternoon Momentum - second activity peak |
-| 4:55 AM | EOD flatten - verify all positions closed |
-| 5:00 AM | Market closes - can sleep or stop system |
+### During US EST (November–March): Cape Town is ET+7
+
+| Event | Eastern Time (ET) | Cape Town Time (SAST) |
+|-------|-------------------|----------------------|
+| System startup recommended | 9:15 AM | 4:15 PM |
+| **US Market open** | **9:30 AM** | **4:30 PM** |
+| ORB Breakout active | 9:35 AM – 11:30 AM | 4:35 PM – 6:30 PM |
+| VWAP Reclaim active | 10:00 AM – 12:00 PM | 5:00 PM – 7:00 PM |
+| Afternoon Momentum active | 2:00 PM – 3:30 PM | 9:00 PM – 10:30 PM |
+| EOD flatten begins | 3:55 PM | 10:55 PM |
+| **US Market close** | **4:00 PM** | **11:00 PM** |
+
+### Typical Operating Schedule (Cape Town)
+
+**During EDT (summer schedule):**
+
+| Time (SAST) | Activity |
+|-------------|----------|
+| 3:15 PM | Start IB Gateway, start ARGUS |
+| 3:30 PM | Market opens - monitoring begins |
+| 3:35 PM – 5:30 PM | ORB strategies active - peak activity |
+| 5:30 PM – 8:00 PM | Midday lull - periodic checks (dinner time) |
+| 8:00 PM – 9:30 PM | Afternoon Momentum - second activity peak |
+| 9:55 PM | EOD flatten - verify all positions closed |
+| 10:00 PM | Market closes - system shutdown |
+
+**During EST (winter schedule):** Same sequence, shifted 1 hour later (starts 4:15 PM, ends 11:00 PM).
 
 ### Daylight Saving Time Notes
 
 - **US DST begins**: Second Sunday in March (clocks forward 1 hour)
 - **US DST ends**: First Sunday in November (clocks back 1 hour)
-- Taiwan does not observe DST
-- Offset is **+13 hours** during US standard time, **+12 hours** during US DST
+- South Africa does not observe DST
+- Offset is **+7 hours** during US standard time, **+6 hours** during US DST
 
 When US changes DST, your schedule shifts by 1 hour. Update your alarms accordingly.
 

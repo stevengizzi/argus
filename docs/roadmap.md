@@ -19,7 +19,7 @@ ARGUS evolves from a **rules-based multi-strategy system** into an **AI-powered 
 - Learns from its own trade outcomes to continuously sharpen scoring and allocation
 - Presents the entire system as a legible, navigable 3D visualization — the **Synapse**
 
-The target: **sustainable 5–10%+ monthly returns on deployed capital** at the $100K–$500K scale, with the system running autonomously during US market hours from Taipei.
+The target: **sustainable 5–10%+ monthly returns on deployed capital** at the $100K–$500K scale, with the system running autonomously during US market hours from Cape Town.
 
 The path divides into two halves. Everything through Phase 6 builds a strong AI-enhanced multi-strategy trading system — valuable regardless of what comes after. Phases 7–10 build the ensemble infrastructure and test whether systematic search produces validated ensembles that outperform hand-crafted strategies. If the controlled experiment in Phase 8 fails, ARGUS is still strong. If it succeeds, it becomes something without a comparable at the independent trader scale.
 
@@ -697,7 +697,7 @@ The original Orchestrator V2 concept (enhanced rules-based for ~15 strategies) i
 | **Broad-universe processing throughput** | Low | 5–9 | Pure Python at 4,000 symbols uses ~2–4% CPU. Monitor during paper trading. If per-second processing exceeds 100ms, Cythonize IndicatorEngine hot path (~0.5 day effort). DEC-263. |
 | **Three.js performance at scale** | Medium | 9 | Instanced mesh geometry. Performance target: 60fps at 800 nodes. Budget for optimization sessions. |
 | **Scope creep extending timeline** | Medium | All | Each sprint is independently valuable. Can pause at any phase boundary. |
-| **Taipei latency (~150–200ms)** | Low | All | Structural disadvantage for ultra-short holds. Longer-duration strategies (5–30 min) preferred. Already reflected in strategy design. |
+| **Cape Town latency (~200–250ms)** | Low | All | Structural disadvantage for ultra-short holds. Longer-duration strategies (5–30 min) preferred. Already reflected in strategy design. |
 | **IBKR Gateway nightly resets** | Low | All | Automated reconnection (RSK-022). live-operations.md procedures. |
 
 ---

@@ -7,7 +7,7 @@
 
 ## What Is ARGUS
 
-ARGUS is a fully automated, AI-enhanced multi-strategy day trading system for US equities. It combines rules-based strategy execution with planned AI-powered setup quality grading, NLP catalyst analysis, and dynamic position sizing. Built in Python (FastAPI backend) with a React/TypeScript Command Center frontend (Tauri desktop + PWA mobile). The user is building this to generate household income for his family. He operates from Taipei, trading US markets during overnight hours (~10:30 PM–5:00 AM local time), making mobile access critical. He can code in Python and has trading experience but no prior algorithmic trading system.
+ARGUS is a fully automated, AI-enhanced multi-strategy day trading system for US equities. It combines rules-based strategy execution with planned AI-powered setup quality grading, NLP catalyst analysis, and dynamic position sizing. Built in Python (FastAPI backend) with a React/TypeScript Command Center frontend (Tauri desktop + PWA mobile). The user is building this to generate household income for his family. He operates from Cape Town, South Africa, trading US markets during afternoon/evening hours (~3:30 PM–11:00 PM local time), making mobile access critical. He can code in Python and has trading experience but no prior algorithmic trading system.
 
 ## Current State
 
@@ -154,7 +154,7 @@ Per-trade risk: 0.5–1% of strategy allocation. Daily loss limit: 3–5%. Weekl
 - **Pre-Databento backtests provisional:** All pre-Databento parameter optimization requires re-validation (DEC-132).
 - **No live L2/L3 on Standard plan:** Requires Plus tier $1,399/mo (DEC-237).
 - **Databento EQUS.MINI historical lag:** Multi-day lag for daily bars (DEC-247). **Resolved by Sprint 21.7:** FMP Scanner now provides dynamic pre-market symbol selection via gainers/losers/actives endpoints.
-- **Latency from Taipei:** ~150–200ms to US exchanges. Scalping has structural disadvantages; longer-duration strategies (5–30 min holds) preferred.
+- **Latency from Cape Town:** ~200–250ms to US exchanges. Scalping has structural disadvantages; longer-duration strategies (5–30 min holds) preferred.
 - **Secrets:** All API keys in encrypted secrets manager, never in code/git.
 - **FMP Starter plan news restriction:** FMP news endpoints (`stock_news`, `press_releases`) return HTTP 403 on Starter plan ($22/mo). `fmp_news.enabled: false` in `system_live.yaml`. FMP news circuit breaker (DEC-323) prevents request spam if accidentally enabled. Upgrade to Premium ($59/mo) would resolve.
 - **Audit:** Every action logged immutably.

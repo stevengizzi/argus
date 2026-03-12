@@ -26,7 +26,7 @@ class SystemContextBuilder:
 
     # Timezone references
     ET_TZ = ZoneInfo("America/New_York")
-    TAIPEI_TZ = ZoneInfo("Asia/Taipei")
+    CAPE_TOWN_TZ = ZoneInfo("Africa/Johannesburg")
 
     async def build_context(
         self,
@@ -67,13 +67,13 @@ class SystemContextBuilder:
         """
         now_utc = datetime.now(ZoneInfo("UTC"))
         now_et = now_utc.astimezone(self.ET_TZ)
-        now_taipei = now_utc.astimezone(self.TAIPEI_TZ)
+        now_local = now_utc.astimezone(self.CAPE_TOWN_TZ)
 
         state: dict[str, Any] = {
             "current_time": {
                 "utc": now_utc.isoformat(),
                 "et": now_et.strftime("%Y-%m-%d %H:%M:%S ET"),
-                "taipei": now_taipei.strftime("%Y-%m-%d %H:%M:%S Taipei"),
+                "cape_town": now_local.strftime("%Y-%m-%d %H:%M:%S SAST"),
             },
             "active_strategy_count": len(app_state.strategies),
             "circuit_breakers": [],

@@ -109,7 +109,7 @@ If this fails, check:
 
 **What time zone are you in?** All market times are Eastern Time (ET). Adjust accordingly. Market hours are 9:30 AM – 4:00 PM ET.
 
-- For Taipei (CST/UTC+8): Market hours are **10:30 PM – 5:00 AM** your time. This means trading sessions happen overnight for you. Plan accordingly — you may want to start the system before bed and check results in the morning.
+- For Cape Town (SAST/UTC+2): Market hours are **3:30 PM – 10:00 PM** during EDT and **4:30 PM – 11:00 PM** during EST. Trading happens during afternoon and evening hours.
 
 **Start Argus 15–30 minutes before market open:**
 
