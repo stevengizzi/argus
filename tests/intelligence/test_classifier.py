@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -450,3 +450,193 @@ class TestQualityScoreRange:
         results = await classifier.classify_batch([raw_item])
 
         assert results[0].quality_score == 0  # Clamped to min
+
+
+class TestNoneUsageTracker:
+    """Tests for classifier when usage_tracker is None."""
+
+    @pytest.mark.asyncio
+    async def test_classification_completes_with_none_usage_tracker(
+        self,
+        mock_client: MagicMock,
+        mock_storage: MagicMock,
+        config: CatalystConfig,
+        raw_item: CatalystRawItem,
+    ) -> None:
+        """Classification succeeds without error when usage_tracker is None."""
+        response, usage = _make_claude_response([
+            {
+                "category": "earnings",
+                "quality_score": 85,
+                "summary": "Apple exceeded expectations",
+                "trading_relevance": "high",
+            }
+        ])
+        mock_client.send_message = AsyncMock(return_value=(response, usage))
+
+        classifier = CatalystClassifier(mock_client, None, config, mock_storage)
+        results = await classifier.classify_batch([raw_item])
+
+        assert len(results) == 1
+        assert results[0].category == "earnings"
+        assert results[0].classified_by == "claude"
+
+
+class TestCostCeilingBelowThreshold:
+    """Tests for cost ceiling when daily cost is below the threshold."""
+
+    @pytest.mark.asyncio
+    async def test_cost_below_ceiling_uses_claude(
+        self,
+        mock_client: MagicMock,
+        mock_usage_tracker: MagicMock,
+        mock_storage: MagicMock,
+        raw_item: CatalystRawItem,
+    ) -> None:
+        """When daily cost is below ceiling, Claude classification proceeds."""
+        config = CatalystConfig(
+            enabled=True,
+            max_batch_size=5,
+            daily_cost_ceiling_usd=10.0,
+        )
+
+        # Return cost well below ceiling
+        mock_usage_tracker.get_daily_usage = AsyncMock(
+            return_value={"estimated_cost_usd": 1.00}
+        )
+
+        response, usage = _make_claude_response([
+            {
+                "category": "earnings",
+                "quality_score": 85,
+                "summary": "Test",
+                "trading_relevance": "high",
+            }
+        ])
+        mock_client.send_message = AsyncMock(return_value=(response, usage))
+
+        classifier = CatalystClassifier(mock_client, mock_usage_tracker, config, mock_storage)
+        results = await classifier.classify_batch([raw_item])
+
+        assert len(results) == 1
+        assert results[0].classified_by == "claude"
+        mock_client.send_message.assert_called_once()
+
+
+class TestRecordUsageCalled:
+    """Tests that record_usage is called after each Claude classification."""
+
+    @pytest.mark.asyncio
+    async def test_record_usage_called_after_claude_classification(
+        self,
+        mock_client: MagicMock,
+        mock_usage_tracker: MagicMock,
+        mock_storage: MagicMock,
+        config: CatalystConfig,
+        raw_item: CatalystRawItem,
+    ) -> None:
+        """record_usage is called once per Claude API batch call."""
+        response, usage = _make_claude_response([
+            {
+                "category": "earnings",
+                "quality_score": 85,
+                "summary": "Test",
+                "trading_relevance": "high",
+            }
+        ])
+        mock_client.send_message = AsyncMock(return_value=(response, usage))
+
+        classifier = CatalystClassifier(mock_client, mock_usage_tracker, config, mock_storage)
+        await classifier.classify_batch([raw_item])
+
+        mock_usage_tracker.record_usage.assert_called_once_with(
+            conversation_id=None,
+            input_tokens=100,
+            output_tokens=50,
+            model="claude-3-haiku",
+            estimated_cost_usd=0.01,
+            endpoint="catalyst_classification",
+        )
+
+    @pytest.mark.asyncio
+    async def test_record_usage_called_per_batch(
+        self,
+        mock_client: MagicMock,
+        mock_usage_tracker: MagicMock,
+        mock_storage: MagicMock,
+    ) -> None:
+        """record_usage is called once per batch (2 batches = 2 calls)."""
+        config = CatalystConfig(
+            enabled=True,
+            max_batch_size=2,
+            daily_cost_ceiling_usd=100.0,
+        )
+
+        now = datetime.now(_ET)
+        items = [
+            CatalystRawItem(
+                headline=f"Unique headline number {i}",
+                symbol="TEST",
+                source="test",
+                published_at=now,
+                fetched_at=now,
+            )
+            for i in range(3)
+        ]
+
+        response_2, usage_2 = _make_claude_response([
+            {"category": "other", "quality_score": 50, "summary": "T", "trading_relevance": "low"},
+            {"category": "other", "quality_score": 50, "summary": "T", "trading_relevance": "low"},
+        ])
+        response_1, usage_1 = _make_claude_response([
+            {"category": "other", "quality_score": 50, "summary": "T", "trading_relevance": "low"},
+        ])
+        mock_client.send_message = AsyncMock(
+            side_effect=[(response_2, usage_2), (response_1, usage_1)]
+        )
+
+        classifier = CatalystClassifier(mock_client, mock_usage_tracker, config, mock_storage)
+        await classifier.classify_batch(items)
+
+        assert mock_usage_tracker.record_usage.call_count == 2
+
+
+class TestCycleCostLogging:
+    """Tests for cycle cost logging output."""
+
+    @pytest.mark.asyncio
+    async def test_cycle_cost_logged_with_counts(
+        self,
+        mock_client: MagicMock,
+        mock_usage_tracker: MagicMock,
+        mock_storage: MagicMock,
+        config: CatalystConfig,
+        raw_item: CatalystRawItem,
+    ) -> None:
+        """Cycle cost log includes dollar amount and Claude/fallback counts."""
+        response, usage = _make_claude_response([
+            {
+                "category": "earnings",
+                "quality_score": 85,
+                "summary": "Test",
+                "trading_relevance": "high",
+            }
+        ])
+        mock_client.send_message = AsyncMock(return_value=(response, usage))
+
+        classifier = CatalystClassifier(mock_client, mock_usage_tracker, config, mock_storage)
+
+        with patch("argus.intelligence.classifier.logger") as mock_logger:
+            await classifier.classify_batch([raw_item])
+
+            # Find the info call with cycle cost
+            info_calls = mock_logger.info.call_args_list
+            cost_log = [
+                c for c in info_calls
+                if "Classification cycle cost" in str(c)
+            ]
+            assert len(cost_log) == 1
+            log_msg = cost_log[0][0][0] % cost_log[0][0][1:]
+            assert "$0.0100" in log_msg
+            assert "1 via Claude" in log_msg
+            assert "0 via fallback" in log_msg

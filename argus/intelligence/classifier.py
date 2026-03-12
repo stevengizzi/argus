@@ -189,6 +189,7 @@ class CatalystClassifier:
         batch_size = self._config.max_batch_size
         fallback_count = 0
         claude_count = 0
+        cycle_cost = 0.0
 
         for i in range(0, len(uncached_items), batch_size):
             batch = uncached_items[i:i + batch_size]
@@ -209,7 +210,8 @@ class CatalystClassifier:
                 continue
 
             # Try Claude API classification
-            batch_classifications = await self._classify_with_claude(batch)
+            batch_classifications, call_cost = await self._classify_with_claude(batch)
+            cycle_cost += call_cost
 
             if batch_classifications is None:
                 # Claude failed, use fallback for entire batch
@@ -233,8 +235,9 @@ class CatalystClassifier:
             daily_total = await self._get_daily_cost()
 
         logger.info(
-            "Classified %d items: %d via Claude, %d via fallback, %d cached",
-            len(results),
+            "Classification cycle cost: $%.4f "
+            "(%d via Claude, %d via fallback, %d cached)",
+            cycle_cost,
             claude_count,
             fallback_count,
             len(results) - claude_count - fallback_count,
@@ -244,18 +247,18 @@ class CatalystClassifier:
 
     async def _classify_with_claude(
         self, batch: list[tuple[str, CatalystRawItem]]
-    ) -> list[CatalystClassification] | None:
+    ) -> tuple[list[CatalystClassification] | None, float]:
         """Classify a batch of items using Claude API.
 
         Args:
             batch: List of (headline_hash, item) tuples to classify.
 
         Returns:
-            List of classifications if successful, None on error.
+            Tuple of (classifications or None on error, cost in USD for this call).
         """
         if not self._client.enabled:
             logger.debug("Claude API disabled, cannot classify")
-            return None
+            return None, 0.0
 
         # Build the user message with all headlines
         headlines = [f"{i+1}. {item.headline}" for i, (_, item) in enumerate(batch)]
@@ -270,6 +273,8 @@ class CatalystClassifier:
                 stream=False,
             )
 
+            call_cost = usage.estimated_cost_usd
+
             # Record usage
             if self._usage_tracker is not None:
                 await self._usage_tracker.record_usage(
@@ -277,21 +282,21 @@ class CatalystClassifier:
                     input_tokens=usage.input_tokens,
                     output_tokens=usage.output_tokens,
                     model=usage.model,
-                    estimated_cost_usd=usage.estimated_cost_usd,
+                    estimated_cost_usd=call_cost,
                     endpoint="catalyst_classification",
                 )
 
             # Check for error response
             if response.get("type") == "error":
                 logger.warning("Claude API error: %s", response.get("message"))
-                return None
+                return None, call_cost
 
             # Parse the response
-            return self._parse_claude_response(response, len(batch))
+            return self._parse_claude_response(response, len(batch)), call_cost
 
         except Exception as e:
             logger.error("Error calling Claude API: %s", e)
-            return None
+            return None, 0.0
 
     def _parse_claude_response(
         self, response: dict, expected_count: int
