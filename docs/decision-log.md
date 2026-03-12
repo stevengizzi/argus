@@ -3742,6 +3742,118 @@ Each entry follows this format:
 
 ---
 
+### DEC-319 | asyncio.wait_for Safety Timeout on Pipeline Gather
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-12 |
+| **Sprint** | 23.8 |
+| **Decision** | Wrap the `asyncio.gather(*fetch_tasks, return_exceptions=True)` call in `startup.py` with `asyncio.wait_for(..., timeout=120)`. On timeout, log at CRITICAL level with source count and symbol count, then continue to the next sleep/poll cycle. This is a safety net above the per-source 30s timeouts — it catches cases where the entire `run_poll()` hangs (including classification, storage, publishing), not just source fetches. |
+| **Alternatives Considered** | 1. Per-source timeout only: Rejected — the gather blocks until ALL sources complete; a single hanging source blocks the entire poll. The 120s safety net catches cases the 30s per-source timeout misses (e.g., classification hanging). |
+| **Rationale** | During the March 12 QA session, the polling loop hung indefinitely after startup with zero fetch activity. The `asyncio.gather()` had no timeout, and a source that never returned blocked all polling forever. The 120s timeout is 4× the per-source 30s timeout, providing margin for legitimate slow responses while catching genuine hangs. |
+| **Cross-References** | DEC-315 (polling loop), DEC-322 (per-source timeouts) |
+| **Status** | Active |
+
+---
+
+### DEC-320 | Polling Task Health Monitoring via done_callback
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-12 |
+| **Sprint** | 23.8 |
+| **Decision** | The intelligence polling asyncio task is stored on `app_state.intelligence_polling_task` (preventing garbage collection) and has a `done_callback` that logs CRITICAL with the exception if the task crashes. Previously the task reference was a local variable — if the task threw an unhandled exception, it was silently swallowed by the asyncio event loop with no log output. |
+| **Alternatives Considered** | 1. Periodic health check polling the task status: Rejected — adds complexity; done_callback is the standard asyncio pattern. |
+| **Rationale** | During QA debugging, the polling task appeared to die silently — no errors, no exceptions, nothing in logs after "Polling loop started." The done_callback makes any future crash immediately visible. Storing on app_state prevents the GC race where a locally-referenced task can be collected before completion. |
+| **Cross-References** | DEC-315 (polling loop), DEC-319 (wait_for timeout) |
+| **Status** | Active |
+
+---
+
+### DEC-321 | Intelligence Pipeline Symbol Scope — Scanner Watchlist
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-12 |
+| **Sprint** | 23.8 |
+| **Decision** | `get_symbols()` in `server.py` returns the scanner watchlist (~15 symbols) as its primary source, falling back to the viable universe capped at `max_batch_size` (config, default 20) when the watchlist is empty. Previously it returned the full viable universe (6,342 symbols). |
+| **Alternatives Considered** | 1. Full viable universe (previous behavior): Rejected — 6,342 symbols caused the poll to timeout at 120s without completing. Finnhub free tier (60 req/min) would need 105 minutes per cycle. 2. Hardcoded cap: Rejected — config-driven `max_batch_size` is more flexible. |
+| **Rationale** | The pipeline's cost model ($5/day ceiling, DEC-303) and rate limits (Finnhub 60/min, SEC EDGAR 10/sec) assume 15–30 symbols per cycle. The scanner watchlist is the natural scope — it represents the day's most active symbols. The capped-universe fallback handles the case where the scanner hasn't run. Long-term, the firehose architecture (DEC-327) eliminates the per-symbol model entirely. |
+| **Cross-References** | DEC-303 (daily cost ceiling), DEC-327 (firehose architecture deferred) |
+| **Status** | Active |
+
+---
+
+### DEC-322 | Source-Level Explicit Socket Timeouts
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-12 |
+| **Sprint** | 23.8 |
+| **Decision** | All three intelligence source HTTP clients (SEC Edgar, Finnhub, FMP News) use `aiohttp.ClientTimeout(total=30, sock_connect=10, sock_read=20)` with explicit `sock_connect` and `sock_read` parameters. Validated — these were already present in Sprint 23.5/23.6 implementations. Tests added to confirm. |
+| **Alternatives Considered** | N/A — already implemented correctly. |
+| **Rationale** | `total` alone can behave unpredictably when DNS resolution hangs or a server accepts the connection but never sends response headers. Explicit `sock_connect=10` catches DNS/connection hangs; `sock_read=20` catches silent server hangs. Sprint 23.8 validated the existing implementation and added regression tests. |
+| **Cross-References** | DEC-319 (gather-level timeout — defense in depth) |
+| **Status** | Active |
+
+---
+
+### DEC-323 | FMP News Circuit Breaker on 401/403
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-12 |
+| **Sprint** | 23.8 |
+| **Decision** | FMP news source implements a per-cycle circuit breaker. On the first 401 (invalid key) or 403 (plan restriction) response, `_disabled_for_cycle` flag is set, an ERROR is logged, and all remaining symbols/batches in the cycle are skipped. A WARNING with skip count is logged at cycle end. The flag resets at the start of each new `fetch_catalysts()` call. |
+| **Alternatives Considered** | 1. No circuit breaker: Previous behavior — 100+ wasted 403 requests observed during QA (one per symbol, ~30 seconds of hammering). 2. Permanent disable until restart: Rejected — transient 403s (rate limiting) should recover on next cycle. 3. 403-only trigger: Expanded to include 401 because an invalid key will fail on every request, making retry equally pointless. |
+| **Rationale** | During the March 12 QA session, enabling the pipeline with FMP Starter plan produced 100+ HTTP 403 errors in 30 seconds — one per symbol with no backoff. The FMP news endpoints (`stock_news`, `press_releases`) are not available on Starter plan. The circuit breaker detects the first auth failure and skips the rest, reducing 100+ wasted requests to 1. |
+| **Cross-References** | DEC-298 (FMP stable API), DEC-304 (three-source architecture) |
+| **Status** | Active |
+
+---
+
+### DEC-324 | Cost Ceiling Enforcement Wired into Classifier
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-12 |
+| **Sprint** | 23.8 |
+| **Decision** | `CatalystClassifier.classify_batch()` checks cumulative daily cost via `_get_daily_cost()` before each Claude API classification call. When `daily_cost_ceiling_usd` is reached, remaining items fall through to rule-based fallback (DEC-301). Each successful Claude call records cost via `UsageTracker.record_usage()`. Cycle cost is logged at INFO level with breakdown: `"Classification cycle cost: $X.XXXX (N via Claude, N via fallback, N cached)"`. Ceiling breach logs at WARNING level. |
+| **Alternatives Considered** | 1. Pre-check only (check once before batch): Rejected — a large batch could exceed the ceiling mid-batch. Per-call checking provides precise enforcement. |
+| **Rationale** | During the March 12 QA session, 336 items were classified via Claude API with zero cost tracking — the $5/day ceiling (DEC-303) was specified in Sprint 23.5 design but the enforcement path was not fully wired. Sprint 23.8 Session 2 confirmed the `record_usage` and None guards were already in place; the primary additions were cycle cost tracking via a `_classify_with_claude` return type change (returns `tuple[list | None, float]`) and the updated log format including dollar cost. |
+| **Cross-References** | DEC-301 (rule-based fallback), DEC-303 (daily cost ceiling spec), DEC-274 (per-call cost tracking) |
+| **Status** | Active |
+
+---
+
+### DEC-325 | Classifier usage_tracker None Guards
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-12 |
+| **Sprint** | 23.8 |
+| **Decision** | All `usage_tracker` access in `classifier.py` is guarded with `if self._usage_tracker is not None`. When `usage_tracker` is `None` (AI layer disabled), classification proceeds normally without cost tracking — no errors, no warnings. `_get_daily_cost()` returns `0.0` when tracker is None, meaning the ceiling check never triggers and all items go to Claude (if available) or fallback. |
+| **Alternatives Considered** | N/A — validated existing implementation, added tests. |
+| **Rationale** | The classifier can operate without the AI layer's UsageTracker (e.g., when `ANTHROPIC_API_KEY` is unset and rule-based fallback handles all classification). Sprint 23.8 validated the existing guards and added explicit test coverage for the `usage_tracker=None` code path. |
+| **Cross-References** | DEC-301 (rule-based fallback), DEC-324 (cost ceiling enforcement) |
+| **Status** | Active |
+
+---
+
+### DEC-326 | Databento Lazy Warm-Up End Timestamp Clamped
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-12 |
+| **Sprint** | 23.8 |
+| **Decision** | In `DatabentoDataService._lazy_warmup_symbol()`, the `end` parameter for historical API requests is clamped to `now - 600s` (10 minutes). If the clamped `end` is before `start`, the warm-up is skipped with a DEBUG log and the symbol builds indicators from the live stream only. The pre-market boot path (DEC-316: skip warm-up entirely) is unaffected. |
+| **Alternatives Considered** | 1. Dynamic lag detection (probe Databento for current availability): Rejected — over-engineering for a problem the fixed buffer solves. 2. No buffer (request up to now): Previous behavior — Databento returned HTTP 422 `data_end_after_available_end` because the historical API lags ~10 minutes behind the live stream. |
+| **Rationale** | During the March 12 QA session, every mid-session lazy warm-up request failed with Databento 422 errors. The historical API has data available up to ~10 minutes before the current time. The 600s buffer is conservative — if Databento reduces their lag, the buffer just means slightly less warm-up data (not a correctness issue). If 600s is insufficient, the existing warm-up skip logic handles it gracefully. |
+| **Cross-References** | DEC-316 (time-aware warm-up), DEC-088 (Databento threading) |
+| **Status** | Active |
+
+---
+
 ### DEC-327 | Intelligence Pipeline Architecture — Firehose Model Deferred to Sprint 24
 
 | Field | Value |
@@ -3772,4 +3884,4 @@ Each entry follows this format:
 
 *End of Decision Log v1.0*
 *Next DEC: 329*
-*Last updated: 2026-03-12 (Sprint 23.8 — DEC-327–328)*
+*Last updated: 2026-03-12 (Sprint 23.8 — DEC-319–328)*

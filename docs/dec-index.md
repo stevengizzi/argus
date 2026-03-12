@@ -353,5 +353,13 @@
 
 ## Phase J — Intelligence Pipeline Live QA Fixes (Sprint 23.8)
 
+- ● **DEC-319**: asyncio.wait_for 120s Safety Timeout — wraps pipeline gather, prevents indefinite hang
+- ● **DEC-320**: Polling Task Health Monitoring — done_callback + app_state reference, makes crashes visible
+- ● **DEC-321**: Intelligence Pipeline Symbol Scope — scanner watchlist (not full universe), capped fallback
+- ● **DEC-322**: Source-Level Socket Timeouts — validated sock_connect=10, sock_read=20 on all sources
+- ● **DEC-323**: FMP News Circuit Breaker — 401/403 disables source for cycle, resets next cycle
+- ● **DEC-324**: Cost Ceiling Enforcement — per-call daily cost check, fallback on breach, cycle cost logging
+- ● **DEC-325**: Classifier usage_tracker None Guards — validated, silent degradation when AI disabled
+- ● **DEC-326**: Databento Lazy Warm-Up End Clamp — now - 600s buffer, skip if clamped end < start
 - ● **DEC-327**: Intelligence Pipeline Firehose Architecture — deferred to Sprint 24 design; per-symbol polling replaced by watchlist scoping as interim fix
 - ● **DEC-328**: Test Suite Tiering — full suite at sprint entry + close-outs + final review; scoped tests for mid-sprint pre-flights and non-final reviews

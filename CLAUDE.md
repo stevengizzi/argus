@@ -5,20 +5,21 @@
 
 ## Active Sprint
 
-**Sprint 23.8 (Intelligence Pipeline Live QA Fixes)** — impromptu triage from March 12 QA session. 3 sessions: pipeline resilience + symbol scope, cost ceiling enforcement, source hardening + warm-up fix.
+**No active sprint.** Sprint 23.8 (Intelligence Pipeline Live QA Fixes) completed March 12, 2026. Sprint 23.9 (fast-follow frontend + debrief fixes) planned next.
 
-Next planned sprint: **24 (Setup Quality Engine + Dynamic Sizer)** — composite 0–100 quality scoring, grade-based position sizing.
+Next planned sprint: **23.9 (Frontend + Debrief Fixes)** → then **24 (Setup Quality Engine + Dynamic Sizer)**.
 
-### Known Issues (Pre-Sprint 23.8)
-- **Config alignment test failure:** `system_live.yaml` was modified during the March 12 QA session (catalyst section added, `fmp_news` disabled). Config alignment test fails until Session 1 updates the fixture.
-- **Live debug patches on main:** Temporary `_poll_task_done` callback and `"Polling loop coroutine entered"` log line in `server.py`/`startup.py` from QA debugging. Functional but quick-and-dirty — Session 1 replaces with production implementations.
-- **FMP Starter plan restriction:** FMP news endpoints (`stock_news`, `press_releases`) return 403 on Starter plan ($22/mo). `fmp_news.enabled: false` in `system_live.yaml`. Upgrade to Premium ($59/mo) would resolve — see DEF-035.
+### Known Issues
+- **2 pre-existing test_main.py failures under xdist:** `test_orchestrator_in_app_state` and `test_multiple_strategies_registered_with_orchestrator` fail under `pytest-xdist -n auto`. Confirmed pre-existing (fail on clean HEAD). Tracked for Sprint 23.9 investigation.
+- **SEC Edgar timeout test is tautological:** Tests hardcoded values instead of actual `start()` behavior. Tracked for Sprint 23.9 rewrite (Review 3 CONCERNS).
+- **xdist test collection discrepancy:** Full suite under `-n auto` collects 2,519 tests vs 2,521+ without xdist. Minor — likely worker isolation behavior. Tracked for investigation.
+- **FMP Starter plan restriction:** FMP news endpoints return 403 on Starter plan ($22/mo). `fmp_news.enabled: false` in `system_live.yaml`. FMP circuit breaker (DEC-323) prevents spam if accidentally enabled.
 
 ## Current State
 
 - **Active sprint:** None (between sprints)
 - **Next sprint:** 24 (Setup Quality Engine + Dynamic Sizer)
-- **Tests:** 2,511 pytest + 435 Vitest
+- **Tests:** 2,529 pytest + 435 Vitest
 - **Strategies:** 4 active (ORB Breakout, ORB Scalp, VWAP Reclaim, Afternoon Momentum)
 - **Infrastructure:** Databento EQUS.MINI (live) + IBKR paper trading (Account U24619949) + FMP Starter (scanning + reference data) + Finnhub (news + analyst recs) + Claude API (Copilot + Catalyst Classification) + Universe Manager (config-gated) + Catalyst Pipeline (config-gated) + Intelligence Polling Loop (config-gated) + Reference Data Cache
 - **Frontend:** 7-page Command Center + AI Copilot + Universe Status Card + Intelligence Brief View (all active), Tauri desktop + PWA mobile
@@ -260,12 +261,14 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 | DEF-041 | Frontend catalyst endpoint short-circuit | Sprint 23.9 (fast-follow to 23.8) | Frontend fires 15+ per-symbol catalyst GET requests on page load even when pipeline is disabled (all return 503). Fix: check pipeline status from `/api/v1/health` before issuing catalyst requests. ~10 lines in TanStack Query hooks. Scoping note: `docs/sprints/sprint-23.8/sprint-23.9-scoping-note.md`. Priority: MEDIUM. |
 | DEF-043 | `/debrief/briefings` endpoint 503 fix | Sprint 23.9 (fast-follow to 23.8) | DailySummaryGenerator endpoint returns 503. Generator IS created (confirmed in server.py init log) but something causes the route to return 503 — likely a secondary dependency check. Separate from intelligence pipeline briefings (which work). Scoping note: `docs/sprints/sprint-23.8/sprint-23.9-scoping-note.md`. Priority: MEDIUM. |
 | DEF-044 | SPY intra-day regime re-evaluation | Regime-aware strategy behavior implemented OR paper trading shows regime stale after open | Orchestrator runs `_classify_regime()` once during `run_pre_market_routine()`. SPY data unavailable pre-market (Databento streams market hours only), so regime defaults to `range_bound`. After market open, SPY bars flow but nothing re-triggers classification. Making regime detection continuous requires design: how should mid-session regime changes affect running strategies? Priority: MEDIUM. |
+| DEF-045 | SEC Edgar timeout test rewrite | Sprint 23.9 | Test is tautological — tests hardcoded values instead of calling `start()` and inspecting `client._session.timeout`. Should match Finnhub/FMP test pattern. Needs CIK map refresh mocking. Review 3 CONCERNS item. Priority: LOW. |
+| DEF-046 | test_main.py xdist failures investigation | Sprint 23.9 | `test_orchestrator_in_app_state` and `test_multiple_strategies_registered_with_orchestrator` fail under `pytest-xdist -n auto`. Pass without xdist. Pre-existing — confirmed on clean HEAD. Likely shared state or port conflict under parallel execution. Priority: MEDIUM. |
 
 ## Reference
 
 | Document | What It Covers |
 |----------|---------------|
-| `docs/decision-log.md` | All 318 DEC entries with full rationale |
+| `docs/decision-log.md` | All 328 DEC entries with full rationale |
 | `docs/dec-index.md` | Quick-reference index with status markers |
 | `docs/sprint-history.md` | Complete sprint history (1–23.6) |
 | `docs/process-evolution.md` | Workflow evolution narrative |

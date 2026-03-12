@@ -526,13 +526,49 @@
 
 ---
 
+### Sprint 23.8 — Intelligence Pipeline Live QA Fixes (2529 pytest + 435 Vitest, +18/+0)
+
+**Trigger:** First-ever live run of the NLP Catalyst Pipeline (Sprint 23.5/23.6) during March 12 QA session revealed multiple bugs preventing end-to-end operation.
+**Type:** Impromptu triage. **Urgency:** DISCOVERED — found during live QA campaign.
+
+**Session 1 (S1): Pipeline Resilience + Symbol Scope**
+- Added `asyncio.wait_for(120)` safety timeout wrapping pipeline gather in polling loop
+- Validated existing `done_callback` and `app_state.intelligence_polling_task` from QA session
+- Fixed `get_symbols()` to return scanner watchlist (~15 symbols) instead of full viable universe (6,342)
+- Added fallback: viable universe capped at `max_batch_size` when watchlist empty
+- Symbol count logged per poll cycle
+- Fixed pre-existing config alignment test (system_live.yaml catalyst section)
+- Cleaned QA debug patches (log level INFO→DEBUG)
+- 5 new pytest tests
+
+**Session 2 (S2): Cost Ceiling Enforcement + Classifier Guards**
+- Added cycle cost tracking via `_classify_with_claude` return type change to `tuple[list | None, float]`
+- Validated existing `record_usage()` calls and `usage_tracker is not None` guards
+- Updated classification log format to include dollar cost: `"Classification cycle cost: $X.XXXX (N via Claude, N via fallback, N cached)"`
+- Ceiling breach logs at WARNING level (judgment call — more operationally appropriate than INFO)
+- 5 new pytest tests
+
+**Session 3 (S3): Source Hardening + Databento Warm-Up Fix**
+- Validated existing `ClientTimeout(total=30, sock_connect=10, sock_read=20)` on all three sources
+- Implemented FMP news circuit breaker: first 401/403 sets `_disabled_for_cycle` flag, remaining symbols/batches skipped, WARNING with skip count at cycle end, flag resets next cycle
+- Clamped Databento lazy warm-up `end` to `now - 600s`, skip if clamped end < start (DEBUG log)
+- Pre-market boot path (DEC-316 skip) unaffected
+- 8 new pytest tests
+
+**Key decisions:** DEC-319 (wait_for timeout), DEC-320 (done_callback), DEC-321 (watchlist scope), DEC-322 (source timeouts validated), DEC-323 (FMP circuit breaker), DEC-324 (cost ceiling enforcement), DEC-325 (None guards validated), DEC-326 (warm-up end clamp)
+**Sessions:** 3 implementation (S1, S2, S3)
+**Test counts:** S1(+5), S2(+5), S3(+8) = +18 new pytest, +0 Vitest
+**Notes:** S1 CLEAN/CLEAR, S2 CLEAN/CLEAR, S3 MINOR_DEVIATIONS/CONCERNS. S3 CONCERNS: SEC Edgar timeout test is tautological (doesn't call `start()`, tests hardcoded values) — tracked for Sprint 23.9 rewrite. Several "fixes" turned out to be validations of existing Sprint 23.5/23.6 code — the implementations were more complete than QA session diagnostics suggested. 2 pre-existing test_main.py failures discovered under xdist parallel execution (`test_orchestrator_in_app_state`, `test_multiple_strategies_registered_with_orchestrator`) — tracked for Sprint 23.9 investigation.
+
+---
+
 ## Sprint Statistics
 
-- **Total sprints:** 23 full + 16 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7)
-- **Total sessions:** ~279+ Claude Code sessions
-- **Total tests:** 2,511 pytest + 435 Vitest = 2,946 total
-- **Total decisions:** 318 (DEC-001 through DEC-318)
-- **Calendar days (active dev):** ~26 (Feb 14 – Mar 11, 2026)
+- **Total sprints:** 23 full + 17 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8)
+- **Total sessions:** ~282+ Claude Code sessions
+- **Total tests:** 2,529 pytest + 435 Vitest = 2,964 total
+- **Total decisions:** 328 (DEC-001 through DEC-328)
+- **Calendar days (active dev):** ~27 (Feb 14 – Mar 12, 2026)
 - **Largest sprint:** 22 (9 implementation + 5 fix + 9 reviews, largest scope)
 - **Cleanest sprint:** 23 (11 sessions, 0 regressions, 0 scope gaps requiring follow-up)
 - **Most test-dense:** Sprint 22 (286 new tests), Sprint 23.2 (188 new tests), Sprint 23 (141 new tests across 23+23.05)
