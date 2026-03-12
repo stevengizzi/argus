@@ -562,12 +562,39 @@
 
 ---
 
+### Sprint 23.9 — Frontend + Test Cleanup (2532 pytest + 446 Vitest, +3/+11)
+
+**Trigger:** Issues discovered during live QA campaign (March 12) and Sprint 23.8 Tier 2 review CONCERNS.
+**Type:** Impromptu triage (fast-follow to 23.8). **Urgency:** DISCOVERED.
+
+**Session 1 (S1): Catalyst Hook Gating + Test Fixes + Debrief Investigation**
+- Created `usePipelineStatus` hook extracting `catalyst_pipeline` component status from existing `useHealth()` hook (15s polling, no new network requests). Fail-closed: queries disabled when pipeline status unknown or errored.
+- Gated `useCatalysts` and `useIntelligenceBriefings` TanStack Query hooks on `isPipelineActive` via `enabled` option. Zero catalyst/briefing HTTP requests when pipeline is inactive.
+- Registered `catalyst_pipeline` component with `health_monitor` in `server.py` after successful pipeline init (health.py was on do-not-modify list).
+- Rewrote tautological SEC Edgar timeout test: now calls `await client.start()` with mocked CIK map refresh, inspects `client._session.timeout` values. Matches Finnhub/FMP timeout test pattern.
+- Fixed xdist test isolation: `load_dotenv()` in `ArgusSystem.__init__()` re-loaded real `ANTHROPIC_API_KEY` from `.env` after `monkeypatch.delenv()`, and `AIConfig.auto_detect_enabled` model validator overrode `enabled=False` → `True`. Fix: `monkeypatch.setenv("ANTHROPIC_API_KEY", "")` + explicit `ai: enabled: false` in test YAML.
+- Investigated debrief 503 root cause (read-only): `DebriefService` initialized in `dev_state.py` but never wired in `server.py` lifespan. Findings reported in close-out for Session 2.
+- 11 new Vitest tests (5 for `usePipelineStatus`, 3 for catalyst gating, 3 for briefing gating)
+
+**Session 2 (S2): Debrief 503 Fix**
+- Initialized `DebriefService(db)` in `server.py` lifespan using `trade_logger._db`, matching `dev_state.py` pattern (~10 lines). Guard clause `debrief_service is None` in `dependencies.py` preserved for genuine init failure.
+- Frontend empty state already existed in `BriefingList.tsx:226-238` — the 503 was triggering the error path instead. No frontend changes needed.
+- 3 new pytest tests (`TestDebriefEndpointWiring`: 503 when None, 200 empty, 200 with data)
+
+**Key decisions:** DEC-329 (pipeline health hook gating)
+**Sessions:** 2 implementation (S1, S2)
+**Test counts:** S1(+0 pytest, +11 Vitest), S2(+3 pytest, +0 Vitest) = +3 new pytest, +11 new Vitest
+**DEF closures:** DEF-041 (catalyst hook short-circuit), DEF-043 (debrief 503), DEF-045 (SEC Edgar test rewrite), DEF-046 (xdist — 2 named tests fixed, 4 additional pre-existing failures tracked as DEF-048)
+**Notes:** S1 MINOR_DEVIATIONS/CLEAR. Deviation: server.py health monitor registration was unanticipated but justified (health.py on do-not-modify list). S2 CLEAN/CONCERNS. CONCERNS: close-out ran scoped tests instead of full suite for final session (DEC-328 violation — process only, code correct). 4 additional xdist failures remain pre-existing (DEF-048, same `load_dotenv` race pattern). 22 pre-existing TypeScript build errors unrelated to this sprint.
+
+---
+
 ## Sprint Statistics
 
-- **Total sprints:** 23 full + 17 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8)
-- **Total sessions:** ~282+ Claude Code sessions
-- **Total tests:** 2,529 pytest + 435 Vitest = 2,964 total
-- **Total decisions:** 328 (DEC-001 through DEC-328)
+- **Total sprints:** 23 full + 18 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9)
+- **Total sessions:** ~284+ Claude Code sessions
+- **Total tests:** 2,532 pytest + 446 Vitest = 2,978 total
+- **Total decisions:** 329 (DEC-001 through DEC-329)
 - **Calendar days (active dev):** ~27 (Feb 14 – Mar 12, 2026)
 - **Largest sprint:** 22 (9 implementation + 5 fix + 9 reviews, largest scope)
 - **Cleanest sprint:** 23 (11 sessions, 0 regressions, 0 scope gaps requiring follow-up)

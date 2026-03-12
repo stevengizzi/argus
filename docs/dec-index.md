@@ -363,3 +363,7 @@
 - ● **DEC-326**: Databento Lazy Warm-Up End Clamp — now - 600s buffer, skip if clamped end < start
 - ● **DEC-327**: Intelligence Pipeline Firehose Architecture — deferred to Sprint 24 design; per-symbol polling replaced by watchlist scoping as interim fix
 - ● **DEC-328**: Test Suite Tiering — full suite at sprint entry + close-outs + final review; scoped tests for mid-sprint pre-flights and non-final reviews
+
+## Phase K — Frontend + Test Cleanup (Sprint 23.9)
+
+- ● **DEC-329**: Gate Frontend Intelligence Hooks on Pipeline Health Status — `usePipelineStatus` hook gates catalyst/briefing TanStack queries on health endpoint pipeline component; fail-closed default

@@ -1,6 +1,6 @@
 # ARGUS — Project Knowledge (Claude Context)
 
-> *Tier A operational context for Claude Code and Claude.ai. Last updated: March 11, 2026 (Sprint 23.7 doc sync).*
+> *Tier A operational context for Claude Code and Claude.ai. Last updated: March 12, 2026 (Sprint 23.9 doc sync).*
 > *Full decision rationale: `docs/decision-log.md` | Sprint details: `docs/sprint-history.md` | DEC index: `docs/dec-index.md`*
 
 ---
@@ -11,9 +11,9 @@ ARGUS is a fully automated, AI-enhanced multi-strategy day trading system for US
 
 ## Current State
 
-**Tests:** 2,529 pytest + 435 Vitest
-**Sprints completed:** 1 through 23.8 (23 full sprints + sub-sprints + Universe Manager + Autonomous Sprint Runner + Wide Pipe + NLP Catalyst + Pipeline Integration + Startup Fixes)
-**Active sprint:** None (between sprints — live QA campaign in progress)
+**Tests:** 2,532 pytest + 446 Vitest
+**Sprints completed:** 1 through 23.9 (23 full sprints + sub-sprints + Universe Manager + Autonomous Sprint Runner + Wide Pipe + NLP Catalyst + Pipeline Integration + Startup Fixes + Pipeline QA + Frontend Cleanup)
+**Active sprint:** None (between sprints — Sprint 24 next)
 **Next sprint:** 24 (Setup Quality Engine + Dynamic Sizer)
 **GitHub:** `https://github.com/stevengizzi/argus.git` (public)
 
@@ -54,6 +54,7 @@ ARGUS is a fully automated, AI-enhanced multi-strategy day trading system for US
 | 23.6 | Tier 3 Remediation + Pipeline Integration | 2490+435V | Mar 10 | DEC-308–315 |
 | 23.7 | Startup Scaling Fixes | 2511+435V | Mar 11 | DEC-316–318 |
 | 23.8 | Intelligence Pipeline Live QA Fixes | 2529+435V | Mar 12 | DEC-319–328 |
+| 23.9 | Frontend + Test Cleanup | 2532+446V | Mar 12 | DEC-329 |
 
 *Full sprint scopes and session details: `docs/sprint-history.md`*
 
@@ -77,7 +78,7 @@ Paper trading active with Databento EQUS.MINI + IBKR paper (Account U24619949, D
 1. **Trading Engine** — Strategies, Orchestrator, Risk Manager, Data Service, Broker abstraction, Order Manager, Trade Logger, Backtesting (VectorBT + Replay Harness)
 2. **Command Center** — 7 pages (all built): Dashboard, Trade Log, Performance, Orchestrator, Pattern Library, The Debrief, System. Tauri desktop + PWA mobile + web. AI Copilot active.
 3. **AI Layer** (Sprint 22) — Claude API (Opus, DEC-098) via ClaudeClient wrapper; PromptManager with system prompt template and behavioral guardrails (DEC-273); SystemContextBuilder for per-page context injection (DEC-268); tool_use for structured action proposals (DEC-271) with 5 defined tools (DEC-272); ActionManager with DB-persisted proposals and 5-min TTL (DEC-267); 5 ActionExecutors with 4-condition pre-execution re-check; ConversationManager with calendar-date keying and tags (DEC-266); UsageTracker for per-call cost tracking (DEC-274); DailySummaryGenerator for insight card + daily summaries; ResponseCache for insight TTL caching. WS /ws/v1/ai/chat for streaming with actual API usage extraction (DEC-265). All timestamps ET-based (DEC-276). All AI features degrade gracefully when ANTHROPIC_API_KEY unset.
-4. **Intelligence Layer** (Sprints 23.5 + 23.6) — CatalystPipeline orchestrates three data sources: SECEdgarSource (8-K, Form 4), FMPNewsSource (stock news, press releases), FinnhubSource (company news, analyst recommendations). CatalystClassifier uses Claude API with rule-based fallback (DEC-301). CatalystStorage with SQLite persistence in separate catalyst.db (DEC-309) and headline hash deduplication (DEC-302). BriefingGenerator produces pre-market intelligence briefs with $5/day cost ceiling (DEC-303). Post-classification semantic dedup by (symbol, category, time_window) before storage (DEC-311). Batch-then-publish ordering for data safety (DEC-312). Config-gated via `catalyst.enabled` (DEC-300). Intelligence startup factory in `argus/intelligence/startup.py` builds all components from config (DEC-308). Polling loop via asyncio task with market-hours-aware intervals (DEC-315). Sprint 23.8 hardened the pipeline: `asyncio.wait_for(120)` safety timeout on source gather (DEC-319), polling task health monitoring via `done_callback` (DEC-320), symbol scope reduced from full viable universe to scanner watchlist (DEC-321), FMP news circuit breaker on 401/403 (DEC-323), cost ceiling enforcement wired into classifier with cycle cost logging (DEC-324), and Databento lazy warm-up `end` clamped to `now - 600s` (DEC-326). FMP canary test at startup validates API schema (DEC-313). Frontend: CatalystBadge, CatalystAlertPanel, IntelligenceBriefView with TanStack Query hooks.
+4. **Intelligence Layer** (Sprints 23.5 + 23.6) — CatalystPipeline orchestrates three data sources: SECEdgarSource (8-K, Form 4), FMPNewsSource (stock news, press releases), FinnhubSource (company news, analyst recommendations). CatalystClassifier uses Claude API with rule-based fallback (DEC-301). CatalystStorage with SQLite persistence in separate catalyst.db (DEC-309) and headline hash deduplication (DEC-302). BriefingGenerator produces pre-market intelligence briefs with $5/day cost ceiling (DEC-303). Post-classification semantic dedup by (symbol, category, time_window) before storage (DEC-311). Batch-then-publish ordering for data safety (DEC-312). Config-gated via `catalyst.enabled` (DEC-300). Intelligence startup factory in `argus/intelligence/startup.py` builds all components from config (DEC-308). Polling loop via asyncio task with market-hours-aware intervals (DEC-315). Sprint 23.8 hardened the pipeline: `asyncio.wait_for(120)` safety timeout on source gather (DEC-319), polling task health monitoring via `done_callback` (DEC-320), symbol scope reduced from full viable universe to scanner watchlist (DEC-321), FMP news circuit breaker on 401/403 (DEC-323), cost ceiling enforcement wired into classifier with cycle cost logging (DEC-324), and Databento lazy warm-up `end` clamped to `now - 600s` (DEC-326). FMP canary test at startup validates API schema (DEC-313). Frontend: CatalystBadge, CatalystAlertPanel, IntelligenceBriefView with TanStack Query hooks. Sprint 23.9 added `usePipelineStatus` hook gating all catalyst/briefing queries on pipeline health status from `/api/v1/health` — zero requests when pipeline inactive (DEC-329). DebriefService initialized in `server.py` lifespan (was only wired in dev mode, causing 503 in live mode).
 
 ### Key Components
 - **Strategies:** Daily-stateful, session-stateless plugins (DEC-028). 4 active. 14 more planned.
@@ -191,6 +192,8 @@ Per-trade risk: 0.5–1% of strategy allocation. Daily loss limit: 3–5%. Weekl
 **NLP Catalyst Pipeline:** DEC-300 (config-gated feature), DEC-301 (rule-based fallback classifier), DEC-302 (headline hash deduplication), DEC-303 (daily cost ceiling enforcement), DEC-304 (three-source architecture), DEC-305 (TanStack Query hooks), DEC-306 (Finnhub free tier for news), DEC-307 (Intelligence Brief view).
 
 **Pipeline Hardening (Sprint 23.8):** DEC-319 (wait_for timeout), DEC-320 (polling task health monitoring), DEC-321 (watchlist symbol scope), DEC-322 (source socket timeouts), DEC-323 (FMP circuit breaker), DEC-324 (cost ceiling enforcement), DEC-325 (classifier None guards), DEC-326 (Databento warm-up clamp), DEC-327 (firehose architecture deferred), DEC-328 (test suite tiering).
+
+**Frontend + Test Cleanup (Sprint 23.9):** DEC-329 (gate frontend intelligence hooks on pipeline health status).
 
 **Pipeline Integration (Sprint 23.6):** DEC-308 (deferred initialization), DEC-309 (separate catalyst.db), DEC-310 (CatalystConfig in SystemConfig), DEC-311 (semantic dedup), DEC-312 (batch-then-publish), DEC-313 (FMP canary test), DEC-314 (reference data cache), DEC-315 (polling loop).
 

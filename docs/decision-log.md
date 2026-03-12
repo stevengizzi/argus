@@ -3882,6 +3882,20 @@ Each entry follows this format:
 
 ---
 
+### DEC-329 | Gate Frontend Intelligence Hooks on Pipeline Health Status
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-12 |
+| **Sprint** | 23.9 |
+| **Decision** | Frontend TanStack Query hooks for catalyst data and intelligence briefings use the `enabled` option keyed to pipeline active status from the `/api/v1/health` endpoint. A new `usePipelineStatus` hook extracts `catalyst_pipeline` component status from the existing `useHealth()` hook (15s polling — no additional network requests). When pipeline is inactive, loading, or errored, hooks do not fire — zero HTTP requests made (fail-closed). Pipeline component registered via `health_monitor.update_component("catalyst_pipeline", ...)` in `server.py` after successful pipeline initialization, keeping `health.py` unmodified. |
+| **Alternatives Considered** | 1. Dedicated `/api/v1/catalysts/status` endpoint (Option B): Rejected — adds backend surface area when the health endpoint already carries component status information. 2. Check `catalyst.enabled` config value directly from frontend: Rejected — config values aren't exposed to the frontend; health endpoint is the correct runtime status channel. |
+| **Rationale** | DEF-041 — Dashboard page load produced 15–60 wasted 503 responses when `catalyst.enabled: false`, with per-symbol catalyst requests firing unconditionally for every watchlist symbol. On remount/navigation, the same requests fired again. Using the existing health endpoint for pipeline status required zero backend route changes (only a `health_monitor.update_component()` call in `server.py`) and leverages the already-polling `useHealth()` hook. |
+| **Cross-References** | DEC-305 (TanStack Query hooks for catalyst data), DEC-313 (FMP canary test — health endpoint component pattern) |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
-*Next DEC: 329*
-*Last updated: 2026-03-12 (Sprint 23.8 — DEC-319–328)*
+*Next DEC: 330*
+*Last updated: 2026-03-12 (Sprint 23.9 — DEC-329)*
