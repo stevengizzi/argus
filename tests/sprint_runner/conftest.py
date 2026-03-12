@@ -1,12 +1,21 @@
-"""Fixtures for sprint runner tests."""
+"""Fixtures for sprint runner tests.
+
+Uses the workflow submodule's sprint_runner package via the
+scripts/sprint_runner symlink.
+"""
 
 from __future__ import annotations
 
+import os
 import tempfile
 from pathlib import Path
 
 import pytest
 import yaml
+
+# Set ARGUS env prefix so the generalized runner config reads
+# ARGUS_RUNNER_MODE, ARGUS_RUNNER_SPRINT_DIR, ARGUS_COST_CEILING
+os.environ.setdefault("WORKFLOW_ENV_PREFIX", "ARGUS")
 
 
 @pytest.fixture

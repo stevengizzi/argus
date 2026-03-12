@@ -215,8 +215,8 @@ structured logging and record-keeping.
 All significant decisions logged with sequential DEC numbers. Deferred items tracked in CLAUDE.md.
 
 **Autonomous Runner (DEC-278, Sprint 23.2):** Python-based orchestrator at
-`scripts/sprint-runner.py` with implementation in `scripts/sprint_runner/`
-package (13 modules, 210 tests). Reads sprint package, invokes Claude Code CLI
+`scripts/sprint-runner.py` (thin entry point importing from `workflow/runner/`
+submodule). 13 modules, 210 tests. Reads sprint package, invokes Claude Code CLI
 per session, parses structured close-out and review verdicts, makes rule-based
 proceed/halt decisions, and maintains full run-log on disk. Supports resume
 from any checkpoint and parallel session execution. Notifications via ntfy.sh
@@ -225,7 +225,11 @@ from any checkpoint and parallel session execution. Notifications via ntfy.sh
 with configurable ceiling (DEC-287). Independent test verification (DEC-291),
 pre-session file validation (DEC-292), compaction detection heuristic (DEC-293),
 and session boundary diff validation (DEC-294) provide defense-in-depth between
-sessions. See `docs/protocols/autonomous-sprint-runner.md`.
+sessions. See `workflow/protocols/autonomous-sprint-runner.md`.
+
+Universal protocols, templates, and the runner live in the `workflow/` submodule
+(https://github.com/stevengizzi/claude-workflow). ARGUS-specific rules remain in
+`.claude/rules/`.
 
 **Sprint methodology:** Sprint spec → session prompts → Claude Code implementation → code review → polish → doc sync. By Sprint 18+, evolved into comprehensive "sprint packages" (spec + prompts + review plans + doc updates in one conversation).
 
@@ -253,6 +257,7 @@ sessions. See `docs/protocols/autonomous-sprint-runner.md`.
 | `CLAUDE.md` | Claude Code session context |
 | `docs/ui/ux-feature-backlog.md` | Planned UI features |
 | `docs/strategies/STRATEGY_*.md` | Per-strategy spec sheets |
+| `workflow/` | Claude-workflow metarepo (protocols, templates, runner) |
 
 ---
 

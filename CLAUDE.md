@@ -48,7 +48,8 @@ argus/
 ├── config/         # system.yaml, system_live.yaml, strategies/*.yaml
 ├── tests/          # pytest (backend) + Vitest (frontend)
 ├── docs/           # Decision log, sprint history, strategy specs, research reports
-└── .claude/        # rules/, skills/, agents/ for Claude Code
+├── workflow/       # Metarepo submodule (protocols, templates, runner, universal rules)
+└── .claude/        # rules/ (project-specific + universal→workflow), skills/→workflow, agents/→workflow
     └── rules/      # backtesting.md, trading-strategies.md, universal.md
 ```
 
