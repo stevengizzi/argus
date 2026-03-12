@@ -5,9 +5,14 @@
 
 ## Active Sprint
 
-**No active sprint.** Sprint 23.7 (Startup Scaling Fixes) completed March 11, 2026. Live QA campaign in progress.
+**Sprint 23.8 (Intelligence Pipeline Live QA Fixes)** — impromptu triage from March 12 QA session. 3 sessions: pipeline resilience + symbol scope, cost ceiling enforcement, source hardening + warm-up fix.
 
-Next sprint: **24 (Setup Quality Engine + Dynamic Sizer)** — composite 0–100 quality scoring, grade-based position sizing.
+Next planned sprint: **24 (Setup Quality Engine + Dynamic Sizer)** — composite 0–100 quality scoring, grade-based position sizing.
+
+### Known Issues (Pre-Sprint 23.8)
+- **Config alignment test failure:** `system_live.yaml` was modified during the March 12 QA session (catalyst section added, `fmp_news` disabled). Config alignment test fails until Session 1 updates the fixture.
+- **Live debug patches on main:** Temporary `_poll_task_done` callback and `"Polling loop coroutine entered"` log line in `server.py`/`startup.py` from QA debugging. Functional but quick-and-dirty — Session 1 replaces with production implementations.
+- **FMP Starter plan restriction:** FMP news endpoints (`stock_news`, `press_releases`) return 403 on Starter plan ($22/mo). `fmp_news.enabled: false` in `system_live.yaml`. Upgrade to Premium ($59/mo) would resolve — see DEF-035.
 
 ## Current State
 
@@ -252,12 +257,15 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 | DEF-038 | Fuzzy/Embedding-Based Catalyst Dedup | Sprint 28+ or when duplicate catalyst volume is high | Current semantic dedup uses (symbol, category, time_window) grouping (DEC-311). Embedding-based similarity matching would catch semantic duplicates with different headlines. Requires embedding model integration. Priority: LOW — rule-based dedup handles the common case. |
 | DEF-039 | Runner Conformance Check Reliability Audit | When conformance_fallback_count consistently >2 per sprint run | Sprint 23.6 added conformance fallback tracking. If fallback counter shows frequent failures, investigate structured output parsing reliability and tighten the conformance check. Priority: LOW — monitoring only. |
 | DEF-040 | Runner main.py Further Decomposition | Runner exceeds ~2,500 lines | Sprint 23.6 S5 extracted CLI helpers (~120 lines). main.py still 2,067 lines. Further extraction candidates: session execution loop, parallel session handling, notification logic. Priority: LOW. |
+| DEF-041 | Frontend catalyst endpoint short-circuit | Sprint 23.9 (fast-follow to 23.8) | Frontend fires 15+ per-symbol catalyst GET requests on page load even when pipeline is disabled (all return 503). Fix: check pipeline status from `/api/v1/health` before issuing catalyst requests. ~10 lines in TanStack Query hooks. Scoping note: `docs/sprints/sprint-23.8/sprint-23.9-scoping-note.md`. Priority: MEDIUM. |
+| DEF-043 | `/debrief/briefings` endpoint 503 fix | Sprint 23.9 (fast-follow to 23.8) | DailySummaryGenerator endpoint returns 503. Generator IS created (confirmed in server.py init log) but something causes the route to return 503 — likely a secondary dependency check. Separate from intelligence pipeline briefings (which work). Scoping note: `docs/sprints/sprint-23.8/sprint-23.9-scoping-note.md`. Priority: MEDIUM. |
+| DEF-044 | SPY intra-day regime re-evaluation | Regime-aware strategy behavior implemented OR paper trading shows regime stale after open | Orchestrator runs `_classify_regime()` once during `run_pre_market_routine()`. SPY data unavailable pre-market (Databento streams market hours only), so regime defaults to `range_bound`. After market open, SPY bars flow but nothing re-triggers classification. Making regime detection continuous requires design: how should mid-session regime changes affect running strategies? Priority: MEDIUM. |
 
 ## Reference
 
 | Document | What It Covers |
 |----------|---------------|
-| `docs/decision-log.md` | All 315 DEC entries with full rationale |
+| `docs/decision-log.md` | All 318 DEC entries with full rationale |
 | `docs/dec-index.md` | Quick-reference index with status markers |
 | `docs/sprint-history.md` | Complete sprint history (1–23.6) |
 | `docs/process-evolution.md` | Workflow evolution narrative |

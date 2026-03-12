@@ -3742,6 +3742,20 @@ Each entry follows this format:
 
 ---
 
+### DEC-327 | Intelligence Pipeline Architecture — Firehose Model Deferred to Sprint 24
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-12 |
+| **Sprint** | 23.8 (planning) |
+| **Decision** | Defer the intelligence pipeline architecture refactor from per-symbol polling to a firehose model. The current architecture calls external APIs once per symbol per poll cycle (N+1 pattern). With 15 scanner symbols this produced 5,392 raw items (94% duplicates). With the full 6,342-symbol viable universe, the poll timed out at 120s without completing. Sprint 23.8 makes the current architecture functional via watchlist scoping, timeouts, and circuit breakers. The right architecture — to be designed during Sprint 24 planning — eliminates the N+1 pattern entirely via one or both of: (1) News-first firehose: pull full feeds from each source (SEC EDGAR RSS, Finnhub general market news), associate items to symbols after ingestion. One API call per source per cycle. (2) Signal-first on-demand: when a strategy generates a signal, do a targeted catalyst lookup for that specific symbol. Feeds into Sprint 24's Setup Quality Engine as a quality score input. |
+| **Alternatives Considered** | 1. Fix in Sprint 23.8: Rejected — architecture redesign doesn't belong in an impromptu bug-fix sprint. Watchlist scoping is sufficient to make the current design functional. 2. Abandon per-symbol model entirely now: Rejected — needs API analysis per source (which endpoints support firehose vs per-symbol), cost modeling, and integration design with the quality engine. |
+| **Rationale** | The per-symbol polling model was designed before Sprint 23's full-universe pipe existed. It assumed 15–30 symbols. The architecture works at that scale with watchlist scoping (Sprint 23.8 fix), but the 94% duplicate rate and N+1 API pattern indicate a fundamental design mismatch. Firehose + on-demand is the correct long-term model, but it requires Sprint 24 design work to implement properly. |
+| **Cross-References** | DEC-300 (config-gated pipeline), DEC-303 (daily cost ceiling), DEC-304 (three-source architecture), DEC-315 (polling loop) |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
-*Next DEC: 319*
-*Last updated: 2026-03-11 (Sprint 23.7 doc-sync — DEC-316–318)*
+*Next DEC: 328*
+*Last updated: 2026-03-12 (Sprint 23.8 pre-sprint — DEC-327)*

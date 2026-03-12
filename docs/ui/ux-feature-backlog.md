@@ -484,6 +484,7 @@ Each watchlist symbol gains catalyst badge showing latest catalyst category. Def
 
 *Effort: ~3 hours. Badge integration with existing watchlist.*
 
+
 ### 23-G. Trade Detail Panel — Catalyst Section [P1] — DEFERRED
 
 **Catalyst context in trade deep-dive.**
@@ -511,6 +512,13 @@ When hovering/selecting a position or trade, floating toolbar appears. Deferred 
 Sections remember collapsed/expanded state across sessions (Zustand persist). Filter settings persist on Trades page. Dashboard widget arrangement saves.
 
 *Effort: ~3 hours. Zustand persist integration.*
+
+### 23-J. Catalyst Endpoint Short-Circuit [P0] — DEF-041
+
+**Skip catalyst requests when pipeline is disabled.**
+TanStack Query hooks (`useCatalysts`) should check pipeline status before issuing per-symbol `GET /api/v1/catalysts/{symbol}` requests. Currently fires 15+ requests that all return 503 when `catalyst.enabled: false`. Check via `/api/v1/health` component status or a dedicated `/api/v1/catalysts/status` endpoint. Return empty state immediately when pipeline is disabled.
+
+*Discovered: March 12, 2026 live QA. Effort: ~1 hour.*
 
 ---
 

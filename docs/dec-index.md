@@ -350,3 +350,7 @@
 - ● **DEC-316**: Time-Aware Indicator Warm-Up — skip pre-market, lazy per-symbol mid-session
 - ● **DEC-317**: Periodic Reference Cache Saves — every 1,000 symbols + on shutdown signal
 - ● **DEC-318**: API Server Port Guard + Double-Bind Fix — removed duplicate WS bridge start, socket check
+
+## Phase J — Intelligence Pipeline Live QA Fixes (Sprint 23.8)
+
+- ● **DEC-327**: Intelligence Pipeline Firehose Architecture — deferred to Sprint 24 design; per-symbol polling replaced by watchlist scoping as interim fix
