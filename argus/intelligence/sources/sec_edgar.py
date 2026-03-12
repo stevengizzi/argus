@@ -91,7 +91,7 @@ class SECEdgarClient(CatalystSource):
 
         self._session = aiohttp.ClientSession(
             headers=headers,
-            timeout=aiohttp.ClientTimeout(total=30.0),
+            timeout=aiohttp.ClientTimeout(total=30.0, sock_connect=10.0, sock_read=20.0),
         )
 
         # Pre-load CIK mapping

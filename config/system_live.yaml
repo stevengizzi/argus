@@ -99,7 +99,7 @@ catalyst:
       user_agent_email: "gizzimusic@gmail.com"     # Required: your email for SEC fair access
       rate_limit_per_second: 10.0
     fmp_news:
-      enabled: true
+      enabled: false
       api_key_env_var: "FMP_API_KEY"
       endpoints:
         - "stock_news"

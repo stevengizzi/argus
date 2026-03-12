@@ -271,14 +271,15 @@ class CatalystClassifier:
             )
 
             # Record usage
-            await self._usage_tracker.record_usage(
-                conversation_id=None,
-                input_tokens=usage.input_tokens,
-                output_tokens=usage.output_tokens,
-                model=usage.model,
-                estimated_cost_usd=usage.estimated_cost_usd,
-                endpoint="catalyst_classification",
-            )
+            if self._usage_tracker is not None:
+                await self._usage_tracker.record_usage(
+                    conversation_id=None,
+                    input_tokens=usage.input_tokens,
+                    output_tokens=usage.output_tokens,
+                    model=usage.model,
+                    estimated_cost_usd=usage.estimated_cost_usd,
+                    endpoint="catalyst_classification",
+                )
 
             # Check for error response
             if response.get("type") == "error":
@@ -491,6 +492,8 @@ class CatalystClassifier:
         Returns:
             Today's total estimated cost in USD.
         """
+        if self._usage_tracker is None:
+            return 0.0
         today = datetime.now(_ET).date().isoformat()
         usage = await self._usage_tracker.get_daily_usage(today)
         return usage.get("estimated_cost_usd", 0.0)

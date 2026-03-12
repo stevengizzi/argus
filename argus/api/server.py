@@ -151,19 +151,47 @@ def create_app(app_state: AppState) -> FastAPI:
                     )
 
                     # Create get_symbols callback for polling
+                    catalyst_max = app_state.config.catalyst.max_batch_size
+
                     def get_symbols() -> list[str]:
-                        # Prefer universe manager viable symbols
+                        # Prefer scanner watchlist (small, curated list)
+                        if app_state.cached_watchlist:
+                            symbols = [item.symbol for item in app_state.cached_watchlist]
+                            logger.info(
+                                "Polling %d symbols: %s",
+                                len(symbols),
+                                symbols[:5],
+                            )
+                            return symbols
+                        # Fallback to viable universe, capped to max_batch_size
                         if (
                             app_state.universe_manager is not None
                             and app_state.universe_manager.viable_count > 0
                         ):
-                            return list(app_state.universe_manager.viable_symbols)
-                        # Fallback to cached watchlist
-                        if app_state.cached_watchlist:
-                            return [item.symbol for item in app_state.cached_watchlist]
+                            all_viable = list(app_state.universe_manager.viable_symbols)
+                            symbols = all_viable[:catalyst_max]
+                            logger.info(
+                                "Polling %d symbols (capped from %d viable): %s",
+                                len(symbols),
+                                len(all_viable),
+                                symbols[:5],
+                            )
+                            return symbols
                         return []
 
                     # Start polling loop task
+                    def _poll_task_done(task: asyncio.Task[None]) -> None:
+                        if task.cancelled():
+                            logger.info("Intelligence polling task was cancelled")
+                        elif task.exception():
+                            logger.critical(
+                                "Intelligence polling task CRASHED: %s",
+                                task.exception(),
+                                exc_info=task.exception(),
+                            )
+                        else:
+                            logger.warning("Intelligence polling task exited cleanly (unexpected)")
+
                     polling_task = asyncio.create_task(
                         run_polling_loop(
                             pipeline=intelligence_components.pipeline,
@@ -171,6 +199,8 @@ def create_app(app_state: AppState) -> FastAPI:
                             get_symbols=get_symbols,
                         )
                     )
+                    polling_task.add_done_callback(_poll_task_done)
+                    app_state.intelligence_polling_task = polling_task
                     logger.info("Intelligence polling loop started")
             except Exception as e:
                 logger.error(f"Failed to initialize intelligence pipeline: {e}")

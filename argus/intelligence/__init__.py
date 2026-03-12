@@ -131,9 +131,21 @@ class CatalystPipeline:
         if not symbols:
             return []
 
-        # Step 1: Fetch from all sources concurrently
+        # Step 1: Fetch from all sources concurrently (120s safety net)
         fetch_tasks = [source.fetch_catalysts(symbols) for source in self._sources]
-        results = await asyncio.gather(*fetch_tasks, return_exceptions=True)
+        try:
+            results = await asyncio.wait_for(
+                asyncio.gather(*fetch_tasks, return_exceptions=True),
+                timeout=120.0,
+            )
+        except TimeoutError:
+            logger.critical(
+                "Poll cycle timed out after 120s waiting for source fetches "
+                "(%d sources, %d symbols)",
+                len(self._sources),
+                len(symbols),
+            )
+            return []
 
         # Collect raw items and log per-source counts
         all_raw_items: list[CatalystRawItem] = []

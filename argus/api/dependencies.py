@@ -6,6 +6,7 @@ app startup and injected into routes via FastAPI's dependency injection.
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -73,6 +74,7 @@ class AppState:
         universe_manager: Universe Manager for viable universe and routing.
         catalyst_storage: Storage for catalyst events and briefs.
         briefing_generator: Pre-market brief generator.
+        intelligence_polling_task: Asyncio task for the intelligence polling loop.
     """
 
     event_bus: EventBus
@@ -101,6 +103,7 @@ class AppState:
     universe_manager: UniverseManager | None = None
     catalyst_storage: CatalystStorage | None = None
     briefing_generator: BriefingGenerator | None = None
+    intelligence_polling_task: asyncio.Task[None] | None = None
 
 
 def get_app_state(request: Request) -> AppState:

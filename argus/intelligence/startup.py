@@ -191,6 +191,8 @@ async def run_polling_loop(
         market_open: Market open time in HH:MM format (ET).
         market_close: Market close time in HH:MM format (ET).
     """
+    logger.info("Polling loop coroutine entered")
+
     et_tz = ZoneInfo("America/New_York")
     open_hour, open_minute = map(int, market_open.split(":"))
     close_hour, close_minute = map(int, market_close.split(":"))

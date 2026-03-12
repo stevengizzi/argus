@@ -79,7 +79,7 @@ class FMPNewsClient(CatalystSource):
             )
 
         self._session = aiohttp.ClientSession(
-            timeout=aiohttp.ClientTimeout(total=30.0),
+            timeout=aiohttp.ClientTimeout(total=30.0, sock_connect=10.0, sock_read=20.0),
         )
         self._disabled_for_cycle = False
 
