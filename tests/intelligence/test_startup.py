@@ -530,6 +530,54 @@ class TestRunPollingLoop:
         assert iteration_count == 1
 
     @pytest.mark.asyncio
+    async def test_polling_loop_timeout_catches_hanging_poll(
+        self, mock_pipeline: MagicMock, polling_config: CatalystConfig, caplog
+    ) -> None:
+        """When pipeline.run_poll hangs past timeout, TimeoutError is caught and logged."""
+        import asyncio
+        import logging
+        from unittest.mock import patch
+
+        symbols = ["AAPL", "TSLA"]
+        iteration_count = 0
+
+        # Make run_poll raise TimeoutError (simulating what wait_for does)
+        mock_pipeline.run_poll = AsyncMock(side_effect=asyncio.TimeoutError())
+        mock_pipeline._sources = [MagicMock(), MagicMock()]
+
+        async def mock_sleep(duration: float) -> None:
+            nonlocal iteration_count
+            iteration_count += 1
+            if iteration_count >= 1:
+                raise asyncio.CancelledError()
+
+        # Patch wait_for to propagate the TimeoutError from run_poll
+        async def passthrough_wait_for(coro, *, timeout):
+            return await coro
+
+        with (
+            patch("argus.intelligence.startup.asyncio.sleep", side_effect=mock_sleep),
+            patch("argus.intelligence.startup.asyncio.wait_for", side_effect=passthrough_wait_for),
+            caplog.at_level(logging.CRITICAL, logger="argus.intelligence.startup"),
+        ):
+            task = asyncio.create_task(
+                run_polling_loop(
+                    pipeline=mock_pipeline,
+                    config=polling_config,
+                    get_symbols=lambda: symbols,
+                )
+            )
+
+            with pytest.raises(asyncio.CancelledError):
+                await task
+
+        # Verify CRITICAL was logged with timeout message
+        assert "Poll cycle timed out after 120s" in caplog.text
+
+        # Loop continued after timeout (reached sleep)
+        assert iteration_count == 1
+
+    @pytest.mark.asyncio
     async def test_polling_loop_overlap_protection(
         self, mock_pipeline: MagicMock, polling_config: CatalystConfig, caplog
     ) -> None:

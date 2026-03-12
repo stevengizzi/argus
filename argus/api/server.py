@@ -154,29 +154,18 @@ def create_app(app_state: AppState) -> FastAPI:
                     catalyst_max = app_state.config.catalyst.max_batch_size
 
                     def get_symbols() -> list[str]:
-                        # Prefer scanner watchlist (small, curated list)
+                        # Priority 1: Scanner watchlist (15 symbols from FMP pre-market scan)
                         if app_state.cached_watchlist:
                             symbols = [item.symbol for item in app_state.cached_watchlist]
-                            logger.info(
-                                "Polling %d symbols: %s",
-                                len(symbols),
-                                symbols[:5],
-                            )
-                            return symbols
-                        # Fallback to viable universe, capped to max_batch_size
+                            if symbols:
+                                return symbols
+                        # Priority 2: Viable universe capped at max_batch_size
                         if (
                             app_state.universe_manager is not None
                             and app_state.universe_manager.viable_count > 0
                         ):
                             all_viable = list(app_state.universe_manager.viable_symbols)
-                            symbols = all_viable[:catalyst_max]
-                            logger.info(
-                                "Polling %d symbols (capped from %d viable): %s",
-                                len(symbols),
-                                len(all_viable),
-                                symbols[:5],
-                            )
-                            return symbols
+                            return all_viable[:catalyst_max]
                         return []
 
                     # Start polling loop task

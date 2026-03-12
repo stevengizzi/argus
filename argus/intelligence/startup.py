@@ -191,7 +191,7 @@ async def run_polling_loop(
         market_open: Market open time in HH:MM format (ET).
         market_close: Market close time in HH:MM format (ET).
     """
-    logger.info("Polling loop coroutine entered")
+    logger.debug("Polling loop coroutine entered")
 
     et_tz = ZoneInfo("America/New_York")
     open_hour, open_minute = map(int, market_open.split(":"))
@@ -233,7 +233,22 @@ async def run_polling_loop(
                     if not symbols:
                         logger.warning("No symbols returned from get_symbols(), skipping poll")
                     else:
-                        await pipeline.run_poll(symbols)
+                        logger.info(
+                            "Polling %d symbols: %s...",
+                            len(symbols),
+                            symbols[:5],
+                        )
+                        await asyncio.wait_for(
+                            pipeline.run_poll(symbols),
+                            timeout=120.0,
+                        )
+                except asyncio.TimeoutError:
+                    logger.critical(
+                        "Poll cycle timed out after 120s waiting for source fetches "
+                        "(%d sources, %d symbols)",
+                        len(pipeline._sources),
+                        len(symbols),
+                    )
                 except asyncio.CancelledError:
                     logger.info("Polling loop cancelled")
                     raise

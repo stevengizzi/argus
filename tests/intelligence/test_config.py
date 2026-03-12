@@ -100,11 +100,11 @@ class TestCatalystConfigYamlAlignment:
         raw = yaml.safe_load(_SYSTEM_YAML.read_text())
         catalyst_data = raw.get("catalyst", {})
         cfg = CatalystConfig(**catalyst_data)
-        assert cfg.enabled is False
+        assert cfg.enabled is True
 
-    def test_yaml_catalyst_enabled_is_false(self) -> None:
+    def test_yaml_catalyst_enabled_is_true(self) -> None:
         raw = yaml.safe_load(_SYSTEM_YAML.read_text())
-        assert raw["catalyst"]["enabled"] is False
+        assert raw["catalyst"]["enabled"] is True
 
     def test_yaml_catalyst_sources_sec_edgar_filing_types(self) -> None:
         raw = yaml.safe_load(_SYSTEM_YAML.read_text())

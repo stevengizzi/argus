@@ -5,6 +5,7 @@ Sprint 23.6 Session 3b — Tests for app lifecycle wiring of intelligence pipeli
 
 from __future__ import annotations
 
+import asyncio
 import time
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -310,6 +311,259 @@ async def test_lifespan_ai_disabled_catalyst_enabled(
         # Factory was called with ai_client=None
         assert len(captured_ai_client) == 1
         assert captured_ai_client[0] is None
+
+
+# -----------------------------------------------------------------------------
+# get_symbols Tests (Sprint 23.8 Session 1)
+# -----------------------------------------------------------------------------
+
+
+class TestGetSymbols:
+    """Tests for the get_symbols closure in server lifespan."""
+
+    @pytest.mark.asyncio
+    async def test_get_symbols_returns_watchlist_when_populated(
+        self,
+        minimal_app_state: AppState,
+        tmp_path: Path,
+        jwt_secret: str,
+    ):
+        """get_symbols returns cached_watchlist symbols when watchlist is populated."""
+        from argus.api.server import create_app
+        from argus.core.events import WatchlistItem
+
+        # Populate cached_watchlist
+        minimal_app_state.cached_watchlist = [
+            WatchlistItem(symbol="AAPL", gap_pct=3.5),
+            WatchlistItem(symbol="TSLA", gap_pct=5.2),
+            WatchlistItem(symbol="NVDA", gap_pct=2.8),
+        ]
+        minimal_app_state.config.catalyst = CatalystConfig(enabled=True)
+        minimal_app_state.config.data_dir = str(tmp_path)
+
+        # We need to capture get_symbols from the lifespan
+        captured_get_symbols = []
+
+        mock_pipeline = MagicMock()
+        mock_pipeline.start = AsyncMock()
+        mock_pipeline.stop = AsyncMock()
+
+        mock_components = MagicMock()
+        mock_components.storage = MagicMock()
+        mock_components.briefing_generator = MagicMock()
+        mock_components.pipeline = mock_pipeline
+        mock_components.sources = ["finnhub"]
+
+        original_run_polling_loop = None
+
+        async def capture_polling_loop(pipeline, config, get_symbols, **kwargs):
+            captured_get_symbols.append(get_symbols)
+            # Don't actually run the loop — just capture and return
+            raise asyncio.CancelledError()
+
+        with (
+            patch(
+                "argus.intelligence.startup.create_intelligence_components",
+                new=AsyncMock(return_value=mock_components),
+            ),
+            patch(
+                "argus.intelligence.startup.run_polling_loop",
+                side_effect=capture_polling_loop,
+            ),
+            patch(
+                "argus.intelligence.startup.shutdown_intelligence",
+                new=AsyncMock(),
+            ),
+        ):
+            app = create_app(minimal_app_state)
+
+            async with app.router.lifespan_context(app):
+                # Give the task a moment to start
+                await asyncio.sleep(0.05)
+
+                assert len(captured_get_symbols) == 1
+                symbols = captured_get_symbols[0]()
+                assert symbols == ["AAPL", "TSLA", "NVDA"]
+
+    @pytest.mark.asyncio
+    async def test_get_symbols_returns_capped_viable_universe_when_watchlist_empty(
+        self,
+        minimal_app_state: AppState,
+        tmp_path: Path,
+        jwt_secret: str,
+    ):
+        """get_symbols returns capped viable universe when watchlist is empty."""
+        from argus.api.server import create_app
+
+        # Empty watchlist, set up universe manager mock
+        minimal_app_state.cached_watchlist = []
+        mock_um = MagicMock()
+        mock_um.viable_count = 50
+        mock_um.viable_symbols = {f"SYM{i}" for i in range(50)}
+        minimal_app_state.universe_manager = mock_um
+
+        minimal_app_state.config.catalyst = CatalystConfig(
+            enabled=True, max_batch_size=10
+        )
+        minimal_app_state.config.data_dir = str(tmp_path)
+
+        captured_get_symbols = []
+
+        mock_pipeline = MagicMock()
+        mock_pipeline.start = AsyncMock()
+        mock_pipeline.stop = AsyncMock()
+
+        mock_components = MagicMock()
+        mock_components.storage = MagicMock()
+        mock_components.briefing_generator = MagicMock()
+        mock_components.pipeline = mock_pipeline
+        mock_components.sources = ["finnhub"]
+
+        async def capture_polling_loop(pipeline, config, get_symbols, **kwargs):
+            captured_get_symbols.append(get_symbols)
+            raise asyncio.CancelledError()
+
+        with (
+            patch(
+                "argus.intelligence.startup.create_intelligence_components",
+                new=AsyncMock(return_value=mock_components),
+            ),
+            patch(
+                "argus.intelligence.startup.run_polling_loop",
+                side_effect=capture_polling_loop,
+            ),
+            patch(
+                "argus.intelligence.startup.shutdown_intelligence",
+                new=AsyncMock(),
+            ),
+        ):
+            app = create_app(minimal_app_state)
+
+            async with app.router.lifespan_context(app):
+                await asyncio.sleep(0.05)
+
+                assert len(captured_get_symbols) == 1
+                symbols = captured_get_symbols[0]()
+                # Should be capped at max_batch_size=10
+                assert len(symbols) == 10
+
+    @pytest.mark.asyncio
+    async def test_get_symbols_returns_empty_when_both_sources_empty(
+        self,
+        minimal_app_state: AppState,
+        tmp_path: Path,
+        jwt_secret: str,
+    ):
+        """get_symbols returns [] when watchlist and viable universe are both empty."""
+        from argus.api.server import create_app
+
+        # Empty watchlist, no universe manager
+        minimal_app_state.cached_watchlist = []
+        minimal_app_state.universe_manager = None
+
+        minimal_app_state.config.catalyst = CatalystConfig(enabled=True)
+        minimal_app_state.config.data_dir = str(tmp_path)
+
+        captured_get_symbols = []
+
+        mock_pipeline = MagicMock()
+        mock_pipeline.start = AsyncMock()
+        mock_pipeline.stop = AsyncMock()
+
+        mock_components = MagicMock()
+        mock_components.storage = MagicMock()
+        mock_components.briefing_generator = MagicMock()
+        mock_components.pipeline = mock_pipeline
+        mock_components.sources = ["finnhub"]
+
+        async def capture_polling_loop(pipeline, config, get_symbols, **kwargs):
+            captured_get_symbols.append(get_symbols)
+            raise asyncio.CancelledError()
+
+        with (
+            patch(
+                "argus.intelligence.startup.create_intelligence_components",
+                new=AsyncMock(return_value=mock_components),
+            ),
+            patch(
+                "argus.intelligence.startup.run_polling_loop",
+                side_effect=capture_polling_loop,
+            ),
+            patch(
+                "argus.intelligence.startup.shutdown_intelligence",
+                new=AsyncMock(),
+            ),
+        ):
+            app = create_app(minimal_app_state)
+
+            async with app.router.lifespan_context(app):
+                await asyncio.sleep(0.05)
+
+                assert len(captured_get_symbols) == 1
+                symbols = captured_get_symbols[0]()
+                assert symbols == []
+
+
+# -----------------------------------------------------------------------------
+# done_callback Tests (Sprint 23.8 Session 1)
+# -----------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_done_callback_logs_critical_on_task_crash(
+    minimal_app_state: AppState,
+    tmp_path: Path,
+    jwt_secret: str,
+    caplog,
+):
+    """done_callback logs CRITICAL when polling task crashes with an exception."""
+    from argus.api.server import create_app
+
+    minimal_app_state.config.catalyst = CatalystConfig(enabled=True)
+    minimal_app_state.config.data_dir = str(tmp_path)
+
+    mock_pipeline = MagicMock()
+    mock_pipeline.start = AsyncMock()
+    mock_pipeline.stop = AsyncMock()
+
+    mock_components = MagicMock()
+    mock_components.storage = MagicMock()
+    mock_components.briefing_generator = MagicMock()
+    mock_components.pipeline = mock_pipeline
+    mock_components.sources = ["finnhub"]
+
+    async def crashing_polling_loop(pipeline, config, get_symbols, **kwargs):
+        raise RuntimeError("Simulated polling crash")
+
+    with (
+        patch(
+            "argus.intelligence.startup.create_intelligence_components",
+            new=AsyncMock(return_value=mock_components),
+        ),
+        patch(
+            "argus.intelligence.startup.run_polling_loop",
+            side_effect=crashing_polling_loop,
+        ),
+        patch(
+            "argus.intelligence.startup.shutdown_intelligence",
+            new=AsyncMock(),
+        ),
+    ):
+        import contextlib
+        import logging
+
+        with caplog.at_level(logging.CRITICAL, logger="argus.api.server"):
+            app = create_app(minimal_app_state)
+
+            # The shutdown path awaits the polling task, which re-raises
+            # the RuntimeError. Suppress it since we're testing the callback.
+            with contextlib.suppress(RuntimeError):
+                async with app.router.lifespan_context(app):
+                    # Give the task time to crash and callback to fire
+                    await asyncio.sleep(0.1)
+
+            assert "Intelligence polling task CRASHED" in caplog.text
+            assert "Simulated polling crash" in caplog.text
 
 
 # -----------------------------------------------------------------------------
