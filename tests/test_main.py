@@ -654,10 +654,14 @@ class TestOrchestratorIntegration:
         """Verify AppState includes the Orchestrator when API is enabled."""
         from argus.main import ArgusSystem
 
+        # Ensure AI is disabled — load_dotenv() may have loaded the real key
+        # from .env before mock_env_vars deleted it, so set it to empty string
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "")
         # Set JWT secret so API starts
         monkeypatch.setenv("ARGUS_JWT_SECRET", "test_secret")
 
-        # Update system.yaml to enable API
+        # Update system.yaml to enable API (ai: false prevents load_dotenv race
+        # when ANTHROPIC_API_KEY exists in .env but monkeypatch.delenv removed it)
         (mock_config_dir / "system.yaml").write_text("""
 timezone: "America/New_York"
 market_open: "09:30"
@@ -674,6 +678,9 @@ health:
   alert_webhook_url: ""
   daily_check_enabled: false
   weekly_reconciliation_enabled: false
+
+ai:
+  enabled: false
 
 api:
   enabled: true
@@ -805,7 +812,8 @@ api:
 
         monkeypatch.setenv("ARGUS_JWT_SECRET", "test_secret")
 
-        # Update system.yaml to enable API
+        # Update system.yaml to enable API (ai: false prevents load_dotenv race
+        # when ANTHROPIC_API_KEY exists in .env but monkeypatch.delenv removed it)
         (mock_config_dir / "system.yaml").write_text("""
 timezone: "America/New_York"
 market_open: "09:30"
@@ -822,6 +830,9 @@ health:
   alert_webhook_url: ""
   daily_check_enabled: false
   weekly_reconciliation_enabled: false
+
+ai:
+  enabled: false
 
 api:
   enabled: true
@@ -1016,10 +1027,13 @@ max_hold_seconds: 120
 
     @pytest.mark.asyncio
     async def test_multiple_strategies_registered_with_orchestrator(
-        self, mock_config_dir: Path, mock_env_vars: None
+        self, mock_config_dir: Path, mock_env_vars: None, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Verify both strategies are registered with the Orchestrator."""
         from argus.main import ArgusSystem
+
+        # Ensure AI is disabled — load_dotenv() may have loaded the real key
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "")
 
         # Add orb_scalp.yaml to config
         (mock_config_dir / "strategies" / "orb_scalp.yaml").write_text("""

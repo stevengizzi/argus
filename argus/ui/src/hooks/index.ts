@@ -74,6 +74,9 @@ export {
 // Universe Manager hooks (Sprint 23)
 export { useUniverseStatus } from './useUniverseStatus';
 
+// Pipeline status hook (Sprint 23.9)
+export { usePipelineStatus } from './usePipelineStatus';
+
 // Intelligence hooks (Sprint 23.5)
 export {
   useCatalystsBySymbol,

@@ -9,6 +9,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { getToken } from '../api/client';
+import { usePipelineStatus } from './usePipelineStatus';
 
 const API_BASE = '/api/v1';
 
@@ -146,10 +147,12 @@ async function getRecentCatalysts(limit: number): Promise<CatalystsResponse> {
  * @returns Query result with catalyst data
  */
 export function useCatalystsBySymbol(symbol: string) {
+  const isPipelineActive = usePipelineStatus();
+
   return useQuery<CatalystsResponse, Error>({
     queryKey: ['catalysts', 'symbol', symbol],
     queryFn: () => getCatalystsBySymbol(symbol),
-    enabled: Boolean(symbol),
+    enabled: Boolean(symbol) && isPipelineActive,
     staleTime: 60_000, // 1 minute
     refetchInterval: () => (isMarketHours() ? 60_000 : false), // 60s during market hours
     refetchOnWindowFocus: false,
@@ -163,9 +166,12 @@ export function useCatalystsBySymbol(symbol: string) {
  * @returns Query result with recent catalyst data
  */
 export function useRecentCatalysts(limit: number = 50) {
+  const isPipelineActive = usePipelineStatus();
+
   return useQuery<CatalystsResponse, Error>({
     queryKey: ['catalysts', 'recent', limit],
     queryFn: () => getRecentCatalysts(limit),
+    enabled: isPipelineActive,
     staleTime: 30_000, // 30 seconds
     refetchInterval: () => (isMarketHours() ? 30_000 : false), // 30s during market hours
     refetchOnWindowFocus: false,

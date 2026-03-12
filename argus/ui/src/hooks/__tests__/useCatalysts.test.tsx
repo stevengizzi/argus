@@ -19,6 +19,11 @@ vi.mock('../../api/client', () => ({
   getToken: vi.fn(() => 'mock-token'),
 }));
 
+// Mock usePipelineStatus to return true (pipeline active) for existing tests
+vi.mock('../usePipelineStatus', () => ({
+  usePipelineStatus: vi.fn(() => true),
+}));
+
 const mockCatalystsResponse = {
   catalysts: [
     {

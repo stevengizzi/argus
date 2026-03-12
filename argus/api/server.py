@@ -145,6 +145,17 @@ def create_app(app_state: AppState) -> FastAPI:
                     app_state.catalyst_storage = intelligence_components.storage
                     app_state.briefing_generator = intelligence_components.briefing_generator
                     intelligence_initialized_here = True
+
+                    # Register pipeline component with health monitor for frontend gating
+                    if app_state.health_monitor is not None:
+                        from argus.core.health import ComponentStatus
+
+                        app_state.health_monitor.update_component(
+                            "catalyst_pipeline",
+                            ComponentStatus.HEALTHY,
+                            message=f"{len(intelligence_components.sources)} sources active",
+                        )
+
                     logger.info(
                         "Intelligence pipeline initialized (%d sources)",
                         len(intelligence_components.sources),

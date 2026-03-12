@@ -9,6 +9,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getToken } from '../api/client';
+import { usePipelineStatus } from './usePipelineStatus';
 
 const API_BASE = '/api/v1';
 
@@ -111,9 +112,12 @@ async function generateIntelligenceBriefing(): Promise<IntelligenceBrief> {
  * @returns Query result with briefing data or null if not found
  */
 export function useIntelligenceBriefing(date?: string) {
+  const isPipelineActive = usePipelineStatus();
+
   return useQuery<IntelligenceBrief | null, Error>({
     queryKey: ['intelligence-briefing', date ?? 'today'],
     queryFn: () => getIntelligenceBriefing(date),
+    enabled: isPipelineActive,
     staleTime: Infinity, // Briefs don't change once generated
     refetchOnWindowFocus: false,
   });
@@ -126,9 +130,12 @@ export function useIntelligenceBriefing(date?: string) {
  * @returns Query result with list of past briefings
  */
 export function useIntelligenceBriefingHistory(limit: number = 30) {
+  const isPipelineActive = usePipelineStatus();
+
   return useQuery<IntelligenceBrief[], Error>({
     queryKey: ['intelligence-briefings', 'history', limit],
     queryFn: () => getIntelligenceBriefingHistory(limit),
+    enabled: isPipelineActive,
     staleTime: 60_000, // 1 minute
     refetchOnWindowFocus: false,
   });
