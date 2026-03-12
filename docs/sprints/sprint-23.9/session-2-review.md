@@ -17,7 +17,7 @@ Sprint-Level Regression Checklist, and Sprint-Level Escalation Criteria:
 `docs/sprints/sprint-23.9/review-context.md`
 
 ## Tier 1 Close-Out Report
-[PASTE THE SESSION 2 CLOSE-OUT REPORT HERE]
+Reference `docs/sprints/sprint-23.9/session-2-closeout.md` for the full report.
 
 ## Review Scope
 - Diff to review: `git diff HEAD~1` (Session 2 changes only)
@@ -33,27 +33,32 @@ Sprint-Level Regression Checklist, and Sprint-Level Escalation Criteria:
   - `argus/api/routes/health.py`
   - `argus/config/system.yaml`, `argus/config/system_live.yaml`
   - Session 1 files should not be re-modified (catalyst hooks, test fixes)
+    — specifically check that `usePipelineStatus.ts`, `useCatalysts.ts`,
+    `useIntelligenceBriefings.ts`, `test_sec_edgar.py`, `test_main.py` are
+    untouched by Session 2
 
 ## Session-Specific Review Focus
-1. **Verify 503 is replaced with 200 + empty result:** The endpoint must return
-   200 for both "generator ready with data" and "generator ready with no data"
-   cases. 503 should only occur when the generator is genuinely unavailable
-   (None / uninitialized / API key missing).
-2. **Verify the fix matches investigation findings:** Compare the actual
-   implementation against what Session 1's close-out recommended. If the fix
-   deviated significantly, verify the deviation was justified.
-3. **Verify frontend empty state:** If the Debrief page was modified, check that
-   the empty state is visually appropriate — no error indicators, matches the
-   design language of other empty states in the app.
-4. **Verify no side effects on other routes:** Check that changes to `server.py`
-   (if any) didn't affect initialization of other services. The health endpoint
-   should report the same components as before.
-5. **Verify Session 1 changes are intact:** Quick check that catalyst hook gating
-   still works, SEC Edgar test still calls `start()`, xdist tests still pass.
-   Session 2 should not have regressed Session 1.
+1. **Verify DebriefService is initialized in server.py lifespan:** The fix
+   should mirror the pattern from `dev_state.py:~2154`. Check that the
+   constructor arguments match and the database connection is the same one
+   used elsewhere in the lifespan.
+2. **Verify 503 is replaced with 200 + empty result:** The endpoint must return
+   200 for both "service ready with data" and "service ready with no data"
+   cases. 503 should only occur when `debrief_service` is genuinely None
+   (DebriefService failed to initialize).
+3. **Verify Session 1's catalyst_pipeline registration is intact:** The
+   `health_monitor.update_component("catalyst_pipeline", ...)` call added
+   in Session 1 must still be present and undisturbed in `server.py`. Both
+   sessions modify `server.py` — verify they don't interfere.
+4. **Verify frontend empty state (if modified):** If Debrief page components
+   were changed, check that the empty state is visually appropriate — no error
+   indicators, matches design language of other empty states.
+5. **Verify no side effects on other routes:** Check that `server.py` lifespan
+   changes didn't affect initialization of other services. Health endpoint
+   should report the same components as before (plus `catalyst_pipeline` from
+   Session 1).
 6. **Full suite test count:** As the final review, confirm total test count is
-   ≥ 2,529 pytest (expect ~2,532-2,534 with new tests) and ≥ 439 Vitest
-   (Session 1 additions + possible Session 2 additions).
+   ≥ 2,529 pytest and ≥ 446 Vitest (Session 1's baseline + Session 2 additions).
 
 ## Visual Review
 The developer should visually verify:
@@ -63,7 +68,7 @@ The developer should visually verify:
 2. **Empty state displayed:** With no daily summaries available, the page shows
    a friendly empty state message, not an error.
 3. **Dashboard unaffected:** Quick navigation to Dashboard — catalyst gating from
-   Session 1 still works correctly.
+   Session 1 still works correctly (no 503 spam with pipeline disabled).
 4. **Other pages unaffected:** Navigate to Trade Log, Orchestrator, System page.
    No regressions.
 
@@ -74,8 +79,9 @@ Verification conditions:
 
 ## Additional Context
 This is the final session of Sprint 23.9. The cumulative diff (`main..HEAD`)
-covers all 4 DEF items. Pay special attention to the interaction between
-Session 1's catalyst hook gating and Session 2's debrief fix — they both
-touch the frontend and should not conflict. Verify the Debrief page doesn't
-accidentally depend on the pipeline status hook for its own data (debrief
-briefings are from DailySummaryGenerator, not the intelligence pipeline).
+covers all 4 DEF items. Both sessions modify `server.py` — Session 1 added
+`catalyst_pipeline` health monitor registration, Session 2 adds `DebriefService`
+initialization. Verify these don't conflict. The Debrief page uses
+`DebriefService` (database-backed), NOT the intelligence pipeline's
+`BriefingGenerator` — these are separate systems. The debrief endpoint should
+NOT be gated on `isPipelineActive` from Session 1's hook.

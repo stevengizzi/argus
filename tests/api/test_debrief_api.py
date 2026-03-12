@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+import time
+
 import pytest
-from httpx import AsyncClient
+from httpx import ASGITransport, AsyncClient
+
+from argus.api.dependencies import AppState
+from argus.api.server import create_app
 
 
 class TestBriefingsAPI:
@@ -592,3 +597,85 @@ class TestSearchAPI:
         assert data["total_count"] >= 2
         assert len(data["journal"]) >= 1
         assert len(data["documents"]) >= 1
+
+
+class TestDebriefEndpointWiring:
+    """Tests for DEF-043: /debrief/briefings returns 200 vs 503 based on service init."""
+
+    @pytest.mark.asyncio
+    async def test_briefings_returns_503_when_service_is_none(
+        self,
+        test_event_bus,
+        test_trade_logger,
+        test_broker,
+        test_health_monitor,
+        test_risk_manager,
+        test_order_manager,
+        test_clock,
+        test_system_config,
+        jwt_secret: str,
+        auth_headers: dict[str, str],
+    ) -> None:
+        """GET /debrief/briefings returns 503 when debrief_service is None."""
+        state = AppState(
+            event_bus=test_event_bus,
+            trade_logger=test_trade_logger,
+            broker=test_broker,
+            health_monitor=test_health_monitor,
+            risk_manager=test_risk_manager,
+            order_manager=test_order_manager,
+            data_service=None,
+            strategies={},
+            clock=test_clock,
+            config=test_system_config,
+            start_time=time.time(),
+            debrief_service=None,
+        )
+        app = create_app(state)
+        app.state.app_state = state
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://test",
+        ) as client:
+            response = await client.get(
+                "/api/v1/debrief/briefings",
+                headers=auth_headers,
+            )
+        assert response.status_code == 503
+        assert "not available" in response.json()["detail"]
+
+    @pytest.mark.asyncio
+    async def test_briefings_returns_200_empty_when_no_data(
+        self,
+        client: AsyncClient,
+        auth_headers: dict[str, str],
+    ) -> None:
+        """GET /debrief/briefings returns 200 with empty list when service has no data."""
+        response = await client.get(
+            "/api/v1/debrief/briefings",
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["briefings"] == []
+        assert data["total"] == 0
+
+    @pytest.mark.asyncio
+    async def test_briefings_returns_200_with_data(
+        self,
+        client_with_debrief: AsyncClient,
+        auth_headers: dict[str, str],
+    ) -> None:
+        """GET /debrief/briefings returns 200 with briefings when data exists."""
+        response = await client_with_debrief.get(
+            "/api/v1/debrief/briefings",
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["briefings"]) > 0
+        assert data["total"] > 0
+        briefing = data["briefings"][0]
+        assert "id" in briefing
+        assert "date" in briefing
+        assert "briefing_type" in briefing

@@ -121,6 +121,17 @@ def create_app(app_state: AppState) -> FastAPI:
         elif app_state.config and app_state.config.ai and not app_state.config.ai.enabled:
             logger.info("AI services disabled — no API key")
 
+        # Initialize DebriefService (uses same DB as trade_logger)
+        if app_state.debrief_service is None and app_state.trade_logger is not None:
+            try:
+                from argus.analytics.debrief_service import DebriefService
+
+                db = app_state.trade_logger._db
+                app_state.debrief_service = DebriefService(db)
+                logger.info("DebriefService initialized")
+            except Exception as e:
+                logger.error(f"Failed to initialize DebriefService: {e}")
+
         # Initialize intelligence pipeline if enabled
         intelligence_initialized_here = False
         intelligence_components = None

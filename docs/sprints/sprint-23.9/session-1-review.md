@@ -17,7 +17,7 @@ Sprint-Level Regression Checklist, and Sprint-Level Escalation Criteria:
 `docs/sprints/sprint-23.9/review-context.md`
 
 ## Tier 1 Close-Out Report
-[PASTE THE SESSION 1 CLOSE-OUT REPORT HERE]
+Reference `docs/sprints/sprint-23.9/session-1-closeout.md` for the full report.
 
 ## Review Scope
 - Diff to review: `git diff main..HEAD`
