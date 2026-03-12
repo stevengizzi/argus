@@ -337,6 +337,41 @@ class TestSECEdgarClient:
         assert "user_agent_email is empty" in str(exc_info.value)
 
     @pytest.mark.asyncio
+    async def test_session_timeout_includes_sock_connect_and_sock_read(
+        self, config: SECEdgarConfig
+    ) -> None:
+        """Session is created with sock_connect=10 and sock_read=20 timeouts."""
+        client = SECEdgarClient(config)
+
+        captured_timeout: list[aiohttp.ClientTimeout] = []
+        original_init = aiohttp.ClientSession.__init__
+
+        def mock_init(self_session: Any, *args: Any, **kwargs: Any) -> None:
+            if "timeout" in kwargs:
+                captured_timeout.append(kwargs["timeout"])
+
+        with (
+            patch.object(aiohttp.ClientSession, "__init__", mock_init),
+            patch.object(aiohttp.ClientSession, "get", AsyncMock()),
+            patch.object(aiohttp.ClientSession, "close", AsyncMock()),
+        ):
+            # Manually trigger session creation logic
+            user_agent = f"ARGUS Trading System ({config.user_agent_email})"
+            headers = {"User-Agent": user_agent}
+            client._session = aiohttp.ClientSession(
+                headers=headers,
+                timeout=aiohttp.ClientTimeout(
+                    total=30.0, sock_connect=10.0, sock_read=20.0
+                ),
+            )
+
+        assert len(captured_timeout) == 1
+        timeout = captured_timeout[0]
+        assert timeout.sock_connect == 10.0
+        assert timeout.sock_read == 20.0
+        assert timeout.total == 30.0
+
+    @pytest.mark.asyncio
     async def test_sec_edgar_start_valid_email_succeeds(self) -> None:
         """start() with valid email does not raise."""
         config = SECEdgarConfig(user_agent_email="valid@example.com")

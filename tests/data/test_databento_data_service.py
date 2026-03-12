@@ -2084,6 +2084,109 @@ class TestTimeAwareWarmUp:
         assert service._mid_session_mode is True
         assert len(service._symbols_needing_warmup) == 3
 
+    def test_lazy_warmup_clamps_end_to_now_minus_600s(
+        self, mock_databento, event_bus, databento_config, data_config
+    ):
+        """Lazy warm-up clamps end parameter to now - 600s (DEC-326)."""
+        from argus.data.databento_data_service import DatabentoDataService
+
+        # Clock at 11:00 AM ET = 15:00 UTC (well past 9:30 + 10min)
+        clock = FixedClock(datetime(2026, 3, 11, 15, 0, 0, tzinfo=UTC))
+
+        service = DatabentoDataService(
+            event_bus=event_bus,
+            config=databento_config,
+            data_config=data_config,
+            clock=clock,
+        )
+
+        # Set up mid-session mode
+        service._mid_session_mode = True
+        service._symbols_needing_warmup = {"AAPL"}
+
+        # Create mock hist_client to capture the end parameter
+        mock_hist = MagicMock()
+        mock_df = MagicMock()
+        mock_df.to_df.return_value = MagicMock(empty=True)
+        mock_hist.timeseries.get_range.return_value = mock_df
+        service._hist_client = mock_hist
+
+        service._lazy_warmup_symbol("AAPL")
+
+        # Verify get_range was called
+        assert mock_hist.timeseries.get_range.called
+        call_kwargs = mock_hist.timeseries.get_range.call_args
+
+        # The end parameter should be ~10:50 AM ET (11:00 - 10min)
+        end_str = call_kwargs.kwargs.get("end") or call_kwargs[1].get("end")
+        from datetime import datetime as dt
+        from zoneinfo import ZoneInfo
+        # Parse the ISO format end time
+        et_tz = ZoneInfo("America/New_York")
+        end_parsed = dt.fromisoformat(end_str)
+        expected_end = clock.now().astimezone(et_tz) - timedelta(seconds=600)
+        # Should be within a second of expected
+        assert abs((end_parsed - expected_end).total_seconds()) < 1.0
+
+    def test_lazy_warmup_skips_when_clamped_end_before_start(
+        self, mock_databento, event_bus, databento_config, data_config, caplog
+    ):
+        """Lazy warm-up skips symbol when clamped end < start (< 10min into session)."""
+        import logging
+
+        # Clock at 9:35 AM ET = 13:35 UTC (only 5 min into session)
+        # After clamping: end = 9:35 - 10min = 9:25 AM < 9:30 AM start
+        clock = FixedClock(datetime(2026, 3, 11, 13, 35, 0, tzinfo=UTC))
+
+        from argus.data.databento_data_service import DatabentoDataService
+
+        service = DatabentoDataService(
+            event_bus=event_bus,
+            config=databento_config,
+            data_config=data_config,
+            clock=clock,
+        )
+
+        service._mid_session_mode = True
+        service._symbols_needing_warmup = {"AAPL"}
+
+        # Create mock hist_client (should NOT be called)
+        mock_hist = MagicMock()
+        service._hist_client = mock_hist
+
+        with caplog.at_level(logging.DEBUG):
+            service._lazy_warmup_symbol("AAPL")
+
+        # Historical API should NOT have been called
+        assert not mock_hist.timeseries.get_range.called
+        # Should log the skip reason
+        assert "clamped end" in caplog.text
+        assert "skipping" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_premarket_boot_unaffected_by_end_clamping(
+        self, mock_databento, event_bus, databento_config, data_config, premarket_clock, caplog
+    ):
+        """Pre-market boot skips warm-up entirely — end clamping not involved."""
+        import logging
+
+        from argus.data.databento_data_service import DatabentoDataService
+
+        service = DatabentoDataService(
+            event_bus=event_bus,
+            config=databento_config,
+            data_config=data_config,
+            clock=premarket_clock,
+        )
+
+        with caplog.at_level(logging.INFO):
+            await service._warm_up_indicators(["AAPL"])
+
+        # Pre-market skips warm-up entirely (no mid-session mode, no lazy warmup)
+        assert service._mid_session_mode is False
+        assert len(service._symbols_needing_warmup) == 0
+        assert "Pre-market boot" in caplog.text
+
     def test_warmup_state_initialized_correctly(
         self, mock_databento, event_bus, databento_config, data_config
     ):

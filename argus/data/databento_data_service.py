@@ -833,13 +833,27 @@ class DatabentoDataService(DataService):
                 today, dt_time(9, 30, 0), tzinfo=et_tz
             )
 
+            # Databento historical API lags ~10min behind live stream (DEC-326)
+            _HISTORICAL_LAG_BUFFER = timedelta(seconds=600)
+            end_et = now_et - _HISTORICAL_LAG_BUFFER
+
+            if end_et <= market_open_et:
+                logger.debug(
+                    "Lazy warm-up for %s: clamped end (%s) <= start (%s), "
+                    "skipping — indicators will build from live stream",
+                    symbol,
+                    end_et.strftime("%H:%M:%S"),
+                    market_open_et.strftime("%H:%M:%S"),
+                )
+                return
+
             # Fetch historical 1m candles
             data = self._hist_client.timeseries.get_range(
                 dataset=self._config.dataset,
                 symbols=symbol,
                 schema="ohlcv-1m",
                 start=market_open_et.isoformat(),
-                end=now_et.isoformat(),
+                end=end_et.isoformat(),
                 stype_in=self._config.stype_in,
             )
 

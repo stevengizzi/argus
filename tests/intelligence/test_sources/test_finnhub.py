@@ -317,6 +317,27 @@ class TestFinnhubClient:
         await client.stop()
 
     @pytest.mark.asyncio
+    async def test_session_timeout_includes_sock_connect_and_sock_read(
+        self, config: FinnhubConfig
+    ) -> None:
+        """Session is created with sock_connect=10 and sock_read=20 timeouts."""
+        import aiohttp
+
+        client = FinnhubClient(config)
+
+        with patch.dict("os.environ", {"FINNHUB_API_KEY": "test_key"}):
+            await client.start()
+
+        # Inspect the session's timeout
+        assert client._session is not None
+        timeout = client._session.timeout
+        assert timeout.sock_connect == 10.0
+        assert timeout.sock_read == 20.0
+        assert timeout.total == 30.0
+
+        await client.stop()
+
+    @pytest.mark.asyncio
     async def test_error_handling_429_triggers_backoff(
         self, client: FinnhubClient
     ) -> None:

@@ -319,6 +319,107 @@ class TestFMPNewsClient:
         assert client.source_name == "fmp_news"
 
     @pytest.mark.asyncio
+    async def test_session_timeout_includes_sock_connect_and_sock_read(
+        self, config: FMPNewsConfig
+    ) -> None:
+        """Session is created with sock_connect=10 and sock_read=20 timeouts."""
+        client = FMPNewsClient(config)
+
+        with patch.dict("os.environ", {"FMP_API_KEY": "test_key"}):
+            await client.start()
+
+        assert client._session is not None
+        timeout = client._session.timeout
+        assert timeout.sock_connect == 10.0
+        assert timeout.sock_read == 20.0
+        assert timeout.total == 30.0
+
+        await client.stop()
+
+    @pytest.mark.asyncio
+    async def test_circuit_breaker_403_skips_remaining_symbols(
+        self, config: FMPNewsConfig
+    ) -> None:
+        """First 403 sets circuit breaker, remaining symbols are skipped."""
+        # Use press_releases endpoint to test per-symbol circuit breaking
+        config = FMPNewsConfig(
+            api_key_env_var="FMP_API_KEY",
+            endpoints=["press_releases"],
+        )
+        client = FMPNewsClient(config)
+
+        request_urls: list[str] = []
+
+        def mock_get(url: str, params: Any = None) -> _MockContextManager:
+            request_urls.append(url)
+            # Always return 403
+            return _MockContextManager(_create_mock_response(403, None))
+
+        mock_session = MagicMock()
+        mock_session.get = mock_get
+        mock_session.close = AsyncMock()
+
+        with patch.dict("os.environ", {"FMP_API_KEY": "test_key"}):
+            await client.start()
+
+        if client._session:
+            await client._session.close()
+        client._session = mock_session
+
+        result = await client.fetch_catalysts(["AAPL", "MSFT", "TSLA"])
+
+        # Only the first symbol should have made a request (403 trips breaker)
+        assert len(request_urls) == 1
+        assert result == []
+        assert client._disabled_for_cycle is True
+
+        await client.stop()
+
+    @pytest.mark.asyncio
+    async def test_circuit_breaker_resets_between_cycles(
+        self, config: FMPNewsConfig
+    ) -> None:
+        """Circuit breaker resets at start of each fetch_catalysts cycle."""
+        config = FMPNewsConfig(
+            api_key_env_var="FMP_API_KEY",
+            endpoints=["press_releases"],
+        )
+        client = FMPNewsClient(config)
+
+        call_count = 0
+
+        def mock_get(url: str, params: Any = None) -> _MockContextManager:
+            nonlocal call_count
+            call_count += 1
+            if call_count <= 1:
+                # First cycle: 403
+                return _MockContextManager(_create_mock_response(403, None))
+            # Second cycle: 200 with empty list
+            return _MockContextManager(_create_mock_response(200, []))
+
+        mock_session = MagicMock()
+        mock_session.get = mock_get
+        mock_session.close = AsyncMock()
+
+        with patch.dict("os.environ", {"FMP_API_KEY": "test_key"}):
+            await client.start()
+
+        if client._session:
+            await client._session.close()
+        client._session = mock_session
+
+        # Cycle 1: triggers 403
+        result1 = await client.fetch_catalysts(["AAPL"])
+        assert result1 == []
+        assert client._disabled_for_cycle is True
+
+        # Cycle 2: should retry (flag reset)
+        result2 = await client.fetch_catalysts(["AAPL"])
+        assert call_count == 2  # Second call was made (not skipped)
+
+        await client.stop()
+
+    @pytest.mark.asyncio
     async def test_fetch_catalysts_empty_symbols_returns_empty(
         self, client: FMPNewsClient
     ) -> None:

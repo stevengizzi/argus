@@ -96,6 +96,10 @@ class FMPNewsClient(CatalystSource):
     async def fetch_catalysts(self, symbols: list[str]) -> list[CatalystRawItem]:
         """Fetch news and press releases for the given symbols.
 
+        Resets the circuit breaker at the start of each cycle. If a 403
+        (plan restriction) is encountered, remaining symbols are skipped
+        for this cycle only — the next call retries from scratch.
+
         Args:
             symbols: List of stock ticker symbols.
 
@@ -110,19 +114,19 @@ class FMPNewsClient(CatalystSource):
             logger.debug("FMP API key not configured, returning empty")
             return []
 
-        if self._disabled_for_cycle:
-            logger.debug("FMP disabled for this cycle (auth error)")
-            return []
-
         if not symbols:
             return []
+
+        # Reset circuit breaker at start of each poll cycle
+        self._disabled_for_cycle = False
 
         catalysts: list[CatalystRawItem] = []
         seen_hashes: set[str] = set()
         fetch_time = datetime.now(_ET)
+        skipped_count = 0
 
         # Fetch stock news (batched)
-        if "stock_news" in self._config.endpoints:
+        if "stock_news" in self._config.endpoints and not self._disabled_for_cycle:
             news = await self._fetch_stock_news(symbols, fetch_time)
             for item in news:
                 h = compute_headline_hash(item.headline)
@@ -133,12 +137,21 @@ class FMPNewsClient(CatalystSource):
         # Fetch press releases (per symbol)
         if "press_releases" in self._config.endpoints:
             for symbol in symbols:
+                if self._disabled_for_cycle:
+                    skipped_count += 1
+                    continue
                 releases = await self._fetch_press_releases(symbol, fetch_time)
                 for item in releases:
                     h = compute_headline_hash(item.headline)
                     if h not in seen_hashes:
                         seen_hashes.add(h)
                         catalysts.append(item)
+
+        if self._disabled_for_cycle and skipped_count > 0:
+            logger.warning(
+                "FMP news circuit breaker: skipped %d symbols after 403",
+                skipped_count,
+            )
 
         logger.debug(
             "Fetched %d catalysts from FMP news for %d symbols",
@@ -165,6 +178,8 @@ class FMPNewsClient(CatalystSource):
 
         # Batch symbols in groups of 5
         for i in range(0, len(symbols), self._BATCH_SIZE):
+            if self._disabled_for_cycle:
+                break
             batch = symbols[i : i + self._BATCH_SIZE]
             tickers = ",".join(batch)
 
@@ -249,8 +264,16 @@ class FMPNewsClient(CatalystSource):
                             return data
                         return None
 
-                    if response.status in (401, 403):
-                        logger.error("FMP API key invalid (HTTP %d)", response.status)
+                    if response.status == 401:
+                        logger.error("FMP API key invalid (HTTP 401)")
+                        self._disabled_for_cycle = True
+                        return None
+
+                    if response.status == 403:
+                        logger.error(
+                            "FMP API key invalid (HTTP 403) — disabling "
+                            "FMP news source for this poll cycle"
+                        )
                         self._disabled_for_cycle = True
                         return None
 

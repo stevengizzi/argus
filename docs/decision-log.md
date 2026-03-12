@@ -3756,6 +3756,20 @@ Each entry follows this format:
 
 ---
 
+### DEC-328 | Test Suite Tiering — Full vs Scoped Runs in Sprint Cycle
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-12 |
+| **Sprint** | 23.8 (process) |
+| **Decision** | Reduce full test suite runs from 3× per session (pre-flight, close-out, review) to a tiered model. Full suite (`python -m pytest tests/ -x -q -n auto`) runs at: (1) Sprint entry — Session 1 pre-flight, (2) every close-out, (3) final review only. Mid-sprint pre-flights and non-final reviews use scoped test commands targeting only the session's affected modules. Full suite always uses `pytest-xdist` (`-n auto`) for parallel execution. |
+| **Alternatives Considered** | 1. Full suite everywhere (status quo): Rejected — 9 full runs in a 3-session sprint at 7+ minutes each is 63+ minutes of pure test time. Mid-sprint pre-flights are redundant when the previous close-out just confirmed full pass. 2. Skip pre-flight entirely after Session 1: Rejected — scoped pre-flight is cheap and catches issues from manual code changes between sessions. |
+| **Rationale** | In a 3-session sprint, the previous model ran the full suite 9 times. The tiered model runs it 4 times (Session 1 pre-flight, 3 close-outs, final review). Mid-sprint pre-flights are redundant: the previous session's close-out and review confirmed full pass on the same branch. Non-final reviews are redundant: the close-out just ran the full suite. Scoped runs for these checkpoints still catch regressions in the session's affected modules while completing in seconds instead of minutes. `pytest-xdist` with `-n auto` further reduces full suite time via parallel execution across CPU cores. |
+| **Cross-References** | DEC-275 (compaction risk scoring — session efficiency) |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
-*Next DEC: 328*
-*Last updated: 2026-03-12 (Sprint 23.8 pre-sprint — DEC-327)*
+*Next DEC: 329*
+*Last updated: 2026-03-12 (Sprint 23.8 — DEC-327–328)*

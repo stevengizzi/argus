@@ -354,3 +354,4 @@
 ## Phase J — Intelligence Pipeline Live QA Fixes (Sprint 23.8)
 
 - ● **DEC-327**: Intelligence Pipeline Firehose Architecture — deferred to Sprint 24 design; per-symbol polling replaced by watchlist scoping as interim fix
+- ● **DEC-328**: Test Suite Tiering — full suite at sprint entry + close-outs + final review; scoped tests for mid-sprint pre-flights and non-final reviews
