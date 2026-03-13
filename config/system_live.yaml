@@ -112,6 +112,34 @@ catalyst:
     model: null             # null inherits from ai.model (Claude Opus)
     max_symbols: 30
 
+# Quality Engine (Sprint 24 — Setup Quality + Dynamic Sizer)
+# Scores trade setups across 5 dimensions, maps grades to risk tiers.
+quality_engine:
+  enabled: true
+  weights:
+    pattern_strength: 0.30
+    catalyst_quality: 0.25
+    volume_profile: 0.20
+    historical_match: 0.15
+    regime_alignment: 0.10
+  thresholds:
+    a_plus: 90
+    a: 80
+    a_minus: 70
+    b_plus: 60
+    b: 50
+    b_minus: 40
+    c_plus: 30
+  risk_tiers:
+    a_plus: [0.02, 0.03]
+    a: [0.015, 0.02]
+    a_minus: [0.01, 0.015]
+    b_plus: [0.0075, 0.01]
+    b: [0.005, 0.0075]
+    b_minus: [0.0025, 0.005]
+    c_plus: [0.0025, 0.0025]
+  min_grade_to_trade: "C+"
+
 # Universe Manager (Sprint 23 — DEC-263)
 # Broad-universe monitoring with strategy-specific filtering
 # Set enabled: true to activate. Requires FMP_API_KEY.

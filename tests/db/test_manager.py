@@ -26,7 +26,38 @@ class TestDatabaseManager:
         assert "orchestrator_decisions" in table_names
         assert "approval_log" in table_names
         assert "journal_entries" in table_names
+        # Quality Engine (Sprint 24)
+        assert "quality_history" in table_names
         # Note: system_health is deferred to Step 10
+
+    async def test_quality_history_table_created(self, db: DatabaseManager) -> None:
+        """quality_history table has expected columns and indexes."""
+        # Verify columns via pragma
+        cols = await db.fetch_all("PRAGMA table_info(quality_history)")
+        col_names = [c["name"] for c in cols]
+        expected_cols = [
+            "id", "symbol", "strategy_id", "scored_at",
+            "pattern_strength", "catalyst_quality", "volume_profile",
+            "historical_match", "regime_alignment",
+            "composite_score", "grade", "risk_tier",
+            "entry_price", "stop_price", "calculated_shares",
+            "signal_context",
+            "outcome_trade_id", "outcome_realized_pnl", "outcome_r_multiple",
+            "created_at",
+        ]
+        for col in expected_cols:
+            assert col in col_names, f"Missing column: {col}"
+
+        # Verify indexes exist
+        indexes = await db.fetch_all(
+            "SELECT name FROM sqlite_master WHERE type='index' "
+            "AND tbl_name='quality_history'"
+        )
+        idx_names = [i["name"] for i in indexes]
+        assert "idx_quality_history_symbol" in idx_names
+        assert "idx_quality_history_strategy" in idx_names
+        assert "idx_quality_history_scored_at" in idx_names
+        assert "idx_quality_history_grade" in idx_names
 
     async def test_execute_and_fetch(self, db: DatabaseManager) -> None:
         """execute() and fetch methods work correctly."""

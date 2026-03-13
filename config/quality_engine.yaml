@@ -1,0 +1,39 @@
+# Quality Engine Configuration (Sprint 24)
+# Scores trade setups across 5 dimensions and maps grades to risk tiers.
+#
+# NOTE: With Historical Match stubbed at 50 (Sprint 24), effective score range
+# is ~7.5 to ~92.5. Grade thresholds are PROVISIONAL — recalibrate after
+# Sprint 28 when historical match has real data.
+
+enabled: true
+
+# Per-dimension weights (must sum to 1.0)
+weights:
+  pattern_strength: 0.30
+  catalyst_quality: 0.25
+  volume_profile: 0.20
+  historical_match: 0.15
+  regime_alignment: 0.10
+
+# Score-to-grade thresholds (inclusive lower bounds, strictly descending)
+thresholds:
+  a_plus: 90
+  a: 80
+  a_minus: 70
+  b_plus: 60
+  b: 50
+  b_minus: 40
+  c_plus: 30
+
+# Risk percentage ranges per grade for dynamic position sizing [min, max]
+risk_tiers:
+  a_plus: [0.02, 0.03]
+  a: [0.015, 0.02]
+  a_minus: [0.01, 0.015]
+  b_plus: [0.0075, 0.01]
+  b: [0.005, 0.0075]
+  b_minus: [0.0025, 0.005]
+  c_plus: [0.0025, 0.0025]
+
+# Minimum quality grade required to place a trade
+min_grade_to_trade: "C+"

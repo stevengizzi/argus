@@ -265,6 +265,7 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 | ~~DEF-046~~ | ~~test_main.py xdist failures (2 named tests)~~ | ~~Sprint 23.9~~ | **CLOSED** (Sprint 23.9). Root cause: `load_dotenv()` in `ArgusSystem.__init__()` re-loaded `.env` after monkeypatch, `AIConfig.auto_detect_enabled` overrode `enabled=False`. Fix: empty `ANTHROPIC_API_KEY` env var + explicit `ai: enabled: false`. 4 additional failures tracked as DEF-048. |
 | DEF-047 | Bulk catalyst endpoint | Unscheduled | Consolidate per-symbol catalyst GET requests into single batch request. Currently one request per watchlist symbol when pipeline is active. Priority: LOW. |
 | DEF-048 | Additional test_main.py xdist failures | Unscheduled | 4 more tests fail under `-n auto` (same `load_dotenv`/`AIConfig` race as DEF-046): `test_both_strategies_created`, `test_multi_strategy_health_status`, `test_candle_event_routing_subscribed`, `test_12_phase_startup_creates_orchestrator`. Pre-existing on clean HEAD. Same fix approach as DEF-046. Priority: LOW. |
+| DEF-049 | test_orchestrator_uses_strategies_from_registry isolation failure | Unscheduled | `test_orchestrator_uses_strategies_from_registry` in tests/test_main.py fails when run in isolation but passes in full suite. Pre-existing test isolation issue. Discovered Sprint 24 S1. Priority: LOW. |
 
 ## Reference
 

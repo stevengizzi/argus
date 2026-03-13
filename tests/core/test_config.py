@@ -33,6 +33,7 @@ from argus.core.config import (
     load_vwap_reclaim_config,
     load_yaml_file,
 )
+from argus.intelligence.config import QualityEngineConfig
 
 FIXTURES_DIR = Path(__file__).parent.parent / "fixtures"
 
@@ -1047,3 +1048,119 @@ log_level: INFO
         assert "universe_manager" in raw_yaml, (
             "universe_manager section missing from system_live.yaml"
         )
+
+
+class TestQualityEngineConfigWiring:
+    """Tests for QualityEngineConfig integration into SystemConfig (Sprint 24 S5b)."""
+
+    def test_system_config_loads_quality_engine(self) -> None:
+        """SystemConfig with quality_engine section parses correctly."""
+        config = SystemConfig(
+            quality_engine={
+                "enabled": True,
+                "weights": {
+                    "pattern_strength": 0.30,
+                    "catalyst_quality": 0.25,
+                    "volume_profile": 0.20,
+                    "historical_match": 0.15,
+                    "regime_alignment": 0.10,
+                },
+                "thresholds": {"a_plus": 90, "a": 80, "a_minus": 70,
+                               "b_plus": 60, "b": 50, "b_minus": 40, "c_plus": 30},
+                "min_grade_to_trade": "B",
+            }
+        )
+        assert config.quality_engine.enabled is True
+        assert config.quality_engine.weights.pattern_strength == 0.30
+        assert config.quality_engine.thresholds.a_plus == 90
+        assert config.quality_engine.min_grade_to_trade == "B"
+
+    def test_system_config_default_quality_engine(self) -> None:
+        """Missing quality_engine section yields valid defaults (enabled=True)."""
+        config = SystemConfig()
+        assert isinstance(config.quality_engine, QualityEngineConfig)
+        assert config.quality_engine.enabled is True
+        assert config.quality_engine.min_grade_to_trade == "C+"
+
+    def test_quality_engine_yaml_keys_match_model(self) -> None:
+        """All keys in quality_engine.yaml map to QualityEngineConfig fields."""
+        yaml_path = Path("config/quality_engine.yaml")
+        if not yaml_path.exists():
+            pytest.skip("quality_engine.yaml not present")
+
+        raw = yaml.safe_load(yaml_path.read_text())
+
+        # Top-level keys must all be valid QualityEngineConfig fields
+        model_fields = set(QualityEngineConfig.model_fields.keys())
+        yaml_keys = set(raw.keys())
+        extra = yaml_keys - model_fields
+        assert not extra, f"YAML has keys not in model: {extra}"
+        # All model fields should be present in YAML
+        missing = model_fields - yaml_keys
+        assert not missing, f"Model fields missing from YAML: {missing}"
+
+    def test_quality_engine_yaml_loads_as_config(self) -> None:
+        """quality_engine.yaml can be loaded as a valid QualityEngineConfig."""
+        yaml_path = Path("config/quality_engine.yaml")
+        if not yaml_path.exists():
+            pytest.skip("quality_engine.yaml not present")
+
+        raw = yaml.safe_load(yaml_path.read_text())
+        config = QualityEngineConfig(**raw)
+        assert config.enabled is True
+        assert abs(sum([
+            config.weights.pattern_strength,
+            config.weights.catalyst_quality,
+            config.weights.volume_profile,
+            config.weights.historical_match,
+            config.weights.regime_alignment,
+        ]) - 1.0) < 0.001
+
+    def test_system_yaml_has_quality_engine(self) -> None:
+        """config/system.yaml includes quality_engine section and parses."""
+        system_path = Path("config/system.yaml")
+        if not system_path.exists():
+            pytest.skip("system.yaml not present")
+
+        config = load_config(Path("config"))
+        assert hasattr(config.system, "quality_engine")
+        assert isinstance(config.system.quality_engine, QualityEngineConfig)
+        assert config.system.quality_engine.enabled is True
+
+        raw_yaml = yaml.safe_load(system_path.read_text())
+        assert "quality_engine" in raw_yaml, (
+            "quality_engine section missing from system.yaml"
+        )
+
+    def test_system_live_yaml_has_quality_engine(self) -> None:
+        """config/system_live.yaml includes quality_engine section and parses."""
+        system_live_path = Path("config/system_live.yaml")
+        if not system_live_path.exists():
+            pytest.skip("system_live.yaml not present")
+
+        config = load_config(Path("config"), system_config_file=system_live_path)
+        assert hasattr(config.system, "quality_engine")
+        assert isinstance(config.system.quality_engine, QualityEngineConfig)
+        assert config.system.quality_engine.enabled is True
+
+        raw_yaml = yaml.safe_load(system_live_path.read_text())
+        assert "quality_engine" in raw_yaml, (
+            "quality_engine section missing from system_live.yaml"
+        )
+
+    def test_quality_engine_disabled_config(self) -> None:
+        """quality_engine can be explicitly disabled."""
+        config = SystemConfig(quality_engine={"enabled": False})
+        assert config.quality_engine.enabled is False
+
+    def test_quality_engine_risk_tiers_loaded_from_yaml(self) -> None:
+        """Risk tiers from YAML match expected values."""
+        yaml_path = Path("config/quality_engine.yaml")
+        if not yaml_path.exists():
+            pytest.skip("quality_engine.yaml not present")
+
+        raw = yaml.safe_load(yaml_path.read_text())
+        config = QualityEngineConfig(**raw)
+        assert config.risk_tiers.a_plus == [0.02, 0.03]
+        assert config.risk_tiers.b == [0.005, 0.0075]
+        assert config.risk_tiers.c_plus == [0.0025, 0.0025]

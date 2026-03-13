@@ -169,7 +169,7 @@ class SignalEvent(Event):
     rationale: str = ""
     time_stop_seconds: int | None = None
     pattern_strength: float = 50.0  # 0-100, strategy-assessed signal quality
-    signal_context: dict = field(default_factory=dict)  # Strategy-specific metadata
+    signal_context: dict[str, object] = field(default_factory=dict)  # Strategy-specific metadata
     quality_score: float = 0.0  # Populated by Quality Engine after scoring
     quality_grade: str = ""  # Populated by Quality Engine after scoring
 
@@ -470,5 +470,5 @@ class QualitySignalEvent(Event):
     score: float = 0.0
     grade: str = ""
     risk_tier: str = ""
-    components: dict = field(default_factory=dict)
+    components: dict[str, object] = field(default_factory=dict)
     rationale: str = ""

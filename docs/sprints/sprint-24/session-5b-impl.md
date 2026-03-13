@@ -5,6 +5,34 @@
 2. Scoped test: `python -m pytest tests/core/test_config.py tests/db/ -x -q`
 3. Branch: `sprint-24`
 
+## Pre-Flight Fixes (from Work Journal carry-forwards)
+
+Complete these three items BEFORE starting the session's main work. They are small,
+isolated, and have no dependencies on future sessions.
+
+### Fix A: Add pre-existing test failure to CLAUDE.md DEF list
+In `CLAUDE.md`, add to the DEF (deferred) items list:
+```
+DEF-049: test_orchestrator_uses_strategies_from_registry in tests/test_main.py fails
+when run in isolation but passes in full suite. Pre-existing test isolation issue.
+Discovered Sprint 24 S1. (Source: S1 review, INFO finding)
+```
+
+### Fix B: Tighten bare `dict` type annotations
+Three files need `dict` → `dict[str, object]`:
+- `argus/core/events.py`: `signal_context: dict` → `signal_context: dict[str, object]`
+  on SignalEvent AND `components: dict` → `components: dict[str, object]` on
+  QualitySignalEvent
+- `argus/intelligence/quality_engine.py`: `components: dict` → `components: dict[str, float]`
+  on SetupQuality (this one is specifically `str, float` since all component values are floats)
+
+### Fix C: Remove unused import
+In `argus/intelligence/position_sizer.py`, remove the unused `VALID_GRADES` import.
+
+### Verification
+After all three fixes, run: `python -m pytest tests/core/test_events.py tests/intelligence/test_quality_engine.py tests/intelligence/test_position_sizer.py -x -q`
+All must pass with zero changes to test files.
+
 ## Objective
 Wire QualityEngineConfig into SystemConfig. Create quality_engine.yaml. Add quality_history table. Update both system YAML files.
 

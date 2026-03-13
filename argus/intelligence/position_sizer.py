@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 
-from argus.intelligence.config import VALID_GRADES, QualityEngineConfig
+from argus.intelligence.config import QualityEngineConfig
 from argus.intelligence.quality_engine import SetupQuality
 
 logger = logging.getLogger(__name__)

@@ -23,7 +23,7 @@ class SetupQuality:
     score: float
     grade: str
     risk_tier: str
-    components: dict
+    components: dict[str, float]
     rationale: str
 
 

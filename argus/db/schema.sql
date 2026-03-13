@@ -302,6 +302,49 @@ CREATE INDEX IF NOT EXISTS idx_documents_category ON documents(category);
 CREATE INDEX IF NOT EXISTS idx_documents_created ON documents(created_at);
 
 -- ---------------------------------------------------------------------------
+-- Quality History Table
+-- ---------------------------------------------------------------------------
+-- Full component breakdown per scored signal (Sprint 24 — Quality Engine)
+CREATE TABLE IF NOT EXISTS quality_history (
+    id TEXT PRIMARY KEY,                    -- ULID
+    symbol TEXT NOT NULL,
+    strategy_id TEXT NOT NULL,
+    scored_at TEXT NOT NULL,                -- ISO-8601 ET timestamp (DEC-276)
+
+    -- Component dimension scores (each 0–100)
+    pattern_strength REAL NOT NULL,
+    catalyst_quality REAL NOT NULL,
+    volume_profile REAL NOT NULL,
+    historical_match REAL NOT NULL,
+    regime_alignment REAL NOT NULL,
+
+    -- Composite score and grade
+    composite_score REAL NOT NULL,
+    grade TEXT NOT NULL,
+    risk_tier TEXT NOT NULL,
+
+    -- Execution parameters
+    entry_price REAL NOT NULL,
+    stop_price REAL NOT NULL,
+    calculated_shares INTEGER NOT NULL,
+
+    -- Context
+    signal_context TEXT,                    -- JSON dict with strategy-specific factors
+
+    -- Outcome columns (NULL until trade closes)
+    outcome_trade_id TEXT,
+    outcome_realized_pnl REAL,
+    outcome_r_multiple REAL,
+
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_quality_history_symbol ON quality_history(symbol);
+CREATE INDEX IF NOT EXISTS idx_quality_history_strategy ON quality_history(strategy_id);
+CREATE INDEX IF NOT EXISTS idx_quality_history_scored_at ON quality_history(scored_at);
+CREATE INDEX IF NOT EXISTS idx_quality_history_grade ON quality_history(grade);
+
+-- ---------------------------------------------------------------------------
 -- System Health Table
 -- ---------------------------------------------------------------------------
 -- NOTE: Deferred to Step 10 (System Health Monitoring)
