@@ -14,6 +14,7 @@ Tests for four-strategy scenarios including:
 from __future__ import annotations
 
 import asyncio
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
@@ -543,17 +544,32 @@ class TestSequentialFlows:
         await risk_manager.initialize()
         await risk_manager.reset_daily_state()
 
+        # Sprint 24 S6a: Legacy sizing (strategies emit share_count=0,
+        # pipeline fills before RM). Apply legacy sizing for integration tests.
+        def legacy_size(sig: SignalEvent, strategy: object) -> SignalEvent:
+            risk_per_share = abs(sig.entry_price - sig.stop_price)
+            if risk_per_share > 0 and sig.share_count == 0:
+                shares = int(
+                    strategy.allocated_capital
+                    * strategy.config.risk_limits.max_loss_per_trade_pct
+                    / risk_per_share
+                )
+                return replace(sig, share_count=shares)
+            return sig
+
         # All three signals should pass risk check
         broker.set_price("AAPL", 101.5)
-        orb_result = await risk_manager.evaluate_signal(orb_signal)
+        orb_result = await risk_manager.evaluate_signal(legacy_size(orb_signal, orb_strategy))
         assert isinstance(orb_result, OrderApprovedEvent)
 
         broker.set_price("TSLA", 100.2)
-        vwap_result = await risk_manager.evaluate_signal(vwap_signal)
+        vwap_result = await risk_manager.evaluate_signal(legacy_size(vwap_signal, vwap_strategy))
         assert isinstance(vwap_result, OrderApprovedEvent)
 
         broker.set_price("NVDA", 101.2)
-        afternoon_result = await risk_manager.evaluate_signal(afternoon_signal)
+        afternoon_result = await risk_manager.evaluate_signal(
+            legacy_size(afternoon_signal, afternoon_strategy)
+        )
         assert isinstance(afternoon_result, OrderApprovedEvent)
 
         await order_manager.stop()

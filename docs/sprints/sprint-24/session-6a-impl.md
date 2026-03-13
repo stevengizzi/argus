@@ -41,6 +41,12 @@ Uses aiosqlite via db_manager reference. Writes all columns from schema. Uses UL
 
 Add `db_manager` parameter to `__init__` (optional, None if not wiring DB).
 
+### Post-Wiring Verification
+Restore `test_full_pipeline_scanner_to_signal` in tests/test_integration_sprint3.py:
+change `assert signal.share_count == 0` back to `assert signal.share_count > 0`.
+This test must pass — it confirms the Dynamic Sizer is populating share_count
+through the full pipeline. If it fails, the wiring is incomplete.
+
 ## Constraints
 - Do NOT modify: `argus/core/orchestrator.py`, `argus/execution/order_manager.py`, `argus/analytics/trade_logger.py`, `argus/backtest/*`
 - Risk Manager: ONLY add check 0. No other modifications to evaluate_signal().

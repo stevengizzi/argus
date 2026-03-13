@@ -1,19 +1,32 @@
 """Setup quality scoring engine for the ARGUS intelligence layer.
 
 Stateless, synchronous scorer. All inputs passed as arguments — no IO.
+Optionally records quality history to the database.
 
-Sprint 24, Session 4.
+Sprint 24, Sessions 4 + 6a.
 """
 
 from __future__ import annotations
 
+import json
+import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING
+from zoneinfo import ZoneInfo
 
 from argus.core.events import SignalEvent
+from argus.core.ids import generate_id
 from argus.core.regime import MarketRegime
 from argus.intelligence.config import QualityEngineConfig
 from argus.intelligence.models import ClassifiedCatalyst
+
+if TYPE_CHECKING:
+    from argus.db.manager import DatabaseManager
+
+logger = logging.getLogger(__name__)
+
+_ET = ZoneInfo("America/New_York")
 
 
 @dataclass(frozen=True)
@@ -30,8 +43,11 @@ class SetupQuality:
 class SetupQualityEngine:
     """Scores trade setups across five quality dimensions."""
 
-    def __init__(self, config: QualityEngineConfig) -> None:
+    def __init__(
+        self, config: QualityEngineConfig, db_manager: DatabaseManager | None = None
+    ) -> None:
         self._config = config
+        self._db = db_manager
 
     def score_setup(
         self,
@@ -134,4 +150,55 @@ class SetupQualityEngine:
         return (
             f"PS:{ps:.0f} CQ:{cq:.0f} VP:{vp:.0f} HM:{hm:.0f} RA:{ra:.0f}"
             f" \u2192 Score:{score} ({grade})"
+        )
+
+    async def record_quality_history(
+        self, signal: SignalEvent, quality: SetupQuality, shares: int = 0
+    ) -> None:
+        """Persist quality scoring result to quality_history table.
+
+        Records the full component breakdown, composite score, grade, and
+        execution parameters for every scored signal — whether traded or not.
+
+        Args:
+            signal: The scored SignalEvent.
+            quality: The SetupQuality result from score_setup().
+            shares: Calculated share count (0 if filtered/skipped).
+        """
+        if self._db is None:
+            return
+
+        scored_at = datetime.now(_ET).isoformat()
+        row_id = generate_id()
+        context_json = json.dumps(signal.signal_context) if signal.signal_context else None
+
+        await self._db.execute(
+            """
+            INSERT INTO quality_history (
+                id, symbol, strategy_id, scored_at,
+                pattern_strength, catalyst_quality, volume_profile,
+                historical_match, regime_alignment,
+                composite_score, grade, risk_tier,
+                entry_price, stop_price, calculated_shares,
+                signal_context
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                row_id,
+                signal.symbol,
+                signal.strategy_id,
+                scored_at,
+                quality.components["pattern_strength"],
+                quality.components["catalyst_quality"],
+                quality.components["volume_profile"],
+                quality.components["historical_match"],
+                quality.components["regime_alignment"],
+                quality.score,
+                quality.grade,
+                quality.risk_tier,
+                signal.entry_price,
+                signal.stop_price,
+                shares,
+                context_json,
+            ),
         )

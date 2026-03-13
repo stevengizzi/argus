@@ -126,6 +126,58 @@ class TestPDTTracker:
         assert remaining == 3  # Old trade pruned
 
 
+class TestRiskManagerCheck0ShareCount:
+    """Tests for check 0: zero/negative share count rejection (Sprint 24)."""
+
+    @pytest.mark.asyncio
+    async def test_risk_manager_rejects_zero_shares(self) -> None:
+        """SignalEvent(share_count=0) → OrderRejectedEvent."""
+        broker = SimulatedBroker(initial_cash=100_000)
+        await broker.connect()
+        bus = EventBus()
+        config = make_risk_config()
+        clock = FixedClock(datetime(2026, 3, 13, 15, 0, 0, tzinfo=UTC))
+        rm = RiskManager(config=config, broker=broker, event_bus=bus, clock=clock)
+
+        signal = make_signal(share_count=0)
+        result = await rm.evaluate_signal(signal)
+
+        assert isinstance(result, OrderRejectedEvent)
+        assert "zero or negative" in result.reason
+
+    @pytest.mark.asyncio
+    async def test_risk_manager_rejects_negative_shares(self) -> None:
+        """share_count=-1 → rejected."""
+        broker = SimulatedBroker(initial_cash=100_000)
+        await broker.connect()
+        bus = EventBus()
+        config = make_risk_config()
+        clock = FixedClock(datetime(2026, 3, 13, 15, 0, 0, tzinfo=UTC))
+        rm = RiskManager(config=config, broker=broker, event_bus=bus, clock=clock)
+
+        signal = make_signal(share_count=-1)
+        result = await rm.evaluate_signal(signal)
+
+        assert isinstance(result, OrderRejectedEvent)
+        assert "zero or negative" in result.reason
+
+    @pytest.mark.asyncio
+    async def test_risk_manager_existing_checks_unchanged(self) -> None:
+        """Positive share_count → proceeds to check 1+ (approved if all checks pass)."""
+        broker = SimulatedBroker(initial_cash=100_000)
+        await broker.connect()
+        bus = EventBus()
+        config = make_risk_config()
+        clock = FixedClock(datetime(2026, 3, 13, 15, 0, 0, tzinfo=UTC))
+        rm = RiskManager(config=config, broker=broker, event_bus=bus, clock=clock)
+
+        signal = make_signal(share_count=100)
+        result = await rm.evaluate_signal(signal)
+
+        # Should proceed past check 0 and get approved (all other checks pass)
+        assert isinstance(result, OrderApprovedEvent)
+
+
 class TestRiskManagerApproval:
     """Tests for signal approval scenarios."""
 

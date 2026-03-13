@@ -14,6 +14,7 @@ Tests for three-strategy scenarios including:
 from __future__ import annotations
 
 import asyncio
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
@@ -813,14 +814,21 @@ class TestVwapReclaimStateMachine:
         assert signal is not None
         assert vwap_strategy._get_symbol_state("AAPL").state == VwapState.ENTERED
 
+        # Sprint 24 S6a: Legacy sizing (pipeline fills share_count before RM)
+        risk_per_share = abs(signal.entry_price - signal.stop_price)
+        if risk_per_share > 0:
+            shares = int(
+                vwap_strategy.allocated_capital
+                * vwap_strategy.config.risk_limits.max_loss_per_trade_pct
+                / risk_per_share
+            )
+            signal = replace(signal, share_count=shares)
+
         # Risk approval
         result = await risk_manager.evaluate_signal(signal)
         assert isinstance(result, OrderApprovedEvent)
-
-        # Sprint 24 S2: share_count=0 (Dynamic Sizer deferred to S6a).
-        # Order Manager will skip order placement until sizer fills share count.
         assert result.signal is not None
-        assert result.signal.share_count == 0
+        assert result.signal.share_count > 0
 
         await order_manager.stop()
 

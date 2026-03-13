@@ -23,6 +23,7 @@ import logging
 import os
 import signal
 import time
+from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -49,7 +50,7 @@ from argus.core.config import (
     load_yaml_file,
 )
 from argus.core.event_bus import EventBus
-from argus.core.events import CandleEvent, PositionClosedEvent, ShutdownRequestedEvent
+from argus.core.events import CandleEvent, PositionClosedEvent, QualitySignalEvent, ShutdownRequestedEvent
 from argus.core.health import ComponentStatus, HealthMonitor
 from argus.core.logging_config import setup_logging
 from argus.core.orchestrator import Orchestrator
@@ -66,6 +67,9 @@ from argus.ai.actions import ActionManager
 from argus.ai.conversations import ConversationManager
 from argus.ai.usage import UsageTracker
 from argus.db.manager import DatabaseManager
+from argus.core.regime import MarketRegime
+from argus.intelligence.position_sizer import DynamicPositionSizer
+from argus.intelligence.quality_engine import SetupQualityEngine
 from argus.execution.alpaca_broker import AlpacaBroker
 from argus.execution.order_manager import OrderManager
 from argus.strategies.afternoon_momentum import AfternoonMomentumStrategy
@@ -127,6 +131,10 @@ class ArgusSystem:
         self._cached_watchlist: list = []  # Scanner results for API watchlist endpoint
         self._universe_manager: UniverseManager | None = None  # Sprint 23: Universe Manager
         self._strategies: dict = {}  # Strategy dict for candle routing
+        # Sprint 24: Quality pipeline components (initialized after DB + config)
+        self._quality_engine: SetupQualityEngine | None = None
+        self._position_sizer: DynamicPositionSizer | None = None
+        self._catalyst_storage: object | None = None  # CatalystStorage, if pipeline active
 
     async def start(self) -> None:
         """Initialize and start all components in dependency order.
@@ -534,6 +542,29 @@ class ArgusSystem:
         # Wire Risk Manager to Order Manager for cross-strategy checks
         self._risk_manager.set_order_manager(self._order_manager)
 
+        # --- Phase 10.25: Quality Pipeline (Sprint 24) ---
+        qe_config = config.system.quality_engine
+        if qe_config.enabled and config.system.broker_source != BrokerSource.SIMULATED:
+            self._quality_engine = SetupQualityEngine(qe_config, db_manager=self._db)
+            self._position_sizer = DynamicPositionSizer(qe_config)
+            # Create CatalystStorage for quality lookups (catalyst data)
+            if self._catalyst_storage is None:
+                try:
+                    from argus.intelligence.storage import CatalystStorage
+
+                    db_path = Path(config.system.data_dir) / "argus.db"
+                    self._catalyst_storage = CatalystStorage(str(db_path))
+                    await self._catalyst_storage.initialize()
+                except Exception:
+                    logger.debug("CatalystStorage not available for quality pipeline")
+            logger.info("Quality pipeline initialized (engine + sizer)")
+        else:
+            logger.info(
+                "Quality pipeline disabled (enabled=%s, broker=%s)",
+                qe_config.enabled,
+                config.system.broker_source,
+            )
+
         # --- Phase 10.5: Event Routing ---
         # Subscribe to CandleEvents and route to active strategies (DEC-125)
         self._event_bus.subscribe(CandleEvent, self._on_candle_for_strategies)
@@ -681,8 +712,8 @@ class ArgusSystem:
            of which strategies should receive this symbol.
         2. Legacy path: Iterates all strategies, checks watchlist membership.
 
-        If a strategy emits a SignalEvent, it's sent through the Risk Manager
-        for approval and the result is published to the Event Bus.
+        If a strategy emits a SignalEvent, it is processed through the quality
+        pipeline (if active) or legacy sizing, then sent to the Risk Manager.
 
         Args:
             event: The candle event to route.
@@ -698,8 +729,7 @@ class ArgusSystem:
                 if strategy is not None and strategy.is_active:
                     signal = await strategy.on_candle(event)
                     if signal is not None:
-                        result = await self._risk_manager.evaluate_signal(signal)
-                        await self._event_bus.publish(result)
+                        await self._process_signal(signal, strategy)
         else:
             # Legacy path: iterate all strategies, check watchlist
             if self._orchestrator is None:
@@ -712,8 +742,136 @@ class ArgusSystem:
 
                 signal = await strategy.on_candle(event)
                 if signal is not None:
-                    result = await self._risk_manager.evaluate_signal(signal)
-                    await self._event_bus.publish(result)
+                    await self._process_signal(signal, strategy)
+
+    async def _process_signal(self, signal: "SignalEvent", strategy: object) -> None:
+        """Run quality pipeline (or legacy sizing) then evaluate via Risk Manager.
+
+        Bypass conditions (legacy sizing):
+        - BrokerSource.SIMULATED (backtesting)
+        - quality_engine.enabled = false
+
+        Args:
+            signal: The SignalEvent emitted by a strategy.
+            strategy: The strategy instance that emitted the signal.
+        """
+        config = self._config
+        bypass = (
+            config.system.broker_source == BrokerSource.SIMULATED
+            or not config.system.quality_engine.enabled
+            or self._quality_engine is None
+        )
+
+        if bypass:
+            # Legacy sizing: compute shares from strategy config
+            risk_per_share = abs(signal.entry_price - signal.stop_price)
+            if risk_per_share > 0:
+                shares = int(
+                    strategy.allocated_capital
+                    * strategy.config.risk_limits.max_loss_per_trade_pct
+                    / risk_per_share
+                )
+            else:
+                shares = 0
+            signal = replace(signal, share_count=shares)
+        else:
+            # Quality pipeline: score → grade → size → enrich signal
+            catalysts = []
+            if self._catalyst_storage is not None:
+                try:
+                    catalysts = await self._catalyst_storage.get_catalysts_by_symbol(
+                        signal.symbol, limit=10
+                    )
+                except Exception:
+                    logger.debug("Catalyst lookup failed for %s", signal.symbol)
+
+            regime = (
+                self._orchestrator.current_regime
+                if self._orchestrator is not None
+                else MarketRegime.RANGE_BOUND
+            )
+
+            quality = self._quality_engine.score_setup(
+                signal=signal,
+                catalysts=catalysts,
+                rvol=None,
+                regime=regime,
+                allowed_regimes=[],
+            )
+
+            # Check minimum grade
+            min_grade = config.system.quality_engine.min_grade_to_trade
+            if not self._grade_meets_minimum(quality.grade, min_grade):
+                logger.info(
+                    "Signal filtered: %s %s grade=%s below min=%s",
+                    signal.symbol,
+                    signal.strategy_id,
+                    quality.grade,
+                    min_grade,
+                )
+                await self._quality_engine.record_quality_history(signal, quality, shares=0)
+                return
+
+            # Dynamic position sizing
+            account = await self._broker.get_account()
+            shares = self._position_sizer.calculate_shares(
+                quality=quality,
+                entry_price=signal.entry_price,
+                stop_price=signal.stop_price,
+                allocated_capital=strategy.allocated_capital,
+                buying_power=account.buying_power if account else 0.0,
+            )
+
+            if shares <= 0:
+                logger.info(
+                    "Signal skipped: %s %s sizer returned 0 shares",
+                    signal.symbol,
+                    signal.strategy_id,
+                )
+                await self._quality_engine.record_quality_history(signal, quality, shares=0)
+                return
+
+            # Record with actual shares
+            await self._quality_engine.record_quality_history(signal, quality, shares=shares)
+
+            # Enrich signal with quality data and share count
+            signal = replace(
+                signal,
+                share_count=shares,
+                quality_score=quality.score,
+                quality_grade=quality.grade,
+            )
+
+            # Publish informational QualitySignalEvent for UI consumers
+            await self._event_bus.publish(
+                QualitySignalEvent(
+                    symbol=signal.symbol,
+                    strategy_id=signal.strategy_id,
+                    score=quality.score,
+                    grade=quality.grade,
+                    risk_tier=quality.risk_tier,
+                    components=quality.components,
+                    rationale=quality.rationale,
+                )
+            )
+
+        result = await self._risk_manager.evaluate_signal(signal)
+        await self._event_bus.publish(result)
+
+    def _grade_meets_minimum(self, grade: str, min_grade: str) -> bool:
+        """Check if a quality grade meets the minimum threshold.
+
+        Args:
+            grade: The actual grade (e.g. "B+").
+            min_grade: The minimum required grade (e.g. "C+").
+
+        Returns:
+            True if grade >= min_grade in the grade ordering.
+        """
+        from argus.intelligence.config import VALID_GRADES
+
+        grade_order = {g: i for i, g in enumerate(reversed(VALID_GRADES))}
+        return grade_order.get(grade, -1) >= grade_order.get(min_grade, 0)
 
     async def _on_position_closed_for_strategies(self, event: PositionClosedEvent) -> None:
         """Route PositionClosedEvents to originating strategy.

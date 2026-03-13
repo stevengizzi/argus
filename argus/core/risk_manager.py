@@ -223,6 +223,15 @@ class RiskManager:
         Returns:
             OrderApprovedEvent (possibly with modifications) or OrderRejectedEvent.
         """
+        # Check 0: Defensive guard against zero share count (Sprint 24)
+        if signal.share_count <= 0:
+            logger.warning(
+                "Signal rejected: share_count=%d (zero or negative)", signal.share_count
+            )
+            return OrderRejectedEvent(
+                signal=signal, reason="Invalid share count: zero or negative"
+            )
+
         # 1. Circuit breaker check
         if self._circuit_breaker_active:
             logger.warning(

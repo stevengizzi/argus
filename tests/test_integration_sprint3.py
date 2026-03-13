@@ -8,6 +8,7 @@ End-to-end integration test wiring together all Sprint 1-3 components:
 - SimulatedBroker → receives approved order
 """
 
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -242,6 +243,16 @@ class TestSprint3Integration:
         async def handle_candle(candle: CandleEvent) -> None:
             signal = await strategy.on_candle(candle)
             if signal is not None:
+                # Legacy sizing (Sprint 24: strategies emit share_count=0,
+                # Dynamic Sizer fills it in main.py pipeline)
+                risk_per_share = abs(signal.entry_price - signal.stop_price)
+                if risk_per_share > 0:
+                    shares = int(
+                        strategy.allocated_capital
+                        * strategy.config.risk_limits.max_loss_per_trade_pct
+                        / risk_per_share
+                    )
+                    signal = replace(signal, share_count=shares)
                 result = await risk_manager.evaluate_signal(signal)
                 if isinstance(result, OrderApprovedEvent):
                     approvals.append(result)
