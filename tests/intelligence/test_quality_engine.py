@@ -8,7 +8,7 @@ import pytest
 
 from argus.core.events import Side, SignalEvent
 from argus.core.regime import MarketRegime
-from argus.intelligence.config import GradeThresholdsConfig, QualityEngineConfig
+from argus.intelligence.config import QualityEngineConfig, QualityThresholdsConfig, QualityWeightsConfig
 from argus.intelligence.models import ClassifiedCatalyst
 from argus.intelligence.quality_engine import SetupQuality, SetupQualityEngine
 
@@ -19,18 +19,18 @@ from argus.intelligence.quality_engine import SetupQuality, SetupQualityEngine
 
 
 def make_engine(
-    weights: dict | None = None,
-    thresholds: GradeThresholdsConfig | None = None,
+    weights: QualityWeightsConfig | None = None,
+    thresholds: QualityThresholdsConfig | None = None,
 ) -> SetupQualityEngine:
     config = QualityEngineConfig(
-        weights=weights or {
-            "pattern_strength": 0.2,
-            "catalyst_quality": 0.2,
-            "volume_profile": 0.2,
-            "historical_match": 0.2,
-            "regime_alignment": 0.2,
-        },
-        thresholds=thresholds or GradeThresholdsConfig(),
+        weights=weights or QualityWeightsConfig(
+            pattern_strength=0.2,
+            catalyst_quality=0.2,
+            volume_profile=0.2,
+            historical_match=0.2,
+            regime_alignment=0.2,
+        ),
+        thresholds=thresholds or QualityThresholdsConfig(),
     )
     return SetupQualityEngine(config)
 
@@ -229,13 +229,13 @@ def test_grade_from_score_boundaries():
     engine = make_engine()
     # Directly test _grade_from_score via score_setup with controlled weights
     # Use weights that map score = pattern_strength (only dimension)
-    weights = {
-        "pattern_strength": 1.0,
-        "catalyst_quality": 0.0,
-        "volume_profile": 0.0,
-        "historical_match": 0.0,
-        "regime_alignment": 0.0,
-    }
+    weights = QualityWeightsConfig(
+        pattern_strength=1.0,
+        catalyst_quality=0.0,
+        volume_profile=0.0,
+        historical_match=0.0,
+        regime_alignment=0.0,
+    )
     eng = make_engine(weights=weights)
 
     def grade(ps: float) -> str:
@@ -248,17 +248,17 @@ def test_grade_from_score_boundaries():
     assert grade(80.0) == "A"
     assert grade(79.0) == "A-"
     assert grade(30.0) == "C+"
-    assert grade(29.0) == "C-"
+    assert grade(29.0) == "C"
 
 
-def test_grade_c_below_c_minus_threshold():
-    weights = {
-        "pattern_strength": 1.0,
-        "catalyst_quality": 0.0,
-        "volume_profile": 0.0,
-        "historical_match": 0.0,
-        "regime_alignment": 0.0,
-    }
+def test_grade_c_below_c_plus_threshold():
+    weights = QualityWeightsConfig(
+        pattern_strength=1.0,
+        catalyst_quality=0.0,
+        volume_profile=0.0,
+        historical_match=0.0,
+        regime_alignment=0.0,
+    )
     eng = make_engine(weights=weights)
     result = eng.score_setup(
         make_signal(pattern_strength=10.0), [], None, MarketRegime.BULLISH_TRENDING, []
@@ -304,19 +304,23 @@ def test_score_setup_varied_inputs_produce_different_grades():
     # A+ — high pattern + good rvol + in allowed
     # PS=100, CQ=50 (empty), VP=95 (rvol≥3), HM=50, RA=80 → 0.2*375=75 → A-
     # Need all-100 for A+: achievable by clamping
-    weights_all_ps = {k: (1.0 if k == "pattern_strength" else 0.0) for k in
-                      ["pattern_strength", "catalyst_quality", "volume_profile",
-                       "historical_match", "regime_alignment"]}
+    weights_all_ps = QualityWeightsConfig(
+        pattern_strength=1.0,
+        catalyst_quality=0.0,
+        volume_profile=0.0,
+        historical_match=0.0,
+        regime_alignment=0.0,
+    )
     eng_pure = make_engine(weights=weights_all_ps)
     assert eng_pure.score_setup(
         make_signal(100.0), [], None, DEFAULT_REGIME, DEFAULT_ALLOWED
     ).grade == "A+"
 
-    # C- — low PS, low VP, regime not in allowed
-    # PS=0, CQ=50, VP=10, HM=50, RA=20 → 0.2*130=26 → C-
+    # C — low PS, low VP, regime not in allowed
+    # PS=0, CQ=50, VP=10, HM=50, RA=20 → 0.2*130=26 → C (below c_plus=30)
     assert engine.score_setup(
         make_signal(0.0), [], 0.1, MarketRegime.RANGE_BOUND, ["bullish_trending"]
-    ).grade == "C-"
+    ).grade == "C"
 
 
 # ---------------------------------------------------------------------------

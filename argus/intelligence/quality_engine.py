@@ -118,8 +118,6 @@ class SetupQualityEngine:
             return "B-"
         if score >= t.c_plus:
             return "C+"
-        if score >= t.c_minus:
-            return "C-"
         return "C"
 
     def _risk_tier_from_grade(self, grade: str) -> str:

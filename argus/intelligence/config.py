@@ -1,14 +1,14 @@
-"""Pydantic configuration models for the NLP Catalyst Pipeline.
+"""Pydantic configuration models for the intelligence layer.
 
-Provides typed, validated config models for the catalyst: section
-in system.yaml and system_live.yaml.
+Provides typed, validated config models for the catalyst: and
+quality_engine: sections in system.yaml and system_live.yaml.
 
-Sprint 23.5 — DEC-164
+Sprint 23.5 — DEC-164, Sprint 24 S5a — Quality Engine config + Position Sizer.
 """
 
 from __future__ import annotations
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 
 class SECEdgarConfig(BaseModel):
@@ -109,32 +109,151 @@ class CatalystConfig(BaseModel):
     briefing: BriefingConfig = BriefingConfig()
 
 
-class GradeThresholdsConfig(BaseModel):
-    """Score thresholds for grade assignment (inclusive lower bounds)."""
+VALID_GRADES: tuple[str, ...] = ("A+", "A", "A-", "B+", "B", "B-", "C+")
 
-    a_plus: float = 90.0
-    a: float = 80.0
-    a_minus: float = 70.0
-    b_plus: float = 60.0
-    b: float = 50.0
-    b_minus: float = 40.0
-    c_plus: float = 30.0
-    c_minus: float = 15.0
+
+class QualityWeightsConfig(BaseModel):
+    """Per-dimension weights for quality scoring. Must sum to 1.0.
+
+    Attributes:
+        pattern_strength: Weight for pattern strength dimension.
+        catalyst_quality: Weight for catalyst quality dimension.
+        volume_profile: Weight for volume profile dimension.
+        historical_match: Weight for historical match dimension.
+        regime_alignment: Weight for regime alignment dimension.
+    """
+
+    pattern_strength: float = 0.30
+    catalyst_quality: float = 0.25
+    volume_profile: float = 0.20
+    historical_match: float = 0.15
+    regime_alignment: float = 0.10
+
+    @model_validator(mode="after")
+    def validate_weight_sum(self) -> QualityWeightsConfig:
+        """Validate that all five weights sum to 1.0 (±0.001 tolerance)."""
+        total = (
+            self.pattern_strength
+            + self.catalyst_quality
+            + self.volume_profile
+            + self.historical_match
+            + self.regime_alignment
+        )
+        if abs(total - 1.0) > 0.001:
+            raise ValueError(f"Quality weights must sum to 1.0, got {total:.4f}")
+        return self
+
+    def get(self, key: str, default: float = 0.2) -> float:
+        """Dict-like access for backward compatibility with SetupQualityEngine."""
+        return getattr(self, key, default)
+
+
+class QualityThresholdsConfig(BaseModel):
+    """Score thresholds for grade assignment (inclusive lower bounds).
+
+    All values must be integers in [0, 100] and strictly descending.
+
+    Attributes:
+        a_plus: Minimum score for A+ grade.
+        a: Minimum score for A grade.
+        a_minus: Minimum score for A- grade.
+        b_plus: Minimum score for B+ grade.
+        b: Minimum score for B grade.
+        b_minus: Minimum score for B- grade.
+        c_plus: Minimum score for C+ grade.
+    """
+
+    a_plus: int = 90
+    a: int = 80
+    a_minus: int = 70
+    b_plus: int = 60
+    b: int = 50
+    b_minus: int = 40
+    c_plus: int = 30
+
+    @model_validator(mode="after")
+    def validate_descending(self) -> QualityThresholdsConfig:
+        """Validate all thresholds are in [0, 100] and strictly descending."""
+        values = [
+            self.a_plus, self.a, self.a_minus,
+            self.b_plus, self.b, self.b_minus, self.c_plus,
+        ]
+        for v in values:
+            if not 0 <= v <= 100:
+                raise ValueError(f"Threshold {v} not in [0, 100]")
+        for i in range(len(values) - 1):
+            if values[i] <= values[i + 1]:
+                raise ValueError(
+                    f"Thresholds must be strictly descending: "
+                    f"{values[i]} <= {values[i + 1]}"
+                )
+        return self
+
+
+class QualityRiskTiersConfig(BaseModel):
+    """Risk percentage ranges per grade for dynamic position sizing.
+
+    Each tier is a [min, max] pair where min <= max and both in [0, 1].
+
+    Attributes:
+        a_plus: Risk range for A+ grade setups.
+        a: Risk range for A grade setups.
+        a_minus: Risk range for A- grade setups.
+        b_plus: Risk range for B+ grade setups.
+        b: Risk range for B grade setups.
+        b_minus: Risk range for B- grade setups.
+        c_plus: Risk range for C+ grade setups.
+    """
+
+    a_plus: list[float] = [0.02, 0.03]
+    a: list[float] = [0.015, 0.02]
+    a_minus: list[float] = [0.01, 0.015]
+    b_plus: list[float] = [0.0075, 0.01]
+    b: list[float] = [0.005, 0.0075]
+    b_minus: list[float] = [0.0025, 0.005]
+    c_plus: list[float] = [0.0025, 0.0025]
+
+    @model_validator(mode="after")
+    def validate_tiers(self) -> QualityRiskTiersConfig:
+        """Validate each tier pair has exactly 2 values, min <= max, both in [0, 1]."""
+        for grade in VALID_GRADES:
+            field_name = grade.lower().replace("+", "_plus").replace("-", "_minus")
+            pair = getattr(self, field_name)
+            if len(pair) != 2:
+                raise ValueError(f"Risk tier {grade} must have exactly 2 values")
+            lo, hi = pair
+            if not (0.0 <= lo <= 1.0) or not (0.0 <= hi <= 1.0):
+                raise ValueError(f"Risk tier {grade} values must be in [0, 1]")
+            if lo > hi:
+                raise ValueError(
+                    f"Risk tier {grade} min ({lo}) exceeds max ({hi})"
+                )
+        return self
 
 
 class QualityEngineConfig(BaseModel):
-    """Configuration for the SetupQualityEngine.
+    """Configuration for the SetupQualityEngine and DynamicPositionSizer.
 
     Attributes:
+        enabled: Whether quality scoring is active.
         weights: Per-dimension weights (must sum to 1.0).
         thresholds: Score-to-grade mapping thresholds.
+        risk_tiers: Risk percentage ranges per grade for position sizing.
+        min_grade_to_trade: Minimum quality grade required to place a trade.
     """
 
-    weights: dict[str, float] = {
-        "pattern_strength": 0.2,
-        "catalyst_quality": 0.2,
-        "volume_profile": 0.2,
-        "historical_match": 0.2,
-        "regime_alignment": 0.2,
-    }
-    thresholds: GradeThresholdsConfig = GradeThresholdsConfig()
+    enabled: bool = True
+    weights: QualityWeightsConfig = QualityWeightsConfig()
+    thresholds: QualityThresholdsConfig = QualityThresholdsConfig()
+    risk_tiers: QualityRiskTiersConfig = QualityRiskTiersConfig()
+    min_grade_to_trade: str = "C+"
+
+    @model_validator(mode="after")
+    def validate_min_grade(self) -> QualityEngineConfig:
+        """Validate min_grade_to_trade is a recognized grade string."""
+        if self.min_grade_to_trade not in VALID_GRADES:
+            raise ValueError(
+                f"min_grade_to_trade must be one of {VALID_GRADES}, "
+                f"got '{self.min_grade_to_trade}'"
+            )
+        return self
