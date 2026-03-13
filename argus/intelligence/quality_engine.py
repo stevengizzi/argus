@@ -1,0 +1,139 @@
+"""Setup quality scoring engine for the ARGUS intelligence layer.
+
+Stateless, synchronous scorer. All inputs passed as arguments — no IO.
+
+Sprint 24, Session 4.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+
+from argus.core.events import SignalEvent
+from argus.core.regime import MarketRegime
+from argus.intelligence.config import QualityEngineConfig
+from argus.intelligence.models import ClassifiedCatalyst
+
+
+@dataclass(frozen=True)
+class SetupQuality:
+    """Composite quality score for a trade setup."""
+
+    score: float
+    grade: str
+    risk_tier: str
+    components: dict
+    rationale: str
+
+
+class SetupQualityEngine:
+    """Scores trade setups across five quality dimensions."""
+
+    def __init__(self, config: QualityEngineConfig) -> None:
+        self._config = config
+
+    def score_setup(
+        self,
+        signal: SignalEvent,
+        catalysts: list[ClassifiedCatalyst],
+        rvol: float | None,
+        regime: MarketRegime,
+        allowed_regimes: list[str],
+    ) -> SetupQuality:
+        """Score a trade setup and return a composite SetupQuality."""
+        components = {
+            "pattern_strength": self._score_pattern_strength(signal),
+            "catalyst_quality": self._score_catalyst_quality(catalysts),
+            "volume_profile": self._score_volume_profile(rvol),
+            "historical_match": self._score_historical_match(),
+            "regime_alignment": self._score_regime_alignment(regime, allowed_regimes),
+        }
+        weights = self._config.weights
+        score = sum(components[k] * weights.get(k, 0.2) for k in components)
+        grade = self._grade_from_score(score)
+        return SetupQuality(
+            score=round(score, 1),
+            grade=grade,
+            risk_tier=self._risk_tier_from_grade(grade),
+            components=components,
+            rationale=self._build_rationale(components, round(score, 1), grade),
+        )
+
+    def _score_pattern_strength(self, signal: SignalEvent) -> float:
+        return max(0.0, min(100.0, signal.pattern_strength))
+
+    def _score_catalyst_quality(self, catalysts: list[ClassifiedCatalyst]) -> float:
+        cutoff = datetime.now(UTC) - timedelta(hours=24)
+        recent = [
+            c for c in catalysts
+            if (c.published_at if c.published_at.tzinfo else c.published_at.replace(tzinfo=UTC))
+            >= cutoff
+        ]
+        if not recent:
+            return 50.0
+        return max(0.0, min(100.0, max(c.quality_score for c in recent)))
+
+    def _score_volume_profile(self, rvol: float | None) -> float:
+        if rvol is None:
+            return 50.0
+        breakpoints = [(0.5, 10.0), (1.0, 40.0), (2.0, 70.0), (3.0, 95.0)]
+        if rvol <= breakpoints[0][0]:
+            return breakpoints[0][1]
+        if rvol >= breakpoints[-1][0]:
+            return breakpoints[-1][1]
+        for i in range(len(breakpoints) - 1):
+            x0, y0 = breakpoints[i]
+            x1, y1 = breakpoints[i + 1]
+            if x0 <= rvol <= x1:
+                t = (rvol - x0) / (x1 - x0)
+                return y0 + t * (y1 - y0)
+        return 50.0
+
+    def _score_historical_match(self) -> float:
+        return 50.0
+
+    def _score_regime_alignment(
+        self, regime: MarketRegime, allowed_regimes: list[str]
+    ) -> float:
+        if not allowed_regimes:
+            return 70.0
+        if regime.value in allowed_regimes:
+            return 80.0
+        return 20.0
+
+    def _grade_from_score(self, score: float) -> str:
+        t = self._config.thresholds
+        if score >= t.a_plus:
+            return "A+"
+        if score >= t.a:
+            return "A"
+        if score >= t.a_minus:
+            return "A-"
+        if score >= t.b_plus:
+            return "B+"
+        if score >= t.b:
+            return "B"
+        if score >= t.b_minus:
+            return "B-"
+        if score >= t.c_plus:
+            return "C+"
+        if score >= t.c_minus:
+            return "C-"
+        return "C"
+
+    def _risk_tier_from_grade(self, grade: str) -> str:
+        return grade
+
+    def _build_rationale(
+        self, components: dict, score: float, grade: str
+    ) -> str:
+        ps = components["pattern_strength"]
+        cq = components["catalyst_quality"]
+        vp = components["volume_profile"]
+        hm = components["historical_match"]
+        ra = components["regime_alignment"]
+        return (
+            f"PS:{ps:.0f} CQ:{cq:.0f} VP:{vp:.0f} HM:{hm:.0f} RA:{ra:.0f}"
+            f" \u2192 Score:{score} ({grade})"
+        )

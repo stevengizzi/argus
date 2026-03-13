@@ -107,3 +107,34 @@ class CatalystConfig(BaseModel):
     dedup_window_minutes: int = 30
     sources: SourcesConfig = SourcesConfig()
     briefing: BriefingConfig = BriefingConfig()
+
+
+class GradeThresholdsConfig(BaseModel):
+    """Score thresholds for grade assignment (inclusive lower bounds)."""
+
+    a_plus: float = 90.0
+    a: float = 80.0
+    a_minus: float = 70.0
+    b_plus: float = 60.0
+    b: float = 50.0
+    b_minus: float = 40.0
+    c_plus: float = 30.0
+    c_minus: float = 15.0
+
+
+class QualityEngineConfig(BaseModel):
+    """Configuration for the SetupQualityEngine.
+
+    Attributes:
+        weights: Per-dimension weights (must sum to 1.0).
+        thresholds: Score-to-grade mapping thresholds.
+    """
+
+    weights: dict[str, float] = {
+        "pattern_strength": 0.2,
+        "catalyst_quality": 0.2,
+        "volume_profile": 0.2,
+        "historical_match": 0.2,
+        "regime_alignment": 0.2,
+    }
+    thresholds: GradeThresholdsConfig = GradeThresholdsConfig()
