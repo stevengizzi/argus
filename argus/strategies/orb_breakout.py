@@ -94,18 +94,19 @@ class OrbBreakoutStrategy(OrbBaseStrategy):
         target_1 = entry_price + risk_per_share * self._breakout_config.target_1_r
         target_2 = entry_price + risk_per_share * self._breakout_config.target_2_r
 
-        # Calculate position size
-        shares = self.calculate_position_size(entry_price, stop_price)
-        if shares <= 0:
-            logger.warning("%s: Position size calculation returned 0", symbol)
-            return None
-
-        # Get VWAP for rationale
+        # Get VWAP for rationale and pattern strength
+        vwap: float | None = None
         vwap_str = "N/A"
         if self._data_service is not None:
             vwap = await self._data_service.get_indicator(symbol, "vwap")
             if vwap is not None:
                 vwap_str = f"{vwap:.2f}"
+
+        # Calculate pattern strength (share_count deferred to Dynamic Sizer, Sprint 24 S6a)
+        volume_ratio = candle.volume / volume_threshold if volume_threshold > 0 else 1.0
+        pattern_strength, signal_context = self._calculate_pattern_strength(
+            candle, state, volume_ratio, state.atr_ratio, vwap
+        )
 
         signal = SignalEvent(
             strategy_id=self.strategy_id,
@@ -114,12 +115,14 @@ class OrbBreakoutStrategy(OrbBaseStrategy):
             entry_price=entry_price,
             stop_price=stop_price,
             target_prices=(target_1, target_2),
-            share_count=shares,
+            share_count=0,
             rationale=(
                 f"ORB breakout: {symbol} closed above OR high {state.or_high:.2f}, "
                 f"volume {candle.volume} > {volume_threshold:.0f}, VWAP {vwap_str}"
             ),
             time_stop_seconds=self._breakout_config.time_stop_minutes * 60,
+            pattern_strength=pattern_strength,
+            signal_context=signal_context,
         )
 
         # Mark breakout as triggered
@@ -129,13 +132,14 @@ class OrbBreakoutStrategy(OrbBaseStrategy):
         OrbBaseStrategy._orb_family_triggered_symbols.add(symbol)
 
         logger.info(
-            "%s: ORB breakout signal - entry=%.2f, stop=%.2f, targets=(%.2f, %.2f), shares=%d",
+            "%s: ORB breakout signal - entry=%.2f, stop=%.2f, targets=(%.2f, %.2f), "
+            "pattern_strength=%.1f",
             symbol,
             entry_price,
             stop_price,
             target_1,
             target_2,
-            shares,
+            pattern_strength,
         )
 
         return signal

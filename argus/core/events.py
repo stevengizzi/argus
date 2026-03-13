@@ -168,6 +168,10 @@ class SignalEvent(Event):
     share_count: int = 0
     rationale: str = ""
     time_stop_seconds: int | None = None
+    pattern_strength: float = 50.0  # 0-100, strategy-assessed signal quality
+    signal_context: dict = field(default_factory=dict)  # Strategy-specific metadata
+    quality_score: float = 0.0  # Populated by Quality Engine after scoring
+    quality_grade: str = ""  # Populated by Quality Engine after scoring
 
 
 # ---------------------------------------------------------------------------
@@ -445,3 +449,26 @@ class UniverseUpdateEvent(Event):
 
     viable_count: int = 0
     total_fetched: int = 0
+
+
+# ---------------------------------------------------------------------------
+# Intelligence Events (Sprint 24)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class QualitySignalEvent(Event):
+    """Informational event published for UI consumers after quality scoring.
+
+    Does NOT participate in execution pipeline. Published by the Quality Engine
+    after scoring a SignalEvent. Subscribers (Command Center, AI Copilot) use
+    this for display and logging.
+    """
+
+    symbol: str = ""
+    strategy_id: str = ""
+    score: float = 0.0
+    grade: str = ""
+    risk_tier: str = ""
+    components: dict = field(default_factory=dict)
+    rationale: str = ""

@@ -75,6 +75,7 @@ class OrbSymbolState:
     or_valid: bool = False
     or_avg_volume: float = 0.0
     or_rejection_reason: str | None = None
+    atr_ratio: float | None = None  # OR range / ATR, stored during finalization
 
     # Breakout tracking
     breakout_triggered: bool = False
@@ -212,6 +213,7 @@ class OrbBaseStrategy(BaseStrategy):
 
         if atr is not None and atr > 0:
             range_to_atr = range_size / atr
+            state.atr_ratio = range_to_atr
 
             if range_to_atr < self._orb_config.min_range_atr_ratio:
                 state.or_valid = False
@@ -247,6 +249,111 @@ class OrbBaseStrategy(BaseStrategy):
             )
 
         state.or_complete = True
+
+    # -------------------------------------------------------------------------
+    # Pattern Strength Scoring
+    # -------------------------------------------------------------------------
+
+    def _calculate_pattern_strength(
+        self,
+        candle: CandleEvent,
+        state: OrbSymbolState,
+        volume_ratio: float,
+        atr_ratio: float | None,
+        vwap: float | None = None,
+    ) -> tuple[float, dict]:
+        """Calculate ORB family pattern strength (0-100) and context dict.
+
+        Scores the signal quality from ORB-specific factors. All ORB family
+        strategies share this logic (OrbBreakoutStrategy, OrbScalpStrategy).
+
+        Args:
+            candle: The breakout candle.
+            state: The symbol's ORB state (contains OR high/low).
+            volume_ratio: Actual breakout volume divided by the volume threshold.
+            atr_ratio: OR range / ATR at the time the range was formed (None if unavailable).
+            vwap: Current VWAP value (None if unavailable).
+
+        Returns:
+            Tuple of (pattern_strength, signal_context) where pattern_strength
+            is in [0, 100] and signal_context contains per-factor credits.
+        """
+        # --- Volume credit (30%) ---
+        # At 1.0× threshold = 40, at 2.0× = 65, at 3.0× = 90. Linear, clamped [10, 95].
+        volume_credit = 40.0 + 25.0 * (volume_ratio - 1.0)
+        volume_credit = max(10.0, min(95.0, volume_credit))
+
+        # --- ATR ratio credit (25%) ---
+        # Mid-range = 80 (parabolic peak), extremes = 30. None → neutral 50.
+        if atr_ratio is not None:
+            min_ratio = self._orb_config.min_range_atr_ratio
+            max_ratio = self._orb_config.max_range_atr_ratio
+            half_range = (max_ratio - min_ratio) / 2.0
+            midpoint = min_ratio + half_range
+            if half_range > 0:
+                normalized = (atr_ratio - midpoint) / half_range
+                atr_credit = 80.0 - 50.0 * (normalized ** 2)
+            else:
+                atr_credit = 80.0
+            atr_credit = max(0.0, min(100.0, atr_credit))
+        else:
+            atr_credit = 50.0
+
+        # --- Chase distance credit (25%) ---
+        # At OR high = 90, at chase_protection_pct limit = 30. Linear.
+        if state.or_high is not None and state.or_high > 0:
+            chase_distance_pct = (candle.close - state.or_high) / state.or_high
+            chase_pct_limit = self._orb_config.chase_protection_pct
+            if chase_pct_limit > 0:
+                chase_credit = 90.0 - 60.0 * (chase_distance_pct / chase_pct_limit)
+            else:
+                chase_credit = 90.0
+            chase_credit = max(0.0, min(100.0, chase_credit))
+        else:
+            chase_distance_pct = 0.0
+            chase_credit = 50.0
+
+        # --- VWAP position credit (20%) ---
+        # 0–0.2% above = 50, 0.5% = 70, 1%+ = 80, capped at 85.
+        if vwap is not None and vwap > 0:
+            vwap_distance_pct = (candle.close - vwap) / vwap
+            if vwap_distance_pct <= 0.0:
+                vwap_credit = 30.0
+            elif vwap_distance_pct <= 0.002:
+                vwap_credit = 50.0
+            elif vwap_distance_pct <= 0.005:
+                vwap_credit = 50.0 + (vwap_distance_pct - 0.002) / 0.003 * 20.0
+            elif vwap_distance_pct <= 0.01:
+                vwap_credit = 70.0 + (vwap_distance_pct - 0.005) / 0.005 * 10.0
+            else:
+                vwap_credit = min(85.0, 80.0 + (vwap_distance_pct - 0.01) * 500.0)
+            vwap_credit = max(0.0, min(85.0, vwap_credit))
+        else:
+            vwap_distance_pct = 0.0
+            vwap_credit = 50.0
+
+        pattern_strength = (
+            0.30 * volume_credit
+            + 0.25 * atr_credit
+            + 0.25 * chase_credit
+            + 0.20 * vwap_credit
+        )
+        pattern_strength = max(0.0, min(100.0, pattern_strength))
+
+        signal_context: dict = {
+            "volume_ratio": round(volume_ratio, 4),
+            "atr_ratio": round(atr_ratio, 4) if atr_ratio is not None else None,
+            "chase_distance_pct": round(
+                (candle.close - state.or_high) / state.or_high if state.or_high else 0.0, 6
+            ),
+            "vwap_distance_pct": round(vwap_distance_pct, 6),
+            "volume_credit": round(volume_credit, 2),
+            "atr_credit": round(atr_credit, 2),
+            "chase_credit": round(chase_credit, 2),
+            "vwap_credit": round(vwap_credit, 2),
+        }
+
+        return pattern_strength, signal_context
 
     # -------------------------------------------------------------------------
     # Breakout Detection

@@ -186,7 +186,7 @@ class TestSprint3Integration:
         assert signal.symbol == "TEST"
         assert signal.entry_price == pytest.approx(101.3)
         assert signal.stop_price == pytest.approx(100.0)  # Midpoint
-        assert signal.share_count > 0
+        assert signal.share_count == 0  # Sprint 24 S1: deferred to Dynamic Sizer
 
     @pytest.mark.asyncio
     async def test_full_pipeline_with_risk_manager(self, tmp_path: Path) -> None:

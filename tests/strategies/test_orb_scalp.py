@@ -1298,8 +1298,8 @@ class TestOrbScalpSignalProperties:
         return await strategy.on_candle(breakout)
 
     @pytest.mark.asyncio
-    async def test_position_size_formula(self) -> None:
-        """Position size uses allocated_capital * max_loss_per_trade_pct / risk."""
+    async def test_position_size_deferred_to_dynamic_sizer(self) -> None:
+        """share_count=0: Dynamic Sizer will calculate size in Sprint 24 Session 6a."""
         config = make_scalp_config(max_loss_per_trade_pct=0.01, chase_protection_pct=0.02)
         mock_data_service = AsyncMock()
         mock_data_service.get_indicator.side_effect = lambda s, i: {
@@ -1313,10 +1313,8 @@ class TestOrbScalpSignalProperties:
         signal = await self._setup_and_breakout(strategy, or_high=101.0, or_low=99.0)
 
         assert signal is not None
-        # Entry: 101.5, Stop: 100 (midpoint), Risk: 1.5
-        # Risk dollars: 100K * 1% = 1000
-        # Shares: 1000 / 1.5 = 666
-        assert signal.share_count == 666
+        # Sprint 24 S1: share_count deferred to Dynamic Sizer
+        assert signal.share_count == 0
 
     @pytest.mark.asyncio
     async def test_rationale_contains_orb_scalp(self) -> None:
