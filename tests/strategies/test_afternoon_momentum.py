@@ -20,6 +20,7 @@ from argus.core.events import CandleEvent, SignalEvent
 from argus.strategies.afternoon_momentum import (
     AfternoonMomentumStrategy,
     ConsolidationState,
+    ConsolidationSymbolState,
 )
 
 ET = ZoneInfo("America/New_York")
@@ -800,7 +801,7 @@ class TestEntryConditions:
             )
         )
         assert signal is not None
-        assert signal.share_count > 0
+        assert signal.share_count == 0  # deferred to Dynamic Sizer (Sprint 24 S6a)
 
     @pytest.mark.asyncio
     async def test_max_concurrent_positions(self) -> None:
@@ -964,8 +965,8 @@ class TestSignalBuilding:
         assert signal.target_prices[1] == pytest.approx(103.599)
 
     @pytest.mark.asyncio
-    async def test_signal_share_count(self) -> None:
-        """Position sizing with risk formula."""
+    async def test_signal_share_count_is_zero(self) -> None:
+        """Share count is 0 — deferred to Dynamic Sizer (Sprint 24 S6a)."""
         config = make_config(
             consolidation_atr_ratio=0.75,
             min_consolidation_bars=5,
@@ -1005,10 +1006,8 @@ class TestSignalBuilding:
         )
 
         assert signal is not None
-        # Risk per share = 101.0 - 98.0 = 3.0
-        # Risk dollars = 100K × 1% = 1000
-        # Shares = 1000 / 3.0 = 333
-        assert signal.share_count == 333
+        # share_count deferred to Dynamic Sizer (Sprint 24 S6a)
+        assert signal.share_count == 0
 
     @pytest.mark.asyncio
     async def test_signal_min_risk_floor(self) -> None:
@@ -1051,12 +1050,8 @@ class TestSignalBuilding:
         )
 
         assert signal is not None
-        # Actual risk = 100.1 - 99.9 = 0.2
-        # Min risk floor = 100.1 × 0.003 = 0.3003
-        # Effective risk = max(0.2, 0.3003) = 0.3003
-        # Risk dollars = 100K × 1% = 1000
-        # Shares = int(1000 / 0.3003) = 3330
-        assert signal.share_count == 3330
+        # share_count deferred to Dynamic Sizer (Sprint 24 S6a)
+        assert signal.share_count == 0
 
     @pytest.mark.asyncio
     async def test_signal_time_stop_seconds(self) -> None:
@@ -1985,3 +1980,217 @@ class TestConfigValidation:
 
         with pytest.raises(ValueError):
             make_config(max_hold_minutes=121)
+
+
+# ---------------------------------------------------------------------------
+# Sprint 24 S2: Pattern Strength Tests
+# ---------------------------------------------------------------------------
+
+
+class TestPatternStrength:
+    """Tests for Afternoon Momentum pattern_strength scoring (Sprint 24 S2)."""
+
+    def _make_strategy(self, **overrides) -> AfternoonMomentumStrategy:
+        config = make_config(**overrides)
+        return AfternoonMomentumStrategy(config)
+
+    def _make_state(
+        self,
+        midday_high: float = 100.5,
+        midday_low: float = 99.5,
+        consolidation_bars: int = 5,
+        volumes: list | None = None,
+    ) -> ConsolidationSymbolState:
+        return ConsolidationSymbolState(
+            state=ConsolidationState.CONSOLIDATED,
+            midday_high=midday_high,
+            midday_low=midday_low,
+            consolidation_bars=consolidation_bars,
+            recent_volumes=volumes if volumes is not None else [100_000] * 5 + [150_000],
+        )
+
+    def test_afmo_pattern_strength_varies_with_conditions(self) -> None:
+        """Better condition margins (higher vol ratio) produce a higher score."""
+        strategy = self._make_strategy(
+            volume_multiplier=1.2,
+            max_chase_pct=0.01,
+            consolidation_atr_ratio=0.75,
+        )
+        consolidation_high = 100.5
+        atr = 2.0
+
+        # High volume: 2x required (240_000 vs required 120_000)
+        state_high = self._make_state(volumes=[100_000] * 5 + [240_000])
+        candle_high = make_candle(timestamp_et=time(14, 30), close=100.6, volume=240_000)
+
+        # Low volume: just above required (125_000 vs required 120_000)
+        state_low = self._make_state(volumes=[100_000] * 5 + [125_000])
+        candle_low = make_candle(timestamp_et=time(14, 30), close=100.6, volume=125_000)
+
+        strength_high, _ = strategy._calculate_pattern_strength(
+            candle_high, state_high, consolidation_high, atr
+        )
+        strength_low, _ = strategy._calculate_pattern_strength(
+            candle_low, state_low, consolidation_high, atr
+        )
+
+        assert strength_high > strength_low
+
+    def test_afmo_pattern_strength_varies_with_tightness(self) -> None:
+        """Tighter consolidation range produces higher tightness credit."""
+        strategy = self._make_strategy(consolidation_atr_ratio=0.75)
+        consolidation_high = 100.5
+        atr = 2.0
+        candle = make_candle(timestamp_et=time(14, 30), close=100.6, volume=200_000)
+
+        # Tight: range 0.6 / atr 2.0 = 0.3 -> tightness_credit = 90
+        state_tight = self._make_state(midday_high=100.3, midday_low=99.7)
+        # Loose: range 1.6 / atr 2.0 = 0.8 -> tightness_credit = 40
+        state_loose = self._make_state(midday_high=100.8, midday_low=99.2)
+
+        _, ctx_tight = strategy._calculate_pattern_strength(
+            candle, state_tight, consolidation_high, atr
+        )
+        _, ctx_loose = strategy._calculate_pattern_strength(
+            candle, state_loose, consolidation_high, atr
+        )
+
+        assert ctx_tight["tightness_credit"] == pytest.approx(90.0)
+        assert ctx_loose["tightness_credit"] == pytest.approx(40.0)
+        assert ctx_tight["tightness_credit"] > ctx_loose["tightness_credit"]
+
+    def test_afmo_pattern_strength_varies_with_volume_surge(self) -> None:
+        """Higher volume surge ratio produces higher surge credit."""
+        strategy = self._make_strategy()
+        consolidation_high = 100.5
+        atr = 2.0
+
+        # High surge: 2.5x avg -> surge_credit = 85
+        state_high = self._make_state(volumes=[100_000] * 5 + [250_000])
+        candle_high = make_candle(timestamp_et=time(14, 30), close=100.6, volume=250_000)
+
+        # Low surge: 1.1x avg < 1.2x threshold -> surge_credit = 30
+        state_low = self._make_state(volumes=[100_000] * 5 + [110_000])
+        candle_low = make_candle(timestamp_et=time(14, 30), close=100.6, volume=110_000)
+
+        _, ctx_high = strategy._calculate_pattern_strength(
+            candle_high, state_high, consolidation_high, atr
+        )
+        _, ctx_low = strategy._calculate_pattern_strength(
+            candle_low, state_low, consolidation_high, atr
+        )
+
+        assert ctx_high["surge_credit"] == pytest.approx(85.0)
+        assert ctx_low["surge_credit"] == pytest.approx(30.0)
+        assert ctx_high["surge_credit"] > ctx_low["surge_credit"]
+
+    def test_afmo_pattern_strength_time_factor(self) -> None:
+        """Earlier in operating window produces higher time credit."""
+        strategy = self._make_strategy()
+        consolidation_high = 100.5
+        atr = 2.0
+        state = self._make_state(volumes=[100_000] * 5 + [200_000])
+
+        # 2:00 PM ET (window opens, 90 min remaining) -> time_credit = 80
+        candle_early = make_candle(timestamp_et=time(14, 0), close=100.6, volume=200_000)
+        # 3:15 PM ET (15 min remaining) -> time_credit = 35
+        candle_late = make_candle(timestamp_et=time(15, 15), close=100.6, volume=200_000)
+
+        _, ctx_early = strategy._calculate_pattern_strength(
+            candle_early, state, consolidation_high, atr
+        )
+        _, ctx_late = strategy._calculate_pattern_strength(
+            candle_late, state, consolidation_high, atr
+        )
+
+        assert ctx_early["time_credit"] == pytest.approx(80.0)
+        assert ctx_late["time_credit"] == pytest.approx(35.0)
+        assert ctx_early["time_credit"] > ctx_late["time_credit"]
+
+    @pytest.mark.asyncio
+    async def test_afmo_signal_share_count_zero(self) -> None:
+        """Signal share_count is 0 — deferred to Dynamic Sizer (Sprint 24 S6a)."""
+        config = make_config(
+            consolidation_atr_ratio=0.75,
+            min_consolidation_bars=5,
+            volume_multiplier=1.0,
+            max_chase_pct=0.01,
+        )
+        mock_ds = MockDataService(atr=2.0)
+        strategy = AfternoonMomentumStrategy(config, data_service=mock_ds)
+        strategy.allocated_capital = 100_000
+        strategy.set_watchlist(["AAPL"])
+
+        for i in range(5):
+            await strategy.on_candle(
+                make_candle(
+                    symbol="AAPL",
+                    timestamp_et=time(12, i),
+                    high=100.5,
+                    low=99.5,
+                    close=100.0,
+                )
+            )
+        signal = await strategy.on_candle(
+            make_candle(
+                symbol="AAPL",
+                timestamp_et=time(14, 30),
+                high=101.0,
+                low=100.2,
+                close=100.6,
+                volume=150_000,
+            )
+        )
+
+        assert signal is not None
+        assert signal.share_count == 0
+
+    @pytest.mark.asyncio
+    async def test_afmo_signal_context_populated(self) -> None:
+        """Signal context contains all expected keys and pattern_strength is in [0, 100]."""
+        config = make_config(
+            consolidation_atr_ratio=0.75,
+            min_consolidation_bars=5,
+            volume_multiplier=1.0,
+            max_chase_pct=0.01,
+        )
+        mock_ds = MockDataService(atr=2.0)
+        strategy = AfternoonMomentumStrategy(config, data_service=mock_ds)
+        strategy.allocated_capital = 100_000
+        strategy.set_watchlist(["AAPL"])
+
+        for i in range(5):
+            await strategy.on_candle(
+                make_candle(
+                    symbol="AAPL",
+                    timestamp_et=time(12, i),
+                    high=100.5,
+                    low=99.5,
+                    close=100.0,
+                )
+            )
+        signal = await strategy.on_candle(
+            make_candle(
+                symbol="AAPL",
+                timestamp_et=time(14, 30),
+                high=101.0,
+                low=100.2,
+                close=100.6,
+                volume=150_000,
+            )
+        )
+
+        assert signal is not None
+        expected_keys = {
+            "vol_margin_ratio",
+            "chase_margin_ratio",
+            "tightness_ratio",
+            "surge_ratio",
+            "minutes_remaining",
+            "condition_credit",
+            "tightness_credit",
+            "surge_credit",
+            "time_credit",
+        }
+        assert expected_keys.issubset(signal.signal_context.keys())
+        assert 0.0 <= signal.pattern_strength <= 100.0

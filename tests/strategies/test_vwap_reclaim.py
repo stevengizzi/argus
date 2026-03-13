@@ -20,7 +20,7 @@ from argus.core.config import (
     load_vwap_reclaim_config,
 )
 from argus.core.events import CandleEvent, SignalEvent
-from argus.strategies.vwap_reclaim import VwapReclaimStrategy, VwapState
+from argus.strategies.vwap_reclaim import VwapReclaimStrategy, VwapState, VwapSymbolState
 
 ET = ZoneInfo("America/New_York")
 
@@ -1142,8 +1142,8 @@ class TestEntryConditionRejections:
         assert signal2 is None
 
     @pytest.mark.asyncio
-    async def test_reject_zero_allocated_capital(self) -> None:
-        """Reject when allocated_capital is 0."""
+    async def test_zero_allocated_capital_signal_still_fires(self) -> None:
+        """Signal fires even with allocated_capital=0; share_count=0 deferred to Dynamic Sizer."""
         config = make_vwap_reclaim_config(
             min_pullback_pct=0.002,
             min_pullback_bars=3,
@@ -1175,7 +1175,8 @@ class TestEntryConditionRejections:
             )
         )
 
-        assert signal is None
+        assert signal is not None
+        assert signal.share_count == 0  # Dynamic Sizer will determine shares
 
     @pytest.mark.asyncio
     async def test_reject_internal_risk_limits_hit(self) -> None:
@@ -1348,8 +1349,8 @@ class TestSignalConstruction:
         assert signal.time_stop_seconds == 45 * 60
 
     @pytest.mark.asyncio
-    async def test_signal_share_count_from_position_sizing(self) -> None:
-        """Share count uses position sizing formula."""
+    async def test_signal_share_count_is_zero(self) -> None:
+        """Share count is 0 — deferred to Dynamic Sizer (Sprint 24 S6a)."""
         config = make_vwap_reclaim_config(
             min_pullback_pct=0.002,
             min_pullback_bars=3,
@@ -1390,10 +1391,8 @@ class TestSignalConstruction:
         )
 
         assert signal is not None
-        # Risk per share = 100.5 - 99 = 1.5
-        # Risk dollars = 100K × 1% = 1000
-        # Shares = 1000 / 1.5 = 666
-        assert signal.share_count == 666
+        # share_count deferred to Dynamic Sizer (Sprint 24 S6a)
+        assert signal.share_count == 0
 
     @pytest.mark.asyncio
     async def test_signal_rationale_includes_key_values(self) -> None:
@@ -2108,3 +2107,204 @@ class TestMultipleSymbols:
         )
         assert signal2 is not None
         assert signal2.symbol == "MSFT"
+
+
+# ---------------------------------------------------------------------------
+# Sprint 24 S2: Pattern Strength Tests
+# ---------------------------------------------------------------------------
+
+
+class TestPatternStrength:
+    """Tests for VWAP Reclaim pattern_strength scoring (Sprint 24 S2)."""
+
+    def _make_strategy(self, **kwargs) -> VwapReclaimStrategy:
+        config = make_vwap_reclaim_config(max_pullback_pct=0.02, **kwargs)
+        return VwapReclaimStrategy(config)
+
+    def _make_state(
+        self,
+        pullback_low: float = 99.2,
+        bars_below_vwap: int = 3,
+        volumes: list | None = None,
+        below_vwap_entries: int = 1,
+    ) -> VwapSymbolState:
+        return VwapSymbolState(
+            pullback_low=pullback_low,
+            bars_below_vwap=bars_below_vwap,
+            recent_volumes=volumes if volumes is not None else [100_000, 100_000, 100_000, 200_000],
+            below_vwap_entries=below_vwap_entries,
+        )
+
+    def test_vwap_pattern_strength_varies_with_path_quality(self) -> None:
+        """Clean path scores higher than choppy path."""
+        strategy = self._make_strategy()
+        vwap = 100.0
+        candle = make_candle(close=100.2, volume=200_000)
+        state_clean = self._make_state(below_vwap_entries=1)
+        state_choppy = self._make_state(below_vwap_entries=3)
+
+        strength_clean, ctx_clean = strategy._calculate_pattern_strength(candle, state_clean, vwap)
+        strength_choppy, ctx_choppy = strategy._calculate_pattern_strength(
+            candle, state_choppy, vwap
+        )
+
+        assert strength_clean > strength_choppy
+        assert ctx_clean["path_quality"] == "clean"
+        assert ctx_choppy["path_quality"] == "choppy"
+
+    def test_vwap_pattern_strength_varies_with_pullback_depth(self) -> None:
+        """Optimal pullback depth ratio (0.4x) scores higher than extremes."""
+        strategy = self._make_strategy()
+        vwap = 100.0
+        candle = make_candle(close=100.2, volume=200_000)
+
+        # Optimal: depth_ratio = 0.4 → pullback_low = vwap * (1 - 0.4 * max_pullback_pct)
+        state_optimal = self._make_state(pullback_low=99.2)  # 0.8% depth -> ratio 0.4
+        # Too shallow: ratio ~0.1 -> pullback_low ~99.8 (0.2% depth)
+        state_shallow = self._make_state(pullback_low=99.8)
+        # Too deep: ratio ~0.9 -> pullback_low ~98.2 (1.8% depth)
+        state_deep = self._make_state(pullback_low=98.2)
+
+        strength_optimal, _ = strategy._calculate_pattern_strength(candle, state_optimal, vwap)
+        strength_shallow, _ = strategy._calculate_pattern_strength(candle, state_shallow, vwap)
+        strength_deep, _ = strategy._calculate_pattern_strength(candle, state_deep, vwap)
+
+        assert strength_optimal > strength_shallow
+        assert strength_optimal > strength_deep
+
+    def test_vwap_pattern_strength_varies_with_reclaim_volume(self) -> None:
+        """Higher reclaim volume ratio produces higher volume credit."""
+        strategy = self._make_strategy()
+        vwap = 100.0
+        state = self._make_state(pullback_low=99.2, bars_below_vwap=3)
+
+        # Avg pullback = 100_000; high reclaim = 200_000 (2.0x) -> volume_credit = 80
+        candle_high = make_candle(close=100.2, volume=200_000)
+        # Low reclaim = 70_000 (0.7x) -> volume_credit = 30
+        candle_low = make_candle(close=100.2, volume=70_000)
+
+        strength_high, ctx_high = strategy._calculate_pattern_strength(candle_high, state, vwap)
+        strength_low, ctx_low = strategy._calculate_pattern_strength(candle_low, state, vwap)
+
+        assert strength_high > strength_low
+        assert ctx_high["volume_credit"] == pytest.approx(80.0)
+        assert ctx_low["volume_credit"] == pytest.approx(30.0)
+
+    def test_vwap_pattern_strength_range(self) -> None:
+        """All pattern_strength outputs are in [0, 100]."""
+        strategy = self._make_strategy()
+        vwap = 100.0
+
+        test_cases = [
+            # (pullback_low, bars, volumes, entries, close, vol)
+            (99.2, 3, [100_000, 100_000, 100_000, 200_000], 1, 100.1, 200_000),
+            (99.8, 1, [100_000, 50_000], 3, 100.05, 50_000),
+            (98.5, 5, [100_000] * 5 + [300_000], 2, 100.3, 300_000),
+            (99.0, 2, [50_000, 50_000, 10_000], 4, 100.5, 10_000),
+            (99.5, 4, [200_000] * 4 + [400_000], 1, 100.01, 400_000),
+        ]
+        for pullback_low, bars, vols, entries, close, cvol in test_cases:
+            state = VwapSymbolState(
+                pullback_low=pullback_low,
+                bars_below_vwap=bars,
+                recent_volumes=vols,
+                below_vwap_entries=entries,
+            )
+            candle = make_candle(close=close, volume=cvol)
+            strength, _ = strategy._calculate_pattern_strength(candle, state, vwap)
+            assert 0.0 <= strength <= 100.0, f"strength={strength} out of [0, 100] for {close}"
+
+    @pytest.mark.asyncio
+    async def test_vwap_signal_share_count_zero(self) -> None:
+        """Signal share_count is 0 — deferred to Dynamic Sizer (Sprint 24 S6a)."""
+        config = make_vwap_reclaim_config(
+            min_pullback_pct=0.002,
+            min_pullback_bars=3,
+            volume_confirmation_multiplier=1.0,
+            max_chase_above_vwap_pct=0.01,
+        )
+        mock_ds = MockDataService(vwap=100.0)
+        strategy = VwapReclaimStrategy(config, data_service=mock_ds)
+        strategy.allocated_capital = 100_000
+        strategy.set_watchlist(["AAPL"])
+
+        await strategy.on_candle(
+            make_candle(symbol="AAPL", close=101.0, high=101.0, low=100.5, volume=100_000)
+        )
+        for i in range(3):
+            await strategy.on_candle(
+                make_candle(
+                    symbol="AAPL",
+                    close=99.0,
+                    high=99.5,
+                    low=99.0,
+                    volume=100_000,
+                    timestamp=datetime(2026, 2, 15, 15, 31 + i, 0, tzinfo=UTC),
+                )
+            )
+        signal = await strategy.on_candle(
+            make_candle(
+                symbol="AAPL",
+                close=100.3,
+                high=101.0,
+                low=100.0,
+                volume=150_000,
+                timestamp=datetime(2026, 2, 15, 15, 35, 0, tzinfo=UTC),
+            )
+        )
+
+        assert signal is not None
+        assert signal.share_count == 0
+
+    @pytest.mark.asyncio
+    async def test_vwap_signal_context_populated(self) -> None:
+        """Signal context contains all expected keys and pattern_strength is in [0, 100]."""
+        config = make_vwap_reclaim_config(
+            min_pullback_pct=0.002,
+            min_pullback_bars=3,
+            volume_confirmation_multiplier=1.0,
+            max_chase_above_vwap_pct=0.01,
+        )
+        mock_ds = MockDataService(vwap=100.0)
+        strategy = VwapReclaimStrategy(config, data_service=mock_ds)
+        strategy.allocated_capital = 100_000
+        strategy.set_watchlist(["AAPL"])
+
+        await strategy.on_candle(
+            make_candle(symbol="AAPL", close=101.0, high=101.0, low=100.5, volume=100_000)
+        )
+        for i in range(3):
+            await strategy.on_candle(
+                make_candle(
+                    symbol="AAPL",
+                    close=99.0,
+                    high=99.5,
+                    low=99.0,
+                    volume=100_000,
+                    timestamp=datetime(2026, 2, 15, 15, 31 + i, 0, tzinfo=UTC),
+                )
+            )
+        signal = await strategy.on_candle(
+            make_candle(
+                symbol="AAPL",
+                close=100.3,
+                high=101.0,
+                low=100.0,
+                volume=150_000,
+                timestamp=datetime(2026, 2, 15, 15, 35, 0, tzinfo=UTC),
+            )
+        )
+
+        assert signal is not None
+        expected_keys = {
+            "path_quality",
+            "pullback_depth_ratio",
+            "reclaim_volume_ratio",
+            "vwap_distance_pct",
+            "path_credit",
+            "depth_credit",
+            "volume_credit",
+            "distance_credit",
+        }
+        assert expected_keys.issubset(signal.signal_context.keys())
+        assert 0.0 <= signal.pattern_strength <= 100.0

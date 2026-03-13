@@ -817,12 +817,10 @@ class TestVwapReclaimStateMachine:
         result = await risk_manager.evaluate_signal(signal)
         assert isinstance(result, OrderApprovedEvent)
 
-        # Order execution
-        await order_manager.on_approved(result)
-        await asyncio.sleep(0.05)
-
-        positions = order_manager.get_managed_positions()
-        assert "AAPL" in positions
+        # Sprint 24 S2: share_count=0 (Dynamic Sizer deferred to S6a).
+        # Order Manager will skip order placement until sizer fills share count.
+        assert result.signal is not None
+        assert result.signal.share_count == 0
 
         await order_manager.stop()
 

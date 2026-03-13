@@ -73,6 +73,10 @@ class VwapSymbolState:
     # Position tracking
     position_active: bool = False
 
+    # Transition counter: incremented each time we enter BELOW_VWAP state
+    # (includes first entry and any re-entries after resets)
+    below_vwap_entries: int = 0
+
 
 class VwapReclaimStrategy(BaseStrategy):
     """VWAP Reclaim Strategy.
@@ -237,6 +241,7 @@ class VwapReclaimStrategy(BaseStrategy):
                 state.state = VwapState.BELOW_VWAP
                 state.pullback_low = candle.low
                 state.bars_below_vwap = 1
+                state.below_vwap_entries += 1
                 logger.debug(
                     "%s: ABOVE_VWAP → BELOW_VWAP (close=%.2f < vwap=%.2f, low=%.2f)",
                     symbol,
@@ -415,6 +420,113 @@ class VwapReclaimStrategy(BaseStrategy):
         # All conditions pass — build signal
         return self._build_signal(symbol, candle, state, vwap)
 
+    def _calculate_pattern_strength(
+        self,
+        candle: CandleEvent,
+        state: VwapSymbolState,
+        vwap: float,
+    ) -> tuple[float, dict]:
+        """Calculate VWAP Reclaim pattern strength (0-100) and context dict.
+
+        Scoring factors:
+        - State machine path quality (30%): clean path scores highest.
+        - Pullback depth (25%): parabolic curve peaking at 0.4× of max_pullback_pct.
+        - Reclaim volume (25%): reclaim candle vs avg pullback window volume.
+        - Distance to VWAP (20%): tighter to VWAP at reclaim = better.
+
+        Args:
+            candle: The reclaim candle.
+            state: The symbol's VWAP state.
+            vwap: The current VWAP value.
+
+        Returns:
+            Tuple of (pattern_strength, signal_context).
+        """
+        # --- State machine path quality (30%) ---
+        # Clean first-attempt path = 85. Each additional BELOW_VWAP entry reduces quality.
+        below_vwap_entries = state.below_vwap_entries
+        if below_vwap_entries <= 1:
+            path_credit = 85.0
+            path_quality = "clean"
+        elif below_vwap_entries == 2:
+            path_credit = 60.0
+            path_quality = "retested"
+        elif below_vwap_entries == 3:
+            path_credit = 50.0
+            path_quality = "choppy"
+        else:
+            path_credit = 40.0
+            path_quality = "extended"
+
+        # --- Pullback depth (25%) ---
+        # Normalized by max_pullback_pct. Optimal 0.3-0.5× = 80. Parabolic peak at 0.4×.
+        if state.pullback_low is not None and vwap > 0 and self._vwap_config.max_pullback_pct > 0:
+            raw_depth = (vwap - state.pullback_low) / vwap
+            pullback_depth_ratio = raw_depth / self._vwap_config.max_pullback_pct
+        else:
+            pullback_depth_ratio = 0.4  # neutral
+
+        depth_credit = 80.0 - 1125.0 * (pullback_depth_ratio - 0.4) ** 2
+        depth_credit = max(35.0, min(80.0, depth_credit))
+
+        # --- Reclaim volume (25%) ---
+        # Ratio = reclaim candle volume / avg pullback window volume.
+        # >1.5× = 80, 1.0× = 50, <0.8× = 30. Piecewise linear.
+        if state.bars_below_vwap > 0 and len(state.recent_volumes) > state.bars_below_vwap:
+            pullback_vols = state.recent_volumes[-(state.bars_below_vwap + 1):-1]
+        else:
+            pullback_vols = state.recent_volumes[:-1] if len(state.recent_volumes) > 1 else []
+
+        avg_pullback_volume = (
+            sum(pullback_vols) / len(pullback_vols) if pullback_vols else float(candle.volume)
+        )
+        reclaim_volume_ratio = (
+            candle.volume / avg_pullback_volume if avg_pullback_volume > 0 else 1.0
+        )
+
+        if reclaim_volume_ratio < 0.8:
+            volume_credit = 30.0
+        elif reclaim_volume_ratio <= 1.0:
+            volume_credit = 30.0 + (reclaim_volume_ratio - 0.8) / 0.2 * 20.0
+        elif reclaim_volume_ratio <= 1.5:
+            volume_credit = 50.0 + (reclaim_volume_ratio - 1.0) / 0.5 * 30.0
+        else:
+            volume_credit = 80.0
+
+        # --- Distance to VWAP (20%) ---
+        # At VWAP = 90, 0.5% away = 60, >1% away = 40. Piecewise linear.
+        vwap_distance_pct = (candle.close - vwap) / vwap if vwap > 0 else 0.0
+
+        if vwap_distance_pct <= 0.0:
+            distance_credit = 90.0
+        elif vwap_distance_pct <= 0.005:
+            distance_credit = 90.0 - 6000.0 * vwap_distance_pct
+        elif vwap_distance_pct <= 0.01:
+            distance_credit = 60.0 - 4000.0 * (vwap_distance_pct - 0.005)
+        else:
+            distance_credit = 40.0
+
+        pattern_strength = (
+            0.30 * path_credit
+            + 0.25 * depth_credit
+            + 0.25 * volume_credit
+            + 0.20 * distance_credit
+        )
+        pattern_strength = max(0.0, min(100.0, pattern_strength))
+
+        signal_context: dict = {
+            "path_quality": path_quality,
+            "pullback_depth_ratio": round(pullback_depth_ratio, 4),
+            "reclaim_volume_ratio": round(reclaim_volume_ratio, 4),
+            "vwap_distance_pct": round(vwap_distance_pct, 6),
+            "path_credit": round(path_credit, 2),
+            "depth_credit": round(depth_credit, 2),
+            "volume_credit": round(volume_credit, 2),
+            "distance_credit": round(distance_credit, 2),
+        }
+
+        return pattern_strength, signal_context
+
     def _build_signal(
         self,
         symbol: str,
@@ -444,11 +556,8 @@ class VwapReclaimStrategy(BaseStrategy):
         t1 = entry_price + risk_per_share * self._vwap_config.target_1_r
         t2 = entry_price + risk_per_share * self._vwap_config.target_2_r
 
-        # Calculate position size
-        shares = self.calculate_position_size(entry_price, stop_price)
-        if shares <= 0:
-            logger.warning("%s: Position size calculation returned 0", symbol)
-            return None
+        # Calculate pattern strength (share_count deferred to Dynamic Sizer, Sprint 24 S6a)
+        pattern_strength, signal_context = self._calculate_pattern_strength(candle, state, vwap)
 
         # Build signal
         signal = SignalEvent(
@@ -458,12 +567,14 @@ class VwapReclaimStrategy(BaseStrategy):
             entry_price=entry_price,
             stop_price=stop_price,
             target_prices=(t1, t2),
-            share_count=shares,
+            share_count=0,
             rationale=(
                 f"VWAP Reclaim: {symbol} reclaimed VWAP {vwap:.2f} after pullback to "
                 f"{state.pullback_low:.2f} ({state.bars_below_vwap} bars below)"
             ),
             time_stop_seconds=self._vwap_config.time_stop_minutes * 60,
+            pattern_strength=pattern_strength,
+            signal_context=signal_context,
         )
 
         # Mark state as entered
@@ -472,14 +583,13 @@ class VwapReclaimStrategy(BaseStrategy):
 
         logger.info(
             "%s: VWAP reclaim signal - entry=%.2f, stop=%.2f, T1=%.2f, T2=%.2f, "
-            "shares=%d, time_stop=%dm",
+            "pattern_strength=%.1f",
             symbol,
             entry_price,
             stop_price,
             t1,
             t2,
-            shares,
-            self._vwap_config.time_stop_minutes,
+            pattern_strength,
         )
 
         return signal

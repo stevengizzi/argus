@@ -463,7 +463,7 @@ class AfternoonMomentumStrategy(BaseStrategy):
         # Check for breakout: close > consolidation_high (value BEFORE this bar)
         if consolidation_high_before is not None and candle.close > consolidation_high_before:
             return await self._check_breakout_entry(
-                symbol, candle, state, consolidation_high_before
+                symbol, candle, state, consolidation_high_before, atr
             )
 
         return None
@@ -474,6 +474,7 @@ class AfternoonMomentumStrategy(BaseStrategy):
         candle: CandleEvent,
         state: ConsolidationSymbolState,
         consolidation_high: float,
+        atr: float,
     ) -> SignalEvent | None:
         """Check if breakout entry conditions are met.
 
@@ -482,6 +483,7 @@ class AfternoonMomentumStrategy(BaseStrategy):
             candle: The breakout candle.
             state: The symbol's state.
             consolidation_high: The consolidation high BEFORE this bar (for chase check).
+            atr: The current ATR-14 value (passed through for pattern strength scoring).
 
         Returns:
             SignalEvent if all conditions pass, None otherwise.
@@ -542,7 +544,152 @@ class AfternoonMomentumStrategy(BaseStrategy):
             return None
 
         # All conditions pass — build signal
-        return self._build_signal(symbol, candle, state, consolidation_high)
+        return self._build_signal(symbol, candle, state, consolidation_high, atr)
+
+    def _calculate_pattern_strength(
+        self,
+        candle: CandleEvent,
+        state: ConsolidationSymbolState,
+        consolidation_high: float,
+        atr: float,
+    ) -> tuple[float, dict]:
+        """Calculate Afternoon Momentum pattern strength (0-100) and context dict.
+
+        Scoring factors:
+        - Entry condition margin (35%): average margin above threshold for 4 conditions.
+        - Consolidation tightness (25%): range/ATR; tighter = better.
+        - Volume surge (25%): breakout volume vs avg consolidation volume.
+        - Time in window (15%): minutes remaining in operating window.
+
+        Args:
+            candle: The breakout candle.
+            state: The symbol's consolidation state.
+            consolidation_high: The consolidation high before the breakout bar.
+            atr: The current ATR-14 value.
+
+        Returns:
+            Tuple of (pattern_strength, signal_context).
+        """
+        close = candle.close
+
+        # Average volume from all bars before the current breakout candle
+        if len(state.recent_volumes) > 1:
+            avg_volume = sum(state.recent_volumes[:-1]) / (len(state.recent_volumes) - 1)
+        else:
+            avg_volume = float(candle.volume)
+
+        # --- Entry condition margin (35%) ---
+        # Average of 4 quantifiable condition credits.
+
+        # 1. Volume margin: actual vs required. 1.0 = at threshold = 50, 1.1+ = 100.
+        required_vol = avg_volume * self._pm_config.volume_multiplier
+        vol_margin_ratio = candle.volume / required_vol if required_vol > 0 else 1.0
+        vol_margin_credit = 50.0 + (vol_margin_ratio - 1.0) * 500.0
+        vol_margin_credit = max(0.0, min(100.0, vol_margin_credit))
+
+        # 2. Chase margin: how far below the chase limit (near breakout high = best).
+        chase_limit = consolidation_high * (1.0 + self._pm_config.max_chase_pct)
+        chase_range = chase_limit - consolidation_high
+        chase_margin_ratio = (
+            (chase_limit - close) / chase_range if chase_range > 0 else 0.5
+        )
+        chase_margin_credit = chase_margin_ratio * 100.0
+        chase_margin_credit = max(0.0, min(100.0, chase_margin_credit))
+
+        # 3. Consolidation quality: how far below the ATR threshold (tighter = more margin).
+        if state.midday_high is not None and state.midday_low is not None and atr > 0:
+            midday_range = state.midday_high - state.midday_low
+            actual_ratio = midday_range / atr
+            cons_quality_ratio = (
+                self._pm_config.consolidation_atr_ratio / actual_ratio if actual_ratio > 0 else 1.0
+            )
+        else:
+            cons_quality_ratio = 1.0
+        # At threshold = 1.0 = 50; 2× tighter = 2.0 = 100.
+        cons_margin_credit = 50.0 + (cons_quality_ratio - 1.0) * 50.0
+        cons_margin_credit = max(0.0, min(100.0, cons_margin_credit))
+
+        # 4. Risk per share margin: bigger stop distance = more conviction.
+        midday_low = state.midday_low if state.midday_low is not None else close * 0.99
+        stop_price_est = midday_low * (1.0 - self._pm_config.stop_buffer_pct)
+        risk_pct = (close - stop_price_est) / close if close > 0 else 0.01
+        # 0.3% = 50, 0.6%+ = 100. Linear.
+        risk_credit = 50.0 + (risk_pct - 0.003) / 0.003 * 50.0
+        risk_credit = max(0.0, min(100.0, risk_credit))
+
+        condition_credit = (
+            vol_margin_credit + chase_margin_credit + cons_margin_credit + risk_credit
+        ) / 4.0
+
+        # --- Consolidation tightness (25%) ---
+        if state.midday_high is not None and state.midday_low is not None and atr > 0:
+            tightness_ratio = (state.midday_high - state.midday_low) / atr
+        else:
+            tightness_ratio = 0.5  # neutral
+
+        if tightness_ratio <= 0.3:
+            tightness_credit = 90.0
+        elif tightness_ratio <= 0.5:
+            tightness_credit = 90.0 - 25.0 * (tightness_ratio - 0.3) / 0.2
+        elif tightness_ratio <= 0.8:
+            tightness_credit = 65.0 - 25.0 * (tightness_ratio - 0.5) / 0.3
+        else:
+            tightness_credit = 40.0
+
+        # --- Volume surge (25%) ---
+        # >2.0× = 85, 1.5× = 65, <1.2× = 30. Piecewise linear.
+        surge_ratio = candle.volume / avg_volume if avg_volume > 0 else 1.0
+
+        if surge_ratio < 1.2:
+            surge_credit = 30.0
+        elif surge_ratio <= 1.5:
+            surge_credit = 30.0 + (surge_ratio - 1.2) / 0.3 * 35.0
+        elif surge_ratio <= 2.0:
+            surge_credit = 65.0 + (surge_ratio - 1.5) / 0.5 * 20.0
+        else:
+            surge_credit = 85.0
+
+        # --- Time in window (15%) ---
+        # 2:00 PM (90 min remaining) = 80, 3:00 PM (30 min) = 50, 3:15 PM (15 min) = 35.
+        candle_et = candle.timestamp.astimezone(ET)
+        latest_dt = candle_et.replace(
+            hour=self._latest_entry_time.hour,
+            minute=self._latest_entry_time.minute,
+            second=0,
+            microsecond=0,
+        )
+        minutes_remaining = max(0.0, (latest_dt - candle_et).total_seconds() / 60.0)
+
+        if minutes_remaining >= 90.0:
+            time_credit = 80.0
+        elif minutes_remaining >= 30.0:
+            time_credit = 80.0 - 0.5 * (90.0 - minutes_remaining)
+        elif minutes_remaining >= 15.0:
+            time_credit = 50.0 - (30.0 - minutes_remaining)
+        else:
+            time_credit = 35.0
+
+        pattern_strength = (
+            0.35 * condition_credit
+            + 0.25 * tightness_credit
+            + 0.25 * surge_credit
+            + 0.15 * time_credit
+        )
+        pattern_strength = max(0.0, min(100.0, pattern_strength))
+
+        signal_context: dict = {
+            "vol_margin_ratio": round(vol_margin_ratio, 4),
+            "chase_margin_ratio": round(chase_margin_ratio, 4),
+            "tightness_ratio": round(tightness_ratio, 4),
+            "surge_ratio": round(surge_ratio, 4),
+            "minutes_remaining": round(minutes_remaining, 1),
+            "condition_credit": round(condition_credit, 2),
+            "tightness_credit": round(tightness_credit, 2),
+            "surge_credit": round(surge_credit, 2),
+            "time_credit": round(time_credit, 2),
+        }
+
+        return pattern_strength, signal_context
 
     def _build_signal(
         self,
@@ -550,6 +697,7 @@ class AfternoonMomentumStrategy(BaseStrategy):
         candle: CandleEvent,
         state: ConsolidationSymbolState,
         consolidation_high: float,
+        atr: float,
     ) -> SignalEvent | None:
         """Build a SignalEvent for afternoon breakout entry.
 
@@ -558,9 +706,10 @@ class AfternoonMomentumStrategy(BaseStrategy):
             candle: The breakout candle.
             state: The symbol's state (contains consolidation range).
             consolidation_high: The consolidation high BEFORE the breakout bar.
+            atr: The current ATR-14 value (used for pattern strength scoring).
 
         Returns:
-            SignalEvent with T1/T2 targets, or None if position size is 0.
+            SignalEvent with T1/T2 targets.
         """
         if state.midday_low is None:
             return None
@@ -573,14 +722,13 @@ class AfternoonMomentumStrategy(BaseStrategy):
         t1 = entry_price + risk_per_share * self._pm_config.target_1_r
         t2 = entry_price + risk_per_share * self._pm_config.target_2_r
 
-        # Calculate position size
-        shares = self.calculate_position_size(entry_price, stop_price)
-        if shares <= 0:
-            logger.warning("%s: Position size calculation returned 0", symbol)
-            return None
-
         # Compute dynamic time stop
         time_stop_seconds = self._compute_effective_time_stop(candle)
+
+        # Calculate pattern strength (share_count deferred to Dynamic Sizer, Sprint 24 S6a)
+        pattern_strength, signal_context = self._calculate_pattern_strength(
+            candle, state, consolidation_high, atr
+        )
 
         # Build signal (use consolidation_high for the rationale, not updated midday_high)
         signal = SignalEvent(
@@ -590,7 +738,7 @@ class AfternoonMomentumStrategy(BaseStrategy):
             entry_price=entry_price,
             stop_price=stop_price,
             target_prices=(t1, t2),
-            share_count=shares,
+            share_count=0,
             rationale=(
                 f"Afternoon Momentum: {symbol} broke above consolidation high "
                 f"{consolidation_high:.2f} "
@@ -598,6 +746,8 @@ class AfternoonMomentumStrategy(BaseStrategy):
                 f"{state.consolidation_bars} bars)"
             ),
             time_stop_seconds=time_stop_seconds,
+            pattern_strength=pattern_strength,
+            signal_context=signal_context,
         )
 
         # Mark state as entered
@@ -607,13 +757,13 @@ class AfternoonMomentumStrategy(BaseStrategy):
 
         logger.info(
             "%s: Afternoon breakout signal - entry=%.2f, stop=%.2f, T1=%.2f, T2=%.2f, "
-            "shares=%d, time_stop=%ds",
+            "pattern_strength=%.1f, time_stop=%ds",
             symbol,
             entry_price,
             stop_price,
             t1,
             t2,
-            shares,
+            pattern_strength,
             time_stop_seconds,
         )
 

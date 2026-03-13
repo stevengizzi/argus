@@ -208,6 +208,15 @@ class OrderManager:
             if "target_prices" in event.modifications:
                 target_prices = event.modifications["target_prices"]
 
+        # Signals with share_count=0 are pending Dynamic Sizer (Sprint 24 S6a).
+        # Do not submit broker orders until the sizer fills in the share count.
+        if share_count == 0:
+            logger.debug(
+                "Signal for %s has share_count=0 (Dynamic Sizer pending), skipping order.",
+                signal.symbol,
+            )
+            return
+
         # Validate we have at least T1 target
         if len(target_prices) < 1:
             logger.error(
