@@ -46,6 +46,15 @@ Add `firehose` parameter (default True for background polling). When firehose=Tr
 - Do NOT modify: `argus/intelligence/classifier.py`, `argus/intelligence/storage.py`, `argus/intelligence/models.py`, `argus/intelligence/briefing.py`
 - Do NOT change existing intelligence shutdown sequence
 
+## Pre-Flight Verification (Work Journal carry-forward #5)
+
+Confirm that firehose mode with `symbols=[]` naturally suppresses Finnhub
+per-symbol recommendation calls (the loop iterates over an empty list).
+Add a test that verifies: `pipeline.run(symbols=[], firehose=True)` results
+in exactly 1 API call per source (general news / EFTS search), NOT 1+N.
+If the implementation doesn't naturally suppress recs, gate
+`_fetch_recommendations()` behind `if not firehose` in finnhub.py.
+
 ## Test Targets
 - `test_create_quality_components_enabled`: Returns (engine, sizer) tuple
 - `test_create_quality_components_disabled`: Returns None when enabled=false

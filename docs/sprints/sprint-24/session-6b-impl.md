@@ -5,6 +5,45 @@
 2. Scoped test: `python -m pytest tests/test_main.py tests/intelligence/ -x -q`
 3. Branch: `sprint-24`
 
+## Pre-Flight Fix: test_main.py Performance Regression (DEF-051)
+
+`test_main.py` (43 tests) takes 7+ minutes to run, causing review session timeouts.
+The S6a review session could not complete test_main.py verification at all. Since
+Session 6b is test-only and every remaining session (7 more + reviews) pays this cost,
+fix it here.
+
+### Diagnosis
+Run: `python -m pytest tests/test_main.py --durations=20 -v 2>&1 | tail -40`
+
+Identify whether the bottleneck is:
+- (a) Per-test ArgusSystem initialization (each test spins up full system)
+- (b) Phase 10.25 additions (CatalystStorage, QualityEngine, PositionSizer init)
+- (c) External service connection attempts (Databento, FMP, IBKR) timing out
+- (d) Database initialization overhead per test
+
+### Fix Strategy (pick the minimal one that works)
+1. **If external connections:** Add/verify mocks or patches for Databento, FMP, IBKR
+   clients in the test fixtures so no real connections are attempted.
+2. **If per-test init:** Convert the ArgusSystem fixture to `scope="module"` or
+   `scope="class"` where tests don't mutate shared state. Tests that DO mutate
+   state keep their own fixture.
+3. **If Phase 10.25:** Ensure CatalystStorage, QualityEngine, and PositionSizer
+   init is mocked/lightweight in test mode.
+
+### Constraints
+- All 43 existing tests must still pass with identical assertions.
+- No test logic changes — only fixture/setup optimization.
+- Target: full test_main.py suite completes in < 60 seconds.
+- Source code changes to test files ONLY (this is an exception to the "test_main.py
+  is not modified" convention — the fix is to test infrastructure, not production code).
+
+### Verification
+Before and after timing:
+```bash
+time python -m pytest tests/test_main.py -x -q
+```
+Report both times in the close-out.
+
 ## Objective
 Full integration tests running multiple signals through the quality pipeline. Error path coverage. Backtest bypass verification.
 
@@ -50,6 +89,7 @@ Write integration tests covering:
 - [ ] Bypass modes verified
 - [ ] No source code modified
 - [ ] 11+ new tests passing
+- [ ] test_main.py runs in < 60 seconds (was 7+ minutes)
 
 ## Close-Out
 Write report to `docs/sprints/sprint-24/session-6b-closeout.md`.

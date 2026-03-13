@@ -1554,6 +1554,14 @@ class TestAutoShutdown:
         # Verify shutdown was requested
         assert system._shutdown_event.is_set()
 
+        # Clean up: cancel any pending tasks created by _on_shutdown_requested
+        # to prevent the event loop from hanging during pytest teardown
+        for task in asyncio.all_tasks():
+            if task is not asyncio.current_task() and not task.done():
+                task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
+
     def test_shutdown_requested_event_has_correct_fields(self) -> None:
         """ShutdownRequestedEvent has reason and delay_seconds fields."""
         from argus.core.events import ShutdownRequestedEvent

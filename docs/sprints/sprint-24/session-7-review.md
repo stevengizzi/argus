@@ -21,4 +21,5 @@ Read: `docs/sprints/sprint-24/session-7-closeout.md`
 3. Verify polling loop default is firehose=True
 4. Verify health component registered for quality_engine
 5. Verify graceful handling when quality_engine.enabled=false (no components created)
-
+6. Verify Finnhub firehose with symbols=[] makes exactly 1 API call (no per-symbol
+   recommendation calls). Work Journal carry-forward from S3 review.
