@@ -93,19 +93,28 @@ class FMPNewsClient(CatalystSource):
         self._api_key = None
         logger.info("FMPNewsClient stopped")
 
-    async def fetch_catalysts(self, symbols: list[str]) -> list[CatalystRawItem]:
+    async def fetch_catalysts(
+        self, symbols: list[str], firehose: bool = False
+    ) -> list[CatalystRawItem]:
         """Fetch news and press releases for the given symbols.
 
         Resets the circuit breaker at the start of each cycle. If a 403
         (plan restriction) is encountered, remaining symbols are skipped
         for this cycle only — the next call retries from scratch.
 
+        FMP has no firehose endpoint — returns empty list when firehose=True.
+
         Args:
             symbols: List of stock ticker symbols.
+            firehose: Ignored; FMP has no market-wide feed endpoint.
 
         Returns:
-            List of CatalystRawItem from news and press releases.
+            List of CatalystRawItem from news and press releases, or empty
+            list when firehose=True.
         """
+        if firehose:
+            return []
+
         if not self._session:
             logger.error("FMPNewsClient not started - call start() first")
             return []

@@ -6,6 +6,7 @@ Sprint 23.5 Session 2: Data Source Clients.
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 from zoneinfo import ZoneInfo
@@ -384,3 +385,218 @@ class TestSECEdgarClient:
             assert len(client._cik_map) > 0
 
             await client.stop()
+
+
+def _make_efts_response(
+    hits: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Create a mock EFTS search-index response."""
+    return {"hits": {"hits": [{"_source": h} for h in hits]}}
+
+
+def _make_efts_hit(
+    form_type: str = "8-K",
+    entity_id: str = "0000320193",
+    file_date: str = "2024-03-01",
+    description: str = "Results of Operations",
+) -> dict[str, Any]:
+    """Create a single EFTS hit _source dict."""
+    return {
+        "form_type": form_type,
+        "entity_id": entity_id,
+        "file_date": file_date,
+        "description": description,
+    }
+
+
+class TestSECEdgarFirehose:
+    """Tests for SECEdgarClient firehose mode (DEC-327)."""
+
+    @pytest.fixture
+    def config(self) -> SECEdgarConfig:
+        """Default config for tests."""
+        return SECEdgarConfig(
+            user_agent_email="test@example.com",
+            filing_types=["8-K", "4"],
+        )
+
+    @pytest.fixture
+    def client(self, config: SECEdgarConfig) -> SECEdgarClient:
+        """Client with CIK map pre-populated and cache marked fresh."""
+        c = SECEdgarClient(config)
+        c._cik_map = {
+            "AAPL": "0000320193",
+            "MSFT": "0000789019",
+            "TSLA": "0001318605",
+        }
+        c._cik_cache_time = datetime.now(ZoneInfo("America/New_York"))
+        return c
+
+    def _mock_session_with_response(
+        self, json_data: Any
+    ) -> tuple[MagicMock, list[str]]:
+        """Create mock session that returns a fixed response."""
+        called_urls: list[str] = []
+
+        def mock_get(url: str) -> _MockContextManager:
+            called_urls.append(url)
+            return _MockContextManager(_create_mock_response(200, json_data))
+
+        mock_session = MagicMock()
+        mock_session.get = mock_get
+        return mock_session, called_urls
+
+    @pytest.mark.asyncio
+    async def test_sec_edgar_firehose_single_api_call(
+        self, client: SECEdgarClient
+    ) -> None:
+        """firehose=True makes exactly 1 call to the EFTS search endpoint."""
+        called_urls: list[str] = []
+        efts_response = _make_efts_response([])
+
+        def mock_get(url: str) -> _MockContextManager:
+            called_urls.append(url)
+            return _MockContextManager(_create_mock_response(200, efts_response))
+
+        mock_session = MagicMock()
+        mock_session.get = mock_get
+        client._session = mock_session
+
+        result = await client.fetch_catalysts(["AAPL"], firehose=True)
+
+        assert len(called_urls) == 1
+        assert "efts.sec.gov" in called_urls[0]
+        assert isinstance(result, list)
+
+    @pytest.mark.asyncio
+    async def test_sec_edgar_firehose_cik_mapping(
+        self, client: SECEdgarClient
+    ) -> None:
+        """Filing with known CIK is mapped to the correct ticker symbol."""
+        hit = _make_efts_hit(form_type="8-K", entity_id="0000320193")
+        efts_response = _make_efts_response([hit])
+
+        fetch_time = datetime(2024, 3, 2, 9, 0, tzinfo=ZoneInfo("America/New_York"))
+        reverse_map = {
+            cik.lstrip("0") or "0": ticker
+            for ticker, cik in client._cik_map.items()
+        }
+        result = client._parse_firehose_filings(efts_response, fetch_time, reverse_map)
+
+        assert len(result) == 1
+        assert result[0].symbol == "AAPL"
+        assert result[0].filing_type == "8-K"
+        assert result[0].source == "sec_edgar"
+
+    @pytest.mark.asyncio
+    async def test_sec_edgar_firehose_unknown_cik(
+        self, client: SECEdgarClient
+    ) -> None:
+        """Filing with unknown CIK gets symbol=''."""
+        hit = _make_efts_hit(form_type="8-K", entity_id="9999999999")
+        efts_response = _make_efts_response([hit])
+
+        fetch_time = datetime(2024, 3, 2, 9, 0, tzinfo=ZoneInfo("America/New_York"))
+        result = client._parse_firehose_filings(efts_response, fetch_time, {})
+
+        assert len(result) == 1
+        assert result[0].symbol == ""
+
+    @pytest.mark.asyncio
+    async def test_sec_edgar_firehose_form4_headline(
+        self, client: SECEdgarClient
+    ) -> None:
+        """Form 4 filing generates 'Insider Transaction' headline."""
+        hit = _make_efts_hit(form_type="4", entity_id="0000320193")
+        efts_response = _make_efts_response([hit])
+
+        fetch_time = datetime(2024, 3, 2, 9, 0, tzinfo=ZoneInfo("America/New_York"))
+        reverse_map = {"320193": "AAPL"}
+        result = client._parse_firehose_filings(efts_response, fetch_time, reverse_map)
+
+        assert len(result) == 1
+        assert "Insider Transaction" in result[0].headline
+
+    @pytest.mark.asyncio
+    async def test_sec_edgar_per_symbol_still_works(
+        self, client: SECEdgarClient
+    ) -> None:
+        """firehose=False still uses per-CIK submission fetching."""
+        submissions = _make_submissions_response(
+            forms=["8-K"],
+            filing_dates=["2024-03-01"],
+            accession_numbers=["0000320193-24-000001"],
+        )
+
+        called_urls: list[str] = []
+
+        def mock_get(url: str) -> _MockContextManager:
+            called_urls.append(url)
+            return _MockContextManager(_create_mock_response(200, submissions))
+
+        mock_session = MagicMock()
+        mock_session.get = mock_get
+        client._session = mock_session
+        client._cik_cache_time = datetime.now(ZoneInfo("America/New_York"))
+
+        result = await client.fetch_catalysts(["AAPL"], firehose=False)
+
+        efts_calls = [u for u in called_urls if "efts.sec.gov" in u]
+        submissions_calls = [u for u in called_urls if "submissions" in u]
+        assert len(efts_calls) == 0
+        assert len(submissions_calls) == 1
+        assert len(result) == 1
+        assert result[0].symbol == "AAPL"
+
+    @pytest.mark.asyncio
+    async def test_sec_edgar_firehose_empty_response_returns_empty(
+        self, client: SECEdgarClient
+    ) -> None:
+        """firehose mode with empty hits returns []."""
+        efts_response = _make_efts_response([])
+
+        mock_session = MagicMock()
+        mock_session.get = MagicMock(
+            return_value=_MockContextManager(_create_mock_response(200, efts_response))
+        )
+        client._session = mock_session
+
+        result = await client.fetch_catalysts(["AAPL"], firehose=True)
+
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_sec_edgar_firehose_api_error_returns_empty(
+        self, client: SECEdgarClient
+    ) -> None:
+        """firehose mode with API error returns []."""
+        mock_session = MagicMock()
+        mock_session.get = MagicMock(
+            return_value=_MockContextManager(_create_mock_response(500, None))
+        )
+        client._session = mock_session
+
+        result = await client.fetch_catalysts(["AAPL"], firehose=True)
+
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_sec_edgar_firehose_filters_by_filing_types(
+        self, client: SECEdgarClient
+    ) -> None:
+        """firehose mode only returns filing types in config.filing_types."""
+        hits = [
+            _make_efts_hit(form_type="8-K", entity_id="0000320193"),
+            _make_efts_hit(form_type="10-K", entity_id="0000320193"),
+            _make_efts_hit(form_type="4", entity_id="0000789019"),
+            _make_efts_hit(form_type="S-1", entity_id="0000789019"),
+        ]
+        efts_response = _make_efts_response(hits)
+
+        fetch_time = datetime(2024, 3, 2, 9, 0, tzinfo=ZoneInfo("America/New_York"))
+        reverse_map = {"320193": "AAPL", "789019": "MSFT"}
+        result = client._parse_firehose_filings(efts_response, fetch_time, reverse_map)
+
+        assert len(result) == 2
+        form_types = {r.filing_type for r in result}
+        assert form_types == {"8-K", "4"}

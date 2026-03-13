@@ -28,11 +28,15 @@ class CatalystSource(ABC):
     """
 
     @abstractmethod
-    async def fetch_catalysts(self, symbols: list[str]) -> list[CatalystRawItem]:
+    async def fetch_catalysts(
+        self, symbols: list[str], firehose: bool = False
+    ) -> list[CatalystRawItem]:
         """Fetch raw catalyst items for the given symbols.
 
         Args:
             symbols: List of stock ticker symbols to fetch catalysts for.
+            firehose: When True, fetch market-wide feed in one call instead of
+                per-symbol polling. Not all sources support firehose mode.
 
         Returns:
             List of raw catalyst items from this source. May be empty

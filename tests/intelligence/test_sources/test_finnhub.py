@@ -368,3 +368,220 @@ class TestFinnhubClient:
         assert attempt_count == 3  # Should retry 3 times
 
         await client.stop()
+
+
+class TestFinnhubFirehose:
+    """Tests for FinnhubClient firehose mode (DEC-327)."""
+
+    @pytest.fixture
+    def config(self) -> FinnhubConfig:
+        """Default config for tests."""
+        return FinnhubConfig(
+            api_key_env_var="FINNHUB_API_KEY",
+            rate_limit_per_minute=60,
+        )
+
+    @pytest.fixture
+    def client(self, config: FinnhubConfig) -> FinnhubClient:
+        """Client with API key set and mock session."""
+        c = FinnhubClient(config)
+        c._api_key = "test_key"
+        return c
+
+    def _make_session_with_responses(
+        self, responses: list[tuple[str, Any]]
+    ) -> tuple[MagicMock, list[str]]:
+        """Create mock session that tracks URLs called.
+
+        Args:
+            responses: List of (url_fragment, json_data) pairs returned
+                in order for each call.
+
+        Returns:
+            (mock_session, calls_made) where calls_made is appended to.
+        """
+        calls_made: list[str] = []
+        response_iter = iter(responses)
+
+        def mock_get(url: str, params: dict[str, Any]) -> _MockContextManager:
+            calls_made.append(url)
+            try:
+                _, json_data = next(response_iter)
+            except StopIteration:
+                json_data = []
+            mock_response = _create_mock_response(200, json_data)
+            return _MockContextManager(mock_response)
+
+        mock_session = MagicMock()
+        mock_session.get = mock_get
+        mock_session.close = AsyncMock()
+        return mock_session, calls_made
+
+    @pytest.mark.asyncio
+    async def test_finnhub_firehose_single_api_call(self, client: FinnhubClient) -> None:
+        """firehose=True makes exactly 1 call to /news?category=general."""
+        calls_made: list[str] = []
+
+        def mock_get(url: str, params: dict[str, Any]) -> _MockContextManager:
+            calls_made.append(url)
+            return _MockContextManager(_create_mock_response(200, []))
+
+        mock_session = MagicMock()
+        mock_session.get = mock_get
+        mock_session.close = AsyncMock()
+        client._session = mock_session
+
+        fetch_time = datetime.now(_ET)
+        result = await client._fetch_general_news(fetch_time)
+
+        assert len(calls_made) == 1
+        assert "/news" in calls_made[0]
+        assert isinstance(result, list)
+
+    @pytest.mark.asyncio
+    async def test_finnhub_firehose_symbol_association(
+        self, client: FinnhubClient
+    ) -> None:
+        """Item with related='AAPL,MSFT' produces 2 CatalystRawItems."""
+        item = _make_news_item("Market-wide news", category="general")
+        item["related"] = "AAPL,MSFT"
+
+        fetch_time = datetime.now(_ET)
+        result = client._associate_symbols([item], fetch_time)
+
+        assert len(result) == 2
+        symbols = {r.symbol for r in result}
+        assert symbols == {"AAPL", "MSFT"}
+        assert all(r.headline == "Market-wide news" for r in result)
+
+    @pytest.mark.asyncio
+    async def test_finnhub_firehose_no_related_field(
+        self, client: FinnhubClient
+    ) -> None:
+        """Item with no 'related' field is stored with symbol=''."""
+        item = _make_news_item("Headline with no ticker")
+        item.pop("related", None)
+
+        fetch_time = datetime.now(_ET)
+        result = client._associate_symbols([item], fetch_time)
+
+        assert len(result) == 1
+        assert result[0].symbol == ""
+
+    @pytest.mark.asyncio
+    async def test_finnhub_firehose_empty_related_field(
+        self, client: FinnhubClient
+    ) -> None:
+        """Item with related='' is stored with symbol=''."""
+        item = _make_news_item("Headline with empty related")
+        item["related"] = ""
+
+        fetch_time = datetime.now(_ET)
+        result = client._associate_symbols([item], fetch_time)
+
+        assert len(result) == 1
+        assert result[0].symbol == ""
+
+    @pytest.mark.asyncio
+    async def test_finnhub_per_symbol_still_works(
+        self, client: FinnhubClient
+    ) -> None:
+        """firehose=False triggers per-symbol company-news calls."""
+        news_response = [_make_news_item("Company headline")]
+        rec_response: list[dict] = []
+
+        call_urls: list[str] = []
+
+        def mock_get(url: str, params: dict[str, Any]) -> _MockContextManager:
+            call_urls.append(url)
+            if "company-news" in url:
+                return _MockContextManager(_create_mock_response(200, news_response))
+            return _MockContextManager(_create_mock_response(200, rec_response))
+
+        mock_session = MagicMock()
+        mock_session.get = mock_get
+        mock_session.close = AsyncMock()
+        client._session = mock_session
+
+        result = await client.fetch_catalysts(["AAPL"], firehose=False)
+
+        company_news_calls = [u for u in call_urls if "company-news" in u]
+        general_news_calls = [u for u in call_urls if "/news" in u and "company-news" not in u]
+
+        assert len(company_news_calls) == 1
+        assert len(general_news_calls) == 0
+        assert len(result) == 1
+        assert result[0].symbol == "AAPL"
+
+    @pytest.mark.asyncio
+    async def test_finnhub_firehose_recommendations_still_per_symbol(
+        self, client: FinnhubClient
+    ) -> None:
+        """In firehose mode, recommendations are still fetched per-symbol."""
+        rec_item = _make_recommendation_item()
+        call_urls: list[str] = []
+
+        def mock_get(url: str, params: dict[str, Any]) -> _MockContextManager:
+            call_urls.append(url)
+            if "recommendation" in url:
+                return _MockContextManager(_create_mock_response(200, [rec_item]))
+            # /news endpoint for general news
+            return _MockContextManager(_create_mock_response(200, []))
+
+        mock_session = MagicMock()
+        mock_session.get = mock_get
+        mock_session.close = AsyncMock()
+        client._session = mock_session
+
+        result = await client.fetch_catalysts(["AAPL", "MSFT"], firehose=True)
+
+        rec_calls = [u for u in call_urls if "recommendation" in u]
+        assert len(rec_calls) == 2  # One per symbol
+        assert any(r.metadata.get("category") == "analyst_recommendation" for r in result)
+
+    @pytest.mark.asyncio
+    async def test_finnhub_firehose_empty_response_returns_empty(
+        self, client: FinnhubClient
+    ) -> None:
+        """firehose mode with empty API response returns []."""
+        mock_session = MagicMock()
+        mock_session.get = MagicMock(
+            return_value=_MockContextManager(_create_mock_response(200, []))
+        )
+        mock_session.close = AsyncMock()
+        client._session = mock_session
+
+        fetch_time = datetime.now(_ET)
+        result = await client._fetch_general_news(fetch_time)
+
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_finnhub_firehose_api_error_returns_empty(
+        self, client: FinnhubClient
+    ) -> None:
+        """firehose mode with API error (500) returns []."""
+        mock_session = MagicMock()
+        mock_session.get = MagicMock(
+            return_value=_MockContextManager(_create_mock_response(500, None))
+        )
+        mock_session.close = AsyncMock()
+        client._session = mock_session
+
+        fetch_time = datetime.now(_ET)
+        result = await client._fetch_general_news(fetch_time)
+
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_catalyst_source_abc_firehose_param(
+        self, client: FinnhubClient
+    ) -> None:
+        """CatalystSource ABC fetch_catalysts() accepts firehose parameter."""
+        from argus.intelligence.sources import CatalystSource
+        import inspect
+
+        sig = inspect.signature(CatalystSource.fetch_catalysts)
+        assert "firehose" in sig.parameters
+        param = sig.parameters["firehose"]
+        assert param.default is False

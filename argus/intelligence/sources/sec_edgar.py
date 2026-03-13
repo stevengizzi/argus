@@ -50,6 +50,7 @@ class SECEdgarClient(CatalystSource):
     _TICKERS_URL = "https://www.sec.gov/files/company_tickers.json"
     _SUBMISSIONS_URL = "https://data.sec.gov/submissions/CIK{cik}.json"
     _FILING_URL = "https://www.sec.gov/Archives/edgar/data/{cik}/{accession}/{doc}"
+    _EFTS_SEARCH_URL = "https://efts.sec.gov/LATEST/search-index"
 
     def __init__(self, config: SECEdgarConfig) -> None:
         """Initialize SEC EDGAR client.
@@ -110,11 +111,18 @@ class SECEdgarClient(CatalystSource):
         self._cik_map.clear()
         logger.info("SECEdgarClient stopped")
 
-    async def fetch_catalysts(self, symbols: list[str]) -> list[CatalystRawItem]:
+    async def fetch_catalysts(
+        self, symbols: list[str], firehose: bool = False
+    ) -> list[CatalystRawItem]:
         """Fetch recent SEC filings for the given symbols.
+
+        When firehose=True, fetches all recent filings in a single EFTS
+        search call instead of per-CIK polling.
 
         Args:
             symbols: List of stock ticker symbols.
+            firehose: When True, use the EFTS search endpoint to pull all
+                recent filings in one call.
 
         Returns:
             List of CatalystRawItem for matching filings.
@@ -122,6 +130,16 @@ class SECEdgarClient(CatalystSource):
         if not self._session:
             logger.error("SECEdgarClient not started - call start() first")
             return []
+
+        if firehose:
+            await self._ensure_cik_map_fresh()
+            fetch_time = datetime.now(_ET)
+            catalysts = await self._fetch_recent_filings_firehose(fetch_time)
+            logger.debug(
+                "Fetched %d catalysts from SEC EDGAR (firehose)",
+                len(catalysts),
+            )
+            return catalysts
 
         if not symbols:
             return []
@@ -151,6 +169,107 @@ class SECEdgarClient(CatalystSource):
             len(catalysts),
             len(symbols),
         )
+        return catalysts
+
+    async def _fetch_recent_filings_firehose(
+        self, fetch_time: datetime
+    ) -> list[CatalystRawItem]:
+        """Fetch all recent filings in a single EFTS search call.
+
+        Uses SEC EFTS full-text search index to retrieve recent 8-K and Form 4
+        filings without per-CIK polling. Maps entity CIKs to tickers via the
+        reverse of self._cik_map. Filings for unknown CIKs get symbol="".
+
+        Args:
+            fetch_time: Timestamp for fetched_at field.
+
+        Returns:
+            List of CatalystRawItem for all matching filings.
+        """
+        yesterday = (fetch_time - timedelta(days=1)).strftime("%Y-%m-%d")
+        forms = ",".join(self._config.filing_types)
+        url = (
+            f"{self._EFTS_SEARCH_URL}"
+            f"?dateRange=custom&startdt={yesterday}&forms={forms}"
+        )
+
+        # Build reverse lookup: stripped CIK → ticker
+        reverse_cik_map = {
+            cik.lstrip("0") or "0": ticker
+            for ticker, cik in self._cik_map.items()
+        }
+
+        response_data = await self._make_rate_limited_request(url)
+        if response_data is None:
+            return []
+
+        return self._parse_firehose_filings(response_data, fetch_time, reverse_cik_map)
+
+    def _parse_firehose_filings(
+        self,
+        data: dict[str, Any],
+        fetch_time: datetime,
+        reverse_cik_map: dict[str, str],
+    ) -> list[CatalystRawItem]:
+        """Parse EFTS search response into CatalystRawItem list.
+
+        Args:
+            data: Raw EFTS JSON response.
+            fetch_time: Timestamp for fetched_at field.
+            reverse_cik_map: Mapping of stripped CIK → ticker symbol.
+
+        Returns:
+            List of CatalystRawItem. Items with unknown CIK get symbol="".
+        """
+        hits = data.get("hits", {}).get("hits", [])
+        allowed_forms = set(self._config.filing_types)
+        catalysts: list[CatalystRawItem] = []
+
+        for hit in hits:
+            source = hit.get("_source", {})
+            form_type = source.get("form_type", "")
+            if form_type not in allowed_forms:
+                continue
+
+            entity_id = source.get("entity_id", "")
+            cik_stripped = entity_id.lstrip("0") or "0"
+            ticker = reverse_cik_map.get(cik_stripped, "")
+
+            file_date = source.get("file_date", "")
+            description = source.get("description", "")
+
+            try:
+                published_at = datetime.strptime(file_date, "%Y-%m-%d").replace(tzinfo=_ET)
+            except ValueError:
+                published_at = fetch_time
+
+            display_name = ticker or entity_id
+            if form_type == "4":
+                headline = f"SEC Form 4 (Insider Transaction) filed by {display_name}"
+            elif form_type == "8-K":
+                headline = (
+                    f"SEC 8-K filed: {description}"
+                    if description
+                    else f"SEC 8-K filed by {display_name}"
+                )
+            else:
+                headline = f"SEC {form_type} filed by {display_name}"
+
+            catalysts.append(
+                CatalystRawItem(
+                    headline=headline,
+                    symbol=ticker,
+                    source="sec_edgar",
+                    filing_type=form_type,
+                    published_at=published_at,
+                    fetched_at=fetch_time,
+                    metadata={
+                        "entity_id": entity_id,
+                        "description": description,
+                    },
+                )
+            )
+
         return catalysts
 
     async def _refresh_cik_map(self) -> None:

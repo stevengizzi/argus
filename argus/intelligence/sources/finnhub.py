@@ -95,11 +95,19 @@ class FinnhubClient(CatalystSource):
         self._api_key = None
         logger.info("FinnhubClient stopped")
 
-    async def fetch_catalysts(self, symbols: list[str]) -> list[CatalystRawItem]:
+    async def fetch_catalysts(
+        self, symbols: list[str], firehose: bool = False
+    ) -> list[CatalystRawItem]:
         """Fetch news and recommendations for the given symbols.
+
+        When firehose=True, fetches market-wide general news in one call
+        instead of per-symbol company news. Recommendations are always
+        fetched per-symbol (no firehose endpoint exists for them).
 
         Args:
             symbols: List of stock ticker symbols.
+            firehose: When True, use the general news feed instead of
+                per-symbol company-news polling.
 
         Returns:
             List of CatalystRawItem from news and recommendations.
@@ -122,20 +130,94 @@ class FinnhubClient(CatalystSource):
         catalysts: list[CatalystRawItem] = []
         fetch_time = datetime.now(_ET)
 
-        for symbol in symbols:
-            # Fetch company news (last 24 hours)
-            news = await self._fetch_company_news(symbol, fetch_time)
-            catalysts.extend(news)
+        if firehose:
+            # Single API call for market-wide general news
+            general_news = await self._fetch_general_news(fetch_time)
+            catalysts.extend(general_news)
+        else:
+            for symbol in symbols:
+                news = await self._fetch_company_news(symbol, fetch_time)
+                catalysts.extend(news)
 
-            # Fetch recommendation trends
+        # Recommendations always fetched per-symbol (no firehose endpoint)
+        for symbol in symbols:
             recommendations = await self._fetch_recommendations(symbol, fetch_time)
             catalysts.extend(recommendations)
 
         logger.debug(
-            "Fetched %d catalysts from Finnhub for %d symbols",
+            "Fetched %d catalysts from Finnhub for %d symbols (firehose=%s)",
             len(catalysts),
             len(symbols),
+            firehose,
         )
+        return catalysts
+
+    async def _fetch_general_news(self, fetch_time: datetime) -> list[CatalystRawItem]:
+        """Fetch market-wide general news in a single API call.
+
+        Uses the /news?category=general endpoint to retrieve last 24h of
+        market-wide news, then associates each item with its related symbols.
+
+        Args:
+            fetch_time: Timestamp for fetched_at field.
+
+        Returns:
+            List of CatalystRawItem with symbol association applied.
+        """
+        url = f"{self._BASE_URL}/news"
+        params: dict[str, str | int] = {
+            "category": "general",
+            "token": self._api_key or "",
+        }
+
+        data = await self._make_rate_limited_request(url, params)
+        if data is None:
+            return []
+
+        return self._associate_symbols(data, fetch_time)
+
+    def _associate_symbols(
+        self,
+        items: list[dict],
+        fetch_time: datetime,
+    ) -> list[CatalystRawItem]:
+        """Associate general news items with their related symbols.
+
+        Each Finnhub news item may have a `related` field containing
+        comma-separated tickers. Creates one CatalystRawItem per
+        (item, symbol) pair. Items with empty/missing `related` get symbol="".
+
+        Args:
+            items: Raw news items from the Finnhub API.
+            fetch_time: Timestamp for fetched_at field.
+
+        Returns:
+            List of CatalystRawItem, potentially multiple per input item.
+        """
+        catalysts: list[CatalystRawItem] = []
+
+        for item in items:
+            headline = item.get("headline", "")
+            if not headline:
+                continue
+
+            related_raw = item.get("related", "")
+            symbols = (
+                [s.strip() for s in related_raw.split(",") if s.strip()]
+                if related_raw
+                else []
+            )
+
+            if not symbols:
+                catalyst = self._parse_news_item(item, "", fetch_time)
+                if catalyst:
+                    catalysts.append(catalyst)
+            else:
+                for symbol in symbols:
+                    catalyst = self._parse_news_item(item, symbol, fetch_time)
+                    if catalyst:
+                        catalysts.append(catalyst)
+
         return catalysts
 
     async def _fetch_company_news(
