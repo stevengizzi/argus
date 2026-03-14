@@ -5,6 +5,10 @@ from __future__ import annotations
 import pytest
 from fastapi import FastAPI
 
+from argus.intelligence.config import QualityEngineConfig
+from argus.intelligence.position_sizer import DynamicPositionSizer
+from argus.intelligence.quality_engine import SetupQualityEngine
+
 
 @pytest.mark.asyncio
 async def test_app_creation(app_state):
@@ -157,3 +161,48 @@ class TestPortAvailabilityGuard:
                 await task
             except asyncio.CancelledError:
                 pass
+
+
+class TestServerLifespanQualityInit:
+    """Tests for quality component initialization in server lifespan (S24-S7)."""
+
+    @pytest.mark.asyncio
+    async def test_server_lifespan_quality_init(self, app_state) -> None:
+        """Quality components created during startup when enabled."""
+        from argus.api.server import create_app
+
+        app_state.config.quality_engine = QualityEngineConfig(enabled=True)
+
+        app = create_app(app_state)
+
+        async with app.router.lifespan_context(app):
+            assert app_state.quality_engine is not None
+            assert isinstance(app_state.quality_engine, SetupQualityEngine)
+            assert app_state.position_sizer is not None
+            assert isinstance(app_state.position_sizer, DynamicPositionSizer)
+
+    @pytest.mark.asyncio
+    async def test_server_lifespan_quality_disabled(self, app_state) -> None:
+        """No components when quality engine is disabled."""
+        from argus.api.server import create_app
+
+        app_state.config.quality_engine = QualityEngineConfig(enabled=False)
+
+        app = create_app(app_state)
+
+        async with app.router.lifespan_context(app):
+            assert app_state.quality_engine is None
+            assert app_state.position_sizer is None
+
+    @pytest.mark.asyncio
+    async def test_health_component_registered(self, app_state) -> None:
+        """quality_engine registered in health monitor when enabled."""
+        from argus.api.server import create_app
+
+        app_state.config.quality_engine = QualityEngineConfig(enabled=True)
+
+        app = create_app(app_state)
+
+        async with app.router.lifespan_context(app):
+            status = app_state.health_monitor.get_status()
+            assert "quality_engine" in status

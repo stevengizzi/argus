@@ -23,6 +23,8 @@ from zoneinfo import ZoneInfo
 from argus.intelligence import CatalystPipeline
 from argus.intelligence.briefing import BriefingGenerator
 from argus.intelligence.classifier import CatalystClassifier
+from argus.intelligence.position_sizer import DynamicPositionSizer
+from argus.intelligence.quality_engine import SetupQualityEngine
 from argus.intelligence.sources import CatalystSource
 from argus.intelligence.sources.finnhub import FinnhubClient
 from argus.intelligence.sources.fmp_news import FMPNewsClient
@@ -33,7 +35,8 @@ if TYPE_CHECKING:
     from argus.ai.client import ClaudeClient
     from argus.ai.usage import UsageTracker
     from argus.core.event_bus import EventBus
-    from argus.intelligence.config import CatalystConfig
+    from argus.db.manager import DatabaseManager
+    from argus.intelligence.config import CatalystConfig, QualityEngineConfig
 
 logger = logging.getLogger(__name__)
 
@@ -155,6 +158,30 @@ async def create_intelligence_components(
     )
 
 
+def create_quality_components(
+    config: QualityEngineConfig, db_manager: DatabaseManager | None = None
+) -> tuple[SetupQualityEngine, DynamicPositionSizer] | None:
+    """Build quality engine + sizer from config. Returns None if disabled.
+
+    Args:
+        config: Quality engine configuration.
+        db_manager: Optional database manager for quality history persistence.
+
+    Returns:
+        Tuple of (SetupQualityEngine, DynamicPositionSizer) if enabled,
+        None if config.enabled is False.
+    """
+    if not config.enabled:
+        logger.info("Quality engine disabled in config")
+        return None
+
+    engine = SetupQualityEngine(config, db_manager=db_manager)
+    sizer = DynamicPositionSizer(config)
+
+    logger.info("Quality components created (engine + sizer)")
+    return engine, sizer
+
+
 async def shutdown_intelligence(components: IntelligenceComponents) -> None:
     """Shutdown intelligence pipeline components.
 
@@ -178,6 +205,7 @@ async def run_polling_loop(
     get_symbols: Callable[[], list[str]],
     market_open: str = "09:30",
     market_close: str = "16:00",
+    firehose: bool = True,
 ) -> None:
     """Run the catalyst polling loop indefinitely.
 
@@ -190,6 +218,8 @@ async def run_polling_loop(
         get_symbols: Callback that returns the current list of symbols to poll.
         market_open: Market open time in HH:MM format (ET).
         market_close: Market close time in HH:MM format (ET).
+        firehose: When True (default), use firehose mode for market-wide
+            feed instead of per-symbol polling.
     """
     logger.debug("Polling loop coroutine entered")
 
@@ -229,19 +259,29 @@ async def run_polling_loop(
         else:
             async with poll_lock:
                 try:
-                    symbols = get_symbols()
-                    if not symbols:
-                        logger.warning("No symbols returned from get_symbols(), skipping poll")
-                    else:
-                        logger.info(
-                            "Polling %d symbols: %s...",
-                            len(symbols),
-                            symbols[:5],
-                        )
+                    if firehose:
+                        logger.info("Polling in firehose mode (market-wide)")
                         await asyncio.wait_for(
-                            pipeline.run_poll(symbols),
+                            pipeline.run_poll(symbols=[], firehose=True),
                             timeout=120.0,
                         )
+                    else:
+                        symbols = get_symbols()
+                        if not symbols:
+                            logger.warning(
+                                "No symbols returned from get_symbols(), "
+                                "skipping poll"
+                            )
+                        else:
+                            logger.info(
+                                "Polling %d symbols: %s...",
+                                len(symbols),
+                                symbols[:5],
+                            )
+                            await asyncio.wait_for(
+                                pipeline.run_poll(symbols),
+                                timeout=120.0,
+                            )
                 except asyncio.TimeoutError:
                     logger.critical(
                         "Poll cycle timed out after 120s waiting for source fetches "

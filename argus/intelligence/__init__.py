@@ -116,7 +116,9 @@ class CatalystPipeline:
             except Exception as e:
                 logger.error("Failed to stop source %s: %s", source.source_name, e)
 
-    async def run_poll(self, symbols: list[str]) -> list[ClassifiedCatalyst]:
+    async def run_poll(
+        self, symbols: list[str], firehose: bool = False
+    ) -> list[ClassifiedCatalyst]:
         """Run a single poll cycle across all sources.
 
         Fetches from all sources concurrently, deduplicates, classifies,
@@ -124,15 +126,23 @@ class CatalystPipeline:
 
         Args:
             symbols: List of stock ticker symbols to poll.
+            firehose: When True, call each source with firehose=True and
+                symbols=[] for market-wide feed instead of per-symbol polling.
 
         Returns:
             List of newly classified catalysts.
         """
-        if not symbols:
+        if not symbols and not firehose:
             return []
 
         # Step 1: Fetch from all sources concurrently (120s safety net)
-        fetch_tasks = [source.fetch_catalysts(symbols) for source in self._sources]
+        if firehose:
+            fetch_tasks = [
+                source.fetch_catalysts(symbols=[], firehose=True)
+                for source in self._sources
+            ]
+        else:
+            fetch_tasks = [source.fetch_catalysts(symbols) for source in self._sources]
         try:
             results = await asyncio.wait_for(
                 asyncio.gather(*fetch_tasks, return_exceptions=True),

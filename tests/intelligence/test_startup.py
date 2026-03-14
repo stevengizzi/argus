@@ -348,7 +348,7 @@ class TestRunPollingLoop:
         # Run one iteration and cancel
         call_count = 0
 
-        async def mock_run_poll(syms: list[str]) -> None:
+        async def mock_run_poll(syms: list[str], firehose: bool = False) -> None:
             nonlocal call_count
             call_count += 1
             if call_count >= 1:
@@ -363,6 +363,7 @@ class TestRunPollingLoop:
                 pipeline=mock_pipeline,
                 config=polling_config,
                 get_symbols=get_symbols,
+                firehose=False,
             )
         )
 
@@ -404,6 +405,7 @@ class TestRunPollingLoop:
                     pipeline=mock_pipeline,
                     config=polling_config,
                     get_symbols=lambda: symbols,
+                    firehose=False,
                 )
             )
 
@@ -447,6 +449,7 @@ class TestRunPollingLoop:
                     pipeline=mock_pipeline,
                     config=polling_config,
                     get_symbols=lambda: symbols,
+                    firehose=False,
                 )
             )
 
@@ -479,6 +482,7 @@ class TestRunPollingLoop:
                     pipeline=mock_pipeline,
                     config=polling_config,
                     get_symbols=lambda: [],  # Empty symbols
+                    firehose=False,
                 )
             )
 
@@ -516,6 +520,7 @@ class TestRunPollingLoop:
                     pipeline=mock_pipeline,
                     config=polling_config,
                     get_symbols=lambda: symbols,
+                    firehose=False,
                 )
             )
 
@@ -565,6 +570,7 @@ class TestRunPollingLoop:
                     pipeline=mock_pipeline,
                     config=polling_config,
                     get_symbols=lambda: symbols,
+                    firehose=False,
                 )
             )
 
@@ -590,7 +596,7 @@ class TestRunPollingLoop:
         poll_can_finish = asyncio.Event()
         iteration_count = 0
 
-        async def slow_poll(syms: list[str]) -> None:
+        async def slow_poll(syms: list[str], firehose: bool = False) -> None:
             poll_started.set()
             await poll_can_finish.wait()
 
@@ -610,6 +616,7 @@ class TestRunPollingLoop:
                     pipeline=mock_pipeline,
                     config=polling_config,
                     get_symbols=lambda: symbols,
+                    firehose=False,
                 )
             )
 

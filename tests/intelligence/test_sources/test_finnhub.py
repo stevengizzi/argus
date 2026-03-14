@@ -514,17 +514,14 @@ class TestFinnhubFirehose:
         assert result[0].symbol == "AAPL"
 
     @pytest.mark.asyncio
-    async def test_finnhub_firehose_recommendations_still_per_symbol(
+    async def test_finnhub_firehose_suppresses_recommendations(
         self, client: FinnhubClient
     ) -> None:
-        """In firehose mode, recommendations are still fetched per-symbol."""
-        rec_item = _make_recommendation_item()
+        """In firehose mode, recommendations are suppressed (no per-symbol calls)."""
         call_urls: list[str] = []
 
         def mock_get(url: str, params: dict[str, Any]) -> _MockContextManager:
             call_urls.append(url)
-            if "recommendation" in url:
-                return _MockContextManager(_create_mock_response(200, [rec_item]))
             # /news endpoint for general news
             return _MockContextManager(_create_mock_response(200, []))
 
@@ -536,8 +533,10 @@ class TestFinnhubFirehose:
         result = await client.fetch_catalysts(["AAPL", "MSFT"], firehose=True)
 
         rec_calls = [u for u in call_urls if "recommendation" in u]
-        assert len(rec_calls) == 2  # One per symbol
-        assert any(r.metadata.get("category") == "analyst_recommendation" for r in result)
+        assert len(rec_calls) == 0  # No recommendation calls in firehose mode
+        assert not any(
+            r.metadata.get("category") == "analyst_recommendation" for r in result
+        )
 
     @pytest.mark.asyncio
     async def test_finnhub_firehose_empty_response_returns_empty(

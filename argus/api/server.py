@@ -208,6 +208,7 @@ def create_app(app_state: AppState) -> FastAPI:
                             pipeline=intelligence_components.pipeline,
                             config=app_state.config.catalyst,
                             get_symbols=get_symbols,
+                            firehose=True,
                         )
                     )
                     polling_task.add_done_callback(_poll_task_done)
@@ -221,6 +222,38 @@ def create_app(app_state: AppState) -> FastAPI:
             and not app_state.config.catalyst.enabled
         ):
             logger.info("Intelligence pipeline disabled")
+
+        # Initialize quality engine + position sizer if enabled
+        if app_state.config and app_state.config.quality_engine:
+            try:
+                from argus.intelligence.startup import create_quality_components
+
+                db_manager = None
+                if app_state.trade_logger is not None:
+                    db_manager = app_state.trade_logger._db
+
+                quality_result = create_quality_components(
+                    config=app_state.config.quality_engine,
+                    db_manager=db_manager,
+                )
+
+                if quality_result is not None:
+                    app_state.quality_engine, app_state.position_sizer = quality_result
+
+                    if app_state.health_monitor is not None:
+                        from argus.core.health import ComponentStatus
+
+                        app_state.health_monitor.update_component(
+                            "quality_engine",
+                            ComponentStatus.HEALTHY,
+                            message="Quality engine + sizer active",
+                        )
+
+                    logger.info("Quality engine + position sizer initialized")
+                else:
+                    logger.info("Quality engine disabled in config")
+            except Exception as e:
+                logger.error(f"Failed to initialize quality components: {e}")
 
         # Note: WebSocket bridge is started by main.py before calling run_server().
         # We only need to get a reference to it here for cleanup.

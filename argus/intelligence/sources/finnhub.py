@@ -124,7 +124,7 @@ class FinnhubClient(CatalystSource):
             logger.debug("Finnhub disabled for this cycle (auth error)")
             return []
 
-        if not symbols:
+        if not symbols and not firehose:
             return []
 
         catalysts: list[CatalystRawItem] = []
@@ -139,10 +139,14 @@ class FinnhubClient(CatalystSource):
                 news = await self._fetch_company_news(symbol, fetch_time)
                 catalysts.extend(news)
 
-        # Recommendations always fetched per-symbol (no firehose endpoint)
-        for symbol in symbols:
-            recommendations = await self._fetch_recommendations(symbol, fetch_time)
-            catalysts.extend(recommendations)
+        # Recommendations fetched per-symbol only (no firehose endpoint).
+        # In firehose mode with symbols=[], this loop naturally executes 0 times.
+        if not firehose:
+            for symbol in symbols:
+                recommendations = await self._fetch_recommendations(
+                    symbol, fetch_time
+                )
+                catalysts.extend(recommendations)
 
         logger.debug(
             "Fetched %d catalysts from Finnhub for %d symbols (firehose=%s)",

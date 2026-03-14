@@ -36,6 +36,8 @@ if TYPE_CHECKING:
     from argus.execution.broker import Broker
     from argus.execution.order_manager import OrderManager
     from argus.intelligence.briefing import BriefingGenerator
+    from argus.intelligence.position_sizer import DynamicPositionSizer
+    from argus.intelligence.quality_engine import SetupQualityEngine
     from argus.intelligence.storage import CatalystStorage
     from argus.strategies.base_strategy import BaseStrategy
 
@@ -104,6 +106,8 @@ class AppState:
     catalyst_storage: CatalystStorage | None = None
     briefing_generator: BriefingGenerator | None = None
     intelligence_polling_task: asyncio.Task[None] | None = None
+    quality_engine: SetupQualityEngine | None = None
+    position_sizer: DynamicPositionSizer | None = None
 
 
 def get_app_state(request: Request) -> AppState:
