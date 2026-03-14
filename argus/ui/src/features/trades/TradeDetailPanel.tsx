@@ -8,6 +8,8 @@
 import { TrendingUp, TrendingDown, Target, Shield, Clock, ExternalLink } from 'lucide-react';
 import { SlideInPanel } from '../../components/SlideInPanel';
 import { Badge } from '../../components/Badge';
+import { QualityBadge } from '../../components/QualityBadge';
+import { useQualityScore } from '../../hooks/useQuality';
 import { TradeChart } from '../../components/TradeChart';
 import { useSymbolDetailUI } from '../../stores/symbolDetailUI';
 import type { Trade } from '../../api/types';
@@ -97,6 +99,7 @@ function getExitExplanation(exitReason: string | null): string {
 export function TradeDetailPanel({ trade, onClose }: TradeDetailPanelProps) {
   const isOpen = trade !== null;
   const { open: openSymbolDetail } = useSymbolDetailUI();
+  const { data: qualityData } = useQualityScore(trade?.symbol ?? '');
 
   const handleSymbolClick = () => {
     if (trade) {
@@ -133,6 +136,20 @@ export function TradeDetailPanel({ trade, onClose }: TradeDetailPanelProps) {
           <div className="flex items-center gap-2">
             <Badge variant="info">{trade.strategy_id}</Badge>
           </div>
+
+          {/* Quality Score */}
+          {(trade.quality_grade || qualityData) && (
+            <div className="bg-argus-surface-2 rounded-lg p-4">
+              <div className="text-sm text-argus-text-dim mb-2">Setup Quality</div>
+              <QualityBadge
+                grade={trade.quality_grade ?? qualityData?.grade ?? ''}
+                score={trade.quality_score ?? qualityData?.score}
+                riskTier={qualityData?.risk_tier}
+                components={qualityData?.components}
+                compact={false}
+              />
+            </div>
+          )}
 
           {/* P&L Summary */}
           <div className="bg-argus-surface-2 rounded-lg p-4">

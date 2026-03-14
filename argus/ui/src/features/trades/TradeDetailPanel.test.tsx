@@ -6,6 +6,8 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type { ReactNode } from 'react';
 import { TradeDetailPanel } from './TradeDetailPanel';
 import type { Trade } from '../../api/types';
 
@@ -18,6 +20,14 @@ vi.mock('../../stores/symbolDetailUI', () => ({
 vi.mock('../../components/TradeChart', () => ({
   TradeChart: () => <div data-testid="mock-trade-chart">Trade Chart</div>,
 }));
+
+const queryClient = new QueryClient({
+  defaultOptions: { queries: { retry: false } },
+});
+
+function Wrapper({ children }: { children: ReactNode }) {
+  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+}
 
 const mockTrade: Trade = {
   id: 'trade-001',
@@ -37,18 +47,20 @@ const mockTrade: Trade = {
   market_regime: 'bullish',
   stop_price: 248.0,
   target_prices: [254.0, 258.0],
+  quality_grade: null,
+  quality_score: null,
 };
 
 describe('TradeDetailPanel', () => {
   it('renders nothing when trade is null', () => {
-    const { container } = render(<TradeDetailPanel trade={null} onClose={() => {}} />);
+    const { container } = render(<TradeDetailPanel trade={null} onClose={() => {}} />, { wrapper: Wrapper });
 
     // Panel should not show trade content when trade is null
     expect(screen.queryByText('TSLA')).not.toBeInTheDocument();
   });
 
   it('renders trade details when trade is provided', () => {
-    render(<TradeDetailPanel trade={mockTrade} onClose={() => {}} />);
+    render(<TradeDetailPanel trade={mockTrade} onClose={() => {}} />, { wrapper: Wrapper });
 
     // Should show the symbol
     expect(screen.getByText('TSLA')).toBeInTheDocument();
@@ -57,7 +69,7 @@ describe('TradeDetailPanel', () => {
   });
 
   it('displays price levels section with stop and target prices', () => {
-    render(<TradeDetailPanel trade={mockTrade} onClose={() => {}} />);
+    render(<TradeDetailPanel trade={mockTrade} onClose={() => {}} />, { wrapper: Wrapper });
 
     // Should show the Price Levels header
     expect(screen.getByText('Price Levels')).toBeInTheDocument();
@@ -87,7 +99,7 @@ describe('TradeDetailPanel', () => {
       target_prices: undefined,
     };
 
-    render(<TradeDetailPanel trade={tradeWithoutLevels} onClose={() => {}} />);
+    render(<TradeDetailPanel trade={tradeWithoutLevels} onClose={() => {}} />, { wrapper: Wrapper });
 
     // Should show dash for stop when not provided
     const stopSection = screen.getByText('Stop').closest('div')?.parentElement;
@@ -97,7 +109,7 @@ describe('TradeDetailPanel', () => {
   });
 
   it('shows exit reason badge and explanation', () => {
-    render(<TradeDetailPanel trade={mockTrade} onClose={() => {}} />);
+    render(<TradeDetailPanel trade={mockTrade} onClose={() => {}} />, { wrapper: Wrapper });
 
     // Exit reason section should exist
     expect(screen.getByText('Exit Reason')).toBeInTheDocument();
@@ -111,7 +123,7 @@ describe('TradeDetailPanel', () => {
   });
 
   it('displays P&L with R-multiple', () => {
-    render(<TradeDetailPanel trade={mockTrade} onClose={() => {}} />);
+    render(<TradeDetailPanel trade={mockTrade} onClose={() => {}} />, { wrapper: Wrapper });
 
     // Should show P&L value (formatted as currency)
     expect(screen.getByText(/\+\$500\.00/)).toBeInTheDocument();

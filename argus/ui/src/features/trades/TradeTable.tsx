@@ -11,6 +11,7 @@
 
 import { ChevronLeft, ChevronRight, Filter, BarChart3 } from 'lucide-react';
 import { Badge, StrategyBadge } from '../../components/Badge';
+import { QualityBadge } from '../../components/QualityBadge';
 import { EmptyState } from '../../components/EmptyState';
 import { useSymbolDetailUI } from '../../stores/symbolDetailUI';
 import type { Trade } from '../../api/types';
@@ -163,6 +164,10 @@ export function TradeTable({
               <th className="hidden lg:table-cell w-[65px] px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-right">
                 Shares
               </th>
+              {/* Tablet+: quality grade */}
+              <th className="hidden md:table-cell w-[60px] px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-center">
+                Quality
+              </th>
               {/* All: exit reason */}
               <th className="w-[60px] px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-center">
                 Exit
@@ -256,6 +261,17 @@ export function TradeTable({
                   {/* Desktop: shares */}
                   <td className="hidden lg:table-cell px-3 py-2.5 text-sm tabular-nums text-right">
                     {trade.shares}
+                  </td>
+                  {/* Tablet+: quality grade */}
+                  <td className="hidden md:table-cell px-3 py-2.5 text-center">
+                    {trade.quality_grade ? (
+                      <QualityBadge
+                        grade={trade.quality_grade}
+                        score={trade.quality_score ?? undefined}
+                      />
+                    ) : (
+                      <span className="text-sm text-argus-text-dim">—</span>
+                    )}
                   </td>
                   {/* All: exit reason */}
                   <td className="px-3 py-2.5 text-center">

@@ -21,6 +21,7 @@ import type {
   DocumentsListResponse,
   DocumentTagsResponse,
   GoalsConfig,
+  GradeDistributionResponse,
   HeatmapResponse,
   HealthResponse,
   JournalEntriesListResponse,
@@ -31,6 +32,8 @@ import type {
   PerformancePeriod,
   PerformanceResponse,
   PositionsResponse,
+  QualityHistoryResponse,
+  QualityScoreResponse,
   ResearchDocument,
   SessionSummaryResponse,
   StrategiesResponse,
@@ -612,4 +615,38 @@ export async function getConversation(
 // Universe Manager endpoints (Sprint 23)
 export async function getUniverseStatus(): Promise<UniverseStatusResponse> {
   return fetchWithAuth<UniverseStatusResponse>('/universe/status');
+}
+
+// Quality Engine endpoints (Sprint 24)
+export async function getQualityScore(symbol: string): Promise<QualityScoreResponse> {
+  return fetchWithAuth<QualityScoreResponse>(`/quality/${symbol}`);
+}
+
+export interface QualityHistoryParams {
+  symbol?: string;
+  strategy_id?: string;
+  grade?: string;
+  start_date?: string;
+  end_date?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export async function getQualityHistory(
+  params?: QualityHistoryParams
+): Promise<QualityHistoryResponse> {
+  const searchParams = new URLSearchParams();
+  if (params) {
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined) {
+        searchParams.set(key, String(value));
+      }
+    });
+  }
+  const query = searchParams.toString();
+  return fetchWithAuth<QualityHistoryResponse>(`/quality/history${query ? `?${query}` : ''}`);
+}
+
+export async function getQualityDistribution(): Promise<GradeDistributionResponse> {
+  return fetchWithAuth<GradeDistributionResponse>('/quality/distribution');
 }

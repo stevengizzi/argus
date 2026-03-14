@@ -76,6 +76,8 @@ export interface Trade {
   market_regime: string | null;
   stop_price: number | null;
   target_prices: number[] | null;
+  quality_grade: string | null;
+  quality_score: number | null;
 }
 
 export interface TradesResponse {
@@ -639,6 +641,37 @@ export interface ConversationDetailResponse {
 
 // AI — Conversation tag types for color coding
 export type ConversationTag = 'session' | 'research' | 'debrief' | 'pre-market' | 'general';
+
+// Quality Engine (Sprint 24)
+export interface QualityComponents {
+  ps: number;  // pattern_strength
+  cq: number;  // catalyst_quality
+  vp: number;  // volume_profile
+  hm: number;  // historical_match
+  ra: number;  // regime_alignment
+}
+
+export interface QualityScoreResponse {
+  symbol: string;
+  score: number;
+  grade: string;
+  risk_tier: string;
+  components: QualityComponents;
+  scored_at: string;
+}
+
+export interface QualityHistoryResponse {
+  items: QualityScoreResponse[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface GradeDistributionResponse {
+  grades: Record<string, number>;
+  total: number;
+  filtered: number;
+}
 
 // Universe Manager (Sprint 23)
 export interface UniverseStatusResponse {

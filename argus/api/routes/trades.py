@@ -42,6 +42,8 @@ class TradeResponse(BaseModel):
     market_regime: str | None
     stop_price: float | None = None
     target_prices: list[float] | None = None
+    quality_grade: str | None = None
+    quality_score: float | None = None
 
 
 class TradesResponse(BaseModel):
@@ -146,6 +148,8 @@ async def get_trades(
                 market_regime=row.get("market_regime"),
                 stop_price=row.get("stop_price"),
                 target_prices=target_prices,
+                quality_grade=row.get("quality_grade") or None,
+                quality_score=row.get("quality_score"),
             )
         )
 
@@ -226,6 +230,8 @@ async def get_trades_batch(
                 market_regime=row.get("market_regime"),
                 stop_price=row.get("stop_price"),
                 target_prices=target_prices,
+                quality_grade=row.get("quality_grade") or None,
+                quality_score=row.get("quality_score"),
             )
         )
 
@@ -528,6 +534,8 @@ async def get_trade_replay(
         market_regime=trade_row.get("market_regime"),
         stop_price=trade_row.get("stop_price"),
         target_prices=target_prices,
+        quality_grade=trade_row.get("quality_grade") or None,
+        quality_score=trade_row.get("quality_score"),
     )
 
     # Check if we're in dev mode (has _mock_watchlist attribute)
