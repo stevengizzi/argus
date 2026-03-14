@@ -17,19 +17,7 @@ import {
 } from 'recharts';
 import { Card } from '../../components/Card';
 import { useQualityDistribution } from '../../hooks/useQuality';
-
-const GRADE_COLORS: Record<string, string> = {
-  'A+': '#34d399',
-  'A':  '#4ade80',
-  'A-': '#22c55e',
-  'B+': '#fbbf24',
-  'B':  '#f59e0b',
-  'B-': '#fb923c',
-  'C+': '#f87171',
-  'C':  '#9ca3af',
-};
-
-const GRADE_ORDER = ['A+', 'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C'];
+import { GRADE_COLORS, GRADE_ORDER } from '../../constants/qualityConstants';
 
 interface GradeBar {
   grade: string;

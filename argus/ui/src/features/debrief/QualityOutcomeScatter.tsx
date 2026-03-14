@@ -19,22 +19,11 @@ import {
   ResponsiveContainer,
   ReferenceLine,
   Cell,
-  Line,
 } from 'recharts';
 import { Card } from '../../components/Card';
 import { useQualityHistory } from '../../hooks/useQuality';
+import { GRADE_COLORS } from '../../constants/qualityConstants';
 import type { QualityScoreResponse } from '../../api/types';
-
-const GRADE_COLORS: Record<string, string> = {
-  'A+': '#34d399',
-  'A':  '#4ade80',
-  'A-': '#22c55e',
-  'B+': '#fbbf24',
-  'B':  '#f59e0b',
-  'B-': '#fb923c',
-  'C+': '#f87171',
-  'C':  '#9ca3af',
-};
 
 interface ScatterPoint {
   score: number;
@@ -87,7 +76,7 @@ export function QualityOutcomeScatter() {
     if (!data?.items) return { points: [], trendLine: null };
 
     const filtered = data.items.filter(
-      (item: QualityScoreResponse) => item.outcome_r_multiple !== null,
+      (item: QualityScoreResponse) => item.outcome_r_multiple != null,
     );
 
     const pts: ScatterPoint[] = filtered.map((item: QualityScoreResponse) => ({

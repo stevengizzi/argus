@@ -1,9 +1,10 @@
 /**
  * The Debrief page — institutional knowledge layer.
  *
- * Five sections:
+ * Six sections:
  * - Intelligence Brief: Pre-market AI-generated intelligence briefs
  * - Briefings: Pre-market and end-of-day structured reports
+ * - Quality: Quality vs. outcome scatter plot for scored signals
  * - Research: Unified view of all project documentation
  * - Journal: Typed entries for observations, trade annotations, and notes
  * - Learning Journal: AI Copilot conversation history browser
@@ -13,6 +14,7 @@
  * Keyboard shortcuts:
  * - 'i' → switch to Intelligence Brief tab
  * - 'b' → switch to Briefings tab
+ * - 'q' → switch to Quality tab
  * - 'r' → switch to Research tab
  * - 'j' → switch to Journal tab
  * - 'l' → switch to Learning Journal tab
@@ -21,6 +23,7 @@
  *
  * Sprint 22 Session 6: Added Learning Journal section.
  * Sprint 23.5 Session 6: Added Intelligence Brief section.
+ * Sprint 24 Session 11: Added Quality section.
  */
 
 import { useEffect } from 'react';

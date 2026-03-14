@@ -20,20 +20,8 @@ import {
 } from 'recharts';
 import { Card } from '../../components/Card';
 import { useQualityHistory } from '../../hooks/useQuality';
+import { GRADE_COLORS, GRADE_ORDER } from '../../constants/qualityConstants';
 import type { QualityScoreResponse } from '../../api/types';
-
-const GRADE_ORDER = ['A+', 'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C'];
-
-const GRADE_COLORS: Record<string, string> = {
-  'A+': '#34d399',
-  'A':  '#4ade80',
-  'A-': '#22c55e',
-  'B+': '#fbbf24',
-  'B':  '#f59e0b',
-  'B-': '#fb923c',
-  'C+': '#f87171',
-  'C':  '#9ca3af',
-};
 
 // Bar colors for the three metrics
 const AVG_PNL_COLOR = '#3b82f6';
@@ -53,7 +41,7 @@ function aggregateByGrade(items: QualityScoreResponse[]): GradeAggregate[] {
   const byGrade = new Map<string, QualityScoreResponse[]>();
 
   for (const item of items) {
-    if (item.outcome_r_multiple === null) continue;
+    if (item.outcome_r_multiple == null) continue;
     const existing = byGrade.get(item.grade) ?? [];
     existing.push(item);
     byGrade.set(item.grade, existing);
@@ -241,7 +229,7 @@ function GradeTooltip({ active, payload }: GradeTooltipProps) {
       <div className="text-xs space-y-1">
         <div className="text-argus-text font-medium">
           Grade {d.grade}
-          <span className="text-argus-text-dim ml-2">({d.count} trades)</span>
+          <span className="text-argus-text-dim ml-2">({d.count} {d.count === 1 ? 'trade' : 'trades'})</span>
         </div>
         <div className="text-argus-text-dim">
           Avg P&L:{' '}

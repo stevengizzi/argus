@@ -11,19 +11,7 @@
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { Card } from '../../components/Card';
 import { useQualityDistribution } from '../../hooks/useQuality';
-
-const GRADE_COLORS: Record<string, string> = {
-  'A+': '#34d399', // emerald-400
-  'A':  '#4ade80', // green-400
-  'A-': '#22c55e', // green-500
-  'B+': '#fbbf24', // amber-400
-  'B':  '#f59e0b', // amber-500
-  'B-': '#fb923c', // orange-400
-  'C+': '#f87171', // red-400
-  'C':  '#9ca3af', // gray-400
-};
-
-const GRADE_ORDER = ['A+', 'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C'];
+import { GRADE_COLORS, GRADE_ORDER } from '../../constants/qualityConstants';
 
 interface DonutSegment {
   grade: string;

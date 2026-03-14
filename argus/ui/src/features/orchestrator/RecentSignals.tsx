@@ -64,7 +64,9 @@ export function RecentSignals() {
       </p>
       <div className="space-y-1" data-testid="recent-signals-list">
         {signals.map((signal, idx) => {
-          const strategyDisplay = getStrategyDisplay(signal.strategy_id);
+          const strategyDisplay = signal.strategy_id
+            ? getStrategyDisplay(signal.strategy_id)
+            : { shortName: 'Unknown', fullName: 'Unknown', color: 'text-gray-400', bgColor: 'bg-gray-400' };
           return (
             <div
               key={`${signal.symbol}-${signal.scored_at}-${idx}`}
