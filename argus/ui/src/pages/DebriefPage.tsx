@@ -34,12 +34,14 @@ import { BriefingList } from '../features/debrief/briefings';
 import { ResearchLibrary } from '../features/debrief/research';
 import { JournalList, ConversationBrowser } from '../features/debrief/journal';
 import { IntelligenceBriefView } from '../components/IntelligenceBriefView';
+import { QualityOutcomeScatter } from '../features/debrief/QualityOutcomeScatter';
 import { DURATION, EASE } from '../utils/motion';
 import { useCopilotContext } from '../hooks/useCopilotContext';
 
 const SECTIONS: SegmentedTabSegment[] = [
   { label: 'Intelligence Brief', value: 'intelligence_brief' },
   { label: 'Briefings', value: 'briefings' },
+  { label: 'Quality', value: 'quality' },
   { label: 'Research', value: 'research' },
   { label: 'Journal', value: 'journal' },
   { label: 'Learning Journal', value: 'learning_journal' },
@@ -102,6 +104,9 @@ export function DebriefPage() {
           break;
         case 'b':
           setActiveSection('briefings');
+          break;
+        case 'q':
+          setActiveSection('quality');
           break;
         case 'r':
           setActiveSection('research');
@@ -191,6 +196,7 @@ export function DebriefPage() {
           <ErrorBoundary name={activeSection}>
             {activeSection === 'intelligence_brief' && <IntelligenceBriefView />}
             {activeSection === 'briefings' && <BriefingList />}
+            {activeSection === 'quality' && <QualityOutcomeScatter />}
             {activeSection === 'research' && <ResearchLibrary />}
             {activeSection === 'journal' && <JournalList />}
             {activeSection === 'learning_journal' && <ConversationBrowser />}

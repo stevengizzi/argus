@@ -51,6 +51,8 @@ class QualityScoreResponse(BaseModel):
     risk_tier: str
     components: QualityComponentsResponse
     scored_at: str
+    outcome_realized_pnl: float | None = None
+    outcome_r_multiple: float | None = None
 
 
 class QualityHistoryResponse(BaseModel):
@@ -113,6 +115,8 @@ def _row_to_response(row: object) -> QualityScoreResponse:
             ra=row[9],  # type: ignore[index]
         ),
         scored_at=row[10],  # type: ignore[index]
+        outcome_realized_pnl=row[11],  # type: ignore[index]
+        outcome_r_multiple=row[12],  # type: ignore[index]
     )
 
 
@@ -183,7 +187,8 @@ async def get_quality_history(
         f"""
         SELECT symbol, strategy_id, composite_score, grade, risk_tier,
                pattern_strength, catalyst_quality, volume_profile,
-               historical_match, regime_alignment, scored_at
+               historical_match, regime_alignment, scored_at,
+               outcome_realized_pnl, outcome_r_multiple
         FROM quality_history
         {where}
         ORDER BY scored_at DESC
@@ -270,7 +275,8 @@ async def get_quality_for_symbol(
         """
         SELECT symbol, strategy_id, composite_score, grade, risk_tier,
                pattern_strength, catalyst_quality, volume_profile,
-               historical_match, regime_alignment, scored_at
+               historical_match, regime_alignment, scored_at,
+               outcome_realized_pnl, outcome_r_multiple
         FROM quality_history
         WHERE symbol = ?
         ORDER BY scored_at DESC

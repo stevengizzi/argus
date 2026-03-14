@@ -20,6 +20,9 @@ export { RiskWaterfall } from './RiskWaterfall';
 export { PortfolioTreemap } from './PortfolioTreemap';
 export { CorrelationMatrix } from './CorrelationMatrix';
 
+// Sprint 24 — Quality grade chart
+export { QualityGradeChart } from './QualityGradeChart';
+
 // Skeleton exports
 export {
   PerformanceSkeleton,

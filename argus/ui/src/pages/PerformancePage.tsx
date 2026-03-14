@@ -41,6 +41,7 @@ import { RiskWaterfall } from '../features/performance/RiskWaterfall';
 import { PortfolioTreemap } from '../features/performance/PortfolioTreemap';
 import { CorrelationMatrix } from '../features/performance/CorrelationMatrix';
 import { TradeReplay } from '../features/performance/TradeReplay';
+import { QualityGradeChart } from '../features/performance/QualityGradeChart';
 import { staggerContainer, staggerItem } from '../utils/motion';
 import type { PerformancePeriod } from '../api/types';
 import { useCopilotContext } from '../hooks/useCopilotContext';
@@ -459,6 +460,7 @@ interface DistributionTabProps {
 function DistributionTabContent({ period }: DistributionTabProps) {
   return (
     <motion.div
+      className="space-y-4 md:space-y-6"
       variants={staggerContainer(0.08)}
       initial="hidden"
       animate="show"
@@ -472,6 +474,11 @@ function DistributionTabContent({ period }: DistributionTabProps) {
           <RiskWaterfall fullHeight />
         </motion.div>
       </div>
+
+      {/* Quality grade performance chart */}
+      <motion.div variants={staggerItem}>
+        <QualityGradeChart />
+      </motion.div>
     </motion.div>
   );
 }

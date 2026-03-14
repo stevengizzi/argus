@@ -659,6 +659,8 @@ export interface QualityScoreResponse {
   risk_tier: string;
   components: QualityComponents;
   scored_at: string;
+  outcome_realized_pnl: number | null;
+  outcome_r_multiple: number | null;
 }
 
 export interface QualityHistoryResponse {
