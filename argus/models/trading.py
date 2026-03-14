@@ -200,6 +200,8 @@ class Trade(BaseModel):
     outcome: TradeOutcome = TradeOutcome.BREAKEVEN
     rationale: str = ""
     notes: str = ""
+    quality_grade: str = ""
+    quality_score: float = 0.0
 
     def model_post_init(self, __context: object) -> None:
         """Calculate derived fields after initialization."""

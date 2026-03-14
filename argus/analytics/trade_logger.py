@@ -63,8 +63,9 @@ class TradeLogger:
                 entry_price, entry_time, exit_price, exit_time,
                 shares, stop_price, target_prices, exit_reason,
                 gross_pnl, commission, net_pnl, r_multiple,
-                hold_duration_seconds, outcome, rationale, notes
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                hold_duration_seconds, outcome, rationale, notes,
+                quality_grade, quality_score
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
 
         params = (
@@ -89,6 +90,8 @@ class TradeLogger:
             trade.outcome.value,
             trade.rationale,
             trade.notes,
+            trade.quality_grade,
+            trade.quality_score if trade.quality_score else None,
         )
 
         await self._db.execute(sql, params)
@@ -772,4 +775,6 @@ class TradeLogger:
             outcome=TradeOutcome(r["outcome"]),
             rationale=r["rationale"] or "",
             notes=r["notes"] or "",
+            quality_grade=r.get("quality_grade", "") or "",
+            quality_score=float(r["quality_score"]) if r.get("quality_score") is not None else 0.0,
         )

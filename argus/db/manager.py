@@ -83,6 +83,22 @@ class DatabaseManager:
         await self._connection.executescript(schema_sql)
         await self._connection.commit()
 
+        # Migration: add quality columns to trades (Sprint 24.1)
+        try:
+            await self._connection.execute(
+                "ALTER TABLE trades ADD COLUMN quality_grade TEXT"
+            )
+            await self._connection.commit()
+        except Exception:
+            pass  # Column already exists
+        try:
+            await self._connection.execute(
+                "ALTER TABLE trades ADD COLUMN quality_score REAL"
+            )
+            await self._connection.commit()
+        except Exception:
+            pass  # Column already exists
+
     @asynccontextmanager
     async def connection(self) -> AsyncIterator[aiosqlite.Connection]:
         """Get a database connection context manager.

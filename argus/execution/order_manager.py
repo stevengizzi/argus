@@ -80,6 +80,8 @@ class ManagedPosition:
     t2_order_id: str | None = None  # Broker-side T2 limit order ID (IBKR native brackets)
     realized_pnl: float = 0.0  # Accumulated P&L from partial exits
     time_stop_seconds: int | None = None  # Per-position time stop from signal (DEC-122)
+    quality_grade: str = ""     # From signal, set at entry fill
+    quality_score: float = 0.0  # From signal, set at entry fill
 
     @property
     def is_fully_closed(self) -> bool:
@@ -515,6 +517,8 @@ class OrderManager:
             t2_order_id=pending.bracket_t2_order_id,  # FROM BRACKET (DEC-093)
             high_watermark=event.fill_price,
             time_stop_seconds=signal.time_stop_seconds,  # Per-position time stop (DEC-122)
+            quality_grade=signal.quality_grade,
+            quality_score=signal.quality_score,
         )
 
         # Add to managed positions
@@ -1200,6 +1204,8 @@ class OrderManager:
                     target_prices=[position.t1_price, position.t2_price],
                     exit_reason=exit_reason,
                     gross_pnl=position.realized_pnl,
+                    quality_grade=position.quality_grade,
+                    quality_score=position.quality_score,
                 )
                 await self._trade_logger.log_trade(trade)
             except Exception:

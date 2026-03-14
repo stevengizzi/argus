@@ -31,6 +31,8 @@ CREATE TABLE IF NOT EXISTS trades (
     outcome TEXT NOT NULL,                  -- 'win', 'loss', 'breakeven'
     rationale TEXT,
     notes TEXT,
+    quality_grade TEXT,              -- e.g., 'B+', 'A-', '' for legacy
+    quality_score REAL,              -- 0-100, NULL for legacy trades
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
