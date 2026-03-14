@@ -24,7 +24,7 @@ import { Card } from '../../../components/Card';
 import { useConversations, useConversation } from '../../../hooks';
 import { useCopilotUIStore } from '../../../stores/copilotUI';
 import { formatDate, formatRelativeTime } from '../../../utils/format';
-import { DURATION, EASE } from '../../../utils/motion';
+import { DURATION } from '../../../utils/motion';
 import type { ConversationSummary, ConversationTag } from '../../../api/types';
 
 /** Tag color mapping */

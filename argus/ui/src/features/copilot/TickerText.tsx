@@ -7,7 +7,7 @@
  * Sprint 22 — AI chat enhancement.
  */
 
-import type { ReactNode } from 'react';
+import type { JSX, ReactNode } from 'react';
 
 // Pattern: $ followed by 1-5 uppercase letters at a word boundary
 const TICKER_PATTERN = /(\$[A-Z]{1,5})\b/g;

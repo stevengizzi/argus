@@ -54,8 +54,10 @@ export function TradesPage() {
     totalTradeCount: data?.total_count ?? 0,
     selectedTrade: selectedTrade ? {
       symbol: selectedTrade.symbol,
-      pnl: selectedTrade.realized_pnl,
-      outcome: selectedTrade.outcome,
+      pnl: selectedTrade.pnl_dollars,
+      outcome: selectedTrade.pnl_dollars !== null
+        ? (selectedTrade.pnl_dollars > 0 ? 'win' : selectedTrade.pnl_dollars < 0 ? 'loss' : 'breakeven')
+        : null,
       strategy: selectedTrade.strategy_id,
     } : null,
   }));

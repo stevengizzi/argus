@@ -37,7 +37,7 @@ interface PositionDetailPanelProps {
  * - 100% = at T1 target
  */
 function calculateProgress(
-  entryPrice: number,
+  _entryPrice: number,
   currentPrice: number,
   stopPrice: number,
   targetPrice: number,

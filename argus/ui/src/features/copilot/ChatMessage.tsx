@@ -30,7 +30,7 @@ function processTickerChildren(children: ReactNode): ReactNode {
     if (typeof child === 'string') {
       return <TickerText>{child}</TickerText>;
     }
-    if (isValidElement(child) && child.props.children) {
+    if (isValidElement<{ children?: ReactNode }>(child) && child.props.children) {
       // Clone element with processed children
       return { ...child, props: { ...child.props, children: processTickerChildren(child.props.children) } };
     }

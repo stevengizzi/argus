@@ -50,9 +50,9 @@ export function PatternLibraryPage() {
         family: selectedStrategy.family,
       } : null,
       patternStats: selectedStrategy ? {
-        winRate: selectedStrategy.live_metrics?.win_rate ?? selectedStrategy.backtest_metrics?.win_rate ?? null,
-        avgR: selectedStrategy.live_metrics?.avg_r ?? selectedStrategy.backtest_metrics?.avg_r ?? null,
-        sampleSize: selectedStrategy.live_metrics?.total_trades ?? selectedStrategy.backtest_metrics?.total_trades ?? null,
+        winRate: selectedStrategy.performance_summary?.win_rate ?? selectedStrategy.backtest_summary?.wfe_pnl ?? null,
+        avgR: selectedStrategy.performance_summary?.avg_r ?? selectedStrategy.backtest_summary?.oos_sharpe ?? null,
+        sampleSize: selectedStrategy.performance_summary?.trade_count ?? selectedStrategy.backtest_summary?.total_trades ?? null,
       } : null,
       stageFilter: filters.stage,
       totalPatterns: strategies.length,

@@ -36,17 +36,6 @@ const PAGE_LABELS: Record<string, string> = {
   '/system': 'System',
 };
 
-// Map pathname to API page context key
-const PAGE_KEYS: Record<string, string> = {
-  '/': 'Dashboard',
-  '/trades': 'Trades',
-  '/performance': 'Performance',
-  '/orchestrator': 'Orchestrator',
-  '/patterns': 'PatternLibrary',
-  '/debrief': 'Debrief',
-  '/system': 'System',
-};
-
 /**
  * Connection status indicator.
  */
@@ -278,7 +267,6 @@ export function CopilotPanel() {
 
   // Use registered page name from store, fall back to URL-based lookup
   const pageName = currentPage ?? PAGE_LABELS[location.pathname] ?? 'Unknown';
-  const pageKey = currentPage ?? PAGE_KEYS[location.pathname] ?? 'Dashboard';
 
   // Initialize AI status and WebSocket on panel open
   useEffect(() => {

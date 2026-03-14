@@ -117,7 +117,7 @@ export function CatalystAlertPanel() {
     <Card>
       <CardHeader
         title="Catalyst Alerts"
-        icon={AlertCircle}
+        icon={<AlertCircle className="w-4 h-4" />}
         badge={
           <span
             className={`w-2 h-2 rounded-full ${isStale ? 'bg-amber-400' : 'bg-argus-profit'}`}
