@@ -153,17 +153,13 @@ export function OrchestratorPage() {
           <StrategyOperationsGrid />
         </motion.div>
 
-        {/* Section 4: Decision Timeline + Catalyst Alerts */}
+        {/* Section 4: Decision Timeline + Catalyst Alerts + Recent Signals */}
         <motion.div variants={staggerItem}>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <DecisionTimeline />
             <CatalystAlertPanel />
+            <RecentSignals />
           </div>
-        </motion.div>
-
-        {/* Section 5: Recent Quality Signals */}
-        <motion.div variants={staggerItem}>
-          <RecentSignals />
         </motion.div>
 
         {/* Section 6: Global Controls */}

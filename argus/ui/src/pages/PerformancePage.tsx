@@ -42,6 +42,7 @@ import { PortfolioTreemap } from '../features/performance/PortfolioTreemap';
 import { CorrelationMatrix } from '../features/performance/CorrelationMatrix';
 import { TradeReplay } from '../features/performance/TradeReplay';
 import { QualityGradeChart } from '../features/performance/QualityGradeChart';
+import { QualityOutcomeScatter } from '../features/debrief/QualityOutcomeScatter';
 import { staggerContainer, staggerItem } from '../utils/motion';
 import type { PerformancePeriod } from '../api/types';
 import { useCopilotContext } from '../hooks/useCopilotContext';
@@ -478,6 +479,11 @@ function DistributionTabContent({ period }: DistributionTabProps) {
       {/* Quality grade performance chart */}
       <motion.div variants={staggerItem}>
         <QualityGradeChart />
+      </motion.div>
+
+      {/* Quality vs. outcome scatter plot */}
+      <motion.div variants={staggerItem}>
+        <QualityOutcomeScatter />
       </motion.div>
     </motion.div>
   );

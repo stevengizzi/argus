@@ -57,6 +57,10 @@ vi.mock('../features/performance/TradeReplay', () => ({
   TradeReplay: () => <div data-testid="trade-replay">Trade Replay</div>,
 }));
 
+vi.mock('../features/debrief/QualityOutcomeScatter', () => ({
+  QualityOutcomeScatter: () => <div data-testid="quality-outcome-scatter">Scatter</div>,
+}));
+
 import { usePerformance, usePreviousPeriodPerformance } from '../hooks/usePerformance';
 
 const mockPerformanceData = {

@@ -9,7 +9,7 @@
 
 import { create } from 'zustand';
 
-export type DebriefSection = 'intelligence_brief' | 'briefings' | 'quality' | 'research' | 'journal' | 'learning_journal';
+export type DebriefSection = 'intelligence_brief' | 'briefings' | 'research' | 'journal' | 'learning_journal';
 
 export type JournalFilterKey = 'type' | 'strategy_id' | 'tag' | 'search';
 
