@@ -1,7 +1,7 @@
 # ARGUS — Strategic Roadmap
 
 > From artisanal strategies to ensemble alpha — the complete path
-> **v1.3 — March 10, 2026** (Sprint 23.6 complete — Pipeline integration, warm-up optimization)
+> **v1.4 — March 14, 2026** (Sprint 24 complete — Setup Quality Engine + Dynamic Sizer)
 > **Status:** CANONICAL — this is the single source of truth for ARGUS's strategic direction and sprint queue.
 > **Supersedes:** `docs/research/ARGUS_Expanded_Roadmap.md` (Feb 26), `docs/argus_unified_vision_roadmap.md` (Mar 5), `docs/10_PHASE3_SPRINT_PLAN.md` (all forward-looking sections)
 
@@ -78,7 +78,7 @@ These foundations are correct and remain:
 
 ARGUS completed 21 sprints + sub-sprints in ~17 calendar days of active development (Feb 14 – Mar 5). Average sprint: ~0.8 calendar days. However, sprint complexity has been increasing — early sprints (1–5) were dense single-day affairs, while later sprints (21a–21d, 21.5) span multiple days. The roadmap below assumes sprint durations of 1–4 days each depending on complexity, with some parallelism where noted.
 
-**Current state:** Sprint 23.5 complete. 2,396 pytest + 435 Vitest. Four active strategies. Live Databento + IBKR paper trading. Seven-page Command Center + AI Copilot active. FMP Scanner + Universe Manager integrated. Autonomous Sprint Runner implemented (DEC-278–297). NLP Catalyst Pipeline complete (DEC-300–307).
+**Current state:** Sprint 24 complete. 2,686 pytest + 497 Vitest. Four active strategies. Live Databento + IBKR paper trading. Seven-page Command Center + AI Copilot active. FMP Scanner + Universe Manager integrated. Autonomous Sprint Runner implemented (DEC-278–297). NLP Catalyst Pipeline complete (DEC-300–307). Setup Quality Engine + Dynamic Position Sizer complete (DEC-330–341). Phase 5 Gate next.
 
 ---
 
@@ -223,15 +223,22 @@ Re-validate all pre-Databento strategy parameters using Databento tick-level dat
 
 ### Sprint 24: Setup Quality Engine + Dynamic Position Sizer (DEC-163, DEC-239)
 **Target:** ~3–4 days
-**Status:** NEXT
+**Status:** ✅ COMPLETE (March 14, 2026)
 
-**Scope:**
-- **SetupQualityEngine** (`argus/intelligence/quality_engine.py`): Composite 0–100 scoring from 5 weighted inputs (DEC-239): pattern strength (25%), catalyst quality (20%), volume profile (20%), historical match (15%), regime alignment (20%). Order Flow dimension added post-revenue when Databento Plus activated — rebalances to 6 dimensions with Order Flow at 20%. Configurable weights via YAML.
-- **DynamicPositionSizer** (`argus/intelligence/position_sizer.py`): Grade → risk tier → share count. A+=2–3%, A=1.5%, B=0.75%, C+=0.25%, C-=SKIP. Replaces fixed `risk_per_trade_pct`. Risk Manager limits still enforced.
-- SignalEvent enrichment: `quality_score`, `quality_grade`, `risk_tier` fields.
-- Quality History DB table for Learning Loop.
-- **UI:** Dashboard gains quality distribution mini-card and Signal Quality Distribution panel. Watchlist/positions/trade log gain quality grade badges. Trade Detail gains radar chart + "Why this size?" breakdown. Performance gains "by quality grade" chart. Debrief gains quality vs. outcome scatter plot.
-- **Tests:** ~100 new.
+**Scope (delivered):**
+- **SetupQualityEngine** (`argus/intelligence/quality_engine.py`): Composite 0–100 scoring from 5 weighted inputs (DEC-239): pattern strength (25%), catalyst quality (20%), volume profile (20%), historical match (15%), regime alignment (20%). Configurable weights via YAML. Grade thresholds: A+ (≥90) through C- (<40).
+- **DynamicPositionSizer** (`argus/intelligence/position_sizer.py`): Grade → risk tier → share count. A+=2–3%, A=1.5–2%, B+=1–1.5%, B=0.5–1%, C+=0.25–0.5%, C/C-=SKIP. Pydantic config models with validators.
+- **Pattern Strength** on all 4 strategies: `_calculate_pattern_strength()` returns 0–100, strategies emit `share_count=0` for quality pipeline deferred sizing.
+- **Firehose Mode** for catalyst sources: Finnhub single general news call, SEC EDGAR single EFTS search (DEC-332).
+- **Pipeline Wiring** in main.py: `_process_signal()` runs score → filter → size → enrich → RM. Risk Manager check 0 rejects `share_count ≤ 0`. Bypass modes for SimulatedBroker and disabled quality engine.
+- **Quality History DB** table (20 columns, 4 indexes) for Learning Loop.
+- **API:** 3 quality endpoints (`/{symbol}`, `/history`, `/distribution`).
+- **UI:** QualityBadge component, quality column in Trades, Setup Quality in TradeDetailPanel, QualityDistributionCard (donut) + SignalQualityPanel (histogram) on Dashboard, RecentSignals on Orchestrator, QualityGradeChart on Performance, QualityOutcomeScatter on Debrief. Shared GRADE_COLORS/GRADE_ORDER constants.
+- **Tests:** 209 new (158 pytest + 51 Vitest) — 2× target.
+
+**Decisions:** DEC-330 through DEC-341. See `docs/decision-log.md` for full rationale.
+
+**Notes:** 13 sessions (including 11f visual fixes). 2 CONCERNS ratings with acceptable rationale. Quality pipeline fully integrated end-to-end from strategy signals through frontend visualization. Phase 5 Foundation Completion achieved.
 
 ### Phase 5 Gate
 

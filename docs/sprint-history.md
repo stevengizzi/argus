@@ -1,7 +1,7 @@
 # ARGUS — Sprint History
 
 > Complete record of all sprints from project inception through current state.
-> Active development began February 14, 2026. As of March 4, 2026 (~18 calendar days), 21 full sprints + sub-sprints completed.
+> Active development began February 14, 2026. As of March 14, 2026 (~29 calendar days), 24 full sprints + sub-sprints completed.
 
 ---
 
@@ -13,7 +13,8 @@
 | B — Backtesting | 6–11 | Feb 16–17 | Validation toolkit + parameter optimization |
 | C — Infrastructure | 12–13 | Feb 21–22 | Databento + IBKR adapters |
 | D — Command Center + Strategies | 14–20 | Feb 23–26 | Frontend, Orchestrator, 3 new strategies |
-| E — Seven-Page Architecture + Live | 21a–21.5 | Feb 27– | Full UI, live integration |
+| E — Seven-Page Architecture + Live | 21a–21.5 | Feb 27–Mar 5 | Full UI, live integration |
+| F–K — AI + Intelligence + Quality | 22–24 | Mar 6–14 | AI Copilot, NLP Catalyst, Universe Manager, Quality Engine |
 
 ---
 
@@ -589,16 +590,125 @@
 
 ---
 
+### Sprint 24 — Setup Quality Engine + Dynamic Sizer (2686 pytest + 497 Vitest, +154/+51)
+
+**Date:** March 13–14, 2026
+**Scope:** Full quality pipeline from strategy pattern strength through quality scoring, dynamic position sizing, API endpoints, and frontend visualization across all 7 pages.
+**Type:** Planned sprint. **Phase:** 5 (Foundation Completion).
+
+**Session 1 (S1): SignalEvent Enrichment + ORB Pattern Strength**
+- Added 4 optional fields to SignalEvent: `pattern_strength`, `signal_context`, `quality_score`, `quality_grade`
+- Created QualitySignalEvent for UI consumption
+- Implemented `_calculate_pattern_strength()` on OrbBaseStrategy (4-factor: volume 30%, ATR 25%, chase 25%, midpoint 20%)
+- Stored `atr_ratio` in OrbSymbolState to avoid redundant indicator fetches
+- 22 new pytest tests
+
+**Session 2 (S2): VWAP Reclaim + Afternoon Momentum Pattern Strength**
+- Implemented `_calculate_pattern_strength()` for VWAP Reclaim (4-factor: volume 30%, pullback 25%, reclaim 25%, VWAP proximity 20%)
+- Implemented `_calculate_pattern_strength()` for Afternoon Momentum (4-factor: volume 30%, consolidation 25%, breakout 25%, ATR-relative 20%)
+- All 4 strategies now emit `share_count=0` for quality pipeline deferred sizing
+- Order Manager `on_approved()` early-returns on zero shares
+- 12 new pytest tests
+
+**Session 3 (S3): Firehose Source Refactoring (DEC-327)**
+- Added `firehose: bool = False` parameter to CatalystSource.fetch_catalysts()
+- Finnhub firehose: single `GET /news?category=general` call
+- SEC EDGAR firehose: single EFTS search-index call
+- 17 new intelligence tests
+
+**Session 4 (S4): SetupQualityEngine Core**
+- Created `quality_engine.py` (139 lines) with SetupQuality dataclass
+- 5-dimension scoring: pattern strength, catalyst quality, volume profile, historical match, regime alignment
+- QualityEngineConfig with configurable weights and thresholds
+- Grade thresholds: A+ (≥90), A (≥80), B+ (≥70), B (≥60), C+ (≥50), C (≥40), C- (<40)
+- 23 new intelligence tests
+
+**Session 5a (S5a): DynamicPositionSizer + Config Models**
+- Created DynamicPositionSizer: grade → risk tier → share count
+- Replaced flat dict configs with Pydantic models: QualityWeightsConfig, QualityThresholdsConfig, QualityRiskTiersConfig
+- Field validators: weights sum to 1.0, thresholds in descending order
+- 19 new pytest tests
+
+**Session 5b (S5b): Config Wiring + YAML + DB Schema**
+- Wired QualityEngineConfig into SystemConfig
+- Created `config/quality_engine.yaml` with all defaults
+- Added `quality_engine` sections to system.yaml and system_live.yaml (enabled: false)
+- Created `quality_history` table: 20 columns, 4 indexes
+- 9 new pytest tests
+
+**Session 6a (S6a): Pipeline Wiring + RM Check 0 + Quality History**
+- Extracted `_process_signal()` in main.py for quality pipeline flow
+- Risk Manager check 0: rejects `share_count ≤ 0` before circuit breaker evaluation
+- Quality history recording via `record_quality_history()`
+- QualitySignalEvent published after scoring
+- Pipeline bypass: BrokerSource.SIMULATED or quality_engine.enabled=false → legacy sizing
+- `_grade_meets_minimum()` helper on ArgusSystem
+- 14 new pytest tests
+
+**Session 6b (S6b): Integration Tests + Error Paths**
+- 12 comprehensive integration tests: engine exception fallback, missing catalyst/RVOL, regimes, bypasses
+- Fixed test_main.py hang: dangling asyncio task in shutdown test (added cleanup)
+- test_main.py runtime reduced from 7+ minutes to 2.16s
+
+**Session 7 (S7): Quality Server Init + Firehose Pipeline**
+- Quality engine initialization in server.py lifespan
+- `firehose: true` default for background polling loop
+- Gated Finnhub per-symbol recs behind `if not firehose`
+- Registered quality engine as health component
+- 14 new pytest tests
+
+**Session 8 (S8): Quality API Endpoints**
+- 3 endpoints: `GET /{symbol}` (latest), `GET /history` (paginated), `GET /distribution` (grade counts)
+- Registered quality router in routes/__init__.py
+- 12 new API tests
+
+**Session 9 (S9): Quality UI — QualityBadge + Trades Integration**
+- QualityBadge component with grade coloring + tooltip
+- 3 TanStack Query hooks: useQualityScore, useQualityHistory, useQualityDistribution
+- Quality column in Trades table (tablet+ breakpoint)
+- Setup Quality section in TradeDetailPanel
+- 22 new Vitest tests
+
+**Session 10 (S10): Dashboard Panels + Orchestrator Signals**
+- QualityDistributionCard (donut chart) on Dashboard
+- SignalQualityPanel (histogram) on Dashboard
+- RecentSignals list on Orchestrator page
+- `strategy_id` added to API response (backward-compatible)
+- 16 new Vitest tests
+
+**Session 11 (S11): Performance Grade Chart + Debrief Scatter Plot**
+- QualityGradeChart: grouped bars by grade (avg PnL, win rate, R-multiple) on Performance
+- QualityOutcomeScatter: quality score vs R-multiple with linear trend line on Debrief
+- Outcome fields added to quality API
+- 13 new Vitest tests, 4 new pytest tests
+
+**Session 11f (S11f): Visual Review Fixes + Code Cleanup**
+- Extracted GRADE_COLORS/GRADE_ORDER to shared `quality/constants.ts`
+- Fixed 3 visual bugs: RecentSignals crash, QualityGradeChart invisible bars, QualityOutcomeScatter no dots
+- Defensive `== null` checks for API response field omission
+- Removed unused Line import, updated DebriefPage docstring
+- Created QA seed script for visual testing
+- 0 new tests (all existing pass, no regressions)
+
+**Key decisions:** DEC-330 (SignalEvent enrichment), DEC-331 (VWAP/AfMo pattern strength + OM guard), DEC-332 (firehose refactoring), DEC-333 (quality engine 5-dimension scoring), DEC-334 (dynamic sizer + config models), DEC-335 (config wiring + YAML + DB schema), DEC-336 (pipeline wiring + RM check 0), DEC-337 (integration tests + error paths), DEC-338 (server init + firehose pipeline), DEC-339 (quality API routes), DEC-340 (quality UI — badge + hooks + trades), DEC-341 (quality UI — dashboard + orchestrator + performance + debrief)
+**Sessions:** 13 implementation (S1, S2, S3, S4, S5a, S5b, S6a, S6b, S7, S8, S9, S10, S11, S11f)
+**Test counts:** S1(+22), S2(+12), S3(+17), S4(+23), S5a(+19), S5b(+9), S6a(+14), S6b(+12), S7(+14), S8(+12), S9(+22V), S10(+16V), S11(+4+13V), S11f(+0) = +158 new pytest, +51 new Vitest
+**Review verdicts:** S1 MINOR_DEVIATIONS, S2 CLEAR, S3 CLEAR, S4 CLEAR, S5a CONCERNS (test count documentation), S5b CLEAR, S6a CONCERNS (spec deviation with rationale), S6b CLEAR, S7 CLEAR, S8 CLEAR, S9 CLEAR, S10 CLEAR, S11 CLEAR, S11f CLEAR
+**New deferred items:** DEF-050 (ArgusSystem e2e test), DEF-052 (dashboard quality interactivity), DEF-053 (dashboard tables quality column), DEF-054 (orchestrator clickable signals), DEF-055 (orchestrator 3-column layout), DEF-056 (scatter plot page placement), DEF-057 (EFTS URL validation), DEF-058 (trades DB quality columns), DEF-059 (TS build errors), DEF-060 (PROVISIONAL comment gap), DEF-061 (quality API private attrs), DEF-062 (seed script cleanup)
+**Notes:** Largest Sprint 24 scope: quality pipeline end-to-end from strategy signals through scoring, sizing, API, and full frontend integration across all 7 Command Center pages. 2 CONCERNS ratings (S5a test count documentation, S6a test assertion spec deviation) both have acceptable rationales. S11f cleaned up visual bugs and shared constant duplication. All sessions completed successfully. Ready for Phase 5 Gate (Sprint 24.5).
+
+---
+
 ## Sprint Statistics
 
-- **Total sprints:** 23 full + 18 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9)
-- **Total sessions:** ~284+ Claude Code sessions
-- **Total tests:** 2,532 pytest + 446 Vitest = 2,978 total
-- **Total decisions:** 329 (DEC-001 through DEC-329)
-- **Calendar days (active dev):** ~27 (Feb 14 – Mar 12, 2026)
+- **Total sprints:** 24 full + 18 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9)
+- **Total sessions:** ~298+ Claude Code sessions
+- **Total tests:** 2,686 pytest + 497 Vitest = 3,183 total
+- **Total decisions:** 341 (DEC-001 through DEC-341)
+- **Calendar days (active dev):** ~29 (Feb 14 – Mar 14, 2026)
 - **Largest sprint:** 22 (9 implementation + 5 fix + 9 reviews, largest scope)
 - **Cleanest sprint:** 23 (11 sessions, 0 regressions, 0 scope gaps requiring follow-up)
-- **Most test-dense:** Sprint 22 (286 new tests), Sprint 23.2 (188 new tests), Sprint 23 (141 new tests across 23+23.05)
-- **Most Vitest-dense:** 21d (119 new Vitest)
+- **Most test-dense:** Sprint 22 (286 new tests), Sprint 24 (209 new tests), Sprint 23.2 (188 new tests), Sprint 23 (141 new tests across 23+23.05)
+- **Most Vitest-dense:** 21d (119 new Vitest), Sprint 24 (51 new Vitest)
 - **Crisis sprint:** 8 (VectorBT performance — iterrows() → vectorized, 4 conversations)
 - **Most compaction events:** Sprint 22 (Sessions 3a and 3b both compacted, led to DEC-275)

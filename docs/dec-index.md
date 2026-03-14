@@ -1,7 +1,7 @@
 # ARGUS — Decision Index
 
-> 315 decisions (DEC-001 through DEC-315)
-> Generated: March 10, 2026 | Source: `docs/decision-log.md`
+> 341 decisions (DEC-001 through DEC-341)
+> Generated: March 14, 2026 | Source: `docs/decision-log.md`
 > Legend: ● Active | ○ Superseded | △ Amended | ✗ Duplicate entry
 
 
@@ -367,3 +367,18 @@
 ## Phase K — Frontend + Test Cleanup (Sprint 23.9)
 
 - ● **DEC-329**: Gate Frontend Intelligence Hooks on Pipeline Health Status — `usePipelineStatus` hook gates catalyst/briefing TanStack queries on health endpoint pipeline component; fail-closed default
+
+## Phase L — Setup Quality Engine (Sprint 24)
+
+- ● **DEC-330**: SignalEvent Enrichment Fields + ORB Pattern Strength — `pattern_strength`, `signal_context`, `quality_score`, `quality_grade` on SignalEvent; `_calculate_pattern_strength()` on OrbBaseStrategy; QualitySignalEvent
+- ● **DEC-331**: VWAP/AfMo Pattern Strength + Order Manager share_count=0 Guard — `_calculate_pattern_strength()` for VWAP Reclaim and Afternoon Momentum; all strategies emit `share_count=0`; OM early-return on zero shares
+- ● **DEC-332**: Firehose Source Refactoring (DEC-327 Implementation) — `firehose: bool` parameter on CatalystSource.fetch_catalysts(); Finnhub single general news call; SEC EDGAR EFTS search
+- ● **DEC-333**: SetupQualityEngine 5-Dimension Scoring — pattern strength, catalyst quality, volume profile, historical match, regime alignment; SetupQuality dataclass; QualityEngineConfig
+- ● **DEC-334**: DynamicPositionSizer + Config Models with Validators — grade-to-risk-tier mapping; QualityWeightsConfig, QualityThresholdsConfig, QualityRiskTiersConfig Pydantic models
+- ● **DEC-335**: Config Wiring + quality_engine.yaml + quality_history Table — QualityEngineConfig in SystemConfig; standalone + embedded YAML; 20-column DB table with 4 indexes
+- ● **DEC-336**: Pipeline Wiring + RM Check 0 + Quality History Recording — `_process_signal()` extraction in main.py; Risk Manager rejects `share_count ≤ 0`; QualitySignalEvent published; bypass modes
+- ● **DEC-337**: Quality Pipeline Integration Tests + Error Paths — 12 integration tests covering engine exception, missing catalyst/RVOL, regimes, bypasses; test_main.py hang fix
+- ● **DEC-338**: Server Quality Component Init + Firehose Pipeline Wiring — quality engine initialization in server lifespan; `firehose: true` default for polling loop; health component registration
+- ● **DEC-339**: Quality API Routes (3 Endpoints) — `GET /{symbol}` latest score, `GET /history` paginated, `GET /distribution` grade distribution; quality router registered
+- ● **DEC-340**: Quality UI — QualityBadge + Hooks + Trades Integration — QualityBadge component with grade coloring + tooltip; 3 TanStack Query hooks; quality column in Trades; Setup Quality in TradeDetailPanel
+- ● **DEC-341**: Quality UI — Dashboard + Orchestrator + Performance + Debrief Panels — QualityDistributionCard (donut), SignalQualityPanel (histogram), RecentSignals list, QualityGradeChart (grouped bars), QualityOutcomeScatter (scatter + trend line); shared GRADE_COLORS/GRADE_ORDER constants

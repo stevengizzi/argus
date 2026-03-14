@@ -1,27 +1,41 @@
 # ARGUS — Claude Code Context
 
 > Dense, actionable context for Claude Code sessions. No history — see `docs/` for that.
-> Last updated: March 11, 2026
+> Last updated: March 14, 2026
 
 ## Active Sprint
 
-**No active sprint.** Sprint 23.8 (Intelligence Pipeline Live QA Fixes) completed March 12, 2026. Sprint 23.9 (fast-follow frontend + debrief fixes) planned next.
+**No active sprint.** Sprint 24 (Setup Quality Engine + Dynamic Sizer) completed March 14, 2026.
 
-Next planned sprint: **23.9 (Frontend + Debrief Fixes)** → then **24 (Setup Quality Engine + Dynamic Sizer)**.
+Next planned sprint: **24.5 (Phase 5 Gate — Strategic Check-In)** → then **25 (Red-to-Green + Pattern Library Foundation)**.
 
 ### Known Issues
-- **2 pre-existing test_main.py failures under xdist:** `test_orchestrator_in_app_state` and `test_multiple_strategies_registered_with_orchestrator` fail under `pytest-xdist -n auto`. Confirmed pre-existing (fail on clean HEAD). Tracked for Sprint 23.9 investigation.
-- **SEC Edgar timeout test is tautological:** Tests hardcoded values instead of actual `start()` behavior. Tracked for Sprint 23.9 rewrite (Review 3 CONCERNS).
-- **xdist test collection discrepancy:** Full suite under `-n auto` collects 2,519 tests vs 2,521+ without xdist. Minor — likely worker isolation behavior. Tracked for investigation.
 - **FMP Starter plan restriction:** FMP news endpoints return 403 on Starter plan ($22/mo). `fmp_news.enabled: false` in `system_live.yaml`. FMP circuit breaker (DEC-323) prevents spam if accidentally enabled.
+- **Pre-existing xdist failures (DEF-048):** 4 test_main.py tests fail under `-n auto` (same `load_dotenv`/`AIConfig` race): `test_both_strategies_created`, `test_multi_strategy_health_status`, `test_candle_event_routing_subscribed`, `test_12_phase_startup_creates_orchestrator`. Pre-existing on clean HEAD. Priority: LOW.
+- **Test isolation (DEF-049):** `test_orchestrator_uses_strategies_from_registry` fails when run in isolation but passes in full suite. Pre-existing.
+- **ArgusSystem e2e integration test (DEF-050):** Full strategy → quality engine → sizer → RM integration test needed. Discovered Sprint 24 S6a. Priority: MEDIUM.
+- **Dashboard quality interactivity (DEF-052):** Dashboard quality cards — clickable segments, hover tooltips, donut legend. Discovered Sprint 24 S11f visual review. Priority: LOW.
+- **Dashboard tables quality column (DEF-053):** Quality column in Dashboard Positions / Recent Trades tables. Discovered Sprint 24 S11f visual review. Priority: LOW.
+- **Orchestrator clickable signals (DEF-054):** Orchestrator Recent Signals — clickable rows for signal details. Discovered Sprint 24 S11f visual review. Priority: LOW.
+- **Orchestrator 3-column layout (DEF-055):** Combine Decision Log, Catalyst Alerts, Recent Signals into 3-column row. Discovered Sprint 24 S11f visual review. Priority: LOW.
+- **Scatter plot page placement (DEF-056):** Consider moving QualityOutcomeScatter from Debrief Quality tab to Performance Distribution tab. Discovered Sprint 24 S11f visual review. Priority: LOW.
+- **EFTS URL live validation (DEF-057):** SEC EDGAR EFTS URL tested with mocked responses only; should validate against live API. Priority: LOW.
+- **Trades DB quality columns (DEF-058):** Trades table quality_grade/quality_score columns are informational until DB schema adds columns to trades table. Priority: LOW.
+- **22 pre-existing TypeScript build errors (DEF-059):** Unrelated to Sprint 24. Priority: LOW.
+- **PROVISIONAL comment gap (DEF-060):** quality_engine.yaml standalone config has PROVISIONAL comment but system.yaml/system_live.yaml embedded sections do not. Priority: LOW.
+- **Quality API private attribute access (DEF-061):** Quality API routes access `quality_engine._db` directly. Should add public accessor if pattern spreads. Priority: LOW.
+- **Seed script cleanup (DEF-062):** QA seed script (`scripts/seed_quality_data.py`) creates ephemeral dev data. Remove or gate before production. Priority: LOW.
+- **CatalystStorage init log level (LOW):** Should be `warning` not `debug` in main.py.
+- **EFTS URL needs live validation before firehose activation:** Covered by DEF-057.
+- **SetupQualityEngine needs `@property` accessors for `_db`/`_config`:** Covered by DEF-061.
 
 ## Current State
 
 - **Active sprint:** None (between sprints)
-- **Next sprint:** 24 (Setup Quality Engine + Dynamic Sizer)
-- **Tests:** 2,532 pytest + 446 Vitest
+- **Next sprint:** 24.5 (Phase 5 Gate — Strategic Check-In)
+- **Tests:** 2,686 pytest + 497 Vitest
 - **Strategies:** 4 active (ORB Breakout, ORB Scalp, VWAP Reclaim, Afternoon Momentum)
-- **Infrastructure:** Databento EQUS.MINI (live) + IBKR paper trading (Account U24619949) + FMP Starter (scanning + reference data) + Finnhub (news + analyst recs) + Claude API (Copilot + Catalyst Classification) + Universe Manager (config-gated) + Catalyst Pipeline (config-gated) + Intelligence Polling Loop (config-gated) + Reference Data Cache
+- **Infrastructure:** Databento EQUS.MINI (live) + IBKR paper trading (Account U24619949) + FMP Starter (scanning + reference data) + Finnhub (news + analyst recs) + Claude API (Copilot + Catalyst Classification) + Universe Manager (config-gated) + Catalyst Pipeline (config-gated) + Intelligence Polling Loop (config-gated) + Reference Data Cache + Quality Engine (config-gated) + Dynamic Position Sizer
 - **Frontend:** 7-page Command Center + AI Copilot + Universe Status Card + Intelligence Brief View (all active), Tauri desktop + PWA mobile
 
 ## Project Structure
@@ -50,7 +64,7 @@ argus/
 │   ├── summary.py  # DailySummaryGenerator
 │   ├── cache.py    # ResponseCache (TTL-based)
 │   └── tools.py    # 5 tool_use definitions with JSON schemas
-├── intelligence/   # CatalystPipeline, CatalystClassifier, CatalystStorage, BriefingGenerator, startup factory, polling loop (Sprints 23.5 + 23.6)
+├── intelligence/   # CatalystPipeline, CatalystClassifier, CatalystStorage, BriefingGenerator, startup factory, polling loop (Sprints 23.5 + 23.6), SetupQualityEngine (quality_engine.py), DynamicPositionSizer (position_sizer.py) (Sprint 24)
 ├── config/         # system.yaml, system_live.yaml, strategies/*.yaml
 ├── tests/          # pytest (backend) + Vitest (frontend)
 ├── docs/           # Decision log, sprint history, strategy specs, research reports
@@ -66,7 +80,7 @@ argus/
 python -m pytest tests/                   # Run all tests
 python -m pytest tests/ -x               # Stop on first failure
 python -m pytest tests/ -x -q            # Fail-fast, quiet
-cd argus/ui && npx vitest run            # Frontend tests (~435)
+cd argus/ui && npx vitest run            # Frontend tests (~497)
 
 # Trading engine
 python -m argus.main                      # Start (paper trading default)
@@ -266,14 +280,26 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 | DEF-047 | Bulk catalyst endpoint | Unscheduled | Consolidate per-symbol catalyst GET requests into single batch request. Currently one request per watchlist symbol when pipeline is active. Priority: LOW. |
 | DEF-048 | Additional test_main.py xdist failures | Unscheduled | 4 more tests fail under `-n auto` (same `load_dotenv`/`AIConfig` race as DEF-046): `test_both_strategies_created`, `test_multi_strategy_health_status`, `test_candle_event_routing_subscribed`, `test_12_phase_startup_creates_orchestrator`. Pre-existing on clean HEAD. Same fix approach as DEF-046. Priority: LOW. |
 | DEF-049 | test_orchestrator_uses_strategies_from_registry isolation failure | Unscheduled | `test_orchestrator_uses_strategies_from_registry` in tests/test_main.py fails when run in isolation but passes in full suite. Pre-existing test isolation issue. Discovered Sprint 24 S1. Priority: LOW. |
+| DEF-050 | Full ArgusSystem e2e integration test | Unscheduled | Full strategy → quality engine → sizer → RM in one test. Discovered Sprint 24 S6a. Priority: MEDIUM. |
+| DEF-052 | Dashboard quality cards interactivity | Unscheduled | Clickable segments, hover tooltips, donut legend. Discovered Sprint 24 S11f visual review. Priority: LOW. |
+| DEF-053 | Quality column in Dashboard tables | Unscheduled | Quality column in Dashboard Positions / Recent Trades tables. Discovered Sprint 24 S11f visual review. Priority: LOW. |
+| DEF-054 | Orchestrator clickable signal rows | Unscheduled | Orchestrator Recent Signals — clickable rows for signal details. Discovered Sprint 24 S11f visual review. Priority: LOW. |
+| DEF-055 | Orchestrator 3-column layout | Unscheduled | Combine Decision Log, Catalyst Alerts, Recent Signals into 3-column row. Discovered Sprint 24 S11f visual review. Priority: LOW. |
+| DEF-056 | QualityOutcomeScatter page placement | Unscheduled | Consider moving QualityOutcomeScatter from Debrief Quality tab to Performance Distribution tab. Discovered Sprint 24 S11f visual review. Priority: LOW. |
+| DEF-057 | SEC EDGAR EFTS URL live validation | Unscheduled | EFTS URL tested with mocked responses only; should validate against live API. Discovered Sprint 24 S3. Priority: LOW. |
+| DEF-058 | Trades DB quality columns | Unscheduled | `quality_grade`/`quality_score` columns in Trades table are informational until DB schema adds columns to trades table. Discovered Sprint 24 S9. Priority: LOW. |
+| DEF-059 | Pre-existing TypeScript build errors (22) | Unscheduled | 22 TypeScript build errors pre-existing, unrelated to Sprint 24. Priority: LOW. |
+| DEF-060 | PROVISIONAL comment gap in system YAML quality sections | Unscheduled | `quality_engine.yaml` standalone has PROVISIONAL comment but system.yaml/system_live.yaml embedded sections do not. Discovered Sprint 24 S5b. Priority: LOW. |
+| DEF-061 | Quality API private attribute access | Unscheduled | Quality routes access `quality_engine._db` directly. Should add public accessor if pattern spreads. Discovered Sprint 24 S8. Priority: LOW. |
+| DEF-062 | QA seed script cleanup | Unscheduled | `scripts/seed_quality_data.py` creates ephemeral dev data. Remove or gate before production. Discovered Sprint 24 S11f. Priority: LOW. |
 
 ## Reference
 
 | Document | What It Covers |
 |----------|---------------|
-| `docs/decision-log.md` | All 328 DEC entries with full rationale |
+| `docs/decision-log.md` | All 341 DEC entries with full rationale |
 | `docs/dec-index.md` | Quick-reference index with status markers |
-| `docs/sprint-history.md` | Complete sprint history (1–23.6) |
+| `docs/sprint-history.md` | Complete sprint history (1–24) |
 | `docs/process-evolution.md` | Workflow evolution narrative |
 | `docs/live-operations.md` | Live trading procedures |
 | `docs/strategies/STRATEGY_*.md` | Per-strategy spec sheets |

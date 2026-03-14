@@ -3896,6 +3896,174 @@ Each entry follows this format:
 
 ---
 
+### DEC-330 | SignalEvent Enrichment Fields + ORB Family Pattern Strength
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-13 |
+| **Sprint** | 24 |
+| **Decision** | Added 4 optional fields to SignalEvent: `pattern_strength` (float, 0–100), `signal_context` (dict), `quality_score` (float, 0–100), `quality_grade` (str). Created QualitySignalEvent as informational event for UI consumption. Implemented `_calculate_pattern_strength()` on OrbBaseStrategy with 4-factor weighted scoring: volume ratio (30%), ATR ratio tightness (25%), chase distance from VWAP (25%), opening range midpoint proximity (20%). `vwap` parameter is optional. Stored `atr_ratio` in OrbSymbolState to avoid redundant indicator fetches. |
+| **Alternatives Considered** | 1. Separate PatternStrength event: Rejected — enriching SignalEvent keeps the data co-located with the signal for downstream consumers. 2. Quality fields as required: Rejected — must be optional for backward compatibility with backtest and strategies that haven't been enriched yet. |
+| **Rationale** | Sprint 24 Quality Engine requires strategy-assessed signal quality as one of its 5 scoring dimensions. Pattern strength must be computed by each strategy since only the strategy knows what makes a "good" setup for its pattern type. The ORB family (Breakout + Scalp) shares the same base class and pattern assessment logic. |
+| **Cross-References** | DEC-239 (Setup Quality Engine spec), DEC-120 (OrbBaseStrategy ABC) |
+| **Status** | Active |
+
+---
+
+### DEC-331 | VWAP/AfMo Pattern Strength + Order Manager share_count=0 Guard
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-13 |
+| **Sprint** | 24 |
+| **Decision** | Implemented `_calculate_pattern_strength()` for VWAP Reclaim (4-factor: volume 30%, pullback depth 25%, reclaim strength 25%, VWAP proximity 20%) and Afternoon Momentum (4-factor: volume 30%, consolidation tightness 25%, breakout strength 25%, ATR-relative move 20%). All 4 strategies now emit `share_count=0` to defer sizing to the quality pipeline. Order Manager `on_approved()` early-returns when `share_count==0` (no order placed). |
+| **Alternatives Considered** | 1. Keep share_count populated by strategies: Rejected — dynamic sizing requires the quality pipeline to determine share count based on quality grade, not strategy-level fixed calculation. 2. Sentinel value (-1) instead of 0: Rejected — 0 is semantically clearer ("not yet sized"). |
+| **Rationale** | Completes pattern strength implementation across all 4 active strategies. The `share_count=0` convention cleanly separates strategy signal generation from position sizing, enabling the quality pipeline to own the sizing decision. The OM guard prevents zero-share orders from reaching the broker. |
+| **Cross-References** | DEC-330 (ORB pattern strength), DEC-136 (VWAP Reclaim), DEC-152 (Afternoon Momentum) |
+| **Status** | Active |
+
+---
+
+### DEC-332 | Firehose Source Refactoring (DEC-327 Implementation)
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-13 |
+| **Sprint** | 24 |
+| **Decision** | Added `firehose: bool = False` parameter to `CatalystSource.fetch_catalysts()`. In firehose mode: Finnhub uses single `GET /news?category=general` call (instead of per-symbol calls), SEC EDGAR uses single EFTS search-index call. FMP behavior unchanged (already batch-oriented). Firehose mode reduces API calls from N+1 (per symbol) to ≤3 (one per source per cycle). |
+| **Alternatives Considered** | 1. Separate FiehoseSource subclasses: Rejected — parameter flag is simpler and the behavioral difference is small (URL construction). 2. Remove per-symbol mode entirely: Rejected — per-symbol mode is still useful for on-demand single-symbol lookups. |
+| **Rationale** | Implements the firehose architecture deferred in DEC-327. The per-symbol polling model produced 5,392 raw items (94% duplicates) with 15 scanner symbols. Firehose mode eliminates the N+1 API pattern by pulling full feeds and associating items to symbols after ingestion. |
+| **Cross-References** | DEC-327 (firehose architecture deferred), DEC-304 (three-source architecture) |
+| **Status** | Active |
+
+---
+
+### DEC-333 | SetupQualityEngine 5-Dimension Scoring
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-13 |
+| **Sprint** | 24 |
+| **Decision** | Created `SetupQualityEngine` class (139 lines) in `argus/intelligence/quality_engine.py` with `SetupQuality` dataclass. Scores setups on 5 weighted dimensions: pattern strength (30%), catalyst quality (25%), volume profile (20%), historical match (15%), regime alignment (10%). Each dimension produces a 0–100 sub-score. Weighted composite maps to quality grade via configurable thresholds: A+ (≥90), A (≥80), B+ (≥70), B (≥60), C+ (≥50), C (≥40), C- (<40). Grade thresholds use `int` type. Dimension weights configurable via `QualityEngineConfig`. |
+| **Alternatives Considered** | 1. Machine-learned scoring model: Rejected — insufficient training data; rule-based V1 establishes the scoring framework that the Learning Loop (Sprint 28) will refine. 2. Three dimensions only (pattern + volume + regime): Rejected — catalyst quality and historical match provide meaningful signal differentiation. |
+| **Rationale** | DEC-239 specified 5-dimension quality scoring. The engine is deliberately simple — weighted linear combination with configurable weights — because the initial weights are estimates that the Learning Loop will calibrate against actual trade outcomes. Complexity in the scoring model would be premature before outcome data exists. |
+| **Cross-References** | DEC-239 (Setup Quality Engine spec), DEC-330 (pattern strength input) |
+| **Status** | Active |
+
+---
+
+### DEC-334 | DynamicPositionSizer + Config Models with Validators
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-13 |
+| **Sprint** | 24 |
+| **Decision** | Created `DynamicPositionSizer` class in `argus/intelligence/position_sizer.py`. Maps quality grades to risk tiers: A+ (2–3%), A (1.5–2%), B+ (1–1.5%), B (0.5–1%), C+ (0.25–0.5%), C (SKIP), C- (SKIP). Calculates shares = risk_tier_midpoint / risk_per_share, capped by buying power. Replaced flat dict weights/thresholds with Pydantic models: `QualityWeightsConfig` (5 weights summing to 1.0), `QualityThresholdsConfig` (6 thresholds in descending order), `QualityRiskTiersConfig` (per-grade min/max risk percentages). All models include field validators ensuring sum/ordering constraints. |
+| **Alternatives Considered** | 1. Flat config dicts: Initial implementation; replaced with Pydantic models for validation. 2. Continuous risk curve (no discrete tiers): Rejected — discrete tiers are more interpretable and auditable. |
+| **Rationale** | The position sizer is the bridge between quality assessment and risk allocation. Pydantic models with validators prevent configuration errors (e.g., weights not summing to 1.0, thresholds out of order) at startup rather than producing subtle runtime bugs. Risk tier ranges (min/max) rather than fixed values allow the sizer to use the midpoint while supporting future refinement. |
+| **Cross-References** | DEC-333 (quality engine), DEC-239 (dynamic sizer spec) |
+| **Status** | Active |
+
+---
+
+### DEC-335 | Config Wiring + quality_engine.yaml + quality_history Table
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-13 |
+| **Sprint** | 24 |
+| **Decision** | Wired `QualityEngineConfig` into `SystemConfig` (loads from `quality_engine` YAML section). Created standalone `config/quality_engine.yaml` with all weights, thresholds, and risk tier defaults. Added `quality_engine` sections to `system.yaml` and `system_live.yaml` (both `enabled: false` by default). Created `quality_history` database table with 20 columns (symbol, strategy_id, pattern_strength, catalyst_score, volume_score, historical_score, regime_score, quality_score, quality_grade, risk_tier_pct, share_count, entry_price, stop_price, signal_context JSON, regime, timestamp, plus indexes on symbol, strategy_id, quality_grade, and timestamp). |
+| **Alternatives Considered** | 1. Quality history in separate DB: Rejected — unlike catalyst.db (DEC-309), quality history is tightly coupled to trade data and belongs in the main trading database. 2. Fewer columns: Rejected — per-dimension scores are essential for Learning Loop analysis. |
+| **Rationale** | Config-gated quality engine (default disabled) follows the same pattern as Universe Manager and Catalyst Pipeline. The quality_history table stores per-dimension scores to enable the Learning Loop (Sprint 28) to correlate individual dimensions with trade outcomes, not just the composite score. |
+| **Cross-References** | DEC-300 (config-gated feature pattern), DEC-032 (Pydantic config), DEC-034 (aiosqlite) |
+| **Status** | Active |
+
+---
+
+### DEC-336 | Pipeline Wiring + Risk Manager Check 0 + Quality History Recording
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-13 |
+| **Sprint** | 24 |
+| **Decision** | Extracted `_process_signal()` method in main.py to handle the quality pipeline flow: score setup → filter by minimum grade → calculate shares → enrich SignalEvent → publish QualitySignalEvent → record quality history → emit to Risk Manager. Risk Manager check 0 added: rejects `share_count ≤ 0` with reason `"Zero or negative share count"` before circuit breaker evaluation. Pipeline bypass: when `BrokerSource.SIMULATED` or `quality_engine.enabled: false`, legacy sizing applies (allocated_capital × max_loss_per_trade_pct / risk_per_share). `_grade_meets_minimum()` helper on ArgusSystem for grade comparison. Quality history written via `quality_engine.record_quality_history()`. |
+| **Alternatives Considered** | 1. Quality pipeline in Risk Manager: Rejected — Risk Manager evaluates risk, not quality. Quality scoring is a pre-risk enrichment step. 2. Inline in signal handler: Rejected — extraction to `_process_signal()` keeps the handler clean and testable. |
+| **Rationale** | The pipeline wiring is the critical integration point. The RM check 0 ensures that signals that failed quality filtering (grade below minimum → share_count stays 0) or where the sizer couldn't determine a valid position size are cleanly rejected before any risk evaluation. This prevents zero-share orders from consuming risk budget. |
+| **Cross-References** | DEC-333 (quality engine), DEC-334 (position sizer), DEC-027 (Risk Manager modifications) |
+| **Status** | Active |
+
+---
+
+### DEC-337 | Quality Pipeline Integration Tests + Error Paths
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-13 |
+| **Sprint** | 24 |
+| **Decision** | Added 12 comprehensive integration tests covering quality pipeline error paths: engine exception fallback to legacy sizing, missing catalyst data (graceful 0 score), missing RVOL data, various regime conditions, simulated broker bypass, disabled quality engine bypass, grade below minimum (C- filtered), and full pipeline happy path. Fixed test_main.py hanging due to dangling asyncio task in `test_shutdown_requested_event_schedules_shutdown` (added task cleanup). |
+| **Alternatives Considered** | N/A — test coverage for error paths is mandatory for safety-critical pipeline code. |
+| **Rationale** | The quality pipeline sits between strategy signals and the Risk Manager — errors in this path could either block all trading (if exceptions propagate) or produce incorrect position sizes (if errors are silently ignored). Integration tests verify that every failure mode degrades gracefully to legacy sizing rather than crashing or producing zero-share orders. The test_main.py hang fix was a pre-existing issue discovered during test runs. |
+| **Cross-References** | DEC-336 (pipeline wiring), DEC-328 (test suite tiering) |
+| **Status** | Active |
+
+---
+
+### DEC-338 | Server Quality Component Init + Firehose Pipeline Wiring
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-13 |
+| **Sprint** | 24 |
+| **Decision** | Wired quality engine initialization in `server.py` lifespan: creates `SetupQualityEngine` and `DynamicPositionSizer` when `quality_engine.enabled: true`, stores in `app_state`. Added `firehose: bool = True` as default for background polling loop — firehose is the correct mode for periodic background fetches. Gated Finnhub per-symbol recommendations behind `if not firehose` to honor ≤3 API calls per poll cycle. Registered quality engine as health component via `health_monitor.update_component("quality_engine", ...)`. |
+| **Alternatives Considered** | 1. Firehose as opt-in (default False): Rejected — background polling should always use firehose; per-symbol mode is for on-demand lookups only. 2. Quality engine init in main.py only: Rejected — API server needs quality engine access for quality API routes (Sprint 24 S8). |
+| **Rationale** | Server-side quality engine initialization mirrors the pattern established for catalyst pipeline (DEC-308) and universe manager. Firehose as default for polling ensures the background intelligence loop makes ≤3 API calls per cycle regardless of watchlist size. |
+| **Cross-References** | DEC-332 (firehose refactoring), DEC-308 (deferred initialization pattern), DEC-315 (polling loop) |
+| **Status** | Active |
+
+---
+
+### DEC-339 | Quality API Routes (3 Endpoints)
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-14 |
+| **Sprint** | 24 |
+| **Decision** | Created 3 quality API endpoints: `GET /api/v1/quality/{symbol}` returns latest quality score for a symbol, `GET /api/v1/quality/history` returns paginated quality history with optional filters (symbol, strategy, grade, date range), `GET /api/v1/quality/distribution` returns grade distribution counts with optional filters. All endpoints require JWT auth. Router registered in `routes/__init__.py`. Added "C" to grades list (was missing from initial implementation). |
+| **Alternatives Considered** | 1. Single endpoint with query params for all operations: Rejected — separate endpoints follow REST conventions and match existing API patterns (trades, catalysts). 2. Public accessor for quality DB: Considered but pragmatically accessed `quality_engine._db` directly due to spec constraint. |
+| **Rationale** | Quality data needs to be accessible to the frontend for dashboard panels, trade detail views, and performance analysis. Three endpoints cover the three access patterns: latest score (trade detail), history (analysis), distribution (dashboard summary). |
+| **Cross-References** | DEC-335 (quality_history table), DEC-099 (API lifecycle), DEC-102 (JWT auth) |
+| **Status** | Active |
+
+---
+
+### DEC-340 | Quality UI — QualityBadge + Hooks + Trades Integration
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-14 |
+| **Sprint** | 24 |
+| **Decision** | Created `QualityBadge` component with grade-specific coloring (A+=emerald, A=green, B+=blue, B=sky, C+=amber, C/C-=red) and hover tooltip showing quality score. Created 3 TanStack Query hooks: `useQualityScore(symbol)`, `useQualityHistory(filters)`, `useQualityDistribution(filters)`. Added quality grade column to Trades table (tablet+ breakpoint to save phone space). Added Setup Quality section to TradeDetailPanel with per-dimension score breakdown. Added optional `quality_grade`/`quality_score` fields to Trade TypeScript interface. |
+| **Alternatives Considered** | 1. Quality column visible on all breakpoints: Rejected — phone space is too constrained; quality badge appears in trade detail on mobile. 2. Separate quality page: Rejected — quality information should be ambient, visible where trades are viewed, not isolated on its own page (DEC-168). |
+| **Rationale** | Quality visibility follows DEC-168 (intelligence visible everywhere). The badge is compact enough for table cells while the tooltip provides the numeric score. Per-dimension breakdown in the trade detail panel supports the "Why this size?" user story from the Sprint 24 spec. |
+| **Cross-References** | DEC-168 (intelligence visible everywhere), DEC-339 (quality API), DEC-305 (TanStack Query hooks pattern) |
+| **Status** | Active |
+
+---
+
+### DEC-341 | Quality UI — Dashboard + Orchestrator + Performance + Debrief Panels
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-14 |
+| **Sprint** | 24 |
+| **Decision** | Created 5 new UI components across 4 pages: (1) **QualityDistributionCard** (Dashboard): donut chart showing grade distribution with count label. (2) **SignalQualityPanel** (Dashboard): histogram of recent signal quality scores. (3) **RecentSignals** (Orchestrator): list of recent signals with quality badge, strategy, and timestamp; added `strategy_id` to API response (backward-compatible). (4) **QualityGradeChart** (Performance): grouped bar chart showing average PnL, win rate, and R-multiple by quality grade. (5) **QualityOutcomeScatter** (Debrief): scatter plot of quality score vs R-multiple with linear trend line. Extracted shared `GRADE_COLORS` and `GRADE_ORDER` constants to `quality/constants.ts` to eliminate duplication across components. Visual bugs fixed in S11f: defensive `== null` checks for API response fields, Recharts fill/stroke props for visibility. |
+| **Alternatives Considered** | 1. Single combined quality dashboard page: Rejected — distributing quality insights across existing pages provides ambient awareness without navigation overhead. 2. Per-component color constants: Initial approach; refactored to shared constants in S11f after duplication was flagged. |
+| **Rationale** | Quality visibility across all pages completes the Sprint 24 UI scope. Each component serves a specific user story: distribution (overall quality health), histogram (recent signal quality trend), recent signals (operational awareness), grade chart (quality-outcome correlation), scatter plot (individual trade quality analysis). The trend line in the scatter plot provides visual confirmation of whether higher quality scores correlate with better outcomes — the fundamental hypothesis the quality engine exists to validate. |
+| **Cross-References** | DEC-340 (quality badge + hooks), DEC-109 (design north star), DEC-215 (chart library assignments — Recharts for standard charts) |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
-*Next DEC: 330*
-*Last updated: 2026-03-12 (Sprint 23.9 — DEC-329)*
+*Next DEC: 342*
+*Last updated: 2026-03-14 (Sprint 24 — DEC-330–341)*
