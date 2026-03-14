@@ -114,7 +114,7 @@ export function CatalystAlertPanel() {
   const isStale = dataUpdatedAt ? Date.now() - dataUpdatedAt > 60_000 : false;
 
   return (
-    <Card>
+    <div>
       <CardHeader
         title="Catalyst Alerts"
         icon={<AlertCircle className="w-4 h-4" />}
@@ -125,9 +125,9 @@ export function CatalystAlertPanel() {
           />
         }
       />
-
-      {/* Scrollable content area */}
-      <div className="max-h-[300px] overflow-y-auto -mx-4 -mb-4">
+      <Card>
+        {/* Scrollable content area */}
+        <div className="max-h-[300px] overflow-y-auto -mx-4 -mb-4">
         {isLoading && (
           <div className="flex items-center justify-center h-32">
             <div className="w-5 h-5 border-2 border-argus-accent border-t-transparent rounded-full animate-spin" />
@@ -158,7 +158,8 @@ export function CatalystAlertPanel() {
             ))}
           </div>
         )}
-      </div>
-    </Card>
+        </div>
+      </Card>
+    </div>
   );
 }

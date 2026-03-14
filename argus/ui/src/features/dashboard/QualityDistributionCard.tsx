@@ -103,6 +103,7 @@ export function QualityDistributionCard() {
               outerRadius={58}
               paddingAngle={2}
               strokeWidth={0}
+              isAnimationActive={false}
             >
               {segments.map(segment => (
                 <Cell key={segment.grade} fill={segment.color} />

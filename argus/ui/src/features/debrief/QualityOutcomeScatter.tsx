@@ -102,12 +102,12 @@ export function QualityOutcomeScatter() {
 
   if (isLoading) {
     return (
-      <Card>
+      <Card fullHeight>
         <h3 className="text-sm font-medium text-argus-text mb-3">
           Quality vs. Outcome
         </h3>
         <div
-          className="h-[320px] bg-argus-surface-2 rounded animate-pulse"
+          className="flex-1 bg-argus-surface-2 rounded animate-pulse"
           data-testid="quality-scatter-skeleton"
         />
       </Card>
@@ -116,12 +116,12 @@ export function QualityOutcomeScatter() {
 
   if (points.length === 0) {
     return (
-      <Card>
+      <Card fullHeight>
         <h3 className="text-sm font-medium text-argus-text mb-3">
           Quality vs. Outcome
         </h3>
         <div
-          className="flex items-center justify-center h-[320px]"
+          className="flex items-center justify-center flex-1"
           data-testid="quality-scatter-empty"
         >
           <p className="text-sm text-argus-text-dim text-center max-w-xs">
@@ -134,12 +134,12 @@ export function QualityOutcomeScatter() {
   }
 
   return (
-    <Card>
+    <Card fullHeight>
       <h3 className="text-sm font-medium text-argus-text mb-3">
         Quality vs. Outcome
       </h3>
-      <div data-testid="quality-scatter-chart">
-        <ResponsiveContainer width="100%" height={320}>
+      <div data-testid="quality-scatter-chart" className="flex-1 min-h-0">
+        <ResponsiveContainer width="100%" height="100%">
           <ScatterChart margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
             <XAxis
               dataKey="score"

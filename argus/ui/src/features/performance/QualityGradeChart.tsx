@@ -89,12 +89,12 @@ export function QualityGradeChart({ startDate, endDate }: QualityGradeChartProps
 
   if (isLoading) {
     return (
-      <Card>
+      <Card fullHeight>
         <h3 className="text-sm font-medium text-argus-text mb-3">
           Performance by Quality Grade
         </h3>
         <div
-          className="h-[280px] bg-argus-surface-2 rounded animate-pulse"
+          className="flex-1 bg-argus-surface-2 rounded animate-pulse"
           data-testid="quality-grade-chart-skeleton"
         />
       </Card>
@@ -103,12 +103,12 @@ export function QualityGradeChart({ startDate, endDate }: QualityGradeChartProps
 
   if (!hasOutcomeData) {
     return (
-      <Card>
+      <Card fullHeight>
         <h3 className="text-sm font-medium text-argus-text mb-3">
           Performance by Quality Grade
         </h3>
         <div
-          className="flex items-center justify-center h-[280px]"
+          className="flex items-center justify-center flex-1"
           data-testid="quality-grade-chart-empty"
         >
           <p className="text-sm text-argus-text-dim">
@@ -120,12 +120,12 @@ export function QualityGradeChart({ startDate, endDate }: QualityGradeChartProps
   }
 
   return (
-    <Card>
+    <Card fullHeight>
       <h3 className="text-sm font-medium text-argus-text mb-3">
         Performance by Quality Grade
       </h3>
-      <div data-testid="quality-grade-chart">
-        <ResponsiveContainer width="100%" height={280}>
+      <div data-testid="quality-grade-chart" className="flex-1 min-h-0">
+        <ResponsiveContainer width="100%" height="100%">
           <ComposedChart
             data={chartData}
             margin={{ top: 10, right: 20, left: 0, bottom: 5 }}

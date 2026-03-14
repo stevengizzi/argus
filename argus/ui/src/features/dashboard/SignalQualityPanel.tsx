@@ -108,7 +108,7 @@ export function SignalQualityPanel() {
               allowDecimals={false}
             />
             <Tooltip content={<HistogramTooltip />} cursor={{ fill: 'rgba(255,255,255,0.05)' }} isAnimationActive={false} />
-            <Bar dataKey="count" radius={[3, 3, 0, 0]} maxBarSize={28}>
+            <Bar dataKey="count" radius={[3, 3, 0, 0]} maxBarSize={28} isAnimationActive={false}>
               {bars.map(bar => (
                 <Cell key={bar.grade} fill={bar.color} />
               ))}

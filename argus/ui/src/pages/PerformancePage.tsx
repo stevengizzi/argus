@@ -461,27 +461,22 @@ interface DistributionTabProps {
 function DistributionTabContent({ period }: DistributionTabProps) {
   return (
     <motion.div
-      className="space-y-4 md:space-y-6"
       variants={staggerContainer(0.08)}
       initial="hidden"
       animate="show"
     >
-      {/* Side by side on desktop (≥1024px), stacked on tablet/mobile */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 items-stretch">
-        <motion.div variants={staggerItem} className="lg:col-span-1 h-full">
+      {/* 2x2 equal quadrant grid — all cards same height, fits on one screen */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+        <motion.div variants={staggerItem} className="h-[400px] overflow-hidden">
           <RMultipleHistogram period={period} fullHeight />
         </motion.div>
-        <motion.div variants={staggerItem} className="lg:col-span-1 h-full">
+        <motion.div variants={staggerItem} className="h-[400px] overflow-hidden">
           <RiskWaterfall fullHeight />
         </motion.div>
-      </div>
-
-      {/* Quality charts side-by-side on desktop */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
-        <motion.div variants={staggerItem} className="h-full">
+        <motion.div variants={staggerItem} className="h-[400px] overflow-hidden">
           <QualityGradeChart />
         </motion.div>
-        <motion.div variants={staggerItem} className="h-full">
+        <motion.div variants={staggerItem} className="h-[400px] overflow-hidden">
           <QualityOutcomeScatter />
         </motion.div>
       </div>
