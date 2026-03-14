@@ -108,7 +108,7 @@ export function QualityDistributionCard() {
                 <Cell key={segment.grade} fill={segment.color} />
               ))}
             </Pie>
-            <Tooltip content={<DonutTooltip />} />
+            <Tooltip content={<DonutTooltip />} isAnimationActive={false} />
           </PieChart>
         </ResponsiveContainer>
         {/* Center text overlay */}

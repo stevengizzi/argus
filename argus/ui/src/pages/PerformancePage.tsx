@@ -476,15 +476,15 @@ function DistributionTabContent({ period }: DistributionTabProps) {
         </motion.div>
       </div>
 
-      {/* Quality grade performance chart */}
-      <motion.div variants={staggerItem}>
-        <QualityGradeChart />
-      </motion.div>
-
-      {/* Quality vs. outcome scatter plot */}
-      <motion.div variants={staggerItem}>
-        <QualityOutcomeScatter />
-      </motion.div>
+      {/* Quality charts side-by-side on desktop */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+        <motion.div variants={staggerItem} className="h-full">
+          <QualityGradeChart />
+        </motion.div>
+        <motion.div variants={staggerItem} className="h-full">
+          <QualityOutcomeScatter />
+        </motion.div>
+      </div>
     </motion.div>
   );
 }

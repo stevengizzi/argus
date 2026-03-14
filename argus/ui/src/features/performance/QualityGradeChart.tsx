@@ -1,17 +1,19 @@
 /**
- * Quality Grade Performance Chart — grouped bar chart showing performance by grade.
+ * Quality Grade Performance Chart — bars + line showing performance by grade.
  *
  * X-axis: quality grades (A+ through C+).
- * Bars: avg PnL, win rate, avg R-multiple per grade.
- * Grades with no data show empty bars (not omitted).
+ * Blue bars: Avg P&L ($) on left y-axis.
+ * Green line with dots: Win Rate (%) on right y-axis.
+ * Avg R dropped — derivable from the scatter plot.
  *
- * Sprint 24 Session 11.
+ * Sprint 24 Session 11. Redesigned Sprint 24.1 S4f.
  */
 
 import { useMemo } from 'react';
 import {
-  BarChart,
+  ComposedChart,
   Bar,
+  Line,
   XAxis,
   YAxis,
   Tooltip,
@@ -20,21 +22,17 @@ import {
 } from 'recharts';
 import { Card } from '../../components/Card';
 import { useQualityHistory } from '../../hooks/useQuality';
-import { GRADE_COLORS, GRADE_ORDER } from '../../constants/qualityConstants';
+import { GRADE_ORDER } from '../../constants/qualityConstants';
 import type { QualityScoreResponse } from '../../api/types';
 
-// Bar colors for the three metrics
 const AVG_PNL_COLOR = '#3b82f6';
 const WIN_RATE_COLOR = '#22c55e';
-const AVG_R_COLOR = '#a78bfa';
 
 interface GradeAggregate {
   grade: string;
   avgPnl: number;
   winRate: number;
-  avgR: number;
   count: number;
-  color: string;
 }
 
 function aggregateByGrade(items: QualityScoreResponse[]): GradeAggregate[] {
@@ -50,22 +48,11 @@ function aggregateByGrade(items: QualityScoreResponse[]): GradeAggregate[] {
   return GRADE_ORDER.map((grade) => {
     const gradeItems = byGrade.get(grade) ?? [];
     if (gradeItems.length === 0) {
-      return {
-        grade,
-        avgPnl: 0,
-        winRate: 0,
-        avgR: 0,
-        count: 0,
-        color: GRADE_COLORS[grade] ?? '#6b7280',
-      };
+      return { grade, avgPnl: 0, winRate: 0, count: 0 };
     }
 
     const totalPnl = gradeItems.reduce(
       (sum, item) => sum + (item.outcome_realized_pnl ?? 0),
-      0,
-    );
-    const totalR = gradeItems.reduce(
-      (sum, item) => sum + (item.outcome_r_multiple ?? 0),
       0,
     );
     const wins = gradeItems.filter(
@@ -76,9 +63,7 @@ function aggregateByGrade(items: QualityScoreResponse[]): GradeAggregate[] {
       grade,
       avgPnl: Math.round(totalPnl / gradeItems.length),
       winRate: Math.round((wins / gradeItems.length) * 100),
-      avgR: Number((totalR / gradeItems.length).toFixed(2)),
       count: gradeItems.length,
-      color: GRADE_COLORS[grade] ?? '#6b7280',
     };
   });
 }
@@ -141,7 +126,7 @@ export function QualityGradeChart({ startDate, endDate }: QualityGradeChartProps
       </h3>
       <div data-testid="quality-grade-chart">
         <ResponsiveContainer width="100%" height={280}>
-          <BarChart
+          <ComposedChart
             data={chartData}
             margin={{ top: 10, right: 20, left: 0, bottom: 5 }}
           >
@@ -156,7 +141,15 @@ export function QualityGradeChart({ startDate, endDate }: QualityGradeChartProps
               tick={{ fill: 'rgba(255,255,255,0.5)', fontSize: 10 }}
               axisLine={false}
               tickLine={false}
-              width={50}
+              width={55}
+              label={{
+                value: 'Avg P&L ($)',
+                angle: -90,
+                position: 'insideLeft',
+                offset: 10,
+                fill: 'rgba(255,255,255,0.4)',
+                fontSize: 10,
+              }}
             />
             <YAxis
               yAxisId="pct"
@@ -165,9 +158,17 @@ export function QualityGradeChart({ startDate, endDate }: QualityGradeChartProps
               axisLine={false}
               tickLine={false}
               domain={[0, 100]}
-              width={40}
+              width={45}
+              label={{
+                value: 'Win Rate (%)',
+                angle: 90,
+                position: 'insideRight',
+                offset: 10,
+                fill: 'rgba(255,255,255,0.4)',
+                fontSize: 10,
+              }}
             />
-            <Tooltip content={<GradeTooltip />} />
+            <Tooltip content={<GradeTooltip />} isAnimationActive={false} />
             <Legend
               wrapperStyle={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}
             />
@@ -177,25 +178,20 @@ export function QualityGradeChart({ startDate, endDate }: QualityGradeChartProps
               name="Avg P&L ($)"
               fill={AVG_PNL_COLOR}
               radius={[3, 3, 0, 0]}
-              maxBarSize={24}
+              maxBarSize={32}
+              isAnimationActive={false}
             />
-            <Bar
+            <Line
               yAxisId="pct"
               dataKey="winRate"
               name="Win Rate (%)"
-              fill={WIN_RATE_COLOR}
-              radius={[3, 3, 0, 0]}
-              maxBarSize={24}
+              stroke={WIN_RATE_COLOR}
+              strokeWidth={2}
+              dot={{ fill: WIN_RATE_COLOR, r: 4, strokeWidth: 0 }}
+              activeDot={{ fill: WIN_RATE_COLOR, r: 6, strokeWidth: 2, stroke: '#fff' }}
+              isAnimationActive={false}
             />
-            <Bar
-              yAxisId="pnl"
-              dataKey="avgR"
-              name="Avg R"
-              fill={AVG_R_COLOR}
-              radius={[3, 3, 0, 0]}
-              maxBarSize={24}
-            />
-          </BarChart>
+          </ComposedChart>
         </ResponsiveContainer>
       </div>
     </Card>
@@ -239,12 +235,6 @@ function GradeTooltip({ active, payload }: GradeTooltipProps) {
         </div>
         <div className="text-argus-text-dim">
           Win Rate: <span className="text-argus-text">{d.winRate}%</span>
-        </div>
-        <div className="text-argus-text-dim">
-          Avg R:{' '}
-          <span className={d.avgR >= 0 ? 'text-argus-profit' : 'text-argus-loss'}>
-            {d.avgR >= 0 ? '+' : ''}{d.avgR}R
-          </span>
         </div>
       </div>
     </div>

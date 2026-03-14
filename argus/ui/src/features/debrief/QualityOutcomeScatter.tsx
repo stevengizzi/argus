@@ -178,7 +178,7 @@ export function QualityOutcomeScatter() {
               stroke="rgba(255,255,255,0.3)"
               strokeDasharray="4 4"
             />
-            <Tooltip content={<ScatterTooltip />} />
+            <Tooltip content={<ScatterTooltip />} isAnimationActive={false} />
             <Scatter data={points} isAnimationActive={false}>
               {points.map((point, index) => (
                 <Cell

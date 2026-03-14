@@ -149,12 +149,14 @@ export function RecentTrades() {
 
               {/* Right: Quality, exit reason, and time */}
               <div className="flex items-center gap-3">
-                <QualityBadge grade={trade.quality_grade ?? ''} />
-                {trade.exit_reason && (
-                  <Badge variant={getExitReasonVariant(trade.exit_reason)}>
-                    {getExitReasonLabel(trade.exit_reason)}
-                  </Badge>
-                )}
+                <span className="w-8 text-center"><QualityBadge grade={trade.quality_grade ?? ''} /></span>
+                <span className="w-12 text-center">
+                  {trade.exit_reason && (
+                    <Badge variant={getExitReasonVariant(trade.exit_reason)}>
+                      {getExitReasonLabel(trade.exit_reason)}
+                    </Badge>
+                  )}
+                </span>
                 <span className="text-xs text-argus-text-dim tabular-nums w-20 text-right">
                   {trade.exit_time ? formatTime(trade.exit_time) : '—'}
                 </span>

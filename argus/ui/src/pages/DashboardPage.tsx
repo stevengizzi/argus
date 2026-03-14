@@ -49,7 +49,6 @@ import {
   GoalTracker,
   PreMarketLayout,
   UniverseStatusCard,
-  QualityDistributionCard,
   SignalQualityPanel,
 } from '../features/dashboard';
 import { WatchlistSidebar } from '../features/watchlist';
@@ -143,8 +142,7 @@ export function DashboardPage() {
           {/* Universe status card */}
           <motion.div variants={staggerItem}><UniverseStatusCard /></motion.div>
 
-          {/* Quality cards */}
-          <motion.div variants={staggerItem}><QualityDistributionCard /></motion.div>
+          {/* Signal quality histogram */}
           <motion.div variants={staggerItem}><SignalQualityPanel /></motion.div>
 
           <motion.div variants={staggerItem}><OpenPositions /></motion.div>
@@ -214,9 +212,9 @@ export function DashboardPage() {
             </motion.div>
           </motion.div>
 
-          {/* AI Insight + Universe Status row */}
+          {/* AI Insight + Universe Status + Signal Quality row */}
           <motion.div
-            className="grid grid-cols-2 gap-6"
+            className="grid grid-cols-3 gap-6"
             variants={staggerItemWithChildren(0.08)}
           >
             <motion.div variants={staggerItem} className="h-full">
@@ -225,17 +223,7 @@ export function DashboardPage() {
             <motion.div variants={staggerItem} className="h-full">
               <UniverseStatusCard />
             </motion.div>
-          </motion.div>
-
-          {/* Quality Distribution + Signal Quality row */}
-          <motion.div
-            className="grid grid-cols-3 gap-6"
-            variants={staggerItemWithChildren(0.08)}
-          >
             <motion.div variants={staggerItem} className="h-full">
-              <QualityDistributionCard />
-            </motion.div>
-            <motion.div variants={staggerItem} className="col-span-2 h-full">
               <SignalQualityPanel />
             </motion.div>
           </motion.div>
@@ -331,17 +319,9 @@ export function DashboardPage() {
           </motion.div>
         </motion.div>
 
-        {/* Quality Distribution + Signal Quality row */}
-        <motion.div
-          className="grid grid-cols-2 gap-5"
-          variants={staggerItemWithChildren(0.08)}
-        >
-          <motion.div variants={staggerItem} className="h-full">
-            <QualityDistributionCard />
-          </motion.div>
-          <motion.div variants={staggerItem} className="h-full">
-            <SignalQualityPanel />
-          </motion.div>
+        {/* Signal quality histogram */}
+        <motion.div variants={staggerItem}>
+          <SignalQualityPanel />
         </motion.div>
 
         <motion.div variants={staggerItem}>

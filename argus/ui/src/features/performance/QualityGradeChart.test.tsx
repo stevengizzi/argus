@@ -10,17 +10,19 @@ import { QualityGradeChart } from './QualityGradeChart';
 
 // Mock Recharts
 vi.mock('recharts', () => ({
-  BarChart: ({ children }: { children: React.ReactNode }) => (
+  ComposedChart: ({ children }: { children: React.ReactNode }) => (
     <div data-testid="mock-bar-chart">{children}</div>
   ),
   Bar: ({ children, name }: { children: React.ReactNode; name: string }) => (
     <div data-testid={`mock-bar-${name}`}>{children}</div>
   ),
+  Line: ({ name }: { name: string }) => (
+    <div data-testid={`mock-line-${name}`} />
+  ),
   XAxis: () => <div data-testid="mock-x-axis" />,
   YAxis: () => <div data-testid="mock-y-axis" />,
   Tooltip: () => <div />,
   Legend: () => <div data-testid="mock-legend" />,
-  Cell: () => <div data-testid="mock-cell" />,
   ResponsiveContainer: ({ children }: { children: React.ReactNode }) => (
     <div>{children}</div>
   ),

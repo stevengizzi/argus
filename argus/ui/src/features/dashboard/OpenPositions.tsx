@@ -278,28 +278,28 @@ export function OpenPositions() {
             <thead className="sticky top-0 z-10 bg-argus-surface">
               <tr className="bg-argus-surface-2 text-argus-text-dim text-xs uppercase tracking-wider">
                 <th
-                  className="px-4 py-2 text-left font-medium cursor-pointer hover:text-argus-text select-none"
+                  className="px-4 py-2 text-left font-medium cursor-pointer hover:text-argus-text select-none w-20"
                   onClick={() => handleSort('symbol')}
                 >
                   Symbol<SortIndicator field="symbol" />
                 </th>
-                <th className="px-4 py-2 text-left font-medium">Strategy</th>
+                <th className="px-4 py-2 text-left font-medium w-28">Strategy</th>
                 <th
-                  className="px-4 py-2 text-right font-medium cursor-pointer hover:text-argus-text select-none"
+                  className="px-4 py-2 text-right font-medium cursor-pointer hover:text-argus-text select-none w-20"
                   onClick={() => handleSort('pnl')}
                 >
                   P&L<SortIndicator field="pnl" />
                 </th>
                 <th
-                  className="px-4 py-2 text-right font-medium cursor-pointer hover:text-argus-text select-none"
+                  className="px-4 py-2 text-right font-medium cursor-pointer hover:text-argus-text select-none w-16"
                   onClick={() => handleSort('r')}
                 >
                   R<SortIndicator field="r" />
                 </th>
-                <th className="px-4 py-2 text-center font-medium">Status</th>
-                <th className="px-4 py-2 text-center font-medium">Quality</th>
+                <th className="px-4 py-2 text-center font-medium w-16">Status</th>
+                <th className="px-4 py-2 text-center font-medium w-16">Quality</th>
                 <th
-                  className="px-4 py-2 text-right font-medium cursor-pointer hover:text-argus-text select-none"
+                  className="px-4 py-2 text-right font-medium cursor-pointer hover:text-argus-text select-none w-20"
                   onClick={() => handleSort('time')}
                 >
                   Time<SortIndicator field="time" />
@@ -714,28 +714,28 @@ export function OpenPositions() {
             <thead className="sticky top-0 z-10 bg-argus-surface">
               <tr className="bg-argus-surface-2 text-argus-text-dim text-xs uppercase tracking-wider">
                 <th
-                  className="px-4 py-2 text-left font-medium cursor-pointer hover:text-argus-text select-none"
+                  className="px-4 py-2 text-left font-medium cursor-pointer hover:text-argus-text select-none w-20"
                   onClick={() => handleSort('symbol')}
                 >
                   Symbol<SortIndicator field="symbol" />
                 </th>
-                <th className="px-4 py-2 text-left font-medium">Strategy</th>
+                <th className="px-4 py-2 text-left font-medium w-28">Strategy</th>
                 <th
-                  className="px-4 py-2 text-right font-medium cursor-pointer hover:text-argus-text select-none"
+                  className="px-4 py-2 text-right font-medium cursor-pointer hover:text-argus-text select-none w-20"
                   onClick={() => handleSort('pnl')}
                 >
                   P&L<SortIndicator field="pnl" />
                 </th>
                 <th
-                  className="px-4 py-2 text-right font-medium cursor-pointer hover:text-argus-text select-none"
+                  className="px-4 py-2 text-right font-medium cursor-pointer hover:text-argus-text select-none w-16"
                   onClick={() => handleSort('r')}
                 >
                   R<SortIndicator field="r" />
                 </th>
-                <th className="px-4 py-2 text-center font-medium">Exit</th>
-                <th className="px-4 py-2 text-center font-medium">Quality</th>
+                <th className="px-4 py-2 text-center font-medium w-16">Exit</th>
+                <th className="px-4 py-2 text-center font-medium w-16">Quality</th>
                 <th
-                  className="px-4 py-2 text-right font-medium cursor-pointer hover:text-argus-text select-none"
+                  className="px-4 py-2 text-right font-medium cursor-pointer hover:text-argus-text select-none w-20"
                   onClick={() => handleSort('time')}
                 >
                   Time<SortIndicator field="time" />
