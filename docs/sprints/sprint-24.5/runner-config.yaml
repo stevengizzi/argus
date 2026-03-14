@@ -1,0 +1,87 @@
+# runner-config.yaml — Sprint 24.5: Strategy Observability + Operational Fixes
+# Autonomous execution mode
+
+sprint:
+  directory: "docs/sprints/sprint-24.5"
+  session_order:
+    - "session-1"
+    - "session-2"
+    - "session-3"
+    - "session-3.5"
+    - "session-4"
+    - "session-5"
+    - "session-6"
+  review_context_file: "docs/sprints/sprint-24.5/review-context.md"
+
+execution:
+  mode: "autonomous"
+  max_retries: 2
+  retry_delay_seconds: 30
+  session_timeout_seconds: 0
+  enable_agent_teams: false
+  model_override: null
+  test_count_tolerance: 0
+  compaction_threshold_bytes: 102400
+
+git:
+  branch: "sprint-24.5"
+  commit_message_format: "[Sprint 24.5] Session {session_id}: {title}"
+  auto_commit: true
+  save_patches: true
+
+notifications:
+  tiers:
+    HALTED: true
+    SESSION_COMPLETE: true
+    PHASE_TRANSITION: true
+    WARNING: true
+    COMPLETED: true
+  primary:
+    type: "ntfy"
+    endpoint: "https://ntfy.sh/argus-runner"
+    auth_token: null
+  secondary: []
+  # Cape Town is UTC+2. US market hours 15:30-23:00 SAST.
+  # Quiet hours: after market close through morning.
+  quiet_hours:
+    enabled: true
+    start_utc: "21:00"   # 23:00 SAST — after US market close
+    end_utc: "11:00"     # 13:00 SAST — afternoon, before market prep
+  halted_reminder_minutes: 60
+
+cost:
+  ceiling_usd: 50.0
+  rates:
+    input_per_million: 3.0
+    output_per_million: 15.0
+    cached_input_per_million: 0.30
+  halt_on_ceiling: true
+
+run_log:
+  base_directory: "docs/sprints/sprint-24.5"
+  auto_generate_journal: true
+  commit_run_log: true
+
+triage:
+  enabled: true
+  prompt_template: "workflow/templates/tier-2.5-triage-prompt.md"
+  auto_insert_fixes: true
+  max_auto_fixes: 3
+  fix_prompt_template: "workflow/templates/fix-prompt.md"
+
+conformance:
+  enabled: true
+  prompt_template: "workflow/templates/spec-conformance-prompt.md"
+  drift_minor_action: "warn"
+  drift_major_action: "halt"
+
+doc_sync:
+  enabled: true
+  prompt_template: "workflow/templates/doc-sync-automation-prompt.md"
+  target_documents:
+    - "docs/project-knowledge.md"
+    - "docs/architecture.md"
+    - "docs/decision-log.md"
+    - "docs/dec-index.md"
+    - "docs/sprint-history.md"
+    - "CLAUDE.md"
