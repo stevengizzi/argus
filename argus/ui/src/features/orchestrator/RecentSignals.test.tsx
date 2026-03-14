@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { RecentSignals } from './RecentSignals';
 import type { QualityScoreResponse } from '../../api/types';
 
@@ -136,5 +136,75 @@ describe('RecentSignals', () => {
     render(<RecentSignals />);
 
     expect(mockUseQualityHistory).toHaveBeenCalledWith({ limit: 10 });
+  });
+
+  it('clicking a row expands the detail panel', () => {
+    mockUseQualityHistory.mockReturnValue({
+      data: {
+        items: [
+          makeSignal({ symbol: 'AAPL', outcome_realized_pnl: null, outcome_r_multiple: null }),
+        ],
+        total: 1,
+        limit: 10,
+        offset: 0,
+      },
+      isLoading: false,
+    });
+
+    render(<RecentSignals />);
+
+    expect(screen.queryByTestId('signal-detail-panel')).not.toBeInTheDocument();
+
+    const row = screen.getByTestId('recent-signal-row');
+    fireEvent.click(row);
+
+    expect(screen.getByTestId('signal-detail-panel')).toBeInTheDocument();
+  });
+
+  it('clicking the same row again collapses the detail panel', () => {
+    mockUseQualityHistory.mockReturnValue({
+      data: {
+        items: [makeSignal({ symbol: 'AAPL', outcome_realized_pnl: null, outcome_r_multiple: null })],
+        total: 1,
+        limit: 10,
+        offset: 0,
+      },
+      isLoading: false,
+    });
+
+    render(<RecentSignals />);
+
+    const row = screen.getByTestId('recent-signal-row');
+    fireEvent.click(row);
+    expect(screen.getByTestId('signal-detail-panel')).toBeInTheDocument();
+
+    fireEvent.click(row);
+    expect(screen.queryByTestId('signal-detail-panel')).not.toBeInTheDocument();
+  });
+
+  it('clicking a different row switches the detail panel', () => {
+    mockUseQualityHistory.mockReturnValue({
+      data: {
+        items: [
+          makeSignal({ symbol: 'AAPL', outcome_realized_pnl: null, outcome_r_multiple: null }),
+          makeSignal({ symbol: 'NVDA', outcome_realized_pnl: 50.0, outcome_r_multiple: 1.2 }),
+        ],
+        total: 2,
+        limit: 10,
+        offset: 0,
+      },
+      isLoading: false,
+    });
+
+    render(<RecentSignals />);
+
+    const rows = screen.getAllByTestId('recent-signal-row');
+    fireEvent.click(rows[0]);
+    expect(screen.getByTestId('signal-detail-panel')).toBeInTheDocument();
+
+    fireEvent.click(rows[1]);
+    const panels = screen.getAllByTestId('signal-detail-panel');
+    expect(panels).toHaveLength(1);
+    expect(screen.getByText('$50.00')).toBeInTheDocument();
   });
 });

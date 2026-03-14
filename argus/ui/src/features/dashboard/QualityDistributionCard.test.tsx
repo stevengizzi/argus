@@ -17,6 +17,7 @@ vi.mock('recharts', () => ({
     <div data-testid="mock-pie">{children}</div>
   ),
   Cell: () => <div data-testid="mock-cell" />,
+  Tooltip: () => null,
   ResponsiveContainer: ({ children }: { children: React.ReactNode }) => (
     <div>{children}</div>
   ),

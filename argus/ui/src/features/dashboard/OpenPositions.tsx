@@ -15,6 +15,7 @@ import { CardHeader } from '../../components/CardHeader';
 import { EmptyState } from '../../components/EmptyState';
 import { PnlValue } from '../../components/PnlValue';
 import { Badge, StrategyBadge } from '../../components/Badge';
+import { QualityBadge } from '../../components/QualityBadge';
 import { SegmentedTab } from '../../components/SegmentedTab';
 import { PositionTimeline } from '../../components/PositionTimeline';
 import { TradeDetailPanel } from '../trades/TradeDetailPanel';
@@ -296,6 +297,7 @@ export function OpenPositions() {
                   R<SortIndicator field="r" />
                 </th>
                 <th className="px-4 py-2 text-center font-medium">Status</th>
+                <th className="px-4 py-2 text-center font-medium">Quality</th>
                 <th
                   className="px-4 py-2 text-right font-medium cursor-pointer hover:text-argus-text select-none"
                   onClick={() => handleSort('time')}
@@ -309,7 +311,7 @@ export function OpenPositions() {
               {sortedPositions.length > 0 && (
                 <>
                   <tr className="bg-argus-surface-2/50">
-                    <td colSpan={6} className="px-4 py-1.5 text-xs font-medium text-argus-accent">
+                    <td colSpan={7} className="px-4 py-1.5 text-xs font-medium text-argus-accent">
                       Open Positions
                     </td>
                   </tr>
@@ -339,6 +341,9 @@ export function OpenPositions() {
                       <td className="px-4 py-3 text-center">
                         <Badge variant="success">OPEN</Badge>
                       </td>
+                      <td className="px-4 py-3 text-center">
+                        <span className="text-argus-text-dim">—</span>
+                      </td>
                       <td className="px-4 py-3 text-right text-argus-text-dim tabular-nums">
                         {formatDuration(pos.hold_duration_seconds)}
                       </td>
@@ -351,7 +356,7 @@ export function OpenPositions() {
               {trades.length > 0 && (
                 <>
                   <tr className="bg-argus-surface-2/50">
-                    <td colSpan={6} className="px-4 py-1.5 text-xs font-medium text-argus-text-dim">
+                    <td colSpan={7} className="px-4 py-1.5 text-xs font-medium text-argus-text-dim">
                       Closed Today
                     </td>
                   </tr>
@@ -378,6 +383,9 @@ export function OpenPositions() {
                         <Badge variant={getExitReasonVariant(trade.exit_reason)}>
                           {getExitReasonLabel(trade.exit_reason)}
                         </Badge>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <QualityBadge grade={trade.quality_grade ?? ''} score={trade.quality_score ?? undefined} />
                       </td>
                       <td className="px-4 py-3 text-right text-argus-text-dim tabular-nums">
                         {trade.exit_time ? formatTime(trade.exit_time) : '—'}
@@ -725,6 +733,7 @@ export function OpenPositions() {
                   R<SortIndicator field="r" />
                 </th>
                 <th className="px-4 py-2 text-center font-medium">Exit</th>
+                <th className="px-4 py-2 text-center font-medium">Quality</th>
                 <th
                   className="px-4 py-2 text-right font-medium cursor-pointer hover:text-argus-text select-none"
                   onClick={() => handleSort('time')}
@@ -757,6 +766,9 @@ export function OpenPositions() {
                     <Badge variant={getExitReasonVariant(trade.exit_reason)}>
                       {getExitReasonLabel(trade.exit_reason)}
                     </Badge>
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    <QualityBadge grade={trade.quality_grade ?? ''} score={trade.quality_score ?? undefined} />
                   </td>
                   <td className="px-4 py-3 text-right text-argus-text-dim tabular-nums">
                     {trade.exit_time ? formatTime(trade.exit_time) : '—'}

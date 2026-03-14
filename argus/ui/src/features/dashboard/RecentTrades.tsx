@@ -19,6 +19,7 @@ import { CardHeader } from '../../components/CardHeader';
 import { EmptyState } from '../../components/EmptyState';
 import { PnlValue } from '../../components/PnlValue';
 import { Badge } from '../../components/Badge';
+import { QualityBadge } from '../../components/QualityBadge';
 import { TradeDetailPanel } from '../trades/TradeDetailPanel';
 import { useTrades } from '../../hooks/useTrades';
 import { useSymbolDetailUI } from '../../stores/symbolDetailUI';
@@ -146,8 +147,9 @@ export function RecentTrades() {
                 <PnlValue value={trade.pnl_dollars ?? 0} size="sm" />
               </div>
 
-              {/* Right: Exit reason and time */}
+              {/* Right: Quality, exit reason, and time */}
               <div className="flex items-center gap-3">
+                <QualityBadge grade={trade.quality_grade ?? ''} />
                 {trade.exit_reason && (
                   <Badge variant={getExitReasonVariant(trade.exit_reason)}>
                     {getExitReasonLabel(trade.exit_reason)}

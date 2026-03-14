@@ -8,7 +8,7 @@
  * Sprint 24 Session 10.
  */
 
-import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { Card } from '../../components/Card';
 import { useQualityDistribution } from '../../hooks/useQuality';
 import { GRADE_COLORS, GRADE_ORDER } from '../../constants/qualityConstants';
@@ -17,6 +17,29 @@ interface DonutSegment {
   grade: string;
   count: number;
   color: string;
+  total: number;
+}
+
+interface ChartTooltipProps {
+  active?: boolean;
+  payload?: Array<{ payload: DonutSegment }>;
+}
+
+function DonutTooltip({ active, payload }: ChartTooltipProps) {
+  if (!active || !payload?.length) return null;
+  const { grade, count, color, total } = payload[0].payload;
+  const pct = total > 0 ? ((count / total) * 100).toFixed(1) : '0.0';
+  return (
+    <div className="bg-argus-surface border border-argus-border rounded px-3 py-2 shadow-lg">
+      <div className="flex items-center gap-2">
+        <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
+        <span className="text-sm font-medium text-argus-text">{grade}</span>
+      </div>
+      <p className="text-xs text-argus-text-dim mt-1">
+        {count} signal{count !== 1 ? 's' : ''} ({pct}%)
+      </p>
+    </div>
+  );
 }
 
 export function QualityDistributionCard() {
@@ -50,12 +73,13 @@ export function QualityDistributionCard() {
     );
   }
 
-  const segments: DonutSegment[] = GRADE_ORDER
+  const segments = GRADE_ORDER
     .filter(grade => (data.grades[grade] ?? 0) > 0)
     .map(grade => ({
       grade,
       count: data.grades[grade],
       color: GRADE_COLORS[grade] ?? '#6b7280',
+      total: data.total,
     }));
 
   return (
@@ -84,6 +108,7 @@ export function QualityDistributionCard() {
                 <Cell key={segment.grade} fill={segment.color} />
               ))}
             </Pie>
+            <Tooltip content={<DonutTooltip />} />
           </PieChart>
         </ResponsiveContainer>
         {/* Center text overlay */}
@@ -93,6 +118,15 @@ export function QualityDistributionCard() {
           </span>
           <span className="text-[10px] text-argus-text-dim uppercase">signals</span>
         </div>
+      </div>
+      {/* Legend */}
+      <div className="flex flex-wrap justify-center gap-x-3 gap-y-1 mt-1" data-testid="quality-donut-legend">
+        {segments.map(s => (
+          <div key={s.grade} className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: s.color }} />
+            <span className="text-xs text-argus-text-dim">{s.grade}</span>
+          </div>
+        ))}
       </div>
       {data.filtered > 0 && (
         <p className="text-xs text-argus-text-dim text-center mt-1">

@@ -12,6 +12,7 @@ import {
   Bar,
   XAxis,
   YAxis,
+  Tooltip,
   ResponsiveContainer,
   Cell,
 } from 'recharts';
@@ -23,6 +24,27 @@ interface GradeBar {
   grade: string;
   count: number;
   color: string;
+}
+
+interface BarTooltipProps {
+  active?: boolean;
+  payload?: Array<{ payload: GradeBar }>;
+}
+
+function HistogramTooltip({ active, payload }: BarTooltipProps) {
+  if (!active || !payload?.length) return null;
+  const { grade, count, color } = payload[0].payload;
+  return (
+    <div className="bg-argus-surface border border-argus-border rounded px-3 py-2 shadow-lg">
+      <div className="flex items-center gap-2">
+        <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
+        <span className="text-sm font-medium text-argus-text">{grade}</span>
+      </div>
+      <p className="text-xs text-argus-text-dim mt-1">
+        {count} signal{count !== 1 ? 's' : ''}
+      </p>
+    </div>
+  );
 }
 
 export function SignalQualityPanel() {
@@ -85,6 +107,7 @@ export function SignalQualityPanel() {
               tickLine={false}
               allowDecimals={false}
             />
+            <Tooltip content={<HistogramTooltip />} cursor={{ fill: 'rgba(255,255,255,0.05)' }} />
             <Bar dataKey="count" radius={[3, 3, 0, 0]} maxBarSize={28}>
               {bars.map(bar => (
                 <Cell key={bar.grade} fill={bar.color} />
