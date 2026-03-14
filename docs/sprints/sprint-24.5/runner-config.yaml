@@ -38,7 +38,7 @@ notifications:
     COMPLETED: true
   primary:
     type: "ntfy"
-    endpoint: "https://ntfy.sh/argus-runner"
+    endpoint: "https://ntfy.sh/argus-sprint-runner"
     auth_token: null
   secondary: []
   # Cape Town is UTC+2. US market hours 15:30-23:00 SAST.
