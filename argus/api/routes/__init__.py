@@ -22,6 +22,7 @@ from argus.api.routes.market import router as market_router
 from argus.api.routes.orchestrator import router as orchestrator_router
 from argus.api.routes.performance import router as performance_router
 from argus.api.routes.positions import router as positions_router
+from argus.api.routes.quality import router as quality_router
 from argus.api.routes.session import router as session_router
 from argus.api.routes.strategies import router as strategies_router
 from argus.api.routes.trades import router as trades_router
@@ -53,3 +54,4 @@ api_router.include_router(debrief_search_router, prefix="/debrief", tags=["debri
 api_router.include_router(ai_router, prefix="/ai", tags=["ai"])
 api_router.include_router(universe_router, prefix="/universe", tags=["universe"])
 api_router.include_router(intelligence_router, tags=["intelligence"])
+api_router.include_router(quality_router, prefix="/quality", tags=["quality"])
