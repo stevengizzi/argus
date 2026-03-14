@@ -653,6 +653,7 @@ export interface QualityComponents {
 
 export interface QualityScoreResponse {
   symbol: string;
+  strategy_id: string;
   score: number;
   grade: string;
   risk_tier: string;

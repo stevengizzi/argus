@@ -28,6 +28,8 @@ export { GoalTracker } from './GoalTracker';
 export { MarketCountdown } from './MarketCountdown';
 export { PreMarketLayout } from './PreMarketLayout';
 export { UniverseStatusCard } from './UniverseStatusCard';
+export { QualityDistributionCard } from './QualityDistributionCard';
+export { SignalQualityPanel } from './SignalQualityPanel';
 
 // Skeleton exports
 export {

@@ -29,6 +29,7 @@ import {
   OrchestratorSkeleton,
   SessionPhaseBadge,
   computeCountdown,
+  RecentSignals,
 } from '../features/orchestrator';
 import { useOrchestratorStatus } from '../hooks';
 import { staggerContainer, staggerItem } from '../utils/motion';
@@ -160,7 +161,12 @@ export function OrchestratorPage() {
           </div>
         </motion.div>
 
-        {/* Section 5: Global Controls */}
+        {/* Section 5: Recent Quality Signals */}
+        <motion.div variants={staggerItem}>
+          <RecentSignals />
+        </motion.div>
+
+        {/* Section 6: Global Controls */}
         <motion.div variants={staggerItem}>
           <GlobalControls />
         </motion.div>

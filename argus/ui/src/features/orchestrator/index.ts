@@ -15,3 +15,4 @@ export { GlobalControls } from './GlobalControls';
 export { ThrottleOverrideDialog } from './ThrottleOverrideDialog';
 export { SessionOverview } from './SessionOverview';
 export { OrchestratorSkeleton } from './OrchestratorSkeleton';
+export { RecentSignals } from './RecentSignals';

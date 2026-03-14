@@ -45,6 +45,7 @@ class QualityScoreResponse(BaseModel):
     """Single quality score record."""
 
     symbol: str
+    strategy_id: str
     score: float
     grade: str
     risk_tier: str
@@ -100,17 +101,18 @@ def _row_to_response(row: object) -> QualityScoreResponse:
     """
     return QualityScoreResponse(
         symbol=row[0],  # type: ignore[index]
-        score=row[1],  # type: ignore[index]
-        grade=row[2],  # type: ignore[index]
-        risk_tier=row[3],  # type: ignore[index]
+        strategy_id=row[1],  # type: ignore[index]
+        score=row[2],  # type: ignore[index]
+        grade=row[3],  # type: ignore[index]
+        risk_tier=row[4],  # type: ignore[index]
         components=QualityComponentsResponse(
-            ps=row[4],  # type: ignore[index]
-            cq=row[5],  # type: ignore[index]
-            vp=row[6],  # type: ignore[index]
-            hm=row[7],  # type: ignore[index]
-            ra=row[8],  # type: ignore[index]
+            ps=row[5],  # type: ignore[index]
+            cq=row[6],  # type: ignore[index]
+            vp=row[7],  # type: ignore[index]
+            hm=row[8],  # type: ignore[index]
+            ra=row[9],  # type: ignore[index]
         ),
-        scored_at=row[9],  # type: ignore[index]
+        scored_at=row[10],  # type: ignore[index]
     )
 
 
@@ -179,7 +181,7 @@ async def get_quality_history(
     # Fetch page
     rows = await db.fetch_all(
         f"""
-        SELECT symbol, composite_score, grade, risk_tier,
+        SELECT symbol, strategy_id, composite_score, grade, risk_tier,
                pattern_strength, catalyst_quality, volume_profile,
                historical_match, regime_alignment, scored_at
         FROM quality_history
@@ -266,7 +268,7 @@ async def get_quality_for_symbol(
 
     row = await db.fetch_one(
         """
-        SELECT symbol, composite_score, grade, risk_tier,
+        SELECT symbol, strategy_id, composite_score, grade, risk_tier,
                pattern_strength, catalyst_quality, volume_profile,
                historical_match, regime_alignment, scored_at
         FROM quality_history
