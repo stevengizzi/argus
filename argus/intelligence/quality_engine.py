@@ -49,6 +49,16 @@ class SetupQualityEngine:
         self._config = config
         self._db = db_manager
 
+    @property
+    def db(self) -> DatabaseManager | None:
+        """Public accessor for database manager."""
+        return self._db
+
+    @property
+    def config(self) -> QualityEngineConfig:
+        """Public accessor for quality engine config."""
+        return self._config
+
     def score_setup(
         self,
         signal: SignalEvent,

@@ -114,6 +114,8 @@ catalyst:
 
 # Quality Engine (Sprint 24 — Setup Quality + Dynamic Sizer)
 # Scores trade setups across 5 dimensions, maps grades to risk tiers.
+# NOTE: Thresholds are PROVISIONAL — recalibrate after Sprint 28
+# when historical match has real data.
 quality_engine:
   enabled: true
   weights:

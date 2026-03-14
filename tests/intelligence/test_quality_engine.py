@@ -341,3 +341,32 @@ def test_rationale_string_format():
     assert "RA:" in rationale
     assert "Score:" in rationale
     assert result.grade in rationale
+
+
+# ---------------------------------------------------------------------------
+# Public property accessors (Sprint 24.1 S1b — DEF-061)
+# ---------------------------------------------------------------------------
+
+
+def test_db_property_returns_db_manager():
+    engine = make_engine()
+    assert engine.db is None  # default: no db_manager
+
+    sentinel = object()
+    engine_with_db = SetupQualityEngine(
+        QualityEngineConfig(
+            weights=QualityWeightsConfig(),
+            thresholds=QualityThresholdsConfig(),
+        ),
+        db_manager=sentinel,  # type: ignore[arg-type]
+    )
+    assert engine_with_db.db is sentinel
+
+
+def test_config_property_returns_config():
+    config = QualityEngineConfig(
+        weights=QualityWeightsConfig(),
+        thresholds=QualityThresholdsConfig(),
+    )
+    engine = SetupQualityEngine(config)
+    assert engine.config is config

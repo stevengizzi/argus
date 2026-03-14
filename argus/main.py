@@ -556,7 +556,7 @@ class ArgusSystem:
                     self._catalyst_storage = CatalystStorage(str(db_path))
                     await self._catalyst_storage.initialize()
                 except Exception:
-                    logger.debug("CatalystStorage not available for quality pipeline")
+                    logger.warning("CatalystStorage not available for quality pipeline")
             logger.info("Quality pipeline initialized (engine + sizer)")
         else:
             logger.info(

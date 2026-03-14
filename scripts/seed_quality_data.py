@@ -159,7 +159,17 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Seed quality_history for visual QA")
     parser.add_argument("--cleanup", action="store_true", help="Remove seeded rows")
     parser.add_argument("--db", default="data/argus.db", help="Path to SQLite DB")
+    parser.add_argument(
+        "--i-know-this-is-dev",
+        action="store_true",
+        help="Required safety flag to confirm this is a dev environment",
+    )
     args = parser.parse_args()
+
+    if not args.i_know_this_is_dev and not args.cleanup:
+        print("ERROR: This script inserts synthetic data and is for development only.")
+        print("Pass --i-know-this-is-dev to confirm, or use --cleanup to remove seed data.")
+        sys.exit(1)
 
     db_path = Path(args.db)
     if not db_path.exists():

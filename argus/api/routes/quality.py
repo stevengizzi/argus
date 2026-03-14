@@ -84,7 +84,7 @@ def _ensure_quality_engine(state: AppState) -> None:
     Raises:
         HTTPException 503: If quality engine or its DB is not initialized.
     """
-    if state.quality_engine is None or state.quality_engine._db is None:
+    if state.quality_engine is None or state.quality_engine.db is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Quality engine not available",
@@ -152,7 +152,7 @@ async def get_quality_history(
         Paginated list of quality scores with total count.
     """
     _ensure_quality_engine(state)
-    db = state.quality_engine._db  # type: ignore[union-attr]
+    db = state.quality_engine.db  # type: ignore[union-attr]
 
     conditions: list[str] = []
     params: list[object] = []
@@ -217,7 +217,7 @@ async def get_quality_distribution(
         the minimum trading grade.
     """
     _ensure_quality_engine(state)
-    db = state.quality_engine._db  # type: ignore[union-attr]
+    db = state.quality_engine.db  # type: ignore[union-attr]
 
     today = datetime.now(_ET).strftime("%Y-%m-%d")
 
@@ -239,7 +239,7 @@ async def get_quality_distribution(
     total = sum(grade_counts.values())
 
     # Count signals below min_grade_to_trade
-    min_grade = state.quality_engine._config.min_grade_to_trade  # type: ignore[union-attr]
+    min_grade = state.quality_engine.config.min_grade_to_trade  # type: ignore[union-attr]
     min_idx = _ALL_GRADES.index(min_grade) if min_grade in _ALL_GRADES else len(_ALL_GRADES)
     below_grades = _ALL_GRADES[min_idx + 1:]
     filtered = sum(grade_counts.get(g, 0) for g in below_grades)
@@ -269,7 +269,7 @@ async def get_quality_for_symbol(
         404: If no quality history exists for the symbol.
     """
     _ensure_quality_engine(state)
-    db = state.quality_engine._db  # type: ignore[union-attr]
+    db = state.quality_engine.db  # type: ignore[union-attr]
 
     row = await db.fetch_one(
         """
