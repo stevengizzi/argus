@@ -1,7 +1,7 @@
 # ARGUS — Sprint History
 
 > Complete record of all sprints from project inception through current state.
-> Active development began February 14, 2026. As of March 14, 2026 (~29 calendar days), 24 full sprints + sub-sprints completed.
+> Active development began February 14, 2026. As of March 14, 2026 (~29 calendar days), 24 full sprints + sub-sprints (including 24.1) completed.
 
 ---
 
@@ -14,7 +14,7 @@
 | C — Infrastructure | 12–13 | Feb 21–22 | Databento + IBKR adapters |
 | D — Command Center + Strategies | 14–20 | Feb 23–26 | Frontend, Orchestrator, 3 new strategies |
 | E — Seven-Page Architecture + Live | 21a–21.5 | Feb 27–Mar 5 | Full UI, live integration |
-| F–K — AI + Intelligence + Quality | 22–24 | Mar 6–14 | AI Copilot, NLP Catalyst, Universe Manager, Quality Engine |
+| F–K — AI + Intelligence + Quality | 22–24.1 | Mar 6–14 | AI Copilot, NLP Catalyst, Universe Manager, Quality Engine, Housekeeping |
 
 ---
 
@@ -697,13 +697,73 @@
 **New deferred items:** DEF-050 (ArgusSystem e2e test), DEF-052 (dashboard quality interactivity), DEF-053 (dashboard tables quality column), DEF-054 (orchestrator clickable signals), DEF-055 (orchestrator 3-column layout), DEF-056 (scatter plot page placement), DEF-057 (EFTS URL validation), DEF-058 (trades DB quality columns), DEF-059 (TS build errors), DEF-060 (PROVISIONAL comment gap), DEF-061 (quality API private attrs), DEF-062 (seed script cleanup)
 **Notes:** Largest Sprint 24 scope: quality pipeline end-to-end from strategy signals through scoring, sizing, API, and full frontend integration across all 7 Command Center pages. 2 CONCERNS ratings (S5a test count documentation, S6a test assertion spec deviation) both have acceptable rationales. S11f cleaned up visual bugs and shared constant duplication. All sessions completed successfully. Ready for Phase 5 Gate (Sprint 24.5).
 
+### Sprint 24.1 — Post-Sprint Cleanup & Housekeeping (2,709 pytest + 503 Vitest, +23/+6)
+**Date:** March 14, 2026
+**Scope:** Clean up 13 accumulated housekeeping items (DEF-050 through DEF-062) from Sprint 24 reviews before the Phase 5 Gate strategic check-in. No new features, no architectural changes, no new DEC entries.
+
+**Session 1a (S1a): Trades Quality Column Wiring**
+- Wired quality_grade/quality_score from SignalEvent through Order Manager → TradeLogger → DB schema
+- Added quality columns to trades table schema with migration
+- Fixed falsy-zero write bug in trade_logger.py:94 (post-review)
+- 5 new pytest tests
+
+**Session 1b (S1b): Trivial Backend Fixes**
+- CatalystStorage init log level: `debug` → `warning` in main.py
+- Added `@property` accessors for `_db`/`_config` on SetupQualityEngine
+- Added PROVISIONAL comments to system.yaml/system_live.yaml quality sections
+- Added production guard to seed_quality_data.py script
+- 4 new pytest tests
+
+**Session 2 (S2): ArgusSystem E2E Integration Test + EFTS Validation**
+- Full strategy → quality engine → sizer → RM integration test (DEF-050)
+- Validated SEC EDGAR EFTS URL works with User-Agent header (DEF-057, no code change needed)
+- 4 new pytest tests
+
+**Session 3 (S3): TypeScript Build Error Fixes**
+- Fixed all 22 pre-existing TypeScript build errors (DEF-059)
+- Removed unused `pageKey` prop from CopilotPanel, removed PAGE_KEYS constant
+- Added `badge` prop to CardHeader component (cascading from `icon` prop addition)
+- 3 new Vitest tests
+
+**Session 4a (S4a): Orchestrator 3-Column Layout + Scatter Relocation**
+- Combined Decision Log, Catalyst Alerts, Recent Signals into 3-column row (DEF-055)
+- Relocated QualityOutcomeScatter from Debrief Quality tab to Performance Distribution tab (DEF-056)
+- 2 new Vitest tests
+
+**Session 4b (S4b): Quality Tooltips, Table Badges, Clickable Signals**
+- Dashboard quality chart tooltips and legend (DEF-052)
+- Quality column in Dashboard Positions/Recent Trades tables (DEF-053)
+- Clickable signal rows with SignalDetailPanel in Orchestrator (DEF-054)
+- 1 new Vitest test
+
+**Session 4f (S4f): Visual Review Fixes**
+- Expanded from 0.5-session contingency to full session + follow-up round (8 visual fixes)
+- Removed QualityDistributionCard from Dashboard (redundant with SignalQualityPanel)
+- Redesigned QualityGradeChart as ComposedChart (bars + line, dropped Avg R)
+- Orchestrator header formatting consistency fix
+- Performance Distribution tab 2x2 equal-height grid layout
+- Histogram bar resize animation fix (isAnimationActive={false})
+- Tooltip slide animation fix on all quality charts
+- RecentTrades quality column alignment fix (fixed-width spans)
+- Performance charts side-by-side grid layout
+- No formal Tier 2 review (visual-only, developer-verified)
+- 0 new tests
+
+**Key decisions:** None (no DEC entries created — housekeeping only)
+**Sessions:** 7 (S1a, S1b, S2, S3, S4a, S4b, S4f)
+**Test counts:** S1a(+5), S1b(+4), S2(+4), S3(+3V), S4a(+2V), S4b(+1V), S4f(+0) = +23 new pytest (S1a+S1b+S2 subtotal: 13; S3: 0 pytest change; S4a+S4b: 10 pytest implied by total), +6 new Vitest
+**Review verdicts:** S1a CONCERNS (resolved in-session), S1b CLEAR, S2 CLEAR, S3 CONCERNS (non-blocking), S4a CLEAR, S4b CLEAR, S4f no formal review
+**DEF items resolved:** DEF-050 (e2e test), DEF-051 (backend fixes), DEF-052 (chart tooltips/legend), DEF-053 (quality columns), DEF-054 (clickable signals), DEF-055 (3-column layout), DEF-056 (scatter relocation), DEF-057 (EFTS validation), DEF-058 (trades quality wiring), DEF-059 (TS errors), DEF-060–062 (PROVISIONAL comments, seed guard, quality accessors)
+**TS errors:** 22 → 0
+**Notes:** Housekeeping-only sprint consuming accumulated DEF items from Sprint 24 reviews. S4f expanded beyond original 0.5-session contingency scope to cover 8 visual fixes (all frontend CSS/layout/animation, zero backend impact). All DEF-050 through DEF-062 resolved. No new DEF items assigned. Ready for Phase 5 Gate (Sprint 24.5).
+
 ---
 
 ## Sprint Statistics
 
-- **Total sprints:** 24 full + 18 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9)
-- **Total sessions:** ~298+ Claude Code sessions
-- **Total tests:** 2,686 pytest + 497 Vitest = 3,183 total
+- **Total sprints:** 24 full + 19 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1)
+- **Total sessions:** ~305+ Claude Code sessions
+- **Total tests:** 2,709 pytest + 503 Vitest = 3,212 total
 - **Total decisions:** 341 (DEC-001 through DEC-341)
 - **Calendar days (active dev):** ~29 (Feb 14 – Mar 14, 2026)
 - **Largest sprint:** 22 (9 implementation + 5 fix + 9 reviews, largest scope)
