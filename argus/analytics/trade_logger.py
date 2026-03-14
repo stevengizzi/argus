@@ -91,7 +91,7 @@ class TradeLogger:
             trade.rationale,
             trade.notes,
             trade.quality_grade,
-            trade.quality_score if trade.quality_score else None,
+            trade.quality_score if trade.quality_score is not None else None,
         )
 
         await self._db.execute(sql, params)
