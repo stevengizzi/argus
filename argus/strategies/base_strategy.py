@@ -14,7 +14,9 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
+from datetime import datetime
 from typing import TYPE_CHECKING
+from zoneinfo import ZoneInfo
 
 from argus.core.clock import Clock, SystemClock
 from argus.core.config import StrategyConfig
@@ -23,6 +25,12 @@ from argus.models.strategy import (
     ExitRules,
     MarketConditionsFilter,
     ScannerCriteria,
+)
+from argus.strategies.telemetry import (
+    EvaluationEvent,
+    EvaluationEventType,
+    EvaluationResult,
+    StrategyEvaluationBuffer,
 )
 
 if TYPE_CHECKING:
@@ -56,6 +64,7 @@ class BaseStrategy(ABC):
         self._daily_pnl: float = 0.0
         self._trade_count_today: int = 0
         self._watchlist: list[str] = []
+        self._eval_buffer = StrategyEvaluationBuffer()
 
     # -------------------------------------------------------------------------
     # Identity (from config)
@@ -294,3 +303,40 @@ class BaseStrategy(ABC):
     def watchlist(self) -> list[str]:
         """Current watchlist of symbols this strategy is tracking."""
         return self._watchlist.copy()
+
+    @property
+    def eval_buffer(self) -> StrategyEvaluationBuffer:
+        """Ring buffer of recent evaluation events for this strategy."""
+        return self._eval_buffer
+
+    def record_evaluation(
+        self,
+        symbol: str,
+        event_type: EvaluationEventType,
+        result: EvaluationResult,
+        reason: str,
+        metadata: dict[str, object] | None = None,
+    ) -> None:
+        """Record a strategy evaluation event. Fire-and-forget — never raises.
+
+        Args:
+            symbol: The ticker being evaluated.
+            event_type: Category of evaluation step.
+            result: Whether the step passed, failed, or is informational.
+            reason: Human-readable explanation of the result.
+            metadata: Optional strategy-specific supplemental data.
+        """
+        try:
+            et_tz = ZoneInfo("America/New_York")
+            event = EvaluationEvent(
+                timestamp=datetime.now(et_tz).replace(tzinfo=None),
+                symbol=symbol,
+                strategy_id=self.strategy_id,
+                event_type=event_type,
+                result=result,
+                reason=reason,
+                metadata=metadata or {},
+            )
+            self._eval_buffer.record(event)
+        except Exception:
+            pass  # Telemetry must never impact strategy operation

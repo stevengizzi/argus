@@ -5,6 +5,7 @@ Provides endpoints for viewing and managing trading strategies.
 
 from __future__ import annotations
 
+import dataclasses
 import logging
 import os
 import subprocess
@@ -12,7 +13,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
@@ -373,3 +374,41 @@ async def get_strategy_spec(
         )
 
     return StrategySpecResponse(strategy_id=strategy_id, documents=documents)
+
+
+@router.get("/{strategy_id}/decisions")
+async def get_strategy_decisions(
+    strategy_id: str,
+    symbol: str | None = Query(None),
+    limit: int = Query(100, ge=1, le=500),
+    state: AppState = Depends(get_app_state),  # noqa: B008
+    _user: dict = Depends(require_auth),  # noqa: B008
+) -> list[dict[str, object]]:
+    """Get recent evaluation events from a strategy's decision buffer.
+
+    Returns strategy evaluation telemetry newest-first. Optionally filter
+    by symbol and cap the result count.
+
+    Args:
+        strategy_id: The strategy ID (e.g., "strat_orb_breakout").
+        symbol: Optional ticker filter (e.g., "AAPL").
+        limit: Maximum number of events to return (1–500, default 100).
+
+    Returns:
+        List of serialized EvaluationEvent dicts, newest first.
+
+    Raises:
+        HTTPException 404: If no strategy with that ID is registered.
+    """
+    strategy = state.strategies.get(strategy_id)
+    if strategy is None:
+        raise HTTPException(status_code=404, detail=f"Strategy {strategy_id} not found")
+
+    events = strategy.eval_buffer.query(symbol=symbol, limit=limit)
+    return [
+        {
+            **dataclasses.asdict(event),
+            "timestamp": event.timestamp.isoformat(),
+        }
+        for event in events
+    ]
