@@ -3,6 +3,7 @@
 
 sprint:
   directory: "docs/sprints/sprint-24.5"
+  test_command: "python -m pytest tests/ -x -q -n auto --ignore=tests/test_main.py"
   session_order:
     - "session-1"
     - "session-2"
