@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import FrozenInstanceError
 from datetime import datetime
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -19,7 +19,6 @@ from argus.strategies.telemetry import (
     EvaluationResult,
     StrategyEvaluationBuffer,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -195,8 +194,8 @@ def test_buffer_max_size_constant() -> None:
 def test_record_evaluation_swallows_exceptions() -> None:
     """record_evaluation() must not propagate exceptions from a broken buffer."""
     from argus.core.config import StrategyConfig
-    from argus.strategies.base_strategy import BaseStrategy
     from argus.models.strategy import ExitRules, MarketConditionsFilter, ScannerCriteria
+    from argus.strategies.base_strategy import BaseStrategy
 
     class _ConcreteStrategy(BaseStrategy):
         async def on_candle(self, event):  # type: ignore[override]
