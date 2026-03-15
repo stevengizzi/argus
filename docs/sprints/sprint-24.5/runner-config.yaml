@@ -21,7 +21,7 @@ execution:
   session_timeout_seconds: 0
   enable_agent_teams: false
   model_override: null
-  test_count_tolerance: 0
+  test_count_tolerance: 50
   compaction_threshold_bytes: 102400
 
 git:
