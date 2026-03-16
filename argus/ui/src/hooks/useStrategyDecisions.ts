@@ -9,7 +9,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { getStrategyDecisions } from '../api/client';
-import type { StrategyDecisionsResponse } from '../api/types';
+import type { EvaluationEvent } from '../api/types';
 
 export type { EvaluationEvent } from '../api/types';
 
@@ -25,7 +25,7 @@ export function useStrategyDecisions(
 ) {
   const isEnabled = options?.enabled ?? !!strategyId;
 
-  return useQuery<StrategyDecisionsResponse, Error>({
+  return useQuery<EvaluationEvent[], Error>({
     queryKey: ['strategy-decisions', strategyId, options?.symbol, options?.limit],
     queryFn: () =>
       getStrategyDecisions(strategyId!, {

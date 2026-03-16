@@ -37,7 +37,7 @@ import type {
   ResearchDocument,
   SessionSummaryResponse,
   StrategiesResponse,
-  StrategyDecisionsResponse,
+  EvaluationEvent,
   StrategySpecResponse,
   ThrottleOverrideRequest,
   TokenResponse,
@@ -656,7 +656,7 @@ export async function getQualityDistribution(): Promise<GradeDistributionRespons
 export async function getStrategyDecisions(
   strategyId: string,
   params?: { symbol?: string; limit?: number }
-): Promise<StrategyDecisionsResponse> {
+): Promise<EvaluationEvent[]> {
   const searchParams = new URLSearchParams();
   if (params?.symbol) {
     searchParams.set('symbol', params.symbol);
@@ -665,7 +665,7 @@ export async function getStrategyDecisions(
     searchParams.set('limit', String(params.limit));
   }
   const query = searchParams.toString();
-  return fetchWithAuth<StrategyDecisionsResponse>(
+  return fetchWithAuth<EvaluationEvent[]>(
     `/strategies/${strategyId}/decisions${query ? `?${query}` : ''}`
   );
 }

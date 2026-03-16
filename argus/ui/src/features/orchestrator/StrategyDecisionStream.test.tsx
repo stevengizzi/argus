@@ -48,15 +48,11 @@ function renderStream(overrides?: Parameters<typeof mockUseStrategyDecisions>[0]
 describe('StrategyDecisionStream', () => {
   it('renders event list with mock data', () => {
     mockUseStrategyDecisions.mockReturnValue({
-      data: {
-        events: [
-          makeEvent({ symbol: 'AAPL', event_type: 'CANDLE_CHECK', result: 'PASS' }),
-          makeEvent({ symbol: 'NVDA', event_type: 'VOLUME_FILTER', result: 'FAIL' }),
-          makeEvent({ symbol: 'TSLA', event_type: 'SIGNAL_GENERATED', result: 'INFO' }),
-        ],
-        count: 3,
-        timestamp: '2026-03-16T10:30:00Z',
-      },
+      data: [
+        makeEvent({ symbol: 'AAPL', event_type: 'CANDLE_CHECK', result: 'PASS' }),
+        makeEvent({ symbol: 'NVDA', event_type: 'VOLUME_FILTER', result: 'FAIL' }),
+        makeEvent({ symbol: 'TSLA', event_type: 'SIGNAL_GENERATED', result: 'INFO' }),
+      ],
       isLoading: false,
       error: null,
     });
@@ -72,11 +68,7 @@ describe('StrategyDecisionStream', () => {
 
   it('color codes PASS events as green', () => {
     mockUseStrategyDecisions.mockReturnValue({
-      data: {
-        events: [makeEvent({ result: 'PASS' })],
-        count: 1,
-        timestamp: '2026-03-16T10:30:00Z',
-      },
+      data: [makeEvent({ result: 'PASS' })],
       isLoading: false,
       error: null,
     });
@@ -89,11 +81,7 @@ describe('StrategyDecisionStream', () => {
 
   it('color codes FAIL events as red', () => {
     mockUseStrategyDecisions.mockReturnValue({
-      data: {
-        events: [makeEvent({ result: 'FAIL' })],
-        count: 1,
-        timestamp: '2026-03-16T10:30:00Z',
-      },
+      data: [makeEvent({ result: 'FAIL' })],
       isLoading: false,
       error: null,
     });
@@ -106,11 +94,7 @@ describe('StrategyDecisionStream', () => {
 
   it('color codes INFO events as amber', () => {
     mockUseStrategyDecisions.mockReturnValue({
-      data: {
-        events: [makeEvent({ result: 'INFO', event_type: 'STATUS_UPDATE' })],
-        count: 1,
-        timestamp: '2026-03-16T10:30:00Z',
-      },
+      data: [makeEvent({ result: 'INFO', event_type: 'STATUS_UPDATE' })],
       isLoading: false,
       error: null,
     });
@@ -123,11 +107,7 @@ describe('StrategyDecisionStream', () => {
 
   it('color codes SIGNAL_GENERATED events as blue', () => {
     mockUseStrategyDecisions.mockReturnValue({
-      data: {
-        events: [makeEvent({ event_type: 'SIGNAL_GENERATED', result: 'PASS' })],
-        count: 1,
-        timestamp: '2026-03-16T10:30:00Z',
-      },
+      data: [makeEvent({ event_type: 'SIGNAL_GENERATED', result: 'PASS' })],
       isLoading: false,
       error: null,
     });
@@ -140,15 +120,11 @@ describe('StrategyDecisionStream', () => {
 
   it('symbol filter filters displayed events', () => {
     mockUseStrategyDecisions.mockReturnValue({
-      data: {
-        events: [
-          makeEvent({ symbol: 'AAPL', event_type: 'CHECK_A' }),
-          makeEvent({ symbol: 'NVDA', event_type: 'CHECK_B' }),
-          makeEvent({ symbol: 'TSLA', event_type: 'CHECK_C' }),
-        ],
-        count: 3,
-        timestamp: '2026-03-16T10:30:00Z',
-      },
+      data: [
+        makeEvent({ symbol: 'AAPL', event_type: 'CHECK_A' }),
+        makeEvent({ symbol: 'NVDA', event_type: 'CHECK_B' }),
+        makeEvent({ symbol: 'TSLA', event_type: 'CHECK_C' }),
+      ],
       isLoading: false,
       error: null,
     });
@@ -166,7 +142,7 @@ describe('StrategyDecisionStream', () => {
 
   it('empty state shows awaiting message', () => {
     mockUseStrategyDecisions.mockReturnValue({
-      data: { events: [], count: 0, timestamp: '2026-03-16T10:30:00Z' },
+      data: [],
       isLoading: false,
       error: null,
     });
@@ -198,16 +174,12 @@ describe('StrategyDecisionStream', () => {
 
   it('summary stats show correct counts', () => {
     mockUseStrategyDecisions.mockReturnValue({
-      data: {
-        events: [
-          makeEvent({ symbol: 'AAPL', event_type: 'SIGNAL_GENERATED' }),
-          makeEvent({ symbol: 'NVDA', event_type: 'SIGNAL_REJECTED' }),
-          makeEvent({ symbol: 'NVDA', event_type: 'SIGNAL_REJECTED' }),
-          makeEvent({ symbol: 'TSLA', event_type: 'CANDLE_CHECK' }),
-        ],
-        count: 4,
-        timestamp: '2026-03-16T10:30:00Z',
-      },
+      data: [
+        makeEvent({ symbol: 'AAPL', event_type: 'SIGNAL_GENERATED' }),
+        makeEvent({ symbol: 'NVDA', event_type: 'SIGNAL_REJECTED' }),
+        makeEvent({ symbol: 'NVDA', event_type: 'SIGNAL_REJECTED' }),
+        makeEvent({ symbol: 'TSLA', event_type: 'CANDLE_CHECK' }),
+      ],
       isLoading: false,
       error: null,
     });
@@ -220,9 +192,35 @@ describe('StrategyDecisionStream', () => {
     expect(stats).toHaveTextContent('Rejected: 2');
   });
 
+  it('summary stats reflect symbol filter', () => {
+    mockUseStrategyDecisions.mockReturnValue({
+      data: [
+        makeEvent({ symbol: 'AAPL', event_type: 'SIGNAL_GENERATED' }),
+        makeEvent({ symbol: 'AAPL', event_type: 'SIGNAL_REJECTED' }),
+        makeEvent({ symbol: 'NVDA', event_type: 'SIGNAL_GENERATED' }),
+        makeEvent({ symbol: 'NVDA', event_type: 'SIGNAL_REJECTED' }),
+        makeEvent({ symbol: 'NVDA', event_type: 'SIGNAL_REJECTED' }),
+      ],
+      isLoading: false,
+      error: null,
+    });
+
+    renderStream();
+
+    const stats = screen.getByTestId('summary-stats');
+    expect(stats).toHaveTextContent('Signals: 2');
+    expect(stats).toHaveTextContent('Rejected: 3');
+
+    const select = screen.getByTestId('symbol-filter');
+    fireEvent.change(select, { target: { value: 'AAPL' } });
+
+    expect(stats).toHaveTextContent('Signals: 1');
+    expect(stats).toHaveTextContent('Rejected: 1');
+  });
+
   it('close button calls onClose', () => {
     mockUseStrategyDecisions.mockReturnValue({
-      data: { events: [], count: 0, timestamp: '2026-03-16T10:30:00Z' },
+      data: [],
       isLoading: false,
       error: null,
     });
@@ -237,15 +235,11 @@ describe('StrategyDecisionStream', () => {
 
   it('clicking event row expands metadata', () => {
     mockUseStrategyDecisions.mockReturnValue({
-      data: {
-        events: [
-          makeEvent({
-            metadata: { atr_ratio: 1.5, volume: 50000 },
-          }),
-        ],
-        count: 1,
-        timestamp: '2026-03-16T10:30:00Z',
-      },
+      data: [
+        makeEvent({
+          metadata: { atr_ratio: 1.5, volume: 50000 },
+        }),
+      ],
       isLoading: false,
       error: null,
     });

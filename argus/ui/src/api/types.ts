@@ -697,8 +697,3 @@ export interface EvaluationEvent {
   metadata: Record<string, unknown>;
 }
 
-export interface StrategyDecisionsResponse {
-  events: EvaluationEvent[];
-  count: number;
-  timestamp: string;
-}

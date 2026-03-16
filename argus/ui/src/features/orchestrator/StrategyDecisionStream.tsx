@@ -122,7 +122,7 @@ export function StrategyDecisionStream({ strategyId, onClose }: StrategyDecision
     limit: 200,
   });
 
-  const events = data?.events ?? [];
+  const events = data ?? [];
 
   const uniqueSymbols = useMemo(
     () => [...new Set(events.map((e) => e.symbol))].sort(),
@@ -135,13 +135,13 @@ export function StrategyDecisionStream({ strategyId, onClose }: StrategyDecision
   );
 
   const signalCount = useMemo(
-    () => events.filter((e) => e.event_type === 'SIGNAL_GENERATED').length,
-    [events]
+    () => filteredEvents.filter((e) => e.event_type === 'SIGNAL_GENERATED').length,
+    [filteredEvents]
   );
 
   const rejectedCount = useMemo(
-    () => events.filter((e) => e.event_type === 'SIGNAL_REJECTED').length,
-    [events]
+    () => filteredEvents.filter((e) => e.event_type === 'SIGNAL_REJECTED').length,
+    [filteredEvents]
   );
 
   return (
