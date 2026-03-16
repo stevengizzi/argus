@@ -37,6 +37,7 @@ import type {
   ResearchDocument,
   SessionSummaryResponse,
   StrategiesResponse,
+  StrategyDecisionsResponse,
   StrategySpecResponse,
   ThrottleOverrideRequest,
   TokenResponse,
@@ -649,4 +650,22 @@ export async function getQualityHistory(
 
 export async function getQualityDistribution(): Promise<GradeDistributionResponse> {
   return fetchWithAuth<GradeDistributionResponse>('/quality/distribution');
+}
+
+// Strategy decision endpoints (Sprint 24.5)
+export async function getStrategyDecisions(
+  strategyId: string,
+  params?: { symbol?: string; limit?: number }
+): Promise<StrategyDecisionsResponse> {
+  const searchParams = new URLSearchParams();
+  if (params?.symbol) {
+    searchParams.set('symbol', params.symbol);
+  }
+  if (params?.limit !== undefined) {
+    searchParams.set('limit', String(params.limit));
+  }
+  const query = searchParams.toString();
+  return fetchWithAuth<StrategyDecisionsResponse>(
+    `/strategies/${strategyId}/decisions${query ? `?${query}` : ''}`
+  );
 }

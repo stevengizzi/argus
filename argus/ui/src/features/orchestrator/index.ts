@@ -16,3 +16,4 @@ export { ThrottleOverrideDialog } from './ThrottleOverrideDialog';
 export { SessionOverview } from './SessionOverview';
 export { OrchestratorSkeleton } from './OrchestratorSkeleton';
 export { RecentSignals } from './RecentSignals';
+export { StrategyDecisionStream } from './StrategyDecisionStream';

@@ -685,3 +685,20 @@ export interface UniverseStatusResponse {
   last_refresh: string | null;
   reference_data_age_minutes: number | null;
 }
+
+// Strategy Decisions (Sprint 24.5)
+export interface EvaluationEvent {
+  timestamp: string;
+  symbol: string;
+  strategy_id: string;
+  event_type: string;
+  result: 'PASS' | 'FAIL' | 'INFO';
+  reason: string;
+  metadata: Record<string, unknown>;
+}
+
+export interface StrategyDecisionsResponse {
+  events: EvaluationEvent[];
+  count: number;
+  timestamp: string;
+}
