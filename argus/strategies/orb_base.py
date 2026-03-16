@@ -26,6 +26,7 @@ from argus.core.config import OperatingWindow, StrategyRiskLimits
 from argus.core.events import CandleEvent, SignalEvent, TickEvent
 from argus.models.strategy import ScannerCriteria
 from argus.strategies.base_strategy import BaseStrategy
+from argus.strategies.telemetry import EvaluationEventType, EvaluationResult
 
 if TYPE_CHECKING:
     from argus.data.service import DataService
@@ -379,6 +380,13 @@ class OrbBaseStrategy(BaseStrategy):
 
         # 1. Candle must CLOSE above OR high (not just wick)
         if candle.close <= state.or_high:
+            self.record_evaluation(
+                symbol,
+                EvaluationEventType.ENTRY_EVALUATION,
+                EvaluationResult.FAIL,
+                f"No breakout: close {candle.close:.2f} <= OR high {state.or_high:.2f}",
+                {"close": candle.close, "or_high": state.or_high},
+            )
             return None
 
         # 2. Volume check: breakout candle volume > multiplier × OR avg volume
@@ -389,6 +397,13 @@ class OrbBaseStrategy(BaseStrategy):
                 symbol,
                 candle.volume,
                 volume_threshold,
+            )
+            self.record_evaluation(
+                symbol,
+                EvaluationEventType.ENTRY_EVALUATION,
+                EvaluationResult.FAIL,
+                f"Volume too low: {candle.volume} < {volume_threshold:.0f}",
+                {"volume": candle.volume, "threshold": volume_threshold},
             )
             return None
 
@@ -402,6 +417,13 @@ class OrbBaseStrategy(BaseStrategy):
                     candle.close,
                     vwap,
                 )
+                self.record_evaluation(
+                    symbol,
+                    EvaluationEventType.ENTRY_EVALUATION,
+                    EvaluationResult.FAIL,
+                    f"Below VWAP: {candle.close:.2f} < {vwap:.2f}",
+                    {"close": candle.close, "vwap": vwap},
+                )
                 return None
 
         # 4. Chase protection: price hasn't moved too far from OR high
@@ -413,9 +435,30 @@ class OrbBaseStrategy(BaseStrategy):
                 candle.close,
                 chase_limit,
             )
+            self.record_evaluation(
+                symbol,
+                EvaluationEventType.ENTRY_EVALUATION,
+                EvaluationResult.FAIL,
+                f"Chase protection: {candle.close:.2f} > {chase_limit:.2f}",
+                {"close": candle.close, "chase_limit": chase_limit},
+            )
             return None
 
-        # All conditions met! Delegate to subclass for signal construction
+        # All conditions met!
+        self.record_evaluation(
+            symbol,
+            EvaluationEventType.ENTRY_EVALUATION,
+            EvaluationResult.PASS,
+            f"Breakout confirmed: close {candle.close:.2f} above OR high {state.or_high:.2f}",
+            {
+                "close": candle.close,
+                "or_high": state.or_high,
+                "volume": candle.volume,
+                "volume_threshold": volume_threshold,
+            },
+        )
+
+        # Delegate to subclass for signal construction
         return await self._build_breakout_signal(symbol, candle, state, volume_threshold)
 
     @abstractmethod
@@ -468,31 +511,105 @@ class OrbBaseStrategy(BaseStrategy):
             if self._is_in_or_window(event):
                 # Accumulate candles during OR window
                 state.or_candles.append(event)
+                self.record_evaluation(
+                    symbol,
+                    EvaluationEventType.OPENING_RANGE_UPDATE,
+                    EvaluationResult.INFO,
+                    f"OR candle accumulated ({len(state.or_candles)} candles)",
+                    {"candle_count": len(state.or_candles)},
+                )
                 return None
             elif self._is_past_or_window(event) and not state.or_complete:
                 # First candle after OR window - finalize the range
                 await self._finalize_opening_range(symbol, state)
+                if state.or_valid:
+                    self.record_evaluation(
+                        symbol,
+                        EvaluationEventType.OPENING_RANGE_UPDATE,
+                        EvaluationResult.PASS,
+                        f"Opening range established: high={state.or_high:.2f}"
+                        f" low={state.or_low:.2f}",
+                        {
+                            "or_high": state.or_high,
+                            "or_low": state.or_low,
+                            "or_range_pct": round(
+                                (state.or_high - state.or_low) / state.or_low * 100, 4
+                            )
+                            if state.or_low and state.or_low > 0
+                            else 0.0,
+                            "or_valid": True,
+                        },
+                    )
+                else:
+                    self.record_evaluation(
+                        symbol,
+                        EvaluationEventType.OPENING_RANGE_UPDATE,
+                        EvaluationResult.FAIL,
+                        f"Opening range invalid: {state.or_rejection_reason}",
+                        {
+                            "or_high": state.or_high,
+                            "or_low": state.or_low,
+                            "or_range_pct": round(
+                                (state.or_high - state.or_low) / state.or_low * 100, 4
+                            )
+                            if state.or_high is not None
+                            and state.or_low is not None
+                            and state.or_low > 0
+                            else 0.0,
+                            "or_valid": False,
+                        },
+                    )
 
         # Phase 2: Breakout Detection
         if state.or_complete and state.or_valid and not state.breakout_triggered:
             # DEC-261: ORB family same-symbol exclusion — first to fire wins
             if symbol in OrbBaseStrategy._orb_family_triggered_symbols:
+                self.record_evaluation(
+                    symbol,
+                    EvaluationEventType.CONDITION_CHECK,
+                    EvaluationResult.FAIL,
+                    "DEC-261: Symbol already triggered by another ORB strategy",
+                )
                 return None
 
             # Check entry window
             if not self._is_after_earliest_entry(event):
+                self.record_evaluation(
+                    symbol,
+                    EvaluationEventType.TIME_WINDOW_CHECK,
+                    EvaluationResult.FAIL,
+                    "Before earliest entry time",
+                )
                 return None
             if not self._is_before_latest_entry(event):
+                self.record_evaluation(
+                    symbol,
+                    EvaluationEventType.TIME_WINDOW_CHECK,
+                    EvaluationResult.FAIL,
+                    "After latest entry time",
+                )
                 return None
 
             # Check internal risk limits
             if not self.check_internal_risk_limits():
+                self.record_evaluation(
+                    symbol,
+                    EvaluationEventType.CONDITION_CHECK,
+                    EvaluationResult.FAIL,
+                    "Internal risk limits exceeded",
+                )
                 return None
 
             # Check concurrent positions
             active_positions = sum(1 for s in self._symbol_state.values() if s.position_active)
             max_positions = self._orb_config.risk_limits.max_concurrent_positions
             if active_positions >= max_positions:
+                self.record_evaluation(
+                    symbol,
+                    EvaluationEventType.CONDITION_CHECK,
+                    EvaluationResult.FAIL,
+                    f"Max concurrent positions reached ({active_positions}/{max_positions})",
+                )
                 return None
 
             # Check breakout conditions

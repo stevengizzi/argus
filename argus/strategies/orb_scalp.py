@@ -31,6 +31,7 @@ from argus.models.strategy import (
     ProfitTarget,
 )
 from argus.strategies.orb_base import OrbBaseStrategy, OrbSymbolState
+from argus.strategies.telemetry import EvaluationEventType, EvaluationResult
 
 if TYPE_CHECKING:
     from argus.data.service import DataService
@@ -111,6 +112,14 @@ class OrbScalpStrategy(OrbBaseStrategy):
             candle, state, volume_ratio, state.atr_ratio, vwap
         )
 
+        self.record_evaluation(
+            symbol,
+            EvaluationEventType.QUALITY_SCORED,
+            EvaluationResult.INFO,
+            f"ORB Scalp pattern strength: {pattern_strength:.1f}",
+            signal_context,
+        )
+
         signal = SignalEvent(
             strategy_id=self.strategy_id,
             symbol=symbol,
@@ -133,6 +142,19 @@ class OrbScalpStrategy(OrbBaseStrategy):
         state.position_active = True
         # DEC-261: Mark symbol as triggered for ORB family exclusion
         OrbBaseStrategy._orb_family_triggered_symbols.add(symbol)
+
+        self.record_evaluation(
+            symbol,
+            EvaluationEventType.SIGNAL_GENERATED,
+            EvaluationResult.PASS,
+            f"ORB Scalp signal generated for {symbol}",
+            {
+                "direction": "long",
+                "entry": entry_price,
+                "stop": stop_price,
+                "target1": target,
+            },
+        )
 
         logger.info(
             "%s: ORB scalp signal - entry=%.2f, stop=%.2f, target=%.2f, "
