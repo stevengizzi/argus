@@ -14,7 +14,6 @@ import { Card } from '../../components/Card';
 import { CardHeader } from '../../components/CardHeader';
 import { useStrategyDecisions } from '../../hooks/useStrategyDecisions';
 import type { EvaluationEvent } from '../../hooks/useStrategyDecisions';
-import { staggerContainer, staggerItem } from '../../utils/motion';
 import { getStrategyDisplay } from '../../utils/strategyConfig';
 
 interface StrategyDecisionStreamProps {
@@ -56,42 +55,49 @@ function EventRow({ event }: { event: EvaluationEvent }) {
   return (
     <div data-testid="event-row">
       <div
-        className="flex items-center gap-2 py-1.5 px-2 rounded hover:bg-argus-surface-2 transition-colors cursor-pointer"
+        className="py-1.5 px-2 rounded hover:bg-argus-surface-2 transition-colors cursor-pointer"
         onClick={() => hasMetadata && setExpanded(!expanded)}
         data-testid="event-row-header"
       >
-        {hasMetadata ? (
-          expanded ? (
-            <ChevronDown className="w-3 h-3 text-argus-text-dim shrink-0" />
+        {/* Line 1: Timestamp + Symbol + Result badge */}
+        <div className="flex items-center gap-2">
+          {hasMetadata ? (
+            expanded ? (
+              <ChevronDown className="w-3 h-3 text-argus-text-dim shrink-0" />
+            ) : (
+              <ChevronRight className="w-3 h-3 text-argus-text-dim shrink-0" />
+            )
           ) : (
-            <ChevronRight className="w-3 h-3 text-argus-text-dim shrink-0" />
-          )
-        ) : (
-          <span className="w-3 shrink-0" />
-        )}
+            <span className="w-3 shrink-0" />
+          )}
 
-        <span className="text-xs text-argus-text-dim tabular-nums w-16 shrink-0">
-          {formatTimestamp(event.timestamp)}
-        </span>
+          <span className="text-xs text-argus-text-dim font-mono tabular-nums w-16 shrink-0">
+            {formatTimestamp(event.timestamp)}
+          </span>
 
-        <span className="text-xs font-medium text-argus-text bg-argus-surface-2 px-1.5 py-0.5 rounded shrink-0">
-          {event.symbol}
-        </span>
+          <span className="text-xs font-medium text-argus-text bg-argus-surface-2 px-1.5 py-0.5 rounded shrink-0">
+            {event.symbol}
+          </span>
 
-        <span className="text-xs text-argus-text-dim truncate w-28 shrink-0" data-testid="event-type">
-          {event.event_type}
-        </span>
+          <span className="flex-1" />
 
-        <span className={`text-xs font-medium shrink-0 ${resultColor(event)}`} data-testid="event-result">
-          {event.result}
-        </span>
+          <span className={`text-xs font-medium shrink-0 ${resultColor(event)}`} data-testid="event-result">
+            {event.result}
+          </span>
+        </div>
 
-        <span
-          className="text-xs text-argus-text-dim truncate flex-1 min-w-0"
-          title={event.reason}
-        >
-          {event.reason}
-        </span>
+        {/* Line 2: Event type + reason (wrapping allowed) */}
+        <div className="flex items-start gap-2 mt-0.5 pl-5">
+          <span className="text-xs font-mono text-zinc-500 shrink-0" data-testid="event-type">
+            {event.event_type}
+          </span>
+          <span
+            className="text-xs text-argus-text-dim whitespace-normal"
+            data-testid="event-reason"
+          >
+            {event.reason}
+          </span>
+        </div>
       </div>
 
       <AnimatePresence>
@@ -120,7 +126,6 @@ export function StrategyDecisionStream({ strategyId, onClose }: StrategyDecision
   const displayName = getStrategyDisplay(strategyId).name;
   const [symbolFilter, setSymbolFilter] = useState<string>('');
   const { data, isLoading, error } = useStrategyDecisions(strategyId, {
-    symbol: symbolFilter || undefined,
     limit: 200,
   });
 
@@ -147,7 +152,7 @@ export function StrategyDecisionStream({ strategyId, onClose }: StrategyDecision
   );
 
   return (
-    <div data-testid="strategy-decision-stream">
+    <div className="flex flex-col h-full" data-testid="strategy-decision-stream">
       <CardHeader
         title={displayName}
         action={
@@ -161,7 +166,7 @@ export function StrategyDecisionStream({ strategyId, onClose }: StrategyDecision
           </button>
         }
       />
-      <Card>
+      <Card className="flex-1 flex flex-col min-h-0">
         {/* Symbol filter */}
         <div className="flex items-center gap-3 mb-3">
           <select
@@ -217,21 +222,18 @@ export function StrategyDecisionStream({ strategyId, onClose }: StrategyDecision
           </div>
         )}
 
-        {/* Event list */}
+        {/* Event list — no stagger animation; items change dynamically with filtering */}
         {!isLoading && !error && filteredEvents.length > 0 && (
-          <motion.div
-            variants={staggerContainer(0.03)}
-            initial="hidden"
-            animate="show"
-            className="max-h-96 overflow-y-auto space-y-0.5"
+          <div
+            className="flex-1 overflow-y-auto space-y-0.5 min-h-0"
             data-testid="event-list"
           >
             {filteredEvents.map((event, idx) => (
-              <motion.div key={`${event.timestamp}-${event.symbol}-${idx}`} variants={staggerItem}>
+              <div key={`${event.timestamp}-${event.symbol}-${idx}`}>
                 <EventRow event={event} />
-              </motion.div>
+              </div>
             ))}
-          </motion.div>
+          </div>
         )}
       </Card>
     </div>

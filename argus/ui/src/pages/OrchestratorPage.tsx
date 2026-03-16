@@ -12,7 +12,7 @@
  * Uses stagger animation pattern from DashboardPage.
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Gauge } from 'lucide-react';
 import { AnimatedPage } from '../components/AnimatedPage';
@@ -42,6 +42,20 @@ export function OrchestratorPage() {
   const { data: orchestratorData, isLoading, error } = useOrchestratorStatus();
 
   const handleClosePanel = useCallback(() => setDecisionStrategyId(null), []);
+
+  // Esc key closes the slide-out panel
+  useEffect(() => {
+    if (decisionStrategyId === null) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        handleClosePanel();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [decisionStrategyId, handleClosePanel]);
 
   // Register Copilot context
   useCopilotContext('Orchestrator', () => ({

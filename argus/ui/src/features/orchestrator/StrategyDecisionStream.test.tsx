@@ -6,6 +6,7 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+import { useState, useEffect, useCallback } from 'react';
 import { StrategyDecisionStream } from './StrategyDecisionStream';
 import type { EvaluationEvent } from '../../api/types';
 
@@ -266,5 +267,87 @@ describe('StrategyDecisionStream', () => {
 
     expect(screen.getByTestId('error-state')).toBeInTheDocument();
     expect(screen.getByText(/Network error/)).toBeInTheDocument();
+  });
+
+  it('renders two-line layout with event type and full reason text', () => {
+    const longReason = 'All entry conditions met — breakout confirmed above resistance with strong volume';
+    mockUseStrategyDecisions.mockReturnValue({
+      data: [
+        makeEvent({
+          event_type: 'SIGNAL_GENERATED',
+          reason: longReason,
+        }),
+      ],
+      isLoading: false,
+      error: null,
+    });
+
+    renderStream();
+
+    const eventType = screen.getByTestId('event-type');
+    expect(eventType).toHaveTextContent('SIGNAL_GENERATED');
+
+    const reasonEl = screen.getByTestId('event-reason');
+    expect(reasonEl).toHaveTextContent(longReason);
+    expect(reasonEl.className).toContain('whitespace-normal');
+    expect(reasonEl.className).not.toContain('truncate');
+  });
+
+  it('event type is visually distinct with font-mono styling', () => {
+    mockUseStrategyDecisions.mockReturnValue({
+      data: [makeEvent({ event_type: 'CANDLE_CHECK' })],
+      isLoading: false,
+      error: null,
+    });
+
+    renderStream();
+
+    const eventType = screen.getByTestId('event-type');
+    expect(eventType.className).toContain('font-mono');
+    expect(eventType.className).toContain('text-zinc-500');
+  });
+});
+
+/**
+ * Esc key close test — tests the useEffect pattern from OrchestratorPage
+ * using a minimal wrapper that mirrors the real slide-out panel logic.
+ */
+describe('Esc key closes slide-out panel', () => {
+  function PanelWithEscKey() {
+    const [open, setOpen] = useState(true);
+    const handleClose = useCallback(() => setOpen(false), []);
+
+    useEffect(() => {
+      if (!open) return;
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') handleClose();
+      };
+      document.addEventListener('keydown', handleKeyDown);
+      return () => document.removeEventListener('keydown', handleKeyDown);
+    }, [open, handleClose]);
+
+    if (!open) return <div data-testid="panel-closed">closed</div>;
+    return (
+      <div data-testid="panel-open">
+        <StrategyDecisionStream strategyId="strat_orb_breakout" onClose={handleClose} />
+      </div>
+    );
+  }
+
+  it('pressing Escape closes the panel', () => {
+    mockUseStrategyDecisions.mockReturnValue({
+      data: [],
+      isLoading: false,
+      error: null,
+    });
+
+    render(<PanelWithEscKey />);
+
+    expect(screen.getByTestId('panel-open')).toBeInTheDocument();
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    expect(screen.getByTestId('panel-closed')).toBeInTheDocument();
+    expect(screen.queryByTestId('panel-open')).not.toBeInTheDocument();
   });
 });
