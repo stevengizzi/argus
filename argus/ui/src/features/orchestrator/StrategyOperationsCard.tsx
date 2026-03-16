@@ -9,7 +9,7 @@
  * - Operating window: time range and active status
  */
 
-import { Play, Pause, ShieldAlert } from 'lucide-react';
+import { Play, Pause, ShieldAlert, ListChecks } from 'lucide-react';
 import { Card } from '../../components/Card';
 import { StrategyBadge, ThrottleBadge } from '../../components/Badge';
 import { AnimatedNumber } from '../../components/AnimatedNumber';
@@ -27,6 +27,7 @@ import type { AllocationInfo } from '../../api/types';
 
 interface StrategyOperationsCardProps {
   allocation: AllocationInfo;
+  onViewDecisions?: (strategyId: string) => void;
 }
 
 /**
@@ -68,7 +69,7 @@ function deriveHealthStatus(alloc: AllocationInfo): 'healthy' | 'degraded' | 'er
   return 'healthy';
 }
 
-export function StrategyOperationsCard({ allocation }: StrategyOperationsCardProps) {
+export function StrategyOperationsCard({ allocation, onViewDecisions }: StrategyOperationsCardProps) {
   const pauseMutation = usePauseStrategy();
   const resumeMutation = useResumeStrategy();
   const openOverrideDialog = useOrchestratorUI((s) => s.openOverrideDialog);
@@ -116,6 +117,17 @@ export function StrategyOperationsCard({ allocation }: StrategyOperationsCardPro
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
             <StatusDot status={healthStatus} pulse={allocation.is_active} size="md" />
+            {onViewDecisions && (
+              <button
+                onClick={() => onViewDecisions(allocation.strategy_id)}
+                className="p-1.5 rounded-md text-argus-text-dim hover:bg-argus-surface-2
+                           hover:text-argus-text transition-colors"
+                title="View strategy decisions"
+                data-testid="view-decisions-button"
+              >
+                <ListChecks className="w-4 h-4" />
+              </button>
+            )}
             <button
               onClick={handlePauseResume}
               disabled={isPending}

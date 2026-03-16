@@ -12,7 +12,8 @@
  * Uses stagger animation pattern from DashboardPage.
  */
 
-import { motion } from 'framer-motion';
+import { useState, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Gauge } from 'lucide-react';
 import { AnimatedPage } from '../components/AnimatedPage';
 import { Card } from '../components/Card';
@@ -30,13 +31,17 @@ import {
   SessionPhaseBadge,
   computeCountdown,
   RecentSignals,
+  StrategyDecisionStream,
 } from '../features/orchestrator';
 import { useOrchestratorStatus } from '../hooks';
 import { staggerContainer, staggerItem } from '../utils/motion';
 import { useCopilotContext } from '../hooks/useCopilotContext';
 
 export function OrchestratorPage() {
+  const [decisionStrategyId, setDecisionStrategyId] = useState<string | null>(null);
   const { data: orchestratorData, isLoading, error } = useOrchestratorStatus();
+
+  const handleClosePanel = useCallback(() => setDecisionStrategyId(null), []);
 
   // Register Copilot context
   useCopilotContext('Orchestrator', () => ({
@@ -150,7 +155,7 @@ export function OrchestratorPage() {
 
         {/* Section 3: Strategy Operations */}
         <motion.div variants={staggerItem}>
-          <StrategyOperationsGrid />
+          <StrategyOperationsGrid onViewDecisions={setDecisionStrategyId} />
         </motion.div>
 
         {/* Section 4: Decision Timeline + Catalyst Alerts + Recent Signals */}
@@ -170,6 +175,42 @@ export function OrchestratorPage() {
 
       {/* Throttle override dialog (mounted outside scroll flow) */}
       <ThrottleOverrideDialog />
+
+      {/* Strategy Decision Stream slide-out panel */}
+      <AnimatePresence>
+        {decisionStrategyId && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              key="decision-backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 bg-black/40 z-40"
+              onClick={handleClosePanel}
+              data-testid="decision-panel-backdrop"
+            />
+            {/* Slide-out panel */}
+            <motion.div
+              key="decision-panel"
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className="fixed top-0 right-0 h-full w-full max-w-lg z-50
+                         bg-argus-surface border-l border-argus-border
+                         shadow-2xl overflow-y-auto p-4"
+              data-testid="decision-slide-panel"
+            >
+              <StrategyDecisionStream
+                strategyId={decisionStrategyId}
+                onClose={handleClosePanel}
+              />
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </AnimatedPage>
   );
 }

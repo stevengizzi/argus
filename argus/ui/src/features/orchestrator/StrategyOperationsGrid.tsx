@@ -15,7 +15,11 @@ import { Card } from '../../components/Card';
 import { CardHeader } from '../../components/CardHeader';
 import { Skeleton } from '../../components/Skeleton';
 
-export function StrategyOperationsGrid() {
+interface StrategyOperationsGridProps {
+  onViewDecisions?: (strategyId: string) => void;
+}
+
+export function StrategyOperationsGrid({ onViewDecisions }: StrategyOperationsGridProps) {
   const { data: orchestratorData, isLoading, error } = useOrchestratorStatus();
 
   if (isLoading) {
@@ -60,7 +64,11 @@ export function StrategyOperationsGrid() {
       <h3 className="text-sm font-medium text-argus-text-dim mb-3">Strategy Operations</h3>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {allocations.map((allocation) => (
-          <StrategyOperationsCard key={allocation.strategy_id} allocation={allocation} />
+          <StrategyOperationsCard
+            key={allocation.strategy_id}
+            allocation={allocation}
+            onViewDecisions={onViewDecisions}
+          />
         ))}
       </div>
     </div>
