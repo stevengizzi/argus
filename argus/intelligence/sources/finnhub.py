@@ -57,6 +57,10 @@ class FinnhubClient(CatalystSource):
         self._api_key: str | None = None
         self._disabled_for_cycle = False
 
+        # Per-cycle 403 tracking
+        self._cycle_403_count: int = 0
+        self._cycle_total_requests: int = 0
+
         # Rate limiting: 60 calls/min = 1 call/second
         self._last_request_time: float = 0.0
         self._min_interval = 60.0 / config.rate_limit_per_minute
@@ -127,6 +131,10 @@ class FinnhubClient(CatalystSource):
         if not symbols and not firehose:
             return []
 
+        # Reset per-cycle counters
+        self._cycle_403_count = 0
+        self._cycle_total_requests = 0
+
         catalysts: list[CatalystRawItem] = []
         fetch_time = datetime.now(_ET)
 
@@ -147,6 +155,14 @@ class FinnhubClient(CatalystSource):
                     symbol, fetch_time
                 )
                 catalysts.extend(recommendations)
+
+        if self._cycle_403_count > 0:
+            logger.info(
+                "Finnhub cycle summary: %d/%d requests returned 403"
+                " — free tier coverage gap",
+                self._cycle_403_count,
+                self._cycle_total_requests,
+            )
 
         logger.debug(
             "Fetched %d catalysts from Finnhub for %d symbols (firehose=%s)",
@@ -324,6 +340,8 @@ class FinnhubClient(CatalystSource):
             await asyncio.sleep(self._min_interval - elapsed)
         self._last_request_time = asyncio.get_event_loop().time()
 
+        self._cycle_total_requests += 1
+
         for attempt in range(max_retries):
             try:
                 async with self._session.get(url, params=params) as response:
@@ -339,7 +357,11 @@ class FinnhubClient(CatalystSource):
                         return None
 
                     if response.status == 403:
-                        logger.error("Finnhub API access denied (HTTP 403)")
+                        logger.warning(
+                            "Finnhub HTTP 403 for %s — free tier coverage gap",
+                            url,
+                        )
+                        self._cycle_403_count += 1
                         self._disabled_for_cycle = True
                         return None
 

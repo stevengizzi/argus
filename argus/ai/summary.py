@@ -303,7 +303,26 @@ class DailySummaryGenerator:
         et_tz = ZoneInfo("America/New_York")
         now_et = datetime.now(et_tz)
         data["current_time"] = now_et.strftime("%H:%M ET")
-        data["market_open"] = 9 * 60 + 30 <= now_et.hour * 60 + now_et.minute <= 16 * 60
+
+        market_open_minutes = 9 * 60 + 30  # 9:30 ET
+        market_close_minutes = 16 * 60  # 16:00 ET
+        now_minutes = now_et.hour * 60 + now_et.minute
+
+        if now_minutes < market_open_minutes:
+            data["market_open"] = False
+            data["session_status"] = "pre_market"
+            data["session_elapsed_minutes"] = None
+            data["minutes_until_open"] = market_open_minutes - now_minutes
+        elif now_minutes <= market_close_minutes:
+            data["market_open"] = True
+            data["session_status"] = "open"
+            data["session_elapsed_minutes"] = now_minutes - market_open_minutes
+            data["minutes_until_open"] = None
+        else:
+            data["market_open"] = False
+            data["session_status"] = "closed"
+            data["session_elapsed_minutes"] = None
+            data["minutes_until_open"] = None
 
         # Current positions
         if app_state.order_manager is not None:
@@ -431,8 +450,14 @@ class DailySummaryGenerator:
 
         # Time and market status
         lines.append(f"Time: {data.get('current_time', 'unknown')}")
-        market_status = "open" if data.get("market_open") else "closed"
-        lines.append(f"Market: {market_status}")
+        session_status = data.get("session_status", "unknown")
+        lines.append(f"Market: {session_status}")
+        elapsed = data.get("session_elapsed_minutes")
+        if elapsed is not None:
+            lines.append(f"Session elapsed: {elapsed} minutes (since 9:30 ET)")
+        minutes_until = data.get("minutes_until_open")
+        if minutes_until is not None:
+            lines.append(f"Minutes until open: {minutes_until}")
         lines.append(f"Regime: {data.get('regime', 'unknown')}")
         lines.append("")
 
