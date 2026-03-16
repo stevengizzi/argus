@@ -12,6 +12,7 @@ import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -21,6 +22,8 @@ logger = logging.getLogger(__name__)
 from argus.analytics.performance import compute_metrics
 from argus.api.auth import require_auth
 from argus.api.dependencies import AppState, get_app_state
+
+_ET = ZoneInfo("America/New_York")
 
 router = APIRouter()
 
@@ -381,18 +384,21 @@ async def get_strategy_decisions(
     strategy_id: str,
     symbol: str | None = Query(None),
     limit: int = Query(100, ge=1, le=500),
+    date: str | None = Query(None, description="Date (YYYY-MM-DD) for historical query"),
     state: AppState = Depends(get_app_state),  # noqa: B008
     _user: dict = Depends(require_auth),  # noqa: B008
 ) -> list[dict[str, object]]:
     """Get recent evaluation events from a strategy's decision buffer.
 
     Returns strategy evaluation telemetry newest-first. Optionally filter
-    by symbol and cap the result count.
+    by symbol and cap the result count. If ``date`` is provided and is not
+    today, queries the persistent SQLite store for historical data.
 
     Args:
         strategy_id: The strategy ID (e.g., "strat_orb_breakout").
         symbol: Optional ticker filter (e.g., "AAPL").
         limit: Maximum number of events to return (1–500, default 100).
+        date: Optional date filter (YYYY-MM-DD) for historical queries.
 
     Returns:
         List of serialized EvaluationEvent dicts, newest first.
@@ -404,6 +410,23 @@ async def get_strategy_decisions(
     if strategy is None:
         raise HTTPException(status_code=404, detail=f"Strategy {strategy_id} not found")
 
+    # Route to persistent store for historical (non-today) dates
+    today_str = datetime.now(_ET).strftime("%Y-%m-%d")
+    use_store = (
+        date is not None
+        and date != today_str
+        and getattr(state, "telemetry_store", None) is not None
+    )
+
+    if use_store:
+        return await state.telemetry_store.query_events(  # type: ignore[union-attr]
+            strategy_id=strategy_id,
+            symbol=symbol,
+            date=date,
+            limit=limit,
+        )
+
+    # Default: use the in-memory ring buffer (today or no store)
     events = strategy.eval_buffer.query(symbol=symbol, limit=limit)
     return [
         {

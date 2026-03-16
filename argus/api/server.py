@@ -255,6 +255,26 @@ def create_app(app_state: AppState) -> FastAPI:
             except Exception as e:
                 logger.error(f"Failed to initialize quality components: {e}")
 
+        # Initialize EvaluationEventStore for telemetry persistence
+        telemetry_store = None
+        if app_state.trade_logger is not None:
+            try:
+                from argus.strategies.telemetry_store import EvaluationEventStore
+
+                db_path = app_state.trade_logger._db._db_path
+                telemetry_store = EvaluationEventStore(db_path)
+                await telemetry_store.initialize()
+                await telemetry_store.cleanup_old_events()
+                app_state.telemetry_store = telemetry_store
+
+                # Wire store into each strategy's evaluation buffer
+                for strategy in app_state.strategies.values():
+                    strategy.eval_buffer.set_store(telemetry_store)
+
+                logger.info("EvaluationEventStore initialized and wired to strategy buffers")
+            except Exception as e:
+                logger.error(f"Failed to initialize EvaluationEventStore: {e}")
+
         # Note: WebSocket bridge is started by main.py before calling run_server().
         # We only need to get a reference to it here for cleanup.
         from argus.api.websocket import get_bridge
@@ -298,6 +318,12 @@ def create_app(app_state: AppState) -> FastAPI:
             app_state.catalyst_storage = None
             app_state.briefing_generator = None
             logger.info("Intelligence pipeline cleaned up")
+
+        # Cleanup telemetry store
+        if telemetry_store is not None:
+            await telemetry_store.close()
+            app_state.telemetry_store = None
+            logger.info("EvaluationEventStore closed")
 
     app = FastAPI(
         title="Argus Command Center API",

@@ -7,10 +7,18 @@ the Command Center Decision Explorer.
 
 from __future__ import annotations
 
+import asyncio
 import collections
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from argus.strategies.telemetry_store import EvaluationEventStore
+
+logger = logging.getLogger(__name__)
 
 BUFFER_MAX_SIZE = 1000
 
@@ -74,14 +82,29 @@ class StrategyEvaluationBuffer:
             maxlen: Maximum number of events to retain. Oldest are evicted when full.
         """
         self._events: collections.deque[EvaluationEvent] = collections.deque(maxlen=maxlen)
+        self._store: EvaluationEventStore | None = None
+
+    def set_store(self, store: EvaluationEventStore) -> None:
+        """Attach a persistent store for durable event writes.
+
+        Args:
+            store: The initialized EvaluationEventStore instance.
+        """
+        self._store = store
 
     def record(self, event: EvaluationEvent) -> None:
-        """Append an event to the buffer.
+        """Append an event to the buffer and persist to store if available.
 
         Args:
             event: The evaluation event to record.
         """
         self._events.append(event)
+        if self._store is not None:
+            try:
+                loop = asyncio.get_running_loop()
+                loop.create_task(self._store.write_event(event))
+            except Exception:
+                pass  # No event loop or store error — degrade gracefully
 
     def query(
         self,

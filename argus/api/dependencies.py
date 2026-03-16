@@ -40,6 +40,7 @@ if TYPE_CHECKING:
     from argus.intelligence.quality_engine import SetupQualityEngine
     from argus.intelligence.storage import CatalystStorage
     from argus.strategies.base_strategy import BaseStrategy
+    from argus.strategies.telemetry_store import EvaluationEventStore
 
 
 @dataclass
@@ -108,6 +109,7 @@ class AppState:
     intelligence_polling_task: asyncio.Task[None] | None = None
     quality_engine: SetupQualityEngine | None = None
     position_sizer: DynamicPositionSizer | None = None
+    telemetry_store: EvaluationEventStore | None = None
 
 
 def get_app_state(request: Request) -> AppState:
