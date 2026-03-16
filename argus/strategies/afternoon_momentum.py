@@ -32,6 +32,7 @@ from argus.models.strategy import (
     ScannerCriteria,
 )
 from argus.strategies.base_strategy import BaseStrategy
+from argus.strategies.telemetry import EvaluationEventType, EvaluationResult
 
 if TYPE_CHECKING:
     from argus.data.service import DataService
@@ -235,6 +236,15 @@ class AfternoonMomentumStrategy(BaseStrategy):
         if state.state in (ConsolidationState.ENTERED, ConsolidationState.REJECTED):
             return None
 
+        # Time window check — outside operating window (entry window)
+        if not self._is_in_entry_window(event) and not self._is_in_consolidation_window(event):
+            self.record_evaluation(
+                symbol,
+                EvaluationEventType.TIME_WINDOW_CHECK,
+                EvaluationResult.FAIL,
+                "Outside Afternoon Momentum operating window",
+            )
+
         # Get ATR from data service
         atr: float | None = None
         if self._data_service is not None:
@@ -345,6 +355,20 @@ class AfternoonMomentumStrategy(BaseStrategy):
             state.midday_high = candle.high
             state.midday_low = candle.low
             state.consolidation_bars = 1
+            self.record_evaluation(
+                symbol,
+                EvaluationEventType.STATE_TRANSITION,
+                EvaluationResult.INFO,
+                (
+                    f"State transition: {ConsolidationState.WATCHING} → "
+                    f"{ConsolidationState.ACCUMULATING}"
+                ),
+                metadata={
+                    "from_state": str(ConsolidationState.WATCHING),
+                    "to_state": str(ConsolidationState.ACCUMULATING),
+                    "trigger": "consolidation window started",
+                },
+            )
             logger.debug(
                 "%s: WATCHING -> ACCUMULATING at %s (high=%.2f, low=%.2f)",
                 symbol,
@@ -383,9 +407,39 @@ class AfternoonMomentumStrategy(BaseStrategy):
         midday_range = state.midday_high - state.midday_low
         consolidation_ratio = midday_range / atr
 
+        # Emit consolidation tracking event
+        self.record_evaluation(
+            symbol,
+            EvaluationEventType.STATE_TRANSITION,
+            EvaluationResult.INFO,
+            (
+                f"Consolidation tracking: {state.consolidation_bars} candles, "
+                f"range={midday_range:.2f}"
+            ),
+            metadata={
+                "consolidation_bars": state.consolidation_bars,
+                "midday_range": round(midday_range, 4),
+                "consolidation_ratio": round(consolidation_ratio, 4),
+            },
+        )
+
         # Check if range is too wide -> REJECTED
         if consolidation_ratio > self._pm_config.max_consolidation_atr_ratio:
             state.state = ConsolidationState.REJECTED
+            self.record_evaluation(
+                symbol,
+                EvaluationEventType.STATE_TRANSITION,
+                EvaluationResult.INFO,
+                (
+                    f"State transition: {ConsolidationState.ACCUMULATING} → "
+                    f"{ConsolidationState.REJECTED}"
+                ),
+                metadata={
+                    "from_state": str(ConsolidationState.ACCUMULATING),
+                    "to_state": str(ConsolidationState.REJECTED),
+                    "trigger": "consolidation range too wide",
+                },
+            )
             logger.info(
                 "%s: ACCUMULATING -> REJECTED (ratio=%.2f > max=%.2f, range=%.2f, atr=%.2f)",
                 symbol,
@@ -402,6 +456,19 @@ class AfternoonMomentumStrategy(BaseStrategy):
             and state.consolidation_bars >= self._pm_config.min_consolidation_bars
         ):
             state.state = ConsolidationState.CONSOLIDATED
+            self.record_evaluation(
+                symbol,
+                EvaluationEventType.STATE_TRANSITION,
+                EvaluationResult.PASS,
+                "Consolidation established",
+                metadata={
+                    "from_state": str(ConsolidationState.ACCUMULATING),
+                    "to_state": str(ConsolidationState.CONSOLIDATED),
+                    "trigger": "range confirmed tight",
+                    "consolidation_bars": state.consolidation_bars,
+                    "consolidation_ratio": round(consolidation_ratio, 4),
+                },
+            )
             logger.info(
                 "Afternoon Momentum: %s consolidation detected "
                 "(%d bars, range/ATR %.2f) — watching for breakout",
@@ -493,53 +560,254 @@ class AfternoonMomentumStrategy(BaseStrategy):
         if state.midday_low is None:
             return None
 
-        # 1. Internal risk limits check
-        if not self.check_internal_risk_limits():
-            logger.debug("%s: Breakout rejected - internal risk limits hit", symbol)
-            return None
+        conditions_passed: list[str] = []
+        failed_condition: str | None = None
 
-        # 2. Concurrent positions check
+        # Condition 1/8: Price above consolidation high
+        price_above = close > consolidation_high
+        self.record_evaluation(
+            symbol,
+            EvaluationEventType.CONDITION_CHECK,
+            EvaluationResult.PASS if price_above else EvaluationResult.FAIL,
+            f"Condition 1/8: Price above consolidation high — "
+            f"close={close:.2f} vs high={consolidation_high:.2f}",
+            metadata={
+                "condition_name": "price_above_consolidation_high",
+                "value": close,
+                "threshold": consolidation_high,
+                "passed": price_above,
+            },
+        )
+        if price_above:
+            conditions_passed.append("price_above_consolidation_high")
+        elif failed_condition is None:
+            failed_condition = "price_above_consolidation_high"
+        # Note: caller already verified close > consolidation_high, so this always passes
+
+        # Condition 2/8: Volume confirmation
+        avg_volume = (
+            sum(state.recent_volumes) / len(state.recent_volumes)
+            if state.recent_volumes
+            else float(candle.volume)
+        )
+        required_volume = avg_volume * self._pm_config.volume_multiplier
+        volume_ok = candle.volume >= required_volume
+        rvol = candle.volume / avg_volume if avg_volume > 0 else 0.0
+        self.record_evaluation(
+            symbol,
+            EvaluationEventType.CONDITION_CHECK,
+            EvaluationResult.PASS if volume_ok else EvaluationResult.FAIL,
+            f"Condition 2/8: Volume confirmation — "
+            f"rvol={rvol:.1f}x, threshold={self._pm_config.volume_multiplier}x",
+            metadata={
+                "condition_name": "volume_confirmation",
+                "value": candle.volume,
+                "threshold": required_volume,
+                "passed": volume_ok,
+            },
+        )
+        if volume_ok:
+            conditions_passed.append("volume_confirmation")
+        elif failed_condition is None:
+            failed_condition = "volume_confirmation"
+
+        # Condition 3/8: Breakout candle body ratio
+        candle_range = candle.high - candle.low
+        candle_body = abs(candle.close - candle.open)
+        body_ratio = candle_body / candle_range if candle_range > 0 else 0.0
+        # Body ratio > 0.3 is a reasonable breakout candle (bullish body, not doji)
+        body_ok = body_ratio > 0.3
+        self.record_evaluation(
+            symbol,
+            EvaluationEventType.CONDITION_CHECK,
+            EvaluationResult.PASS if body_ok else EvaluationResult.FAIL,
+            f"Condition 3/8: Breakout candle body ratio — "
+            f"ratio={body_ratio:.2f}, threshold=0.30",
+            metadata={
+                "condition_name": "body_ratio",
+                "value": round(body_ratio, 4),
+                "threshold": 0.3,
+                "passed": body_ok,
+            },
+        )
+        if body_ok:
+            conditions_passed.append("body_ratio")
+        elif failed_condition is None:
+            failed_condition = "body_ratio"
+
+        # Condition 4/8: Spread/range check (candle range vs ATR)
+        range_atr_ratio = candle_range / atr if atr > 0 else 0.0
+        spread_ok = range_atr_ratio < 2.0  # Not an extreme bar
+        self.record_evaluation(
+            symbol,
+            EvaluationEventType.CONDITION_CHECK,
+            EvaluationResult.PASS if spread_ok else EvaluationResult.FAIL,
+            f"Condition 4/8: Spread/range check — "
+            f"range/ATR={range_atr_ratio:.2f}, max=2.00",
+            metadata={
+                "condition_name": "spread_range",
+                "value": round(range_atr_ratio, 4),
+                "threshold": 2.0,
+                "passed": spread_ok,
+            },
+        )
+        if spread_ok:
+            conditions_passed.append("spread_range")
+        elif failed_condition is None:
+            failed_condition = "spread_range"
+
+        # Condition 5/8: Chase protection (distance from consolidation high)
+        chase_limit = consolidation_high * (1 + self._pm_config.max_chase_pct)
+        chase_ok = close <= chase_limit
+        self.record_evaluation(
+            symbol,
+            EvaluationEventType.CONDITION_CHECK,
+            EvaluationResult.PASS if chase_ok else EvaluationResult.FAIL,
+            f"Condition 5/8: Distance from consolidation high — "
+            f"close={close:.2f}, limit={chase_limit:.2f}",
+            metadata={
+                "condition_name": "chase_protection",
+                "value": close,
+                "threshold": chase_limit,
+                "passed": chase_ok,
+            },
+        )
+        if chase_ok:
+            conditions_passed.append("chase_protection")
+        elif failed_condition is None:
+            failed_condition = "chase_protection"
+
+        # Condition 6/8: Time remaining check
+        in_window = self._is_in_entry_window(candle)
+        self.record_evaluation(
+            symbol,
+            EvaluationEventType.CONDITION_CHECK,
+            EvaluationResult.PASS if in_window else EvaluationResult.FAIL,
+            f"Condition 6/8: Time remaining check — "
+            f"window={self._earliest_entry_time}–{self._latest_entry_time}",
+            metadata={
+                "condition_name": "time_remaining",
+                "passed": in_window,
+            },
+        )
+        if in_window:
+            conditions_passed.append("time_remaining")
+        elif failed_condition is None:
+            failed_condition = "time_remaining"
+
+        # Condition 7/8: Internal risk limits (trend alignment proxy)
+        risk_ok = self.check_internal_risk_limits()
+        self.record_evaluation(
+            symbol,
+            EvaluationEventType.CONDITION_CHECK,
+            EvaluationResult.PASS if risk_ok else EvaluationResult.FAIL,
+            f"Condition 7/8: Trend alignment (risk limits) — "
+            f"{'within limits' if risk_ok else 'limits exceeded'}",
+            metadata={
+                "condition_name": "trend_alignment",
+                "passed": risk_ok,
+            },
+        )
+        if risk_ok:
+            conditions_passed.append("trend_alignment")
+        elif failed_condition is None:
+            failed_condition = "trend_alignment"
+
+        # Condition 8/8: Consolidation quality (tightness + positions)
         active_positions = sum(1 for s in self._symbol_state.values() if s.position_active)
         max_positions = self._pm_config.risk_limits.max_concurrent_positions
-        if active_positions >= max_positions:
-            logger.debug("%s: Breakout rejected - max positions reached", symbol)
+        positions_ok = active_positions < max_positions
+        entry_price = close
+        stop_price = state.midday_low * (1 - self._pm_config.stop_buffer_pct)
+        risk_per_share = entry_price - stop_price
+        valid_risk = risk_per_share > 0
+        quality_ok = positions_ok and valid_risk
+        self.record_evaluation(
+            symbol,
+            EvaluationEventType.CONDITION_CHECK,
+            EvaluationResult.PASS if quality_ok else EvaluationResult.FAIL,
+            f"Condition 8/8: Consolidation quality — "
+            f"positions={active_positions}/{max_positions}, risk/share={risk_per_share:.2f}",
+            metadata={
+                "condition_name": "consolidation_quality",
+                "value": active_positions,
+                "threshold": max_positions,
+                "passed": quality_ok,
+            },
+        )
+        if quality_ok:
+            conditions_passed.append("consolidation_quality")
+        elif failed_condition is None:
+            failed_condition = "consolidation_quality"
+
+        # Check for failures — use original control flow logic
+        if not risk_ok:
+            logger.debug("%s: Breakout rejected - internal risk limits hit", symbol)
+            self.record_evaluation(
+                symbol,
+                EvaluationEventType.SIGNAL_REJECTED,
+                EvaluationResult.FAIL,
+                "AfMo rejected: failed condition 7 (trend_alignment)",
+                metadata={"passed": conditions_passed, "failed": failed_condition},
+            )
             return None
 
-        # 3. Volume confirmation
-        if state.recent_volumes:
-            avg_volume = sum(state.recent_volumes) / len(state.recent_volumes)
-            required_volume = avg_volume * self._pm_config.volume_multiplier
-            if candle.volume < required_volume:
-                logger.debug(
-                    "%s: Breakout rejected - volume %d < required %.0f",
-                    symbol,
-                    candle.volume,
-                    required_volume,
-                )
-                return None
+        if not positions_ok:
+            logger.debug("%s: Breakout rejected - max positions reached", symbol)
+            self.record_evaluation(
+                symbol,
+                EvaluationEventType.SIGNAL_REJECTED,
+                EvaluationResult.FAIL,
+                "AfMo rejected: failed condition 8 (consolidation_quality)",
+                metadata={"passed": conditions_passed, "failed": "consolidation_quality"},
+            )
+            return None
 
-        # 4. Chase protection: not too far above consolidation_high
-        chase_limit = consolidation_high * (1 + self._pm_config.max_chase_pct)
-        if close > chase_limit:
+        if not volume_ok:
+            logger.debug(
+                "%s: Breakout rejected - volume %d < required %.0f",
+                symbol,
+                candle.volume,
+                required_volume,
+            )
+            self.record_evaluation(
+                symbol,
+                EvaluationEventType.SIGNAL_REJECTED,
+                EvaluationResult.FAIL,
+                "AfMo rejected: failed condition 2 (volume_confirmation)",
+                metadata={"passed": conditions_passed, "failed": "volume_confirmation"},
+            )
+            return None
+
+        if not chase_ok:
             logger.debug(
                 "%s: Breakout rejected - chase protection (close=%.2f > limit=%.2f)",
                 symbol,
                 close,
                 chase_limit,
             )
+            self.record_evaluation(
+                symbol,
+                EvaluationEventType.SIGNAL_REJECTED,
+                EvaluationResult.FAIL,
+                "AfMo rejected: failed condition 5 (chase_protection)",
+                metadata={"passed": conditions_passed, "failed": "chase_protection"},
+            )
             return None
 
-        # 5. Valid risk per share (stop below consolidation_low)
-        entry_price = close
-        stop_price = state.midday_low * (1 - self._pm_config.stop_buffer_pct)
-        risk_per_share = entry_price - stop_price
-
-        if risk_per_share <= 0:
+        if not valid_risk:
             logger.debug(
                 "%s: Breakout rejected - invalid risk (entry=%.2f, stop=%.2f)",
                 symbol,
                 entry_price,
                 stop_price,
+            )
+            self.record_evaluation(
+                symbol,
+                EvaluationEventType.SIGNAL_REJECTED,
+                EvaluationResult.FAIL,
+                "AfMo rejected: failed condition 8 (consolidation_quality)",
+                metadata={"passed": conditions_passed, "failed": "consolidation_quality"},
             )
             return None
 
@@ -689,6 +957,14 @@ class AfternoonMomentumStrategy(BaseStrategy):
             "time_credit": round(time_credit, 2),
         }
 
+        self.record_evaluation(
+            candle.symbol,
+            EvaluationEventType.QUALITY_SCORED,
+            EvaluationResult.INFO,
+            f"Afternoon Momentum pattern strength: {pattern_strength:.1f}",
+            metadata=signal_context,
+        )
+
         return pattern_strength, signal_context
 
     def _build_signal(
@@ -750,10 +1026,40 @@ class AfternoonMomentumStrategy(BaseStrategy):
             signal_context=signal_context,
         )
 
+        # Emit SIGNAL_GENERATED before state transition
+        self.record_evaluation(
+            symbol,
+            EvaluationEventType.SIGNAL_GENERATED,
+            EvaluationResult.PASS,
+            f"AfMo signal: {symbol} breakout at {entry_price:.2f}",
+            metadata={
+                "entry": entry_price,
+                "stop": stop_price,
+                "t1": t1,
+                "t2": t2,
+                "pattern_strength": round(pattern_strength, 2),
+            },
+        )
+
         # Mark state as entered
         state.state = ConsolidationState.ENTERED
         state.position_active = True
         self._signals_generated_today += 1
+
+        self.record_evaluation(
+            symbol,
+            EvaluationEventType.STATE_TRANSITION,
+            EvaluationResult.INFO,
+            (
+                f"State transition: {ConsolidationState.CONSOLIDATED} → "
+                f"{ConsolidationState.ENTERED}"
+            ),
+            metadata={
+                "from_state": str(ConsolidationState.CONSOLIDATED),
+                "to_state": str(ConsolidationState.ENTERED),
+                "trigger": "signal generated — all conditions passed",
+            },
+        )
 
         logger.info(
             "%s: Afternoon breakout signal - entry=%.2f, stop=%.2f, T1=%.2f, T2=%.2f, "

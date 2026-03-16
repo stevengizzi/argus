@@ -33,6 +33,7 @@ from argus.models.strategy import (
     ScannerCriteria,
 )
 from argus.strategies.base_strategy import BaseStrategy
+from argus.strategies.telemetry import EvaluationEventType, EvaluationResult
 
 if TYPE_CHECKING:
     from argus.data.service import DataService
@@ -186,7 +187,22 @@ class VwapReclaimStrategy(BaseStrategy):
 
         # Terminal states: no more signals for this symbol today
         if state.state in (VwapState.ENTERED, VwapState.EXHAUSTED):
+            self.record_evaluation(
+                symbol,
+                EvaluationEventType.STATE_TRANSITION,
+                EvaluationResult.INFO,
+                f"Symbol in terminal state: {state.state}",
+            )
             return None
+
+        # Time window check — outside operating window
+        if not self._is_in_entry_window(event):
+            self.record_evaluation(
+                symbol,
+                EvaluationEventType.TIME_WINDOW_CHECK,
+                EvaluationResult.FAIL,
+                "Outside VWAP Reclaim operating window",
+            )
 
         # Get VWAP from data service
         vwap: float | None = None
@@ -220,10 +236,32 @@ class VwapReclaimStrategy(BaseStrategy):
         """
         close = candle.close
 
+        # Emit VWAP distance for every candle in the state machine
+        vwap_distance = close - vwap
+        vwap_distance_pct = vwap_distance / vwap if vwap > 0 else 0.0
+        self.record_evaluation(
+            symbol,
+            EvaluationEventType.INDICATOR_STATUS,
+            EvaluationResult.INFO,
+            f"VWAP distance: {vwap_distance:.4f} ({vwap_distance_pct * 100:.2f}%)",
+            metadata={"vwap": vwap, "price": close, "distance_pct": round(vwap_distance_pct, 6)},
+        )
+
         if state.state == VwapState.WATCHING:
             # Transition to ABOVE_VWAP when close > VWAP
             if close > vwap:
                 state.state = VwapState.ABOVE_VWAP
+                self.record_evaluation(
+                    symbol,
+                    EvaluationEventType.STATE_TRANSITION,
+                    EvaluationResult.INFO,
+                    f"State transition: {VwapState.WATCHING} → {VwapState.ABOVE_VWAP}",
+                    metadata={
+                        "from_state": str(VwapState.WATCHING),
+                        "to_state": str(VwapState.ABOVE_VWAP),
+                        "trigger": "price crossed above VWAP",
+                    },
+                )
                 logger.debug(
                     "%s: WATCHING → ABOVE_VWAP (close=%.2f > vwap=%.2f)",
                     symbol,
@@ -242,6 +280,17 @@ class VwapReclaimStrategy(BaseStrategy):
                 state.pullback_low = candle.low
                 state.bars_below_vwap = 1
                 state.below_vwap_entries += 1
+                self.record_evaluation(
+                    symbol,
+                    EvaluationEventType.STATE_TRANSITION,
+                    EvaluationResult.INFO,
+                    f"State transition: {VwapState.ABOVE_VWAP} → {VwapState.BELOW_VWAP}",
+                    metadata={
+                        "from_state": str(VwapState.ABOVE_VWAP),
+                        "to_state": str(VwapState.BELOW_VWAP),
+                        "trigger": "price pulled back below VWAP",
+                    },
+                )
                 logger.debug(
                     "%s: ABOVE_VWAP → BELOW_VWAP (close=%.2f < vwap=%.2f, low=%.2f)",
                     symbol,
@@ -286,6 +335,17 @@ class VwapReclaimStrategy(BaseStrategy):
         pullback_depth = (vwap - state.pullback_low) / vwap
         if pullback_depth > self._vwap_config.max_pullback_pct:
             state.state = VwapState.EXHAUSTED
+            self.record_evaluation(
+                symbol,
+                EvaluationEventType.STATE_TRANSITION,
+                EvaluationResult.INFO,
+                f"State transition: {VwapState.BELOW_VWAP} → {VwapState.EXHAUSTED}",
+                metadata={
+                    "from_state": str(VwapState.BELOW_VWAP),
+                    "to_state": str(VwapState.EXHAUSTED),
+                    "trigger": "exhaustion — pullback too deep",
+                },
+            )
             logger.info(
                 "%s: BELOW_VWAP → EXHAUSTED (pullback %.2f%% > max %.2f%%)",
                 symbol,
@@ -331,7 +391,16 @@ class VwapReclaimStrategy(BaseStrategy):
         # Check conditions — return None for any failure, transition to ABOVE_VWAP
 
         # 1. Time window check
-        if not self._is_in_entry_window(candle):
+        in_window = self._is_in_entry_window(candle)
+        self.record_evaluation(
+            symbol,
+            EvaluationEventType.CONDITION_CHECK,
+            EvaluationResult.PASS if in_window else EvaluationResult.FAIL,
+            f"Time window: {'PASS' if in_window else 'FAIL'} "
+            f"(window={self._earliest_entry_time}–{self._latest_entry_time})",
+            metadata={"condition_name": "time_window", "passed": in_window},
+        )
+        if not in_window:
             # Reclaim but outside time window — allow retry by going back to ABOVE_VWAP
             state.state = VwapState.ABOVE_VWAP
             state.bars_below_vwap = 0
@@ -340,7 +409,15 @@ class VwapReclaimStrategy(BaseStrategy):
             return None
 
         # 2. Internal risk limits
-        if not self.check_internal_risk_limits():
+        risk_ok = self.check_internal_risk_limits()
+        self.record_evaluation(
+            symbol,
+            EvaluationEventType.CONDITION_CHECK,
+            EvaluationResult.PASS if risk_ok else EvaluationResult.FAIL,
+            f"Internal risk limits: {'PASS' if risk_ok else 'FAIL'}",
+            metadata={"condition_name": "internal_risk_limits", "passed": risk_ok},
+        )
+        if not risk_ok:
             state.state = VwapState.ABOVE_VWAP
             state.bars_below_vwap = 0
             state.pullback_low = None
@@ -350,7 +427,21 @@ class VwapReclaimStrategy(BaseStrategy):
         # 3. Concurrent positions check
         active_positions = sum(1 for s in self._symbol_state.values() if s.position_active)
         max_positions = self._vwap_config.risk_limits.max_concurrent_positions
-        if active_positions >= max_positions:
+        positions_ok = active_positions < max_positions
+        self.record_evaluation(
+            symbol,
+            EvaluationEventType.CONDITION_CHECK,
+            EvaluationResult.PASS if positions_ok else EvaluationResult.FAIL,
+            f"Concurrent positions: {'PASS' if positions_ok else 'FAIL'} "
+            f"({active_positions}/{max_positions})",
+            metadata={
+                "condition_name": "concurrent_positions",
+                "value": active_positions,
+                "threshold": max_positions,
+                "passed": positions_ok,
+            },
+        )
+        if not positions_ok:
             state.state = VwapState.ABOVE_VWAP
             state.bars_below_vwap = 0
             state.pullback_low = None
@@ -361,7 +452,21 @@ class VwapReclaimStrategy(BaseStrategy):
         if state.pullback_low is None:
             return None
         pullback_depth = (vwap - state.pullback_low) / vwap
-        if pullback_depth < self._vwap_config.min_pullback_pct:
+        depth_ok = pullback_depth >= self._vwap_config.min_pullback_pct
+        self.record_evaluation(
+            symbol,
+            EvaluationEventType.CONDITION_CHECK,
+            EvaluationResult.PASS if depth_ok else EvaluationResult.FAIL,
+            f"Pullback depth: {'PASS' if depth_ok else 'FAIL'} "
+            f"({pullback_depth * 100:.2f}% vs min {self._vwap_config.min_pullback_pct * 100:.2f}%)",
+            metadata={
+                "condition_name": "pullback_depth",
+                "value": round(pullback_depth, 6),
+                "threshold": self._vwap_config.min_pullback_pct,
+                "passed": depth_ok,
+            },
+        )
+        if not depth_ok:
             # Reclaim but pullback not deep enough — reset and allow retry
             state.state = VwapState.ABOVE_VWAP
             state.bars_below_vwap = 0
@@ -375,7 +480,21 @@ class VwapReclaimStrategy(BaseStrategy):
             return None
 
         # 5. Minimum pullback bars check
-        if state.bars_below_vwap < self._vwap_config.min_pullback_bars:
+        bars_ok = state.bars_below_vwap >= self._vwap_config.min_pullback_bars
+        self.record_evaluation(
+            symbol,
+            EvaluationEventType.CONDITION_CHECK,
+            EvaluationResult.PASS if bars_ok else EvaluationResult.FAIL,
+            f"Pullback bars: {'PASS' if bars_ok else 'FAIL'} "
+            f"({state.bars_below_vwap} vs min {self._vwap_config.min_pullback_bars})",
+            metadata={
+                "condition_name": "pullback_bars",
+                "value": state.bars_below_vwap,
+                "threshold": self._vwap_config.min_pullback_bars,
+                "passed": bars_ok,
+            },
+        )
+        if not bars_ok:
             state.state = VwapState.ABOVE_VWAP
             state.bars_below_vwap = 0
             state.pullback_low = None
@@ -391,7 +510,23 @@ class VwapReclaimStrategy(BaseStrategy):
         if state.recent_volumes:
             avg_volume = sum(state.recent_volumes) / len(state.recent_volumes)
             required_volume = avg_volume * self._vwap_config.volume_confirmation_multiplier
-            if candle.volume < required_volume:
+            rvol = candle.volume / avg_volume if avg_volume > 0 else 0.0
+            volume_ok = candle.volume >= required_volume
+            self.record_evaluation(
+                symbol,
+                EvaluationEventType.CONDITION_CHECK,
+                EvaluationResult.PASS if volume_ok else EvaluationResult.FAIL,
+                f"Volume confirmation: {'PASS' if volume_ok else 'FAIL'} "
+                f"(rvol={rvol:.1f}x, threshold="
+                f"{self._vwap_config.volume_confirmation_multiplier}x)",
+                metadata={
+                    "condition_name": "volume_confirmation",
+                    "value": candle.volume,
+                    "threshold": required_volume,
+                    "passed": volume_ok,
+                },
+            )
+            if not volume_ok:
                 state.state = VwapState.ABOVE_VWAP
                 state.bars_below_vwap = 0
                 state.pullback_low = None
@@ -405,7 +540,21 @@ class VwapReclaimStrategy(BaseStrategy):
 
         # 7. Chase protection: not too far above VWAP
         chase_limit = vwap * (1 + self._vwap_config.max_chase_above_vwap_pct)
-        if close > chase_limit:
+        chase_ok = close <= chase_limit
+        self.record_evaluation(
+            symbol,
+            EvaluationEventType.CONDITION_CHECK,
+            EvaluationResult.PASS if chase_ok else EvaluationResult.FAIL,
+            f"Chase protection: {'PASS' if chase_ok else 'FAIL'} "
+            f"(close={close:.2f}, limit={chase_limit:.2f})",
+            metadata={
+                "condition_name": "chase_protection",
+                "value": close,
+                "threshold": chase_limit,
+                "passed": chase_ok,
+            },
+        )
+        if not chase_ok:
             state.state = VwapState.ABOVE_VWAP
             state.bars_below_vwap = 0
             state.pullback_low = None
@@ -525,6 +674,14 @@ class VwapReclaimStrategy(BaseStrategy):
             "distance_credit": round(distance_credit, 2),
         }
 
+        self.record_evaluation(
+            candle.symbol,
+            EvaluationEventType.QUALITY_SCORED,
+            EvaluationResult.INFO,
+            f"VWAP Reclaim pattern strength: {pattern_strength:.1f}",
+            metadata=signal_context,
+        )
+
         return pattern_strength, signal_context
 
     def _build_signal(
@@ -577,9 +734,36 @@ class VwapReclaimStrategy(BaseStrategy):
             signal_context=signal_context,
         )
 
+        # Emit SIGNAL_GENERATED before state transition
+        self.record_evaluation(
+            symbol,
+            EvaluationEventType.SIGNAL_GENERATED,
+            EvaluationResult.PASS,
+            f"VWAP Reclaim signal: {symbol} entry at {entry_price:.2f}",
+            metadata={
+                "entry": entry_price,
+                "stop": stop_price,
+                "t1": t1,
+                "t2": t2,
+                "pattern_strength": round(pattern_strength, 2),
+            },
+        )
+
         # Mark state as entered
         state.state = VwapState.ENTERED
         state.position_active = True
+
+        self.record_evaluation(
+            symbol,
+            EvaluationEventType.STATE_TRANSITION,
+            EvaluationResult.INFO,
+            f"State transition: {VwapState.BELOW_VWAP} → {VwapState.ENTERED}",
+            metadata={
+                "from_state": str(VwapState.BELOW_VWAP),
+                "to_state": str(VwapState.ENTERED),
+                "trigger": "signal generated — all conditions passed",
+            },
+        )
 
         logger.info(
             "%s: VWAP reclaim signal - entry=%.2f, stop=%.2f, T1=%.2f, T2=%.2f, "
