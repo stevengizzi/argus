@@ -4064,6 +4064,20 @@ Each entry follows this format:
 
 ---
 
+### DEC-342 | Strategy Evaluation Telemetry — In-Memory Ring Buffer, No EventBus
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-15 |
+| **Sprint** | 24.5 |
+| **Decision** | Evaluation events are diagnostic-only and do NOT flow through the EventBus. A `StrategyEvaluationBuffer(maxlen=1000)` ring buffer is attached to `BaseStrategy`. Each strategy calls `record_evaluation()` at every decision point (time window checks, condition evaluations, signal generation, quality scoring). The method wraps its entire body in try/except — it never raises. Timestamps use ET naive datetimes per DEC-276. Nine event types defined in `EvaluationEventType` (StrEnum): TIME_WINDOW_CHECK, OPENING_RANGE_UPDATE, STATE_TRANSITION, INDICATOR_STATUS, CONDITION_CHECK, ENTRY_EVALUATION, SIGNAL_GENERATED, SIGNAL_REJECTED, QUALITY_SCORED. Three result types: PASS, FAIL, INFO. `EvaluationEventStore` provides SQLite persistence with 7-day retention (ET-date-based cleanup). Fire-and-forget async forwarding from buffer to store via `loop.create_task()`. REST endpoint `GET /api/v1/strategies/{id}/decisions` returns buffer contents for today (or store contents for historical `?date=` queries). JWT-protected. Frontend: `StrategyDecisionStream` component with TanStack Query polling (3s), color-coded two-line event rows, symbol filter, summary stats, expandable metadata. Slide-out panel on Orchestrator page with Esc key close. |
+| **Alternatives Considered** | 1. EventBus integration: Rejected — evaluation telemetry is high-volume diagnostic data (~200 events/candle across 4 strategies) that would flood the bus and subscribers. 2. WebSocket streaming: Deferred — REST polling sufficient for MVP. 3. Per-strategy SQLite databases: Rejected — single DB simpler, WAL mode handles concurrent writes. |
+| **Rationale** | EventBus is for system-critical events that drive execution logic. Evaluation telemetry is high-volume diagnostic data that would flood the bus. Ring buffer provides O(1) append with bounded memory. SQLite persistence enables historical analysis without growing the ring buffer. Strategy observability is critical for paper trading validation — actionable diagnostic data even when zero trades occur. |
+| **Cross-References** | DEC-276 (ET timestamps), DEC-028 (strategy statefulness), DEC-029 (EventBus sole streaming — telemetry intentionally excluded) |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
-*Next DEC: 342*
-*Last updated: 2026-03-14 (Sprint 24 — DEC-330–341)*
+*Next DEC: 343*
+*Last updated: 2026-03-16 (Sprint 24.5 — DEC-342)*

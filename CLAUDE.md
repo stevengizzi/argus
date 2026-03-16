@@ -1,13 +1,13 @@
 # ARGUS — Claude Code Context
 
 > Dense, actionable context for Claude Code sessions. No history — see `docs/` for that.
-> Last updated: March 14, 2026 (Sprint 24.1 doc sync)
+> Last updated: March 16, 2026 (Sprint 24.5 doc sync)
 
 ## Active Sprint
 
-**No active sprint.** Sprint 24.1 (Post-Sprint Cleanup & Housekeeping) completed March 14, 2026.
+**No active sprint.** Sprint 24.5 (Strategy Observability + Operational Fixes) completed March 16, 2026.
 
-Next planned sprint: **24.5 (Phase 5 Gate — Strategic Check-In)** → then **25 (Red-to-Green + Pattern Library Foundation)**.
+Next planned sprint: **25 (Red-to-Green + Pattern Library Foundation)**.
 
 ### Known Issues
 - **FMP Starter plan restriction:** FMP news endpoints return 403 on Starter plan ($22/mo). `fmp_news.enabled: false` in `system_live.yaml`. FMP circuit breaker (DEC-323) prevents spam if accidentally enabled.
@@ -17,10 +17,10 @@ Next planned sprint: **24.5 (Phase 5 Gate — Strategic Check-In)** → then **2
 ## Current State
 
 - **Active sprint:** None (between sprints)
-- **Next sprint:** 24.5 (Phase 5 Gate — Strategic Check-In)
-- **Tests:** 2,709 pytest + 503 Vitest
+- **Next sprint:** 25 (Red-to-Green + Pattern Library Foundation)
+- **Tests:** 2,768 pytest + 523 Vitest
 - **Strategies:** 4 active (ORB Breakout, ORB Scalp, VWAP Reclaim, Afternoon Momentum)
-- **Infrastructure:** Databento EQUS.MINI (live) + IBKR paper trading (Account U24619949) + FMP Starter (scanning + reference data) + Finnhub (news + analyst recs) + Claude API (Copilot + Catalyst Classification) + Universe Manager (config-gated) + Catalyst Pipeline (config-gated) + Intelligence Polling Loop (config-gated) + Reference Data Cache + Quality Engine (config-gated) + Dynamic Position Sizer
+- **Infrastructure:** Databento EQUS.MINI (live) + IBKR paper trading (Account U24619949) + FMP Starter (scanning + reference data) + Finnhub (news + analyst recs) + Claude API (Copilot + Catalyst Classification) + Universe Manager (config-gated) + Catalyst Pipeline (config-gated) + Intelligence Polling Loop (config-gated) + Reference Data Cache + Quality Engine (config-gated) + Dynamic Position Sizer + Strategy Evaluation Telemetry (ring buffer + SQLite persistence)
 - **Frontend:** 7-page Command Center + AI Copilot + Universe Status Card + Intelligence Brief View (all active), Tauri desktop + PWA mobile
 
 ## Project Structure
@@ -65,7 +65,7 @@ argus/
 python -m pytest tests/                   # Run all tests
 python -m pytest tests/ -x               # Stop on first failure
 python -m pytest tests/ -x -q            # Fail-fast, quiet
-cd argus/ui && npx vitest run            # Frontend tests (~503)
+cd argus/ui && npx vitest run            # Frontend tests (~523)
 
 # Trading engine
 python -m argus.main                      # Start (paper trading default)
@@ -282,9 +282,9 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 
 | Document | What It Covers |
 |----------|---------------|
-| `docs/decision-log.md` | All 341 DEC entries with full rationale |
+| `docs/decision-log.md` | All 342 DEC entries with full rationale |
 | `docs/dec-index.md` | Quick-reference index with status markers |
-| `docs/sprint-history.md` | Complete sprint history (1–24.1) |
+| `docs/sprint-history.md` | Complete sprint history (1–24.5) |
 | `docs/process-evolution.md` | Workflow evolution narrative |
 | `docs/live-operations.md` | Live trading procedures |
 | `docs/strategies/STRATEGY_*.md` | Per-strategy spec sheets |

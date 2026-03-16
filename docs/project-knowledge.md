@@ -1,6 +1,6 @@
 # ARGUS — Project Knowledge (Claude Context)
 
-> *Tier A operational context for Claude Code and Claude.ai. Last updated: March 14, 2026 (Sprint 24.1 doc sync).*
+> *Tier A operational context for Claude Code and Claude.ai. Last updated: March 16, 2026 (Sprint 24.5 doc sync).*
 > *Full decision rationale: `docs/decision-log.md` | Sprint details: `docs/sprint-history.md` | DEC index: `docs/dec-index.md`*
 
 ---
@@ -11,10 +11,10 @@ ARGUS is a fully automated, AI-enhanced multi-strategy day trading system for US
 
 ## Current State
 
-**Tests:** 2,709 pytest + 503 Vitest
-**Sprints completed:** 1 through 24.1 (24 full sprints + sub-sprints + Universe Manager + Autonomous Sprint Runner + Wide Pipe + NLP Catalyst + Pipeline Integration + Startup Fixes + Pipeline QA + Frontend Cleanup + Quality Engine + Post-Sprint Housekeeping)
-**Active sprint:** None (between sprints — Sprint 24.5 next)
-**Next sprint:** 24.5 (Phase 5 Gate — Strategic Check-In)
+**Tests:** 2,768 pytest + 523 Vitest
+**Sprints completed:** 1 through 24.5 (24 full sprints + sub-sprints + Universe Manager + Autonomous Sprint Runner + Wide Pipe + NLP Catalyst + Pipeline Integration + Startup Fixes + Pipeline QA + Frontend Cleanup + Quality Engine + Post-Sprint Housekeeping + Strategy Observability)
+**Active sprint:** None (between sprints — Sprint 25 next)
+**Next sprint:** 25 (Red-to-Green + Pattern Library Foundation)
 **GitHub:** `https://github.com/stevengizzi/argus.git` (public)
 
 ### Sprint History (Summary)
@@ -57,12 +57,13 @@ ARGUS is a fully automated, AI-enhanced multi-strategy day trading system for US
 | 23.9 | Frontend + Test Cleanup | 2532+446V | Mar 12 | DEC-329 |
 | 24 | Setup Quality Engine + Dynamic Sizer | 2686+497V | Mar 13–14 | DEC-330–341 |
 | 24.1 | Post-Sprint Cleanup & Housekeeping | 2709+503V | Mar 14 | — |
+| 24.5 | Strategy Observability + Operational Fixes | 2768+523V | Mar 15–16 | DEC-342 |
 
 *Full sprint scopes and session details: `docs/sprint-history.md`*
 
 ### Build Track Queue
 
-21.6 (Backtest Re-Validation, parallel) → 24.5 (Phase 5 Gate) → 25 (Red-to-Green + Pattern Library Foundation) → 26 (Pattern Expansion I) → 27 (Short Selling + Parabolic Short + Pattern Expansion II) → 28 (Learning Loop V1) → 29–31 (BacktestEngine, Sweep Infrastructure, Strategy Templates) → 32–34 (Statistical Validation, ORB Systematic Search ★, Ensemble Analysis) → 35–38 (Cross-Family Search, Ensemble Orchestrator V2, Synapse) → 39–41 (Learning Loop V2, Continuous Discovery, Performance Workbench). Sprint 23.5 (NLP Catalyst Pipeline) complete. Order Flow Model deferred to post-revenue (DEC-238). Full roadmap: `docs/roadmap.md` (DEC-262).
+21.6 (Backtest Re-Validation, parallel) → 25 (Red-to-Green + Pattern Library Foundation) → 26 (Pattern Expansion I) → 27 (Short Selling + Parabolic Short + Pattern Expansion II) → 28 (Learning Loop V1) → 29–31 (BacktestEngine, Sweep Infrastructure, Strategy Templates) → 32–34 (Statistical Validation, ORB Systematic Search ★, Ensemble Analysis) → 35–38 (Cross-Family Search, Ensemble Orchestrator V2, Synapse) → 39–41 (Learning Loop V2, Continuous Discovery, Performance Workbench). Sprint 23.5 (NLP Catalyst Pipeline) complete. Order Flow Model deferred to post-revenue (DEC-238). Full roadmap: `docs/roadmap.md` (DEC-262).
 
 ### Validation Track
 
@@ -84,7 +85,7 @@ Paper trading active with Databento EQUS.MINI + IBKR paper (Account U24619949, D
 5. **Quality Engine** (Sprints 24 + 24.1) — SetupQualityEngine scores setups on 5 weighted dimensions: pattern strength (30%), catalyst quality (25%), volume profile (20%), historical match (15%), regime alignment (10%). Produces quality_grade (A+ through C) and quality_score (0–100). DynamicPositionSizer maps grades to risk tiers (A+=2–3%, A=1.5%, B=0.75%, C+=0.25%, C-=SKIP). Strategies emit `share_count=0` with `pattern_strength` (0–100); `_process_signal()` in main.py runs quality pipeline (score → filter by minimum grade → size → enrich SignalEvent). Risk Manager check 0 rejects `share_count ≤ 0` before circuit breaker evaluation. Pipeline bypass: `BrokerSource.SIMULATED` or `quality_engine.enabled: false` → legacy sizing. QualitySignalEvent published after scoring (informational). Quality history persisted to `quality_history` table (20 columns, 4 indexes). Quality grade/score wired through Order Manager → TradeLogger → DB (Sprint 24.1). Config: `config/quality_engine.yaml` with Pydantic models (QualityWeightsConfig, QualityThresholdsConfig, QualityRiskTiersConfig) with validators. Firehose mode for catalyst sources: Finnhub single `GET /news?category=general`, SEC EDGAR single EFTS search (DEC-332). API: 3 endpoints (`/api/v1/quality/{symbol}`, `/api/v1/quality/history`, `/api/v1/quality/distribution`). UI: QualityBadge component, quality column in Trades table, Setup Quality in TradeDetailPanel, SignalQualityPanel (histogram) on Dashboard, RecentSignals with clickable SignalDetailPanel on Orchestrator (Sprint 24.1), QualityGradeChart (ComposedChart: bars for Avg P&L + line for Win Rate) on Performance, QualityOutcomeScatter on Performance Distribution tab (relocated from Debrief in Sprint 24.1). Orchestrator uses 3-column layout for Decision Log + Catalyst Alerts + Recent Signals (Sprint 24.1). Shared GRADE_COLORS/GRADE_ORDER constants extracted for consistency.
 
 ### Key Components
-- **Strategies:** Daily-stateful, session-stateless plugins (DEC-028). 4 active. 14 more planned. All strategies implement `_calculate_pattern_strength()` returning 0–100 score and emit `share_count=0` for quality pipeline sizing (Sprint 24, DEC-330/331).
+- **Strategies:** Daily-stateful, session-stateless plugins (DEC-028). 4 active. 14 more planned. All strategies implement `_calculate_pattern_strength()` returning 0–100 score and emit `share_count=0` for quality pipeline sizing (Sprint 24, DEC-330/331). BaseStrategy includes `StrategyEvaluationBuffer` (ring buffer, maxlen=1000) for diagnostic telemetry — `record_evaluation()` logs decision-point events with try/except guard (never raises). `EvaluationEventStore` provides SQLite persistence with 7-day retention and ET-date-based queries. REST endpoint `GET /api/v1/strategies/{id}/decisions` returns buffer contents (JWT-protected). Frontend `StrategyDecisionStream` slide-out panel on Orchestrator page (DEC-342, Sprint 24.5).
 - **Orchestrator:** Rules-based V1 (DEC-118). Equal-weight allocation, regime monitoring (SPY vol as VIX proxy), performance throttling, pre-market routine.
 - **Risk Manager:** Three-level gating (strategy, cross-strategy, account). Check 0 rejects `share_count ≤ 0` before circuit breaker evaluation (Sprint 24, DEC-336). Approve-with-modification for share reduction and target tightening; never modify stops or entry (DEC-027). Concentration limit approve-with-modification with 0.25R floor (DEC-249).
 - **Data Service:** Databento EQUS.MINI primary (DEC-248). Event Bus sole streaming mechanism (DEC-029). Databento callbacks on reader thread, bridged via `call_soon_threadsafe()` (DEC-088). Universe Manager (Sprint 23) adds fast-path discard for non-viable symbols and ALL_SYMBOLS Databento mode. Time-aware indicator warm-up (DEC-316, Sprint 23.7): pre-market boot skips warm-up; mid-session boot uses lazy per-symbol backfill on first candle arrival.
@@ -199,6 +200,8 @@ Per-trade risk: 0.5–1% of strategy allocation. Daily loss limit: 3–5%. Weekl
 **Frontend + Test Cleanup (Sprint 23.9):** DEC-329 (gate frontend intelligence hooks on pipeline health status).
 
 **Setup Quality Engine (Sprint 24):** DEC-330 (SignalEvent enrichment + ORB pattern strength), DEC-331 (VWAP/AfMo pattern strength + OM share_count=0 guard), DEC-332 (firehose source refactoring), DEC-333 (SetupQualityEngine 5-dimension scoring), DEC-334 (DynamicPositionSizer + config models), DEC-335 (config wiring + quality_engine.yaml + quality_history table), DEC-336 (pipeline wiring + RM check 0 + quality history recording), DEC-337 (integration tests + error paths), DEC-338 (server quality component init + firehose pipeline wiring), DEC-339 (quality API routes — 3 endpoints), DEC-340 (quality UI — QualityBadge + hooks + trades integration), DEC-341 (quality UI — dashboard/orchestrator/performance/debrief panels).
+
+**Strategy Observability (Sprint 24.5):** DEC-342 (strategy evaluation telemetry — ring buffer + SQLite persistence + REST endpoint + Decision Stream frontend).
 
 **Pipeline Integration (Sprint 23.6):** DEC-308 (deferred initialization), DEC-309 (separate catalyst.db), DEC-310 (CatalystConfig in SystemConfig), DEC-311 (semantic dedup), DEC-312 (batch-then-publish), DEC-313 (FMP canary test), DEC-314 (reference data cache), DEC-315 (polling loop).
 

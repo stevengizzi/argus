@@ -456,6 +456,37 @@ Consolidation breakout strategy entering on breakouts from midday tight ranges d
 
 **Operating window:** Consolidation tracking from 12:00 PM, entries 2:00–3:30 PM, force close 3:45 PM ET. 8 simultaneous entry conditions (DEC-156). Dynamic time stop = min(max_hold_minutes, seconds until force_close) (DEC-157). Scanner reuses ORB gap watchlist (DEC-154).
 
+### 3.4.4 Strategy Evaluation Telemetry — Sprint 24.5 ✅
+
+Real-time and historical visibility into what every strategy evaluates on every candle. Diagnostic-only — does NOT flow through the EventBus (DEC-342).
+
+**In-Memory Ring Buffer (`strategies/evaluation_buffer.py`):**
+- `StrategyEvaluationBuffer(maxlen=1000)` attached to `BaseStrategy`
+- `record_evaluation()` logs decision-point events at every strategy decision (time window checks, condition evaluations, signal generation, quality scoring)
+- Entire method body wrapped in try/except — never raises, never affects trading logic
+- 9 event types in `EvaluationEventType` (StrEnum): `TIME_WINDOW_CHECK`, `OPENING_RANGE_UPDATE`, `STATE_TRANSITION`, `INDICATOR_STATUS`, `CONDITION_CHECK`, `ENTRY_EVALUATION`, `SIGNAL_GENERATED`, `SIGNAL_REJECTED`, `QUALITY_SCORED`
+- 3 result types: `PASS`, `FAIL`, `INFO`
+- Timestamps use ET naive datetimes per DEC-276
+
+**SQLite Persistence (`strategies/telemetry_store.py`):**
+- `EvaluationEventStore` persists events to the main DB file (WAL mode, separate connection)
+- 7-day retention with ET-date-based cleanup
+- Fire-and-forget async forwarding from buffer to store via `loop.create_task()`
+
+**REST Endpoint:**
+- `GET /api/v1/strategies/{id}/decisions` — JWT-protected
+- Returns buffer contents for today; supports `?date=YYYY-MM-DD` param for historical queries (routes to store for non-today dates, buffer for today)
+- `AppState.telemetry_store` wired in server lifespan
+
+**Frontend (`features/orchestrator/StrategyDecisionStream`):**
+- TanStack Query hook (`useStrategyDecisions`) with 3-second polling
+- Color-coded two-line event rows (PASS=green, FAIL=red, INFO=amber, signals=blue)
+- Symbol filter dropdown, summary stats, expandable metadata
+- Slide-out panel on Orchestrator page with AnimatePresence animation + Esc key close
+- "View Decisions" button on strategy cards opens panel; optional `onViewDecisions` callback prop on `StrategyOperationsCard` and `StrategyOperationsGrid`
+
+**Instrumentation Coverage:** All 4 strategies emit evaluation events at every decision point (OR accumulation, finalization, exclusion checks, entry conditions, signal generation, quality scoring). AfMo `_check_breakout_entry()` restructured from sequential early-return to evaluate-all-then-check pattern to support 8 individual `CONDITION_CHECK` events.
+
 ### 3.5 Risk Manager (`core/risk_manager.py`)
 
 Every order passes through the Risk Manager before reaching the broker.
@@ -1073,7 +1104,7 @@ Orchestrates catalyst ingestion, classification, and storage from three data sou
 **Data Sources:**
 - `SECEdgarSource` (`intelligence/catalyst/sources/sec_edgar.py`): 8-K filings, Form 4 insider transactions
 - `FMPNewsSource` (`intelligence/catalyst/sources/fmp_news.py`): Stock news, press releases
-- `FinnhubSource` (`intelligence/catalyst/sources/finnhub.py`): Company news, analyst recommendations (DEC-306)
+- `FinnhubSource` (`intelligence/catalyst/sources/finnhub.py`): Company news, analyst recommendations (DEC-306). Finnhub 403 responses downgraded from ERROR to WARNING with per-cycle request/403 counters and cycle summary log (Sprint 24.5 S6).
 
 **Core Components:**
 - `CatalystClassifier` (`intelligence/catalyst/classifier.py`): Claude API classification with rule-based fallback (DEC-301). Categories: earnings, insider, guidance, analyst, regulatory, partnership, product, restructuring, other.
@@ -1149,7 +1180,7 @@ Interface:
 Anthropic API integration. All calls use Claude Opus (DEC-098). Prompt caching for system context.
 
 #### ContextBuilder (`ai/context_builder.py`)
-Assembles system state for Claude. Page-specific context payloads for Copilot.
+Assembles system state for Claude. Page-specific context payloads for Copilot. Insight data includes `session_status` (pre_market/open/closed), `session_elapsed_minutes` (from 9:30 ET), and `minutes_until_open` — replaces previous binary open/closed market status (Sprint 24.5 S6).
 
 Interface:
 - `build_context(page: str, selected_entity: dict | None) -> SystemContext`

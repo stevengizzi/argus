@@ -1,7 +1,7 @@
 # ARGUS — Sprint History
 
 > Complete record of all sprints from project inception through current state.
-> Active development began February 14, 2026. As of March 14, 2026 (~29 calendar days), 24 full sprints + sub-sprints (including 24.1) completed.
+> Active development began February 14, 2026. As of March 16, 2026 (~31 calendar days), 24 full sprints + sub-sprints (including 24.5) completed.
 
 ---
 
@@ -15,6 +15,7 @@
 | D — Command Center + Strategies | 14–20 | Feb 23–26 | Frontend, Orchestrator, 3 new strategies |
 | E — Seven-Page Architecture + Live | 21a–21.5 | Feb 27–Mar 5 | Full UI, live integration |
 | F–K — AI + Intelligence + Quality | 22–24.1 | Mar 6–14 | AI Copilot, NLP Catalyst, Universe Manager, Quality Engine, Housekeeping |
+| M — Strategy Observability | 24.5 | Mar 15–16 | Evaluation telemetry, operational fixes |
 
 ---
 
@@ -757,15 +758,96 @@
 **TS errors:** 22 → 0
 **Notes:** Housekeeping-only sprint consuming accumulated DEF items from Sprint 24 reviews. S4f expanded beyond original 0.5-session contingency scope to cover 8 visual fixes (all frontend CSS/layout/animation, zero backend impact). All DEF-050 through DEF-062 resolved. No new DEF items assigned. Ready for Phase 5 Gate (Sprint 24.5).
 
+### Sprint 24.5 — Strategy Observability + Operational Fixes (2,768 pytest + 523 Vitest, +59/+20)
+**Date:** March 15–16, 2026
+**Scope:** Real-time and historical visibility into what every strategy evaluates on every candle, so that paper trading validation produces actionable diagnostic data even when zero trades occur. Plus three operational fixes discovered during live QA.
+
+**Session 1 (S1): Telemetry Infrastructure**
+- Created `StrategyEvaluationBuffer` (ring buffer, maxlen=1000) on `BaseStrategy`
+- Defined `EvaluationEventType` (9 types) and `EvaluationResult` (3 types) StrEnums
+- `record_evaluation()` with try/except guard (never raises)
+- REST endpoint `GET /api/v1/strategies/{id}/decisions` (JWT-protected)
+- DEC-342: Strategy evaluation telemetry — ring buffer, no EventBus
+- 7 new pytest tests
+
+**Session 2 (S2): ORB Family Instrumentation**
+- Instrumented OrbBaseStrategy and OrbBreakoutStrategy with evaluation events
+- OR accumulation, finalization, exclusion checks, entry conditions, signal generation
+- Per-failure-mode ENTRY_EVALUATION events for diagnostic granularity
+- 11 new pytest tests
+
+**Session 3 (S3): VWAP + AfMo Instrumentation**
+- Instrumented VwapReclaimStrategy and AfternoonMomentumStrategy
+- AfMo `_check_breakout_entry()` restructured from sequential early-return to evaluate-all-then-check pattern for 8 individual CONDITION_CHECK events
+- 3 informational-only conditions (body_ratio, spread_range, time_remaining) — emit PASS/FAIL but do not gate signal
+- 17 new pytest tests
+
+**Session 3.5 (S3.5): Event Persistence**
+- `EvaluationEventStore` — SQLite persistence with 7-day retention (ET-date cleanup)
+- Fire-and-forget async forwarding from buffer to store via `loop.create_task()`
+- REST endpoint supports `?date=` param for historical queries (routes to store for non-today dates, buffer for today)
+- `AppState.telemetry_store` wired in server lifespan with `close()` resource cleanup
+- 11 new pytest tests
+
+**Session 4 (S4): Frontend Decision Stream**
+- `StrategyDecisionStream` component with TanStack Query hook (`useStrategyDecisions`, 3s polling)
+- Color-coded event rows (PASS=green, FAIL=red, INFO=amber, signals=blue)
+- Symbol filter, summary stats, expandable metadata
+- Error state rendering
+- 10 new Vitest tests
+
+**Session 4a-fix (S4a): Frontend Type Fix**
+- Fixed response type mismatch: changed frontend from `StrategyDecisionsResponse` wrapper to `EvaluationEvent[]` bare array
+- Summary stats derived from filtered events (was unfiltered)
+- 4 new Vitest tests
+
+**Session 5 (S5): Orchestrator Integration**
+- "View Decisions" button on strategy cards opens slide-out panel
+- Optional `onViewDecisions` callback prop on `StrategyOperationsCard` and `StrategyOperationsGrid` for backward compatibility
+- AnimatePresence animation on slide-out panel
+- 4 new Vitest tests
+
+**Session 5f (S5f): Visual Fixes — Round 1**
+- 3-column container y-values aligned (min-h-10 on CardHeader)
+- Strategy card heights made consistent (fullHeight + flex layout + mt-auto footer)
+- Dropdown chevron padding fix (pl-2 pr-8)
+- 3 new pytest tests
+
+**Session 5f-fix (S5f-fix): MockStrategy + Card Height Fix**
+- Added `eval_buffer` field to MockStrategy in `dev_state.py` with mock event seeding
+- Fixed 3-column card heights (h-full flex flex-col + Card flex-1)
+- 2 new Vitest tests
+
+**Session 5f-fix2 (S5f-fix2): Esc Key, Two-Line Rows, Filter Bugs**
+- Esc key closes slide-out panel (useEffect keydown listener in OrchestratorPage)
+- Two-line event row layout (time+symbol+result / event_type+reason)
+- Removed stagger animation (caused opacity:0 bug on filtered-in items)
+- Removed server-side symbol filter (caused dropdown to lose options)
+- Replaced max-h-96 with flex-1 min-h-0 for event list fill
+- 1 new pytest test
+
+**Session 6 (S6): Operational Fixes**
+- AI insight data enriched with `session_status`, `session_elapsed_minutes`, `minutes_until_open` (replaces binary open/closed)
+- Finnhub 403 responses downgraded from ERROR to WARNING with per-cycle counters and summary log
+- FMP circuit breaker (DEC-323) dedicated test coverage added
+- 2 new pytest tests
+
+**Key decisions:** DEC-342 (strategy evaluation telemetry)
+**Sessions:** 11 (S1, S2, S3, S3.5, S4, S4a-fix, S5, S5f, S5f-fix, S5f-fix2, S6)
+**Test counts:** pytest 2,709 → 2,768 (+59), Vitest 503 → 523 (+20) = 79 new tests total
+**Review verdicts:** S1 CLEAR, S2 CLEAR, S3 CONCERNS (accepted — AfMo restructure necessary), S3.5 CLEAR, S4 CONCERNS (resolved S4a), S5 CLEAR, S6 CLEAR
+**DEF items:** None created — all 18 tracked issues resolved in-sprint
+**Notes:** Observability sprint focused on paper trading diagnostic value. The evaluation telemetry system is intentionally separated from the EventBus to avoid flooding subscribers with ~200 diagnostic events per candle across 4 strategies. AfMo's `_check_breakout_entry()` restructure was the only non-additive change — necessary to emit 8 individual condition check events per the sprint spec.
+
 ---
 
 ## Sprint Statistics
 
-- **Total sprints:** 24 full + 19 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1)
-- **Total sessions:** ~305+ Claude Code sessions
-- **Total tests:** 2,709 pytest + 503 Vitest = 3,212 total
-- **Total decisions:** 341 (DEC-001 through DEC-341)
-- **Calendar days (active dev):** ~29 (Feb 14 – Mar 14, 2026)
+- **Total sprints:** 24 full + 20 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5)
+- **Total sessions:** ~316+ Claude Code sessions
+- **Total tests:** 2,768 pytest + 523 Vitest = 3,291 total
+- **Total decisions:** 342 (DEC-001 through DEC-342)
+- **Calendar days (active dev):** ~31 (Feb 14 – Mar 16, 2026)
 - **Largest sprint:** 22 (9 implementation + 5 fix + 9 reviews, largest scope)
 - **Cleanest sprint:** 23 (11 sessions, 0 regressions, 0 scope gaps requiring follow-up)
 - **Most test-dense:** Sprint 22 (286 new tests), Sprint 24 (209 new tests), Sprint 23.2 (188 new tests), Sprint 23 (141 new tests across 23+23.05)

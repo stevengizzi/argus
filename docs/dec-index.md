@@ -1,7 +1,7 @@
 # ARGUS — Decision Index
 
-> 341 decisions (DEC-001 through DEC-341)
-> Generated: March 14, 2026 | Source: `docs/decision-log.md`
+> 342 decisions (DEC-001 through DEC-342)
+> Generated: March 16, 2026 | Source: `docs/decision-log.md`
 > Legend: ● Active | ○ Superseded | △ Amended | ✗ Duplicate entry
 
 
@@ -382,3 +382,7 @@
 - ● **DEC-339**: Quality API Routes (3 Endpoints) — `GET /{symbol}` latest score, `GET /history` paginated, `GET /distribution` grade distribution; quality router registered
 - ● **DEC-340**: Quality UI — QualityBadge + Hooks + Trades Integration — QualityBadge component with grade coloring + tooltip; 3 TanStack Query hooks; quality column in Trades; Setup Quality in TradeDetailPanel
 - ● **DEC-341**: Quality UI — Dashboard + Orchestrator + Performance + Debrief Panels — QualityDistributionCard (donut), SignalQualityPanel (histogram), RecentSignals list, QualityGradeChart (grouped bars), QualityOutcomeScatter (scatter + trend line); shared GRADE_COLORS/GRADE_ORDER constants
+
+## Phase M — Strategy Observability (Sprint 24.5)
+
+- ● **DEC-342**: Strategy Evaluation Telemetry — in-memory ring buffer (maxlen=1000), no EventBus integration, ET naive timestamps per DEC-276, REST endpoint GET /strategies/{id}/decisions, SQLite persistence with 7-day retention, StrategyDecisionStream frontend component
