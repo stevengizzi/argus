@@ -12,6 +12,7 @@ from __future__ import annotations
 import pytest
 
 from argus.api.dev_state import create_dev_state
+from argus.strategies.telemetry import StrategyEvaluationBuffer
 
 
 @pytest.mark.asyncio
@@ -129,3 +130,20 @@ async def test_dev_state_strategies_have_distinct_families() -> None:
     assert expected_families.issubset(
         families
     ), f"Missing expected families. Expected {expected_families}, got {families}"
+
+
+@pytest.mark.asyncio
+async def test_dev_state_mock_strategies_have_eval_buffer() -> None:
+    """Each MockStrategy has an eval_buffer with seeded events."""
+    state = await create_dev_state()
+
+    for strategy_id, strategy in state.strategies.items():
+        assert hasattr(strategy, "eval_buffer"), (
+            f"Strategy {strategy_id} missing eval_buffer attribute"
+        )
+        assert isinstance(strategy.eval_buffer, StrategyEvaluationBuffer), (
+            f"Strategy {strategy_id} eval_buffer is not a StrategyEvaluationBuffer"
+        )
+        assert len(strategy.eval_buffer) > 0, (
+            f"Strategy {strategy_id} eval_buffer should have seeded events"
+        )

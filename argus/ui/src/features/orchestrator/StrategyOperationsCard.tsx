@@ -107,8 +107,8 @@ export function StrategyOperationsCard({ allocation, onViewDecisions }: Strategy
   const isPending = pauseMutation.isPending || resumeMutation.isPending;
 
   return (
-    <Card className={`border-l-4 ${borderClass}`}>
-      <div className="space-y-3">
+    <Card className={`border-l-4 ${borderClass}`} fullHeight>
+      <div className="space-y-3 flex-1 flex flex-col">
         {/* Header row */}
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
@@ -237,7 +237,7 @@ export function StrategyOperationsCard({ allocation, onViewDecisions }: Strategy
 
         {/* Operating window */}
         {hasWindow && (
-          <div className="flex items-center justify-between text-xs border-t border-argus-border pt-2">
+          <div className="flex items-center justify-between text-xs border-t border-argus-border pt-2 mt-auto">
             <span className="text-argus-text-dim">
               {formatWindowTime(allocation.operating_window!.earliest_entry)} –{' '}
               {formatWindowTime(allocation.operating_window!.latest_entry)} ET

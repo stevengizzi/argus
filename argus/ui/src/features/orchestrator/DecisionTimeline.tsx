@@ -18,9 +18,9 @@ export function DecisionTimeline() {
 
   if (isLoading) {
     return (
-      <div>
+      <div className="h-full flex flex-col">
         <CardHeader title="Decision Log" />
-        <Card>
+        <Card className="flex-1">
           <div className="space-y-4">
             {[1, 2, 3].map((i) => (
               <div key={i} className="flex items-start gap-3">
@@ -37,9 +37,9 @@ export function DecisionTimeline() {
 
   if (error) {
     return (
-      <div>
+      <div className="h-full flex flex-col">
         <CardHeader title="Decision Log" />
-        <Card>
+        <Card className="flex-1">
           <div className="flex flex-col items-center justify-center py-8 text-center">
             <p className="text-argus-warning mb-2 text-sm">
               Unable to load decisions
@@ -59,12 +59,12 @@ export function DecisionTimeline() {
   );
 
   return (
-    <div>
+    <div className="h-full flex flex-col">
       <CardHeader
         title="Decision Log"
         subtitle={decisions.length > 0 ? `${decisions.length} today · newest first` : undefined}
       />
-      <Card>
+      <Card className="flex-1">
         {decisions.length === 0 ? (
           <EmptyState
             icon={ClipboardList}

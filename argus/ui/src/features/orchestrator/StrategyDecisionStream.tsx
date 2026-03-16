@@ -15,6 +15,7 @@ import { CardHeader } from '../../components/CardHeader';
 import { useStrategyDecisions } from '../../hooks/useStrategyDecisions';
 import type { EvaluationEvent } from '../../hooks/useStrategyDecisions';
 import { staggerContainer, staggerItem } from '../../utils/motion';
+import { getStrategyDisplay } from '../../utils/strategyConfig';
 
 interface StrategyDecisionStreamProps {
   strategyId: string;
@@ -116,6 +117,7 @@ function EventRow({ event }: { event: EvaluationEvent }) {
 }
 
 export function StrategyDecisionStream({ strategyId, onClose }: StrategyDecisionStreamProps) {
+  const displayName = getStrategyDisplay(strategyId).name;
   const [symbolFilter, setSymbolFilter] = useState<string>('');
   const { data, isLoading, error } = useStrategyDecisions(strategyId, {
     symbol: symbolFilter || undefined,
@@ -147,7 +149,7 @@ export function StrategyDecisionStream({ strategyId, onClose }: StrategyDecision
   return (
     <div data-testid="strategy-decision-stream">
       <CardHeader
-        title={strategyId}
+        title={displayName}
         action={
           <button
             onClick={onClose}
@@ -165,7 +167,7 @@ export function StrategyDecisionStream({ strategyId, onClose }: StrategyDecision
           <select
             value={symbolFilter}
             onChange={(e) => setSymbolFilter(e.target.value)}
-            className="text-xs bg-argus-surface-2 border border-argus-border rounded px-2 py-1 text-argus-text"
+            className="text-xs bg-argus-surface-2 border border-argus-border rounded pl-2 pr-8 py-1 text-argus-text"
             data-testid="symbol-filter"
           >
             <option value="">All symbols</option>

@@ -13,7 +13,7 @@ import os
 import random
 import tempfile
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
 from argus.analytics.debrief_service import DebriefService
@@ -39,6 +39,12 @@ from argus.core.config import (
     VwapReclaimConfig,
 )
 from argus.core.event_bus import EventBus
+from argus.strategies.telemetry import (
+    EvaluationEvent,
+    EvaluationEventType,
+    EvaluationResult,
+    StrategyEvaluationBuffer,
+)
 from argus.core.health import ComponentStatus, HealthMonitor
 from argus.core.regime import MarketRegime, RegimeIndicators
 from argus.core.risk_manager import RiskManager
@@ -77,6 +83,7 @@ class MockStrategy:
     consecutive_losses: int = 0
     rolling_sharpe: float | None = None
     drawdown_pct: float = 0.0
+    eval_buffer: StrategyEvaluationBuffer = field(default_factory=StrategyEvaluationBuffer)
 
     @property
     def _is_active(self) -> bool:
@@ -1050,6 +1057,57 @@ async def _seed_orchestrator_decisions(trade_logger: TradeLogger, now: datetime)
         details={"regime": "bullish_trending", "total_pnl": 1250.50, "trade_count": 14},
         rationale="End of day review: +$1,250.50 across 14 trades",
     )
+
+
+def _seed_eval_events(strategy: MockStrategy, now: datetime) -> None:
+    """Seed a few mock evaluation events into a strategy's eval_buffer.
+
+    Provides realistic Decision Stream data in dev mode.
+
+    Args:
+        strategy: The MockStrategy instance to seed.
+        now: Current timestamp for realistic event times.
+    """
+    events = [
+        EvaluationEvent(
+            timestamp=now - timedelta(minutes=12),
+            symbol="TSLA",
+            strategy_id=strategy.strategy_id,
+            event_type=EvaluationEventType.TIME_WINDOW_CHECK,
+            result=EvaluationResult.FAIL,
+            reason="Outside strategy operating window",
+            metadata={"window_start": "09:35", "window_end": "10:30"},
+        ),
+        EvaluationEvent(
+            timestamp=now - timedelta(minutes=8),
+            symbol="NVDA",
+            strategy_id=strategy.strategy_id,
+            event_type=EvaluationEventType.CONDITION_CHECK,
+            result=EvaluationResult.PASS,
+            reason="Volume above threshold (2.3x avg)",
+            metadata={"volume_ratio": 2.3, "threshold": 1.5},
+        ),
+        EvaluationEvent(
+            timestamp=now - timedelta(minutes=5),
+            symbol="NVDA",
+            strategy_id=strategy.strategy_id,
+            event_type=EvaluationEventType.ENTRY_EVALUATION,
+            result=EvaluationResult.FAIL,
+            reason="Price below VWAP — no long entry",
+            metadata={"price": 142.50, "vwap": 143.10},
+        ),
+        EvaluationEvent(
+            timestamp=now - timedelta(minutes=2),
+            symbol="AAPL",
+            strategy_id=strategy.strategy_id,
+            event_type=EvaluationEventType.SIGNAL_GENERATED,
+            result=EvaluationResult.PASS,
+            reason="All entry conditions met",
+            metadata={"entry_price": 188.45, "stop": 187.20, "target_1": 189.70},
+        ),
+    ]
+    for event in events:
+        strategy.eval_buffer.record(event)
 
 
 def _create_mock_orchestrator(now: datetime) -> MockOrchestrator:
@@ -2126,6 +2184,12 @@ async def create_dev_state() -> AppState:
         rolling_sharpe=1.42,
         drawdown_pct=0.012,
     )
+
+    # Seed evaluation events into each strategy's buffer for dev mode
+    _seed_eval_events(mock_orb_breakout, now)
+    _seed_eval_events(mock_orb_scalp, now)
+    _seed_eval_events(mock_vwap_reclaim, now)
+    _seed_eval_events(mock_afternoon_momentum, now)
 
     # Mock orchestrator
     mock_orchestrator = _create_mock_orchestrator(now)

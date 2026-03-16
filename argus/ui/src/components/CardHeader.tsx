@@ -8,7 +8,7 @@ interface CardHeaderProps {
 
 export function CardHeader({ title, subtitle, action, icon, badge }: CardHeaderProps) {
   return (
-    <div className="flex items-center justify-between mb-3">
+    <div className="flex items-center justify-between mb-3 min-h-10">
       <div className="flex items-center gap-2">
         {icon && <span>{icon}</span>}
         <div>

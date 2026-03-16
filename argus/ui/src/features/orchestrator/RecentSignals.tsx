@@ -30,9 +30,9 @@ export function RecentSignals() {
 
   if (isLoading) {
     return (
-      <div>
+      <div className="h-full flex flex-col">
         <CardHeader title="Recent Signals" />
-        <Card>
+        <Card className="flex-1">
           <div className="space-y-2">
             {Array.from({ length: 4 }).map((_, i) => (
               <div key={i} className="h-8 bg-argus-surface-2 rounded animate-pulse" />
@@ -47,9 +47,9 @@ export function RecentSignals() {
 
   if (signals.length === 0) {
     return (
-      <div>
+      <div className="h-full flex flex-col">
         <CardHeader title="Recent Signals" />
-        <Card>
+        <Card className="flex-1">
           <div
             className="flex items-center justify-center h-32"
             data-testid="recent-signals-empty"
@@ -62,12 +62,12 @@ export function RecentSignals() {
   }
 
   return (
-    <div>
+    <div className="h-full flex flex-col">
       <CardHeader
         title="Recent Signals"
         subtitle={`${signals.length} scored`}
       />
-      <Card>
+      <Card className="flex-1">
         <div className="space-y-1" data-testid="recent-signals-list">
           {signals.map((signal, idx) => {
             const strategyDisplay = signal.strategy_id

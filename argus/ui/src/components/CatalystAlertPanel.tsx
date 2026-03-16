@@ -114,7 +114,7 @@ export function CatalystAlertPanel() {
   const isStale = dataUpdatedAt ? Date.now() - dataUpdatedAt > 60_000 : false;
 
   return (
-    <div>
+    <div className="h-full flex flex-col">
       <CardHeader
         title="Catalyst Alerts"
         icon={<AlertCircle className="w-4 h-4" />}
@@ -125,7 +125,7 @@ export function CatalystAlertPanel() {
           />
         }
       />
-      <Card>
+      <Card className="flex-1">
         {/* Scrollable content area */}
         <div className="max-h-[300px] overflow-y-auto -mx-4 -mb-4">
         {isLoading && (
