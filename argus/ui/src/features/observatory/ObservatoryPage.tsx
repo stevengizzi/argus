@@ -11,6 +11,7 @@
 import { useState, useCallback } from 'react';
 import { ObservatoryLayout } from './ObservatoryLayout';
 import { ShortcutOverlay } from './ShortcutOverlay';
+import { MatrixView } from './views/MatrixView';
 import {
   useObservatoryKeyboard,
   type ObservatoryView,
@@ -49,6 +50,36 @@ export function ObservatoryPage() {
 
   const handleDeselectSymbol = useCallback(() => setSelectedSymbol(null), []);
   const handleSelectTier = useCallback((index: number) => setSelectedTierIndex(index), []);
+  const handleSelectSymbol = useCallback((symbol: string) => setSelectedSymbol(symbol), []);
+
+  function renderView() {
+    if (currentView === 'matrix') {
+      return (
+        <MatrixView
+          selectedTier={selectedTierIndex}
+          selectedSymbol={selectedSymbol}
+          onSelectSymbol={handleSelectSymbol}
+        />
+      );
+    }
+
+    // Placeholder for views not yet implemented
+    return (
+      <div
+        className="flex items-center justify-center h-full"
+        data-testid={`view-${currentView}`}
+      >
+        <div className="text-center">
+          <p className="text-lg font-semibold text-argus-text" data-testid="active-view-label">
+            {VIEW_LABELS[currentView]}
+          </p>
+          <p className="text-xs text-argus-text-dim mt-1">
+            Press F/M/R/T to switch views
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -62,20 +93,7 @@ export function ObservatoryPage() {
         selectedSymbol={selectedSymbol}
         onDeselectSymbol={handleDeselectSymbol}
       >
-        {/* View placeholder — replaced with actual views in later sessions */}
-        <div
-          className="flex items-center justify-center h-full"
-          data-testid={`view-${currentView}`}
-        >
-          <div className="text-center">
-            <p className="text-lg font-semibold text-argus-text" data-testid="active-view-label">
-              {VIEW_LABELS[currentView]}
-            </p>
-            <p className="text-xs text-argus-text-dim mt-1">
-              Press 1-4 to switch views
-            </p>
-          </div>
-        </div>
+        {renderView()}
       </ObservatoryLayout>
 
       {/* Shortcut help overlay */}

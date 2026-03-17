@@ -708,6 +708,30 @@ export interface CatalystsBySymbolResponse {
   symbol: string;
 }
 
+// Observatory (Sprint 25)
+export interface ObservatoryConditionDetail {
+  name: string;
+  passed: boolean;
+  actual_value: string | number | boolean | null;
+  required_value: string | number | boolean | null;
+}
+
+export interface ObservatoryClosestMissEntry {
+  symbol: string;
+  strategy: string;
+  conditions_passed: number;
+  conditions_total: number;
+  conditions_detail: ObservatoryConditionDetail[];
+  timestamp: string | null;
+}
+
+export interface ObservatoryClosestMissesResponse {
+  tier: string;
+  items: ObservatoryClosestMissEntry[];
+  count: number;
+  timestamp: string;
+}
+
 // Strategy Decisions (Sprint 24.5)
 export interface EvaluationEvent {
   timestamp: string;

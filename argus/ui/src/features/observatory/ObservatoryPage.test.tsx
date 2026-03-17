@@ -24,6 +24,12 @@ vi.mock('../../api/client', () => ({
     },
     timestamp: '2026-03-17T14:30:00Z',
   }),
+  getObservatoryClosestMisses: vi.fn().mockResolvedValue({
+    tier: 'universe',
+    items: [],
+    count: 0,
+    timestamp: '2026-03-17T14:30:00Z',
+  }),
 }));
 
 function createWrapper() {
@@ -59,12 +65,17 @@ describe('ObservatoryPage', () => {
     expect(screen.getByTestId('active-view-label')).toHaveTextContent('Funnel View');
   });
 
-  it('switches views when pressing f/m/r/t', () => {
+  it('switches views when pressing f/m/r/t', async () => {
     render(<ObservatoryPage />, { wrapper: createWrapper() });
 
+    // Matrix view renders its own component (not the placeholder)
     fireEvent.keyDown(window, { key: 'm' });
-    expect(screen.getByTestId('active-view-label')).toHaveTextContent('Matrix View');
+    await waitFor(() => {
+      // MatrixView renders matrix-empty or matrix-loading — not the placeholder label
+      expect(screen.queryByTestId('active-view-label')).not.toBeInTheDocument();
+    });
 
+    // Other views still use placeholder
     fireEvent.keyDown(window, { key: 't' });
     expect(screen.getByTestId('active-view-label')).toHaveTextContent('Timeline View');
 
