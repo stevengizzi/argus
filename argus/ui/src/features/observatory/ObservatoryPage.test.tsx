@@ -10,6 +10,15 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ObservatoryPage } from './ObservatoryPage';
 
+// Mock the FunnelView lazy import — Three.js is not available in jsdom
+vi.mock('./views/FunnelView', () => ({
+  FunnelView: vi.fn().mockImplementation(
+    ({ selectedTier }: { selectedTier: number }) => (
+      <div data-testid="funnel-view" data-selected-tier={selectedTier} />
+    ),
+  ),
+}));
+
 // Mock the API client
 vi.mock('../../api/client', () => ({
   getToken: () => 'mock-token',
@@ -61,9 +70,11 @@ describe('ObservatoryPage', () => {
     expect(screen.getByTestId('observatory-page')).toBeInTheDocument();
   });
 
-  it('defaults to funnel view', () => {
+  it('defaults to funnel view', async () => {
     render(<ObservatoryPage />, { wrapper: createWrapper() });
-    expect(screen.getByTestId('active-view-label')).toHaveTextContent('Funnel View');
+    await waitFor(() => {
+      expect(screen.getByTestId('funnel-view')).toBeInTheDocument();
+    });
   });
 
   it('switches views when pressing f/m/r/t', async () => {
@@ -84,7 +95,9 @@ describe('ObservatoryPage', () => {
     expect(screen.getByTestId('active-view-label')).toHaveTextContent('Radar View');
 
     fireEvent.keyDown(window, { key: 'f' });
-    expect(screen.getByTestId('active-view-label')).toHaveTextContent('Funnel View');
+    await waitFor(() => {
+      expect(screen.getByTestId('funnel-view')).toBeInTheDocument();
+    });
   });
 
   it('does not switch view when pressing numeric keys 1-4', () => {
@@ -96,7 +109,7 @@ describe('ObservatoryPage', () => {
     fireEvent.keyDown(window, { key: '4' });
 
     // Should remain on default Funnel view
-    expect(screen.getByTestId('active-view-label')).toHaveTextContent('Funnel View');
+    expect(screen.getByTestId('funnel-view')).toBeInTheDocument();
   });
 
   it('navigates tiers with [ and ] keys', () => {
@@ -144,7 +157,7 @@ describe('ObservatoryPage', () => {
     fireEvent.keyDown(input, { key: 'm' });
 
     // Should still show Funnel (default), not Matrix
-    expect(screen.getByTestId('active-view-label')).toHaveTextContent('Funnel View');
+    expect(screen.getByTestId('funnel-view')).toBeInTheDocument();
   });
 
   it('renders all 7 tier pills', () => {

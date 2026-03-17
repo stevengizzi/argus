@@ -8,7 +8,7 @@
  * Sprint 25 — Page 8 in Command Center.
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, lazy, Suspense } from 'react';
 import { ObservatoryLayout } from './ObservatoryLayout';
 import { ShortcutOverlay } from './ShortcutOverlay';
 import { MatrixView } from './views/MatrixView';
@@ -16,6 +16,11 @@ import {
   useObservatoryKeyboard,
   type ObservatoryView,
 } from './hooks/useObservatoryKeyboard';
+import type { FunnelViewHandle } from './views/FunnelView';
+
+const LazyFunnelView = lazy(() =>
+  import('./views/FunnelView').then((m) => ({ default: m.FunnelView }))
+);
 
 const VIEW_LABELS: Record<ObservatoryView, string> = {
   funnel: 'Funnel View',
@@ -31,8 +36,13 @@ export function ObservatoryPage() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
 
+  const funnelRef = useRef<FunnelViewHandle>(null);
+
   // Placeholder symbols — will come from API tier data in later sessions
   const symbols: string[] = [];
+
+  const handleResetCamera = useCallback(() => funnelRef.current?.resetCamera(), []);
+  const handleFitView = useCallback(() => funnelRef.current?.fitView(), []);
 
   useObservatoryKeyboard({
     currentView,
@@ -46,6 +56,8 @@ export function ObservatoryPage() {
     setSearchOpen,
     shortcutHelpOpen,
     setShortcutHelpOpen,
+    onResetCamera: handleResetCamera,
+    onFitView: handleFitView,
   });
 
   const handleDeselectSymbol = useCallback(() => setSelectedSymbol(null), []);
@@ -53,6 +65,25 @@ export function ObservatoryPage() {
   const handleSelectSymbol = useCallback((symbol: string) => setSelectedSymbol(symbol), []);
 
   function renderView() {
+    if (currentView === 'funnel') {
+      return (
+        <Suspense
+          fallback={
+            <div className="flex items-center justify-center h-full">
+              <p className="text-sm text-argus-text-dim">Loading 3D view…</p>
+            </div>
+          }
+        >
+          <LazyFunnelView
+            ref={funnelRef}
+            selectedTier={selectedTierIndex}
+            selectedSymbol={selectedSymbol}
+            onSelectSymbol={handleSelectSymbol}
+          />
+        </Suspense>
+      );
+    }
+
     if (currentView === 'matrix') {
       return (
         <MatrixView

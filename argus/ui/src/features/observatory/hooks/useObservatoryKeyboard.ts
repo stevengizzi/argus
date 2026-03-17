@@ -48,6 +48,8 @@ interface ObservatoryKeyboardState {
   setSearchOpen: (open: boolean) => void;
   shortcutHelpOpen: boolean;
   setShortcutHelpOpen: (open: boolean) => void;
+  onResetCamera?: () => void;
+  onFitView?: () => void;
 }
 
 export function useObservatoryKeyboard({
@@ -62,6 +64,8 @@ export function useObservatoryKeyboard({
   setSearchOpen,
   shortcutHelpOpen,
   setShortcutHelpOpen,
+  onResetCamera,
+  onFitView,
 }: ObservatoryKeyboardState): void {
   const handleTierNav = useCallback(
     (direction: -1 | 1) => {
@@ -172,6 +176,17 @@ export function useObservatoryKeyboard({
         return;
       }
 
+      // Camera controls (Shift+R / Shift+F) — only in funnel/radar views
+      const is3dView = currentView === 'funnel' || currentView === 'radar';
+      if (is3dView && e.key === 'R' && e.shiftKey) {
+        onResetCamera?.();
+        return;
+      }
+      if (is3dView && e.key === 'F' && e.shiftKey) {
+        onFitView?.();
+        return;
+      }
+
     };
 
     window.addEventListener('keydown', handleKeyDown);
@@ -189,6 +204,8 @@ export function useObservatoryKeyboard({
     setSearchOpen,
     shortcutHelpOpen,
     setShortcutHelpOpen,
+    onResetCamera,
+    onFitView,
   ]);
 }
 
