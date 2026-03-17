@@ -87,12 +87,16 @@ describe('ObservatoryPage', () => {
       expect(screen.queryByTestId('active-view-label')).not.toBeInTheDocument();
     });
 
-    // Other views still use placeholder
+    // Timeline still uses placeholder
     fireEvent.keyDown(window, { key: 't' });
     expect(screen.getByTestId('active-view-label')).toHaveTextContent('Timeline View');
 
+    // Radar shares scene with funnel — renders funnel-view, not placeholder
     fireEvent.keyDown(window, { key: 'r' });
-    expect(screen.getByTestId('active-view-label')).toHaveTextContent('Radar View');
+    await waitFor(() => {
+      expect(screen.getByTestId('funnel-view')).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('active-view-label')).not.toBeInTheDocument();
 
     fireEvent.keyDown(window, { key: 'f' });
     await waitFor(() => {

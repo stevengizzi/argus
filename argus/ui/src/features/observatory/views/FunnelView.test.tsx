@@ -121,6 +121,7 @@ vi.mock('three', () => {
   return {
     Scene: class {
       add() {}
+      remove() {}
       clear() {}
     },
     PerspectiveCamera: class {

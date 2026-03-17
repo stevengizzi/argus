@@ -9,12 +9,21 @@
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
+import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import {
   FunnelSymbolManager,
   type FunnelSymbolManagerCallbacks,
   type SymbolTierData,
 } from './FunnelSymbolManager';
+import {
+  type CameraMode,
+  FUNNEL_PRESET,
+  RADAR_PRESET,
+  TRANSITION_DURATION_MS,
+  easeOutCubic,
+  FUNNEL_ORBIT,
+  RADAR_ORBIT,
+} from './useCameraTransition';
 
 /** Tier definition: name, vertical position, disc radius, color. */
 interface TierDef {
@@ -46,6 +55,25 @@ const DEFAULT_CAMERA_TARGET = new THREE.Vector3(0, 3, 0);
 
 const ANIMATE_DURATION_MS = 600;
 
+/** Build a styled CSS2DObject label for radar-mode tier rings. */
+function createRadarLabel(text: string, color: string): CSS2DObject {
+  const div = document.createElement('div');
+  div.style.color = color;
+  div.style.fontSize = '11px';
+  div.style.fontFamily = 'monospace';
+  div.style.fontWeight = '600';
+  div.style.textTransform = 'uppercase';
+  div.style.letterSpacing = '0.05em';
+  div.style.opacity = '0';
+  div.style.transition = 'none';
+  div.style.pointerEvents = 'none';
+  div.style.textShadow = '0 0 4px rgba(0,0,0,0.8)';
+  div.textContent = text;
+  const obj = new CSS2DObject(div);
+  obj.visible = false;
+  return obj;
+}
+
 export class FunnelScene {
   readonly scene: THREE.Scene;
   readonly camera: THREE.PerspectiveCamera;
@@ -74,6 +102,12 @@ export class FunnelScene {
     duration: number;
   } | null = null;
 
+  private readonly radarTierLabels: CSS2DObject[] = [];
+  private radarTriggerLabel: CSS2DObject | null = null;
+  private _cameraMode: CameraMode = 'funnel';
+  private transitioning = false;
+  private onTransitionComplete: (() => void) | null = null;
+
   private disposed = false;
 
   constructor(container: HTMLElement) {
@@ -98,6 +132,7 @@ export class FunnelScene {
     this.setupLighting();
     this.createTierDiscs();
     this.createConnectingLines();
+    this.createRadarLabels();
 
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = true;
@@ -196,6 +231,46 @@ export class FunnelScene {
     return this.discMeshes.length;
   }
 
+  /** Current camera mode. */
+  get cameraMode(): CameraMode {
+    return this._cameraMode;
+  }
+
+  /** Whether a camera transition is currently in progress. */
+  get isTransitioning(): boolean {
+    return this.transitioning;
+  }
+
+  /** Smoothly transition camera to bottom-up radar perspective. */
+  transitionToRadar(onComplete?: () => void): void {
+    if (this._cameraMode === 'radar' && !this.transitioning) return;
+    this._cameraMode = 'radar';
+    this.transitioning = true;
+    this.onTransitionComplete = onComplete ?? null;
+    this.controls.enabled = false;
+    this.setRadarLabelsVisible(true);
+    this.startCameraAnimation(
+      RADAR_PRESET.position.clone(),
+      RADAR_PRESET.target.clone(),
+      TRANSITION_DURATION_MS,
+    );
+  }
+
+  /** Smoothly transition camera back to angled funnel perspective. */
+  transitionToFunnel(onComplete?: () => void): void {
+    if (this._cameraMode === 'funnel' && !this.transitioning) return;
+    this._cameraMode = 'funnel';
+    this.transitioning = true;
+    this.onTransitionComplete = onComplete ?? null;
+    this.controls.enabled = false;
+    this.setRadarLabelsVisible(false);
+    this.startCameraAnimation(
+      FUNNEL_PRESET.position.clone(),
+      FUNNEL_PRESET.target.clone(),
+      TRANSITION_DURATION_MS,
+    );
+  }
+
   /** Dispose all Three.js resources. */
   dispose(): void {
     if (this.disposed) return;
@@ -208,6 +283,14 @@ export class FunnelScene {
 
     this.controls.dispose();
     this.symbolManager.dispose();
+
+    // Clean up radar labels
+    for (const label of this.radarTierLabels) {
+      this.scene.remove(label);
+    }
+    if (this.radarTriggerLabel) {
+      this.scene.remove(this.radarTriggerLabel);
+    }
 
     for (const geo of this.geometries) geo.dispose();
     for (const mat of this.materials) mat.dispose();
@@ -308,14 +391,79 @@ export class FunnelScene {
     }
   }
 
-  private startCameraAnimation(endPos: THREE.Vector3, endTarget: THREE.Vector3): void {
+  private createRadarLabels(): void {
+    for (const tier of TIER_DEFS) {
+      const hexColor = '#' + tier.color.toString(16).padStart(6, '0');
+      const label = createRadarLabel(tier.name, hexColor);
+      // Position at the outer edge of each disc (offset on X axis)
+      label.position.x = tier.radius + 0.3;
+      label.position.y = tier.y;
+      label.position.z = 0;
+      this.scene.add(label);
+      this.radarTierLabels.push(label);
+    }
+
+    // Center TRIGGER label
+    const triggerLabel = createRadarLabel('TRIGGER', '#4caf50');
+    triggerLabel.element.style.fontSize = '13px';
+    triggerLabel.element.style.fontWeight = '700';
+    triggerLabel.position.x = 0;
+    triggerLabel.position.y = -0.3;
+    triggerLabel.position.z = 0;
+    this.scene.add(triggerLabel);
+    this.radarTriggerLabel = triggerLabel;
+  }
+
+  /** Show or hide radar labels, animating opacity. */
+  private setRadarLabelsVisible(visible: boolean): void {
+    const allLabels = [...this.radarTierLabels];
+    if (this.radarTriggerLabel) allLabels.push(this.radarTriggerLabel);
+
+    for (const label of allLabels) {
+      if (visible) {
+        label.visible = true;
+        // Opacity fade handled in updateCameraAnimation via elapsed fraction
+      }
+      // When hiding, we keep visible=true during transition and hide on completion
+    }
+  }
+
+  /** Update radar label opacity based on transition progress. */
+  private updateRadarLabelOpacity(fadeIn: boolean, progress: number): void {
+    const opacity = fadeIn ? progress : 1 - progress;
+    const opacityStr = String(Math.max(0, Math.min(1, opacity)));
+
+    const allLabels = [...this.radarTierLabels];
+    if (this.radarTriggerLabel) allLabels.push(this.radarTriggerLabel);
+
+    for (const label of allLabels) {
+      label.element.style.opacity = opacityStr;
+      if (!fadeIn && progress >= 1) {
+        label.visible = false;
+      }
+    }
+  }
+
+  /** Apply orbit control constraints for the given camera mode. */
+  private applyOrbitConstraints(mode: CameraMode): void {
+    const constraints = mode === 'radar' ? RADAR_ORBIT : FUNNEL_ORBIT;
+    this.controls.minPolarAngle = constraints.minPolarAngle;
+    this.controls.maxPolarAngle = constraints.maxPolarAngle;
+    this.controls.enableRotate = constraints.enableRotate;
+  }
+
+  private startCameraAnimation(
+    endPos: THREE.Vector3,
+    endTarget: THREE.Vector3,
+    duration?: number,
+  ): void {
     this.cameraAnimation = {
       startPos: this.camera.position.clone(),
       endPos,
       startTarget: this.controls.target.clone(),
       endTarget,
       startTime: performance.now(),
-      duration: ANIMATE_DURATION_MS,
+      duration: duration ?? ANIMATE_DURATION_MS,
     };
   }
 
@@ -324,8 +472,7 @@ export class FunnelScene {
 
     const elapsed = performance.now() - this.cameraAnimation.startTime;
     const t = Math.min(elapsed / this.cameraAnimation.duration, 1);
-    // Ease-out cubic
-    const ease = 1 - Math.pow(1 - t, 3);
+    const ease = easeOutCubic(t);
 
     this.camera.position.lerpVectors(
       this.cameraAnimation.startPos,
@@ -338,8 +485,25 @@ export class FunnelScene {
       ease,
     );
 
+    // Fade radar labels during transition
+    if (this.transitioning) {
+      const fadingIn = this._cameraMode === 'radar';
+      this.updateRadarLabelOpacity(fadingIn, ease);
+    }
+
     if (t >= 1) {
       this.cameraAnimation = null;
+
+      if (this.transitioning) {
+        this.transitioning = false;
+        this.controls.enabled = true;
+        this.applyOrbitConstraints(this._cameraMode);
+        this.controls.update();
+
+        const cb = this.onTransitionComplete;
+        this.onTransitionComplete = null;
+        cb?.();
+      }
     }
   }
 

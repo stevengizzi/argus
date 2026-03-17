@@ -64,8 +64,12 @@ export function ObservatoryPage() {
   const handleSelectTier = useCallback((index: number) => setSelectedTierIndex(index), []);
   const handleSelectSymbol = useCallback((symbol: string) => setSelectedSymbol(symbol), []);
 
+  // Funnel and radar share the same Three.js scene — camera transition only
+  const is3dView = currentView === 'funnel' || currentView === 'radar';
+  const cameraMode = currentView === 'radar' ? 'radar' : 'funnel';
+
   function renderView() {
-    if (currentView === 'funnel') {
+    if (is3dView) {
       return (
         <Suspense
           fallback={
@@ -76,6 +80,7 @@ export function ObservatoryPage() {
         >
           <LazyFunnelView
             ref={funnelRef}
+            mode={cameraMode}
             selectedTier={selectedTierIndex}
             selectedSymbol={selectedSymbol}
             onSelectSymbol={handleSelectSymbol}

@@ -13,13 +13,16 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { FunnelScene } from './three/FunnelScene';
 import { getObservatoryPipeline, getToken } from '../../../api/client';
 import type { SymbolTierData } from './three/FunnelSymbolManager';
+import type { CameraMode } from './three/useCameraTransition';
 
 export interface FunnelViewHandle {
   resetCamera: () => void;
   fitView: () => void;
+  getScene: () => FunnelScene | null;
 }
 
 interface FunnelViewProps {
+  mode?: CameraMode;
   selectedTier: number;
   selectedSymbol?: string | null;
   onSelectSymbol?: (symbol: string) => void;
@@ -33,7 +36,7 @@ interface TooltipState {
 }
 
 export const FunnelView = forwardRef<FunnelViewHandle, FunnelViewProps>(
-  function FunnelView({ selectedTier, selectedSymbol, onSelectSymbol }, ref) {
+  function FunnelView({ mode = 'funnel', selectedTier, selectedSymbol, onSelectSymbol }, ref) {
     const containerRef = useRef<HTMLDivElement>(null);
     const sceneRef = useRef<FunnelScene | null>(null);
     const [tooltip, setTooltip] = useState<TooltipState | null>(null);
@@ -45,6 +48,7 @@ export const FunnelView = forwardRef<FunnelViewHandle, FunnelViewProps>(
     useImperativeHandle(ref, () => ({
       resetCamera: () => sceneRef.current?.resetCamera(),
       fitView: () => sceneRef.current?.fitView(),
+      getScene: () => sceneRef.current,
     }));
 
     // Fetch initial pipeline data (symbols per tier)
@@ -110,6 +114,18 @@ export const FunnelView = forwardRef<FunnelViewHandle, FunnelViewProps>(
         sceneRef.current = null;
       };
     }, []);
+
+    // Transition camera when mode changes (funnel ↔ radar)
+    useEffect(() => {
+      const scene = sceneRef.current;
+      if (!scene) return;
+
+      if (mode === 'radar' && scene.cameraMode !== 'radar') {
+        scene.transitionToRadar();
+      } else if (mode === 'funnel' && scene.cameraMode !== 'funnel') {
+        scene.transitionToFunnel();
+      }
+    }, [mode]);
 
     // Forward pipeline data to symbol manager
     useEffect(() => {
