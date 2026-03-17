@@ -40,6 +40,7 @@ vi.mock('../../api/client', () => ({
     count: 0,
     timestamp: '2026-03-17T14:30:00Z',
   }),
+  getStrategyDecisions: vi.fn().mockResolvedValue([]),
 }));
 
 function createWrapper() {
@@ -87,9 +88,11 @@ describe('ObservatoryPage', () => {
       expect(screen.queryByTestId('active-view-label')).not.toBeInTheDocument();
     });
 
-    // Timeline still uses placeholder
+    // Timeline renders its own component (not the placeholder)
     fireEvent.keyDown(window, { key: 't' });
-    expect(screen.getByTestId('active-view-label')).toHaveTextContent('Timeline View');
+    await waitFor(() => {
+      expect(screen.queryByTestId('active-view-label')).not.toBeInTheDocument();
+    });
 
     // Radar shares scene with funnel — renders funnel-view, not placeholder
     fireEvent.keyDown(window, { key: 'r' });

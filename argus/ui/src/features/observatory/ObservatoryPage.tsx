@@ -12,6 +12,7 @@ import { useState, useCallback, useRef, lazy, Suspense } from 'react';
 import { ObservatoryLayout } from './ObservatoryLayout';
 import { ShortcutOverlay } from './ShortcutOverlay';
 import { MatrixView } from './views/MatrixView';
+import { TimelineView } from './views/TimelineView';
 import {
   useObservatoryKeyboard,
   type ObservatoryView,
@@ -93,6 +94,15 @@ export function ObservatoryPage() {
       return (
         <MatrixView
           selectedTier={selectedTierIndex}
+          selectedSymbol={selectedSymbol}
+          onSelectSymbol={handleSelectSymbol}
+        />
+      );
+    }
+
+    if (currentView === 'timeline') {
+      return (
+        <TimelineView
           selectedSymbol={selectedSymbol}
           onSelectSymbol={handleSelectSymbol}
         />
