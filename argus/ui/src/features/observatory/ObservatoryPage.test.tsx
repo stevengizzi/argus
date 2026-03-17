@@ -12,6 +12,7 @@ import { ObservatoryPage } from './ObservatoryPage';
 
 // Mock the API client
 vi.mock('../../api/client', () => ({
+  getToken: () => 'mock-token',
   getObservatoryPipeline: vi.fn().mockResolvedValue({
     tiers: {
       universe: { count: 3000, symbols: [] },

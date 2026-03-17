@@ -18,6 +18,7 @@ interface MatrixRowProps {
   conditionsTotal: number;
   conditions: ObservatoryConditionDetail[];
   isSelected: boolean;
+  isHighlighted?: boolean;
   onSelect: (symbol: string) => void;
 }
 
@@ -27,18 +28,22 @@ export function MatrixRow({
   conditionsTotal,
   conditions,
   isSelected,
+  isHighlighted = false,
   onSelect,
 }: MatrixRowProps) {
   return (
     <tr
       onClick={() => onSelect(symbol)}
       data-testid={`matrix-row-${symbol}`}
+      data-highlighted={isHighlighted}
       className={`
         cursor-pointer transition-colors
         ${
           isSelected
             ? 'bg-argus-accent/10 outline outline-1 outline-argus-accent/40'
-            : 'hover:bg-argus-surface-2/50'
+            : isHighlighted
+              ? 'bg-argus-surface-2/40 border-l-2 border-l-argus-accent'
+              : 'hover:bg-argus-surface-2/50'
         }
       `}
     >
