@@ -47,8 +47,8 @@ class ConditionDetail(BaseModel):
 
     name: str
     passed: bool
-    actual_value: object | None = None
-    required_value: object | None = None
+    actual_value: float | str | bool | None = None
+    required_value: float | str | bool | None = None
 
 
 class ClosestMissEntry(BaseModel):

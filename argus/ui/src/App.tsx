@@ -49,7 +49,15 @@ function App() {
           <Route path="performance" element={<PerformancePage />} />
           <Route path="patterns" element={<PatternLibraryPage />} />
           <Route path="orchestrator" element={<OrchestratorPage />} />
-          <Route path="observatory" element={<Suspense fallback={null}><ObservatoryPage /></Suspense>} />
+          <Route path="observatory" element={
+            <Suspense fallback={
+              <div className="flex items-center justify-center h-full">
+                <span className="text-sm text-argus-text-dim">Loading Observatory…</span>
+              </div>
+            }>
+              <ObservatoryPage />
+            </Suspense>
+          } />
           <Route path="debrief" element={<DebriefPage />} />
           <Route path="system" element={<SystemPage />} />
           <Route path="dev/connection" element={<ConnectionTest />} />

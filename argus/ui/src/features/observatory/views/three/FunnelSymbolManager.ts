@@ -13,24 +13,7 @@
 
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
-
-/** Tier disc definition — must match TIER_DEFS in FunnelScene.ts. */
-interface TierDef {
-  name: string;
-  y: number;
-  radius: number;
-  color: number;
-}
-
-const TIER_DEFS: TierDef[] = [
-  { name: 'Universe',     y: 6, radius: 5.0, color: 0x6b7b8d },
-  { name: 'Viable',       y: 5, radius: 4.2, color: 0x7b8d9e },
-  { name: 'Routed',       y: 4, radius: 3.4, color: 0xc9963a },
-  { name: 'Evaluating',   y: 3, radius: 2.6, color: 0x8b6bb5 },
-  { name: 'Near-trigger', y: 2, radius: 1.8, color: 0xd4a03c },
-  { name: 'Signal',       y: 1, radius: 1.0, color: 0x4caf50 },
-  { name: 'Traded',       y: 0, radius: 0.4, color: 0x66bb6a },
-];
+import { TIER_DEFS } from './constants';
 
 /** Tier name → index lookup. */
 const TIER_NAME_TO_INDEX: Record<string, number> = {

@@ -34,16 +34,15 @@ interface MatrixViewProps {
 function groupByStrategy(
   items: ObservatoryClosestMissEntry[],
 ): Map<string, ObservatoryClosestMissEntry[]> {
-  const groups = new Map<string, ObservatoryClosestMissEntry[]>();
-  for (const item of items) {
+  return items.reduce((groups, item) => {
     const existing = groups.get(item.strategy);
     if (existing) {
       existing.push(item);
     } else {
       groups.set(item.strategy, [item]);
     }
-  }
-  return groups;
+    return groups;
+  }, new Map<string, ObservatoryClosestMissEntry[]>());
 }
 
 function getColumnNames(items: ObservatoryClosestMissEntry[]): string[] {
@@ -84,6 +83,7 @@ export function MatrixView({
 
         if (highlightedSymbol === null) {
           setHighlightedSymbol(sorted[0].symbol);
+          onSelectSymbol(sorted[0].symbol);
           return;
         }
 
@@ -92,6 +92,7 @@ export function MatrixView({
         );
         if (currentIdx === -1) {
           setHighlightedSymbol(sorted[0].symbol);
+          onSelectSymbol(sorted[0].symbol);
           return;
         }
 
@@ -99,6 +100,7 @@ export function MatrixView({
           (currentIdx + direction + sorted.length) % sorted.length;
         const nextSymbol = sorted[nextIdx].symbol;
         setHighlightedSymbol(nextSymbol);
+        onSelectSymbol(nextSymbol);
 
         // Auto-scroll highlighted row into view
         if (containerRef.current) {

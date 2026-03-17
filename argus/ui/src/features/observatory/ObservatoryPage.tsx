@@ -65,6 +65,7 @@ export function ObservatoryPage() {
     setShortcutHelpOpen,
     onResetCamera: handleResetCamera,
     onFitView: handleFitView,
+    isMatrixActive: currentView === 'matrix',
   });
 
   const handleDeselectSymbol = useCallback(() => setSelectedSymbol(null), []);

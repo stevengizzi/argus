@@ -45,6 +45,8 @@ import type {
   TradeReplayResponse,
   TradesBatchResponse,
   TradesResponse,
+  ObservatoryClosestMissesResponse,
+  ObservatorySessionSummaryResponse,
   UniverseStatusResponse,
   WatchlistResponse,
 } from './types';
@@ -724,21 +726,21 @@ export async function getObservatoryClosestMisses(
   tier: string,
   limit: number = 20,
   date?: string
-): Promise<import('./types').ObservatoryClosestMissesResponse> {
+): Promise<ObservatoryClosestMissesResponse> {
   const params = new URLSearchParams();
   params.set('tier', tier);
   params.set('limit', String(limit));
   if (date) params.set('date', date);
-  return fetchWithAuth<import('./types').ObservatoryClosestMissesResponse>(
+  return fetchWithAuth<ObservatoryClosestMissesResponse>(
     `/observatory/closest-misses?${params}`
   );
 }
 
 export async function getObservatorySessionSummary(
   date?: string
-): Promise<import('./types').ObservatorySessionSummaryResponse> {
+): Promise<ObservatorySessionSummaryResponse> {
   const query = date ? `?date=${date}` : '';
-  return fetchWithAuth<import('./types').ObservatorySessionSummaryResponse>(
+  return fetchWithAuth<ObservatorySessionSummaryResponse>(
     `/observatory/session-summary${query}`
   );
 }

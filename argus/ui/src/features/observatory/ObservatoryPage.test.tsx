@@ -4,19 +4,31 @@
  * Sprint 25, Session 3.
  */
 
+import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ObservatoryPage } from './ObservatoryPage';
 
-// Mock the FunnelView lazy import — Three.js is not available in jsdom
+// Ref callbacks for camera shortcut tests
+const mockResetCamera = vi.fn();
+const mockFitView = vi.fn();
+
+// Mock the FunnelView lazy import — Three.js is not available in jsdom.
+// Uses forwardRef so the page can attach resetCamera/fitView via ref.
 vi.mock('./views/FunnelView', () => ({
-  FunnelView: vi.fn().mockImplementation(
-    ({ selectedTier }: { selectedTier: number }) => (
-      <div data-testid="funnel-view" data-selected-tier={selectedTier} />
-    ),
-  ),
+  FunnelView: React.forwardRef(function MockFunnelView(
+    { selectedTier }: { selectedTier: number },
+    ref: React.Ref<{ resetCamera: () => void; fitView: () => void; getScene: () => null }>,
+  ) {
+    React.useImperativeHandle(ref, () => ({
+      resetCamera: mockResetCamera,
+      fitView: mockFitView,
+      getScene: () => null,
+    }));
+    return <div data-testid="funnel-view" data-selected-tier={selectedTier} />;
+  }),
 }));
 
 // Mock the API client
@@ -74,6 +86,8 @@ function createWrapper() {
 describe('ObservatoryPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockResetCamera.mockClear();
+    mockFitView.mockClear();
   });
 
   it('renders the observatory page at /observatory', () => {
@@ -247,5 +261,36 @@ describe('ObservatoryPage', () => {
   it('renders session vitals bar', () => {
     render(<ObservatoryPage />, { wrapper: createWrapper() });
     expect(screen.getByTestId('session-vitals-bar')).toBeInTheDocument();
+  });
+
+  it('invokes resetCamera on Shift+R and fitView on Shift+F in funnel view', async () => {
+    render(<ObservatoryPage />, { wrapper: createWrapper() });
+
+    // Wait for funnel view to mount so the ref is attached
+    await waitFor(() => {
+      expect(screen.getByTestId('funnel-view')).toBeInTheDocument();
+    });
+
+    // Shift+R → resetCamera
+    fireEvent.keyDown(window, { key: 'R', shiftKey: true });
+    expect(mockResetCamera).toHaveBeenCalledTimes(1);
+
+    // Shift+F → fitView
+    fireEvent.keyDown(window, { key: 'F', shiftKey: true });
+    expect(mockFitView).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not invoke camera shortcuts outside 3D views', async () => {
+    render(<ObservatoryPage />, { wrapper: createWrapper() });
+
+    // Switch to matrix view
+    fireEvent.keyDown(window, { key: 'm' });
+
+    // Shift+R and Shift+F should NOT trigger camera actions
+    fireEvent.keyDown(window, { key: 'R', shiftKey: true });
+    fireEvent.keyDown(window, { key: 'F', shiftKey: true });
+
+    expect(mockResetCamera).not.toHaveBeenCalled();
+    expect(mockFitView).not.toHaveBeenCalled();
   });
 });

@@ -50,6 +50,8 @@ interface ObservatoryKeyboardState {
   setShortcutHelpOpen: (open: boolean) => void;
   onResetCamera?: () => void;
   onFitView?: () => void;
+  /** When true, Matrix view owns Tab handling — skip page-level Tab cycle. */
+  isMatrixActive?: boolean;
 }
 
 export function useObservatoryKeyboard({
@@ -66,6 +68,7 @@ export function useObservatoryKeyboard({
   setShortcutHelpOpen,
   onResetCamera,
   onFitView,
+  isMatrixActive,
 }: ObservatoryKeyboardState): void {
   const handleTierNav = useCallback(
     (direction: -1 | 1) => {
@@ -131,7 +134,8 @@ export function useObservatoryKeyboard({
       }
 
       // Symbol cycling: Tab / Shift+Tab
-      if (e.key === 'Tab') {
+      // When Matrix is active, MatrixView owns Tab (syncs highlight + selection)
+      if (e.key === 'Tab' && !isMatrixActive) {
         e.preventDefault();
         handleSymbolCycle(e.shiftKey ? -1 : 1);
         return;
@@ -176,7 +180,12 @@ export function useObservatoryKeyboard({
         return;
       }
 
-      // Camera controls (Shift+R / Shift+F) — only in funnel/radar views
+      // Camera controls (Shift+R / Shift+F) — only in funnel/radar views.
+      // Ordering note: this check runs AFTER the lowercase VIEW_KEYS lookup
+      // above. When Shift is held, e.key is uppercase ('R'/'F'), so the
+      // VIEW_KEYS match for 'r'/'f' won't fire — they are case-sensitive.
+      // This means Shift+R and Shift+F safely reach here without triggering
+      // a view switch.
       const is3dView = currentView === 'funnel' || currentView === 'radar';
       if (is3dView && e.key === 'R' && e.shiftKey) {
         onResetCamera?.();
@@ -206,6 +215,7 @@ export function useObservatoryKeyboard({
     setShortcutHelpOpen,
     onResetCamera,
     onFitView,
+    isMatrixActive,
   ]);
 }
 

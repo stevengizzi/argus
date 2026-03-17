@@ -30,13 +30,6 @@ interface ObservatoryLayoutProps {
   children: React.ReactNode;
 }
 
-const VIEW_LABELS: Record<ObservatoryView, string> = {
-  funnel: 'Funnel',
-  matrix: 'Matrix',
-  timeline: 'Timeline',
-  radar: 'Radar',
-};
-
 export function ObservatoryLayout({
   currentView,
   onChangeView,

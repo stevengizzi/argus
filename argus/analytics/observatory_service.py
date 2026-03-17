@@ -55,6 +55,10 @@ class ObservatoryService:
         self._quality = quality_engine
         self._strategies = strategies
 
+    def _store_available(self) -> bool:
+        """Check if the telemetry store is initialized and connected."""
+        return self._store is not None and self._store.is_connected
+
     async def get_pipeline_stages(self, date: str | None = None) -> dict:
         """Return counts for each pipeline tier.
 
@@ -88,42 +92,37 @@ class ObservatoryService:
         signal_count = 0
         traded_count = 0
 
-        if self._store is not None and self._store._conn is not None:
-            conn = self._store._conn
+        if self._store_available():
+            assert self._store is not None  # narrowing for type checker
 
             # Evaluating: distinct symbols with any event today
-            row = await conn.execute(
+            rows = await self._store.execute_query(
                 "SELECT COUNT(DISTINCT symbol) FROM evaluation_events "
                 "WHERE trading_date = ?",
                 (target_date,),
             )
-            result = await row.fetchone()
-            evaluating_count = result[0] if result else 0
+            evaluating_count = rows[0][0] if rows else 0
 
             # Near-trigger: symbols passing ≥50% conditions in most recent
             # ENTRY_EVALUATION event
-            near_trigger_count = await self._count_near_triggers(
-                conn, target_date
-            )
+            near_trigger_count = await self._count_near_triggers(target_date)
 
             # Signal: distinct symbols with SIGNAL_GENERATED event today
-            row = await conn.execute(
+            rows = await self._store.execute_query(
                 "SELECT COUNT(DISTINCT symbol) FROM evaluation_events "
                 "WHERE trading_date = ? AND event_type = ?",
                 (target_date, "SIGNAL_GENERATED"),
             )
-            result = await row.fetchone()
-            signal_count = result[0] if result else 0
+            signal_count = rows[0][0] if rows else 0
 
             # Traded: distinct symbols with QUALITY_SCORED event (indicates
             # the signal went through the quality pipeline toward execution)
-            row = await conn.execute(
+            rows = await self._store.execute_query(
                 "SELECT COUNT(DISTINCT symbol) FROM evaluation_events "
                 "WHERE trading_date = ? AND event_type = ?",
                 (target_date, "QUALITY_SCORED"),
             )
-            result = await row.fetchone()
-            traded_count = result[0] if result else 0
+            traded_count = rows[0][0] if rows else 0
 
         return {
             "universe": universe_count,
@@ -155,13 +154,13 @@ class ObservatoryService:
         """
         target_date = date or _today_et()
 
-        if self._store is None or self._store._conn is None:
+        if not self._store_available():
             return []
 
-        conn = self._store._conn
+        assert self._store is not None  # narrowing for type checker
 
         # Get the most recent ENTRY_EVALUATION event per (symbol, strategy)
-        rows = await conn.execute(
+        results = await self._store.execute_query(
             """
             SELECT e.symbol, e.strategy_id, e.metadata_json, e.timestamp
             FROM evaluation_events e
@@ -178,7 +177,6 @@ class ObservatoryService:
             """,
             (target_date, "ENTRY_EVALUATION", target_date, "ENTRY_EVALUATION"),
         )
-        results = await rows.fetchall()
 
         entries = []
         for row in results:
@@ -217,19 +215,18 @@ class ObservatoryService:
         """
         target_date = date or _today_et()
 
-        if self._store is None or self._store._conn is None:
+        if not self._store_available():
             return []
 
-        conn = self._store._conn
+        assert self._store is not None  # narrowing for type checker
 
-        rows = await conn.execute(
-            "SELECT timestamp, strategy_id, event_type, result, reason, "
+        results = await self._store.execute_query(
+            "SELECT timestamp, strategy_id, event_type, result, "
             "metadata_json FROM evaluation_events "
             "WHERE trading_date = ? AND symbol = ? "
             "ORDER BY timestamp ASC",
             (target_date, symbol.upper()),
         )
-        results = await rows.fetchall()
 
         return [
             {
@@ -237,7 +234,7 @@ class ObservatoryService:
                 "strategy": row[1],
                 "event_type": row[2],
                 "result": row[3],
-                "metadata": _safe_json_loads(row[5]),
+                "metadata": _safe_json_loads(row[4]),
             }
             for row in results
         ]
@@ -257,10 +254,10 @@ class ObservatoryService:
         """
         target_date = date or _today_et()
 
-        if self._store is None or self._store._conn is None:
+        if not self._store_available():
             return {}
 
-        conn = self._store._conn
+        assert self._store is not None  # narrowing for type checker
 
         # Build symbol -> highest tier from evaluation events
         # Tier priority: traded > signal > near_trigger > evaluating
@@ -270,12 +267,11 @@ class ObservatoryService:
         }
 
         # Get all distinct (symbol, event_type) pairs for today
-        rows = await conn.execute(
+        results = await self._store.execute_query(
             "SELECT DISTINCT symbol, event_type FROM evaluation_events "
             "WHERE trading_date = ?",
             (target_date,),
         )
-        results = await rows.fetchall()
 
         symbol_tiers: dict[str, str] = {}
         tier_rank = {"evaluating": 0, "near_trigger": 1, "signal": 2, "traded": 3}
@@ -292,7 +288,7 @@ class ObservatoryService:
         # Check near-trigger status for symbols still at "evaluating"
         if symbol_tiers:
             near_trigger_symbols = await self._get_near_trigger_symbols(
-                conn, target_date
+                target_date
             )
             for sym in near_trigger_symbols:
                 if symbol_tiers.get(sym) == "evaluating":
@@ -302,19 +298,19 @@ class ObservatoryService:
 
     async def _get_near_trigger_symbols(
         self,
-        conn: object,
         target_date: str,
     ) -> set[str]:
         """Get symbols that pass ≥50% conditions in latest ENTRY_EVALUATION.
 
         Args:
-            conn: aiosqlite connection.
             target_date: Date string (YYYY-MM-DD).
 
         Returns:
             Set of symbol names meeting near-trigger threshold.
         """
-        rows = await conn.execute(  # type: ignore[union-attr]
+        assert self._store is not None  # narrowing for type checker
+
+        results = await self._store.execute_query(
             """
             SELECT e.symbol, e.metadata_json
             FROM evaluation_events e
@@ -331,7 +327,6 @@ class ObservatoryService:
             """,
             (target_date, "ENTRY_EVALUATION", target_date, "ENTRY_EVALUATION"),
         )
-        results = await rows.fetchall()
 
         near_symbols: set[str] = set()
         for row in results:
@@ -357,7 +352,7 @@ class ObservatoryService:
         """
         target_date = date or _today_et()
 
-        if self._store is None or self._store._conn is None:
+        if not self._store_available():
             return {
                 "total_evaluations": 0,
                 "total_signals": 0,
@@ -368,47 +363,43 @@ class ObservatoryService:
                 "date": target_date,
             }
 
-        conn = self._store._conn
+        assert self._store is not None  # narrowing for type checker
 
         # Total evaluations (ENTRY_EVALUATION events)
-        row = await conn.execute(
+        rows = await self._store.execute_query(
             "SELECT COUNT(*) FROM evaluation_events "
             "WHERE trading_date = ? AND event_type = ?",
             (target_date, "ENTRY_EVALUATION"),
         )
-        result = await row.fetchone()
-        total_evaluations = result[0] if result else 0
+        total_evaluations = rows[0][0] if rows else 0
 
         # Total signals
-        row = await conn.execute(
+        rows = await self._store.execute_query(
             "SELECT COUNT(*) FROM evaluation_events "
             "WHERE trading_date = ? AND event_type = ?",
             (target_date, "SIGNAL_GENERATED"),
         )
-        result = await row.fetchone()
-        total_signals = result[0] if result else 0
+        total_signals = rows[0][0] if rows else 0
 
         # Total trades (QUALITY_SCORED as proxy)
-        row = await conn.execute(
+        rows = await self._store.execute_query(
             "SELECT COUNT(*) FROM evaluation_events "
             "WHERE trading_date = ? AND event_type = ?",
             (target_date, "QUALITY_SCORED"),
         )
-        result = await row.fetchone()
-        total_trades = result[0] if result else 0
+        total_trades = rows[0][0] if rows else 0
 
         # Distinct symbols evaluated
-        row = await conn.execute(
+        rows = await self._store.execute_query(
             "SELECT COUNT(DISTINCT symbol) FROM evaluation_events "
             "WHERE trading_date = ?",
             (target_date,),
         )
-        result = await row.fetchone()
-        symbols_evaluated = result[0] if result else 0
+        symbols_evaluated = rows[0][0] if rows else 0
 
         # Top blockers: most frequent rejection reasons from ENTRY_EVALUATION
         # events with FAIL result
-        top_blockers = await self._get_top_blockers(conn, target_date)
+        top_blockers = await self._get_top_blockers(target_date)
 
         # Closest miss: the single symbol+strategy with most conditions passed
         closest_misses = await self.get_closest_misses(
@@ -428,20 +419,20 @@ class ObservatoryService:
 
     async def _count_near_triggers(
         self,
-        conn: object,
         target_date: str,
     ) -> int:
         """Count symbols passing ≥50% conditions in latest ENTRY_EVALUATION.
 
         Args:
-            conn: aiosqlite connection.
             target_date: Date string (YYYY-MM-DD).
 
         Returns:
             Count of near-trigger symbols.
         """
+        assert self._store is not None  # narrowing for type checker
+
         # Get latest ENTRY_EVALUATION per (symbol, strategy)
-        rows = await conn.execute(  # type: ignore[union-attr]
+        results = await self._store.execute_query(
             """
             SELECT e.metadata_json
             FROM evaluation_events e
@@ -458,7 +449,6 @@ class ObservatoryService:
             """,
             (target_date, "ENTRY_EVALUATION", target_date, "ENTRY_EVALUATION"),
         )
-        results = await rows.fetchall()
 
         count = 0
         for row in results:
@@ -474,7 +464,6 @@ class ObservatoryService:
 
     async def _get_top_blockers(
         self,
-        conn: object,
         target_date: str,
         top_n: int = 5,
     ) -> list[dict]:
@@ -484,19 +473,19 @@ class ObservatoryService:
         occurrences, and returns the top N.
 
         Args:
-            conn: aiosqlite connection.
             target_date: Date string (YYYY-MM-DD).
             top_n: Number of top blockers to return.
 
         Returns:
             List of {condition_name, rejection_count, percentage} dicts.
         """
-        rows = await conn.execute(  # type: ignore[union-attr]
+        assert self._store is not None  # narrowing for type checker
+
+        results = await self._store.execute_query(
             "SELECT metadata_json FROM evaluation_events "
             "WHERE trading_date = ? AND event_type = ?",
             (target_date, "ENTRY_EVALUATION"),
         )
-        results = await rows.fetchall()
 
         blocker_counts: dict[str, int] = {}
         total_checks = 0

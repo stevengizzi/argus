@@ -45,6 +45,18 @@ class FakeStore:
     def __init__(self, conn: aiosqlite.Connection) -> None:
         self._conn = conn
 
+    @property
+    def is_connected(self) -> bool:
+        """Return True if the database connection is open."""
+        return self._conn is not None
+
+    async def execute_query(
+        self, sql: str, params: tuple[object, ...] = ()
+    ) -> list[aiosqlite.Row]:
+        """Execute a read-only SQL query and return all rows."""
+        cursor = await self._conn.execute(sql, params)
+        return await cursor.fetchall()
+
 
 async def _make_store(tmp_path: Path) -> tuple[FakeStore, aiosqlite.Connection]:
     """Create a FakeStore backed by a temporary SQLite database."""
