@@ -34,6 +34,7 @@ const NAV_ROUTES = [
   '/trades',
   '/performance',
   '/orchestrator',
+  '/observatory',
   '/patterns',
   '/debrief',
   '/system',

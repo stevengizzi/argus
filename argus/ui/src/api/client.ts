@@ -669,3 +669,14 @@ export async function getStrategyDecisions(
     `/strategies/${strategyId}/decisions${query ? `?${query}` : ''}`
   );
 }
+
+// --- Observatory ---
+
+export interface ObservatoryPipelineResponse {
+  tiers: Record<string, { count: number; symbols: string[] }>;
+  timestamp: string;
+}
+
+export async function getObservatoryPipeline(): Promise<ObservatoryPipelineResponse> {
+  return fetchWithAuth<ObservatoryPipelineResponse>('/observatory/pipeline');
+}

@@ -13,7 +13,7 @@
  */
 
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, ScrollText, TrendingUp, Gauge, BookOpen, GraduationCap, Activity, LogOut } from 'lucide-react';
+import { LayoutDashboard, ScrollText, TrendingUp, Gauge, Telescope, BookOpen, GraduationCap, Activity, LogOut } from 'lucide-react';
 import { useAuthStore } from '../stores/auth';
 import { useLiveStore } from '../stores/live';
 
@@ -31,6 +31,7 @@ const NAV_ITEMS: Array<{
   { to: '/performance', icon: TrendingUp, label: 'Performance', divider: true },
   // Operate group
   { to: '/orchestrator', icon: Gauge, label: 'Orchestrator' },
+  { to: '/observatory', icon: Telescope, label: 'Observatory' },
   { to: '/patterns', icon: BookOpen, label: 'Pattern Library', divider: true },
   // Learn group
   { to: '/debrief', icon: GraduationCap, label: 'The Debrief', divider: true },
