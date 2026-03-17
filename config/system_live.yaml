@@ -157,7 +157,7 @@ universe_manager:
 # Observatory (Sprint 25 — The Observatory)
 # Immersive pipeline visualization page for operational visibility.
 observatory:
-  enabled: false
+  enabled: true
   ws_update_interval_ms: 1000       # WebSocket push interval (ms)
   timeline_bucket_seconds: 60       # Timeline view event bucketing (seconds)
   matrix_max_rows: 100              # Maximum rows in Matrix view
