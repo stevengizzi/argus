@@ -11,10 +11,9 @@
  * - Bottom shortcut reference strip with key hints
  */
 
-import { AnimatePresence, motion } from 'framer-motion';
 import { TierSelector } from './TierSelector';
-import type { ObservatoryView, PipelineTier } from './hooks/useObservatoryKeyboard';
-import { PIPELINE_TIERS } from './hooks/useObservatoryKeyboard';
+import { SymbolDetailPanel } from './detail/SymbolDetailPanel';
+import type { ObservatoryView } from './hooks/useObservatoryKeyboard';
 
 interface ObservatoryLayoutProps {
   currentView: ObservatoryView;
@@ -40,8 +39,6 @@ export function ObservatoryLayout({
   onDeselectSymbol,
   children,
 }: ObservatoryLayoutProps) {
-  const detailOpen = selectedSymbol !== null;
-
   return (
     <div className="flex flex-col h-full" data-testid="observatory-layout">
       {/* Session vitals bar — placeholder for S9 */}
@@ -73,58 +70,11 @@ export function ObservatoryLayout({
         </div>
 
         {/* Detail panel — slide in from right, pushes canvas */}
-        <AnimatePresence>
-          {detailOpen && (
-            <motion.div
-              key="detail-panel"
-              initial={{ width: 0, opacity: 0 }}
-              animate={{ width: 320, opacity: 1 }}
-              exit={{ width: 0, opacity: 0 }}
-              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              className="shrink-0 border-l border-argus-border bg-argus-surface overflow-hidden"
-              data-testid="detail-panel"
-            >
-              <div className="w-[320px] h-full p-4 overflow-y-auto">
-                {/* Detail panel header */}
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-sm font-semibold text-argus-text">{selectedSymbol}</h3>
-                  <button
-                    onClick={onDeselectSymbol}
-                    className="text-xs text-argus-text-dim hover:text-argus-text"
-                  >
-                    ESC
-                  </button>
-                </div>
-
-                {/* Tier badge */}
-                <div className="mb-4">
-                  <span className="text-[10px] font-medium text-argus-accent bg-argus-accent/10 px-2 py-0.5 rounded">
-                    {PIPELINE_TIERS[selectedTierIndex]}
-                  </span>
-                </div>
-
-                {/* Placeholder content — populated in later sessions */}
-                <div className="space-y-4">
-                  <div className="h-48 rounded bg-argus-surface-2/50 flex items-center justify-center">
-                    <span className="text-xs text-argus-text-dim">
-                      Candlestick Chart — S5
-                    </span>
-                  </div>
-                  <div className="h-32 rounded bg-argus-surface-2/50 flex items-center justify-center">
-                    <span className="text-xs text-argus-text-dim">
-                      Condition Grid — S5
-                    </span>
-                  </div>
-                  <div className="h-24 rounded bg-argus-surface-2/50 flex items-center justify-center">
-                    <span className="text-xs text-argus-text-dim">
-                      Strategy History — S5
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        <SymbolDetailPanel
+          selectedSymbol={selectedSymbol}
+          selectedTierIndex={selectedTierIndex}
+          onClose={onDeselectSymbol}
+        />
       </div>
 
       {/* Bottom shortcut reference strip */}

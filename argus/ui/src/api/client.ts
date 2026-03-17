@@ -680,3 +680,31 @@ export interface ObservatoryPipelineResponse {
 export async function getObservatoryPipeline(): Promise<ObservatoryPipelineResponse> {
   return fetchWithAuth<ObservatoryPipelineResponse>('/observatory/pipeline');
 }
+
+export interface ObservatoryJourneyEvent {
+  timestamp: string;
+  strategy: string;
+  event_type: string;
+  result: string;
+  metadata: Record<string, unknown>;
+}
+
+export interface ObservatoryJourneyResponse {
+  symbol: string;
+  events: ObservatoryJourneyEvent[];
+  count: number;
+  date: string;
+  timestamp: string;
+}
+
+export async function getSymbolJourney(
+  symbol: string,
+  date?: string
+): Promise<ObservatoryJourneyResponse> {
+  const params = new URLSearchParams();
+  if (date) params.set('date', date);
+  const query = params.toString();
+  return fetchWithAuth<ObservatoryJourneyResponse>(
+    `/observatory/symbol/${symbol}/journey${query ? `?${query}` : ''}`
+  );
+}
