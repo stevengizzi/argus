@@ -148,7 +148,9 @@ def _get_observatory_service(state: AppState):
 
 def _now_iso() -> str:
     """Return current UTC time as ISO 8601 string."""
-    return datetime.utcnow().isoformat() + "Z"
+    from datetime import UTC
+
+    return datetime.now(UTC).isoformat()
 
 
 # --- Endpoints ---
