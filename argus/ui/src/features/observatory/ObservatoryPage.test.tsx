@@ -59,19 +59,31 @@ describe('ObservatoryPage', () => {
     expect(screen.getByTestId('active-view-label')).toHaveTextContent('Funnel View');
   });
 
-  it('switches views when pressing 1-4', () => {
+  it('switches views when pressing f/m/r/t', () => {
     render(<ObservatoryPage />, { wrapper: createWrapper() });
 
-    fireEvent.keyDown(window, { key: '2' });
+    fireEvent.keyDown(window, { key: 'm' });
     expect(screen.getByTestId('active-view-label')).toHaveTextContent('Matrix View');
 
-    fireEvent.keyDown(window, { key: '3' });
+    fireEvent.keyDown(window, { key: 't' });
     expect(screen.getByTestId('active-view-label')).toHaveTextContent('Timeline View');
 
-    fireEvent.keyDown(window, { key: '4' });
+    fireEvent.keyDown(window, { key: 'r' });
     expect(screen.getByTestId('active-view-label')).toHaveTextContent('Radar View');
 
+    fireEvent.keyDown(window, { key: 'f' });
+    expect(screen.getByTestId('active-view-label')).toHaveTextContent('Funnel View');
+  });
+
+  it('does not switch view when pressing numeric keys 1-4', () => {
+    render(<ObservatoryPage />, { wrapper: createWrapper() });
+
     fireEvent.keyDown(window, { key: '1' });
+    fireEvent.keyDown(window, { key: '2' });
+    fireEvent.keyDown(window, { key: '3' });
+    fireEvent.keyDown(window, { key: '4' });
+
+    // Should remain on default Funnel view
     expect(screen.getByTestId('active-view-label')).toHaveTextContent('Funnel View');
   });
 
@@ -117,7 +129,7 @@ describe('ObservatoryPage', () => {
     input.focus();
 
     // Fire keydown on the input element
-    fireEvent.keyDown(input, { key: '2' });
+    fireEvent.keyDown(input, { key: 'm' });
 
     // Should still show Funnel (default), not Matrix
     expect(screen.getByTestId('active-view-label')).toHaveTextContent('Funnel View');

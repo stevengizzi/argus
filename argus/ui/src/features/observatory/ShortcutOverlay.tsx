@@ -11,10 +11,10 @@ const SHORTCUT_GROUPS = [
   {
     title: 'Views',
     shortcuts: [
-      { keys: ['1'], description: 'Funnel view' },
-      { keys: ['2'], description: 'Matrix view' },
-      { keys: ['3'], description: 'Timeline view' },
-      { keys: ['4'], description: 'Radar view' },
+      { keys: ['F'], description: 'Funnel view' },
+      { keys: ['M'], description: 'Matrix view' },
+      { keys: ['R'], description: 'Radar view' },
+      { keys: ['T'], description: 'Timeline view' },
     ],
   },
   {
@@ -32,13 +32,6 @@ const SHORTCUT_GROUPS = [
       { keys: ['Enter'], description: 'Open detail panel' },
       { keys: ['Esc'], description: 'Close panel / deselect' },
       { keys: ['/'], description: 'Symbol search' },
-    ],
-  },
-  {
-    title: 'Camera',
-    shortcuts: [
-      { keys: ['R'], description: 'Reset camera' },
-      { keys: ['F'], description: 'Fit to view' },
     ],
   },
 ];

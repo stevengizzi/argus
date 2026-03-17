@@ -2,15 +2,13 @@
  * Keyboard shortcut system for the Observatory page.
  *
  * Handles all Observatory-specific keyboard navigation:
- * - 1-4: Switch between views (funnel, matrix, timeline, radar)
+ * - f/m/r/t: Switch between views (funnel, matrix, radar, timeline)
  * - [/]: Navigate tiers up/down
  * - Tab/Shift+Tab: Cycle symbols within current tier
  * - Enter: Confirm selection / open detail panel
  * - Escape: Deselect symbol / close detail panel
  * - /: Open symbol search overlay
  * - ?: Toggle shortcut help overlay
- * - r/R: Reset camera (future Three.js)
- * - f/F: Fit view (future Three.js)
  *
  * Only active when Observatory page is focused (not when typing in inputs).
  */
@@ -32,10 +30,10 @@ const PIPELINE_TIERS = [
 export type PipelineTier = (typeof PIPELINE_TIERS)[number];
 
 const VIEW_KEYS: Record<string, ObservatoryView> = {
-  '1': 'funnel',
-  '2': 'matrix',
-  '3': 'timeline',
-  '4': 'radar',
+  'f': 'funnel',
+  'm': 'matrix',
+  'r': 'radar',
+  't': 'timeline',
 };
 
 interface ObservatoryKeyboardState {
@@ -111,7 +109,7 @@ export function useObservatoryKeyboard({
       const hasModifier = e.metaKey || e.ctrlKey || e.altKey;
       if (hasModifier) return;
 
-      // View switching: 1-4
+      // View switching: f/m/r/t
       const view = VIEW_KEYS[e.key];
       if (view) {
         setCurrentView(view);
@@ -174,15 +172,6 @@ export function useObservatoryKeyboard({
         return;
       }
 
-      // Camera controls (no-op for now)
-      if (e.key === 'r' || e.key === 'R') {
-        // Reset camera — wired in Three.js sessions
-        return;
-      }
-      if (e.key === 'f' || e.key === 'F') {
-        // Fit view — wired in Three.js sessions
-        return;
-      }
     };
 
     window.addEventListener('keydown', handleKeyDown);

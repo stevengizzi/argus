@@ -132,7 +132,7 @@ export function ObservatoryLayout({
         className="flex items-center gap-4 h-7 px-4 border-t border-argus-border bg-argus-surface/50 shrink-0"
         data-testid="shortcut-strip"
       >
-        <ShortcutHint keys="1-4" label="views" />
+        <ShortcutHint keys="F M R T" label="views" />
         <ShortcutHint keys="[ ]" label="tiers" />
         <ShortcutHint keys="Tab" label="symbols" />
         <ShortcutHint keys="Enter" label="select" />
