@@ -14,7 +14,7 @@ ARGUS is a fully automated, AI-enhanced multi-strategy day trading system for US
 **Tests:** 2,768 pytest + 523 Vitest
 **Sprints completed:** 1 through 24.5 (24 full sprints + sub-sprints + Universe Manager + Autonomous Sprint Runner + Wide Pipe + NLP Catalyst + Pipeline Integration + Startup Fixes + Pipeline QA + Frontend Cleanup + Quality Engine + Post-Sprint Housekeeping + Strategy Observability)
 **Active sprint:** None (between sprints — Sprint 25 next)
-**Next sprint:** 25 (Red-to-Green + Pattern Library Foundation)
+**Next sprint:** 25 (The Observatory — immersive pipeline visualization page)
 **GitHub:** `https://github.com/stevengizzi/argus.git` (public)
 
 ### Sprint History (Summary)
@@ -63,7 +63,7 @@ ARGUS is a fully automated, AI-enhanced multi-strategy day trading system for US
 
 ### Build Track Queue
 
-21.6 (Backtest Re-Validation, parallel) → 25 (Red-to-Green + Pattern Library Foundation) → 26 (Pattern Expansion I) → 27 (Short Selling + Parabolic Short + Pattern Expansion II) → 28 (Learning Loop V1) → 29–31 (BacktestEngine, Sweep Infrastructure, Strategy Templates) → 32–34 (Statistical Validation, ORB Systematic Search ★, Ensemble Analysis) → 35–38 (Cross-Family Search, Ensemble Orchestrator V2, Synapse) → 39–41 (Learning Loop V2, Continuous Discovery, Performance Workbench). Sprint 23.5 (NLP Catalyst Pipeline) complete. Order Flow Model deferred to post-revenue (DEC-238). Full roadmap: `docs/roadmap.md` (DEC-262).
+21.6 (Backtest Re-Validation, parallel) → 25 (The Observatory) → 26 (Red-to-Green + Pattern Library Foundation) → 27 (Pattern Expansion I) → 28 (Short Selling + Parabolic Short + Pattern Expansion II) → 29 (Learning Loop V1) → 30–32 (BacktestEngine, Sweep Infrastructure, Strategy Templates) → 33–35 (Statistical Validation, ORB Systematic Search ★, Ensemble Analysis) → 36–39 (Cross-Family Search, Ensemble Orchestrator V2, Synapse) → 40–42 (Learning Loop V2, Continuous Discovery, Performance Workbench). Sprint 23.5 (NLP Catalyst Pipeline) complete. Order Flow Model deferred to post-revenue (DEC-238). Full roadmap: `docs/roadmap.md` (DEC-262).
 
 ### Validation Track
 

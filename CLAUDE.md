@@ -7,7 +7,7 @@
 
 **No active sprint.** Sprint 24.5 (Strategy Observability + Operational Fixes) completed March 16, 2026.
 
-Next planned sprint: **25 (Red-to-Green + Pattern Library Foundation)**.
+Next planned sprint: **25 (The Observatory)**. Scope rescoped from Red-to-Green to operational visibility — immersive 3D pipeline visualization page with Funnel/Radar/Matrix/Timeline views, keyboard-first navigation, detail panel with live candlesticks, session vitals, and debrief mode. Red-to-Green deferred to Sprint 26.
 
 ### Known Issues
 - **FMP Starter plan restriction:** FMP news endpoints return 403 on Starter plan ($22/mo). `fmp_news.enabled: false` in `system_live.yaml`. FMP circuit breaker (DEC-323) prevents spam if accidentally enabled.
@@ -17,7 +17,7 @@ Next planned sprint: **25 (Red-to-Green + Pattern Library Foundation)**.
 ## Current State
 
 - **Active sprint:** None (between sprints)
-- **Next sprint:** 25 (Red-to-Green + Pattern Library Foundation)
+- **Next sprint:** 25 (The Observatory — immersive pipeline visualization page)
 - **Tests:** 2,768 pytest + 523 Vitest
 - **Strategies:** 4 active (ORB Breakout, ORB Scalp, VWAP Reclaim, Afternoon Momentum)
 - **Infrastructure:** Databento EQUS.MINI (live) + IBKR paper trading (Account U24619949) + FMP Starter (scanning + reference data) + Finnhub (news + analyst recs) + Claude API (Copilot + Catalyst Classification) + Universe Manager (config-gated) + Catalyst Pipeline (config-gated) + Intelligence Polling Loop (config-gated) + Reference Data Cache + Quality Engine (config-gated) + Dynamic Position Sizer + Strategy Evaluation Telemetry (ring buffer + SQLite persistence)

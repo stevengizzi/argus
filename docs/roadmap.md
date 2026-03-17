@@ -1,7 +1,7 @@
 # ARGUS — Strategic Roadmap
 
 > From artisanal strategies to ensemble alpha — the complete path
-> **v1.4 — March 14, 2026** (Sprint 24 complete — Setup Quality Engine + Dynamic Sizer)
+> **v1.5 — March 17, 2026** (Phase 5 Gate complete — Sprint 25 rescoped to The Observatory)
 > **Status:** CANONICAL — this is the single source of truth for ARGUS's strategic direction and sprint queue.
 > **Supersedes:** `docs/research/ARGUS_Expanded_Roadmap.md` (Feb 26), `docs/argus_unified_vision_roadmap.md` (Mar 5), `docs/10_PHASE3_SPRINT_PLAN.md` (all forward-looking sections)
 
@@ -78,7 +78,7 @@ These foundations are correct and remain:
 
 ARGUS completed 21 sprints + sub-sprints in ~17 calendar days of active development (Feb 14 – Mar 5). Average sprint: ~0.8 calendar days. However, sprint complexity has been increasing — early sprints (1–5) were dense single-day affairs, while later sprints (21a–21d, 21.5) span multiple days. The roadmap below assumes sprint durations of 1–4 days each depending on complexity, with some parallelism where noted.
 
-**Current state:** Sprint 24 complete. 2,686 pytest + 497 Vitest. Four active strategies. Live Databento + IBKR paper trading. Seven-page Command Center + AI Copilot active. FMP Scanner + Universe Manager integrated. Autonomous Sprint Runner implemented (DEC-278–297). NLP Catalyst Pipeline complete (DEC-300–307). Setup Quality Engine + Dynamic Position Sizer complete (DEC-330–341). Phase 5 Gate next.
+**Current state:** Sprint 24.5 complete. 2,768 pytest + 523 Vitest. Four active strategies with per-candle evaluation telemetry. Live Databento + IBKR paper trading. Seven-page Command Center + AI Copilot active. FMP Scanner + Universe Manager integrated. Autonomous Sprint Runner implemented (DEC-278–297). NLP Catalyst Pipeline complete (DEC-300–307). Setup Quality Engine + Dynamic Position Sizer complete (DEC-330–341). Strategy Observability complete (DEC-342). Phase 5 Gate complete — Sprint 25 (The Observatory) next.
 
 ---
 
@@ -98,8 +98,8 @@ The Command Center evolves from 7 pages to 10 across this roadmap:
 | The Debrief | Built | AI-generated summaries | Unchanged | Research session recaps | Ensemble debrief |
 | System | Built | API health monitoring | Unchanged | BacktestEngine monitoring | Pipeline health |
 | Copilot | Shell built | Activated (Sprint 22) | Ensemble-aware context | Research assistant mode | Full ensemble copilot |
-| Research Console | — | — | — | **New (Sprint 29)** | Discovery pipeline view |
-| Synapse | — | — | — | — | **New (Sprint 37–38)** |
+| Research Console | — | — | — | **New (Sprint 30)** | Discovery pipeline view |
+| Synapse | — | — | — | — | **New (Sprint 38–39)** |
 
 ---
 
@@ -254,11 +254,34 @@ Re-validate all pre-Databento strategy parameters using Databento tick-level dat
 
 ---
 
-## 7. Phase 6: Strategy Expansion — Artisanal (Sprints 25–28)
+## 7. Phase 6: Strategy Expansion — Artisanal (Sprints 25–29)
 
-*Expands the strategy roster to 13–15+ hand-crafted patterns including short selling. Adds the Learning Loop for self-monitoring. This is the phase where ARGUS becomes a serious multi-strategy system. UI focus: make strategy health and correlation visible.*
+*Opens with The Observatory for operational visibility, then expands the strategy roster to 13–15+ hand-crafted patterns including short selling. Adds the Learning Loop for self-monitoring. This is the phase where ARGUS becomes a serious multi-strategy system. UI focus: make strategy health, correlation, and pipeline behavior visible.*
 
-### Sprint 25: Red-to-Green + Pattern Library Foundation (DEC-163, DEC-167)
+### Sprint 25: The Observatory (Phase 5 Gate outcome)
+**Target:** ~4–5 days
+**Status:** PLANNED (sprint package generated March 17, 2026)
+
+**Context:** Phase 5 Gate strategic check-in identified a critical gap: the system has sophisticated evaluation telemetry (Sprint 24.5) but no way for the operator to observe pipeline behavior immersively. Zero trades were occurring and the operator couldn't tell why. The Observatory addresses this directly — operational visibility is prerequisite to adding more strategies.
+
+**Scope:**
+- **Observatory page** (Command Center page 8): Full-bleed immersive visualization, keyboard-first navigation
+- **Four views** switchable via `1` `2` `3` `4` keys:
+  - **Funnel** (Three.js 3D): Translucent cone with tier discs, symbol particles via InstancedMesh, orbit controls, LOD labels
+  - **Radar** (Three.js camera animation): Bottom-up perspective of the same funnel — concentric rings with trigger point at center. Smooth camera transition from Funnel.
+  - **Matrix**: Condition heatmap sorted by proximity to trigger. Green/red/gray cells. Virtual scrolling. Live-updating sort.
+  - **Timeline**: Strategy lane timeline (9:30–4:00 ET) with event marks at 4 severity levels
+- **Detail panel** (right slide-out): Per-symbol condition grid, quality score, catalyst summary, live candlestick chart (Lightweight Charts), chronological strategy history. Persists across view switches.
+- **Session vitals bar**: Connection status, evaluation counts, closest miss, top blocking condition
+- **Debrief mode**: Date picker switches all views to historical data (7-day retention)
+- **Backend**: 4 REST endpoints (session summary, pipeline counts, closest-misses, symbol journey) + WebSocket live updates
+- **Config-gated** via `observatory.enabled` (default: true)
+- **13 sessions + 5 visual-review fix contingency = up to 18 sessions**
+- **Tests:** ~92 new (25 pytest + 67 Vitest)
+
+**Decisions:** DEC-343+ (reserved through DEC-360)
+
+### Sprint 26: Red-to-Green + Pattern Library Foundation (DEC-163, DEC-167)
 **Target:** ~2–3 days
 
 **Scope:**
@@ -269,18 +292,18 @@ Re-validate all pre-Databento strategy parameters using Databento tick-level dat
 - **7 strategies/patterns active.**
 - **Tests:** ~80 new.
 
-### Sprint 26: Pattern Expansion I (DEC-167)
+### Sprint 27: Pattern Expansion I (DEC-167)
 **Target:** ~2–3 days
 
 **Scope:**
 - **Dip-and-Rip**, **HOD Break**, **Gap-and-Go** pattern modules. Each through stages 1–3.
-- Optionally **Pre-Market High Break** if velocity allows (otherwise deferred to Sprint 27).
+- Optionally **Pre-Market High Break** if velocity allows (otherwise deferred to Sprint 28).
 - Each module implements PatternLibrary interface. Walk-forward validated. Quality Engine integration.
-- **UI:** Pattern Library gains 3–4 new strategy cards. Dashboard gains Short Exposure indicator (infrastructure prep for Sprint 27).
+- **UI:** Pattern Library gains 3–4 new strategy cards. Dashboard gains Short Exposure indicator (infrastructure prep for Sprint 28).
 - **10–11 strategies/patterns active.**
 - **Tests:** ~60 new.
 
-### Sprint 27: Short Selling Infrastructure + Pattern Expansion II (DEC-166, DEC-167)
+### Sprint 28: Short Selling Infrastructure + Pattern Expansion II (DEC-166, DEC-167)
 **Target:** ~3 days
 
 **Scope:**
@@ -291,11 +314,11 @@ Re-validate all pre-Databento strategy parameters using Databento tick-level dat
 - **13–15 strategies/patterns active (including first short strategy).**
 - **Tests:** ~80 new.
 
-### Sprint 28: Learning Loop V1 (DEC-163)
+### Sprint 29: Learning Loop V1 (DEC-163)
 **Target:** ~3 days
 
 **Scope:**
-- **LearningDatabase** (`argus/intelligence/learning.py`): Stores all scored setups (traded and untrade), outcomes, quality scores, regime context. Rolling window analysis.
+- **LearningDatabase** (`argus/intelligence/learning.py`): Stores all scored setups (traded and untraded), outcomes, quality scores, regime context. Rolling window analysis.
 - **PostTradeAnalyzer**: Correlates quality scores with outcomes. Weekly batch retraining of Quality Engine weights. V1 uses statistical lookup tables (pattern × catalyst × regime → performance).
 - Performance-aware throttling: Strategies that underperform their historical baseline get throttled. Strategies that outperform get boosted. Recommendations surfaced as action cards for human approval.
 - Correlation monitoring: Pairwise correlation between all active strategies over trailing window. Highly correlated pairs flagged.
@@ -307,7 +330,7 @@ Re-validate all pre-Databento strategy parameters using Databento tick-level dat
 
 ### Phase 6 Gate ★ CRITICAL — LIVE TRADING DECISION POINT ★
 
-**Trigger:** Sprint 28 complete.
+**Trigger:** Sprint 29 complete.
 **Protocol:** Strategic Check-In (`strategic-check-in.md`) + Codebase Health Audit (`codebase-health-audit.md`) + Documentation Compression.
 
 **ARGUS state at this gate:** 13–15 hand-crafted strategies (including at least one short strategy) with AI quality filtering, NLP catalysts, dynamic sizing, and performance-aware learning loop. Paper trading has been running for 4–6 weeks at this point.
@@ -324,11 +347,11 @@ Re-validate all pre-Databento strategy parameters using Databento tick-level dat
 
 ---
 
-## 8. Phase 7: Infrastructure Unification (Sprints 29–31)
+## 8. Phase 7: Infrastructure Unification (Sprints 30–32)
 
 *Builds the BacktestEngine and parameterized strategy system. This is the architectural foundation for the ensemble vision. Nothing in this phase changes live trading behavior — it's building the research infrastructure in parallel. UI focus: the Research Console makes strategy research visible and interactive.*
 
-### Sprint 29: BacktestEngine Core + Research Console (NEW PAGE)
+### Sprint 30: BacktestEngine Core + Research Console (NEW PAGE)
 **Target:** ~4 days
 
 **Scope (backend):**
@@ -347,7 +370,7 @@ Re-validate all pre-Databento strategy parameters using Databento tick-level dat
 
 **Tests:** ~80 new.
 
-### Sprint 30: Parallel Sweep Infrastructure
+### Sprint 31: Parallel Sweep Infrastructure
 **Target:** ~3–4 days
 
 **Scope (backend):**
@@ -363,7 +386,7 @@ Re-validate all pre-Databento strategy parameters using Databento tick-level dat
 
 **Tests:** ~60 new.
 
-### Sprint 31: Parameterized Strategy Templates
+### Sprint 32: Parameterized Strategy Templates
 **Target:** ~3–4 days
 
 **Scope:**
@@ -378,18 +401,18 @@ Re-validate all pre-Databento strategy parameters using Databento tick-level dat
 
 ### Phase 7 Gate
 
-**Trigger:** Sprint 31 complete.
+**Trigger:** Sprint 32 complete.
 **Protocol:** Strategic Check-In (`strategic-check-in.md`) + Documentation Compression.
 
 **Critical resolution required:** Historical data sufficiency. If not already purchased at Phase 6 Gate, the data purchase MUST happen now. Three-way splits (train/selection/validation) across only 35 months of data may not provide enough statistical power. Options: acquire 5–10 years of Databento 1-minute bars; synthetic data augmentation (block bootstrap); accept lower granularity for coarse screening.
 
 ---
 
-## 9. Phase 8: Controlled Experiment (Sprints 32–34)
+## 9. Phase 8: Controlled Experiment (Sprints 33–35)
 
 *The proving ground. Takes one strategy family and systematically searches the parameter × filter space. Validates the methodology before scaling. UI focus: make the search process and statistical validation legible.*
 
-### Sprint 32: Statistical Validation Framework
+### Sprint 33: Statistical Validation Framework
 **Target:** ~3–4 days
 
 **Scope (backend):**
@@ -405,7 +428,7 @@ Re-validate all pre-Databento strategy parameters using Databento tick-level dat
 
 **Tests:** ~60 new.
 
-### Sprint 33: ORB Family Systematic Search ★ THE PIVOTAL EXPERIMENT ★
+### Sprint 34: ORB Family Systematic Search ★ THE PIVOTAL EXPERIMENT ★
 **Target:** ~4–5 days (compute-heavy — may need cloud burst)
 
 **Scope:** Take the ORB Breakout template and systematically search:
@@ -430,10 +453,10 @@ Estimated total combinations: ~500K–2M (many eliminated by incompatibility). T
 
 **Tests:** ~40 new.
 
-### Sprint 34: Ensemble Performance Analysis
+### Sprint 35: Ensemble Performance Analysis
 **Target:** ~2–3 days
 
-**Scope:** Deep analysis of Sprint 33 results. Correlation structure among validated micro-strategies. Capital efficiency. Turnover and commission impact. Drawdown comparison. Regime sensitivity.
+**Scope:** Deep analysis of Sprint 34 results. Correlation structure among validated micro-strategies. Capital efficiency. Turnover and commission impact. Drawdown comparison. Regime sensitivity.
 
 **UI deliverable:** Research Console — Ensemble Analysis Suite:
 - **Correlation Cluster Map:** Force-directed graph of validated micro-strategies, proximity = correlation. 2D precursor to the Synapse.
@@ -445,12 +468,12 @@ Estimated total combinations: ~500K–2M (many eliminated by incompatibility). T
 
 ### Phase 8 Gate ★★★ THE GO/NO-GO DECISION ★★★
 
-**Trigger:** Sprint 34 complete.
+**Trigger:** Sprint 35 complete.
 **Protocol:** Custom Gate Review (see SPRINT_CAMPAIGN.md Section 7).
 
 **If GO:** Validated ensemble of ORB micro-strategies outperforms hand-crafted baselines. Methodology proven. Proceed to Phase 9 (cross-family scaling).
 
-**If NO-GO:** Diagnose through visual tools. Determine if salvageable (methodology adjustment → revised Sprint 33) or fundamental (approach doesn't work → continue artisanal path). BacktestEngine, Research Console, and statistical framework remain valuable for individual strategy research regardless. ARGUS remains a strong multi-strategy system with the Phase 6 roster.
+**If NO-GO:** Diagnose through visual tools. Determine if salvageable (methodology adjustment → revised Sprint 34) or fundamental (approach doesn't work → continue artisanal path). BacktestEngine, Research Console, and statistical framework remain valuable for individual strategy research regardless. ARGUS remains a strong multi-strategy system with the Phase 6 roster.
 
 **ARGUS state regardless of outcome:** Production trading continues with 13–15 strategies. The Research Console is a sophisticated analysis environment — sweep heatmaps, 3D parameter landscapes, FDR reports, smoothness overlays, ensemble equity curves.
 
@@ -458,24 +481,24 @@ Estimated total combinations: ~500K–2M (many eliminated by incompatibility). T
 
 ---
 
-## 10. Phase 9: Ensemble Scaling (Sprints 35–38)
+## 10. Phase 9: Ensemble Scaling (Sprints 36–39)
 
 *ONLY EXECUTES IF PHASE 8 GO.*
 
 *Extends the proven methodology across all strategy families. Builds the Ensemble Orchestrator and the Synapse visualization. UI focus: making the full ensemble comprehensible as a living neural system.*
 
-### Sprint 35: Cross-Family Search (VWAP + Afternoon Momentum)
+### Sprint 36: Cross-Family Search (VWAP + Afternoon Momentum)
 **Target:** ~4–5 days
 
-**Scope (backend):** Apply Sprint 33 methodology to VWAP Reclaim and Afternoon Momentum template families. Same tiered sweep → statistical filtering → ensemble validation pipeline. Cross-family correlation analysis.
+**Scope (backend):** Apply Sprint 34 methodology to VWAP Reclaim and Afternoon Momentum template families. Same tiered sweep → statistical filtering → ensemble validation pipeline. Cross-family correlation analysis.
 
 **Scope (frontend):** Research Console — Cross-Family View:
-- Multi-family color-coded correlation cluster map (expanding the Sprint 34 cluster map).
+- Multi-family color-coded correlation cluster map (expanding the Sprint 35 cluster map).
 - **Family Contribution Chart:** Percentage of ensemble returns from each strategy family, broken down by regime. "In trending markets, ORB contributes 45% and VWAP contributes 35%."
 
 **State after:** Three strategy families have validated micro-strategy ensembles. Cross-family diversification measured. Total validated micro-strategies: likely 100–400.
 
-### Sprint 36: Cross-Family Search (Remaining Families)
+### Sprint 37: Cross-Family Search (Remaining Families)
 **Target:** ~4–5 days
 
 **Scope:** Red-to-Green, Gap-and-Go, ABCD, Parabolic Short, and remaining artisanal strategies from Phase 6 get the systematic search treatment. Each family's template is swept and filtered.
@@ -484,7 +507,7 @@ Estimated total combinations: ~500K–2M (many eliminated by incompatibility). T
 
 **State after:** All strategy families have validated ensembles. Total micro-strategies: potentially 200–800.
 
-### Sprint 37: Ensemble Orchestrator V2 + Synapse (Analysis Mode)
+### Sprint 38: Ensemble Orchestrator V2 + Synapse (Analysis Mode)
 **Target:** ~6–7 days (the largest sprint in the roadmap — backend Orchestrator + full 3D visualization)
 
 **This sprint should be decomposed into 37a (backend) and 37b (frontend) during sprint planning.**
@@ -526,7 +549,7 @@ Each grouping mode rearranges with smooth fly-through animation — nodes flow f
 
 **Special: Mini-Discovery before implementation.** Run a focused Three.js research conversation before writing code (can overlap with 37a backend work). Explore instanced mesh geometry, spring physics, WebGL performance budgets.
 
-### Sprint 38: Ensemble Monitoring + Real-Time Synapse
+### Sprint 39: Ensemble Monitoring + Real-Time Synapse
 **Target:** ~5–6 days
 
 **This sprint should be decomposed into 38a (backend WebSocket) and 38b (frontend) during sprint planning.**
@@ -560,7 +583,7 @@ Each grouping mode rearranges with smooth fly-through animation — nodes flow f
 
 ### Phase 9 Gate
 
-**Trigger:** Sprint 38 complete.
+**Trigger:** Sprint 39 complete.
 **Protocol:** Strategic Check-In (`strategic-check-in.md`) + Codebase Health Audit (`codebase-health-audit.md`) + Documentation Compression.
 
 **Assessment:** Ensemble operational in paper trading? Synapse working? 20–60 micro-strategies activating per day as expected? Ensemble Sharpe tracking toward 3.0+? System fast enough at scale?
@@ -571,11 +594,11 @@ Each grouping mode rearranges with smooth fly-through animation — nodes flow f
 
 ---
 
-## 11. Phase 10: Full Vision (Sprints 39–41)
+## 11. Phase 10: Full Vision (Sprints 40–42)
 
 *The self-improving system. The ensemble doesn't just execute — it learns, adapts, and evolves. UI focus: make adaptation and discovery visible.*
 
-### Sprint 39: Learning Loop V2 (Ensemble Edition)
+### Sprint 40: Learning Loop V2 (Ensemble Edition)
 **Target:** ~4–5 days
 
 **Scope (backend):**
@@ -588,7 +611,7 @@ Each grouping mode rearranges with smooth fly-through animation — nodes flow f
 - **Health decay indicators:** Declining performance causes slow color shift from family hue toward grey.
 - **Adaptation Timeline** on Research Console: Ensemble evolution over time — additions, retirements, throttles, boosts, net ensemble metrics. "Week 3: +12 ORB variants promoted, -4 VWAP variants retired, net ensemble Sharpe: 2.7 → 2.9."
 
-### Sprint 40: Continuous Discovery Pipeline
+### Sprint 41: Continuous Discovery Pipeline
 **Target:** ~3–4 days
 
 **Scope (backend):**
@@ -602,7 +625,7 @@ Each grouping mode rearranges with smooth fly-through animation — nodes flow f
 - **Staging Queue on Synapse:** Ghost nodes showing where discoveries would live in strategy space. Preview how new strategies change ensemble shape before committing.
 - **Discovery Heatmap:** Which regions of parameter/filter space are being explored, exhausted, or yielding discoveries.
 
-### Sprint 41: Performance Workbench
+### Sprint 42: Performance Workbench
 **Target:** ~4–5 days
 
 **Scope:** Customizable widget grid using `react-grid-layout`. Drag/drop/resize visualizations into personalized analysis workflows.
@@ -617,7 +640,7 @@ Each grouping mode rearranges with smooth fly-through animation — nodes flow f
 
 ### Phase 10 Gate (Full Vision)
 
-**Trigger:** Sprint 41 complete.
+**Trigger:** Sprint 42 complete.
 **Protocol:** Strategic Check-In (`strategic-check-in.md`) + Final Documentation Reconciliation.
 
 **Full system assessment:**
@@ -681,13 +704,13 @@ Each grouping mode rearranges with smooth fly-through animation — nodes flow f
 VectorBT currently handles all parameter sweeps. After Phase 7, the BacktestEngine takes over for serious validation work. VectorBT remains useful for rapid coarse screening (Stage 1 of the tiered sweep) but is no longer the primary optimization tool.
 
 ### Pattern Library Page Semantics
-Evolves from individual strategy gallery (current) → template gallery with parameter ranges (Sprint 31) → secondary to the Synapse for ensemble visualization (Sprint 37+). The Pattern Library doesn't disappear, but its role shifts from "primary strategy view" to "template reference and configuration tool."
+Evolves from individual strategy gallery (current) → template gallery with parameter ranges (Sprint 32) → secondary to the Synapse for ensemble visualization (Sprint 38+). The Pattern Library doesn't disappear, but its role shifts from "primary strategy view" to "template reference and configuration tool."
 
 ### Dashboard Density Management
-The Dashboard accumulates significant new panels across this roadmap. The Performance Workbench (Sprint 41) partially solves this by letting you customize which panels appear where. Until then, use progressive disclosure: panels appear only when relevant features are active.
+The Dashboard accumulates significant new panels across this roadmap. The Performance Workbench (Sprint 42) partially solves this by letting you customize which panels appear where. Until then, use progressive disclosure: panels appear only when relevant features are active.
 
 ### Orchestrator V2 Supersession
-The original Orchestrator V2 concept (enhanced rules-based for ~15 strategies) is superseded by the Ensemble Orchestrator in Sprint 37. These are incompatible approaches — the ensemble version handles hundreds of micro-strategies with correlation-aware allocation and activation filtering.
+The original Orchestrator V2 concept (enhanced rules-based for ~15 strategies) is superseded by the Ensemble Orchestrator in Sprint 38. These are incompatible approaches — the ensemble version handles hundreds of micro-strategies with correlation-aware allocation and activation filtering.
 
 ---
 
@@ -820,7 +843,7 @@ One-time costs: Historical data purchase (~$1,000–5,000, Phase 7 Gate). Cloud 
 
 ## 18. The Decision That Matters Most
 
-The entire roadmap pivots on the outcome of Sprint 33 (ORB Family Systematic Search). Everything before it is valuable regardless — live trading, AI layer, artisanal strategies, short selling, BacktestEngine, Research Console. Everything after it depends on whether systematic search produces validated ensembles that outperform hand-crafted strategies.
+The entire roadmap pivots on the outcome of Sprint 34 (ORB Family Systematic Search). Everything before it is valuable regardless — live trading, AI layer, artisanal strategies, short selling, BacktestEngine, Research Console. Everything after it depends on whether systematic search produces validated ensembles that outperform hand-crafted strategies.
 
 If you build nothing beyond Phase 6, you still have a strong AI-enhanced multi-strategy trading system with 13–15 patterns and live capital deployment. If you build through Phase 8 and the experiment fails, you still have the best strategy research infrastructure of any independent trader. The ensemble vision is the ceiling, not the floor.
 
