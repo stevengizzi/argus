@@ -2,25 +2,31 @@
  * Three-zone layout for the Observatory page.
  *
  * Zones:
- * a. Canvas zone (main area) — renders the active view, takes remaining space
- * b. Tier selector (floating right edge of canvas) — vertical stack of tier pills
- * c. Detail panel (right slide-out, 320px) — slides in when symbol selected, pushes canvas
+ * a. Session vitals bar at top — live metrics, view tabs, debrief toggle
+ * b. Canvas zone (main area) — renders the active view, takes remaining space
+ * c. Tier selector (floating right edge of canvas) — vertical stack of tier pills
+ * d. Detail panel (right slide-out, 320px) — slides in when symbol selected, pushes canvas
  *
  * Also includes:
- * - Session vitals bar slot at top (placeholder for S9)
  * - Bottom shortcut reference strip with key hints
  */
 
 import { TierSelector } from './TierSelector';
 import { SymbolDetailPanel } from './detail/SymbolDetailPanel';
+import { SessionVitalsBar } from './vitals/SessionVitalsBar';
 import type { ObservatoryView } from './hooks/useObservatoryKeyboard';
+import type { UseSessionVitalsResult } from './hooks/useSessionVitals';
+import type { UseDebriefModeResult } from './hooks/useDebriefMode';
 
 interface ObservatoryLayoutProps {
   currentView: ObservatoryView;
+  onChangeView: (view: ObservatoryView) => void;
   selectedTierIndex: number;
   onSelectTier: (index: number) => void;
   selectedSymbol: string | null;
   onDeselectSymbol: () => void;
+  vitals: UseSessionVitalsResult;
+  debrief: UseDebriefModeResult;
   children: React.ReactNode;
 }
 
@@ -33,23 +39,24 @@ const VIEW_LABELS: Record<ObservatoryView, string> = {
 
 export function ObservatoryLayout({
   currentView,
+  onChangeView,
   selectedTierIndex,
   onSelectTier,
   selectedSymbol,
   onDeselectSymbol,
+  vitals,
+  debrief,
   children,
 }: ObservatoryLayoutProps) {
   return (
     <div className="flex flex-col h-full" data-testid="observatory-layout">
-      {/* Session vitals bar — placeholder for S9 */}
-      <div
-        className="flex items-center h-10 px-4 border-b border-argus-border bg-argus-surface/50 shrink-0"
-        data-testid="session-vitals-placeholder"
-      >
-        <span className="text-[10px] text-argus-text-dim uppercase tracking-wider">
-          Session Vitals — Coming Soon
-        </span>
-      </div>
+      {/* Session vitals bar */}
+      <SessionVitalsBar
+        currentView={currentView}
+        onChangeView={onChangeView}
+        vitals={vitals}
+        debrief={debrief}
+      />
 
       {/* Main content area: canvas + tier selector + detail panel */}
       <div className="flex flex-1 min-h-0">
@@ -74,6 +81,7 @@ export function ObservatoryLayout({
           selectedSymbol={selectedSymbol}
           selectedTierIndex={selectedTierIndex}
           onClose={onDeselectSymbol}
+          date={debrief.isDebrief ? debrief.selectedDate ?? undefined : undefined}
         />
       </div>
 

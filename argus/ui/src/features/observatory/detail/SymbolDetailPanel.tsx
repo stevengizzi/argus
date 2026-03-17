@@ -25,12 +25,14 @@ interface SymbolDetailPanelProps {
   selectedSymbol: string | null;
   selectedTierIndex: number;
   onClose: () => void;
+  date?: string;
 }
 
 export function SymbolDetailPanel({
   selectedSymbol,
   selectedTierIndex,
   onClose,
+  date,
 }: SymbolDetailPanelProps) {
   const isOpen = selectedSymbol !== null;
 
@@ -64,6 +66,7 @@ export function SymbolDetailPanel({
               symbol={selectedSymbol}
               tierIndex={selectedTierIndex}
               onClose={onClose}
+              date={date}
             />
           </div>
         </motion.div>
@@ -76,6 +79,7 @@ interface SymbolDetailContentProps {
   symbol: string;
   tierIndex: number;
   onClose: () => void;
+  date?: string;
 }
 
 const GRADE_COLORS: Record<string, string> = {
@@ -92,8 +96,8 @@ function formatVolume(vol: number): string {
   return String(vol);
 }
 
-function SymbolDetailContent({ symbol, tierIndex, onClose }: SymbolDetailContentProps) {
-  const { journey, quality, catalysts, candles } = useSymbolDetail({ symbol });
+function SymbolDetailContent({ symbol, tierIndex, onClose, date }: SymbolDetailContentProps) {
+  const { journey, quality, catalysts, candles } = useSymbolDetail({ symbol, date });
 
   const events = journey?.events ?? [];
   const bars = candles?.bars ?? [];

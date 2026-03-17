@@ -17,6 +17,8 @@ import {
   useObservatoryKeyboard,
   type ObservatoryView,
 } from './hooks/useObservatoryKeyboard';
+import { useDebriefMode } from './hooks/useDebriefMode';
+import { useSessionVitals } from './hooks/useSessionVitals';
 import type { FunnelViewHandle } from './views/FunnelView';
 
 const LazyFunnelView = lazy(() =>
@@ -38,6 +40,10 @@ export function ObservatoryPage() {
   const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
 
   const funnelRef = useRef<FunnelViewHandle>(null);
+
+  const debrief = useDebriefMode();
+  const debriefDate = debrief.isDebrief ? debrief.selectedDate ?? undefined : undefined;
+  const vitals = useSessionVitals({ date: debriefDate });
 
   // Placeholder symbols — will come from API tier data in later sessions
   const symbols: string[] = [];
@@ -96,6 +102,7 @@ export function ObservatoryPage() {
           selectedTier={selectedTierIndex}
           selectedSymbol={selectedSymbol}
           onSelectSymbol={handleSelectSymbol}
+          date={debriefDate}
         />
       );
     }
@@ -105,6 +112,7 @@ export function ObservatoryPage() {
         <TimelineView
           selectedSymbol={selectedSymbol}
           onSelectSymbol={handleSelectSymbol}
+          date={debriefDate}
         />
       );
     }
@@ -134,10 +142,13 @@ export function ObservatoryPage() {
     >
       <ObservatoryLayout
         currentView={currentView}
+        onChangeView={setCurrentView}
         selectedTierIndex={selectedTierIndex}
         onSelectTier={handleSelectTier}
         selectedSymbol={selectedSymbol}
         onDeselectSymbol={handleDeselectSymbol}
+        vitals={vitals}
+        debrief={debrief}
       >
         {renderView()}
       </ObservatoryLayout>

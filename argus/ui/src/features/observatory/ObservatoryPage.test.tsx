@@ -40,6 +40,16 @@ vi.mock('../../api/client', () => ({
     count: 0,
     timestamp: '2026-03-17T14:30:00Z',
   }),
+  getObservatorySessionSummary: vi.fn().mockResolvedValue({
+    total_evaluations: 150,
+    total_signals: 5,
+    total_trades: 2,
+    symbols_evaluated: 42,
+    top_blockers: [],
+    closest_miss: null,
+    date: '2026-03-17',
+    timestamp: '2026-03-17T14:30:00Z',
+  }),
   getStrategyDecisions: vi.fn().mockResolvedValue([]),
 }));
 
@@ -234,8 +244,8 @@ describe('ObservatoryPage', () => {
     expect(screen.getByTestId('shortcut-strip')).toBeInTheDocument();
   });
 
-  it('renders session vitals placeholder', () => {
+  it('renders session vitals bar', () => {
     render(<ObservatoryPage />, { wrapper: createWrapper() });
-    expect(screen.getByTestId('session-vitals-placeholder')).toBeInTheDocument();
+    expect(screen.getByTestId('session-vitals-bar')).toBeInTheDocument();
   });
 });

@@ -732,6 +732,31 @@ export interface ObservatoryClosestMissesResponse {
   timestamp: string;
 }
 
+// Observatory Session Summary (Sprint 25 S9)
+export interface ObservatoryBlockerEntry {
+  condition_name: string;
+  rejection_count: number;
+  percentage: number;
+}
+
+export interface ObservatoryClosestMissSummary {
+  symbol: string;
+  strategy: string;
+  conditions_passed: number;
+  conditions_total: number;
+}
+
+export interface ObservatorySessionSummaryResponse {
+  total_evaluations: number;
+  total_signals: number;
+  total_trades: number;
+  symbols_evaluated: number;
+  top_blockers: ObservatoryBlockerEntry[];
+  closest_miss: ObservatoryClosestMissSummary | null;
+  date: string;
+  timestamp: string;
+}
+
 // Strategy Decisions (Sprint 24.5)
 export interface EvaluationEvent {
   timestamp: string;

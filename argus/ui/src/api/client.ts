@@ -733,3 +733,12 @@ export async function getObservatoryClosestMisses(
     `/observatory/closest-misses?${params}`
   );
 }
+
+export async function getObservatorySessionSummary(
+  date?: string
+): Promise<import('./types').ObservatorySessionSummaryResponse> {
+  const query = date ? `?date=${date}` : '';
+  return fetchWithAuth<import('./types').ObservatorySessionSummaryResponse>(
+    `/observatory/session-summary${query}`
+  );
+}
