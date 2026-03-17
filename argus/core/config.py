@@ -14,6 +14,7 @@ import yaml
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from argus.ai.config import AIConfig
+from argus.analytics.config import ObservatoryConfig
 from argus.intelligence.config import CatalystConfig, QualityEngineConfig
 
 # ---------------------------------------------------------------------------
@@ -185,6 +186,8 @@ class SystemConfig(BaseModel):
     catalyst: CatalystConfig = Field(default_factory=CatalystConfig)
     # Quality Engine configuration (Sprint 24 — Setup Quality + Dynamic Sizer)
     quality_engine: QualityEngineConfig = Field(default_factory=QualityEngineConfig)
+    # Observatory configuration (Sprint 25 — The Observatory)
+    observatory: ObservatoryConfig = Field(default_factory=ObservatoryConfig)
 
     @field_validator("timezone")
     @classmethod

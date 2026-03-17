@@ -145,3 +145,13 @@ quality_engine:
     b_minus: [0.0025, 0.005]
     c_plus: [0.0025, 0.0025]
   min_grade_to_trade: "C+"
+
+# Observatory (Sprint 25 — The Observatory)
+# Immersive pipeline visualization page for operational visibility.
+# Set enabled: false to disable Observatory endpoints.
+observatory:
+  enabled: true
+  ws_update_interval_ms: 1000       # WebSocket push interval (ms)
+  timeline_bucket_seconds: 60       # Timeline view event bucketing (seconds)
+  matrix_max_rows: 100              # Maximum rows in Matrix view
+  debrief_retention_days: 7         # Days of historical data for Debrief mode
