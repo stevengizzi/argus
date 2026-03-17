@@ -242,6 +242,109 @@ class ObservatoryService:
             for row in results
         ]
 
+    async def get_symbol_tiers(self, date: str | None = None) -> dict[str, str]:
+        """Return current tier assignment for each symbol.
+
+        Tier is determined by the most advanced pipeline stage reached today.
+        Used by the WebSocket handler to diff between intervals and detect
+        tier transitions.
+
+        Args:
+            date: Date filter (YYYY-MM-DD). Defaults to today (ET).
+
+        Returns:
+            Dict mapping symbol -> tier name (e.g. {"AAPL": "signal", "NVDA": "evaluating"}).
+        """
+        target_date = date or _today_et()
+
+        if self._store is None or self._store._conn is None:
+            return {}
+
+        conn = self._store._conn
+
+        # Build symbol -> highest tier from evaluation events
+        # Tier priority: traded > signal > near_trigger > evaluating
+        tier_priority = {
+            "QUALITY_SCORED": "traded",
+            "SIGNAL_GENERATED": "signal",
+        }
+
+        # Get all distinct (symbol, event_type) pairs for today
+        rows = await conn.execute(
+            "SELECT DISTINCT symbol, event_type FROM evaluation_events "
+            "WHERE trading_date = ?",
+            (target_date,),
+        )
+        results = await rows.fetchall()
+
+        symbol_tiers: dict[str, str] = {}
+        tier_rank = {"evaluating": 0, "near_trigger": 1, "signal": 2, "traded": 3}
+
+        for row in results:
+            symbol = row[0]
+            event_type = row[1]
+            tier = tier_priority.get(event_type, "evaluating")
+            current_rank = tier_rank.get(symbol_tiers.get(symbol, ""), -1)
+            new_rank = tier_rank.get(tier, 0)
+            if new_rank > current_rank:
+                symbol_tiers[symbol] = tier
+
+        # Check near-trigger status for symbols still at "evaluating"
+        if symbol_tiers:
+            near_trigger_symbols = await self._get_near_trigger_symbols(
+                conn, target_date
+            )
+            for sym in near_trigger_symbols:
+                if symbol_tiers.get(sym) == "evaluating":
+                    symbol_tiers[sym] = "near_trigger"
+
+        return symbol_tiers
+
+    async def _get_near_trigger_symbols(
+        self,
+        conn: object,
+        target_date: str,
+    ) -> set[str]:
+        """Get symbols that pass ≥50% conditions in latest ENTRY_EVALUATION.
+
+        Args:
+            conn: aiosqlite connection.
+            target_date: Date string (YYYY-MM-DD).
+
+        Returns:
+            Set of symbol names meeting near-trigger threshold.
+        """
+        rows = await conn.execute(  # type: ignore[union-attr]
+            """
+            SELECT e.symbol, e.metadata_json
+            FROM evaluation_events e
+            INNER JOIN (
+                SELECT symbol, strategy_id, MAX(timestamp) as max_ts
+                FROM evaluation_events
+                WHERE trading_date = ? AND event_type = ?
+                GROUP BY symbol, strategy_id
+            ) latest
+            ON e.symbol = latest.symbol
+                AND e.strategy_id = latest.strategy_id
+                AND e.timestamp = latest.max_ts
+            WHERE e.trading_date = ? AND e.event_type = ?
+            """,
+            (target_date, "ENTRY_EVALUATION", target_date, "ENTRY_EVALUATION"),
+        )
+        results = await rows.fetchall()
+
+        near_symbols: set[str] = set()
+        for row in results:
+            metadata = _safe_json_loads(row[1])
+            conditions = _extract_conditions(metadata)
+            if not conditions:
+                continue
+            passed = sum(1 for c in conditions if c["passed"])
+            if passed >= len(conditions) / 2:
+                near_symbols.add(row[0])
+
+        return near_symbols
+
     async def get_session_summary(self, date: str | None = None) -> dict:
         """Return aggregate metrics for a trading session.
 

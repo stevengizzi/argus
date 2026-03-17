@@ -390,6 +390,12 @@ def create_app(app_state: AppState) -> FastAPI:
     app.include_router(ws_router)
     app.include_router(ai_ws_router)
 
+    # Mount Observatory WebSocket (config-gated — Sprint 25 S2)
+    if observatory_enabled:
+        from argus.api.websocket.observatory_ws import observatory_ws_router
+
+        app.include_router(observatory_ws_router)
+
     # Mount static files if configured
     if app_state.config and app_state.config.api and app_state.config.api.static_dir:
         static_path = Path(app_state.config.api.static_dir)

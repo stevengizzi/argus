@@ -11,6 +11,10 @@ from argus.api.websocket.live import (
     reset_bridge,
     ws_router,
 )
+from argus.api.websocket.observatory_ws import (
+    get_active_observatory_connections,
+    observatory_ws_router,
+)
 
 __all__ = [
     "ClientConnection",
@@ -20,4 +24,6 @@ __all__ = [
     "ws_router",
     "ai_ws_router",
     "get_active_connections",
+    "observatory_ws_router",
+    "get_active_observatory_connections",
 ]
