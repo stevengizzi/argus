@@ -11,6 +11,7 @@ import type {
   BarsResponse,
   Briefing,
   BriefingsListResponse,
+  CatalystsBySymbolResponse,
   ConversationDetailResponse,
   ConversationsListResponse,
   CorrelationResponse,
@@ -668,6 +669,16 @@ export async function getStrategyDecisions(
   return fetchWithAuth<EvaluationEvent[]>(
     `/strategies/${strategyId}/decisions${query ? `?${query}` : ''}`
   );
+}
+
+// Catalyst endpoints (Intelligence pipeline)
+export async function getCatalystsBySymbol(
+  symbol: string,
+  limit: number = 10
+): Promise<CatalystsBySymbolResponse> {
+  const params = new URLSearchParams();
+  params.set('limit', String(limit));
+  return fetchWithAuth<CatalystsBySymbolResponse>(`/catalysts/${symbol}?${params}`);
 }
 
 // --- Observatory ---

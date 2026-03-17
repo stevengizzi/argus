@@ -3,21 +3,21 @@
  *
  * Shows a selected symbol's full context: pipeline position, condition grid,
  * quality score, market data, catalyst summary, strategy history, and
- * candlestick chart slot.
+ * candlestick chart.
  *
  * Panel receives selectedSymbol: string | null. When null, panel is hidden.
  * Content swaps on symbol change without close/reopen animation.
  * Closes only on Escape or explicit close button (not canvas click).
  *
- * Sprint 25 Session 4a.
+ * Sprint 25 Sessions 4a + 4b.
  */
 
-import { useQuery } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect } from 'react';
 
-import { getSymbolJourney } from '../../../api/client';
 import { PIPELINE_TIERS } from '../hooks/useObservatoryKeyboard';
+import { useSymbolDetail } from '../hooks/useSymbolDetail';
+import { SymbolCandlestickChart } from './SymbolCandlestickChart';
 import { SymbolConditionGrid } from './SymbolConditionGrid';
 import { SymbolStrategyHistory } from './SymbolStrategyHistory';
 
@@ -78,16 +78,33 @@ interface SymbolDetailContentProps {
   onClose: () => void;
 }
 
-function SymbolDetailContent({ symbol, tierIndex, onClose }: SymbolDetailContentProps) {
-  const journeyQuery = useQuery({
-    queryKey: ['observatory', 'journey', symbol],
-    queryFn: () => getSymbolJourney(symbol),
-    enabled: symbol !== '',
-    staleTime: 10_000,
-    refetchInterval: 15_000,
-  });
+const GRADE_COLORS: Record<string, string> = {
+  A: 'text-green-400 bg-green-400/10',
+  B: 'text-blue-400 bg-blue-400/10',
+  C: 'text-yellow-400 bg-yellow-400/10',
+  D: 'text-orange-400 bg-orange-400/10',
+  F: 'text-red-400 bg-red-400/10',
+};
 
-  const events = journeyQuery.data?.events ?? [];
+function formatVolume(vol: number): string {
+  if (vol >= 1_000_000) return `${(vol / 1_000_000).toFixed(1)}M`;
+  if (vol >= 1_000) return `${(vol / 1_000).toFixed(0)}K`;
+  return String(vol);
+}
+
+function SymbolDetailContent({ symbol, tierIndex, onClose }: SymbolDetailContentProps) {
+  const { journey, quality, catalysts, candles } = useSymbolDetail({ symbol });
+
+  const events = journey?.events ?? [];
+  const bars = candles?.bars ?? [];
+  const lastBar = bars.length > 0 ? bars[bars.length - 1] : null;
+  const firstBar = bars.length > 0 ? bars[0] : null;
+
+  const priceChange = lastBar && firstBar
+    ? ((lastBar.close - firstBar.open) / firstBar.open) * 100
+    : null;
+
+  const totalVolume = bars.reduce((sum, bar) => sum + bar.volume, 0);
 
   return (
     <div className="p-4 space-y-4">
@@ -100,7 +117,19 @@ function SymbolDetailContent({ symbol, tierIndex, onClose }: SymbolDetailContent
           >
             {symbol}
           </h3>
-          <span className="text-[10px] text-argus-text-dim">Company name pending</span>
+          {lastBar && (
+            <span className="text-[10px] font-mono text-argus-text-dim">
+              ${lastBar.close.toFixed(2)}
+              {priceChange !== null && (
+                <span className={priceChange >= 0 ? 'text-green-400 ml-1' : 'text-red-400 ml-1'}>
+                  {priceChange >= 0 ? '+' : ''}{priceChange.toFixed(2)}%
+                </span>
+              )}
+            </span>
+          )}
+          {!lastBar && (
+            <span className="text-[10px] text-argus-text-dim">Loading...</span>
+          )}
         </div>
         <button
           onClick={onClose}
@@ -125,31 +154,74 @@ function SymbolDetailContent({ symbol, tierIndex, onClose }: SymbolDetailContent
         <SymbolConditionGrid events={events} />
       </section>
 
-      {/* Quality score placeholder */}
+      {/* Quality score */}
       <section data-testid="detail-quality-section">
         <SectionLabel>Quality</SectionLabel>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-argus-text-dim">Score &amp; grade — S4b</span>
-        </div>
+        {quality ? (
+          <div className="flex items-center gap-2">
+            <span
+              className={`text-xs font-bold px-1.5 py-0.5 rounded ${GRADE_COLORS[quality.grade] ?? 'text-argus-text-dim bg-argus-surface-2'}`}
+              data-testid="detail-quality-grade"
+            >
+              {quality.grade}
+            </span>
+            <span className="text-xs font-mono text-argus-text" data-testid="detail-quality-score">
+              {quality.score.toFixed(1)}
+            </span>
+          </div>
+        ) : (
+          <span className="text-xs text-argus-text-dim">No quality data</span>
+        )}
       </section>
 
-      {/* Market data snapshot placeholder */}
+      {/* Market data snapshot */}
       <section data-testid="detail-market-data">
         <SectionLabel>Market Data</SectionLabel>
         <div className="grid grid-cols-3 gap-2">
-          <MarketDataCell label="Price" value="--" />
-          <MarketDataCell label="Change" value="--" />
-          <MarketDataCell label="Volume" value="--" />
-          <MarketDataCell label="ATR" value="--" />
-          <MarketDataCell label="VWAP" value="--" />
-          <MarketDataCell label="Rel Vol" value="--" />
+          <MarketDataCell
+            label="Price"
+            value={lastBar ? `$${lastBar.close.toFixed(2)}` : '--'}
+          />
+          <MarketDataCell
+            label="Change"
+            value={priceChange !== null ? `${priceChange >= 0 ? '+' : ''}${priceChange.toFixed(2)}%` : '--'}
+          />
+          <MarketDataCell
+            label="Volume"
+            value={totalVolume > 0 ? formatVolume(totalVolume) : '--'}
+          />
+          <MarketDataCell
+            label="High"
+            value={lastBar ? `$${lastBar.high.toFixed(2)}` : '--'}
+          />
+          <MarketDataCell
+            label="Low"
+            value={lastBar ? `$${lastBar.low.toFixed(2)}` : '--'}
+          />
+          <MarketDataCell
+            label="Open"
+            value={firstBar ? `$${firstBar.open.toFixed(2)}` : '--'}
+          />
         </div>
       </section>
 
-      {/* Catalyst summary placeholder */}
+      {/* Catalyst summary */}
       <section data-testid="detail-catalyst-section">
         <SectionLabel>Catalysts</SectionLabel>
-        <span className="text-xs text-argus-text-dim">No catalysts available</span>
+        {catalysts && catalysts.catalysts.length > 0 ? (
+          <div className="space-y-1.5">
+            {catalysts.catalysts.map((cat, i) => (
+              <div key={i} className="text-xs">
+                <span className="text-argus-text-dim">{cat.category}</span>
+                <p className="text-argus-text leading-tight truncate" title={cat.headline}>
+                  {cat.headline}
+                </p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <span className="text-xs text-argus-text-dim">No catalysts available</span>
+        )}
       </section>
 
       {/* Strategy history */}
@@ -158,12 +230,16 @@ function SymbolDetailContent({ symbol, tierIndex, onClose }: SymbolDetailContent
         <SymbolStrategyHistory events={events} />
       </section>
 
-      {/* Candlestick chart slot */}
+      {/* Candlestick chart */}
       <section data-testid="detail-chart-slot">
         <SectionLabel>Chart</SectionLabel>
-        <div className="h-48 rounded bg-argus-surface-2/50 flex items-center justify-center">
-          <span className="text-xs text-argus-text-dim">Candlestick Chart — S4b</span>
-        </div>
+        {bars.length > 0 ? (
+          <SymbolCandlestickChart symbol={symbol} bars={bars} height={200} />
+        ) : (
+          <div className="h-48 rounded bg-argus-surface-2/50 flex items-center justify-center">
+            <span className="text-xs text-argus-text-dim">No chart data available</span>
+          </div>
+        )}
       </section>
     </div>
   );

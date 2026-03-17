@@ -686,6 +686,28 @@ export interface UniverseStatusResponse {
   reference_data_age_minutes: number | null;
 }
 
+// Catalysts (Intelligence pipeline)
+export interface CatalystItem {
+  headline: string;
+  symbol: string;
+  source: string;
+  source_url: string | null;
+  filing_type: string | null;
+  published_at: string;
+  category: string;
+  quality_score: number;
+  summary: string;
+  trading_relevance: string;
+  classified_by: string;
+  classified_at: string;
+}
+
+export interface CatalystsBySymbolResponse {
+  catalysts: CatalystItem[];
+  count: number;
+  symbol: string;
+}
+
 // Strategy Decisions (Sprint 24.5)
 export interface EvaluationEvent {
   timestamp: string;

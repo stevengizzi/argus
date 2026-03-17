@@ -2,7 +2,7 @@
  * Tests for Observatory detail panel: SymbolDetailPanel, SymbolConditionGrid,
  * and SymbolStrategyHistory.
  *
- * Sprint 25, Session 4a.
+ * Sprint 25, Sessions 4a + 4b.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -14,6 +14,18 @@ import { SymbolConditionGrid } from './SymbolConditionGrid';
 import { SymbolStrategyHistory } from './SymbolStrategyHistory';
 import type { ObservatoryJourneyEvent } from '../../../api/client';
 
+// Mock lightweight-charts (used by SymbolCandlestickChart)
+vi.mock('lightweight-charts', () => ({
+  createChart: vi.fn(() => ({
+    addSeries: vi.fn(() => ({ setData: vi.fn() })),
+    timeScale: vi.fn(() => ({ fitContent: vi.fn() })),
+    remove: vi.fn(),
+    applyOptions: vi.fn(),
+  })),
+  CandlestickSeries: 'CandlestickSeries',
+  LineStyle: { Solid: 0, Dotted: 1, Dashed: 2, LargeDashed: 3 },
+}));
+
 vi.mock('../../../api/client', () => ({
   getSymbolJourney: vi.fn().mockResolvedValue({
     symbol: 'AAPL',
@@ -21,6 +33,18 @@ vi.mock('../../../api/client', () => ({
     count: 0,
     date: '2026-03-17',
     timestamp: '2026-03-17T14:30:00Z',
+  }),
+  getQualityScore: vi.fn().mockResolvedValue(null),
+  getCatalystsBySymbol: vi.fn().mockResolvedValue({
+    catalysts: [],
+    count: 0,
+    symbol: 'AAPL',
+  }),
+  fetchSymbolBars: vi.fn().mockResolvedValue({
+    symbol: 'AAPL',
+    timeframe: '1m',
+    bars: [],
+    count: 0,
   }),
 }));
 
