@@ -11,6 +11,7 @@ import type {
   BarsResponse,
   Briefing,
   BriefingsListResponse,
+  CatalystsBySymbolResponse,
   ConversationDetailResponse,
   ConversationsListResponse,
   CorrelationResponse,
@@ -44,6 +45,8 @@ import type {
   TradeReplayResponse,
   TradesBatchResponse,
   TradesResponse,
+  ObservatoryClosestMissesResponse,
+  ObservatorySessionSummaryResponse,
   UniverseStatusResponse,
   WatchlistResponse,
 } from './types';
@@ -667,5 +670,77 @@ export async function getStrategyDecisions(
   const query = searchParams.toString();
   return fetchWithAuth<EvaluationEvent[]>(
     `/strategies/${strategyId}/decisions${query ? `?${query}` : ''}`
+  );
+}
+
+// Catalyst endpoints (Intelligence pipeline)
+export async function getCatalystsBySymbol(
+  symbol: string,
+  limit: number = 10
+): Promise<CatalystsBySymbolResponse> {
+  const params = new URLSearchParams();
+  params.set('limit', String(limit));
+  return fetchWithAuth<CatalystsBySymbolResponse>(`/catalysts/${symbol}?${params}`);
+}
+
+// --- Observatory ---
+
+export interface ObservatoryPipelineResponse {
+  tiers: Record<string, { count: number; symbols: string[] }>;
+  timestamp: string;
+}
+
+export async function getObservatoryPipeline(): Promise<ObservatoryPipelineResponse> {
+  return fetchWithAuth<ObservatoryPipelineResponse>('/observatory/pipeline');
+}
+
+export interface ObservatoryJourneyEvent {
+  timestamp: string;
+  strategy: string;
+  event_type: string;
+  result: string;
+  metadata: Record<string, unknown>;
+}
+
+export interface ObservatoryJourneyResponse {
+  symbol: string;
+  events: ObservatoryJourneyEvent[];
+  count: number;
+  date: string;
+  timestamp: string;
+}
+
+export async function getSymbolJourney(
+  symbol: string,
+  date?: string
+): Promise<ObservatoryJourneyResponse> {
+  const params = new URLSearchParams();
+  if (date) params.set('date', date);
+  const query = params.toString();
+  return fetchWithAuth<ObservatoryJourneyResponse>(
+    `/observatory/symbol/${symbol}/journey${query ? `?${query}` : ''}`
+  );
+}
+
+export async function getObservatoryClosestMisses(
+  tier: string,
+  limit: number = 20,
+  date?: string
+): Promise<ObservatoryClosestMissesResponse> {
+  const params = new URLSearchParams();
+  params.set('tier', tier);
+  params.set('limit', String(limit));
+  if (date) params.set('date', date);
+  return fetchWithAuth<ObservatoryClosestMissesResponse>(
+    `/observatory/closest-misses?${params}`
+  );
+}
+
+export async function getObservatorySessionSummary(
+  date?: string
+): Promise<ObservatorySessionSummaryResponse> {
+  const query = date ? `?date=${date}` : '';
+  return fetchWithAuth<ObservatorySessionSummaryResponse>(
+    `/observatory/session-summary${query}`
   );
 }

@@ -16,7 +16,7 @@
 import { useEffect, useCallback } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { TrendingUp, GraduationCap, Activity } from 'lucide-react';
+import { TrendingUp, Telescope, GraduationCap, Activity } from 'lucide-react';
 import { DURATION, EASE } from '../utils/motion';
 
 interface MoreSheetProps {
@@ -26,6 +26,7 @@ interface MoreSheetProps {
 
 const MORE_ITEMS = [
   { to: '/performance', icon: TrendingUp, label: 'Performance' },
+  { to: '/observatory', icon: Telescope, label: 'Observatory' },
   { to: '/debrief', icon: GraduationCap, label: 'The Debrief' },
   { to: '/system', icon: Activity, label: 'System' },
 ] as const;

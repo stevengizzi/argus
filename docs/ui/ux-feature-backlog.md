@@ -9,9 +9,9 @@
 
 ## Design Vision & Principles
 
-### The Vision: Seven-Page Command Center + AI Copilot
+### The Vision: Eight-Page Command Center + AI Copilot
 
-ARGUS's Command Center is a 7-page application (DEC-169) with a contextual AI Copilot (DEC-170) accessible from every page. Each page has a focused purpose:
+ARGUS's Command Center is an 8-page application with a contextual AI Copilot (DEC-170) accessible from every page. Each page has a focused purpose:
 
 | Page | Purpose | Primary User Question |
 |------|---------|----------------------|
@@ -22,6 +22,7 @@ ARGUS's Command Center is a 7-page application (DEC-169) with a contextual AI Co
 | **Pattern Library** | Strategy encyclopedia | "How does each strategy work, and how has it performed?" |
 | **The Debrief** | Knowledge accumulation | "What have I learned, and what should I review?" |
 | **System** | Infrastructure health | "Is everything running correctly?" |
+| **Observatory** | Pipeline visualization | "What is the pipeline doing with every symbol right now?" |
 
 The **AI Copilot** is a persistent slide-out chat panel (desktop: right 35%, mobile: full-screen overlay) triggered by a floating button or `c` keyboard shortcut. Context-aware — automatically receives page context, selected entities, and system state.
 
@@ -44,14 +45,15 @@ The **AI Copilot** is a persistent slide-out chat panel (desktop: right 35%, mob
 **Desktop (icon sidebar):** Grouped by concern with subtle dividers.
 - **Monitor:** Dashboard 📊 | Trades 📋 | Performance 📈
 - **Operate:** Orchestrator 🎯 | Patterns 🧩
+- **Observe:** Observatory 🔭
 - **Learn:** Debrief 📚
 - **Maintain:** System ⚙️
 
-Keyboard shortcuts: `1`–`7` page navigation, `c` copilot, `w` watchlist toggle.
+Keyboard shortcuts: `1`–`8` page navigation (sidebar), `Cmd+K` copilot, `w` watchlist toggle. Observatory internal: `f`/`m`/`r`/`t` for views, `[`/`]` for tiers, `Tab` for symbols, `Shift+R`/`Shift+F` for camera.
 
 **Mobile (bottom tab bar):** 5 primary tabs + More menu.
 - Tabs: Dashboard | Trades | Orchestrator | Patterns | More
-- More menu: Performance | Debrief | System
+- More menu: Performance | Debrief | System | Observatory
 
 Copilot floating button on all surfaces, positioned above tab bar on mobile.
 
@@ -547,49 +549,29 @@ Snapshot of L2 state at trade entry time, stored with trade data. Shows in Trade
 
 ---
 
-## Sprint 25 — Quality Engine UI (DEC-163, DEC-168)
+## Sprint 25 — The Observatory ✅ COMPLETE (March 18, 2026)
 
-### 25-A. Quality Grade Badges Everywhere [P0]
+Observatory page (Command Center page 8) with 4 views, detail panel, session vitals, and debrief mode. See `docs/architecture.md` §13 for full technical details.
 
-**Setup quality visible at every level.**
-Compact grade badges (A+/A/B+/B/C in color) appear on:
-- Watchlist items (pre-scored quality from Pre-Market Engine)
-- Open positions (current quality grade)
-- Trade Log (new column, filterable)
-- Dashboard (quality distribution mini-card: today's A+/A/B/C counts)
+| ID | Feature | Priority | Status |
+|----|---------|----------|--------|
+| 25-A | Funnel View (Three.js 3D — translucent cone, InstancedMesh particles, CSS2DRenderer labels) | P1 | ✅ Sprint 25 S6a–S6b |
+| 25-B | Radar View (Three.js camera animation — shared scene with Funnel, bottom-up perspective) | P1 | ✅ Sprint 25 S7 |
+| 25-C | Matrix View (condition heatmap, virtual scrolling, Tab navigation) | P1 | ✅ Sprint 25 S5a–S5b |
+| 25-D | Timeline View (SVG strategy lanes, 9:30–4:00 ET, 4 severity levels) | P1 | ✅ Sprint 25 S8 |
+| 25-E | Detail Panel (condition grid, candlestick chart, strategy history, quality/catalyst) | P1 | ✅ Sprint 25 S4a–S4b |
+| 25-F | Session Vitals + Debrief Mode (live metrics, date picker, 7-day history) | P1 | ✅ Sprint 25 S9 |
+| 25-G | Backend (ObservatoryService, 4 REST endpoints, Observatory WebSocket) | P1 | ✅ Sprint 25 S1–S2 |
+| 25-H | Keyboard Navigation (f/m/r/t views, [/] tiers, Tab symbols, Shift+R/F camera) | P0 | ✅ Sprint 25 S3+S3f |
 
-*Effort: ~4 hours. Badge variant + 4 integration points.*
+### Quality Engine UI (originally planned for Sprint 25, delivered Sprint 24/24.1)
 
-### 25-B. Trade Detail Panel — Quality Breakdown [P1]
-
-**Full transparency into scoring.**
-New section in Trade Detail panel:
-- Radar chart showing 6 component scores (pattern strength, catalyst quality, order flow, volume, historical match, regime alignment)
-- Overall grade + score
-- "Why this size?" section: grade → risk tier → % risk → share count calculation
-- Rationale text from SetupQualityEngine
-
-*Effort: ~8 hours. Radar chart (Recharts), breakdown layout, sizer explanation.*
-
-### 25-C. Performance — By Quality Grade [P1]
-
-**Are A+ setups actually outperforming?**
-Critical validation chart on Performance page:
-- Win rate by grade
-- Average R by grade
-- Total P&L by grade
-- Sample size by grade
-
-Must show clear gradient (A+ > A > B+ > B) for quality scoring to be validated (ASM-016).
-
-*Effort: ~4 hours. New chart + API aggregation.*
-
-### 25-D. Orchestrator — Quality-Weighted Allocation [P1]
-
-**Capital deployment by quality tier.**
-New sub-section in Orchestrator allocation column: how much capital was deployed to A+ setups vs B setups today. Historical trend. Ties allocation decisions to setup quality.
-
-*Effort: ~3 hours. New widget in existing column.*
+| ID | Feature | Priority | Status |
+|----|---------|----------|--------|
+| Q-A | Quality Grade Badges (QualityBadge, trades table, dashboard) | P0 | ✅ Sprint 24 S6b + 24.1 S4b |
+| Q-B | Trade Detail Panel — Quality Breakdown (SignalDetailPanel, quality score) | P1 | ✅ Sprint 24.1 S4b |
+| Q-C | Performance — By Quality Grade (QualityGradeChart, QualityOutcomeScatter) | P1 | ✅ Sprint 24.1 S4a |
+| Q-D | Orchestrator — Quality-Weighted Allocation | P1 | Deferred to Sprint 26+ |
 
 ---
 
@@ -680,7 +662,7 @@ Refactor Performance page from fixed 5-tab layout to customizable widget grid us
 | **23.5** ✅ | CatalystBadge, CatalystAlertPanel, IntelligenceBriefView, TanStack Query hooks | ~12h | Catalyst intelligence UI foundation |
 | **23+** | Sunburst, regime timeline, symbol heatmap, configurable grid, notifications | ~36h | Refinement & customization |
 | **24** | Flow indicator, L2 heatmap, entry snapshot | ~14h | Order flow UI |
-| **25** | Quality badges, breakdown radar, performance by grade, allocation by quality | ~19h | Quality scoring UI |
+| **25** ✅ | Observatory page (4 views, detail panel, vitals, debrief mode, Three.js 3D) | ~14 sessions | Pipeline visualization |
 | **30** | Calibration chart, weekly insight, learning loop health | ~8h | Learning loop UI |
 
 ---
@@ -697,7 +679,7 @@ Refactor Performance page from fixed 5-tab layout to customizable widget grid us
 - **Lightweight Charts** (integrated): Equity curves, candlestick, area, histograms.
 - **Recharts** (integrated): Donut/bar charts, radar charts, simple histograms.
 - **D3** (Sprint 21d+): Treemaps, heatmaps, correlation matrices, sunbursts. Use sparingly.
-- **Three.js or Plotly 3D** (Sprint 22): Strategy optimization landscape. Single showpiece.
+- **Three.js r128** (Sprint 25): Observatory Funnel/Radar 3D views. Code-split via React.lazy. InstancedMesh for symbol particles, CSS2DRenderer for labels. Shared-scene pattern (Funnel+Radar share one scene with camera presets).
 
 ### Mobile-First Patterns
 - Detail panels → full-screen modals on mobile

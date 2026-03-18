@@ -17,7 +17,7 @@ Before making any changes:
    Expected: ~2,768 tests, all passing
    Vitest: `cd argus/ui && npx vitest run`
    Expected: ~523 tests, all passing
-3. Verify you are on the correct branch: `main` (or sprint-25 branch if created)
+3. Verify you are on the correct branch: `sprint-25`
 
 ## Objective
 Create ObservatoryService (analytics/aggregation layer) and 4 REST endpoints that provide the data foundation for all Observatory frontend views: pipeline stage counts, closest-miss ranking, per-symbol pipeline journey, and session summary.

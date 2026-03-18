@@ -2,7 +2,7 @@
  * Main App component with routing.
  */
 
-import { useEffect } from 'react';
+import { useEffect, lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from './stores/auth';
 import { ProtectedRoute } from './components/ProtectedRoute';
@@ -16,6 +16,11 @@ import { OrchestratorPage } from './pages/OrchestratorPage';
 import { DebriefPage } from './pages/DebriefPage';
 import { SystemPage } from './pages/SystemPage';
 import { ConnectionTest } from './pages/ConnectionTest';
+
+// Lazy-loaded pages for code-splitting
+const ObservatoryPage = lazy(() =>
+  import('./features/observatory/ObservatoryPage').then((m) => ({ default: m.ObservatoryPage }))
+);
 
 function App() {
   const init = useAuthStore((state) => state.init);
@@ -44,6 +49,15 @@ function App() {
           <Route path="performance" element={<PerformancePage />} />
           <Route path="patterns" element={<PatternLibraryPage />} />
           <Route path="orchestrator" element={<OrchestratorPage />} />
+          <Route path="observatory" element={
+            <Suspense fallback={
+              <div className="flex items-center justify-center h-full">
+                <span className="text-sm text-argus-text-dim">Loading Observatory…</span>
+              </div>
+            }>
+              <ObservatoryPage />
+            </Suspense>
+          } />
           <Route path="debrief" element={<DebriefPage />} />
           <Route path="system" element={<SystemPage />} />
           <Route path="dev/connection" element={<ConnectionTest />} />

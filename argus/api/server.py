@@ -275,6 +275,25 @@ def create_app(app_state: AppState) -> FastAPI:
             except Exception as e:
                 logger.error(f"Failed to initialize EvaluationEventStore: {e}")
 
+        # Initialize ObservatoryService if enabled (Sprint 25)
+        if (
+            app_state.config is not None
+            and app_state.config.observatory is not None
+            and app_state.config.observatory.enabled
+        ):
+            try:
+                from argus.analytics.observatory_service import ObservatoryService
+
+                app_state.observatory_service = ObservatoryService(
+                    telemetry_store=app_state.telemetry_store,
+                    universe_manager=app_state.universe_manager,
+                    quality_engine=app_state.quality_engine,
+                    strategies=app_state.strategies,
+                )
+                logger.info("ObservatoryService initialized")
+            except Exception as e:
+                logger.error(f"Failed to initialize ObservatoryService: {e}")
+
         # Note: WebSocket bridge is started by main.py before calling run_server().
         # We only need to get a reference to it here for cleanup.
         from argus.api.websocket import get_bridge
@@ -350,11 +369,32 @@ def create_app(app_state: AppState) -> FastAPI:
 
     app.include_router(api_router, prefix="/api/v1")
 
+    # Mount Observatory routes (config-gated — Sprint 25)
+    observatory_enabled = (
+        app_state.config is not None
+        and app_state.config.observatory is not None
+        and app_state.config.observatory.enabled
+    )
+    if observatory_enabled:
+        from argus.api.routes.observatory import router as observatory_router
+
+        app.include_router(
+            observatory_router,
+            prefix="/api/v1/observatory",
+            tags=["observatory"],
+        )
+
     # Mount WebSocket routes (no prefix)
     from argus.api.websocket import ai_ws_router, ws_router
 
     app.include_router(ws_router)
     app.include_router(ai_ws_router)
+
+    # Mount Observatory WebSocket (config-gated — Sprint 25 S2)
+    if observatory_enabled:
+        from argus.api.websocket.observatory_ws import observatory_ws_router
+
+        app.include_router(observatory_ws_router)
 
     # Mount static files if configured
     if app_state.config and app_state.config.api and app_state.config.api.static_dir:

@@ -1,7 +1,7 @@
 # ARGUS — Strategic Roadmap
 
 > From artisanal strategies to ensemble alpha — the complete path
-> **v1.5 — March 17, 2026** (Phase 5 Gate complete — Sprint 25 rescoped to The Observatory)
+> **v1.6 — March 18, 2026** (Sprint 25 complete — The Observatory delivered)
 > **Status:** CANONICAL — this is the single source of truth for ARGUS's strategic direction and sprint queue.
 > **Supersedes:** `docs/research/ARGUS_Expanded_Roadmap.md` (Feb 26), `docs/argus_unified_vision_roadmap.md` (Mar 5), `docs/10_PHASE3_SPRINT_PLAN.md` (all forward-looking sections)
 
@@ -78,7 +78,7 @@ These foundations are correct and remain:
 
 ARGUS completed 21 sprints + sub-sprints in ~17 calendar days of active development (Feb 14 – Mar 5). Average sprint: ~0.8 calendar days. However, sprint complexity has been increasing — early sprints (1–5) were dense single-day affairs, while later sprints (21a–21d, 21.5) span multiple days. The roadmap below assumes sprint durations of 1–4 days each depending on complexity, with some parallelism where noted.
 
-**Current state:** Sprint 24.5 complete. 2,768 pytest + 523 Vitest. Four active strategies with per-candle evaluation telemetry. Live Databento + IBKR paper trading. Seven-page Command Center + AI Copilot active. FMP Scanner + Universe Manager integrated. Autonomous Sprint Runner implemented (DEC-278–297). NLP Catalyst Pipeline complete (DEC-300–307). Setup Quality Engine + Dynamic Position Sizer complete (DEC-330–341). Strategy Observability complete (DEC-342). Phase 5 Gate complete — Sprint 25 (The Observatory) next.
+**Current state:** Sprint 25 complete. 2,765 pytest + 599 Vitest. Four active strategies with per-candle evaluation telemetry. Live Databento + IBKR paper trading. Eight-page Command Center (Observatory added Sprint 25) + AI Copilot active. FMP Scanner + Universe Manager integrated. Autonomous Sprint Runner implemented (DEC-278–297). NLP Catalyst Pipeline complete (DEC-300–307). Setup Quality Engine + Dynamic Position Sizer complete (DEC-330–341). Strategy Observability complete (DEC-342). The Observatory complete (Sprint 25) — Sprint 26 (Red-to-Green) next.
 
 ---
 
@@ -86,7 +86,7 @@ ARGUS completed 21 sprints + sub-sprints in ~17 calendar days of active developm
 
 Every capability must be visible the moment it exists. Terminal-only development phases are a failure mode — they disconnect the builder from the system and erode confidence in what the system is actually doing. The design north star remains "Bloomberg Terminal meets modern fintech" and the aspiration remains "a portal, not a tool."
 
-The Command Center evolves from 7 pages to 10 across this roadmap:
+The Command Center evolves from 8 pages to 11 across this roadmap:
 
 | Page | Current | Phase 5 | Phase 6 | Phase 7–8 | Phase 9–10 |
 |------|---------|---------|---------|-----------|------------|
@@ -97,6 +97,7 @@ The Command Center evolves from 7 pages to 10 across this roadmap:
 | Pattern Library | Built | Unchanged | New strategy cards | Template gallery evolution | Template + ensemble browser |
 | The Debrief | Built | AI-generated summaries | Unchanged | Research session recaps | Ensemble debrief |
 | System | Built | API health monitoring | Unchanged | BacktestEngine monitoring | Pipeline health |
+| Observatory | **Built (Sprint 25)** | — | Strategy-specific views | Ensemble pipeline viz | Full ensemble observatory |
 | Copilot | Shell built | Activated (Sprint 22) | Ensemble-aware context | Research assistant mode | Full ensemble copilot |
 | Research Console | — | — | — | **New (Sprint 30)** | Discovery pipeline view |
 | Synapse | — | — | — | — | **New (Sprint 38–39)** |
@@ -258,28 +259,25 @@ Re-validate all pre-Databento strategy parameters using Databento tick-level dat
 
 *Opens with The Observatory for operational visibility, then expands the strategy roster to 13–15+ hand-crafted patterns including short selling. Adds the Learning Loop for self-monitoring. This is the phase where ARGUS becomes a serious multi-strategy system. UI focus: make strategy health, correlation, and pipeline behavior visible.*
 
-### Sprint 25: The Observatory (Phase 5 Gate outcome)
-**Target:** ~4–5 days
-**Status:** PLANNED (sprint package generated March 17, 2026)
+### Sprint 25: The Observatory (Phase 5 Gate outcome) ✅ COMPLETE (March 18, 2026)
 
 **Context:** Phase 5 Gate strategic check-in identified a critical gap: the system has sophisticated evaluation telemetry (Sprint 24.5) but no way for the operator to observe pipeline behavior immersively. Zero trades were occurring and the operator couldn't tell why. The Observatory addresses this directly — operational visibility is prerequisite to adding more strategies.
 
-**Scope:**
-- **Observatory page** (Command Center page 8): Full-bleed immersive visualization, keyboard-first navigation
-- **Four views** switchable via `1` `2` `3` `4` keys:
-  - **Funnel** (Three.js 3D): Translucent cone with tier discs, symbol particles via InstancedMesh, orbit controls, LOD labels
-  - **Radar** (Three.js camera animation): Bottom-up perspective of the same funnel — concentric rings with trigger point at center. Smooth camera transition from Funnel.
-  - **Matrix**: Condition heatmap sorted by proximity to trigger. Green/red/gray cells. Virtual scrolling. Live-updating sort.
-  - **Timeline**: Strategy lane timeline (9:30–4:00 ET) with event marks at 4 severity levels
+**Delivered:**
+- **Observatory page** (Command Center page 8): Full-bleed immersive visualization, keyboard-first navigation (f/m/r/t for views, [/] for tiers, Tab for symbols, Shift+R/F for camera)
+- **Four views:**
+  - **Funnel** (Three.js 3D): Translucent cone with tier discs, symbol particles via InstancedMesh (up to 5,000), CSS2DRenderer labels, OrbitControls
+  - **Radar** (Three.js camera animation): Bottom-up perspective of same scene — concentric rings with trigger point at center. Shared-scene pattern with Funnel.
+  - **Matrix**: Condition heatmap sorted by proximity to trigger. Green/red/gray cells. Virtual scrolling. Tab navigation.
+  - **Timeline**: Strategy lane timeline (9:30–4:00 ET) with SVG event marks at 4 severity levels
 - **Detail panel** (right slide-out): Per-symbol condition grid, quality score, catalyst summary, live candlestick chart (Lightweight Charts), chronological strategy history. Persists across view switches.
 - **Session vitals bar**: Connection status, evaluation counts, closest miss, top blocking condition
 - **Debrief mode**: Date picker switches all views to historical data (7-day retention)
-- **Backend**: 4 REST endpoints (session summary, pipeline counts, closest-misses, symbol journey) + WebSocket live updates
+- **Backend**: ObservatoryService (4 query methods) + 4 REST endpoints + Observatory WebSocket (`/ws/v1/observatory`)
 - **Config-gated** via `observatory.enabled` (default: true)
-- **13 sessions + 5 visual-review fix contingency = up to 18 sessions**
-- **Tests:** ~92 new (25 pytest + 67 Vitest)
-
-**Decisions:** DEC-343+ (reserved through DEC-360)
+- **14 sessions** (S1, S2, S3, S3f, S4a, S4b, S5a, S5b, S6a, S6b, S7, S8, S9, S10)
+- **Tests:** pytest −3 (DEF-048 gap), Vitest +76. Net: 2,765 pytest + 599 Vitest = 3,364 total
+- **No new DEC entries.** Reserved range DEC-343–360 unused.
 
 ### Sprint 26: Red-to-Green + Pattern Library Foundation (DEC-163, DEC-167)
 **Target:** ~2–3 days

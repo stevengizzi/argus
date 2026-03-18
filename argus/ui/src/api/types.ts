@@ -686,6 +686,77 @@ export interface UniverseStatusResponse {
   reference_data_age_minutes: number | null;
 }
 
+// Catalysts (Intelligence pipeline)
+export interface CatalystItem {
+  headline: string;
+  symbol: string;
+  source: string;
+  source_url: string | null;
+  filing_type: string | null;
+  published_at: string;
+  category: string;
+  quality_score: number;
+  summary: string;
+  trading_relevance: string;
+  classified_by: string;
+  classified_at: string;
+}
+
+export interface CatalystsBySymbolResponse {
+  catalysts: CatalystItem[];
+  count: number;
+  symbol: string;
+}
+
+// Observatory (Sprint 25)
+export interface ObservatoryConditionDetail {
+  name: string;
+  passed: boolean;
+  actual_value: string | number | boolean | null;
+  required_value: string | number | boolean | null;
+}
+
+export interface ObservatoryClosestMissEntry {
+  symbol: string;
+  strategy: string;
+  conditions_passed: number;
+  conditions_total: number;
+  conditions_detail: ObservatoryConditionDetail[];
+  timestamp: string | null;
+}
+
+export interface ObservatoryClosestMissesResponse {
+  tier: string;
+  items: ObservatoryClosestMissEntry[];
+  count: number;
+  timestamp: string;
+}
+
+// Observatory Session Summary (Sprint 25 S9)
+export interface ObservatoryBlockerEntry {
+  condition_name: string;
+  rejection_count: number;
+  percentage: number;
+}
+
+export interface ObservatoryClosestMissSummary {
+  symbol: string;
+  strategy: string;
+  conditions_passed: number;
+  conditions_total: number;
+}
+
+export interface ObservatorySessionSummaryResponse {
+  total_evaluations: number;
+  total_signals: number;
+  total_trades: number;
+  symbols_evaluated: number;
+  top_blockers: ObservatoryBlockerEntry[];
+  closest_miss: ObservatoryClosestMissSummary | null;
+  date: string;
+  timestamp: string;
+}
+
 // Strategy Decisions (Sprint 24.5)
 export interface EvaluationEvent {
   timestamp: string;

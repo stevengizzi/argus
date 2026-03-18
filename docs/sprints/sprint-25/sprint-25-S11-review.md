@@ -1,8 +1,8 @@
-# Sprint 25, Session 10 — Tier 2 Review Prompt (FINAL SESSION)
+# Sprint 25, Session 11 — Tier 2 Review Prompt (FINAL SESSION)
 
 ## Context
 Read: `docs/sprints/sprint-25/review-context.md`
-Close-out: `docs/sprints/sprint-25/session-10-closeout.md`
+Close-out: `docs/sprints/sprint-25/session-11-closeout.md`
 
 ## Diff & Test (FULL SUITE — final session)
 Diff: `git diff HEAD~1` (or full sprint diff)
@@ -23,4 +23,4 @@ ALL trading pipeline files per regression checklist
 7. **Check ALL items in regression checklist** (final session)
 
 ## Output
-Write to: `docs/sprints/sprint-25/session-10-review.md`
+Write to: `docs/sprints/sprint-25/session-11-review.md`

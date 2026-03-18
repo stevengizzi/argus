@@ -170,6 +170,31 @@ class EvaluationEventStore:
             for row in results
         ]
 
+    @property
+    def is_connected(self) -> bool:
+        """Return True if the database connection is open."""
+        return self._conn is not None
+
+    async def execute_query(
+        self, sql: str, params: tuple[object, ...] = ()
+    ) -> list[aiosqlite.Row]:
+        """Execute a read-only SQL query and return all rows.
+
+        Provides public access to the underlying connection for
+        read-only analytics queries (e.g. ObservatoryService).
+
+        Args:
+            sql: SQL query string.
+            params: Query parameters.
+
+        Returns:
+            List of result rows.
+        """
+        if self._conn is None:
+            return []
+        cursor = await self._conn.execute(sql, params)
+        return await cursor.fetchall()
+
     async def cleanup_old_events(self) -> None:
         """Delete events older than RETENTION_DAYS.
 

@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from argus.ai.summary import DailySummaryGenerator
     from argus.ai.usage import UsageTracker
     from argus.analytics.debrief_service import DebriefService
+    from argus.analytics.observatory_service import ObservatoryService
     from argus.analytics.trade_logger import TradeLogger
     from argus.core.clock import Clock
     from argus.core.config import SystemConfig
@@ -110,6 +111,7 @@ class AppState:
     quality_engine: SetupQualityEngine | None = None
     position_sizer: DynamicPositionSizer | None = None
     telemetry_store: EvaluationEventStore | None = None
+    observatory_service: ObservatoryService | None = None
 
 
 def get_app_state(request: Request) -> AppState:
