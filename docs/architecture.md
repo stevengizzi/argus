@@ -1355,8 +1355,8 @@ Seven pages delivered with responsive design across four breakpoints (DEC-169). 
 
 | Surface | Navigation | Pages |
 |---------|-----------|-------|
-| Desktop (≥1024px) | Icon sidebar with group dividers | All 7 pages visible |
-| Tablet (640–1023px) | Icon sidebar | All 7 pages visible |
+| Desktop (≥1024px) | Icon sidebar with group dividers | All 8 pages visible |
+| Tablet (640–1023px) | Icon sidebar | All 8 pages visible |
 | Mobile (<640px) | Bottom tab bar (5 tabs) + More sheet | Dash, Trades, Orch, Patterns, More → (Performance, Debrief, System) |
 
 Global keyboard shortcuts: `1`–`7` page navigation, `w` watchlist toggle, `c` copilot toggle (DEC-199).
@@ -1790,7 +1790,7 @@ Each executor validates inputs against schema bounds (e.g., allocation 0–100%,
 
 **Markdown rendering:** `react-markdown` + `remark-gfm` + `rehype-sanitize` (DEC-270).
 
-**Context hooks:** Each of 7 pages provides context via `useCopilotContext` (DEC-268).
+**Context hooks:** Each of 8 pages provides context via `useCopilotContext` (DEC-268).
 
 ---
 
@@ -1907,7 +1907,81 @@ config/
 
 ---
 
-## 13. Technology Stack Summary
+## 13. Observatory Subsystem (Sprint 25)
+
+The Observatory is an immersive pipeline visualization page (Command Center page 8) providing real-time and post-session visibility into the entire ARGUS trading pipeline — from universe filtering through strategy evaluation to trade execution.
+
+### 13.1 ObservatoryService (`analytics/observatory_service.py`)
+
+Read-only analytics service querying EvaluationEventStore and UniverseManager. Does not write data or affect the trading pipeline.
+
+**Methods:**
+- `get_pipeline_stages()` — Aggregated counts per pipeline tier (universe → viable → monitored → evaluated → quality_scored → traded)
+- `get_closest_misses()` — Symbols closest to triggering a strategy signal (most conditions passed)
+- `get_symbol_journey(symbol)` — Full evaluation history for a single symbol across all strategies
+- `get_session_summary()` — High-level session metrics (evaluation count, signal count, trade count, unique symbols)
+
+**Data access:** Uses `EvaluationEventStore.execute_query()` public method (added Sprint 25 S10) for SQL queries over the evaluation telemetry SQLite database. The `is_connected` property gates queries when the store is not initialized.
+
+### 13.2 Observatory WebSocket (`/ws/v1/observatory`)
+
+Push-based pipeline updates, independent from the AI chat WebSocket (`/ws/v1/ai/chat`).
+
+**Message types:**
+- Tier transition events (symbol moves between pipeline stages)
+- Evaluation summaries (periodic aggregated counts)
+
+**Authentication:** JWT token required on connection (same as other WS endpoints).
+
+**Config-gated:** Only active when `observatory.enabled: true` in system config.
+
+### 13.3 Observatory Frontend
+
+**Page structure:** Full-bleed immersive layout with 4 switchable views, persistent detail panel, and session vitals bar.
+
+**Views (keyboard: f/m/r/t):**
+1. **Funnel (Three.js 3D):** Translucent cone with tier discs, symbol particles via InstancedMesh (up to 5,000), CSS2DRenderer for labels with LOD behavior, OrbitControls for camera manipulation.
+2. **Radar (Three.js 3D):** Bottom-up camera perspective of the same scene — concentric rings with trigger point at center. Thin wrapper passing `mode="radar"` to FunnelView. Smooth camera animation transition.
+3. **Matrix (heatmap):** Condition heatmap sorted by proximity to trigger. Green/red/gray cells for pass/fail/unknown. Virtual scrolling for large symbol lists. Tab key navigation.
+4. **Timeline (SVG):** Strategy lane timeline (9:30 AM–4:00 PM ET) with event marks at 4 severity levels (pass/fail/skip/trigger).
+
+**Shared-scene pattern:** Funnel and Radar share a single Three.js scene with camera presets. This avoids duplicate WebGL contexts and enables smooth camera transitions between views.
+
+**Three.js integration:**
+- Three.js r128, loaded via React.lazy code-splitting (separate chunk, does not impact initial bundle)
+- InstancedMesh for symbol particles — O(1) draw calls regardless of symbol count
+- CSS2DRenderer for HTML labels overlaid on the 3D scene
+- Monotonic instance slot allocation (no reclamation within session)
+
+**Detail panel (right slide-out):**
+- Per-symbol condition grid (which conditions passed/failed for each strategy)
+- Quality score and catalyst summary
+- Live candlestick chart (Lightweight Charts)
+- Chronological strategy evaluation history
+- Persists across view switches
+
+**Session vitals bar:**
+- Connection status, evaluation counts, closest miss, top blocking condition
+- Live data via WS + REST polling
+
+**Debrief mode:**
+- Date picker switches all views to historical data
+- 7-day retention (matches EvaluationEventStore retention)
+
+**Keyboard navigation:**
+- `f`/`m`/`r`/`t` — switch views (Funnel/Matrix/Radar/Timeline)
+- `[`/`]` — navigate tiers
+- `Tab` — cycle through symbols
+- `Shift+R` — reset camera
+- `Shift+F` — fit camera to scene
+
+### 13.4 ObservatoryConfig (`analytics/config.py`)
+
+Pydantic BaseModel wired into SystemConfig. Config-gated feature with `observatory.enabled` (default: true). YAML section: `observatory:` in system.yaml / system_live.yaml.
+
+---
+
+## 14. Technology Stack Summary
 
 | Component | Technology |
 |-----------|-----------|
@@ -1926,6 +2000,7 @@ config/
 | Charts (time-series) | Lightweight Charts (TradingView) |
 | Charts (standard) | Recharts |
 | Charts (custom viz) | D3 (sparingly — treemaps, heatmaps) |
+| 3D Visualization | Three.js r128 (Observatory Funnel/Radar views, code-split) |
 | Animation | Framer Motion + CSS transitions |
 | AI Integration | Anthropic Claude API |
 | Scheduling | APScheduler |
@@ -1937,4 +2012,4 @@ config/
 
 ---
 
-*End of Architecture Document v1.0*
+*End of Architecture Document v1.1 (updated Sprint 25 — Observatory subsystem)*

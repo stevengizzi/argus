@@ -1,6 +1,6 @@
 # ARGUS — Project Knowledge (Claude Context)
 
-> *Tier A operational context for Claude Code and Claude.ai. Last updated: March 16, 2026 (Sprint 24.5 doc sync).*
+> *Tier A operational context for Claude Code and Claude.ai. Last updated: March 18, 2026 (Sprint 25 doc sync).*
 > *Full decision rationale: `docs/decision-log.md` | Sprint details: `docs/sprint-history.md` | DEC index: `docs/dec-index.md`*
 
 ---
@@ -11,10 +11,10 @@ ARGUS is a fully automated, AI-enhanced multi-strategy day trading system for US
 
 ## Current State
 
-**Tests:** 2,768 pytest + 523 Vitest
-**Sprints completed:** 1 through 24.5 (24 full sprints + sub-sprints + Universe Manager + Autonomous Sprint Runner + Wide Pipe + NLP Catalyst + Pipeline Integration + Startup Fixes + Pipeline QA + Frontend Cleanup + Quality Engine + Post-Sprint Housekeeping + Strategy Observability)
-**Active sprint:** None (between sprints — Sprint 25 next)
-**Next sprint:** 25 (The Observatory — immersive pipeline visualization page)
+**Tests:** 2,765 pytest + 599 Vitest
+**Sprints completed:** 1 through 25 (25 full sprints + sub-sprints)
+**Active sprint:** None (between sprints)
+**Next sprint:** 26 (Red-to-Green + Pattern Library Foundation)
 **GitHub:** `https://github.com/stevengizzi/argus.git` (public)
 
 ### Sprint History (Summary)
@@ -58,12 +58,13 @@ ARGUS is a fully automated, AI-enhanced multi-strategy day trading system for US
 | 24 | Setup Quality Engine + Dynamic Sizer | 2686+497V | Mar 13–14 | DEC-330–341 |
 | 24.1 | Post-Sprint Cleanup & Housekeeping | 2709+503V | Mar 14 | — |
 | 24.5 | Strategy Observability + Operational Fixes | 2768+523V | Mar 15–16 | DEC-342 |
+| 25 | The Observatory | 2765+599V | Mar 17–18 | — (no new DECs) |
 
 *Full sprint scopes and session details: `docs/sprint-history.md`*
 
 ### Build Track Queue
 
-21.6 (Backtest Re-Validation, parallel) → 25 (The Observatory) → 26 (Red-to-Green + Pattern Library Foundation) → 27 (Pattern Expansion I) → 28 (Short Selling + Parabolic Short + Pattern Expansion II) → 29 (Learning Loop V1) → 30–32 (BacktestEngine, Sweep Infrastructure, Strategy Templates) → 33–35 (Statistical Validation, ORB Systematic Search ★, Ensemble Analysis) → 36–39 (Cross-Family Search, Ensemble Orchestrator V2, Synapse) → 40–42 (Learning Loop V2, Continuous Discovery, Performance Workbench). Sprint 23.5 (NLP Catalyst Pipeline) complete. Order Flow Model deferred to post-revenue (DEC-238). Full roadmap: `docs/roadmap.md` (DEC-262).
+21.6 (Backtest Re-Validation, parallel) → 26 (Red-to-Green + Pattern Library Foundation) → 27 (Pattern Expansion I) → 28 (Short Selling + Parabolic Short + Pattern Expansion II) → 29 (Learning Loop V1) → 30–32 (BacktestEngine, Sweep Infrastructure, Strategy Templates) → 33–35 (Statistical Validation, ORB Systematic Search ★, Ensemble Analysis) → 36–39 (Cross-Family Search, Ensemble Orchestrator V2, Synapse) → 40–42 (Learning Loop V2, Continuous Discovery, Performance Workbench). Sprint 23.5 (NLP Catalyst Pipeline) complete. Order Flow Model deferred to post-revenue (DEC-238). Full roadmap: `docs/roadmap.md` (DEC-262).
 
 ### Validation Track
 
@@ -79,13 +80,14 @@ Paper trading active with Databento EQUS.MINI + IBKR paper (Account U24619949, D
 
 ### Three-Tier System
 1. **Trading Engine** — Strategies, Orchestrator, Risk Manager, Data Service, Broker abstraction, Order Manager, Trade Logger, Backtesting (VectorBT + Replay Harness)
-2. **Command Center** — 7 pages (all built): Dashboard, Trade Log, Performance, Orchestrator, Pattern Library, The Debrief, System. Tauri desktop + PWA mobile + web. AI Copilot active.
+2. **Command Center** — 8 pages (all built): Dashboard, Trade Log, Performance, Orchestrator, Pattern Library, The Debrief, System, Observatory. Tauri desktop + PWA mobile + web. AI Copilot active.
 3. **AI Layer** (Sprint 22) — Claude API (Opus, DEC-098) via ClaudeClient wrapper; PromptManager with system prompt template and behavioral guardrails (DEC-273); SystemContextBuilder for per-page context injection (DEC-268); tool_use for structured action proposals (DEC-271) with 5 defined tools (DEC-272); ActionManager with DB-persisted proposals and 5-min TTL (DEC-267); 5 ActionExecutors with 4-condition pre-execution re-check; ConversationManager with calendar-date keying and tags (DEC-266); UsageTracker for per-call cost tracking (DEC-274); DailySummaryGenerator for insight card + daily summaries; ResponseCache for insight TTL caching. WS /ws/v1/ai/chat for streaming with actual API usage extraction (DEC-265). All timestamps ET-based (DEC-276). All AI features degrade gracefully when ANTHROPIC_API_KEY unset.
 4. **Intelligence Layer** (Sprints 23.5 + 23.6 + 24) — CatalystPipeline orchestrates three data sources: SECEdgarSource (8-K, Form 4), FMPNewsSource (stock news, press releases), FinnhubSource (company news, analyst recommendations). CatalystClassifier uses Claude API with rule-based fallback (DEC-301). CatalystStorage with SQLite persistence in separate catalyst.db (DEC-309) and headline hash deduplication (DEC-302). BriefingGenerator produces pre-market intelligence briefs with $5/day cost ceiling (DEC-303). Post-classification semantic dedup by (symbol, category, time_window) before storage (DEC-311). Batch-then-publish ordering for data safety (DEC-312). Config-gated via `catalyst.enabled` (DEC-300). Intelligence startup factory in `argus/intelligence/startup.py` builds all components from config (DEC-308). Polling loop via asyncio task with market-hours-aware intervals (DEC-315). Sprint 23.8 hardened the pipeline: `asyncio.wait_for(120)` safety timeout on source gather (DEC-319), polling task health monitoring via `done_callback` (DEC-320), symbol scope reduced from full viable universe to scanner watchlist (DEC-321), FMP news circuit breaker on 401/403 (DEC-323), cost ceiling enforcement wired into classifier with cycle cost logging (DEC-324), and Databento lazy warm-up `end` clamped to `now - 600s` (DEC-326). FMP canary test at startup validates API schema (DEC-313). Frontend: CatalystBadge, CatalystAlertPanel, IntelligenceBriefView with TanStack Query hooks. Sprint 23.9 added `usePipelineStatus` hook gating all catalyst/briefing queries on pipeline health status from `/api/v1/health` — zero requests when pipeline inactive (DEC-329). DebriefService initialized in `server.py` lifespan (was only wired in dev mode, causing 503 in live mode).
 5. **Quality Engine** (Sprints 24 + 24.1) — SetupQualityEngine scores setups on 5 weighted dimensions: pattern strength (30%), catalyst quality (25%), volume profile (20%), historical match (15%), regime alignment (10%). Produces quality_grade (A+ through C) and quality_score (0–100). DynamicPositionSizer maps grades to risk tiers (A+=2–3%, A=1.5%, B=0.75%, C+=0.25%, C-=SKIP). Strategies emit `share_count=0` with `pattern_strength` (0–100); `_process_signal()` in main.py runs quality pipeline (score → filter by minimum grade → size → enrich SignalEvent). Risk Manager check 0 rejects `share_count ≤ 0` before circuit breaker evaluation. Pipeline bypass: `BrokerSource.SIMULATED` or `quality_engine.enabled: false` → legacy sizing. QualitySignalEvent published after scoring (informational). Quality history persisted to `quality_history` table (20 columns, 4 indexes). Quality grade/score wired through Order Manager → TradeLogger → DB (Sprint 24.1). Config: `config/quality_engine.yaml` with Pydantic models (QualityWeightsConfig, QualityThresholdsConfig, QualityRiskTiersConfig) with validators. Firehose mode for catalyst sources: Finnhub single `GET /news?category=general`, SEC EDGAR single EFTS search (DEC-332). API: 3 endpoints (`/api/v1/quality/{symbol}`, `/api/v1/quality/history`, `/api/v1/quality/distribution`). UI: QualityBadge component, quality column in Trades table, Setup Quality in TradeDetailPanel, SignalQualityPanel (histogram) on Dashboard, RecentSignals with clickable SignalDetailPanel on Orchestrator (Sprint 24.1), QualityGradeChart (ComposedChart: bars for Avg P&L + line for Win Rate) on Performance, QualityOutcomeScatter on Performance Distribution tab (relocated from Debrief in Sprint 24.1). Orchestrator uses 3-column layout for Decision Log + Catalyst Alerts + Recent Signals (Sprint 24.1). Shared GRADE_COLORS/GRADE_ORDER constants extracted for consistency.
 
 ### Key Components
-- **Strategies:** Daily-stateful, session-stateless plugins (DEC-028). 4 active. 14 more planned. All strategies implement `_calculate_pattern_strength()` returning 0–100 score and emit `share_count=0` for quality pipeline sizing (Sprint 24, DEC-330/331). BaseStrategy includes `StrategyEvaluationBuffer` (ring buffer, maxlen=1000) for diagnostic telemetry — `record_evaluation()` logs decision-point events with try/except guard (never raises). `EvaluationEventStore` provides SQLite persistence with 7-day retention and ET-date-based queries. REST endpoint `GET /api/v1/strategies/{id}/decisions` returns buffer contents (JWT-protected). Frontend `StrategyDecisionStream` slide-out panel on Orchestrator page (DEC-342, Sprint 24.5).
+- **Strategies:** Daily-stateful, session-stateless plugins (DEC-028). 4 active. 14 more planned. All strategies implement `_calculate_pattern_strength()` returning 0–100 score and emit `share_count=0` for quality pipeline sizing (Sprint 24, DEC-330/331). BaseStrategy includes `StrategyEvaluationBuffer` (ring buffer, maxlen=1000) for diagnostic telemetry — `record_evaluation()` logs decision-point events with try/except guard (never raises). `EvaluationEventStore` provides SQLite persistence with 7-day retention and ET-date-based queries; exposes `execute_query()` public method and `is_connected` property (Sprint 25 S10). REST endpoint `GET /api/v1/strategies/{id}/decisions` returns buffer contents (JWT-protected). Frontend `StrategyDecisionStream` slide-out panel on Orchestrator page (DEC-342, Sprint 24.5).
+- **Observatory (Sprint 25):** ObservatoryService (`argus/analytics/observatory_service.py`) — read-only query service over EvaluationEventStore and UniverseManager with 4 methods: `get_pipeline_stages`, `get_closest_misses`, `get_symbol_journey`, `get_session_summary`. Observatory WebSocket (`/ws/v1/observatory`) — push-based pipeline updates with tier transition detection and evaluation summaries, independent from AI chat WS. ObservatoryConfig (`argus/analytics/config.py`) — Pydantic model wired into SystemConfig, config-gated via `observatory.enabled`. Frontend: 4 views (Funnel 3D, Radar 3D, Matrix heatmap, Timeline SVG), detail panel with candlestick chart, session vitals bar, debrief mode (7-day history). Three.js (r128) code-split via React.lazy. Shared-scene pattern: Funnel and Radar share single Three.js scene with camera presets. InstancedMesh for symbol particles (up to 5,000). Keyboard: f/m/r/t for views, [/] for tiers, Tab for symbols, Shift+R/F for camera.
 - **Orchestrator:** Rules-based V1 (DEC-118). Equal-weight allocation, regime monitoring (SPY vol as VIX proxy), performance throttling, pre-market routine.
 - **Risk Manager:** Three-level gating (strategy, cross-strategy, account). Check 0 rejects `share_count ≤ 0` before circuit breaker evaluation (Sprint 24, DEC-336). Approve-with-modification for share reduction and target tightening; never modify stops or entry (DEC-027). Concentration limit approve-with-modification with 0.25R floor (DEC-249).
 - **Data Service:** Databento EQUS.MINI primary (DEC-248). Event Bus sole streaming mechanism (DEC-029). Databento callbacks on reader thread, bridged via `call_soon_threadsafe()` (DEC-088). Universe Manager (Sprint 23) adds fast-path discard for non-viable symbols and ALL_SYMBOLS Databento mode. Time-aware indicator warm-up (DEC-316, Sprint 23.7): pre-market boot skips warm-up; mid-session boot uses lazy per-symbol backfill on first candle arrival.
@@ -97,7 +99,7 @@ Paper trading active with Databento EQUS.MINI + IBKR paper (Account U24619949, D
 
 ### Tech Stack
 - **Backend:** Python 3.11+, FastAPI (in-process Phase 12 startup, DEC-099), aiosqlite (DEC-034), asyncio Event Bus
-- **Frontend:** React + TypeScript, TanStack Query, Zustand, Framer Motion, TradingView Lightweight Charts + Recharts + D3 (DEC-104/215), Tailwind CSS v4
+- **Frontend:** React + TypeScript, TanStack Query, Zustand, Framer Motion, TradingView Lightweight Charts + Recharts + D3 (DEC-104/215) + Three.js r128 (Observatory 3D views, code-split), Tailwind CSS v4
 - **Desktop/mobile:** Tauri v2 desktop, PWA (iPhone/iPad) (DEC-080)
 - **Testing:** pytest + Vitest (DEC-130), ruff linting
 - **Config:** YAML → Pydantic BaseModel validation (DEC-032)

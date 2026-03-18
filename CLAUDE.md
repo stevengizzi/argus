@@ -1,13 +1,13 @@
 # ARGUS — Claude Code Context
 
 > Dense, actionable context for Claude Code sessions. No history — see `docs/` for that.
-> Last updated: March 16, 2026 (Sprint 24.5 doc sync)
+> Last updated: March 18, 2026 (Sprint 25 doc sync)
 
 ## Active Sprint
 
-**No active sprint.** Sprint 24.5 (Strategy Observability + Operational Fixes) completed March 16, 2026.
+**No active sprint.** Sprint 25 (The Observatory) completed March 18, 2026.
 
-Next planned sprint: **25 (The Observatory)**. Scope rescoped from Red-to-Green to operational visibility — immersive 3D pipeline visualization page with Funnel/Radar/Matrix/Timeline views, keyboard-first navigation, detail panel with live candlesticks, session vitals, and debrief mode. Red-to-Green deferred to Sprint 26.
+Next planned sprint: **26 (Red-to-Green + Pattern Library Foundation)**. Red-to-Green strategy + PatternLibrary ABC + Bull Flag + Flat-Top Breakout pattern modules.
 
 ### Known Issues
 - **FMP Starter plan restriction:** FMP news endpoints return 403 on Starter plan ($22/mo). `fmp_news.enabled: false` in `system_live.yaml`. FMP circuit breaker (DEC-323) prevents spam if accidentally enabled.
@@ -17,11 +17,11 @@ Next planned sprint: **25 (The Observatory)**. Scope rescoped from Red-to-Green 
 ## Current State
 
 - **Active sprint:** None (between sprints)
-- **Next sprint:** 25 (The Observatory — immersive pipeline visualization page)
-- **Tests:** 2,768 pytest + 523 Vitest
+- **Next sprint:** 26 (Red-to-Green + Pattern Library Foundation)
+- **Tests:** 2,765 pytest + 599 Vitest
 - **Strategies:** 4 active (ORB Breakout, ORB Scalp, VWAP Reclaim, Afternoon Momentum)
 - **Infrastructure:** Databento EQUS.MINI (live) + IBKR paper trading (Account U24619949) + FMP Starter (scanning + reference data) + Finnhub (news + analyst recs) + Claude API (Copilot + Catalyst Classification) + Universe Manager (config-gated) + Catalyst Pipeline (config-gated) + Intelligence Polling Loop (config-gated) + Reference Data Cache + Quality Engine (config-gated) + Dynamic Position Sizer + Strategy Evaluation Telemetry (ring buffer + SQLite persistence)
-- **Frontend:** 7-page Command Center + AI Copilot + Universe Status Card + Intelligence Brief View (all active), Tauri desktop + PWA mobile
+- **Frontend:** 8-page Command Center (Observatory added Sprint 25) + AI Copilot + Universe Status Card + Intelligence Brief View (all active), Tauri desktop + PWA mobile
 
 ## Project Structure
 
@@ -65,7 +65,7 @@ argus/
 python -m pytest tests/                   # Run all tests
 python -m pytest tests/ -x               # Stop on first failure
 python -m pytest tests/ -x -q            # Fail-fast, quiet
-cd argus/ui && npx vitest run            # Frontend tests (~523)
+cd argus/ui && npx vitest run            # Frontend tests (~599)
 
 # Trading engine
 python -m argus.main                      # Start (paper trading default)
@@ -191,7 +191,7 @@ python scripts/sprint-runner.py resume --run-dir path/to/run  # Resume from chec
 
 - **Design principles (DEC-109):** Information over decoration. Ambient awareness. Progressive disclosure. Motion with purpose. Mobile as primary trading surface. Research lab aesthetics.
 - **Animation library (DEC-110):** Framer Motion for page transitions + stagger. CSS transitions for hover/micro-interactions. Lightweight Charts native for chart animations. Budget: <500ms, 60fps, never blocks interaction.
-- **Chart library stack (DEC-104, DEC-108):** Lightweight Charts (time-series) + Recharts (standard charts) + D3 (custom viz, sparingly) + Three.js/Plotly 3D (Sprint 22 optimization landscape).
+- **Chart library stack (DEC-104, DEC-108):** Lightweight Charts (time-series) + Recharts (standard charts) + D3 (custom viz, sparingly) + Three.js r128 (Observatory Funnel/Radar 3D views, code-split via React.lazy).
 - **UX Feature Backlog:** `docs/ui/ux-feature-backlog.md` — canonical inventory of all planned UI/UX enhancements. Reference when planning sprint UX scope. (DEC-106)
 - **Responsive breakpoints:** 393px (iPhone SE/mini), 834px (iPad portrait), 1194px (iPad landscape), 1512px (MacBook Pro).
 - **Mobile nav:** Bottom tab bar. Desktop/tablet: icon sidebar.
@@ -284,7 +284,7 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 |----------|---------------|
 | `docs/decision-log.md` | All 342 DEC entries with full rationale |
 | `docs/dec-index.md` | Quick-reference index with status markers |
-| `docs/sprint-history.md` | Complete sprint history (1–24.5) |
+| `docs/sprint-history.md` | Complete sprint history (1–25) |
 | `docs/process-evolution.md` | Workflow evolution narrative |
 | `docs/live-operations.md` | Live trading procedures |
 | `docs/strategies/STRATEGY_*.md` | Per-strategy spec sheets |

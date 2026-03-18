@@ -1,7 +1,7 @@
 # ARGUS — Sprint History
 
 > Complete record of all sprints from project inception through current state.
-> Active development began February 14, 2026. As of March 16, 2026 (~31 calendar days), 24 full sprints + sub-sprints (including 24.5) completed.
+> Active development began February 14, 2026. As of March 18, 2026 (~33 calendar days), 25 full sprints + sub-sprints completed.
 
 ---
 
@@ -16,6 +16,7 @@
 | E — Seven-Page Architecture + Live | 21a–21.5 | Feb 27–Mar 5 | Full UI, live integration |
 | F–K — AI + Intelligence + Quality | 22–24.1 | Mar 6–14 | AI Copilot, NLP Catalyst, Universe Manager, Quality Engine, Housekeeping |
 | M — Strategy Observability | 24.5 | Mar 15–16 | Evaluation telemetry, operational fixes |
+| N — The Observatory | 25 | Mar 17–18 | Immersive pipeline visualization page |
 
 ---
 
@@ -841,16 +842,126 @@
 
 ---
 
+### Sprint 25 — The Observatory (2,765 pytest + 599 Vitest = 3,364 total)
+**Date:** Mar 17–18, 2026
+**Scope:** New Observatory page (Command Center page 8) providing immersive, real-time and post-session visualization of the entire ARGUS trading pipeline. Four views (Funnel/Radar/Matrix/Timeline), keyboard-first navigation, detail panel with live candlestick charts, session vitals, and debrief mode. ObservatoryService backend with 4 query methods. Observatory WebSocket for push-based pipeline updates. Config-gated via `observatory.enabled`.
+**Key decisions:** DEC-342 (carried from Sprint 24.5 — strategy evaluation telemetry)
+**No new DEC or DEF entries created during this sprint.**
+
+**Session 1 (S1): Backend API — ObservatoryService + REST Endpoints**
+- ObservatoryService (`argus/analytics/observatory_service.py`): read-only query service over EvaluationEventStore and UniverseManager
+- 4 methods: `get_pipeline_stages`, `get_closest_misses`, `get_symbol_journey`, `get_session_summary`
+- ObservatoryConfig Pydantic model wired into SystemConfig
+- 4 REST endpoints under `/api/v1/observatory/`
+- New pytest tests
+
+**Session 2 (S2): Backend WebSocket — Observatory Live Updates**
+- Observatory WebSocket endpoint (`/ws/v1/observatory`) independent from AI chat WS
+- Push-based tier transition detection and evaluation summaries
+- JWT authentication on WS connection
+- New pytest tests
+
+**Session 3 (S3): Page Shell + Routing + Keyboard Navigation**
+- Observatory page component with React.lazy code-splitting
+- View switching via keyboard (initially 1-4 keys)
+- Sidebar navigation updated (7 → 8 pages)
+- Suspense fallback, responsive layout shell
+- New Vitest tests
+
+**Session 3f (S3f): Keybinding Fix**
+- View-switching keys changed from 1-4 to f/m/r/t (mnemonic) due to conflict with sidebar navigation shortcuts
+- Camera control placeholders repurposed; camera controls moved to Shift+R/Shift+F
+
+**Session 4a (S4a): Detail Panel Core**
+- Right slide-out detail panel with per-symbol condition grid
+- Quality score display, catalyst summary section
+- Strategy history chronological list
+- Panel persists across view switches
+- New Vitest tests
+
+**Session 4b (S4b): Candlestick Chart + Hooks**
+- Live candlestick chart in detail panel via Lightweight Charts
+- TanStack Query hooks for observatory data (pipeline stages, symbol journey, closest misses)
+- API client types for observatory endpoints
+- New Vitest tests
+
+**Session 5a (S5a): Matrix View Core**
+- Condition heatmap sorted by proximity to trigger
+- Green/red/gray cells for pass/fail/unknown conditions
+- Column headers with condition names
+- New Vitest tests
+
+**Session 5b (S5b): Matrix Scroll + Interaction**
+- Virtual scrolling for large symbol lists
+- Tab key navigation for symbol selection
+- Click-to-select with detail panel integration
+- Highlight + selection unified state management
+- New Vitest tests
+
+**Session 6a (S6a): Three.js Scene Setup**
+- Three.js (r128) integration with React.lazy code-splitting (separate chunk)
+- Shared scene architecture: Funnel and Radar share single Three.js scene with camera presets
+- Translucent cone geometry with tier disc overlays
+- OrbitControls for camera manipulation
+- Camera shortcuts: Shift+R (reset), Shift+F (fit)
+- New Vitest tests
+
+**Session 6b (S6b): Symbol Particles**
+- InstancedMesh for symbol particles (up to 5,000 symbols)
+- CSS2DRenderer for symbol labels with LOD behavior
+- Monotonic instance slot allocation
+- TIER_DEFS extracted to shared constants.ts
+- New Vitest tests
+
+**Session 7 (S7): Radar Camera Animation**
+- RadarView as thin wrapper passing mode="radar" to FunnelView
+- Bottom-up camera perspective with smooth animation transition
+- Concentric ring visualization with trigger point at center
+- New Vitest tests
+
+**Session 8 (S8): Timeline View**
+- Strategy lane timeline (9:30 AM–4:00 PM ET) with SVG rendering
+- Event marks at 4 severity levels (pass/fail/skip/trigger)
+- Horizontal time axis with market hours
+- New Vitest tests
+
+**Session 9 (S9): Session Vitals + Debrief Mode**
+- Session vitals bar: connection status, evaluation counts, closest miss, top blocking condition
+- Live metrics via WS + REST polling
+- Debrief mode: date picker switches all views to historical data (7-day retention from EvaluationEventStore)
+- New Vitest tests
+
+**Session 10 (S10): Integration Polish**
+- Tab handler overlap fix (unified highlight+selection with isMatrixActive flag)
+- EvaluationEventStore public API: `execute_query()` method and `is_connected` property added
+- Type narrowing (object|None → float|str|bool|None)
+- Unused reason column removed from SELECT
+- Inline import moved to top-level
+- Imperative loop replaced with reduce()
+- TIER_DEFS duplication resolved (shared constants.ts)
+- Suspense fallback text added
+- Unused VIEW_LABELS removed
+- 2 new camera shortcut tests
+- system_live.yaml observatory config added
+
+**Sessions:** 14 (S1, S2, S3, S3f, S4a, S4b, S5a, S5b, S6a, S6b, S7, S8, S9, S10)
+**Test counts:** pytest 2,768 → 2,765 (−3, DEF-048 xdist gap), Vitest 523 → 599 (+76) = 73 net new tests
+**Review verdicts:** 10 CLEAR, 4 CONCERNS (all non-blocking; resolved in-sprint or accepted as LOW/INFO)
+**DEF items:** None created. All review findings resolved in-sprint.
+**Notes:** Purely additive sprint — no architectural decisions affecting the trading pipeline. The −3 pytest delta is from known DEF-048 xdist ignore gap, not a regression. Three.js is code-split via React.lazy to avoid impacting initial bundle size. Shared-scene pattern (Funnel+Radar) avoids duplicate Three.js contexts. EvaluationEventStore gained `execute_query()` public method to replace private `_conn` access by ObservatoryService.
+
+---
+
 ## Sprint Statistics
 
-- **Total sprints:** 24 full + 20 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5)
-- **Total sessions:** ~316+ Claude Code sessions
-- **Total tests:** 2,768 pytest + 523 Vitest = 3,291 total
+- **Total sprints:** 25 full + 20 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5)
+- **Total sessions:** ~330+ Claude Code sessions
+- **Total tests:** 2,765 pytest + 599 Vitest = 3,364 total
 - **Total decisions:** 342 (DEC-001 through DEC-342)
-- **Calendar days (active dev):** ~31 (Feb 14 – Mar 16, 2026)
+- **Calendar days (active dev):** ~33 (Feb 14 – Mar 18, 2026)
 - **Largest sprint:** 22 (9 implementation + 5 fix + 9 reviews, largest scope)
 - **Cleanest sprint:** 23 (11 sessions, 0 regressions, 0 scope gaps requiring follow-up)
 - **Most test-dense:** Sprint 22 (286 new tests), Sprint 24 (209 new tests), Sprint 23.2 (188 new tests), Sprint 23 (141 new tests across 23+23.05)
-- **Most Vitest-dense:** 21d (119 new Vitest), Sprint 24 (51 new Vitest)
+- **Most Vitest-dense:** 21d (119 new Vitest), Sprint 25 (76 new Vitest), Sprint 24 (51 new Vitest)
 - **Crisis sprint:** 8 (VectorBT performance — iterrows() → vectorized, 4 conversations)
 - **Most compaction events:** Sprint 22 (Sessions 3a and 3b both compacted, led to DEC-275)
