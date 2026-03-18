@@ -1150,7 +1150,7 @@ class AfternoonMomentumStrategy(BaseStrategy):
         afternoon momentum moves are present.
         """
         return MarketConditionsFilter(
-            allowed_regimes=["bullish_trending", "high_volatility"],
+            allowed_regimes=["bullish_trending", "range_bound", "high_volatility"],
             max_vix=30.0,
         )
 
