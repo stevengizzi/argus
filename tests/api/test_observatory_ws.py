@@ -27,6 +27,15 @@ from argus.core.config import ApiConfig, SystemConfig
 TEST_JWT_SECRET = "test-jwt-secret-for-argus-api-testing-minimum-32-chars"
 TEST_DATE = "2026-03-17"
 
+
+@pytest.fixture(autouse=True)
+def _freeze_today_et(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Pin _today_et() to TEST_DATE so WS handler queries match seed data."""
+    monkeypatch.setattr(
+        "argus.analytics.observatory_service._today_et",
+        lambda: TEST_DATE,
+    )
+
 _CREATE_TABLE = """\
 CREATE TABLE IF NOT EXISTS evaluation_events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
