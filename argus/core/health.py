@@ -25,6 +25,8 @@ if TYPE_CHECKING:
     from argus.analytics.trade_logger import TradeLogger
     from argus.core.clock import Clock
     from argus.execution.broker import Broker
+    from argus.strategies.base_strategy import BaseStrategy
+    from argus.strategies.telemetry_store import EvaluationEventStore
 
 logger = logging.getLogger(__name__)
 
@@ -518,3 +520,88 @@ class HealthMonitor:
             body: Alert body/message.
         """
         await self._send_alert(title, body, severity="warning")
+
+    # --- Strategy Evaluation Health Check ---
+
+    async def check_strategy_evaluations(
+        self,
+        strategies: dict[str, BaseStrategy],
+        eval_store: EvaluationEventStore,
+        clock: Clock,
+    ) -> None:
+        """Check for active strategies with zero evaluation events after window opens.
+
+        Detects when an active strategy has a populated watchlist but no
+        evaluation events after its operating window start + 5 minutes,
+        indicating a possible pipeline issue.
+
+        This method is idempotent — safe to call repeatedly. When evaluations
+        appear, the warning stops and the component status returns to HEALTHY.
+
+        Args:
+            strategies: Dict mapping strategy_id to BaseStrategy instances.
+            eval_store: The EvaluationEventStore for querying today's events.
+            clock: Clock for current time.
+        """
+        et_tz = ZoneInfo("America/New_York")
+        now = clock.now()
+        now_et = now.replace(tzinfo=et_tz) if now.tzinfo is None else now.astimezone(et_tz)
+        current_time = now_et.time()
+        today_str = now_et.strftime("%Y-%m-%d")
+
+        for strategy_id, strategy in strategies.items():
+            component_name = f"strategy_{strategy_id}"
+
+            if not strategy.is_active:
+                continue
+
+            if len(strategy.watchlist) == 0:
+                continue
+
+            # Parse the strategy's earliest_entry time and add 5 minutes
+            earliest_entry_str = strategy.config.operating_window.earliest_entry
+            parts = earliest_entry_str.split(":")
+            entry_hour = int(parts[0])
+            entry_minute = int(parts[1])
+            grace_minute = entry_minute + 5
+            grace_hour = entry_hour + grace_minute // 60
+            grace_minute = grace_minute % 60
+            window_threshold = time(grace_hour, grace_minute)
+
+            if current_time < window_threshold:
+                continue
+
+            # Query today's evaluation count for this strategy
+            events = await eval_store.query_events(
+                strategy_id=strategy_id, date=today_str, limit=1
+            )
+            minutes_past = (
+                (current_time.hour * 60 + current_time.minute)
+                - (entry_hour * 60 + entry_minute)
+            )
+
+            if len(events) == 0:
+                logger.warning(
+                    "Strategy %s has 0 evaluation events %dmin after window "
+                    "opened (watchlist: %d symbols) — possible pipeline issue",
+                    strategy_id,
+                    minutes_past,
+                    len(strategy.watchlist),
+                )
+                self.update_component(
+                    component_name,
+                    ComponentStatus.DEGRADED,
+                    message=(
+                        f"0 evaluations {minutes_past}min after window "
+                        f"(watchlist: {len(strategy.watchlist)} symbols)"
+                    ),
+                )
+            else:
+                # Evaluations present — ensure component is HEALTHY
+                current = self._components.get(component_name)
+                if current is not None and current.status == ComponentStatus.DEGRADED:
+                    self.update_component(
+                        component_name,
+                        ComponentStatus.HEALTHY,
+                        message="Evaluations resumed",
+                    )

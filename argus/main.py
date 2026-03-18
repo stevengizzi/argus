@@ -135,6 +135,7 @@ class ArgusSystem:
         self._quality_engine: SetupQualityEngine | None = None
         self._position_sizer: DynamicPositionSizer | None = None
         self._catalyst_storage: object | None = None  # CatalystStorage, if pipeline active
+        self._eval_check_task: asyncio.Task[None] | None = None  # Sprint 25.5: eval health check
 
     async def start(self) -> None:
         """Initialize and start all components in dependency order.
@@ -702,12 +703,64 @@ class ArgusSystem:
             logger.info("API: http://%s:%d", config.system.api.host, config.system.api.port)
         logger.info("=" * 60)
 
+        # Start strategy evaluation health check (Sprint 25.5)
+        self._eval_check_task = asyncio.create_task(
+            self._evaluation_health_check_loop()
+        )
+
         # Send startup alert
         mode = "DRY RUN" if self._dry_run else "PAPER TRADING"
         await self._health_monitor.send_warning_alert(
             title="Argus Started",
             body=f"Watching {len(symbols)} symbols. Mode: {mode}",
         )
+
+    async def _evaluation_health_check_loop(self) -> None:
+        """Periodic check for strategies with zero evaluation events.
+
+        Runs every 60 seconds during market hours (9:30–16:00 ET).
+        Delegates to HealthMonitor.check_strategy_evaluations().
+        """
+        from datetime import time as dt_time
+        from zoneinfo import ZoneInfo
+
+        from argus.strategies.telemetry_store import EvaluationEventStore
+
+        et_tz = ZoneInfo("America/New_York")
+        market_open = dt_time(9, 30)
+        market_close = dt_time(16, 0)
+
+        while True:
+            try:
+                now = self._clock.now()
+                now_et = (
+                    now.replace(tzinfo=et_tz) if now.tzinfo is None
+                    else now.astimezone(et_tz)
+                )
+                current_time = now_et.time()
+
+                if market_open <= current_time <= market_close:
+                    # Build an EvaluationEventStore from DB path
+                    if (
+                        self._health_monitor is not None
+                        and self._db is not None
+                        and self._strategies
+                    ):
+                        db_path = self._db._db_path
+                        store = EvaluationEventStore(db_path)
+                        await store.initialize()
+                        try:
+                            await self._health_monitor.check_strategy_evaluations(
+                                strategies=self._strategies,
+                                eval_store=store,
+                                clock=self._clock,
+                            )
+                        finally:
+                            await store.close()
+            except Exception as e:
+                logger.error("Evaluation health check error: %s", e)
+
+            await asyncio.sleep(60)
 
     async def _on_candle_for_strategies(self, event: CandleEvent) -> None:
         """Route CandleEvents to active strategies (DEC-125).
@@ -1030,7 +1083,16 @@ class ArgusSystem:
             get_bridge().stop()
             logger.info("API server stopped")
 
-        # 0a. Stop ActionManager cleanup task
+        # 0a. Stop evaluation health check task
+        if self._eval_check_task is not None:
+            import contextlib as _ctxlib
+
+            self._eval_check_task.cancel()
+            with _ctxlib.suppress(asyncio.CancelledError):
+                await self._eval_check_task
+            logger.info("Evaluation health check task stopped")
+
+        # 0b. Stop ActionManager cleanup task
         if self._action_manager is not None:
             logger.info("Stopping ActionManager cleanup task...")
             self._action_manager.stop_cleanup_task()
