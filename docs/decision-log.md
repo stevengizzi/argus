@@ -4078,6 +4078,34 @@ Each entry follows this format:
 
 ---
 
+### DEC-343 | Watchlist Population from Universe Manager Routing
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-18 |
+| **Sprint** | 25.5 |
+| **Decision** | When Universe Manager is enabled, populate each strategy's watchlist from the UM routing table after `build_routing_table()` completes (Phase 9.5 in main.py startup). Convert `_watchlist` from `list[str]` to `set[str]` for O(1) membership checks. Add `source` parameter to `set_watchlist()` (default `"scanner"`) for logging provenance. `watchlist` property continues to return `list[str]` — external API unchanged. |
+| **Alternatives Considered** | 1. Remove watchlist gating from strategies entirely — rejected, breaks scanner-only flow and loses the performance optimization. 2. Check UM routing inline in `on_candle()` — rejected, duplicates routing logic and breaks separation of concerns. |
+| **Rationale** | Since Sprint 23 (Universe Manager introduction, March 7), all four strategies had empty watchlists when UM was enabled. `set_watchlist()` was skipped in the UM code path, but every strategy's `on_candle()` gates on `self._watchlist` as the first check. Result: 10+ days of inert paper trading with candles routed correctly by UM but silently dropped at strategy level. |
+| **Cross-References** | DEC-263 (full-universe monitoring), DEC-277 (fail-closed on missing reference data), DEC-344 (zero-evaluation health warning) |
+| **Status** | Active |
+
+---
+
+### DEC-344 | Zero-Evaluation Health Warning
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-18 |
+| **Sprint** | 25.5 |
+| **Decision** | Add `HealthMonitor.check_strategy_evaluations()` that detects active strategies with populated watchlists but zero evaluation events after their operating window + 5 min grace period. Sets component status to DEGRADED. Self-corrects to HEALTHY when evaluations resume (idempotent). Periodic asyncio task in main.py runs every 60s during market hours only (9:30–16:00 ET). Opens/closes its own `EvaluationEventStore` per check cycle to avoid coupling with server.py-managed store lifecycle. |
+| **Alternatives Considered** | 1. Alert on zero trades instead of zero evaluations — rejected, zero trades is a valid outcome (no setups qualifying), but zero evaluations means candles aren't being processed at all. 2. Check at strategy level instead of health monitor — rejected, health monitor is the correct abstraction for system health. |
+| **Rationale** | The Sprint 25.5 root cause (empty watchlists → zero evaluations) was silent for 10+ days. This health check ensures the class of failure "strategy receives candles but produces no evaluations" is detected automatically within minutes of market open. |
+| **Cross-References** | DEC-342 (evaluation telemetry), DEC-343 (watchlist population from UM routing) |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
-*Next DEC: 343*
-*Last updated: 2026-03-16 (Sprint 24.5 — DEC-342)*
+*Next DEC: 345*
+*Last updated: 2026-03-18 (Sprint 25.5 — DEC-343, DEC-344)*

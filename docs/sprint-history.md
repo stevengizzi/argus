@@ -1,7 +1,7 @@
 # ARGUS — Sprint History
 
 > Complete record of all sprints from project inception through current state.
-> Active development began February 14, 2026. As of March 18, 2026 (~33 calendar days), 25 full sprints + sub-sprints completed.
+> Active development began February 14, 2026. As of March 18, 2026 (~33 calendar days), 25 full sprints + 21 sub-sprints completed.
 
 ---
 
@@ -17,6 +17,7 @@
 | F–K — AI + Intelligence + Quality | 22–24.1 | Mar 6–14 | AI Copilot, NLP Catalyst, Universe Manager, Quality Engine, Housekeeping |
 | M — Strategy Observability | 24.5 | Mar 15–16 | Evaluation telemetry, operational fixes |
 | N — The Observatory | 25 | Mar 17–18 | Immersive pipeline visualization page |
+| O — Watchlist Wiring Fix | 25.5 | Mar 18 | UM watchlist population + zero-eval health warning |
 
 ---
 
@@ -952,12 +953,42 @@
 
 ---
 
+### Sprint 25.5 — Universe Manager Watchlist Wiring Fix (2,782 pytest + 599 Vitest = 3,381 total)
+**Date:** Mar 18, 2026
+**Scope:** Fix critical bug where strategy watchlists are empty when Universe Manager is enabled, causing all four strategies to silently drop every candle since Sprint 23 (March 7, 10+ days of inert paper trading). Populate strategy watchlists from UM routing, convert watchlist to set for O(1) lookups, add zero-evaluation health warning.
+**Type:** Bugfix sprint. **Urgency:** CRITICAL.
+
+**Session 1 (S1): Watchlist Wiring + List-to-Set**
+- Populated each strategy's watchlist from UM routing table after `build_routing_table()` in Phase 9.5 of main.py startup via `strategy.set_watchlist(symbols, source="universe_manager")`
+- Converted `_watchlist` from `list[str]` to `set[str]` for O(1) membership checks in `on_candle()` gates
+- Added `source` parameter to `set_watchlist()` (default `"scanner"`) for logging provenance
+- `watchlist` property continues to return `list[str]` — external API unchanged
+- `reset_daily_state()` clears to `set()`
+- New pytest tests
+
+**Session 2 (S2): Zero-Evaluation Health Warning + E2E Telemetry Tests**
+- `HealthMonitor.check_strategy_evaluations()` detects active strategies with populated watchlists but zero evaluation events after operating window + 5 min grace period
+- Sets component status to DEGRADED; self-corrects to HEALTHY when evaluations resume (idempotent)
+- Periodic 60s asyncio task in main.py during market hours only (9:30–16:00 ET)
+- Opens/closes its own `EvaluationEventStore` per check cycle to avoid coupling with server.py-managed store lifecycle
+- E2E telemetry tests in `tests/test_evaluation_telemetry_e2e.py`
+- New pytest tests (including 9th test `test_health_warning_self_corrects` beyond the 8 required — justified by spec's idempotency requirement)
+
+**Key decisions:** DEC-343 (watchlist population from UM routing), DEC-344 (zero-evaluation health warning)
+**Sessions:** 2 implementation (S1, S2)
+**Test counts:** pytest 2,765 → 2,782 (+17), Vitest 599 → 599 (+0)
+**Review verdicts:** S1 CLEAR, S2 CLEAR
+**DEF items:** None created. No new deferred items.
+**Notes:** Critical bugfix sprint. Root cause: `set_watchlist()` was never called in the UM code path, but every strategy's `on_candle()` gates on `self._watchlist` as the first check. 10+ days of inert paper trading where candles were routed correctly by UM but silently dropped at strategy level. Zero-evaluation health check ensures this class of silent failure is detected automatically within minutes of market open.
+
+---
+
 ## Sprint Statistics
 
-- **Total sprints:** 25 full + 20 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5)
-- **Total sessions:** ~330+ Claude Code sessions
-- **Total tests:** 2,765 pytest + 599 Vitest = 3,364 total
-- **Total decisions:** 342 (DEC-001 through DEC-342)
+- **Total sprints:** 25 full + 21 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5)
+- **Total sessions:** ~332+ Claude Code sessions
+- **Total tests:** 2,782 pytest + 599 Vitest = 3,381 total
+- **Total decisions:** 344 (DEC-001 through DEC-344)
 - **Calendar days (active dev):** ~33 (Feb 14 – Mar 18, 2026)
 - **Largest sprint:** 22 (9 implementation + 5 fix + 9 reviews, largest scope)
 - **Cleanest sprint:** 23 (11 sessions, 0 regressions, 0 scope gaps requiring follow-up)

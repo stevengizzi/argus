@@ -1,7 +1,7 @@
 # ARGUS — Decision Index
 
-> 342 decisions (DEC-001 through DEC-342)
-> Generated: March 16, 2026 | Source: `docs/decision-log.md`
+> 344 decisions (DEC-001 through DEC-344)
+> Generated: March 18, 2026 | Source: `docs/decision-log.md`
 > Legend: ● Active | ○ Superseded | △ Amended | ✗ Duplicate entry
 
 
@@ -386,3 +386,8 @@
 ## Phase M — Strategy Observability (Sprint 24.5)
 
 - ● **DEC-342**: Strategy Evaluation Telemetry — in-memory ring buffer (maxlen=1000), no EventBus integration, ET naive timestamps per DEC-276, REST endpoint GET /strategies/{id}/decisions, SQLite persistence with 7-day retention, StrategyDecisionStream frontend component
+
+## Phase N — Universe Manager Watchlist Wiring Fix (Sprint 25.5)
+
+- ● **DEC-343**: Watchlist Population from UM Routing — `set_watchlist(symbols, source="universe_manager")` after `build_routing_table()` in Phase 9.5; `_watchlist` list→set for O(1) lookups; external API unchanged
+- ● **DEC-344**: Zero-Evaluation Health Warning — `HealthMonitor.check_strategy_evaluations()` detects populated watchlist + zero evaluations after operating window + 5 min grace; DEGRADED status; self-corrects; 60s asyncio task during market hours

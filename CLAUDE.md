@@ -1,11 +1,11 @@
 # ARGUS — Claude Code Context
 
 > Dense, actionable context for Claude Code sessions. No history — see `docs/` for that.
-> Last updated: March 18, 2026 (Sprint 25 doc sync)
+> Last updated: March 18, 2026 (Sprint 25.5 doc sync)
 
 ## Active Sprint
 
-**No active sprint.** Sprint 25 (The Observatory) completed March 18, 2026.
+**No active sprint.** Sprint 25.5 (Universe Manager Watchlist Wiring Fix) completed March 18, 2026.
 
 Next planned sprint: **26 (Red-to-Green + Pattern Library Foundation)**. Red-to-Green strategy + PatternLibrary ABC + Bull Flag + Flat-Top Breakout pattern modules.
 
@@ -18,7 +18,7 @@ Next planned sprint: **26 (Red-to-Green + Pattern Library Foundation)**. Red-to-
 
 - **Active sprint:** None (between sprints)
 - **Next sprint:** 26 (Red-to-Green + Pattern Library Foundation)
-- **Tests:** 2,765 pytest + 599 Vitest
+- **Tests:** 2,782 pytest + 599 Vitest
 - **Strategies:** 4 active (ORB Breakout, ORB Scalp, VWAP Reclaim, Afternoon Momentum)
 - **Infrastructure:** Databento EQUS.MINI (live) + IBKR paper trading (Account U24619949) + FMP Starter (scanning + reference data) + Finnhub (news + analyst recs) + Claude API (Copilot + Catalyst Classification) + Universe Manager (config-gated) + Catalyst Pipeline (config-gated) + Intelligence Polling Loop (config-gated) + Reference Data Cache + Quality Engine (config-gated) + Dynamic Position Sizer + Strategy Evaluation Telemetry (ring buffer + SQLite persistence)
 - **Frontend:** 8-page Command Center (Observatory added Sprint 25) + AI Copilot + Universe Status Card + Intelligence Brief View (all active), Tauri desktop + PWA mobile
@@ -282,9 +282,9 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 
 | Document | What It Covers |
 |----------|---------------|
-| `docs/decision-log.md` | All 342 DEC entries with full rationale |
+| `docs/decision-log.md` | All 344 DEC entries with full rationale |
 | `docs/dec-index.md` | Quick-reference index with status markers |
-| `docs/sprint-history.md` | Complete sprint history (1–25) |
+| `docs/sprint-history.md` | Complete sprint history (1–25.5) |
 | `docs/process-evolution.md` | Workflow evolution narrative |
 | `docs/live-operations.md` | Live trading procedures |
 | `docs/strategies/STRATEGY_*.md` | Per-strategy spec sheets |

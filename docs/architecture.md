@@ -413,8 +413,15 @@ class BaseStrategy(ABC):
     def check_internal_risk_limits(self) -> bool:
         """Check strategy-level risk limits (max daily loss, max positions, etc.)."""
 
+    def set_watchlist(self, symbols: list[str], source: str = "scanner") -> None:
+        """Set the strategy's watchlist. `_watchlist` is `set[str]` internally
+        for O(1) membership checks. `watchlist` property returns `list[str]`
+        — external API unchanged. `source` param logged for provenance
+        (e.g., "scanner" or "universe_manager"). (DEC-343, Sprint 25.5)"""
+
     def reset_daily_state(self) -> None:
-        """Called at start of each trading day. Wipes all intraday state."""
+        """Called at start of each trading day. Wipes all intraday state.
+        Clears `_watchlist` to `set()`."""
 
     async def reconstruct_state(self, trade_logger: TradeLogger) -> None:
         """Reconstruct intraday state from database after mid-day restart.
@@ -885,6 +892,7 @@ class HealthMonitor:
 - Critical alert dispatch via webhook (Discord, Slack, or generic JSON)
 - Daily integrity check (verify all open positions have broker-side stop orders)
 - Weekly reconciliation (compare trade log with broker records)
+- **Zero-evaluation health warning (DEC-344, Sprint 25.5):** `check_strategy_evaluations()` detects active strategies with populated watchlists but zero evaluation events after their operating window + 5 min grace period. Sets component status to DEGRADED. Self-corrects to HEALTHY when evaluations resume (idempotent). Periodic 60s asyncio task in main.py during market hours only (9:30–16:00 ET). Opens/closes its own `EvaluationEventStore` per check cycle to avoid coupling with server.py-managed store lifecycle.
 
 **Status Model:** STARTING → HEALTHY → DEGRADED → UNHEALTHY → STOPPED
 
@@ -914,7 +922,7 @@ Wires all components together with a 12-phase startup sequence:
 7.5. FMPReferenceClient start (if Universe Manager enabled)
 8. Build viable universe (if UM enabled, using scanner symbols)
 9. Strategies (with mid-day reconstruction if applicable)
-9.5. Build routing table (if UM enabled, from strategy configs)
+9.5. Build routing table (if UM enabled, from strategy configs); populate each strategy's watchlist from UM routing via `strategy.set_watchlist(symbols, source="universe_manager")` (DEC-343, Sprint 25.5)
 10. OrderManager (with broker position reconstruction)
 10.5. Set viable universe on DataService (if UM enabled)
 11. Start data streaming
