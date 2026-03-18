@@ -1500,7 +1500,7 @@ class TestOrbScalpStateManagement:
 
         strategy.set_watchlist(["AAPL", "MSFT", "GOOG"])
 
-        assert strategy._watchlist == ["AAPL", "MSFT", "GOOG"]
+        assert strategy._watchlist == {"AAPL", "MSFT", "GOOG"}
 
     def test_record_trade_result_updates_daily_pnl(self) -> None:
         """record_trade_result updates daily P&L and trade count."""

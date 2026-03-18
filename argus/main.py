@@ -520,6 +520,12 @@ class ArgusSystem:
             }
             self._universe_manager.build_routing_table(strategy_configs)
 
+            # Populate strategy watchlists from Universe Manager routing
+            for strategy_id, strategy in strategies.items():
+                um_symbols = self._universe_manager.get_strategy_symbols(strategy_id)
+                strategy.set_watchlist(list(um_symbols), source="universe_manager")
+            logger.info("Strategy watchlists populated from Universe Manager routing")
+
         # --- Phase 10: Order Manager ---
         logger.info("[10/12] Starting order manager...")
         order_manager_yaml = load_yaml_file(self._config_dir / "order_manager.yaml")

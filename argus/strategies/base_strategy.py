@@ -63,7 +63,7 @@ class BaseStrategy(ABC):
         self._is_active: bool = False
         self._daily_pnl: float = 0.0
         self._trade_count_today: int = 0
-        self._watchlist: list[str] = []
+        self._watchlist: set[str] = set()
         self._eval_buffer = StrategyEvaluationBuffer()
 
     # -------------------------------------------------------------------------
@@ -207,7 +207,7 @@ class BaseStrategy(ABC):
         """
         self._daily_pnl = 0.0
         self._trade_count_today = 0
-        self._watchlist = []
+        self._watchlist = set()
         logger.debug("%s: daily state reset", self.strategy_id)
 
     async def reconstruct_state(self, trade_logger: TradeLogger) -> None:
@@ -234,16 +234,23 @@ class BaseStrategy(ABC):
             self._trade_count_today,
         )
 
-    def set_watchlist(self, symbols: list[str]) -> None:
+    def set_watchlist(self, symbols: list[str], source: str = "scanner") -> None:
         """Set the watchlist for this strategy.
 
-        Called by the Orchestrator after the Scanner runs.
+        Called by the Orchestrator after the Scanner runs, or by the startup
+        sequence when the Universe Manager populates strategy watchlists.
 
         Args:
             symbols: List of ticker symbols to watch today.
+            source: Origin of the watchlist (e.g. "scanner", "universe_manager").
         """
-        self._watchlist = symbols.copy()
-        logger.debug("%s: watchlist set to %d symbols", self.strategy_id, len(symbols))
+        self._watchlist = set(symbols)
+        logger.debug(
+            "%s: watchlist set to %d symbols (source: %s)",
+            self.strategy_id,
+            len(self._watchlist),
+            source,
+        )
 
     def record_trade_result(self, pnl: float) -> None:
         """Record the result of a completed trade.
@@ -302,7 +309,7 @@ class BaseStrategy(ABC):
     @property
     def watchlist(self) -> list[str]:
         """Current watchlist of symbols this strategy is tracking."""
-        return self._watchlist.copy()
+        return list(self._watchlist)
 
     @property
     def eval_buffer(self) -> StrategyEvaluationBuffer:

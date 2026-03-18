@@ -283,7 +283,7 @@ class TestWatchlist:
         """set_watchlist updates the watchlist."""
         strategy = ConcreteTestStrategy(make_config())
         strategy.set_watchlist(["AAPL", "MSFT", "NVDA"])
-        assert strategy.watchlist == ["AAPL", "MSFT", "NVDA"]
+        assert set(strategy.watchlist) == {"AAPL", "MSFT", "NVDA"}
 
     def test_watchlist_is_copy(self) -> None:
         """Watchlist property returns a copy."""
@@ -292,6 +292,93 @@ class TestWatchlist:
         watchlist = strategy.watchlist
         watchlist.append("MSFT")  # Modify the copy
         assert "MSFT" not in strategy.watchlist  # Original unchanged
+
+    def test_set_watchlist_stores_as_set(self) -> None:
+        """set_watchlist stores symbols internally as a set."""
+        strategy = ConcreteTestStrategy(make_config())
+        strategy.set_watchlist(["A", "B", "C"])
+        assert isinstance(strategy._watchlist, set)
+        assert strategy._watchlist == {"A", "B", "C"}
+
+    def test_set_watchlist_accepts_list(self) -> None:
+        """set_watchlist accepts list input without error."""
+        strategy = ConcreteTestStrategy(make_config())
+        symbols: list[str] = ["AAPL", "MSFT"]
+        strategy.set_watchlist(symbols)
+        assert set(strategy.watchlist) == {"AAPL", "MSFT"}
+
+    def test_watchlist_property_returns_list(self) -> None:
+        """watchlist property returns list[str], not set."""
+        strategy = ConcreteTestStrategy(make_config())
+        strategy.set_watchlist(["AAPL", "MSFT"])
+        result = strategy.watchlist
+        assert isinstance(result, list)
+        assert not isinstance(result, set)
+
+    def test_set_watchlist_deduplicates(self) -> None:
+        """set_watchlist deduplicates symbols via set conversion."""
+        strategy = ConcreteTestStrategy(make_config())
+        strategy.set_watchlist(["A", "A", "B"])
+        assert len(strategy.watchlist) == 2
+        assert set(strategy.watchlist) == {"A", "B"}
+
+
+class TestWatchlistOnCandle:
+    """Tests for watchlist gating in on_candle()."""
+
+    @pytest.mark.asyncio
+    async def test_on_candle_passes_watchlisted_symbol(self) -> None:
+        """Candle for a watchlisted symbol passes through the gate."""
+        strategy = ConcreteTestStrategy(make_config())
+        strategy.allocated_capital = 100_000.0
+        strategy.set_watchlist(["AAPL"])
+
+        candle = CandleEvent(
+            symbol="AAPL",
+            timeframe="1m",
+            open=105.0,
+            high=110.0,
+            low=104.0,
+            close=108.0,
+            volume=1_000_000,
+        )
+        signal = await strategy.on_candle(candle)
+        # Signal returned (not None) means the watchlist gate was passed
+        assert signal is not None
+        assert signal.symbol == "AAPL"
+
+    @pytest.mark.asyncio
+    async def test_on_candle_rejects_non_watchlisted_symbol(self) -> None:
+        """Candle for a non-watchlisted symbol returns None without processing."""
+        strategy = ConcreteTestStrategy(make_config())
+        strategy.allocated_capital = 100_000.0
+        strategy.set_watchlist(["MSFT"])
+
+        candle = CandleEvent(
+            symbol="AAPL",
+            timeframe="1m",
+            open=105.0,
+            high=110.0,
+            low=104.0,
+            close=108.0,
+            volume=1_000_000,
+        )
+        signal = await strategy.on_candle(candle)
+        assert signal is None
+
+
+class TestResetDailyStateClearsWatchlist:
+    """Tests for watchlist clearing on reset."""
+
+    def test_reset_daily_state_clears_watchlist(self) -> None:
+        """After set_watchlist(), reset_daily_state() empties the watchlist."""
+        strategy = ConcreteTestStrategy(make_config())
+        strategy.set_watchlist(["AAPL", "MSFT", "NVDA"])
+        assert len(strategy.watchlist) == 3
+
+        strategy.reset_daily_state()
+        assert strategy.watchlist == []
+        assert isinstance(strategy._watchlist, set)
 
 
 class TestRecordTradeResult:
@@ -473,3 +560,31 @@ class TestReconstructState:
         assert strategy.trade_count_today == 2
 
         await db.close()
+
+
+class TestWatchlistPopulatedFromUniverseManager:
+    """Integration test: strategy watchlists populated from Universe Manager routing."""
+
+    def test_watchlist_populated_from_universe_manager(self) -> None:
+        """Simulates the main.py startup path: build routing table, then populate watchlists."""
+        # Create strategies
+        orb = ConcreteTestStrategy(make_config(strategy_id="orb_breakout", name="ORB Breakout"))
+        vwap = ConcreteTestStrategy(make_config(strategy_id="vwap_reclaim", name="VWAP Reclaim"))
+        strategies = {"orb_breakout": orb, "vwap_reclaim": vwap}
+
+        # Simulate UM routing table: maps strategy_id -> set of symbols
+        um_routing: dict[str, set[str]] = {
+            "orb_breakout": {"AAPL", "MSFT", "NVDA"},
+            "vwap_reclaim": {"TSLA", "AAPL"},
+        }
+
+        # Simulate the main.py loop that populates watchlists from UM
+        for strategy_id, strategy in strategies.items():
+            um_symbols = um_routing.get(strategy_id, set())
+            strategy.set_watchlist(list(um_symbols), source="universe_manager")
+
+        # Verify each strategy's watchlist matches UM routing
+        assert set(orb.watchlist) == {"AAPL", "MSFT", "NVDA"}
+        assert set(vwap.watchlist) == {"TSLA", "AAPL"}
+        assert isinstance(orb.watchlist, list)
+        assert isinstance(vwap.watchlist, list)
