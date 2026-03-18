@@ -350,7 +350,33 @@ pkill -9 -f "uvicorn"
 
 ---
 
-## 8. Cape Town Timezone Reference
+## 8. Post-Session Debrief
+
+After market close, run the structured debrief protocol to diagnose system behavior and identify action items.
+
+**Protocol:** `docs/protocols/market-session-debrief.md`
+
+**What to provide:**
+- The JSONL log file only: `logs/argus_YYYYMMDD.jsonl` (NOT the .log or UI log)
+- Access to run SQLite queries against `data/argus.db` and `data/catalyst.db`
+- Any Command Center observations (screenshots, notes)
+
+**What it produces:**
+- Session coverage report (which strategy windows were active)
+- Strategy pipeline diagnosis (where in the funnel did signals stop?)
+- Data flow analysis (candle throughput, warm-up success, stale episodes)
+- Catalyst pipeline report (cycles, cost, classification counts)
+- Error catalog (actionable vs benign)
+- DEF items for issues discovered
+- Action items for tomorrow's session
+
+**When to run:** After every market session, or at minimum when zero trades occur and you need to understand why. The protocol includes a decision tree for zero-trade diagnosis that traces the issue from orchestrator regime exclusion through evaluation telemetry to quality engine to trade execution.
+
+**Typical runtime:** 10–15 minutes with the protocol, vs 45+ minutes ad-hoc.
+
+---
+
+## 9. Cape Town Timezone Reference
 
 For operating from Cape Town (SAST, UTC+2), use this schedule. Note: South Africa does not observe DST, but the US does — so your schedule shifts by 1 hour twice a year.
 
@@ -439,7 +465,7 @@ pkill -9 -f "python -m argus.main"
 
 ---
 
-## 8. AI Copilot Operations
+## 10. AI Copilot Operations
 
 *Added in Sprint 22. Requires `ANTHROPIC_API_KEY` environment variable.*
 

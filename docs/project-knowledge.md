@@ -271,6 +271,7 @@ Universal protocols, templates, and the runner live in the `workflow/` submodule
 | `docs/process-evolution.md` | Workflow evolution narrative |
 | `docs/risk-register.md` | Assumptions and risks |
 | `docs/live-operations.md` | Live trading procedures |
+| `docs/protocols/market-session-debrief.md` | Post-market diagnostic runbook (7-phase: session boundaries → startup health → data flow → strategy pipeline → catalysts → error catalog → synthesis) |
 | `CLAUDE.md` | Claude Code session context |
 | `docs/ui/ux-feature-backlog.md` | Planned UI features |
 | `docs/strategies/STRATEGY_*.md` | Per-strategy spec sheets |
