@@ -27,7 +27,6 @@ interface FilterState {
   outcome: OutcomeFilter;
   date_from: string | undefined;
   date_to: string | undefined;
-  page: number;
 }
 
 interface TradeFiltersProps {

@@ -42,9 +42,6 @@ describe('TradeTable quality column', () => {
       <TradeTable
         trades={[baseTrade]}
         totalCount={1}
-        limit={20}
-        currentPage={1}
-        onPageChange={vi.fn()}
       />
     );
 
@@ -56,9 +53,6 @@ describe('TradeTable quality column', () => {
       <TradeTable
         trades={[baseTrade]}
         totalCount={1}
-        limit={20}
-        currentPage={1}
-        onPageChange={vi.fn()}
       />
     );
 
@@ -83,9 +77,6 @@ describe('TradeTable quality column', () => {
       <TradeTable
         trades={[tradeWithQuality]}
         totalCount={1}
-        limit={20}
-        currentPage={1}
-        onPageChange={vi.fn()}
       />
     );
 
@@ -105,9 +96,6 @@ describe('TradeTable quality column', () => {
       <TradeTable
         trades={[tradeEmptyGrade]}
         totalCount={1}
-        limit={20}
-        currentPage={1}
-        onPageChange={vi.fn()}
       />
     );
 

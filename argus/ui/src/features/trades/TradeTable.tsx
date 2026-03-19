@@ -1,5 +1,5 @@
 /**
- * Trade table with pagination, row coloring, strategy badges, and exit reason badges.
+ * Trade table with scrollable body, sortable columns, row coloring, strategy badges, and exit reason badges.
  *
  * Three responsive breakpoints:
  * - Phone (<640px): Date/Symbol combined, Strategy, P&L, Exit Reason
@@ -7,9 +7,11 @@
  * - Desktop (≥1024px): Date, Symbol, Strategy, Side, Entry Price, Exit Price, P&L ($), P&L (R), Shares, Exit Reason, Hold Duration, Commission
  *
  * Updated with StrategyBadge (17-D).
+ * Updated: pagination replaced with scrollable table + sortable columns (Sprint 25.6 S3).
  */
 
-import { ChevronLeft, ChevronRight, Filter, BarChart3 } from 'lucide-react';
+import { useState, useMemo, useCallback } from 'react';
+import { ChevronUp, ChevronDown, Filter, BarChart3 } from 'lucide-react';
 import { Badge, StrategyBadge } from '../../components/Badge';
 import { QualityBadge } from '../../components/QualityBadge';
 import { EmptyState } from '../../components/EmptyState';
@@ -23,23 +25,49 @@ import {
   formatR,
 } from '../../utils/format';
 
+export type SortDirection = 'asc' | 'desc';
+
+export interface SortState {
+  column: string;
+  direction: SortDirection;
+}
+
 interface TradeTableProps {
   trades: Trade[];
   totalCount: number;
-  limit: number;
   isLoading?: boolean;
   isTransitioning?: boolean;
-  /** Current page number (1-indexed) */
-  currentPage: number;
-  /** Callback when page changes */
-  onPageChange: (page: number) => void;
   /** Whether any filters are currently active */
   hasFilters?: boolean;
   /** Callback when a trade row is clicked */
   onTradeClick?: (trade: Trade) => void;
 }
 
-const ITEMS_PER_PAGE = 20;
+/**
+ * Compare two trade values for sorting. Handles nulls by sorting them last.
+ */
+function compareTradeValues(a: number | string | null, b: number | string | null, direction: SortDirection): number {
+  if (a === null && b === null) return 0;
+  if (a === null) return 1;
+  if (b === null) return -1;
+  const cmp = a < b ? -1 : a > b ? 1 : 0;
+  return direction === 'asc' ? cmp : -cmp;
+}
+
+/**
+ * Get the sortable value from a trade for a given column key.
+ */
+function getTradeValue(trade: Trade, column: string): number | string | null {
+  switch (column) {
+    case 'symbol': return trade.symbol;
+    case 'strategy': return trade.strategy_id;
+    case 'entry_time': return trade.entry_time;
+    case 'pnl': return trade.pnl_dollars;
+    case 'r_multiple': return trade.pnl_r_multiple;
+    case 'hold_duration': return trade.hold_duration_seconds;
+    default: return null;
+  }
+}
 
 /**
  * Get exit reason badge variant based on exit reason type.
@@ -93,16 +121,30 @@ function getRowBgClass(pnl: number | null): string {
 export function TradeTable({
   trades,
   totalCount,
-  limit,
   isLoading,
   isTransitioning = false,
-  currentPage,
-  onPageChange,
   hasFilters = false,
   onTradeClick,
 }: TradeTableProps) {
   const openSymbolDetail = useSymbolDetailUI((state) => state.open);
-  const totalPages = Math.ceil(totalCount / (limit || ITEMS_PER_PAGE));
+  const [sort, setSort] = useState<SortState | null>(null);
+
+  // Cycle sort: none → asc → desc → none
+  const handleSort = useCallback((column: string) => {
+    setSort((prev) => {
+      if (!prev || prev.column !== column) return { column, direction: 'asc' };
+      if (prev.direction === 'asc') return { column, direction: 'desc' };
+      return null;
+    });
+  }, []);
+
+  // Client-side sort
+  const sortedTrades = useMemo(() => {
+    if (!sort) return trades;
+    return [...trades].sort((a, b) =>
+      compareTradeValues(getTradeValue(a, sort.column), getTradeValue(b, sort.column), sort.direction)
+    );
+  }, [trades, sort]);
 
   // Handle symbol click - opens SymbolDetailPanel without triggering row click
   const handleSymbolClick = (e: React.MouseEvent, symbol: string) => {
@@ -118,9 +160,20 @@ export function TradeTable({
     return <EmptyState icon={icon} message={message} />;
   }
 
+  /** Render sort indicator for a column header. */
+  const sortIndicator = (column: string) => {
+    if (!sort || sort.column !== column) return null;
+    return sort.direction === 'asc'
+      ? <ChevronUp className="w-3 h-3 inline-block ml-0.5" />
+      : <ChevronDown className="w-3 h-3 inline-block ml-0.5" />;
+  };
+
+  const sortableClass = 'cursor-pointer select-none hover:text-argus-text transition-colors';
+
   return (
     <div className="bg-argus-surface border border-argus-border rounded-lg overflow-hidden">
-      <div className="overflow-x-auto">
+      {/* Scrollable container: ~20 rows visible */}
+      <div className="overflow-x-auto overflow-y-auto max-h-[800px]" data-testid="trade-table-scroll">
         <table className="w-full table-fixed">
           <thead className="sticky top-0 z-10">
             <tr className="bg-argus-surface-2">
@@ -128,17 +181,29 @@ export function TradeTable({
               <th className="lg:hidden px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-left">
                 Trade
               </th>
-              {/* Desktop: separate date column */}
-              <th className="hidden lg:table-cell w-[100px] px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-left">
-                Date
+              {/* Desktop: separate date column — sortable by entry_time */}
+              <th
+                className={`hidden lg:table-cell w-[100px] px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-left ${sortableClass}`}
+                onClick={() => handleSort('entry_time')}
+                data-testid="sort-entry_time"
+              >
+                Date{sortIndicator('entry_time')}
               </th>
-              {/* Desktop: separate symbol column */}
-              <th className="hidden lg:table-cell w-[80px] px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-left">
-                Symbol
+              {/* Desktop: separate symbol column — sortable */}
+              <th
+                className={`hidden lg:table-cell w-[80px] px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-left ${sortableClass}`}
+                onClick={() => handleSort('symbol')}
+                data-testid="sort-symbol"
+              >
+                Symbol{sortIndicator('symbol')}
               </th>
-              {/* Tablet+: strategy */}
-              <th className="hidden md:table-cell w-[70px] px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-left">
-                Strat
+              {/* Tablet+: strategy — sortable */}
+              <th
+                className={`hidden md:table-cell w-[70px] px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-left ${sortableClass}`}
+                onClick={() => handleSort('strategy')}
+                data-testid="sort-strategy"
+              >
+                Strat{sortIndicator('strategy')}
               </th>
               {/* Desktop only: side */}
               <th className="hidden lg:table-cell w-[55px] px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-left">
@@ -152,13 +217,21 @@ export function TradeTable({
               <th className="hidden md:table-cell w-[85px] px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-right">
                 Exit
               </th>
-              {/* All: P&L */}
-              <th className="w-[90px] px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-right">
-                P&L
+              {/* All: P&L — sortable */}
+              <th
+                className={`w-[90px] px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-right ${sortableClass}`}
+                onClick={() => handleSort('pnl')}
+                data-testid="sort-pnl"
+              >
+                P&L{sortIndicator('pnl')}
               </th>
-              {/* Tablet+: R-multiple */}
-              <th className="hidden md:table-cell w-[60px] px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-right">
-                R
+              {/* Tablet+: R-multiple — sortable */}
+              <th
+                className={`hidden md:table-cell w-[60px] px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-right ${sortableClass}`}
+                onClick={() => handleSort('r_multiple')}
+                data-testid="sort-r_multiple"
+              >
+                R{sortIndicator('r_multiple')}
               </th>
               {/* Desktop only: shares */}
               <th className="hidden lg:table-cell w-[65px] px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-right">
@@ -172,9 +245,13 @@ export function TradeTable({
               <th className="w-[60px] px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-center">
                 Exit
               </th>
-              {/* Desktop only: hold duration */}
-              <th className="hidden lg:table-cell w-[80px] px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-right">
-                Duration
+              {/* Desktop only: hold duration — sortable */}
+              <th
+                className={`hidden lg:table-cell w-[80px] px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-right ${sortableClass}`}
+                onClick={() => handleSort('hold_duration')}
+                data-testid="sort-hold_duration"
+              >
+                Duration{sortIndicator('hold_duration')}
               </th>
             </tr>
           </thead>
@@ -184,7 +261,7 @@ export function TradeTable({
               isTransitioning ? 'opacity-40' : 'opacity-100'
             }`}
           >
-            {trades.map((trade) => {
+            {sortedTrades.map((trade) => {
               const pnlFormatted = formatPnl(trade.pnl_dollars ?? 0);
               const rFormatted = formatR(trade.pnl_r_multiple ?? 0);
 
@@ -292,32 +369,12 @@ export function TradeTable({
         </table>
       </div>
 
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between px-4 py-3 border-t border-argus-border bg-argus-surface-2">
-          <button
-            onClick={() => onPageChange(currentPage - 1)}
-            disabled={currentPage <= 1}
-            className="flex items-center justify-center gap-1 min-w-[44px] min-h-[44px] px-3 text-sm rounded-md border border-argus-border bg-argus-surface hover:bg-argus-surface-3 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            <ChevronLeft className="w-4 h-4" />
-            <span className="hidden sm:inline">Prev</span>
-          </button>
-
-          <span className="text-sm text-argus-text-dim tabular-nums">
-            Page {currentPage} of {totalPages}
-          </span>
-
-          <button
-            onClick={() => onPageChange(currentPage + 1)}
-            disabled={currentPage >= totalPages}
-            className="flex items-center justify-center gap-1 min-w-[44px] min-h-[44px] px-3 text-sm rounded-md border border-argus-border bg-argus-surface hover:bg-argus-surface-3 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            <span className="hidden sm:inline">Next</span>
-            <ChevronRight className="w-4 h-4" />
-          </button>
-        </div>
-      )}
+      {/* Trade count footer */}
+      <div className="px-4 py-2 border-t border-argus-border bg-argus-surface-2">
+        <span className="text-xs text-argus-text-dim tabular-nums">
+          {totalCount} {totalCount === 1 ? 'trade' : 'trades'}
+        </span>
+      </div>
     </div>
   );
 }
