@@ -6,6 +6,7 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { TradeTable } from './TradeTable';
 import type { Trade } from '../../api/types';
 
@@ -105,5 +106,66 @@ describe('TradeTable quality column', () => {
       (cell) => cell.textContent === '—' && cell.classList.contains('text-center')
     );
     expect(qualityCells.length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe('TradeTable quality sort', () => {
+  const trades: Trade[] = [
+    { ...baseTrade, id: '1', symbol: 'AAPL', quality_grade: 'B+', quality_score: 70 },
+    { ...baseTrade, id: '2', symbol: 'TSLA', quality_grade: 'A+', quality_score: 95 },
+    { ...baseTrade, id: '3', symbol: 'NVDA', quality_grade: null, quality_score: null },
+    { ...baseTrade, id: '4', symbol: 'MSFT', quality_grade: 'C', quality_score: 40 },
+    { ...baseTrade, id: '5', symbol: 'GOOG', quality_grade: 'A-', quality_score: 82 },
+  ];
+
+  it('sorts by quality grade in ascending order (A+ first)', async () => {
+    const user = userEvent.setup();
+    render(<TradeTable trades={trades} totalCount={trades.length} />);
+
+    const qualityHeader = screen.getByTestId('sort-quality');
+    await user.click(qualityHeader);
+
+    // After one click: ascending (A+ = index 0 first, then A-, B+, C, null last)
+    const rows = document.querySelectorAll('tbody tr');
+    const symbols = Array.from(rows).map(
+      (row) => row.querySelectorAll('td')[2]?.textContent // desktop symbol column
+    );
+
+    expect(symbols).toEqual(['TSLA', 'GOOG', 'AAPL', 'MSFT', 'NVDA']);
+  });
+
+  it('sorts by quality grade in descending order (C first, null last)', async () => {
+    const user = userEvent.setup();
+    render(<TradeTable trades={trades} totalCount={trades.length} />);
+
+    const qualityHeader = screen.getByTestId('sort-quality');
+    await user.click(qualityHeader); // asc
+    await user.click(qualityHeader); // desc
+
+    const rows = document.querySelectorAll('tbody tr');
+    const symbols = Array.from(rows).map(
+      (row) => row.querySelectorAll('td')[2]?.textContent
+    );
+
+    // Descending: C first, then B+, A-, A+. Null still last.
+    expect(symbols).toEqual(['MSFT', 'AAPL', 'GOOG', 'TSLA', 'NVDA']);
+  });
+
+  it('clears sort on third click', async () => {
+    const user = userEvent.setup();
+    render(<TradeTable trades={trades} totalCount={trades.length} />);
+
+    const qualityHeader = screen.getByTestId('sort-quality');
+    await user.click(qualityHeader); // asc
+    await user.click(qualityHeader); // desc
+    await user.click(qualityHeader); // clear
+
+    // Back to original order
+    const rows = document.querySelectorAll('tbody tr');
+    const symbols = Array.from(rows).map(
+      (row) => row.querySelectorAll('td')[2]?.textContent
+    );
+
+    expect(symbols).toEqual(['AAPL', 'TSLA', 'NVDA', 'MSFT', 'GOOG']);
   });
 });

@@ -24,6 +24,7 @@ import {
   formatPrice,
   formatR,
 } from '../../utils/format';
+import { GRADE_ORDER } from '../../constants/qualityConstants';
 
 export type SortDirection = 'asc' | 'desc';
 
@@ -62,8 +63,16 @@ function getTradeValue(trade: Trade, column: string): number | string | null {
     case 'symbol': return trade.symbol;
     case 'strategy': return trade.strategy_id;
     case 'entry_time': return trade.entry_time;
+    case 'side': return trade.side;
     case 'pnl': return trade.pnl_dollars;
     case 'r_multiple': return trade.pnl_r_multiple;
+    case 'quality': {
+      const grade = trade.quality_grade;
+      if (!grade) return null;
+      const idx = GRADE_ORDER.indexOf(grade as typeof GRADE_ORDER[number]);
+      return idx === -1 ? null : idx;
+    }
+    case 'exit_reason': return trade.exit_reason;
     case 'hold_duration': return trade.hold_duration_seconds;
     default: return null;
   }
@@ -205,9 +214,13 @@ export function TradeTable({
               >
                 Strat{sortIndicator('strategy')}
               </th>
-              {/* Desktop only: side */}
-              <th className="hidden lg:table-cell w-[55px] px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-left">
-                Side
+              {/* Desktop only: side — sortable */}
+              <th
+                className={`hidden lg:table-cell w-[55px] px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-left ${sortableClass}`}
+                onClick={() => handleSort('side')}
+                data-testid="sort-side"
+              >
+                Side{sortIndicator('side')}
               </th>
               {/* Tablet+: entry price */}
               <th className="hidden md:table-cell w-[85px] px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-right">
@@ -237,13 +250,21 @@ export function TradeTable({
               <th className="hidden lg:table-cell w-[65px] px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-right">
                 Shares
               </th>
-              {/* Tablet+: quality grade */}
-              <th className="hidden md:table-cell w-[60px] px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-center">
-                Quality
+              {/* Tablet+: quality grade — sortable */}
+              <th
+                className={`hidden md:table-cell w-[60px] px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-center ${sortableClass}`}
+                onClick={() => handleSort('quality')}
+                data-testid="sort-quality"
+              >
+                Quality{sortIndicator('quality')}
               </th>
-              {/* All: exit reason */}
-              <th className="w-[60px] px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-center">
-                Exit
+              {/* All: exit reason — sortable */}
+              <th
+                className={`w-[60px] px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-center ${sortableClass}`}
+                onClick={() => handleSort('exit_reason')}
+                data-testid="sort-exit_reason"
+              >
+                Exit{sortIndicator('exit_reason')}
               </th>
               {/* Desktop only: hold duration — sortable */}
               <th

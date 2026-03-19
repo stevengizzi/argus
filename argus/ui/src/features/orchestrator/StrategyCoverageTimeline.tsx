@@ -92,7 +92,7 @@ export function StrategyCoverageTimeline({ allocations }: StrategyCoverageTimeli
 
   // Compute layout dimensions
   const layout = useMemo(() => {
-    const labelWidth = isDesktop ? 140 : isTablet ? 60 : 32;
+    const labelWidth = isDesktop ? 160 : isTablet ? 60 : 32;
     const rowHeight = 28;
     const axisHeight = 24;
     const padding = 8;
