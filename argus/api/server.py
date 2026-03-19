@@ -256,12 +256,15 @@ def create_app(app_state: AppState) -> FastAPI:
                 logger.error(f"Failed to initialize quality components: {e}")
 
         # Initialize EvaluationEventStore for telemetry persistence
-        telemetry_store = None
-        if app_state.trade_logger is not None:
+        # When launched from main.py, the store is pre-created and passed via app_state.
+        # When launched standalone (--dev mode), create it here.
+        _pre_initialized_store = app_state.telemetry_store
+        telemetry_store = _pre_initialized_store
+        if telemetry_store is None and app_state.trade_logger is not None:
             try:
                 from argus.strategies.telemetry_store import EvaluationEventStore
 
-                db_path = app_state.trade_logger._db._db_path
+                db_path = str(Path("data/evaluation.db"))
                 telemetry_store = EvaluationEventStore(db_path)
                 await telemetry_store.initialize()
                 await telemetry_store.cleanup_old_events()
@@ -274,6 +277,8 @@ def create_app(app_state: AppState) -> FastAPI:
                 logger.info("EvaluationEventStore initialized and wired to strategy buffers")
             except Exception as e:
                 logger.error(f"Failed to initialize EvaluationEventStore: {e}")
+        elif telemetry_store is not None:
+            logger.info("EvaluationEventStore pre-initialized by main.py")
 
         # Initialize ObservatoryService if enabled (Sprint 25)
         if (
@@ -338,8 +343,8 @@ def create_app(app_state: AppState) -> FastAPI:
             app_state.briefing_generator = None
             logger.info("Intelligence pipeline cleaned up")
 
-        # Cleanup telemetry store
-        if telemetry_store is not None:
+        # Cleanup telemetry store (only if created by lifespan, not main.py)
+        if telemetry_store is not None and telemetry_store is not _pre_initialized_store:
             await telemetry_store.close()
             app_state.telemetry_store = None
             logger.info("EvaluationEventStore closed")

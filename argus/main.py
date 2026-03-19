@@ -73,6 +73,7 @@ from argus.intelligence.quality_engine import SetupQualityEngine
 from argus.execution.alpaca_broker import AlpacaBroker
 from argus.execution.order_manager import OrderManager
 from argus.strategies.afternoon_momentum import AfternoonMomentumStrategy
+from argus.strategies.telemetry_store import EvaluationEventStore
 from argus.strategies.orb_breakout import OrbBreakoutStrategy
 from argus.strategies.orb_scalp import OrbScalpStrategy
 from argus.strategies.vwap_reclaim import VwapReclaimStrategy
@@ -136,6 +137,7 @@ class ArgusSystem:
         self._position_sizer: DynamicPositionSizer | None = None
         self._catalyst_storage: object | None = None  # CatalystStorage, if pipeline active
         self._eval_check_task: asyncio.Task[None] | None = None  # Sprint 25.5: eval health check
+        self._eval_store: EvaluationEventStore | None = None  # Sprint 25.6: reused in health check
 
     async def start(self) -> None:
         """Initialize and start all components in dependency order.
@@ -572,6 +574,23 @@ class ArgusSystem:
                 config.system.broker_source,
             )
 
+        # --- Phase 10.3: Telemetry Store (Sprint 25.6) ---
+        # Create EvaluationEventStore early so health check + API share one instance
+        try:
+            eval_db_path = str(Path(config.system.data_dir) / "evaluation.db")
+            self._eval_store = EvaluationEventStore(eval_db_path)
+            await self._eval_store.initialize()
+            await self._eval_store.cleanup_old_events()
+
+            # Wire store into each strategy's evaluation buffer
+            for strategy in self._strategies.values():
+                strategy.eval_buffer.set_store(self._eval_store)
+
+            logger.info("EvaluationEventStore initialized: %s", eval_db_path)
+        except Exception as e:
+            logger.error("Failed to initialize EvaluationEventStore: %s", e)
+            self._eval_store = None
+
         # --- Phase 10.5: Event Routing ---
         # Subscribe to CandleEvents and route to active strategies (DEC-125)
         self._event_bus.subscribe(CandleEvent, self._on_candle_for_strategies)
@@ -643,6 +662,7 @@ class ArgusSystem:
                     usage_tracker=self._usage_tracker,
                     action_manager=self._action_manager,
                     universe_manager=self._universe_manager,
+                    telemetry_store=self._eval_store,
                 )
 
                 # Start ActionManager cleanup task if AI is enabled
@@ -703,7 +723,7 @@ class ArgusSystem:
             logger.info("API: http://%s:%d", config.system.api.host, config.system.api.port)
         logger.info("=" * 60)
 
-        # Start strategy evaluation health check (Sprint 25.5)
+        # Start strategy evaluation health check (Sprint 25.5, 25.6: reuse store)
         self._eval_check_task = asyncio.create_task(
             self._evaluation_health_check_loop()
         )
@@ -724,8 +744,6 @@ class ArgusSystem:
         from datetime import time as dt_time
         from zoneinfo import ZoneInfo
 
-        from argus.strategies.telemetry_store import EvaluationEventStore
-
         et_tz = ZoneInfo("America/New_York")
         market_open = dt_time(9, 30)
         market_close = dt_time(16, 0)
@@ -740,23 +758,17 @@ class ArgusSystem:
                 current_time = now_et.time()
 
                 if market_open <= current_time <= market_close:
-                    # Build an EvaluationEventStore from DB path
                     if (
                         self._health_monitor is not None
-                        and self._db is not None
+                        and self._eval_store is not None
+                        and self._eval_store.is_connected
                         and self._strategies
                     ):
-                        db_path = self._db._db_path
-                        store = EvaluationEventStore(db_path)
-                        await store.initialize()
-                        try:
-                            await self._health_monitor.check_strategy_evaluations(
-                                strategies=self._strategies,
-                                eval_store=store,
-                                clock=self._clock,
-                            )
-                        finally:
-                            await store.close()
+                        await self._health_monitor.check_strategy_evaluations(
+                            strategies=self._strategies,
+                            eval_store=self._eval_store,
+                            clock=self._clock,
+                        )
             except Exception as e:
                 logger.error("Evaluation health check error: %s", e)
 
@@ -1091,6 +1103,12 @@ class ArgusSystem:
             with _ctxlib.suppress(asyncio.CancelledError):
                 await self._eval_check_task
             logger.info("Evaluation health check task stopped")
+
+        # 0a2. Close evaluation telemetry store
+        if self._eval_store is not None:
+            await self._eval_store.close()
+            self._eval_store = None
+            logger.info("EvaluationEventStore closed")
 
         # 0b. Stop ActionManager cleanup task
         if self._action_manager is not None:

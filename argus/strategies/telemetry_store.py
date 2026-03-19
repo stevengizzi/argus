@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -61,6 +62,7 @@ class EvaluationEventStore:
     """
 
     RETENTION_DAYS: int = 7
+    _WARNING_INTERVAL_SECONDS: float = 60.0
 
     def __init__(self, db_path: str) -> None:
         """Initialize the store.
@@ -70,6 +72,7 @@ class EvaluationEventStore:
         """
         self._db_path = db_path
         self._conn: aiosqlite.Connection | None = None
+        self._last_warning_time: float = 0.0
 
     async def initialize(self) -> None:
         """Create the evaluation_events table and indexes if they don't exist."""
@@ -112,7 +115,10 @@ class EvaluationEventStore:
             )
             await self._conn.commit()
         except Exception:
-            logger.warning("Failed to write evaluation event", exc_info=True)
+            now = time.monotonic()
+            if now - self._last_warning_time >= self._WARNING_INTERVAL_SECONDS:
+                logger.warning("Failed to write evaluation event", exc_info=True)
+                self._last_warning_time = now
 
     async def query_events(
         self,
