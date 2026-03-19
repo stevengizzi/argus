@@ -247,7 +247,7 @@ async def update_journal_entry(
     return _dict_to_entry_response(entry)
 
 
-@router.delete("/{entry_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{entry_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 async def delete_journal_entry(
     entry_id: str,
     _auth: dict = Depends(require_auth),  # noqa: B008

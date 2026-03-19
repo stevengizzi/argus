@@ -206,7 +206,7 @@ async def update_briefing(
     return BriefingResponse(**briefing)
 
 
-@router.delete("/{briefing_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{briefing_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 async def delete_briefing(
     briefing_id: str,
     _auth: dict = Depends(require_auth),  # noqa: B008
