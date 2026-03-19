@@ -264,7 +264,8 @@ def create_app(app_state: AppState) -> FastAPI:
             try:
                 from argus.strategies.telemetry_store import EvaluationEventStore
 
-                db_path = str(Path("data/evaluation.db"))
+                data_dir = app_state.config.data_dir if app_state.config else "data"
+                db_path = str(Path(data_dir) / "evaluation.db")
                 telemetry_store = EvaluationEventStore(db_path)
                 await telemetry_store.initialize()
                 await telemetry_store.cleanup_old_events()
