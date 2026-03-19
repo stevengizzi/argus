@@ -1,7 +1,7 @@
 # ARGUS — Sprint History
 
 > Complete record of all sprints from project inception through current state.
-> Active development began February 14, 2026. As of March 18, 2026 (~33 calendar days), 25 full sprints + 21 sub-sprints completed.
+> Active development began February 14, 2026. As of March 20, 2026 (~35 calendar days), 25 full sprints + 22 sub-sprints completed.
 
 ---
 
@@ -18,6 +18,7 @@
 | M — Strategy Observability | 24.5 | Mar 15–16 | Evaluation telemetry, operational fixes |
 | N — The Observatory | 25 | Mar 17–18 | Immersive pipeline visualization page |
 | O — Watchlist Wiring Fix | 25.5 | Mar 18 | UM watchlist population + zero-eval health warning |
+| O — Bug Sweep | 25.6 | Mar 19–20 | Operational bug fixes from first live session post-25.5 |
 
 ---
 
@@ -983,13 +984,76 @@
 
 ---
 
+### Sprint 25.6 — Bug Sweep (2,794 pytest + 611 Vitest = 3,405 total)
+**Date:** Mar 19–20, 2026
+**Scope:** Fix all operational bugs from March 19 live session — first session after Sprint 25.5 watchlist wiring fix. Nine DEF items (065–073) plus regime stagnation and log hygiene.
+**Type:** Bug sweep sprint.
+
+**Session 1 (S1): Telemetry Store DB Separation + Log Hygiene**
+- Separated EvaluationEventStore to `data/evaluation.db` (eliminates SQLite write contention)
+- Rate-limited write failure warnings to 1 per 60s via `time.monotonic()`
+- Health check loop reuses `self._eval_store` instead of creating/closing per cycle
+- Store created in main.py Phase 10.3; server.py conditional creation in standalone/dev mode
+- DEF-065 (telemetry DB contention), DEF-066 (log bloat from write warnings) resolved
+- +6 pytest
+- Verdict: CONCERNS (undocumented frontend changes in shared commit — process artifact of parallel execution; hardcoded path in server.py — absorbed into S2)
+
+**Session 2 (S2): Periodic Regime Reclassification**
+- Added `Orchestrator.reclassify_regime()` public method returning `tuple[MarketRegime, MarketRegime]`
+- Existing `_run_regime_recheck()` refactored to delegate to `reclassify_regime()` (single source of truth)
+- Independent 300s periodic task in `main.py._run_regime_reclassification()` with market hours guard (9:30–16:00 ET)
+- Sleep-first pattern avoids redundant reclassification immediately after pre-market routine
+- SPY unavailability retains current regime, logs WARNING
+- +6 pytest
+- Verdict: CLEAR
+
+**Session 3 (S3): Trades Page Fixes**
+- Replaced pagination with scrollable table (`max-h-[800px]`)
+- Full-dataset metrics (removed `limit`/`offset` from `useTrades` call)
+- Zustand filter persistence (TradesPage reads from store on mount)
+- 6 sortable columns added
+- DEF-067 (pagination→scroll), DEF-068 (metrics from paginated subset), DEF-069 (filter persistence), DEF-073 (non-sortable columns) resolved
+- +4 Vitest
+- Verdict: CLEAR
+
+**Session 4 (S4): Orchestrator Timeline Fixes**
+- Strategy Coverage Timeline label width increased to 140px for full strategy names
+- Throttled vs suspended visual distinction with separate `isSuspended`/`isThrottled` logic, labels, and tooltips
+- DEF-070 (label truncation), DEF-071 (throttled/suspended indistinguishable) resolved
+- +3 Vitest
+- Verdict: CLEAR
+
+**Session 5 (S5): Dashboard Layout Restructure**
+- Positions promoted to Row 2 (above fold on 1080p)
+- MarketStatusCard removed from desktop layout (OrchestratorStatusStrip covers same info)
+- Universe + SignalQuality moved below fold
+- DEF-072 (Positions below fold) resolved
+- +2 Vitest
+- Verdict: CLEAR
+
+**Session 5f (S5f): Visual Review Fixes**
+- Label width bumped from 140px to 160px
+- Added Side, Quality, and Exit Type sortable columns with grade-order-aware Quality sort
+- DEF-070 (label width finalized), DEF-073 (additional sort columns) finalized
+- +3 Vitest
+- Verdict: CLEAR
+
+**Parallelization:** S1+S3 ran simultaneously (Track A backend + Track B frontend), then S2+S4 simultaneously. S5 sequential. S5f after visual review.
+
+**Key decisions:** DEC-345 (evaluation.db separation), DEC-346 (periodic regime reclassification).
+**DEFs resolved:** DEF-065, DEF-066, DEF-067, DEF-068, DEF-069, DEF-070, DEF-071, DEF-072, DEF-073.
+**DEFs created:** DEF-074 (dual regime recheck path consolidation).
+**Prior-session bug noted:** 4 pre-existing e2e telemetry test failures in test_evaluation_telemetry_e2e.py (from Sprint 25.5).
+
+---
+
 ## Sprint Statistics
 
-- **Total sprints:** 25 full + 21 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5)
-- **Total sessions:** ~332+ Claude Code sessions
-- **Total tests:** 2,782 pytest + 599 Vitest = 3,381 total
-- **Total decisions:** 344 (DEC-001 through DEC-344)
-- **Calendar days (active dev):** ~33 (Feb 14 – Mar 18, 2026)
+- **Total sprints:** 25 full + 22 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6)
+- **Total sessions:** ~338+ Claude Code sessions
+- **Total tests:** 2,794 pytest + 611 Vitest = 3,405 total
+- **Total decisions:** 346 (DEC-001 through DEC-346)
+- **Calendar days (active dev):** ~35 (Feb 14 – Mar 20, 2026)
 - **Largest sprint:** 22 (9 implementation + 5 fix + 9 reviews, largest scope)
 - **Cleanest sprint:** 23 (11 sessions, 0 regressions, 0 scope gaps requiring follow-up)
 - **Most test-dense:** Sprint 22 (286 new tests), Sprint 24 (209 new tests), Sprint 23.2 (188 new tests), Sprint 23 (141 new tests across 23+23.05)

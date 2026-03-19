@@ -604,6 +604,8 @@ class Orchestrator:
 
 **Background Poll Loop (DEC-118):** Self-contained asyncio loop (no APScheduler). Triggers pre-market at configured time (default 09:25 ET), regime recheck every 30 minutes during market hours (DEC-115), EOD review at 16:05 ET. Daily flags reset at midnight.
 
+**Periodic Regime Reclassification (DEC-346, Sprint 25.6):** Public `reclassify_regime()` method returns `tuple[MarketRegime, MarketRegime]` (old, new). Independent 300s asyncio task in `main.py._run_regime_reclassification()` with market hours guard (9:30–16:00 ET). Sleep-first pattern avoids redundant reclassification after pre-market routine. SPY unavailability retains current regime. Note: Orchestrator's own poll loop also calls `reclassify_regime()` via `_run_regime_recheck()` — both paths are idempotent (DEF-074 tracks consolidation).
+
 **Intraday Monitoring:** Subscribes to `PositionClosedEvent`. Tracks per-strategy consecutive losses in-memory. Suspends strategy if intraday consecutive losses exceed threshold. Independent from pre-market throttle checks (which use full historical trade log).
 
 **Allocation Math (V1):** Equal-weight across eligible active strategies. Deployable = equity × (1 - cash_reserve_pct). Per-strategy = min(1/N, max_allocation_pct) × deployable. REDUCE strategies get min_allocation_pct. Single-strategy cap at 40% accepted (DEC-119).
@@ -1157,6 +1159,11 @@ Events published: `CatalystEvent(symbol, category, quality_score, headline, sour
 - SEC EDGAR `start()` validates `user_agent_email` config — raises ValueError if empty
 
 Storage: separate `catalyst.db` SQLite file (DEC-309), path: `{data_dir}/catalyst.db`.
+
+**Note on SQLite databases:** ARGUS uses three separate SQLite database files to avoid write contention:
+- `data/argus.db` — trades, quality history, orchestrator decisions, conversation history, AI usage
+- `data/catalyst.db` — catalyst events and classifications (DEC-309, Sprint 23.6)
+- `data/evaluation.db` — strategy evaluation telemetry events (DEC-345, Sprint 25.6)
 
 #### PreMarketEngine (`intelligence/premarket_engine.py`) — NOT YET IMPLEMENTED
 

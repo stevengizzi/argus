@@ -1,7 +1,7 @@
 # ARGUS — Decision Index
 
-> 344 decisions (DEC-001 through DEC-344)
-> Generated: March 18, 2026 | Source: `docs/decision-log.md`
+> 346 decisions (DEC-001 through DEC-346)
+> Generated: March 20, 2026 | Source: `docs/decision-log.md`
 > Legend: ● Active | ○ Superseded | △ Amended | ✗ Duplicate entry
 
 
@@ -391,3 +391,8 @@
 
 - ● **DEC-343**: Watchlist Population from UM Routing — `set_watchlist(symbols, source="universe_manager")` after `build_routing_table()` in Phase 9.5; `_watchlist` list→set for O(1) lookups; external API unchanged
 - ● **DEC-344**: Zero-Evaluation Health Warning — `HealthMonitor.check_strategy_evaluations()` detects populated watchlist + zero evaluations after operating window + 5 min grace; DEGRADED status; self-corrects; 60s asyncio task during market hours
+
+## Phase O — Bug Sweep (Sprint 25.6)
+
+- ● **DEC-345**: Evaluation Telemetry DB Separation — EvaluationEventStore writes to `data/evaluation.db`; store created in main.py Phase 10.3; server.py conditional creation; health check reuses store; write warning rate-limiting (60s)
+- ● **DEC-346**: Periodic Regime Reclassification — `Orchestrator.reclassify_regime()` public method; 300s periodic task in main.py with market hours guard; sleep-first pattern; SPY unavailability retains current regime

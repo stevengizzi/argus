@@ -4106,6 +4106,36 @@ Each entry follows this format:
 
 ---
 
+## Phase O — Bug Sweep (Sprint 25.6)
+
+### DEC-345 | Evaluation Telemetry DB Separation
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-19 |
+| **Sprint** | 25.6 |
+| **Decision** | EvaluationEventStore writes to `data/evaluation.db` instead of `data/argus.db`. Store created in main.py Phase 10.3 for early availability. Server.py lifespan conditionally creates store only in standalone/dev mode (skips if pre-initialized by main.py). Health check loop reuses `self._eval_store` instead of creating/closing per cycle. Write failure warnings rate-limited to 1 per 60 seconds using `time.monotonic()`. |
+| **Alternatives Considered** | 1. WAL mode tuning on argus.db — rejected, separate DB eliminates contention entirely and follows the precedent set by DEC-309 (separate catalyst.db). 2. In-memory buffer with periodic flush — rejected, adds complexity and risks data loss on crash. |
+| **Rationale** | March 19 live session revealed SQLite write contention between main trading DB and evaluation telemetry. Observatory was unusable. Write failure warnings produced 1.3 GB of log bloat. Separating the telemetry DB eliminates the contention at the source. |
+| **Cross-References** | DEC-309 (separate catalyst.db precedent), DEC-342 (evaluation telemetry) |
+| **Status** | Active |
+
+---
+
+### DEC-346 | Periodic Regime Reclassification
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-19 |
+| **Sprint** | 25.6 |
+| **Decision** | Add periodic regime reclassification task (300s interval) with market hours guard (9:30–16:00 ET). New public `Orchestrator.reclassify_regime()` method returns `tuple[MarketRegime, MarketRegime]` (old, new). Existing `_run_regime_recheck()` refactored to delegate to `reclassify_regime()` (single source of truth). Independent asyncio task in `main.py._run_regime_reclassification()` with sleep-first pattern avoids redundant reclassification immediately after pre-market routine. SPY unavailability retains current regime (never sets to None), logs WARNING. Regime change logs INFO, unchanged logs DEBUG. |
+| **Alternatives Considered** | 1. Increase Orchestrator poll loop frequency — rejected, poll loop serves multiple purposes and its interval is a compromise across all its responsibilities. 2. Event-driven regime updates on every SPY candle — rejected, too frequent (every minute) and unnecessary. 300s provides timely updates without noise. |
+| **Rationale** | March 19 live session revealed regime was classified once at pre-market and never reclassified during market hours. SPY data is unavailable pre-market (Databento streams market hours only), so regime defaulted to `range_bound` and stayed there all day. This left regime-aware strategy behavior permanently stale. |
+| **Cross-References** | DEC-113 (regime classification V1), DEC-115 (continuous regime monitoring), DEC-118 (pre-market scheduling), DEF-044 (SPY intra-day regime re-evaluation — partially resolved), DEF-074 (dual recheck path consolidation) |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
-*Next DEC: 345*
-*Last updated: 2026-03-18 (Sprint 25.5 — DEC-343, DEC-344)*
+*Next DEC: 347*
+*Last updated: 2026-03-20 (Sprint 25.6 — DEC-345, DEC-346)*

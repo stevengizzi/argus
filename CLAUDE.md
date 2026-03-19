@@ -1,11 +1,11 @@
 # ARGUS — Claude Code Context
 
 > Dense, actionable context for Claude Code sessions. No history — see `docs/` for that.
-> Last updated: March 18, 2026 (Sprint 25.5 doc sync)
+> Last updated: March 20, 2026 (Sprint 25.6 doc sync)
 
 ## Active Sprint
 
-**No active sprint.** Sprint 25.5 (Universe Manager Watchlist Wiring Fix) completed March 18, 2026.
+**No active sprint.** Sprint 25.6 (Bug Sweep) completed March 20, 2026.
 
 Next planned sprint: **26 (Red-to-Green + Pattern Library Foundation)**. Red-to-Green strategy + PatternLibrary ABC + Bull Flag + Flat-Top Breakout pattern modules.
 
@@ -13,12 +13,13 @@ Next planned sprint: **26 (Red-to-Green + Pattern Library Foundation)**. Red-to-
 - **FMP Starter plan restriction:** FMP news endpoints return 403 on Starter plan ($22/mo). `fmp_news.enabled: false` in `system_live.yaml`. FMP circuit breaker (DEC-323) prevents spam if accidentally enabled.
 - **Pre-existing xdist failures (DEF-048):** 4 test_main.py tests fail under `-n auto` (same `load_dotenv`/`AIConfig` race): `test_both_strategies_created`, `test_multi_strategy_health_status`, `test_candle_event_routing_subscribed`, `test_12_phase_startup_creates_orchestrator`. Pre-existing on clean HEAD. Priority: LOW.
 - **Test isolation (DEF-049):** `test_orchestrator_uses_strategies_from_registry` fails when run in isolation but passes in full suite. Pre-existing.
+- **Pre-existing e2e telemetry test failures:** 4 tests in `test_evaluation_telemetry_e2e.py` fail (observatory pipeline, session summary, health warning self-correct, health warning with evaluations). From Sprint 25.5 — async write→query race condition. Pre-existing on clean HEAD. Priority: LOW.
 
 ## Current State
 
 - **Active sprint:** None (between sprints)
 - **Next sprint:** 26 (Red-to-Green + Pattern Library Foundation)
-- **Tests:** 2,782 pytest + 599 Vitest
+- **Tests:** 2,794 pytest + 611 Vitest
 - **Strategies:** 4 active (ORB Breakout, ORB Scalp, VWAP Reclaim, Afternoon Momentum)
 - **Infrastructure:** Databento EQUS.MINI (live) + IBKR paper trading (Account U24619949) + FMP Starter (scanning + reference data) + Finnhub (news + analyst recs) + Claude API (Copilot + Catalyst Classification) + Universe Manager (config-gated) + Catalyst Pipeline (config-gated) + Intelligence Polling Loop (config-gated) + Reference Data Cache + Quality Engine (config-gated) + Dynamic Position Sizer + Strategy Evaluation Telemetry (ring buffer + SQLite persistence)
 - **Frontend:** 8-page Command Center (Observatory added Sprint 25) + AI Copilot + Universe Status Card + Intelligence Brief View (all active), Tauri desktop + PWA mobile
@@ -65,7 +66,7 @@ argus/
 python -m pytest tests/                   # Run all tests
 python -m pytest tests/ -x               # Stop on first failure
 python -m pytest tests/ -x -q            # Fail-fast, quiet
-cd argus/ui && npx vitest run            # Frontend tests (~599)
+cd argus/ui && npx vitest run            # Frontend tests (~611)
 
 # Trading engine
 python -m argus.main                      # Start (paper trading default)
@@ -259,12 +260,13 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 | DEF-040 | Runner main.py Further Decomposition | Runner exceeds ~2,500 lines | Sprint 23.6 S5 extracted CLI helpers (~120 lines). main.py still 2,067 lines. Further extraction candidates: session execution loop, parallel session handling, notification logic. Priority: LOW. |
 | ~~DEF-041~~ | ~~Frontend catalyst endpoint short-circuit~~ | ~~Sprint 23.9~~ | **CLOSED** (Sprint 23.9, DEC-329). `usePipelineStatus` hook gates catalyst/briefing TanStack queries on health endpoint pipeline component. Zero requests when pipeline inactive. |
 | ~~DEF-043~~ | ~~/debrief/briefings endpoint 503 fix~~ | ~~Sprint 23.9~~ | **CLOSED** (Sprint 23.9). Root cause: `DebriefService` only initialized in `dev_state.py`, never in `server.py` lifespan. Fix: ~10 lines wiring `DebriefService(db)` in lifespan. Frontend empty state already existed. |
-| DEF-044 | SPY intra-day regime re-evaluation | Regime-aware strategy behavior implemented OR paper trading shows regime stale after open | Orchestrator runs `_classify_regime()` once during `run_pre_market_routine()`. SPY data unavailable pre-market (Databento streams market hours only), so regime defaults to `range_bound`. After market open, SPY bars flow but nothing re-triggers classification. Making regime detection continuous requires design: how should mid-session regime changes affect running strategies? Priority: MEDIUM. |
+| ~~DEF-044~~ | ~~SPY intra-day regime re-evaluation~~ | — | **PARTIALLY RESOLVED** (Sprint 25.6, DEC-346): Periodic 300s regime reclassification task added. Regime now reclassified during market hours. Remaining: regime-aware strategy behavior (how should mid-session regime changes affect running strategies). |
 | ~~DEF-045~~ | ~~SEC Edgar timeout test rewrite~~ | ~~Sprint 23.9~~ | **CLOSED** (Sprint 23.9). Rewrote to call `client.start()` with mocked CIK refresh, inspects `client._session.timeout`. Matches Finnhub/FMP pattern. |
 | ~~DEF-046~~ | ~~test_main.py xdist failures (2 named tests)~~ | ~~Sprint 23.9~~ | **CLOSED** (Sprint 23.9). Root cause: `load_dotenv()` in `ArgusSystem.__init__()` re-loaded `.env` after monkeypatch, `AIConfig.auto_detect_enabled` overrode `enabled=False`. Fix: empty `ANTHROPIC_API_KEY` env var + explicit `ai: enabled: false`. 4 additional failures tracked as DEF-048. |
 | DEF-047 | Bulk catalyst endpoint | Unscheduled | Consolidate per-symbol catalyst GET requests into single batch request. Currently one request per watchlist symbol when pipeline is active. Priority: LOW. |
 | DEF-048 | Additional test_main.py xdist failures | Unscheduled | 4 more tests fail under `-n auto` (same `load_dotenv`/`AIConfig` race as DEF-046): `test_both_strategies_created`, `test_multi_strategy_health_status`, `test_candle_event_routing_subscribed`, `test_12_phase_startup_creates_orchestrator`. Pre-existing on clean HEAD. Same fix approach as DEF-046. Priority: LOW. |
 | DEF-049 | test_orchestrator_uses_strategies_from_registry isolation failure | Unscheduled | `test_orchestrator_uses_strategies_from_registry` in tests/test_main.py fails when run in isolation but passes in full suite. Pre-existing test isolation issue. Discovered Sprint 24 S1. Priority: LOW. |
+| DEF-074 | Dual regime recheck path consolidation | Natural lull / future cleanup | Orchestrator's `_poll_loop` and main.py's `_run_regime_reclassification` both call `reclassify_regime()`. Benign (idempotent) but redundant. Consolidate to single periodic mechanism. Priority: LOW. |
 | ~~DEF-050~~ | ~~Full ArgusSystem e2e integration test~~ | ~~Unscheduled~~ | **RESOLVED** (Sprint 24.1 S2): Full strategy → quality engine → sizer → RM integration test implemented. |
 | ~~DEF-052~~ | ~~Dashboard quality cards interactivity~~ | ~~Unscheduled~~ | **RESOLVED** (Sprint 24.1 S4b + S4f): Tooltips, legend, and chart redesign completed. QualityDistributionCard donut removed (redundant with SignalQualityPanel histogram). |
 | ~~DEF-053~~ | ~~Quality column in Dashboard tables~~ | ~~Unscheduled~~ | **RESOLVED** (Sprint 24.1 S4b): Quality column added to Dashboard Positions/Recent Trades tables. |
@@ -282,9 +284,9 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 
 | Document | What It Covers |
 |----------|---------------|
-| `docs/decision-log.md` | All 344 DEC entries with full rationale |
+| `docs/decision-log.md` | All 346 DEC entries with full rationale |
 | `docs/dec-index.md` | Quick-reference index with status markers |
-| `docs/sprint-history.md` | Complete sprint history (1–25.5) |
+| `docs/sprint-history.md` | Complete sprint history (1–25.6) |
 | `docs/process-evolution.md` | Workflow evolution narrative |
 | `docs/live-operations.md` | Live trading procedures |
 | `docs/strategies/STRATEGY_*.md` | Per-strategy spec sheets |
