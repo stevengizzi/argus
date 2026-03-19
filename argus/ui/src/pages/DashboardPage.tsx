@@ -196,42 +196,28 @@ export function DashboardPage() {
             </motion.div>
           </motion.div>
 
-          {/* 3-col row: Market Status | Today's Stats | Session Timeline */}
+          {/* Positions — promoted above fold */}
+          <motion.div variants={staggerItem}>
+            <OpenPositions />
+          </motion.div>
+
+          {/* 3-col row: Today's Stats | Session Timeline | AI Insight */}
           <motion.div
             className="grid grid-cols-3 gap-6"
             variants={staggerItemWithChildren(0.08)}
           >
-            <motion.div variants={staggerItem} className="h-full">
-              <MarketStatusCard />
-            </motion.div>
             <motion.div variants={staggerItem} className="h-full">
               <TodayStats data={summaryData?.today_stats} useSummaryData />
             </motion.div>
             <motion.div variants={staggerItem} className="h-full">
               <SessionTimeline />
             </motion.div>
-          </motion.div>
-
-          {/* AI Insight + Universe Status + Signal Quality row */}
-          <motion.div
-            className="grid grid-cols-3 gap-6"
-            variants={staggerItemWithChildren(0.08)}
-          >
             <motion.div variants={staggerItem} className="h-full">
               <AIInsightCard />
             </motion.div>
-            <motion.div variants={staggerItem} className="h-full">
-              <UniverseStatusCard />
-            </motion.div>
-            <motion.div variants={staggerItem} className="h-full">
-              <SignalQualityPanel />
-            </motion.div>
           </motion.div>
 
-          <motion.div variants={staggerItem}>
-            <OpenPositions />
-          </motion.div>
-
+          {/* Recent Trades | System Status */}
           <motion.div
             className="grid grid-cols-2 gap-6"
             variants={staggerItemWithChildren(0.08)}
@@ -241,6 +227,19 @@ export function DashboardPage() {
             </motion.div>
             <motion.div variants={staggerItem}>
               <HealthMini />
+            </motion.div>
+          </motion.div>
+
+          {/* Below fold: review-oriented cards */}
+          <motion.div
+            className="grid grid-cols-2 gap-6"
+            variants={staggerItemWithChildren(0.08)}
+          >
+            <motion.div variants={staggerItem} className="h-full">
+              <UniverseStatusCard />
+            </motion.div>
+            <motion.div variants={staggerItem} className="h-full">
+              <SignalQualityPanel />
             </motion.div>
           </motion.div>
         </motion.div>

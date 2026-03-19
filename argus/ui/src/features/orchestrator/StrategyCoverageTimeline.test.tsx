@@ -88,6 +88,103 @@ describe('StrategyCoverageTimeline', () => {
     expect(rects?.length).toBeGreaterThanOrEqual(2);
   });
 
+  it('renders full strategy name on desktop without truncation', () => {
+    // Add an Afternoon Momentum allocation to test the longest label
+    const allocsWithAfternoon: AllocationInfo[] = [
+      ...mockAllocations,
+      {
+        strategy_id: 'afternoon_momentum',
+        allocation_pct: 25,
+        allocation_dollars: 10000,
+        throttle_action: 'none',
+        eligible: true,
+        reason: '',
+        deployed_capital: 0,
+        deployed_pct: 0,
+        is_throttled: false,
+        operating_window: {
+          earliest_entry: '14:00',
+          latest_entry: '15:30',
+          force_close: '15:45',
+        },
+        consecutive_losses: 0,
+        rolling_sharpe: 1.0,
+        drawdown_pct: 0,
+        is_active: true,
+        health_status: 'healthy',
+        trade_count_today: 0,
+        daily_pnl: 0,
+        open_position_count: 0,
+        override_active: false,
+        override_until: null,
+      },
+    ];
+
+    render(<StrategyCoverageTimeline allocations={allocsWithAfternoon} />);
+
+    // Desktop mock is true — full names should render
+    expect(screen.getByText('Afternoon Momentum')).toBeInTheDocument();
+    expect(screen.getByText('ORB Breakout')).toBeInTheDocument();
+  });
+
+  it('active non-throttled strategy renders solid bar without hatched overlay', () => {
+    // All-active, non-throttled allocations
+    const activeAllocations: AllocationInfo[] = [
+      {
+        ...mockAllocations[0],
+        is_throttled: false,
+        is_active: true,
+      },
+    ];
+
+    render(<StrategyCoverageTimeline allocations={activeAllocations} />);
+
+    const svg = document.querySelector('svg');
+    const rects = Array.from(svg?.querySelectorAll('rect') || []);
+
+    // Should have exactly 1 rect (main bar) — no stripe overlay
+    const mainBars = rects.filter(
+      (rect) => rect.getAttribute('fill')?.startsWith('#')
+    );
+    const stripeOverlays = rects.filter(
+      (rect) => rect.getAttribute('fill') === 'url(#throttled-stripes)'
+    );
+
+    expect(mainBars.length).toBe(1);
+    expect(stripeOverlays.length).toBe(0);
+    // Main bar should have full opacity (0.8)
+    expect(mainBars[0].getAttribute('opacity')).toBe('0.8');
+  });
+
+  it('suspended strategy shows hatched bar and title tooltip', () => {
+    const suspendedAllocations: AllocationInfo[] = [
+      {
+        ...mockAllocations[0],
+        is_throttled: false,
+        is_active: false, // Suspended by circuit breaker
+      },
+    ];
+
+    render(<StrategyCoverageTimeline allocations={suspendedAllocations} />);
+
+    // Bar should have reduced opacity
+    const svg = document.querySelector('svg');
+    const mainBars = Array.from(svg?.querySelectorAll('rect') || []).filter(
+      (rect) => rect.getAttribute('fill')?.startsWith('#')
+    );
+    expect(mainBars[0].getAttribute('opacity')).toBe('0.3');
+
+    // Stripe overlay should be present
+    const stripeOverlays = Array.from(svg?.querySelectorAll('rect') || []).filter(
+      (rect) => rect.getAttribute('fill') === 'url(#throttled-stripes)'
+    );
+    expect(stripeOverlays.length).toBe(1);
+
+    // Label should have title tooltip indicating suspension
+    const label = screen.getByTitle('Suspended (circuit breaker)');
+    expect(label).toBeInTheDocument();
+  });
+
   it('throttled strategy bar has reduced opacity', () => {
     render(<StrategyCoverageTimeline allocations={mockAllocations} />);
 

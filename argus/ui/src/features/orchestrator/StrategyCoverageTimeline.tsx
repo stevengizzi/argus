@@ -92,7 +92,7 @@ export function StrategyCoverageTimeline({ allocations }: StrategyCoverageTimeli
 
   // Compute layout dimensions
   const layout = useMemo(() => {
-    const labelWidth = isDesktop ? 100 : isTablet ? 60 : 32;
+    const labelWidth = isDesktop ? 140 : isTablet ? 60 : 32;
     const rowHeight = 28;
     const axisHeight = 24;
     const padding = 8;
@@ -202,7 +202,8 @@ export function StrategyCoverageTimeline({ allocations }: StrategyCoverageTimeli
             const startPct = timeToPercent(window.earliest_entry);
             const endPct = timeToPercent(window.latest_entry);
             const color = getStrategyColor(alloc.strategy_id);
-            const isThrottled = alloc.is_throttled || !alloc.is_active;
+            const isSuspended = !alloc.is_active;
+            const isThrottledOrSuspended = alloc.is_throttled || isSuspended;
             const y = idx * layout.rowHeight + 4;
             const barHeight = layout.rowHeight - 8;
 
@@ -215,11 +216,11 @@ export function StrategyCoverageTimeline({ allocations }: StrategyCoverageTimeli
                   width={`${endPct - startPct}%`}
                   height={barHeight}
                   fill={color}
-                  opacity={isThrottled ? 0.3 : 0.8}
+                  opacity={isThrottledOrSuspended ? 0.3 : 0.8}
                   rx={4}
                 />
-                {/* Stripe overlay for throttled */}
-                {isThrottled && (
+                {/* Stripe overlay for throttled/suspended */}
+                {isThrottledOrSuspended && (
                   <rect
                     x={`${startPct}%`}
                     y={y}
@@ -264,20 +265,29 @@ export function StrategyCoverageTimeline({ allocations }: StrategyCoverageTimeli
             const config = getStrategyDisplay(alloc.strategy_id);
             const label = isDesktop ? config.name : isTablet ? config.shortName : config.letter;
             const color = config.color;
-            const isThrottled = alloc.is_throttled || !alloc.is_active;
+            const isSuspended = !alloc.is_active;
+            const isThrottledOrSuspended = alloc.is_throttled || isSuspended;
+
+            // Build status suffix for desktop labels
+            let statusSuffix = '';
+            if (isDesktop) {
+              if (isSuspended) statusSuffix = ' (Susp)';
+              else if (alloc.is_throttled) statusSuffix = ' (Thrt)';
+            }
 
             return (
               <div
                 key={alloc.strategy_id}
                 className={`flex items-center justify-end pr-2 text-xs font-medium truncate ${
-                  isThrottled ? 'opacity-50' : ''
+                  isThrottledOrSuspended ? 'opacity-50' : ''
                 }`}
                 style={{
                   height: layout.rowHeight,
                   color,
                 }}
+                title={isSuspended ? 'Suspended (circuit breaker)' : alloc.is_throttled ? 'Throttled' : undefined}
               >
-                {label}
+                {label}{statusSuffix}
               </div>
             );
           })}
@@ -307,7 +317,7 @@ export function StrategyCoverageTimeline({ allocations }: StrategyCoverageTimeli
         )}
         <span className="flex items-center gap-1">
           <span className="w-3 h-3 bg-gray-500/30 rounded" />
-          <span>Throttled</span>
+          <span>Throttled / Suspended</span>
         </span>
       </div>
     </Card>
