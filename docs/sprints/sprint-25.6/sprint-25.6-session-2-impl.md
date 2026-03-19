@@ -16,6 +16,15 @@ Before making any changes:
 ## Objective
 Add a periodic asyncio task that re-evaluates market regime during market hours (~5 min interval) using the orchestrator's existing classification logic. Currently, regime is set once at startup via `run_pre_market_routine()` and never updated, even though SPY data flows continuously after market open.
 
+## Additional fix from S1 review (hardcoded path in server.py):
+In `argus/api/server.py`, the standalone/dev mode EvaluationEventStore initialization hardcodes the path `"data/evaluation.db"`. This should use the config-driven path to match `main.py`. Change line ~267 from:
+`pythondb_path = str(Path("data/evaluation.db"))`
+
+to:
+`pythondb_path = str(Path(config.system.data_dir) / "evaluation.db")`
+
+where `config` is the SystemConfig already available in the lifespan scope. This ensures both initialization paths (main.py and standalone server.py) resolve to the same location if `data_dir` is ever customized. No new tests needed — existing S1 tests cover the store initialization; this is a one-line config consistency fix.
+
 ## Requirements
 
 ### 1. Investigate existing regime logic

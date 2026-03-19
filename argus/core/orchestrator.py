@@ -613,25 +613,46 @@ class Orchestrator:
                 except Exception:
                     logger.exception("EOD review failed")
 
-    async def _run_regime_recheck(self) -> None:
-        """Re-evaluate regime during market hours."""
+    async def reclassify_regime(self) -> tuple[MarketRegime, MarketRegime]:
+        """Re-evaluate market regime using current SPY data.
+
+        Can be called at any time. Fetches SPY daily bars, classifies the regime,
+        and updates internal state. If SPY data is unavailable, retains the current
+        regime without error.
+
+        Returns:
+            Tuple of (old_regime, new_regime). If SPY data is unavailable,
+            both values will be the current regime.
+        """
+        old_regime = self._current_regime
+
         spy_bars = await self._data_service.fetch_daily_bars(self._config.spy_symbol, 60)
         if spy_bars is None or len(spy_bars) < 20:
-            return
+            logger.warning(
+                "Regime reclassification: SPY data unavailable, retaining %s",
+                self._current_regime.value,
+            )
+            self._last_regime_check = self._clock.now()
+            return (old_regime, old_regime)
 
         indicators = self._regime_classifier.compute_indicators(spy_bars)
         new_regime = self._regime_classifier.classify(indicators)
         self._current_indicators = indicators
+        self._current_regime = new_regime
         self._last_regime_check = self._clock.now()
 
-        if new_regime != self._current_regime:
-            old = self._current_regime
-            self._current_regime = new_regime
-            logger.info("Regime changed intraday: %s → %s", old.value, new_regime.value)
+        return (old_regime, new_regime)
+
+    async def _run_regime_recheck(self) -> None:
+        """Re-evaluate regime during market hours and handle strategy eligibility."""
+        old_regime, new_regime = await self.reclassify_regime()
+
+        if new_regime != old_regime:
+            logger.info("Regime changed intraday: %s → %s", old_regime.value, new_regime.value)
 
             await self._event_bus.publish(
                 RegimeChangeEvent(
-                    old_regime=old.value,
+                    old_regime=old_regime.value,
                     new_regime=new_regime.value,
                     indicators=self._indicators_to_dict(),
                 )

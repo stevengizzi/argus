@@ -138,6 +138,7 @@ class ArgusSystem:
         self._catalyst_storage: object | None = None  # CatalystStorage, if pipeline active
         self._eval_check_task: asyncio.Task[None] | None = None  # Sprint 25.5: eval health check
         self._eval_store: EvaluationEventStore | None = None  # Sprint 25.6: reused in health check
+        self._regime_task: asyncio.Task[None] | None = None  # Sprint 25.6 S2: periodic regime reclass
 
     async def start(self) -> None:
         """Initialize and start all components in dependency order.
@@ -728,6 +729,11 @@ class ArgusSystem:
             self._evaluation_health_check_loop()
         )
 
+        # Start periodic regime reclassification (Sprint 25.6 S2)
+        self._regime_task = asyncio.create_task(
+            self._run_regime_reclassification()
+        )
+
         # Send startup alert
         mode = "DRY RUN" if self._dry_run else "PAPER TRADING"
         await self._health_monitor.send_warning_alert(
@@ -773,6 +779,43 @@ class ArgusSystem:
                 logger.error("Evaluation health check error: %s", e)
 
             await asyncio.sleep(60)
+
+    async def _run_regime_reclassification(self) -> None:
+        """Periodic regime reclassification during market hours.
+
+        Runs every 5 minutes (300s). Calls the orchestrator's reclassify_regime()
+        method and logs the result at appropriate levels.
+        """
+        from datetime import time as dt_time
+        from zoneinfo import ZoneInfo
+
+        et_tz = ZoneInfo("America/New_York")
+        market_open = dt_time(9, 30)
+        market_close = dt_time(16, 0)
+
+        while True:
+            await asyncio.sleep(300)
+            try:
+                now = self._clock.now()
+                now_et = (
+                    now.replace(tzinfo=et_tz) if now.tzinfo is None
+                    else now.astimezone(et_tz)
+                )
+                current_time = now_et.time()
+
+                if market_open <= current_time <= market_close:
+                    if self._orchestrator is not None:
+                        old, new = await self._orchestrator.reclassify_regime()
+                        if old != new:
+                            logger.info(
+                                "Regime reclassified: %s → %s",
+                                old.value,
+                                new.value,
+                            )
+                        else:
+                            logger.debug("Regime unchanged: %s", new.value)
+            except Exception as e:
+                logger.error("Regime reclassification error: %s", e)
 
     async def _on_candle_for_strategies(self, event: CandleEvent) -> None:
         """Route CandleEvents to active strategies (DEC-125).
@@ -1103,6 +1146,15 @@ class ArgusSystem:
             with _ctxlib.suppress(asyncio.CancelledError):
                 await self._eval_check_task
             logger.info("Evaluation health check task stopped")
+
+        # 0a1. Stop regime reclassification task
+        if self._regime_task is not None:
+            import contextlib as _ctxlib2
+
+            self._regime_task.cancel()
+            with _ctxlib2.suppress(asyncio.CancelledError):
+                await self._regime_task
+            logger.info("Regime reclassification task stopped")
 
         # 0a2. Close evaluation telemetry store
         if self._eval_store is not None:

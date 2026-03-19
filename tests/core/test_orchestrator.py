@@ -6,6 +6,7 @@ regime classification. These tests verify all major functionality.
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime, time, timedelta
 from unittest.mock import AsyncMock, MagicMock
 from zoneinfo import ZoneInfo
@@ -1532,3 +1533,158 @@ async def test_override_throttle_for_unknown_strategy(
     # Override is set
     assert "nonexistent" in orchestrator._override_until
     assert orchestrator._is_override_active("nonexistent") is True
+
+
+# ---------------------------------------------------------------------------
+# Reclassify Regime (Public Method) Tests — Sprint 25.6 S2
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_reclassify_regime_returns_valid_regime_with_spy_data(
+    orchestrator: Orchestrator,
+    mock_data_service: AsyncMock,
+) -> None:
+    """Test reclassify_regime returns a valid (old, new) tuple when SPY data is available."""
+    mock_data_service.fetch_daily_bars.return_value = create_spy_bars_bullish()
+    orchestrator.register_strategy(MockStrategy("orb_breakout"))
+
+    # Initial regime is range_bound (default)
+    assert orchestrator.current_regime == MarketRegime.RANGE_BOUND
+
+    old, new = await orchestrator.reclassify_regime()
+
+    assert old == MarketRegime.RANGE_BOUND
+    assert new == MarketRegime.BULLISH_TRENDING
+    assert orchestrator.current_regime == MarketRegime.BULLISH_TRENDING
+    assert orchestrator.last_regime_check is not None
+
+
+@pytest.mark.asyncio
+async def test_reclassify_regime_retains_current_when_spy_unavailable(
+    orchestrator: Orchestrator,
+    mock_data_service: AsyncMock,
+) -> None:
+    """Test reclassify_regime retains current regime when SPY data is unavailable."""
+    # Set initial regime to bullish via pre-market
+    mock_data_service.fetch_daily_bars.return_value = create_spy_bars_bullish()
+    orchestrator.register_strategy(MockStrategy("orb_breakout"))
+    await orchestrator.run_pre_market()
+    assert orchestrator.current_regime == MarketRegime.BULLISH_TRENDING
+
+    # Now make SPY data unavailable
+    mock_data_service.fetch_daily_bars.return_value = None
+
+    old, new = await orchestrator.reclassify_regime()
+
+    assert old == MarketRegime.BULLISH_TRENDING
+    assert new == MarketRegime.BULLISH_TRENDING
+    assert orchestrator.current_regime == MarketRegime.BULLISH_TRENDING
+
+
+@pytest.mark.asyncio
+async def test_reclassify_regime_retains_current_with_insufficient_data(
+    orchestrator: Orchestrator,
+    mock_data_service: AsyncMock,
+) -> None:
+    """Test reclassify_regime retains current regime with too few SPY bars."""
+    mock_data_service.fetch_daily_bars.return_value = pd.DataFrame(
+        {
+            "timestamp": [datetime(2026, 2, 24, tzinfo=UTC)],
+            "close": [500.0],
+        }
+    )
+
+    old, new = await orchestrator.reclassify_regime()
+
+    # Default is range_bound, should stay range_bound
+    assert old == MarketRegime.RANGE_BOUND
+    assert new == MarketRegime.RANGE_BOUND
+
+
+@pytest.mark.asyncio
+async def test_regime_reclassification_task_only_runs_during_market_hours() -> None:
+    """Test that _run_regime_reclassification only calls orchestrator during market hours."""
+    from unittest.mock import patch
+
+    from argus.main import ArgusSystem
+
+    system = ArgusSystem.__new__(ArgusSystem)
+
+    # Clock set to 7:00 AM ET (12:00 UTC) — before market open
+    system._clock = FixedClock(datetime(2026, 2, 24, 12, 0, tzinfo=UTC))
+
+    mock_orchestrator = AsyncMock()
+    mock_orchestrator.reclassify_regime = AsyncMock(
+        return_value=(MarketRegime.RANGE_BOUND, MarketRegime.RANGE_BOUND)
+    )
+    system._orchestrator = mock_orchestrator
+
+    # Patch asyncio.sleep to run only one iteration then cancel
+    call_count = 0
+
+    async def mock_sleep(seconds: float) -> None:
+        nonlocal call_count
+        call_count += 1
+        if call_count > 1:
+            raise asyncio.CancelledError
+
+    with patch("asyncio.sleep", side_effect=mock_sleep):
+        with pytest.raises(asyncio.CancelledError):
+            await system._run_regime_reclassification()
+
+    # Orchestrator should NOT have been called (outside market hours)
+    mock_orchestrator.reclassify_regime.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_regime_reclassification_task_runs_during_market_hours() -> None:
+    """Test that _run_regime_reclassification calls orchestrator during market hours."""
+    from unittest.mock import patch
+
+    from argus.main import ArgusSystem
+
+    system = ArgusSystem.__new__(ArgusSystem)
+
+    # Clock set to 10:30 AM ET (15:30 UTC) — during market hours
+    system._clock = FixedClock(datetime(2026, 2, 24, 15, 30, tzinfo=UTC))
+
+    mock_orchestrator = AsyncMock()
+    mock_orchestrator.reclassify_regime = AsyncMock(
+        return_value=(MarketRegime.RANGE_BOUND, MarketRegime.BULLISH_TRENDING)
+    )
+    system._orchestrator = mock_orchestrator
+
+    call_count = 0
+
+    async def mock_sleep(seconds: float) -> None:
+        nonlocal call_count
+        call_count += 1
+        if call_count > 1:
+            raise asyncio.CancelledError
+
+    with patch("asyncio.sleep", side_effect=mock_sleep):
+        with pytest.raises(asyncio.CancelledError):
+            await system._run_regime_reclassification()
+
+    # Orchestrator SHOULD have been called (during market hours)
+    mock_orchestrator.reclassify_regime.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_regime_reclassification_log_levels(
+    orchestrator: Orchestrator,
+    mock_data_service: AsyncMock,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Test reclassify_regime logs at correct levels: WARNING for unavailable SPY."""
+    import logging
+
+    # SPY data unavailable — should log at WARNING
+    mock_data_service.fetch_daily_bars.return_value = None
+    with caplog.at_level(logging.WARNING, logger="argus.core.orchestrator"):
+        await orchestrator.reclassify_regime()
+
+    assert any("SPY data unavailable" in r.message for r in caplog.records)
+    assert any(r.levelno == logging.WARNING for r in caplog.records
+               if "SPY data unavailable" in r.message)
