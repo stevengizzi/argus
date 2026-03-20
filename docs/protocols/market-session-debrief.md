@@ -7,7 +7,7 @@
 > **Output:** Session debrief report with findings, DEF items, and action items for tomorrow
 > **Time:** ~10–15 minutes with this protocol, vs ~45+ minutes ad-hoc
 >
-> Last updated: 2026-03-17. Calibrated against March 17 session analysis.
+> Last updated: 2026-03-20. Calibrated against March 17 + March 20 sessions.
 
 ---
 
@@ -15,7 +15,7 @@
 
 The operator provides:
 1. **The JSONL log file only:** `logs/argus_YYYYMMDD.jsonl` — this is the structured JSON log containing every distinct event in a parseable format. Do NOT provide `logs/argus_YYYY-MM-DD.log` — that file contains the same events in human-readable format plus multi-line continuation lines (Databento error details, Python tracebacks, uvicorn output) that bloat it to ~2.4x the JSONL size with zero additional trading-relevant information. Exception: provide the .log file only if debugging a specific uvicorn/startup issue not appearing in the JSONL.
-2. Access to run Python/SQLite queries against `data/argus.db` and `data/catalyst.db`
+2. Access to run Python/SQLite queries against `data/argus.db`, `data/evaluation.db`, and `data/catalyst.db`
 3. Any observations from watching the Command Center (screenshots, notes, or "didn't watch")
 4. **Do NOT provide** `logs/ui_YYYY-MM-DD.log` — this contains only Vite dev server output (port conflicts, hot-reload). Not useful for trading diagnostics.
 
@@ -179,7 +179,7 @@ Did strategies actually evaluate candles and record telemetry?
 
 ```python
 import sqlite3
-conn = sqlite3.connect('data/argus.db')
+conn = sqlite3.connect('data/evaluation.db')  # DEC-345: evaluation_events moved from argus.db
 
 # Total count
 c = conn.execute("""
@@ -214,8 +214,8 @@ conn.close()
 ```
 
 **Healthy baseline:**
-- Thousands of events per active strategy per session
-- Multiple event types: RANGE_ACCUMULATION, RANGE_FINALIZED, ENTRY_EVALUATION, STATE_TRANSITION, CONDITION_CHECK, etc.
+- 200K–500K events per active strategy per full session (~1M+ total across 3 strategies)
+- Multiple event types: TIME_WINDOW_CHECK, CONDITION_CHECK, OPENING_RANGE_UPDATE, ENTRY_EVALUATION, STATE_TRANSITION, QUALITY_SCORED, SIGNAL_GENERATED, etc.
 - Mix of PASS and FAIL results
 
 **If zero events:**
@@ -232,7 +232,7 @@ Which symbols got closest to triggering?
 
 ```python
 import sqlite3, json
-conn = sqlite3.connect('data/argus.db')
+conn = sqlite3.connect('data/evaluation.db')  # DEC-345: evaluation_events moved from argus.db
 c = conn.execute("""
     SELECT symbol, strategy_id, event_type, result, reason, metadata_json
     FROM evaluation_events
@@ -480,7 +480,7 @@ Always include:
 
 ## Quick Reference: Database Schemas
 
-### argus.db — evaluation_events
+### evaluation.db — evaluation_events (DEC-345)
 ```
 id INTEGER, trading_date TEXT, timestamp TEXT, symbol TEXT, strategy_id TEXT,
 event_type TEXT, result TEXT, reason TEXT, metadata_json TEXT
@@ -509,7 +509,10 @@ outcome_r_multiple REAL, created_at TEXT
 
 ### catalyst.db — catalyst_events
 ```
-(query PRAGMA table_info(catalyst_events) to confirm — schema not verified yet)
+id TEXT, symbol TEXT, catalyst_type TEXT, quality_score REAL, headline TEXT,
+summary TEXT, source TEXT, source_url TEXT, filing_type TEXT, headline_hash TEXT,
+published_at TEXT, classified_at TEXT, classified_by TEXT, trading_relevance TEXT,
+created_at TEXT, fetched_at TEXT
 ```
 
 ### Log message patterns
@@ -536,3 +539,4 @@ outcome_r_multiple REAL, created_at TEXT
 
 - **2026-03-17:** Initial version. Calibrated against March 17 session (zero evaluation events due to regime exclusion + late startup). Added database schemas, error catalog, decision tree for zero-trade diagnosis.
 - **2026-03-17 (post-debrief):** Specified JSONL-only input. The `.log` file contains the same events as JSONL plus ~7,000 multi-line continuation lines (Databento 422 details, tracebacks, uvicorn output) with zero additional trading information. UI log also excluded — contains only Vite dev server output.
+- **2026-03-20:** Corrected evaluation_events database path from `data/argus.db` to `data/evaluation.db` (DEC-345, Sprint 25.6). Updated healthy baseline for evaluation events from "thousands" to 200K–500K per strategy per full session (calibrated against March 20 data: 1,159,232 total across 3 strategies, 1,653 symbols). Updated event type list to match actual telemetry output. Filled in catalyst_events schema from live database.
