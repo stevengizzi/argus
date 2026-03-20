@@ -2799,3 +2799,94 @@ universe_manager:
             # Verify warm-up received scanner symbols (UM disabled)
             assert len(warmup_symbols_received) == 3
             assert set(warmup_symbols_received) == {"SCANNER1", "SCANNER2", "SCANNER3"}
+
+
+class TestProcessSignalDiagnosticLogging:
+    """Tests for sizer diagnostic log fields emitted when shares == 0."""
+
+    @pytest.mark.asyncio
+    async def test_signal_skipped_logs_diagnostic_fields(
+        self, mock_config_dir: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """When the sizer returns 0 shares, the log includes all diagnostic fields."""
+        import logging
+
+        from argus.core.config import BrokerSource
+        from argus.core.events import Side, SignalEvent
+        from argus.main import ArgusSystem
+
+        system = ArgusSystem(config_dir=mock_config_dir, dry_run=True)
+
+        # Build a minimal config mock that routes through the quality pipeline
+        mock_qe_config = MagicMock()
+        mock_qe_config.enabled = True
+        mock_qe_config.min_grade_to_trade = "C"
+
+        mock_system_cfg = MagicMock()
+        mock_system_cfg.broker_source = BrokerSource.ALPACA
+        mock_system_cfg.quality_engine = mock_qe_config
+
+        mock_config = MagicMock()
+        mock_config.system = mock_system_cfg
+        system._config = mock_config
+
+        # Quality engine returns a passing grade so the grade check is not the exit
+        mock_quality = MagicMock()
+        mock_quality.grade = "B"
+        mock_quality.score = 72.0
+        mock_quality.risk_tier = (0.005, 0.01)
+        mock_quality.components = {}
+        mock_quality.rationale = "test"
+
+        mock_qe = MagicMock()
+        mock_qe.score_setup = MagicMock(return_value=mock_quality)
+        mock_qe.record_quality_history = AsyncMock()
+        system._quality_engine = mock_qe
+
+        # Grade minimum check passes
+        system._grade_meets_minimum = MagicMock(return_value=True)
+
+        # Sizer returns 0 — triggers the diagnostic log
+        mock_sizer = MagicMock()
+        mock_sizer.calculate_shares = MagicMock(return_value=0)
+        system._position_sizer = mock_sizer
+
+        # Broker returns an account with buying power
+        mock_account = MagicMock()
+        mock_account.buying_power = 50_000.0
+        mock_broker = MagicMock()
+        mock_broker.get_account = AsyncMock(return_value=mock_account)
+        system._broker = mock_broker
+
+        system._catalyst_storage = None
+        system._orchestrator = MagicMock()
+        system._orchestrator.current_regime = MagicMock()
+
+        # Mock strategy object
+        mock_strategy = MagicMock()
+        mock_strategy.allocated_capital = 25_000.0
+        mock_strategy.config.risk_limits.max_loss_per_trade_pct = 0.01
+
+        signal = SignalEvent(
+            strategy_id="strat_orb_breakout",
+            symbol="AAPL",
+            side=Side.LONG,
+            entry_price=150.0,
+            stop_price=148.0,
+            share_count=0,
+        )
+
+        with caplog.at_level(logging.INFO, logger="argus.main"):
+            await system._process_signal(signal, mock_strategy)
+
+        log_messages = [r.getMessage() for r in caplog.records]
+        skipped = [m for m in log_messages if "Signal skipped" in m]
+        assert len(skipped) == 1, f"Expected 'Signal skipped' log, got: {log_messages}"
+        msg = skipped[0]
+        assert "grade=" in msg
+        assert "score=" in msg
+        assert "allocated_capital=" in msg
+        assert "buying_power=" in msg
+        assert "entry=" in msg
+        assert "stop=" in msg
+        assert "risk_per_share=" in msg

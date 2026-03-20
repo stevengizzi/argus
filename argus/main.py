@@ -938,9 +938,18 @@ class ArgusSystem:
 
             if shares <= 0:
                 logger.info(
-                    "Signal skipped: %s %s sizer returned 0 shares",
+                    "Signal skipped: %s %s sizer returned 0 shares "
+                    "(grade=%s, score=%.0f, allocated_capital=%.2f, "
+                    "buying_power=%.2f, entry=%.2f, stop=%.2f, risk_per_share=%.4f)",
                     signal.symbol,
                     signal.strategy_id,
+                    quality.grade,
+                    quality.score,
+                    strategy.allocated_capital,
+                    account.buying_power if account else 0.0,
+                    signal.entry_price,
+                    signal.stop_price,
+                    abs(signal.entry_price - signal.stop_price),
                 )
                 await self._quality_engine.record_quality_history(signal, quality, shares=0)
                 return
@@ -1124,6 +1133,37 @@ class ArgusSystem:
                 title="Argus Shutting Down",
                 body="Graceful shutdown initiated",
             )
+
+        # --- Debrief Export (before tearing down components) ---
+        try:
+            from argus.analytics.debrief_export import export_debrief_data
+            from zoneinfo import ZoneInfo
+
+            et_tz = ZoneInfo("America/New_York")
+            session_date = self._clock.now().astimezone(et_tz).strftime("%Y-%m-%d")
+
+            catalyst_db_path = None
+            data_dir_str = getattr(
+                getattr(self._config, 'system', self._config), 'data_dir', 'data'
+            )
+            if self._catalyst_storage is not None:
+                catalyst_db_path = str(Path(data_dir_str) / "catalyst.db")
+
+            export_path = await export_debrief_data(
+                session_date=session_date,
+                db=self._db,
+                eval_store=self._eval_store,
+                catalyst_db_path=catalyst_db_path,
+                broker=self._broker,
+                orchestrator=self._orchestrator,
+                output_dir="logs",
+            )
+            if export_path:
+                logger.info("Debrief data exported: %s", export_path)
+            else:
+                logger.warning("Debrief data export failed — see earlier warnings")
+        except Exception as e:
+            logger.warning("Debrief export error (non-fatal): %s", e)
 
         # 0. Stop API server
         if self._api_task:

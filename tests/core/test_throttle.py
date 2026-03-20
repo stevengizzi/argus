@@ -567,3 +567,29 @@ class TestCustomThresholds:
         default_throttler = PerformanceThrottler(OrchestratorConfig())
         default_result = default_throttler.check("test_strategy", trades, daily_pnl)
         assert default_result == ThrottleAction.NONE
+
+
+# ---------------------------------------------------------------------------
+# No-Trade History Tests
+# ---------------------------------------------------------------------------
+
+
+class TestNoTradeHistory:
+    """Tests for throttler behavior when a strategy has no trade history."""
+
+    def test_throttler_no_trades_returns_none(self, throttler: PerformanceThrottler) -> None:
+        """check() with empty trades and no daily P&L returns ThrottleAction.NONE."""
+        result = throttler.check("test", [], [])
+        assert result == ThrottleAction.NONE
+
+    def test_throttler_no_trades_does_not_suspend(self, throttler: PerformanceThrottler) -> None:
+        """Strategy with empty trade history is not suspended; same throttler reacts to losses."""
+        # A fresh strategy with no history should pass through unthrottled.
+        no_history_result = throttler.check("test", [], [])
+        assert no_history_result == ThrottleAction.NONE
+
+        # The same throttler instance with enough consecutive losses should REDUCE,
+        # confirming the NONE result above was due to the empty history, not a broken throttler.
+        losing_trades = [make_trade(net_pnl=-50.0) for _ in range(5)]
+        losing_result = throttler.check("test", losing_trades, [])
+        assert losing_result == ThrottleAction.REDUCE

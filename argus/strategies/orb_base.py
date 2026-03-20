@@ -378,6 +378,8 @@ class OrbBaseStrategy(BaseStrategy):
         if state.or_high is None or state.or_midpoint is None:
             return None
 
+        conditions_total = 4
+
         # 1. Candle must CLOSE above OR high (not just wick)
         if candle.close <= state.or_high:
             self.record_evaluation(
@@ -385,7 +387,12 @@ class OrbBaseStrategy(BaseStrategy):
                 EvaluationEventType.ENTRY_EVALUATION,
                 EvaluationResult.FAIL,
                 f"No breakout: close {candle.close:.2f} <= OR high {state.or_high:.2f}",
-                {"close": candle.close, "or_high": state.or_high},
+                {
+                    "close": candle.close,
+                    "or_high": state.or_high,
+                    "conditions_passed": 0,
+                    "conditions_total": conditions_total,
+                },
             )
             return None
 
@@ -403,7 +410,12 @@ class OrbBaseStrategy(BaseStrategy):
                 EvaluationEventType.ENTRY_EVALUATION,
                 EvaluationResult.FAIL,
                 f"Volume too low: {candle.volume} < {volume_threshold:.0f}",
-                {"volume": candle.volume, "threshold": volume_threshold},
+                {
+                    "volume": candle.volume,
+                    "threshold": volume_threshold,
+                    "conditions_passed": 1,
+                    "conditions_total": conditions_total,
+                },
             )
             return None
 
@@ -422,7 +434,12 @@ class OrbBaseStrategy(BaseStrategy):
                     EvaluationEventType.ENTRY_EVALUATION,
                     EvaluationResult.FAIL,
                     f"Below VWAP: {candle.close:.2f} < {vwap:.2f}",
-                    {"close": candle.close, "vwap": vwap},
+                    {
+                        "close": candle.close,
+                        "vwap": vwap,
+                        "conditions_passed": 2,
+                        "conditions_total": conditions_total,
+                    },
                 )
                 return None
 
@@ -440,7 +457,12 @@ class OrbBaseStrategy(BaseStrategy):
                 EvaluationEventType.ENTRY_EVALUATION,
                 EvaluationResult.FAIL,
                 f"Chase protection: {candle.close:.2f} > {chase_limit:.2f}",
-                {"close": candle.close, "chase_limit": chase_limit},
+                {
+                    "close": candle.close,
+                    "chase_limit": chase_limit,
+                    "conditions_passed": 3,
+                    "conditions_total": conditions_total,
+                },
             )
             return None
 
@@ -455,6 +477,8 @@ class OrbBaseStrategy(BaseStrategy):
                 "or_high": state.or_high,
                 "volume": candle.volume,
                 "volume_threshold": volume_threshold,
+                "conditions_passed": conditions_total,
+                "conditions_total": conditions_total,
             },
         )
 

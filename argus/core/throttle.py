@@ -90,6 +90,11 @@ class PerformanceThrottler:
         """
         actions: list[ThrottleAction] = []
 
+        # DEF-080: No trade history → no throttle action.
+        # A strategy with zero trades should never be suspended or reduced.
+        if not trades and not daily_pnl:
+            return ThrottleAction.NONE
+
         # Check consecutive losses → REDUCE
         consecutive_losses = self.get_consecutive_losses(trades)
         if consecutive_losses >= self._config.consecutive_loss_throttle:

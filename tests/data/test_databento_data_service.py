@@ -1419,11 +1419,13 @@ class TestDatabentoFetchDailyBars:
     """Tests for fetch_daily_bars() — returns None in V1."""
 
     @pytest.mark.asyncio
-    async def test_fetch_daily_bars_returns_none(
-        self, mock_databento, event_bus, databento_config, data_config
+    async def test_fetch_daily_bars_returns_none_without_api_key(
+        self, mock_databento, event_bus, databento_config, data_config, monkeypatch
     ):
-        """fetch_daily_bars returns None — not implemented for Databento V1."""
+        """fetch_daily_bars returns None when FMP_API_KEY is not set."""
         from argus.data.databento_data_service import DatabentoDataService
+
+        monkeypatch.delenv("FMP_API_KEY", raising=False)
 
         service = DatabentoDataService(
             event_bus=event_bus,
@@ -2202,3 +2204,238 @@ class TestTimeAwareWarmUp:
         assert service._mid_session_mode is False
         assert service._symbols_needing_warmup == set()
         assert hasattr(service, "_warmup_lock")
+
+
+class TestFetchDailyBars:
+    """Tests for DatabentoDataService.fetch_daily_bars()."""
+
+    @pytest.mark.asyncio
+    async def test_fetch_daily_bars_success(
+        self, mock_databento, event_bus, databento_config, data_config, monkeypatch
+    ):
+        """Valid FMP response returns DataFrame with correct columns, sort, and row count."""
+        from argus.data.databento_data_service import DatabentoDataService
+
+        monkeypatch.setenv("FMP_API_KEY", "test-fmp-key")
+
+        fmp_payload = [
+            {"date": "2026-01-03", "open": 100.0, "high": 105.0, "low": 99.0, "close": 104.0, "volume": 1_000_000},
+            {"date": "2026-01-02", "open": 98.0, "high": 102.0, "low": 97.0, "close": 101.0, "volume": 900_000},
+            {"date": "2026-01-01", "open": 95.0, "high": 99.0, "low": 94.0, "close": 98.0, "volume": 800_000},
+        ]
+
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.json = AsyncMock(return_value=fmp_payload)
+        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_response.__aexit__ = AsyncMock(return_value=False)
+
+        mock_session = MagicMock()
+        mock_session.get = MagicMock(return_value=mock_response)
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+
+        service = DatabentoDataService(
+            event_bus=event_bus,
+            config=databento_config,
+            data_config=data_config,
+        )
+
+        with patch("aiohttp.ClientSession", return_value=mock_session):
+            df = await service.fetch_daily_bars("AAPL", lookback_days=60)
+
+        assert df is not None
+        assert list(df.columns) == ["date", "open", "high", "low", "close", "volume"]
+        assert len(df) == 3
+        # Verify ascending sort by date
+        assert list(df["date"]) == ["2026-01-01", "2026-01-02", "2026-01-03"]
+
+    @pytest.mark.asyncio
+    async def test_fetch_daily_bars_no_api_key(
+        self, mock_databento, event_bus, databento_config, data_config, monkeypatch
+    ):
+        """Missing FMP_API_KEY returns None without making any HTTP request."""
+        from argus.data.databento_data_service import DatabentoDataService
+
+        monkeypatch.delenv("FMP_API_KEY", raising=False)
+
+        service = DatabentoDataService(
+            event_bus=event_bus,
+            config=databento_config,
+            data_config=data_config,
+        )
+
+        with patch("aiohttp.ClientSession") as mock_session_cls:
+            result = await service.fetch_daily_bars("AAPL")
+
+        assert result is None
+        mock_session_cls.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_fetch_daily_bars_http_error(
+        self, mock_databento, event_bus, databento_config, data_config, monkeypatch
+    ):
+        """Non-200 HTTP response returns None."""
+        from argus.data.databento_data_service import DatabentoDataService
+
+        monkeypatch.setenv("FMP_API_KEY", "test-fmp-key")
+
+        mock_response = MagicMock()
+        mock_response.status = 403
+        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_response.__aexit__ = AsyncMock(return_value=False)
+
+        mock_session = MagicMock()
+        mock_session.get = MagicMock(return_value=mock_response)
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+
+        service = DatabentoDataService(
+            event_bus=event_bus,
+            config=databento_config,
+            data_config=data_config,
+        )
+
+        with patch("aiohttp.ClientSession", return_value=mock_session):
+            result = await service.fetch_daily_bars("AAPL")
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_fetch_daily_bars_timeout(
+        self, mock_databento, event_bus, databento_config, data_config, monkeypatch
+    ):
+        """asyncio.TimeoutError during request returns None."""
+        from argus.data.databento_data_service import DatabentoDataService
+
+        monkeypatch.setenv("FMP_API_KEY", "test-fmp-key")
+
+        mock_response = MagicMock()
+        mock_response.__aenter__ = AsyncMock(side_effect=asyncio.TimeoutError())
+        mock_response.__aexit__ = AsyncMock(return_value=False)
+
+        mock_session = MagicMock()
+        mock_session.get = MagicMock(return_value=mock_response)
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+
+        service = DatabentoDataService(
+            event_bus=event_bus,
+            config=databento_config,
+            data_config=data_config,
+        )
+
+        with patch("aiohttp.ClientSession", return_value=mock_session):
+            result = await service.fetch_daily_bars("AAPL")
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_fetch_daily_bars_empty_response(
+        self, mock_databento, event_bus, databento_config, data_config, monkeypatch
+    ):
+        """Empty JSON array from FMP returns None."""
+        from argus.data.databento_data_service import DatabentoDataService
+
+        monkeypatch.setenv("FMP_API_KEY", "test-fmp-key")
+
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.json = AsyncMock(return_value=[])
+        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_response.__aexit__ = AsyncMock(return_value=False)
+
+        mock_session = MagicMock()
+        mock_session.get = MagicMock(return_value=mock_response)
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+
+        service = DatabentoDataService(
+            event_bus=event_bus,
+            config=databento_config,
+            data_config=data_config,
+        )
+
+        with patch("aiohttp.ClientSession", return_value=mock_session):
+            result = await service.fetch_daily_bars("AAPL")
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_fetch_daily_bars_lookback_limit(
+        self, mock_databento, event_bus, databento_config, data_config, monkeypatch
+    ):
+        """When FMP returns more rows than lookback_days, only the most recent rows are returned."""
+        from argus.data.databento_data_service import DatabentoDataService
+
+        monkeypatch.setenv("FMP_API_KEY", "test-fmp-key")
+
+        fmp_payload = [
+            {
+                "date": f"2025-{str((i // 30) + 1).zfill(2)}-{str((i % 30) + 1).zfill(2)}",
+                "open": 100.0,
+                "high": 105.0,
+                "low": 99.0,
+                "close": 104.0,
+                "volume": 1_000_000,
+            }
+            for i in range(100)
+        ]
+
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.json = AsyncMock(return_value=fmp_payload)
+        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_response.__aexit__ = AsyncMock(return_value=False)
+
+        mock_session = MagicMock()
+        mock_session.get = MagicMock(return_value=mock_response)
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+
+        service = DatabentoDataService(
+            event_bus=event_bus,
+            config=databento_config,
+            data_config=data_config,
+        )
+
+        with patch("aiohttp.ClientSession", return_value=mock_session):
+            df = await service.fetch_daily_bars("AAPL", lookback_days=60)
+
+        assert df is not None
+        assert len(df) == 60
+
+    def test_last_update_set_on_dispatch(
+        self, mock_databento, event_bus, databento_config, data_config, monkeypatch
+    ):
+        """last_update is set to a datetime after _dispatch_record processes a record."""
+        from argus.data.databento_data_service import DatabentoDataService
+
+        monkeypatch.setenv("DATABENTO_API_KEY", "test-key")
+
+        service = DatabentoDataService(
+            event_bus=event_bus,
+            config=databento_config,
+            data_config=data_config,
+        )
+
+        # Wire up record class references that _dispatch_record inspects
+        service._OHLCVMsg = MockOHLCVMsg
+        service._TradeMsg = MagicMock
+        service._SymbolMappingMsg = MagicMock
+
+        assert service.last_update is None
+
+        record = MockOHLCVMsg(
+            instrument_id=100,
+            open=100_000_000_000,
+            high=105_000_000_000,
+            low=99_000_000_000,
+            close=104_000_000_000,
+            volume=500_000,
+        )
+
+        service._dispatch_record(record)
+
+        assert service.last_update is not None
+        assert service.last_update.tzinfo is not None

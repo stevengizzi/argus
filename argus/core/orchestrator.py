@@ -109,6 +109,9 @@ class Orchestrator:
         # Override tracking (transient — lost on restart, which is acceptable)
         self._override_until: dict[str, datetime] = {}  # strategy_id → expiry datetime
 
+        # Rate-limit counter for SPY data unavailable warnings (DEF-078)
+        self._spy_unavailable_count: int = 0
+
     # -------------------------------------------------------------------------
     # Lifecycle
     # -------------------------------------------------------------------------
@@ -228,11 +231,15 @@ class Orchestrator:
             indicators = self._regime_classifier.compute_indicators(spy_bars)
             new_regime = self._regime_classifier.classify(indicators)
             self._current_indicators = indicators
+            self._spy_unavailable_count = 0
         else:
-            logger.warning(
-                "SPY data unavailable — using previous regime: %s",
-                self._current_regime.value,
-            )
+            self._spy_unavailable_count += 1
+            if self._spy_unavailable_count <= 1 or self._spy_unavailable_count % 6 == 0:
+                logger.warning(
+                    "SPY data unavailable — using previous regime: %s (occurrence #%d)",
+                    self._current_regime.value,
+                    self._spy_unavailable_count,
+                )
             new_regime = self._current_regime
 
         old_regime = self._current_regime
@@ -628,10 +635,13 @@ class Orchestrator:
 
         spy_bars = await self._data_service.fetch_daily_bars(self._config.spy_symbol, 60)
         if spy_bars is None or len(spy_bars) < 20:
-            logger.warning(
-                "Regime reclassification: SPY data unavailable, retaining %s",
-                self._current_regime.value,
-            )
+            self._spy_unavailable_count += 1
+            if self._spy_unavailable_count <= 1 or self._spy_unavailable_count % 6 == 0:
+                logger.warning(
+                    "Regime reclassification: SPY data unavailable, retaining %s (occurrence #%d)",
+                    self._current_regime.value,
+                    self._spy_unavailable_count,
+                )
             self._last_regime_check = self._clock.now()
             return (old_regime, old_regime)
 
@@ -640,6 +650,7 @@ class Orchestrator:
         self._current_indicators = indicators
         self._current_regime = new_regime
         self._last_regime_check = self._clock.now()
+        self._spy_unavailable_count = 0
 
         return (old_regime, new_regime)
 

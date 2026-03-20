@@ -445,3 +445,87 @@ class TestOrbScalpPatternStrengthEmitsQualityScored:
         assert "ORB Scalp pattern strength" in events[0].reason
         assert "volume_credit" in events[0].metadata
         assert "chase_credit" in events[0].metadata
+
+
+# ---------------------------------------------------------------------------
+# Test 9: Entry eval metadata — conditions_passed and conditions_total present
+# ---------------------------------------------------------------------------
+
+
+class TestEntryEvalMetadataHasConditionsPassed:
+
+    @pytest.mark.asyncio
+    async def test_entry_eval_metadata_has_conditions_passed(self) -> None:
+        """ENTRY_EVALUATION FAIL event includes conditions_passed and conditions_total keys."""
+        ds = _mock_data_service(atr=2.0, vwap=99.0)
+        strategy = OrbBreakoutStrategy(_breakout_config(), data_service=ds)
+        strategy.set_watchlist(["AAPL"])
+        strategy.allocated_capital = 100_000
+
+        for c in _or_candles():
+            await strategy.on_candle(c)
+
+        # Finalize the OR (first post-OR candle)
+        post_or = _candle(timestamp=datetime(2026, 2, 15, 14, 35, 0, tzinfo=UTC))
+        await strategy.on_candle(post_or)
+
+        # Candle that fails condition 1: close <= OR high (101.0)
+        fails_close = _candle(
+            timestamp=datetime(2026, 2, 15, 14, 36, 0, tzinfo=UTC),
+            close=100.5,
+            high=100.8,
+            low=99.5,
+            volume=200_000,
+        )
+        await strategy.on_candle(fails_close)
+
+        entry_events = _events_of_type(strategy, EvaluationEventType.ENTRY_EVALUATION)
+        fail_events = [e for e in entry_events if e.result == EvaluationResult.FAIL]
+        assert len(fail_events) >= 1
+        metadata = fail_events[0].metadata
+        assert "conditions_passed" in metadata
+        assert "conditions_total" in metadata
+
+
+# ---------------------------------------------------------------------------
+# Test 10: Entry eval all-pass — conditions_passed == conditions_total == 4
+# ---------------------------------------------------------------------------
+
+
+class TestEntryEvalAllPassConditionsCount:
+
+    @pytest.mark.asyncio
+    async def test_entry_eval_all_pass_conditions_count(self) -> None:
+        """ENTRY_EVALUATION PASS event has conditions_passed == conditions_total == 4."""
+        ds = _mock_data_service(atr=2.0, vwap=99.0)
+        strategy = OrbBreakoutStrategy(_breakout_config(), data_service=ds)
+        strategy.set_watchlist(["AAPL"])
+        strategy.allocated_capital = 100_000
+
+        for c in _or_candles():
+            await strategy.on_candle(c)
+
+        # Finalize the OR
+        post_or = _candle(timestamp=datetime(2026, 2, 15, 14, 35, 0, tzinfo=UTC))
+        await strategy.on_candle(post_or)
+
+        # Breakout candle: all 4 conditions pass
+        # 1. close > OR high (101.0): close=101.3 ✓
+        # 2. volume > or_avg_volume * 1.5 (~150k): volume=500k ✓
+        # 3. close > vwap (99.0): 101.3 > 99.0 ✓
+        # 4. close <= or_high * 1.005 (101.505): 101.3 <= 101.505 ✓
+        all_pass = _candle(
+            timestamp=datetime(2026, 2, 15, 14, 36, 0, tzinfo=UTC),
+            close=101.3,
+            high=101.5,
+            low=100.8,
+            open_price=100.9,
+            volume=500_000,
+        )
+        await strategy.on_candle(all_pass)
+
+        entry_events = _events_of_type(strategy, EvaluationEventType.ENTRY_EVALUATION)
+        pass_events = [e for e in entry_events if e.result == EvaluationResult.PASS]
+        assert len(pass_events) == 1
+        assert pass_events[0].metadata["conditions_passed"] == 4
+        assert pass_events[0].metadata["conditions_total"] == 4

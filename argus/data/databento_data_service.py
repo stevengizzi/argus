@@ -97,6 +97,9 @@ class DatabentoDataService(DataService):
         self._last_message_time: float = 0.0
         self._stale_published = False
 
+        # Last data update timestamp for health endpoint (DEF-076)
+        self.last_update: datetime | None = None
+
         # Symbols we're tracking (populated during start())
         self._active_symbols: set[str] = set()
         self._symbols_list: list[str] = []
@@ -488,6 +491,7 @@ class DatabentoDataService(DataService):
         importing databento on every message (hot path optimization).
         """
         self._last_message_time = time.monotonic()
+        self.last_update = datetime.now(UTC)
 
         if isinstance(record, self._OHLCVMsg):
             self._on_ohlcv(record)
@@ -1034,18 +1038,82 @@ class DatabentoDataService(DataService):
         return normalize_databento_df(df)
 
     async def fetch_daily_bars(self, symbol: str, lookback_days: int = 60) -> pd.DataFrame | None:
-        """Fetch daily OHLCV bars for regime classification.
+        """Fetch daily OHLCV bars for regime classification via FMP API.
 
-        DatabentoDataService does not support daily bar fetching in V1.
-        Returns None. The Orchestrator should handle None by using a fallback regime.
-
-        Future: When Databento subscription is active, implement via Historical API.
+        Uses the FMP stable historical-price-eod endpoint (available on Starter
+        plan). Called once at startup and periodically (~every 5 min) for regime
+        reclassification — not hot path.
 
         Args:
             symbol: Ticker symbol (e.g., "SPY").
-            lookback_days: Number of trading days to fetch.
+            lookback_days: Number of trading days to return.
 
         Returns:
-            None — daily bars not yet implemented for Databento.
+            DataFrame with columns [date, open, high, low, close, volume],
+            sorted ascending by date, limited to lookback_days rows.
+            Returns None on any error (graceful degradation).
         """
-        return None
+        import aiohttp
+
+        api_key = os.getenv("FMP_API_KEY")
+        if not api_key:
+            logger.warning("fetch_daily_bars: FMP_API_KEY not set, returning None")
+            return None
+
+        url = "https://financialmodelingprep.com/stable/historical-price-eod/full"
+        params = {"symbol": symbol, "apikey": api_key}
+
+        try:
+            async with aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=10)
+            ) as session:
+                async with session.get(url, params=params) as response:
+                    if response.status != 200:
+                        logger.info(
+                            "fetch_daily_bars: FMP returned HTTP %d for %s",
+                            response.status,
+                            symbol,
+                        )
+                        return None
+
+                    data = await response.json()
+
+            if not isinstance(data, list) or not data:
+                logger.info("fetch_daily_bars: empty or invalid response for %s", symbol)
+                return None
+
+            df = pd.DataFrame(data)
+
+            # Ensure required columns exist
+            required_cols = {"date", "open", "high", "low", "close", "volume"}
+            if not required_cols.issubset(df.columns):
+                logger.info(
+                    "fetch_daily_bars: missing columns for %s (got %s)",
+                    symbol,
+                    list(df.columns),
+                )
+                return None
+
+            # Keep only required columns
+            df = df[["date", "open", "high", "low", "close", "volume"]].copy()
+
+            # Sort ascending by date (FMP returns newest first)
+            df = df.sort_values("date", ascending=True).reset_index(drop=True)
+
+            # Limit to lookback_days most recent rows
+            if len(df) > lookback_days:
+                df = df.tail(lookback_days).reset_index(drop=True)
+
+            logger.info(
+                "fetch_daily_bars: fetched %d daily bars for %s via FMP",
+                len(df),
+                symbol,
+            )
+            return df
+
+        except asyncio.TimeoutError:
+            logger.info("fetch_daily_bars: timeout fetching %s from FMP", symbol)
+            return None
+        except Exception as e:
+            logger.info("fetch_daily_bars: error fetching %s from FMP: %s", symbol, e)
+            return None

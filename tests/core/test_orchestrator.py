@@ -1688,3 +1688,72 @@ async def test_regime_reclassification_log_levels(
     assert any("SPY data unavailable" in r.message for r in caplog.records)
     assert any(r.levelno == logging.WARNING for r in caplog.records
                if "SPY data unavailable" in r.message)
+
+
+@pytest.mark.asyncio
+async def test_regime_warning_rate_limited(
+    orchestrator: Orchestrator,
+    mock_data_service: AsyncMock,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """reclassify_regime() logs the SPY-unavailable warning only on occurrences 1 and 6."""
+    import logging
+
+    mock_data_service.fetch_daily_bars.return_value = None
+
+    with caplog.at_level(logging.WARNING, logger="argus.core.orchestrator"):
+        for _ in range(12):
+            await orchestrator.reclassify_regime()
+
+    warning_messages = [
+        r.message for r in caplog.records if "SPY data unavailable" in r.message
+    ]
+    occurrence_numbers = [
+        int(m.split("occurrence #")[1].rstrip(")")) for m in warning_messages
+    ]
+
+    # The rate-limit rule: log on occurrence 1, 6, 12 (multiples of 6 after the first).
+    # Over 12 calls we expect exactly occurrences 1, 6, and 12.
+    assert 1 in occurrence_numbers, "Expected warning logged on occurrence #1"
+    assert 6 in occurrence_numbers, "Expected warning logged on occurrence #6"
+    assert 12 in occurrence_numbers, "Expected warning logged on occurrence #12"
+    # Occurrences 2–5 and 7–11 must NOT appear.
+    suppressed = set(occurrence_numbers) - {1, 6, 12}
+    assert not suppressed, f"Unexpected warning occurrences logged: {suppressed}"
+
+
+@pytest.mark.asyncio
+async def test_spy_unavailable_counter_resets_on_success(
+    orchestrator: Orchestrator,
+    mock_data_service: AsyncMock,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """_spy_unavailable_count resets to 0 after a successful SPY fetch."""
+    import logging
+
+    # Three unavailable calls → counter reaches 3.
+    mock_data_service.fetch_daily_bars.return_value = None
+    for _ in range(3):
+        await orchestrator.reclassify_regime()
+
+    assert orchestrator._spy_unavailable_count == 3
+
+    # One successful call → counter resets to 0.
+    mock_data_service.fetch_daily_bars.return_value = create_spy_bars_bullish()
+    await orchestrator.reclassify_regime()
+    assert orchestrator._spy_unavailable_count == 0
+
+    # Next unavailable call → counter starts again from 1 and logs a warning.
+    mock_data_service.fetch_daily_bars.return_value = None
+    caplog.clear()
+    with caplog.at_level(logging.WARNING, logger="argus.core.orchestrator"):
+        await orchestrator.reclassify_regime()
+
+    assert orchestrator._spy_unavailable_count == 1
+    warning_messages = [
+        r.message for r in caplog.records if "SPY data unavailable" in r.message
+    ]
+    occurrence_numbers = [
+        int(m.split("occurrence #")[1].rstrip(")")) for m in warning_messages
+    ]
+    assert 1 in occurrence_numbers, "Counter should have reset; expected occurrence #1 in log"

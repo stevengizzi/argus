@@ -279,6 +279,14 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 | ~~DEF-060~~ | ~~PROVISIONAL comment gap in system YAML quality sections~~ | ~~Unscheduled~~ | **RESOLVED** (Sprint 24.1 S1b): PROVISIONAL comments added to system.yaml/system_live.yaml quality sections. |
 | ~~DEF-061~~ | ~~Quality API private attribute access~~ | ~~Unscheduled~~ | **RESOLVED** (Sprint 24.1 S1b): `@property` accessors added for `_db`/`_config` on SetupQualityEngine. |
 | ~~DEF-062~~ | ~~QA seed script cleanup~~ | ~~Unscheduled~~ | **RESOLVED** (Sprint 24.1 S1b): Production guard added to `scripts/seed_quality_data.py`. |
+| ~~DEF-075~~ | ~~`fetch_daily_bars()` via FMP for regime classification~~ | ~~Sprint 25.7~~ | **RESOLVED** (Sprint 25.7 S1): Implemented via FMP stable historical-price-eod endpoint. |
+| ~~DEF-076~~ | ~~Health endpoint `last_data_received` always null~~ | ~~Sprint 25.7~~ | **RESOLVED** (Sprint 25.7 S1): `last_update` attribute added to DatabentoDataService, set in `_dispatch_record()`. |
+| ~~DEF-077~~ | ~~Diagnostic logging when position sizer returns 0 shares~~ | ~~Sprint 25.7~~ | **RESOLVED** (Sprint 25.7 S1): Log now includes grade, score, allocated_capital, buying_power, entry, stop, risk_per_share. |
+| ~~DEF-078~~ | ~~Rate-limit regime reclassification warnings~~ | ~~Sprint 25.7~~ | **RESOLVED** (Sprint 25.7 S1): Counter-based rate limiting — logs on 1st occurrence and every 6th. Resets on success. |
+| ~~DEF-079~~ | ~~Automated debrief data export at shutdown~~ | ~~Sprint 25.7~~ | **RESOLVED** (Sprint 25.7 S1): `debrief_export.py` produces `logs/debrief_YYYYMMDD.json` during shutdown. |
+| ~~DEF-080~~ | ~~VWAP Reclaim false suspension on zero trade history~~ | ~~Sprint 25.7~~ | **RESOLVED** (Sprint 25.7 S1): Early return `ThrottleAction.NONE` when both trades and daily_pnl are empty. |
+| ~~DEF-081~~ | ~~Entry evaluation conditions_passed/conditions_total metadata~~ | ~~Sprint 25.7~~ | **RESOLVED** (Sprint 25.7 S1): Added to all ENTRY_EVALUATION calls in `_check_breakout_conditions()`. |
+| DEF-082 | Quality engine catalyst_quality and volume_profile always 50.0 (neutral default) | Unscheduled | Expected when no real-time RVOL or symbol-specific catalysts. Will become useful as data sources are enriched. Priority: LOW. |
 
 ## Reference
 
