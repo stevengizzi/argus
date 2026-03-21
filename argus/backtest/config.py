@@ -15,6 +15,7 @@ class StrategyType(StrEnum):
     ORB_SCALP = "orb_scalp"
     VWAP_RECLAIM = "vwap_reclaim"
     AFTERNOON_MOMENTUM = "afternoon_momentum"
+    RED_TO_GREEN = "red_to_green"
 
 
 class DataFetcherConfig(BaseModel):
@@ -120,3 +121,12 @@ class BacktestConfig(BaseModel):
     afternoon_max_hold_minutes: int = 60
     afternoon_target_1_r: float = 1.0
     afternoon_target_2_r: float = 2.0
+
+    # Red-to-Green params (used when strategy_type=RED_TO_GREEN)
+    r2g_min_gap_down_pct: float = 0.02
+    r2g_level_proximity_pct: float = 0.003
+    r2g_volume_confirmation_multiplier: float = 1.2
+    r2g_time_stop_minutes: int = 20
+    r2g_target_1_r: float = 1.0
+    r2g_target_2_r: float = 2.0
+    r2g_stop_buffer_pct: float = 0.001

@@ -38,7 +38,18 @@ benchmarks:
   max_drawdown_pct: 0.12
 
 backtest_summary:
-  status: "not_validated"
+  status: "vectorbt_module_ready"
+  module: "argus.backtest.vectorbt_red_to_green"
+  param_grid:
+    min_gap_down_pct: [0.015, 0.02, 0.03, 0.04]
+    level_proximity_pct: [0.002, 0.003, 0.005]
+    volume_confirmation_multiplier: [1.0, 1.2, 1.5]
+    time_stop_minutes: [15, 20, 30]
+  total_combinations: 108
+  walk_forward_strategy_key: "red_to_green"
+  data_source: "provisional_alpaca"  # DEC-132: re-validate with Databento
+  last_updated: "2026-03-21"
+  note: "VectorBT module + walk-forward integration complete. Run sweep on historical data to populate results."
 
 universe_filter:
   min_price: 5.0

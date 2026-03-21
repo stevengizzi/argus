@@ -341,3 +341,50 @@ def test_not_in_watchlist_returns_none_sync() -> None:
     strategy.set_watchlist(["MSFT"])
     # AAPL not in watchlist — verified by async test flow
     assert "AAPL" not in strategy._watchlist
+
+
+def test_scanner_criteria_passthrough() -> None:
+    """Wrapper returns ScannerCriteria from config's universe_filter."""
+    pattern = MockPattern(lookback=1)
+    config = _make_config(
+        universe_filter={
+            "min_price": 15.0,
+            "max_price": 300.0,
+            "min_avg_volume": 2_000_000,
+        }
+    )
+    strategy = PatternBasedStrategy(pattern=pattern, config=config)
+
+    criteria = strategy.get_scanner_criteria()
+    assert criteria.min_price == 15.0
+    assert criteria.max_price == 300.0
+    assert criteria.min_volume_avg_daily == 2_000_000
+    assert criteria.max_results == 20
+
+
+def test_market_conditions_filter_passthrough() -> None:
+    """Wrapper returns MarketConditionsFilter with sensible defaults."""
+    pattern = MockPattern(lookback=1)
+    config = _make_config()
+    strategy = PatternBasedStrategy(pattern=pattern, config=config)
+
+    mcf = strategy.get_market_conditions_filter()
+    assert "bullish_trending" in mcf.allowed_regimes
+    assert "range_bound" in mcf.allowed_regimes
+    assert mcf.max_vix == 35.0
+
+
+@pytest.mark.asyncio
+async def test_reconstruct_state_delegation() -> None:
+    """Wrapper delegates reconstruct_state to BaseStrategy (queries trade_logger)."""
+    pattern = MockPattern(lookback=1)
+    config = _make_config()
+    strategy = PatternBasedStrategy(pattern=pattern, config=config)
+
+    mock_logger = AsyncMock()
+    mock_logger.get_trades_by_date = AsyncMock(return_value=[])
+
+    # Should not raise — delegates to super().reconstruct_state()
+    await strategy.reconstruct_state(mock_logger)
+    # BaseStrategy.reconstruct_state queries today's trades via get_trades_by_date
+    mock_logger.get_trades_by_date.assert_called_once()

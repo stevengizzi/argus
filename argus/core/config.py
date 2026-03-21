@@ -748,6 +748,31 @@ class RedToGreenConfig(StrategyConfig):
         return self
 
 
+class BullFlagConfig(StrategyConfig):
+    """Bull Flag continuation pattern strategy configuration (Sprint 26).
+
+    Detects strong upward moves (pole) followed by tight consolidation
+    (flag), then enters on breakout with volume confirmation.
+    Operates 10:00 AM - 3:00 PM ET.
+    """
+
+    # Pole parameters
+    pole_min_bars: int = Field(default=5, ge=2, le=50)
+    pole_min_move_pct: float = Field(default=0.03, gt=0, le=0.50)
+
+    # Flag parameters
+    flag_max_bars: int = Field(default=20, ge=1, le=100)
+    flag_max_retrace_pct: float = Field(default=0.50, gt=0, le=1.0)
+
+    # Breakout confirmation
+    breakout_volume_multiplier: float = Field(default=1.3, gt=0, le=10.0)
+
+    # Targets and stops
+    target_1_r: float = Field(default=1.0, gt=0)
+    target_2_r: float = Field(default=2.0, gt=0)
+    time_stop_minutes: int = Field(default=30, ge=1)
+
+
 # ---------------------------------------------------------------------------
 # Config Loader
 # ---------------------------------------------------------------------------
@@ -927,6 +952,23 @@ def load_red_to_green_config(path: Path) -> RedToGreenConfig:
     """
     data = load_yaml_file(path)
     return RedToGreenConfig(**data)
+
+
+def load_bull_flag_config(path: Path) -> BullFlagConfig:
+    """Load Bull Flag strategy configuration from a YAML file.
+
+    Args:
+        path: Path to the Bull Flag strategy YAML file.
+
+    Returns:
+        Validated BullFlagConfig instance.
+
+    Raises:
+        FileNotFoundError: If the file does not exist.
+        pydantic.ValidationError: If validation fails.
+    """
+    data = load_yaml_file(path)
+    return BullFlagConfig(**data)
 
 
 def load_scanner_config(path: Path) -> ScannerConfig:

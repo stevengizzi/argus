@@ -7,6 +7,7 @@ to create a fully functional trading strategy.
 """
 
 from argus.strategies.patterns.base import CandleBar, PatternDetection, PatternModule
+from argus.strategies.patterns.bull_flag import BullFlagPattern
 
 
 def __getattr__(name: str) -> object:
@@ -18,4 +19,10 @@ def __getattr__(name: str) -> object:
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
-__all__ = ["CandleBar", "PatternBasedStrategy", "PatternDetection", "PatternModule"]
+__all__ = [
+    "BullFlagPattern",
+    "CandleBar",
+    "PatternBasedStrategy",
+    "PatternDetection",
+    "PatternModule",
+]
