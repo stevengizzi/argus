@@ -709,6 +709,45 @@ class AfternoonMomentumConfig(StrategyConfig):
         return self
 
 
+class RedToGreenConfig(StrategyConfig):
+    """Red-to-Green strategy configuration (Sprint 26).
+
+    Gap-down reversal strategy that enters long when price tests and
+    holds a key support level (VWAP, premarket low, prior close) after
+    a gap down. Operates 9:45 AM – 11:00 AM ET.
+
+    State machine: WATCHING → GAP_DOWN_CONFIRMED → TESTING_LEVEL → entry
+    (or EXHAUSTED)
+    """
+
+    # Gap parameters
+    min_gap_down_pct: float = Field(default=0.02, ge=0, le=0.50)
+    max_gap_down_pct: float = Field(default=0.10, ge=0, le=0.50)
+
+    # Level testing parameters
+    level_proximity_pct: float = Field(default=0.003, ge=0, le=0.05)
+    min_level_test_bars: int = Field(default=2, ge=1, le=30)
+    volume_confirmation_multiplier: float = Field(default=1.2, gt=0, le=5.0)
+    max_chase_pct: float = Field(default=0.003, ge=0, le=0.05)
+    max_level_attempts: int = Field(default=2, ge=1, le=10)
+
+    # Targets and stops
+    target_1_r: float = Field(default=1.0, gt=0)
+    target_2_r: float = Field(default=2.0, gt=0)
+    time_stop_minutes: int = Field(default=20, ge=1)
+    stop_buffer_pct: float = Field(default=0.001, ge=0, le=0.05)
+
+    @model_validator(mode="after")
+    def validate_gap_range(self) -> RedToGreenConfig:
+        """Ensure min_gap_down_pct is less than max_gap_down_pct."""
+        if self.min_gap_down_pct >= self.max_gap_down_pct:
+            raise ValueError(
+                f"min_gap_down_pct ({self.min_gap_down_pct}) must be less than "
+                f"max_gap_down_pct ({self.max_gap_down_pct})"
+            )
+        return self
+
+
 # ---------------------------------------------------------------------------
 # Config Loader
 # ---------------------------------------------------------------------------
@@ -871,6 +910,23 @@ def load_afternoon_momentum_config(path: Path) -> AfternoonMomentumConfig:
     """
     data = load_yaml_file(path)
     return AfternoonMomentumConfig(**data)
+
+
+def load_red_to_green_config(path: Path) -> RedToGreenConfig:
+    """Load Red-to-Green strategy configuration from a YAML file.
+
+    Args:
+        path: Path to the Red-to-Green strategy YAML file.
+
+    Returns:
+        Validated RedToGreenConfig instance.
+
+    Raises:
+        FileNotFoundError: If the file does not exist.
+        pydantic.ValidationError: If validation fails.
+    """
+    data = load_yaml_file(path)
+    return RedToGreenConfig(**data)
 
 
 def load_scanner_config(path: Path) -> ScannerConfig:

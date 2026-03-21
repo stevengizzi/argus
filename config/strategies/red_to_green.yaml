@@ -1,0 +1,46 @@
+strategy_id: "strat_red_to_green"
+name: "Red-to-Green"
+version: "1.0.0"
+enabled: true
+asset_class: "us_stocks"
+pipeline_stage: "exploration"
+family: "reversal"
+description_short: "Gap-down reversal at key support levels (VWAP, premarket low, prior close)."
+time_window_display: "9:45–11:00 AM"
+
+operating_window:
+  earliest_entry: "09:45"
+  latest_entry: "11:00"
+  force_close: "15:50"
+
+min_gap_down_pct: 0.02      # Minimum gap down (2%)
+max_gap_down_pct: 0.10      # Maximum gap down (10%) — beyond this, thesis is too risky
+level_proximity_pct: 0.003  # Within 0.3% of key level to trigger TESTING_LEVEL
+min_level_test_bars: 2      # Min bars at level before entry
+volume_confirmation_multiplier: 1.2
+max_chase_pct: 0.003        # Don't chase if >0.3% above level
+max_level_attempts: 2       # Max levels to try before EXHAUSTED
+target_1_r: 1.0
+target_2_r: 2.0
+time_stop_minutes: 20
+stop_buffer_pct: 0.001
+
+risk_limits:
+  max_loss_per_trade_pct: 0.01
+  max_daily_loss_pct: 0.03
+  max_trades_per_day: 6
+  max_concurrent_positions: 2
+
+benchmarks:
+  min_win_rate: 0.40
+  min_profit_factor: 1.1
+  min_sharpe_ratio: 0.3
+  max_drawdown_pct: 0.12
+
+backtest_summary:
+  status: "not_validated"
+
+universe_filter:
+  min_price: 5.0
+  max_price: 200.0
+  min_avg_volume: 500000
