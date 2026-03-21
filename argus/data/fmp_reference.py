@@ -137,6 +137,7 @@ class FMPReferenceConfig:
         request_timeout_seconds: HTTP request timeout in seconds.
         cache_file: Path to the file-based cache JSON file.
         cache_max_age_hours: Maximum age for cached entries before considered stale.
+        rate_limit_delay_seconds: Per-request rate limit delay in seconds.
     """
 
     base_url: str = "https://financialmodelingprep.com/stable"
@@ -147,6 +148,7 @@ class FMPReferenceConfig:
     request_timeout_seconds: float = 30.0
     cache_file: str = "data/reference_cache.json"
     cache_max_age_hours: int = 24
+    rate_limit_delay_seconds: float = 0.2
 
 
 class FMPReferenceClient:
@@ -419,8 +421,9 @@ class FMPReferenceClient:
                 return None
 
             async with semaphore:
-                # Rate limiting: 0.2s minimum spacing
-                await asyncio.sleep(0.2)
+                # Rate limiting: configurable spacing (0 in tests)
+                if self._config.rate_limit_delay_seconds > 0:
+                    await asyncio.sleep(self._config.rate_limit_delay_seconds)
 
                 result = await self._fetch_single_profile_with_retry(session, symbol)
 
@@ -690,7 +693,8 @@ class FMPReferenceClient:
                     # Continue with other symbols
 
                 # Rate limiting between requests
-                await asyncio.sleep(0.25)
+                if self._config.rate_limit_delay_seconds > 0:
+                    await asyncio.sleep(self._config.rate_limit_delay_seconds)
 
         logger.debug("Fetched float data for %d/%d symbols", len(results), len(symbols))
         return results

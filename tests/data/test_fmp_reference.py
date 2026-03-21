@@ -75,6 +75,7 @@ class TestFMPReferenceClientConfig:
         assert config.cache_ttl_hours == 24
         assert config.max_retries == 3
         assert config.request_timeout_seconds == 30.0
+        assert config.rate_limit_delay_seconds == 0.2
 
 
 class TestFMPReferenceClientStart:
@@ -83,7 +84,7 @@ class TestFMPReferenceClientStart:
     @pytest.fixture
     def config(self) -> FMPReferenceConfig:
         """Default config for tests."""
-        return FMPReferenceConfig()
+        return FMPReferenceConfig(rate_limit_delay_seconds=0)
 
     @pytest.fixture
     def client(self, config: FMPReferenceConfig) -> FMPReferenceClient:
@@ -221,7 +222,7 @@ class TestFMPReferenceClientFetchReferenceData:
     @pytest.fixture
     def config(self) -> FMPReferenceConfig:
         """Config with small batch size for testing."""
-        return FMPReferenceConfig(batch_size=50)
+        return FMPReferenceConfig(batch_size=50, rate_limit_delay_seconds=0)
 
     @pytest.fixture
     def client(self, config: FMPReferenceConfig) -> FMPReferenceClient:
@@ -282,7 +283,7 @@ class TestFMPReferenceClientFetchReferenceData:
 
     async def test_fetch_reference_data_concurrent_calls(self) -> None:
         """Test that fetch_reference_data makes concurrent calls for all symbols."""
-        config = FMPReferenceConfig()
+        config = FMPReferenceConfig(rate_limit_delay_seconds=0)
         client = FMPReferenceClient(config)
         client._api_key = "test_key"
 
@@ -304,7 +305,7 @@ class TestFMPReferenceClientFetchReferenceData:
 
     async def test_fetch_reference_data_partial_failure(self) -> None:
         """Test that some symbol failures don't prevent other symbols from succeeding."""
-        config = FMPReferenceConfig(max_retries=1)
+        config = FMPReferenceConfig(max_retries=1, rate_limit_delay_seconds=0)
         client = FMPReferenceClient(config)
         client._api_key = "test_key"
 
@@ -330,7 +331,7 @@ class TestFMPReferenceClientFetchReferenceData:
 
     async def test_fetch_reference_data_all_fail(self) -> None:
         """Test that all symbols failing returns empty dict without exception."""
-        config = FMPReferenceConfig(max_retries=1)
+        config = FMPReferenceConfig(max_retries=1, rate_limit_delay_seconds=0)
         client = FMPReferenceClient(config)
         client._api_key = "test_key"
 
@@ -356,7 +357,7 @@ class TestFMPReferenceClientFetchReferenceData:
 
     async def test_fetch_reference_data_not_started(self) -> None:
         """Test that fetch returns empty dict if client not started."""
-        client = FMPReferenceClient(FMPReferenceConfig())
+        client = FMPReferenceClient(FMPReferenceConfig(rate_limit_delay_seconds=0))
         # Don't set _api_key
 
         result = await client.fetch_reference_data(["AAPL"])
@@ -369,7 +370,7 @@ class TestFMPReferenceClientFetchFloatData:
     @pytest.fixture
     def client(self) -> FMPReferenceClient:
         """Started client instance."""
-        c = FMPReferenceClient(FMPReferenceConfig())
+        c = FMPReferenceClient(FMPReferenceConfig(rate_limit_delay_seconds=0))
         c._api_key = "test_key"
         return c
 
@@ -412,7 +413,7 @@ class TestFMPReferenceClientFetchFloatData:
 
     async def test_fetch_float_data_not_started(self) -> None:
         """Test that fetch returns empty dict if client not started."""
-        client = FMPReferenceClient(FMPReferenceConfig())
+        client = FMPReferenceClient(FMPReferenceConfig(rate_limit_delay_seconds=0))
         # Don't set _api_key
 
         result = await client.fetch_float_data(["AAPL"])
@@ -431,7 +432,7 @@ class TestFMPReferenceClientBuildCache:
 
     async def test_build_reference_cache(self) -> None:
         """Test end-to-end cache building with profile and float data."""
-        config = FMPReferenceConfig()
+        config = FMPReferenceConfig(rate_limit_delay_seconds=0)
         client = FMPReferenceClient(config)
         client._api_key = "test_key"
 
@@ -461,7 +462,7 @@ class TestFMPReferenceClientBuildCache:
 
     async def test_build_reference_cache_updates_cache_time(self) -> None:
         """Test that build_reference_cache updates cache timestamp."""
-        config = FMPReferenceConfig()
+        config = FMPReferenceConfig(rate_limit_delay_seconds=0)
         client = FMPReferenceClient(config)
         client._api_key = "test_key"
 
@@ -490,14 +491,14 @@ class TestFMPReferenceClientCacheFreshness:
 
     def test_cache_freshness_no_cache(self) -> None:
         """Test is_cache_fresh returns False when cache never built."""
-        client = FMPReferenceClient(FMPReferenceConfig())
+        client = FMPReferenceClient(FMPReferenceConfig(rate_limit_delay_seconds=0))
 
         assert client.is_cache_fresh() is False
         assert client.cache_age_minutes == float("inf")
 
     def test_cache_freshness_fresh_cache(self) -> None:
         """Test is_cache_fresh returns True for recently built cache."""
-        config = FMPReferenceConfig(cache_ttl_hours=24)
+        config = FMPReferenceConfig(cache_ttl_hours=24, rate_limit_delay_seconds=0)
         client = FMPReferenceClient(config)
 
         # Simulate cache built just now
@@ -508,7 +509,7 @@ class TestFMPReferenceClientCacheFreshness:
 
     def test_cache_freshness_stale_cache(self) -> None:
         """Test is_cache_fresh returns False for old cache."""
-        config = FMPReferenceConfig(cache_ttl_hours=24)
+        config = FMPReferenceConfig(cache_ttl_hours=24, rate_limit_delay_seconds=0)
         client = FMPReferenceClient(config)
 
         # Simulate cache built 25 hours ago
@@ -519,7 +520,7 @@ class TestFMPReferenceClientCacheFreshness:
 
     def test_cached_symbol_count(self) -> None:
         """Test cached_symbol_count returns correct count."""
-        client = FMPReferenceClient(FMPReferenceConfig())
+        client = FMPReferenceClient(FMPReferenceConfig(rate_limit_delay_seconds=0))
 
         assert client.cached_symbol_count == 0
 
@@ -533,7 +534,7 @@ class TestFMPReferenceClientCacheFreshness:
 
     def test_get_cached_exists(self) -> None:
         """Test get_cached returns data when symbol is cached."""
-        client = FMPReferenceClient(FMPReferenceConfig())
+        client = FMPReferenceClient(FMPReferenceConfig(rate_limit_delay_seconds=0))
         client._cache = {
             "AAPL": SymbolReferenceData(symbol="AAPL", sector="Technology"),
         }
@@ -545,7 +546,7 @@ class TestFMPReferenceClientCacheFreshness:
 
     def test_get_cached_not_exists(self) -> None:
         """Test get_cached returns None when symbol is not cached."""
-        client = FMPReferenceClient(FMPReferenceConfig())
+        client = FMPReferenceClient(FMPReferenceConfig(rate_limit_delay_seconds=0))
 
         result = client.get_cached("AAPL")
         assert result is None
@@ -557,7 +558,7 @@ class TestFMPReferenceClientOTCDetection:
     @pytest.fixture
     def client(self) -> FMPReferenceClient:
         """Client instance."""
-        return FMPReferenceClient(FMPReferenceConfig())
+        return FMPReferenceClient(FMPReferenceConfig(rate_limit_delay_seconds=0))
 
     def test_otc_detection_otc_exchange(self, client: FMPReferenceClient) -> None:
         """Test that OTC exchanges are detected as OTC."""
@@ -585,7 +586,7 @@ class TestFMPReferenceClientOTCDetection:
 
     def test_parse_profile_response_sets_otc_flag(self) -> None:
         """Test that _parse_profile_response correctly sets is_otc flag."""
-        client = FMPReferenceClient(FMPReferenceConfig())
+        client = FMPReferenceClient(FMPReferenceConfig(rate_limit_delay_seconds=0))
 
         response_data = [
             _make_profile_item("AAPL", exchange="NASDAQ"),
@@ -650,7 +651,7 @@ class TestFMPReferenceClientParseResponse:
     @pytest.fixture
     def client(self) -> FMPReferenceClient:
         """Client instance."""
-        return FMPReferenceClient(FMPReferenceConfig())
+        return FMPReferenceClient(FMPReferenceConfig(rate_limit_delay_seconds=0))
 
     def test_parse_profile_response_success(self, client: FMPReferenceClient) -> None:
         """Test that _parse_profile_response correctly parses FMP response."""
@@ -718,7 +719,7 @@ class TestFMPReferenceClientFetchStockList:
     @pytest.fixture
     def client(self) -> FMPReferenceClient:
         """Started client instance."""
-        c = FMPReferenceClient(FMPReferenceConfig())
+        c = FMPReferenceClient(FMPReferenceConfig(rate_limit_delay_seconds=0))
         c._api_key = "test_key"
         return c
 
@@ -798,7 +799,7 @@ class TestFMPReferenceClientFetchStockList:
 
     async def test_fetch_stock_list_not_started(self) -> None:
         """Test that fetch returns empty list if client not started."""
-        client = FMPReferenceClient(FMPReferenceConfig())
+        client = FMPReferenceClient(FMPReferenceConfig(rate_limit_delay_seconds=0))
         # Don't set _api_key
 
         result = await client.fetch_stock_list()
@@ -810,7 +811,7 @@ class TestFMPReferenceClientRetryBehavior:
 
     async def test_fetch_reference_data_retry_on_429(self) -> None:
         """Test that 429 errors trigger retry with eventual success."""
-        config = FMPReferenceConfig(max_retries=3)
+        config = FMPReferenceConfig(max_retries=3, rate_limit_delay_seconds=0)
         client = FMPReferenceClient(config)
         client._api_key = "test_key"
 
@@ -845,7 +846,7 @@ class TestFMPReferenceClientRetryBehavior:
 
         caplog.set_level(logging.INFO)
 
-        config = FMPReferenceConfig()
+        config = FMPReferenceConfig(rate_limit_delay_seconds=0)
         client = FMPReferenceClient(config)
         client._api_key = "test_key"
 
@@ -877,7 +878,7 @@ class TestFMPReferenceClientFileCacheOperations:
     @pytest.fixture
     def config_with_tmp_cache(self, tmp_cache_path: str) -> FMPReferenceConfig:
         """Config with temporary cache file path."""
-        return FMPReferenceConfig(cache_file=tmp_cache_path)
+        return FMPReferenceConfig(cache_file=tmp_cache_path, rate_limit_delay_seconds=0)
 
     @pytest.fixture
     def client_with_tmp_cache(
@@ -1076,7 +1077,7 @@ class TestFMPReferenceClientStalenessChecking:
     @pytest.fixture
     def config_with_tmp_cache(self, tmp_cache_path: str) -> FMPReferenceConfig:
         """Config with temporary cache file path."""
-        return FMPReferenceConfig(cache_file=tmp_cache_path, cache_max_age_hours=24)
+        return FMPReferenceConfig(cache_file=tmp_cache_path, cache_max_age_hours=24, rate_limit_delay_seconds=0)
 
     @pytest.fixture
     def client_with_tmp_cache(
@@ -1272,7 +1273,7 @@ class TestFMPReferenceClientIncrementalFetch:
     @pytest.fixture
     def config_with_tmp_cache(self, tmp_cache_path: str) -> FMPReferenceConfig:
         """Config with temporary cache file path."""
-        return FMPReferenceConfig(cache_file=tmp_cache_path, cache_max_age_hours=24)
+        return FMPReferenceConfig(cache_file=tmp_cache_path, cache_max_age_hours=24, rate_limit_delay_seconds=0)
 
     @pytest.fixture
     def client_with_tmp_cache(
@@ -1549,7 +1550,7 @@ class TestFMPReferenceClientPeriodicCheckpoints:
     @pytest.fixture
     def config_with_tmp_cache(self, tmp_cache_path: str) -> FMPReferenceConfig:
         """Config with temporary cache file path."""
-        return FMPReferenceConfig(cache_file=tmp_cache_path, cache_max_age_hours=24)
+        return FMPReferenceConfig(cache_file=tmp_cache_path, cache_max_age_hours=24, rate_limit_delay_seconds=0)
 
     @pytest.fixture
     def client_with_tmp_cache(
@@ -1707,7 +1708,7 @@ class TestFMPReferenceClientShutdownHandling:
     @pytest.fixture
     def config_with_tmp_cache(self, tmp_cache_path: str) -> FMPReferenceConfig:
         """Config with temporary cache file path."""
-        return FMPReferenceConfig(cache_file=tmp_cache_path)
+        return FMPReferenceConfig(cache_file=tmp_cache_path, rate_limit_delay_seconds=0)
 
     @pytest.fixture
     def client_with_tmp_cache(
