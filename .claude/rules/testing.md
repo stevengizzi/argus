@@ -59,3 +59,33 @@ Run specific test files during development:
 ```
 python -m pytest tests/core/test_risk_manager.py -v
 ```
+
+## Test Execution in Claude Code Sessions
+
+**Never pipe test output through `tail` or `head` for long-running suites.**
+When pytest runs with `-n auto` (xdist), all output is buffered until every
+worker finishes. If any test hangs, the pipe blocks forever and the session
+appears stuck. Instead:
+```bash
+# WRONG — buffers forever if any test hangs
+python -m pytest tests/ -n auto -q | tail -30
+
+# CORRECT — write to file, check progress independently
+python -m pytest tests/ -n auto -q 2>&1 | tee /tmp/pytest_output.txt
+
+# CORRECT — write to file, read when done
+python -m pytest tests/ -n auto -q > /tmp/pytest_output.txt 2>&1
+cat /tmp/pytest_output.txt
+```
+
+**Standard test commands:**
+```bash
+# Full suite (use for sprint entry, closeouts, and final reviews):
+python -m pytest --ignore=tests/test_main.py -n auto -q
+
+# Scoped (use for mid-sprint pre-flights and development):
+python -m pytest tests/core/test_orchestrator.py -x -q
+```
+
+Expected full suite runtime: ~39s with `-n auto`, ~208s sequential.
+Only `tests/test_main.py` needs ignoring (DEF-048 xdist issue).
