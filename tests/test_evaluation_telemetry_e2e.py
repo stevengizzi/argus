@@ -42,6 +42,38 @@ from argus.strategies.telemetry_store import EvaluationEventStore
 _ET = ZoneInfo("America/New_York")
 
 
+def _today_et() -> str:
+    """Return today's date string in ET timezone (matches record_evaluation)."""
+    return datetime.now(_ET).strftime("%Y-%m-%d")
+
+
+def _now_utc_at_10am_et() -> datetime:
+    """Return a UTC datetime corresponding to ~10:00 AM ET today.
+
+    Needed because record_evaluation() uses datetime.now() for timestamps,
+    so the stored trading_date will be today's real date. The clock must
+    match so that health checks query the correct date.
+    """
+    now_et = datetime.now(_ET)
+    # Replace time to 10:00 AM ET (well past 09:35 + 5min grace period)
+    at_10am = now_et.replace(hour=10, minute=0, second=0, microsecond=0)
+    return at_10am.astimezone(UTC)
+
+
+async def _flush_pending_writes(max_wait: float = 1.0) -> None:
+    """Yield to the event loop repeatedly to let fire-and-forget writes complete.
+
+    The StrategyEvaluationBuffer uses ``loop.create_task(store.write_event(...))``
+    which is non-blocking. We must give the loop time to actually run and
+    complete these tasks before querying the database.
+    """
+    elapsed = 0.0
+    step = 0.02
+    while elapsed < max_wait:
+        await asyncio.sleep(step)
+        elapsed += step
+
+
 # ---------------------------------------------------------------------------
 # Test Strategy
 # ---------------------------------------------------------------------------
@@ -139,10 +171,13 @@ async def eval_store(tmp_path: Path) -> EvaluationEventStore:
 
 @pytest.fixture
 def health_monitor() -> HealthMonitor:
-    """Create a HealthMonitor for testing."""
+    """Create a HealthMonitor for testing.
+
+    Uses today's real date at 10:00 AM ET so that health queries match
+    the trading_date written by record_evaluation() (which uses datetime.now).
+    """
     event_bus = EventBus()
-    # 14:00 UTC = 10:00 AM EDT (March 18, 2026 is EDT, UTC-4)
-    clock = FixedClock(datetime(2026, 3, 18, 14, 0, 0, tzinfo=UTC))
+    clock = FixedClock(_now_utc_at_10am_et())
     config = HealthConfig(
         heartbeat_interval_seconds=60,
         heartbeat_url_env="",
@@ -187,7 +222,7 @@ class TestE2EPipeline:
         await strategy.on_candle(candle)
 
         # Give the async write task a moment to complete
-        await asyncio.sleep(0.1)
+        await _flush_pending_writes()
 
         # Query SQLite directly
         rows = await eval_store.execute_query(
@@ -207,7 +242,7 @@ class TestE2EPipeline:
         strategy.eval_buffer.set_store(eval_store)
 
         await strategy.on_candle(_make_candle("AAPL"))
-        await asyncio.sleep(0.1)
+        await _flush_pending_writes()
 
         observatory = ObservatoryService(
             telemetry_store=eval_store,
@@ -216,7 +251,7 @@ class TestE2EPipeline:
             strategies={"strat_test": strategy},
         )
 
-        stages = await observatory.get_pipeline_stages(date="2026-03-18")
+        stages = await observatory.get_pipeline_stages(date=_today_et())
         assert stages["evaluating"] >= 1
 
     @pytest.mark.asyncio
@@ -229,7 +264,7 @@ class TestE2EPipeline:
         strategy.eval_buffer.set_store(eval_store)
 
         await strategy.on_candle(_make_candle("AAPL"))
-        await asyncio.sleep(0.1)
+        await _flush_pending_writes()
 
         observatory = ObservatoryService(
             telemetry_store=eval_store,
@@ -238,7 +273,7 @@ class TestE2EPipeline:
             strategies={"strat_test": strategy},
         )
 
-        summary = await observatory.get_session_summary(date="2026-03-18")
+        summary = await observatory.get_session_summary(date=_today_et())
         assert summary["total_evaluations"] >= 1
         assert summary["symbols_evaluated"] >= 1
 
@@ -263,8 +298,7 @@ class TestHealthWarning:
         strat.is_active = True
         strat.set_watchlist(["AAPL", "NVDA"])
 
-        # 14:00 UTC = 10:00 AM EDT — well past 09:35 + 5min = 09:40
-        clock = FixedClock(datetime(2026, 3, 18, 14, 0, 0, tzinfo=UTC))
+        clock = FixedClock(_now_utc_at_10am_et())
 
         await health_monitor.check_strategy_evaluations(
             strategies={"strat_test": strat},
@@ -292,10 +326,9 @@ class TestHealthWarning:
 
         # Deliver a candle to generate an evaluation event
         await strat.on_candle(_make_candle("AAPL"))
-        await asyncio.sleep(0.1)
+        await _flush_pending_writes()
 
-        # 14:00 UTC = 10:00 AM EDT
-        clock = FixedClock(datetime(2026, 3, 18, 14, 0, 0, tzinfo=UTC))
+        clock = FixedClock(_now_utc_at_10am_et())
 
         await health_monitor.check_strategy_evaluations(
             strategies={"strat_test": strat},
@@ -319,8 +352,7 @@ class TestHealthWarning:
         strat.is_active = True
         # Watchlist is empty — UM routed nothing
 
-        # 14:00 UTC = 10:00 AM EDT
-        clock = FixedClock(datetime(2026, 3, 18, 14, 0, 0, tzinfo=UTC))
+        clock = FixedClock(_now_utc_at_10am_et())
 
         await health_monitor.check_strategy_evaluations(
             strategies={"strat_test": strat},
@@ -343,8 +375,10 @@ class TestHealthWarning:
         strat.is_active = True
         strat.set_watchlist(["AAPL", "NVDA"])
 
-        # 14:03 UTC = 10:03 AM EDT — before 10:00 + 5min = 10:05
-        clock = FixedClock(datetime(2026, 3, 18, 14, 3, 0, tzinfo=UTC))
+        # Set clock to 10:03 AM ET today — before 10:00 + 5min = 10:05
+        now_et = datetime.now(_ET)
+        at_1003 = now_et.replace(hour=10, minute=3, second=0, microsecond=0)
+        clock = FixedClock(at_1003.astimezone(UTC))
 
         await health_monitor.check_strategy_evaluations(
             strategies={"strat_test": strat},
@@ -368,8 +402,7 @@ class TestHealthWarning:
         strat.set_watchlist(["AAPL"])
         strat.eval_buffer.set_store(eval_store)
 
-        # 14:00 UTC = 10:00 AM EDT
-        clock = FixedClock(datetime(2026, 3, 18, 14, 0, 0, tzinfo=UTC))
+        clock = FixedClock(_now_utc_at_10am_et())
 
         # First check: 0 evaluations → DEGRADED
         await health_monitor.check_strategy_evaluations(
@@ -383,7 +416,7 @@ class TestHealthWarning:
 
         # Now generate an evaluation
         await strat.on_candle(_make_candle("AAPL"))
-        await asyncio.sleep(0.1)
+        await _flush_pending_writes()
 
         # Second check: evaluations present → self-corrects to HEALTHY
         await health_monitor.check_strategy_evaluations(

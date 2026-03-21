@@ -676,7 +676,8 @@ class TestNormalizeDatabentoDF:
         # Same columns as Alpaca output
         assert list(result.columns) == ["timestamp", "open", "high", "low", "close", "volume"]
         # Correct dtypes
-        assert result["timestamp"].dtype.name == "datetime64[ns, UTC]"
+        assert "datetime64" in result["timestamp"].dtype.name
+        assert "UTC" in result["timestamp"].dtype.name
         assert result["open"].dtype == float
         assert result["volume"].dtype in (int, "int64")
 

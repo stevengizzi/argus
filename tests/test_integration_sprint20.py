@@ -326,11 +326,11 @@ class TestFourStrategyRegistration:
 
     @pytest.mark.asyncio
     async def test_four_strategy_equal_allocation(self) -> None:
-        """Four strategies registered, but only 3 eligible at 9:00 AM.
+        """Four strategies registered, all eligible via regime filter.
 
-        Afternoon Momentum's operating window is 2:00 PM - 3:30 PM, so at
-        pre-market time (9:00 AM), it is not eligible. The three eligible
-        strategies (ORB, Scalp, VWAP) split 80% equally → ~26.67% each.
+        The orchestrator uses regime-based eligibility, not operating-window
+        time. All four strategies allow ``range_bound`` regime, so all are
+        eligible at any time. Each gets 25% of the 80% deployable capital.
         """
         event_bus = EventBus()
         clock = FixedClock(datetime(2026, 2, 26, 14, 0, 0, tzinfo=UTC))  # 9:00 AM ET
@@ -374,17 +374,14 @@ class TestFourStrategyRegistration:
         allocations = orchestrator.current_allocations
         assert len(allocations) == 4
 
-        # Three strategies eligible at 9:00 AM (afternoon not in window)
+        # All four strategies eligible (regime-based, not time-based)
         eligible_count = sum(1 for a in allocations.values() if a.eligible)
-        assert eligible_count == 3
+        assert eligible_count == 4
 
-        # Eligible strategies get ~33.3% each (80% / 3)
+        # Each strategy gets 25% (80% / 4)
         for strategy_id, alloc in allocations.items():
-            if alloc.eligible:
-                assert alloc.allocation_pct == pytest.approx(1 / 3, rel=0.01)
-            else:
-                # Afternoon momentum not eligible at this time
-                assert alloc.allocation_pct == 0.0
+            assert alloc.eligible
+            assert alloc.allocation_pct == pytest.approx(1 / 4, rel=0.01)
 
         # Total deployment = 80K (100K - 20% reserve)
         deployable = 100_000 * 0.80
@@ -1310,8 +1307,8 @@ class TestDailyReset:
     async def test_afternoon_momentum_allocation_with_four_strategies(self) -> None:
         """Verify no single strategy exceeds 40% cap.
 
-        At 9:00 AM, only 3 strategies are eligible (afternoon momentum is out of window).
-        Each eligible strategy gets ~33.3% which is under the 40% cap.
+        All 4 strategies are eligible via regime filter (range_bound).
+        Each gets 25% which is under the 40% cap.
         """
         event_bus = EventBus()
         clock = FixedClock(datetime(2026, 2, 26, 14, 0, 0, tzinfo=UTC))  # 9:00 AM ET
@@ -1358,7 +1355,8 @@ class TestDailyReset:
         for strategy_id, alloc in allocations.items():
             assert alloc.allocation_pct <= 0.40, f"{strategy_id} exceeds 40% cap"
 
-        # At 9:00 AM, 3 strategies eligible, each gets ~33.3%
+        # All 4 strategies eligible (regime-based), each gets 25%
         eligible_allocations = [a for a in allocations.values() if a.eligible]
+        assert len(eligible_allocations) == 4
         for alloc in eligible_allocations:
-            assert alloc.allocation_pct == pytest.approx(1 / 3, rel=0.01)
+            assert alloc.allocation_pct == pytest.approx(1 / 4, rel=0.01)
