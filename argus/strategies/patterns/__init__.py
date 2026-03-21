@@ -8,6 +8,7 @@ to create a fully functional trading strategy.
 
 from argus.strategies.patterns.base import CandleBar, PatternDetection, PatternModule
 from argus.strategies.patterns.bull_flag import BullFlagPattern
+from argus.strategies.patterns.flat_top_breakout import FlatTopBreakoutPattern
 
 
 def __getattr__(name: str) -> object:
@@ -22,6 +23,7 @@ def __getattr__(name: str) -> object:
 __all__ = [
     "BullFlagPattern",
     "CandleBar",
+    "FlatTopBreakoutPattern",
     "PatternBasedStrategy",
     "PatternDetection",
     "PatternModule",

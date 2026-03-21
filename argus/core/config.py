@@ -773,6 +773,30 @@ class BullFlagConfig(StrategyConfig):
     time_stop_minutes: int = Field(default=30, ge=1)
 
 
+class FlatTopBreakoutConfig(StrategyConfig):
+    """Flat-Top Breakout pattern strategy configuration (Sprint 26).
+
+    Detects horizontal resistance with multiple touches, tight
+    consolidation below, and volume-confirmed breakout above.
+    Operates 10:00 AM - 3:00 PM ET.
+    """
+
+    # Resistance parameters
+    resistance_touches: int = Field(default=3, ge=2, le=20)
+    resistance_tolerance_pct: float = Field(default=0.002, gt=0, le=0.05)
+
+    # Consolidation parameters
+    consolidation_min_bars: int = Field(default=10, ge=2, le=100)
+
+    # Breakout confirmation
+    breakout_volume_multiplier: float = Field(default=1.3, gt=0, le=10.0)
+
+    # Targets and stops
+    target_1_r: float = Field(default=1.0, gt=0)
+    target_2_r: float = Field(default=2.0, gt=0)
+    time_stop_minutes: int = Field(default=30, ge=1)
+
+
 # ---------------------------------------------------------------------------
 # Config Loader
 # ---------------------------------------------------------------------------
@@ -969,6 +993,23 @@ def load_bull_flag_config(path: Path) -> BullFlagConfig:
     """
     data = load_yaml_file(path)
     return BullFlagConfig(**data)
+
+
+def load_flat_top_breakout_config(path: Path) -> FlatTopBreakoutConfig:
+    """Load Flat-Top Breakout strategy configuration from a YAML file.
+
+    Args:
+        path: Path to the Flat-Top Breakout strategy YAML file.
+
+    Returns:
+        Validated FlatTopBreakoutConfig instance.
+
+    Raises:
+        FileNotFoundError: If the file does not exist.
+        pydantic.ValidationError: If validation fails.
+    """
+    data = load_yaml_file(path)
+    return FlatTopBreakoutConfig(**data)
 
 
 def load_scanner_config(path: Path) -> ScannerConfig:
