@@ -129,7 +129,7 @@ class TestRedToGreenConfig:
         assert config.risk_limits.max_concurrent_positions == 2
         assert config.benchmarks.min_win_rate == 0.40
         assert config.benchmarks.max_drawdown_pct == 0.12
-        assert config.backtest_summary.status == "not_validated"
+        assert config.backtest_summary.status == "vectorbt_module_ready"
         assert config.universe_filter is not None
         assert config.universe_filter.min_price == 5.0
 
