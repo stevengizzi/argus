@@ -13,6 +13,9 @@ import re
 import sqlite3
 from datetime import datetime
 from pathlib import Path
+from typing import Any
+
+import aiosqlite
 
 from argus.core.ids import generate_id
 from argus.db.manager import DatabaseManager
@@ -40,7 +43,7 @@ class DebriefService:
             db: The database manager instance.
         """
         self._db = db
-        self._fs_doc_cache: list[dict] | None = None
+        self._fs_doc_cache: list[dict[str, Any]] | None = None
         self._fs_doc_cache_time: float = 0.0
         self._fs_doc_cache_ttl: float = 30.0  # seconds
 
@@ -54,7 +57,7 @@ class DebriefService:
         briefing_type: str,
         title: str | None = None,
         content: str | None = None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Create a new briefing.
 
         Args:
@@ -94,9 +97,12 @@ class DebriefService:
 
         logger.info("Created briefing %s: %s %s", briefing_id[:8], briefing_type, date)
 
-        return await self.get_briefing(briefing_id)  # type: ignore[return-value]
+        result = await self.get_briefing(briefing_id)
+        if result is None:
+            raise RuntimeError(f"Failed to retrieve briefing {briefing_id} after creation")
+        return result
 
-    async def get_briefing(self, briefing_id: str) -> dict | None:
+    async def get_briefing(self, briefing_id: str) -> dict[str, Any] | None:
         """Retrieve a briefing by ID.
 
         Args:
@@ -121,7 +127,7 @@ class DebriefService:
         date_to: str | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> tuple[list[dict], int]:
+    ) -> tuple[list[dict[str, Any]], int]:
         """List briefings with optional filtering and pagination.
 
         Args:
@@ -160,7 +166,7 @@ class DebriefService:
         # Get total count
         count_sql = f"SELECT COUNT(*) as count FROM briefings WHERE {where_clause}"
         count_row = await self._db.fetch_one(count_sql, tuple(params))
-        total = int(dict(count_row).get("count", 0)) if count_row else 0  # type: ignore[arg-type]
+        total = self._extract_count(count_row)
 
         # Get paginated results
         sql = f"""
@@ -180,7 +186,7 @@ class DebriefService:
 
         return briefings, total
 
-    async def update_briefing(self, briefing_id: str, **kwargs: object) -> dict | None:
+    async def update_briefing(self, briefing_id: str, **kwargs: object) -> dict[str, Any] | None:
         """Update a briefing.
 
         Args:
@@ -196,23 +202,23 @@ class DebriefService:
 
         allowed_fields = {"title", "content", "status", "metadata"}
         updates: list[str] = []
-        params: list[object] = []
+        update_params: list[object] = []
 
         for field, value in kwargs.items():
             if field in allowed_fields:
                 if field == "metadata" and value is not None:
                     value = json.dumps(value)
                 updates.append(f"{field} = ?")
-                params.append(value)
+                update_params.append(value)
 
         if not updates:
             return existing
 
         updates.append("updated_at = datetime('now')")
-        params.append(briefing_id)
+        update_params.append(briefing_id)
 
         sql = f"UPDATE briefings SET {', '.join(updates)} WHERE id = ?"
-        await self._db.execute(sql, tuple(params))
+        await self._db.execute(sql, tuple(update_params))
         await self._db.commit()
 
         logger.debug("Updated briefing %s", briefing_id[:8])
@@ -252,7 +258,7 @@ class DebriefService:
         linked_strategy_id: str | None = None,
         linked_trade_ids: list[str] | None = None,
         tags: list[str] | None = None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Create a new journal entry.
 
         Args:
@@ -293,9 +299,12 @@ class DebriefService:
 
         logger.info("Created journal entry %s: %s", entry_id[:8], entry_type)
 
-        return await self.get_journal_entry(entry_id)  # type: ignore[return-value]
+        result = await self.get_journal_entry(entry_id)
+        if result is None:
+            raise RuntimeError(f"Failed to retrieve journal entry {entry_id} after creation")
+        return result
 
-    async def get_journal_entry(self, entry_id: str) -> dict | None:
+    async def get_journal_entry(self, entry_id: str) -> dict[str, Any] | None:
         """Retrieve a journal entry by ID.
 
         Args:
@@ -322,7 +331,7 @@ class DebriefService:
         date_to: str | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> tuple[list[dict], int]:
+    ) -> tuple[list[dict[str, Any]], int]:
         """List journal entries with optional filtering and pagination.
 
         Args:
@@ -378,7 +387,7 @@ class DebriefService:
         # Get total count
         count_sql = f"SELECT COUNT(*) as count FROM journal_entries WHERE {where_clause}"
         count_row = await self._db.fetch_one(count_sql, tuple(params))
-        total = int(dict(count_row).get("count", 0)) if count_row else 0  # type: ignore[arg-type]
+        total = self._extract_count(count_row)
 
         # Get paginated results
         sql = f"""
@@ -395,7 +404,7 @@ class DebriefService:
 
         return entries, total
 
-    async def update_journal_entry(self, entry_id: str, **kwargs: object) -> dict | None:
+    async def update_journal_entry(self, entry_id: str, **kwargs: object) -> dict[str, Any] | None:
         """Update a journal entry.
 
         Args:
@@ -419,23 +428,23 @@ class DebriefService:
             "tags",
         }
         updates: list[str] = []
-        params: list[object] = []
+        update_params: list[object] = []
 
         for field, value in kwargs.items():
             if field in allowed_fields:
                 if field in ("linked_trade_ids", "tags") and value is not None:
                     value = json.dumps(value)
                 updates.append(f"{field} = ?")
-                params.append(value)
+                update_params.append(value)
 
         if not updates:
             return existing
 
         updates.append("updated_at = datetime('now')")
-        params.append(entry_id)
+        update_params.append(entry_id)
 
         sql = f"UPDATE journal_entries SET {', '.join(updates)} WHERE id = ?"
-        await self._db.execute(sql, tuple(params))
+        await self._db.execute(sql, tuple(update_params))
         await self._db.commit()
 
         logger.debug("Updated journal entry %s", entry_id[:8])
@@ -474,9 +483,10 @@ class DebriefService:
 
         all_tags: set[str] = set()
         for row in rows:
-            r = dict(row)  # type: ignore[arg-type]
+            r = self._row_to_dict(row)
             tags = self._parse_json_field(r.get("tags"))
-            all_tags.update(tags)
+            if isinstance(tags, list):
+                all_tags.update(tags)
 
         return sorted(all_tags)
 
@@ -490,8 +500,8 @@ class DebriefService:
         title: str,
         content: str,
         tags: list[str] | None = None,
-        metadata: dict | None = None,
-    ) -> dict:
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """Create a new document in the database.
 
         Args:
@@ -520,9 +530,12 @@ class DebriefService:
 
         logger.info("Created document %s: %s", document_id[:8], category)
 
-        return await self.get_document(document_id)  # type: ignore[return-value]
+        result = await self.get_document(document_id)
+        if result is None:
+            raise RuntimeError(f"Failed to retrieve document {document_id} after creation")
+        return result
 
-    async def get_document(self, document_id: str) -> dict | None:
+    async def get_document(self, document_id: str) -> dict[str, Any] | None:
         """Retrieve a document by ID.
 
         Args:
@@ -539,7 +552,7 @@ class DebriefService:
 
         return self._row_to_document_dict(row)
 
-    async def list_documents(self, category: str | None = None) -> list[dict]:
+    async def list_documents(self, category: str | None = None) -> list[dict[str, Any]]:
         """List documents with optional category filter.
 
         Args:
@@ -557,7 +570,7 @@ class DebriefService:
 
         return [self._row_to_document_dict(row) for row in rows]
 
-    async def update_document(self, document_id: str, **kwargs: object) -> dict | None:
+    async def update_document(self, document_id: str, **kwargs: object) -> dict[str, Any] | None:
         """Update a document.
 
         Args:
@@ -573,23 +586,23 @@ class DebriefService:
 
         allowed_fields = {"title", "content", "category", "tags", "metadata"}
         updates: list[str] = []
-        params: list[object] = []
+        update_params: list[object] = []
 
         for field, value in kwargs.items():
             if field in allowed_fields:
                 if field in ("tags", "metadata") and value is not None:
                     value = json.dumps(value)
                 updates.append(f"{field} = ?")
-                params.append(value)
+                update_params.append(value)
 
         if not updates:
             return existing
 
         updates.append("updated_at = datetime('now')")
-        params.append(document_id)
+        update_params.append(document_id)
 
         sql = f"UPDATE documents SET {', '.join(updates)} WHERE id = ?"
-        await self._db.execute(sql, tuple(params))
+        await self._db.execute(sql, tuple(update_params))
         await self._db.commit()
 
         logger.debug("Updated document %s", document_id[:8])
@@ -621,7 +634,9 @@ class DebriefService:
     # Filesystem Document Discovery
     # -------------------------------------------------------------------------
 
-    def discover_filesystem_documents(self, base_dir: str | Path | None = None) -> list[dict]:
+    def discover_filesystem_documents(
+        self, base_dir: str | Path | None = None
+    ) -> list[dict[str, Any]]:
         """Discover markdown documents from the filesystem.
 
         Scans:
@@ -649,7 +664,7 @@ class DebriefService:
             Path(__file__).parent.parent.parent if base_dir is None else Path(base_dir)
         )
 
-        documents: list[dict] = []
+        documents: list[dict[str, Any]] = []
         scan_patterns = [
             ("research", "docs/research/*.md"),
             ("strategy", "docs/strategies/STRATEGY_*.md"),
@@ -675,7 +690,9 @@ class DebriefService:
 
         return documents
 
-    def _parse_filesystem_document(self, filepath: Path, category: str) -> dict:
+    def _parse_filesystem_document(
+        self, filepath: Path, category: str
+    ) -> dict[str, Any]:
         """Parse a filesystem document into a dict.
 
         Args:
@@ -715,7 +732,7 @@ class DebriefService:
 
     async def search_all(
         self, query: str, scope: str = "all"
-    ) -> dict[str, list[dict]]:
+    ) -> dict[str, list[dict[str, Any]]]:
         """Search across all content types.
 
         Args:
@@ -726,7 +743,7 @@ class DebriefService:
             Dict with keys 'briefings', 'journal', 'documents', each containing
             a list of matching items.
         """
-        results: dict[str, list[dict]] = {
+        results: dict[str, list[dict[str, Any]]] = {
             "briefings": [],
             "journal": [],
             "documents": [],
@@ -851,6 +868,32 @@ Note any overnight catalysts, watchlist candidates, or adjustments to strategy.
     # Helper Methods
     # -------------------------------------------------------------------------
 
+    @staticmethod
+    def _row_to_dict(row: aiosqlite.Row) -> dict[str, Any]:
+        """Convert an aiosqlite.Row to a plain dict.
+
+        Args:
+            row: The database row.
+
+        Returns:
+            Dict with column names as keys.
+        """
+        return dict(row)  # type: ignore[arg-type]
+
+    @staticmethod
+    def _extract_count(row: aiosqlite.Row | None) -> int:
+        """Extract a COUNT(*) value from a query result row.
+
+        Args:
+            row: The row from a COUNT query, or None.
+
+        Returns:
+            The count as an integer, or 0 if row is None.
+        """
+        if row is None:
+            return 0
+        return int(row[0])
+
     def _compute_word_count(self, text: str) -> int:
         """Compute word count for text.
 
@@ -877,7 +920,7 @@ Note any overnight catalysts, watchlist candidates, or adjustments to strategy.
 
     def _parse_json_field(
         self, value: str | None, *, expect_list: bool = True
-    ) -> list | dict | None:
+    ) -> list[Any] | dict[str, Any] | None:
         """Safely parse a JSON field.
 
         Args:
@@ -909,7 +952,7 @@ Note any overnight catalysts, watchlist candidates, or adjustments to strategy.
         """
         return term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
-    def _row_to_briefing_dict(self, row: object) -> dict:
+    def _row_to_briefing_dict(self, row: aiosqlite.Row) -> dict[str, Any]:
         """Convert a database row to a briefing dict.
 
         Args:
@@ -918,7 +961,7 @@ Note any overnight catalysts, watchlist candidates, or adjustments to strategy.
         Returns:
             Briefing dict with computed fields.
         """
-        r = dict(row)  # type: ignore[arg-type]
+        r = self._row_to_dict(row)
         content = r.get("content", "") or ""
         word_count = self._compute_word_count(content)
 
@@ -937,7 +980,7 @@ Note any overnight catalysts, watchlist candidates, or adjustments to strategy.
             "reading_time_min": self._compute_reading_time(word_count),
         }
 
-    def _row_to_journal_dict(self, row: object) -> dict:
+    def _row_to_journal_dict(self, row: aiosqlite.Row) -> dict[str, Any]:
         """Convert a database row to a journal entry dict.
 
         Args:
@@ -946,7 +989,7 @@ Note any overnight catalysts, watchlist candidates, or adjustments to strategy.
         Returns:
             Journal entry dict with parsed JSON fields.
         """
-        r = dict(row)  # type: ignore[arg-type]
+        r = self._row_to_dict(row)
 
         return {
             "id": r["id"],
@@ -961,7 +1004,7 @@ Note any overnight catalysts, watchlist candidates, or adjustments to strategy.
             "updated_at": r["updated_at"],
         }
 
-    def _row_to_document_dict(self, row: object) -> dict:
+    def _row_to_document_dict(self, row: aiosqlite.Row) -> dict[str, Any]:
         """Convert a database row to a document dict.
 
         Args:
@@ -970,7 +1013,7 @@ Note any overnight catalysts, watchlist candidates, or adjustments to strategy.
         Returns:
             Document dict with computed fields.
         """
-        r = dict(row)  # type: ignore[arg-type]
+        r = self._row_to_dict(row)
         content = r.get("content", "") or ""
         word_count = self._compute_word_count(content)
 

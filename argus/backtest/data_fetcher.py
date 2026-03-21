@@ -19,12 +19,15 @@ Or use the backtest_universe.yaml for the full symbol list:
 For Databento, use fetch_symbol_month_databento() programmatically.
 """
 
+from __future__ import annotations
+
 import asyncio
 import calendar
 import logging
 import time
 from datetime import UTC, date, datetime
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 from alpaca.data.enums import Adjustment, DataFeed
@@ -73,7 +76,7 @@ def _generate_month_ranges(start_date: date, end_date: date) -> list[tuple[int, 
     return ranges
 
 
-def _bars_to_dataframe(bars, symbol: str) -> pd.DataFrame:
+def _bars_to_dataframe(bars: Any, symbol: str) -> pd.DataFrame:
     """Convert Alpaca bar response to a standardized DataFrame.
 
     Normalizes the Alpaca SDK's bar objects into our standard schema:
@@ -205,7 +208,7 @@ class DataFetcher:
         return self._manifest
 
     @property
-    def _db_client(self):
+    def _db_client(self) -> Any:
         """Lazy-init Databento Historical client.
 
         Returns:
@@ -275,7 +278,7 @@ class DataFetcher:
             symbol_or_symbols=symbol,
             start=start,
             end=end,
-            timeframe=TimeFrame.Minute,
+            timeframe=TimeFrame.Minute,  # type: ignore[arg-type]
             adjustment=adjustment,
             feed=feed,
         )
@@ -288,7 +291,7 @@ class DataFetcher:
                     "API response for %s: type=%s, keys=%s",
                     symbol,
                     type(bars).__name__,
-                    list(bars.data.keys()) if hasattr(bars, "data") else "no data attr",
+                    list(bars.data.keys()) if hasattr(bars, "data") else "no data attr",  # type: ignore[union-attr]
                 )
                 return _bars_to_dataframe(bars, symbol)
             except Exception as e:
@@ -765,7 +768,7 @@ def debug_single_request() -> None:
         symbol_or_symbols=symbol,
         start=start,
         end=end,
-        timeframe=TimeFrame.Minute,
+        timeframe=TimeFrame.Minute,  # type: ignore[arg-type]
         feed=DataFeed.IEX,
     )
 
@@ -776,19 +779,19 @@ def debug_single_request() -> None:
     print(f"Has 'df' attr: {hasattr(bars, 'df')}")
 
     if hasattr(bars, "data"):
-        print(f"bars.data type: {type(bars.data).__name__}")
-        print(f"bars.data keys: {list(bars.data.keys())}")
+        print(f"bars.data type: {type(bars.data).__name__}")  # type: ignore[union-attr]
+        print(f"bars.data keys: {list(bars.data.keys())}")  # type: ignore[union-attr]
 
     if hasattr(bars, "df"):
-        df = bars.df
+        df = bars.df  # type: ignore[union-attr]
         print(f"\nbars.df shape: {df.shape}")
         print(f"bars.df empty: {df.empty}")
         if not df.empty:
             print(f"bars.df head:\n{df.head()}")
 
-    print(f"\n'{symbol}' in bars: {symbol in bars}")
+    print(f"\n'{symbol}' in bars: {symbol in bars}")  # type: ignore[operator]
 
-    if symbol in bars:
+    if symbol in bars:  # type: ignore[operator]
         bar_list = bars[symbol]
         print(f"bars['{symbol}'] length: {len(bar_list)}")
         if bar_list:

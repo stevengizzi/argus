@@ -175,6 +175,11 @@ class Orchestrator:
         return self._current_regime
 
     @property
+    def spy_data_available(self) -> bool:
+        """Whether SPY data was available at last regime check."""
+        return self._spy_unavailable_count == 0
+    
+    @property
     def current_allocations(self) -> dict[str, StrategyAllocation]:
         """Get current strategy allocations."""
         return self._current_allocations.copy()
@@ -195,7 +200,7 @@ class Orchestrator:
         return self._last_regime_check
 
     @property
-    def regime_check_interval_minutes(self) -> int:
+    def regime_check_interval_minutes(self) -> int | None:
         """Minutes between regime re-checks."""
         return self._config.regime_check_interval_minutes
 

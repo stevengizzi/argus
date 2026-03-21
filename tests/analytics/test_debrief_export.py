@@ -194,9 +194,10 @@ async def test_export_json_serializes_datetimes(tmp_path: Path) -> None:
 
     position = MagicMock()
     position.symbol = "AAPL"
-    position.quantity = 10
-    position.avg_cost = 175.50
-    position.market_value = 1_755.0
+    position.shares = 10
+    position.entry_price = 175.50
+    position.current_price = 175.50
+    position.unrealized_pnl = 0.0
 
     broker = MagicMock()
     broker.get_account = AsyncMock(return_value=account)

@@ -26,6 +26,7 @@ import asyncio
 import logging
 from datetime import UTC, date, datetime
 from pathlib import Path
+from typing import Any
 from zoneinfo import ZoneInfo
 
 import pandas as pd
@@ -321,7 +322,7 @@ class ReplayHarness:
         signal = await self._strategy.on_candle(event)
         if signal is not None and self._risk_manager is not None:
             result = await self._risk_manager.evaluate_signal(signal)
-            await self._event_bus.publish(result)
+            await self._event_bus.publish(result)  # type: ignore[union-attr]
 
     def _load_risk_config(self, config_dir: Path) -> RiskConfig:
         """Load risk configuration."""
@@ -833,12 +834,12 @@ def main() -> None:
     )
 
     # Parse config overrides
-    overrides: dict[str, any] = {}
+    overrides: dict[str, Any] = {}
     for override in args.config_override:
         key, _, value = override.partition("=")
         # Try to parse as number
         try:
-            parsed_value: any = float(value)
+            parsed_value: float | int | str = float(value)
             if parsed_value == int(parsed_value):
                 parsed_value = int(parsed_value)
         except ValueError:

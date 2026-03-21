@@ -322,9 +322,10 @@ async def _export_account_state(
             for pos in positions:
                 position_list.append({
                     "symbol": pos.symbol,
-                    "quantity": pos.quantity,
-                    "avg_cost": pos.avg_cost,
-                    "market_value": pos.market_value,
+                    "shares": pos.shares,
+                    "entry_price": pos.entry_price,
+                    "current_price": pos.current_price,
+                    "unrealized_pnl": pos.unrealized_pnl,
                 })
         account_data["positions"] = position_list
 
@@ -343,7 +344,7 @@ def _export_regime(orchestrator: Orchestrator | None) -> dict[str, Any]:
     try:
         regime_data: dict[str, Any] = {
             "current": orchestrator.current_regime.value,
-            "spy_data_available": orchestrator._spy_unavailable_count == 0,
+            "spy_data_available": orchestrator.spy_data_available
         }
 
         allocations = orchestrator.current_allocations

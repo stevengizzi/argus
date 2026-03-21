@@ -7,7 +7,7 @@ context inspection, and action proposal management. All endpoints are JWT-protec
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime, date
+from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 from typing import Any
 
@@ -269,7 +269,7 @@ async def post_chat(
     )
 
     # Persist user message
-    user_msg = await state.conversation_manager.add_message(
+    await state.conversation_manager.add_message(
         conversation_id,
         "user",
         request.message,
@@ -277,7 +277,8 @@ async def post_chat(
     )
 
     # Call Claude API
-    response, usage_record = await state.ai_client.send_message(
+    assert state.ai_client is not None
+    response, usage_record = await state.ai_client.send_message(  # type: ignore[misc]
         messages,
         full_system,
         tools=ARGUS_TOOLS,
@@ -351,7 +352,7 @@ async def post_chat(
         })
 
         # Continue conversation with tool results
-        continuation_response, continuation_usage = await state.ai_client.send_with_tool_results(
+        continuation_response, continuation_usage = await state.ai_client.send_with_tool_results(  # type: ignore[union-attr]
             messages,
             full_system,
             ARGUS_TOOLS,
@@ -379,7 +380,7 @@ async def post_chat(
         conversation_id,
         "assistant",
         full_content,
-        tool_use_data=tool_use_blocks if tool_use_blocks else None,
+        tool_use_data=tool_use_blocks if tool_use_blocks else None,  # type: ignore[arg-type]
     )
 
     # Record usage

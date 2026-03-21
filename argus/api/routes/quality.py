@@ -12,6 +12,7 @@ import logging
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+import aiosqlite
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 
@@ -91,7 +92,7 @@ def _ensure_quality_engine(state: AppState) -> None:
         )
 
 
-def _row_to_response(row: object) -> QualityScoreResponse:
+def _row_to_response(row: aiosqlite.Row) -> QualityScoreResponse:
     """Convert a database row to a QualityScoreResponse.
 
     Args:
@@ -102,22 +103,9 @@ def _row_to_response(row: object) -> QualityScoreResponse:
         QualityScoreResponse model.
     """
     return QualityScoreResponse(
-        symbol=row[0],  # type: ignore[index]
-        strategy_id=row[1],  # type: ignore[index]
-        score=row[2],  # type: ignore[index]
-        grade=row[3],  # type: ignore[index]
-        risk_tier=row[4],  # type: ignore[index]
-        components=QualityComponentsResponse(
-            ps=row[5],  # type: ignore[index]
-            cq=row[6],  # type: ignore[index]
-            vp=row[7],  # type: ignore[index]
-            hm=row[8],  # type: ignore[index]
-            ra=row[9],  # type: ignore[index]
-        ),
-        scored_at=row[10],  # type: ignore[index]
-        outcome_realized_pnl=row[11],  # type: ignore[index]
-        outcome_r_multiple=row[12],  # type: ignore[index]
-    )
+        symbol=row[0],        strategy_id=row[1],        score=row[2],        grade=row[3],        risk_tier=row[4],        components=QualityComponentsResponse(
+            ps=row[5],            cq=row[6],            vp=row[7],            hm=row[8],            ra=row[9],        ),
+        scored_at=row[10],        outcome_realized_pnl=row[11],        outcome_r_multiple=row[12],    )
 
 
 # --- Endpoints ---
@@ -176,12 +164,12 @@ async def get_quality_history(
     where = "WHERE " + " AND ".join(conditions) if conditions else ""
 
     # Total count
+    assert db is not None
     count_row = await db.fetch_one(
         f"SELECT COUNT(*) FROM quality_history {where}",  # noqa: S608
         tuple(params),
     )
-    total = count_row[0] if count_row else 0  # type: ignore[index]
-
+    total = count_row[0] if count_row else 0
     # Fetch page
     rows = await db.fetch_all(
         f"""
@@ -221,6 +209,7 @@ async def get_quality_distribution(
 
     today = datetime.now(_ET).strftime("%Y-%m-%d")
 
+    assert db is not None
     rows = await db.fetch_all(
         """
         SELECT grade, COUNT(*) as cnt
@@ -234,8 +223,7 @@ async def get_quality_distribution(
     # Build grade map with all grades initialized to 0
     grade_counts: dict[str, int] = {g: 0 for g in _ALL_GRADES}
     for row in rows:
-        grade_counts[row[0]] = row[1]  # type: ignore[index]
-
+        grade_counts[row[0]] = row[1]
     total = sum(grade_counts.values())
 
     # Count signals below min_grade_to_trade
@@ -271,6 +259,7 @@ async def get_quality_for_symbol(
     _ensure_quality_engine(state)
     db = state.quality_engine.db  # type: ignore[union-attr]
 
+    assert db is not None
     row = await db.fetch_one(
         """
         SELECT symbol, strategy_id, composite_score, grade, risk_tier,

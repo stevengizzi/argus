@@ -9,6 +9,9 @@ from __future__ import annotations
 import json
 import logging
 from datetime import date, datetime
+from typing import Any
+
+import aiosqlite
 
 from argus.core.ids import generate_id
 from argus.db.manager import DatabaseManager
@@ -308,7 +311,7 @@ class TradeLogger:
 
         if row is None:
             return 0.0
-        return float(dict(row).get("total", 0.0))  # type: ignore[arg-type]
+        return float(row[0])
 
     async def get_todays_trade_count(self) -> int:
         """Get the count of trades closed today.
@@ -328,7 +331,7 @@ class TradeLogger:
 
         if row is None:
             return 0
-        return int(dict(row).get("count", 0))  # type: ignore[arg-type]
+        return int(row[0])
 
     async def query_trades(
         self,
@@ -339,7 +342,7 @@ class TradeLogger:
         symbol: str | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """Query trades with filtering and pagination.
 
         Args:
@@ -391,9 +394,9 @@ class TradeLogger:
         params.extend([limit, offset])
 
         rows = await self._db.fetch_all(sql, tuple(params))
-        return [dict(row) for row in rows]  # type: ignore[arg-type]
+        return [self._row_to_dict(row) for row in rows]
 
-    async def get_trades_by_ids(self, trade_ids: list[str]) -> list[dict]:
+    async def get_trades_by_ids(self, trade_ids: list[str]) -> list[dict[str, Any]]:
         """Retrieve trades by their IDs.
 
         Args:
@@ -414,7 +417,7 @@ class TradeLogger:
         """
 
         rows = await self._db.fetch_all(sql, tuple(trade_ids))
-        return [dict(row) for row in rows]  # type: ignore[arg-type]
+        return [self._row_to_dict(row) for row in rows]
 
     async def count_trades(
         self,
@@ -464,19 +467,19 @@ class TradeLogger:
                 conditions.append("net_pnl = 0")
 
         where_clause = " AND ".join(conditions) if conditions else "1=1"
-        sql = f"SELECT COUNT(*) as count FROM trades WHERE {where_clause}"
+        sql = f"SELECT COUNT(*) FROM trades WHERE {where_clause}"
 
         row = await self._db.fetch_one(sql, tuple(params))
         if row is None:
             return 0
-        return int(dict(row).get("count", 0))  # type: ignore[arg-type]
+        return int(row[0])
 
     async def get_daily_pnl(
         self,
         date_from: str | None = None,
         date_to: str | None = None,
         strategy_id: str | None = None,
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """Get daily P&L aggregation.
 
         Args:
@@ -516,13 +519,13 @@ class TradeLogger:
         """
 
         rows = await self._db.fetch_all(sql, tuple(params))
-        return [dict(row) for row in rows]  # type: ignore[arg-type]
+        return [self._row_to_dict(row) for row in rows]
 
     async def get_daily_pnl_by_strategy(
         self,
         date_from: str | None = None,
         date_to: str | None = None,
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """Get daily P&L broken out by strategy.
 
         Used for computing strategy correlation matrices and other
@@ -560,14 +563,14 @@ class TradeLogger:
         """
 
         rows = await self._db.fetch_all(sql, tuple(params))
-        return [dict(row) for row in rows]  # type: ignore[arg-type]
+        return [self._row_to_dict(row) for row in rows]
 
     async def log_orchestrator_decision(
         self,
         date: str,
         decision_type: str,
         strategy_id: str | None,
-        details: dict,
+        details: dict[str, Any],
         rationale: str,
         created_at: str | None = None,
     ) -> str:
@@ -630,7 +633,7 @@ class TradeLogger:
         strategy_id: str | None = None,
         decision_type: str | None = None,
         date: str | None = None,
-    ) -> tuple[list[dict], int]:
+    ) -> tuple[list[dict[str, Any]], int]:
         """Query orchestrator decisions with pagination.
 
         Args:
@@ -661,9 +664,9 @@ class TradeLogger:
         where_clause = " AND ".join(conditions) if conditions else "1=1"
 
         # Get total count
-        count_sql = f"SELECT COUNT(*) as count FROM orchestrator_decisions WHERE {where_clause}"
+        count_sql = f"SELECT COUNT(*) FROM orchestrator_decisions WHERE {where_clause}"
         count_row = await self._db.fetch_one(count_sql, tuple(params))
-        total = int(dict(count_row).get("count", 0)) if count_row else 0  # type: ignore[arg-type]
+        total = int(count_row[0]) if count_row else 0
 
         # Get paginated results
         # Returns newest-first. Frontend DecisionTimeline reverses for chronological display.
@@ -680,7 +683,7 @@ class TradeLogger:
 
         decisions = []
         for row in rows:
-            r = dict(row)  # type: ignore[arg-type]
+            r = self._row_to_dict(row)
             decisions.append(
                 {
                     "id": r["id"],
@@ -739,7 +742,19 @@ class TradeLogger:
 
         return summary_id
 
-    def _row_to_trade(self, row: object) -> Trade:
+    @staticmethod
+    def _row_to_dict(row: aiosqlite.Row) -> dict[str, Any]:
+        """Convert an aiosqlite.Row to a plain dict.
+
+        Args:
+            row: The database row.
+
+        Returns:
+            Dict with column names as keys.
+        """
+        return dict(row)  # type: ignore[arg-type]
+
+    def _row_to_trade(self, row: aiosqlite.Row) -> Trade:
         """Convert a database row to a Trade model.
 
         Args:
@@ -750,8 +765,7 @@ class TradeLogger:
         """
         from argus.models.trading import AssetClass, ExitReason, OrderSide, TradeOutcome
 
-        # Access row as dict-like object
-        r = dict(row)  # type: ignore[arg-type]
+        r = self._row_to_dict(row)
 
         return Trade(
             id=r["id"],

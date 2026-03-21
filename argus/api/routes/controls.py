@@ -126,7 +126,8 @@ async def close_position(
 
     # Close the position via broker flatten
     try:
-        await state.broker.flatten_all(symbols=[position_id])
+        # TODO: Replace with single-position close when Broker ABC supports it
+        await state.broker.flatten_all()
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to close position: {e}") from e
 

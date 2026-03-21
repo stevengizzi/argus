@@ -325,19 +325,20 @@ async def _optimize_in_sample_orb(
         metric_col = "sharpe_ratio"
     else:
         metric_col = config.optimization_metric
-    best_row = qualifying.loc[qualifying[metric_col].idxmax()]
+    best_idx = qualifying[metric_col].idxmax()  # type: ignore[union-attr]
+    best_row = qualifying.loc[best_idx]  # type: ignore[call-overload]
 
     best_params = {col: best_row[col] for col in param_cols}
 
-    total_pnl_dollars = float(best_row["total_return_pct"]) * config.initial_cash / 100.0
+    total_pnl_dollars = float(best_row["total_return_pct"]) * config.initial_cash / 100.0  # type: ignore[arg-type]
 
     is_metrics = {
-        "total_trades": int(best_row["total_trades"]),
-        "sharpe": float(best_row["sharpe_ratio"]),
-        "win_rate": float(best_row["win_rate"]),
-        "profit_factor": float(best_row["profit_factor"]),
+        "total_trades": int(best_row["total_trades"]),  # type: ignore[arg-type]
+        "sharpe": float(best_row["sharpe_ratio"]),  # type: ignore[arg-type]
+        "win_rate": float(best_row["win_rate"]),  # type: ignore[arg-type]
+        "profit_factor": float(best_row["profit_factor"]),  # type: ignore[arg-type]
         "total_pnl": total_pnl_dollars,
-        "max_drawdown": float(best_row["max_drawdown_pct"]),
+        "max_drawdown": float(best_row["max_drawdown_pct"]),  # type: ignore[arg-type]
     }
 
     return best_params, is_metrics
@@ -392,19 +393,20 @@ async def _optimize_in_sample_scalp(
         metric_col = "sharpe_ratio"
     else:
         metric_col = config.optimization_metric
-    best_row = qualifying.loc[qualifying[metric_col].idxmax()]
+    best_idx = qualifying[metric_col].idxmax()  # type: ignore[union-attr]
+    best_row = qualifying.loc[best_idx]  # type: ignore[call-overload]
 
     best_params = {col: best_row[col] for col in param_cols}
 
-    total_pnl_dollars = float(best_row["total_return_pct"]) * config.initial_cash / 100.0
+    total_pnl_dollars = float(best_row["total_return_pct"]) * config.initial_cash / 100.0  # type: ignore[arg-type]
 
     is_metrics = {
-        "total_trades": int(best_row["total_trades"]),
-        "sharpe": float(best_row["sharpe_ratio"]),
-        "win_rate": float(best_row["win_rate"]),
-        "profit_factor": float(best_row["profit_factor"]),
+        "total_trades": int(best_row["total_trades"]),  # type: ignore[arg-type]
+        "sharpe": float(best_row["sharpe_ratio"]),  # type: ignore[arg-type]
+        "win_rate": float(best_row["win_rate"]),  # type: ignore[arg-type]
+        "profit_factor": float(best_row["profit_factor"]),  # type: ignore[arg-type]
         "total_pnl": total_pnl_dollars,
-        "max_drawdown": float(best_row["max_drawdown_pct"]),
+        "max_drawdown": float(best_row["max_drawdown_pct"]),  # type: ignore[arg-type]
     }
 
     return best_params, is_metrics
@@ -468,19 +470,20 @@ async def _optimize_in_sample_vwap_reclaim(
         metric_col = "sharpe_ratio"
     else:
         metric_col = config.optimization_metric
-    best_row = qualifying.loc[qualifying[metric_col].idxmax()]
+    best_idx = qualifying[metric_col].idxmax()  # type: ignore[union-attr]
+    best_row = qualifying.loc[best_idx]  # type: ignore[call-overload]
 
     best_params = {col: best_row[col] for col in param_cols}
 
-    total_pnl_dollars = float(best_row["total_return_pct"]) * config.initial_cash / 100.0
+    total_pnl_dollars = float(best_row["total_return_pct"]) * config.initial_cash / 100.0  # type: ignore[arg-type]
 
     is_metrics = {
-        "total_trades": int(best_row["total_trades"]),
-        "sharpe": float(best_row["sharpe_ratio"]),
-        "win_rate": float(best_row["win_rate"]),
-        "profit_factor": float(best_row["profit_factor"]),
+        "total_trades": int(best_row["total_trades"]),  # type: ignore[arg-type]
+        "sharpe": float(best_row["sharpe_ratio"]),  # type: ignore[arg-type]
+        "win_rate": float(best_row["win_rate"]),  # type: ignore[arg-type]
+        "profit_factor": float(best_row["profit_factor"]),  # type: ignore[arg-type]
         "total_pnl": total_pnl_dollars,
-        "max_drawdown": float(best_row["max_drawdown_pct"]),
+        "max_drawdown": float(best_row["max_drawdown_pct"]),  # type: ignore[arg-type]
     }
 
     return best_params, is_metrics
@@ -569,19 +572,20 @@ async def _optimize_in_sample_afternoon_momentum(
         metric_col = "sharpe_ratio"
     else:
         metric_col = config.optimization_metric
-    best_row = qualifying.loc[qualifying[metric_col].idxmax()]
+    best_idx = qualifying[metric_col].idxmax()  # type: ignore[union-attr]
+    best_row = qualifying.loc[best_idx]  # type: ignore[call-overload]
 
     best_params = {col: best_row[col] for col in param_cols}
 
-    total_pnl_dollars = float(best_row["total_return_pct"]) * config.initial_cash / 100.0
+    total_pnl_dollars = float(best_row["total_return_pct"]) * config.initial_cash / 100.0  # type: ignore[arg-type]
 
     is_metrics = {
-        "total_trades": int(best_row["total_trades"]),
-        "sharpe": float(best_row["sharpe_ratio"]),
-        "win_rate": float(best_row["win_rate"]),
-        "profit_factor": float(best_row["profit_factor"]),
+        "total_trades": int(best_row["total_trades"]),  # type: ignore[arg-type]
+        "sharpe": float(best_row["sharpe_ratio"]),  # type: ignore[arg-type]
+        "win_rate": float(best_row["win_rate"]),  # type: ignore[arg-type]
+        "profit_factor": float(best_row["profit_factor"]),  # type: ignore[arg-type]
         "total_pnl": total_pnl_dollars,
-        "max_drawdown": float(best_row["max_drawdown_pct"]),
+        "max_drawdown": float(best_row["max_drawdown_pct"]),  # type: ignore[arg-type]
     }
 
     return best_params, is_metrics
@@ -1004,18 +1008,18 @@ async def run_walk_forward(config: WalkForwardConfig) -> WalkForwardResult:
                 oos_start=oos_start,
                 oos_end=oos_end,
                 best_params=best_params,
-                is_total_trades=is_metrics["total_trades"],
-                is_win_rate=is_metrics["win_rate"],
-                is_profit_factor=is_metrics["profit_factor"],
-                is_sharpe=is_metrics["sharpe"],
-                is_total_pnl=is_metrics["total_pnl"],
-                is_max_drawdown=is_metrics["max_drawdown"],
-                oos_total_trades=oos_metrics["total_trades"],
-                oos_win_rate=oos_metrics["win_rate"],
-                oos_profit_factor=oos_metrics["profit_factor"],
-                oos_sharpe=oos_metrics["sharpe"],
-                oos_total_pnl=oos_metrics["total_pnl"],
-                oos_max_drawdown=oos_metrics["max_drawdown"],
+                is_total_trades=int(is_metrics["total_trades"]),
+                is_win_rate=float(is_metrics["win_rate"]),
+                is_profit_factor=float(is_metrics["profit_factor"]),
+                is_sharpe=float(is_metrics["sharpe"]),
+                is_total_pnl=float(is_metrics["total_pnl"]),
+                is_max_drawdown=float(is_metrics["max_drawdown"]),
+                oos_total_trades=int(oos_metrics["total_trades"]),
+                oos_win_rate=float(oos_metrics["win_rate"]),
+                oos_profit_factor=float(oos_metrics["profit_factor"]),
+                oos_sharpe=float(oos_metrics["sharpe"]),
+                oos_total_pnl=float(oos_metrics["total_pnl"]),
+                oos_max_drawdown=float(oos_metrics["max_drawdown"]),
                 wfe_sharpe=wfe_sharpe,
                 wfe_pnl=wfe_pnl,
             )
@@ -1321,35 +1325,38 @@ def load_walk_forward_results(output_dir: str) -> WalkForwardResult | None:
     if params_csv_path.exists():
         params_df = pd.read_csv(params_csv_path)
         for _, row in params_df.iterrows():
-            window_num = int(row["window_number"])
-            params = {k: v for k, v in row.items() if k != "window_number"}
+            window_num = int(row["window_number"])  # type: ignore[arg-type]
+            params: dict[str, Any] = {
+                str(k): v for k, v in row.items() if k != "window_number"
+            }
             params_by_window[window_num] = params
 
     # Reconstruct WindowResult objects
     windows: list[WindowResult] = []
     for _, row in windows_df.iterrows():
+        win_num = int(row["window_number"])  # type: ignore[arg-type]
         w = WindowResult(
-            window_number=int(row["window_number"]),
-            is_start=date.fromisoformat(row["is_start"]),
-            is_end=date.fromisoformat(row["is_end"]),
-            oos_start=date.fromisoformat(row["oos_start"]),
-            oos_end=date.fromisoformat(row["oos_end"]),
-            best_params=params_by_window.get(int(row["window_number"]), {}),
-            is_total_trades=int(row["is_total_trades"]),
-            is_win_rate=float(row["is_win_rate"]),
-            is_profit_factor=float(row["is_profit_factor"]),
-            is_sharpe=float(row["is_sharpe"]),
-            is_total_pnl=float(row["is_total_pnl"]),
-            is_max_drawdown=float(row["is_max_drawdown"]),
-            oos_total_trades=int(row["oos_total_trades"]),
-            oos_win_rate=float(row["oos_win_rate"]),
-            oos_profit_factor=float(row["oos_profit_factor"]),
-            oos_sharpe=float(row["oos_sharpe"]),
-            oos_total_pnl=float(row["oos_total_pnl"]),
-            oos_max_drawdown=float(row["oos_max_drawdown"]),
-            wfe_sharpe=float(row["wfe_sharpe"]),
-            wfe_pnl=float(row["wfe_pnl"]),
-            error=row["error"] if row["error"] else None,
+            window_number=win_num,
+            is_start=date.fromisoformat(str(row["is_start"])),
+            is_end=date.fromisoformat(str(row["is_end"])),
+            oos_start=date.fromisoformat(str(row["oos_start"])),
+            oos_end=date.fromisoformat(str(row["oos_end"])),
+            best_params=params_by_window.get(win_num, {}),
+            is_total_trades=int(row["is_total_trades"]),  # type: ignore[arg-type]
+            is_win_rate=float(row["is_win_rate"]),  # type: ignore[arg-type]
+            is_profit_factor=float(row["is_profit_factor"]),  # type: ignore[arg-type]
+            is_sharpe=float(row["is_sharpe"]),  # type: ignore[arg-type]
+            is_total_pnl=float(row["is_total_pnl"]),  # type: ignore[arg-type]
+            is_max_drawdown=float(row["is_max_drawdown"]),  # type: ignore[arg-type]
+            oos_total_trades=int(row["oos_total_trades"]),  # type: ignore[arg-type]
+            oos_win_rate=float(row["oos_win_rate"]),  # type: ignore[arg-type]
+            oos_profit_factor=float(row["oos_profit_factor"]),  # type: ignore[arg-type]
+            oos_sharpe=float(row["oos_sharpe"]),  # type: ignore[arg-type]
+            oos_total_pnl=float(row["oos_total_pnl"]),  # type: ignore[arg-type]
+            oos_max_drawdown=float(row["oos_max_drawdown"]),  # type: ignore[arg-type]
+            wfe_sharpe=float(row["wfe_sharpe"]),  # type: ignore[arg-type]
+            wfe_pnl=float(row["wfe_pnl"]),  # type: ignore[arg-type]
+            error=str(row["error"]) if row["error"] else None,  # type: ignore[arg-type]
         )
         windows.append(w)
 
@@ -1448,12 +1455,12 @@ async def _evaluate_fixed_params_orb(
             "max_drawdown": 0.0,
         }
 
-    total_trades = int(results_df["total_trades"].sum())
-    avg_sharpe = float(results_df["sharpe_ratio"].mean())
-    avg_win_rate = float(results_df["win_rate"].mean())
-    avg_pf = float(results_df["profit_factor"].mean())
-    total_return = float(results_df["total_return_pct"].sum())
-    max_dd = float(results_df["max_drawdown_pct"].max())
+    total_trades = int(results_df["total_trades"].sum())  # type: ignore[arg-type]
+    avg_sharpe = float(results_df["sharpe_ratio"].mean())  # type: ignore[arg-type]
+    avg_win_rate = float(results_df["win_rate"].mean())  # type: ignore[arg-type]
+    avg_pf = float(results_df["profit_factor"].mean())  # type: ignore[arg-type]
+    total_return = float(results_df["total_return_pct"].sum())  # type: ignore[arg-type]
+    max_dd = float(results_df["max_drawdown_pct"].max())  # type: ignore[arg-type]
 
     total_pnl_dollars = total_return * config.initial_cash / 100.0
 
@@ -1497,12 +1504,12 @@ async def _evaluate_fixed_params_scalp(
             "max_drawdown": 0.0,
         }
 
-    total_trades = int(results_df["total_trades"].sum())
-    avg_sharpe = float(results_df["sharpe_ratio"].mean())
-    avg_win_rate = float(results_df["win_rate"].mean())
-    avg_pf = float(results_df["profit_factor"].mean())
-    total_return = float(results_df["total_return_pct"].sum())
-    max_dd = float(results_df["max_drawdown_pct"].max())
+    total_trades = int(results_df["total_trades"].sum())  # type: ignore[arg-type]
+    avg_sharpe = float(results_df["sharpe_ratio"].mean())  # type: ignore[arg-type]
+    avg_win_rate = float(results_df["win_rate"].mean())  # type: ignore[arg-type]
+    avg_pf = float(results_df["profit_factor"].mean())  # type: ignore[arg-type]
+    total_return = float(results_df["total_return_pct"].sum())  # type: ignore[arg-type]
+    max_dd = float(results_df["max_drawdown_pct"].max())  # type: ignore[arg-type]
 
     total_pnl_dollars = total_return * config.initial_cash / 100.0
 
@@ -1549,12 +1556,12 @@ async def _evaluate_fixed_params_vwap_reclaim(
             "max_drawdown": 0.0,
         }
 
-    total_trades = int(results_df["total_trades"].sum())
-    avg_sharpe = float(results_df["sharpe_ratio"].mean())
-    avg_win_rate = float(results_df["win_rate"].mean())
-    avg_pf = float(results_df["profit_factor"].mean())
-    total_return = float(results_df["total_return_pct"].sum())
-    max_dd = float(results_df["max_drawdown_pct"].max())
+    total_trades = int(results_df["total_trades"].sum())  # type: ignore[arg-type]
+    avg_sharpe = float(results_df["sharpe_ratio"].mean())  # type: ignore[arg-type]
+    avg_win_rate = float(results_df["win_rate"].mean())  # type: ignore[arg-type]
+    avg_pf = float(results_df["profit_factor"].mean())  # type: ignore[arg-type]
+    total_return = float(results_df["total_return_pct"].sum())  # type: ignore[arg-type]
+    max_dd = float(results_df["max_drawdown_pct"].max())  # type: ignore[arg-type]
 
     total_pnl_dollars = total_return * config.initial_cash / 100.0
 
@@ -1626,12 +1633,12 @@ async def _evaluate_fixed_params_afternoon_momentum(
 
     results_df = pd.DataFrame([vars(r) for r in all_results])
 
-    total_trades = int(results_df["total_trades"].sum())
-    avg_sharpe = float(results_df["sharpe_ratio"].mean())
-    avg_win_rate = float(results_df["win_rate"].mean())
-    avg_pf = float(results_df["profit_factor"].mean())
-    total_return = float(results_df["total_return_pct"].sum())
-    max_dd = float(results_df["max_drawdown_pct"].max())
+    total_trades = int(results_df["total_trades"].sum())  # type: ignore[arg-type]
+    avg_sharpe = float(results_df["sharpe_ratio"].mean())  # type: ignore[arg-type]
+    avg_win_rate = float(results_df["win_rate"].mean())  # type: ignore[arg-type]
+    avg_pf = float(results_df["profit_factor"].mean())  # type: ignore[arg-type]
+    total_return = float(results_df["total_return_pct"].sum())  # type: ignore[arg-type]
+    max_dd = float(results_df["max_drawdown_pct"].max())  # type: ignore[arg-type]
 
     total_pnl_dollars = total_return * config.initial_cash / 100.0
 
@@ -1896,8 +1903,8 @@ async def cross_validate_single_symbol(
     vectorbt_trades = 0
     vectorbt_pnl = 0.0
     if not vbt_results.empty:
-        vectorbt_trades = int(vbt_results["total_trades"].sum())
-        vectorbt_pnl = float(vbt_results["total_return_pct"].sum())
+        vectorbt_trades = int(vbt_results["total_trades"].sum())  # type: ignore[arg-type]
+        vectorbt_pnl = float(vbt_results["total_return_pct"].sum())  # type: ignore[arg-type]
 
     # Run Replay Harness
     wf_config = WalkForwardConfig(

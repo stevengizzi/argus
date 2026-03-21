@@ -152,7 +152,7 @@ class MockOrchestrator:
         return self._last_regime_check
 
     @property
-    def regime_check_interval_minutes(self) -> int:
+    def regime_check_interval_minutes(self) -> int | None:
         """Get regime check interval in minutes."""
         return self._config.regime_check_interval_minutes
 

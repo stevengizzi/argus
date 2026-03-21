@@ -30,7 +30,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
-from typing import TypedDict
+from typing import Any, TypedDict
 from zoneinfo import ZoneInfo
 
 import numpy as np
@@ -493,7 +493,7 @@ def _find_exit_vectorized(
     stop_price: float,
     target_price: float,
     time_stop_bars: int,
-) -> dict | None:
+) -> dict[str, Any] | None:
     """Find exit using vectorized operations. No iterrows().
 
     Exit priority (worst-case-for-longs):
@@ -623,7 +623,7 @@ def _compute_afternoon_result(
     volume_multiplier: float,
     target_r: float,
     time_stop_bars: int,
-    trades: list[dict],
+    trades: list[dict[str, Any]],
     qualifying_days: int,
 ) -> AfternoonSweepResult:
     """Compute metrics from a list of trades."""
@@ -769,7 +769,8 @@ def run_single_symbol_sweep(
 
     # Pre-group bars by day ONCE
     day_groups: dict[date, pd.DataFrame] = {
-        day: group.reset_index(drop=True) for day, group in df.groupby("trading_day")
+        day: group.reset_index(drop=True)
+        for day, group in df.groupby("trading_day")  # type: ignore[misc]
     }
 
     # Pre-compute ALL potential afternoon entries for each qualifying day ONCE
@@ -869,7 +870,7 @@ def run_single_symbol_sweep(
                             continue
 
                         # Compute trades using vectorized exit detection
-                        trades: list[dict] = []
+                        trades: list[dict[str, Any]] = []
                         for _day, entry in filtered_entries:
                             stop_price = entry["consolidation_low"] * (
                                 1 - config.stop_buffer_pct
@@ -1294,12 +1295,12 @@ def main() -> None:
             print(
                 f"\nBest by Sharpe (min 20 trades): "
                 f"consolidation_ratio={best['consolidation_atr_ratio']:.2f}, "
-                f"min_bars={int(best['min_consolidation_bars'])}, "
+                f"min_bars={int(best['min_consolidation_bars'])}, "  # type: ignore[arg-type]
                 f"volume_mult={best['volume_multiplier']:.1f}, "
                 f"target_r={best['target_r']:.1f}, "
-                f"time_stop_bars={int(best['time_stop_bars'])}, "
+                f"time_stop_bars={int(best['time_stop_bars'])}, "  # type: ignore[arg-type]
                 f"sharpe={best['sharpe_ratio']:.2f}, "
-                f"trades={int(best['total_trades'])}"
+                f"trades={int(best['total_trades'])}"  # type: ignore[arg-type]
             )
 
             # Top 5 combos

@@ -28,7 +28,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from itertools import product
 from pathlib import Path
-from typing import TypedDict
+from typing import Any, TypedDict
 from zoneinfo import ZoneInfo
 
 import numpy as np
@@ -297,7 +297,7 @@ def _find_scalp_exit_vectorized(
     stop_price: float,
     target_price: float,
     max_hold_bars: int,
-) -> dict | None:
+) -> dict[str, Any] | None:
     """Find exit using vectorized operations for scalp trades.
 
     Args:
@@ -421,8 +421,8 @@ def _precompute_scalp_entries_for_day(
     # Entry on first breakout bar
     first_breakout_idx = breakout_mask.idxmax()
     entry_bar = post_or_bars.loc[first_breakout_idx]
-    entry_price = float(entry_bar["close"])
-    entry_bar_idx = int(entry_bar["bar_number_in_day"])
+    entry_price = float(entry_bar["close"])  # type: ignore[arg-type]
+    entry_bar_idx = int(entry_bar["bar_number_in_day"])  # type: ignore[arg-type]
 
     # Verify risk is positive
     if entry_price <= or_midpoint:
@@ -463,7 +463,9 @@ def run_single_symbol_sweep(
     results: list[ScalpSweepResult] = []
 
     # Pre-group bars by day
-    day_groups: dict[date, pd.DataFrame] = {day: group for day, group in df.groupby("trading_day")}
+    day_groups: dict[date, pd.DataFrame] = {
+        day: group for day, group in df.groupby("trading_day")  # type: ignore[misc]
+    }
 
     # Compute qualifying days (gap filter)
     qualifying_days = compute_qualifying_days(
@@ -532,7 +534,7 @@ def run_single_symbol_sweep(
             continue
 
         # Vectorized exit detection for all days
-        trades: list[dict] = []
+        trades: list[dict[str, Any]] = []
 
         for _day, entry_info in day_entries.items():
             stop_price = entry_info["or_midpoint"]
@@ -590,7 +592,7 @@ def _compute_scalp_result(
     symbol: str,
     scalp_target_r: float,
     max_hold_bars: int,
-    trades: list[dict],
+    trades: list[dict[str, Any]],
     qualifying_days: int,
 ) -> ScalpSweepResult:
     """Compute metrics from a list of trades."""

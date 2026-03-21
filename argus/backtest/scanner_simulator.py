@@ -251,9 +251,11 @@ class ScannerSimulator:
             df["trading_date"] = df["timestamp_et"].dt.date
 
             # Group by trading date
-            for trading_date, group in df.groupby("trading_date"):
+            for td_key, group in df.groupby("trading_date"):
                 if len(group) == 0:
                     continue
+
+                trading_date: date = td_key  # type: ignore[assignment]
 
                 # Sort by timestamp to get first and last
                 group = group.sort_values("timestamp")

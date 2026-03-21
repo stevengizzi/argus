@@ -28,7 +28,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from itertools import product
 from pathlib import Path
-from typing import TypedDict
+from typing import Any, TypedDict
 from zoneinfo import ZoneInfo
 
 import numpy as np
@@ -348,7 +348,7 @@ def _find_exit_vectorized(
     stop_price: float,
     target_price: float,
     max_hold_minutes: int,
-) -> dict | None:
+) -> dict[str, Any] | None:
     """Find exit using vectorized operations. No iterrows().
 
     Args:
@@ -473,9 +473,9 @@ def _precompute_entries_for_day(
     # Entry on first breakout bar
     first_breakout_idx = breakout_mask.idxmax()
     entry_bar = post_or_bars.loc[first_breakout_idx]
-    entry_price = float(entry_bar["close"])
-    entry_bar_idx = int(entry_bar["bar_number_in_day"])
-    entry_minutes = int(entry_bar["minutes_from_open"])
+    entry_price = float(entry_bar["close"])  # type: ignore[arg-type]
+    entry_bar_idx = int(entry_bar["bar_number_in_day"])  # type: ignore[arg-type]
+    entry_minutes = int(entry_bar["minutes_from_open"])  # type: ignore[arg-type]
 
     # Extract post-entry bars as NumPy arrays
     post_entry_bars = day_bars[day_bars["bar_number_in_day"] > entry_bar_idx]
@@ -520,7 +520,9 @@ def run_single_symbol_sweep(
     results: list[SweepResult] = []
 
     # Pre-group bars by day ONCE at the top
-    day_groups: dict[date, pd.DataFrame] = {day: group for day, group in df.groupby("trading_day")}
+    day_groups: dict[date, pd.DataFrame] = {
+        day: group for day, group in df.groupby("trading_day")  # type: ignore[misc]
+    }
 
     # Pre-compute qualifying days for each min_gap_pct
     gap_qualifying: dict[float, set[date]] = {}
@@ -666,7 +668,7 @@ def run_single_symbol_sweep(
                         continue
 
                     # OPTIMIZATION: Vectorized exit detection
-                    trades: list[dict] = []
+                    trades: list[dict[str, Any]] = []
 
                     for _day, entry_info in day_entries.items():
                         or_low = entry_info["or_low"]
@@ -747,7 +749,7 @@ def _compute_sweep_result(
     max_hold_minutes: int,
     min_gap_pct: float,
     max_range_atr_ratio: float,
-    trades: list[dict],
+    trades: list[dict[str, Any]],
     qualifying_days: int,
 ) -> SweepResult:
     """Compute metrics from a list of trades."""

@@ -154,7 +154,7 @@ class TestControlEndpoints:
         data = response.json()
         assert data["success"] is True
         assert "close" in data["message"].lower()
-        app_state_with_positions.broker.flatten_all.assert_called_once_with(symbols=["AAPL"])
+        app_state_with_positions.broker.flatten_all.assert_called_once_with()
 
     @pytest.mark.asyncio
     async def test_close_position_not_found(

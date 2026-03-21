@@ -9,9 +9,9 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from datetime import UTC, datetime, date
+from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from jose import JWTError, jwt
@@ -19,9 +19,6 @@ from jose import JWTError, jwt
 from argus.ai.tools import ARGUS_TOOLS, requires_approval
 from argus.api.auth import get_jwt_secret
 from argus.api.dependencies import AppState
-
-if TYPE_CHECKING:
-    pass
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +59,6 @@ async def ai_chat_websocket(websocket: WebSocket) -> None:
     await websocket.accept()
     _active_connections.add(websocket)
 
-    authenticated = False
     app_state: AppState | None = None
     current_stream_task: asyncio.Task[None] | None = None
 
@@ -86,7 +82,6 @@ async def ai_chat_websocket(websocket: WebSocket) -> None:
         try:
             jwt_secret = get_jwt_secret()
             jwt.decode(token, jwt_secret, algorithms=["HS256"])
-            authenticated = True
         except (JWTError, Exception):
             await websocket.close(code=4001)
             return
@@ -126,7 +121,8 @@ async def ai_chat_websocket(websocket: WebSocket) -> None:
                     except asyncio.CancelledError:
                         pass
 
-                # Start new streaming response
+                # Start new streaming response (app_state guaranteed set after auth)
+                assert app_state is not None
                 current_stream_task = asyncio.create_task(
                     _handle_chat_message(websocket, app_state, data)
                 )
@@ -278,7 +274,7 @@ async def _handle_chat_message(
         current_tool_use: dict[str, Any] | None = None
         current_tool_input_json: list[str] = []
 
-        async for event in stream_gen:
+        async for event in stream_gen:  # type: ignore[union-attr]
             event_type = event.get("type", "")
 
             # Log stream events for diagnostics
@@ -535,7 +531,7 @@ async def _handle_chat_message(
         conversation_id,
         "assistant",
         full_content,
-        tool_use_data=tool_use_blocks if tool_use_blocks else None,
+        tool_use_data=tool_use_blocks if tool_use_blocks else None,  # type: ignore[arg-type]
     )
 
     # Record usage (use actual API data when available, fall back to estimation)
@@ -547,13 +543,13 @@ async def _handle_chat_message(
         else:
             # Fallback: estimate from content length
             input_tokens = len(full_system) // 4 + sum(
-                len(m.get("content", "")) // 4 for m in messages
+                len(str(m.get("content", ""))) // 4 for m in messages
             )
             output_tokens = len(full_content) // 4
         # Use config values for cost calculation
         cost = (
-            (input_tokens / 1_000_000) * app_state.config.ai.cost_per_million_input_tokens
-            + (output_tokens / 1_000_000) * app_state.config.ai.cost_per_million_output_tokens
+            (input_tokens / 1_000_000) * app_state.config.ai.cost_per_million_input_tokens  # type: ignore[union-attr]
+            + (output_tokens / 1_000_000) * app_state.config.ai.cost_per_million_output_tokens  # type: ignore[union-attr]
         )
         await app_state.usage_tracker.record_usage(
             conversation_id,
