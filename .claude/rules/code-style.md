@@ -84,3 +84,26 @@ class ExitReason(str, Enum):
 - Logger per module: `logger = logging.getLogger(__name__)`
 - Log levels: DEBUG for verbose tracing, INFO for normal operations, WARNING for recoverable issues, ERROR for failures, CRITICAL for system-threatening events
 - Every trade action (signal, approval, rejection, fill, close) must be logged at INFO level
+
+### Static Analysis (Pylance)
+
+All code must be clean under Pylance's default type checking mode. No new
+Pylance errors should be introduced in any session. Specifically:
+
+- **Use parameterized generics:** `dict[str, Any]`, `list[str]`, not bare `dict`, `list`
+- **Use typed row objects:** When working with `aiosqlite`, type rows as
+  `aiosqlite.Row`, not `object`. Extract a `_row_to_dict()` helper method for
+  `dict(row)` conversions to centralize the single necessary `# type: ignore`
+- **Narrow optional types before use:** Use `assert x is not None` or
+  `if x is not None:` guards before accessing attributes on optional values.
+  Do not scatter `# type: ignore[union-attr]` comments
+- **`# type: ignore` is a last resort:** Only use when the type system genuinely
+  cannot express the correct type (e.g., third-party library typing gaps like
+  `alpaca-py`'s `TimeFrame.Minute`). Each `# type: ignore` must include the
+  specific error code (e.g., `# type: ignore[arg-type]`) and should be
+  accompanied by a brief comment explaining why
+- **Import types for annotations:** Use `from typing import Any` and
+  `from __future__ import annotations` where appropriate. Use `TYPE_CHECKING`
+  blocks for imports only needed by type checkers
+- **Return types must match:** If a config field is `int | None`, the property
+  exposing it must also return `int | None`, not `int`
