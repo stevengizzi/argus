@@ -128,15 +128,14 @@ class TestControlEndpoints:
         assert response.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_close_position_success(
+    async def test_close_position_routes_through_order_manager(
         self,
         app_state_with_positions: AppState,
         jwt_secret: str,
         auth_headers: dict[str, str],
     ) -> None:
-        """Close position calls broker flatten."""
-        # Mock the broker flatten method
-        app_state_with_positions.broker.flatten_all = AsyncMock()  # type: ignore[method-assign]
+        """Close position routes through OrderManager.close_position."""
+        app_state_with_positions.order_manager.close_position = AsyncMock(return_value=True)  # type: ignore[method-assign]
 
         app = create_app(app_state_with_positions)
         app.state.app_state = app_state_with_positions
@@ -154,22 +153,59 @@ class TestControlEndpoints:
         data = response.json()
         assert data["success"] is True
         assert "close" in data["message"].lower()
-        app_state_with_positions.broker.flatten_all.assert_called_once_with()
-
-    @pytest.mark.asyncio
-    async def test_close_position_not_found(
-        self,
-        client: AsyncClient,
-        auth_headers: dict[str, str],
-    ) -> None:
-        """Close non-existent position returns 404."""
-        response = await client.post(
-            "/api/v1/controls/positions/ZZZZ/close",
-            headers=auth_headers,
+        app_state_with_positions.order_manager.close_position.assert_called_once_with(
+            "AAPL", reason="api_close"
         )
 
+    @pytest.mark.asyncio
+    async def test_close_position_not_managed_returns_404(
+        self,
+        app_state: AppState,
+        jwt_secret: str,
+        auth_headers: dict[str, str],
+    ) -> None:
+        """Close position returns 404 when OrderManager doesn't manage it."""
+        app_state.order_manager.close_position = AsyncMock(return_value=False)  # type: ignore[method-assign]
+
+        app = create_app(app_state)
+        app.state.app_state = app_state
+
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://test",
+        ) as client:
+            response = await client.post(
+                "/api/v1/controls/positions/ZZZZ/close",
+                headers=auth_headers,
+            )
+
         assert response.status_code == 404
-        assert "not found" in response.json()["detail"]
+        assert "not managed" in response.json()["detail"]
+
+    @pytest.mark.asyncio
+    async def test_close_position_does_not_call_broker_flatten_all(
+        self,
+        app_state_with_positions: AppState,
+        jwt_secret: str,
+        auth_headers: dict[str, str],
+    ) -> None:
+        """Close position must NOT call broker.flatten_all (that was the bug)."""
+        app_state_with_positions.order_manager.close_position = AsyncMock(return_value=True)  # type: ignore[method-assign]
+        app_state_with_positions.broker.flatten_all = AsyncMock()  # type: ignore[method-assign]
+
+        app = create_app(app_state_with_positions)
+        app.state.app_state = app_state_with_positions
+
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://test",
+        ) as client:
+            await client.post(
+                "/api/v1/controls/positions/AAPL/close",
+                headers=auth_headers,
+            )
+
+        app_state_with_positions.broker.flatten_all.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_emergency_flatten_success(

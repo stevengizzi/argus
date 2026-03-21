@@ -31,7 +31,7 @@ if TYPE_CHECKING:
 ALGORITHM = "HS256"
 
 # HTTPBearer extracts the token from "Authorization: Bearer <token>" header
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)
 
 # Module-level JWT secret, set during app startup via set_jwt_secret()
 _jwt_secret: str = ""
@@ -166,7 +166,7 @@ def resolve_jwt_secret(api_config: ApiConfig) -> str:
 
 
 def require_auth(
-    credentials: HTTPAuthorizationCredentials = Depends(security),  # noqa: B008
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),  # noqa: B008
 ) -> dict:
     """FastAPI dependency that validates JWT from Authorization header.
 
@@ -185,5 +185,11 @@ def require_auth(
     Raises:
         HTTPException: If no token provided, token is invalid, or expired.
     """
+    if credentials is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     jwt_secret = get_jwt_secret()
     return verify_token(credentials.credentials, jwt_secret)

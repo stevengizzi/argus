@@ -3708,3 +3708,63 @@ async def test_get_pending_entry_exposure_multiple_symbols(
     assert tsla_exposure == 0.0  # No pending orders
 
     await order_manager.stop()
+
+
+# ---------------------------------------------------------------------------
+# close_position (DEF-085)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_close_position_found_flattens(
+    order_manager: OrderManager,
+    mock_broker: MagicMock,
+) -> None:
+    """close_position() returns True and flattens when symbol exists."""
+    from argus.execution.order_manager import ManagedPosition
+
+    position = ManagedPosition(
+        symbol="AAPL",
+        strategy_id="orb_breakout",
+        entry_price=150.0,
+        entry_time=datetime(2026, 3, 20, 14, 30, tzinfo=UTC),
+        shares_total=100,
+        shares_remaining=100,
+        stop_price=148.0,
+        original_stop_price=148.0,
+        stop_order_id="stop-1",
+        t1_price=152.0,
+        t1_order_id="t1-1",
+        t1_shares=50,
+        t1_filled=False,
+        t2_price=154.0,
+        high_watermark=150.0,
+    )
+    order_manager._managed_positions["AAPL"] = [position]
+
+    mock_broker.cancel_order = AsyncMock()
+    mock_broker.place_order = AsyncMock(
+        return_value=OrderResult(
+            order_id="flatten-1", status=OrderStatus.FILLED, filled_qty=100, filled_price=150.0
+        )
+    )
+
+    await order_manager.start()
+    result = await order_manager.close_position("AAPL", reason="api_close")
+    await order_manager.stop()
+
+    assert result is True
+    # Should have cancelled stop and T1 orders
+    assert mock_broker.cancel_order.call_count >= 1
+
+
+@pytest.mark.asyncio
+async def test_close_position_not_found_returns_false(
+    order_manager: OrderManager,
+) -> None:
+    """close_position() returns False when symbol has no managed positions."""
+    await order_manager.start()
+    result = await order_manager.close_position("ZZZZ")
+    await order_manager.stop()
+
+    assert result is False

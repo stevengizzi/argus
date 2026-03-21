@@ -849,6 +849,27 @@ class OrderManager:
         logger.warning("EMERGENCY FLATTEN — closing all positions immediately")
         await self.eod_flatten()
 
+    async def close_position(self, symbol: str, reason: str = "api_close") -> bool:
+        """Close a specific position by symbol.
+
+        Cancels all child orders (stop, T1, T2) and submits a market sell
+        for remaining shares. Routes through _flatten_position() which handles
+        the full teardown lifecycle.
+
+        Args:
+            symbol: The symbol to close.
+            reason: The exit reason string for logging.
+
+        Returns:
+            True if position was found and close initiated, False if not found.
+        """
+        positions = self._managed_positions.get(symbol)
+        if not positions:
+            return False
+        for position in list(positions):
+            await self._flatten_position(position, reason)
+        return True
+
     async def reconstruct_from_broker(self) -> None:
         """Reconstruct managed positions from broker state.
 

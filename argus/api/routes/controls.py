@@ -111,23 +111,15 @@ async def close_position(
     Raises:
         HTTPException: 404 if position not found.
     """
-    # Get managed positions
-    positions = state.order_manager.get_all_positions_flat()
-
-    # Find position by ID (we use symbol as position_id in the API)
-    target_position = None
-    for pos in positions:
-        if pos.symbol == position_id:
-            target_position = pos
-            break
-
-    if target_position is None:
-        raise HTTPException(status_code=404, detail=f"Position '{position_id}' not found")
-
-    # Close the position via broker flatten
     try:
-        # TODO: Replace with single-position close when Broker ABC supports it
-        await state.broker.flatten_all()
+        closed = await state.order_manager.close_position(position_id, reason="api_close")
+        if not closed:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Position '{position_id}' not managed by OrderManager",
+            )
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to close position: {e}") from e
 
