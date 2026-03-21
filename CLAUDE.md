@@ -1,11 +1,11 @@
 # ARGUS — Claude Code Context
 
 > Dense, actionable context for Claude Code sessions. No history — see `docs/` for that.
-> Last updated: March 20, 2026 (Sprint 25.6 doc sync)
+> Last updated: March 21, 2026 (Sprint 25.8 doc sync)
 
 ## Active Sprint
 
-**No active sprint.** Sprint 25.6 (Bug Sweep) completed March 20, 2026.
+**No active sprint.** Sprint 25.8 (API Auth + Close-Position Fix) completed March 21, 2026.
 
 Next planned sprint: **26 (Red-to-Green + Pattern Library Foundation)**. Red-to-Green strategy + PatternLibrary ABC + Bull Flag + Flat-Top Breakout pattern modules.
 
@@ -13,15 +13,14 @@ Next planned sprint: **26 (Red-to-Green + Pattern Library Foundation)**. Red-to-
 - **FMP Starter plan restriction:** FMP news endpoints return 403 on Starter plan ($22/mo). `fmp_news.enabled: false` in `system_live.yaml`. FMP circuit breaker (DEC-323) prevents spam if accidentally enabled.
 - **Pre-existing xdist failures (DEF-048):** 4 test_main.py tests fail under `-n auto` (same `load_dotenv`/`AIConfig` race): `test_both_strategies_created`, `test_multi_strategy_health_status`, `test_candle_event_routing_subscribed`, `test_12_phase_startup_creates_orchestrator`. Pre-existing on clean HEAD. Priority: LOW.
 - **Test isolation (DEF-049):** `test_orchestrator_uses_strategies_from_registry` fails when run in isolation but passes in full suite. Pre-existing.
-- **Pre-existing e2e telemetry test failures:** 4 tests in `test_evaluation_telemetry_e2e.py` fail (observatory pipeline, session summary, health warning self-correct, health warning with evaluations). From Sprint 25.5 — async write→query race condition. Pre-existing on clean HEAD. Priority: LOW.
 
 ## Current State
 
 - **Active sprint:** None (between sprints)
 - **Next sprint:** 26 (Red-to-Green + Pattern Library Foundation)
-- **Tests:** 2,794 pytest + 611 Vitest
+- **Tests:** 2,815 pytest + 611 Vitest (0 failures, 0 hangs)
 - **Strategies:** 4 active (ORB Breakout, ORB Scalp, VWAP Reclaim, Afternoon Momentum)
-- **Infrastructure:** Databento EQUS.MINI (live) + IBKR paper trading (Account U24619949) + FMP Starter (scanning + reference data) + Finnhub (news + analyst recs) + Claude API (Copilot + Catalyst Classification) + Universe Manager (config-gated) + Catalyst Pipeline (config-gated) + Intelligence Polling Loop (config-gated) + Reference Data Cache + Quality Engine (config-gated) + Dynamic Position Sizer + Strategy Evaluation Telemetry (ring buffer + SQLite persistence)
+- **Infrastructure:** Databento EQUS.MINI (live) + IBKR paper trading (Account U24619949) + FMP Starter (scanning + reference data + daily bars for regime) + Finnhub (news + analyst recs) + Claude API (Copilot + Catalyst Classification) + Universe Manager (config-gated) + Catalyst Pipeline (config-gated) + Intelligence Polling Loop (config-gated) + Reference Data Cache + Quality Engine (config-gated) + Dynamic Position Sizer + Strategy Evaluation Telemetry (ring buffer + SQLite persistence) + Debrief Export (shutdown automation)
 - **Frontend:** 8-page Command Center (Observatory added Sprint 25) + AI Copilot + Universe Status Card + Intelligence Brief View (all active), Tauri desktop + PWA mobile
 
 ## Project Structure
@@ -32,7 +31,7 @@ argus/
 ├── strategies/     # BaseStrategy, OrbBaseStrategy, 4 strategy implementations
 ├── data/           # DataService (Databento/Alpaca/Replay/Backtest), Scanner, IndicatorEngine, UniverseManager, FMPReferenceClient
 ├── execution/      # Broker (IBKR/Alpaca/Simulated), Order Manager
-├── analytics/      # Trade Logger, PerformanceCalculator
+├── analytics/      # Trade Logger, PerformanceCalculator, DebriefExport
 ├── backtest/       # VectorBT helpers, Replay Harness
 ├── api/            # FastAPI REST + WebSocket, JWT auth
 │   └── websocket/  # ai_chat.py (WS streaming)
@@ -63,7 +62,7 @@ argus/
 
 ```bash
 # Tests
-python -m pytest tests/                   # Run all tests
+python -m pytest --ignore=tests/test_main.py -n auto -q  # Full suite (~39s with xdist)
 python -m pytest tests/ -x               # Stop on first failure
 python -m pytest tests/ -x -q            # Fail-fast, quiet
 cd argus/ui && npx vitest run            # Frontend tests (~611)
@@ -287,14 +286,19 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 | ~~DEF-080~~ | ~~VWAP Reclaim false suspension on zero trade history~~ | ~~Sprint 25.7~~ | **RESOLVED** (Sprint 25.7 S1): Early return `ThrottleAction.NONE` when both trades and daily_pnl are empty. |
 | ~~DEF-081~~ | ~~Entry evaluation conditions_passed/conditions_total metadata~~ | ~~Sprint 25.7~~ | **RESOLVED** (Sprint 25.7 S1): Added to all ENTRY_EVALUATION calls in `_check_breakout_conditions()`. |
 | DEF-082 | Quality engine catalyst_quality and volume_profile always 50.0 (neutral default) | Unscheduled | Expected when no real-time RVOL or symbol-specific catalysts. Will become useful as data sources are enriched. Priority: LOW. |
+| ~~DEF-083~~ | ~~API auth 403→401~~ | ~~Sprint 25.8~~ | **RESOLVED** (Sprint 25.8, DEC-351): `HTTPBearer(auto_error=False)` + explicit 401. 35 tests fixed. |
+| DEF-084 | Full test suite runtime optimization | Partially resolved | FMP rate limit configurable (454s→39s with xdist). Remaining slow tests: `test_stale_data_detection/recovery` (10s each). `slow` marker registered in pyproject.toml. Priority: LOW. |
+| ~~DEF-085~~ | ~~Close-position endpoint regression~~ | ~~Sprint 25.8~~ | **RESOLVED** (Sprint 25.8, DEC-352): Routes through `OrderManager.close_position()`. 5 new tests. |
+| ~~DEF-086~~ | ~~WebSocket test hangs~~ | ~~Post-sprint~~ | **RESOLVED**: 8 tests rewrote to test bridge pipeline directly via send_queue, eliminating sync/async cross-thread hang. |
+| ~~DEF-087~~ | ~~11 pre-existing test failures~~ | ~~Post-sprint~~ | **RESOLVED**: 4 vectorbt (NumPy 2.x dep upgrade), 1 data_fetcher (Pandas 2.x datetime precision), 4 e2e telemetry (hardcoded date + async flush), 2 integration sprint20 (regime-based allocation assertions). Zero production code changes. |
 
 ## Reference
 
 | Document | What It Covers |
 |----------|---------------|
-| `docs/decision-log.md` | All 346 DEC entries with full rationale |
+| `docs/decision-log.md` | All 352 DEC entries with full rationale |
 | `docs/dec-index.md` | Quick-reference index with status markers |
-| `docs/sprint-history.md` | Complete sprint history (1–25.6) |
+| `docs/sprint-history.md` | Complete sprint history (1–25.8) |
 | `docs/process-evolution.md` | Workflow evolution narrative |
 | `docs/live-operations.md` | Live trading procedures |
 | `docs/strategies/STRATEGY_*.md` | Per-strategy spec sheets |

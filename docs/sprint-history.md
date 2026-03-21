@@ -1047,13 +1047,77 @@
 
 ---
 
+### Sprint 25.7 — Post-Session Operational Fixes + Debrief Export (2,815 pytest + 611 Vitest = 3,426 total)
+**Date:** Mar 21, 2026
+**Scope:** Post-session operational fixes from March 20 live session plus debrief export automation. Plus Pylance cleanup (~200 errors across ~20 files, type annotations only).
+**Type:** Impromptu operational sprint.
+
+**Session 1 (S1): Operational Fixes + Debrief Export**
+- Implemented `DatabentoDataService.fetch_daily_bars()` via FMP stable API (`GET /stable/historical-price-eod/full`) — regime classification now works in live mode (DEC-347)
+- Added `last_update` attribute to DatabentoDataService, set in `_dispatch_record()` — health endpoint `last_data_received` no longer null (DEF-076)
+- Diagnostic logging when position sizer returns 0 shares (DEF-077)
+- Rate-limited regime reclassification warnings (DEF-078)
+- New module `argus/analytics/debrief_export.py` — automated debrief data export at shutdown producing `logs/debrief_YYYYMMDD.json` (DEC-348, DEF-079)
+- `PerformanceThrottler.check()` zero-trade-history guard (DEC-349, DEF-080)
+- `ENTRY_EVALUATION` events include `conditions_passed`/`conditions_total` metadata (DEC-350, DEF-081)
+- `Orchestrator.spy_data_available` public property
+- `scripts/launch_monitor.sh` — unattended launch + monitoring script with 5 checkpoints and ntfy.sh notifications
+- +20 pytest (1 pre-existing updated)
+
+**Post-review:** Pylance cleanup (~200 errors across ~20 files, type annotations only). Bug fix: Position model fields in debrief export. Bug fix: `flatten_all(symbols=...)` invalid kwarg in controls.py.
+
+**Key decisions:** DEC-347, DEC-348, DEC-349, DEC-350
+**DEFs resolved:** DEF-075, DEF-076, DEF-077, DEF-078, DEF-079, DEF-080, DEF-081
+**Test counts:** pytest 2,794 → 2,815 (+21), Vitest 611 → 611 (+0)
+
+---
+
+### Sprint 25.8 — API Auth 401 + Close-Position Fix (2,815 pytest + 611 Vitest = 3,426 total)
+**Date:** Mar 21, 2026
+**Scope:** Fix API auth returning 403 instead of 401 for unauthenticated requests. Fix close-position endpoint that either crashed (invalid kwarg) or closed all positions (kwarg removed).
+**Type:** Impromptu micro-fix sprint.
+
+**Session 1 (S1): Auth + Close-Position**
+- `HTTPBearer(auto_error=False)` + explicit 401 with `WWW-Authenticate: Bearer` header (DEC-351, DEF-083)
+- `POST /controls/positions/{id}/close` routes through new `OrderManager.close_position(symbol)` (DEC-352, DEF-085)
+- +5 pytest, 35 previously-failing tests now pass
+
+**Key decisions:** DEC-351, DEC-352
+**DEFs resolved:** DEF-083, DEF-085
+**Test counts:** pytest 2,815 → 2,815 (+5 new, 35 fixed, net count unchanged due to consolidation)
+
+---
+
+### Test Infrastructure Fixes (post-sprint, no sprint number)
+**Date:** Mar 21, 2026
+**Scope:** Two rounds of test infrastructure work. No production code changes in Round 2.
+
+**Round 1: Test Speed Fix**
+- Made `rate_limit_delay_seconds` configurable on `FMPReferenceConfig` (default 0.2), set to 0 in all test fixtures
+- Added `slow` pytest marker to pyproject.toml
+- Full suite 454s → 178s (−61%). FMP tests 270s → 6.3s (−97.6%)
+
+**Round 2: Fix All Pre-Existing Failures (DEF-086 + DEF-087)**
+- Fixed 19 broken tests (11 failures + 8 hangs). Zero production code changes.
+- WebSocket tests: rewrote 8 hanging async tests to test bridge pipeline directly via send_queue
+- data_fetcher: relaxed datetime64 precision assertion for Pandas 2.x
+- e2e telemetry: fixed hardcoded date + added flush helper for async writes
+- integration sprint20: updated allocation assertions for regime-based eligibility
+- Dependencies upgraded: matplotlib, scipy, scikit-learn for NumPy 2.x compat
+- **Final suite: 2,815 passed, 0 failures, 0 hangs. 39s with xdist.**
+
+**DEFs resolved:** DEF-084 (partially — runtime optimized), DEF-086, DEF-087
+**Standard test command:** `python -m pytest --ignore=tests/test_main.py -n auto -q` (only test_main.py needs ignoring now)
+
+---
+
 ## Sprint Statistics
 
-- **Total sprints:** 25 full + 22 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6)
-- **Total sessions:** ~338+ Claude Code sessions
-- **Total tests:** 2,794 pytest + 611 Vitest = 3,405 total
-- **Total decisions:** 346 (DEC-001 through DEC-346)
-- **Calendar days (active dev):** ~35 (Feb 14 – Mar 20, 2026)
+- **Total sprints:** 25 full + 24 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8)
+- **Total sessions:** ~342+ Claude Code sessions
+- **Total tests:** 2,815 pytest + 611 Vitest = 3,426 total
+- **Total decisions:** 352 (DEC-001 through DEC-352)
+- **Calendar days (active dev):** ~36 (Feb 14 – Mar 21, 2026)
 - **Largest sprint:** 22 (9 implementation + 5 fix + 9 reviews, largest scope)
 - **Cleanest sprint:** 23 (11 sessions, 0 regressions, 0 scope gaps requiring follow-up)
 - **Most test-dense:** Sprint 22 (286 new tests), Sprint 24 (209 new tests), Sprint 23.2 (188 new tests), Sprint 23 (141 new tests across 23+23.05)

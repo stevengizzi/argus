@@ -1,6 +1,6 @@
 # ARGUS — Project Knowledge (Claude Context)
 
-> *Tier A operational context for Claude Code and Claude.ai. Last updated: March 20, 2026 (Sprint 25.6 doc sync).*
+> *Tier A operational context for Claude Code and Claude.ai. Last updated: March 21, 2026 (Sprint 25.8 doc sync).*
 > *Full decision rationale: `docs/decision-log.md` | Sprint details: `docs/sprint-history.md` | DEC index: `docs/dec-index.md`*
 
 ---
@@ -11,8 +11,8 @@ ARGUS is a fully automated, AI-enhanced multi-strategy day trading system for US
 
 ## Current State
 
-**Tests:** 2,794 pytest + 611 Vitest
-**Sprints completed:** 1 through 25.6 (25 full sprints + sub-sprints)
+**Tests:** 2,815 pytest + 611 Vitest (0 failures, 0 hangs)
+**Sprints completed:** 1 through 25.8 (25 full sprints + sub-sprints)
 **Active sprint:** None (between sprints)
 **Next sprint:** 26 (Red-to-Green + Pattern Library Foundation)
 **GitHub:** `https://github.com/stevengizzi/argus.git` (public)
@@ -61,6 +61,8 @@ ARGUS is a fully automated, AI-enhanced multi-strategy day trading system for US
 | 25 | The Observatory | 2765+599V | Mar 17–18 | — (no new DECs) |
 | 25.5 | Universe Manager Watchlist Wiring Fix | 2782+599V | Mar 18 | DEC-343–344 |
 | 25.6 | Bug Sweep | 2794+611V | Mar 19–20 | DEC-345–346 |
+| 25.7 | Post-Session Operational Fixes | 2815+611V | Mar 21 | DEC-347–350 |
+| 25.8 | API Auth 401 + Close-Position Fix | 2815+611V | Mar 21 | DEC-351–352 |
 
 *Full sprint scopes and session details: `docs/sprint-history.md`*
 
@@ -90,9 +92,9 @@ Paper trading active with Databento EQUS.MINI + IBKR paper (Account U24619949, D
 ### Key Components
 - **Strategies:** Daily-stateful, session-stateless plugins (DEC-028). 4 active. 14 more planned. All strategies implement `_calculate_pattern_strength()` returning 0–100 score and emit `share_count=0` for quality pipeline sizing (Sprint 24, DEC-330/331). `_watchlist` is `set[str]` internally for O(1) membership checks; `set_watchlist()` accepts `list[str]` input with `source` parameter (default `"scanner"`); `watchlist` property returns `list[str]` — external API unchanged (DEC-343, Sprint 25.5). BaseStrategy includes `StrategyEvaluationBuffer` (ring buffer, maxlen=1000) for diagnostic telemetry — `record_evaluation()` logs decision-point events with try/except guard (never raises). `EvaluationEventStore` provides SQLite persistence in `data/evaluation.db` (separated from `argus.db` in Sprint 25.6 to eliminate write contention, DEC-345) with 7-day retention and ET-date-based queries; exposes `execute_query()` public method and `is_connected` property (Sprint 25 S10). Write failure warnings rate-limited to 1 per 60s. REST endpoint `GET /api/v1/strategies/{id}/decisions` returns buffer contents (JWT-protected). Frontend `StrategyDecisionStream` slide-out panel on Orchestrator page (DEC-342, Sprint 24.5).
 - **Observatory (Sprint 25):** ObservatoryService (`argus/analytics/observatory_service.py`) — read-only query service over EvaluationEventStore and UniverseManager with 4 methods: `get_pipeline_stages`, `get_closest_misses`, `get_symbol_journey`, `get_session_summary`. Observatory WebSocket (`/ws/v1/observatory`) — push-based pipeline updates with tier transition detection and evaluation summaries, independent from AI chat WS. ObservatoryConfig (`argus/analytics/config.py`) — Pydantic model wired into SystemConfig, config-gated via `observatory.enabled`. Frontend: 4 views (Funnel 3D, Radar 3D, Matrix heatmap, Timeline SVG), detail panel with candlestick chart, session vitals bar, debrief mode (7-day history). Three.js (r128) code-split via React.lazy. Shared-scene pattern: Funnel and Radar share single Three.js scene with camera presets. InstancedMesh for symbol particles (up to 5,000). Keyboard: f/m/r/t for views, [/] for tiers, Tab for symbols, Shift+R/F for camera.
-- **Orchestrator:** Rules-based V1 (DEC-118). Equal-weight allocation, regime monitoring (SPY vol as VIX proxy), performance throttling, pre-market routine. Public `reclassify_regime()` method (DEC-346, Sprint 25.6) enables periodic regime reclassification — independent 300s asyncio task in main.py during market hours (9:30–16:00 ET).
+- **Orchestrator:** Rules-based V1 (DEC-118). Equal-weight allocation, regime monitoring (SPY vol as VIX proxy), performance throttling, pre-market routine. Public `reclassify_regime()` method (DEC-346, Sprint 25.6) enables periodic regime reclassification — independent 300s asyncio task in main.py during market hours (9:30–16:00 ET). Public `spy_data_available` property (Sprint 25.7). `PerformanceThrottler` returns `ThrottleAction.NONE` for strategies with zero trade history (DEC-349, Sprint 25.7).
 - **Risk Manager:** Three-level gating (strategy, cross-strategy, account). Check 0 rejects `share_count ≤ 0` before circuit breaker evaluation (Sprint 24, DEC-336). Approve-with-modification for share reduction and target tightening; never modify stops or entry (DEC-027). Concentration limit approve-with-modification with 0.25R floor (DEC-249).
-- **Data Service:** Databento EQUS.MINI primary (DEC-248). Event Bus sole streaming mechanism (DEC-029). Databento callbacks on reader thread, bridged via `call_soon_threadsafe()` (DEC-088). Universe Manager (Sprint 23) adds fast-path discard for non-viable symbols and ALL_SYMBOLS Databento mode. Time-aware indicator warm-up (DEC-316, Sprint 23.7): pre-market boot skips warm-up; mid-session boot uses lazy per-symbol backfill on first candle arrival.
+- **Data Service:** Databento EQUS.MINI primary (DEC-248). Event Bus sole streaming mechanism (DEC-029). Databento callbacks on reader thread, bridged via `call_soon_threadsafe()` (DEC-088). `fetch_daily_bars()` implemented via FMP stable API for regime classification (DEC-347, Sprint 25.7). `last_update` attribute tracks last data receipt for health endpoint (Sprint 25.7). Universe Manager (Sprint 23) adds fast-path discard for non-viable symbols and ALL_SYMBOLS Databento mode. Time-aware indicator warm-up (DEC-316, Sprint 23.7): pre-market boot skips warm-up; mid-session boot uses lazy per-symbol backfill on first candle arrival.
 - **Universe Manager (Sprint 23):** FMPReferenceClient fetches Company Profile + Share Float in batches for ~3,000–5,000 symbols. UniverseManager applies system-level filters (OTC, price, volume; fail-closed on missing data per DEC-277), builds pre-computed routing table mapping symbols to qualifying strategies via declarative `universe_filter` YAML configs. O(1) route_candle lookup. After `build_routing_table()` in Phase 9.5, strategy watchlists are populated from UM routing via `set_watchlist(symbols, source="universe_manager")` (DEC-343, Sprint 25.5). Fast-path discard in DatabentoDataService drops non-viable symbols before IndicatorEngine. Config-gated: `universe_manager.enabled` in system.yaml. Backward compatible (disabled = existing scanner flow). Zero-evaluation health warning (DEC-344, Sprint 25.5): `HealthMonitor.check_strategy_evaluations()` detects strategies with populated watchlists but zero evaluations after operating window + 5 min grace; sets DEGRADED, self-corrects when evaluations appear. Periodic 60s asyncio task during market hours. Full-universe input pipe active (DEC-299): ~8,000 symbols fetched from FMP stock-list, ~3,000–4,000 viable after system filters. Reference data file cache (DEC-314) with JSON persistence, atomic writes, and per-symbol staleness tracking enables incremental warm-up (~2–5 min vs ~27 min full fetch). Periodic cache saves every 1,000 symbols during fetch + save on shutdown signal (DEC-317, Sprint 23.7) prevent data loss on interrupted cold-starts.
 - **Broker Abstraction:** IBKRBroker (live, via `ib_async`), AlpacaBroker (incubator), SimulatedBroker (backtest). Atomic bracket orders (DEC-117). Config-driven selection via BrokerSource enum (DEC-094).
 - **Backtesting:** VectorBT (parameter sweeps, precompute+vectorize mandated DEC-149) + Replay Harness (production code replay). Walk-forward validation mandatory, WFE > 0.3 (DEC-047).
@@ -116,7 +118,7 @@ argus/
 ├── strategies/     # Base class + individual strategy modules
 ├── data/           # Scanner, Data Service, Indicators, IndicatorEngine, Universe Manager, FMP Reference
 ├── execution/      # Broker abstraction, Order Manager
-├── analytics/      # Trade Logger, Performance Calculator
+├── analytics/      # Trade Logger, Performance Calculator, Debrief Export
 ├── backtest/       # VectorBT helpers, Replay Harness
 ├── ui/             # React frontend (Vite + TypeScript)
 ├── api/            # FastAPI REST + WebSocket
@@ -217,6 +219,10 @@ Per-trade risk: 0.5–1% of strategy allocation. Daily loss limit: 3–5%. Weekl
 
 **Bug Sweep (Sprint 25.6):** DEC-345 (evaluation telemetry DB separation — `data/evaluation.db`), DEC-346 (periodic regime reclassification — 300s interval, market hours only, `Orchestrator.reclassify_regime()` public method).
 
+**Post-Session Operational Fixes (Sprint 25.7):** DEC-347 (FMP daily bars for regime classification — `fetch_daily_bars()` via FMP stable API), DEC-348 (automated debrief data export at shutdown — `debrief_export.py`), DEC-349 (performance throttler zero-trade-history guard), DEC-350 (entry evaluation conditions_passed metadata in ORB telemetry).
+
+**API Auth + Close-Position Fix (Sprint 25.8):** DEC-351 (API auth 401 for unauthenticated requests — `HTTPBearer(auto_error=False)`), DEC-352 (close-position endpoint routes through `OrderManager.close_position()`).
+
 **Superseded (do not use):** DEC-031 (IBKR deferral → DEC-083), DEC-089 (XNAS.ITCH → DEC-248), DEC-097 (activation timing → DEC-143/161), DEC-165 (L2 included → DEC-237), DEC-234 (XNAS+XNYS phased → DEC-248).
 
 ---
@@ -271,9 +277,9 @@ Universal protocols, templates, and the runner live in the `workflow/` submodule
 | `docs/architecture.md` | Technical blueprint — how |
 | `docs/roadmap.md` | Strategic vision + sprint queue (DEC-262) |
 | `docs/sprint-campaign.md` | Operational sprint choreography |
-| `docs/decision-log.md` | All DEC entries with full rationale |
+| `docs/decision-log.md` | All 352 DEC entries with full rationale |
 | `docs/dec-index.md` | Quick-reference DEC index with status |
-| `docs/sprint-history.md` | Complete sprint history |
+| `docs/sprint-history.md` | Complete sprint history (1–25.8) |
 | `docs/process-evolution.md` | Workflow evolution narrative |
 | `docs/risk-register.md` | Assumptions and risks |
 | `docs/live-operations.md` | Live trading procedures |

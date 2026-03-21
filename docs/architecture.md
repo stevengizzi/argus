@@ -280,6 +280,10 @@ Future (when needed):
 
 **Implementation Status:** Sprint 12 ✅ COMPLETE (Feb 21), updated Sprint 21.5 (Mar 2–3). DatabentoConfig, DatabentoDataService (live streaming, reconnection with exponential backoff, indicators, stale data monitor, historical/Parquet cache). DataFetcher Databento backend with manifest tracking. DatabentoScanner (V1 watchlist with historical data lag resilience, DEC-247). DataSource enum for config-driven provider selection. Shared normalization via `argus/data/databento_utils.py` (DEC-091). Threading model: Databento reader thread → `call_soon_threadsafe()` → asyncio Event Bus (DEC-088). Production dataset: EQUS.MINI (DEC-248, supersedes XNAS.ITCH DEC-089) — consolidated US equities covering all exchanges in single feed. Symbol resolution uses Databento library's built-in `symbology_map` (DEC-242). Prices in fixed-point format ×1e9 (DEC-243). DatabentoSymbolMap removed (replaced by built-in mapping). Live streaming + all required schemas (ohlcv-1m, ohlcv-1d, trades, tbbo) verified on Standard plan. See `argus_market_data_research_report.md` Section 14. **Scanning data source (Sprint 21.7):** FMP Starter ($22/mo, DEC-258) provides pre-market daily bars and screener endpoints for gap/volume scanning, replacing the broken Databento historical daily bar path (DEC-247). Hybrid architecture: Databento for live streaming + backtesting, FMP for scanning (DEC-257). **Universe Manager integration (Sprint 23):** DatabentoDataService gains `set_viable_universe()` method and fast-path discard in `_on_ohlcv` and `_on_trade` — non-viable symbols are dropped before `_active_symbols` check and before IndicatorEngine processing. Backward compatible: when viable_universe is None (UM disabled), all symbols pass. **Indicator warm-up scaling (Sprint 23.7):** Time-aware warm-up (DEC-316) — pre-market boot skips warm-up; mid-session boot uses lazy per-symbol backfill. Replaced blocking per-symbol warm-up that took 12+ hours for 6,000+ symbols.
 
+**Daily bars for regime classification (Sprint 25.7, DEC-347):** `fetch_daily_bars()` implemented via FMP stable API (`GET /stable/historical-price-eod/full`). Uses `aiohttp` GET with 10s timeout, returns DataFrame or None on any error. Called at startup (pre-market routine) and every 5 min (regime reclassification). Previously a stub returning `None` since Sprint 12.
+
+**Data freshness tracking (Sprint 25.7):** `last_update` attribute set in `_dispatch_record()` on every incoming record. Exposed via health endpoint's `last_data_received` field.
+
 
 ### 3.3 Broker Abstraction (`execution/broker.py`)
 
@@ -472,11 +476,12 @@ Real-time and historical visibility into what every strategy evaluates on every 
 - `record_evaluation()` logs decision-point events at every strategy decision (time window checks, condition evaluations, signal generation, quality scoring)
 - Entire method body wrapped in try/except — never raises, never affects trading logic
 - 9 event types in `EvaluationEventType` (StrEnum): `TIME_WINDOW_CHECK`, `OPENING_RANGE_UPDATE`, `STATE_TRANSITION`, `INDICATOR_STATUS`, `CONDITION_CHECK`, `ENTRY_EVALUATION`, `SIGNAL_GENERATED`, `SIGNAL_REJECTED`, `QUALITY_SCORED`
+- `ENTRY_EVALUATION` events in ORB family include `conditions_passed` (0–4) and `conditions_total` (4) in metadata for closest-miss analysis (DEC-350, Sprint 25.7)
 - 3 result types: `PASS`, `FAIL`, `INFO`
 - Timestamps use ET naive datetimes per DEC-276
 
 **SQLite Persistence (`strategies/telemetry_store.py`):**
-- `EvaluationEventStore` persists events to the main DB file (WAL mode, separate connection)
+- `EvaluationEventStore` persists events to `data/evaluation.db` (separated from argus.db in Sprint 25.6, DEC-345)
 - 7-day retention with ET-date-based cleanup
 - Fire-and-forget async forwarding from buffer to store via `loop.create_task()`
 
@@ -576,7 +581,7 @@ class Orchestrator:
 
 **Supporting Components:**
 - `RegimeClassifier` (`core/regime.py`): Rules-based SPY regime classification. Computes SMA-20/50, 5-day ROC, 20-day realized vol (VIX proxy, DEC-113). Classifies into 5 regimes: BULLISH_TRENDING, BEARISH_TRENDING, RANGE_BOUND, HIGH_VOLATILITY, CRISIS.
-- `PerformanceThrottler` (`core/throttle.py`): Evaluates per-strategy performance using per-strategy daily P&L from `TradeLogger.get_daily_pnl(strategy_id=...)`. Three rules: 5 consecutive losses → REDUCE, negative 20-day Sharpe → SUSPEND, >15% drawdown → SUSPEND. Worst action wins.
+- `PerformanceThrottler` (`core/throttle.py`): Evaluates per-strategy performance using per-strategy daily P&L from `TradeLogger.get_daily_pnl(strategy_id=...)`. Three rules: 5 consecutive losses → REDUCE, negative 20-day Sharpe → SUSPEND, >15% drawdown → SUSPEND. Worst action wins. Zero-trade-history guard (DEC-349, Sprint 25.7): returns `ThrottleAction.NONE` immediately when both `trades` and `daily_pnl` are empty — prevents false suspension of strategies with no history.
 - `CorrelationTracker` (`core/correlation.py`): Records daily P&L per strategy, computes pairwise Pearson correlation. Infrastructure for V2 correlation-adjusted allocation (DEC-116). Not yet wired into allocation math.
 
 **Lifecycle:**
@@ -600,6 +605,10 @@ class Orchestrator:
 
     async def run_end_of_day(self) -> None:
         """Post-close: record daily P&L per strategy to CorrelationTracker, log EOD decision."""
+
+    @property
+    def spy_data_available(self) -> bool:
+        """Whether SPY daily bars have been loaded for regime classification (Sprint 25.7)."""
 ```
 
 **Background Poll Loop (DEC-118):** Self-contained asyncio loop (no APScheduler). Triggers pre-market at configured time (default 09:25 ET), regime recheck every 30 minutes during market hours (DEC-115), EOD review at 16:05 ET. Daily flags reset at midnight.
@@ -678,6 +687,11 @@ class OrderManager:
 
     async def emergency_flatten(self) -> None:
         """Close all positions at market. Used by circuit breakers."""
+
+    async def close_position(self, symbol: str) -> None:
+        """Close specific position by symbol. Cancels child orders (stops,
+        targets) and submits market sell. Routes through OrderManager for
+        proper position tracking (DEC-352, Sprint 25.8)."""
 ```
 
 **Position Management Architecture:**
@@ -1080,6 +1094,10 @@ CREATE TABLE system_health (
 );
 ```
 
+### 3.10b Debrief Export (`analytics/debrief_export.py`) — Sprint 25.7 ✅
+
+Automated export of debrief data during graceful shutdown (DEC-348). Produces `logs/debrief_YYYYMMDD.json` with 7 sections: session boundaries, positions, trades, signals, evaluations, catalysts, and errors. Each section independently try/excepted — cannot prevent shutdown. Lazy-imported in `shutdown()` to avoid import overhead during normal operation. Queries `argus.db`, `catalyst.db`, and `evaluation.db`. JSON artifact designed for paste into Claude.ai debrief protocol.
+
 ### 3.11 Intelligence Layer (`argus/intelligence/`)
 
 New module directory housing all AI-enhanced trading intelligence components. These are distinct from core trading engine modules — they enrich the trading pipeline with quality signals but the engine functions without them (graceful degradation).
@@ -1324,6 +1342,7 @@ ws://host/ws/v1/live?token={jwt}
 - Single-user system: password-only login (no username)
 - JWT tokens (HS256) with configurable expiry (default 24h)
 - All REST endpoints require `Authorization: Bearer {token}`
+- Unauthenticated requests return HTTP 401 with `WWW-Authenticate: Bearer` header (DEC-351, Sprint 25.8). Uses `HTTPBearer(auto_error=False)` with explicit 401 response.
 - WebSocket authenticates via `?token={jwt}` query parameter
 - Password stored as bcrypt hash in config
 
@@ -1408,7 +1427,7 @@ See `docs/ui/ux-feature-backlog.md` for the complete prioritized inventory (35 f
 |----------|--------|-------------|
 | `/controls/strategies/{id}/pause` | POST | Pause strategy signal generation |
 | `/controls/strategies/{id}/resume` | POST | Resume paused strategy |
-| `/controls/positions/{id}/close` | POST | Close specific position at market |
+| `/controls/positions/{id}/close` | POST | Close specific position via `OrderManager.close_position(symbol)` (DEC-352) |
 | `/controls/emergency/flatten` | POST | Emergency close all positions |
 | `/controls/emergency/pause` | POST | Emergency pause all strategies |
 | `/trades/export/csv` | GET | Export trades as CSV (with filters) |
@@ -1557,7 +1576,8 @@ docs/backtesting/
 docs/sprints/sprint-{N}/
 └── run-log/                       # Autonomous runner output (see run-log-spec)
 scripts/
-└── sprint-runner.py              # Autonomous sprint orchestrator
+├── sprint-runner.py              # Autonomous sprint orchestrator
+└── launch_monitor.sh             # Unattended launch + monitoring (5 checkpoints, ntfy.sh notifications, Sprint 25.7)
 config/
 └── runner.yaml                   # Runner configuration
 

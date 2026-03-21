@@ -1,7 +1,7 @@
 # ARGUS — Decision Index
 
-> 346 decisions (DEC-001 through DEC-346)
-> Generated: March 20, 2026 | Source: `docs/decision-log.md`
+> 352 decisions (DEC-001 through DEC-352)
+> Generated: March 21, 2026 | Source: `docs/decision-log.md`
 > Legend: ● Active | ○ Superseded | △ Amended | ✗ Duplicate entry
 
 
@@ -396,3 +396,15 @@
 
 - ● **DEC-345**: Evaluation Telemetry DB Separation — EvaluationEventStore writes to `data/evaluation.db`; store created in main.py Phase 10.3; server.py conditional creation; health check reuses store; write warning rate-limiting (60s)
 - ● **DEC-346**: Periodic Regime Reclassification — `Orchestrator.reclassify_regime()` public method; 300s periodic task in main.py with market hours guard; sleep-first pattern; SPY unavailability retains current regime
+
+## Phase P — Post-Session Operational Fixes (Sprint 25.7)
+
+- ● **DEC-347**: FMP Daily Bars for Regime Classification — `fetch_daily_bars()` via FMP stable historical-price-eod endpoint
+- ● **DEC-348**: Automated Debrief Data Export at Shutdown — `debrief_export.py` produces `logs/debrief_YYYYMMDD.json`
+- ● **DEC-349**: Performance Throttler Zero-Trade-History Guard — early return `ThrottleAction.NONE` on empty history
+- ● **DEC-350**: Entry Evaluation conditions_passed Metadata — `conditions_passed`/`conditions_total` in ORB ENTRY_EVALUATION events
+
+## Phase Q — API Auth + Close-Position Fix (Sprint 25.8)
+
+- ● **DEC-351**: API Auth 401 for Unauthenticated Requests — `HTTPBearer(auto_error=False)` + explicit 401 with `WWW-Authenticate` header
+- ● **DEC-352**: Close-Position Endpoint Routes Through OrderManager — `OrderManager.close_position(symbol)` for single-symbol teardown

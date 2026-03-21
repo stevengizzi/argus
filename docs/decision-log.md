@@ -4136,6 +4136,94 @@ Each entry follows this format:
 
 ---
 
+## Phase P — Post-Session Operational Fixes (Sprint 25.7)
+
+### DEC-347 | FMP Daily Bars for Regime Classification
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-21 |
+| **Sprint** | 25.7 |
+| **Decision** | Implement `DatabentoDataService.fetch_daily_bars()` via FMP stable API (`GET /stable/historical-price-eod/full`). Uses `aiohttp` GET with 10s timeout, returns DataFrame or None on any error (6 error paths). Reads key from `FMP_API_KEY` env var. Called once at startup (pre-market routine) and every 5 min (regime reclassification task). |
+| **Alternatives Considered** | 1. Databento historical daily bars — rejected, multi-day lag (DEC-247) makes them useless for regime classification. 2. Cache daily bars across reclassification cycles — rejected, adds complexity; FMP stable endpoint is fast and rate-limit-friendly for 1 call/5 min. |
+| **Rationale** | `fetch_daily_bars()` was a stub returning `None` since Sprint 12. Regime classification never worked in live mode because it depended on this method. FMP Starter ($22/mo) already active for scanning — reusing it for daily bars is zero incremental cost. |
+| **Cross-References** | DEC-082 (Databento primary), DEC-257 (hybrid Databento+FMP), DEC-258 (FMP Starter), DEF-075 (resolved) |
+| **Status** | Active |
+
+---
+
+### DEC-348 | Automated Debrief Data Export at Shutdown
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-21 |
+| **Sprint** | 25.7 |
+| **Decision** | Run debrief data export during graceful shutdown, after EOD flatten and before component teardown. New module `argus/analytics/debrief_export.py`. Produces `logs/debrief_YYYYMMDD.json` with 7 sections (session boundaries, positions, trades, signals, evaluations, catalysts, errors), each independently try/excepted. Lazy import in `shutdown()`. Cannot prevent shutdown — all failures are caught and logged. |
+| **Alternatives Considered** | 1. Real-time export during market hours — rejected, adds load during trading. 2. External script run post-shutdown — rejected, databases may be locked by next process. 3. Include in debrief protocol itself — rejected, Claude.ai cannot access SQLite databases directly. |
+| **Rationale** | Debrief protocol needs data from three databases (argus.db, catalyst.db, evaluation.db) that aren't accessible in Claude.ai. Exporting at shutdown provides a JSON artifact that can be pasted into Claude.ai for post-session analysis. |
+| **Cross-References** | DEF-079 (resolved) |
+| **Status** | Active |
+
+---
+
+### DEC-349 | Performance Throttler Zero-Trade-History Guard
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-21 |
+| **Sprint** | 25.7 |
+| **Decision** | `PerformanceThrottler.check()` returns `ThrottleAction.NONE` immediately when strategy has no trade history (both `trades` and `daily_pnl` empty). 3-line early return guard. |
+| **Alternatives Considered** | 1. Default to REDUCE for unknown strategies — rejected, penalizes new/unused strategies. 2. Check only `trades` — rejected, `daily_pnl` being empty is equally indicative of no history. |
+| **Rationale** | March 20 live session: VWAP Reclaim was falsely suspended because `PerformanceThrottler` evaluated empty trade history and triggered the consecutive-loss or drawdown rule (undefined behavior on empty data). |
+| **Cross-References** | DEF-080 (resolved) |
+| **Status** | Active |
+
+---
+
+### DEC-350 | Entry Evaluation conditions_passed Metadata
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-21 |
+| **Sprint** | 25.7 |
+| **Decision** | `ENTRY_EVALUATION` events in `OrbBaseStrategy._check_breakout_conditions()` include `conditions_passed` (0–4) and `conditions_total` (4) in metadata dict. ORB family only. Purely additive — no behavior change. |
+| **Alternatives Considered** | 1. Per-condition individual events — rejected, too noisy (4 events per candle per symbol). 2. Add to all strategies — rejected, each strategy has different condition structures; start with ORB family. |
+| **Rationale** | Enables closest-miss analysis in Observatory and debrief: "How many conditions did this symbol pass before being rejected?" Supports identifying symbols that nearly triggered but failed on one condition. |
+| **Cross-References** | DEC-342 (evaluation telemetry), DEF-081 (resolved) |
+| **Status** | Active |
+
+---
+
+## Phase Q — API Auth + Close-Position Fix (Sprint 25.8)
+
+### DEC-351 | API Auth 401 for Unauthenticated Requests
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-21 |
+| **Sprint** | 25.8 |
+| **Decision** | Change `HTTPBearer(auto_error=False)` + explicit 401 with `WWW-Authenticate: Bearer` header when credentials are None. Previously FastAPI's default `HTTPBearer(auto_error=True)` returned 403 for missing tokens. |
+| **Alternatives Considered** | 1. Keep 403 — rejected, HTTP spec (RFC 7235) requires 401 for unauthenticated requests with `WWW-Authenticate` header. 403 means "authenticated but forbidden." 2. Custom middleware — rejected, `auto_error=False` + manual check is simpler and idiomatic FastAPI. |
+| **Rationale** | ~35 pre-existing API tests were asserting 403 for unauthenticated requests. Correcting to 401 aligns with HTTP spec and fixes all 35 test expectations. |
+| **Cross-References** | DEC-102 (JWT auth), DEF-083 (resolved) |
+| **Status** | Active |
+
+---
+
+### DEC-352 | Close-Position Endpoint Routes Through OrderManager
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-21 |
+| **Sprint** | 25.8 |
+| **Decision** | `POST /controls/positions/{id}/close` calls new public `OrderManager.close_position(symbol)` instead of `broker.flatten_all()`. `close_position()` finds ManagedPositions for the symbol, cancels child orders (stops, targets), and submits market sell for the position's shares. |
+| **Alternatives Considered** | 1. Fix `broker.flatten_all(symbols=[symbol])` kwarg — rejected, `flatten_all()` is designed for emergency all-position close, not single-symbol. Adding symbol filtering to it conflates two use cases. 2. Call `broker.place_order()` directly from route — rejected, bypasses OrderManager's position tracking and child order cleanup. |
+| **Rationale** | Original implementation had invalid kwarg (`symbols=...` not in `flatten_all()` signature), causing crash. A Pylance fix removed the kwarg, which then closed ALL positions instead of just the targeted one. Routing through OrderManager ensures proper single-symbol teardown with child order cancellation. |
+| **Cross-References** | DEF-085 (resolved) |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
-*Next DEC: 347*
-*Last updated: 2026-03-20 (Sprint 25.6 — DEC-345, DEC-346)*
+*Next DEC: 353*
+*Last updated: 2026-03-21 (Sprint 25.8 — DEC-347 through DEC-352)*

@@ -357,8 +357,9 @@ After market close, run the structured debrief protocol to diagnose system behav
 **Protocol:** `docs/protocols/market-session-debrief.md`
 
 **What to provide:**
-- The JSONL log file only: `logs/argus_YYYYMMDD.jsonl` (NOT the .log or UI log)
-- Access to run SQLite queries against `data/argus.db` and `data/catalyst.db`
+- The debrief export JSON: `logs/debrief_YYYYMMDD.json` (auto-generated at shutdown, Sprint 25.7, DEC-348)
+- The JSONL log file: `logs/argus_YYYYMMDD.jsonl` (NOT the .log or UI log)
+- Access to run SQLite queries against `data/argus.db`, `data/catalyst.db`, and `data/evaluation.db`
 - Any Command Center observations (screenshots, notes)
 
 **What it produces:**
@@ -440,6 +441,12 @@ When US changes DST, your schedule shifts by 1 hour. Update your alarms accordin
 ```bash
 # Start Gateway first, then:
 ./scripts/start_live.sh --with-ui
+
+# Unattended launch + monitoring (Sprint 25.7)
+./scripts/launch_monitor.sh              # Launch at next market open + monitor
+./scripts/launch_monitor.sh --now        # Launch immediately + monitor
+./scripts/launch_monitor.sh --monitor-only  # Monitor only (system already running)
+./scripts/launch_monitor.sh --launch-et HH:MM  # Launch at specific ET time
 ```
 
 ### Shutdown
@@ -565,4 +572,4 @@ The Debrief page includes a **Learning Journal** conversation browser:
 
 ---
 
-*End of Live Operations Guide v1.1*
+*End of Live Operations Guide v1.2*
