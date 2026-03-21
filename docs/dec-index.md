@@ -1,6 +1,6 @@
 # ARGUS — Decision Index
 
-> 352 decisions (DEC-001 through DEC-352)
+> 356 decisions (DEC-001 through DEC-356)
 > Generated: March 21, 2026 | Source: `docs/decision-log.md`
 > Legend: ● Active | ○ Superseded | △ Amended | ✗ Duplicate entry
 
@@ -408,3 +408,10 @@
 
 - ● **DEC-351**: API Auth 401 for Unauthenticated Requests — `HTTPBearer(auto_error=False)` + explicit 401 with `WWW-Authenticate` header
 - ● **DEC-352**: Close-Position Endpoint Routes Through OrderManager — `OrderManager.close_position(symbol)` for single-symbol teardown
+
+## Phase 5 Gate — Strategic Check-In (March 2026)
+
+- ● **DEC-353**: Historical data purchase deferred indefinitely — Standard plan includes free OHLCV-1m
+- ● **DEC-354**: Phase 6 compression — BacktestEngine pulled to Sprint 27
+- ● **DEC-355**: Gate 2 paper trading day counter reset (~4 valid days)
+- ● **DEC-356**: FMP Premium upgrade deferred until Learning Loop data

@@ -4224,6 +4224,64 @@ Each entry follows this format:
 
 ---
 
+## Phase 5 Gate — Strategic Check-In (March 21, 2026)
+
+### DEC-353 | Historical Data Purchase Deferred Indefinitely
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-21 |
+| **Context** | Roadmap §17 budgeted $1,000–$5,000 for historical Databento data purchase at the Phase 7 Gate. Investigation during Phase 5 Gate revealed that the Standard plan ($199/mo, already active) includes unlimited OHLCV-1m history for EQUS.MINI from March 2023 to present at $0.00 for all symbols. Verified via `metadata.get_cost()` API — all OHLCV queries return $0.00. L1 tick data (trades schema) is included for trailing 12 months; older tick data is pay-as-you-go (~$0.21/mo/symbol). |
+| **Decision** | Defer historical data purchase indefinitely. Use free OHLCV-1m data for BacktestEngine development and strategy re-validation. Only reconsider tick-level historical purchase if systematic search (Phase 8+) requires sub-minute precision. |
+| **Alternatives Considered** | (1) Purchase tick-level data for deeper history — unnecessary for current strategies. (2) Wait for Phase 7 Gate — no reason to wait, data is available now. |
+| **Rationale** | 3 years of institutional-grade 1-minute bar data covers the full EQUS.MINI history (2023-03-28 to present), including multiple market regimes. ARGUS strategies operate on 1-minute candles — this is exactly the data the BacktestEngine needs. Zero incremental cost. |
+| **Cross-References** | Roadmap §17, DEC-248 (EQUS.MINI confirmed) |
+| **Status** | Active |
+
+---
+
+### DEC-354 | Phase 6 Compression — BacktestEngine Pulled to Sprint 27
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-21 |
+| **Context** | Phase 5 Gate strategic check-in assessed roadmap sequencing. Original plan: Sprint 26 (Red-to-Green) → 27 (Pattern Expansion I) → 28 (Short Selling + Expansion II) → 29 (Learning Loop) → 30 (BacktestEngine). DEC-353 confirmed free historical data is available, removing the data dependency that justified BacktestEngine's late position. Additionally, every new strategy benefits from production-code backtesting, and Sprint 21.6 (Re-Validation) depends on BacktestEngine infrastructure. |
+| **Decision** | Pull BacktestEngine Core from Sprint 30 to Sprint 27 (immediately after Red-to-Green). Pull Learning Loop V1 from Sprint 29 to Sprint 28. Pattern expansion and short selling shift to Sprints 29–31. Revised sequence: 26 (Red-to-Green) → 27 (BacktestEngine Core) → 21.6 (Re-Validation) → 28 (Learning Loop V1) → 29–31 (Pattern Expansion + Short Selling) → 32+ (Sweep Infrastructure, Systematic Search). |
+| **Alternatives Considered** | (1) Keep original order — delays proper validation infrastructure by 4+ sprints. (2) Pull BacktestEngine even earlier (before Red-to-Green) — unnecessary; Red-to-Green can use existing VectorBT + Replay Harness. |
+| **Rationale** | BacktestEngine is a force multiplier — every subsequent strategy gets proper validation. Learning Loop benefits from the paper trading quality data being accumulated now. Pattern expansion is less urgent than infrastructure that makes all patterns better. |
+| **Cross-References** | DEC-353, Roadmap §3, §7 |
+| **Status** | Active |
+
+---
+
+### DEC-355 | Gate 2 Paper Trading Day Counter Reset
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-21 |
+| **Context** | Gate 2 requires "minimum 20 trading days" with Databento + IBKR paper. The system ran for ~10 days (approximately March 6–17) with a watchlist wiring bug (fixed in Sprint 25.5) that caused strategies to receive zero symbols and produce zero evaluations. These days should not count toward the gate threshold because the strategies were not evaluating setups. |
+| **Decision** | Reset the Gate 2 day counter. Count only sessions where strategies produced evaluation events and the pipeline was functioning end-to-end. As of March 21, 2026: ~4 valid paper trading days. |
+| **Alternatives Considered** | (1) Count all days — would inflate the gate metric with meaningless data. (2) Partial credit — unnecessarily complex for a clear-cut case. |
+| **Rationale** | The purpose of Gate 2 is to validate strategy behavior under real market conditions. Sessions where strategies were silently inactive provide no validation signal. |
+| **Cross-References** | DEC-343 (watchlist wiring fix), DEC-344 (zero-evaluation health warning) |
+| **Status** | Active |
+
+---
+
+### DEC-356 | FMP Premium Upgrade Deferred
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-21 |
+| **Context** | FMP Starter plan ($22/mo) returns HTTP 403 on news endpoints (`stock_news`, `press_releases`). FMP news is one of three catalyst sources. The Quality Engine weights catalyst_quality at 25% of the composite score, but DEF-082 confirms catalyst_quality always returns 50.0 (neutral default) because no symbol-specific catalyst data flows to the scorer. Volume_profile (20%) also returns neutral defaults. Upgrading to FMP Premium ($59/mo, +$37/mo) would enable the news endpoints. |
+| **Decision** | Defer FMP Premium upgrade. Do not spend $37/mo on a data source until the Learning Loop (Sprint 28) can measure whether catalyst data actually predicts trade outcomes. |
+| **Alternatives Considered** | (1) Upgrade now — $37/mo with no evidence it improves outcomes. (2) Upgrade after 20 paper trading days — reasonable but still speculative without Learning Loop analysis. |
+| **Rationale** | 45% of the quality composite is dead weight regardless of FMP plan — the scoring dimensions aren't wired to real data yet. Spending more on catalyst data before proving it matters is premature. The Quality Engine functions on 55% signal (pattern_strength + historical_match + regime_alignment), which may be sufficient. |
+| **Cross-References** | DEF-082, DEF-035, DEC-323 (FMP circuit breaker), DEC-333 (quality dimensions) |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
-*Next DEC: 353*
-*Last updated: 2026-03-21 (Sprint 25.8 — DEC-347 through DEC-352)*
+*Next DEC: 357*
+*Last updated: 2026-03-21 (Phase 5 Gate — DEC-353 through DEC-356)*

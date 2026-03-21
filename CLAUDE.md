@@ -1,13 +1,13 @@
 # ARGUS — Claude Code Context
 
 > Dense, actionable context for Claude Code sessions. No history — see `docs/` for that.
-> Last updated: March 21, 2026 (Sprint 25.8 doc sync)
+> Last updated: March 21, 2026 (Phase 5 Gate doc sync)
 
 ## Active Sprint
 
 **No active sprint.** Sprint 25.8 (API Auth + Close-Position Fix) completed March 21, 2026.
 
-Next planned sprint: **26 (Red-to-Green + Pattern Library Foundation)**. Red-to-Green strategy + PatternLibrary ABC + Bull Flag + Flat-Top Breakout pattern modules.
+Next planned sprint: **26 (Red-to-Green + Pattern Library Foundation)**. Red-to-Green strategy + PatternLibrary ABC + Bull Flag + Flat-Top Breakout pattern modules. Phase 5 Gate completed March 21 — build track resequenced per DEC-354: Sprint 27 is now BacktestEngine Core (not Pattern Expansion), followed by Sprint 21.6 (Re-Validation) and Sprint 28 (Learning Loop V1).
 
 ### Known Issues
 - **FMP Starter plan restriction:** FMP news endpoints return 403 on Starter plan ($22/mo). `fmp_news.enabled: false` in `system_live.yaml`. FMP circuit breaker (DEC-323) prevents spam if accidentally enabled.

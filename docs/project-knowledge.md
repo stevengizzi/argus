@@ -1,6 +1,6 @@
 # ARGUS — Project Knowledge (Claude Context)
 
-> *Tier A operational context for Claude Code and Claude.ai. Last updated: March 21, 2026 (Sprint 25.8 doc sync).*
+> *Tier A operational context for Claude Code and Claude.ai. Last updated: March 21, 2026 (Phase 5 Gate doc sync).*
 > *Full decision rationale: `docs/decision-log.md` | Sprint details: `docs/sprint-history.md` | DEC index: `docs/dec-index.md`*
 
 ---
@@ -68,7 +68,7 @@ ARGUS is a fully automated, AI-enhanced multi-strategy day trading system for US
 
 ### Build Track Queue
 
-21.6 (Backtest Re-Validation, parallel) → **26 (Red-to-Green + Pattern Library Foundation)** → 27 (Pattern Expansion I) → 28 (Short Selling + Parabolic Short + Pattern Expansion II) → 29 (Learning Loop V1) → 30–32 (BacktestEngine, Sweep Infrastructure, Strategy Templates) → 33–35 (Statistical Validation, ORB Systematic Search ★, Ensemble Analysis) → 36–39 (Cross-Family Search, Ensemble Orchestrator V2, Synapse) → 40–42 (Learning Loop V2, Continuous Discovery, Performance Workbench). Sprint 23.5 (NLP Catalyst Pipeline) complete. Order Flow Model deferred to post-revenue (DEC-238). Full roadmap: `docs/roadmap.md` (DEC-262).
+21.6 (Backtest Re-Validation, after Sprint 27) → **26 (Red-to-Green + Pattern Library Foundation)** → 27 (BacktestEngine Core — pulled forward per DEC-354) → 21.6 (Backtest Re-Validation) → 28 (Learning Loop V1) → 29–31 (Pattern Expansion + Short Selling) → 32–34 (Sweep Infrastructure, Strategy Templates, Statistical Validation) → 35–38 (ORB Systematic Search ★, Cross-Family Search, Ensemble Orchestrator V2, Synapse) → 39–41 (Learning Loop V2, Continuous Discovery, Performance Workbench). Sprint 23.5 (NLP Catalyst Pipeline) complete. Order Flow Model deferred to post-revenue (DEC-238). Historical data purchase deferred indefinitely (DEC-353). Full roadmap: `docs/roadmap.md` (DEC-262).
 
 ### Validation Track
 
@@ -223,6 +223,8 @@ Per-trade risk: 0.5–1% of strategy allocation. Daily loss limit: 3–5%. Weekl
 
 **API Auth + Close-Position Fix (Sprint 25.8):** DEC-351 (API auth 401 for unauthenticated requests — `HTTPBearer(auto_error=False)`), DEC-352 (close-position endpoint routes through `OrderManager.close_position()`).
 
+**Phase 5 Gate (March 2026):** DEC-353 (historical data purchase deferred — free OHLCV-1m on Standard plan), DEC-354 (Phase 6 compression — BacktestEngine to Sprint 27), DEC-355 (Gate 2 day counter reset), DEC-356 (FMP Premium deferred until Learning Loop data).
+
 **Superseded (do not use):** DEC-031 (IBKR deferral → DEC-083), DEC-089 (XNAS.ITCH → DEC-248), DEC-097 (activation timing → DEC-143/161), DEC-165 (L2 included → DEC-237), DEC-234 (XNAS+XNYS phased → DEC-248).
 
 ---
@@ -277,7 +279,7 @@ Universal protocols, templates, and the runner live in the `workflow/` submodule
 | `docs/architecture.md` | Technical blueprint — how |
 | `docs/roadmap.md` | Strategic vision + sprint queue (DEC-262) |
 | `docs/sprint-campaign.md` | Operational sprint choreography |
-| `docs/decision-log.md` | All 352 DEC entries with full rationale |
+| `docs/decision-log.md` | All 356 DEC entries with full rationale |
 | `docs/dec-index.md` | Quick-reference DEC index with status |
 | `docs/sprint-history.md` | Complete sprint history (1–25.8) |
 | `docs/process-evolution.md` | Workflow evolution narrative |

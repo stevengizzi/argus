@@ -1,7 +1,7 @@
 # ARGUS — Strategic Roadmap
 
 > From artisanal strategies to ensemble alpha — the complete path
-> **v1.7 — March 20, 2026** (Sprint 25.6 complete — Bug Sweep)
+> **v1.8 — March 21, 2026** (Phase 5 Gate complete — DEC-353–356)
 > **Status:** CANONICAL — this is the single source of truth for ARGUS's strategic direction and sprint queue.
 > **Supersedes:** `docs/research/ARGUS_Expanded_Roadmap.md` (Feb 26), `docs/argus_unified_vision_roadmap.md` (Mar 5), `docs/10_PHASE3_SPRINT_PLAN.md` (all forward-looking sections)
 
@@ -78,7 +78,7 @@ These foundations are correct and remain:
 
 ARGUS completed 21 sprints + sub-sprints in ~17 calendar days of active development (Feb 14 – Mar 5). Average sprint: ~0.8 calendar days. However, sprint complexity has been increasing — early sprints (1–5) were dense single-day affairs, while later sprints (21a–21d, 21.5) span multiple days. The roadmap below assumes sprint durations of 1–4 days each depending on complexity, with some parallelism where noted.
 
-**Current state:** Sprint 25 complete. 2,765 pytest + 599 Vitest. Four active strategies with per-candle evaluation telemetry. Live Databento + IBKR paper trading. Eight-page Command Center (Observatory added Sprint 25) + AI Copilot active. FMP Scanner + Universe Manager integrated. Autonomous Sprint Runner implemented (DEC-278–297). NLP Catalyst Pipeline complete (DEC-300–307). Setup Quality Engine + Dynamic Position Sizer complete (DEC-330–341). Strategy Observability complete (DEC-342). The Observatory complete (Sprint 25) — Sprint 26 (Red-to-Green) next.
+**Current state:** Sprint 25.8 complete. 2,815 pytest + 611 Vitest. Four active strategies with per-candle evaluation telemetry. Live Databento + IBKR paper trading with 28+ trades across 4 sessions. Eight-page Command Center (Observatory added Sprint 25) + AI Copilot active. FMP Scanner + Universe Manager integrated. Autonomous Sprint Runner implemented (DEC-278–297). NLP Catalyst Pipeline complete (DEC-300–307). Setup Quality Engine + Dynamic Position Sizer complete (DEC-330–341). Strategy Observability complete (DEC-342). Phase 5 Gate complete (March 21, 2026). Revised sprint order per DEC-354: Sprint 26 (Red-to-Green) → Sprint 27 (BacktestEngine Core) → Sprint 21.6 (Re-Validation) → Sprint 28 (Learning Loop V1) → Sprints 29–31 (Pattern Expansion + Short Selling).
 
 ---
 
@@ -241,17 +241,23 @@ Re-validate all pre-Databento strategy parameters using Databento tick-level dat
 
 **Notes:** 13 sessions (including 11f visual fixes). 2 CONCERNS ratings with acceptable rationale. Quality pipeline fully integrated end-to-end from strategy signals through frontend visualization. Phase 5 Foundation Completion achieved.
 
-### Phase 5 Gate
+### Phase 5 Gate ✅ COMPLETE (March 21, 2026)
 
-**Trigger:** Sprint 24 complete.
-**Protocol:** Strategic Check-In (`strategic-check-in.md`) + Documentation Compression.
+**Trigger:** Sprint 24 complete (deferred through Sprint 25.8 due to operational priorities).
+**Protocol:** Strategic Check-In (`strategic-check-in.md`).
 
-**Assessment criteria:**
-- AI Layer operational? Copilot responsive and useful?
-- Quality Engine producing meaningful differentiation between setups?
-- Paper trading health (Gate 2 progress)?
-- Phase 6 readiness?
-- Velocity calibration for Phase 6 estimates.
+**Assessment results:**
+- AI Layer operational: Yes — Copilot responsive, streaming works, cost tracking active.
+- Quality Engine producing differentiation: Partial — 55% of composite active (DEF-082), 45% at neutral defaults (RSK-045). Grade distribution TBD after more paper trading data.
+- Paper trading health: 4 valid sessions, 28+ trades. Gate 2 counter reset (DEC-355). ~16 more days needed.
+- Phase 6 readiness: Yes, with revised sequencing (DEC-354).
+- Velocity: 1.5x multiplier budgeted (1 fix sprint per 2 feature sprints).
+
+**Key decisions:**
+- DEC-353: Historical data purchase deferred — Standard plan includes free OHLCV-1m.
+- DEC-354: Phase 6 compressed — BacktestEngine to Sprint 27, Learning Loop to Sprint 28.
+- DEC-355: Gate 2 day counter reset to ~4 valid days.
+- DEC-356: FMP Premium upgrade deferred until Learning Loop data.
 
 ---
 
@@ -279,6 +285,18 @@ Re-validate all pre-Databento strategy parameters using Databento tick-level dat
 - **Tests:** pytest −3 (DEF-048 gap), Vitest +76. Net: 2,765 pytest + 599 Vitest = 3,364 total
 - **No new DEC entries.** Reserved range DEC-343–360 unused.
 
+### Sprint 25.6: Bug Sweep ✅ COMPLETE (March 20, 2026)
+
+Evaluation telemetry DB separation (`data/evaluation.db`, DEC-345). Periodic regime reclassification (300s interval, DEC-346). Tests: 2,794 pytest + 611 Vitest.
+
+### Sprint 25.7: Post-Session Operational Fixes ✅ COMPLETE (March 21, 2026)
+
+FMP daily bars for regime classification (`fetch_daily_bars()`, DEC-347). Automated debrief export at shutdown (DEC-348). Performance throttler zero-trade-history guard (DEC-349). ORB entry evaluation metadata (DEC-350). Tests: 2,815 pytest + 611 Vitest.
+
+### Sprint 25.8: API Auth 401 + Close-Position Fix ✅ COMPLETE (March 21, 2026)
+
+API auth 401 for unauthenticated requests (DEC-351). Close-position endpoint routes through OrderManager (DEC-352). Tests: 2,815 pytest + 611 Vitest.
+
 ### Sprint 26: Red-to-Green + Pattern Library Foundation (DEC-163, DEC-167)
 **Target:** ~2–3 days
 
@@ -290,29 +308,26 @@ Re-validate all pre-Databento strategy parameters using Databento tick-level dat
 - **7 strategies/patterns active.**
 - **Tests:** ~80 new.
 
-### Sprint 27: Pattern Expansion I (DEC-167)
-**Target:** ~2–3 days
-
-**Scope:**
-- **Dip-and-Rip**, **HOD Break**, **Gap-and-Go** pattern modules. Each through stages 1–3.
-- Optionally **Pre-Market High Break** if velocity allows (otherwise deferred to Sprint 28).
-- Each module implements PatternLibrary interface. Walk-forward validated. Quality Engine integration.
-- **UI:** Pattern Library gains 3–4 new strategy cards. Dashboard gains Short Exposure indicator (infrastructure prep for Sprint 28).
-- **10–11 strategies/patterns active.**
-- **Tests:** ~60 new.
-
-### Sprint 28: Short Selling Infrastructure + Pattern Expansion II (DEC-166, DEC-167)
+### Sprint 27: BacktestEngine Core (DEC-354)
 **Target:** ~3 days
 
 **Scope:**
-- **Short selling infrastructure** (`argus/execution/short_selling.py`): Locate/borrow tracking. Inverted risk logic (stop above entry, target below). Short-specific Risk Manager rules. Uptick rule compliance (SSR detection). Short exposure limits (separate from long limits).
-- **Parabolic Short** strategy module: First short strategy. Parabolic extension detection, volume exhaustion, reversal candle patterns. Uses L1 signals only (Order Flow enhancement added post-revenue per DEC-238).
-- 1–2 additional long pattern modules (**ABCD Reversal**, **Sympathy Play**, or others from the planned roster) if velocity allows.
-- **UI:** Dashboard gains short exposure indicator (active). Orchestrator gains short position section. Pattern Library gains Parabolic Short + any additional strategy cards.
-- **13–15 strategies/patterns active (including first short strategy).**
+- **BacktestEngine** (`argus/backtest/engine.py`): Production-code backtesting engine using Databento OHLCV-1m historical data (free on Standard plan per DEC-353).
+- Data pipeline: Databento `metadata.get_cost()` → `timeseries.get_range()` for OHLCV-1m bars (March 2023 – present).
+- Engine runs actual strategy code against historical data (not VectorBT approximation).
+- Walk-forward validation integration. Results persistence.
 - **Tests:** ~80 new.
 
-### Sprint 29: Learning Loop V1 (DEC-163)
+### Sprint 21.6: Backtest Re-Validation (after Sprint 27)
+**Target:** ~2 days
+
+**Scope:**
+- Re-validate all 4 active strategies using BacktestEngine + 3 years of Databento OHLCV-1m data.
+- Compare Databento-based results against provisional Alpaca-era backtests (DEC-132).
+- Update strategy parameters if data shows significant divergence.
+- **Tests:** ~20 new.
+
+### Sprint 28: Learning Loop V1 (DEC-163, DEC-354)
 **Target:** ~3 days
 
 **Scope:**
@@ -328,36 +343,54 @@ Re-validate all pre-Databento strategy parameters using Databento tick-level dat
 
 ### Phase 6 Gate ★ CRITICAL — LIVE TRADING DECISION POINT ★
 
-**Trigger:** Sprint 29 complete.
+**Trigger:** Sprint 31 complete (after Pattern Expansion + Short Selling).
 **Protocol:** Strategic Check-In (`strategic-check-in.md`) + Codebase Health Audit (`codebase-health-audit.md`) + Documentation Compression.
 
-**ARGUS state at this gate:** 13–15 hand-crafted strategies (including at least one short strategy) with AI quality filtering, NLP catalysts, dynamic sizing, and performance-aware learning loop. Paper trading has been running for 4–6 weeks at this point.
+**ARGUS state at this gate:** 13–15 hand-crafted strategies (including at least one short strategy) with AI quality filtering, NLP catalysts, dynamic sizing, and performance-aware learning loop. Paper trading has been running for 6–8 weeks at this point. All strategies validated with BacktestEngine + 3 years of Databento data.
 
 **What you see:** 13–15 strategy cards in the Pattern Library. Health bands on every strategy in the Orchestrator. Correlation heatmap on Performance. Short exposure indicator on Dashboard. Quality-graded signals firing throughout the day. Morning intelligence briefs. AI-generated debrief narratives.
 
 **Critical decisions at this gate:**
 1. **CPA consultation** — Tax strategy for live trading (wash sale tracking, entity structure, estimated payments).
 2. **Live trading decision** — If paper trading results are strong (Sharpe > 2.0, positive expectancy, no catastrophic drawdowns), this is the natural point for Gate 5 (live minimum deployment). **Live trading with real capital could begin during or after Phase 6.**
-3. **Historical data purchase decision** — If proceeding with ensemble vision (Phases 7–10), resolve the data sufficiency risk: acquire 5–10 years of Databento 1-minute historical bars (estimated $1,000–5,000 one-time). This must happen before Phase 8's controlled experiment.
-4. **Ensemble go/no-go** — Confirm commitment to the ensemble research path (Phases 7–10). If choosing to defer, ARGUS continues as a strong artisanal multi-strategy system.
+3. **Ensemble go/no-go** — Confirm commitment to the ensemble research path (Phases 7–10). If choosing to defer, ARGUS continues as a strong artisanal multi-strategy system. Historical data is already available at no cost (DEC-353).
 
 **Elapsed time from start:** ~5–7 weeks.
 
 ---
 
-## 8. Phase 7: Infrastructure Unification (Sprints 30–32)
+## 8. Phase 7: Infrastructure Unification (Sprints 29–32)
 
-*Builds the BacktestEngine and parameterized strategy system. This is the architectural foundation for the ensemble vision. Nothing in this phase changes live trading behavior — it's building the research infrastructure in parallel. UI focus: the Research Console makes strategy research visible and interactive.*
+*Expands the strategy roster and adds short selling, then builds parameterized strategy system for the ensemble vision. BacktestEngine (Sprint 27) provides the foundation. Nothing in this phase changes live trading behavior — it's building the research infrastructure in parallel. UI focus: the Research Console makes strategy research visible and interactive.*
 
-### Sprint 30: BacktestEngine Core + Research Console (NEW PAGE)
-**Target:** ~4 days
+### Sprint 29: Pattern Expansion I (DEC-167)
+**Target:** ~2–3 days
+
+**Scope:**
+- **Dip-and-Rip**, **HOD Break**, **Gap-and-Go** pattern modules. Each through stages 1–3.
+- Optionally **Pre-Market High Break** if velocity allows.
+- Each module implements PatternLibrary interface. Walk-forward validated. Quality Engine integration.
+- **UI:** Pattern Library gains 3–4 new strategy cards.
+- **10–11 strategies/patterns active.**
+- **Tests:** ~60 new.
+
+### Sprint 30: Short Selling Infrastructure + Pattern Expansion II (DEC-166, DEC-167)
+**Target:** ~3 days
+
+**Scope:**
+- **Short selling infrastructure** (`argus/execution/short_selling.py`): Locate/borrow tracking. Inverted risk logic (stop above entry, target below). Short-specific Risk Manager rules. Uptick rule compliance (SSR detection). Short exposure limits (separate from long limits).
+- **Parabolic Short** strategy module: First short strategy. Parabolic extension detection, volume exhaustion, reversal candle patterns. Uses L1 signals only (Order Flow enhancement added post-revenue per DEC-238).
+- 1–2 additional long pattern modules if velocity allows.
+- **UI:** Dashboard gains short exposure indicator (active). Orchestrator gains short position section. Pattern Library gains Parabolic Short + any additional strategy cards.
+- **13–15 strategies/patterns active (including first short strategy).**
+- **Tests:** ~80 new.
+
+### Sprint 31: Pattern Expansion III + Research Console (NEW PAGE)
+**Target:** ~3 days
 
 **Scope (backend):**
-- **SynchronousEventBus**: Direct-dispatch, no async overhead — optimized for backtest speed.
-- **BacktestEngine** orchestrator: Wires real strategy classes + IndicatorEngine + SimulatedBroker in fast-replay mode.
-- **HistoricalDataFeed** adapter for stored Databento data.
-- **ResultsCollector** for trades and equity curves.
-- Single-strategy, single-parameter-set execution verified against Replay Harness results. Result equivalence is mandatory.
+- Additional pattern modules to reach 15 total strategies.
+- **Research Console** backend API endpoints for backtest run management.
 
 **Scope (frontend):** **Research Console** — Command Center page 9. Mission control for strategy research.
 - **Run Manager:** Shows backtest runs in progress (progress bar, ETA), queued runs, completed runs. Each completed run: equity curve thumbnail, Sharpe, win rate, max drawdown, trade count.
@@ -835,7 +868,7 @@ Items deferred until monthly trading income justifies their cost or complexity. 
 | Post-Revenue | ~$1,620–1,820/mo | + Databento Plus ($1,399 for Order Flow) |
 | Multi-Asset | ~$1,800–2,070/mo | + Databento CME ($179) + IQFeed ($160–250) |
 
-One-time costs: Historical data purchase (~$1,000–5,000, Phase 7 Gate). Cloud burst compute (pay-per-use, Phases 8–9).
+One-time costs: ~~Historical data purchase~~ — deferred indefinitely per DEC-353 (Standard plan includes free OHLCV-1m history). Cloud burst compute (pay-per-use, Phases 8–9). Tick-level historical data only if systematic search requires sub-minute precision (estimated $0.21/symbol/month via pay-as-you-go).
 
 ---
 

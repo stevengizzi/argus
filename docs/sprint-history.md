@@ -1,7 +1,7 @@
 # ARGUS — Sprint History
 
 > Complete record of all sprints from project inception through current state.
-> Active development began February 14, 2026. As of March 20, 2026 (~35 calendar days), 25 full sprints + 22 sub-sprints completed.
+> Active development began February 14, 2026. As of March 21, 2026 (~36 calendar days), 25 full sprints + 24 sub-sprints completed.
 
 ---
 
@@ -1111,12 +1111,30 @@
 
 ---
 
+### Phase 5 Gate — Strategic Check-In (March 21, 2026)
+
+**Protocol:** Strategic Check-In (6 sections). Conducted in Claude.ai.
+
+**Key findings:**
+- Paper trading: 4 valid sessions, 28+ trades. Gate 2 counter reset (DEC-355).
+- Historical data: Databento Standard includes free OHLCV-1m (DEC-353). $1K–$5K purchase eliminated.
+- Phase 6 compression: BacktestEngine pulled to Sprint 27 (DEC-354). Learning Loop to Sprint 28.
+- Quality Engine: 55% signal active, 45% at neutral defaults (RSK-045). FMP upgrade deferred (DEC-356).
+- Velocity: 1.5x multiplier (1 fix sprint per 2 feature sprints).
+- PDT reform: FINRA filed with SEC Dec 2025. SEC extended review Jan 2026. Approval expected Q1–Q2 2026.
+
+**Decisions:** DEC-353, DEC-354, DEC-355, DEC-356.
+**New risks:** RSK-045 (Quality Engine partial signal).
+**Updated risks:** RSK-027 (re-validation committed), RSK-032 (now testable).
+
+---
+
 ## Sprint Statistics
 
 - **Total sprints:** 25 full + 24 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8)
 - **Total sessions:** ~342+ Claude Code sessions
 - **Total tests:** 2,815 pytest + 611 Vitest = 3,426 total
-- **Total decisions:** 352 (DEC-001 through DEC-352)
+- **Total decisions:** 356 (DEC-001 through DEC-356)
 - **Calendar days (active dev):** ~36 (Feb 14 – Mar 21, 2026)
 - **Largest sprint:** 22 (9 implementation + 5 fix + 9 reviews, largest scope)
 - **Cleanest sprint:** 23 (11 sessions, 0 regressions, 0 scope gaps requiring follow-up)

@@ -439,6 +439,7 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 | **Impact** | Medium (parameters may shift; methodology and infrastructure are validated) |
 | **Mitigation** | Schedule a re-validation sprint when Databento subscription activates (~Sprint 19). Re-run VectorBT sweeps, walk-forward, and cross-validation for all strategies. Compare results to Alpaca-based analysis to quantify divergence. |
 | **Status** | Open — trigger: Databento activation |
+| **Update (2026-03-21)** | Trigger has fired — Databento is active since March 2026. Sprint 21.6 committed for after Sprint 27 (BacktestEngine Core). DEC-353 confirmed free OHLCV-1m data available from March 2023. Re-validation will use BacktestEngine + 3 years of institutional-grade data. Resolution date: estimated late April 2026. |
 
 ---
 
@@ -492,6 +493,7 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 | **Detection** | Quality Calibration chart (Performance page). Weekly predicted vs actual review. |
 | **Contingency** | Fall back to uniform sizing (current system). Intelligence infrastructure still provides value for research. |
 | **Status** | Open |
+| **Update (2026-03-21)** | Now testable with 28+ paper trades producing quality scores. Active monitoring of quality-score-to-outcome correlation begins. RSK-045 notes that 45% of composite is at neutral defaults, which may reduce overfitting risk (less signal to overfit to) but also reduces differentiation power. |
 
 ---
 
@@ -930,4 +932,18 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 
 ---
 
-*End of Risk & Assumptions Register v1.4*
+### RSK-045 — Quality Engine Running on Partial Signal
+| Field | Value |
+|-------|-------|
+| **Date Identified** | 2026-03-21 |
+| **Severity** | Medium |
+| **Likelihood** | High (confirmed — DEF-082) |
+| **Description** | 45% of the Quality Engine composite score (catalyst_quality 25% + volume_profile 20%) returns neutral defaults (50.0) because real-time RVOL and symbol-specific catalyst data are not flowing to the scorer. The Dynamic Position Sizer makes sizing decisions based on 55% of intended signal (pattern_strength 30%, historical_match 15%, regime_alignment 10%). Quality grades may cluster with less differentiation than designed. |
+| **Mitigation** | (1) Learning Loop V1 (Sprint 28) will correlate quality scores with trade outcomes, revealing whether the active 55% is sufficient. (2) If >80% of trades cluster in 2 adjacent grades, consider reweighting active dimensions to use the full 0–100 range. (3) FMP Premium upgrade (DEC-356) revisited after Learning Loop data. |
+| **Detection** | Monitor quality_history table grade distribution weekly. Flag if grade variance is below threshold. |
+| **Owner** | Quality Engine / Learning Loop |
+| **Status** | Open |
+
+---
+
+*End of Risk & Assumptions Register v1.5*
