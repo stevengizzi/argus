@@ -8,4 +8,14 @@ to create a fully functional trading strategy.
 
 from argus.strategies.patterns.base import CandleBar, PatternDetection, PatternModule
 
-__all__ = ["CandleBar", "PatternDetection", "PatternModule"]
+
+def __getattr__(name: str) -> object:
+    """Lazy import to avoid circular dependency with pattern_strategy."""
+    if name == "PatternBasedStrategy":
+        from argus.strategies.pattern_strategy import PatternBasedStrategy
+
+        return PatternBasedStrategy
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+__all__ = ["CandleBar", "PatternBasedStrategy", "PatternDetection", "PatternModule"]
