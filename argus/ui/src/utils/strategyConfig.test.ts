@@ -40,6 +40,15 @@ describe('strategyConfig', () => {
       expect(getStrategyDisplay('strat_orb_scalp').name).toBe('ORB Scalp');
       expect(getStrategyDisplay('strat_vwap_reclaim').name).toBe('VWAP Reclaim');
       expect(getStrategyDisplay('strat_afternoon_momentum').name).toBe('Afternoon Momentum');
+      expect(getStrategyDisplay('strat_red_to_green').name).toBe('Red-to-Green');
+      expect(getStrategyDisplay('strat_bull_flag').name).toBe('Bull Flag');
+      expect(getStrategyDisplay('strat_flat_top_breakout').name).toBe('Flat-Top Breakout');
+    });
+
+    it('returns correct short names for new strategies', () => {
+      expect(getStrategyDisplay('strat_red_to_green').shortName).toBe('R2G');
+      expect(getStrategyDisplay('strat_bull_flag').shortName).toBe('FLAG');
+      expect(getStrategyDisplay('strat_flat_top_breakout').shortName).toBe('FLAT');
     });
 
     it('returns grey fallback for unknown strategies', () => {
@@ -63,6 +72,9 @@ describe('strategyConfig', () => {
       expect(getStrategyColor('strat_orb_scalp')).toBe('#c084fc');
       expect(getStrategyColor('strat_vwap_reclaim')).toBe('#2dd4bf');
       expect(getStrategyColor('strat_afternoon_momentum')).toBe('#fbbf24');
+      expect(getStrategyColor('strat_red_to_green')).toBe('#fb923c');
+      expect(getStrategyColor('strat_bull_flag')).toBe('#22d3ee');
+      expect(getStrategyColor('strat_flat_top_breakout')).toBe('#a78bfa');
     });
 
     it('returns grey fallback for unknown strategies', () => {
@@ -74,6 +86,9 @@ describe('strategyConfig', () => {
     it('returns correct Tailwind class for known strategies', () => {
       expect(getStrategyBorderClass('strat_orb_breakout')).toBe('border-l-blue-400');
       expect(getStrategyBorderClass('strat_afternoon_momentum')).toBe('border-l-amber-400');
+      expect(getStrategyBorderClass('strat_red_to_green')).toBe('border-l-orange-400');
+      expect(getStrategyBorderClass('strat_bull_flag')).toBe('border-l-cyan-400');
+      expect(getStrategyBorderClass('strat_flat_top_breakout')).toBe('border-l-violet-400');
     });
 
     it('returns grey fallback for unknown strategies', () => {
@@ -85,6 +100,9 @@ describe('strategyConfig', () => {
     it('returns correct Tailwind class for known strategies', () => {
       expect(getStrategyBarClass('strat_orb_breakout')).toBe('bg-blue-400');
       expect(getStrategyBarClass('strat_vwap_reclaim')).toBe('bg-teal-400');
+      expect(getStrategyBarClass('strat_red_to_green')).toBe('bg-orange-400');
+      expect(getStrategyBarClass('strat_bull_flag')).toBe('bg-cyan-400');
+      expect(getStrategyBarClass('strat_flat_top_breakout')).toBe('bg-violet-400');
     });
 
     it('returns grey fallback for unknown strategies', () => {

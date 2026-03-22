@@ -35,6 +35,9 @@ const STRATEGY_COLORS: Record<string, string> = {
   vwap_reclaim: '#2dd4bf',
   momentum: '#fbbf24',      // amber-400
   afternoon_momentum: '#fbbf24',
+  red_to_green: '#fb923c',  // orange-400
+  bull_flag: '#22d3ee',      // cyan-400
+  flat_top_breakout: '#a78bfa', // violet-400
 };
 
 const RESERVE_COLOR = '#71717a'; // zinc-500 (legend dot)
@@ -55,6 +58,9 @@ const STRATEGY_DISPLAY_NAMES: Record<string, string> = {
   vwap_reclaim: 'VWAP Reclaim',
   momentum: 'Momentum',
   afternoon_momentum: 'Afternoon Mom',
+  red_to_green: 'Red-to-Green',
+  bull_flag: 'Bull Flag',
+  flat_top_breakout: 'Flat-Top',
 };
 
 function getStrategyDisplayName(strategyId: string): string {

@@ -33,6 +33,9 @@ const STRATEGY_OPTIONS = [
   { label: 'ORB Scalp', value: 'strat_orb_scalp' },
   { label: 'VWAP Reclaim', value: 'strat_vwap_reclaim' },
   { label: 'Afternoon Momentum', value: 'strat_afternoon_momentum' },
+  { label: 'Red-to-Green', value: 'strat_red_to_green' },
+  { label: 'Bull Flag', value: 'strat_bull_flag' },
+  { label: 'Flat-Top Breakout', value: 'strat_flat_top_breakout' },
 ];
 
 // Colors

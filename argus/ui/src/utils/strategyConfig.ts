@@ -59,6 +59,30 @@ export const STRATEGY_DISPLAY: Record<string, StrategyDisplayConfig> = {
     tailwindColor: 'amber-400',
     badgeId: 'strat_afternoon_momentum',
   },
+  strat_red_to_green: {
+    name: 'Red-to-Green',
+    shortName: 'R2G',
+    letter: 'R',
+    color: '#fb923c',
+    tailwindColor: 'orange-400',
+    badgeId: 'strat_red_to_green',
+  },
+  strat_bull_flag: {
+    name: 'Bull Flag',
+    shortName: 'FLAG',
+    letter: 'F',
+    color: '#22d3ee',
+    tailwindColor: 'cyan-400',
+    badgeId: 'strat_bull_flag',
+  },
+  strat_flat_top_breakout: {
+    name: 'Flat-Top Breakout',
+    shortName: 'FLAT',
+    letter: 'T',
+    color: '#a78bfa',
+    tailwindColor: 'violet-400',
+    badgeId: 'strat_flat_top_breakout',
+  },
 };
 
 /**
@@ -70,6 +94,9 @@ export const STRATEGY_BORDER_CLASSES: Record<string, string> = {
   strat_orb_scalp: 'border-l-purple-400',
   strat_vwap_reclaim: 'border-l-teal-400',
   strat_afternoon_momentum: 'border-l-amber-400',
+  strat_red_to_green: 'border-l-orange-400',
+  strat_bull_flag: 'border-l-cyan-400',
+  strat_flat_top_breakout: 'border-l-violet-400',
 };
 
 /**
@@ -81,6 +108,9 @@ export const STRATEGY_BAR_CLASSES: Record<string, string> = {
   strat_orb_scalp: 'bg-purple-400',
   strat_vwap_reclaim: 'bg-teal-400',
   strat_afternoon_momentum: 'bg-amber-400',
+  strat_red_to_green: 'bg-orange-400',
+  strat_bull_flag: 'bg-cyan-400',
+  strat_flat_top_breakout: 'bg-violet-400',
 };
 
 /**

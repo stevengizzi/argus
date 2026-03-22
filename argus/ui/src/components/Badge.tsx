@@ -13,7 +13,7 @@
 type BaseVariant = 'info' | 'success' | 'warning' | 'danger' | 'neutral';
 
 // Strategy identifiers
-type StrategyId = 'orb' | 'orb_breakout' | 'scalp' | 'orb_scalp' | 'vwap' | 'vwap_reclaim' | 'momentum' | 'afternoon_momentum';
+type StrategyId = 'orb' | 'orb_breakout' | 'scalp' | 'orb_scalp' | 'vwap' | 'vwap_reclaim' | 'momentum' | 'afternoon_momentum' | 'red_to_green' | 'bull_flag' | 'flat_top_breakout';
 
 // Market regime identifiers
 type RegimeId = 'bullish' | 'bullish_trending' | 'bearish' | 'bearish_trending' | 'range' | 'range_bound' | 'high_vol' | 'crisis';
@@ -34,6 +34,9 @@ const strategyColors: Record<StrategyId, string> = {
   vwap_reclaim: 'text-teal-400 bg-teal-400/15',
   momentum: 'text-amber-400 bg-amber-400/15',
   afternoon_momentum: 'text-amber-400 bg-amber-400/15',
+  red_to_green: 'text-orange-400 bg-orange-400/15',
+  bull_flag: 'text-cyan-400 bg-cyan-400/15',
+  flat_top_breakout: 'text-violet-400 bg-violet-400/15',
 };
 
 // Color mapping for market regimes
@@ -81,6 +84,9 @@ const strategyLabels: Record<string, string> = {
   vwap_reclaim: 'VWAP',
   momentum: 'MOM',
   afternoon_momentum: 'MOM',
+  red_to_green: 'R2G',
+  bull_flag: 'FLAG',
+  flat_top_breakout: 'FLAT',
 };
 
 // Single-letter labels for compact badges
@@ -93,6 +99,9 @@ const strategyLetters: Record<string, string> = {
   vwap_reclaim: 'V',
   momentum: 'A', // Afternoon Momentum → A
   afternoon_momentum: 'A',
+  red_to_green: 'R',
+  bull_flag: 'F',
+  flat_top_breakout: 'T',
 };
 
 // Display labels for regimes

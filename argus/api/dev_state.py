@@ -26,6 +26,8 @@ from argus.core.config import (
     AfternoonMomentumConfig,
     ApiConfig,
     BacktestSummaryConfig,
+    BullFlagConfig,
+    FlatTopBreakoutConfig,
     GoalsConfig,
     HealthConfig,
     OperatingWindow,
@@ -33,6 +35,7 @@ from argus.core.config import (
     OrbScalpConfig,
     OrchestratorConfig,
     OrderManagerConfig,
+    RedToGreenConfig,
     RiskConfig,
     StrategyConfig,
     SystemConfig,
@@ -1972,6 +1975,15 @@ async def create_dev_state() -> AppState:
     health_monitor.update_component(
         "strategy_afternoon_momentum", ComponentStatus.HEALTHY, "Afternoon Momentum running"
     )
+    health_monitor.update_component(
+        "strategy_red_to_green", ComponentStatus.HEALTHY, "Red-to-Green running"
+    )
+    health_monitor.update_component(
+        "strategy_bull_flag", ComponentStatus.HEALTHY, "Bull Flag running"
+    )
+    health_monitor.update_component(
+        "strategy_flat_top_breakout", ComponentStatus.HEALTHY, "Flat-Top Breakout running"
+    )
 
     # Risk manager
     risk_config = RiskConfig()
@@ -2185,11 +2197,110 @@ async def create_dev_state() -> AppState:
         drawdown_pct=0.012,
     )
 
+    # Red-to-Green config (exploration stage — no backtest results yet)
+    r2g_config = RedToGreenConfig(
+        strategy_id="strat_red_to_green",
+        name="Red-to-Green",
+        version="1.0.0",
+        family="reversal",
+        description_short=(
+            "Gap-down reversal at key support levels "
+            "(VWAP, premarket low, prior close)."
+        ),
+        time_window_display="9:45–11:00 AM",
+        operating_window=OperatingWindow(
+            earliest_entry="09:45",
+            latest_entry="11:00",
+            force_close="15:50",
+        ),
+        backtest_summary=BacktestSummaryConfig(
+            status="vectorbt_module_ready",
+        ),
+    )
+    mock_red_to_green = MockStrategy(
+        strategy_id="strat_red_to_green",
+        name="Red-to-Green",
+        version="1.0.0",
+        is_active=False,
+        pipeline_stage="exploration",
+        allocated_capital=0.0,
+        daily_pnl=0.0,
+        trade_count_today=0,
+        config=r2g_config,
+    )
+
+    # Bull Flag config (exploration stage)
+    bull_flag_config = BullFlagConfig(
+        strategy_id="strat_bull_flag",
+        name="Bull Flag",
+        version="1.0.0",
+        family="continuation",
+        description_short=(
+            "Bull flag continuation: strong pole, tight flag "
+            "consolidation, breakout on volume."
+        ),
+        time_window_display="10:00 AM–3:00 PM",
+        operating_window=OperatingWindow(
+            earliest_entry="10:00",
+            latest_entry="15:00",
+            force_close="15:50",
+        ),
+        backtest_summary=BacktestSummaryConfig(
+            status="exploration",
+        ),
+    )
+    mock_bull_flag = MockStrategy(
+        strategy_id="strat_bull_flag",
+        name="Bull Flag",
+        version="1.0.0",
+        is_active=False,
+        pipeline_stage="exploration",
+        allocated_capital=0.0,
+        daily_pnl=0.0,
+        trade_count_today=0,
+        config=bull_flag_config,
+    )
+
+    # Flat-Top Breakout config (exploration stage)
+    flat_top_config = FlatTopBreakoutConfig(
+        strategy_id="strat_flat_top_breakout",
+        name="Flat-Top Breakout",
+        version="1.0.0",
+        family="breakout",
+        description_short=(
+            "Horizontal resistance with multiple touches, tight "
+            "consolidation, volume breakout."
+        ),
+        time_window_display="10:00 AM–3:00 PM",
+        operating_window=OperatingWindow(
+            earliest_entry="10:00",
+            latest_entry="15:00",
+            force_close="15:50",
+        ),
+        backtest_summary=BacktestSummaryConfig(
+            status="exploration",
+        ),
+    )
+    mock_flat_top = MockStrategy(
+        strategy_id="strat_flat_top_breakout",
+        name="Flat-Top Breakout",
+        version="1.0.0",
+        is_active=False,
+        pipeline_stage="exploration",
+        allocated_capital=0.0,
+        daily_pnl=0.0,
+        trade_count_today=0,
+        config=flat_top_config,
+    )
+
     # Seed evaluation events into each strategy's buffer for dev mode
     _seed_eval_events(mock_orb_breakout, now)
     _seed_eval_events(mock_orb_scalp, now)
     _seed_eval_events(mock_vwap_reclaim, now)
     _seed_eval_events(mock_afternoon_momentum, now)
+    _seed_eval_events(mock_red_to_green, now)
+    _seed_eval_events(mock_bull_flag, now)
+    _seed_eval_events(mock_flat_top, now)
 
     # Mock orchestrator
     mock_orchestrator = _create_mock_orchestrator(now)
@@ -2211,6 +2322,9 @@ async def create_dev_state() -> AppState:
             "orb_scalp": mock_orb_scalp,  # type: ignore[dict-item]
             "vwap_reclaim": mock_vwap_reclaim,  # type: ignore[dict-item]
             "afternoon_momentum": mock_afternoon_momentum,  # type: ignore[dict-item]
+            "strat_red_to_green": mock_red_to_green,  # type: ignore[dict-item]
+            "strat_bull_flag": mock_bull_flag,  # type: ignore[dict-item]
+            "strat_flat_top_breakout": mock_flat_top,  # type: ignore[dict-item]
         },
         clock=clock,
         config=system_config,

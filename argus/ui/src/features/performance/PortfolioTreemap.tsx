@@ -34,6 +34,9 @@ const STRATEGY_ABBREV: Record<string, string> = {
   strat_orb_scalp: 'Scalp',
   strat_vwap_reclaim: 'VWAP',
   strat_afternoon_momentum: 'AFTN',
+  strat_red_to_green: 'R2G',
+  strat_bull_flag: 'FLAG',
+  strat_flat_top_breakout: 'FLAT',
 };
 
 interface TreemapNode {
