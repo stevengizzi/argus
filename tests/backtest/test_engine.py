@@ -10,6 +10,7 @@ watchlist scoping, and daily state reset.
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
@@ -219,19 +220,15 @@ async def test_factory_unknown_raises(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_teardown_cleans_up(tmp_path: Path) -> None:
-    """run() with stub completes without error and DB file is created."""
+    """run() with no data returns empty result (no setup/teardown needed)."""
     config = _make_config(tmp_path, StrategyType.ORB_BREAKOUT, "strat_orb_breakout")
     engine = BacktestEngine(config)
     result = await engine.run()
 
-    # Verify result is returned
+    # Verify result is returned with empty metrics
     assert result.strategy_id == "strat_orb_breakout"
     assert result.total_trades == 0
     assert result.initial_capital == 100_000.0
-
-    # Verify DB file was created
-    assert engine._db_path is not None
-    assert engine._db_path.exists()
 
 
 @pytest.mark.asyncio
@@ -945,5 +942,473 @@ async def test_daily_state_reset(tmp_path: Path) -> None:
     try:
         await engine._run_trading_day(TRADING_DAY, ["AAPL"])
         assert reset_called["count"] == 1
+    finally:
+        await engine._teardown()
+
+
+# ---------------------------------------------------------------------------
+# Sprint 27 Session 5: Multi-day orchestration + scanner + results + CLI
+# ---------------------------------------------------------------------------
+
+
+def _make_multi_day_bars(
+    symbol: str,
+    trading_days: list[date],
+) -> pd.DataFrame:
+    """Build bar data spanning multiple trading days.
+
+    Creates 3 bars per day at 9:30, 10:00, 10:30 ET with simple price data.
+    """
+    rows: list[dict[str, object]] = []
+    base_price = 100.0
+    for day in trading_days:
+        for h, m in [(9, 30), (10, 0), (10, 30)]:
+            ts = datetime(
+                day.year, day.month, day.day, h, m, 0, tzinfo=ET,
+            ).astimezone(UTC)
+            rows.append({
+                "timestamp": ts,
+                "open": base_price,
+                "high": base_price + 1.0,
+                "low": base_price - 1.0,
+                "close": base_price + 0.5,
+                "volume": 1000,
+                "trading_date": day,
+            })
+        base_price += 1.0
+    return pd.DataFrame(rows)
+
+
+MULTI_DAYS = [
+    date(2025, 6, 16),
+    date(2025, 6, 17),
+    date(2025, 6, 18),
+    date(2025, 6, 19),
+    date(2025, 6, 20),
+]
+
+
+# --- Test S5-1: Multi-day run ---
+
+@pytest.mark.asyncio
+async def test_run_multi_day(tmp_path: Path) -> None:
+    """Run processes all 5 trading days."""
+    bars = _make_multi_day_bars("AAPL", MULTI_DAYS)
+    config = _make_config(
+        tmp_path, StrategyType.ORB_BREAKOUT, "strat_orb_breakout"
+    )
+    engine = BacktestEngine(config)
+
+    # Inject bar data directly
+    engine._bar_data = {"AAPL": bars}
+    engine._trading_days = MULTI_DAYS
+
+    # Patch _load_data to skip file I/O
+    engine._load_data = AsyncMock()  # type: ignore[method-assign]
+
+    result = await engine.run()
+
+    assert result.trading_days == 5
+    assert result.strategy_id == "strat_orb_breakout"
+
+
+# --- Test S5-2: Daily state reset across days ---
+
+@pytest.mark.asyncio
+async def test_daily_state_reset_across_days(tmp_path: Path) -> None:
+    """Strategy/RM/OM/DS reset between each trading day."""
+    days = [date(2025, 6, 16), date(2025, 6, 17), date(2025, 6, 18)]
+    bars = _make_multi_day_bars("AAPL", days)
+
+    engine = await _setup_engine_with_bars(tmp_path, {"AAPL": bars})
+    assert engine._strategy is not None
+
+    reset_count = {"value": 0}
+    original_reset = engine._strategy.reset_daily_state
+
+    def counting_reset() -> None:
+        reset_count["value"] += 1
+        original_reset()
+
+    engine._strategy.reset_daily_state = counting_reset  # type: ignore[assignment]
+    engine._trading_days = days
+
+    try:
+        for day in days:
+            await engine._run_trading_day(day, ["AAPL"])
+        assert reset_count["value"] == 3
+    finally:
+        await engine._teardown()
+
+
+# --- Test S5-3: Scanner generates watchlists ---
+
+@pytest.mark.asyncio
+async def test_scanner_generates_watchlists(tmp_path: Path) -> None:
+    """ScannerSimulator is called and watchlists used per day."""
+    days = [date(2025, 6, 16), date(2025, 6, 17)]
+    bars_a = _make_multi_day_bars("AAPL", days)
+    bars_t = _make_multi_day_bars("TSLA", days)
+
+    config = _make_config(
+        tmp_path, StrategyType.ORB_BREAKOUT, "strat_orb_breakout"
+    )
+    engine = BacktestEngine(config)
+    engine._bar_data = {"AAPL": bars_a, "TSLA": bars_t}
+    engine._trading_days = days
+    engine._load_data = AsyncMock()  # type: ignore[method-assign]
+
+    # Patch ScannerSimulator to track calls
+    from argus.backtest.scanner_simulator import ScannerSimulator, DailyWatchlist
+
+    watchlist_calls: list[object] = []
+    original_compute = ScannerSimulator.compute_watchlists
+
+    def tracking_compute(
+        self: ScannerSimulator,
+        bar_data: dict[str, pd.DataFrame],
+        trading_days: list[date],
+    ) -> dict[date, DailyWatchlist]:
+        watchlist_calls.append(True)
+        return original_compute(self, bar_data, trading_days)
+
+    with patch.object(
+        ScannerSimulator, "compute_watchlists", tracking_compute
+    ):
+        result = await engine.run()
+
+    assert len(watchlist_calls) == 1  # Called exactly once
+    assert result.trading_days == 2
+
+
+# --- Test S5-4: Results computed ---
+
+@pytest.mark.asyncio
+async def test_results_computed(tmp_path: Path) -> None:
+    """BacktestResult has valid fields after run."""
+    bars = _make_multi_day_bars("AAPL", MULTI_DAYS)
+    config = _make_config(
+        tmp_path, StrategyType.ORB_BREAKOUT, "strat_orb_breakout"
+    )
+    config.initial_cash = 50_000.0
+    engine = BacktestEngine(config)
+    engine._bar_data = {"AAPL": bars}
+    engine._trading_days = MULTI_DAYS
+    engine._load_data = AsyncMock()  # type: ignore[method-assign]
+
+    result = await engine.run()
+
+    assert result.initial_capital == 50_000.0
+    assert result.start_date == date(2025, 6, 16)
+    assert result.end_date == date(2025, 6, 20)
+    assert result.trading_days == 5
+    # No signals emitted by default ORB strategy on this simple data
+    assert result.total_trades == 0
+    assert result.final_equity == 50_000.0
+
+
+# --- Test S5-5: Empty data returns empty result ---
+
+@pytest.mark.asyncio
+async def test_empty_data_returns_empty_result(tmp_path: Path) -> None:
+    """No trading days -> BacktestResult with 0 trades."""
+    config = _make_config(
+        tmp_path, StrategyType.ORB_BREAKOUT, "strat_orb_breakout"
+    )
+    engine = BacktestEngine(config)
+    # No bar data, no trading days
+    result = await engine.run()
+
+    assert result.total_trades == 0
+    assert result.trading_days == 0
+    assert result.win_rate == 0.0
+
+
+# --- Test S5-6: End-to-end ORB breakout (no signals on simple data) ---
+
+@pytest.mark.asyncio
+async def test_end_to_end_orb_breakout(tmp_path: Path) -> None:
+    """ORB Breakout on mocked data completes without error."""
+    bars = _make_multi_day_bars("AAPL", MULTI_DAYS[:3])
+    config = _make_config(
+        tmp_path, StrategyType.ORB_BREAKOUT, "strat_orb_breakout"
+    )
+    engine = BacktestEngine(config)
+    engine._bar_data = {"AAPL": bars}
+    engine._trading_days = MULTI_DAYS[:3]
+    engine._load_data = AsyncMock()  # type: ignore[method-assign]
+
+    result = await engine.run()
+
+    # Simple data won't trigger ORB entries — just verify no crash
+    assert result.trading_days == 3
+    assert result.total_trades >= 0
+
+
+# --- Test S5-7: End-to-end no signals ---
+
+@pytest.mark.asyncio
+async def test_end_to_end_no_signals(tmp_path: Path) -> None:
+    """Strategy with no matching setups -> 0 trades, no error."""
+    bars = _make_multi_day_bars("AAPL", [date(2025, 6, 16)])
+    config = _make_config(
+        tmp_path, StrategyType.VWAP_RECLAIM, "strat_vwap_reclaim"
+    )
+    engine = BacktestEngine(config)
+    engine._bar_data = {"AAPL": bars}
+    engine._trading_days = [date(2025, 6, 16)]
+    engine._load_data = AsyncMock()  # type: ignore[method-assign]
+
+    result = await engine.run()
+
+    assert result.total_trades == 0
+    assert result.strategy_id == "strat_vwap_reclaim"
+
+
+# --- Test S5-8: DB output created ---
+
+@pytest.mark.asyncio
+async def test_db_output_created(tmp_path: Path) -> None:
+    """SQLite file exists at expected path with DEC-056 naming."""
+    bars = _make_multi_day_bars("AAPL", [date(2025, 6, 16)])
+    config = _make_config(
+        tmp_path, StrategyType.ORB_BREAKOUT, "strat_orb_breakout"
+    )
+    engine = BacktestEngine(config)
+    engine._bar_data = {"AAPL": bars}
+    engine._trading_days = [date(2025, 6, 16)]
+    engine._load_data = AsyncMock()  # type: ignore[method-assign]
+
+    await engine.run()
+
+    assert engine._db_path is not None
+    assert engine._db_path.exists()
+    # DEC-056: {strategy_id}_{start}_{end}_{timestamp}.db
+    assert engine._db_path.name.startswith("strat_orb_breakout_")
+    assert engine._db_path.suffix == ".db"
+
+
+# --- Test S5-9: Metadata recorded (AR-1) ---
+
+@pytest.mark.asyncio
+async def test_metadata_recorded(tmp_path: Path) -> None:
+    """engine_type and fill_model present in output (AR-1)."""
+    import json as json_mod
+
+    bars = _make_multi_day_bars("AAPL", [date(2025, 6, 16)])
+    config = _make_config(
+        tmp_path, StrategyType.ORB_BREAKOUT, "strat_orb_breakout"
+    )
+    engine = BacktestEngine(config)
+    engine._bar_data = {"AAPL": bars}
+    engine._trading_days = [date(2025, 6, 16)]
+    engine._load_data = AsyncMock()  # type: ignore[method-assign]
+
+    await engine.run()
+
+    assert engine._db_path is not None
+    meta_path = Path(f"{engine._db_path}.meta.json")
+    assert meta_path.exists()
+
+    metadata = json_mod.loads(meta_path.read_text())
+    assert metadata["engine_type"] == "backtest_engine"
+    assert metadata["fill_model"] == "bar_level_worst_case"
+    assert metadata["strategy_type"] == "orb"
+    assert metadata["symbol_count"] == 1
+    assert "run_timestamp" in metadata
+
+
+# --- Test S5-10: CLI parse_args ---
+
+def test_cli_parse_args() -> None:
+    """parse_args handles all required flags correctly."""
+    from argus.backtest.engine import parse_args
+
+    with patch(
+        "sys.argv",
+        [
+            "engine",
+            "--strategy", "orb",
+            "--start", "2025-01-01",
+            "--end", "2025-01-31",
+            "--symbols", "AAPL,TSLA",
+            "--initial-cash", "50000",
+            "--slippage", "0.02",
+            "--log-level", "INFO",
+            "--no-cost-check",
+            "--config-override", "orb_window_minutes=15",
+            "-v",
+        ],
+    ):
+        args = parse_args()
+
+    assert args.strategy == "orb"
+    assert args.start == date(2025, 1, 1)
+    assert args.end == date(2025, 1, 31)
+    assert args.symbols == "AAPL,TSLA"
+    assert args.initial_cash == 50000.0
+    assert args.slippage == 0.02
+    assert args.log_level == "INFO"
+    assert args.no_cost_check is True
+    assert args.verbose is True
+    assert args.config_override == ["orb_window_minutes=15"]
+
+
+# --- Test S5-11: CLI main runs ---
+
+def test_cli_main_runs(tmp_path: Path) -> None:
+    """main() builds correct config and calls asyncio.run()."""
+    from argus.backtest.engine import main
+    from argus.backtest.metrics import BacktestResult
+
+    empty_result = BacktestResult(
+        strategy_id="strat_orb", start_date=date(2025, 6, 16),
+        end_date=date(2025, 6, 16), initial_capital=100_000.0,
+        final_equity=100_000.0, trading_days=0, total_trades=0,
+        winning_trades=0, losing_trades=0, breakeven_trades=0,
+        win_rate=0.0, profit_factor=0.0, avg_r_multiple=0.0,
+        avg_winner_r=0.0, avg_loser_r=0.0, expectancy=0.0,
+        max_drawdown_dollars=0.0, max_drawdown_pct=0.0,
+        sharpe_ratio=0.0, recovery_factor=0.0, avg_hold_minutes=0.0,
+        max_consecutive_wins=0, max_consecutive_losses=0,
+        largest_win_dollars=0.0, largest_loss_dollars=0.0,
+        largest_win_r=0.0, largest_loss_r=0.0,
+    )
+
+    with patch(
+        "sys.argv",
+        [
+            "engine",
+            "--strategy", "orb",
+            "--start", "2025-06-16",
+            "--end", "2025-06-16",
+            "--output-dir", str(tmp_path / "output"),
+            "--log-level", "ERROR",
+        ],
+    ), patch(
+        "argus.backtest.engine.asyncio.run",
+        return_value=empty_result,
+    ) as mock_run:
+        main()
+
+    # Verify asyncio.run was called with a coroutine
+    assert mock_run.called
+
+
+# --- Test S5-12: Log level config ---
+
+@pytest.mark.asyncio
+async def test_log_level_config(tmp_path: Path) -> None:
+    """WARNING level applied during _setup(); INFO level applies INFO."""
+    config = _make_config(
+        tmp_path, StrategyType.ORB_BREAKOUT, "strat_orb_breakout"
+    )
+    config.log_level = "WARNING"
+    engine = BacktestEngine(config)
+    await engine._setup()
+    try:
+        argus_logger = logging.getLogger("argus")
+        assert argus_logger.level == logging.WARNING
+    finally:
+        await engine._teardown()
+
+    # Now test with INFO
+    config2 = _make_config(
+        tmp_path, StrategyType.ORB_BREAKOUT, "strat_orb_breakout_2"
+    )
+    config2.log_level = "INFO"
+    engine2 = BacktestEngine(config2)
+    await engine2._setup()
+    try:
+        assert logging.getLogger("argus").level == logging.INFO
+    finally:
+        await engine2._teardown()
+
+
+# --- Test S5-13: Progress logging ---
+
+@pytest.mark.asyncio
+async def test_progress_logging(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Progress logged every 20 days."""
+    # Create 25 weekdays (need >20 to trigger progress log)
+    base = date(2025, 1, 2)
+    all_days = [base + timedelta(days=i) for i in range(40)]
+    days = [d for d in all_days if d.weekday() < 5][:25]
+    bars = _make_multi_day_bars("AAPL", days)
+
+    config = _make_config(
+        tmp_path, StrategyType.ORB_BREAKOUT, "strat_orb_breakout"
+    )
+    config.log_level = "INFO"
+    engine = BacktestEngine(config)
+    engine._bar_data = {"AAPL": bars}
+    engine._trading_days = days
+    engine._load_data = AsyncMock()  # type: ignore[method-assign]
+
+    with caplog.at_level(logging.INFO, logger="argus.backtest.engine"):
+        await engine.run()
+
+    progress_msgs = [
+        r for r in caplog.records
+        if "Progress:" in r.message and "trading days complete" in r.message
+    ]
+    # With 25 days, day 20 triggers progress log
+    assert len(progress_msgs) >= 1
+
+
+# --- Test S5-14: Config overrides applied ---
+
+@pytest.mark.asyncio
+async def test_config_overrides_applied_in_run(tmp_path: Path) -> None:
+    """Strategy parameter overrides reflected in strategy config via run()."""
+    bars = _make_multi_day_bars("AAPL", [date(2025, 6, 16)])
+    config = _make_config(
+        tmp_path, StrategyType.ORB_BREAKOUT, "strat_orb_breakout"
+    )
+    config.config_overrides = {"orb_window_minutes": 20}
+    engine = BacktestEngine(config)
+    engine._bar_data = {"AAPL": bars}
+    engine._trading_days = [date(2025, 6, 16)]
+    engine._load_data = AsyncMock()  # type: ignore[method-assign]
+
+    # Run setup only to check strategy config
+    await engine._setup()
+    try:
+        assert isinstance(engine._strategy, OrbBreakoutStrategy)
+        assert engine._strategy._config.orb_window_minutes == 20
+    finally:
+        await engine._teardown()
+
+
+# --- Test S5-15: Symbols filter ---
+
+@pytest.mark.asyncio
+async def test_symbols_filter(tmp_path: Path) -> None:
+    """Only specified symbols processed when symbols list provided."""
+    days = [date(2025, 6, 16)]
+    bars_a = _make_multi_day_bars("AAPL", days)
+    bars_t = _make_multi_day_bars("TSLA", days)
+
+    engine = await _setup_engine_with_bars(
+        tmp_path, {"AAPL": bars_a, "TSLA": bars_t}
+    )
+    assert engine._data_service is not None
+
+    fed_symbols: list[str] = []
+    original_feed = engine._data_service.feed_bar
+
+    async def track_feed(symbol: str, **kwargs: object) -> None:
+        fed_symbols.append(symbol)
+        await original_feed(symbol=symbol, **kwargs)
+
+    engine._data_service.feed_bar = track_feed  # type: ignore[assignment]
+
+    try:
+        # Only pass AAPL in watchlist
+        await engine._run_trading_day(date(2025, 6, 16), ["AAPL"])
+        assert all(s == "AAPL" for s in fed_symbols)
+        assert "TSLA" not in fed_symbols
     finally:
         await engine._teardown()

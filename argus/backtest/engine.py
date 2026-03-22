@@ -8,13 +8,18 @@ Decision references:
 - DEC-055: BacktestDataService (Step-Driven DataService)
 - DEC-056: Backtest Database Naming Convention
 - Sprint 27 S3: Component assembly + strategy factory
+- Sprint 27 S5: Multi-day orchestration + scanner + results + CLI
 """
 
 from __future__ import annotations
 
+import argparse
+import asyncio
+import json
 import logging
 from datetime import UTC, date, datetime
 from pathlib import Path
+from typing import Any
 from zoneinfo import ZoneInfo
 
 import pandas as pd
@@ -23,7 +28,8 @@ from argus.analytics.trade_logger import TradeLogger
 from argus.backtest.backtest_data_service import BacktestDataService
 from argus.backtest.config import BacktestEngineConfig, StrategyType
 from argus.backtest.historical_data_feed import HistoricalDataFeed
-from argus.backtest.metrics import BacktestResult
+from argus.backtest.metrics import BacktestResult, compute_metrics
+from argus.backtest.scanner_simulator import ScannerSimulator
 from argus.core.clock import FixedClock
 from argus.core.config import (
     AfternoonMomentumConfig,
@@ -66,6 +72,11 @@ class BacktestEngine:
     in fast-replay mode using SyncEventBus instead of async EventBus.
     No tick synthesis — uses bar-level fill model (worst-case priority).
 
+    Note: The bar-level fill model is least accurate for strategies with risk
+    parameters smaller than the typical 1-minute bar range (e.g., ORB Scalp
+    with 0.3R target). For these strategies, the Replay Harness with tick
+    synthesis provides higher-fidelity results.
+
     Usage:
         config = BacktestEngineConfig(start_date=..., end_date=...)
         engine = BacktestEngine(config)
@@ -100,23 +111,84 @@ class BacktestEngine:
     async def run(self) -> BacktestResult:
         """Run the backtest end-to-end.
 
-        Sets up all components, loads data, runs the day-by-day execution
-        loop, computes results, and tears down.
+        Follows the ReplayHarness.run() flow:
+        1. Log start info
+        2. Load data (via HistoricalDataFeed or from pre-loaded bar_data)
+        3. If no trading days -> return _empty_result()
+        4. Initialize all components via _setup()
+        5. Pre-compute watchlists via ScannerSimulator
+        6. For each trading day: _run_trading_day(day, watchlist)
+        7. Compute results via _compute_results()
+        8. Record engine metadata (AR-1)
+        9. Teardown
+        10. Log completion summary
 
         Returns:
             BacktestResult with metrics from the run.
         """
-        await self._setup()
+        logger.info(
+            "Starting BacktestEngine: strategy=%s, period=%s to %s",
+            self._config.strategy_id,
+            self._config.start_date,
+            self._config.end_date,
+        )
+
+        # 1. Load data
         await self._load_data()
 
-        # Day-by-day execution loop
-        watchlist = list(self._bar_data.keys())
-        for trading_day in self._trading_days:
-            await self._run_trading_day(trading_day, watchlist)
+        # 2. If no trading days, return empty
+        if not self._trading_days:
+            logger.warning("No trading days found in date range")
+            return self._empty_result()
 
-        # Results computation added in S5
-        result = self._empty_result()
+        # 3. Initialize all components
+        await self._setup()
+
+        # 4. Pre-compute watchlists via ScannerSimulator
+        scanner = ScannerSimulator(
+            min_gap_pct=self._config.scanner_min_gap_pct,
+            min_price=self._config.scanner_min_price,
+            max_price=self._config.scanner_max_price,
+            fallback_all_symbols=self._config.scanner_fallback_all_symbols,
+        )
+        watchlists = scanner.compute_watchlists(
+            self._bar_data, self._trading_days
+        )
+
+        # 5. Day-by-day execution loop
+        for day_num, trading_day in enumerate(self._trading_days, 1):
+            daily_watchlist = watchlists.get(trading_day)
+            symbols = daily_watchlist.symbols if daily_watchlist else list(
+                self._bar_data.keys()
+            )
+            await self._run_trading_day(trading_day, symbols)
+
+            if day_num % 20 == 0:
+                logger.info(
+                    "Progress: %d/%d trading days complete",
+                    day_num,
+                    len(self._trading_days),
+                )
+
+        # 6. Compute results
+        result = await self._compute_results()
+
+        # 7. Record engine metadata (AR-1)
+        self._write_metadata()
+
+        # 8. Teardown
         await self._teardown()
+
+        # 9. Log completion summary
+        logger.info(
+            "Backtest complete: %d trading days, %d trades, PF=%.2f, WR=%.1f%%",
+            result.trading_days,
+            result.total_trades,
+            result.profit_factor if result.profit_factor != float("inf")
+            else 0.0,
+            result.win_rate * 100,
+        )
+
         return result
 
     async def _setup(self) -> None:
@@ -891,6 +963,56 @@ class BacktestEngine:
             largest_loss_r=0.0,
         )
 
+    # --- Results & metadata ---
+
+    async def _compute_results(self) -> BacktestResult:
+        """Compute all metrics after the backtest completes.
+
+        Delegates to compute_metrics() from argus.backtest.metrics,
+        matching the ReplayHarness._compute_results() pattern.
+
+        Returns:
+            BacktestResult with all computed metrics.
+        """
+        if self._trade_logger is None:
+            return self._empty_result()
+
+        return await compute_metrics(
+            trade_logger=self._trade_logger,
+            strategy_id=self._config.strategy_id,
+            start_date=self._config.start_date,
+            end_date=self._config.end_date,
+            initial_capital=self._config.initial_cash,
+            trading_days=len(self._trading_days),
+        )
+
+    def _write_metadata(self) -> None:
+        """Record engine metadata alongside the output database (AR-1).
+
+        Writes a JSON metadata file at {db_path}.meta.json with engine
+        type, fill model, strategy info, date range, and run timestamp.
+        """
+        if self._db_path is None:
+            return
+
+        metadata = {
+            "engine_type": "backtest_engine",
+            "fill_model": "bar_level_worst_case",
+            "strategy_type": str(self._config.strategy_type),
+            "strategy_id": self._config.strategy_id,
+            "start_date": self._config.start_date.isoformat(),
+            "end_date": self._config.end_date.isoformat(),
+            "symbol_count": len(self._bar_data),
+            "trading_days": len(self._trading_days),
+            "initial_cash": self._config.initial_cash,
+            "slippage_per_share": self._config.slippage_per_share,
+            "run_timestamp": datetime.now(UTC).isoformat(),
+        }
+
+        meta_path = Path(f"{self._db_path}.meta.json")
+        meta_path.write_text(json.dumps(metadata, indent=2))
+        logger.info("Engine metadata written: %s", meta_path)
+
     # --- Teardown ---
 
     async def _teardown(self) -> None:
@@ -902,3 +1024,178 @@ class BacktestEngine:
             await self._db_manager.close()
 
         logger.info("Backtest database saved: %s", self._db_path)
+
+
+# ---------------------------------------------------------------------------
+# CLI Entry Point
+# ---------------------------------------------------------------------------
+
+
+def parse_args() -> argparse.Namespace:
+    """Parse command line arguments for BacktestEngine.
+
+    Returns:
+        Parsed argument namespace.
+    """
+    parser = argparse.ArgumentParser(
+        description="Argus BacktestEngine - bar-level production-code backtesting"
+    )
+    parser.add_argument(
+        "--strategy",
+        type=str,
+        required=True,
+        choices=[e.value for e in StrategyType],
+        help="Strategy type to backtest",
+    )
+    parser.add_argument(
+        "--start",
+        type=date.fromisoformat,
+        required=True,
+        help="Start date (YYYY-MM-DD)",
+    )
+    parser.add_argument(
+        "--end",
+        type=date.fromisoformat,
+        required=True,
+        help="End date (YYYY-MM-DD)",
+    )
+    parser.add_argument(
+        "--symbols",
+        type=str,
+        default=None,
+        help="Comma-separated symbols (default: all cached)",
+    )
+    parser.add_argument(
+        "--cache-dir",
+        default="data/databento_cache",
+        help="Path to Databento cache directory",
+    )
+    parser.add_argument(
+        "--output-dir",
+        default="data/backtest_runs",
+        help="Path to store backtest results",
+    )
+    parser.add_argument(
+        "--initial-cash",
+        type=float,
+        default=100_000.0,
+        help="Starting capital",
+    )
+    parser.add_argument(
+        "--slippage",
+        type=float,
+        default=0.01,
+        help="Fixed slippage per share in dollars",
+    )
+    parser.add_argument(
+        "--no-cost-check",
+        action="store_true",
+        help="Disable Databento zero-cost verification",
+    )
+    parser.add_argument(
+        "--log-level",
+        default="WARNING",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        help="Logging level (default: WARNING)",
+    )
+    parser.add_argument(
+        "--config-override",
+        action="append",
+        default=[],
+        help="Config override in key=value format (repeatable)",
+    )
+    parser.add_argument(
+        "-v", "--verbose",
+        action="store_true",
+        help="Enable debug logging (overrides --log-level)",
+    )
+    return parser.parse_args()
+
+
+def main() -> None:
+    """CLI entry point for BacktestEngine."""
+    args = parse_args()
+
+    # Configure logging
+    log_level = "DEBUG" if args.verbose else args.log_level
+    logging.basicConfig(
+        level=getattr(logging, log_level),
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+
+    # Parse symbols
+    symbols: list[str] | None = None
+    if args.symbols:
+        symbols = [s.strip() for s in args.symbols.split(",")]
+
+    # Parse config overrides
+    overrides: dict[str, Any] = {}
+    for override in args.config_override:
+        key, _, value = override.partition("=")
+        try:
+            parsed_value: float | int | str = float(value)
+            if parsed_value == int(parsed_value):
+                parsed_value = int(parsed_value)
+        except ValueError:
+            parsed_value = value
+        overrides[key.strip()] = parsed_value
+
+    # Build config
+    config = BacktestEngineConfig(
+        strategy_type=StrategyType(args.strategy),
+        strategy_id=f"strat_{args.strategy}",
+        symbols=symbols,
+        start_date=args.start,
+        end_date=args.end,
+        cache_dir=Path(args.cache_dir),
+        output_dir=Path(args.output_dir),
+        initial_cash=args.initial_cash,
+        slippage_per_share=args.slippage,
+        verify_zero_cost=not args.no_cost_check,
+        log_level=log_level,
+        config_overrides=overrides,
+    )
+
+    # Run
+    engine = BacktestEngine(config)
+    result = asyncio.run(engine.run())
+
+    # Print summary
+    print("\n" + "=" * 60)
+    print("BACKTEST RESULTS")
+    print("=" * 60)
+    print(f"Strategy:        {result.strategy_id}")
+    print(f"Period:          {result.start_date} to {result.end_date}")
+    print(f"Trading Days:    {result.trading_days}")
+    print(f"Total Trades:    {result.total_trades}")
+    print(f"Win Rate:        {result.win_rate:.1%}")
+    pf_str = (
+        f"{result.profit_factor:.2f}"
+        if result.profit_factor != float("inf")
+        else "inf"
+    )
+    print(f"Profit Factor:   {pf_str}")
+    print(f"Avg R-Multiple:  {result.avg_r_multiple:.2f}")
+    print(f"Expectancy:      {result.expectancy:.3f}R")
+    print(
+        f"Max Drawdown:    ${result.max_drawdown_dollars:,.2f}"
+        f" ({result.max_drawdown_pct:.1%})"
+    )
+    print(f"Sharpe Ratio:    {result.sharpe_ratio:.2f}")
+    rf_str = (
+        f"{result.recovery_factor:.2f}"
+        if result.recovery_factor != float("inf")
+        else "inf"
+    )
+    print(f"Recovery Factor: {rf_str}")
+    print(
+        f"Net P&L:         ${result.final_equity - config.initial_cash:,.2f}"
+    )
+    print(f"Final Equity:    ${result.final_equity:,.2f}")
+    print(f"Avg Hold:        {result.avg_hold_minutes:.0f} min")
+    print("=" * 60)
+
+
+if __name__ == "__main__":
+    main()
