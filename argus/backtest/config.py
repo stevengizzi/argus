@@ -16,6 +16,8 @@ class StrategyType(StrEnum):
     VWAP_RECLAIM = "vwap_reclaim"
     AFTERNOON_MOMENTUM = "afternoon_momentum"
     RED_TO_GREEN = "red_to_green"
+    BULL_FLAG = "bull_flag"
+    FLAT_TOP_BREAKOUT = "flat_top_breakout"
 
 
 class DataFetcherConfig(BaseModel):
@@ -130,3 +132,46 @@ class BacktestConfig(BaseModel):
     r2g_target_1_r: float = 1.0
     r2g_target_2_r: float = 2.0
     r2g_stop_buffer_pct: float = 0.001
+
+
+class BacktestEngineConfig(BaseModel):
+    """Configuration for BacktestEngine runs.
+
+    Controls strategy selection, date range, data source, execution parameters,
+    scanner simulation, and output settings for the new bar-level backtest engine.
+    """
+
+    # Strategy
+    strategy_type: StrategyType = StrategyType.ORB_BREAKOUT
+    strategy_id: str = "strat_orb_breakout"
+    symbols: list[str] | None = None  # None = all available
+
+    # Date range
+    start_date: date
+    end_date: date
+
+    # Data
+    data_source: str = Field(default="databento", pattern=r"^(databento|parquet)$")
+    cache_dir: Path = Path("data/databento_cache")
+    verify_zero_cost: bool = True
+
+    # Execution
+    engine_mode: str = Field(default="sync", pattern=r"^(sync)$")  # Only sync for now
+    initial_cash: float = Field(default=100_000.0, gt=0)
+    slippage_per_share: float = Field(default=0.01, ge=0.0)
+
+    # Scanner
+    scanner_min_gap_pct: float = Field(default=0.02, ge=0.0)
+    scanner_min_price: float = Field(default=10.0, ge=0.0)
+    scanner_max_price: float = Field(default=500.0, gt=0.0)
+    scanner_fallback_all_symbols: bool = True
+
+    # EOD
+    eod_flatten_time: str = "15:50"
+
+    # Output
+    output_dir: Path = Path("data/backtest_runs")
+    log_level: str = Field(default="WARNING", pattern=r"^(DEBUG|INFO|WARNING|ERROR)$")
+
+    # Config overrides (strategy parameter overrides)
+    config_overrides: dict[str, Any] = Field(default_factory=dict)

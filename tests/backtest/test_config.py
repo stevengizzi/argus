@@ -7,7 +7,12 @@ import pytest
 import yaml
 from pydantic import ValidationError
 
-from argus.backtest.config import BacktestConfig, DataFetcherConfig, StrategyType
+from argus.backtest.config import (
+    BacktestConfig,
+    BacktestEngineConfig,
+    DataFetcherConfig,
+    StrategyType,
+)
 
 
 class TestDataFetcherConfig:
@@ -98,7 +103,10 @@ class TestStrategyType:
 
     def test_all_strategy_types_present(self) -> None:
         """All expected strategy types are present."""
-        expected = ["orb", "orb_scalp", "vwap_reclaim", "afternoon_momentum"]
+        expected = [
+            "orb", "orb_scalp", "vwap_reclaim", "afternoon_momentum",
+            "red_to_green", "bull_flag", "flat_top_breakout",
+        ]
         actual = [s.value for s in StrategyType]
         for exp in expected:
             assert exp in actual
@@ -149,3 +157,54 @@ class TestBacktestConfigAfternoonMomentum:
         )
         assert config.strategy_type == StrategyType.AFTERNOON_MOMENTUM
         assert config.strategy_id == "strat_afternoon_momentum"
+
+
+class TestStrategyTypeNewValues:
+    """Tests for new StrategyType enum values added in Sprint 27."""
+
+    def test_strategy_type_bull_flag(self) -> None:
+        """StrategyType('bull_flag') resolves to BULL_FLAG."""
+        assert StrategyType("bull_flag") == StrategyType.BULL_FLAG
+
+    def test_strategy_type_flat_top(self) -> None:
+        """StrategyType('flat_top_breakout') resolves to FLAT_TOP_BREAKOUT."""
+        assert StrategyType("flat_top_breakout") == StrategyType.FLAT_TOP_BREAKOUT
+
+    def test_existing_strategy_types_unchanged(self) -> None:
+        """All 5 original StrategyType values still resolve correctly."""
+        assert StrategyType("orb") == StrategyType.ORB_BREAKOUT
+        assert StrategyType("orb_scalp") == StrategyType.ORB_SCALP
+        assert StrategyType("vwap_reclaim") == StrategyType.VWAP_RECLAIM
+        assert StrategyType("afternoon_momentum") == StrategyType.AFTERNOON_MOMENTUM
+        assert StrategyType("red_to_green") == StrategyType.RED_TO_GREEN
+
+
+class TestBacktestEngineConfig:
+    """Tests for BacktestEngineConfig Pydantic model."""
+
+    def test_backtest_engine_config_defaults(self) -> None:
+        """Model instantiates with only required fields (start_date, end_date)."""
+        config = BacktestEngineConfig(
+            start_date=date(2025, 6, 1),
+            end_date=date(2025, 12, 31),
+        )
+        assert config.strategy_type == StrategyType.ORB_BREAKOUT
+        assert config.strategy_id == "strat_orb_breakout"
+        assert config.symbols is None
+        assert config.data_source == "databento"
+        assert config.engine_mode == "sync"
+        assert config.initial_cash == 100_000.0
+        assert config.slippage_per_share == 0.01
+        assert config.verify_zero_cost is True
+        assert config.log_level == "WARNING"
+        assert config.eod_flatten_time == "15:50"
+        assert config.config_overrides == {}
+
+    def test_backtest_engine_config_rejects_invalid_engine_mode(self) -> None:
+        """Validation error for unknown engine mode."""
+        with pytest.raises(ValidationError):
+            BacktestEngineConfig(
+                start_date=date(2025, 6, 1),
+                end_date=date(2025, 12, 31),
+                engine_mode="parallel",
+            )
