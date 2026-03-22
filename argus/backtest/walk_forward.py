@@ -30,7 +30,8 @@ from typing import Any
 import pandas as pd
 from dateutil.relativedelta import relativedelta
 
-from argus.backtest.config import BacktestConfig, StrategyType
+from argus.backtest.config import BacktestConfig, BacktestEngineConfig, StrategyType
+from argus.backtest.engine import BacktestEngine
 from argus.backtest.replay_harness import ReplayHarness
 from argus.backtest.vectorbt_afternoon_momentum import AfternoonSweepConfig
 from argus.backtest.vectorbt_orb import SweepConfig, run_sweep
@@ -135,6 +136,9 @@ class WalkForwardConfig:
     # Output
     output_dir: str = "data/backtest_runs/walk_forward"
 
+    # OOS validation engine
+    oos_engine: str = "replay_harness"  # "replay_harness" or "backtest_engine"
+
     # Replay Harness settings (for OOS validation)
     initial_cash: float = 100_000.0
     slippage_per_share: float = 0.01
@@ -175,6 +179,9 @@ class WindowResult:
     wfe_sharpe: float  # oos_sharpe / is_sharpe (handle div-by-zero)
     wfe_pnl: float  # oos_total_pnl / is_total_pnl (handle div-by-zero)
 
+    # OOS engine used for this window (AR-4)
+    oos_engine: str = "replay_harness"
+
     # Error tracking
     error: str | None = None  # Set if window processing failed
 
@@ -200,6 +207,9 @@ class WalkForwardResult:
     run_started: datetime
     run_completed: datetime
     run_duration_seconds: float
+
+    # OOS engine used (AR-4)
+    oos_engine: str = "replay_harness"
 
 
 def compute_windows(
@@ -691,12 +701,13 @@ async def validate_out_of_sample(
     best_params: dict[str, Any],
     config: WalkForwardConfig,
 ) -> dict[str, Any]:
-    """Run Replay Harness on OOS period with the IS-optimized parameters.
+    """Run OOS validation with the IS-optimized parameters.
 
-    This is the high-fidelity validation: actual production code (strategy,
-    Risk Manager, Order Manager, SimulatedBroker) processes the OOS data.
+    Uses the engine specified by config.oos_engine:
+    - "replay_harness" (default): ReplayHarness with tick synthesis
+    - "backtest_engine": BacktestEngine with bar-level fill model
 
-    Dispatches to strategy-specific validation based on config.strategy.
+    Both paths produce the same result dict shape.
 
     Args:
         oos_start: Start date for out-of-sample period.
@@ -708,6 +719,11 @@ async def validate_out_of_sample(
         Dict with: total_trades, win_rate, profit_factor, sharpe, total_pnl,
         max_drawdown, avg_r_multiple.
     """
+    if config.oos_engine == "backtest_engine":
+        return await _validate_oos_backtest_engine(
+            oos_start, oos_end, best_params, config
+        )
+
     if config.strategy == "orb_scalp":
         return await _validate_oos_scalp(oos_start, oos_end, best_params, config)
     elif config.strategy == "vwap_reclaim":
@@ -718,6 +734,141 @@ async def validate_out_of_sample(
         return await _validate_oos_r2g(oos_start, oos_end, best_params, config)
     else:
         return await _validate_oos_orb(oos_start, oos_end, best_params, config)
+
+
+# Strategy name → StrategyType mapping for BacktestEngine OOS path
+_STRATEGY_TYPE_MAP: dict[str, StrategyType] = {
+    "orb": StrategyType.ORB_BREAKOUT,
+    "orb_scalp": StrategyType.ORB_SCALP,
+    "vwap_reclaim": StrategyType.VWAP_RECLAIM,
+    "afternoon_momentum": StrategyType.AFTERNOON_MOMENTUM,
+    "red_to_green": StrategyType.RED_TO_GREEN,
+    "bull_flag": StrategyType.BULL_FLAG,
+    "flat_top_breakout": StrategyType.FLAT_TOP_BREAKOUT,
+}
+
+
+async def _validate_oos_backtest_engine(
+    oos_start: date,
+    oos_end: date,
+    best_params: dict[str, Any],
+    config: WalkForwardConfig,
+) -> dict[str, Any]:
+    """Run BacktestEngine on OOS period with the IS-optimized parameters.
+
+    Uses the bar-level fill model (no tick synthesis). Faster than the
+    Replay Harness but with lower fill-price fidelity.
+
+    Args:
+        oos_start: Start date for out-of-sample period.
+        oos_end: End date for out-of-sample period.
+        best_params: Parameters optimized in IS period.
+        config: WalkForwardConfig with data paths and settings.
+
+    Returns:
+        Dict with: total_trades, win_rate, profit_factor, sharpe, total_pnl,
+        max_drawdown, avg_r_multiple.
+    """
+    strategy_type = _STRATEGY_TYPE_MAP.get(
+        config.strategy, StrategyType.ORB_BREAKOUT
+    )
+    strategy_id = f"strat_{config.strategy}"
+
+    # Build config_overrides from best_params using strategy-specific mappings
+    config_overrides = _build_config_overrides(config.strategy, best_params)
+
+    engine_config = BacktestEngineConfig(
+        strategy_type=strategy_type,
+        strategy_id=strategy_id,
+        symbols=config.symbols,
+        start_date=oos_start,
+        end_date=oos_end,
+        initial_cash=config.initial_cash,
+        slippage_per_share=config.slippage_per_share,
+        output_dir=Path(config.output_dir) / "oos_engine_runs",
+        config_overrides=config_overrides,
+        log_level="WARNING",
+    )
+
+    engine = BacktestEngine(engine_config)
+    result = await engine.run()
+
+    return {
+        "total_trades": result.total_trades,
+        "win_rate": result.win_rate,
+        "profit_factor": (
+            result.profit_factor
+            if result.profit_factor != float("inf")
+            else 0.0
+        ),
+        "sharpe": result.sharpe_ratio,
+        "total_pnl": result.final_equity - config.initial_cash,
+        "max_drawdown": result.max_drawdown_pct,
+        "avg_r_multiple": result.avg_r_multiple,
+    }
+
+
+def _build_config_overrides(
+    strategy: str, best_params: dict[str, Any]
+) -> dict[str, Any]:
+    """Build strategy config overrides from VectorBT best_params.
+
+    Translates VectorBT parameter names to strategy config field names
+    for the BacktestEngine path.
+
+    Args:
+        strategy: Strategy name (e.g., "orb", "vwap_reclaim").
+        best_params: VectorBT parameter dict.
+
+    Returns:
+        Dict of config overrides for BacktestEngineConfig.
+    """
+    if strategy == "orb":
+        return {
+            "opening_range_minutes": int(best_params["or_minutes"]),
+            "profit_target_r": float(best_params["target_r"]),
+            "stop_buffer_pct": float(best_params["stop_buffer_pct"]),
+            "max_hold_minutes": int(best_params["max_hold_minutes"]),
+            "max_range_atr_ratio": float(best_params["max_range_atr_ratio"]),
+        }
+    elif strategy == "orb_scalp":
+        return {
+            "scalp_target_r": float(best_params["scalp_target_r"]),
+            "max_hold_seconds": int(best_params["max_hold_bars"]) * 60,
+            "orb_window_minutes": 5,
+        }
+    elif strategy == "vwap_reclaim":
+        return {
+            "min_pullback_pct": float(best_params["min_pullback_pct"]),
+            "min_pullback_bars": int(best_params["min_pullback_bars"]),
+            "volume_confirmation_multiplier": float(
+                best_params["volume_multiplier"]
+            ),
+            "target_1_r": float(best_params["target_r"]),
+            "time_stop_minutes": int(best_params["time_stop_bars"]),
+        }
+    elif strategy == "afternoon_momentum":
+        return {
+            "consolidation_atr_ratio": float(
+                best_params["consolidation_atr_ratio"]
+            ),
+            "min_consolidation_bars": int(
+                best_params["min_consolidation_bars"]
+            ),
+            "volume_multiplier": float(best_params["volume_multiplier"]),
+            "target_1_r": float(best_params["target_r"]),
+            "max_hold_minutes": int(best_params["time_stop_bars"]),
+        }
+    elif strategy == "red_to_green":
+        return {
+            "min_gap_down_pct": float(best_params["min_gap_down_pct"]),
+            "level_proximity_pct": float(best_params["level_proximity_pct"]),
+            "volume_confirmation_multiplier": float(
+                best_params["volume_confirmation_multiplier"]
+            ),
+            "time_stop_minutes": int(best_params["time_stop_minutes"]),
+        }
+    return dict(best_params)
 
 
 async def _validate_oos_orb(
@@ -1180,6 +1331,7 @@ async def run_walk_forward(config: WalkForwardConfig) -> WalkForwardResult:
                 oos_max_drawdown=float(oos_metrics["max_drawdown"]),
                 wfe_sharpe=wfe_sharpe,
                 wfe_pnl=wfe_pnl,
+                oos_engine=config.oos_engine,
             )
 
         except NoQualifyingParamsError as e:
@@ -1226,6 +1378,7 @@ async def run_walk_forward(config: WalkForwardConfig) -> WalkForwardResult:
         total_oos_trades=total_oos_trades,
         overall_oos_sharpe=overall_oos_sharpe,
         overall_oos_pnl=overall_oos_pnl,
+        oos_engine=config.oos_engine,
         run_started=run_started,
         run_completed=run_completed,
         run_duration_seconds=run_duration,
@@ -1397,6 +1550,7 @@ def save_walk_forward_results(result: WalkForwardResult, output_dir: str) -> str
             "overall_oos_pnl": result.overall_oos_pnl,
         },
         "parameter_stability": result.parameter_stability,
+        "oos_engine": result.oos_engine,
         "window_count": len(result.windows),
         "valid_window_count": len([w for w in result.windows if w.error is None]),
     }
@@ -1428,6 +1582,7 @@ def save_walk_forward_results(result: WalkForwardResult, output_dir: str) -> str
             "oos_max_drawdown": w.oos_max_drawdown,
             "wfe_sharpe": w.wfe_sharpe,
             "wfe_pnl": w.wfe_pnl,
+            "oos_engine": w.oos_engine,
             "error": w.error or "",
         }
         window_rows.append(row)
@@ -1514,6 +1669,7 @@ def load_walk_forward_results(output_dir: str) -> WalkForwardResult | None:
             oos_max_drawdown=float(row["oos_max_drawdown"]),  # type: ignore[arg-type]
             wfe_sharpe=float(row["wfe_sharpe"]),  # type: ignore[arg-type]
             wfe_pnl=float(row["wfe_pnl"]),  # type: ignore[arg-type]
+            oos_engine=str(row.get("oos_engine", "replay_harness")),  # type: ignore[union-attr]
             error=str(row["error"]) if row["error"] else None,  # type: ignore[arg-type]
         )
         windows.append(w)
@@ -1537,6 +1693,7 @@ def load_walk_forward_results(output_dir: str) -> WalkForwardResult | None:
         total_oos_trades=summary["aggregates"]["total_oos_trades"],
         overall_oos_sharpe=summary["aggregates"]["overall_oos_sharpe"],
         overall_oos_pnl=summary["aggregates"]["overall_oos_pnl"],
+        oos_engine=summary.get("oos_engine", "replay_harness"),
         run_started=datetime.fromisoformat(summary["run_started"]),
         run_completed=datetime.fromisoformat(summary["run_completed"]),
         run_duration_seconds=summary["run_duration_seconds"],
@@ -1915,6 +2072,7 @@ async def run_fixed_params_walk_forward(
                 oos_max_drawdown=oos_metrics["max_drawdown"],
                 wfe_sharpe=wfe_sharpe,
                 wfe_pnl=wfe_pnl,
+                oos_engine=config.oos_engine,
             )
 
         except Exception as e:
@@ -1959,6 +2117,7 @@ async def run_fixed_params_walk_forward(
         total_oos_trades=total_oos_trades,
         overall_oos_sharpe=overall_oos_sharpe,
         overall_oos_pnl=overall_oos_pnl,
+        oos_engine=config.oos_engine,
         run_started=run_started,
         run_completed=run_completed,
         run_duration_seconds=run_duration,
@@ -2319,6 +2478,13 @@ def parse_args() -> argparse.Namespace:
     )
 
     parser.add_argument(
+        "--oos-engine",
+        default="replay_harness",
+        choices=["replay_harness", "backtest_engine"],
+        help="Engine for OOS validation",
+    )
+
+    parser.add_argument(
         "-v",
         "--verbose",
         action="store_true",
@@ -2409,6 +2575,7 @@ def main() -> None:
             optimization_metric=args.metric,
             output_dir=args.output_dir,
             initial_cash=args.initial_cash,
+            oos_engine=args.oos_engine,
         )
 
         # Build strategy-specific fixed params
@@ -2524,6 +2691,7 @@ def main() -> None:
             optimization_metric=args.metric,
             output_dir=args.output_dir,
             initial_cash=args.initial_cash,
+            oos_engine=args.oos_engine,
         )
 
         result = asyncio.run(run_walk_forward(config))
