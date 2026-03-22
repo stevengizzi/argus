@@ -20,7 +20,6 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from itertools import product
 from pathlib import Path
-from typing import Any
 from zoneinfo import ZoneInfo
 
 import numpy as np

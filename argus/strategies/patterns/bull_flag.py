@@ -106,10 +106,7 @@ class BullFlagPattern(PatternModule):
 
         # --- Pole validation ---
         pole_candles = candles[pole_end_idx - self._pole_min_bars : pole_end_idx]
-        pole_low = pole_candles[0].low
         pole_high = max(c.high for c in pole_candles)
-
-        # Find the actual pole bottom (lowest low in pole)
         pole_low = min(c.low for c in pole_candles)
 
         if pole_low <= 0:

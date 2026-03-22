@@ -18,6 +18,7 @@ Sprint 26, Session 3: Entry/exit/pattern strength completion.
 from __future__ import annotations
 
 import logging
+from collections import deque
 from dataclasses import dataclass, field
 from datetime import time
 from enum import StrEnum
@@ -81,7 +82,7 @@ class RedToGreenSymbolState:
     premarket_low: float = 0.0
     prior_close: float = 0.0
     exhaustion_reason: str = ""
-    recent_volumes: list[int] = field(default_factory=list)
+    recent_volumes: deque[int] = field(default_factory=lambda: deque(maxlen=50))
 
 
 class RedToGreenStrategy(BaseStrategy):
@@ -996,8 +997,9 @@ class RedToGreenStrategy(BaseStrategy):
         await super().reconstruct_state(trade_logger)
 
         today = self._clock.today()
-        trades_today = await trade_logger.get_trades_by_date(today)
-        my_trades = [t for t in trades_today if t.strategy_id == self.strategy_id]
+        my_trades = await trade_logger.get_trades_by_date(
+            today, strategy_id=self.strategy_id
+        )
 
         for trade in my_trades:
             symbol = trade.symbol
