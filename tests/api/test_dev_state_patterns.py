@@ -29,8 +29,8 @@ async def test_dev_state_mock_strategies_have_family() -> None:
         assert strategy.config.family != "", f"Strategy {strategy_id} config has empty family"
         families.append(strategy.config.family)
 
-    # Should have 4 strategies
-    assert len(families) == 4
+    # Should have 7 strategies (4 original + 3 Sprint 26)
+    assert len(families) == 7
 
 
 @pytest.mark.asyncio
@@ -80,6 +80,11 @@ async def test_dev_state_backtest_summaries_present() -> None:
     """Dev state mock strategy configs have backtest_summary populated."""
     state = await create_dev_state()
 
+    # Exploration-stage strategies may not have full backtest results yet
+    exploration_strategies = {
+        "strat_red_to_green", "strat_bull_flag", "strat_flat_top_breakout",
+    }
+
     for strategy_id, strategy in state.strategies.items():
         config = strategy.config
 
@@ -95,18 +100,21 @@ async def test_dev_state_backtest_summaries_present() -> None:
         assert bs.status != "not_validated", (
             f"Strategy {strategy_id} backtest status still 'not_validated'"
         )
-        assert bs.total_trades is not None, (
-            f"Strategy {strategy_id} backtest_summary missing total_trades"
-        )
-        assert bs.total_trades > 0, (
-            f"Strategy {strategy_id} backtest_summary total_trades should be positive"
-        )
-        assert bs.data_months is not None and bs.data_months > 0, (
-            f"Strategy {strategy_id} backtest_summary missing data_months"
-        )
-        assert bs.last_run is not None, (
-            f"Strategy {strategy_id} backtest_summary missing last_run"
-        )
+
+        # Full backtest metrics only required for validated strategies
+        if strategy_id not in exploration_strategies:
+            assert bs.total_trades is not None, (
+                f"Strategy {strategy_id} backtest_summary missing total_trades"
+            )
+            assert bs.total_trades > 0, (
+                f"Strategy {strategy_id} backtest_summary total_trades should be positive"
+            )
+            assert bs.data_months is not None and bs.data_months > 0, (
+                f"Strategy {strategy_id} backtest_summary missing data_months"
+            )
+            assert bs.last_run is not None, (
+                f"Strategy {strategy_id} backtest_summary missing last_run"
+            )
 
 
 @pytest.mark.asyncio
@@ -118,15 +126,15 @@ async def test_dev_state_strategies_have_distinct_families() -> None:
     for strategy in state.strategies.values():
         families.add(strategy.config.family)
 
-    # With 4 strategies (ORB Breakout, ORB Scalp, VWAP Reclaim, Afternoon Momentum):
-    # - ORB Breakout and ORB Scalp share "orb_family"
-    # - VWAP Reclaim has "mean_reversion"
-    # - Afternoon Momentum has "momentum"
-    # So we expect 3 distinct families
-    assert len(families) >= 3, f"Expected at least 3 distinct families, got {families}"
+    # With 7 strategies we expect 6 distinct families:
+    # orb_family (2), mean_reversion, momentum, reversal, continuation, breakout
+    assert len(families) >= 6, f"Expected at least 6 distinct families, got {families}"
 
     # Verify specific families exist
-    expected_families = {"orb_family", "mean_reversion", "momentum"}
+    expected_families = {
+        "orb_family", "mean_reversion", "momentum",
+        "reversal", "continuation", "breakout",
+    }
     assert expected_families.issubset(
         families
     ), f"Missing expected families. Expected {expected_families}, got {families}"

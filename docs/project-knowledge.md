@@ -1,6 +1,6 @@
 # ARGUS — Project Knowledge (Claude Context)
 
-> *Tier A operational context for Claude Code and Claude.ai. Last updated: March 21, 2026 (Phase 5 Gate doc sync).*
+> *Tier A operational context for Claude Code and Claude.ai. Last updated: March 22, 2026 (Sprint 26 doc sync).*
 > *Full decision rationale: `docs/decision-log.md` | Sprint details: `docs/sprint-history.md` | DEC index: `docs/dec-index.md`*
 
 ---
@@ -11,10 +11,10 @@ ARGUS is a fully automated, AI-enhanced multi-strategy day trading system for US
 
 ## Current State
 
-**Tests:** 2,815 pytest + 611 Vitest (0 failures, 0 hangs)
-**Sprints completed:** 1 through 25.8 (25 full sprints + sub-sprints)
+**Tests:** 2,925 pytest + 620 Vitest (0 failures, 0 hangs)
+**Sprints completed:** 1 through 26 (26 full sprints + sub-sprints)
 **Active sprint:** None (between sprints)
-**Next sprint:** 26 (Red-to-Green + Pattern Library Foundation)
+**Next sprint:** 27 (BacktestEngine Core)
 **GitHub:** `https://github.com/stevengizzi/argus.git` (public)
 
 ### Sprint History (Summary)
@@ -63,12 +63,13 @@ ARGUS is a fully automated, AI-enhanced multi-strategy day trading system for US
 | 25.6 | Bug Sweep | 2794+611V | Mar 19–20 | DEC-345–346 |
 | 25.7 | Post-Session Operational Fixes | 2815+611V | Mar 21 | DEC-347–350 |
 | 25.8 | API Auth 401 + Close-Position Fix | 2815+611V | Mar 21 | DEC-351–352 |
+| 26 | Red-to-Green + Pattern Library Foundation | 2925+620V | Mar 21–22 | — (no new DECs) |
 
 *Full sprint scopes and session details: `docs/sprint-history.md`*
 
 ### Build Track Queue
 
-21.6 (Backtest Re-Validation, after Sprint 27) → **26 (Red-to-Green + Pattern Library Foundation)** → 27 (BacktestEngine Core — pulled forward per DEC-354) → 21.6 (Backtest Re-Validation) → 28 (Learning Loop V1) → 29–31 (Pattern Expansion + Short Selling) → 32–34 (Sweep Infrastructure, Strategy Templates, Statistical Validation) → 35–38 (ORB Systematic Search ★, Cross-Family Search, Ensemble Orchestrator V2, Synapse) → 39–41 (Learning Loop V2, Continuous Discovery, Performance Workbench). Sprint 23.5 (NLP Catalyst Pipeline) complete. Order Flow Model deferred to post-revenue (DEC-238). Historical data purchase deferred indefinitely (DEC-353). Full roadmap: `docs/roadmap.md` (DEC-262).
+~~26 (Red-to-Green + Pattern Library Foundation)~~ ✅ → **27 (BacktestEngine Core — pulled forward per DEC-354)** → 21.6 (Backtest Re-Validation) → 28 (Learning Loop V1) → 29–31 (Pattern Expansion + Short Selling) → 32–34 (Sweep Infrastructure, Strategy Templates, Statistical Validation) → 35–38 (ORB Systematic Search ★, Cross-Family Search, Ensemble Orchestrator V2, Synapse) → 39–41 (Learning Loop V2, Continuous Discovery, Performance Workbench). Sprint 23.5 (NLP Catalyst Pipeline) complete. Order Flow Model deferred to post-revenue (DEC-238). Historical data purchase deferred indefinitely (DEC-353). Full roadmap: `docs/roadmap.md` (DEC-262).
 
 ### Validation Track
 
@@ -90,14 +91,15 @@ Paper trading active with Databento EQUS.MINI + IBKR paper (Account U24619949, D
 5. **Quality Engine** (Sprints 24 + 24.1) — SetupQualityEngine scores setups on 5 weighted dimensions: pattern strength (30%), catalyst quality (25%), volume profile (20%), historical match (15%), regime alignment (10%). Produces quality_grade (A+ through C) and quality_score (0–100). DynamicPositionSizer maps grades to risk tiers (A+=2–3%, A=1.5%, B=0.75%, C+=0.25%, C-=SKIP). Strategies emit `share_count=0` with `pattern_strength` (0–100); `_process_signal()` in main.py runs quality pipeline (score → filter by minimum grade → size → enrich SignalEvent). Risk Manager check 0 rejects `share_count ≤ 0` before circuit breaker evaluation. Pipeline bypass: `BrokerSource.SIMULATED` or `quality_engine.enabled: false` → legacy sizing. QualitySignalEvent published after scoring (informational). Quality history persisted to `quality_history` table (20 columns, 4 indexes). Quality grade/score wired through Order Manager → TradeLogger → DB (Sprint 24.1). Config: `config/quality_engine.yaml` with Pydantic models (QualityWeightsConfig, QualityThresholdsConfig, QualityRiskTiersConfig) with validators. Firehose mode for catalyst sources: Finnhub single `GET /news?category=general`, SEC EDGAR single EFTS search (DEC-332). API: 3 endpoints (`/api/v1/quality/{symbol}`, `/api/v1/quality/history`, `/api/v1/quality/distribution`). UI: QualityBadge component, quality column in Trades table, Setup Quality in TradeDetailPanel, SignalQualityPanel (histogram) on Dashboard, RecentSignals with clickable SignalDetailPanel on Orchestrator (Sprint 24.1), QualityGradeChart (ComposedChart: bars for Avg P&L + line for Win Rate) on Performance, QualityOutcomeScatter on Performance Distribution tab (relocated from Debrief in Sprint 24.1). Orchestrator uses 3-column layout for Decision Log + Catalyst Alerts + Recent Signals (Sprint 24.1). Shared GRADE_COLORS/GRADE_ORDER constants extracted for consistency.
 
 ### Key Components
-- **Strategies:** Daily-stateful, session-stateless plugins (DEC-028). 4 active. 14 more planned. All strategies implement `_calculate_pattern_strength()` returning 0–100 score and emit `share_count=0` for quality pipeline sizing (Sprint 24, DEC-330/331). `_watchlist` is `set[str]` internally for O(1) membership checks; `set_watchlist()` accepts `list[str]` input with `source` parameter (default `"scanner"`); `watchlist` property returns `list[str]` — external API unchanged (DEC-343, Sprint 25.5). BaseStrategy includes `StrategyEvaluationBuffer` (ring buffer, maxlen=1000) for diagnostic telemetry — `record_evaluation()` logs decision-point events with try/except guard (never raises). `EvaluationEventStore` provides SQLite persistence in `data/evaluation.db` (separated from `argus.db` in Sprint 25.6 to eliminate write contention, DEC-345) with 7-day retention and ET-date-based queries; exposes `execute_query()` public method and `is_connected` property (Sprint 25 S10). Write failure warnings rate-limited to 1 per 60s. REST endpoint `GET /api/v1/strategies/{id}/decisions` returns buffer contents (JWT-protected). Frontend `StrategyDecisionStream` slide-out panel on Orchestrator page (DEC-342, Sprint 24.5).
+- **Strategies:** Daily-stateful, session-stateless plugins (DEC-028). 7 active. 11 more planned. All strategies implement `_calculate_pattern_strength()` returning 0–100 score and emit `share_count=0` for quality pipeline sizing (Sprint 24, DEC-330/331). `_watchlist` is `set[str]` internally for O(1) membership checks; `set_watchlist()` accepts `list[str]` input with `source` parameter (default `"scanner"`); `watchlist` property returns `list[str]` — external API unchanged (DEC-343, Sprint 25.5). BaseStrategy includes `StrategyEvaluationBuffer` (ring buffer, maxlen=1000) for diagnostic telemetry — `record_evaluation()` logs decision-point events with try/except guard (never raises). `EvaluationEventStore` provides SQLite persistence in `data/evaluation.db` (separated from `argus.db` in Sprint 25.6 to eliminate write contention, DEC-345) with 7-day retention and ET-date-based queries; exposes `execute_query()` public method and `is_connected` property (Sprint 25 S10). Write failure warnings rate-limited to 1 per 60s. REST endpoint `GET /api/v1/strategies/{id}/decisions` returns buffer contents (JWT-protected). Frontend `StrategyDecisionStream` slide-out panel on Orchestrator page (DEC-342, Sprint 24.5).
+- **Pattern Library (Sprint 26):** PatternModule ABC (`argus/strategies/patterns/base.py`) — standardized pattern detection interface with 5 abstract members: `name`, `lookback_bars`, `detect()`, `score()`, `get_default_params()`. CandleBar frozen dataclass (independent of events.py). PatternDetection dataclass for detection results. PatternBasedStrategy (`argus/strategies/pattern_strategy.py`) — generic wrapper that handles operating window, per-symbol candle deque, signal generation, and telemetry for any PatternModule. BullFlagPattern (`argus/strategies/patterns/bull_flag.py`) — pole detection, flag validation, breakout confirmation, measured move targets. Score: 30/30/25/15 weighting. FlatTopBreakoutPattern (`argus/strategies/patterns/flat_top_breakout.py`) — resistance clustering, consolidation validation with range narrowing, breakout confirmation. Score: 30/30/25/15 weighting. RedToGreenStrategy (`argus/strategies/red_to_green.py`) — standalone from BaseStrategy, 5-state machine (WATCHING → GAP_DOWN_CONFIRMED → TESTING_LEVEL → ENTERED / EXHAUSTED), key level identification (VWAP, premarket_low, prior_close), max_level_attempts=2. PatternBacktester (`argus/backtest/vectorbt_pattern.py`) — generic sliding-window backtester for any PatternModule with parameter grid generation (±20%/±40% variations). VectorBT R2G (`argus/backtest/vectorbt_red_to_green.py`) — dedicated R2G backtester with gap-down detection.
 - **Observatory (Sprint 25):** ObservatoryService (`argus/analytics/observatory_service.py`) — read-only query service over EvaluationEventStore and UniverseManager with 4 methods: `get_pipeline_stages`, `get_closest_misses`, `get_symbol_journey`, `get_session_summary`. Observatory WebSocket (`/ws/v1/observatory`) — push-based pipeline updates with tier transition detection and evaluation summaries, independent from AI chat WS. ObservatoryConfig (`argus/analytics/config.py`) — Pydantic model wired into SystemConfig, config-gated via `observatory.enabled`. Frontend: 4 views (Funnel 3D, Radar 3D, Matrix heatmap, Timeline SVG), detail panel with candlestick chart, session vitals bar, debrief mode (7-day history). Three.js (r128) code-split via React.lazy. Shared-scene pattern: Funnel and Radar share single Three.js scene with camera presets. InstancedMesh for symbol particles (up to 5,000). Keyboard: f/m/r/t for views, [/] for tiers, Tab for symbols, Shift+R/F for camera.
 - **Orchestrator:** Rules-based V1 (DEC-118). Equal-weight allocation, regime monitoring (SPY vol as VIX proxy), performance throttling, pre-market routine. Public `reclassify_regime()` method (DEC-346, Sprint 25.6) enables periodic regime reclassification — independent 300s asyncio task in main.py during market hours (9:30–16:00 ET). Public `spy_data_available` property (Sprint 25.7). `PerformanceThrottler` returns `ThrottleAction.NONE` for strategies with zero trade history (DEC-349, Sprint 25.7).
 - **Risk Manager:** Three-level gating (strategy, cross-strategy, account). Check 0 rejects `share_count ≤ 0` before circuit breaker evaluation (Sprint 24, DEC-336). Approve-with-modification for share reduction and target tightening; never modify stops or entry (DEC-027). Concentration limit approve-with-modification with 0.25R floor (DEC-249).
 - **Data Service:** Databento EQUS.MINI primary (DEC-248). Event Bus sole streaming mechanism (DEC-029). Databento callbacks on reader thread, bridged via `call_soon_threadsafe()` (DEC-088). `fetch_daily_bars()` implemented via FMP stable API for regime classification (DEC-347, Sprint 25.7). `last_update` attribute tracks last data receipt for health endpoint (Sprint 25.7). Universe Manager (Sprint 23) adds fast-path discard for non-viable symbols and ALL_SYMBOLS Databento mode. Time-aware indicator warm-up (DEC-316, Sprint 23.7): pre-market boot skips warm-up; mid-session boot uses lazy per-symbol backfill on first candle arrival.
 - **Universe Manager (Sprint 23):** FMPReferenceClient fetches Company Profile + Share Float in batches for ~3,000–5,000 symbols. UniverseManager applies system-level filters (OTC, price, volume; fail-closed on missing data per DEC-277), builds pre-computed routing table mapping symbols to qualifying strategies via declarative `universe_filter` YAML configs. O(1) route_candle lookup. After `build_routing_table()` in Phase 9.5, strategy watchlists are populated from UM routing via `set_watchlist(symbols, source="universe_manager")` (DEC-343, Sprint 25.5). Fast-path discard in DatabentoDataService drops non-viable symbols before IndicatorEngine. Config-gated: `universe_manager.enabled` in system.yaml. Backward compatible (disabled = existing scanner flow). Zero-evaluation health warning (DEC-344, Sprint 25.5): `HealthMonitor.check_strategy_evaluations()` detects strategies with populated watchlists but zero evaluations after operating window + 5 min grace; sets DEGRADED, self-corrects when evaluations appear. Periodic 60s asyncio task during market hours. Full-universe input pipe active (DEC-299): ~8,000 symbols fetched from FMP stock-list, ~3,000–4,000 viable after system filters. Reference data file cache (DEC-314) with JSON persistence, atomic writes, and per-symbol staleness tracking enables incremental warm-up (~2–5 min vs ~27 min full fetch). Periodic cache saves every 1,000 symbols during fetch + save on shutdown signal (DEC-317, Sprint 23.7) prevent data loss on interrupted cold-starts.
 - **Broker Abstraction:** IBKRBroker (live, via `ib_async`), AlpacaBroker (incubator), SimulatedBroker (backtest). Atomic bracket orders (DEC-117). Config-driven selection via BrokerSource enum (DEC-094).
-- **Backtesting:** VectorBT (parameter sweeps, precompute+vectorize mandated DEC-149) + Replay Harness (production code replay). Walk-forward validation mandatory, WFE > 0.3 (DEC-047).
+- **Backtesting:** VectorBT (parameter sweeps, precompute+vectorize mandated DEC-149) + Replay Harness (production code replay) + PatternBacktester (generic sliding-window backtester for PatternModule patterns, Sprint 26) + VectorBT R2G (dedicated R2G backtester, Sprint 26). Walk-forward validation mandatory, WFE > 0.3 (DEC-047).
 - **Event Bus:** FIFO per subscriber, monotonic sequence numbers, no priority queues. In-process asyncio only (DEC-025).
 - **Order Manager:** Event-driven (tick-subscribed for open positions) + 5-second fallback poll + scheduled EOD flatten (DEC-030).
 
@@ -115,7 +117,8 @@ Paper trading active with Databento EQUS.MINI + IBKR paper (Account U24619949, D
 ```
 argus/
 ├── core/           # Orchestrator, Risk Manager, Portfolio, Event Bus
-├── strategies/     # Base class + individual strategy modules
+├── strategies/     # Base class + individual strategy modules + patterns/ package
+│   └── patterns/   # PatternModule ABC, BullFlagPattern, FlatTopBreakoutPattern
 ├── data/           # Scanner, Data Service, Indicators, IndicatorEngine, Universe Manager, FMP Reference
 ├── execution/      # Broker abstraction, Order Manager
 ├── analytics/      # Trade Logger, Performance Calculator, Debrief Export
@@ -141,8 +144,11 @@ Strategy files: `snake_case.py` → classes: `PascalCase`. Config: `snake_case.y
 | 2 | ORB Scalp | 9:45–11:30 AM | 10s–5 min | Quick 0.3R target, 120s hold |
 | 3 | VWAP Reclaim | 10:00 AM–12:00 PM | 5–30 min | Mean-reversion, 5-state machine, OOS Sharpe 1.49 |
 | 4 | Afternoon Momentum | 2:00–3:30 PM | 15–60 min | Consolidation breakout, 8 entry conditions |
+| 5 | Red-to-Green | 9:35–11:30 AM | 1–15 min | Gap-down reversal at key levels (VWAP, premarket low, prior close), 5-state machine |
+| 6 | Bull Flag | 10:00–15:00 | 5–30 min | Pole+flag+breakout continuation pattern (PatternModule) |
+| 7 | Flat-Top Breakout | 10:00–15:00 | 5–30 min | Resistance cluster breakout pattern (PatternModule) |
 
-Cross-strategy: ALLOW_ALL (DEC-121/160). Time windows largely non-overlapping. 5% max single-stock exposure across all strategies. ORB family shares OrbBaseStrategy ABC (DEC-120) with same-symbol mutual exclusion — first ORB strategy to fire on a symbol blocks the other for the day (DEC-261). Per-signal time stops (DEC-122).
+Cross-strategy: ALLOW_ALL (DEC-121/160). Time windows largely non-overlapping. 5% max single-stock exposure across all strategies. 7 strategies across 3 families (ORB, reversal, continuation/breakout). ORB family shares OrbBaseStrategy ABC (DEC-120) with same-symbol mutual exclusion — first ORB strategy to fire on a symbol blocks the other for the day (DEC-261). Bull Flag and Flat-Top Breakout use PatternModule ABC via PatternBasedStrategy wrapper (Sprint 26). Per-signal time stops (DEC-122).
 
 ### Pipeline Stages
 Concept → Exploration (VectorBT) → Validation (Replay + WF) → Ecosystem Replay → Paper (20–30 days) → Live Min → Live Full → Active → Suspended → Retired
@@ -279,9 +285,9 @@ Universal protocols, templates, and the runner live in the `workflow/` submodule
 | `docs/architecture.md` | Technical blueprint — how |
 | `docs/roadmap.md` | Strategic vision + sprint queue (DEC-262) |
 | `docs/sprint-campaign.md` | Operational sprint choreography |
-| `docs/decision-log.md` | All 356 DEC entries with full rationale |
+| `docs/decision-log.md` | All 356 DEC entries with full rationale (no new DECs in Sprint 26) |
 | `docs/dec-index.md` | Quick-reference DEC index with status |
-| `docs/sprint-history.md` | Complete sprint history (1–25.8) |
+| `docs/sprint-history.md` | Complete sprint history (1–26) |
 | `docs/process-evolution.md` | Workflow evolution narrative |
 | `docs/risk-register.md` | Assumptions and risks |
 | `docs/live-operations.md` | Live trading procedures |

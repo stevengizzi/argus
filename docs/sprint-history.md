@@ -1,7 +1,7 @@
 # ARGUS — Sprint History
 
 > Complete record of all sprints from project inception through current state.
-> Active development began February 14, 2026. As of March 21, 2026 (~36 calendar days), 25 full sprints + 24 sub-sprints completed.
+> Active development began February 14, 2026. As of March 22, 2026 (~37 calendar days), 26 full sprints + 24 sub-sprints completed.
 
 ---
 
@@ -19,6 +19,7 @@
 | N — The Observatory | 25 | Mar 17–18 | Immersive pipeline visualization page |
 | O — Watchlist Wiring Fix | 25.5 | Mar 18 | UM watchlist population + zero-eval health warning |
 | O — Bug Sweep | 25.6 | Mar 19–20 | Operational bug fixes from first live session post-25.5 |
+| P — Pattern Library Foundation | 26 | Mar 21–22 | R2G + PatternModule ABC + Bull Flag + Flat-Top + backtesting |
 
 ---
 
@@ -1129,13 +1130,106 @@
 
 ---
 
+## Phase P — Pattern Library Foundation (Sprint 26, Mar 21–22)
+
+### Sprint 26 — Red-to-Green + Pattern Library Foundation (2,925 pytest + 620 Vitest = 3,545 total)
+**Date:** Mar 21–22, 2026
+**Scope:** Add Red-to-Green reversal strategy, PatternModule ABC, Bull Flag and Flat-Top Breakout pattern modules, VectorBT backtesting for all three, integration wiring into main.py, and UI cards for Pattern Library page. From 4 to 7 active strategies/patterns.
+**Type:** Feature sprint. **Execution:** Autonomous runner (human-in-the-loop mode).
+
+**Session 1 (S1): PatternModule ABC**
+- Created `argus/strategies/patterns/` package with `base.py`
+- `CandleBar` frozen dataclass, `PatternDetection` dataclass, `PatternModule` ABC (5 abstract members)
+- +10 pytest
+- Verdict: CLEAR
+
+**Session 2 (S2): R2G Config + State Machine Skeleton**
+- `RedToGreenConfig` Pydantic model, `config/strategies/red_to_green.yaml`
+- State machine skeleton (5 states: WATCHING → GAP_DOWN_CONFIRMED → TESTING_LEVEL → ENTERED / EXHAUSTED)
+- Key level identification (VWAP, premarket_low, prior_close)
+- +12 pytest
+- Verdict: CLEAR
+
+**Session 3 (S3): R2G Entry/Exit Logic**
+- Full entry logic: gap-down confirmation, level proximity, reclaim detection, volume confirmation
+- Exit logic: T1/T2 targets, time stop, max_level_attempts=2
+- +13 pytest
+- Verdict: CLEAR
+
+**Session 4 (S4): PatternBasedStrategy Wrapper**
+- Generic `PatternBasedStrategy` class wrapping any `PatternModule` into a `BaseStrategy`
+- Operating window, per-symbol candle deque, signal generation, telemetry integration
+- Circular import resolution via `__getattr__` lazy import
+- +12 pytest
+- Verdict: CLEAR
+
+**Session 5 (S5): BullFlagPattern**
+- Pole detection, flag validation, breakout confirmation, measured move targets
+- Score weighting: pattern quality 30%, breakout strength 30%, volume 25%, flag tightness 15%
+- +11 pytest
+- Verdict: CLEAR
+
+**Session 6 (S6): FlatTopBreakoutPattern**
+- Resistance clustering, consolidation validation with range narrowing, breakout confirmation
+- Score weighting: resistance strength 30%, consolidation quality 30%, breakout conviction 25%, volume surge 15%
+- +11 pytest
+- Verdict: CLEAR
+
+**Session 7 (S7): VectorBT R2G Backtester**
+- Dedicated `vectorbt_red_to_green.py` with gap-down detection, key level identification, reclaim entry simulation
+- Walk-forward dispatch via `walk_forward.py` (additive changes only)
+- +13 pytest
+- Verdict: CLEAR
+
+**Session 8 (S8): Generic PatternBacktester**
+- `vectorbt_pattern.py` — generic sliding-window backtester for any PatternModule
+- Parameter grid generation (±20%/±40% variations of defaults)
+- Self-contained walk-forward loop
+- +20 pytest
+- Verdict: CLEAR
+
+**Session 9 (S9): Integration Wiring**
+- Wired R2G, Bull Flag, Flat-Top into `main.py` startup sequence
+- Strategy spec sheets: `STRATEGY_RED_TO_GREEN.md`, `STRATEGY_BULL_FLAG.md`, `STRATEGY_FLAT_TOP_BREAKOUT.md`
+- +8 pytest
+- Verdict: CLEAR
+
+**Session 10 (S10): UI Cards + Pattern Library**
+- Pattern Library family mappings for new strategies in `strategyConfig.ts`
+- UI labels, colors, descriptions for R2G, Bull Flag, Flat-Top
+- +8 Vitest (strategyConfig.test.ts)
+- Verdict: CLEAR
+
+**Session 10f (S10f): Visual Review Fixes**
+- Fixed dev_state.py for 3 new mock strategies + health components
+- Updated Badge.tsx labels (R2G/FLAG/FLAT) + colors
+- Updated 7 additional UI files with hardcoded strategy maps: AllocationBars, AllocationDonut, PortfolioTreemap, RMultipleHistogram, TradeActivityHeatmap, strategyConfig.ts
+- +1 Vitest
+- Verdict: CLEAN (no formal review)
+
+**Micro-fix (between S6 and S8):** Updated test assertion in `test_red_to_green.py` to match S7's YAML backtest_summary status change (`not_validated` → `vectorbt_module_ready`).
+
+**Post-review cleanup:** Fixed 4 observations from adversarial review — `reconstruct_state` efficiency (O1), `recent_volumes` deque(maxlen=50) (O2), dead code removal in `bull_flag.py` (O4), unused `Any` import in `vectorbt_pattern.py` (O11).
+
+**Parallelization:** S1∥S2, S3∥S4, S5∥S7 ran in parallel.
+**WFE note:** Walk-forward efficiency not evaluated (no historical data available). Option 1 accepted: proceed to paper trading.
+
+**Key decisions:** None (no DEC entries created — all decisions followed established patterns). Reserved range DEC-357–370 unused.
+**New deferred items:** DEF-088 (PatternParam structured type for `get_default_params()`, pre-assigned at sprint planning, deferred to Sprint 27).
+**Sessions:** 13 (S1, S2, S3, S4, S5, S6, S7, S8, S9, S10, S10f, micro-fix, post-review cleanup)
+**Test counts:** pytest 2,815 → 2,925 (+110), Vitest 611 → 620 (+9) = 119 new tests total
+**Review verdicts:** S1 CLEAR, S2 CLEAR, S3 CLEAR, S4 CLEAR, S5 CLEAR, S6 CLEAR, S7 CLEAR, S8 CLEAR, S9 CLEAR, S10 CLEAR, S10f CLEAN
+**Notes:** First sprint using PatternModule ABC architecture. Three parallel session pairs (S1∥S2, S3∥S4, S5∥S7) enabled by independent module boundaries. No regressions. All 10 review verdicts CLEAR. Strategy count: 4 → 7. New files: 23. Modified files: 20.
+
+---
+
 ## Sprint Statistics
 
-- **Total sprints:** 25 full + 24 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8)
-- **Total sessions:** ~342+ Claude Code sessions
-- **Total tests:** 2,815 pytest + 611 Vitest = 3,426 total
-- **Total decisions:** 356 (DEC-001 through DEC-356)
-- **Calendar days (active dev):** ~36 (Feb 14 – Mar 21, 2026)
+- **Total sprints:** 26 full + 24 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8)
+- **Total sessions:** ~355+ Claude Code sessions
+- **Total tests:** 2,925 pytest + 620 Vitest = 3,545 total
+- **Total decisions:** 356 (DEC-001 through DEC-356, no new DECs in Sprint 26)
+- **Calendar days (active dev):** ~37 (Feb 14 – Mar 22, 2026)
 - **Largest sprint:** 22 (9 implementation + 5 fix + 9 reviews, largest scope)
 - **Cleanest sprint:** 23 (11 sessions, 0 regressions, 0 scope gaps requiring follow-up)
 - **Most test-dense:** Sprint 22 (286 new tests), Sprint 24 (209 new tests), Sprint 23.2 (188 new tests), Sprint 23 (141 new tests across 23+23.05)

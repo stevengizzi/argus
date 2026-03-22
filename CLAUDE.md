@@ -1,13 +1,13 @@
 # ARGUS — Claude Code Context
 
 > Dense, actionable context for Claude Code sessions. No history — see `docs/` for that.
-> Last updated: March 21, 2026 (Phase 5 Gate doc sync)
+> Last updated: March 22, 2026 (Sprint 26 doc sync)
 
 ## Active Sprint
 
-**No active sprint.** Sprint 25.8 (API Auth + Close-Position Fix) completed March 21, 2026.
+**No active sprint.** Sprint 26 (Red-to-Green + Pattern Library Foundation) completed March 22, 2026.
 
-Next planned sprint: **26 (Red-to-Green + Pattern Library Foundation)**. Red-to-Green strategy + PatternLibrary ABC + Bull Flag + Flat-Top Breakout pattern modules. Phase 5 Gate completed March 21 — build track resequenced per DEC-354: Sprint 27 is now BacktestEngine Core (not Pattern Expansion), followed by Sprint 21.6 (Re-Validation) and Sprint 28 (Learning Loop V1).
+Next planned sprint: **27 (BacktestEngine Core)** per DEC-354, followed by Sprint 21.6 (Re-Validation) and Sprint 28 (Learning Loop V1).
 
 ### Known Issues
 - **FMP Starter plan restriction:** FMP news endpoints return 403 on Starter plan ($22/mo). `fmp_news.enabled: false` in `system_live.yaml`. FMP circuit breaker (DEC-323) prevents spam if accidentally enabled.
@@ -17,9 +17,9 @@ Next planned sprint: **26 (Red-to-Green + Pattern Library Foundation)**. Red-to-
 ## Current State
 
 - **Active sprint:** None (between sprints)
-- **Next sprint:** 26 (Red-to-Green + Pattern Library Foundation)
-- **Tests:** 2,815 pytest + 611 Vitest (0 failures, 0 hangs)
-- **Strategies:** 4 active (ORB Breakout, ORB Scalp, VWAP Reclaim, Afternoon Momentum)
+- **Next sprint:** 27 (BacktestEngine Core)
+- **Tests:** 2,925 pytest + 620 Vitest (0 failures, 0 hangs)
+- **Strategies:** 7 active (ORB Breakout, ORB Scalp, VWAP Reclaim, Afternoon Momentum, Red-to-Green, Bull Flag, Flat-Top Breakout)
 - **Infrastructure:** Databento EQUS.MINI (live) + IBKR paper trading (Account U24619949) + FMP Starter (scanning + reference data + daily bars for regime) + Finnhub (news + analyst recs) + Claude API (Copilot + Catalyst Classification) + Universe Manager (config-gated) + Catalyst Pipeline (config-gated) + Intelligence Polling Loop (config-gated) + Reference Data Cache + Quality Engine (config-gated) + Dynamic Position Sizer + Strategy Evaluation Telemetry (ring buffer + SQLite persistence) + Debrief Export (shutdown automation)
 - **Frontend:** 8-page Command Center (Observatory added Sprint 25) + AI Copilot + Universe Status Card + Intelligence Brief View (all active), Tauri desktop + PWA mobile
 
@@ -28,7 +28,8 @@ Next planned sprint: **26 (Red-to-Green + Pattern Library Foundation)**. Red-to-
 ```
 argus/
 ├── core/           # Orchestrator, Risk Manager, Portfolio, Event Bus
-├── strategies/     # BaseStrategy, OrbBaseStrategy, 4 strategy implementations
+├── strategies/     # BaseStrategy, OrbBaseStrategy, 7 strategy implementations
+│   └── patterns/   # PatternModule ABC, BullFlagPattern, FlatTopBreakoutPattern
 ├── data/           # DataService (Databento/Alpaca/Replay/Backtest), Scanner, IndicatorEngine, UniverseManager, FMPReferenceClient
 ├── execution/      # Broker (IBKR/Alpaca/Simulated), Order Manager
 ├── analytics/      # Trade Logger, PerformanceCalculator, DebriefExport
@@ -288,6 +289,7 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 | DEF-082 | Quality engine catalyst_quality and volume_profile always 50.0 (neutral default) | Unscheduled | Expected when no real-time RVOL or symbol-specific catalysts. Will become useful as data sources are enriched. Priority: LOW. |
 | ~~DEF-083~~ | ~~API auth 403→401~~ | ~~Sprint 25.8~~ | **RESOLVED** (Sprint 25.8, DEC-351): `HTTPBearer(auto_error=False)` + explicit 401. 35 tests fixed. |
 | DEF-084 | Full test suite runtime optimization | Partially resolved | FMP rate limit configurable (454s→39s with xdist). Remaining slow tests: `test_stale_data_detection/recovery` (10s each). `slow` marker registered in pyproject.toml. Priority: LOW. |
+| DEF-088 | PatternParam structured type for `get_default_params()` | Sprint 27 | `PatternModule.get_default_params()` returns `dict[str, Any]`. Should return structured `PatternParam` objects with type, range, and description metadata for parameter grid generation and UI. Pre-assigned at Sprint 26 planning, deferred to Sprint 27. Priority: LOW. |
 | ~~DEF-085~~ | ~~Close-position endpoint regression~~ | ~~Sprint 25.8~~ | **RESOLVED** (Sprint 25.8, DEC-352): Routes through `OrderManager.close_position()`. 5 new tests. |
 | ~~DEF-086~~ | ~~WebSocket test hangs~~ | ~~Post-sprint~~ | **RESOLVED**: 8 tests rewrote to test bridge pipeline directly via send_queue, eliminating sync/async cross-thread hang. |
 | ~~DEF-087~~ | ~~11 pre-existing test failures~~ | ~~Post-sprint~~ | **RESOLVED**: 4 vectorbt (NumPy 2.x dep upgrade), 1 data_fetcher (Pandas 2.x datetime precision), 4 e2e telemetry (hardcoded date + async flush), 2 integration sprint20 (regime-based allocation assertions). Zero production code changes. |
@@ -296,9 +298,9 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 
 | Document | What It Covers |
 |----------|---------------|
-| `docs/decision-log.md` | All 352 DEC entries with full rationale |
+| `docs/decision-log.md` | All 356 DEC entries with full rationale |
 | `docs/dec-index.md` | Quick-reference index with status markers |
-| `docs/sprint-history.md` | Complete sprint history (1–25.8) |
+| `docs/sprint-history.md` | Complete sprint history (1–26) |
 | `docs/process-evolution.md` | Workflow evolution narrative |
 | `docs/live-operations.md` | Live trading procedures |
 | `docs/strategies/STRATEGY_*.md` | Per-strategy spec sheets |

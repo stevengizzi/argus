@@ -1,7 +1,7 @@
 # ARGUS — Strategic Roadmap
 
 > From artisanal strategies to ensemble alpha — the complete path
-> **v1.8 — March 21, 2026** (Phase 5 Gate complete — DEC-353–356)
+> **v1.9 — March 22, 2026** (Sprint 26 complete — Red-to-Green + Pattern Library Foundation)
 > **Status:** CANONICAL — this is the single source of truth for ARGUS's strategic direction and sprint queue.
 > **Supersedes:** `docs/research/ARGUS_Expanded_Roadmap.md` (Feb 26), `docs/argus_unified_vision_roadmap.md` (Mar 5), `docs/10_PHASE3_SPRINT_PLAN.md` (all forward-looking sections)
 
@@ -78,7 +78,7 @@ These foundations are correct and remain:
 
 ARGUS completed 21 sprints + sub-sprints in ~17 calendar days of active development (Feb 14 – Mar 5). Average sprint: ~0.8 calendar days. However, sprint complexity has been increasing — early sprints (1–5) were dense single-day affairs, while later sprints (21a–21d, 21.5) span multiple days. The roadmap below assumes sprint durations of 1–4 days each depending on complexity, with some parallelism where noted.
 
-**Current state:** Sprint 25.8 complete. 2,815 pytest + 611 Vitest. Four active strategies with per-candle evaluation telemetry. Live Databento + IBKR paper trading with 28+ trades across 4 sessions. Eight-page Command Center (Observatory added Sprint 25) + AI Copilot active. FMP Scanner + Universe Manager integrated. Autonomous Sprint Runner implemented (DEC-278–297). NLP Catalyst Pipeline complete (DEC-300–307). Setup Quality Engine + Dynamic Position Sizer complete (DEC-330–341). Strategy Observability complete (DEC-342). Phase 5 Gate complete (March 21, 2026). Revised sprint order per DEC-354: Sprint 26 (Red-to-Green) → Sprint 27 (BacktestEngine Core) → Sprint 21.6 (Re-Validation) → Sprint 28 (Learning Loop V1) → Sprints 29–31 (Pattern Expansion + Short Selling).
+**Current state:** Sprint 26 complete. 2,925 pytest + 620 Vitest. Seven active strategies (4 original + R2G, Bull Flag, Flat-Top from Sprint 26) with per-candle evaluation telemetry. PatternModule ABC established for composable pattern detection. Live Databento + IBKR paper trading with 28+ trades across 4 sessions. Eight-page Command Center (Observatory added Sprint 25) + AI Copilot active. FMP Scanner + Universe Manager integrated. Autonomous Sprint Runner implemented (DEC-278–297). NLP Catalyst Pipeline complete (DEC-300–307). Setup Quality Engine + Dynamic Position Sizer complete (DEC-330–341). Strategy Observability complete (DEC-342). Phase 5 Gate complete (March 21, 2026). Next: Sprint 27 (BacktestEngine Core) → Sprint 21.6 (Re-Validation) → Sprint 28 (Learning Loop V1) → Sprints 29–31 (Pattern Expansion + Short Selling).
 
 ---
 
@@ -297,16 +297,21 @@ FMP daily bars for regime classification (`fetch_daily_bars()`, DEC-347). Automa
 
 API auth 401 for unauthenticated requests (DEC-351). Close-position endpoint routes through OrderManager (DEC-352). Tests: 2,815 pytest + 611 Vitest.
 
-### Sprint 26: Red-to-Green + Pattern Library Foundation (DEC-163, DEC-167)
-**Target:** ~2–3 days
+### Sprint 26: Red-to-Green + Pattern Library Foundation ✅ COMPLETE (March 22, 2026)
 
-**Scope:**
-- **RedToGreenStrategy** through Incubator stages 1–3: Gap-down reversal at key levels (VWAP, premarket low, prior close). 9:45–11:00 AM window. State machine similar to VWAP Reclaim.
-- **PatternLibrary ABC interface** (`argus/strategies/patterns/`): Standardized pattern detection modules that feed "pattern strength" to Quality Engine.
-- **Bull Flag** and **Flat-Top Breakout** pattern modules: Each implements PatternLibrary interface. Stages 1–3 validation.
-- **UI:** Pattern Library page gains 3 new strategy cards with full parameter specs and backtest results.
+**Delivered:**
+- **RedToGreenStrategy** (`argus/strategies/red_to_green.py`): Gap-down reversal at key levels (VWAP, premarket low, prior close). 5-state machine (WATCHING → GAP_DOWN_CONFIRMED → TESTING_LEVEL → ENTERED / EXHAUSTED). 9:35–11:30 AM window.
+- **PatternModule ABC** (`argus/strategies/patterns/base.py`): Standardized pattern detection interface with CandleBar, PatternDetection dataclasses, 5 abstract members.
+- **PatternBasedStrategy** (`argus/strategies/pattern_strategy.py`): Generic wrapper turning any PatternModule into a full BaseStrategy.
+- **BullFlagPattern** (`argus/strategies/patterns/bull_flag.py`): Pole+flag+breakout continuation. Score: 30/30/25/15 weighting.
+- **FlatTopBreakoutPattern** (`argus/strategies/patterns/flat_top_breakout.py`): Resistance cluster breakout. Score: 30/30/25/15 weighting.
+- **VectorBT R2G** (`argus/backtest/vectorbt_red_to_green.py`): Dedicated R2G backtester.
+- **PatternBacktester** (`argus/backtest/vectorbt_pattern.py`): Generic sliding-window backtester for any PatternModule.
+- **Integration:** All 3 strategies wired into main.py. Strategy spec sheets created. UI cards added to Pattern Library.
+- **Tests:** 119 new (110 pytest + 9 Vitest). Total: 2,925 pytest + 620 Vitest = 3,545.
+- **13 sessions** (S1–S10, S10f, micro-fix, cleanup). All review verdicts CLEAR.
+- **No new DEC entries.** DEF-088 (PatternParam structured type) deferred to Sprint 27.
 - **7 strategies/patterns active.**
-- **Tests:** ~80 new.
 
 ### Sprint 27: BacktestEngine Core (DEC-354)
 **Target:** ~3 days

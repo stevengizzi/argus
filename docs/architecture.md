@@ -467,7 +467,88 @@ Consolidation breakout strategy entering on breakouts from midday tight ranges d
 
 **Operating window:** Consolidation tracking from 12:00 PM, entries 2:00–3:30 PM, force close 3:45 PM ET. 8 simultaneous entry conditions (DEC-156). Dynamic time stop = min(max_hold_minutes, seconds until force_close) (DEC-157). Scanner reuses ORB gap watchlist (DEC-154).
 
-### 3.4.4 Strategy Evaluation Telemetry — Sprint 24.5 ✅
+### 3.4.4 PatternModule Subsystem — Sprint 26 ✅
+
+Standardized pattern detection framework for composable, testable pattern modules.
+
+**PatternModule ABC (`strategies/patterns/base.py`):**
+```python
+@dataclass(frozen=True)
+class CandleBar:
+    """Lightweight candle representation independent of events.py."""
+    timestamp: datetime
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: float
+
+@dataclass
+class PatternDetection:
+    """Result of pattern detection."""
+    detected: bool
+    confidence: float       # 0–100
+    entry_price: float
+    stop_price: float
+    target_prices: list[float]
+    metadata: dict[str, Any]
+
+class PatternModule(ABC):
+    """Abstract base class for all pattern detection modules."""
+    @property
+    @abstractmethod
+    def name(self) -> str: ...
+
+    @property
+    @abstractmethod
+    def lookback_bars(self) -> int: ...
+
+    @abstractmethod
+    def detect(self, bars: deque[CandleBar], indicators: dict, params: dict) -> PatternDetection | None: ...
+
+    @abstractmethod
+    def score(self, detection: PatternDetection, bars: deque[CandleBar], indicators: dict) -> float: ...
+
+    @abstractmethod
+    def get_default_params(self) -> dict[str, Any]: ...
+```
+
+**PatternBasedStrategy (`strategies/pattern_strategy.py`):**
+Generic wrapper that turns any `PatternModule` into a full `BaseStrategy`. Handles operating window enforcement, per-symbol candle deque management (via `CandleBar` conversion from `CandleEvent`), watchlist gating, signal generation with T1/T2 targets from detection, pattern strength calculation via `score()`, and evaluation telemetry. Configured via strategy YAML with `pattern_name` field. One `PatternBasedStrategy` instance per pattern module.
+
+### 3.4.5 Red-to-Green Strategy (`strategies/red_to_green.py`) — Sprint 26 ✅
+
+Gap-down reversal strategy entering long when a gapped-down stock reclaims a key level. Standalone from BaseStrategy (not PatternModule — uses traditional state machine approach).
+
+**State Machine:** 5 states — WATCHING → GAP_DOWN_CONFIRMED → TESTING_LEVEL → ENTERED (terminal) or EXHAUSTED (terminal).
+
+**Key levels:** VWAP, premarket_low, prior_close. Strategy identifies the nearest key level and monitors for reclaim. `max_level_attempts=2` — if price tests and fails a level twice, state transitions to EXHAUSTED.
+
+**Key parameters:** `min_gap_down_pct` (1.0%), `max_gap_down_pct` (8.0%), `level_proximity_pct` (0.3%), `reclaim_confirmation_bars` (2), `volume_confirmation_multiplier` (1.5×), `target_1_r` (1.0), `target_2_r` (2.0), `time_stop_minutes` (15).
+
+**Operating window:** 9:35–11:30 AM ET.
+
+### 3.4.6 Bull Flag Pattern (`strategies/patterns/bull_flag.py`) — Sprint 26 ✅
+
+Continuation pattern detecting pole+flag+breakout formations. Implements PatternModule ABC, deployed via PatternBasedStrategy wrapper.
+
+**Detection:** Pole detection (strong upward move), flag validation (orderly pullback with declining volume), breakout confirmation above flag high. Measured move target based on pole length.
+
+**Score weighting:** Pattern quality 30%, breakout strength 30%, volume confirmation 25%, flag tightness 15%.
+
+**Operating window:** 10:00 AM – 3:00 PM ET. Config: `config/strategies/bull_flag.yaml`.
+
+### 3.4.7 Flat-Top Breakout Pattern (`strategies/patterns/flat_top_breakout.py`) — Sprint 26 ✅
+
+Resistance cluster breakout pattern. Implements PatternModule ABC, deployed via PatternBasedStrategy wrapper.
+
+**Detection:** Resistance clustering (multiple touches of similar price level), consolidation validation with range narrowing, breakout confirmation above resistance with volume.
+
+**Score weighting:** Resistance strength 30%, consolidation quality 30%, breakout conviction 25%, volume surge 15%.
+
+**Operating window:** 10:00 AM – 3:00 PM ET. Config: `config/strategies/flat_top_breakout.yaml`.
+
+### 3.4.8 Strategy Evaluation Telemetry — Sprint 24.5 ✅
 
 Real-time and historical visibility into what every strategy evaluates on every candle. Diagnostic-only — does NOT flow through the EventBus (DEC-342).
 
@@ -497,7 +578,7 @@ Real-time and historical visibility into what every strategy evaluates on every 
 - Slide-out panel on Orchestrator page with AnimatePresence animation + Esc key close
 - "View Decisions" button on strategy cards opens panel; optional `onViewDecisions` callback prop on `StrategyOperationsCard` and `StrategyOperationsGrid`
 
-**Instrumentation Coverage:** All 4 strategies emit evaluation events at every decision point (OR accumulation, finalization, exclusion checks, entry conditions, signal generation, quality scoring). AfMo `_check_breakout_entry()` restructured from sequential early-return to evaluate-all-then-check pattern to support 8 individual `CONDITION_CHECK` events.
+**Instrumentation Coverage:** All 7 strategies emit evaluation events at every decision point (OR accumulation, finalization, exclusion checks, entry conditions, signal generation, quality scoring). AfMo `_check_breakout_entry()` restructured from sequential early-return to evaluate-all-then-check pattern to support 8 individual `CONDITION_CHECK` events.
 
 ### 3.5 Risk Manager (`core/risk_manager.py`)
 
@@ -1479,6 +1560,14 @@ Precompute+vectorize architecture (DEC-144, ~500x speedup). Precomputes per-day 
 ### 5.1.3 VectorBT Afternoon Momentum Layer (`backtest/vectorbt_afternoon_momentum.py`)
 
 Precompute+vectorize architecture (DEC-162). Consolidation detection from midday bars (12:00–2:00 PM), breakout simulation during 2:00–3:30 PM window. ATR method divergence documented: VectorBT uses SMA(14), production uses Wilder's EMA — thresholds may not transfer exactly. Single entry per day (conservative vs live retry). Walk-forward pipeline dispatch. Results provisional per DEC-132.
+
+### 5.1.4 VectorBT Red-to-Green Layer (`backtest/vectorbt_red_to_green.py`) — Sprint 26 ✅
+
+Dedicated R2G backtester with gap-down detection, key level identification (VWAP, prior close), and reclaim entry simulation. Precompute+vectorize architecture. Walk-forward dispatch via `walk_forward.py`. WFE not evaluated (no historical data available at time of implementation) — Option 1 accepted (proceed to paper).
+
+### 5.1.5 Generic PatternBacktester (`backtest/vectorbt_pattern.py`) — Sprint 26 ✅
+
+Generic sliding-window backtester for any `PatternModule` implementation. Takes a PatternModule instance and runs backtests using the module's `detect()` and `score()` methods against historical OHLCV data. Parameter grid generation produces ±20% and ±40% variations of each default parameter. Self-contained walk-forward loop. Used for Bull Flag and Flat-Top Breakout backtesting.
 ```
 
 **Change C — Update directory structure in section 5.6 (replace the backtest file list):**
@@ -1493,6 +1582,8 @@ With:
 ├── vectorbt_orb_scalp.py          # VectorBT ORB Scalp sweeps
 ├── vectorbt_vwap_reclaim.py       # VectorBT VWAP Reclaim sweeps (DEC-144)
 ├── vectorbt_afternoon_momentum.py # VectorBT Afternoon Momentum sweeps (DEC-162)
+├── vectorbt_red_to_green.py       # VectorBT R2G sweeps (Sprint 26)
+├── vectorbt_pattern.py            # Generic PatternModule backtester (Sprint 26)
 
 ### 5.2 Replay Harness (`backtest/replay_harness.py`)
 
