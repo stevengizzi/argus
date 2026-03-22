@@ -1,6 +1,6 @@
 # ARGUS — Project Knowledge (Claude Context)
 
-> *Tier A operational context for Claude Code and Claude.ai. Last updated: March 22, 2026 (Sprint 26 doc sync).*
+> *Tier A operational context for Claude Code and Claude.ai. Last updated: March 22, 2026 (Sprint 27 doc sync).*
 > *Full decision rationale: `docs/decision-log.md` | Sprint details: `docs/sprint-history.md` | DEC index: `docs/dec-index.md`*
 
 ---
@@ -11,10 +11,10 @@ ARGUS is a fully automated, AI-enhanced multi-strategy day trading system for US
 
 ## Current State
 
-**Tests:** 2,925 pytest + 620 Vitest (0 failures, 0 hangs)
-**Sprints completed:** 1 through 26 (26 full sprints + sub-sprints)
+**Tests:** 3,010 pytest + 620 Vitest (0 failures, 0 hangs)
+**Sprints completed:** 1 through 27 (27 full sprints + sub-sprints)
 **Active sprint:** None (between sprints)
-**Next sprint:** 27 (BacktestEngine Core)
+**Next sprint:** 21.6 (Backtest Re-Validation)
 **GitHub:** `https://github.com/stevengizzi/argus.git` (public)
 
 ### Sprint History (Summary)
@@ -64,12 +64,13 @@ ARGUS is a fully automated, AI-enhanced multi-strategy day trading system for US
 | 25.7 | Post-Session Operational Fixes | 2815+611V | Mar 21 | DEC-347–350 |
 | 25.8 | API Auth 401 + Close-Position Fix | 2815+611V | Mar 21 | DEC-351–352 |
 | 26 | Red-to-Green + Pattern Library Foundation | 2925+620V | Mar 21–22 | — (no new DECs) |
+| 27 | BacktestEngine Core | 3010+620V | Mar 22 | — (no new DECs) |
 
 *Full sprint scopes and session details: `docs/sprint-history.md`*
 
 ### Build Track Queue
 
-~~26 (Red-to-Green + Pattern Library Foundation)~~ ✅ → **27 (BacktestEngine Core — pulled forward per DEC-354)** → 21.6 (Backtest Re-Validation) → 28 (Learning Loop V1) → 29–31 (Pattern Expansion + Short Selling) → 32–34 (Sweep Infrastructure, Strategy Templates, Statistical Validation) → 35–38 (ORB Systematic Search ★, Cross-Family Search, Ensemble Orchestrator V2, Synapse) → 39–41 (Learning Loop V2, Continuous Discovery, Performance Workbench). Sprint 23.5 (NLP Catalyst Pipeline) complete. Order Flow Model deferred to post-revenue (DEC-238). Historical data purchase deferred indefinitely (DEC-353). Full roadmap: `docs/roadmap.md` (DEC-262).
+~~26 (Red-to-Green + Pattern Library Foundation)~~ ✅ → ~~27 (BacktestEngine Core — pulled forward per DEC-354)~~ ✅ → **21.6 (Backtest Re-Validation)** → 28 (Learning Loop V1) → 29–31 (Pattern Expansion + Short Selling) → 32–34 (Sweep Infrastructure, Strategy Templates, Statistical Validation) → 35–38 (ORB Systematic Search ★, Cross-Family Search, Ensemble Orchestrator V2, Synapse) → 39–41 (Learning Loop V2, Continuous Discovery, Performance Workbench). Sprint 23.5 (NLP Catalyst Pipeline) complete. Order Flow Model deferred to post-revenue (DEC-238). Historical data purchase deferred indefinitely (DEC-353). Full roadmap: `docs/roadmap.md` (DEC-262).
 
 ### Validation Track
 
@@ -77,7 +78,7 @@ Paper trading active with Databento EQUS.MINI + IBKR paper (Account U24619949, D
 
 ### Expanded Vision (DEC-163, DEC-262)
 
-15+ artisanal patterns → ensemble systematic search → self-improving trading intelligence platform. Near-term (Phase 5–6): Setup Quality Engine (0–100 scoring, DEC-239, **Sprint 24 ✅**), NLP Catalyst Pipeline (SEC EDGAR + FMP + Finnhub + Claude API, **Sprint 23.5 ✅**), Dynamic Position Sizer (**Sprint 24 ✅**), Learning Loop V1, Short Selling Infrastructure, Universe Manager with full-universe monitoring (DEC-263, **Sprint 23 ✅**). Mid-term (Phase 7–8): BacktestEngine, parameterized strategy templates, systematic parameter search, controlled experiment (go/no-go gate). Long-term (Phase 9–10): Ensemble Orchestrator V2, Synapse visualization, Continuous Discovery Pipeline, Performance Workbench. Order Flow Model deferred to post-revenue (DEC-238, requires Databento Plus $1,399/mo). Full roadmap: `docs/roadmap.md`.
+15+ artisanal patterns → ensemble systematic search → self-improving trading intelligence platform. Near-term (Phase 5–6): Setup Quality Engine (0–100 scoring, DEC-239, **Sprint 24 ✅**), NLP Catalyst Pipeline (SEC EDGAR + FMP + Finnhub + Claude API, **Sprint 23.5 ✅**), Dynamic Position Sizer (**Sprint 24 ✅**), Learning Loop V1, Short Selling Infrastructure, Universe Manager with full-universe monitoring (DEC-263, **Sprint 23 ✅**). Mid-term (Phase 7–8): BacktestEngine (**Sprint 27 ✅**), parameterized strategy templates, systematic parameter search, controlled experiment (go/no-go gate). Long-term (Phase 9–10): Ensemble Orchestrator V2, Synapse visualization, Continuous Discovery Pipeline, Performance Workbench. Order Flow Model deferred to post-revenue (DEC-238, requires Databento Plus $1,399/mo). Full roadmap: `docs/roadmap.md`.
 
 ---
 
@@ -99,7 +100,7 @@ Paper trading active with Databento EQUS.MINI + IBKR paper (Account U24619949, D
 - **Data Service:** Databento EQUS.MINI primary (DEC-248). Event Bus sole streaming mechanism (DEC-029). Databento callbacks on reader thread, bridged via `call_soon_threadsafe()` (DEC-088). `fetch_daily_bars()` implemented via FMP stable API for regime classification (DEC-347, Sprint 25.7). `last_update` attribute tracks last data receipt for health endpoint (Sprint 25.7). Universe Manager (Sprint 23) adds fast-path discard for non-viable symbols and ALL_SYMBOLS Databento mode. Time-aware indicator warm-up (DEC-316, Sprint 23.7): pre-market boot skips warm-up; mid-session boot uses lazy per-symbol backfill on first candle arrival.
 - **Universe Manager (Sprint 23):** FMPReferenceClient fetches Company Profile + Share Float in batches for ~3,000–5,000 symbols. UniverseManager applies system-level filters (OTC, price, volume; fail-closed on missing data per DEC-277), builds pre-computed routing table mapping symbols to qualifying strategies via declarative `universe_filter` YAML configs. O(1) route_candle lookup. After `build_routing_table()` in Phase 9.5, strategy watchlists are populated from UM routing via `set_watchlist(symbols, source="universe_manager")` (DEC-343, Sprint 25.5). Fast-path discard in DatabentoDataService drops non-viable symbols before IndicatorEngine. Config-gated: `universe_manager.enabled` in system.yaml. Backward compatible (disabled = existing scanner flow). Zero-evaluation health warning (DEC-344, Sprint 25.5): `HealthMonitor.check_strategy_evaluations()` detects strategies with populated watchlists but zero evaluations after operating window + 5 min grace; sets DEGRADED, self-corrects when evaluations appear. Periodic 60s asyncio task during market hours. Full-universe input pipe active (DEC-299): ~8,000 symbols fetched from FMP stock-list, ~3,000–4,000 viable after system filters. Reference data file cache (DEC-314) with JSON persistence, atomic writes, and per-symbol staleness tracking enables incremental warm-up (~2–5 min vs ~27 min full fetch). Periodic cache saves every 1,000 symbols during fetch + save on shutdown signal (DEC-317, Sprint 23.7) prevent data loss on interrupted cold-starts.
 - **Broker Abstraction:** IBKRBroker (live, via `ib_async`), AlpacaBroker (incubator), SimulatedBroker (backtest). Atomic bracket orders (DEC-117). Config-driven selection via BrokerSource enum (DEC-094).
-- **Backtesting:** VectorBT (parameter sweeps, precompute+vectorize mandated DEC-149) + Replay Harness (production code replay) + PatternBacktester (generic sliding-window backtester for PatternModule patterns, Sprint 26) + VectorBT R2G (dedicated R2G backtester, Sprint 26). Walk-forward validation mandatory, WFE > 0.3 (DEC-047).
+- **Backtesting:** VectorBT (parameter sweeps, precompute+vectorize mandated DEC-149) + Replay Harness (production code replay) + PatternBacktester (generic sliding-window backtester for PatternModule patterns, Sprint 26) + VectorBT R2G (dedicated R2G backtester, Sprint 26) + **BacktestEngine** (Sprint 27: production-code backtesting via SynchronousEventBus, Databento OHLCV-1m + Parquet cache via HistoricalDataFeed, bar-level fill model with worst-case-for-longs priority, multi-day orchestration, scanner simulation, CLI entry point; walk-forward integration via `oos_engine` parameter selects BacktestEngine vs Replay Harness). Walk-forward validation mandatory, WFE > 0.3 (DEC-047).
 - **Event Bus:** FIFO per subscriber, monotonic sequence numbers, no priority queues. In-process asyncio only (DEC-025).
 - **Order Manager:** Event-driven (tick-subscribed for open positions) + 5-second fallback poll + scheduled EOD flatten (DEC-030).
 
@@ -122,7 +123,7 @@ argus/
 ├── data/           # Scanner, Data Service, Indicators, IndicatorEngine, Universe Manager, FMP Reference
 ├── execution/      # Broker abstraction, Order Manager
 ├── analytics/      # Trade Logger, Performance Calculator, Debrief Export
-├── backtest/       # VectorBT helpers, Replay Harness
+├── backtest/       # VectorBT helpers, Replay Harness, BacktestEngine (Sprint 27)
 ├── ui/             # React frontend (Vite + TypeScript)
 ├── api/            # FastAPI REST + WebSocket
 ├── ai/             # Claude API integration (Sprint 22+)

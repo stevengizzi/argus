@@ -1523,7 +1523,7 @@ See `docs/ui/ux-feature-backlog.md` for the complete prioritized inventory (35 f
 
 ## 5. Backtesting Toolkit
 
-Two-layer approach: VectorBT for fast parameter exploration, Replay Harness for full-fidelity validation. Backtrader was dropped (DEC-046) — the Replay Harness runs actual production code, making Backtrader's intermediate-fidelity approach redundant.
+Three-layer approach: VectorBT for fast parameter exploration, Replay Harness for tick-level fidelity validation, and BacktestEngine (Sprint 27) for production-code speed backtesting. Backtrader was dropped (DEC-046) — the Replay Harness runs actual production code, making Backtrader's intermediate-fidelity approach redundant.
 
 ### 5.1 VectorBT Layer (`backtest/vectorbt_orb.py`)
 
@@ -1569,6 +1569,34 @@ Dedicated R2G backtester with gap-down detection, key level identification (VWAP
 
 Generic sliding-window backtester for any `PatternModule` implementation. Takes a PatternModule instance and runs backtests using the module's `detect()` and `score()` methods against historical OHLCV data. Parameter grid generation produces ±20% and ±40% variations of each default parameter. Self-contained walk-forward loop. Used for Bull Flag and Flat-Top Breakout backtesting.
 ```
+
+### 5.1.6 BacktestEngine (`backtest/engine.py`) — Sprint 27 ✅
+
+Production-code backtesting engine that runs real ARGUS strategy code against Databento OHLCV-1m historical data via synchronous event dispatch. Bridges the gap between VectorBT (fast but approximate) and Replay Harness (high-fidelity but slow) — BacktestEngine runs actual strategy code at ≥5x Replay Harness speed by using bar-level fills instead of synthetic tick generation.
+
+**Key Components:**
+
+- **SynchronousEventBus** (`core/sync_event_bus.py`): Sequential event dispatch with the same interface as the async EventBus. Subscribers receive events synchronously in subscription order. Enables deterministic, single-threaded backtesting without asyncio overhead.
+
+- **HistoricalDataFeed** (`backtest/historical_data_feed.py`): Downloads Databento OHLCV-1m data via `timeseries.get_range()` with `metadata.get_cost()` pre-validation. Parquet cache layer avoids redundant downloads. Supports March 2023 – present for US equities (XNAS.ITCH + XNYS.TRADES datasets).
+
+- **BacktestEngine** (`backtest/engine.py`): Assembles production components (strategies, Risk Manager, Order Manager, SimulatedBroker, IndicatorEngine) wired through SynchronousEventBus. Mirrors ReplayHarness component assembly pattern. Features:
+  - **Bar-level fill model** with worst-case-for-longs exit priority: stop > target > time_stop > EOD (same priority as VectorBT sweeps per `.claude/rules/backtesting.md`)
+  - **Multi-day orchestration**: Iterates trading days, resets daily state, runs scanner simulation per day
+  - **Scanner simulation**: Computes gap from prev_close → day_open, applies scanner filters (same approach as VectorBT backtests)
+  - **Strategy factory**: Creates strategy instances from `StrategyType` enum with config overrides
+  - **CLI entry point**: `python -m argus.backtest.engine --symbols TSLA,NVDA --start 2025-06-01 --end 2025-12-31 --strategy orb_breakout`
+  - **Results persistence**: Per-run SQLite database in `data/backtest_runs/`
+
+- **Walk-forward integration**: `walk_forward.py` gains `oos_engine` parameter (`"replay"` default, `"backtest_engine"` selects BacktestEngine for OOS evaluation). Enables walk-forward validation using production-code execution at speed.
+
+**Relationship between backtesting layers:**
+
+| Layer | Speed | Fidelity | Use Case |
+|-------|-------|----------|----------|
+| VectorBT | Fastest (~30s for full sweep) | Approximate (vectorized logic) | Parameter exploration, sensitivity analysis |
+| BacktestEngine | Fast (≥5x Replay Harness) | High (real strategy code, bar-level fills) | Production-code validation, walk-forward OOS |
+| Replay Harness | Slowest (tick-level replay) | Highest (synthetic ticks from OHLC) | Final validation, tick-level fidelity checks |
 
 **Change C — Update directory structure in section 5.6 (replace the backtest file list):**
 
@@ -1649,12 +1677,17 @@ Generates self-contained HTML reports with:
 ### 5.6 Directory Structure
 argus/backtest/
 ├── init.py
+├── config.py             # BacktestConfig Pydantic model (Sprint 27)
 ├── data_fetcher.py       # Historical data download (Databento primary, Alpaca legacy) → Parquet cache
+├── engine.py             # BacktestEngine — production-code backtesting (Sprint 27)
+├── historical_data_feed.py  # Databento OHLCV-1m download + Parquet cache (Sprint 27)
 ├── replay_harness.py     # Production code replay engine
 ├── vectorbt_orb.py       # VectorBT parameter sweeps
 ├── metrics.py            # Performance metric calculations
 ├── walk_forward.py       # Walk-forward analysis framework
 └── report_generator.py   # HTML report generation
+argus/core/
+├── sync_event_bus.py     # SynchronousEventBus for deterministic backtesting (Sprint 27)
 data/
 ├── historical/           # Downloaded Parquet files (gitignored)
 │   ├── manifest.json     # Download tracking

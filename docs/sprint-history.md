@@ -1,7 +1,7 @@
 # ARGUS — Sprint History
 
 > Complete record of all sprints from project inception through current state.
-> Active development began February 14, 2026. As of March 22, 2026 (~37 calendar days), 26 full sprints + 24 sub-sprints completed.
+> Active development began February 14, 2026. As of March 22, 2026 (~37 calendar days), 27 full sprints + 24 sub-sprints completed.
 
 ---
 
@@ -20,6 +20,7 @@
 | O — Watchlist Wiring Fix | 25.5 | Mar 18 | UM watchlist population + zero-eval health warning |
 | O — Bug Sweep | 25.6 | Mar 19–20 | Operational bug fixes from first live session post-25.5 |
 | P — Pattern Library Foundation | 26 | Mar 21–22 | R2G + PatternModule ABC + Bull Flag + Flat-Top + backtesting |
+| Q — BacktestEngine Core | 27 | Mar 22 | Production-code backtesting engine with SyncEventBus |
 
 ---
 
@@ -1223,12 +1224,73 @@
 
 ---
 
+## Phase Q — BacktestEngine Core (Sprint 27, Mar 22)
+
+### Sprint 27 — BacktestEngine Core (3,010 pytest + 620 Vitest = 3,630 total)
+**Date:** Mar 22, 2026
+**Scope:** Build a production-code backtesting engine running real ARGUS strategy code against Databento OHLCV-1m historical data via synchronous event dispatch. ≥5x speed over Replay Harness. Backend only, no UI.
+**Type:** Feature sprint. **Execution:** Autonomous runner (human-in-the-loop mode).
+
+**Session 1 (S1): SynchronousEventBus + Config**
+- Created `argus/core/sync_event_bus.py` — sequential event dispatch, same interface as async EventBus
+- Extended `argus/backtest/config.py` — BacktestConfig with strategy_type, symbols, date range, config overrides
+- Extended StrategyType enum with `red_to_green`, `bull_flag`, `flat_top_breakout`
+- Fixed pre-existing gap: `test_all_strategy_types_present` missing `red_to_green`
+- +15 pytest
+- Verdict: CLEAR
+
+**Session 2 (S2): HistoricalDataFeed**
+- Created `argus/backtest/historical_data_feed.py` — Databento OHLCV-1m download with Parquet cache
+- `metadata.get_cost()` pre-validation before download
+- Supports XNAS.ITCH + XNYS.TRADES datasets (March 2023 – present)
+- +12 pytest
+- Verdict: CLEAR
+
+**Session 3 (S3): BacktestEngine Assembly + Strategy Factory**
+- Created `argus/backtest/engine.py` — component assembly mirroring ReplayHarness pattern
+- Strategy factory creates instances from StrategyType enum with config overrides
+- SynchronousEventBus wired to strategies, Risk Manager, Order Manager, SimulatedBroker
+- +15 pytest
+- Verdict: CLEAR
+
+**Session 4 (S4): Day Loop + Bar-Level Fill Model**
+- Multi-day orchestration: iterate trading days, reset daily state, scanner simulation per day
+- Bar-level fill model with worst-case-for-longs exit priority: stop > target > time_stop > EOD
+- Scanner simulation: gap from prev_close → day_open with filter application
+- +17 pytest
+- Verdict: CLEAR
+
+**Session 5 (S5): Multi-Day Orchestration + Scanner + CLI**
+- Results collection and aggregation across multi-day runs
+- CLI entry point: `python -m argus.backtest.engine --symbols ... --start ... --end ... --strategy ...`
+- `run()` loads data before `_setup()` so empty runs skip component initialization
+- Per-run SQLite database persistence in `data/backtest_runs/`
+- +14 pytest
+- Verdict: CLEAR
+
+**Session 6 (S6): Walk-Forward Integration + Equivalence Tests**
+- Walk-forward `oos_engine` parameter: `"replay"` (default) or `"backtest_engine"`
+- Directional equivalence tests (mocked data) validating BacktestEngine produces comparable results
+- Speed benchmark infrastructure (real benchmarking deferred to first real run)
+- +12 pytest
+- Verdict: CLEAR
+
+**Key decisions:** None (no DEC entries created — all implementation followed existing patterns and decisions). Reserved range DEC-357–DEC-365 unused.
+**New deferred items:** DEF-089 (in-memory ResultsCollector for parallel sweeps, pre-assigned during planning, deferred to Sprint 32).
+**Sessions:** 6 (S1–S6)
+**Test counts:** pytest 2,925 → 3,010 (+85), Vitest 620 → 620 (+0)
+**Review verdicts:** S1 CLEAR, S2 CLEAR, S3 CLEAR, S4 CLEAR, S5 CLEAR, S6 CLEAR
+**AR items:** AR-1 (metadata), AR-2 (limitation docstring), AR-3 (fail-closed cost), AR-4 (oos_engine field)
+**Notes:** Clean sprint — all 6 sessions CLEAR, no new DECs, no regressions. BacktestEngine operational with all 7 strategy types supported. Walk-forward integration enables production-code OOS evaluation. New files: 4 (sync_event_bus.py, historical_data_feed.py, engine.py, test files). Modified files: 3 (config.py, walk_forward.py, test files). Directional equivalence validated with mocked data; real equivalence validation deferred to Sprint 21.6 with actual historical data.
+
+---
+
 ## Sprint Statistics
 
-- **Total sprints:** 26 full + 24 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8)
-- **Total sessions:** ~355+ Claude Code sessions
-- **Total tests:** 2,925 pytest + 620 Vitest = 3,545 total
-- **Total decisions:** 356 (DEC-001 through DEC-356, no new DECs in Sprint 26)
+- **Total sprints:** 27 full + 24 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8)
+- **Total sessions:** ~361+ Claude Code sessions
+- **Total tests:** 3,010 pytest + 620 Vitest = 3,630 total
+- **Total decisions:** 356 (DEC-001 through DEC-356, no new DECs in Sprints 26–27)
 - **Calendar days (active dev):** ~37 (Feb 14 – Mar 22, 2026)
 - **Largest sprint:** 22 (9 implementation + 5 fix + 9 reviews, largest scope)
 - **Cleanest sprint:** 23 (11 sessions, 0 regressions, 0 scope gaps requiring follow-up)

@@ -1,7 +1,7 @@
 # ARGUS — Strategic Roadmap
 
 > From artisanal strategies to ensemble alpha — the complete path
-> **v1.9 — March 22, 2026** (Sprint 26 complete — Red-to-Green + Pattern Library Foundation)
+> **v2.0 — March 22, 2026** (Sprint 27 complete — BacktestEngine Core)
 > **Status:** CANONICAL — this is the single source of truth for ARGUS's strategic direction and sprint queue.
 > **Supersedes:** `docs/research/ARGUS_Expanded_Roadmap.md` (Feb 26), `docs/argus_unified_vision_roadmap.md` (Mar 5), `docs/10_PHASE3_SPRINT_PLAN.md` (all forward-looking sections)
 
@@ -78,7 +78,7 @@ These foundations are correct and remain:
 
 ARGUS completed 21 sprints + sub-sprints in ~17 calendar days of active development (Feb 14 – Mar 5). Average sprint: ~0.8 calendar days. However, sprint complexity has been increasing — early sprints (1–5) were dense single-day affairs, while later sprints (21a–21d, 21.5) span multiple days. The roadmap below assumes sprint durations of 1–4 days each depending on complexity, with some parallelism where noted.
 
-**Current state:** Sprint 26 complete. 2,925 pytest + 620 Vitest. Seven active strategies (4 original + R2G, Bull Flag, Flat-Top from Sprint 26) with per-candle evaluation telemetry. PatternModule ABC established for composable pattern detection. Live Databento + IBKR paper trading with 28+ trades across 4 sessions. Eight-page Command Center (Observatory added Sprint 25) + AI Copilot active. FMP Scanner + Universe Manager integrated. Autonomous Sprint Runner implemented (DEC-278–297). NLP Catalyst Pipeline complete (DEC-300–307). Setup Quality Engine + Dynamic Position Sizer complete (DEC-330–341). Strategy Observability complete (DEC-342). Phase 5 Gate complete (March 21, 2026). Next: Sprint 27 (BacktestEngine Core) → Sprint 21.6 (Re-Validation) → Sprint 28 (Learning Loop V1) → Sprints 29–31 (Pattern Expansion + Short Selling).
+**Current state:** Sprint 27 complete. 3,010 pytest + 620 Vitest. Seven active strategies (4 original + R2G, Bull Flag, Flat-Top from Sprint 26) with per-candle evaluation telemetry. PatternModule ABC established for composable pattern detection. BacktestEngine operational with all 7 strategy types, walk-forward integration, and CLI entry point (Sprint 27). Live Databento + IBKR paper trading with 28+ trades across 4 sessions. Eight-page Command Center (Observatory added Sprint 25) + AI Copilot active. FMP Scanner + Universe Manager integrated. Autonomous Sprint Runner implemented (DEC-278–297). NLP Catalyst Pipeline complete (DEC-300–307). Setup Quality Engine + Dynamic Position Sizer complete (DEC-330–341). Strategy Observability complete (DEC-342). Phase 5 Gate complete (March 21, 2026). Next: Sprint 21.6 (Backtest Re-Validation using BacktestEngine) → Sprint 28 (Learning Loop V1) → Sprints 29–31 (Pattern Expansion + Short Selling).
 
 ---
 
@@ -313,22 +313,23 @@ API auth 401 for unauthenticated requests (DEC-351). Close-position endpoint rou
 - **No new DEC entries.** DEF-088 (PatternParam structured type) deferred to Sprint 27.
 - **7 strategies/patterns active.**
 
-### Sprint 27: BacktestEngine Core (DEC-354)
-**Target:** ~3 days
+### Sprint 27: BacktestEngine Core (DEC-354) ✅ COMPLETE (March 22, 2026)
 
-**Scope:**
-- **BacktestEngine** (`argus/backtest/engine.py`): Production-code backtesting engine using Databento OHLCV-1m historical data (free on Standard plan per DEC-353).
-- Data pipeline: Databento `metadata.get_cost()` → `timeseries.get_range()` for OHLCV-1m bars (March 2023 – present).
-- Engine runs actual strategy code against historical data (not VectorBT approximation).
-- Walk-forward validation integration. Results persistence.
-- **Tests:** ~80 new.
+**Delivered:**
+- **SynchronousEventBus** (`argus/core/sync_event_bus.py`): Sequential event dispatch with same interface as async EventBus. Enables deterministic, single-threaded backtesting.
+- **HistoricalDataFeed** (`argus/backtest/historical_data_feed.py`): Databento OHLCV-1m download with `metadata.get_cost()` pre-validation and Parquet cache. XNAS.ITCH + XNYS.TRADES datasets (March 2023 – present).
+- **BacktestEngine** (`argus/backtest/engine.py`): Production-code backtesting engine running real strategy code. Bar-level fill model with worst-case-for-longs priority (stop > target > time_stop > EOD). Multi-day orchestration with scanner simulation. Strategy factory for all 7 strategy types. CLI entry point.
+- **Walk-forward integration**: `oos_engine` parameter on `walk_forward.py` selects BacktestEngine vs Replay Harness for OOS evaluation.
+- **6 sessions** (S1–S6), all CLEAR. 85 new pytest tests. No new DEC entries.
+- **State after:** BacktestEngine operational, all 7 strategies supported, walk-forward integration complete. Tests: 3,010 pytest + 620 Vitest.
 
-### Sprint 21.6: Backtest Re-Validation (after Sprint 27)
+### Sprint 21.6: Backtest Re-Validation (after Sprint 27) — NEXT
 **Target:** ~2 days
 
 **Scope:**
-- Re-validate all 4 active strategies using BacktestEngine + 3 years of Databento OHLCV-1m data.
+- Re-validate all 7 active strategies using BacktestEngine + Databento OHLCV-1m data (March 2023 – present).
 - Compare Databento-based results against provisional Alpaca-era backtests (DEC-132).
+- First real BacktestEngine run — validates speed claims and equivalence with Replay Harness.
 - Update strategy parameters if data shows significant divergence.
 - **Tests:** ~20 new.
 
