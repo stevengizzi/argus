@@ -43,9 +43,12 @@ from argus.core.config import (
     DataSource,
     OrchestratorConfig,
     load_afternoon_momentum_config,
+    load_bull_flag_config,
     load_config,
+    load_flat_top_breakout_config,
     load_orb_config,
     load_orb_scalp_config,
+    load_red_to_green_config,
     load_vwap_reclaim_config,
     load_yaml_file,
 )
@@ -73,6 +76,9 @@ from argus.intelligence.quality_engine import SetupQualityEngine
 from argus.execution.alpaca_broker import AlpacaBroker
 from argus.execution.order_manager import OrderManager
 from argus.strategies.afternoon_momentum import AfternoonMomentumStrategy
+from argus.strategies.pattern_strategy import PatternBasedStrategy
+from argus.strategies.patterns import BullFlagPattern, FlatTopBreakoutPattern
+from argus.strategies.red_to_green import RedToGreenStrategy
 from argus.strategies.telemetry_store import EvaluationEventStore
 from argus.strategies.orb_breakout import OrbBreakoutStrategy
 from argus.strategies.orb_scalp import OrbScalpStrategy
@@ -449,6 +455,52 @@ class ArgusSystem:
                 afternoon_strategy.set_watchlist(symbols)
             strategies_created.append("AfternoonMomentum")
 
+        # Red-to-Green (optional — only if config file exists)
+        r2g_strategy: RedToGreenStrategy | None = None
+        r2g_yaml = self._config_dir / "strategies" / "red_to_green.yaml"
+        if r2g_yaml.exists():
+            r2g_config = load_red_to_green_config(r2g_yaml)
+            r2g_strategy = RedToGreenStrategy(
+                config=r2g_config,
+                data_service=self._data_service,
+                clock=self._clock,
+            )
+            if not use_universe_manager:
+                r2g_strategy.set_watchlist(symbols)
+            strategies_created.append("RedToGreen")
+
+        # Bull Flag (optional — PatternBasedStrategy wrapping BullFlagPattern)
+        bull_flag_strategy: PatternBasedStrategy | None = None
+        bull_flag_yaml = self._config_dir / "strategies" / "bull_flag.yaml"
+        if bull_flag_yaml.exists():
+            bull_flag_config = load_bull_flag_config(bull_flag_yaml)
+            bull_flag_pattern = BullFlagPattern()
+            bull_flag_strategy = PatternBasedStrategy(
+                pattern=bull_flag_pattern,
+                config=bull_flag_config,
+                data_service=self._data_service,
+                clock=self._clock,
+            )
+            if not use_universe_manager:
+                bull_flag_strategy.set_watchlist(symbols)
+            strategies_created.append("BullFlag")
+
+        # Flat-Top Breakout (optional — PatternBasedStrategy wrapping FlatTopBreakoutPattern)
+        flat_top_strategy: PatternBasedStrategy | None = None
+        flat_top_yaml = self._config_dir / "strategies" / "flat_top_breakout.yaml"
+        if flat_top_yaml.exists():
+            flat_top_config = load_flat_top_breakout_config(flat_top_yaml)
+            flat_top_pattern = FlatTopBreakoutPattern()
+            flat_top_strategy = PatternBasedStrategy(
+                pattern=flat_top_pattern,
+                config=flat_top_config,
+                data_service=self._data_service,
+                clock=self._clock,
+            )
+            if not use_universe_manager:
+                flat_top_strategy.set_watchlist(symbols)
+            strategies_created.append("FlatTopBreakout")
+
         # Note: is_active and allocated_capital set by Orchestrator in Phase 9
         self._health_monitor.update_component(
             "strategy",
@@ -477,6 +529,12 @@ class ArgusSystem:
             self._orchestrator.register_strategy(vwap_reclaim_strategy)
         if afternoon_strategy is not None:
             self._orchestrator.register_strategy(afternoon_strategy)
+        if r2g_strategy is not None:
+            self._orchestrator.register_strategy(r2g_strategy)
+        if bull_flag_strategy is not None:
+            self._orchestrator.register_strategy(bull_flag_strategy)
+        if flat_top_strategy is not None:
+            self._orchestrator.register_strategy(flat_top_strategy)
 
         await self._orchestrator.start()
 
@@ -510,6 +568,18 @@ class ArgusSystem:
         if afternoon_strategy is not None:
             self._health_monitor.update_component(
                 "strategy_afternoon_momentum", ComponentStatus.HEALTHY, "Afternoon Momentum running"
+            )
+        if r2g_strategy is not None:
+            self._health_monitor.update_component(
+                "strategy_red_to_green", ComponentStatus.HEALTHY, "Red-to-Green running"
+            )
+        if bull_flag_strategy is not None:
+            self._health_monitor.update_component(
+                "strategy_bull_flag", ComponentStatus.HEALTHY, "Bull Flag running"
+            )
+        if flat_top_strategy is not None:
+            self._health_monitor.update_component(
+                "strategy_flat_top_breakout", ComponentStatus.HEALTHY, "Flat-Top Breakout running"
             )
 
         # Store strategies reference for candle routing
