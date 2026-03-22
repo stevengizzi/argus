@@ -13,13 +13,16 @@ Decision references:
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
+
+import pandas as pd
 
 from argus.analytics.trade_logger import TradeLogger
 from argus.backtest.backtest_data_service import BacktestDataService
 from argus.backtest.config import BacktestEngineConfig, StrategyType
+from argus.backtest.historical_data_feed import HistoricalDataFeed
 from argus.backtest.metrics import BacktestResult
 from argus.core.clock import FixedClock
 from argus.core.config import (
@@ -34,12 +37,13 @@ from argus.core.config import (
     VwapReclaimConfig,
     load_yaml_file,
 )
-from argus.core.events import CandleEvent
+from argus.core.events import CandleEvent, OrderFilledEvent
 from argus.core.risk_manager import RiskManager
 from argus.core.sync_event_bus import SyncEventBus
 from argus.db.manager import DatabaseManager
 from argus.execution.order_manager import OrderManager
 from argus.execution.simulated_broker import SimulatedBroker, SimulatedSlippage
+from argus.models.trading import OrderResult, OrderStatus
 from argus.strategies.afternoon_momentum import AfternoonMomentumStrategy
 from argus.strategies.base_strategy import BaseStrategy
 from argus.strategies.orb_breakout import OrbBreakoutStrategy
@@ -89,20 +93,28 @@ class BacktestEngine:
         self._strategy: BaseStrategy | None = None
         self._db_path: Path | None = None
 
-        # Trading days populated by run() (S5)
-        self._trading_days: list[object] = []
+        # Bar data and trading days populated by _load_data()
+        self._bar_data: dict[str, pd.DataFrame] = {}
+        self._trading_days: list[date] = []
 
     async def run(self) -> BacktestResult:
         """Run the backtest end-to-end.
 
-        Sets up all components, runs the execution loop (S4/S5),
-        computes results, and tears down.
+        Sets up all components, loads data, runs the day-by-day execution
+        loop, computes results, and tears down.
 
         Returns:
             BacktestResult with metrics from the run.
         """
         await self._setup()
-        # Execution loop added in S4/S5
+        await self._load_data()
+
+        # Day-by-day execution loop
+        watchlist = list(self._bar_data.keys())
+        for trading_day in self._trading_days:
+            await self._run_trading_day(trading_day, watchlist)
+
+        # Results computation added in S5
         result = self._empty_result()
         await self._teardown()
         return result
@@ -205,6 +217,326 @@ class BacktestEngine:
         if signal is not None and self._risk_manager is not None:
             result = await self._risk_manager.evaluate_signal(signal)
             await self._event_bus.publish(result)  # type: ignore[union-attr, arg-type]
+
+    # --- Data loading ---
+
+    async def _load_data(self) -> None:
+        """Load bar data from HistoricalDataFeed cache.
+
+        Reads Parquet-cached OHLCV-1m data for the configured symbols
+        and date range. Extracts trading days from the data.
+        """
+        symbols = self._config.symbols or []
+        if not symbols:
+            logger.warning(
+                "No symbols configured — backtest will have no data"
+            )
+            return
+
+        feed = HistoricalDataFeed(
+            cache_dir=self._config.cache_dir,
+            verify_zero_cost=self._config.verify_zero_cost,
+        )
+
+        self._bar_data = await feed.load(
+            symbols=symbols,
+            start_date=self._config.start_date,
+            end_date=self._config.end_date,
+        )
+
+        # Extract sorted trading days from loaded data
+        all_dates: set[date] = set()
+        for df in self._bar_data.values():
+            if not df.empty and "trading_date" in df.columns:
+                all_dates.update(df["trading_date"].unique())
+
+        self._trading_days = sorted(all_dates)
+
+        logger.info(
+            "Loaded data: %d symbols, %d trading days",
+            len(self._bar_data),
+            len(self._trading_days),
+        )
+
+    # --- Day execution ---
+
+    def _get_daily_bars(
+        self, trading_day: date, symbols: list[str]
+    ) -> pd.DataFrame:
+        """Get all bars for the given symbols on the given trading day.
+
+        Returns a DataFrame with bars interleaved chronologically across
+        symbols (sorted by timestamp, not grouped by symbol).
+
+        Args:
+            trading_day: The date to get bars for.
+            symbols: List of symbols to include.
+
+        Returns:
+            DataFrame with columns: timestamp, open, high, low, close,
+            volume, trading_date, symbol. Empty if no data.
+        """
+        frames: list[pd.DataFrame] = []
+
+        for symbol in symbols:
+            if symbol not in self._bar_data:
+                continue
+
+            df = self._bar_data[symbol]
+            day_mask = df["trading_date"] == trading_day
+            day_df = df[day_mask].copy()
+
+            if len(day_df) > 0:
+                day_df["symbol"] = symbol
+                frames.append(day_df)
+
+        if not frames:
+            return pd.DataFrame()
+
+        combined = pd.concat(frames, ignore_index=True)
+        combined = combined.sort_values("timestamp").reset_index(drop=True)
+        return combined
+
+    async def _run_trading_day(
+        self, trading_day: date, watchlist: list[str]
+    ) -> None:
+        """Run a single trading day through the bar-level pipeline.
+
+        Processes bars chronologically across all symbols. No tick
+        synthesis — uses bar-level fill model (worst-case priority).
+
+        Args:
+            trading_day: The date to simulate.
+            watchlist: List of symbols to trade today.
+        """
+        if (
+            self._clock is None
+            or self._data_service is None
+            or self._strategy is None
+            or self._risk_manager is None
+            or self._order_manager is None
+            or self._broker is None
+        ):
+            return
+
+        # a. Set clock to pre-market (9:25 AM ET)
+        pre_market = datetime(
+            trading_day.year,
+            trading_day.month,
+            trading_day.day,
+            9, 25, 0,
+            tzinfo=ET,
+        ).astimezone(UTC)
+        self._clock.set(pre_market)
+
+        # b. Reset daily state
+        self._strategy.reset_daily_state()
+        await self._risk_manager.reset_daily_state()
+        self._order_manager.reset_daily_state()
+        self._data_service.reset_daily_state()
+
+        # c. Set strategy watchlist
+        self._strategy.set_watchlist(watchlist)
+
+        # d. Get today's bars (all symbols, sorted by timestamp)
+        daily_bars = self._get_daily_bars(trading_day, watchlist)
+        if daily_bars.empty:
+            return
+
+        # e. Process each bar
+        for _, row in daily_bars.iterrows():
+            symbol: str = row["symbol"]
+            bar_ts = row["timestamp"]
+
+            # Normalize timestamp
+            if isinstance(bar_ts, pd.Timestamp):
+                bar_ts = bar_ts.to_pydatetime()
+            if bar_ts.tzinfo is None:
+                bar_ts = bar_ts.replace(tzinfo=UTC)
+
+            # i. Advance clock to bar timestamp
+            self._clock.set(bar_ts)
+
+            # ii. Set broker price (for market order fills)
+            self._broker.set_price(symbol, float(row["close"]))
+
+            # iii. Feed bar to data_service (publishes CandleEvent +
+            #      IndicatorEvents via SyncEventBus)
+            await self._data_service.feed_bar(
+                symbol=symbol,
+                timestamp=bar_ts,
+                open_=float(row["open"]),
+                high=float(row["high"]),
+                low=float(row["low"]),
+                close=float(row["close"]),
+                volume=int(row["volume"]),
+            )
+
+            # iv. After event dispatch: check bracket orders against
+            #     this bar's OHLC
+            await self._check_bracket_orders(
+                symbol=symbol,
+                bar_high=float(row["high"]),
+                bar_low=float(row["low"]),
+                bar_close=float(row["close"]),
+                bar_timestamp=bar_ts,
+            )
+
+        # f. EOD flatten at configured time
+        h, m = map(int, self._config.eod_flatten_time.split(":"))
+        eod_dt = datetime(
+            trading_day.year,
+            trading_day.month,
+            trading_day.day,
+            h, m, 0,
+            tzinfo=ET,
+        ).astimezone(UTC)
+        self._clock.set(eod_dt)
+        await self._order_manager.eod_flatten()
+
+    # --- Bar-level fill model ---
+
+    async def _check_bracket_orders(
+        self,
+        symbol: str,
+        bar_high: float,
+        bar_low: float,
+        bar_close: float,
+        bar_timestamp: datetime,
+    ) -> None:
+        """Check pending bracket orders against a bar's OHLC.
+
+        Implements worst-case-for-longs priority:
+        1. Stop loss — bar.low <= stop_price → fill at stop_price
+        2. Target — bar.high >= target_price → fill at target_price
+        3. Time stop — elapsed >= time_stop_seconds → fill at bar.close
+           (but use stop_price if bar.low also hits stop)
+
+        When both stop and target trigger on the same bar, stop wins.
+
+        Args:
+            symbol: The bar's symbol.
+            bar_high: Bar high price.
+            bar_low: Bar low price.
+            bar_close: Bar close price.
+            bar_timestamp: Bar timestamp (for time stop calculation).
+        """
+        if self._broker is None or self._event_bus is None:
+            return
+
+        # Collect pending brackets for this symbol
+        stop_orders = [
+            b for b in self._broker._pending_brackets
+            if b.symbol == symbol and b.order_type == "stop"
+        ]
+        target_orders = sorted(
+            [
+                b for b in self._broker._pending_brackets
+                if b.symbol == symbol and b.order_type == "limit"
+            ],
+            key=lambda b: b.trigger_price,
+        )
+
+        # Priority 1: Stop loss (worst case for longs)
+        # When both stop and target could trigger, stop wins
+        if stop_orders and bar_low <= stop_orders[0].trigger_price:
+            results = await self._broker.simulate_price_update(
+                symbol, stop_orders[0].trigger_price
+            )
+            await self._publish_fill_events(results)
+            return  # Position closed
+
+        # Priority 2: Target(s) — process lowest first (T1 before T2)
+        for target in target_orders:
+            if bar_high >= target.trigger_price:
+                # Verify bracket is still pending (prior trigger may
+                # have closed the position and cancelled remaining)
+                still_pending = any(
+                    b.order_id == target.order_id
+                    for b in self._broker._pending_brackets
+                )
+                if still_pending:
+                    results = await self._broker.simulate_price_update(
+                        symbol, target.trigger_price
+                    )
+                    await self._publish_fill_events(results)
+
+        # Priority 3: Time stop
+        await self._check_time_stop(
+            symbol, bar_low, bar_close, bar_timestamp
+        )
+
+    async def _check_time_stop(
+        self,
+        symbol: str,
+        bar_low: float,
+        bar_close: float,
+        bar_timestamp: datetime,
+    ) -> None:
+        """Check if any managed position's time stop has expired.
+
+        If time_stop_seconds has elapsed since entry, close the position.
+        Fill price is bar_close, unless bar_low also hit the stop price
+        (worst case for longs → use stop price).
+
+        Args:
+            symbol: The bar's symbol.
+            bar_low: Bar low price.
+            bar_close: Bar close price.
+            bar_timestamp: Current bar timestamp.
+        """
+        if self._order_manager is None or self._broker is None:
+            return
+
+        managed_dict = self._order_manager.get_managed_positions()
+        positions_for_symbol = managed_dict.get(symbol, [])
+        for position in positions_for_symbol:
+            if position.is_fully_closed:
+                continue
+            if position.time_stop_seconds is None:
+                continue
+
+            elapsed = (bar_timestamp - position.entry_time).total_seconds()
+            if elapsed < position.time_stop_seconds:
+                continue
+
+            # Time stop triggered — determine fill price
+            stop_brackets = [
+                b for b in self._broker._pending_brackets
+                if b.symbol == symbol and b.order_type == "stop"
+            ]
+            if stop_brackets and bar_low <= stop_brackets[0].trigger_price:
+                fill_price = stop_brackets[0].trigger_price
+            else:
+                fill_price = bar_close
+
+            # Set price and close through OrderManager
+            self._broker.set_price(symbol, fill_price)
+            await self._order_manager.close_position(
+                symbol, reason="time_stop"
+            )
+
+    async def _publish_fill_events(
+        self, results: list[OrderResult]
+    ) -> None:
+        """Publish OrderFilledEvent for each filled result.
+
+        Args:
+            results: List of OrderResults from simulate_price_update.
+        """
+        if self._event_bus is None:
+            return
+
+        for result in results:
+            if result.status == OrderStatus.FILLED:
+                fill_event = OrderFilledEvent(
+                    order_id=result.order_id,
+                    fill_price=result.filled_avg_price,
+                    fill_quantity=result.filled_quantity,
+                )
+                await self._event_bus.publish(fill_event)
+
+    # --- Strategy factory ---
 
     def _create_strategy(self, config_dir: Path) -> BaseStrategy:
         """Create strategy instance from config.strategy_type.
