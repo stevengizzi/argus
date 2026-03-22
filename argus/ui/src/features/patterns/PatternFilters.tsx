@@ -23,6 +23,9 @@ const FAMILY_OPTIONS = [
   { value: 'orb_family', label: 'ORB Family' },
   { value: 'momentum', label: 'Momentum' },
   { value: 'mean_reversion', label: 'Mean-Reversion' },
+  { value: 'reversal', label: 'Reversal' },
+  { value: 'continuation', label: 'Continuation' },
+  { value: 'breakout', label: 'Breakout' },
 ];
 
 const TIME_OPTIONS = [

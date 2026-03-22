@@ -21,6 +21,9 @@ const FAMILY_LABELS: Record<string, string> = {
   orb_family: 'ORB Family',
   momentum: 'Momentum',
   mean_reversion: 'Mean-Reversion',
+  reversal: 'Reversal',
+  continuation: 'Continuation',
+  breakout: 'Breakout',
 };
 
 // Display labels for pipeline stages
