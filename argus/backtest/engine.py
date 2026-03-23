@@ -25,6 +25,15 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 
+import math
+
+from argus.analytics.evaluation import (
+    ConfidenceTier,
+    MultiObjectiveResult,
+    RegimeMetrics,
+    compute_confidence_tier,
+    from_backtest_result,
+)
 from argus.analytics.trade_logger import TradeLogger
 from argus.backtest.backtest_data_service import BacktestDataService
 from argus.backtest.config import BacktestEngineConfig, StrategyType
@@ -38,6 +47,7 @@ from argus.core.config import (
     FlatTopBreakoutConfig,
     OrbBreakoutConfig,
     OrbScalpConfig,
+    OrchestratorConfig,
     OrderManagerConfig,
     RedToGreenConfig,
     RiskConfig,
@@ -45,6 +55,7 @@ from argus.core.config import (
     load_yaml_file,
 )
 from argus.core.events import CandleEvent, OrderFilledEvent
+from argus.core.regime import MarketRegime, RegimeClassifier
 from argus.core.risk_manager import RiskManager
 from argus.core.sync_event_bus import SyncEventBus
 from argus.db.manager import DatabaseManager
@@ -977,6 +988,279 @@ class BacktestEngine:
             data = load_yaml_file(om_file)
             return OrderManagerConfig(**data)
         return OrderManagerConfig()
+
+    # --- Regime tagging (Sprint 27.5 S2) ---
+
+    def _load_spy_daily_bars(
+        self, start_date: date, end_date: date
+    ) -> pd.DataFrame | None:
+        """Aggregate SPY daily bars from the Parquet cache.
+
+        Reads SPY 1-minute Parquet files from the same cache_dir used by
+        HistoricalDataFeed and resamples to daily OHLCV.
+
+        Args:
+            start_date: First date of range.
+            end_date: Last date of range.
+
+        Returns:
+            DataFrame with columns [open, high, low, close, volume] indexed
+            by date, or None if SPY not in cache.
+        """
+        spy_dir = Path(self._config.cache_dir) / "SPY"
+        if not spy_dir.exists():
+            return None
+
+        feed = HistoricalDataFeed(
+            cache_dir=self._config.cache_dir,
+            verify_zero_cost=False,
+        )
+
+        # Load with generous margin for SMA-50 lookback
+        margin_start = date(
+            start_date.year if start_date.month > 3
+            else start_date.year - 1,
+            start_date.month - 3 if start_date.month > 3
+            else start_date.month + 9,
+            1,
+        )
+
+        loop = asyncio.get_event_loop()
+        data = loop.run_until_complete(
+            feed.load(["SPY"], margin_start, end_date)
+        )
+
+        spy_df = data.get("SPY")
+        if spy_df is None or spy_df.empty:
+            return None
+
+        # Ensure trading_date column exists
+        if "trading_date" not in spy_df.columns:
+            return None
+
+        # Resample to daily: first open, max high, min low, last close, sum volume
+        grouped = spy_df.groupby("trading_date")
+        daily = pd.DataFrame({
+            "open": grouped["open"].first(),
+            "high": grouped["high"].max(),
+            "low": grouped["low"].min(),
+            "close": grouped["close"].last(),
+            "volume": grouped["volume"].sum(),
+        })
+
+        daily.index.name = "date"
+        return daily.sort_index()
+
+    def _compute_regime_tags(
+        self, daily_bars: pd.DataFrame
+    ) -> dict[date, str]:
+        """Tag each trading day with a market regime.
+
+        Uses RegimeClassifier with default OrchestratorConfig thresholds
+        to classify each day based on trailing daily bar history.
+
+        Args:
+            daily_bars: DataFrame with daily OHLCV, indexed by date.
+
+        Returns:
+            Mapping of date to regime string value.
+        """
+        config = OrchestratorConfig()
+        classifier = RegimeClassifier(config)
+
+        regime_tags: dict[date, str] = {}
+        dates = list(daily_bars.index)
+
+        for i, d in enumerate(dates):
+            # Use all bars up to and including this date
+            history = daily_bars.iloc[: i + 1]
+
+            if len(history) < 20:
+                # Insufficient history for SMA computation
+                regime_tags[d] = MarketRegime.RANGE_BOUND.value
+                continue
+
+            indicators = classifier.compute_indicators(history)
+            regime = classifier.classify(indicators)
+            regime_tags[d] = regime.value
+
+        return regime_tags
+
+    def _compute_regime_metrics(
+        self, trades: list[dict[str, object]]
+    ) -> RegimeMetrics:
+        """Compute RegimeMetrics for a subset of trades.
+
+        Args:
+            trades: List of trade dicts with net_pnl, r_multiple, etc.
+
+        Returns:
+            RegimeMetrics for the trade subset.
+        """
+        total = len(trades)
+        if total == 0:
+            return RegimeMetrics(
+                sharpe_ratio=0.0,
+                max_drawdown_pct=0.0,
+                profit_factor=0.0,
+                win_rate=0.0,
+                total_trades=0,
+                expectancy_per_trade=0.0,
+            )
+
+        winners = [t for t in trades if float(t.get("net_pnl", 0)) > 0.50]  # type: ignore[arg-type]
+        losers = [t for t in trades if float(t.get("net_pnl", 0)) < -0.50]  # type: ignore[arg-type]
+
+        win_rate = len(winners) / total if total > 0 else 0.0
+
+        gross_wins = sum(float(t.get("net_pnl", 0)) for t in winners)  # type: ignore[arg-type]
+        gross_losses = abs(sum(float(t.get("net_pnl", 0)) for t in losers))  # type: ignore[arg-type]
+
+        if gross_losses > 0:
+            profit_factor = gross_wins / gross_losses
+        elif gross_wins > 0:
+            profit_factor = float("inf")
+        else:
+            profit_factor = 0.0
+
+        # Expectancy from R-multiples
+        r_values = [float(t.get("r_multiple", 0)) for t in trades]  # type: ignore[arg-type]
+        expectancy = sum(r_values) / total if total > 0 else 0.0
+
+        # Daily P&L for Sharpe
+        daily_pnl: dict[date, float] = {}
+        for t in trades:
+            exit_time = t.get("exit_time")
+            if exit_time is not None and hasattr(exit_time, "date"):
+                d = exit_time.date()  # type: ignore[union-attr]
+            else:
+                continue
+            daily_pnl[d] = daily_pnl.get(d, 0.0) + float(t.get("net_pnl", 0))  # type: ignore[arg-type]
+
+        daily_returns = list(daily_pnl.values())
+        if len(daily_returns) >= 2:
+            mean_ret = sum(daily_returns) / len(daily_returns)
+            variance = sum((r - mean_ret) ** 2 for r in daily_returns) / (
+                len(daily_returns) - 1
+            )
+            std_dev = variance ** 0.5
+            sharpe = (
+                (mean_ret / std_dev) * (252 ** 0.5) if std_dev > 1e-10 else 0.0
+            )
+        else:
+            sharpe = 0.0
+
+        # Max drawdown from cumulative P&L
+        sorted_days = sorted(daily_pnl.keys())
+        cumulative = 0.0
+        peak = 0.0
+        max_dd = 0.0
+        for d in sorted_days:
+            cumulative += daily_pnl[d]
+            if cumulative > peak:
+                peak = cumulative
+            dd = peak - cumulative
+            if dd > max_dd:
+                max_dd = dd
+
+        max_dd_pct = -(max_dd / peak) if peak > 0 else 0.0
+
+        return RegimeMetrics(
+            sharpe_ratio=round(sharpe, 4),
+            max_drawdown_pct=round(max_dd_pct, 4),
+            profit_factor=profit_factor,
+            win_rate=round(win_rate, 4),
+            total_trades=total,
+            expectancy_per_trade=round(expectancy, 4),
+        )
+
+    async def to_multi_objective_result(
+        self,
+        result: BacktestResult,
+        parameter_hash: str = "",
+        wfe: float = 0.0,
+        is_oos: bool = False,
+    ) -> MultiObjectiveResult:
+        """Convert a BacktestResult into a MultiObjectiveResult with regime tags.
+
+        Loads SPY daily bars from Parquet cache, computes per-day regime tags,
+        partitions trades by exit_date regime, and produces regime-level metrics.
+
+        Args:
+            result: BacktestResult from a completed run().
+            parameter_hash: Deterministic hash of parameter config.
+            wfe: Walk-forward efficiency.
+            is_oos: Whether this is out-of-sample data.
+
+        Returns:
+            MultiObjectiveResult with populated regime_results.
+        """
+        # Get trades from the trade logger
+        trades: list[dict[str, object]] = []
+        if self._trade_logger is not None:
+            trade_objects = await self._trade_logger.get_trades_by_date_range(
+                result.start_date, result.end_date, result.strategy_id
+            )
+            trades = [
+                {
+                    "net_pnl": t.net_pnl,
+                    "r_multiple": t.r_multiple,
+                    "commission": t.commission,
+                    "hold_duration_seconds": t.hold_duration_seconds,
+                    "exit_price": t.exit_price,
+                    "exit_time": t.exit_time,
+                    "gross_pnl": t.gross_pnl,
+                }
+                for t in trade_objects
+            ]
+
+        # Load SPY daily bars and compute regime tags
+        daily_bars = self._load_spy_daily_bars(
+            result.start_date, result.end_date
+        )
+
+        if daily_bars is not None and not daily_bars.empty:
+            regime_tags = self._compute_regime_tags(daily_bars)
+        else:
+            logger.warning(
+                "SPY daily bars not available in Parquet cache — "
+                "assigning all days RANGE_BOUND"
+            )
+            # Assign RANGE_BOUND to all trading days
+            regime_tags = {
+                d: MarketRegime.RANGE_BOUND.value for d in self._trading_days
+            }
+
+        # Partition trades by exit_date → regime
+        regime_trades: dict[str, list[dict[str, object]]] = {}
+        for trade in trades:
+            exit_time = trade.get("exit_time")
+            if exit_time is not None and hasattr(exit_time, "date"):
+                exit_date = exit_time.date()  # type: ignore[union-attr]
+            else:
+                continue
+
+            regime = regime_tags.get(
+                exit_date, MarketRegime.RANGE_BOUND.value
+            )
+            regime_trades.setdefault(regime, []).append(trade)
+
+        # Compute per-regime metrics
+        regime_results: dict[str, RegimeMetrics] = {}
+        for regime_key, regime_trade_list in regime_trades.items():
+            if len(regime_trade_list) == 0:
+                continue
+            regime_results[regime_key] = self._compute_regime_metrics(
+                regime_trade_list
+            )
+
+        return from_backtest_result(
+            result=result,
+            regime_results=regime_results,
+            wfe=wfe,
+            is_oos=is_oos,
+            parameter_hash_value=parameter_hash,
+        )
 
     # --- Result helpers ---
 
