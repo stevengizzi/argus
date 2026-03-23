@@ -81,6 +81,7 @@ universe_manager:
   exclude_otc: true       # System-level: exclude OTC symbols
   reference_cache_ttl_hours: 24  # FMP reference data cache lifetime
   fmp_batch_size: 50      # Symbols per FMP batch API call
+  trust_cache_on_startup: true  # Load cache immediately; refresh stale in background (DEC-362)
 
 # NLP Catalyst Pipeline (Sprint 23.5 — DEC-164)
 # Ingests news/filings from SEC EDGAR, FMP, Finnhub.

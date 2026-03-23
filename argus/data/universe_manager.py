@@ -65,6 +65,7 @@ class UniverseManager:
     async def build_viable_universe(
         self,
         initial_symbols: list[str] | None = None,
+        trust_cache: bool = False,
     ) -> set[str]:
         """Build the viable trading universe.
 
@@ -72,9 +73,14 @@ class UniverseManager:
         and stores the result. If initial_symbols is not provided, this method
         expects the reference_client cache to be pre-populated.
 
+        When trust_cache is True (DEC-362), loads cached data from disk
+        immediately and returns without making any FMP API calls. A background
+        refresh task should be spawned separately to update stale entries.
+
         Args:
             initial_symbols: Starting list of symbols to filter. If None,
                 attempts to use symbols already in reference client cache.
+            trust_cache: If True, return cached data without fetching.
 
         Returns:
             Set of symbols that pass all system-level filters.
@@ -82,6 +88,29 @@ class UniverseManager:
         import time
 
         start_time = time.monotonic()
+
+        # --- Trust-cache fast path (DEC-362) ---
+        if trust_cache:
+            cached = self._reference_client.load_cache_for_startup()
+            if cached:
+                cache_age_str = self._reference_client.get_cache_age_str()
+                logger.info(
+                    "Using cached reference data (%d symbols, cache age: %s). "
+                    "Background refresh will update stale entries.",
+                    len(cached),
+                    cache_age_str,
+                )
+                viable_symbols = self._apply_system_filters(cached)
+                self._viable_symbols = viable_symbols
+                self._reference_cache = cached
+                self._last_build_time = datetime.now(ZoneInfo("UTC"))
+                return viable_symbols
+            else:
+                logger.warning(
+                    "trust_cache_on_startup enabled but cache is empty/missing — "
+                    "falling back to synchronous fetch"
+                )
+                # Fall through to normal fetch path
 
         # Get initial symbol list
         if initial_symbols is not None:
@@ -531,3 +560,53 @@ class UniverseManager:
             ),
             "cache_age_minutes": cache_age_minutes,
         }
+
+    def rebuild_after_refresh(
+        self,
+        strategy_configs: dict[str, StrategyConfig],
+    ) -> None:
+        """Rebuild viable universe and routing table from refreshed cache.
+
+        Called after background refresh completes (DEC-362). Reads the
+        reference client's updated internal cache, re-applies system filters,
+        and atomically swaps the routing table.
+
+        Args:
+            strategy_configs: Dictionary mapping strategy_id to StrategyConfig.
+        """
+        # Re-read reference data from the client's updated cache
+        fresh_reference = dict(self._reference_client._cache)
+
+        if not fresh_reference:
+            logger.warning(
+                "rebuild_after_refresh: reference client cache is empty, skipping"
+            )
+            return
+
+        # Re-apply system filters
+        new_viable = self._apply_system_filters(fresh_reference)
+
+        # Build new routing table in a local variable
+        new_routing: dict[str, set[str]] = {}
+        for symbol in new_viable:
+            new_routing[symbol] = set()
+
+        for strategy_id, config in strategy_configs.items():
+            for symbol in new_viable:
+                ref_data = fresh_reference.get(symbol)
+                if ref_data is None:
+                    continue
+                if self._symbol_matches_filter(symbol, config.universe_filter):
+                    new_routing[symbol].add(strategy_id)
+
+        # Atomic swap (single assignments — GIL-safe for asyncio)
+        self._reference_cache = fresh_reference
+        self._viable_symbols = new_viable
+        self._routing_table = new_routing
+        self._last_build_time = datetime.now(ZoneInfo("UTC"))
+        self._last_routing_build_time = datetime.now(ZoneInfo("UTC"))
+
+        logger.info(
+            "Routing table rebuilt with fresh reference data: %d viable symbols",
+            len(new_viable),
+        )

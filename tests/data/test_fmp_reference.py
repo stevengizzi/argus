@@ -1583,7 +1583,7 @@ class TestFMPReferenceClientPeriodicCheckpoints:
         # Should have logged checkpoint saves at 1,000 and 2,000 symbols
         log_text = caplog.text
         checkpoint_logs = [
-            line for line in log_text.split("\n") if "Reference cache checkpoint" in line
+            line for line in log_text.split("\n") if "Cache checkpoint:" in line
         ]
 
         # Expect exactly 2 checkpoint saves (at 1,000 and 2,000)

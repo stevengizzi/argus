@@ -395,6 +395,15 @@ class FMPReferenceClient:
         total = len(symbols)
         logger.info("Starting reference data fetch for %d symbols", total)
 
+        # B1 fix (DEC-361): Load existing disk cache into self._cache at the
+        # START of a fetch cycle so that checkpoint saves always write the
+        # union of existing + freshly-fetched entries.
+        existing_on_disk = self.load_cache()
+        existing_count = len(existing_on_disk)
+        for sym, data in existing_on_disk.items():
+            if sym not in self._cache:
+                self._cache[sym] = data
+
         # Tracking counters
         results: dict[str, SymbolReferenceData] = {}
         succeeded = 0
@@ -442,12 +451,15 @@ class FMPReferenceClient:
                             and not self._shutdown_requested
                         ):
                             last_checkpoint = succeeded
-                            cache_path = Path(self._config.cache_file)
                             self.save_cache()
                             logger.info(
-                                "Reference cache checkpoint: %d symbols saved to %s",
+                                "Cache checkpoint: %d existing + %d fresh"
+                                " = %d total (fetched %d/%d stale)",
+                                existing_count,
+                                succeeded,
                                 len(self._cache),
-                                cache_path,
+                                succeeded,
+                                total,
                             )
                     else:
                         failed += 1
@@ -1067,3 +1079,103 @@ class FMPReferenceClient:
         self.save_cache()
 
         return merged
+
+    def load_cache_for_startup(self) -> dict[str, SymbolReferenceData]:
+        """Load cache from disk and populate internal state for immediate use.
+
+        Used by trust-cache-on-startup (DEC-362) to return cached data
+        without any FMP API calls. The caller can use the returned data
+        to build routing tables immediately.
+
+        Returns:
+            Dictionary mapping symbol to SymbolReferenceData.
+            Returns empty dict if cache doesn't exist or is corrupt.
+        """
+        cached = self.load_cache()
+        if cached:
+            self._cache = cached
+            self._cache_built_at = datetime.now(ZoneInfo("UTC"))
+        return cached
+
+    def get_cache_age_str(self) -> str:
+        """Get a human-readable string for the age of the oldest cache entry.
+
+        Returns:
+            String like '2h 15m' or 'unknown' if no timestamps available.
+        """
+        if not self._cached_at_timestamps:
+            return "unknown"
+
+        now = datetime.now(ZoneInfo("UTC"))
+        oldest_age_seconds = 0.0
+
+        for cached_at_str in self._cached_at_timestamps.values():
+            try:
+                cached_at = datetime.fromisoformat(cached_at_str)
+                age = (now - cached_at).total_seconds()
+                if age > oldest_age_seconds:
+                    oldest_age_seconds = age
+            except ValueError:
+                continue
+
+        if oldest_age_seconds == 0.0:
+            return "unknown"
+
+        hours = int(oldest_age_seconds // 3600)
+        minutes = int((oldest_age_seconds % 3600) // 60)
+        return f"{hours}h {minutes}m"
+
+    async def background_refresh(self, all_symbols: list[str]) -> None:
+        """Refresh stale cache entries without blocking startup.
+
+        Identifies stale entries, fetches fresh data in batches respecting
+        FMP rate limits, and saves the updated cache. Called as an asyncio
+        background task after startup completes.
+
+        Args:
+            all_symbols: Complete list of symbols to check for staleness.
+        """
+        try:
+            # Load current cache to identify stale entries
+            cached = self.load_cache()
+            if not cached:
+                # No cache to refresh — fall through to full incremental fetch
+                logger.info("Background refresh: no existing cache, running full fetch")
+                await self.fetch_reference_data_incremental(all_symbols)
+                return
+
+            stale_symbols = self.get_stale_symbols(
+                cached, all_symbols, self._config.cache_max_age_hours
+            )
+
+            if not stale_symbols:
+                logger.info(
+                    "Reference cache is fresh — no background refresh needed"
+                )
+                return
+
+            logger.info(
+                "Background refresh: %d stale symbols to update",
+                len(stale_symbols),
+            )
+
+            # Pre-populate internal cache with all existing entries
+            self._cache = dict(cached)
+
+            # Fetch stale symbols (this uses batching + rate limiting internally)
+            fresh_data = await self.fetch_reference_data(stale_symbols)
+
+            # self._cache now contains existing + fresh (fetch_reference_data
+            # updates self._cache per-symbol). Save final state.
+            self.save_cache()
+
+            logger.info(
+                "Background refresh complete: %d symbols updated, %d total cached",
+                len(fresh_data),
+                len(self._cache),
+            )
+
+        except Exception:
+            logger.exception(
+                "Background cache refresh failed — trading on stale cache"
+            )

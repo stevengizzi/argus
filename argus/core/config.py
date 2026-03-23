@@ -136,6 +136,7 @@ class UniverseManagerConfig(BaseModel):
     exclude_otc: bool = True
     reference_cache_ttl_hours: int = 24
     fmp_batch_size: int = 50
+    trust_cache_on_startup: bool = True
 
 
 class DataSource(StrEnum):

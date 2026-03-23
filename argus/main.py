@@ -146,6 +146,7 @@ class ArgusSystem:
         self._eval_store: EvaluationEventStore | None = None  # Sprint 25.6: reused in health check
         self._regime_task: asyncio.Task[None] | None = None  # Sprint 25.6 S2: periodic regime reclass
         self._regime_check_count: int = 0  # Sprint 25.9: counter for INFO logging cadence
+        self._bg_refresh_task: asyncio.Task[None] | None = None  # Sprint 25.9: background cache refresh
 
     async def start(self) -> None:
         """Initialize and start all components in dependency order.
@@ -339,6 +340,9 @@ class ArgusSystem:
         # Track symbols for warm-up (may be scanner symbols or viable symbols)
         warmup_symbols: list[str] = symbols
 
+        # Track all_symbols for potential background refresh (DEC-362)
+        um_all_symbols: list[str] = []
+
         if use_universe_manager:
             logger.info("[7.5/12] Building Universe Manager...")
             try:
@@ -369,8 +373,13 @@ class ArgusSystem:
                     )
                     all_symbols = symbols
 
-                # Build viable universe from full stock list (or fallback)
-                viable_symbols = await self._universe_manager.build_viable_universe(all_symbols)
+                um_all_symbols = all_symbols
+
+                # Build viable universe (trust_cache=True uses cache, no FMP fetch)
+                trust_cache = config.system.universe_manager.trust_cache_on_startup
+                viable_symbols = await self._universe_manager.build_viable_universe(
+                    all_symbols, trust_cache=trust_cache
+                )
 
                 # Handle empty viable set (all symbols filtered out)
                 if not viable_symbols:
@@ -812,6 +821,17 @@ class ArgusSystem:
             self._run_regime_reclassification()
         )
 
+        # Start background cache refresh if trust_cache_on_startup is enabled (DEC-362)
+        if (
+            use_universe_manager
+            and self._universe_manager is not None
+            and config.system.universe_manager.trust_cache_on_startup
+            and um_all_symbols
+        ):
+            self._bg_refresh_task = asyncio.create_task(
+                self._background_cache_refresh(um_all_symbols)
+            )
+
         # Send startup alert
         mode = "DRY RUN" if self._dry_run else "PAPER TRADING"
         watch_count = (
@@ -909,6 +929,45 @@ class ArgusSystem:
                             logger.debug("Regime unchanged: %s", new.value)
             except Exception as e:
                 logger.error("Regime reclassification error: %s", e)
+
+    async def _background_cache_refresh(self, all_symbols: list[str]) -> None:
+        """Background task to refresh stale reference cache entries (DEC-362).
+
+        Runs after startup completes. Fetches fresh data for stale symbols,
+        then atomically rebuilds the routing table and updates strategy
+        watchlists. Failure logs a warning but does not affect trading.
+
+        Args:
+            all_symbols: Complete symbol list for staleness checking.
+        """
+        if self._universe_manager is None:
+            return
+
+        ref_client = self._universe_manager._reference_client
+        await ref_client.background_refresh(all_symbols)
+
+        # Rebuild routing table with fresh data
+        strategy_configs = {
+            sid: strat.config
+            for sid, strat in self._strategies.items()
+            if hasattr(strat, "config")
+        }
+        self._universe_manager.rebuild_after_refresh(strategy_configs)
+
+        # Update strategy watchlists from new routing table
+        for strategy_id, strategy in self._strategies.items():
+            um_symbols = self._universe_manager.get_strategy_symbols(strategy_id)
+            strategy.set_watchlist(list(um_symbols), source="universe_manager")
+
+        # Update data service viable universe for fast-path discard
+        if hasattr(self._data_service, "set_viable_universe"):
+            self._data_service.set_viable_universe(
+                self._universe_manager.viable_symbols
+            )
+
+        logger.info(
+            "Background refresh complete — routing table and watchlists updated"
+        )
 
     async def _on_candle_for_strategies(self, event: CandleEvent) -> None:
         """Route CandleEvents to active strategies (DEC-125).
@@ -1288,6 +1347,15 @@ class ArgusSystem:
             with _ctxlib2.suppress(asyncio.CancelledError):
                 await self._regime_task
             logger.info("Regime reclassification task stopped")
+
+        # 0a1b. Stop background cache refresh task (DEC-362)
+        if self._bg_refresh_task is not None:
+            import contextlib as _ctxlib3
+
+            self._bg_refresh_task.cancel()
+            with _ctxlib3.suppress(asyncio.CancelledError):
+                await self._bg_refresh_task
+            logger.info("Background cache refresh task stopped")
 
         # 0a2. Close evaluation telemetry store
         if self._eval_store is not None:
