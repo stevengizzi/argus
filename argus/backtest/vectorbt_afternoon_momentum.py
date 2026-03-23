@@ -160,7 +160,12 @@ def load_symbol_data(
         logger.warning("No data directory for symbol %s", symbol)
         return pd.DataFrame()
 
+    # Support both naming conventions:
+    # - Legacy: {SYMBOL}_{YYYY-MM}.parquet (Alpaca-era data_fetcher)
+    # - Current: {YYYY-MM}.parquet (HistoricalDataFeed / Databento cache)
     parquet_files = sorted(symbol_dir.glob(f"{symbol.upper()}_*.parquet"))
+    if not parquet_files:
+        parquet_files = sorted(symbol_dir.glob("*.parquet"))
     if not parquet_files:
         logger.warning("No Parquet files found for symbol %s", symbol)
         return pd.DataFrame()

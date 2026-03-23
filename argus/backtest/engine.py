@@ -17,6 +17,7 @@ import argparse
 import asyncio
 import json
 import logging
+from dataclasses import replace
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
@@ -287,6 +288,28 @@ class BacktestEngine:
 
         signal = await self._strategy.on_candle(event)
         if signal is not None and self._risk_manager is not None:
+            # Legacy position sizing for backtest mode (Sprint 24 quality pipeline
+            # is not wired into BacktestEngine — strategies emit share_count=0)
+            if signal.share_count == 0:
+                risk_per_share = abs(signal.entry_price - signal.stop_price)
+                if risk_per_share > 0:
+                    max_loss_pct = getattr(
+                        getattr(
+                            getattr(self._strategy, "config", None),
+                            "risk_limits",
+                            None,
+                        ),
+                        "max_loss_per_trade_pct",
+                        0.01,
+                    )
+                    shares = int(
+                        self._strategy.allocated_capital
+                        * max_loss_pct
+                        / risk_per_share
+                    )
+                    signal = replace(signal, share_count=max(shares, 0))
+                # If risk_per_share == 0 or shares == 0, let Risk Manager reject
+
             result = await self._risk_manager.evaluate_signal(signal)
             await self._event_bus.publish(result)  # type: ignore[union-attr, arg-type]
 
@@ -300,10 +323,25 @@ class BacktestEngine:
         """
         symbols = self._config.symbols or []
         if not symbols:
-            logger.warning(
-                "No symbols configured — backtest will have no data"
+            # Auto-detect symbols from cache directory
+            cache_path = Path(self._config.cache_dir)
+            if cache_path.is_dir():
+                symbols = [
+                    d.name
+                    for d in cache_path.iterdir()
+                    if d.is_dir() and not d.name.startswith(".")
+                ]
+            if not symbols:
+                logger.warning(
+                    "No symbols configured and none found in cache "
+                    "— backtest will have no data"
+                )
+                return
+            logger.info(
+                "Auto-detected %d symbols from cache: %s",
+                len(symbols),
+                symbols[:5],
             )
-            return
 
         feed = HistoricalDataFeed(
             cache_dir=self._config.cache_dir,

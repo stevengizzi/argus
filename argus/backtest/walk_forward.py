@@ -21,7 +21,7 @@ import argparse
 import asyncio
 import json
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime
 from pathlib import Path
 from statistics import mode
@@ -720,8 +720,18 @@ async def validate_out_of_sample(
         max_drawdown, avg_r_multiple.
     """
     if config.oos_engine == "backtest_engine":
+        # Ensure symbols are explicit for BacktestEngine (it needs them for _load_data)
+        oos_config = config
+        if not config.symbols:
+            detected = [
+                d.name
+                for d in Path(config.data_dir).iterdir()
+                if d.is_dir() and not d.name.startswith(".")
+            ]
+            if detected:
+                oos_config = replace(config, symbols=detected)
         return await _validate_oos_backtest_engine(
-            oos_start, oos_end, best_params, config
+            oos_start, oos_end, best_params, oos_config
         )
 
     if config.strategy == "orb_scalp":
