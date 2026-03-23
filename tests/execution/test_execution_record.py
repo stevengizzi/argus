@@ -2,16 +2,30 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+import asyncio
+from datetime import UTC, datetime, timezone
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from argus.core.clock import FixedClock
+from argus.core.config import OrderManagerConfig
+from argus.core.event_bus import EventBus
+from argus.core.events import (
+    OrderApprovedEvent,
+    OrderFilledEvent,
+    PositionOpenedEvent,
+    Side,
+    SignalEvent,
+)
 from argus.db.manager import DatabaseManager
 from argus.execution.execution_record import (
     ExecutionRecord,
     create_execution_record,
     save_execution_record,
 )
+from argus.execution.order_manager import OrderManager, PendingManagedOrder
+from argus.models.trading import BracketOrderResult, OrderResult, OrderStatus
 
 
 class TestCreateExecutionRecord:
@@ -166,3 +180,208 @@ class TestSaveExecutionRecord:
         assert row["name"] == "execution_records"
 
         await db.close()
+
+
+# ---------------------------------------------------------------------------
+# Helpers for OrderManager integration tests
+# ---------------------------------------------------------------------------
+
+
+def _make_signal(
+    entry_price: float = 150.0,
+    stop_price: float = 148.0,
+    target_prices: tuple[float, ...] = (152.0, 154.0),
+    share_count: int = 100,
+) -> SignalEvent:
+    return SignalEvent(
+        strategy_id="orb_breakout",
+        symbol="AAPL",
+        side=Side.LONG,
+        entry_price=entry_price,
+        stop_price=stop_price,
+        target_prices=target_prices,
+        share_count=share_count,
+        rationale="Test signal",
+    )
+
+
+def _make_bracket_broker() -> MagicMock:
+    """Mock broker that fills entry synchronously (SimulatedBroker pattern)."""
+    broker = MagicMock()
+    counter = {"n": 0}
+
+    def bracket_side_effect(
+        entry: MagicMock, stop: MagicMock, targets: list[MagicMock]
+    ) -> BracketOrderResult:
+        counter["n"] += 1
+        entry_result = OrderResult(
+            order_id=entry.id,
+            broker_order_id=f"b-entry-{counter['n']}",
+            status=OrderStatus.FILLED,
+            filled_quantity=entry.quantity,
+            filled_avg_price=150.02,
+        )
+        counter["n"] += 1
+        stop_result = OrderResult(
+            order_id=stop.id,
+            broker_order_id=f"b-stop-{counter['n']}",
+            status=OrderStatus.PENDING,
+        )
+        target_results = []
+        for t in targets:
+            counter["n"] += 1
+            target_results.append(
+                OrderResult(
+                    order_id=t.id,
+                    broker_order_id=f"b-tgt-{counter['n']}",
+                    status=OrderStatus.PENDING,
+                )
+            )
+        return BracketOrderResult(
+            entry=entry_result, stop=stop_result, targets=target_results
+        )
+
+    broker.place_bracket_order = AsyncMock(side_effect=bracket_side_effect)
+    broker.cancel_order = AsyncMock(return_value=True)
+    return broker
+
+
+class TestOrderManagerExecutionRecord:
+    """Tests for execution record integration in OrderManager."""
+
+    @pytest.mark.asyncio
+    async def test_handle_entry_fill_creates_execution_record(self) -> None:
+        """Verify save_execution_record is called with correct fields after entry fill."""
+        event_bus = EventBus()
+        clock = FixedClock(datetime(2026, 2, 16, 15, 0, 0, tzinfo=UTC))
+        broker = _make_bracket_broker()
+        db = DatabaseManager(":memory:")
+        await db.initialize()
+
+        om = OrderManager(
+            event_bus=event_bus,
+            broker=broker,
+            clock=clock,
+            config=OrderManagerConfig(),
+            db_manager=db,
+        )
+        await om.start()
+
+        signal = _make_signal(entry_price=150.0)
+        approved = OrderApprovedEvent(signal=signal)
+        await om.on_approved(approved)
+
+        # Verify execution record was persisted
+        row = await db.fetch_one("SELECT * FROM execution_records LIMIT 1")
+        assert row is not None
+        assert row["symbol"] == "AAPL"
+        assert row["strategy_id"] == "orb_breakout"
+        assert row["side"] == "BUY"
+        assert row["expected_fill_price"] == pytest.approx(150.0)
+        assert row["actual_fill_price"] == pytest.approx(150.02)
+        assert row["order_size_shares"] == 100
+
+        await om.stop()
+        await db.close()
+
+    @pytest.mark.asyncio
+    async def test_handle_entry_fill_continues_on_record_failure(self) -> None:
+        """Verify ManagedPosition created and PositionOpenedEvent published even when record save fails."""
+        event_bus = EventBus()
+        clock = FixedClock(datetime(2026, 2, 16, 15, 0, 0, tzinfo=UTC))
+        broker = _make_bracket_broker()
+
+        # Use a db_manager mock that raises on execute
+        bad_db = MagicMock()
+        bad_db.execute = AsyncMock(side_effect=RuntimeError("DB exploded"))
+        bad_db.commit = AsyncMock()
+
+        opened_events: list[PositionOpenedEvent] = []
+
+        async def capture_opened(e: PositionOpenedEvent) -> None:
+            opened_events.append(e)
+
+        event_bus.subscribe(PositionOpenedEvent, capture_opened)
+
+        om = OrderManager(
+            event_bus=event_bus,
+            broker=broker,
+            clock=clock,
+            config=OrderManagerConfig(),
+            db_manager=bad_db,
+        )
+        await om.start()
+
+        signal = _make_signal()
+        approved = OrderApprovedEvent(signal=signal)
+        await om.on_approved(approved)
+
+        # Allow event bus tasks to dispatch
+        await asyncio.sleep(0)
+
+        # Position should still be created despite record failure
+        positions = om.get_managed_positions()
+        assert "AAPL" in positions
+        assert len(positions["AAPL"]) == 1
+
+        # PositionOpenedEvent should still have been published
+        assert len(opened_events) == 1
+
+        await om.stop()
+
+    def test_pending_order_carries_expected_price(self) -> None:
+        """Verify PendingManagedOrder has expected_fill_price set from signal.entry_price."""
+        pending = PendingManagedOrder(
+            order_id="test-001",
+            symbol="TSLA",
+            strategy_id="vwap_reclaim",
+            order_type="entry",
+            expected_fill_price=45.50,
+        )
+        assert pending.expected_fill_price == 45.50
+
+    def test_pending_order_carries_signal_timestamp(self) -> None:
+        """Verify signal_timestamp is set from clock.now()."""
+        ts = datetime(2026, 3, 23, 14, 30, 0, tzinfo=UTC)
+        pending = PendingManagedOrder(
+            order_id="test-002",
+            symbol="NVDA",
+            strategy_id="bull_flag",
+            order_type="entry",
+            signal_timestamp=ts,
+        )
+        assert pending.signal_timestamp == ts
+
+    def test_pending_order_defaults_backward_compatible(self) -> None:
+        """Verify default values are backward compatible."""
+        pending = PendingManagedOrder(
+            order_id="test-003",
+            symbol="AMD",
+            strategy_id="orb_scalp",
+            order_type="stop",
+        )
+        assert pending.expected_fill_price == 0.0
+        assert pending.signal_timestamp is None
+
+    def test_execution_record_slippage_computation_realistic(self) -> None:
+        """Test with realistic prices: entry=$45.50, fill=$45.52 → verify bps."""
+        signal_ts = datetime(2026, 3, 23, 14, 30, 0, tzinfo=timezone.utc)
+        fill_ts = datetime(2026, 3, 23, 14, 30, 0, 350_000, tzinfo=timezone.utc)
+
+        record = create_execution_record(
+            order_id="order_realistic",
+            symbol="SOFI",
+            strategy_id="orb_breakout",
+            side="BUY",
+            expected_fill_price=45.50,
+            actual_fill_price=45.52,
+            order_size_shares=200,
+            signal_timestamp=signal_ts,
+            fill_timestamp=fill_ts,
+        )
+
+        # $0.02 / $45.50 * 10000 = ~4.396 bps
+        expected_bps = abs(45.52 - 45.50) / 45.50 * 10_000
+        assert record.actual_slippage_bps == pytest.approx(expected_bps, abs=0.01)
+        assert record.slippage_vs_model == pytest.approx(expected_bps - 1.0, abs=0.01)
+        assert record.latency_ms == pytest.approx(350.0, abs=1.0)

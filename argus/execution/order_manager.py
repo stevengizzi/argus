@@ -106,6 +106,9 @@ class PendingManagedOrder:
     bracket_stop_order_id: str | None = None
     bracket_t1_order_id: str | None = None
     bracket_t2_order_id: str | None = None
+    # Execution quality tracking (DEC-358 §5.1)
+    expected_fill_price: float = 0.0
+    signal_timestamp: datetime | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -133,6 +136,7 @@ class OrderManager:
         clock: Clock,
         config: OrderManagerConfig,
         trade_logger: Any | None = None,
+        db_manager: Any | None = None,
     ) -> None:
         """Initialize the Order Manager.
 
@@ -142,12 +146,14 @@ class OrderManager:
             clock: Clock protocol for time operations.
             config: Order Manager configuration.
             trade_logger: Optional TradeLogger for persistence.
+            db_manager: Optional DatabaseManager for execution record persistence.
         """
         self._event_bus = event_bus
         self._broker = broker
         self._clock = clock
         self._config = config
         self._trade_logger = trade_logger
+        self._db_manager = db_manager
 
         # Active positions: keyed by symbol (list to support multiple positions)
         self._managed_positions: dict[str, list[ManagedPosition]] = {}
@@ -308,6 +314,8 @@ class OrderManager:
             bracket_t2_order_id=(
                 bracket_result.targets[1].order_id if len(bracket_result.targets) > 1 else None
             ),
+            expected_fill_price=signal.entry_price,
+            signal_timestamp=self._clock.now(),
         )
         self._pending_orders[entry_order_id] = pending
 
@@ -551,6 +559,37 @@ class OrderManager:
             t1_price,
             t2_price,
         )
+
+        # --- Execution Quality Logging (DEC-358 §5.1) ---
+        try:
+            from argus.execution.execution_record import (
+                create_execution_record,
+                save_execution_record,
+            )
+            record = create_execution_record(
+                order_id=pending.order_id,
+                symbol=pending.symbol,
+                strategy_id=pending.strategy_id,
+                side="BUY",  # Long-only V1 (DEC-011)
+                expected_fill_price=pending.expected_fill_price,
+                actual_fill_price=event.fill_price,
+                order_size_shares=filled_shares,
+                signal_timestamp=pending.signal_timestamp,
+                fill_timestamp=self._clock.now(),
+                avg_daily_volume=None,  # TODO: wire UM reference data when available
+                bid_ask_spread_bps=None,  # Requires L1 data (Standard plan = None)
+            )
+            if self._db_manager is not None:
+                await save_execution_record(self._db_manager, record)
+                logger.debug("Execution record saved: %s", record.record_id)
+            else:
+                logger.debug("No DB manager — execution record not persisted")
+        except Exception:
+            logger.warning(
+                "Failed to save execution record for %s (non-critical)",
+                pending.symbol,
+                exc_info=True,
+            )
 
     async def _handle_t1_fill(self, pending: PendingManagedOrder, event: OrderFilledEvent) -> None:
         """T1 target hit. Move stop to breakeven for remaining shares."""
