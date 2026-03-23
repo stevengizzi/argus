@@ -1032,7 +1032,7 @@ class BacktestEngine:
 
         return await compute_metrics(
             trade_logger=self._trade_logger,
-            strategy_id=self._config.strategy_id,
+            strategy_id=self._strategy.strategy_id if self._strategy else self._config.strategy_id,
             start_date=self._config.start_date,
             end_date=self._config.end_date,
             initial_capital=self._config.initial_cash,
