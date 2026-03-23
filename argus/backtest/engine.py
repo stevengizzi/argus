@@ -30,6 +30,11 @@ from argus.analytics.evaluation import (
     RegimeMetrics,
     from_backtest_result,
 )
+from argus.analytics.slippage_model import (
+    SlippageConfidence,
+    StrategySlippageModel,
+    load_slippage_model,
+)
 from argus.analytics.trade_logger import TradeLogger
 from argus.backtest.backtest_data_service import BacktestDataService
 from argus.backtest.config import BacktestEngineConfig, StrategyType
@@ -111,6 +116,30 @@ class BacktestEngine:
         self._order_manager: OrderManager | None = None
         self._strategy: BaseStrategy | None = None
         self._db_path: Path | None = None
+
+        # Slippage model (Sprint 27.5 S6)
+        self._slippage_model: StrategySlippageModel | None = None
+        if config.slippage_model_path is not None:
+            try:
+                self._slippage_model = load_slippage_model(
+                    config.slippage_model_path
+                )
+                logger.info(
+                    "Loaded slippage model from %s (confidence=%s)",
+                    config.slippage_model_path,
+                    self._slippage_model.confidence.value,
+                )
+            except FileNotFoundError:
+                logger.warning(
+                    "Slippage model file not found: %s — proceeding without model",
+                    config.slippage_model_path,
+                )
+            except ValueError as exc:
+                logger.warning(
+                    "Invalid slippage model file %s: %s — proceeding without model",
+                    config.slippage_model_path,
+                    exc,
+                )
 
         # Bar data and trading days populated by _load_data()
         self._bar_data: dict[str, pd.DataFrame] = {}
@@ -1250,13 +1279,90 @@ class BacktestEngine:
                 regime_trade_list
             )
 
-        return from_backtest_result(
+        mor = from_backtest_result(
             result=result,
             regime_results=regime_results,
             wfe=wfe,
             is_oos=is_oos,
             parameter_hash_value=parameter_hash,
         )
+
+        # Compute execution_quality_adjustment from slippage model (S6).
+        # Formula (first-order approximation):
+        #   delta_bps = model.mean_slippage - default_slippage_bps
+        #   adjustment = -(delta_bps / 10_000) * trades_per_year / return_std
+        # A positive delta_bps means real slippage exceeds the backtest
+        # assumption, so the Sharpe adjustment is negative (penalizes).
+        mor.execution_quality_adjustment = self._compute_execution_quality_adjustment(
+            result
+        )
+
+        return mor
+
+    def _compute_execution_quality_adjustment(
+        self,
+        result: BacktestResult,
+    ) -> float | None:
+        """Compute Sharpe adjustment from calibrated vs assumed slippage.
+
+        Returns None when the slippage model is absent, has INSUFFICIENT
+        confidence, or when the computation would be unreliable (zero trades,
+        zero return std, zero trading days).
+
+        Args:
+            result: Completed BacktestResult.
+
+        Returns:
+            Estimated annualized Sharpe impact, or None.
+        """
+        if self._slippage_model is None:
+            return None
+        if self._slippage_model.confidence == SlippageConfidence.INSUFFICIENT:
+            return None
+        if result.total_trades == 0 or len(self._trading_days) == 0:
+            return None
+
+        # Default slippage assumption in bps (from config)
+        # Approximate: slippage_per_share / avg_entry_price * 10_000
+        # Use result's avg trade P&L to estimate avg entry price range.
+        # Simpler: use slippage_per_share directly with a representative price.
+        # For intraday equities, ~$50 is a reasonable midpoint placeholder.
+        # More accurate: derive from actual trade data if available.
+        # TODO: derive avg_entry_price from actual trade data for higher accuracy
+        avg_entry_price = 50.0  # Conservative midpoint for US equities
+
+        default_slippage_bps = (
+            self._config.slippage_per_share / avg_entry_price * 10_000
+        )
+
+        # Delta: positive means real slippage > assumed
+        delta_bps = (
+            self._slippage_model.estimated_mean_slippage_bps - default_slippage_bps
+        )
+
+        trading_days = len(self._trading_days)
+        trades_per_day = result.total_trades / trading_days
+        trades_per_year = trades_per_day * 252
+
+        # Estimate portfolio return std from Sharpe and annualized return
+        # Sharpe = return / std → std = return / Sharpe
+        # If Sharpe is near zero, std estimation is unreliable.
+        if abs(result.sharpe_ratio) < 0.01:
+            return None
+
+        # Approximate annualized return from total P&L
+        net_pnl = result.final_equity - result.initial_capital
+        total_return = net_pnl / self._config.initial_cash
+        annualized_return = total_return * (252 / max(trading_days, 1))
+        return_std = abs(annualized_return / result.sharpe_ratio)
+
+        if return_std < 1e-10:
+            return None
+
+        # Sharpe adjustment: -(delta_bps / 10_000) * trades_per_year / return_std
+        adjustment = -(delta_bps / 10_000) * trades_per_year / return_std
+
+        return round(adjustment, 6)
 
     # --- Result helpers ---
 

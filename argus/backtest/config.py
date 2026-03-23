@@ -176,6 +176,15 @@ class BacktestEngineConfig(BaseModel):
     # Config overrides (strategy parameter overrides)
     config_overrides: dict[str, Any] = Field(default_factory=dict)
 
+    # Slippage model (Sprint 27.5 S6)
+    slippage_model_path: str | None = Field(
+        default=None,
+        description=(
+            "Path to calibrated StrategySlippageModel JSON. When set, loads "
+            "calibrated slippage for execution_quality_adjustment computation."
+        ),
+    )
+
     # Risk overrides for single-strategy backtesting (DEC-359)
     # Applied on top of risk_limits.yaml to relax constraints that are
     # inappropriate for isolated strategy validation.
