@@ -25,13 +25,9 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 
-import math
-
 from argus.analytics.evaluation import (
-    ConfidenceTier,
     MultiObjectiveResult,
     RegimeMetrics,
-    compute_confidence_tier,
     from_backtest_result,
 )
 from argus.analytics.trade_logger import TradeLogger
