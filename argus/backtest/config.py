@@ -175,3 +175,12 @@ class BacktestEngineConfig(BaseModel):
 
     # Config overrides (strategy parameter overrides)
     config_overrides: dict[str, Any] = Field(default_factory=dict)
+
+    # Risk overrides for single-strategy backtesting (DEC-359)
+    # Applied on top of risk_limits.yaml to relax constraints that are
+    # inappropriate for isolated strategy validation.
+    risk_overrides: dict[str, Any] = Field(default_factory=lambda: {
+        "account.min_position_risk_dollars": 1.0,
+        "account.cash_reserve_pct": 0.05,
+        "cross_strategy.max_single_stock_pct": 0.50,
+    })

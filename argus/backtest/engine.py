@@ -934,19 +934,34 @@ class BacktestEngine:
     # --- Config loading ---
 
     def _load_risk_config(self, config_dir: Path) -> RiskConfig:
-        """Load risk configuration from YAML.
+        """Load risk configuration from YAML, then apply backtest overrides.
 
         Args:
             config_dir: Path to the config directory.
 
         Returns:
-            RiskConfig parsed from YAML or defaults.
+            RiskConfig with backtest risk_overrides applied.
         """
         risk_file = config_dir / "risk_limits.yaml"
         if risk_file.exists():
             data = load_yaml_file(risk_file)
-            return RiskConfig(**data)
-        return RiskConfig()
+            risk_config = RiskConfig(**data)
+        else:
+            risk_config = RiskConfig()
+
+        # Apply backtest risk overrides (DEC-359)
+        for key, value in self._config.risk_overrides.items():
+            parts = key.split(".", 1)
+            if len(parts) == 2:
+                section, field = parts
+                sub_config = getattr(risk_config, section, None)
+                if sub_config is not None and hasattr(sub_config, field):
+                    setattr(sub_config, field, value)
+                    logger.debug("Risk override applied: %s = %s", key, value)
+                else:
+                    logger.warning("Unknown risk override key: %s", key)
+
+        return risk_config
 
     def _load_order_manager_config(self, config_dir: Path) -> OrderManagerConfig:
         """Load order manager configuration from YAML.

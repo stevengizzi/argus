@@ -192,3 +192,81 @@ async def test_load_data_auto_detects_symbols(tmp_path: Path) -> None:
         loaded_symbols = sorted(call_kwargs["symbols"])
         assert loaded_symbols == ["AAPL", "TSLA"]
         assert ".hidden" not in call_kwargs["symbols"]
+
+
+# --- Risk overrides tests (Sprint 21.6.2) ---
+
+
+def test_risk_overrides_applied(tmp_path: Path) -> None:
+    """Default risk_overrides relax production constraints for backtesting."""
+    config = BacktestEngineConfig(
+        start_date=date(2025, 6, 16),
+        end_date=date(2025, 6, 20),
+        output_dir=tmp_path / "runs",
+        log_level="WARNING",
+    )
+    engine = BacktestEngine(config)
+    risk_config = engine._load_risk_config(Path("config"))
+
+    assert risk_config.account.min_position_risk_dollars == 1.0
+    assert risk_config.account.cash_reserve_pct == 0.05
+    assert risk_config.cross_strategy.max_single_stock_pct == 0.50
+
+
+def test_risk_overrides_empty_uses_production(tmp_path: Path) -> None:
+    """Empty risk_overrides preserves production YAML values."""
+    config = BacktestEngineConfig(
+        start_date=date(2025, 6, 16),
+        end_date=date(2025, 6, 20),
+        output_dir=tmp_path / "runs",
+        risk_overrides={},
+        log_level="WARNING",
+    )
+    engine = BacktestEngine(config)
+    risk_config = engine._load_risk_config(Path("config"))
+
+    # Production values from config/risk_limits.yaml
+    assert risk_config.account.min_position_risk_dollars == 100.0
+    assert risk_config.account.cash_reserve_pct == 0.20
+    assert risk_config.cross_strategy.max_single_stock_pct == 0.05
+
+
+def test_risk_overrides_partial(tmp_path: Path) -> None:
+    """Partial custom overrides apply only the specified fields."""
+    config = BacktestEngineConfig(
+        start_date=date(2025, 6, 16),
+        end_date=date(2025, 6, 20),
+        output_dir=tmp_path / "runs",
+        risk_overrides={"account.min_position_risk_dollars": 5.0},
+        log_level="WARNING",
+    )
+    engine = BacktestEngine(config)
+    risk_config = engine._load_risk_config(Path("config"))
+
+    # Overridden
+    assert risk_config.account.min_position_risk_dollars == 5.0
+    # NOT overridden — production values
+    assert risk_config.account.cash_reserve_pct == 0.20
+    assert risk_config.cross_strategy.max_single_stock_pct == 0.05
+
+
+def test_risk_overrides_unknown_key_warns(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Unknown override keys log a warning but don't crash."""
+    config = BacktestEngineConfig(
+        start_date=date(2025, 6, 16),
+        end_date=date(2025, 6, 20),
+        output_dir=tmp_path / "runs",
+        risk_overrides={"bogus.field": 42},
+        log_level="WARNING",
+    )
+    engine = BacktestEngine(config)
+
+    import logging
+    with caplog.at_level(logging.WARNING):
+        risk_config = engine._load_risk_config(Path("config"))
+
+    assert "Unknown risk override key: bogus.field" in caplog.text
+    # Config still loads successfully with production values
+    assert risk_config.account.min_position_risk_dollars == 100.0
