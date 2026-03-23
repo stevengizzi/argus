@@ -30,9 +30,23 @@ benchmarks:
   min_sharpe: 0.3
   max_drawdown_pct: 0.12
 backtest_summary:
-  status: "exploration"
-  backtester: "vectorbt_pattern"
-  note: "Generic PatternBacktester infrastructure ready. Awaiting historical data for full sweep + walk-forward validation."
+  status: "databento_validated"
+  data_source: "databento_ohlcv_1m"
+  universe_size: 28
+  universe_note: "Curated large-cap universe; full-universe re-validation pending"
+  oos_sharpe: 2.78
+  wfe_pnl: null
+  total_trades: 40
+  avg_win_rate: 0.575
+  avg_profit_factor: 1.55
+  data_range: "2023-04-01 to 2025-03-01"
+  data_months: 23
+  last_run: "2026-03-23"
+  prior_baseline:
+    source: "alpaca_provisional"
+    oos_sharpe: null
+    wfe_pnl: null
+    total_trades: null
 universe_filter:
   min_price: 10.0
   max_price: 200.0

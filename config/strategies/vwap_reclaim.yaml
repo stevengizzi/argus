@@ -36,12 +36,23 @@ benchmarks:
   max_drawdown_pct: 0.12
 
 backtest_summary:
-  status: "walk_forward_complete"
-  wfe_pnl: null
-  oos_sharpe: 1.49
-  total_trades: 59556
-  data_months: 35
-  last_run: "2026-02-26"
+  status: "databento_preliminary"
+  data_source: "databento_ohlcv_1m"
+  universe_size: 28
+  universe_note: "Curated large-cap universe; full-universe re-validation pending"
+  oos_sharpe: -1.16
+  wfe_pnl: 1.08
+  total_trades: 308
+  avg_win_rate: 0.432
+  avg_profit_factor: 1.08
+  data_range: "2023-04-01 to 2025-03-01"
+  data_months: 23
+  last_run: "2026-03-23"
+  prior_baseline:
+    source: "alpaca_provisional"
+    oos_sharpe: 1.49
+    wfe_pnl: null
+    total_trades: 59556
 
 # Universe filter for strategy-specific symbol filtering (Sprint 23)
 # VWAP Reclaim is a mean-reversion strategy that benefits from:

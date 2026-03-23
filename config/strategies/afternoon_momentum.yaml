@@ -38,12 +38,23 @@ benchmarks:
   max_drawdown_pct: 0.12
 
 backtest_summary:
-  status: "sweep_complete"
-  wfe_pnl: null
+  status: "databento_insufficient_data"
+  data_source: "databento_ohlcv_1m"
+  universe_size: 28
+  universe_note: "Curated large-cap universe; full-universe re-validation pending"
   oos_sharpe: null
-  total_trades: null
-  data_months: 35
-  last_run: "2026-02-26"
+  wfe_pnl: null
+  total_trades: 0
+  avg_win_rate: null
+  avg_profit_factor: null
+  data_range: "2023-04-01 to 2025-03-01"
+  data_months: 23
+  last_run: "2026-03-23"
+  prior_baseline:
+    source: "alpaca_provisional"
+    oos_sharpe: null
+    wfe_pnl: null
+    total_trades: null
 
 # Universe filter for strategy-specific symbol filtering (Sprint 23)
 # Afternoon Momentum targets consolidation breakouts and benefits from:
