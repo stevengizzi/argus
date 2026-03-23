@@ -1,0 +1,39 @@
+{
+  "strategy": "orb_breakout",
+  "strategy_type": "orb",
+  "date_range": {
+    "start": "2023-04-01",
+    "end": "2025-03-01"
+  },
+  "data_source": "databento_ohlcv_1m",
+  "engine": "backtest_engine",
+  "baseline": {
+    "source": "alpaca_provisional",
+    "oos_sharpe": 0.34,
+    "wfe_pnl": 0.56,
+    "total_trades": 137,
+    "data_months": 35
+  },
+  "new_results": {
+    "oos_sharpe": 0.0,
+    "wfe_pnl": 0.0,
+    "wfe_sharpe": 0.0,
+    "total_oos_trades": 0,
+    "avg_win_rate": 0.0,
+    "avg_profit_factor": 0.0,
+    "total_windows": 9,
+    "valid_windows": 9,
+    "data_months": 23
+  },
+  "divergence": {
+    "sharpe_diff": 0.34,
+    "wfe_diff": 0.56,
+    "win_rate_diff": null,
+    "profit_factor_diff": null,
+    "flagged": false,
+    "flags": []
+  },
+  "status": "ZERO_TRADES",
+  "walk_forward_available": true,
+  "notes": ""
+}
