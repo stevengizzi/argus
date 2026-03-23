@@ -190,6 +190,6 @@ class OrbScalpStrategy(OrbBaseStrategy):
         conditions where momentum is present.
         """
         return MarketConditionsFilter(
-            allowed_regimes=["bullish_trending", "range_bound", "high_volatility"],
+            allowed_regimes=["bullish_trending", "bearish_trending", "range_bound", "high_volatility"],
             max_vix=35.0,
         )

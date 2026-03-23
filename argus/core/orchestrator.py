@@ -327,6 +327,14 @@ class Orchestrator:
             if self._current_regime.value in mcf.allowed_regimes:
                 eligible_ids.append(sid)
 
+        # Warn if regime filtering results in 0 eligible strategies during market hours
+        if not eligible_ids and self._is_market_hours():
+            logger.warning(
+                "Regime filtering resulted in 0 active strategies. "
+                "Current regime: %s. No capital will be allocated.",
+                self._current_regime.value,
+            )
+
         # Step 2: Check throttling for eligible strategies
         throttle_results: dict[str, ThrottleAction] = {}
         for sid in eligible_ids:
@@ -717,6 +725,17 @@ class Orchestrator:
     # -------------------------------------------------------------------------
     # Helpers
     # -------------------------------------------------------------------------
+
+    def _is_market_hours(self) -> bool:
+        """Check if current time is within regular market hours (9:30–16:00 ET).
+
+        Returns:
+            True if within market hours, False otherwise.
+        """
+        et_tz = ZoneInfo("America/New_York")
+        now = self._clock.now()
+        now_et = now.astimezone(et_tz)
+        return time(9, 30) <= now_et.time() <= time(16, 0)
 
     def _indicators_to_dict(self) -> dict[str, float]:
         """Convert RegimeIndicators to dict for event payload.

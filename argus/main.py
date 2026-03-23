@@ -145,6 +145,7 @@ class ArgusSystem:
         self._eval_check_task: asyncio.Task[None] | None = None  # Sprint 25.5: eval health check
         self._eval_store: EvaluationEventStore | None = None  # Sprint 25.6: reused in health check
         self._regime_task: asyncio.Task[None] | None = None  # Sprint 25.6 S2: periodic regime reclass
+        self._regime_check_count: int = 0  # Sprint 25.9: counter for INFO logging cadence
 
     async def start(self) -> None:
         """Initialize and start all components in dependency order.
@@ -790,7 +791,13 @@ class ArgusSystem:
         logger.info("ARGUS TRADING SYSTEM — RUNNING")
         if self._dry_run:
             logger.info("MODE: DRY RUN (no trades will be placed)")
-        logger.info("Watching %d symbols", len(symbols))
+        if self._universe_manager is not None and self._universe_manager.is_built:
+            logger.info(
+                "Watching %d symbols (Universe Manager)",
+                self._universe_manager.viable_count,
+            )
+        else:
+            logger.info("Watching %d symbols (scanner)", len(symbols))
         if self._api_task:
             logger.info("API: http://%s:%d", config.system.api.host, config.system.api.port)
         logger.info("=" * 60)
@@ -807,9 +814,14 @@ class ArgusSystem:
 
         # Send startup alert
         mode = "DRY RUN" if self._dry_run else "PAPER TRADING"
+        watch_count = (
+            self._universe_manager.viable_count
+            if self._universe_manager is not None and self._universe_manager.is_built
+            else len(symbols)
+        )
         await self._health_monitor.send_warning_alert(
             title="Argus Started",
-            body=f"Watching {len(symbols)} symbols. Mode: {mode}",
+            body=f"Watching {watch_count} symbols. Mode: {mode}",
         )
 
     async def _evaluation_health_check_loop(self) -> None:
@@ -877,11 +889,21 @@ class ArgusSystem:
                 if market_open <= current_time <= market_close:
                     if self._orchestrator is not None:
                         old, new = await self._orchestrator.reclassify_regime()
+                        self._regime_check_count += 1
                         if old != new:
                             logger.info(
                                 "Regime reclassified: %s → %s",
                                 old.value,
                                 new.value,
+                            )
+                        elif self._regime_check_count % 6 == 0:
+                            indicators = self._orchestrator.current_indicators
+                            vol = indicators.spy_realized_vol_20d if indicators else None
+                            logger.info(
+                                "Regime unchanged: %s (check #%d, SPY vol: %s)",
+                                new.value,
+                                self._regime_check_count,
+                                f"{vol:.4f}" if vol is not None else "N/A",
                             )
                         else:
                             logger.debug("Regime unchanged: %s", new.value)

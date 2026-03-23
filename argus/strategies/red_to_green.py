@@ -967,7 +967,7 @@ class RedToGreenStrategy(BaseStrategy):
             MarketConditionsFilter with allowed regimes.
         """
         return MarketConditionsFilter(
-            allowed_regimes=["bullish_trending", "range_bound"],
+            allowed_regimes=["bullish_trending", "bearish_trending", "range_bound"],
             max_vix=35.0,
         )
 

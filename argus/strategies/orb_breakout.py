@@ -188,6 +188,6 @@ class OrbBreakoutStrategy(OrbBaseStrategy):
     def get_market_conditions_filter(self) -> MarketConditionsFilter:
         """Return market conditions for ORB activation."""
         return MarketConditionsFilter(
-            allowed_regimes=["bullish_trending", "range_bound", "high_volatility"],
+            allowed_regimes=["bullish_trending", "bearish_trending", "range_bound", "high_volatility"],
             max_vix=35.0,
         )

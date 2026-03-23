@@ -332,7 +332,7 @@ class PatternBasedStrategy(BaseStrategy):
             MarketConditionsFilter allowing bullish and range-bound regimes.
         """
         return MarketConditionsFilter(
-            allowed_regimes=["bullish_trending", "range_bound"],
+            allowed_regimes=["bullish_trending", "bearish_trending", "range_bound"],
             max_vix=35.0,
         )
 
