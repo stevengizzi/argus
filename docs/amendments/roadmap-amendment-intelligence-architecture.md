@@ -598,7 +598,7 @@ All sessions ≤ 13. **Total: 5 sessions, ~3 days.**
 - Sprint 27.5 (Evaluation Framework) — BacktestEngine with MultiObjectiveResult for scenario evaluation
 - Sprint 27.6 (Regime Intelligence) — regime transition detection quality is a stress test metric
 - BacktestEngine (Sprint 27) — executes historical scenarios
-- Databento historical data — crisis period data must be available (DEC-353 confirms OHLCV-1m available on Standard plan)
+- Databento historical data — **confirmed available** at $0 cost on Standard plan: XNAS.ITCH + XNYS.PILLAR provide OHLCV-1m back to May 2018, covering all 5 crisis scenarios. BacktestEngine's HistoricalDataFeed needs a mode to query exchange-specific datasets (XNAS.ITCH + XNYS.PILLAR) instead of EQUS.MINI for pre-March-2023 data — small addition in Sprint 33.5 S1 or S2.
 
 ### What This Does NOT Do
 
@@ -853,7 +853,7 @@ The three preceding sprints don't just help Sprint 28 — they transform it from
 **Layer 4 — Adversarial Stress Testing (Sprint 33.5):**
 - [ ] Adopt, reject, or modify?
 - [ ] If adopted: confirm placement after Sprint 33 and before Sprint 34
-- [ ] If adopted: confirm Databento historical data covers all 5 crisis periods (March 2023 – present on Standard plan — need to verify COVID and 2021 meme stock data availability)
+- [ ] Note: Databento historical data **confirmed available** — XNAS.ITCH + XNYS.PILLAR provide OHLCV-1m back to May 2018 at $0 cost on Standard plan. All 5 crisis scenarios covered. Sprint 33.5 needs ~0.5 session to add exchange-specific HistoricalDataFeed mode.
 
 **Layer 5 — Hypothesis Generation Design:**
 - [ ] Adopt, reject, or modify?
@@ -889,21 +889,39 @@ The three preceding sprints don't just help Sprint 28 — they transform it from
 
 ---
 
-## 12. Historical Data Verification Required
+## 12. Historical Data Availability — Confirmed
 
-Several components in this amendment assume historical data availability:
+Historical data availability has been verified (March 23, 2026). All stress testing scenarios are fully covered at $0 additional cost on the Databento Standard plan.
 
-| Component | Data Needed | Period | Available on Databento Standard? |
-|-----------|-------------|--------|--------------------------------|
-| Adversarial Stress Testing: COVID crash | OHLCV-1m for SPY + watchlist | Feb–Mar 2020 | **Verify** — DEC-353 says "OHLCV-1m" but may be limited to recent years |
-| Adversarial Stress Testing: Meme stocks | OHLCV-1m for GME, AMC, etc. | Jan–Feb 2021 | **Verify** — same concern |
-| Adversarial Stress Testing: SVB week | OHLCV-1m for SIVB, KRE, etc. | Mar 2023 | Likely yes (Standard plan includes March 2023+) |
-| Adversarial Stress Testing: Yen carry | OHLCV-1m for broad market | Aug 2024 | Yes |
-| CorrelationTracker calibration | Daily bars for top 50 symbols | 1 year | Yes (FMP provides this) |
+### Databento Dataset Availability
 
-If pre-2023 Databento OHLCV-1m is not available on Standard plan, the COVID and meme stock stress scenarios would need either (a) Databento historical data purchase, (b) FMP historical bars as lower-fidelity substitute, or (c) deferral of those specific scenarios. The remaining three scenarios (SVB, yen carry, Treasury selloff) are within the Standard plan window.
+| Dataset | OHLCV-1m Earliest | Latest | Notes |
+|---------|-------------------|--------|-------|
+| XNAS.ITCH | 2018-05-01 | 2026-03-23 | ~8 years of NASDAQ data |
+| XNYS.PILLAR | 2018-05-01 | 2026-03-23 | ~8 years of NYSE data |
+| EQUS.MINI | 2023-03-28 | 2026-03-21 | ~3 years — production feed, both exchanges combined |
 
-**Action item for strategic conversation:** Verify Databento Standard plan historical OHLCV-1m availability for 2020–2022 before finalizing stress scenario list.
+**Key finding:** XNYS.TRADES does not exist — the correct NYSE dataset is **XNYS.PILLAR**. Exchange-specific datasets (XNAS.ITCH + XNYS.PILLAR) provide 8 years of history vs EQUS.MINI's 3 years, but require querying both exchanges separately and merging results.
+
+**Cost verification:** SPY OHLCV-1m on XNAS.ITCH for a sample day in March 2020 returns $0.00 — included in Standard plan.
+
+### Stress Scenario Coverage
+
+| Scenario | Period | Dataset | Status |
+|----------|--------|---------|--------|
+| COVID crash | Feb–Mar 2020 | XNAS.ITCH + XNYS.PILLAR | ✅ Available |
+| Meme stock mania | Jan–Feb 2021 | XNAS.ITCH + XNYS.PILLAR | ✅ Available |
+| SVB week | Mar 2023 | XNAS.ITCH + XNYS.PILLAR (or EQUS.MINI) | ✅ Available |
+| Yen carry unwind | Aug 2024 | Any dataset | ✅ Available |
+| Treasury selloff | Oct 2023 | Any dataset | ✅ Available |
+
+### Implementation Implication
+
+BacktestEngine's `HistoricalDataFeed` currently queries EQUS.MINI (Sprint 27). For stress testing and richer walk-forward validation, it needs a mode that queries XNAS.ITCH + XNYS.PILLAR separately and merges the results. This is a small addition (~0.5 session) to Sprint 33.5 scope, or could be built earlier if the 8-year data range proves useful for Sprint 33 (Statistical Validation).
+
+### Broader Impact: Phase 7 Gate Concern Resolved
+
+The roadmap's Phase 7 Gate (Section 8) flags: *"Three-way splits across only 35 months of data may not provide enough statistical power."* With XNAS.ITCH + XNYS.PILLAR providing ~96 months of 1-minute data back to May 2018, this concern is substantially mitigated. The data purchase decision (DEC-353, deferred indefinitely) remains correct — free data is sufficient for the full roadmap through Phase 10.
 
 ---
 
