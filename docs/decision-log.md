@@ -4282,6 +4282,40 @@ Each entry follows this format:
 
 ---
 
+## Amendment Adoption — Strategic Decision Session (March 23, 2026)
+
+### DEC-357 | Experiment Infrastructure Amendment — Adopted
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-23 |
+| **Context** | Strategic decision session reviewing two roadmap amendment proposals produced from autoresearch pattern analysis (March 23 conversation). Sprint 27 (BacktestEngine Core) complete. The current roadmap builds evaluation capabilities late — optimization loops don't close until Sprint 40. Experiment tracking and automated promotion are missing entirely. Paper validation at scale is a multi-year bottleneck without simulated-paper screening. |
+| **Decision** | Adopt the Experiment Infrastructure amendment in full, adding Sprints 27.5 and 32.5 to the build track queue. Sprint 27.5 (Evaluation Framework): MultiObjectiveResult as universal evaluation currency, ConfidenceTier (HIGH/MODERATE/LOW/ENSEMBLE_ONLY), EnsembleResult for cohort evaluation, regime-conditional evaluation in BacktestEngine, Pareto dominance + soft dominance comparison API. Sprint 32.5 (Experiment Registry + Promotion Pipeline + Anti-Fragility): ExperimentRegistry with partitioned SQLite, PromotionCohort as primary promotion unit, 8-stage PromotionPipeline with simulated-paper screening, ExperimentQueue + background worker for overnight compute, kill switches at cohort and individual level, human veto window, loss-driven queue priority, post-mortem automation, drawdown-accelerated experimentation. Hypothesis Generation Design document produced during Sprint 32.5 planning. |
+| **Modifications** | Two modifications from the strategic review: (1) Veto mechanism uses API endpoint + Command Center UI as primary action path, ntfy.sh for notifications only (not ntfy reply parsing). (2) Sprint 28 interim experiment storage uses SQLite with ExperimentRegistry-compatible schema, not JSON, for queryability and to avoid migration friction. |
+| **Placement** | Sprint 27.5: after 21.6, before 28. Sprint 32.5: after 32, before 33. |
+| **DEC Ranges Reserved** | DEC-359–368 (Sprint 27.5), DEC-386–395 (Sprint 32.5). |
+| **Rationale** | Without Sprint 27.5, Sprint 28 (Learning Loop) reinvents ad-hoc evaluation metrics, Sprint 33 (Statistical Validation) reinvents experiment comparison, Sprint 34 (Systematic Search) reinvents candidate ranking — "build it once" eliminates redundant work across 5+ downstream sprints. Without Sprint 32.5, paper validation of Sprint 34's ~200 candidates takes 3+ years (5 individual slots × 20 days each); with simulated-paper screening, ~2 months. The overnight ExperimentQueue gives 16.5 hours/day of free compute. Anti-fragility ensures the system improves fastest when performance is worst. Both sprints are designed for 1000+ micro-strategy scale from day one, avoiding rearchitecture at Phase 9. |
+| **Cross-References** | DEC-354 (BacktestEngine pulled forward), DEC-047 (walk-forward mandatory), DEC-275 (compaction risk scoring), DEC-358 (companion Intelligence Architecture amendment) |
+| **Status** | Active |
+
+---
+
+### DEC-358 | Intelligence Architecture Amendment — Adopted
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-23 |
+| **Context** | Companion to DEC-357. The Experiment Infrastructure amendment provides evaluation discipline; this amendment provides the six intelligence layers that make experimentation targeted, evaluation accurate, and failure productive. Each layer addresses a specific failure mode: crude regime labels → miscategorized evaluations; learning only from trades → 90% of signal discarded; fantasy slippage → inflated backtests; no tail risk testing → fragile promotions. |
+| **Decision** | Adopt the Intelligence Architecture amendment in full, adding Sprints 27.6, 27.7, and 33.5 to the build track queue, plus modifications to Sprints 21.6 and 27.5. Sprint 27.6 (Regime Intelligence): RegimeVector replaces single MarketRegime enum with multi-dimensional representation — trend, volatility (level + direction), breadth, correlation, sector rotation, intraday character. All data from existing subscriptions at $0 additional cost. Backward-compatible via primary_regime field. Sprint 27.7 (Counterfactual Engine): Tracks theoretical outcomes of every rejected signal (~288/day currently, ~5,000/day at scale). Shadow position tracking using existing Databento candle stream. Filter accuracy metrics per-stage, per-reason, per-grade, per-regime. Feeds Learning Loop with 24× more data points than trades alone. Sprint 33.5 (Adversarial Stress Testing): 5 historical crisis scenarios (COVID, meme stocks, SVB, yen carry, Treasury selloff) + 4 synthetic stress scenarios (correlation spike, liquidity drought, gap-through-stop, simultaneous drawdown). Becomes Stage 1.5 gate in PromotionPipeline. All historical data confirmed available at $0 via XNAS.ITCH + XNYS.PILLAR (OHLCV-1m back to May 2018). Execution Quality Feedback: execution logging added to Sprint 21.6, execution_quality_adjustment field + slippage model calibration added to Sprint 27.5. |
+| **Placement** | Sprint 27.6: after 27.5, before 27.7. Sprint 27.7: after 27.6, before 28. Sprint 33.5: after 33, before 34. Execution logging: Sprint 21.6. Slippage calibration: Sprint 27.5. |
+| **DEC Ranges Reserved** | DEC-369–378 (Sprint 27.6), DEC-379–385 (Sprint 27.7), DEC-396–402 (Sprint 33.5). |
+| **Historical Data Confirmed** | XNAS.ITCH: OHLCV-1m back to May 2018 (~8 years), $0 on Standard plan. XNYS.PILLAR: OHLCV-1m back to May 2018 (~8 years), $0 on Standard plan. XNYS.TRADES does not exist — NYSE dataset is XNYS.PILLAR. EQUS.MINI: only back to March 2023 (~3 years). This resolves the Phase 7 Gate historical data sufficiency concern — 96 months of data instead of 35. |
+| **Rationale** | Regime Intelligence: SPY-only classification is inadequate for micro-strategy operating windows; breadth, correlation, and sector dimensions are trivially computed from existing data. Counterfactual Engine: 24× data multiplication for Learning Loop; identifies underserved regime niches that feed hypothesis generation. Execution Quality: closes simulation-to-reality gap; negligible implementation cost. Adversarial Stress Testing: tail risk protection is critical when managing family capital; historical data confirmed free. Combined, these three infrastructure sprints transform Sprint 28 (Learning Loop V1) from basic weight tuning into intelligent system analysis with proper evaluation, rich regime data, and 24× the data volume. |
+| **Cross-References** | DEC-357 (companion Experiment Infrastructure amendment), DEC-346 (periodic regime reclassification), DEC-353 (historical data deferred — resolved by XNAS.ITCH + XNYS.PILLAR availability), DEC-047 (walk-forward mandatory) |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
-*Next DEC: 357*
-*Last updated: 2026-03-21 (Phase 5 Gate — DEC-353 through DEC-356)*
+*Next DEC: 359*
+*Last updated: 2026-03-23 (Amendment Adoption — DEC-357 through DEC-358)*

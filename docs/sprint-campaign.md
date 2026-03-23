@@ -245,15 +245,21 @@ CHOREOGRAPHY:
 | **Phase 6: Strategy Expansion** | | | | | | | |
 | 25 | The Observatory | B | iterative-judgment | 13–18 | 4–5 | No | No |
 | 26 | Red-to-Green + Pattern Library Foundation | B | iterative-judgment | 3–5 | 2–3 | No | No |
-| 27 | Pattern Expansion I | B | iterative-judgment | 5–7 | 4–5 | No | No |
-| 28 | Short Selling Infrastructure + Pattern Expansion II | B | iterative-judgment | 3–5 | 3 | No | No |
-| 29 | Learning Loop V1 | B | iterative-judgment | 3–5 | 3 | No | **Phase 6 Gate** |
+| 27 | BacktestEngine Core | A | standard | 4–6 | 2 | No | No |
+| 21.6 | Backtest Re-Validation + Execution Logging | A | standard | 3–5 | 2 | No | No |
+| **27.5** | **Evaluation Framework** | **A** | **standard** | **5** | **2–3** | **No** | **No** |
+| **27.6** | **Regime Intelligence** | **A** | **standard** | **6** | **3** | **No** | **No** |
+| **27.7** | **Counterfactual Engine** | **A** | **standard** | **4** | **2** | **No** | **No** |
+| 28 | Learning Loop V1 | B | iterative-judgment | 3–5 | 3 | No | No |
+| 29 | Pattern Expansion I | B | iterative-judgment | 3–5 | 2–3 | No | No |
+| 30 | Short Selling Infrastructure + Pattern Expansion II | B | iterative-judgment | 5–7 | 3 | No | No |
+| 31 | Pattern Expansion III + Research Console | B | iterative-judgment | 5–7 | 3 | No | **Phase 6 Gate** |
 | **Phase 7: Infrastructure Unification** | | | | | | | |
-| 30 | BacktestEngine Core + Research Console | C | adversarial, iterative-judgment | 6–8 | 4 | **Yes** | No |
-| 31 | Parallel Sweep Infrastructure | B | iterative-judgment | 5–7 | 3–4 | No | No |
-| 32 | Parameterized Strategy Templates | C | adversarial, iterative-judgment | 5–7 | 3–4 | **Yes** | **Phase 7 Gate** |
+| 32 | Parameterized Strategy Templates | C | adversarial, iterative-judgment | 5–7 | 3–4 | **Yes** | No |
+| **32.5** | **Experiment Registry + Promotion Pipeline + Anti-Fragility** | **A** | **standard** | **9** | **4–5** | **No** | **Phase 7 Gate** |
 | **Phase 8: Controlled Experiment** | | | | | | | |
 | 33 | Statistical Validation Framework | B | adversarial, iterative-judgment | 5–7 | 3–4 | **Yes** | No |
+| **33.5** | **Adversarial Stress Testing** | **A** | **standard** | **5** | **3** | **No** | **No** |
 | 34 | ORB Family Systematic Search | D | research, adversarial | 5–8 | 4–5 | **Yes** | No |
 | 35 | Ensemble Performance Analysis | D | research | 3–5 | 2–3 | No | **Phase 8 GATE (GO/NO-GO)** |
 | **Phase 9: Ensemble Scaling** | | | | | | | |
@@ -268,7 +274,9 @@ CHOREOGRAPHY:
 | 41 | Continuous Discovery Pipeline | B | iterative-judgment | 4–6 | 3–4 | No | No |
 | 42 | Performance Workbench | B | iterative-judgment | 5–8 | 4–5 | No | **Phase 10 Gate** |
 
-**Totals:** 23 sprints (including sub-sprints) | ~105–155 sessions | ~13–17 weeks estimated
+**Totals:** 28 sprints (including sub-sprints) | ~130–185 sessions | ~15–20 weeks estimated
+
+*Note: 5 new sprint slots added by DEC-357/DEC-358 (Sprints 27.5, 27.6, 27.7, 32.5, 33.5). Net extension ~14–15 days.*
 
 ---
 
@@ -284,33 +292,41 @@ Based on the roadmap's per-sprint duration estimates. Start date: March 5, 2026.
 | 23 | Mar 13 | Mar 16 | ✅ Complete (includes 23.05–23.9) |
 | 24 | Mar 13 | Mar 16 | ✅ Complete (includes 24.1, 24.5) |
 | **Phase 5 Gate** | **Mar 17** | **Mar 17** | ✅ Strategic check-in complete |
-| 25 | Mar 17 | Mar 22 | The Observatory (~4–5 days, 13–18 sessions) |
-| 26 | Mar 23 | Mar 26 | Red-to-Green + Pattern Library Foundation |
-| 27 | Mar 26 | Mar 31 | Pattern Expansion I |
-| 28 | Mar 31 | Apr 3 | Short Selling + Pattern Expansion II |
-| 29 | Apr 3 | Apr 6 | Learning Loop V1 |
-| **Phase 6 Gate** | **Apr 6** | **Apr 7** | Strategic check-in + CPA consultation gate |
-| 30 | Apr 8 | Apr 12 | BacktestEngine + Research Console |
-| 31 | Apr 12 | Apr 16 | Parallel Sweep Infrastructure |
-| 32 | Apr 16 | Apr 20 | Parameterized Strategy Templates |
-| **Phase 7 Gate** | **Apr 20** | **Apr 21** | Strategic check-in + data sufficiency decision |
-| 33 | Apr 22 | Apr 26 | Statistical Validation Framework |
-| 34 | Apr 26 | May 1 | ORB Systematic Search; may need cloud burst |
-| 35 | May 1 | May 4 | Ensemble Performance Analysis |
-| **Phase 8 GATE** | **May 4** | **May 5** | **GO/NO-GO — pivotal decision** |
-| 36 | May 6 | May 11 | Only if GO |
-| 37 | May 11 | May 16 | Only if GO |
-| 38a | May 16 | May 19 | Adversarial review adds ~0.5 day |
-| 38b | May 19 | May 23 | Three.js mini-discovery before implementation |
-| 39a | May 23 | May 25 | |
-| 39b | May 25 | May 29 | |
-| **Phase 9 Gate** | **May 29** | **May 30** | Strategic check-in + codebase health audit |
-| 40 | May 31 | Jun 5 | |
-| 41 | Jun 5 | Jun 9 | |
-| 42 | Jun 9 | Jun 14 | |
-| **Phase 10 Gate** | **Jun 14** | **Jun 15** | Final strategic check-in |
+| 25 | Mar 17 | Mar 18 | ✅ Complete (The Observatory) |
+| 25.5–25.8 | Mar 18 | Mar 21 | ✅ Complete (operational fixes) |
+| 26 | Mar 21 | Mar 22 | ✅ Complete (Red-to-Green + Pattern Library Foundation) |
+| 27 | Mar 22 | Mar 22 | ✅ Complete (BacktestEngine Core) |
+| **Amendments** | **Mar 23** | **Mar 23** | DEC-357, DEC-358 adopted |
+| 21.6 | Mar 24 | Mar 26 | Backtest Re-Validation + Execution Logging |
+| **27.5** | **Mar 26** | **Mar 29** | **Evaluation Framework (DEC-357)** |
+| **27.6** | **Mar 29** | **Apr 1** | **Regime Intelligence (DEC-358)** |
+| **27.7** | **Apr 1** | **Apr 3** | **Counterfactual Engine (DEC-358)** |
+| 28 | Apr 3 | Apr 6 | Learning Loop V1 |
+| 29 | Apr 7 | Apr 9 | Pattern Expansion I |
+| 30 | Apr 10 | Apr 13 | Short Selling + Pattern Expansion II |
+| 31 | Apr 13 | Apr 16 | Pattern Expansion III + Research Console |
+| **Phase 6 Gate** | **Apr 16** | **Apr 17** | Strategic check-in + CPA consultation gate |
+| 32 | Apr 18 | Apr 22 | Parameterized Strategy Templates |
+| **32.5** | **Apr 22** | **Apr 27** | **Experiment Registry + Promotion Pipeline (DEC-357)** |
+| **Phase 7 Gate** | **Apr 27** | **Apr 28** | Strategic check-in + data sufficiency (RESOLVED) |
+| 33 | Apr 29 | May 3 | Statistical Validation Framework |
+| **33.5** | **May 3** | **May 6** | **Adversarial Stress Testing (DEC-358)** |
+| 34 | May 7 | May 12 | ORB Systematic Search; may need cloud burst |
+| 35 | May 12 | May 15 | Ensemble Performance Analysis |
+| **Phase 8 GATE** | **May 15** | **May 16** | **GO/NO-GO — pivotal decision** |
+| 36 | May 17 | May 22 | Only if GO |
+| 37 | May 22 | May 27 | Only if GO |
+| 38a | May 27 | May 30 | Adversarial review adds ~0.5 day |
+| 38b | May 30 | Jun 3 | Three.js mini-discovery before implementation |
+| 39a | Jun 3 | Jun 5 | |
+| 39b | Jun 5 | Jun 9 | |
+| **Phase 9 Gate** | **Jun 9** | **Jun 10** | Strategic check-in + codebase health audit |
+| 40 | Jun 11 | Jun 16 | |
+| 41 | Jun 16 | Jun 20 | |
+| 42 | Jun 20 | Jun 25 | |
+| **Phase 10 Gate** | **Jun 25** | **Jun 26** | Final strategic check-in |
 
-**Total calendar estimate:** ~15 weeks (March 5 – June 15)
+**Total calendar estimate:** ~17 weeks (March 5 – June 25)
 
 ---
 
@@ -325,44 +341,44 @@ Phase 5 (Linear Chain — each sprint depends on the previous):
                                       ▼
                                  PHASE 5 GATE
 
-Phase 6 (Linear Chain):
+Phase 6 (Linear Chain — includes amendment infrastructure sprints):
 
-  25 ──→ 26 ──→ 27 ──→ 28
-  (R2G)  (exp-I) (short+exp-II) (learning loop)
-                                      │
-                                      ▼
-                                 PHASE 6 GATE
-                                 (CPA consultation gate — live trading may begin)
+  25 ──→ 26 ──→ 27 ──→ 21.6 ──→ 27.5 ──→ 27.6 ──→ 27.7 ──→ 28 ──→ 29 ──→ 30 ──→ 31
+  (obs)  (R2G)  (BE)   (reval)  (eval)   (regime) (cntfct)  (learn) (exp-I)(short)(exp-III)
+                                                                                    │
+                                                                                    ▼
+                                                                               PHASE 6 GATE
+                                                                               (CPA consultation gate)
 
-Phase 7 (Linear Chain, CAN partially overlap with late Phase 6):
+Phase 7 (Linear Chain):
 
-  29 ──→ 30 ──→ 31
-  (engine) (sweep) (templates)
-                      │
-                      ▼
-                 PHASE 7 GATE
-                 (data sufficiency decision — resolve RSK before Phase 8)
+  32 ──→ 32.5
+  (tmpl)  (registry+pipeline+anti-fragility)
+              │
+              ▼
+         PHASE 7 GATE
+         (data sufficiency RESOLVED — DEC-358)
 
 Phase 8 (Linear Chain):
 
-  32 ──→ 33 ──→ 34
-  (stats) (experiment) (analysis)
-                          │
-                          ▼
-                     PHASE 8 GATE ★★★
-                     (GO/NO-GO — everything after depends on this)
-                          │
-                    ┌─────┴─────┐
-                    │           │
-                   GO        NO-GO
-                    │           │
-                    ▼           ▼
-               Phase 9    Continue Phase 6
-                          artisanal approach
+  33 ──→ 33.5 ──→ 34 ──→ 35
+  (stats) (stress) (experiment) (analysis)
+                                    │
+                                    ▼
+                               PHASE 8 GATE ★★★
+                               (GO/NO-GO — everything after depends on this)
+                                    │
+                              ┌─────┴─────┐
+                              │           │
+                             GO        NO-GO
+                              │           │
+                              ▼           ▼
+                         Phase 9    Continue Phase 6
+                                    artisanal approach
 
 Phase 9 (Linear with sub-sprint decomposition):
 
-  35 ──→ 36 ──→ 37a ──→ 37b ──→ 38a ──→ 38b
+  36 ──→ 37 ──→ 38a ──→ 38b ──→ 39a ──→ 39b
   (VWAP)  (all)  (orch) (synapse) (ws)  (rt-synapse)
                                             │
                                             ▼
@@ -370,7 +386,7 @@ Phase 9 (Linear with sub-sprint decomposition):
 
 Phase 10 (Linear Chain):
 
-  39 ──→ 40 ──→ 41
+  40 ──→ 41 ──→ 42
   (learn) (discover) (workbench)
                         │
                         ▼
@@ -382,10 +398,14 @@ Phase 10 (Linear Chain):
 | Dependency | Description |
 |-----------|-------------|
 | Phase 6 requires Phase 5 | Strategies need quality filtering (Sprint 24) and AI layer (Sprint 22) |
-| Phase 7 can overlap Phase 6 | Sprint 29 (BacktestEngine) only needs existing strategies to test against — could start after Sprint 26–27. The roadmap sequences them serially for simplicity, but parallelism is possible if velocity is ahead of schedule. |
-| Phase 8 requires Phase 7 | The experiment (Sprint 33) needs BacktestEngine (29), sweeps (30), and templates (31) |
+| 27.5 requires 27 | Evaluation Framework builds on BacktestEngine |
+| 27.6 requires 27.5 | RegimeMetrics in MultiObjectiveResult designed for multi-dimensional vectors |
+| 27.7 requires 27.6 | Counterfactual positions tagged with RegimeVector |
+| 28 consumes 27.5+27.6+27.7 | Learning Loop uses evaluation framework, regime vectors, and counterfactual data |
+| 32.5 requires 27.5 + 32 | Experiment Registry consumes MultiObjectiveResult; templates define parameter space |
+| 33.5 requires 32.5 | Stress testing is a PromotionPipeline gate |
+| Phase 8 requires Phase 7 | The experiment (Sprint 34) needs sweeps (31), templates (32), and experiment infrastructure (32.5) |
 | Phase 9 requires Phase 8 GO | If NO-GO, Phase 9 does not execute |
-| Sprint 33 requires data sufficiency | The Phase 7 gate must resolve the historical data risk (RSK from roadmap) before Sprint 32 begins |
 | Sprint 37b requires Three.js research | A mini-discovery session before implementation (see Sprint 37b choreography) |
 
 **Potential Parallelism Windows:**
@@ -909,19 +929,19 @@ Since this sprint is already in progress, pick up from current state:
 
 ### Phase 6 Gate
 
-**Trigger:** Sprint 28 complete
+**Trigger:** Sprint 31 complete
 **Protocol:** Strategic Check-In (`strategic-check-in.md`) + Documentation Compression + Codebase Health Audit
 
 This is the most significant non-Phase-8 gate because **live trading with real capital could begin during or after Phase 6** (per roadmap).
 
 **[Claude.ai]** Strategic Check-In Conversation:
 
-1. **Progress review:** 10–11 strategies active? Learning Loop working? Correlation monitoring producing useful data?
+1. **Progress review:** 13–15 strategies active? Learning Loop working? Correlation monitoring producing useful data? Evaluation Framework, Regime Intelligence, and Counterfactual Engine all operational?
 2. **Paper trading assessment:** Sharpe > 2.0? Positive expectancy across strategies? No catastrophic drawdowns? If yes → CPA consultation gate is met.
 3. **CPA consultation decision:** Is it time to consult with a CPA about tax implications of live trading? Log as DEC entry.
 4. **Live trading readiness:** Are you confident enough in the system to deploy real capital? If yes → schedule live-minimum deployment during Phase 7 or Phase 8. Log as DEC entry.
-5. **Phase 7 readiness:** Is the BacktestEngine direction clear? Are the existing strategies ready to be templatized?
-6. **Historical data sufficiency:** This is the time to decide whether to acquire deeper history (Databento 5–10 year purchase). The decision MUST be made before Phase 8 begins. Create a DEC entry and potentially a RSK entry. If data purchase is needed, start the process now.
+5. **Phase 7 readiness:** Are the existing strategies ready to be templatized? Is the Experiment Registry pipeline design still correct after observing real Learning Loop behavior?
+6. **Historical data sufficiency:** RESOLVED (DEC-358) — XNAS.ITCH + XNYS.PILLAR provide 96 months of OHLCV-1m at $0. No purchase needed.
 7. **Velocity calibration:** Update session estimates for Phase 7–8 based on Phase 5–6 actuals.
 
 **[Claude.ai]** Codebase Health Audit — `codebase-health-audit.md`
@@ -1126,33 +1146,29 @@ This is the most significant non-Phase-8 gate because **live trading with real c
 
 ### Phase 7 Gate
 
-**Trigger:** Sprint 31 complete
+**Trigger:** Sprint 32.5 complete
 **Protocol:** Strategic Check-In (`strategic-check-in.md`) + Documentation Compression
 
 **[Claude.ai]** Strategic Check-In Conversation:
 
-1. **Progress review:** BacktestEngine working? Results match Replay Harness? Templates validated? Research Console operational?
-2. **Data sufficiency decision:** This MUST be resolved now, before Phase 8 begins.
-   - How much historical data is available? Is 35 months enough for three-way splits?
-   - Decision: purchase deeper Databento history? Use synthetic augmentation? Accept lower granularity?
-   - Log as DEC entry. If purchase needed, initiate immediately — this is on the Phase 8 critical path.
-3. **Phase 8 readiness:** Is the BacktestEngine fast enough for the controlled experiment (Sprint 32)? Do the templates cover the ORB family adequately for systematic search?
-4. **Velocity calibration:** Update estimates for Phase 8.
-5. **Risk review:** Any new risks from Phase 7 implementation? Cloud burst infrastructure ready?
+1. **Progress review:** Templates validated? Experiment Registry operational? Promotion Pipeline stages tested? Anti-fragility logic wired?
+2. **Data sufficiency:** RESOLVED (DEC-358). XNAS.ITCH + XNYS.PILLAR provide 96 months of OHLCV-1m at $0. Exchange-specific HistoricalDataFeed mode built in Sprint 33.5.
+3. **Experiment pipeline calibration:** Confirm Sprint 32.5 cohort sizes, veto windows, and kill switch thresholds based on paper trading experience. Review overnight compute capacity — is sequential worker sufficient for Sprint 33, or should Sprint 31 parallelism be prioritized?
+4. **Phase 8 readiness:** Is the BacktestEngine fast enough for the controlled experiment (Sprint 34)? Do the templates cover the ORB family adequately for systematic search?
+5. **Velocity calibration:** Update estimates for Phase 8.
+6. **Risk review:** Any new risks from Phase 7 implementation? Cloud burst infrastructure ready?
 
 **[Claude Code]** Documentation Compression:
 - Archive Phase 5–7 DECs
-- Architecture doc updated to Phase 7 final state (BacktestEngine, templates, Research Console)
+- Architecture doc updated to Phase 7 final state (BacktestEngine, templates, Research Console, Experiment Registry, Promotion Pipeline)
 - Compress Project Knowledge
 - Verify `.claude/rules/` files: `backtesting.md`, `backtest-engine.md`, `strategy-templates.md` all current
 
-**Critical output:** Data sufficiency DEC entry. This gates Phase 8.
-
 ---
 
-## 7. Phase 8: Controlled Experiment (Sprints 32–34)
+## 7. Phase 8: Controlled Experiment (Sprints 33–35)
 
-*The proving ground. Everything before this is valuable regardless. Everything after depends on Sprint 33's results. Target: ~2–2.5 weeks.*
+*The proving ground. Everything before this is valuable regardless. Everything after depends on Sprint 34's results. Target: ~3 weeks (includes Sprint 33.5 stress testing).*
 
 ---
 
@@ -1160,9 +1176,10 @@ This is the most significant non-Phase-8 gate because **live trading with real c
 
 **Type:** B (Mixed Backend + Frontend) | **Modes:** Adversarial Review, Iterative Judgment Loop
 **Duration:** ~3–4 days | **Sessions:** 5–7 (3 backend, 2–4 frontend)
-**Depends on:** Phase 7 Gate complete (including data sufficiency decision)
+**Depends on:** Phase 7 Gate complete
+**Note:** Scope reduced from original plan — evaluation framework (Sprint 27.5), experiment storage (Sprint 32.5), and aggregate views already exist. Sprint 33 focuses purely on statistical methods.
 **Adversarial review:** **YES** — if the statistical methodology is wrong, the entire Phase 8 experiment is worthless. This is the highest-stakes adversarial review in the campaign.
-**Delivers:** FDR correction (Benjamini-Hochberg), minimum trade count thresholds, three-way data splits, smoothness prior, Research Console Validation Dashboard
+**Delivers:** FDR correction (Benjamini-Hochberg), minimum trade count thresholds, three-way data splits (96 months of data available), smoothness prior, Research Console Validation Dashboard
 
 **Choreography:**
 
@@ -1887,11 +1904,11 @@ Summary of all gates and checkpoints in the campaign, with exact protocols and t
 | Gate | After Sprint | Protocol | Cadence Rule | Special Focus |
 |------|-------------|----------|--------------|---------------|
 | Phase 5 Gate | 24 | `strategic-check-in.md` + Doc Compression | Phase boundary | Paper trading health, Phase 6 readiness |
-| Phase 6 Gate | 28 | `strategic-check-in.md` + `codebase-health-audit.md` + Doc Compression | Phase boundary + 4–6 sprint cadence | **CPA consultation, live trading decision, data purchase decision** |
-| Phase 7 Gate | 31 | `strategic-check-in.md` + Doc Compression | Phase boundary | **Data sufficiency resolution (MUST happen before Phase 8)** |
-| Phase 8 Gate | 34 | **Custom Gate Review** (see Section 7) | Phase boundary | **GO/NO-GO — pivotal campaign decision** |
-| Phase 9 Gate | 38b | `strategic-check-in.md` + `codebase-health-audit.md` + Doc Compression | Phase boundary + 4–6 sprint cadence | Ensemble paper trading health, scale performance |
-| Phase 10 Gate | 41 | `strategic-check-in.md` + Final Doc Reconciliation | Campaign completion | Full system review, horizon planning |
+| Phase 6 Gate | 31 | `strategic-check-in.md` + `codebase-health-audit.md` + Doc Compression | Phase boundary + 4–6 sprint cadence | **CPA consultation, live trading decision** |
+| Phase 7 Gate | 32.5 | `strategic-check-in.md` + Doc Compression | Phase boundary | **Data sufficiency RESOLVED (DEC-358). Confirm experiment pipeline thresholds.** |
+| Phase 8 Gate | 35 | **Custom Gate Review** (see Section 7) | Phase boundary | **GO/NO-GO — pivotal campaign decision** |
+| Phase 9 Gate | 39b | `strategic-check-in.md` + `codebase-health-audit.md` + Doc Compression | Phase boundary + 4–6 sprint cadence | Ensemble paper trading health, scale performance |
+| Phase 10 Gate | 42 | `strategic-check-in.md` + Final Doc Reconciliation | Campaign completion | Full system review, horizon planning |
 
 ### Mid-Phase Check-Ins
 

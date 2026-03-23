@@ -1,6 +1,6 @@
 # ARGUS — Project Knowledge (Claude Context)
 
-> *Tier A operational context for Claude Code and Claude.ai. Last updated: March 22, 2026 (Sprint 27 doc sync).*
+> *Tier A operational context for Claude Code and Claude.ai. Last updated: March 23, 2026 (Amendment adoption doc sync — DEC-357, DEC-358).*
 > *Full decision rationale: `docs/decision-log.md` | Sprint details: `docs/sprint-history.md` | DEC index: `docs/dec-index.md`*
 
 ---
@@ -14,7 +14,7 @@ ARGUS is a fully automated, AI-enhanced multi-strategy day trading system for US
 **Tests:** 3,010 pytest + 620 Vitest (0 failures, 0 hangs)
 **Sprints completed:** 1 through 27 (27 full sprints + sub-sprints)
 **Active sprint:** None (between sprints)
-**Next sprint:** 21.6 (Backtest Re-Validation)
+**Next sprint:** 21.6 (Backtest Re-Validation + Execution Logging)
 **GitHub:** `https://github.com/stevengizzi/argus.git` (public)
 
 ### Sprint History (Summary)
@@ -70,7 +70,7 @@ ARGUS is a fully automated, AI-enhanced multi-strategy day trading system for US
 
 ### Build Track Queue
 
-~~26 (Red-to-Green + Pattern Library Foundation)~~ ✅ → ~~27 (BacktestEngine Core — pulled forward per DEC-354)~~ ✅ → **21.6 (Backtest Re-Validation)** → 28 (Learning Loop V1) → 29–31 (Pattern Expansion + Short Selling) → 32–34 (Sweep Infrastructure, Strategy Templates, Statistical Validation) → 35–38 (ORB Systematic Search ★, Cross-Family Search, Ensemble Orchestrator V2, Synapse) → 39–41 (Learning Loop V2, Continuous Discovery, Performance Workbench). Sprint 23.5 (NLP Catalyst Pipeline) complete. Order Flow Model deferred to post-revenue (DEC-238). Historical data purchase deferred indefinitely (DEC-353). Full roadmap: `docs/roadmap.md` (DEC-262).
+~~26 (Red-to-Green + Pattern Library Foundation)~~ ✅ → ~~27 (BacktestEngine Core — pulled forward per DEC-354)~~ ✅ → **21.6 (Backtest Re-Validation + Execution Logging)** → **27.5 (Evaluation Framework)** → **27.6 (Regime Intelligence)** → **27.7 (Counterfactual Engine)** → 28 (Learning Loop V1) → 29–31 (Pattern Expansion + Short Selling + Research Console) → 32 (Parameterized Strategy Templates) → **32.5 (Experiment Registry + Promotion Pipeline + Anti-Fragility)** → 33 (Statistical Validation) → **33.5 (Adversarial Stress Testing)** → 34–35 (ORB Systematic Search ★, Ensemble Analysis) → 36–42 (Cross-Family Search, Ensemble Orchestrator V2, Synapse, Learning Loop V2, Continuous Discovery, Performance Workbench). Sprints 27.5/27.6/27.7/32.5/33.5 added by DEC-357/DEC-358 (amendment adoption March 23, 2026). Order Flow Model deferred to post-revenue (DEC-238). Historical data purchase deferred indefinitely (DEC-353); 96 months of OHLCV-1m available at $0 via XNAS.ITCH + XNYS.PILLAR (DEC-358). Full roadmap: `docs/roadmap.md` (DEC-262).
 
 ### Validation Track
 
@@ -78,7 +78,7 @@ Paper trading active with Databento EQUS.MINI + IBKR paper (Account U24619949, D
 
 ### Expanded Vision (DEC-163, DEC-262)
 
-15+ artisanal patterns → ensemble systematic search → self-improving trading intelligence platform. Near-term (Phase 5–6): Setup Quality Engine (0–100 scoring, DEC-239, **Sprint 24 ✅**), NLP Catalyst Pipeline (SEC EDGAR + FMP + Finnhub + Claude API, **Sprint 23.5 ✅**), Dynamic Position Sizer (**Sprint 24 ✅**), Learning Loop V1, Short Selling Infrastructure, Universe Manager with full-universe monitoring (DEC-263, **Sprint 23 ✅**). Mid-term (Phase 7–8): BacktestEngine (**Sprint 27 ✅**), parameterized strategy templates, systematic parameter search, controlled experiment (go/no-go gate). Long-term (Phase 9–10): Ensemble Orchestrator V2, Synapse visualization, Continuous Discovery Pipeline, Performance Workbench. Order Flow Model deferred to post-revenue (DEC-238, requires Databento Plus $1,399/mo). Full roadmap: `docs/roadmap.md`.
+15+ artisanal patterns → ensemble systematic search → self-improving trading intelligence platform. Near-term (Phase 5–6): Setup Quality Engine (0–100 scoring, DEC-239, **Sprint 24 ✅**), NLP Catalyst Pipeline (SEC EDGAR + FMP + Finnhub + Claude API, **Sprint 23.5 ✅**), Dynamic Position Sizer (**Sprint 24 ✅**), **Evaluation Framework (MultiObjectiveResult, EnsembleResult, Pareto dominance — Sprint 27.5)**, **Regime Intelligence (RegimeVector multi-dimensional — Sprint 27.6)**, **Counterfactual Engine (shadow position tracking — Sprint 27.7)**, Learning Loop V1, Short Selling Infrastructure, Universe Manager with full-universe monitoring (DEC-263, **Sprint 23 ✅**). Mid-term (Phase 7–8): BacktestEngine (**Sprint 27 ✅**), parameterized strategy templates, **Experiment Registry + Promotion Pipeline + Anti-Fragility (Sprint 32.5)**, statistical validation, **Adversarial Stress Testing (Sprint 33.5)**, systematic parameter search, controlled experiment (go/no-go gate). Long-term (Phase 9–10): Ensemble Orchestrator V2, Synapse visualization, Continuous Discovery Pipeline, Performance Workbench. Order Flow Model deferred to post-revenue (DEC-238, requires Databento Plus $1,399/mo). Full roadmap: `docs/roadmap.md`.
 
 ---
 
@@ -232,6 +232,8 @@ Per-trade risk: 0.5–1% of strategy allocation. Daily loss limit: 3–5%. Weekl
 
 **Phase 5 Gate (March 2026):** DEC-353 (historical data purchase deferred — free OHLCV-1m on Standard plan), DEC-354 (Phase 6 compression — BacktestEngine to Sprint 27), DEC-355 (Gate 2 day counter reset), DEC-356 (FMP Premium deferred until Learning Loop data).
 
+**Amendment Adoption (March 2026):** DEC-357 (Experiment Infrastructure amendment — Sprints 27.5 + 32.5 adopted; mods: API-based veto, SQLite interim storage), DEC-358 (Intelligence Architecture amendment — Sprints 27.6 + 27.7 + 33.5 adopted; execution quality mods to 21.6 + 27.5; historical data confirmed: XNAS.ITCH + XNYS.PILLAR OHLCV-1m back to May 2018 at $0). DEC ranges reserved: 359–368 (27.5), 369–378 (27.6), 379–385 (27.7), 386–395 (32.5), 396–402 (33.5). Amendment documents: `docs/amendments/`.
+
 **Superseded (do not use):** DEC-031 (IBKR deferral → DEC-083), DEC-089 (XNAS.ITCH → DEC-248), DEC-097 (activation timing → DEC-143/161), DEC-165 (L2 included → DEC-237), DEC-234 (XNAS+XNYS phased → DEC-248).
 
 ---
@@ -286,9 +288,9 @@ Universal protocols, templates, and the runner live in the `workflow/` submodule
 | `docs/architecture.md` | Technical blueprint — how |
 | `docs/roadmap.md` | Strategic vision + sprint queue (DEC-262) |
 | `docs/sprint-campaign.md` | Operational sprint choreography |
-| `docs/decision-log.md` | All 356 DEC entries with full rationale (no new DECs in Sprint 26) |
+| `docs/decision-log.md` | All 358 DEC entries with full rationale |
 | `docs/dec-index.md` | Quick-reference DEC index with status |
-| `docs/sprint-history.md` | Complete sprint history (1–26) |
+| `docs/sprint-history.md` | Complete sprint history (1–27) |
 | `docs/process-evolution.md` | Workflow evolution narrative |
 | `docs/risk-register.md` | Assumptions and risks |
 | `docs/live-operations.md` | Live trading procedures |

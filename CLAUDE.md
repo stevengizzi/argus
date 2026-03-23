@@ -7,7 +7,18 @@
 
 **No active sprint.** Sprint 27 (BacktestEngine Core) completed March 22, 2026.
 
-Next planned sprint: **21.6 (Backtest Re-Validation)** per DEC-354, followed by Sprint 28 (Learning Loop V1).
+Next planned sprint: **21.6 (Backtest Re-Validation + Execution Logging)** per DEC-354/DEC-358, followed by Sprint 27.5 (Evaluation Framework), Sprint 27.6 (Regime Intelligence), Sprint 27.7 (Counterfactual Engine), then Sprint 28 (Learning Loop V1).
+
+### Roadmap Amendments Adopted (DEC-357, DEC-358)
+Two roadmap amendments adopted March 23, 2026 adding 5 new sprint slots:
+- **27.5** (Evaluation Framework): MultiObjectiveResult, EnsembleResult, Pareto dominance, tiered confidence
+- **27.6** (Regime Intelligence): RegimeVector replaces MarketRegime enum, multi-dimensional
+- **27.7** (Counterfactual Engine): Shadow position tracking for rejected signals, filter accuracy
+- **32.5** (Experiment Registry + Promotion Pipeline): Partitioned SQLite registry, cohort-based promotion, simulated-paper screening, overnight experiment queue, kill switches, anti-fragility
+- **33.5** (Adversarial Stress Testing): Historical crisis replay + synthetic stress scenarios as PromotionPipeline gate
+Amendment docs: `docs/amendments/roadmap-amendment-experiment-infrastructure.md`, `docs/amendments/roadmap-amendment-intelligence-architecture.md`
+Build track: 21.6 → 27.5 → 27.6 → 27.7 → 28 → 29–31 → 32 → 32.5 → 33 → 33.5 → 34 → 35–41
+DEC ranges reserved: 359–368 (27.5), 369–378 (27.6), 379–385 (27.7), 386–395 (32.5), 396–402 (33.5)
 
 ### Known Issues
 - **FMP Starter plan restriction:** FMP news endpoints return 403 on Starter plan ($22/mo). `fmp_news.enabled: false` in `system_live.yaml`. FMP circuit breaker (DEC-323) prevents spam if accidentally enabled.
@@ -301,7 +312,7 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 
 | Document | What It Covers |
 |----------|---------------|
-| `docs/decision-log.md` | All 356 DEC entries with full rationale |
+| `docs/decision-log.md` | All 358 DEC entries with full rationale |
 | `docs/dec-index.md` | Quick-reference index with status markers |
 | `docs/sprint-history.md` | Complete sprint history (1–27) |
 | `docs/process-evolution.md` | Workflow evolution narrative |

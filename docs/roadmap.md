@@ -261,9 +261,11 @@ Re-validate all pre-Databento strategy parameters using Databento tick-level dat
 
 ---
 
-## 7. Phase 6: Strategy Expansion — Artisanal (Sprints 25–29)
+## 7. Phase 6: Strategy Expansion — Artisanal (Sprints 25–31)
 
 *Opens with The Observatory for operational visibility, then expands the strategy roster to 13–15+ hand-crafted patterns including short selling. Adds the Learning Loop for self-monitoring. This is the phase where ARGUS becomes a serious multi-strategy system. UI focus: make strategy health, correlation, and pipeline behavior visible.*
+
+**Amendment note (DEC-357, DEC-358):** Phase 6 now includes Sprints 27.5, 27.6, and 27.7 between 21.6 and 28. These three infrastructure sprints (~7–8 days) transform Sprint 28 (Learning Loop V1) from basic weight tuning into intelligent system analysis with proper evaluation framework, rich multi-dimensional regime data, and 24× more data volume via counterfactual tracking. Paper trading continues running in parallel throughout, accumulating data.
 
 ### Sprint 25: The Observatory (Phase 5 Gate outcome) ✅ COMPLETE (March 18, 2026)
 
@@ -331,14 +333,57 @@ API auth 401 for unauthenticated requests (DEC-351). Close-position endpoint rou
 - Compare Databento-based results against provisional Alpaca-era backtests (DEC-132).
 - First real BacktestEngine run — validates speed claims and equivalence with Replay Harness.
 - Update strategy parameters if data shows significant divergence.
-- **Tests:** ~20 new.
+- **Execution Quality Logging (DEC-358):** Add ExecutionRecord dataclass, logging in OrderManager.submit_order() and fill callback, `execution_records` table in argus.db. Captures expected vs actual fill price, slippage, time-of-day context, order size, latency. Starts calibration data collection from day one of paper trading.
+- **Tests:** ~25 new.
+
+### Sprint 27.5: Evaluation Framework (DEC-357)
+**Target:** ~2–3 days (5 sessions)
+
+**Scope:**
+- **MultiObjectiveResult** — universal evaluation currency capturing Sharpe, max drawdown, profit factor, win rate, trade count, expectancy, regime breakdown, statistical confidence, walk-forward efficiency. Every downstream evaluator produces and consumes this.
+- **ConfidenceTier** (HIGH/MODERATE/LOW/ENSEMBLE_ONLY) — enables hyper-specialized micro-strategies that can't be individually validated. Tier computed from trade count and regime distribution.
+- **EnsembleResult** — first-class evaluation for strategy cohorts: aggregate metrics, diversification ratio, marginal contributions, tail correlation, capital utilization.
+- **Regime-conditional evaluation** — BacktestEngine segments results by regime automatically, producing per-regime RegimeMetrics alongside aggregate metrics. RegimeMetrics designed for multi-dimensional regime vectors (forward-compatible with Sprint 27.6).
+- **Comparison API** — `compare()`, `pareto_frontier()`, `soft_dominance()`, `is_regime_robust()`, `evaluate_cohort_addition()`, `marginal_contribution()`, `identify_deadweight()`.
+- **Execution Quality Calibration (DEC-358):** `execution_quality_adjustment` field on MultiObjectiveResult. StrategySlippageModel calibration utility using accumulated ExecutionRecords. BacktestEngine gains optional `slippage_model` parameter.
+- **Tests:** ~65 new.
+
+**Dependencies:** Sprint 27 (BacktestEngine) ✅, Sprint 21.6 (ideally complete first). No frontend work.
+
+### Sprint 27.6: Regime Intelligence (DEC-358)
+**Target:** ~3 days (6 sessions)
+
+**Scope:**
+- **RegimeVector** replaces single MarketRegime enum with multi-dimensional representation: trend (score + conviction), volatility (level + direction), breadth (score + thrust), correlation (average + regime), sector rotation (phase + leading/lagging sectors), intraday character (opening drive, first-30-min range, VWAP slope, character classification).
+- **Backward-compatible** — `RegimeVector.primary_regime` provides same MarketRegime enum for existing consumers.
+- **Strategy operating windows as regime regions** — micro-strategies define operating conditions as ranges in regime space via YAML config.
+- **New components:** BreadthCalculator (live from Databento stream), CorrelationTracker (overnight compute, SQLite persistence), SectorRotationAnalyzer (FMP sector performance), IntradayCharacterDetector (SPY candle analysis at 9:35/10:00/10:30 AM ET), RegimeClassifierV2 (composes all dimensions).
+- **All data from existing subscriptions** — $0 additional cost. Breadth and intraday dimensions use live Databento stream. Correlation computed overnight. Sector from FMP Starter plan.
+- **Tests:** ~70 new.
+
+**Dependencies:** Sprint 27.5 (RegimeMetrics designed for multi-dimensional vectors). No frontend sprint — Observatory gains regime dimensions in session vitals (small addition).
+
+### Sprint 27.7: Counterfactual Engine (DEC-358)
+**Target:** ~2 days (4 sessions)
+
+**Scope:**
+- **CounterfactualTracker** — intercepts every rejected signal from Quality Engine, Risk Manager, and strategy conditions. Records theoretical position (entry, stop, target, time stop, rejection reason, quality score, regime vector).
+- **Shadow position monitoring** — uses existing Databento candle stream (symbols already in viable universe). Fill priority matches BacktestEngine exactly: stop > target > time_stop > EOD.
+- **CounterfactualStore** — SQLite persistence in `data/counterfactual.db`. ~1KB per position, ~5 MB/day at scale.
+- **FilterAccuracy** computation — per-stage, per-reason, per-grade, per-regime accuracy metrics. Answers: "Is the quality filter too aggressive at B grade?" "Which condition is the weakest filter?" "Which regime niches are underserved?"
+- **API:** `GET /api/v1/counterfactual/accuracy`.
+- **Config-gated** via `counterfactual.enabled`.
+- **Tests:** ~50 new.
+
+**Dependencies:** Sprint 27.5 (counterfactual outcomes feed MultiObjectiveResult), Sprint 27.6 (positions tagged with RegimeVector). Existing evaluation telemetry and Databento stream.
 
 ### Sprint 28: Learning Loop V1 (DEC-163, DEC-354)
 **Target:** ~3 days
 
 **Scope:**
 - **LearningDatabase** (`argus/intelligence/learning.py`): Stores all scored setups (traded and untraded), outcomes, quality scores, regime context. Rolling window analysis.
-- **PostTradeAnalyzer**: Correlates quality scores with outcomes. Weekly batch retraining of Quality Engine weights. V1 uses statistical lookup tables (pattern × catalyst × regime → performance).
+- **PostTradeAnalyzer**: Correlates quality scores with outcomes. Weekly batch retraining of Quality Engine weights. V1 uses statistical lookup tables (pattern × catalyst × regime → performance). Consumes `MultiObjectiveResult` and comparison API from Sprint 27.5 — no ad-hoc evaluation metrics. Consumes counterfactual data from Sprint 27.7 — learns from ~288 rejected signals/day in addition to ~12 trades/day (24× more data). Optimizes against multi-dimensional regime vectors from Sprint 27.6, not crude 5-label enum.
+- **Interim experiment storage:** Writes experiment results to SQLite with ExperimentRegistry-compatible schema (DEC-357 modification). Forward-compatible with Sprint 32.5 registry.
 - Performance-aware throttling: Strategies that underperform their historical baseline get throttled. Strategies that outperform get boosted. Recommendations surfaced as action cards for human approval.
 - Correlation monitoring: Pairwise correlation between all active strategies over trailing window. Highly correlated pairs flagged.
 - **UI — Orchestrator page:** Strategy Health Panel — each strategy gets a health band visualization (horizontal bar, green/amber/red against historical baseline). Throttle/boost recommendations as approve/dismiss action cards.
@@ -365,9 +410,11 @@ API auth 401 for unauthenticated requests (DEC-351). Close-position endpoint rou
 
 ---
 
-## 8. Phase 7: Infrastructure Unification (Sprints 29–32)
+## 8. Phase 7: Infrastructure Unification (Sprints 29–32.5)
 
-*Expands the strategy roster and adds short selling, then builds parameterized strategy system for the ensemble vision. BacktestEngine (Sprint 27) provides the foundation. Nothing in this phase changes live trading behavior — it's building the research infrastructure in parallel. UI focus: the Research Console makes strategy research visible and interactive.*
+*Expands the strategy roster and adds short selling, then builds parameterized strategy system and experiment infrastructure for the ensemble vision. BacktestEngine (Sprint 27) provides the foundation. Nothing in this phase changes live trading behavior — it's building the research infrastructure in parallel. UI focus: the Research Console makes strategy research visible and interactive.*
+
+**Amendment note (DEC-357):** Phase 7 gains Sprint 32.5 (Experiment Registry + Promotion Pipeline + Anti-Fragility + Hypothesis Generation Design) after Sprint 32. Sprint 33 scope decreases as evaluation framework and experiment storage already exist.
 
 ### Sprint 29: Pattern Expansion I (DEC-167)
 **Target:** ~2–3 days
@@ -436,12 +483,31 @@ API auth 401 for unauthenticated requests (DEC-351). Close-position endpoint rou
 
 **Tests:** ~60 new.
 
+### Sprint 32.5: Experiment Registry + Promotion Pipeline (DEC-357)
+**Target:** ~4–5 days (9 sessions)
+
+**Scope:**
+- **ExperimentRegistry** — persistent storage for every experiment ARGUS runs, designed for millions of entries. Partitioned by `(strategy_family, batch_id)`. Separate tables for core metadata vs full results. Pre-computed aggregate views via SQLite triggers: per-family success rates, per-type success rates (meta-learning), per-batch summaries. Archival policy for old REVERTED experiments.
+- **PromotionCohort** — primary unit of promotion (20–50 strategies evaluated together, not individually). Formation rules by cohort type (INDIVIDUAL, FAMILY_SWEEP, CROSS_FAMILY, DISCOVERY_BATCH). HIGH-confidence strategies may form size-1 cohorts; LOW/ENSEMBLE_ONLY strategies require cohort of ≥10.
+- **PromotionPipeline** — 8 stages: BACKTEST_VALIDATED → STRESS_TESTED (if Sprint 33.5 adopted) → SIMULATED_PAPER → PAPER_ACTIVE → PAPER_CONFIRMED → LIVE_PENDING_VETO → LIVE_ACTIVE → STABLE/REVERTED. Simulated-paper screening (BacktestEngine on recent 20 days) breaks the paper validation bottleneck from ~8 years to ~2 months.
+- **Kill switches** — cohort level (5-day Pareto-dominated by baseline → auto-revert) and individual level (negative marginal Sharpe for 10 days → remove strategy, keep rest of cohort).
+- **Human veto window** — 24–72h depending on cohort type. Veto via API endpoint + Command Center UI (DEC-357 modification); ntfy.sh for notifications only.
+- **ExperimentQueue + background worker** — overnight autonomous operation. Market-hours-aware scheduling (~200 experiments/night sequential, ~6,400 with cloud burst from Sprint 31). Priority ordering: learning_loop > systematic_search > discovery_pipeline > manual.
+- **Anti-Fragility Integration (DEC-358):** Loss-driven queue priority (investigate failures during drawdowns, explore during profits). Post-mortem automation on cohort revert (diagnose toxic strategies, check vulnerability of other cohorts). Drawdown-accelerated experimentation (80/20 diagnostic/exploration split during drawdown, increased monitoring frequency).
+- **Hypothesis Generation Design document** — architecture for 4 generation methods (niche identification, pattern mutation, literature mining, anomaly detection) with `GeneratedHypothesis` interface specification. Committed to `docs/design/hypothesis-generation-architecture.md`. Design only — implementation at Sprint 41.
+- **API:** 20+ endpoints for experiments, cohorts, queue, meta-learning, promotion pipeline.
+- **Tests:** ~95 new.
+
+**Dependencies:** Sprint 27.5 (MultiObjectiveResult, EnsembleResult, comparison API), Sprint 32 (templates define parameter space), Sprint 28 (retrofitted to write to registry). Existing ntfy.sh integration (DEC-279), BacktestEngine (Sprint 27).
+
 ### Phase 7 Gate
 
-**Trigger:** Sprint 32 complete.
+**Trigger:** Sprint 32.5 complete.
 **Protocol:** Strategic Check-In (`strategic-check-in.md`) + Documentation Compression.
 
-**Critical resolution required:** Historical data sufficiency. If not already purchased at Phase 6 Gate, the data purchase MUST happen now. Three-way splits (train/selection/validation) across only 35 months of data may not provide enough statistical power. Options: acquire 5–10 years of Databento 1-minute bars; synthetic data augmentation (block bootstrap); accept lower granularity for coarse screening.
+**Historical data sufficiency — RESOLVED (DEC-358).** XNAS.ITCH + XNYS.PILLAR provide OHLCV-1m back to May 2018 (~96 months) at $0 on Standard plan. Three-way splits across 96 months provide ample statistical power. The data purchase concern from the original roadmap is no longer applicable. BacktestEngine's HistoricalDataFeed gains exchange-specific dataset mode in Sprint 33.5.
+
+**Key assessment:** Confirm Sprint 32.5 scope based on paper trading experience. Adjust cohort sizes, veto windows, kill switch thresholds. Review overnight compute capacity — is sequential worker sufficient for Sprint 33, or should Sprint 31 parallelism be prioritized?
 
 ---
 
@@ -449,14 +515,17 @@ API auth 401 for unauthenticated requests (DEC-351). Close-position endpoint rou
 
 *The proving ground. Takes one strategy family and systematically searches the parameter × filter space. Validates the methodology before scaling. UI focus: make the search process and statistical validation legible.*
 
+**Amendment note (DEC-358):** Phase 8 gains Sprint 33.5 (Adversarial Stress Testing) between Sprint 33 and Sprint 34. Stress testing becomes a gate in the PromotionPipeline — no cohort reaches paper without surviving simulated crises. Sprint 33.5 also builds the exchange-specific HistoricalDataFeed mode for XNAS.ITCH + XNYS.PILLAR, giving Sprint 33 access to 96 months of data instead of 35.
+
 ### Sprint 33: Statistical Validation Framework
 **Target:** ~3–4 days
 
 **Scope (backend):**
 - FDR correction implementation (Benjamini-Hochberg). Minimum trade count thresholds per micro-strategy.
-- Three-way data split infrastructure (train / selection / validation).
+- Three-way data split infrastructure (train / selection / validation). With XNAS.ITCH + XNYS.PILLAR providing 96 months of data (DEC-358), three-way splits have ample statistical power.
 - Smoothness prior — neighboring parameter/filter cells must show correlated performance for any cell to be considered valid.
 - Out-of-sample ensemble validation metrics. Walk-forward at ensemble level.
+- **Note:** Scope reduced from original plan — evaluation framework (Sprint 27.5), experiment storage (Sprint 32.5), and aggregate views already exist. Sprint 33 focuses purely on statistical methods.
 
 **Scope (frontend):** Research Console — Validation Dashboard:
 - **Data Split Visualizer:** Timeline bar showing train / selection / validation partitions.
@@ -464,6 +533,19 @@ API auth 401 for unauthenticated requests (DEC-351). Close-position endpoint rou
 - **Smoothness Heatmap:** Overlay on sweep heatmap showing smoothness prior — validated cells glow, isolated spikes dimmed/crossed out. Toggle raw vs. filtered views.
 
 **Tests:** ~60 new.
+
+### Sprint 33.5: Adversarial Stress Testing (DEC-358)
+**Target:** ~3 days (5 sessions)
+
+**Scope:**
+- **Historical stress scenarios** — replay ensemble through 5 known crisis periods: COVID crash (Feb–Mar 2020), meme stock mania (Jan–Feb 2021), SVB week (Mar 2023), yen carry unwind (Aug 2024), Treasury selloff (Oct 2023). All confirmed available via XNAS.ITCH + XNYS.PILLAR OHLCV-1m at $0 on Standard plan.
+- **Synthetic stress scenarios** — 4 structural stress tests: correlation spike (all pairwise correlations to 0.9), liquidity drought (50% fill failure + 3× slippage), gap-through-stop (2× stop distance overnight gap), simultaneous multi-strategy drawdown (worst historical drawdowns forced concurrent).
+- **StressTestResult** — max drawdown, recovery days, kill switch response time, regime detection quality, risk containment metrics, pass/fail verdict.
+- **PromotionPipeline integration** — becomes Stage 1.5 gate between BACKTEST_VALIDATED and SIMULATED_PAPER. All scenarios must pass: max drawdown <15%, kill switch fires within 5 days in crash scenarios, no daily loss limit breach, correlation spike Sharpe >0.5, gap-through-stop worst-case <5%.
+- **Exchange-specific HistoricalDataFeed mode** — queries XNAS.ITCH + XNYS.PILLAR separately and merges results for pre-March-2023 data. Also benefits Sprint 33 statistical validation with 96 months of data instead of 35.
+- **Tests:** ~55 new.
+
+**Dependencies:** Sprint 32.5 (PromotionPipeline for Stage 1.5 gate), Sprint 27.5 (BacktestEngine with MultiObjectiveResult), Sprint 27.6 (regime transition detection quality is a metric), BacktestEngine (Sprint 27).
 
 ### Sprint 34: ORB Family Systematic Search ★ THE PIVOTAL EXPERIMENT ★
 **Target:** ~4–5 days (compute-heavy — may need cloud burst)
@@ -755,7 +837,7 @@ The original Orchestrator V2 concept (enhanced rules-based for ~15 strategies) i
 
 | Risk | Severity | Phase | Mitigation |
 |------|----------|-------|------------|
-| **Historical data insufficiency** | High | 8 | Purchase 5–10yr Databento history before Phase 8. Resolve at Phase 7 Gate. |
+| **Historical data insufficiency** | ~~High~~ RESOLVED | 8 | ~~Purchase 5–10yr Databento history before Phase 8.~~ XNAS.ITCH + XNYS.PILLAR provide OHLCV-1m back to May 2018 (~96 months) at $0 on Standard plan (DEC-358). Exchange-specific HistoricalDataFeed mode built in Sprint 33.5. |
 | **Overfitting the quality model** | High | 5–6 | Walk-forward validation on quality scores. Out-of-sample calibration mandatory. |
 | **Phase 8 experiment failure** | Medium | 8 | System is valuable regardless (Phase 6 artisanal trading continues). Ensemble ceiling lost but floor unchanged. |
 | **Pattern library complexity explosion** | Medium | 6–7 | Each pattern must pass walk-forward independently. Retire patterns that don't earn their keep. |

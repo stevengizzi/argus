@@ -946,4 +946,18 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 
 ---
 
+### RSK-046 — Phase 6 Infrastructure Density
+
+| Field | Value |
+|-------|-------|
+| **Date Identified** | 2026-03-23 |
+| **Severity** | Medium |
+| **Likelihood** | Medium |
+| **Description** | With DEC-357 and DEC-358 adopted, Phase 6 now includes five consecutive sprints (21.6, 27.5, 27.6, 27.7, 28) before the Learning Loop produces its first actionable result. That's ~12–15 days of infrastructure building before the feedback loop closes. Risk: morale and momentum may suffer from extended infrastructure phase without visible trading system improvement. |
+| **Mitigation** | (1) Paper trading continues running in parallel throughout, accumulating data that makes Sprint 28 more powerful when it arrives. (2) Each infrastructure sprint has clear, testable deliverables — not speculative design. (3) If implementation runs faster than estimated, opportunities exist to absorb 27.6 or 27.7 scope into adjacent sprints. (4) The three infrastructure sprints (27.5, 27.6, 27.7) transform Sprint 28 from basic weight tuning into intelligent system analysis with 24× more data — the delay pays for itself in Sprint 28 quality. |
+| **Owner** | Steven |
+| **Status** | Open |
+
+---
+
 *End of Risk & Assumptions Register v1.5*
