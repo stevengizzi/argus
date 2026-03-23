@@ -57,6 +57,9 @@ None — all spec items are complete.
 - All 5 VectorBT glob changes are identical — legacy pattern first, then fallback to `*.parquet`
 - Walk-forward symbol propagation uses `dataclasses.replace()` since WalkForwardConfig is a dataclass
 
+### Post-Review Notes
+- **Reviewer CONCERN (false positive):** Reviewer flagged `config/system_live.yaml` as undocumented scope creep. This is a pre-existing uncommitted change in the working tree — it is NOT part of this session's commit (verified via `git show HEAD --name-only`). The reviewer's `git diff HEAD~1` picked up the unstaged working tree change. Self-assessment CLEAN stands.
+
 ---END-CLOSE-OUT---
 
 ```json:structured-closeout
