@@ -4330,6 +4330,50 @@ Each entry follows this format:
 
 ---
 
+---
+
+### DEC-360 | Add `bearish_trending` to All Strategy Allowed Regimes
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-23 |
+| **Context** | March 23 2026 market session was a complete dead session: regime classified as `bearish_trending` during pre-market, no strategy included `bearish_trending` in its `allowed_regimes`, resulting in 0/7 active strategies, zero evaluations, zero signals, zero trades across 3+ hours of runtime. Same class of bug as the March 17 AfMo/`range_bound` fix but affecting all strategies simultaneously. |
+| **Decision** | Add `bearish_trending` to all 7 strategies' `allowed_regimes`: ORB Breakout, ORB Scalp, VWAP Reclaim, Afternoon Momentum, Red-to-Green (via individual strategy files), Bull Flag and Flat-Top Breakout (via `PatternBasedStrategy.get_market_conditions_filter()`). Add zero-active-strategy WARNING log in `Orchestrator._calculate_allocations()` when regime filtering produces 0 eligible strategies during market hours (guarded by `_is_market_hours()` helper). |
+| **Alternatives** | (1) Regime gates behavior, not existence — reduce sizing/tighten risk in unfavorable regimes instead of blocking. Correct long-term answer but belongs in Sprint 27.6 (Regime Intelligence) where the regime system is redesigned with multi-dimensional RegimeVector. (2) Degraded-mode fallback when 0 active strategies — minimum allocation with tighter risk. Also better suited for 27.6. |
+| **Rationale** | The regime classifier is a single-axis SPY-volatility proxy — too coarse to justify blocking all strategies. Real protection comes from Quality Engine's regime_alignment scoring dimension (10% weight) and Risk Manager circuit breakers. Strategies already allow `high_volatility` which is arguably higher risk than a bearish trend. Only `crisis` remains as a universal block regime. |
+| **Cross-References** | Sprint 25.9 S1, DEC-346 (regime reclassification), Sprint 27.6 (Regime Intelligence — future architectural fix) |
+| **Status** | Active |
+
+---
+
+### DEC-361 | Cache Checkpoint Merge Fix
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-23 |
+| **Context** | March 23 2026 Monday pre-market boot: FMP reference cache from Friday (66 hours old) triggered full re-fetch of 37,803 symbols. When the first fetch was killed after ~7,000 symbols, the periodic checkpoint save had already overwritten the original 37,658-symbol cache with only the 7,000 freshly-fetched entries. The second boot attempt loaded only 7,000 symbols. The checkpoint save logic wrote only the current fetch batch, discarding all previously-cached entries. |
+| **Decision** | Checkpoint saves during `fetch_reference_data()` now write the union of existing cache entries + freshly-fetched entries, with fresh entries taking precedence for duplicate symbols. At the start of each fetch cycle, the existing disk cache is loaded into memory. Checkpoints and the final save write `self._cache` which contains the merged set. Log format updated to show merge statistics: existing count, fresh count, total count, fetch progress. |
+| **Alternatives** | (1) Write-ahead log pattern — more complex, unnecessary for single-writer JSON cache. (2) Backup-before-write — adds I/O but doesn't fix the root cause. |
+| **Rationale** | This is a data safety fix. The previous behavior was data-destructive during interrupted fetches — a scenario that's common during development and operational troubleshooting. The merge pattern is simple (dict union with fresh precedence) and eliminates the data loss risk entirely. |
+| **Cross-References** | Sprint 25.9 S2, DEC-317 (periodic cache saves), DEC-314 (reference data cache) |
+| **Status** | Active |
+
+---
+
+### DEC-362 | Trust Cache on Startup
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-23 |
+| **Context** | March 23 2026 Monday boot blocked on FMP reference data re-fetch for ~100 minutes, missing market open entirely. Root cause: `build_viable_universe()` treated all cache entries older than `cache_max_age_hours` (24h) as stale and blocked startup until all 37,803 symbols were refreshed. On any Monday (or post-holiday boot), 100% of the cache is stale by definition. |
+| **Decision** | Add `trust_cache_on_startup: true` (default) config option in `UniverseManagerConfig`. When enabled: (1) startup loads cached reference data immediately and builds routing table without waiting for FMP API calls; (2) after system is live, a background asyncio task refreshes stale entries incrementally, respecting FMP rate limits; (3) on completion, routing table is rebuilt via atomic swap (`rebuild_after_refresh()` on UniverseManager) and strategy watchlists are updated. When `trust_cache_on_startup: false`, reverts to the previous blocking behavior. Background task follows the same lifecycle pattern as `_regime_task` and `_eval_check_task` (create_task + cancel/suppress/await in stop). INFO-level logging distinguishes startup-on-stale-cache vs cache-refreshed states. Resolves DEF-063. |
+| **Alternatives** | (1) Generous calendar TTL (168 hours / 1 week) — covers weekends but masks the real issue (blocking startup on data freshness). (2) Market-day-aware TTL — correct but requires market calendar dependency. (3) Both become moot with this approach: TTL now determines refresh priority, not startup blocking. |
+| **Rationale** | Reference data (company profile, share float) changes rarely — Friday's data is almost always valid on Monday. Blocking startup on data freshness is the wrong tradeoff for a day trading system where missing market open is catastrophic. The background refresh pattern decouples "ready to trade" from "reference data is perfectly fresh" while ensuring data is eventually consistent. |
+| **Cross-References** | Sprint 25.9 S2, DEC-314 (reference data cache), DEC-317 (periodic cache saves), DEC-361 (checkpoint merge fix), DEF-063 (resolved) |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
-*Next DEC: 360*
-*Last updated: 2026-03-23 (Sprint 21.6 doc sync — DEC-359)*
+*Next DEC: 363*
+*Last updated: 2026-03-23 (Sprint 25.9 doc sync — DEC-360/361/362)*

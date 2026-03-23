@@ -1,7 +1,7 @@
 # ARGUS — Sprint History
 
 > Complete record of all sprints from project inception through current state.
-> Active development began February 14, 2026. As of March 23, 2026 (~38 calendar days), 27 full sprints + 25 sub-sprints completed.
+> Active development began February 14, 2026. As of March 23, 2026 (~38 calendar days), 27 full sprints + 26 sub-sprints completed.
 
 ---
 
@@ -1346,12 +1346,41 @@
 
 ---
 
+## Sprint 25.9 — Operational Resilience Fixes (March 23, 2026)
+
+**Type:** Impromptu (operational fixes)
+**Origin:** Dead market session March 23 2026 (`bearish_trending` blocked all strategies) + FMP cache incident (data-destructive checkpoint bug + blocking startup).
+
+**Session 1 (S1): Regime Fixes + Operational Visibility**
+- Added `bearish_trending` to all 7 strategies' `allowed_regimes` (DEC-360)
+  - 6 strategy files edited; `PatternBasedStrategy.get_market_conditions_filter()` covers both Bull Flag and Flat-Top via inheritance
+  - Only `crisis` remains as universal block regime
+- Zero-active-strategy WARNING in `Orchestrator._calculate_allocations()` (guarded by `_is_market_hours()`)
+- Regime reclassification INFO logging every 6th check (~30 min) via counter-based approach
+- "Watching N symbols" display fix: uses `UniverseManager.viable_count` when available, falls back to scanner count
+- Startup alert also updated to use Universe Manager count (scope addition — same misleading count sent to notification channels)
+
+**Session 2 (S2): Cache Checkpoint Fix + Trust Cache on Startup**
+- B1 (DEC-361): Cache checkpoint merge fix — `fetch_reference_data()` loads existing disk cache at start so checkpoints write union of existing + fresh entries. Prevents data-destructive overwrites during interrupted fetches.
+- B2 (DEC-362): Trust-cache-on-startup — `trust_cache_on_startup: true` (default) in `UniverseManagerConfig`. Startup loads cached reference data immediately; background asyncio task refreshes stale entries post-startup with atomic routing table rebuild via `rebuild_after_refresh()`. Follows same task lifecycle pattern as `_regime_task` and `_eval_check_task`. Resolves DEF-063.
+- Config: `trust_cache_on_startup` added to `system.yaml` and `system_live.yaml`
+- Backward compatible: `trust_cache_on_startup: false` reverts to blocking fetch
+
+**Key decisions:** DEC-360 (bearish_trending for all strategies), DEC-361 (checkpoint merge fix), DEC-362 (trust cache on startup).
+**DEF resolved:** DEF-063 (trust cache on startup).
+**Sessions:** 2 (both CLEAR verdict)
+**Test counts:** pytest 3,051 → 3,071 (+20), Vitest 620 → 620 (+0)
+**Review verdicts:** S1 CLEAR, S2 CLEAR
+**Notes:** E1 (regime fix) is the single most impactful item — prevents an entire class of dead sessions where `bearish_trending` blocks all strategies. B2 (trust cache) prevents a repeat of the 100-minute blocking startup that missed market open.
+
+---
+
 ## Sprint Statistics
 
-- **Total sprints:** 27 full + 25 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8)
+- **Total sprints:** 27 full + 26 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9)
 - **Total sessions:** ~370+ Claude Code sessions
-- **Total tests:** 3,051 pytest + 620 Vitest = 3,671 total
-- **Total decisions:** 359 (DEC-001 through DEC-359)
+- **Total tests:** 3,071 pytest + 620 Vitest = 3,691 total
+- **Total decisions:** 362 (DEC-001 through DEC-362)
 - **Calendar days (active dev):** ~38 (Feb 14 – Mar 23, 2026)
 - **Largest sprint:** 22 (9 implementation + 5 fix + 9 reviews, largest scope)
 - **Cleanest sprint:** 23 (11 sessions, 0 regressions, 0 scope gaps requiring follow-up)

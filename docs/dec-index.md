@@ -1,6 +1,6 @@
 # ARGUS — Decision Index
 
-> 359 decisions (DEC-001 through DEC-359)
+> 362 decisions (DEC-001 through DEC-362)
 > Generated: March 23, 2026 | Source: `docs/decision-log.md`
 > Legend: ● Active | ○ Superseded | △ Amended | ✗ Duplicate entry
 
@@ -424,3 +424,9 @@
 ## Sprint 21.6 — Backtest Re-Validation + Execution Logging
 
 - ● **DEC-359**: BacktestEngine risk overrides — permissive defaults (min_risk: $1, cash_reserve: 5%, max_stock: 50%) for single-strategy backtesting via `risk_overrides` dict on BacktestEngineConfig. Production paths unaffected.
+
+## Sprint 25.9 — Operational Resilience Fixes
+
+- ● **DEC-360**: Add `bearish_trending` to All Strategy Allowed Regimes — all 7 strategies now include `bearish_trending`; zero-active WARNING in Orchestrator during market hours. Only `crisis` remains as universal block.
+- ● **DEC-361**: Cache Checkpoint Merge Fix — checkpoint saves write union of existing cache + fresh entries (fresh takes precedence). Prevents data-destructive overwrites during interrupted fetches.
+- ● **DEC-362**: Trust Cache on Startup — `trust_cache_on_startup: true` (default) loads cached reference data immediately, spawns background asyncio task for stale entry refresh with atomic routing table rebuild. Resolves DEF-063.

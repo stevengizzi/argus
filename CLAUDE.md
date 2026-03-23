@@ -18,7 +18,7 @@ Two roadmap amendments adopted March 23, 2026 adding 5 new sprint slots:
 - **33.5** (Adversarial Stress Testing): Historical crisis replay + synthetic stress scenarios as PromotionPipeline gate
 Amendment docs: `docs/amendments/roadmap-amendment-experiment-infrastructure.md`, `docs/amendments/roadmap-amendment-intelligence-architecture.md`
 Build track: ~~21.6~~ ✅ → 27.5 → 27.6 → 27.7 → 28 → 29–31 → 32 → 32.5 → 33 → 33.5 → 34 → 35–41
-DEC ranges reserved: 359–368 (27.5), 369–378 (27.6), 379–385 (27.7), 386–395 (32.5), 396–402 (33.5)
+DEC ranges reserved: 363–372 (27.5), 369–378 (27.6), 379–385 (27.7), 386–395 (32.5), 396–402 (33.5)
 
 ### Known Issues
 - **FMP Starter plan restriction:** FMP news endpoints return 403 on Starter plan ($22/mo). `fmp_news.enabled: false` in `system_live.yaml`. FMP circuit breaker (DEC-323) prevents spam if accidentally enabled.
@@ -29,7 +29,7 @@ DEC ranges reserved: 359–368 (27.5), 369–378 (27.6), 379–385 (27.7), 386�
 
 - **Active sprint:** None (between sprints)
 - **Next sprint:** 27.5 (Evaluation Framework)
-- **Tests:** 3,051 pytest + 620 Vitest (0 failures, 0 hangs)
+- **Tests:** 3,071 pytest + 620 Vitest (0 failures, 0 hangs)
 - **Strategies:** 7 active (ORB Breakout, ORB Scalp, VWAP Reclaim, Afternoon Momentum, Red-to-Green, Bull Flag, Flat-Top Breakout)
 - **Infrastructure:** Databento EQUS.MINI (live) + IBKR paper trading (Account U24619949) + FMP Starter (scanning + reference data + daily bars for regime) + Finnhub (news + analyst recs) + Claude API (Copilot + Catalyst Classification) + Universe Manager (config-gated) + Catalyst Pipeline (config-gated) + Intelligence Polling Loop (config-gated) + Reference Data Cache + Quality Engine (config-gated) + Dynamic Position Sizer + Strategy Evaluation Telemetry (ring buffer + SQLite persistence) + Debrief Export (shutdown automation)
 - **Frontend:** 8-page Command Center (Observatory added Sprint 25) + AI Copilot + Universe Status Card + Intelligence Brief View (all active), Tauri desktop + PWA mobile
@@ -292,6 +292,8 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 | ~~DEF-060~~ | ~~PROVISIONAL comment gap in system YAML quality sections~~ | ~~Unscheduled~~ | **RESOLVED** (Sprint 24.1 S1b): PROVISIONAL comments added to system.yaml/system_live.yaml quality sections. |
 | ~~DEF-061~~ | ~~Quality API private attribute access~~ | ~~Unscheduled~~ | **RESOLVED** (Sprint 24.1 S1b): `@property` accessors added for `_db`/`_config` on SetupQualityEngine. |
 | ~~DEF-062~~ | ~~QA seed script cleanup~~ | ~~Unscheduled~~ | **RESOLVED** (Sprint 24.1 S1b): Production guard added to `scripts/seed_quality_data.py`. |
+| ~~DEF-063~~ | ~~Trust cache on startup (reference data)~~ | ~~Sprint 25.9~~ | **RESOLVED** (Sprint 25.9 S2, DEC-362): `trust_cache_on_startup: true` loads cached reference data immediately at startup, background asyncio task refreshes stale entries. |
+| DEF-064 | Warm-up 78% failure rate on mid-session boot | Unscheduled | Databento historical API returns 422 for many symbols during lazy warm-up. 69–78% failure rate observed. Only affects mid-session boot (pre-market boot skips warm-up, DEC-316). Priority: LOW while pre-market boot is the normal path. |
 | ~~DEF-075~~ | ~~`fetch_daily_bars()` via FMP for regime classification~~ | ~~Sprint 25.7~~ | **RESOLVED** (Sprint 25.7 S1): Implemented via FMP stable historical-price-eod endpoint. |
 | ~~DEF-076~~ | ~~Health endpoint `last_data_received` always null~~ | ~~Sprint 25.7~~ | **RESOLVED** (Sprint 25.7 S1): `last_update` attribute added to DatabentoDataService, set in `_dispatch_record()`. |
 | ~~DEF-077~~ | ~~Diagnostic logging when position sizer returns 0 shares~~ | ~~Sprint 25.7~~ | **RESOLVED** (Sprint 25.7 S1): Log now includes grade, score, allocated_capital, buying_power, entry, stop, risk_per_share. |
