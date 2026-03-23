@@ -1016,8 +1016,8 @@ class BacktestEngine:
 
     # --- Regime tagging (Sprint 27.5 S2) ---
 
-    def _load_spy_daily_bars(
-        self, start_date: date, end_date: date
+    async def _load_spy_daily_bars(
+        self, start_date: date, end_date: date,
     ) -> pd.DataFrame | None:
         """Aggregate SPY daily bars from the Parquet cache.
 
@@ -1050,10 +1050,7 @@ class BacktestEngine:
             1,
         )
 
-        loop = asyncio.get_event_loop()
-        data = loop.run_until_complete(
-            feed.load(["SPY"], margin_start, end_date)
-        )
+        data = await feed.load(["SPY"], margin_start, end_date)
 
         spy_df = data.get("SPY")
         if spy_df is None or spy_df.empty:
@@ -1240,7 +1237,7 @@ class BacktestEngine:
             ]
 
         # Load SPY daily bars and compute regime tags
-        daily_bars = self._load_spy_daily_bars(
+        daily_bars = await self._load_spy_daily_bars(
             result.start_date, result.end_date
         )
 

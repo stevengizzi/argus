@@ -51,7 +51,7 @@ class RegimeMetrics:
     total_trades: int
     expectancy_per_trade: float
 
-    def to_dict(self) -> dict[str, float | int]:
+    def to_dict(self) -> dict[str, float | int | str]:
         """Serialize to a plain dict.
 
         Returns:
@@ -62,7 +62,7 @@ class RegimeMetrics:
         return {
             "sharpe_ratio": self.sharpe_ratio,
             "max_drawdown_pct": self.max_drawdown_pct,
-            "profit_factor": "Infinity" if math.isinf(pf) else pf,
+            "profit_factor": "Infinity" if pf == float("inf") else ("-Infinity" if pf == float("-inf") else pf),
             "win_rate": self.win_rate,
             "total_trades": self.total_trades,
             "expectancy_per_trade": self.expectancy_per_trade,
@@ -79,7 +79,7 @@ class RegimeMetrics:
             RegimeMetrics instance.
         """
         pf = d["profit_factor"]
-        profit_factor = float("inf") if pf == "Infinity" else float(pf)
+        profit_factor = float("inf") if pf == "Infinity" else (float("-inf") if pf == "-Infinity" else float(pf))
         return cls(
             sharpe_ratio=float(d["sharpe_ratio"]),
             max_drawdown_pct=float(d["max_drawdown_pct"]),
@@ -236,7 +236,7 @@ class MultiObjectiveResult:
             "data_range": [self.data_range[0].isoformat(), self.data_range[1].isoformat()],
             "sharpe_ratio": self.sharpe_ratio,
             "max_drawdown_pct": self.max_drawdown_pct,
-            "profit_factor": "Infinity" if math.isinf(pf) else pf,
+            "profit_factor": "Infinity" if pf == float("inf") else ("-Infinity" if pf == float("-inf") else pf),
             "win_rate": self.win_rate,
             "total_trades": self.total_trades,
             "expectancy_per_trade": self.expectancy_per_trade,
@@ -263,7 +263,8 @@ class MultiObjectiveResult:
         """
         # Parse data_range
         data_range_raw = d["data_range"]
-        assert isinstance(data_range_raw, list)
+        if not isinstance(data_range_raw, list):
+            raise TypeError(f"data_range must be a list, got {type(data_range_raw).__name__}")
         data_range = (
             date.fromisoformat(str(data_range_raw[0])),
             date.fromisoformat(str(data_range_raw[1])),
@@ -271,18 +272,20 @@ class MultiObjectiveResult:
 
         # Parse regime_results
         regime_raw = d.get("regime_results", {})
-        assert isinstance(regime_raw, dict)
+        if not isinstance(regime_raw, dict):
+            raise TypeError(f"regime_results must be a dict, got {type(regime_raw).__name__}")
         regime_results = {k: RegimeMetrics.from_dict(v) for k, v in regime_raw.items()}
 
         # Parse profit_factor
         pf_raw = d["profit_factor"]
-        profit_factor = float("inf") if pf_raw == "Infinity" else float(pf_raw)  # type: ignore[arg-type]
+        profit_factor = float("inf") if pf_raw == "Infinity" else (float("-inf") if pf_raw == "-Infinity" else float(pf_raw))  # type: ignore[arg-type]
 
         # Parse confidence_interval
         ci_raw = d.get("confidence_interval")
         confidence_interval: tuple[float, float] | None = None
         if ci_raw is not None:
-            assert isinstance(ci_raw, list)
+            if not isinstance(ci_raw, list):
+                raise TypeError(f"confidence_interval must be a list, got {type(ci_raw).__name__}")
             confidence_interval = (float(ci_raw[0]), float(ci_raw[1]))
 
         # Parse p_value

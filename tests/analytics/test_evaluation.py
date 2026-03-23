@@ -351,6 +351,22 @@ def test_from_backtest_result_confidence_computed() -> None:
 # ---------------------------------------------------------------------------
 
 
+def test_regime_metrics_serialization_negative_infinity() -> None:
+    """Negative infinity roundtrips correctly."""
+    rm = RegimeMetrics(
+        sharpe_ratio=-1.0,
+        max_drawdown_pct=-0.5,
+        profit_factor=float("-inf"),
+        win_rate=0.0,
+        total_trades=5,
+        expectancy_per_trade=-2.0,
+    )
+    d = rm.to_dict()
+    assert d["profit_factor"] == "-Infinity"
+    restored = RegimeMetrics.from_dict(d)
+    assert restored.profit_factor == float("-inf")
+
+
 def test_comparison_verdict_values() -> None:
     """Verify enum string values."""
     assert ComparisonVerdict.DOMINATES == "dominates"

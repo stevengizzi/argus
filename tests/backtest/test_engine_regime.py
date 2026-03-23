@@ -148,14 +148,15 @@ def _make_trade_dict(
 # ---------------------------------------------------------------------------
 
 
-def test_spy_daily_bar_aggregation(tmp_path: Path) -> None:
+@pytest.mark.asyncio
+async def test_spy_daily_bar_aggregation(tmp_path: Path) -> None:
     """Synthetic 1-min bars -> correct daily OHLCV."""
     config = _make_config(tmp_path)
     trading_dates = [date(2025, 6, 16), date(2025, 6, 17)]
     _write_spy_parquet(config.cache_dir, trading_dates)
 
     engine = BacktestEngine(config)
-    daily = engine._load_spy_daily_bars(date(2025, 6, 16), date(2025, 6, 17))
+    daily = await engine._load_spy_daily_bars(date(2025, 6, 16), date(2025, 6, 17))
 
     assert daily is not None
     assert len(daily) == 2
@@ -260,7 +261,7 @@ async def test_to_multi_objective_result_basic(tmp_path: Path) -> None:
     )
 
     # Patch _load_spy_daily_bars to return None (triggers RANGE_BOUND fallback)
-    with patch.object(engine, "_load_spy_daily_bars", return_value=None):
+    with patch.object(engine, "_load_spy_daily_bars", new=AsyncMock(return_value=None)):
         mor = await engine.to_multi_objective_result(result)
 
     assert isinstance(mor, MultiObjectiveResult)
@@ -314,19 +315,15 @@ async def test_to_multi_objective_result_regime_partitioning(
         date(2025, 6, 17): MarketRegime.RANGE_BOUND.value,
     }
 
-    with patch.object(engine, "_load_spy_daily_bars", return_value=None), \
-         patch.object(engine, "_compute_regime_tags", return_value=regime_tags):
-        # Need daily_bars to not be None to use _compute_regime_tags
-        # Override _load_spy_daily_bars to return a non-None value
-        mock_daily = pd.DataFrame(
-            {"open": [450], "high": [451], "low": [449],
-             "close": [450], "volume": [1000]},
-            index=[date(2025, 6, 16)],
-        )
-        with patch.object(
-            engine, "_load_spy_daily_bars", return_value=mock_daily
-        ):
-            mor = await engine.to_multi_objective_result(result)
+    mock_daily = pd.DataFrame(
+        {"open": [450], "high": [451], "low": [449],
+         "close": [450], "volume": [1000]},
+        index=[date(2025, 6, 16)],
+    )
+    with patch.object(
+        engine, "_load_spy_daily_bars", new=AsyncMock(return_value=mock_daily)
+    ), patch.object(engine, "_compute_regime_tags", return_value=regime_tags):
+        mor = await engine.to_multi_objective_result(result)
 
     assert MarketRegime.BULLISH_TRENDING.value in mor.regime_results
     assert MarketRegime.RANGE_BOUND.value in mor.regime_results
@@ -363,7 +360,7 @@ async def test_to_multi_objective_result_confidence_tier(
     result = _make_empty_result(total_trades=5)
     result = BacktestResult(**{**result.__dict__, "total_trades": 5})
 
-    with patch.object(engine, "_load_spy_daily_bars", return_value=None):
+    with patch.object(engine, "_load_spy_daily_bars", new=AsyncMock(return_value=None)):
         mor = await engine.to_multi_objective_result(result)
 
     assert mor.confidence_tier == ConfidenceTier.ENSEMBLE_ONLY
@@ -414,7 +411,7 @@ async def test_to_multi_objective_result_zero_trades(tmp_path: Path) -> None:
 
     result = _make_empty_result(total_trades=0)
 
-    with patch.object(engine, "_load_spy_daily_bars", return_value=None):
+    with patch.object(engine, "_load_spy_daily_bars", new=AsyncMock(return_value=None)):
         mor = await engine.to_multi_objective_result(result)
 
     assert mor.confidence_tier == ConfidenceTier.ENSEMBLE_ONLY
@@ -454,9 +451,10 @@ async def test_to_multi_objective_result_preserves_backtest_result(
     assert not isinstance(result, MultiObjectiveResult)
 
 
-def test_load_spy_daily_bars_no_spy_dir(tmp_path: Path) -> None:
+@pytest.mark.asyncio
+async def test_load_spy_daily_bars_no_spy_dir(tmp_path: Path) -> None:
     """SPY directory missing -> returns None."""
     config = _make_config(tmp_path)
     engine = BacktestEngine(config)
-    result = engine._load_spy_daily_bars(date(2025, 6, 16), date(2025, 6, 20))
+    result = await engine._load_spy_daily_bars(date(2025, 6, 16), date(2025, 6, 20))
     assert result is None

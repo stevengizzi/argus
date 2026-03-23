@@ -70,7 +70,7 @@ class TestCreateExecutionRecord:
         )
 
         assert record.latency_ms == pytest.approx(1500.0, abs=1.0)
-        assert record.time_of_day == "14:30:01"
+        assert record.time_of_day == "10:30:01"
 
     def test_create_execution_record_nullable_fields(self) -> None:
         """Verify avg_daily_volume=None and bid_ask_spread_bps=None work correctly."""
@@ -162,7 +162,7 @@ class TestSaveExecutionRecord:
         assert row["avg_daily_volume"] == 25_000_000
         assert row["bid_ask_spread_bps"] == pytest.approx(0.5)
         assert row["latency_ms"] == pytest.approx(250.0, abs=1.0)
-        assert row["time_of_day"] == "14:30:00"
+        assert row["time_of_day"] == "10:30:00"
         assert row["created_at"] is not None
 
         await db.close()

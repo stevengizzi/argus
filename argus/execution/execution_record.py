@@ -8,6 +8,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
+
+_ET = ZoneInfo("America/New_York")
 
 from argus.core.ids import generate_id
 from argus.db.manager import DatabaseManager
@@ -83,7 +86,7 @@ def create_execution_record(
     )
     slippage_vs_model = actual_slippage_bps - expected_slippage_bps
 
-    time_of_day = fill_timestamp.strftime("%H:%M:%S")
+    time_of_day = fill_timestamp.astimezone(_ET).strftime("%H:%M:%S")
 
     latency_ms: float | None = None
     delta = fill_timestamp - signal_timestamp
