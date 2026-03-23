@@ -1,0 +1,41 @@
+{
+  "strategy": "vwap_reclaim",
+  "strategy_type": "vwap_reclaim",
+  "date_range": {
+    "start": "2023-04-01",
+    "end": "2025-03-01"
+  },
+  "data_source": "databento_ohlcv_1m",
+  "engine": "backtest_engine",
+  "baseline": {
+    "source": "alpaca_provisional",
+    "oos_sharpe": 1.49,
+    "wfe_pnl": null,
+    "total_trades": 59556,
+    "data_months": 35
+  },
+  "new_results": {
+    "oos_sharpe": -1.1618563523628591,
+    "wfe_pnl": 1.0805160195485304,
+    "wfe_sharpe": 68.65339266211676,
+    "total_oos_trades": 308,
+    "avg_win_rate": 0.4317,
+    "avg_profit_factor": 1.0773,
+    "total_windows": 9,
+    "valid_windows": 9,
+    "data_months": 23
+  },
+  "divergence": {
+    "sharpe_diff": 2.6518563523628593,
+    "wfe_diff": null,
+    "win_rate_diff": null,
+    "profit_factor_diff": null,
+    "flagged": true,
+    "flags": [
+      "sharpe_divergence"
+    ]
+  },
+  "status": "DIVERGENT",
+  "walk_forward_available": true,
+  "notes": ""
+}
