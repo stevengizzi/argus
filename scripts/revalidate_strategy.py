@@ -391,6 +391,7 @@ async def run_backtest_engine_fallback(
         output_dir=output_dir,
         config_overrides=config_overrides,
         log_level="WARNING",
+        initial_cash=1_000_000.0,  # $1M — non-binding for single-strategy validation
     )
 
     engine = BacktestEngine(engine_config)
@@ -458,6 +459,7 @@ async def run_validation(args: argparse.Namespace) -> dict[str, Any]:
             min_trades=args.min_trades,
             output_dir=str(output_dir / strategy_key),
             oos_engine="backtest_engine",
+            initial_cash=1_000_000.0,  # $1M — non-binding for single-strategy validation
         )
         result = await run_fixed_params_walk_forward(config, fixed_params)
         new_results = build_new_results_dict(result)
