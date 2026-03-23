@@ -1,7 +1,7 @@
 # ARGUS — Sprint History
 
 > Complete record of all sprints from project inception through current state.
-> Active development began February 14, 2026. As of March 22, 2026 (~37 calendar days), 27 full sprints + 24 sub-sprints completed.
+> Active development began February 14, 2026. As of March 23, 2026 (~38 calendar days), 27 full sprints + 25 sub-sprints completed.
 
 ---
 
@@ -21,6 +21,7 @@
 | O — Bug Sweep | 25.6 | Mar 19–20 | Operational bug fixes from first live session post-25.5 |
 | P — Pattern Library Foundation | 26 | Mar 21–22 | R2G + PatternModule ABC + Bull Flag + Flat-Top + backtesting |
 | Q — BacktestEngine Core | 27 | Mar 22 | Production-code backtesting engine with SyncEventBus |
+| R — Backtest Re-Validation | 21.6 | Mar 23 | Databento re-validation + ExecutionRecord logging |
 
 ---
 
@@ -1285,13 +1286,73 @@
 
 ---
 
+## Phase R — Backtest Re-Validation (Sprint 21.6, Mar 23)
+
+### Sprint 21.6 — Backtest Re-Validation + Execution Logging (3,051 pytest + 620 Vitest = 3,671 total)
+**Date:** Mar 23, 2026
+**Scope:** Re-validate all 7 active strategies using BacktestEngine with Databento OHLCV-1m data (DEC-132), and add ExecutionRecord logging to OrderManager for slippage model calibration (DEC-358 §5.1). 4 main sessions + 2 impromptu fix sessions (21.6.1, 21.6.2) + 2 inline fixes.
+**Type:** Validation sprint. **Execution:** Human-in-the-loop.
+
+**Session 1 (S1): ExecutionRecord Model + Storage**
+- Created `argus/execution/execution_record.py` — `ExecutionRecord` dataclass with 16 fields capturing expected vs actual fill price, slippage metrics, market conditions
+- Created `execution_records` table with 4 indexes (symbol, strategy_id, timestamp, order_id)
+- Fire-and-forget recording — exceptions logged at WARNING, never disrupt order management
+- +14 pytest
+
+**Session 2 (S2): Order Manager Integration**
+- Wired ExecutionRecord creation into `OrderManager.on_fill()` for entry fills
+- Captures expected_price (from SignalEvent), actual_price (from fill), slippage_bps, market_cap_bucket, avg_daily_volume (placeholder — requires UM reference data)
+- bid_ask_spread_bps always None until L1 data available (Standard plan limitation)
+- +10 pytest
+
+**Session 3 (S3): Revalidation Harness Script**
+- Created `scripts/revalidate_strategy.py` — CLI script running BacktestEngine + walk-forward for each strategy against Databento data
+- Produces JSON result files in `data/backtest_runs/validation/`
+- +8 pytest
+
+**Human Step: Backtest Execution**
+- Ran revalidation script for all 7 strategies against 28-symbol curated universe (2023-04-01 to 2025-03-01)
+- Bull Flag validated (Sharpe 2.78, 57.5% WR, PF 1.55)
+- 2 strategies zero trades (AfMo, R2G — expected given 28-symbol constraint)
+- 4 strategies preliminary results (not production-representative with 28 symbols)
+
+**Session 4 (S4): Results Analysis + YAML Updates + Validation Report**
+- Analyzed all 7 validation result JSONs
+- Updated all 7 strategy YAML `backtest_summary` sections with Databento-era metrics
+- Created comprehensive validation report at `docs/sprints/sprint-21.6/validation-report.md`
+- Status categories: `databento_validated` (Bull Flag), `databento_preliminary` (4 strategies), `databento_insufficient_data` (AfMo, R2G)
+- +9 pytest
+
+**Sprint 21.6.1 — Impromptu: BacktestEngine Sizing + Data Compat**
+- **BacktestEngine position sizing gap:** Strategies emit `share_count=0` since Sprint 24; BacktestEngine wasn't updated to apply legacy sizing. Fixed by adding sizing logic in `_on_candle_event()`.
+- **VectorBT file naming mismatch:** HistoricalDataFeed writes `{YYYY-MM}.parquet`, VectorBT expects `{SYMBOL}_{YYYY-MM}.parquet`. Fixed with dual-glob fallback in all 5 `vectorbt_*.py` files.
+- **BacktestEngine `symbols=None`:** `_load_data()` treated None as empty list. Fixed with auto-detection from cache directory.
+
+**Sprint 21.6.2 — Impromptu: BacktestEngine Risk Overrides (DEC-359)**
+- Production risk limits (min $100 risk, 5% concentration, 20% cash reserve) reject all signals in single-strategy backtests
+- Added `risk_overrides` dict to `BacktestEngineConfig` with permissive defaults (DEC-359)
+- Applied via `setattr` on Pydantic sub-models in `_load_risk_config()` — BacktestEngine-only path
+
+**Inline fixes:**
+- Revalidation script `initial_cash` increased from $100K to $1M for non-binding single-strategy validation
+- `compute_metrics` queried `self._config.strategy_id` instead of `self._strategy.strategy_id`, causing zero-trade metric results
+
+**Key decisions:** DEC-359 (BacktestEngine risk overrides for single-strategy backtesting).
+**DEC-132 status:** PARTIALLY RESOLVED — pipeline proven end-to-end with Databento OHLCV-1m data; Bull Flag validated; 6 strategies require full-universe re-validation (28-symbol results are preliminary).
+**Sessions:** 4 main + 2 impromptu + 2 inline fixes
+**Test counts:** pytest 3,010 → 3,051 (+41), Vitest 620 → 620 (+0)
+**Review verdicts:** S4 CLEAR (Tier 2 review)
+**Notes:** First use of BacktestEngine for real validation. 28-symbol curated universe is not production-representative — strategies dependent on scanner selectivity (ORB, AfMo, R2G) are most affected. Full-universe re-validation (3,000–4,000 symbols) is a prerequisite for completing DEC-132. No parameter changes warranted.
+
+---
+
 ## Sprint Statistics
 
-- **Total sprints:** 27 full + 24 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8)
-- **Total sessions:** ~361+ Claude Code sessions
-- **Total tests:** 3,010 pytest + 620 Vitest = 3,630 total
-- **Total decisions:** 356 (DEC-001 through DEC-356, no new DECs in Sprints 26–27)
-- **Calendar days (active dev):** ~37 (Feb 14 – Mar 22, 2026)
+- **Total sprints:** 27 full + 25 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8)
+- **Total sessions:** ~370+ Claude Code sessions
+- **Total tests:** 3,051 pytest + 620 Vitest = 3,671 total
+- **Total decisions:** 359 (DEC-001 through DEC-359)
+- **Calendar days (active dev):** ~38 (Feb 14 – Mar 23, 2026)
 - **Largest sprint:** 22 (9 implementation + 5 fix + 9 reviews, largest scope)
 - **Cleanest sprint:** 23 (11 sessions, 0 regressions, 0 scope gaps requiring follow-up)
 - **Most test-dense:** Sprint 22 (286 new tests), Sprint 24 (209 new tests), Sprint 23.2 (188 new tests), Sprint 23 (141 new tests across 23+23.05)

@@ -1,7 +1,7 @@
 # ARGUS — Strategic Roadmap
 
 > From artisanal strategies to ensemble alpha — the complete path
-> **v2.0 — March 22, 2026** (Sprint 27 complete — BacktestEngine Core)
+> **v2.1 — March 23, 2026** (Sprint 21.6 complete — Backtest Re-Validation)
 > **Status:** CANONICAL — this is the single source of truth for ARGUS's strategic direction and sprint queue.
 > **Supersedes:** `docs/research/ARGUS_Expanded_Roadmap.md` (Feb 26), `docs/argus_unified_vision_roadmap.md` (Mar 5), `docs/10_PHASE3_SPRINT_PLAN.md` (all forward-looking sections)
 
@@ -78,7 +78,7 @@ These foundations are correct and remain:
 
 ARGUS completed 21 sprints + sub-sprints in ~17 calendar days of active development (Feb 14 – Mar 5). Average sprint: ~0.8 calendar days. However, sprint complexity has been increasing — early sprints (1–5) were dense single-day affairs, while later sprints (21a–21d, 21.5) span multiple days. The roadmap below assumes sprint durations of 1–4 days each depending on complexity, with some parallelism where noted.
 
-**Current state:** Sprint 27 complete. 3,010 pytest + 620 Vitest. Seven active strategies (4 original + R2G, Bull Flag, Flat-Top from Sprint 26) with per-candle evaluation telemetry. PatternModule ABC established for composable pattern detection. BacktestEngine operational with all 7 strategy types, walk-forward integration, and CLI entry point (Sprint 27). Live Databento + IBKR paper trading with 28+ trades across 4 sessions. Eight-page Command Center (Observatory added Sprint 25) + AI Copilot active. FMP Scanner + Universe Manager integrated. Autonomous Sprint Runner implemented (DEC-278–297). NLP Catalyst Pipeline complete (DEC-300–307). Setup Quality Engine + Dynamic Position Sizer complete (DEC-330–341). Strategy Observability complete (DEC-342). Phase 5 Gate complete (March 21, 2026). Next: Sprint 21.6 (Backtest Re-Validation using BacktestEngine) → Sprint 28 (Learning Loop V1) → Sprints 29–31 (Pattern Expansion + Short Selling).
+**Current state:** Sprint 21.6 complete. 3,051 pytest + 620 Vitest. Seven active strategies (4 original + R2G, Bull Flag, Flat-Top from Sprint 26) with per-candle evaluation telemetry. PatternModule ABC established for composable pattern detection. BacktestEngine operational with all 7 strategy types, walk-forward integration, CLI entry point, and risk_overrides for single-strategy backtesting (DEC-359). ExecutionRecord logging captures expected vs actual fill prices for slippage model calibration (DEC-358 §5.1). DEC-132 PARTIALLY RESOLVED — pipeline proven end-to-end with Databento data, Bull Flag validated (Sharpe 2.78), 6 strategies pending full-universe re-validation. Live Databento + IBKR paper trading with 28+ trades across 4 sessions. Eight-page Command Center (Observatory added Sprint 25) + AI Copilot active. FMP Scanner + Universe Manager integrated. Autonomous Sprint Runner implemented (DEC-278–297). NLP Catalyst Pipeline complete (DEC-300–307). Setup Quality Engine + Dynamic Position Sizer complete (DEC-330–341). Strategy Observability complete (DEC-342). Phase 5 Gate complete (March 21, 2026). Next: Sprint 27.5 (Evaluation Framework) → Sprint 27.6 (Regime Intelligence) → Sprint 27.7 (Counterfactual Engine) → Sprint 28 (Learning Loop V1).
 
 ---
 
@@ -163,11 +163,20 @@ Session C2 bugs fixed. UI polish applied.
 
 FMP Starter plan ($22/mo) activated. Dynamic pre-market symbol selection via gainers/losers/actives endpoints. Hybrid Databento+FMP architecture (DEC-257, DEC-258, DEC-259). Resolved historical data lag constraint.
 
-### Sprint 21.6: Backtest Re-Validation (DEC-132 / DEC-235)
-**Target:** ~2 days (runs parallel with Sprint 22)
-**Status:** QUEUED
+### Sprint 21.6: Backtest Re-Validation + Execution Logging (DEC-132 / DEC-358)
+**Target:** ~2 days
+**Status:** ✅ COMPLETE (March 23, 2026)
 
-Re-validate all pre-Databento strategy parameters using Databento tick-level data. All four active strategies. Produce updated parameter sets. Log any parameter changes as DEC entries.
+**Scope (delivered):**
+- Re-validated all 7 active strategies using BacktestEngine with Databento OHLCV-1m data (28-symbol curated universe, 2023-04-01 to 2025-03-01)
+- ExecutionRecord logging added to Order Manager for slippage model calibration (DEC-358 §5.1)
+- BacktestEngine risk_overrides mechanism for single-strategy backtesting (DEC-359)
+- VectorBT dual file naming support, symbol auto-detection from cache
+- Revalidation harness script (`scripts/revalidate_strategy.py`)
+- **DEC-132 PARTIALLY RESOLVED:** Pipeline proven end-to-end. Bull Flag validated (Sharpe 2.78, 57.5% WR, PF 1.55). 6 strategies require full-universe re-validation (3,000–4,000 symbols) — 28-symbol results are preliminary, not production-representative.
+- **Tests:** 3,010 → 3,051 (+41 pytest)
+
+**Prerequisites for full DEC-132 resolution:** Full-universe historical data cache population (3,000–4,000 symbols × 23+ months of Databento OHLCV-1m data). No automated download process exists. Required for production-representative backtesting in Sprints 28+ (Learning Loop) and 33+ (Statistical Validation).
 
 ### Sprint 22: AI Layer MVP + Copilot Activation (DEC-096, DEC-098, DEC-170)
 **Target:** ~3–4 days

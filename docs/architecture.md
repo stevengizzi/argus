@@ -765,6 +765,31 @@ class OrderManager:
     async def eod_flatten(self) -> None:
         """Close all positions at market. Called from poll loop when
         clock.now() >= eod_flatten_time. Sets _flattened_today flag."""
+```
+
+#### ExecutionRecord Logging (`execution/execution_record.py`) — Sprint 21.6 ✅
+
+ExecutionRecord logging (DEC-358 §5.1) captures expected vs actual fill price on every entry fill for slippage model calibration. Fire-and-forget — exceptions logged at WARNING, never disrupt order management. Data persisted to `execution_records` table.
+
+```python
+@dataclass
+class ExecutionRecord:
+    order_id: str
+    symbol: str
+    strategy_id: str
+    expected_price: float        # From SignalEvent entry_price
+    actual_price: float          # From OrderFilledEvent fill_price
+    slippage_bps: float          # (actual - expected) / expected * 10000
+    shares: int
+    side: str
+    timestamp: datetime
+    market_cap_bucket: str | None
+    avg_daily_volume: float | None   # Placeholder until UM reference data wired
+    bid_ask_spread_bps: float | None # Requires L1 data (Standard plan limitation)
+    venue: str | None
+    order_type: str
+    time_to_fill_ms: float | None
+    fill_condition: str | None
 
     async def emergency_flatten(self) -> None:
         """Close all positions at market. Used by circuit breakers."""
@@ -1173,6 +1198,31 @@ CREATE TABLE system_health (
     latency_ms REAL,
     details TEXT
 );
+
+CREATE TABLE execution_records (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    order_id TEXT NOT NULL,
+    symbol TEXT NOT NULL,
+    strategy_id TEXT NOT NULL,
+    expected_price REAL NOT NULL,
+    actual_price REAL NOT NULL,
+    slippage_bps REAL NOT NULL,
+    shares INTEGER NOT NULL,
+    side TEXT NOT NULL,
+    timestamp TEXT NOT NULL,
+    market_cap_bucket TEXT,
+    avg_daily_volume REAL,
+    bid_ask_spread_bps REAL,
+    venue TEXT,
+    order_type TEXT NOT NULL,
+    time_to_fill_ms REAL,
+    fill_condition TEXT
+);
+CREATE INDEX idx_exec_records_symbol ON execution_records(symbol);
+CREATE INDEX idx_exec_records_strategy ON execution_records(strategy_id);
+CREATE INDEX idx_exec_records_timestamp ON execution_records(timestamp);
+CREATE INDEX idx_exec_records_order ON execution_records(order_id);
+-- Sprint 21.6: ExecutionRecord logging for slippage model calibration (DEC-358 §5.1)
 ```
 
 ### 3.10b Debrief Export (`analytics/debrief_export.py`) — Sprint 25.7 ✅
@@ -1589,6 +1639,10 @@ Production-code backtesting engine that runs real ARGUS strategy code against Da
   - **Results persistence**: Per-run SQLite database in `data/backtest_runs/`
 
 - **Walk-forward integration**: `walk_forward.py` gains `oos_engine` parameter (`"replay"` default, `"backtest_engine"` selects BacktestEngine for OOS evaluation). Enables walk-forward validation using production-code execution at speed.
+  - **Risk overrides** (Sprint 21.6, DEC-359): `risk_overrides` dict on `BacktestEngineConfig` with permissive defaults for single-strategy backtesting (min_position_risk_dollars: 1.0, cash_reserve_pct: 0.05, max_single_stock_pct: 0.50). Applied via `setattr` in `_load_risk_config()`. Empty dict opts back into production constraints. Production paths unaffected.
+  - **VectorBT dual file naming** (Sprint 21.6): All 5 `vectorbt_*.py` files support both `{YYYY-MM}.parquet` (HistoricalDataFeed format) and `{SYMBOL}_{YYYY-MM}.parquet` (legacy format) via dual-glob fallback.
+  - **Symbol auto-detection** (Sprint 21.6): `_load_data()` auto-detects available symbols from cache directory when `symbols=None`.
+  - **Revalidation script** (Sprint 21.6): `scripts/revalidate_strategy.py` — CLI running BacktestEngine + walk-forward per strategy, producing JSON results in `data/backtest_runs/validation/`.
 
 **Relationship between backtesting layers:**
 

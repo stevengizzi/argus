@@ -4316,6 +4316,20 @@ Each entry follows this format:
 
 ---
 
+### DEC-359 | BacktestEngine Risk Overrides for Single-Strategy Backtesting
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-23 |
+| **Context** | Production risk limits (min_position_risk_dollars: $100, max_single_stock_pct: 5%, cash_reserve_pct: 20%) cause Risk Manager to reject all signals in single-strategy backtests. Tight ORB stops produce low per-share risk; after concentration reduction, dollar risk falls below the $100 floor. This is a configuration mismatch — production rules designed for multi-strategy portfolios are inappropriate for isolated strategy validation. |
+| **Decision** | Add `risk_overrides` dict to `BacktestEngineConfig` with permissive defaults: min_position_risk_dollars: 1.0, cash_reserve_pct: 0.05, max_single_stock_pct: 0.50. Applied in `_load_risk_config()` after YAML load via setattr on Pydantic sub-models. Empty dict `risk_overrides={}` opts back into production constraints. Production code paths (main.py) are never affected — override mechanism is BacktestEngine-only. |
+| **Alternatives** | (1) Separate risk_limits_backtest.yaml — config file proliferation, easy to forget to update both. (2) Bypass Risk Manager entirely in backtest — loses realistic rejection modeling. (3) Modify Risk Manager to detect backtest mode — violates separation of concerns. |
+| **Rationale** | Single-strategy backtesting requires relaxed concentration and position sizing limits because the portfolio context (multiple strategies sharing capital) doesn't exist. The override mechanism preserves Risk Manager as a real component in the backtest pipeline while adjusting only the limits that are structurally incompatible with isolated strategy validation. |
+| **Cross-References** | DEC-250 (min position risk floor), DEC-249 (concentration approve-with-modification), Sprint 21.6.2 |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
-*Next DEC: 359*
-*Last updated: 2026-03-23 (Amendment Adoption — DEC-357 through DEC-358)*
+*Next DEC: 360*
+*Last updated: 2026-03-23 (Sprint 21.6 doc sync — DEC-359)*

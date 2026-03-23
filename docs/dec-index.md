@@ -1,6 +1,6 @@
 # ARGUS — Decision Index
 
-> 358 decisions (DEC-001 through DEC-358)
+> 359 decisions (DEC-001 through DEC-359)
 > Generated: March 23, 2026 | Source: `docs/decision-log.md`
 > Legend: ● Active | ○ Superseded | △ Amended | ✗ Duplicate entry
 
@@ -420,3 +420,7 @@
 
 - ● **DEC-357**: Experiment Infrastructure Amendment — Adopted. Sprints 27.5 (Evaluation Framework) + 32.5 (Experiment Registry + Promotion Pipeline + Anti-Fragility). Mods: API-based veto, SQLite interim storage for Sprint 28. DEC ranges reserved: 359–368, 386–395.
 - ● **DEC-358**: Intelligence Architecture Amendment — Adopted. Sprints 27.6 (Regime Intelligence) + 27.7 (Counterfactual Engine) + 33.5 (Adversarial Stress Testing). Execution Quality mods to 21.6 + 27.5. Historical data confirmed: XNAS.ITCH + XNYS.PILLAR OHLCV-1m back to May 2018 at $0. DEC ranges reserved: 369–378, 379–385, 396–402.
+
+## Sprint 21.6 — Backtest Re-Validation + Execution Logging
+
+- ● **DEC-359**: BacktestEngine risk overrides — permissive defaults (min_risk: $1, cash_reserve: 5%, max_stock: 50%) for single-strategy backtesting via `risk_overrides` dict on BacktestEngineConfig. Production paths unaffected.

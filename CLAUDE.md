@@ -1,13 +1,13 @@
 # ARGUS — Claude Code Context
 
 > Dense, actionable context for Claude Code sessions. No history — see `docs/` for that.
-> Last updated: March 22, 2026 (Sprint 27 doc sync)
+> Last updated: March 23, 2026 (Sprint 21.6 doc sync)
 
 ## Active Sprint
 
-**No active sprint.** Sprint 27 (BacktestEngine Core) completed March 22, 2026.
+**No active sprint.** Sprint 21.6 (Backtest Re-Validation + Execution Logging) completed March 23, 2026.
 
-Next planned sprint: **21.6 (Backtest Re-Validation + Execution Logging)** per DEC-354/DEC-358, followed by Sprint 27.5 (Evaluation Framework), Sprint 27.6 (Regime Intelligence), Sprint 27.7 (Counterfactual Engine), then Sprint 28 (Learning Loop V1).
+Next planned sprint: **27.5 (Evaluation Framework)** per DEC-357, followed by Sprint 27.6 (Regime Intelligence), Sprint 27.7 (Counterfactual Engine), then Sprint 28 (Learning Loop V1).
 
 ### Roadmap Amendments Adopted (DEC-357, DEC-358)
 Two roadmap amendments adopted March 23, 2026 adding 5 new sprint slots:
@@ -17,7 +17,7 @@ Two roadmap amendments adopted March 23, 2026 adding 5 new sprint slots:
 - **32.5** (Experiment Registry + Promotion Pipeline): Partitioned SQLite registry, cohort-based promotion, simulated-paper screening, overnight experiment queue, kill switches, anti-fragility
 - **33.5** (Adversarial Stress Testing): Historical crisis replay + synthetic stress scenarios as PromotionPipeline gate
 Amendment docs: `docs/amendments/roadmap-amendment-experiment-infrastructure.md`, `docs/amendments/roadmap-amendment-intelligence-architecture.md`
-Build track: 21.6 → 27.5 → 27.6 → 27.7 → 28 → 29–31 → 32 → 32.5 → 33 → 33.5 → 34 → 35–41
+Build track: ~~21.6~~ ✅ → 27.5 → 27.6 → 27.7 → 28 → 29–31 → 32 → 32.5 → 33 → 33.5 → 34 → 35–41
 DEC ranges reserved: 359–368 (27.5), 369–378 (27.6), 379–385 (27.7), 386–395 (32.5), 396–402 (33.5)
 
 ### Known Issues
@@ -28,8 +28,8 @@ DEC ranges reserved: 359–368 (27.5), 369–378 (27.6), 379–385 (27.7), 386�
 ## Current State
 
 - **Active sprint:** None (between sprints)
-- **Next sprint:** 21.6 (Backtest Re-Validation)
-- **Tests:** 3,010 pytest + 620 Vitest (0 failures, 0 hangs)
+- **Next sprint:** 27.5 (Evaluation Framework)
+- **Tests:** 3,051 pytest + 620 Vitest (0 failures, 0 hangs)
 - **Strategies:** 7 active (ORB Breakout, ORB Scalp, VWAP Reclaim, Afternoon Momentum, Red-to-Green, Bull Flag, Flat-Top Breakout)
 - **Infrastructure:** Databento EQUS.MINI (live) + IBKR paper trading (Account U24619949) + FMP Starter (scanning + reference data + daily bars for regime) + Finnhub (news + analyst recs) + Claude API (Copilot + Catalyst Classification) + Universe Manager (config-gated) + Catalyst Pipeline (config-gated) + Intelligence Polling Loop (config-gated) + Reference Data Cache + Quality Engine (config-gated) + Dynamic Position Sizer + Strategy Evaluation Telemetry (ring buffer + SQLite persistence) + Debrief Export (shutdown automation)
 - **Frontend:** 8-page Command Center (Observatory added Sprint 25) + AI Copilot + Universe Status Card + Intelligence Brief View (all active), Tauri desktop + PWA mobile
@@ -192,7 +192,7 @@ python scripts/sprint-runner.py resume --run-dir path/to/run  # Resume from chec
 - VectorBT: precompute+vectorize architecture MANDATORY (DEC-149)
 - BacktestEngine (Sprint 27): production-code backtesting via SynchronousEventBus, bar-level fill model, Databento OHLCV-1m + Parquet cache
 - Walk-forward validation: WFE > 0.3 required (DEC-047); `oos_engine` parameter selects BacktestEngine vs Replay Harness
-- Pre-Databento backtests are PROVISIONAL (DEC-132)
+- Pre-Databento backtests are PROVISIONAL (DEC-132). PARTIALLY RESOLVED (Sprint 21.6) — pipeline proven end-to-end, Bull Flag validated, 6 strategies pending full-universe re-validation
 - See `.claude/rules/backtesting.md` for detailed sweep rules
 
 ### API
