@@ -151,7 +151,7 @@ universe_manager:
   max_price: 10000.0      # System-level: exclude extreme price outliers
   min_avg_volume: 100000  # System-level: minimum average daily volume
   exclude_otc: true       # System-level: exclude OTC symbols
-  reference_cache_ttl_hours: 24  # FMP reference data cache lifetime
+  reference_cache_ttl_hours: 72  # FMP reference data cache lifetime
   fmp_batch_size: 50      # Symbols per FMP batch API call
 
 # Observatory (Sprint 25 — The Observatory)
