@@ -1643,6 +1643,8 @@ Production-code backtesting engine that runs real ARGUS strategy code against Da
   - **VectorBT dual file naming** (Sprint 21.6): All 5 `vectorbt_*.py` files support both `{YYYY-MM}.parquet` (HistoricalDataFeed format) and `{SYMBOL}_{YYYY-MM}.parquet` (legacy format) via dual-glob fallback.
   - **Symbol auto-detection** (Sprint 21.6): `_load_data()` auto-detects available symbols from cache directory when `symbols=None`.
   - **Revalidation script** (Sprint 21.6): `scripts/revalidate_strategy.py` — CLI running BacktestEngine + walk-forward per strategy, producing JSON results in `data/backtest_runs/validation/`.
+  - **Regime tagging** (Sprint 27.5): `to_multi_objective_result()` async method loads SPY 1-min Parquet, resamples to daily OHLCV, instantiates `RegimeClassifier` per day, partitions trades by exit_date regime, produces `MultiObjectiveResult` with populated `regime_results`. Falls back to single `RANGE_BOUND` regime when SPY not in Parquet cache.
+  - **Slippage model integration** (Sprint 27.5): Optional `slippage_model_path: str | None` on `BacktestEngineConfig` loads calibrated slippage model, populating `execution_quality_adjustment` on the output `MultiObjectiveResult`.
 
 **Relationship between backtesting layers:**
 
@@ -2194,7 +2196,67 @@ Pydantic BaseModel wired into SystemConfig. Config-gated feature with `observato
 
 ---
 
-## 14. Technology Stack Summary
+## 14. Evaluation Framework (Sprint 27.5)
+
+Universal evaluation infrastructure that becomes the shared currency for all downstream optimization and experiment sprints (28, 32.5, 33, 34, 38, 40, 41). Pure backend — no frontend, no API endpoints, no new YAML config.
+
+### 14.1 MultiObjectiveResult (`analytics/evaluation.py`)
+
+Core evaluation dataclass capturing:
+- **Primary metrics:** Sharpe ratio, max drawdown %, profit factor, win rate, trade count, expectancy
+- **Per-regime breakdown:** `regime_results: dict[str, RegimeMetrics]` — string-keyed for forward-compatibility with Sprint 27.6 `RegimeVector` (replaces enum-keyed approach)
+- **RegimeMetrics** (frozen dataclass): per-regime Sharpe, max drawdown %, profit factor, win rate, expectancy, trade count
+- **ConfidenceTier** enum: HIGH (≥50 trades + 3 regimes at ≥15 trades), MODERATE (≥30 trades + 2 regimes at ≥10, or ≥50 with insufficient regime coverage), LOW (10–29 trades), ENSEMBLE_ONLY (<10 trades)
+- **ComparisonVerdict** enum: DOMINATES, DOMINATED, INCOMPARABLE, INSUFFICIENT_DATA
+- Walk-forward efficiency, optional `execution_quality_adjustment`, placeholder p-value/CI fields
+- `parameter_hash()`: deterministic SHA-256 of sorted JSON config
+- `from_backtest_result()` factory: bridges `BacktestResult` → `MultiObjectiveResult`
+- JSON serialization roundtrip (`to_dict()`/`from_dict()`) with infinity and None handling
+
+### 14.2 Comparison API (`analytics/comparison.py`)
+
+Pairwise and set-level comparison using Pareto dominance:
+- **5 comparison metrics:** Sharpe↑, max_drawdown_pct↑, profit_factor↑, win_rate↑, expectancy↑
+- `compare(a, b)` → `ComparisonVerdict` via Pareto dominance (all metrics must be ≥, at least one >)
+- `pareto_frontier(results)` → O(n²) pairwise filtering, excludes LOW/ENSEMBLE_ONLY confidence
+- `soft_dominance(a, b, tolerance)` → configurable per-metric tolerance dict
+- `is_regime_robust(result, min_regimes)` → positive expectancy across minimum regime count
+- NaN → INSUFFICIENT_DATA, `float('inf')` handled natively
+
+### 14.3 Ensemble Evaluation (`analytics/ensemble_evaluation.py`)
+
+First-class evaluation for strategy cohorts:
+- **EnsembleResult:** aggregate portfolio-level `MultiObjectiveResult` + `diversification_ratio` + `tail_correlation` + `capital_utilization` + `turnover_rate` + per-strategy `MarginalContribution`
+- **MarginalContribution:** leave-one-out recomputation — measures each strategy's impact on ensemble Sharpe, drawdown, and profit factor
+- `build_ensemble_result()`: constructs from list of strategy `MultiObjectiveResult`s
+- `evaluate_cohort_addition()`: tests whether adding a strategy improves ensemble, returns `improvement_verdict`
+- `identify_deadweight()`: finds strategies with negative marginal contribution
+- **Metric-level approximation** documented (aggregate metrics computed from per-strategy metrics, not trade-level). Trade-level upgrade deferred to Sprint 32.5.
+
+### 14.4 Slippage Model (`analytics/slippage_model.py`)
+
+Calibration from live execution data:
+- **StrategySlippageModel** dataclass: per-strategy slippage calibration
+- `calibrate_slippage_model()` async: queries `execution_records` table filtered by strategy_id
+- **Time-of-day buckets** (ET): pre_10am, 10am_2pm, post_2pm — captures intraday liquidity patterns
+- **Size adjustment:** linear regression slope of slippage vs order size
+- **Confidence tiers:** HIGH (≥50 records), MODERATE (≥20), LOW (≥5), INSUFFICIENT (<5)
+- Atomic JSON persistence (`save_slippage_model()` / `load_slippage_model()`) via tempfile + rename
+- Pure Python math (no numpy dependency)
+
+### 14.5 Directory Structure
+
+```
+analytics/
+├── evaluation.py          # MultiObjectiveResult, RegimeMetrics, ConfidenceTier (Sprint 27.5)
+├── comparison.py          # Pareto comparison API (Sprint 27.5)
+├── ensemble_evaluation.py # EnsembleResult, cohort evaluation (Sprint 27.5)
+├── slippage_model.py      # Slippage calibration from execution records (Sprint 27.5)
+```
+
+---
+
+## 15. Technology Stack Summary
 
 | Component | Technology |
 |-----------|-----------|
@@ -2225,4 +2287,4 @@ Pydantic BaseModel wired into SystemConfig. Config-gated feature with `observato
 
 ---
 
-*End of Architecture Document v1.1 (updated Sprint 25 — Observatory subsystem)*
+*End of Architecture Document v1.2 (updated Sprint 27.5 — Evaluation Framework)*

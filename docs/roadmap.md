@@ -1,7 +1,7 @@
 # ARGUS — Strategic Roadmap
 
 > From artisanal strategies to ensemble alpha — the complete path
-> **v2.1 — March 23, 2026** (Sprint 21.6 complete — Backtest Re-Validation)
+> **v2.2 — March 24, 2026** (Sprint 27.5 complete — Evaluation Framework)
 > **Status:** CANONICAL — this is the single source of truth for ARGUS's strategic direction and sprint queue.
 > **Supersedes:** `docs/research/ARGUS_Expanded_Roadmap.md` (Feb 26), `docs/argus_unified_vision_roadmap.md` (Mar 5), `docs/10_PHASE3_SPRINT_PLAN.md` (all forward-looking sections)
 
@@ -78,7 +78,7 @@ These foundations are correct and remain:
 
 ARGUS completed 21 sprints + sub-sprints in ~17 calendar days of active development (Feb 14 – Mar 5). Average sprint: ~0.8 calendar days. However, sprint complexity has been increasing — early sprints (1–5) were dense single-day affairs, while later sprints (21a–21d, 21.5) span multiple days. The roadmap below assumes sprint durations of 1–4 days each depending on complexity, with some parallelism where noted.
 
-**Current state:** Sprint 21.6 complete. 3,051 pytest + 620 Vitest. Seven active strategies (4 original + R2G, Bull Flag, Flat-Top from Sprint 26) with per-candle evaluation telemetry. PatternModule ABC established for composable pattern detection. BacktestEngine operational with all 7 strategy types, walk-forward integration, CLI entry point, and risk_overrides for single-strategy backtesting (DEC-359). ExecutionRecord logging captures expected vs actual fill prices for slippage model calibration (DEC-358 §5.1). DEC-132 PARTIALLY RESOLVED — pipeline proven end-to-end with Databento data, Bull Flag validated (Sharpe 2.78), 6 strategies pending full-universe re-validation. Live Databento + IBKR paper trading with 28+ trades across 4 sessions. Eight-page Command Center (Observatory added Sprint 25) + AI Copilot active. FMP Scanner + Universe Manager integrated. Autonomous Sprint Runner implemented (DEC-278–297). NLP Catalyst Pipeline complete (DEC-300–307). Setup Quality Engine + Dynamic Position Sizer complete (DEC-330–341). Strategy Observability complete (DEC-342). Phase 5 Gate complete (March 21, 2026). Next: Sprint 27.5 (Evaluation Framework) → Sprint 27.6 (Regime Intelligence) → Sprint 27.7 (Counterfactual Engine) → Sprint 28 (Learning Loop V1).
+**Current state:** Sprint 27.5 complete. 3,177 pytest + 620 Vitest. Seven active strategies (4 original + R2G, Bull Flag, Flat-Top from Sprint 26) with per-candle evaluation telemetry. PatternModule ABC established for composable pattern detection. BacktestEngine operational with all 7 strategy types, walk-forward integration, CLI entry point, and risk_overrides for single-strategy backtesting (DEC-359). ExecutionRecord logging captures expected vs actual fill prices for slippage model calibration (DEC-358 §5.1). DEC-132 PARTIALLY RESOLVED — pipeline proven end-to-end with Databento data, Bull Flag validated (Sharpe 2.78), 6 strategies pending full-universe re-validation. Live Databento + IBKR paper trading with 28+ trades across 4 sessions. Eight-page Command Center (Observatory added Sprint 25) + AI Copilot active. FMP Scanner + Universe Manager integrated. Autonomous Sprint Runner implemented (DEC-278–297). NLP Catalyst Pipeline complete (DEC-300–307). Setup Quality Engine + Dynamic Position Sizer complete (DEC-330–341). Strategy Observability complete (DEC-342). Phase 5 Gate complete (March 21, 2026). Evaluation Framework complete (Sprint 27.5 — MultiObjectiveResult, EnsembleResult, Pareto comparison API, slippage model). Next: Sprint 27.6 (Regime Intelligence) → Sprint 27.7 (Counterfactual Engine) → Sprint 28 (Learning Loop V1).
 
 ---
 
@@ -345,8 +345,8 @@ API auth 401 for unauthenticated requests (DEC-351). Close-position endpoint rou
 - **Execution Quality Logging (DEC-358):** Add ExecutionRecord dataclass, logging in OrderManager.submit_order() and fill callback, `execution_records` table in argus.db. Captures expected vs actual fill price, slippage, time-of-day context, order size, latency. Starts calibration data collection from day one of paper trading.
 - **Tests:** ~25 new.
 
-### Sprint 27.5: Evaluation Framework (DEC-357)
-**Target:** ~2–3 days (5 sessions)
+### Sprint 27.5: Evaluation Framework (DEC-357) ✅
+**Completed:** March 23–24, 2026 (6 sessions + 1 cleanup, +106 pytest)
 
 **Scope:**
 - **MultiObjectiveResult** — universal evaluation currency capturing Sharpe, max drawdown, profit factor, win rate, trade count, expectancy, regime breakdown, statistical confidence, walk-forward efficiency. Every downstream evaluator produces and consumes this.
@@ -357,7 +357,7 @@ API auth 401 for unauthenticated requests (DEC-351). Close-position endpoint rou
 - **Execution Quality Calibration (DEC-358):** `execution_quality_adjustment` field on MultiObjectiveResult. StrategySlippageModel calibration utility using accumulated ExecutionRecords. BacktestEngine gains optional `slippage_model` parameter.
 - **Tests:** ~65 new.
 
-**Dependencies:** Sprint 27 (BacktestEngine) ✅, Sprint 21.6 (ideally complete first). No frontend work.
+**Dependencies:** Sprint 27 (BacktestEngine) ✅, Sprint 21.6 ✅. No frontend work.
 
 ### Sprint 27.6: Regime Intelligence (DEC-358)
 **Target:** ~3 days (6 sessions)

@@ -1,13 +1,13 @@
 # ARGUS — Claude Code Context
 
 > Dense, actionable context for Claude Code sessions. No history — see `docs/` for that.
-> Last updated: March 23, 2026 (Sprint 21.6 doc sync)
+> Last updated: March 24, 2026 (Sprint 27.5 doc sync)
 
 ## Active Sprint
 
-**No active sprint.** Sprint 21.6 (Backtest Re-Validation + Execution Logging) completed March 23, 2026.
+**No active sprint.** Sprint 27.5 (Evaluation Framework) completed March 24, 2026.
 
-Next planned sprint: **27.5 (Evaluation Framework)** per DEC-357, followed by Sprint 27.6 (Regime Intelligence), Sprint 27.7 (Counterfactual Engine), then Sprint 28 (Learning Loop V1).
+Next planned sprint: **27.6 (Regime Intelligence)** per DEC-358, followed by Sprint 27.7 (Counterfactual Engine), then Sprint 28 (Learning Loop V1).
 
 ### Roadmap Amendments Adopted (DEC-357, DEC-358)
 Two roadmap amendments adopted March 23, 2026 adding 5 new sprint slots:
@@ -17,7 +17,7 @@ Two roadmap amendments adopted March 23, 2026 adding 5 new sprint slots:
 - **32.5** (Experiment Registry + Promotion Pipeline): Partitioned SQLite registry, cohort-based promotion, simulated-paper screening, overnight experiment queue, kill switches, anti-fragility
 - **33.5** (Adversarial Stress Testing): Historical crisis replay + synthetic stress scenarios as PromotionPipeline gate
 Amendment docs: `docs/amendments/roadmap-amendment-experiment-infrastructure.md`, `docs/amendments/roadmap-amendment-intelligence-architecture.md`
-Build track: ~~21.6~~ ✅ → 27.5 → 27.6 → 27.7 → 28 → 29–31 → 32 → 32.5 → 33 → 33.5 → 34 → 35–41
+Build track: ~~21.6~~ ✅ → ~~27.5~~ ✅ → 27.6 → 27.7 → 28 → 29–31 → 32 → 32.5 → 33 → 33.5 → 34 → 35–41
 DEC ranges reserved: 363–372 (27.5), 369–378 (27.6), 379–385 (27.7), 386–395 (32.5), 396–402 (33.5)
 
 ### Known Issues
@@ -28,10 +28,10 @@ DEC ranges reserved: 363–372 (27.5), 369–378 (27.6), 379–385 (27.7), 386�
 ## Current State
 
 - **Active sprint:** None (between sprints)
-- **Next sprint:** 27.5 (Evaluation Framework)
-- **Tests:** 3,071 pytest + 620 Vitest (0 failures, 0 hangs)
+- **Next sprint:** 27.6 (Regime Intelligence)
+- **Tests:** 3,177 pytest + 620 Vitest (0 failures, 0 hangs)
 - **Strategies:** 7 active (ORB Breakout, ORB Scalp, VWAP Reclaim, Afternoon Momentum, Red-to-Green, Bull Flag, Flat-Top Breakout)
-- **Infrastructure:** Databento EQUS.MINI (live) + IBKR paper trading (Account U24619949) + FMP Starter (scanning + reference data + daily bars for regime) + Finnhub (news + analyst recs) + Claude API (Copilot + Catalyst Classification) + Universe Manager (config-gated) + Catalyst Pipeline (config-gated) + Intelligence Polling Loop (config-gated) + Reference Data Cache + Quality Engine (config-gated) + Dynamic Position Sizer + Strategy Evaluation Telemetry (ring buffer + SQLite persistence) + Debrief Export (shutdown automation)
+- **Infrastructure:** Databento EQUS.MINI (live) + IBKR paper trading (Account U24619949) + FMP Starter (scanning + reference data + daily bars for regime) + Finnhub (news + analyst recs) + Claude API (Copilot + Catalyst Classification) + Universe Manager (config-gated) + Catalyst Pipeline (config-gated) + Intelligence Polling Loop (config-gated) + Reference Data Cache + Quality Engine (config-gated) + Dynamic Position Sizer + Strategy Evaluation Telemetry (ring buffer + SQLite persistence) + Debrief Export (shutdown automation) + Evaluation Framework (MultiObjectiveResult, EnsembleResult, comparison API, slippage model)
 - **Frontend:** 8-page Command Center (Observatory added Sprint 25) + AI Copilot + Universe Status Card + Intelligence Brief View (all active), Tauri desktop + PWA mobile
 
 ## Project Structure
@@ -43,7 +43,7 @@ argus/
 │   └── patterns/   # PatternModule ABC, BullFlagPattern, FlatTopBreakoutPattern
 ├── data/           # DataService (Databento/Alpaca/Replay/Backtest), Scanner, IndicatorEngine, UniverseManager, FMPReferenceClient
 ├── execution/      # Broker (IBKR/Alpaca/Simulated), Order Manager
-├── analytics/      # Trade Logger, PerformanceCalculator, DebriefExport
+├── analytics/      # Trade Logger, PerformanceCalculator, DebriefExport, Evaluation Framework
 ├── backtest/       # VectorBT helpers, Replay Harness, BacktestEngine (Sprint 27)
 ├── api/            # FastAPI REST + WebSocket, JWT auth
 │   └── websocket/  # ai_chat.py (WS streaming)
@@ -77,7 +77,7 @@ argus/
 python -m pytest --ignore=tests/test_main.py -n auto -q  # Full suite (~39s with xdist)
 python -m pytest tests/ -x               # Stop on first failure
 python -m pytest tests/ -x -q            # Fail-fast, quiet
-cd argus/ui && npx vitest run            # Frontend tests (~611)
+cd argus/ui && npx vitest run            # Frontend tests (~620)
 
 # Trading engine
 python -m argus.main                      # Start (paper trading default)
@@ -190,7 +190,7 @@ python scripts/sprint-runner.py resume --run-dir path/to/run  # Resume from chec
 
 ### Backtesting
 - VectorBT: precompute+vectorize architecture MANDATORY (DEC-149)
-- BacktestEngine (Sprint 27): production-code backtesting via SynchronousEventBus, bar-level fill model, Databento OHLCV-1m + Parquet cache
+- BacktestEngine (Sprint 27): production-code backtesting via SynchronousEventBus, bar-level fill model, Databento OHLCV-1m + Parquet cache; `to_multi_objective_result()` produces regime-tagged `MultiObjectiveResult` (Sprint 27.5); optional `slippage_model_path` on `BacktestEngineConfig` loads calibrated slippage model
 - Walk-forward validation: WFE > 0.3 required (DEC-047); `oos_engine` parameter selects BacktestEngine vs Replay Harness
 - Pre-Databento backtests are PROVISIONAL (DEC-132). PARTIALLY RESOLVED (Sprint 21.6) — pipeline proven end-to-end, Bull Flag validated, 6 strategies pending full-universe re-validation
 - See `.claude/rules/backtesting.md` for detailed sweep rules
@@ -306,6 +306,7 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 | DEF-084 | Full test suite runtime optimization | Partially resolved | FMP rate limit configurable (454s→39s with xdist). Remaining slow tests: `test_stale_data_detection/recovery` (10s each). `slow` marker registered in pyproject.toml. Priority: LOW. |
 | DEF-088 | PatternParam structured type for `get_default_params()` | Unscheduled | `PatternModule.get_default_params()` returns `dict[str, Any]`. Should return structured `PatternParam` objects with type, range, and description metadata for parameter grid generation and UI. Pre-assigned at Sprint 26 planning. Priority: LOW. |
 | DEF-089 | In-memory ResultsCollector for parallel sweeps | Sprint 32 | Pre-assigned during Sprint 27 planning. BacktestEngine writes results to per-run SQLite databases; parallel sweep orchestration would benefit from an in-memory collector to avoid DB contention. Priority: LOW. |
+| ~~DEF-090~~ | ~~`execution_record.py` stores time_of_day in UTC, should be ET per DEC-061~~ | ~~Sprint 27.5~~ | **RESOLVED** (Sprint 27.5 cleanup): `.astimezone(_ET)` before strftime. |
 | ~~DEF-085~~ | ~~Close-position endpoint regression~~ | ~~Sprint 25.8~~ | **RESOLVED** (Sprint 25.8, DEC-352): Routes through `OrderManager.close_position()`. 5 new tests. |
 | ~~DEF-086~~ | ~~WebSocket test hangs~~ | ~~Post-sprint~~ | **RESOLVED**: 8 tests rewrote to test bridge pipeline directly via send_queue, eliminating sync/async cross-thread hang. |
 | ~~DEF-087~~ | ~~11 pre-existing test failures~~ | ~~Post-sprint~~ | **RESOLVED**: 4 vectorbt (NumPy 2.x dep upgrade), 1 data_fetcher (Pandas 2.x datetime precision), 4 e2e telemetry (hardcoded date + async flush), 2 integration sprint20 (regime-based allocation assertions). Zero production code changes. |
@@ -314,9 +315,9 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 
 | Document | What It Covers |
 |----------|---------------|
-| `docs/decision-log.md` | All 358 DEC entries with full rationale |
+| `docs/decision-log.md` | All 362 DEC entries with full rationale |
 | `docs/dec-index.md` | Quick-reference index with status markers |
-| `docs/sprint-history.md` | Complete sprint history (1–27) |
+| `docs/sprint-history.md` | Complete sprint history (1–27.5) |
 | `docs/process-evolution.md` | Workflow evolution narrative |
 | `docs/live-operations.md` | Live trading procedures |
 | `docs/strategies/STRATEGY_*.md` | Per-strategy spec sheets |

@@ -1,7 +1,7 @@
 # ARGUS — Sprint History
 
 > Complete record of all sprints from project inception through current state.
-> Active development began February 14, 2026. As of March 23, 2026 (~38 calendar days), 27 full sprints + 26 sub-sprints completed.
+> Active development began February 14, 2026. As of March 24, 2026 (~39 calendar days), 28 full sprints + 27 sub-sprints completed.
 
 ---
 
@@ -22,6 +22,7 @@
 | P — Pattern Library Foundation | 26 | Mar 21–22 | R2G + PatternModule ABC + Bull Flag + Flat-Top + backtesting |
 | Q — BacktestEngine Core | 27 | Mar 22 | Production-code backtesting engine with SyncEventBus |
 | R — Backtest Re-Validation | 21.6 | Mar 23 | Databento re-validation + ExecutionRecord logging |
+| S — Evaluation Framework | 27.5 | Mar 23–24 | Universal evaluation infrastructure |
 
 ---
 
@@ -1375,13 +1376,91 @@
 
 ---
 
+## Sprint 27.5 — Evaluation Framework (March 23–24, 2026)
+
+**Type:** Planned (DEC-357/DEC-358 amendment adoption)
+**Origin:** Phase 6 evaluation infrastructure — universal evaluation framework for all downstream optimization sprints.
+
+**Session 1 (S1): Core Data Models** — CLEAR
+- Created `argus/analytics/evaluation.py` (361 lines)
+- `MultiObjectiveResult` dataclass: primary metrics + per-regime `RegimeMetrics` + `ConfidenceTier` + WFE + optional execution quality adjustment + placeholder p-value/CI
+- `ConfidenceTier` enum: HIGH (50+ trades, 3+ regimes at 15+), MODERATE (30+ trades, 2+ regimes at 10+, or 50+ with insufficient regime coverage), LOW (10–29), ENSEMBLE_ONLY (<10)
+- `ComparisonVerdict` enum: DOMINATES, DOMINATED, INCOMPARABLE, INSUFFICIENT_DATA
+- `parameter_hash()`: deterministic SHA-256 of sorted JSON config
+- `from_backtest_result()` factory: bridges BacktestResult → MultiObjectiveResult
+- JSON serialization roundtrip (to_dict/from_dict) with infinity and None handling
+- 21 new tests
+
+**Session 2 (S2): Regime Tagging in BacktestEngine** — CLEAR
+- Modified `argus/backtest/engine.py`
+- `_load_spy_daily_bars()`: reads SPY 1-min Parquet, 3-month lookback margin, resamples to daily OHLCV
+- `_compute_regime_tags()`: RegimeClassifier per day, RANGE_BOUND default for insufficient history
+- `_compute_regime_metrics()`: per-regime Sharpe/DD/PF/WR/expectancy from dollar P&L
+- `to_multi_objective_result()`: async, loads SPY, partitions trades by exit_date, produces MOR
+- Falls back to single RANGE_BOUND regime when SPY not in Parquet cache
+- 11 new tests
+
+**Session 3 (S3): Individual Comparison API** — CLEAR
+- Created `argus/analytics/comparison.py` (347 lines)
+- 5 comparison metrics: Sharpe↑, max_drawdown_pct↑, profit_factor↑, win_rate↑, expectancy↑
+- `compare(a, b)` → ComparisonVerdict via Pareto dominance
+- `pareto_frontier()`: O(n²), filters to HIGH/MODERATE confidence
+- `soft_dominance()` with configurable tolerance dict
+- `is_regime_robust()`: positive expectancy across minimum regime count
+- NaN → INSUFFICIENT_DATA, float('inf') handled natively
+- 23 new tests
+
+**Session 4 (S4): Ensemble Evaluation** — CONCERNS_RESOLVED
+- Created `argus/analytics/ensemble_evaluation.py` (~650 lines)
+- `EnsembleResult`: aggregate portfolio-level MOR + diversification_ratio + tail_correlation + capital_utilization + turnover_rate + per-strategy `MarginalContribution`
+- `build_ensemble_result()`, `evaluate_cohort_addition()`, `marginal_contribution()`, `identify_deadweight()`
+- Marginal contributions via exact leave-one-out recomputation
+- Metric-level approximation documented; trade-level deferred to Sprint 32.5
+- CONCERNS: 2 docstring fixes (diversification ratio formula, tail correlation limitation) resolved in-session; 1 accepted limitation (cohort addition key mismatch, Sprint 32.5 scope)
+- 22 new tests
+
+**Session 5 (S5): Slippage Model Calibration** — CONCERNS
+- Created `argus/analytics/slippage_model.py`
+- `StrategySlippageModel` dataclass, `calibrate_slippage_model()` async
+- Time-of-day buckets (pre_10am, 10am_2pm, post_2pm ET), size adjustment linear regression
+- Confidence tiers: HIGH ≥50, MODERATE ≥20, LOW ≥5, INSUFFICIENT <5
+- Atomic JSON persistence (tempfile + rename)
+- CONCERNS: pre-existing upstream issue — execution_record.py stores time_of_day in UTC, not ET (DEF-090)
+- 8 new tests
+
+**Session 6 (S6): Integration Wiring + E2E Tests** — CLEAR
+- Modified `argus/backtest/config.py`: added `slippage_model_path: str | None = None`
+- Modified `argus/backtest/engine.py`: slippage model loading in __init__, `_compute_execution_quality_adjustment()` helper
+- execution_quality_adjustment: first-order Sharpe impact approximation with $50 avg entry price placeholder
+- Graceful FileNotFoundError handling (logs warning, proceeds without model)
+- 17 integration tests covering full pipeline roundtrip
+- 17 new tests
+
+**Cleanup Session** — CLEAR
+- Fix 1 (DEF-090): execution_record.py time_of_day UTC→ET via `.astimezone(_ET)`
+- Fix 2: RegimeMetrics.to_dict() return type annotation includes str
+- Fix 3: 3 assert isinstance → if not isinstance: raise TypeError in MOR.from_dict()
+- Fix 4: Negative infinity serialization roundtrip (4 locations)
+- Fix 5: _load_spy_daily_bars async conversion, removed deprecated asyncio.get_event_loop()
+- 1 new test (negative infinity roundtrip)
+
+**Key decisions:** None issued — all design decisions pre-specified by DEC-357/DEC-358 amendment adoption. Reserved range DEC-363–DEC-368 not consumed.
+**DEF opened:** DEF-090 (execution_record.py UTC/ET mismatch).
+**DEF resolved:** DEF-090 (cleanup session).
+**Sessions:** 6 main + 1 cleanup (all reviewed)
+**Review verdicts:** S1 CLEAR, S2 CLEAR, S3 CLEAR, S4 CONCERNS_RESOLVED, S5 CONCERNS (pre-existing upstream), S6 CLEAR, Cleanup CLEAR
+**Test counts:** pytest 3,071 → 3,177 (+106), Vitest 620 → 620 (+0)
+**Notes:** First sprint with 3-wide parallelism (S2+S3+S5 after S1). Pure backend infrastructure — no frontend, no API endpoints, no new YAML config. Evaluation framework is the shared currency for Sprints 28, 32.5, 33, 34, 38, 40, 41.
+
+---
+
 ## Sprint Statistics
 
-- **Total sprints:** 27 full + 26 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9)
-- **Total sessions:** ~370+ Claude Code sessions
-- **Total tests:** 3,071 pytest + 620 Vitest = 3,691 total
+- **Total sprints:** 28 full + 27 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9, 27.5)
+- **Total sessions:** ~380+ Claude Code sessions
+- **Total tests:** 3,177 pytest + 620 Vitest = 3,797 total
 - **Total decisions:** 362 (DEC-001 through DEC-362)
-- **Calendar days (active dev):** ~38 (Feb 14 – Mar 23, 2026)
+- **Calendar days (active dev):** ~39 (Feb 14 – Mar 24, 2026)
 - **Largest sprint:** 22 (9 implementation + 5 fix + 9 reviews, largest scope)
 - **Cleanest sprint:** 23 (11 sessions, 0 regressions, 0 scope gaps requiring follow-up)
 - **Most test-dense:** Sprint 22 (286 new tests), Sprint 24 (209 new tests), Sprint 23.2 (188 new tests), Sprint 23 (141 new tests across 23+23.05)
