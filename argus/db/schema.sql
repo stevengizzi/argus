@@ -347,6 +347,34 @@ CREATE INDEX IF NOT EXISTS idx_quality_history_scored_at ON quality_history(scor
 CREATE INDEX IF NOT EXISTS idx_quality_history_grade ON quality_history(grade);
 
 -- ---------------------------------------------------------------------------
+-- Execution Records Table
+-- ---------------------------------------------------------------------------
+-- Execution quality logging for slippage model calibration (DEC-358 §5.1)
+CREATE TABLE IF NOT EXISTS execution_records (
+    record_id TEXT PRIMARY KEY,
+    order_id TEXT NOT NULL,
+    symbol TEXT NOT NULL,
+    strategy_id TEXT NOT NULL,
+    side TEXT NOT NULL,
+    expected_fill_price REAL NOT NULL,
+    expected_slippage_bps REAL NOT NULL,
+    actual_fill_price REAL NOT NULL,
+    actual_slippage_bps REAL NOT NULL,
+    time_of_day TEXT NOT NULL,
+    order_size_shares INTEGER NOT NULL,
+    avg_daily_volume INTEGER,
+    bid_ask_spread_bps REAL,
+    latency_ms REAL,
+    slippage_vs_model REAL NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_execution_records_order ON execution_records(order_id);
+CREATE INDEX IF NOT EXISTS idx_execution_records_strategy ON execution_records(strategy_id);
+CREATE INDEX IF NOT EXISTS idx_execution_records_symbol ON execution_records(symbol);
+CREATE INDEX IF NOT EXISTS idx_execution_records_created ON execution_records(created_at);
+
+-- ---------------------------------------------------------------------------
 -- System Health Table
 -- ---------------------------------------------------------------------------
 -- NOTE: Deferred to Step 10 (System Health Monitoring)
