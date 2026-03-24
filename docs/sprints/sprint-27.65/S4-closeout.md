@@ -98,3 +98,10 @@ Pre-existing failures:
 ## Context State
 
 **GREEN** — Session completed well within context limits.
+
+### Post-Review Fixes (S4.5)
+
+| Finding | Fix | Session |
+|---------|-----|---------|
+| F-1: AccountUpdateEvent dead code | Option A: publish via Event Bus, added to standard_events, removed manual _broadcast() | S4.5 |
+| F-3: Duck-typed candle store | Logged as DEF-096 for future Protocol type | S4.5 |

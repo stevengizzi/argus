@@ -284,8 +284,6 @@ class PatternBasedStrategy(BaseStrategy):
                 )
             return None
 
-        reduced_confidence = False
-
         # Build indicators from data service
         indicators: dict[str, float] = {}
         if self._data_service is not None:
@@ -303,7 +301,6 @@ class PatternBasedStrategy(BaseStrategy):
                 EvaluationEventType.ENTRY_EVALUATION,
                 EvaluationResult.FAIL,
                 f"No {self._pattern.name} pattern detected",
-                metadata={"reduced_confidence": reduced_confidence} if reduced_confidence else None,
             )
             return None
 
@@ -369,18 +366,13 @@ class PatternBasedStrategy(BaseStrategy):
             "pattern_strength": round(score, 2),
             "confidence": round(detection.confidence, 2),
         }
-        if reduced_confidence:
-            signal_metadata["reduced_confidence"] = True
-            signal_metadata["bars_available"] = bar_count
-            signal_metadata["bars_required"] = lookback
 
         self.record_evaluation(
             symbol,
             EvaluationEventType.SIGNAL_GENERATED,
             EvaluationResult.PASS,
             f"{self._pattern.name} signal: {symbol} entry at "
-            f"{detection.entry_price:.2f}, score={score:.1f}"
-            + (f" (partial history {bar_count}/{lookback})" if reduced_confidence else ""),
+            f"{detection.entry_price:.2f}, score={score:.1f}",
             metadata=signal_metadata,
         )
 

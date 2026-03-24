@@ -113,3 +113,12 @@ ZD trade: signal entry=$43.38, actual fill=$43.66 (+$0.28 slippage). Target limi
 ## Context State
 
 **GREEN** — Session completed within context limits. All files read before modification. Implementation verified against diff.
+
+### Post-Review Fixes (S4.5)
+
+| Finding | Fix | Session |
+|---------|-----|---------|
+| R2G missing zero-R guard | Added `_has_zero_r()` call in `_build_signal()` | S4.5 |
+| R2G missing concurrent position check | Added strategy-level check in `_handle_testing_level()` with 0=disabled | S4.5 |
+| Bracket amendment unprotected window | Logged as DEF-095 (live trading hardening) | S4.5 |
+| Squashed commit attribution | Acknowledged — process note, no action | S4.5 |

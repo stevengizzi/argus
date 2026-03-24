@@ -176,6 +176,8 @@ class WebSocketBridge:
             SignalEvent,
             OrderApprovedEvent,
             OrderRejectedEvent,
+            # Account events (Sprint 27.65 S4)
+            AccountUpdateEvent,
             # Orchestrator events
             RegimeChangeEvent,
             AllocationUpdateEvent,
@@ -231,6 +233,8 @@ class WebSocketBridge:
                 SignalEvent,
                 OrderApprovedEvent,
                 OrderRejectedEvent,
+                # Account events (Sprint 27.65 S4)
+                AccountUpdateEvent,
                 # Orchestrator events
                 RegimeChangeEvent,
                 AllocationUpdateEvent,
@@ -374,10 +378,11 @@ class WebSocketBridge:
                 logger.exception("Error in heartbeat loop")
 
     async def _account_poll_loop(self) -> None:
-        """Poll broker for account metrics and push via WebSocket.
+        """Poll broker for account metrics and publish via Event Bus.
 
-        Runs every 30 seconds. Publishes account.update messages with
-        equity, daily P&L, and buying power.
+        Runs every 30 seconds. Publishes AccountUpdateEvent with
+        equity, daily P&L, and buying power. The standard event handler
+        routes it to WebSocket clients via EVENT_TYPE_MAP.
         """
         interval = 30  # seconds
 
@@ -394,17 +399,13 @@ class WebSocketBridge:
                 if account is None:
                     continue
 
-                message = {
-                    "type": "account.update",
-                    "data": {
-                        "equity": getattr(account, "equity", 0.0),
-                        "daily_pnl": getattr(account, "daily_pnl", 0.0),
-                        "buying_power": getattr(account, "buying_power", 0.0),
-                    },
-                    "sequence": 0,
-                    "timestamp": datetime.now(UTC).isoformat(),
-                }
-                await self._broadcast(message, "account.update")
+                event = AccountUpdateEvent(
+                    equity=getattr(account, "equity", 0.0),
+                    daily_pnl=getattr(account, "daily_pnl", 0.0),
+                    buying_power=getattr(account, "buying_power", 0.0),
+                )
+                if self._event_bus is not None:
+                    await self._event_bus.publish(event)
             except asyncio.CancelledError:
                 break
             except Exception:

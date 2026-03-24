@@ -723,6 +723,23 @@ class RedToGreenStrategy(BaseStrategy):
             },
         )
 
+        # Concurrent positions check (0 = disabled)
+        max_positions = self._r2g_config.risk_limits.max_concurrent_positions
+        if max_positions > 0:
+            active_positions = sum(
+                1
+                for s in self._symbol_states.values()
+                if s.state == RedToGreenState.ENTERED
+            )
+            if active_positions >= max_positions:
+                self.record_evaluation(
+                    symbol,
+                    EvaluationEventType.ENTRY_EVALUATION,
+                    EvaluationResult.FAIL,
+                    f"Concurrent position limit: {active_positions}/{max_positions}",
+                )
+                return (RedToGreenState.TESTING_LEVEL, None)
+
         # Build signal
         return self._build_signal(symbol, candle, state, volume_ratio)
 
@@ -843,6 +860,16 @@ class RedToGreenStrategy(BaseStrategy):
 
         t1 = entry_price + 1.0 * risk_per_share
         t2 = entry_price + 2.0 * risk_per_share
+
+        # Zero-R guard: suppress signals with no profit potential
+        if self._has_zero_r(symbol, entry_price, t1):
+            self.record_evaluation(
+                symbol,
+                EvaluationEventType.ENTRY_EVALUATION,
+                EvaluationResult.FAIL,
+                f"Zero R: entry={entry_price:.2f}, target={t1:.2f}",
+            )
+            return (RedToGreenState.TESTING_LEVEL, None)
 
         pattern_strength, signal_context = self._calculate_pattern_strength(
             candle, state, level_type, volume_ratio,

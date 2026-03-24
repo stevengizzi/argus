@@ -40,7 +40,7 @@ For future consideration:
 
 ```json:structured-verdict
 {
-  "verdict": "CONCERNS",
+  "verdict": "CONCERNS_RESOLVED",
   "confidence": 0.90,
   "findings": [
     {
@@ -73,6 +73,23 @@ For future consideration:
   "recommendations": [
     "Add zero-R guard to RedToGreenStrategy for defense-in-depth consistency",
     "Consider submit-before-cancel bracket amendment pattern for live trading hardening"
+  ],
+  "post_review_fixes": [
+    "R2G zero-R guard added in _build_signal() (S4.5)",
+    "R2G concurrent position guard added in _handle_testing_level() (S4.5)",
+    "Submit-before-cancel bracket amendment logged as DEF-095 (S4.5)",
+    "Squashed commit observation acknowledged — process note"
   ]
 }
 ```
+
+### Post-Review Resolution
+
+Resolved in Sprint 27.65 S4.5:
+
+| Finding | Resolution |
+|---------|-----------|
+| MEDIUM: Bracket amendment unprotected window | Logged as DEF-095 for live trading hardening. No code change — existing emergency flatten provides safety net. |
+| LOW: R2G missing zero-R guard | Added `_has_zero_r()` call in `_build_signal()` with telemetry recording. |
+| LOW: R2G missing concurrent position check | Added strategy-level concurrent position check in `_handle_testing_level()` with 0=disabled guard. |
+| LOW: Squashed commit attribution | Acknowledged as process note. No action required. |

@@ -135,7 +135,7 @@ correctness or safety.
 
 ```json:structured-verdict
 {
-  "verdict": "CONCERNS",
+  "verdict": "CONCERNS_RESOLVED",
   "confidence": 0.92,
   "findings": [
     {
@@ -165,6 +165,20 @@ correctness or safety.
   "new_test_count": 16,
   "escalation_triggers": [],
   "scope_adherence": "FULL",
-  "files_not_to_modify_check": "PASS"
+  "files_not_to_modify_check": "PASS",
+  "post_review_fixes": [
+    "F-1: AccountUpdateEvent now published via Event Bus (Option A) — manual _broadcast() removed (S4.5)",
+    "F-3: Duck-typed candle store reference logged as DEF-096 (S4.5)"
+  ]
 }
 ```
+
+### Post-Review Resolution
+
+Resolved in Sprint 27.65 S4.5:
+
+| Finding | Resolution |
+|---------|-----------|
+| F-1: AccountUpdateEvent dead code | Implemented Option A — `_account_poll_loop` now publishes `AccountUpdateEvent` via Event Bus. Added to `standard_events` subscription list. Manual `_broadcast()` removed. |
+| F-2: getattr defensiveness | Accepted as V1 behavior. No action. |
+| F-3: Duck-typed candle store | Logged as DEF-096 for future Protocol type cleanup. |
