@@ -147,6 +147,7 @@ class ArgusSystem:
         self._regime_task: asyncio.Task[None] | None = None  # Sprint 25.6 S2: periodic regime reclass
         self._regime_check_count: int = 0  # Sprint 25.9: counter for INFO logging cadence
         self._bg_refresh_task: asyncio.Task[None] | None = None  # Sprint 25.9: background cache refresh
+        self._reconciliation_task: asyncio.Task[None] | None = None  # Sprint 27.65: position recon
 
     async def start(self) -> None:
         """Initialize and start all components in dependency order.
@@ -693,6 +694,16 @@ class ArgusSystem:
                 strategy.set_watchlist(list(um_symbols), source="universe_manager")
             logger.info("Strategy watchlists populated from Universe Manager routing")
 
+            # Initialize R2G prior_close from UM cached reference data (Sprint 27.65 S3)
+            if r2g_strategy is not None:
+                ref_data = {
+                    sym: self._universe_manager.get_reference_data(sym)
+                    for sym in r2g_strategy.watchlist
+                }
+                # Filter out None entries
+                valid_ref = {s: r for s, r in ref_data.items() if r is not None}
+                r2g_strategy.initialize_prior_closes(valid_ref)
+
         # --- Phase 10: Order Manager ---
         logger.info("[10/12] Starting order manager...")
         order_manager_yaml = load_yaml_file(self._config_dir / "order_manager.yaml")
@@ -923,6 +934,11 @@ class ArgusSystem:
             self._run_regime_reclassification()
         )
 
+        # Start periodic position reconciliation (Sprint 27.65)
+        self._reconciliation_task = asyncio.create_task(
+            self._run_position_reconciliation()
+        )
+
         # Start background cache refresh if trust_cache_on_startup is enabled (DEC-362)
         if (
             use_universe_manager
@@ -1032,6 +1048,54 @@ class ArgusSystem:
             except Exception as e:
                 logger.error("Regime reclassification error: %s", e)
 
+    async def _run_position_reconciliation(self) -> None:
+        """Periodic position reconciliation during market hours.
+
+        Runs every 60 seconds. Compares Order Manager internal positions
+        against broker-reported positions and logs warnings on mismatch.
+        Does NOT auto-correct — warn only.
+        """
+        from datetime import time as dt_time
+        from zoneinfo import ZoneInfo
+
+        et_tz = ZoneInfo("America/New_York")
+        market_open = dt_time(9, 30)
+        market_close = dt_time(16, 0)
+
+        while True:
+            await asyncio.sleep(60)
+            try:
+                now = self._clock.now()
+                now_et = (
+                    now.replace(tzinfo=et_tz) if now.tzinfo is None
+                    else now.astimezone(et_tz)
+                )
+                current_time = now_et.time()
+
+                if market_open <= current_time <= market_close:
+                    if self._broker is None or self._order_manager is None:
+                        continue
+
+                    # Get broker positions and convert to {symbol: quantity}
+                    broker_pos_list = await self._broker.get_positions()
+                    broker_positions: dict[str, float] = {}
+                    for pos in broker_pos_list:
+                        symbol = getattr(pos, "symbol", "")
+                        qty = float(getattr(pos, "qty", 0))
+                        if symbol and qty != 0:
+                            broker_positions[symbol] = qty
+
+                    discrepancies = self._order_manager.reconcile_positions(
+                        broker_positions
+                    )
+                    if discrepancies:
+                        logger.warning(
+                            "Position reconciliation: %d mismatch(es) found",
+                            len(discrepancies),
+                        )
+            except Exception as e:
+                logger.error("Position reconciliation error: %s", e)
+
     async def _background_cache_refresh(self, all_symbols: list[str]) -> None:
         """Background task to refresh stale reference cache entries (DEC-362).
 
@@ -1060,6 +1124,16 @@ class ArgusSystem:
         for strategy_id, strategy in self._strategies.items():
             um_symbols = self._universe_manager.get_strategy_symbols(strategy_id)
             strategy.set_watchlist(list(um_symbols), source="universe_manager")
+
+        # Re-initialize R2G prior_close after watchlist refresh (Sprint 27.65 S3)
+        for strategy in self._strategies.values():
+            if isinstance(strategy, RedToGreenStrategy):
+                ref_data = {
+                    sym: self._universe_manager.get_reference_data(sym)
+                    for sym in strategy.watchlist
+                }
+                valid_ref = {s: r for s, r in ref_data.items() if r is not None}
+                strategy.initialize_prior_closes(valid_ref)
 
         # Update data service viable universe for fast-path discard
         if hasattr(self._data_service, "set_viable_universe"):
@@ -1450,6 +1524,15 @@ class ArgusSystem:
                 await self._regime_task
             logger.info("Regime reclassification task stopped")
 
+        # 0a1a. Stop position reconciliation task (Sprint 27.65)
+        if self._reconciliation_task is not None:
+            import contextlib as _ctxlib_recon
+
+            self._reconciliation_task.cancel()
+            with _ctxlib_recon.suppress(asyncio.CancelledError):
+                await self._reconciliation_task
+            logger.info("Position reconciliation task stopped")
+
         # 0a1b. Stop background cache refresh task (DEC-362)
         if self._bg_refresh_task is not None:
             import contextlib as _ctxlib3
@@ -1486,6 +1569,15 @@ class ArgusSystem:
         if self._data_service:
             logger.info("Stopping data service...")
             await self._data_service.stop()
+
+        # 2a. Cancel all open orders at broker BEFORE stopping order manager
+        if self._broker:
+            try:
+                count = await self._broker.cancel_all_orders()
+                if count > 0:
+                    logger.info("Shutdown: cancelled %d open orders at broker", count)
+            except Exception as e:
+                logger.warning("Failed to cancel orders during shutdown: %s", e)
 
         # 3. Stop order manager
         if self._order_manager:

@@ -626,6 +626,16 @@ class SimulatedBroker(Broker):
         logger.info("Retrieved %d open orders from SimulatedBroker", len(orders))
         return orders
 
+    async def cancel_all_orders(self) -> int:
+        """Cancel all open orders (SimulatedBroker no-op).
+
+        Returns:
+            Number of orders cancelled (always 0 for simulated).
+        """
+        count = len(self._pending_brackets)
+        self._pending_brackets.clear()
+        return count
+
     async def flatten_all(self) -> list[OrderResult]:
         """Close all positions and cancel all pending orders.
 

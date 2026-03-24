@@ -161,6 +161,12 @@ class OrderManager:
         # Orders awaiting fill confirmation: keyed by order_id
         self._pending_orders: dict[str, PendingManagedOrder] = {}
 
+        # Flatten-pending guard: symbol → order_id (prevents duplicate flatten orders)
+        self._flatten_pending: dict[str, str] = {}
+
+        # Latest reconciliation result
+        self._last_reconciliation: dict[str, object] | None = None
+
         # Async tasks
         self._poll_task: asyncio.Task[None] | None = None
         self._running: bool = False
@@ -398,7 +404,8 @@ class OrderManager:
         """Handle order cancellation from broker.
 
         Remove from pending orders. If it was a stop order, ensure
-        the position still has protection.
+        the position still has protection. If it was a flatten order,
+        clear the flatten-pending guard so re-flattening can proceed.
         """
         pending = self._pending_orders.pop(event.order_id, None)
         if pending is None:
@@ -411,6 +418,16 @@ class OrderManager:
             pending.symbol,
             event.reason,
         )
+
+        # Clear flatten-pending guard if this was a flatten order
+        if pending.order_type == "flatten":
+            if self._flatten_pending.get(pending.symbol) == event.order_id:
+                self._flatten_pending.pop(pending.symbol, None)
+                logger.info(
+                    "Flatten-pending cleared for %s (order %s cancelled)",
+                    pending.symbol,
+                    event.order_id,
+                )
 
         if pending.order_type == "stop":
             # Critical: position may be unprotected
@@ -1148,7 +1165,21 @@ class OrderManager:
             logger.exception("Failed to submit T2 order for %s", position.symbol)
 
     async def _flatten_position(self, position: ManagedPosition, reason: str) -> None:
-        """Cancel all open orders for this position and submit market sell."""
+        """Cancel all open orders for this position and submit market sell.
+
+        Includes a flatten-pending guard to prevent duplicate flatten orders
+        (e.g., time-stop loop submitting a new flatten every 5 seconds).
+        """
+        # Flatten-pending guard: skip if a flatten order is already pending
+        existing_order_id = self._flatten_pending.get(position.symbol)
+        if existing_order_id is not None:
+            logger.info(
+                "Time-stop for %s: flatten already pending (order %s)",
+                position.symbol,
+                existing_order_id,
+            )
+            return
+
         # Cancel stop order
         if position.stop_order_id:
             try:
@@ -1196,6 +1227,9 @@ class OrderManager:
                 )
                 self._pending_orders[result.order_id] = pending
 
+                # Track flatten as pending (prevents duplicates)
+                self._flatten_pending[position.symbol] = result.order_id
+
                 # Handle immediate fill (SimulatedBroker fills market orders synchronously)
                 if result.status == OrderStatus.FILLED:
                     fill_event = OrderFilledEvent(
@@ -1218,6 +1252,9 @@ class OrderManager:
         exit_reason: ExitReason,
     ) -> None:
         """Finalize a fully closed position. Log trade, publish event, clean up."""
+        # Clear flatten-pending guard for this symbol
+        self._flatten_pending.pop(position.symbol, None)
+
         hold_seconds = int((self._clock.now() - position.entry_time).total_seconds())
 
         # Calculate weighted average exit price from realized P&L.
@@ -1319,6 +1356,8 @@ class OrderManager:
         # Positions should be empty after EOD flatten, but clear just in case
         self._managed_positions.clear()
         self._pending_orders.clear()
+        self._flatten_pending.clear()
+        self._last_reconciliation = None
 
     @property
     def has_open_positions(self) -> bool:
@@ -1391,3 +1430,55 @@ class OrderManager:
         for positions in self._managed_positions.values():
             result.extend(positions)
         return result
+
+    def reconcile_positions(
+        self, broker_positions: dict[str, float]
+    ) -> list[dict[str, object]]:
+        """Compare internal positions against broker-reported positions.
+
+        Warn-only — does NOT auto-correct. Returns a list of discrepancies.
+
+        Args:
+            broker_positions: Dict of {symbol: quantity} from broker.
+
+        Returns:
+            List of discrepancy dicts with symbol, internal_qty, broker_qty.
+        """
+        discrepancies: list[dict[str, object]] = []
+
+        # Build internal position totals by symbol
+        internal_positions: dict[str, int] = {}
+        for symbol, positions in self._managed_positions.items():
+            total_qty = sum(p.shares_remaining for p in positions if not p.is_fully_closed)
+            if total_qty > 0:
+                internal_positions[symbol] = total_qty
+
+        # Check all symbols in either set
+        all_symbols = set(internal_positions.keys()) | set(broker_positions.keys())
+        for symbol in sorted(all_symbols):
+            internal_qty = internal_positions.get(symbol, 0)
+            broker_qty = int(broker_positions.get(symbol, 0))
+            if internal_qty != broker_qty:
+                logger.warning(
+                    "Position mismatch: %s — ARGUS=%d, IBKR=%d",
+                    symbol,
+                    internal_qty,
+                    broker_qty,
+                )
+                discrepancies.append({
+                    "symbol": symbol,
+                    "internal_qty": internal_qty,
+                    "broker_qty": broker_qty,
+                })
+
+        self._last_reconciliation = {
+            "timestamp": self._clock.now().isoformat(),
+            "status": "synced" if not discrepancies else "mismatch",
+            "discrepancies": discrepancies,
+        }
+        return discrepancies
+
+    @property
+    def last_reconciliation(self) -> dict[str, object] | None:
+        """Return the latest reconciliation result."""
+        return self._last_reconciliation

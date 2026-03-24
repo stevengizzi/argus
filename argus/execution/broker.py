@@ -140,6 +140,16 @@ class Broker(ABC):
         """
 
     @abstractmethod
+    async def cancel_all_orders(self) -> int:
+        """Cancel all open orders at the broker.
+
+        Used during graceful shutdown to prevent orphaned orders.
+
+        Returns:
+            Number of orders that were cancelled.
+        """
+
+    @abstractmethod
     async def flatten_all(self) -> list[OrderResult]:
         """Emergency: close all open positions at market price.
 

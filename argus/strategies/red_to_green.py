@@ -39,6 +39,7 @@ from argus.strategies.telemetry import EvaluationEventType, EvaluationResult
 
 if TYPE_CHECKING:
     from argus.analytics.trade_logger import TradeLogger
+    from argus.data.fmp_reference import SymbolReferenceData
     from argus.data.service import DataService
 
 logger = logging.getLogger(__name__)
@@ -233,6 +234,13 @@ class RedToGreenStrategy(BaseStrategy):
             The new state after evaluation.
         """
         if state.prior_close <= 0:
+            self.record_evaluation(
+                symbol,
+                EvaluationEventType.CONDITION_CHECK,
+                EvaluationResult.FAIL,
+                "No prior_close data — cannot compute gap",
+                metadata={"condition_name": "prior_close_available", "passed": False},
+            )
             return RedToGreenState.WATCHING
 
         gap_pct = (candle.open - state.prior_close) / state.prior_close
@@ -970,6 +978,51 @@ class RedToGreenStrategy(BaseStrategy):
             allowed_regimes=["bullish_trending", "bearish_trending", "range_bound"],
             max_vix=35.0,
         )
+
+    # -------------------------------------------------------------------------
+    # Prior Close Initialization
+    # -------------------------------------------------------------------------
+
+    def initialize_prior_closes(
+        self,
+        reference_data: dict[str, SymbolReferenceData],
+    ) -> int:
+        """Populate prior_close for watchlist symbols from cached reference data.
+
+        Uses the Universe Manager's already-cached FMP reference data
+        (SymbolReferenceData.prev_close) — zero additional API calls.
+
+        Args:
+            reference_data: Mapping of symbol → SymbolReferenceData from
+                the Universe Manager's reference cache.
+
+        Returns:
+            Number of symbols successfully initialized.
+        """
+        initialized = 0
+        for symbol in self._watchlist:
+            ref = reference_data.get(symbol)
+            if ref is None or ref.prev_close is None or ref.prev_close <= 0:
+                continue
+            state = self._get_symbol_state(symbol)
+            state.prior_close = ref.prev_close
+            initialized += 1
+
+        if initialized > 0:
+            logger.info(
+                "%s: Initialized prior_close for %d/%d watchlist symbols",
+                self.strategy_id,
+                initialized,
+                len(self._watchlist),
+            )
+        else:
+            logger.warning(
+                "%s: Could not initialize prior_close for any of %d symbols",
+                self.strategy_id,
+                len(self._watchlist),
+            )
+
+        return initialized
 
     # -------------------------------------------------------------------------
     # State Management

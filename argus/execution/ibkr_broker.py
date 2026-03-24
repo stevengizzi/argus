@@ -958,6 +958,29 @@ class IBKRBroker(Broker):
         logger.info("Retrieved %d open orders from IBKR", len(orders))
         return orders
 
+    async def cancel_all_orders(self) -> int:
+        """Cancel all open orders at IBKR via reqGlobalCancel.
+
+        Used during graceful shutdown to prevent orphaned orders.
+
+        Returns:
+            Number of open orders that were present before cancellation.
+        """
+        if not self.is_connected:
+            logger.warning("cancel_all_orders: not connected to IB Gateway")
+            return 0
+
+        open_trades = self._ib.openTrades()
+        count = len(open_trades)
+        if count > 0:
+            self._ib.reqGlobalCancel()
+            # Wait briefly for cancellation confirmations
+            await asyncio.sleep(min(5.0, max(1.0, count * 0.5)))
+            logger.info("Shutdown: cancelled %d open orders at IBKR", count)
+        else:
+            logger.info("Shutdown: no open orders to cancel at IBKR")
+        return count
+
     async def flatten_all(self) -> list[OrderResult]:
         """Emergency: cancel all open orders, then close all positions.
 

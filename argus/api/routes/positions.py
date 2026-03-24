@@ -46,6 +46,14 @@ class PositionsResponse(BaseModel):
     timestamp: str
 
 
+class ReconciliationResponse(BaseModel):
+    """Response for GET /positions/reconciliation."""
+
+    status: str
+    discrepancies: list[dict[str, object]]
+    timestamp: str
+
+
 @router.get("", response_model=PositionsResponse)
 async def get_positions(
     _auth: dict = Depends(require_auth),  # noqa: B008
@@ -134,4 +142,31 @@ async def get_positions(
         positions=positions,
         count=len(positions),
         timestamp=datetime.now(UTC).isoformat(),
+    )
+
+
+@router.get("/reconciliation", response_model=ReconciliationResponse)
+async def get_reconciliation(
+    _auth: dict = Depends(require_auth),  # noqa: B008
+    state: AppState = Depends(get_app_state),  # noqa: B008
+) -> ReconciliationResponse:
+    """Get the latest position reconciliation result.
+
+    Returns the most recent comparison of internal positions against
+    broker-reported positions. If no discrepancies: status is "synced".
+
+    Returns:
+        Latest reconciliation result with timestamp and discrepancies.
+    """
+    result = state.order_manager.last_reconciliation
+    if result is None:
+        return ReconciliationResponse(
+            status="synced",
+            discrepancies=[],
+            timestamp=datetime.now(UTC).isoformat(),
+        )
+    return ReconciliationResponse(
+        status=str(result.get("status", "synced")),
+        discrepancies=list(result.get("discrepancies", [])),  # type: ignore[arg-type]
+        timestamp=str(result.get("timestamp", datetime.now(UTC).isoformat())),
     )

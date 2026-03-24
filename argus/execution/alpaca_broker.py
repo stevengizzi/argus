@@ -758,6 +758,22 @@ class AlpacaBroker(Broker):
             logger.error(f"Failed to get open orders from Alpaca: {e}", exc_info=True)
             return []
 
+    async def cancel_all_orders(self) -> int:
+        """Cancel all open orders at Alpaca.
+
+        Returns:
+            Number of orders cancelled.
+        """
+        self._check_connected()
+        try:
+            cancelled = self._trading_client.cancel_orders()
+            count = len(cancelled) if cancelled else 0
+            logger.info("Shutdown: cancelled %d open orders at Alpaca", count)
+            return count
+        except Exception as e:
+            logger.error("Failed to cancel all orders at Alpaca: %s", e)
+            return 0
+
     async def flatten_all(self) -> list[OrderResult]:
         """Emergency: close all open positions at market price.
 

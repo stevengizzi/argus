@@ -126,6 +126,46 @@ class PatternBasedStrategy(BaseStrategy):
         candle_time = event.timestamp.astimezone(ET).time()
         return self._earliest_entry_time <= candle_time < self._latest_entry_time
 
+    def backfill_candles(self, symbol: str, bars: list[CandleBar]) -> int:
+        """Prepend historical bars to a symbol's candle window.
+
+        Intended to be wired to IntradayCandleStore (Session S4.5) so
+        pattern strategies can evaluate immediately on first live candle
+        instead of waiting for lookback_bars worth of live data.
+
+        Bars are prepended (oldest first) up to the deque's maxlen.
+        Existing bars in the window are preserved at the end.
+
+        Args:
+            symbol: The ticker symbol.
+            bars: Historical CandleBars to prepend, ordered oldest-first.
+
+        Returns:
+            Number of bars actually added to the window.
+        """
+        window = self._get_candle_window(symbol)
+        max_len = self._pattern.lookback_bars
+        existing = list(window)
+        window.clear()
+
+        # Fill with historical bars first, then existing live bars
+        combined = bars + existing
+        # Deque maxlen will naturally truncate from the left (oldest)
+        added = 0
+        for bar in combined[-max_len:]:
+            window.append(bar)
+            added += 1
+
+        logger.debug(
+            "%s: backfill %s — %d bars prepended, window now %d/%d",
+            self.strategy_id,
+            symbol,
+            len(bars),
+            len(window),
+            max_len,
+        )
+        return added
+
     async def on_candle(self, event: CandleEvent) -> SignalEvent | None:
         """Process a candle and potentially emit a pattern-based signal.
 
@@ -140,6 +180,12 @@ class PatternBasedStrategy(BaseStrategy):
         # Check watchlist
         if symbol not in self._watchlist:
             return None
+
+        # Append candle to per-symbol window BEFORE operating window check
+        # so bars accumulate during pre-market/early hours (Sprint 27.65 S3 fix)
+        bar = candle_event_to_bar(event)
+        window = self._get_candle_window(symbol)
+        window.append(bar)
 
         # Check operating window
         if not self._is_in_entry_window(event):
@@ -162,20 +208,42 @@ class PatternBasedStrategy(BaseStrategy):
             )
             return None
 
-        # Append candle to per-symbol window
-        bar = candle_event_to_bar(event)
-        window = self._get_candle_window(symbol)
-        window.append(bar)
+        # Need full lookback before detecting patterns
+        lookback = self._pattern.lookback_bars
+        bar_count = len(window)
 
-        # Need full lookback before detecting
-        if len(window) < self._pattern.lookback_bars:
-            self.record_evaluation(
-                symbol,
-                EvaluationEventType.ENTRY_EVALUATION,
-                EvaluationResult.FAIL,
-                f"Insufficient history ({len(window)}/{self._pattern.lookback_bars})",
-            )
+        if bar_count < lookback:
+            # 50% threshold: log warm-up progress so strategy isn't silent
+            min_partial = (lookback + 1) // 2
+            if bar_count >= min_partial:
+                logger.info(
+                    "%s: evaluating %s with partial history (%d/%d)",
+                    self.strategy_id,
+                    symbol,
+                    bar_count,
+                    lookback,
+                )
+                self.record_evaluation(
+                    symbol,
+                    EvaluationEventType.ENTRY_EVALUATION,
+                    EvaluationResult.FAIL,
+                    f"Warming up ({bar_count}/{lookback}) — partial history",
+                    metadata={
+                        "reduced_confidence": True,
+                        "bars_available": bar_count,
+                        "bars_required": lookback,
+                    },
+                )
+            else:
+                self.record_evaluation(
+                    symbol,
+                    EvaluationEventType.ENTRY_EVALUATION,
+                    EvaluationResult.FAIL,
+                    f"Insufficient history ({bar_count}/{lookback})",
+                )
             return None
+
+        reduced_confidence = False
 
         # Build indicators from data service
         indicators: dict[str, float] = {}
@@ -194,6 +262,7 @@ class PatternBasedStrategy(BaseStrategy):
                 EvaluationEventType.ENTRY_EVALUATION,
                 EvaluationResult.FAIL,
                 f"No {self._pattern.name} pattern detected",
+                metadata={"reduced_confidence": reduced_confidence} if reduced_confidence else None,
             )
             return None
 
@@ -240,18 +309,25 @@ class PatternBasedStrategy(BaseStrategy):
             signal_context=self._last_context,
         )
 
+        signal_metadata: dict[str, object] = {
+            "entry": detection.entry_price,
+            "stop": detection.stop_price,
+            "pattern_strength": round(score, 2),
+            "confidence": round(detection.confidence, 2),
+        }
+        if reduced_confidence:
+            signal_metadata["reduced_confidence"] = True
+            signal_metadata["bars_available"] = bar_count
+            signal_metadata["bars_required"] = lookback
+
         self.record_evaluation(
             symbol,
             EvaluationEventType.SIGNAL_GENERATED,
             EvaluationResult.PASS,
             f"{self._pattern.name} signal: {symbol} entry at "
-            f"{detection.entry_price:.2f}, score={score:.1f}",
-            metadata={
-                "entry": detection.entry_price,
-                "stop": detection.stop_price,
-                "pattern_strength": round(score, 2),
-                "confidence": round(detection.confidence, 2),
-            },
+            f"{detection.entry_price:.2f}, score={score:.1f}"
+            + (f" (partial history {bar_count}/{lookback})" if reduced_confidence else ""),
+            metadata=signal_metadata,
         )
 
         logger.info(

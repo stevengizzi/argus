@@ -9,6 +9,7 @@ Before making any changes:
    - `argus/strategies/orb_base.py`
    - `config/system_live.yaml`
    - `docs/sprints/sprint-27.65/S1-closeout.md` (verify S1 complete)
+   - `docs/sprints/sprint-27.65/S1-review.md` (S1 CONCERNS to resolve in R4)
 2. Run the test baseline (DEC-328):
    Scoped: `python -m pytest tests/execution/ tests/core/test_risk_manager* tests/strategies/test_orb* -x -q`
    Expected: all passing (full suite confirmed by S1 close-out)
@@ -16,8 +17,9 @@ Before making any changes:
 
 ## Objective
 Fix bracket leg pricing after fill slippage (the ZD -$265 "target hit" bug),
-make concurrent position limits optional/disableable for paper trading, and
-add a zero-R signal guard.
+make concurrent position limits optional/disableable for paper trading, add a
+zero-R signal guard, and resolve the S1 reviewer's CONCERNS (shutdown sequence
+integration test + reconciliation endpoint typing).
 
 ## Background
 - ZD trade: signal entry=$43.38, actual fill=$43.66 (+28¢ slippage). Target
@@ -25,6 +27,16 @@ add a zero-R signal guard.
 - Max concurrent positions (2 per-strategy, 10 cross-strategy) blocked hundreds
   of legitimate signals during the session.
 - PDBC signal had entry=$16.86 and target=$16.86 (zero profit potential).
+- S1 Tier 2 review returned CONCERNS with 3 follow-up items (see below).
+
+## S1 Reviewer Follow-Ups (CONCERNS Resolution)
+The S1 reviewer identified 3 findings. All are picked up in this session:
+- **MEDIUM:** Shutdown integration test only mocks broker call, doesn't verify
+  ordering (cancel before disconnect) in actual shutdown sequence → R4.1
+- **LOW:** Reconciliation endpoint uses `type: ignore[arg-type]` due to
+  `dict[str, object]` typing on `_last_reconciliation` → R4.2
+- **LOW:** SimulatedBroker `cancel_all_orders()` close-out says "no-op" but
+  actually clears `_pending_brackets` — documentation mismatch → R4.3
 
 ## Requirements
 
@@ -68,14 +80,43 @@ add a zero-R signal guard.
 2. Apply the same guard in `PatternBasedStrategy` for pattern-based signals.
 3. This should be a base-level check, not strategy-specific.
 
+### R4: S1 Reviewer CONCERNS Resolution
+1. **Shutdown sequence ordering test (MEDIUM):**
+   Add an integration test that verifies the shutdown sequence calls methods
+   in the correct order: `broker.cancel_all_orders()` → `order_manager.stop()`
+   → `broker.disconnect()`. Approach: mock all three methods, call the shutdown
+   sequence (or the relevant portion of `ArgusSystem.stop()`), and assert call
+   order using `mock.assert_has_calls()` or by recording call timestamps. This
+   test belongs in `test_order_manager_safety.py` alongside the existing
+   shutdown tests from S1.
+
+2. **Reconciliation endpoint typing (LOW):**
+   Replace `_last_reconciliation: dict[str, object]` in OrderManager with a
+   proper typed structure. Options (pick whichever fits cleanest):
+   - A `ReconciliationResult` dataclass with `status: str`,
+     `discrepancies: list[dict]`, `timestamp: str` fields
+   - Or a Pydantic model if it's used in the API response serialization
+   Remove the `type: ignore[arg-type]` from `argus/api/routes/positions.py`.
+
+3. **SimulatedBroker close-out accuracy (LOW):**
+   Update the S1 close-out report (`docs/sprints/sprint-27.65/S1-closeout.md`)
+   to correct the description: SimulatedBroker's `cancel_all_orders()` clears
+   `_pending_brackets` (not a no-op). Single line edit. Also update the S1
+   review report with a post-review resolution table per the workflow protocol:
+   append "### Post-Review Resolution" section, change verdict to
+   `CONCERNS_RESOLVED`, add `post_review_fixes` array.
+
 ## Constraints
-- Do NOT modify: Order Manager's flatten_pending guard (from S1)
+- Do NOT modify: Order Manager's flatten_pending guard logic (from S1)
 - Do NOT modify: Risk Manager circuit breakers or daily loss limits
 - Do NOT modify: strategy evaluation logic or pattern detection
 - Bracket amendment must NOT leave a position without stop protection at any point
   (cancel + resubmit should be atomic or have a fallback)
 - The 0-means-disabled convention must not break existing tests that may set
   max_concurrent_positions to specific values
+- S1 close-out and review report edits (R4.3) must follow the Post-Review Fix
+  Documentation protocol exactly (append sections, update verdict to
+  CONCERNS_RESOLVED)
 
 ## Test Targets
 After implementation:
@@ -91,7 +132,9 @@ After implementation:
   8. `test_cross_strategy_limit_disabled` — system max=0, verify no cross-strategy blocking
   9. `test_zero_r_signal_suppressed` — entry=target, verify no signal emitted
   10. `test_normal_r_signal_not_affected` — entry < target, verify signal emitted normally
-- Minimum new test count: 10
+  11. `test_shutdown_sequence_ordering` — (R4.1) verify cancel_all_orders → order_manager.stop → broker.disconnect ordering
+  12. `test_reconciliation_result_typed` — (R4.2) verify ReconciliationResult fields, no type: ignore in endpoint
+- Minimum new test count: 12
 - Test command: `python -m pytest tests/ --ignore=tests/test_main.py -x -q -n auto`
 
 ## Regression Checklist (Session-Specific)
@@ -103,14 +146,19 @@ After implementation:
 | Risk Manager still enforces daily loss limit | Existing circuit breaker tests pass |
 | SimulatedBroker backtest path unaffected | Existing backtest tests pass |
 | Config models accept 0 for concurrent limits | New config validation test |
+| S1 flatten_pending guard still works | Existing S1 tests pass (no modifications to guard logic) |
+| Reconciliation endpoint still works | Existing S1 reconciliation tests pass with new typed model |
+| S1 close-out has Post-Review Fixes section | File inspection |
+| S1 review verdict is CONCERNS_RESOLVED | JSON verdict inspection |
 
 ## Definition of Done
 - [ ] Bracket amendment on slippage implemented and tested
 - [ ] Concurrent position limits made optional (0 = disabled)
 - [ ] Strategy and system configs updated for paper trading
 - [ ] Zero-R signal guard added
+- [ ] S1 CONCERNS resolved: shutdown ordering test, typed reconciliation, close-out/review updated
 - [ ] All existing tests pass
-- [ ] 10+ new tests written and passing
+- [ ] 12+ new tests written and passing
 - [ ] Close-out report written to file
 - [ ] Tier 2 review completed via @reviewer subagent
 
@@ -134,3 +182,7 @@ Write review to: `docs/sprints/sprint-27.65/S2-review.md`
 4. Verify zero-R guard uses absolute value and handles both long and short sides
 5. Verify existing backtest configs are not affected by config changes
 6. Check for race condition between entry fill and bracket amendment
+7. Verify shutdown ordering test actually asserts call sequence (R4.1)
+8. Verify `type: ignore` removed from reconciliation endpoint (R4.2)
+9. Verify S1 close-out and review report updated per Post-Review Fix protocol (R4.3)
+10. Confirm S1 review verdict changed to CONCERNS_RESOLVED with post_review_fixes array
