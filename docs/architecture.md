@@ -661,7 +661,7 @@ class Orchestrator:
 ```
 
 **Supporting Components:**
-- `RegimeClassifier` (`core/regime.py`): Rules-based SPY regime classification. Computes SMA-20/50, 5-day ROC, 20-day realized vol (VIX proxy, DEC-113). Classifies into 5 regimes: BULLISH_TRENDING, BEARISH_TRENDING, RANGE_BOUND, HIGH_VOLATILITY, CRISIS.
+- `RegimeClassifier` (`core/regime.py`): Rules-based SPY regime classification (V1). Computes SMA-20/50, 5-day ROC, 20-day realized vol (VIX proxy, DEC-113). Classifies into 5 regimes: BULLISH_TRENDING, BEARISH_TRENDING, RANGE_BOUND, HIGH_VOLATILITY, CRISIS. V2 (`RegimeClassifierV2`, Sprint 27.6) wraps V1 with 4 additional dimension calculators producing a multi-dimensional `RegimeVector` — see §3.6.1.
 - `PerformanceThrottler` (`core/throttle.py`): Evaluates per-strategy performance using per-strategy daily P&L from `TradeLogger.get_daily_pnl(strategy_id=...)`. Three rules: 5 consecutive losses → REDUCE, negative 20-day Sharpe → SUSPEND, >15% drawdown → SUSPEND. Worst action wins. Zero-trade-history guard (DEC-349, Sprint 25.7): returns `ThrottleAction.NONE` immediately when both `trades` and `daily_pnl` are empty — prevents false suspension of strategies with no history.
 - `CorrelationTracker` (`core/correlation.py`): Records daily P&L per strategy, computes pairwise Pearson correlation. Infrastructure for V2 correlation-adjusted allocation (DEC-116). Not yet wired into allocation math.
 
@@ -705,6 +705,46 @@ class Orchestrator:
 **Events Published:** RegimeChangeEvent, AllocationUpdateEvent, StrategyActivatedEvent, StrategySuspendedEvent
 
 **Decision Logging:** All allocation decisions persisted via `TradeLogger.log_orchestrator_decision()` to `orchestrator_decisions` table.
+
+### 3.6.1 Regime Intelligence (Sprint 27.6)
+
+Multi-dimensional regime classification replacing the single `MarketRegime` enum with a continuous `RegimeVector` across 6 dimensions. All data sourced from existing subscriptions ($0 additional cost). Config-gated via `regime_intelligence.enabled` in `config/regime.yaml`.
+
+**RegimeVector** (`core/regime.py`): Frozen dataclass capturing market environment across 6 dimensions:
+1. **Trend** — `trend_score` (-1.0 bearish to +1.0 bullish) + `trend_conviction` (0.0–1.0). Derived from V1 RegimeClassifier's SPY SMA/ROC indicators.
+2. **Volatility** — `volatility_level` (annualized realized vol, continuous) + `volatility_direction` (-1.0 falling to +1.0 rising). From V1's SPY 20-day realized vol.
+3. **Breadth** — `universe_breadth_score` (fraction of universe above 20-day MA, 0.0–1.0) + `breadth_thrust` (bool, crossed threshold rapidly). Computed from live Databento candle stream.
+4. **Correlation** — `average_correlation` (mean pairwise correlation of top N symbols) + `correlation_regime` ("dispersed"/"normal"/"concentrated"). Computed from cached daily returns.
+5. **Sector Rotation** — `sector_rotation_phase` ("risk_on"/"risk_off"/"mixed"/"transitioning") + `leading_sectors`/`lagging_sectors`. Via FMP sector performance endpoint (graceful degradation on 403).
+6. **Intraday Character** — `opening_drive_strength`, `first_30min_range_ratio`, `vwap_slope`, `direction_change_count` + `intraday_character` ("trending"/"choppy"/"reversal"/"breakout"). From SPY candle analysis at configurable times (default: 9:35/10:00/10:30 ET).
+
+Backward-compatible: `primary_regime` field provides the same `MarketRegime` enum for existing consumers. `regime_confidence` (0.0–1.0) provides overall assessment confidence.
+
+**RegimeOperatingConditions** (`core/regime.py`): Frozen dataclass defining acceptable regime ranges for strategy activation. Float dimensions use `(min, max)` inclusive ranges. String dimensions use list-of-allowed-values. `RegimeVector.matches_conditions()` checks all non-None constraints (AND logic). Empty conditions → always matches (vacuously true).
+
+**RegimeClassifierV2** (`core/regime.py`): Composes V1 `RegimeClassifier` with 4 dimension calculators. Delegates trend + volatility to V1, adds breadth/correlation/sector/intraday. Constructor takes `OrchestratorConfig`, `RegimeIntelligenceConfig`, and 4 calculator instances. `classify_regime_v2()` async method returns `RegimeVector`.
+
+**Calculators:**
+- `BreadthCalculator` (`core/breadth.py`): Maintains per-symbol state (latest close, MA buffer). `update(symbol, close)` for streaming updates. `compute()` returns `(breadth_score, breadth_thrust)`. Configurable `ma_period`, `thrust_threshold`, `min_symbols`, `min_bars_for_valid`.
+- `MarketCorrelationTracker` (`core/market_correlation.py`): Computes pairwise correlation of top N symbols over lookback window. `compute()` returns `(average_correlation, correlation_regime)`. Uses cached daily returns data (FMP daily bars or computed from Databento). Configurable `lookback_days`, `top_n_symbols`, `dispersed_threshold`, `concentrated_threshold`.
+- `SectorRotationAnalyzer` (`core/sector_rotation.py`): Fetches sector performance from FMP. `compute()` returns `(sector_rotation_phase, leading_sectors, lagging_sectors)`. Graceful degradation on HTTP 403 (FMP Starter plan limitation). Uses `aiohttp` with timeout.
+- `IntradayCharacterDetector` (`core/intraday_character.py`): Analyzes SPY intraday price action. `update(candle)` for streaming bar updates. `classify()` returns `(opening_drive_strength, first_30min_range_ratio, vwap_slope, direction_change_count, intraday_character)`. Configurable `first_bar_minutes`, `classification_times`, `min_spy_bars`, threshold parameters.
+
+**RegimeHistoryStore** (`core/regime_history.py`): SQLite persistence in `data/regime_history.db`. Fire-and-forget writes — exceptions logged, never disrupt trading. 7-day retention with automatic pruning. Stores serialized `RegimeVector` with computed_at timestamp. Schema: `regime_history` table with `id`, `computed_at`, `vector_json`, `primary_regime`, `regime_confidence`.
+
+**BacktestEngine Integration:** `use_regime_v2: bool` flag on `BacktestEngineConfig`. When enabled, BacktestEngine uses `RegimeClassifierV2` for regime tagging in `to_multi_objective_result()`.
+
+**Observatory Integration (Sprint 27.6.1):** Orchestrator exposes `latest_regime_vector_summary` property (duck-typed `to_dict()`, no `RegimeVector` import). Observatory REST `/session-summary` and WebSocket push include `regime_vector_summary` field. Frontend `RegimeVitals` component in `SessionVitalsBar` renders regime dimensions.
+
+**Config (`config/regime.yaml`):**
+```yaml
+enabled: true
+persist_history: true
+breadth: { enabled: true, ma_period: 20, thrust_threshold: 0.80, min_symbols: 50 }
+correlation: { enabled: true, lookback_days: 20, top_n_symbols: 50, dispersed_threshold: 0.30, concentrated_threshold: 0.60 }
+sector_rotation: { enabled: true }
+intraday: { enabled: true, first_bar_minutes: 5, classification_times: ["09:35","10:00","10:30"], min_spy_bars: 3 }
+```
 
 ### 3.7 Order Manager (`execution/order_manager.py`)
 
@@ -2110,6 +2150,7 @@ config/
 ├── brokers.yaml          # Broker connections and routing rules
 ├── risk_limits.yaml      # All three levels of risk parameters
 ├── orchestrator.yaml     # Allocation rules, regime thresholds, throttling rules
+├── regime.yaml           # Regime Intelligence V2 config — 6 dimensions, per-dimension enable flags (Sprint 27.6)
 ├── notifications.yaml    # Channel configs, alert routing, schedule
 ├── strategies/
 │   ├── orb_breakout.yaml

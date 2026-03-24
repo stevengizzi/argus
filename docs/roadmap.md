@@ -1,7 +1,7 @@
 # ARGUS — Strategic Roadmap
 
 > From artisanal strategies to ensemble alpha — the complete path
-> **v2.2 — March 24, 2026** (Sprint 27.5 complete — Evaluation Framework)
+> **v2.3 — March 24, 2026** (Sprint 27.6 complete — Regime Intelligence)
 > **Status:** CANONICAL — this is the single source of truth for ARGUS's strategic direction and sprint queue.
 > **Supersedes:** `docs/research/ARGUS_Expanded_Roadmap.md` (Feb 26), `docs/argus_unified_vision_roadmap.md` (Mar 5), `docs/10_PHASE3_SPRINT_PLAN.md` (all forward-looking sections)
 
@@ -53,7 +53,7 @@ These foundations are correct and remain:
 | Price/volume entry triggers only, static pre-market watchlist | **Full-universe monitoring** with strategy-specific filters + **NLP catalyst pipeline** enriching entry context (DEC-263) |
 | AI Layer as advisory add-on (Sprint 22) | **AI Layer as the brain** — real-time setup grading, sizing decisions, learning loop |
 | Orchestrator V1 (rules-based allocation) | **Ensemble Orchestrator** (correlation-aware, activation-filtered, hundreds of micro-strategies) |
-| RegimeClassifier (SPY vol proxy) | **Multi-factor regime engine** with sector rotation awareness |
+| RegimeClassifier (SPY vol proxy) | **Multi-factor regime engine** with sector rotation awareness (**Sprint 27.6 ✅** — RegimeVector 6 dimensions) |
 | Conservative risk defaults | **Graduated risk tiers** (conservative base → aggressive on A+ setups) |
 | Long-only | **Short selling infrastructure** for parabolic short and future short strategies |
 
@@ -78,7 +78,7 @@ These foundations are correct and remain:
 
 ARGUS completed 21 sprints + sub-sprints in ~17 calendar days of active development (Feb 14 – Mar 5). Average sprint: ~0.8 calendar days. However, sprint complexity has been increasing — early sprints (1–5) were dense single-day affairs, while later sprints (21a–21d, 21.5) span multiple days. The roadmap below assumes sprint durations of 1–4 days each depending on complexity, with some parallelism where noted.
 
-**Current state:** Sprint 27.5 complete. 3,177 pytest + 620 Vitest. Seven active strategies (4 original + R2G, Bull Flag, Flat-Top from Sprint 26) with per-candle evaluation telemetry. PatternModule ABC established for composable pattern detection. BacktestEngine operational with all 7 strategy types, walk-forward integration, CLI entry point, and risk_overrides for single-strategy backtesting (DEC-359). ExecutionRecord logging captures expected vs actual fill prices for slippage model calibration (DEC-358 §5.1). DEC-132 PARTIALLY RESOLVED — pipeline proven end-to-end with Databento data, Bull Flag validated (Sharpe 2.78), 6 strategies pending full-universe re-validation. Live Databento + IBKR paper trading with 28+ trades across 4 sessions. Eight-page Command Center (Observatory added Sprint 25) + AI Copilot active. FMP Scanner + Universe Manager integrated. Autonomous Sprint Runner implemented (DEC-278–297). NLP Catalyst Pipeline complete (DEC-300–307). Setup Quality Engine + Dynamic Position Sizer complete (DEC-330–341). Strategy Observability complete (DEC-342). Phase 5 Gate complete (March 21, 2026). Evaluation Framework complete (Sprint 27.5 — MultiObjectiveResult, EnsembleResult, Pareto comparison API, slippage model). Next: Sprint 27.6 (Regime Intelligence) → Sprint 27.7 (Counterfactual Engine) → Sprint 28 (Learning Loop V1).
+**Current state:** Sprint 27.6 complete. 3,337 pytest + 631 Vitest. Seven active strategies (4 original + R2G, Bull Flag, Flat-Top from Sprint 26) with per-candle evaluation telemetry. PatternModule ABC established for composable pattern detection. BacktestEngine operational with all 7 strategy types, walk-forward integration, CLI entry point, and risk_overrides for single-strategy backtesting (DEC-359). ExecutionRecord logging captures expected vs actual fill prices for slippage model calibration (DEC-358 §5.1). DEC-132 PARTIALLY RESOLVED — pipeline proven end-to-end with Databento data, Bull Flag validated (Sharpe 2.78), 6 strategies pending full-universe re-validation. Live Databento + IBKR paper trading with 28+ trades across 4 sessions. Eight-page Command Center (Observatory added Sprint 25) + AI Copilot active. FMP Scanner + Universe Manager integrated. Autonomous Sprint Runner implemented (DEC-278–297). NLP Catalyst Pipeline complete (DEC-300–307). Setup Quality Engine + Dynamic Position Sizer complete (DEC-330–341). Strategy Observability complete (DEC-342). Phase 5 Gate complete (March 21, 2026). Evaluation Framework complete (Sprint 27.5 — MultiObjectiveResult, EnsembleResult, Pareto comparison API, slippage model). Regime Intelligence complete (Sprint 27.6 — RegimeVector 6-dimension, 4 calculators, V2 classifier, RegimeHistoryStore, Observatory wiring). Next: Sprint 27.7 (Counterfactual Engine) → Sprint 28 (Learning Loop V1).
 
 ---
 
@@ -359,18 +359,23 @@ API auth 401 for unauthenticated requests (DEC-351). Close-position endpoint rou
 
 **Dependencies:** Sprint 27 (BacktestEngine) ✅, Sprint 21.6 ✅. No frontend work.
 
-### Sprint 27.6: Regime Intelligence (DEC-358)
-**Target:** ~3 days (6 sessions)
+### Sprint 27.6: Regime Intelligence (DEC-358) ✅ COMPLETE (March 24, 2026)
+**Target:** ~3 days (6 sessions) → **Actual:** 12 sessions (S1–S10 + S5-fix + S27.6.1)
 
-**Scope:**
-- **RegimeVector** replaces single MarketRegime enum with multi-dimensional representation: trend (score + conviction), volatility (level + direction), breadth (score + thrust), correlation (average + regime), sector rotation (phase + leading/lagging sectors), intraday character (opening drive, first-30-min range, VWAP slope, character classification).
-- **Backward-compatible** — `RegimeVector.primary_regime` provides same MarketRegime enum for existing consumers.
-- **Strategy operating windows as regime regions** — micro-strategies define operating conditions as ranges in regime space via YAML config.
-- **New components:** BreadthCalculator (live from Databento stream), CorrelationTracker (overnight compute, SQLite persistence), SectorRotationAnalyzer (FMP sector performance), IntradayCharacterDetector (SPY candle analysis at 9:35/10:00/10:30 AM ET), RegimeClassifierV2 (composes all dimensions).
-- **All data from existing subscriptions** — $0 additional cost. Breadth and intraday dimensions use live Databento stream. Correlation computed overnight. Sector from FMP Starter plan.
-- **Tests:** ~70 new.
+**Scope (delivered):**
+- **RegimeVector** frozen dataclass with 6 dimensions (18 fields): trend (score + conviction), volatility (level + direction), breadth (score + thrust), correlation (average + regime), sector rotation (phase + leading/lagging sectors), intraday character (opening drive, first-30-min range, VWAP slope, direction changes, character classification).
+- **Backward-compatible** — `RegimeVector.primary_regime` provides same MarketRegime enum for existing consumers. `regime_confidence` (0.0–1.0) for overall assessment.
+- **RegimeOperatingConditions** + `matches_conditions()` API for strategy activation in regime regions.
+- **New components:** BreadthCalculator (`core/breadth.py`), MarketCorrelationTracker (`core/market_correlation.py`), SectorRotationAnalyzer (`core/sector_rotation.py`), IntradayCharacterDetector (`core/intraday_character.py`), RegimeClassifierV2 (composes V1 + 4 calculators), RegimeHistoryStore (`core/regime_history.py` — SQLite persistence in `data/regime_history.db`, fire-and-forget, 7-day retention).
+- **Config-gated** via `regime_intelligence.enabled` in `config/regime.yaml`. Per-dimension enable flags.
+- **BacktestEngine integration** — `use_regime_v2` flag on BacktestEngineConfig.
+- **Observatory wiring (Sprint 27.6.1)** — `Orchestrator.latest_regime_vector_summary` property → REST + WS endpoints → frontend `RegimeVitals` component.
+- **All data from existing subscriptions** — $0 additional cost.
+- **0 of reserved DEC-369–378 used** — sprint spec was comprehensive.
+- **Tests:** 171 new (160 pytest + 11 Vitest).
+- **DEF items opened:** DEF-091, DEF-092, DEF-093.
 
-**Dependencies:** Sprint 27.5 (RegimeMetrics designed for multi-dimensional vectors). No frontend sprint — Observatory gains regime dimensions in session vitals (small addition).
+**Dependencies:** Sprint 27.5 (RegimeMetrics designed for multi-dimensional vectors) ✅.
 
 ### Sprint 27.7: Counterfactual Engine (DEC-358)
 **Target:** ~2 days (4 sessions)

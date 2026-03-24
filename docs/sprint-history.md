@@ -1,7 +1,7 @@
 # ARGUS — Sprint History
 
 > Complete record of all sprints from project inception through current state.
-> Active development began February 14, 2026. As of March 24, 2026 (~39 calendar days), 28 full sprints + 27 sub-sprints completed.
+> Active development began February 14, 2026. As of March 24, 2026 (~39 calendar days), 28 full sprints + 28 sub-sprints completed.
 
 ---
 
@@ -23,6 +23,7 @@
 | Q — BacktestEngine Core | 27 | Mar 22 | Production-code backtesting engine with SyncEventBus |
 | R — Backtest Re-Validation | 21.6 | Mar 23 | Databento re-validation + ExecutionRecord logging |
 | S — Evaluation Framework | 27.5 | Mar 23–24 | Universal evaluation infrastructure |
+| T — Regime Intelligence | 27.6 | Mar 24 | Multi-dimensional RegimeVector (6 dimensions) |
 
 ---
 
@@ -1454,16 +1455,112 @@
 
 ---
 
+## Phase T — Regime Intelligence (Sprint 27.6, Mar 24)
+
+### Sprint 27.6 — Regime Intelligence (3,337 pytest + 631 Vitest = 3,968 total)
+**Date:** Mar 24, 2026
+**Scope:** Replace single-dimension MarketRegime with multi-dimensional RegimeVector (6 dimensions: trend, volatility, breadth, correlation, sector rotation, intraday character). All from existing data sources at zero additional cost. Config-gated via `regime_intelligence.enabled`. Includes Observatory visualization wiring (impromptu Sprint 27.6.1).
+**Type:** Feature sprint. **Execution:** Human-in-the-loop.
+
+**Session 1 (S1): RegimeVector + V2 Shell + Config**
+- Created `RegimeVector` frozen dataclass in `core/regime.py` — 6 dimensions with 18 fields + backward-compatible `primary_regime`
+- Created `RegimeOperatingConditions` frozen dataclass with `matches_conditions()` API
+- Created `RegimeClassifierV2` shell composing V1 with dimension calculators
+- Created `config/regime.yaml` with per-dimension enable flags
+- Created `RegimeIntelligenceConfig` Pydantic model in `core/config.py`
+- Verdict: CLEAR
+
+**Session 2 (S2): BreadthCalculator**
+- Created `core/breadth.py` — per-symbol MA tracking, breadth score computation, thrust detection
+- Configurable `ma_period`, `thrust_threshold`, `min_symbols`, `min_bars_for_valid`
+- Streaming `update(symbol, close)` + batch `compute()` pattern
+- Verdict: CLEAR
+
+**Session 3 (S3): MarketCorrelationTracker**
+- Created `core/market_correlation.py` — pairwise correlation of top N symbols
+- Dispersed/normal/concentrated classification based on configurable thresholds
+- Uses cached daily returns data
+- Verdict: CLEAR
+
+**Session 4 (S4): SectorRotationAnalyzer**
+- Created `core/sector_rotation.py` — FMP sector performance endpoint
+- Risk-on/risk-off/mixed/transitioning classification
+- Graceful degradation on HTTP 403 (FMP Starter plan limitation)
+- Verdict: CLEAR
+
+**Session 5 (S5): IntradayCharacterDetector**
+- Created `core/intraday_character.py` — SPY candle analysis
+- Opening drive strength, first 30min range ratio, VWAP slope, direction change count
+- Character classification: trending/choppy/reversal/breakout
+- Configurable classification times (default: 9:35/10:00/10:30 ET)
+- Verdict: CONCERNS→RESOLVED (S5-fix confirmed configurability with 2 new tests)
+
+**Session 5-fix: Configurability Fixes**
+- Confirmed SPY symbol and 5-bar lookback already configurable in S5 implementation
+- Added 2 targeted tests verifying configurability
+- S5 verdict upgraded to CONCERNS_RESOLVED
+- Verdict: CLEAR
+
+**Session 6 (S6): Integration**
+- Wired RegimeClassifierV2 into Orchestrator with `_latest_regime_vector` attribute
+- Wired calculators into main.py startup sequence
+- Config-gated: falls back to V1 when `regime_intelligence.enabled: false`
+- Added `RegimeIntelligenceConfig` to `SystemConfig`
+- Verdict: CLEAR (PASS_WITH_NOTES)
+
+**Session 7 (S7): BacktestEngine V2 Integration**
+- Added `use_regime_v2: bool` flag on `BacktestEngineConfig`
+- BacktestEngine uses RegimeClassifierV2 for regime tagging when flag enabled
+- `RegimeOperatingConditions` matching integrated into operating conditions API
+- Verdict: CLEAR
+
+**Session 8 (S8): E2E Integration Tests + Cleanup**
+- Created comprehensive E2E tests for full regime pipeline
+- Cleanup verification tests ensuring no regressions
+- Golden fixture test data for regression detection
+- Verdict: CLEAR
+
+**Session 9 (S9): Operating Conditions**
+- `RegimeOperatingConditions` matching API complete
+- Strategy activation gating based on regime regions
+- YAML-based operating condition definitions
+- Verdict: CLEAR
+
+**Session 10 (S10): Observatory Visualization**
+- Frontend `RegimeVitals` component in `SessionVitalsBar`
+- `RegimeVectorSummary` TypeScript interface in `types.ts`
+- Session vitals bar displays regime dimensions
+- Verdict: CLEAR
+
+**Sprint 27.6.1 (Impromptu): Observatory Regime Vector Wiring**
+- Added `Orchestrator.latest_regime_vector_summary` property (duck-typed `to_dict()`, no RegimeVector import)
+- Wired regime_vector_summary to Observatory REST `/session-summary` endpoint
+- Wired regime_vector_summary to Observatory WebSocket push
+- All optional — None/null when regime intelligence disabled
+- +5 pytest
+- Verdict: CLEAR
+
+**Key decisions:** None issued — 0 of reserved DEC-369–378 used. Sprint spec was comprehensive enough that no new architectural decisions arose.
+**New deferred items:** DEF-091 (public accessors on V1 RegimeClassifier for V2 access), DEF-092 (unused Protocol types in regime.py), DEF-093 (main.py duplicate orchestrator YAML load + Orchestrator `_latest_regime_vector` typing).
+**Sessions:** 12 (S1–S10 + S5-fix + S27.6.1)
+**Test counts:** pytest 3,177 → 3,337 (+160), Vitest 620 → 631 (+11) = 171 new tests total
+**Review verdicts:** S1 CLEAR, S2 CLEAR, S3 CLEAR, S4 CLEAR, S5 CONCERNS→RESOLVED, S5-fix CLEAR, S6 CLEAR (PASS_WITH_NOTES), S7 CLEAR, S8 CLEAR, S9 CLEAR, S10 CLEAR, S27.6.1 CLEAR
+**New files:** 12 (6 impl modules + 6 test files + 1 golden fixture)
+**Modified files:** 11 (regime.py, config.py, events.py, orchestrator.py, main.py, engine.py, backtest/config.py, observatory.py route, observatory_ws.py, types.ts, SessionVitalsBar + hooks)
+**Notes:** Clean sprint — all 12 sessions CLEAR (S5 resolved in-sprint), no new DECs, no regressions. RegimeVector is the foundation for Sprint 27.7 (Counterfactual Engine) regime tagging and Sprint 28 (Learning Loop) multi-dimensional optimization. All data from existing subscriptions at zero additional cost. Backward-compatible via `primary_regime` field.
+
+---
+
 ## Sprint Statistics
 
-- **Total sprints:** 28 full + 27 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9, 27.5)
-- **Total sessions:** ~380+ Claude Code sessions
-- **Total tests:** 3,177 pytest + 620 Vitest = 3,797 total
+- **Total sprints:** 28 full + 28 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9, 27.5, 27.6)
+- **Total sessions:** ~395+ Claude Code sessions
+- **Total tests:** 3,337 pytest + 631 Vitest = 3,968 total
 - **Total decisions:** 362 (DEC-001 through DEC-362)
 - **Calendar days (active dev):** ~39 (Feb 14 – Mar 24, 2026)
 - **Largest sprint:** 22 (9 implementation + 5 fix + 9 reviews, largest scope)
 - **Cleanest sprint:** 23 (11 sessions, 0 regressions, 0 scope gaps requiring follow-up)
-- **Most test-dense:** Sprint 22 (286 new tests), Sprint 24 (209 new tests), Sprint 23.2 (188 new tests), Sprint 23 (141 new tests across 23+23.05)
+- **Most test-dense:** Sprint 22 (286 new tests), Sprint 24 (209 new tests), Sprint 23.2 (188 new tests), Sprint 27.6 (171 new tests), Sprint 23 (141 new tests across 23+23.05)
 - **Most Vitest-dense:** 21d (119 new Vitest), Sprint 25 (76 new Vitest), Sprint 24 (51 new Vitest)
 - **Crisis sprint:** 8 (VectorBT performance — iterrows() → vectorized, 4 conversations)
 - **Most compaction events:** Sprint 22 (Sessions 3a and 3b both compacted, led to DEC-275)

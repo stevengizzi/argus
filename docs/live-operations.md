@@ -572,4 +572,47 @@ The Debrief page includes a **Learning Journal** conversation browser:
 
 ---
 
-*End of Live Operations Guide v1.2*
+## 11. Regime Intelligence Operations
+
+*Added in Sprint 27.6. Config-gated via `regime_intelligence.enabled` in `config/regime.yaml`.*
+
+### Overview
+
+When enabled, the Regime Intelligence system extends the V1 RegimeClassifier with 4 additional dimension calculators, producing a multi-dimensional `RegimeVector` (6 dimensions: trend, volatility, breadth, correlation, sector rotation, intraday character). All data comes from existing subscriptions at zero additional cost.
+
+### Pre-Market Checks
+
+During pre-market startup, the regime system performs:
+
+1. **Correlation fetch** — MarketCorrelationTracker fetches cached daily returns for top N symbols and computes pairwise correlation. Uses FMP daily bars or computed from Databento candle data.
+2. **Sector performance fetch** — SectorRotationAnalyzer fetches sector performance from FMP sector endpoint via `asyncio.gather()` alongside correlation fetch.
+3. **Note:** FMP sector performance endpoint may return HTTP 403 on Starter plan ($22/mo). The SectorRotationAnalyzer handles this gracefully — sector rotation dimension returns None, and the RegimeVector is still valid with the remaining 5 dimensions populated.
+
+### Intraday Updates
+
+During market hours:
+- **BreadthCalculator** updates on every CandleEvent (streaming, zero-cost from existing Databento subscription)
+- **IntradayCharacterDetector** classifies session character at configurable times (default: 9:35, 10:00, 10:30 ET)
+- **RegimeClassifierV2** recomputes the full RegimeVector during periodic regime reclassification (300s interval)
+- **RegimeHistoryStore** persists each computed vector to `data/regime_history.db` (fire-and-forget, 7-day retention)
+
+### Observatory Visualization
+
+The Observatory page's Session Vitals Bar displays regime dimensions in real-time:
+- REST endpoint `/api/v1/observatory/session-summary` includes `regime_vector_summary`
+- WebSocket push includes regime data in `evaluation_summary` messages
+- All optional/null when regime intelligence disabled — no frontend errors
+
+### Troubleshooting
+
+| Issue | Symptom | Solution |
+|-------|---------|----------|
+| Regime Intelligence disabled | Only V1 regime shown | Check `regime_intelligence.enabled` in `config/regime.yaml` |
+| Sector rotation always null | FMP 403 on Starter plan | Expected on $22/mo plan. Upgrade to Premium ($59/mo) or accept 5-dimension vectors |
+| Breadth score null | Too few symbols in universe | Check `breadth.min_symbols` threshold (default 50). Universe Manager must be active with sufficient viable symbols |
+| Correlation always null | No cached daily returns | Ensure FMP daily bars fetch completes during pre-market. Check FMP API key |
+| Intraday character null | Too few SPY bars | Wait until `intraday.min_spy_bars` (default 3) worth of SPY candles arrive |
+
+---
+
+*End of Live Operations Guide v1.3*
