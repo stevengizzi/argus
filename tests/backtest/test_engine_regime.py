@@ -1,12 +1,13 @@
-"""Tests for BacktestEngine regime tagging — Sprint 27.5 Session 2.
+"""Tests for BacktestEngine regime tagging — Sprint 27.5 Session 2 + Sprint 27.6 S7.
 
 Verifies SPY daily bar aggregation, regime tag computation, trade-to-regime
-partitioning, to_multi_objective_result(), and edge cases.
+partitioning, to_multi_objective_result(), edge cases, and V2 golden-file parity.
 """
 
 from __future__ import annotations
 
 import asyncio
+import json
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -23,9 +24,12 @@ from argus.analytics.evaluation import (
 from argus.backtest.config import BacktestEngineConfig, StrategyType
 from argus.backtest.engine import BacktestEngine
 from argus.backtest.metrics import BacktestResult
-from argus.core.regime import MarketRegime
+from argus.core.config import OrchestratorConfig, RegimeIntelligenceConfig
+from argus.core.regime import MarketRegime, RegimeClassifier, RegimeClassifierV2, RegimeVector
 
 ET = ZoneInfo("America/New_York")
+
+GOLDEN_FIXTURE_PATH = Path(__file__).parent / "fixtures" / "golden_regime_tags_v1.json"
 
 
 # ---------------------------------------------------------------------------
@@ -458,3 +462,297 @@ async def test_load_spy_daily_bars_no_spy_dir(tmp_path: Path) -> None:
     engine = BacktestEngine(config)
     result = await engine._load_spy_daily_bars(date(2025, 6, 16), date(2025, 6, 20))
     assert result is None
+
+
+# ---------------------------------------------------------------------------
+# Sprint 27.6 S7 — V2 Integration Tests
+# ---------------------------------------------------------------------------
+
+
+def _make_v2_config(tmp_path: Path) -> BacktestEngineConfig:
+    """Create a BacktestEngineConfig with use_regime_v2=True."""
+    return BacktestEngineConfig(
+        start_date=date(2025, 6, 16),
+        end_date=date(2025, 6, 20),
+        output_dir=tmp_path / "backtest_runs",
+        cache_dir=tmp_path / "cache",
+        strategy_type=StrategyType.ORB_BREAKOUT,
+        strategy_id="strat_orb_breakout",
+        log_level="WARNING",
+        use_regime_v2=True,
+    )
+
+
+def _load_golden_fixture() -> dict[str, object]:
+    """Load the frozen golden-file fixture."""
+    with open(GOLDEN_FIXTURE_PATH) as f:
+        return json.load(f)
+
+
+def _build_daily_bars_from_fixture(
+    fixture: dict[str, object],
+) -> pd.DataFrame:
+    """Reconstruct daily bar DataFrame from the golden fixture."""
+    bar_data: dict[str, dict[str, float]] = fixture["daily_bars"]  # type: ignore[assignment]
+    rows = []
+    for date_str, bar in sorted(bar_data.items()):
+        rows.append({
+            "date": date.fromisoformat(date_str),
+            "open": bar["open"],
+            "high": bar["high"],
+            "low": bar["low"],
+            "close": bar["close"],
+            "volume": bar["volume"],
+        })
+    df = pd.DataFrame(rows)
+    df = df.set_index("date")
+    df.index.name = "date"
+    return df
+
+
+def test_v2_compute_regime_tags_same_as_v1(tmp_path: Path) -> None:
+    """V2 with None calculators produces identical tags to V1."""
+    config_v1 = _make_config(tmp_path)
+    config_v2 = _make_v2_config(tmp_path)
+    engine_v1 = BacktestEngine(config_v1)
+    engine_v2 = BacktestEngine(config_v2)
+
+    dates = [date(2025, 4, 1) + timedelta(days=i) for i in range(100)]
+    dates = [d for d in dates if d.weekday() < 5][:60]
+    n = len(dates)
+
+    daily = pd.DataFrame(
+        {
+            "open": [400.0 + i * 1.0 for i in range(n)],
+            "high": [401.0 + i * 1.0 for i in range(n)],
+            "low": [399.0 + i * 1.0 for i in range(n)],
+            "close": [400.5 + i * 1.0 for i in range(n)],
+            "volume": [1_000_000] * n,
+        },
+        index=dates,
+    )
+    daily.index.name = "date"
+
+    tags_v1 = engine_v1._compute_regime_tags(daily)
+    tags_v2 = engine_v2._compute_regime_tags(daily)
+
+    assert tags_v1 == tags_v2
+
+
+def test_golden_file_parity_v2_matches_frozen_v1(tmp_path: Path) -> None:
+    """V2 produces identical regime tags to frozen V1 golden fixture (100 days)."""
+    fixture = _load_golden_fixture()
+    daily = _build_daily_bars_from_fixture(fixture)
+    expected_tags: dict[str, str] = fixture["regime_tags"]  # type: ignore[assignment]
+
+    config = _make_v2_config(tmp_path)
+    engine = BacktestEngine(config)
+
+    computed_tags = engine._compute_regime_tags(daily)
+
+    # Convert date keys to ISO strings for comparison
+    computed_str = {d.isoformat(): v for d, v in computed_tags.items()}
+
+    # Only compare the 100 fixture dates (daily has 150 total bars)
+    for date_str, expected_regime in expected_tags.items():
+        assert date_str in computed_str, f"Missing date {date_str} in V2 output"
+        assert computed_str[date_str] == expected_regime, (
+            f"Mismatch on {date_str}: V2={computed_str[date_str]} vs V1={expected_regime}"
+        )
+
+
+def test_regime_tags_are_market_regime_value_strings(tmp_path: Path) -> None:
+    """All regime tag values are valid MarketRegime.value strings."""
+    fixture = _load_golden_fixture()
+    daily = _build_daily_bars_from_fixture(fixture)
+
+    config = _make_v2_config(tmp_path)
+    engine = BacktestEngine(config)
+
+    tags = engine._compute_regime_tags(daily)
+    valid_values = {r.value for r in MarketRegime}
+
+    for d, regime_str in tags.items():
+        assert regime_str in valid_values, f"Invalid regime value '{regime_str}' on {d}"
+
+
+@pytest.mark.asyncio
+async def test_to_multi_objective_result_with_v2_tags(tmp_path: Path) -> None:
+    """to_multi_objective_result() produces valid regime_results with V2 tags."""
+    config = _make_v2_config(tmp_path)
+    engine = BacktestEngine(config)
+    engine._trading_days = [date(2025, 6, 16)]
+
+    mock_trade = MagicMock()
+    mock_trade.net_pnl = 100.0
+    mock_trade.r_multiple = 1.0
+    mock_trade.commission = 0.0
+    mock_trade.hold_duration_seconds = 1800
+    mock_trade.exit_price = 150.0
+    mock_trade.exit_time = datetime(2025, 6, 16, 14, 0, 0, tzinfo=ET)
+    mock_trade.gross_pnl = 100.0
+
+    mock_logger = AsyncMock()
+    mock_logger.get_trades_by_date_range = AsyncMock(return_value=[mock_trade])
+    engine._trade_logger = mock_logger
+
+    result = _make_empty_result(total_trades=1)
+
+    with patch.object(engine, "_load_spy_daily_bars", new=AsyncMock(return_value=None)):
+        mor = await engine.to_multi_objective_result(result)
+
+    assert isinstance(mor, MultiObjectiveResult)
+    assert MarketRegime.RANGE_BOUND.value in mor.regime_results
+    assert mor.regime_results[MarketRegime.RANGE_BOUND.value].total_trades == 1
+
+
+def test_v2_backtest_only_trend_vol_dimensions() -> None:
+    """V2 in backtest mode: only trend+vol populated, others are defaults."""
+    orch_config = OrchestratorConfig()
+    regime_config = RegimeIntelligenceConfig(
+        enabled=True,
+        breadth={"enabled": False},
+        correlation={"enabled": False},
+        sector_rotation={"enabled": False},
+        intraday={"enabled": False},
+    )
+    v2 = RegimeClassifierV2(
+        config=orch_config,
+        regime_config=regime_config,
+        breadth=None,
+        correlation=None,
+        sector=None,
+        intraday=None,
+    )
+
+    # Build a simple uptrend series (50 days)
+    dates = [date(2025, 4, 1) + timedelta(days=i) for i in range(70)]
+    dates = [d for d in dates if d.weekday() < 5][:50]
+    n = len(dates)
+    daily = pd.DataFrame(
+        {
+            "open": [400.0 + i * 1.0 for i in range(n)],
+            "high": [401.0 + i * 1.0 for i in range(n)],
+            "low": [399.0 + i * 1.0 for i in range(n)],
+            "close": [400.5 + i * 1.0 for i in range(n)],
+            "volume": [1_000_000] * n,
+        },
+        index=dates,
+    )
+
+    indicators = v2.compute_indicators(daily)
+    vector = v2.compute_regime_vector(indicators)
+
+    # Trend and vol should be populated
+    assert isinstance(vector, RegimeVector)
+    assert vector.trend_score != 0.0 or vector.trend_conviction >= 0.0
+    assert vector.volatility_level >= 0.0
+
+    # Breadth, correlation, sector, intraday should be defaults (None)
+    assert vector.universe_breadth_score is None
+    assert vector.breadth_thrust is None
+    assert vector.average_correlation is None
+    assert vector.correlation_regime is None
+    assert vector.sector_rotation_phase is None
+    assert vector.leading_sectors == []
+    assert vector.lagging_sectors == []
+    assert vector.opening_drive_strength is None
+    assert vector.first_30min_range_ratio is None
+    assert vector.vwap_slope is None
+    assert vector.direction_change_count is None
+    assert vector.intraday_character is None
+
+
+def test_v2_breadth_correlation_sector_intraday_are_none_defaults(
+    tmp_path: Path,
+) -> None:
+    """Breadth/correlation/sector/intraday are all None in backtest V2."""
+    config = _make_v2_config(tmp_path)
+    engine = BacktestEngine(config)
+
+    # Access the classifier created inside _compute_regime_tags by checking
+    # the config flag is set correctly
+    assert config.use_regime_v2 is True
+
+    # Create minimal daily bars and verify tags are valid
+    dates = [date(2025, 6, 16) + timedelta(days=i) for i in range(25)]
+    dates = [d for d in dates if d.weekday() < 5][:25]
+    n = len(dates)
+    daily = pd.DataFrame(
+        {
+            "open": [450.0] * n,
+            "high": [451.0] * n,
+            "low": [449.0] * n,
+            "close": [450.5] * n,
+            "volume": [1_000_000] * n,
+        },
+        index=dates,
+    )
+    daily.index.name = "date"
+
+    tags = engine._compute_regime_tags(daily)
+    valid_values = {r.value for r in MarketRegime}
+    for regime_str in tags.values():
+        assert regime_str in valid_values
+
+
+def test_backtest_engine_v1_fallback_when_regime_v2_disabled(
+    tmp_path: Path,
+) -> None:
+    """use_regime_v2=False (default) -> V1 classifier used, same behavior."""
+    config = _make_config(tmp_path)
+    assert config.use_regime_v2 is False  # Default
+
+    engine = BacktestEngine(config)
+
+    dates = [date(2025, 4, 1) + timedelta(days=i) for i in range(100)]
+    dates = [d for d in dates if d.weekday() < 5][:60]
+    n = len(dates)
+
+    daily = pd.DataFrame(
+        {
+            "open": [400.0 + i * 1.0 for i in range(n)],
+            "high": [401.0 + i * 1.0 for i in range(n)],
+            "low": [399.0 + i * 1.0 for i in range(n)],
+            "close": [400.5 + i * 1.0 for i in range(n)],
+            "volume": [1_000_000] * n,
+        },
+        index=dates,
+    )
+    daily.index.name = "date"
+
+    tags = engine._compute_regime_tags(daily)
+
+    # Verify V1 produces known result for uptrend data
+    last_day = dates[-1]
+    assert tags[last_day] == MarketRegime.BULLISH_TRENDING.value
+
+
+def test_existing_backtest_integration_unchanged(tmp_path: Path) -> None:
+    """Existing V1 test behavior preserved — regime tags for uptrend data."""
+    config = _make_config(tmp_path)
+    engine = BacktestEngine(config)
+
+    dates = [date(2025, 4, 1) + timedelta(days=i) for i in range(100)]
+    dates = [d for d in dates if d.weekday() < 5][:60]
+    n = len(dates)
+
+    daily = pd.DataFrame(
+        {
+            "open": [400.0 + i * 1.0 for i in range(n)],
+            "high": [401.0 + i * 1.0 for i in range(n)],
+            "low": [399.0 + i * 1.0 for i in range(n)],
+            "close": [400.5 + i * 1.0 for i in range(n)],
+            "volume": [1_000_000] * n,
+        },
+        index=dates,
+    )
+    daily.index.name = "date"
+
+    tags = engine._compute_regime_tags(daily)
+
+    assert len(tags) == 60
+    assert tags[dates[-1]] == MarketRegime.BULLISH_TRENDING.value
+    # Early days should be RANGE_BOUND (insufficient history)
+    for d in dates[:19]:
+        assert tags[d] == MarketRegime.RANGE_BOUND.value

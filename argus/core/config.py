@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from argus.ai.config import AIConfig
 from argus.analytics.config import ObservatoryConfig
+from argus.core.regime import RegimeOperatingConditions
 from argus.intelligence.config import CatalystConfig, QualityEngineConfig
 
 # ---------------------------------------------------------------------------
@@ -594,6 +595,7 @@ class StrategyConfig(BaseModel):
     operating_window: OperatingWindow = OperatingWindow()
     benchmarks: PerformanceBenchmarks = PerformanceBenchmarks()
     universe_filter: UniverseFilterConfig | None = None
+    operating_conditions: RegimeOperatingConditions | None = None
 
 
 # ---------------------------------------------------------------------------

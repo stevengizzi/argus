@@ -51,12 +51,13 @@ from argus.core.config import (
     OrchestratorConfig,
     OrderManagerConfig,
     RedToGreenConfig,
+    RegimeIntelligenceConfig,
     RiskConfig,
     VwapReclaimConfig,
     load_yaml_file,
 )
 from argus.core.events import CandleEvent, OrderFilledEvent
-from argus.core.regime import MarketRegime, RegimeClassifier
+from argus.core.regime import MarketRegime, RegimeClassifier, RegimeClassifierV2
 from argus.core.risk_manager import RiskManager
 from argus.core.sync_event_bus import SyncEventBus
 from argus.db.manager import DatabaseManager
@@ -1078,8 +1079,9 @@ class BacktestEngine:
     ) -> dict[date, str]:
         """Tag each trading day with a market regime.
 
-        Uses RegimeClassifier with default OrchestratorConfig thresholds
-        to classify each day based on trailing daily bar history.
+        Uses RegimeClassifier (V1) or RegimeClassifierV2 (backtest mode with
+        all calculators as None) based on config.use_regime_v2. V2 delegates
+        to V1 internally, producing identical regime tags.
 
         Args:
             daily_bars: DataFrame with daily OHLCV, indexed by date.
@@ -1087,8 +1089,26 @@ class BacktestEngine:
         Returns:
             Mapping of date to regime string value.
         """
-        config = OrchestratorConfig()
-        classifier = RegimeClassifier(config)
+        orch_config = OrchestratorConfig()
+
+        if self._config.use_regime_v2:
+            regime_config = RegimeIntelligenceConfig(
+                enabled=True,
+                breadth={"enabled": False},
+                correlation={"enabled": False},
+                sector_rotation={"enabled": False},
+                intraday={"enabled": False},
+            )
+            classifier = RegimeClassifierV2(
+                config=orch_config,
+                regime_config=regime_config,
+                breadth=None,
+                correlation=None,
+                sector=None,
+                intraday=None,
+            )
+        else:
+            classifier = RegimeClassifier(orch_config)
 
         regime_tags: dict[date, str] = {}
         dates = list(daily_bars.index)

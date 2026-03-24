@@ -193,3 +193,8 @@ class BacktestEngineConfig(BaseModel):
         "account.cash_reserve_pct": 0.05,
         "cross_strategy.max_single_stock_pct": 0.50,
     })
+
+    # Regime classification version (Sprint 27.6 S7)
+    # When True, uses RegimeClassifierV2 with all calculators as None
+    # (backtest mode — trend+vol only). Produces identical regime tags to V1.
+    use_regime_v2: bool = False

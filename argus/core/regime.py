@@ -205,6 +205,92 @@ class RegimeVector:
             regime_confidence=float(data["regime_confidence"]),
         )
 
+    def matches_conditions(self, conditions: RegimeOperatingConditions) -> bool:
+        """Check if this RegimeVector satisfies all operating conditions.
+
+        For each non-None range constraint: the corresponding RegimeVector
+        field must be non-None and within [min, max] inclusive.
+        For each non-None string list constraint: the corresponding field
+        must be non-None and present in the allowed list.
+        Empty conditions (all None) → always matches (vacuously true).
+
+        Args:
+            conditions: The operating conditions to check against.
+
+        Returns:
+            True if all non-None conditions are satisfied, False otherwise.
+        """
+        # Float range checks: (field_value, constraint)
+        range_checks: list[tuple[float | None, tuple[float, float] | None]] = [
+            (self.trend_score, conditions.trend_score),
+            (self.trend_conviction, conditions.trend_conviction),
+            (self.volatility_level, conditions.volatility_level),
+            (self.universe_breadth_score, conditions.universe_breadth_score),
+            (self.average_correlation, conditions.average_correlation),
+            (self.regime_confidence, conditions.regime_confidence),
+        ]
+        for field_value, constraint in range_checks:
+            if constraint is None:
+                continue
+            if field_value is None:
+                return False
+            low, high = constraint
+            if not (low <= field_value <= high):
+                return False
+
+        # String list checks: (field_value, constraint)
+        string_checks: list[tuple[str | None, list[str] | None]] = [
+            (self.correlation_regime, conditions.correlation_regime),
+            (self.sector_rotation_phase, conditions.sector_rotation_phase),
+            (self.intraday_character, conditions.intraday_character),
+        ]
+        for field_value, constraint in string_checks:
+            if constraint is None:
+                continue
+            if field_value is None:
+                return False
+            if field_value not in constraint:
+                return False
+
+        return True
+
+
+@dataclass(frozen=True)
+class RegimeOperatingConditions:
+    """Defines acceptable regime ranges for strategy activation.
+
+    Each field constrains a corresponding RegimeVector dimension.
+    None means unconstrained (always matches). All non-None conditions
+    must match (AND logic).
+
+    Float dimensions use (min, max) inclusive ranges.
+    String dimensions use list-of-allowed-values matching.
+
+    Attributes:
+        trend_score: Acceptable range for trend_score (-1.0 to +1.0).
+        trend_conviction: Acceptable range for trend_conviction (0.0 to 1.0).
+        volatility_level: Acceptable range for volatility_level.
+        universe_breadth_score: Acceptable range for universe_breadth_score.
+        average_correlation: Acceptable range for average_correlation.
+        regime_confidence: Acceptable range for regime_confidence.
+        correlation_regime: Allowed correlation regime strings.
+        sector_rotation_phase: Allowed sector rotation phase strings.
+        intraday_character: Allowed intraday character strings.
+    """
+
+    # Float range constraints (min, max inclusive)
+    trend_score: tuple[float, float] | None = None
+    trend_conviction: tuple[float, float] | None = None
+    volatility_level: tuple[float, float] | None = None
+    universe_breadth_score: tuple[float, float] | None = None
+    average_correlation: tuple[float, float] | None = None
+    regime_confidence: tuple[float, float] | None = None
+
+    # String list constraints
+    correlation_regime: list[str] | None = None
+    sector_rotation_phase: list[str] | None = None
+    intraday_character: list[str] | None = None
+
 
 class BreadthCalculator(Protocol):
     """Protocol for breadth dimension calculators."""
