@@ -1,15 +1,27 @@
 """Tests for market regime classification."""
 
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pandas as pd
 import pytest
+import yaml
 
-from argus.core.config import OrchestratorConfig
+from argus.core.config import (
+    BreadthConfig,
+    CorrelationConfig,
+    IntradayConfig,
+    OrchestratorConfig,
+    RegimeIntelligenceConfig,
+    SectorRotationConfig,
+    SystemConfig,
+)
 from argus.core.regime import (
     MarketRegime,
     RegimeClassifier,
+    RegimeClassifierV2,
     RegimeIndicators,
+    RegimeVector,
     VolatilityBucket,
 )
 
@@ -787,3 +799,473 @@ class TestTrendScore:
         score = classifier._compute_trend_score(indicators)
 
         assert score == -1
+
+
+# ============================================================================
+# RegimeVector Tests (Sprint 27.6)
+# ============================================================================
+
+
+class TestRegimeVector:
+    """Tests for the RegimeVector frozen dataclass."""
+
+    def test_construction_with_all_fields(self) -> None:
+        """RegimeVector constructs with all 6 dimensions populated."""
+        now = datetime.now(UTC)
+        rv = RegimeVector(
+            computed_at=now,
+            trend_score=0.8,
+            trend_conviction=0.9,
+            volatility_level=0.15,
+            volatility_direction=0.2,
+            universe_breadth_score=0.65,
+            breadth_thrust=True,
+            average_correlation=0.45,
+            correlation_regime="normal",
+            sector_rotation_phase="risk_on",
+            leading_sectors=["XLK", "XLY"],
+            lagging_sectors=["XLU", "XLP"],
+            opening_drive_strength=0.6,
+            first_30min_range_ratio=1.1,
+            vwap_slope=0.0003,
+            direction_change_count=1,
+            intraday_character="trending",
+            primary_regime=MarketRegime.BULLISH_TRENDING,
+            regime_confidence=0.85,
+        )
+
+        assert rv.trend_score == 0.8
+        assert rv.trend_conviction == 0.9
+        assert rv.volatility_level == 0.15
+        assert rv.universe_breadth_score == 0.65
+        assert rv.breadth_thrust is True
+        assert rv.average_correlation == 0.45
+        assert rv.correlation_regime == "normal"
+        assert rv.sector_rotation_phase == "risk_on"
+        assert rv.leading_sectors == ["XLK", "XLY"]
+        assert rv.lagging_sectors == ["XLU", "XLP"]
+        assert rv.opening_drive_strength == 0.6
+        assert rv.intraday_character == "trending"
+        assert rv.primary_regime == MarketRegime.BULLISH_TRENDING
+        assert rv.regime_confidence == 0.85
+
+    def test_frozen_immutability(self) -> None:
+        """RegimeVector is frozen — attributes cannot be mutated."""
+        rv = RegimeVector(
+            computed_at=datetime.now(UTC),
+            trend_score=0.5,
+            trend_conviction=0.7,
+            volatility_level=0.12,
+            volatility_direction=0.0,
+            primary_regime=MarketRegime.RANGE_BOUND,
+            regime_confidence=0.6,
+        )
+
+        with pytest.raises(AttributeError):
+            rv.trend_score = 0.9  # type: ignore[misc]
+
+        with pytest.raises(AttributeError):
+            rv.primary_regime = MarketRegime.CRISIS  # type: ignore[misc]
+
+    def test_to_dict_from_dict_roundtrip_full(self) -> None:
+        """to_dict → from_dict roundtrip preserves all fields."""
+        now = datetime.now(UTC)
+        original = RegimeVector(
+            computed_at=now,
+            trend_score=-0.5,
+            trend_conviction=0.6,
+            volatility_level=0.22,
+            volatility_direction=-0.3,
+            universe_breadth_score=0.45,
+            breadth_thrust=False,
+            average_correlation=0.55,
+            correlation_regime="concentrated",
+            sector_rotation_phase="risk_off",
+            leading_sectors=["XLE"],
+            lagging_sectors=["XLK", "XLY"],
+            opening_drive_strength=0.3,
+            first_30min_range_ratio=0.8,
+            vwap_slope=-0.0001,
+            direction_change_count=4,
+            intraday_character="choppy",
+            primary_regime=MarketRegime.BEARISH_TRENDING,
+            regime_confidence=0.72,
+        )
+
+        d = original.to_dict()
+        restored = RegimeVector.from_dict(d)
+
+        assert restored.computed_at == original.computed_at
+        assert restored.trend_score == original.trend_score
+        assert restored.trend_conviction == original.trend_conviction
+        assert restored.volatility_level == original.volatility_level
+        assert restored.volatility_direction == original.volatility_direction
+        assert restored.universe_breadth_score == original.universe_breadth_score
+        assert restored.breadth_thrust == original.breadth_thrust
+        assert restored.average_correlation == original.average_correlation
+        assert restored.correlation_regime == original.correlation_regime
+        assert restored.sector_rotation_phase == original.sector_rotation_phase
+        assert restored.leading_sectors == original.leading_sectors
+        assert restored.lagging_sectors == original.lagging_sectors
+        assert restored.opening_drive_strength == original.opening_drive_strength
+        assert restored.first_30min_range_ratio == original.first_30min_range_ratio
+        assert restored.vwap_slope == original.vwap_slope
+        assert restored.direction_change_count == original.direction_change_count
+        assert restored.intraday_character == original.intraday_character
+        assert restored.primary_regime == original.primary_regime
+        assert restored.regime_confidence == original.regime_confidence
+
+    def test_to_dict_from_dict_roundtrip_with_none_fields(self) -> None:
+        """Roundtrip works when optional (intraday, breadth, etc.) fields are None."""
+        original = RegimeVector(
+            computed_at=datetime.now(UTC),
+            trend_score=0.3,
+            trend_conviction=0.5,
+            volatility_level=0.10,
+            volatility_direction=0.0,
+            primary_regime=MarketRegime.RANGE_BOUND,
+            regime_confidence=0.40,
+        )
+
+        d = original.to_dict()
+        assert d["universe_breadth_score"] is None
+        assert d["intraday_character"] is None
+        assert d["opening_drive_strength"] is None
+
+        restored = RegimeVector.from_dict(d)
+        assert restored.universe_breadth_score is None
+        assert restored.breadth_thrust is None
+        assert restored.average_correlation is None
+        assert restored.correlation_regime is None
+        assert restored.sector_rotation_phase is None
+        assert restored.leading_sectors == []
+        assert restored.lagging_sectors == []
+        assert restored.opening_drive_strength is None
+        assert restored.intraday_character is None
+        assert restored.direction_change_count is None
+
+
+# ============================================================================
+# RegimeClassifierV2 Tests (Sprint 27.6)
+# ============================================================================
+
+
+def make_regime_config(
+    breadth_enabled: bool = True,
+    correlation_enabled: bool = True,
+    sector_enabled: bool = True,
+    intraday_enabled: bool = True,
+) -> RegimeIntelligenceConfig:
+    """Create a RegimeIntelligenceConfig for testing."""
+    return RegimeIntelligenceConfig(
+        breadth=BreadthConfig(enabled=breadth_enabled),
+        correlation=CorrelationConfig(enabled=correlation_enabled),
+        sector_rotation=SectorRotationConfig(enabled=sector_enabled),
+        intraday=IntradayConfig(enabled=intraday_enabled),
+    )
+
+
+class TestRegimeClassifierV2:
+    """Tests for RegimeClassifierV2."""
+
+    def test_classify_delegates_to_v1_bullish(self) -> None:
+        """V2.classify() returns same result as V1 for bullish."""
+        config = make_config()
+        regime_config = make_regime_config()
+        v1 = RegimeClassifier(config)
+        v2 = RegimeClassifierV2(config, regime_config)
+
+        indicators = make_indicators(
+            spy_price=450.0, spy_sma_20=445.0, spy_sma_50=440.0,
+            spy_roc_5d=0.02, spy_realized_vol_20d=0.12,
+        )
+
+        assert v2.classify(indicators) == v1.classify(indicators)
+        assert v2.classify(indicators) == MarketRegime.BULLISH_TRENDING
+
+    def test_classify_delegates_to_v1_bearish(self) -> None:
+        """V2.classify() returns same result as V1 for bearish."""
+        config = make_config()
+        regime_config = make_regime_config()
+        v1 = RegimeClassifier(config)
+        v2 = RegimeClassifierV2(config, regime_config)
+
+        indicators = make_indicators(
+            spy_price=430.0, spy_sma_20=445.0, spy_sma_50=450.0,
+            spy_roc_5d=-0.02, spy_realized_vol_20d=0.12,
+        )
+
+        assert v2.classify(indicators) == v1.classify(indicators)
+        assert v2.classify(indicators) == MarketRegime.BEARISH_TRENDING
+
+    def test_classify_delegates_to_v1_crisis(self) -> None:
+        """V2.classify() returns same result as V1 for crisis."""
+        config = make_config()
+        regime_config = make_regime_config()
+        v1 = RegimeClassifier(config)
+        v2 = RegimeClassifierV2(config, regime_config)
+
+        indicators = make_indicators(spy_realized_vol_20d=0.40)
+
+        assert v2.classify(indicators) == v1.classify(indicators)
+        assert v2.classify(indicators) == MarketRegime.CRISIS
+
+    def test_classify_delegates_to_v1_range_bound(self) -> None:
+        """V2.classify() returns same result as V1 for range bound."""
+        config = make_config()
+        regime_config = make_regime_config()
+        v1 = RegimeClassifier(config)
+        v2 = RegimeClassifierV2(config, regime_config)
+
+        indicators = make_indicators(
+            spy_price=447.0, spy_sma_20=450.0, spy_sma_50=445.0,
+            spy_roc_5d=0.005, spy_realized_vol_20d=0.12,
+        )
+
+        assert v2.classify(indicators) == v1.classify(indicators)
+        assert v2.classify(indicators) == MarketRegime.RANGE_BOUND
+
+    def test_classify_delegates_to_v1_high_volatility(self) -> None:
+        """V2.classify() returns same result as V1 for high volatility."""
+        config = make_config()
+        regime_config = make_regime_config()
+        v1 = RegimeClassifier(config)
+        v2 = RegimeClassifierV2(config, regime_config)
+
+        indicators = make_indicators(
+            spy_price=450.0, spy_sma_20=445.0, spy_sma_50=440.0,
+            spy_roc_5d=0.03, spy_realized_vol_20d=0.28,
+        )
+
+        assert v2.classify(indicators) == v1.classify(indicators)
+        assert v2.classify(indicators) == MarketRegime.HIGH_VOLATILITY
+
+    def test_compute_regime_vector_with_no_calculators(self) -> None:
+        """V2 with all calculators None produces valid RegimeVector with defaults."""
+        config = make_config()
+        regime_config = make_regime_config()
+        v2 = RegimeClassifierV2(config, regime_config)
+
+        indicators = make_indicators(
+            spy_price=450.0, spy_sma_20=445.0, spy_sma_50=440.0,
+            spy_roc_5d=0.02, spy_realized_vol_20d=0.12,
+        )
+
+        rv = v2.compute_regime_vector(indicators)
+
+        assert isinstance(rv, RegimeVector)
+        assert rv.primary_regime == MarketRegime.BULLISH_TRENDING
+        assert rv.trend_score > 0.0  # Bullish → positive trend_score
+        assert rv.trend_conviction > 0.0
+        assert rv.volatility_level == 0.12
+        # Optional dimensions are None when no calculators
+        assert rv.universe_breadth_score is None
+        assert rv.breadth_thrust is None
+        assert rv.average_correlation is None
+        assert rv.correlation_regime is None
+        assert rv.sector_rotation_phase is None
+        assert rv.leading_sectors == []
+        assert rv.lagging_sectors == []
+        assert rv.opening_drive_strength is None
+        assert rv.intraday_character is None
+        # Confidence should be reduced due to missing dimensions
+        assert 0.0 < rv.regime_confidence < 1.0
+
+    def test_compute_regime_vector_trend_score_from_indicators(self) -> None:
+        """V2 computes correct trend_score from indicator signals."""
+        config = make_config()
+        regime_config = make_regime_config()
+        v2 = RegimeClassifierV2(config, regime_config)
+
+        # Strong bull: above both SMAs → V1 trend score +2 → normalized to +1.0
+        bullish = make_indicators(
+            spy_price=460.0, spy_sma_20=450.0, spy_sma_50=440.0,
+            spy_roc_5d=0.02, spy_realized_vol_20d=0.12,
+        )
+        rv_bull = v2.compute_regime_vector(bullish)
+        assert rv_bull.trend_score == pytest.approx(1.0)
+
+        # Strong bear: below both SMAs → V1 trend score -2 → normalized to -1.0
+        bearish = make_indicators(
+            spy_price=430.0, spy_sma_20=445.0, spy_sma_50=450.0,
+            spy_roc_5d=-0.02, spy_realized_vol_20d=0.12,
+        )
+        rv_bear = v2.compute_regime_vector(bearish)
+        assert rv_bear.trend_score == pytest.approx(-1.0)
+
+        # Mixed: between SMAs → V1 trend score 0 → normalized to 0.0
+        mixed = make_indicators(
+            spy_price=447.0, spy_sma_20=450.0, spy_sma_50=445.0,
+            spy_roc_5d=0.005, spy_realized_vol_20d=0.12,
+        )
+        rv_mixed = v2.compute_regime_vector(mixed)
+        assert rv_mixed.trend_score == pytest.approx(0.0)
+
+
+class TestRegimeConfidence:
+    """Tests for regime_confidence computation (signal_clarity × data_completeness)."""
+
+    def test_crisis_regime_high_signal_clarity(self) -> None:
+        """Crisis regime → signal_clarity = 0.95."""
+        config = make_config()
+        regime_config = make_regime_config()
+        v2 = RegimeClassifierV2(config, regime_config)
+
+        indicators = make_indicators(spy_realized_vol_20d=0.45)
+        rv = v2.compute_regime_vector(indicators)
+
+        assert rv.primary_regime == MarketRegime.CRISIS
+        # signal_clarity=0.95, data_completeness=2/6 (trend+vol only)
+        expected = 0.95 * (2.0 / 6.0)
+        assert rv.regime_confidence == pytest.approx(expected, abs=0.01)
+
+    def test_strong_trend_moderate_clarity(self) -> None:
+        """Strong bullish trend → signal_clarity = 0.85."""
+        config = make_config()
+        regime_config = make_regime_config()
+        v2 = RegimeClassifierV2(config, regime_config)
+
+        indicators = make_indicators(
+            spy_price=460.0, spy_sma_20=450.0, spy_sma_50=440.0,
+            spy_roc_5d=0.03, spy_realized_vol_20d=0.12,
+        )
+        rv = v2.compute_regime_vector(indicators)
+
+        # trend_score=1.0 (>=0.75), vol>0 → clarity=0.85, completeness=2/6
+        expected = 0.85 * (2.0 / 6.0)
+        assert rv.regime_confidence == pytest.approx(expected, abs=0.01)
+
+    def test_disabled_dimensions_improve_completeness(self) -> None:
+        """Disabling unused dimensions increases data_completeness ratio."""
+        config = make_config()
+        # Disable all optional dimensions → only trend+vol (2/2 = 1.0 completeness)
+        regime_config = make_regime_config(
+            breadth_enabled=False,
+            correlation_enabled=False,
+            sector_enabled=False,
+            intraday_enabled=False,
+        )
+        v2 = RegimeClassifierV2(config, regime_config)
+
+        indicators = make_indicators(
+            spy_price=460.0, spy_sma_20=450.0, spy_sma_50=440.0,
+            spy_roc_5d=0.03, spy_realized_vol_20d=0.12,
+        )
+        rv = v2.compute_regime_vector(indicators)
+
+        # trend_score=1.0 → clarity=0.85, completeness=2/2=1.0
+        expected = 0.85 * 1.0
+        assert rv.regime_confidence == pytest.approx(expected, abs=0.01)
+
+    def test_indeterminate_low_clarity(self) -> None:
+        """Missing SMAs and no momentum → indeterminate (0.40 clarity)."""
+        config = make_config()
+        regime_config = make_regime_config(
+            breadth_enabled=False,
+            correlation_enabled=False,
+            sector_enabled=False,
+            intraday_enabled=False,
+        )
+        v2 = RegimeClassifierV2(config, regime_config)
+
+        indicators = make_indicators(
+            spy_price=450.0, spy_sma_20=None, spy_sma_50=None,
+            spy_roc_5d=None, spy_realized_vol_20d=0.12,
+        )
+        rv = v2.compute_regime_vector(indicators)
+
+        # trend_score=0.0 → indeterminate → clarity=0.40, completeness=2/2=1.0
+        expected = 0.40 * 1.0
+        assert rv.regime_confidence == pytest.approx(expected, abs=0.01)
+
+
+# ============================================================================
+# Config Model Tests (Sprint 27.6)
+# ============================================================================
+
+
+class TestRegimeIntelligenceConfig:
+    """Tests for RegimeIntelligenceConfig Pydantic models."""
+
+    def test_default_loading(self) -> None:
+        """RegimeIntelligenceConfig loads with all defaults."""
+        config = RegimeIntelligenceConfig()
+
+        assert config.enabled is True
+        assert config.persist_history is True
+        assert config.breadth.enabled is True
+        assert config.breadth.ma_period == 20
+        assert config.breadth.thrust_threshold == 0.80
+        assert config.correlation.enabled is True
+        assert config.correlation.lookback_days == 20
+        assert config.correlation.dispersed_threshold == 0.30
+        assert config.correlation.concentrated_threshold == 0.60
+        assert config.sector_rotation.enabled is True
+        assert config.intraday.enabled is True
+        assert config.intraday.first_bar_minutes == 5
+        assert config.intraday.classification_times == ["09:35", "10:00", "10:30"]
+
+    def test_invalid_breadth_threshold_rejected(self) -> None:
+        """Breadth thrust_threshold > 1.0 is rejected."""
+        with pytest.raises(Exception):
+            BreadthConfig(thrust_threshold=1.5)
+
+    def test_invalid_correlation_lookback_rejected(self) -> None:
+        """Correlation lookback_days < 5 is rejected."""
+        with pytest.raises(Exception):
+            CorrelationConfig(lookback_days=2)
+
+    def test_config_file_loading(self) -> None:
+        """config/regime.yaml loads and matches RegimeIntelligenceConfig fields."""
+        config_path = Path("config/regime.yaml")
+        assert config_path.exists(), "config/regime.yaml not found"
+
+        with open(config_path) as f:
+            raw = yaml.safe_load(f)
+
+        config = RegimeIntelligenceConfig(**raw)
+
+        assert config.enabled is True
+        assert config.breadth.ma_period == 20
+        assert config.correlation.top_n_symbols == 50
+        assert config.intraday.max_direction_changes_trending == 2
+
+    def test_config_silently_ignored_key_detection(self) -> None:
+        """Extra/unknown keys in YAML should be detected (not silently ignored)."""
+        config_path = Path("config/regime.yaml")
+        with open(config_path) as f:
+            raw = yaml.safe_load(f)
+
+        # Verify all top-level keys in YAML are recognized by the model
+        model_fields = set(RegimeIntelligenceConfig.model_fields.keys())
+        yaml_keys = set(raw.keys())
+
+        unrecognized = yaml_keys - model_fields
+        assert unrecognized == set(), f"Unrecognized YAML keys: {unrecognized}"
+
+        # Verify sub-model keys match too
+        if "breadth" in raw:
+            breadth_fields = set(BreadthConfig.model_fields.keys())
+            breadth_yaml = set(raw["breadth"].keys())
+            assert breadth_yaml - breadth_fields == set(), \
+                f"Unrecognized breadth keys: {breadth_yaml - breadth_fields}"
+
+        if "correlation" in raw:
+            corr_fields = set(CorrelationConfig.model_fields.keys())
+            corr_yaml = set(raw["correlation"].keys())
+            assert corr_yaml - corr_fields == set(), \
+                f"Unrecognized correlation keys: {corr_yaml - corr_fields}"
+
+        if "intraday" in raw:
+            intraday_fields = set(IntradayConfig.model_fields.keys())
+            intraday_yaml = set(raw["intraday"].keys())
+            assert intraday_yaml - intraday_fields == set(), \
+                f"Unrecognized intraday keys: {intraday_yaml - intraday_fields}"
+
+    def test_system_config_includes_regime_intelligence(self) -> None:
+        """SystemConfig has regime_intelligence field with correct default."""
+        config = SystemConfig()
+
+        assert hasattr(config, "regime_intelligence")
+        assert isinstance(config.regime_intelligence, RegimeIntelligenceConfig)
+        assert config.regime_intelligence.enabled is True

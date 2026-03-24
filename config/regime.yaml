@@ -1,0 +1,64 @@
+# Regime Intelligence Configuration (Sprint 27.6)
+# Multi-dimensional regime classification beyond V1 trend+vol.
+# Each dimension can be independently enabled/disabled.
+
+# Master toggle — when false, falls back to V1 RegimeClassifier
+enabled: true
+
+# Persist regime history to database for post-session analysis
+persist_history: true
+
+# ---------------------------------------------------------------------------
+# Dimension 3: Universe Breadth
+# ---------------------------------------------------------------------------
+# Measures the fraction of the trading universe above their N-day MA.
+# Breadth thrust triggers when score crosses thrust_threshold rapidly.
+
+breadth:
+  enabled: true
+  ma_period: 20                # Moving average period for breadth calculation
+  thrust_threshold: 0.80       # Fraction threshold for breadth thrust signal
+  min_symbols: 50              # Minimum symbols needed for valid breadth reading
+  min_bars_for_valid: 10       # Minimum bars per symbol to include in calculation
+
+# ---------------------------------------------------------------------------
+# Dimension 4: Correlation
+# ---------------------------------------------------------------------------
+# Pairwise correlation of top N symbols over a lookback window.
+# Classifies as dispersed (< 0.30), normal, or concentrated (> 0.60).
+
+correlation:
+  enabled: true
+  lookback_days: 20            # Days of returns for correlation matrix
+  top_n_symbols: 50            # Number of top symbols to include
+  dispersed_threshold: 0.30    # Below this = dispersed (stock-picking favorable)
+  concentrated_threshold: 0.60 # Above this = concentrated (macro-driven)
+
+# ---------------------------------------------------------------------------
+# Dimension 5: Sector Rotation
+# ---------------------------------------------------------------------------
+# Tracks relative sector performance to detect risk-on/risk-off rotations.
+
+sector_rotation:
+  enabled: true
+
+# ---------------------------------------------------------------------------
+# Dimension 6: Intraday Character
+# ---------------------------------------------------------------------------
+# Classifies the trading session's character using SPY price action.
+# Categories: trending, choppy, reversal, breakout.
+
+intraday:
+  enabled: true
+  first_bar_minutes: 5         # Duration of the opening bar for drive strength
+  classification_times:        # Times (ET) to re-evaluate intraday character
+    - "09:35"
+    - "10:00"
+    - "10:30"
+  min_spy_bars: 3              # Minimum SPY bars before classification is valid
+  drive_strength_trending: 0.4 # Opening drive threshold for trending classification
+  drive_strength_breakout: 0.5 # Opening drive threshold for breakout classification
+  drive_strength_reversal: 0.3 # Opening drive threshold for reversal classification
+  range_ratio_breakout: 1.2    # First 30min range / prior day range for breakout
+  vwap_slope_trending: 0.0002  # Minimum VWAP slope magnitude for trending
+  max_direction_changes_trending: 2  # Max reversals allowed for trending classification

@@ -52,6 +52,80 @@ class LogLevel(StrEnum):
 # ---------------------------------------------------------------------------
 
 
+class BreadthConfig(BaseModel):
+    """Universe breadth dimension configuration (Sprint 27.6).
+
+    Controls how the breadth calculator measures the fraction of
+    the universe trending above their moving averages.
+    """
+
+    enabled: bool = True
+    ma_period: int = Field(default=20, ge=5, le=200)
+    thrust_threshold: float = Field(default=0.80, gt=0, le=1.0)
+    min_symbols: int = Field(default=50, ge=10)
+    min_bars_for_valid: int = Field(default=10, ge=1)
+
+
+class CorrelationConfig(BaseModel):
+    """Correlation dimension configuration (Sprint 27.6).
+
+    Controls pairwise correlation measurement across the top
+    symbols to detect dispersion vs concentration regimes.
+    """
+
+    enabled: bool = True
+    lookback_days: int = Field(default=20, ge=5, le=252)
+    top_n_symbols: int = Field(default=50, ge=10)
+    dispersed_threshold: float = Field(default=0.30, ge=0, le=1.0)
+    concentrated_threshold: float = Field(default=0.60, ge=0, le=1.0)
+
+
+class SectorRotationConfig(BaseModel):
+    """Sector rotation dimension configuration (Sprint 27.6).
+
+    Controls sector-level relative performance tracking to detect
+    risk-on/risk-off rotations.
+    """
+
+    enabled: bool = True
+
+
+class IntradayConfig(BaseModel):
+    """Intraday character dimension configuration (Sprint 27.6).
+
+    Controls how the intraday character of the session is classified
+    using SPY price action in the first 30 minutes and beyond.
+    """
+
+    enabled: bool = True
+    first_bar_minutes: int = Field(default=5, ge=1, le=30)
+    classification_times: list[str] = Field(
+        default_factory=lambda: ["09:35", "10:00", "10:30"]
+    )
+    min_spy_bars: int = Field(default=3, ge=1)
+    drive_strength_trending: float = Field(default=0.4, ge=0)
+    drive_strength_breakout: float = Field(default=0.5, ge=0)
+    drive_strength_reversal: float = Field(default=0.3, ge=0)
+    range_ratio_breakout: float = Field(default=1.2, ge=0)
+    vwap_slope_trending: float = Field(default=0.0002, ge=0)
+    max_direction_changes_trending: int = Field(default=2, ge=0)
+
+
+class RegimeIntelligenceConfig(BaseModel):
+    """Top-level regime intelligence configuration (Sprint 27.6).
+
+    Gates the entire regime intelligence subsystem and contains
+    per-dimension sub-configs.
+    """
+
+    enabled: bool = True
+    persist_history: bool = True
+    breadth: BreadthConfig = Field(default_factory=BreadthConfig)
+    correlation: CorrelationConfig = Field(default_factory=CorrelationConfig)
+    sector_rotation: SectorRotationConfig = Field(default_factory=SectorRotationConfig)
+    intraday: IntradayConfig = Field(default_factory=IntradayConfig)
+
+
 class HealthConfig(BaseModel):
     """Health monitoring configuration."""
 
@@ -189,6 +263,8 @@ class SystemConfig(BaseModel):
     quality_engine: QualityEngineConfig = Field(default_factory=QualityEngineConfig)
     # Observatory configuration (Sprint 25 — The Observatory)
     observatory: ObservatoryConfig = Field(default_factory=ObservatoryConfig)
+    # Regime Intelligence configuration (Sprint 27.6 — multi-dimensional regime)
+    regime_intelligence: RegimeIntelligenceConfig = Field(default_factory=RegimeIntelligenceConfig)
 
     @field_validator("timezone")
     @classmethod
