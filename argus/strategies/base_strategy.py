@@ -164,6 +164,32 @@ class BaseStrategy(ABC):
     # State Management
     # -------------------------------------------------------------------------
 
+    def _has_zero_r(
+        self, symbol: str, entry_price: float, target_price: float
+    ) -> bool:
+        """Check if signal has zero or negative profit potential.
+
+        Suppresses signals where abs(target - entry) < $0.01 to avoid
+        placing trades with no R (e.g., PDBC entry=$16.86 target=$16.86).
+
+        Args:
+            symbol: Ticker for logging.
+            entry_price: Expected entry price.
+            target_price: First target price (T1).
+
+        Returns:
+            True if zero-R detected (signal should be suppressed).
+        """
+        if abs(target_price - entry_price) < 0.01:
+            logger.debug(
+                "%s: signal suppressed — zero R (entry=%.2f, target=%.2f)",
+                symbol,
+                entry_price,
+                target_price,
+            )
+            return True
+        return False
+
     def check_internal_risk_limits(self) -> bool:
         """Check strategy-level risk limits.
 

@@ -2,7 +2,7 @@ account:
   daily_loss_limit_pct: 0.03
   weekly_loss_limit_pct: 0.05
   cash_reserve_pct: 0.20
-  max_concurrent_positions: 10
+  max_concurrent_positions: 0
   emergency_shutdown_enabled: true
   # Minimum position risk floor — positions below this are rejected as "not worth taking"
   # Replaces ratio-based 0.25R floor (DEC-250)

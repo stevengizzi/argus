@@ -191,10 +191,13 @@ class RiskManager:
         Must be called after EventBus is available.
         """
         self._event_bus.subscribe(PositionClosedEvent, self._on_position_closed)
+        max_pos = self._config.account.max_concurrent_positions
         logger.info(
-            "Risk Manager initialized. Config: daily_limit=%.1f%%, weekly_limit=%.1f%%",
+            "Risk Manager initialized. Config: daily_limit=%.1f%%, weekly_limit=%.1f%%, "
+            "cross-strategy concurrent position limit: %s",
             self._config.account.daily_loss_limit_pct * 100,
             self._config.account.weekly_loss_limit_pct * 100,
+            str(max_pos) if max_pos > 0 else "disabled",
         )
 
     async def evaluate_signal(self, signal: SignalEvent) -> OrderApprovedEvent | OrderRejectedEvent:
@@ -282,14 +285,14 @@ class RiskManager:
                 reason="Weekly loss limit reached",
             )
 
-        # 4. Max concurrent positions check
+        # 4. Max concurrent positions check (0 = disabled)
         positions = await self._broker.get_positions()
-        if len(positions) >= self._config.account.max_concurrent_positions:
+        max_pos = self._config.account.max_concurrent_positions
+        if max_pos > 0 and len(positions) >= max_pos:
             logger.warning(
                 "Signal rejected: max concurrent positions (%d) reached",
-                self._config.account.max_concurrent_positions,
+                max_pos,
             )
-            max_pos = self._config.account.max_concurrent_positions
             return OrderRejectedEvent(
                 signal=signal,
                 reason=f"Max concurrent positions ({max_pos}) reached",

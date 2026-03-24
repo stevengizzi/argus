@@ -2,17 +2,46 @@
  * Tests for SessionTimeline component.
  *
  * Sprint 21d Code Review — New component for dashboard 3-card row.
+ * Sprint 27.65 S5 — Added tests for 7-strategy rendering and dynamic source.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SessionTimeline } from './SessionTimeline';
 
-// Wrapper component for Router context
-const renderWithRouter = (ui: React.ReactElement) => {
-  return render(<MemoryRouter>{ui}</MemoryRouter>);
+// Mock useStrategies to control dynamic strategy list
+vi.mock('../../hooks/useStrategies', () => ({
+  useStrategies: vi.fn(() => ({
+    data: undefined,
+    isLoading: true,
+    isError: false,
+  })),
+}));
+
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports
+const { useStrategies } = await import('../../hooks/useStrategies');
+const mockUseStrategies = vi.mocked(useStrategies);
+
+function createQueryClient() {
+  return new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+}
+
+// Wrapper component for Router + Query context
+const renderWithProviders = (ui: React.ReactElement) => {
+  const queryClient = createQueryClient();
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter>{ui}</MemoryRouter>
+    </QueryClientProvider>,
+  );
 };
+
+// Legacy wrapper for backward compatibility
+const renderWithRouter = renderWithProviders;
 
 describe('SessionTimeline', () => {
   it('renders Session Timeline header', () => {
@@ -52,8 +81,8 @@ describe('SessionTimeline', () => {
 
     // Should have multiple rect elements for strategy bars
     const rects = container.querySelectorAll('svg rect');
-    // At least 5: 1 background + 4 strategy bars
-    expect(rects.length).toBeGreaterThanOrEqual(5);
+    // At least 8: 1 background + 7 strategy bars
+    expect(rects.length).toBeGreaterThanOrEqual(8);
   });
 
   it('renders status text based on time', () => {
@@ -79,5 +108,55 @@ describe('SessionTimeline', () => {
     });
 
     expect(foundStatus).toBe(true);
+  });
+
+  it('renders all 7 strategy letters when API unavailable (fallback)', () => {
+    // useStrategies returns undefined data — fallback to all strategies
+    mockUseStrategies.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      isError: false,
+    } as ReturnType<typeof useStrategies>);
+
+    renderWithProviders(<SessionTimeline />);
+
+    // All 7 strategy letters must be present
+    expect(screen.getByText('O')).toBeInTheDocument(); // ORB Breakout
+    expect(screen.getByText('S')).toBeInTheDocument(); // ORB Scalp
+    expect(screen.getByText('V')).toBeInTheDocument(); // VWAP Reclaim
+    expect(screen.getByText('R')).toBeInTheDocument(); // Red-to-Green
+    expect(screen.getByText('F')).toBeInTheDocument(); // Bull Flag
+    expect(screen.getByText('T')).toBeInTheDocument(); // Flat-Top Breakout
+    expect(screen.getByText('A')).toBeInTheDocument(); // Afternoon Momentum
+  });
+
+  it('filters to registered strategies from API (dynamic source)', () => {
+    // API returns only 3 strategies
+    mockUseStrategies.mockReturnValue({
+      data: {
+        strategies: [
+          { strategy_id: 'strat_orb_breakout', name: 'ORB Breakout', version: '1', is_active: true },
+          { strategy_id: 'strat_vwap_reclaim', name: 'VWAP Reclaim', version: '1', is_active: true },
+          { strategy_id: 'strat_bull_flag', name: 'Bull Flag', version: '1', is_active: true },
+        ],
+        count: 3,
+        timestamp: new Date().toISOString(),
+      },
+      isLoading: false,
+      isError: false,
+    } as ReturnType<typeof useStrategies>);
+
+    renderWithProviders(<SessionTimeline />);
+
+    // Only the 3 registered strategy letters should appear
+    expect(screen.getByText('O')).toBeInTheDocument(); // ORB Breakout
+    expect(screen.getByText('V')).toBeInTheDocument(); // VWAP Reclaim
+    expect(screen.getByText('F')).toBeInTheDocument(); // Bull Flag
+
+    // Non-registered strategies should NOT appear
+    expect(screen.queryByText('S')).not.toBeInTheDocument(); // ORB Scalp
+    expect(screen.queryByText('R')).not.toBeInTheDocument(); // Red-to-Green
+    expect(screen.queryByText('T')).not.toBeInTheDocument(); // Flat-Top
+    expect(screen.queryByText('A')).not.toBeInTheDocument(); // Afternoon
   });
 });

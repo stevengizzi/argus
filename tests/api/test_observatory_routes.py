@@ -226,16 +226,84 @@ async def test_pipeline_endpoint(
     observatory_client: AsyncClient,
     auth_headers: dict[str, str],
 ) -> None:
-    """Pipeline endpoint returns correct structure and counts."""
+    """Pipeline endpoint returns tiers format with correct counts."""
     resp = await observatory_client.get(
         f"/api/v1/observatory/pipeline?date={TEST_DATE}",
         headers=auth_headers,
     )
     assert resp.status_code == 200
     data = resp.json()
-    assert data["evaluating"] == 3
-    assert data["signal"] == 1
+    assert "tiers" in data
     assert "timestamp" in data
+    tiers = data["tiers"]
+    assert tiers["evaluating"]["count"] == 3
+    assert tiers["signal"]["count"] == 1
+    assert isinstance(tiers["evaluating"]["symbols"], list)
+    assert isinstance(tiers["signal"]["symbols"], list)
+
+
+@pytest.mark.asyncio
+async def test_pipeline_returns_nonzero_counts(
+    observatory_client: AsyncClient,
+    auth_headers: dict[str, str],
+) -> None:
+    """Pipeline endpoint returns non-zero counts for dynamic tiers with data."""
+    resp = await observatory_client.get(
+        f"/api/v1/observatory/pipeline?date={TEST_DATE}",
+        headers=auth_headers,
+    )
+    assert resp.status_code == 200
+    tiers = resp.json()["tiers"]
+    # At least evaluating and signal should be non-zero from seed data
+    assert tiers["evaluating"]["count"] > 0
+    assert tiers["signal"]["count"] > 0
+    # Static tiers are 0 because no UniverseManager is wired
+    assert tiers["universe"]["count"] == 0
+
+
+@pytest.mark.asyncio
+async def test_pipeline_static_tiers_from_universe_manager(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Pipeline static tiers (universe, viable, routed) come from UniverseManager."""
+    monkeypatch.setenv("ARGUS_JWT_SECRET", TEST_JWT_SECRET)
+    set_jwt_secret(TEST_JWT_SECRET)
+
+    # Build client with a mock UniverseManager
+    mock_um = MagicMock()
+    mock_um.reference_cache = {"AAPL": {}, "NVDA": {}, "TSLA": {}, "MSFT": {}}
+    mock_um.viable_count = 3
+    mock_um.get_universe_stats.return_value = {
+        "total_viable": 3,
+        "per_strategy_counts": {"orb_breakout": 2, "vwap_reclaim": 1},
+    }
+
+    client, obs_conn, temp_db = await _build_observatory_client(
+        tmp_path, enabled=True, seed_data=True,
+    )
+
+    # Patch the universe manager onto the observatory service
+    app_state = client._transport.app.state.app_state  # type: ignore[union-attr]
+    assert app_state.observatory_service is not None
+    app_state.observatory_service._universe = mock_um
+
+    token, _ = create_access_token(TEST_JWT_SECRET, expires_hours=24)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    async with client:
+        resp = await client.get(
+            f"/api/v1/observatory/pipeline?date={TEST_DATE}",
+            headers=headers,
+        )
+        assert resp.status_code == 200
+        tiers = resp.json()["tiers"]
+        assert tiers["universe"]["count"] == 4  # 4 in reference_cache
+        assert tiers["viable"]["count"] == 3
+        assert tiers["routed"]["count"] == 3  # total_viable
+
+    await obs_conn.close()
+    await temp_db.close()
 
 
 # ---------------------------------------------------------------------------

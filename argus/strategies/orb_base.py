@@ -483,7 +483,21 @@ class OrbBaseStrategy(BaseStrategy):
         )
 
         # Delegate to subclass for signal construction
-        return await self._build_breakout_signal(symbol, candle, state, volume_threshold)
+        signal = await self._build_breakout_signal(symbol, candle, state, volume_threshold)
+
+        # Zero-R guard: suppress signals with no profit potential
+        if signal is not None and signal.target_prices:
+            if self._has_zero_r(symbol, signal.entry_price, signal.target_prices[0]):
+                self.record_evaluation(
+                    symbol,
+                    EvaluationEventType.ENTRY_EVALUATION,
+                    EvaluationResult.FAIL,
+                    f"Zero R: entry={signal.entry_price:.2f}, "
+                    f"target={signal.target_prices[0]:.2f}",
+                )
+                return None
+
+        return signal
 
     @abstractmethod
     async def _build_breakout_signal(
@@ -624,17 +638,20 @@ class OrbBaseStrategy(BaseStrategy):
                 )
                 return None
 
-            # Check concurrent positions
-            active_positions = sum(1 for s in self._symbol_state.values() if s.position_active)
+            # Check concurrent positions (0 = disabled)
             max_positions = self._orb_config.risk_limits.max_concurrent_positions
-            if active_positions >= max_positions:
-                self.record_evaluation(
-                    symbol,
-                    EvaluationEventType.CONDITION_CHECK,
-                    EvaluationResult.FAIL,
-                    f"Max concurrent positions reached ({active_positions}/{max_positions})",
+            if max_positions > 0:
+                active_positions = sum(
+                    1 for s in self._symbol_state.values() if s.position_active
                 )
-                return None
+                if active_positions >= max_positions:
+                    self.record_evaluation(
+                        symbol,
+                        EvaluationEventType.CONDITION_CHECK,
+                        EvaluationResult.FAIL,
+                        f"Max concurrent positions reached ({active_positions}/{max_positions})",
+                    )
+                    return None
 
             # Check breakout conditions
             return await self._check_breakout_conditions(symbol, event, state)

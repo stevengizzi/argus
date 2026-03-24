@@ -28,17 +28,17 @@ _ET = ZoneInfo("America/New_York")
 # --- Response Models ---
 
 
-class PipelineStagesResponse(BaseModel):
-    """Pipeline stage counts across all tiers."""
+class TierInfo(BaseModel):
+    """Count and symbol list for a single pipeline tier."""
 
-    universe: int
-    viable: int
-    routed: int
-    evaluating: int
-    near_trigger: int
-    signal: int
-    traded: int
-    date: str
+    count: int
+    symbols: list[str]
+
+
+class PipelineStagesResponse(BaseModel):
+    """Pipeline stage counts across all tiers, with per-tier symbol lists."""
+
+    tiers: dict[str, TierInfo]
     timestamp: str
 
 
@@ -163,20 +163,56 @@ async def get_pipeline_stages(
     _auth: dict = Depends(require_auth),  # noqa: B008
     state: AppState = Depends(get_app_state),  # noqa: B008
 ) -> PipelineStagesResponse:
-    """Get pipeline stage counts for all tiers.
+    """Get pipeline stage counts for all tiers with per-tier symbol lists.
+
+    Static tiers (universe, viable, routed) return counts only (symbol lists
+    empty — too large to serialize). Dynamic tiers (evaluating, near_trigger,
+    signal, traded) include symbol names from evaluation telemetry.
 
     Args:
         date: Optional date filter. Defaults to today (ET).
 
     Returns:
-        Counts for each of the 7 pipeline tiers.
+        Tiers dict with count and symbols per tier.
     """
     svc = _get_observatory_service(state)
-    result = await svc.get_pipeline_stages(date=date)
-    return PipelineStagesResponse(
-        **result,
-        timestamp=_now_iso(),
-    )
+    counts = await svc.get_pipeline_stages(date=date)
+    symbol_tiers = await svc.get_symbol_tiers(date=date)
+
+    # Invert symbol_tiers (symbol -> tier) to (tier -> [symbols])
+    tier_symbols: dict[str, list[str]] = {
+        "evaluating": [],
+        "near_trigger": [],
+        "signal": [],
+        "traded": [],
+    }
+    for symbol, tier_name in symbol_tiers.items():
+        if tier_name in tier_symbols:
+            tier_symbols[tier_name].append(symbol)
+
+    tiers = {
+        "universe": TierInfo(count=counts["universe"], symbols=[]),
+        "viable": TierInfo(count=counts["viable"], symbols=[]),
+        "routed": TierInfo(count=counts["routed"], symbols=[]),
+        "evaluating": TierInfo(
+            count=counts["evaluating"],
+            symbols=tier_symbols["evaluating"],
+        ),
+        "near_trigger": TierInfo(
+            count=counts["near_trigger"],
+            symbols=tier_symbols["near_trigger"],
+        ),
+        "signal": TierInfo(
+            count=counts["signal"],
+            symbols=tier_symbols["signal"],
+        ),
+        "traded": TierInfo(
+            count=counts["traded"],
+            symbols=tier_symbols["traded"],
+        ),
+    }
+
+    return PipelineStagesResponse(tiers=tiers, timestamp=_now_iso())
 
 
 @router.get("/closest-misses", response_model=ClosestMissesResponse)

@@ -126,7 +126,7 @@ class TestRedToGreenConfig:
         assert config.operating_window.earliest_entry == "09:45"
         assert config.operating_window.latest_entry == "11:00"
         assert config.risk_limits.max_trades_per_day == 6
-        assert config.risk_limits.max_concurrent_positions == 2
+        assert config.risk_limits.max_concurrent_positions == 0  # Disabled for paper trading
         assert config.benchmarks.min_win_rate == 0.40
         assert config.benchmarks.max_drawdown_pct == 0.12
         assert config.backtest_summary.status == "databento_insufficient_data"

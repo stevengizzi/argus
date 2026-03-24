@@ -21,7 +21,7 @@ from datetime import datetime, time
 from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
 
-from argus.core.config import OrderManagerConfig
+from argus.core.config import BrokerSource, OrderManagerConfig
 from argus.core.event_bus import EventBus
 from argus.core.events import (
     CircuitBreakerEvent,
@@ -35,6 +35,7 @@ from argus.core.events import (
     PositionOpenedEvent,
     ShutdownRequestedEvent,
     Side,
+    SignalEvent,
     TickEvent,
 )
 from argus.core.ids import generate_id
@@ -90,6 +91,18 @@ class ManagedPosition:
 
 
 @dataclass
+class ReconciliationResult:
+    """Typed result from position reconciliation.
+
+    Replaces dict[str, object] for type safety at the API boundary.
+    """
+
+    timestamp: str
+    status: str  # "synced" or "mismatch"
+    discrepancies: list[dict[str, object]]
+
+
+@dataclass
 class PendingManagedOrder:
     """Tracks an order awaiting fill confirmation from the broker.
 
@@ -137,6 +150,7 @@ class OrderManager:
         config: OrderManagerConfig,
         trade_logger: Any | None = None,
         db_manager: Any | None = None,
+        broker_source: BrokerSource = BrokerSource.SIMULATED,
     ) -> None:
         """Initialize the Order Manager.
 
@@ -147,6 +161,7 @@ class OrderManager:
             config: Order Manager configuration.
             trade_logger: Optional TradeLogger for persistence.
             db_manager: Optional DatabaseManager for execution record persistence.
+            broker_source: Broker type, used to skip amendment for SimulatedBroker.
         """
         self._event_bus = event_bus
         self._broker = broker
@@ -154,6 +169,7 @@ class OrderManager:
         self._config = config
         self._trade_logger = trade_logger
         self._db_manager = db_manager
+        self._broker_source = broker_source
 
         # Active positions: keyed by symbol (list to support multiple positions)
         self._managed_positions: dict[str, list[ManagedPosition]] = {}
@@ -165,7 +181,7 @@ class OrderManager:
         self._flatten_pending: dict[str, str] = {}
 
         # Latest reconciliation result
-        self._last_reconciliation: dict[str, object] | None = None
+        self._last_reconciliation: ReconciliationResult | None = None
 
         # Async tasks
         self._poll_task: asyncio.Task[None] | None = None
@@ -577,6 +593,9 @@ class OrderManager:
             t2_price,
         )
 
+        # --- Bracket amendment on fill slippage (Sprint 27.65 S2) ---
+        await self._amend_bracket_on_slippage(position, signal, event.fill_price)
+
         # --- Execution Quality Logging (DEC-358 §5.1) ---
         try:
             from argus.execution.execution_record import (
@@ -607,6 +626,99 @@ class OrderManager:
                 pending.symbol,
                 exc_info=True,
             )
+
+    async def _amend_bracket_on_slippage(
+        self,
+        position: ManagedPosition,
+        signal: SignalEvent,
+        actual_fill_price: float,
+        tolerance: float = 0.01,
+    ) -> None:
+        """Amend bracket legs when entry fill differs from signal price.
+
+        Shifts stop and target prices by the same delta as the slippage so
+        risk/reward ratios are preserved relative to the actual cost basis.
+
+        Skipped for SimulatedBroker (zero slippage by design).
+
+        Args:
+            position: The newly opened ManagedPosition.
+            signal: The original SignalEvent with expected prices.
+            actual_fill_price: The price the entry actually filled at.
+            tolerance: Minimum price difference to trigger amendment (default $0.01).
+        """
+        # Skip for simulated broker — no slippage
+        if self._broker_source == BrokerSource.SIMULATED:
+            return
+
+        delta = actual_fill_price - signal.entry_price
+        if abs(delta) <= tolerance:
+            return
+
+        new_stop = position.original_stop_price + delta
+        new_t1 = position.t1_price + delta if position.t1_price > 0 else 0.0
+        new_t2 = position.t2_price + delta if position.t2_price > 0 else 0.0
+
+        # Safety check: target must be above fill price for longs
+        if new_t1 > 0 and new_t1 <= actual_fill_price:
+            logger.error(
+                "SAFETY: Amended T1 %.2f <= fill %.2f for %s. Cancelling position.",
+                new_t1,
+                actual_fill_price,
+                position.symbol,
+            )
+            await self._flatten_position(position, reason="bracket_amendment_safety")
+            return
+
+        # Cancel existing bracket legs and resubmit with amended prices
+        # Cancel stop
+        if position.stop_order_id:
+            try:
+                await self._broker.cancel_order(position.stop_order_id)
+            except Exception:
+                logger.debug("Could not cancel stop %s for amendment", position.stop_order_id)
+            self._pending_orders.pop(position.stop_order_id, None)
+            position.stop_order_id = None
+
+        # Cancel T1
+        if position.t1_order_id:
+            try:
+                await self._broker.cancel_order(position.t1_order_id)
+            except Exception:
+                logger.debug("Could not cancel T1 %s for amendment", position.t1_order_id)
+            self._pending_orders.pop(position.t1_order_id, None)
+            position.t1_order_id = None
+
+        # Cancel T2
+        if position.t2_order_id:
+            try:
+                await self._broker.cancel_order(position.t2_order_id)
+            except Exception:
+                logger.debug("Could not cancel T2 %s for amendment", position.t2_order_id)
+            self._pending_orders.pop(position.t2_order_id, None)
+            position.t2_order_id = None
+
+        # Resubmit with amended prices
+        position.stop_price = new_stop
+        position.t1_price = new_t1
+        position.t2_price = new_t2
+
+        await self._submit_stop_order(position, position.shares_remaining, new_stop)
+
+        if new_t1 > 0 and position.t1_shares > 0:
+            await self._submit_t1_order(position, position.t1_shares, new_t1)
+
+        t2_shares = position.shares_remaining - position.t1_shares
+        if new_t2 > 0 and t2_shares > 0:
+            await self._submit_t2_order(position, t2_shares, new_t2)
+
+        logger.info(
+            "Bracket amended for %s: fill slippage %+.2f, new stop=%.2f, new T1=%.2f",
+            position.symbol,
+            delta,
+            new_stop,
+            new_t1,
+        )
 
     async def _handle_t1_fill(self, pending: PendingManagedOrder, event: OrderFilledEvent) -> None:
         """T1 target hit. Move stop to breakeven for remaining shares."""
@@ -1471,14 +1583,14 @@ class OrderManager:
                     "broker_qty": broker_qty,
                 })
 
-        self._last_reconciliation = {
-            "timestamp": self._clock.now().isoformat(),
-            "status": "synced" if not discrepancies else "mismatch",
-            "discrepancies": discrepancies,
-        }
+        self._last_reconciliation = ReconciliationResult(
+            timestamp=self._clock.now().isoformat(),
+            status="synced" if not discrepancies else "mismatch",
+            discrepancies=discrepancies,
+        )
         return discrepancies
 
     @property
-    def last_reconciliation(self) -> dict[str, object] | None:
+    def last_reconciliation(self) -> ReconciliationResult | None:
         """Return the latest reconciliation result."""
         return self._last_reconciliation

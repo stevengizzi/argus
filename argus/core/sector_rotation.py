@@ -101,9 +101,10 @@ class SectorRotationAnalyzer:
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 async with session.get(url) as response:
                     if response.status == 403:
-                        logger.error(
-                            "FMP sector-performance returned 403 — "
-                            "opening circuit breaker"
+                        logger.warning(
+                            "FMP sector-performance unavailable "
+                            "(Starter plan) — using fallback "
+                            "classification"
                         )
                         self._circuit_open = True
                         self._degrade()

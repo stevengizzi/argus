@@ -289,6 +289,19 @@ class PatternBasedStrategy(BaseStrategy):
         if time_stop_minutes is not None:
             time_stop_seconds = int(time_stop_minutes) * 60
 
+        # Zero-R guard: suppress signals with no profit potential
+        if target_prices and self._has_zero_r(
+            symbol, detection.entry_price, target_prices[0]
+        ):
+            self.record_evaluation(
+                symbol,
+                EvaluationEventType.ENTRY_EVALUATION,
+                EvaluationResult.FAIL,
+                f"Zero R: entry={detection.entry_price:.2f}, "
+                f"target={target_prices[0]:.2f}",
+            )
+            return None
+
         # Build signal
         signal = SignalEvent(
             strategy_id=self.strategy_id,

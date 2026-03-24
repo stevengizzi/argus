@@ -282,7 +282,7 @@ class AccountRiskConfig(BaseModel):
     daily_loss_limit_pct: float = Field(default=0.03, gt=0, le=0.2)
     weekly_loss_limit_pct: float = Field(default=0.05, gt=0, le=0.3)
     cash_reserve_pct: float = Field(default=0.20, ge=0, le=0.5)
-    max_concurrent_positions: int = Field(default=10, ge=1)
+    max_concurrent_positions: int = Field(default=10, ge=0)  # 0 = disabled (no limit)
     emergency_shutdown_enabled: bool = True
     # Minimum position risk floor — positions below this dollar amount are rejected
     # as "not worth taking" (replaces ratio-based 0.25R floor — DEC-250)
@@ -538,7 +538,7 @@ class StrategyRiskLimits(BaseModel):
     max_daily_loss_pct: float = Field(default=0.03, gt=0, le=0.1)
     max_consecutive_losses_pause: int = Field(default=5, ge=2)
     max_trades_per_day: int = Field(default=10, ge=1)
-    max_concurrent_positions: int = Field(default=3, ge=1)
+    max_concurrent_positions: int = Field(default=3, ge=0)  # 0 = disabled (no limit)
 
 
 class OperatingWindow(BaseModel):

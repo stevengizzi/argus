@@ -327,6 +327,38 @@ class TestFetch:
         snapshot = analyzer.get_sector_snapshot()
         assert snapshot["sector_rotation_phase"] == "mixed"
 
+    @pytest.mark.asyncio
+    async def test_fetch_403_logged_as_warning_not_error(self) -> None:
+        """FMP 403 is logged at WARNING level (known Starter plan limitation)."""
+        import logging
+
+        analyzer = SectorRotationAnalyzer(
+            config=_default_config(),
+            fmp_base_url="https://example.com",
+            fmp_api_key="key",
+        )
+
+        mock_response = AsyncMock()
+        mock_response.status = 403
+
+        mock_session = AsyncMock()
+        mock_session.get = MagicMock(return_value=_AsyncCtx(mock_response))
+
+        with patch(
+            "argus.core.sector_rotation.aiohttp.ClientSession",
+            return_value=_AsyncCtx(mock_session),
+        ), patch.object(
+            logging.getLogger("argus.core.sector_rotation"),
+            "warning",
+        ) as mock_warn, patch.object(
+            logging.getLogger("argus.core.sector_rotation"),
+            "error",
+        ) as mock_err:
+            await analyzer.fetch()
+            mock_warn.assert_called_once()
+            assert "Starter plan" in mock_warn.call_args[0][0]
+            mock_err.assert_not_called()
+
 
 # ---------------------------------------------------------------------------
 # get_sector_snapshot

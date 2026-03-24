@@ -2,14 +2,11 @@
  * Session Timeline showing the trading day with strategy operating windows.
  *
  * Sprint 21d Code Review Fix #4: New component for 3-card row.
- * - Custom SVG horizontal timeline (9:30 AM → 4:00 PM ET)
- * - Strategy operating windows shown as colored bars:
- *   - ORB: 9:35–11:30 (blue)
- *   - Scalp: 9:45–11:30 (purple)
- *   - VWAP: 10:00–12:00 (cyan/teal)
- *   - Afternoon: 2:00–3:30 (amber)
+ * Sprint 27.65 S5: Dynamic strategy list from API, all 7 strategies.
+ * - Custom SVG horizontal timeline (9:30 AM -> 4:00 PM ET)
+ * - Strategy windows from API registry, filtered against known window config
  * - "Now" marker showing current time position
- * - Strategy letters below bars (O, S, V, A)
+ * - Strategy letters inside bars
  */
 
 import { useState, useEffect, useMemo } from 'react';
@@ -17,7 +14,8 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
 import { Card } from '../../components/Card';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
-import { getStrategyColor } from '../../utils/strategyConfig';
+import { useStrategies } from '../../hooks/useStrategies';
+import { getStrategyColor, STRATEGY_DISPLAY } from '../../utils/strategyConfig';
 
 // Trading day boundaries (minutes from midnight ET)
 const MARKET_OPEN = 9 * 60 + 30; // 9:30 AM = 570
@@ -34,7 +32,8 @@ interface StrategyWindow {
   row: number; // For vertical stacking
 }
 
-const STRATEGY_WINDOWS: StrategyWindow[] = [
+/** Static window definitions for all known strategies. */
+const ALL_STRATEGY_WINDOWS: StrategyWindow[] = [
   {
     id: 'strat_orb_breakout',
     letter: 'O',
@@ -58,6 +57,30 @@ const STRATEGY_WINDOWS: StrategyWindow[] = [
     endMinute: 12 * 60, // 12:00 PM
     color: getStrategyColor('strat_vwap_reclaim'),
     row: 2,
+  },
+  {
+    id: 'strat_red_to_green',
+    letter: 'R',
+    startMinute: 9 * 60 + 35, // 9:35 AM
+    endMinute: 11 * 60 + 30, // 11:30 AM
+    color: getStrategyColor('strat_red_to_green'),
+    row: 3,
+  },
+  {
+    id: 'strat_bull_flag',
+    letter: 'F',
+    startMinute: 10 * 60, // 10:00 AM
+    endMinute: 15 * 60, // 3:00 PM
+    color: getStrategyColor('strat_bull_flag'),
+    row: 4,
+  },
+  {
+    id: 'strat_flat_top_breakout',
+    letter: 'T',
+    startMinute: 10 * 60, // 10:00 AM
+    endMinute: 15 * 60, // 3:00 PM
+    color: getStrategyColor('strat_flat_top_breakout'),
+    row: 5,
   },
   {
     id: 'strat_afternoon_momentum',
@@ -88,18 +111,34 @@ function getCurrentMinutesET(): number {
   return hours * 60 + minutes;
 }
 
-// Timeline dimensions
-const TIMELINE_HEIGHT = 60;
-const BAR_HEIGHT = 10;
-const BAR_GAP = 2;
-const TIMELINE_Y = 20;
-const LABEL_Y = 55;
+// Timeline dimensions — scaled for up to 6 rows
+const BAR_HEIGHT = 7;
+const BAR_GAP = 1;
+const MAX_ROWS = 6;
+const TRACK_HEIGHT = BAR_HEIGHT * MAX_ROWS + BAR_GAP * (MAX_ROWS - 1); // 47
+const TIMELINE_Y = 14;
+const LABEL_Y = TIMELINE_Y + TRACK_HEIGHT + 12; // below track
+const TIMELINE_HEIGHT = LABEL_Y + 4; // total SVG height
 
 export function SessionTimeline() {
   const navigate = useNavigate();
   const [currentMinute, setCurrentMinute] = useState(getCurrentMinutesET);
   const [isHovered, setIsHovered] = useState(false);
   const isTablet = useMediaQuery('(max-width: 1023px)');
+  const { data: strategiesData } = useStrategies();
+
+  // Filter to only registered strategies; fall back to all if API unavailable
+  const visibleWindows = useMemo(() => {
+    if (!strategiesData?.strategies) return ALL_STRATEGY_WINDOWS;
+    const registeredIds = new Set(
+      strategiesData.strategies.map((s) => {
+        const id = s.strategy_id.toLowerCase().replace(/-/g, '_');
+        return id.startsWith('strat_') ? id : `strat_${id}`;
+      }),
+    );
+    const filtered = ALL_STRATEGY_WINDOWS.filter((w) => registeredIds.has(w.id));
+    return filtered.length > 0 ? filtered : ALL_STRATEGY_WINDOWS;
+  }, [strategiesData]);
 
   // Update current time every 30 seconds
   useEffect(() => {
@@ -115,10 +154,10 @@ export function SessionTimeline() {
 
   // Determine which strategies are currently active
   const activeStrategies = useMemo(() => {
-    return STRATEGY_WINDOWS.filter(
+    return visibleWindows.filter(
       (s) => currentMinute >= s.startMinute && currentMinute <= s.endMinute
     ).map((s) => s.id);
-  }, [currentMinute]);
+  }, [currentMinute, visibleWindows]);
 
   // Time labels - use shorter labels at tablet width to avoid overlap
   const timeLabels = useMemo(() => [
@@ -166,13 +205,13 @@ export function SessionTimeline() {
             x="0%"
             y={TIMELINE_Y}
             width="100%"
-            height={BAR_HEIGHT * 3 + BAR_GAP * 2}
+            height={TRACK_HEIGHT}
             rx={4}
             fill="rgba(255, 255, 255, 0.03)"
           />
 
           {/* Strategy windows */}
-          {STRATEGY_WINDOWS.map((strat) => {
+          {visibleWindows.map((strat) => {
             const startPct = minuteToPercent(strat.startMinute);
             const endPct = minuteToPercent(strat.endMinute);
             const widthPct = endPct - startPct;
@@ -197,7 +236,7 @@ export function SessionTimeline() {
                   y={y + BAR_HEIGHT / 2}
                   textAnchor="middle"
                   dominantBaseline="central"
-                  className="fill-white text-[8px] font-semibold pointer-events-none"
+                  className="fill-white text-[7px] font-semibold pointer-events-none"
                   style={{ textShadow: '0 1px 2px rgba(0,0,0,0.4)' }}
                 >
                   {strat.letter}
@@ -213,7 +252,7 @@ export function SessionTimeline() {
                 x1={`${nowPercent}%`}
                 y1={TIMELINE_Y - 4}
                 x2={`${nowPercent}%`}
-                y2={TIMELINE_Y + BAR_HEIGHT * 3 + BAR_GAP * 2 + 4}
+                y2={TIMELINE_Y + TRACK_HEIGHT + 4}
                 stroke="#f97316"
                 strokeWidth={2}
                 strokeLinecap="round"
@@ -249,8 +288,8 @@ export function SessionTimeline() {
         {isAfterHours && 'After hours — session complete'}
         {!isPreMarket && !isAfterHours && activeStrategies.length > 0 && (
           <>Active: {activeStrategies.map((id) => {
-            const strat = STRATEGY_WINDOWS.find((s) => s.id === id);
-            return strat?.letter;
+            const display = STRATEGY_DISPLAY[id];
+            return display?.letter ?? id.charAt(0).toUpperCase();
           }).join(', ')}</>
         )}
         {!isPreMarket && !isAfterHours && activeStrategies.length === 0 && 'No strategies active'}

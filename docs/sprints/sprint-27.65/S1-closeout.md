@@ -81,3 +81,13 @@
 ## Context State
 
 **YELLOW** — Session started fresh but continued from compacted context. All implementation was re-verified against the diff before close-out.
+
+## Post-Review Fixes (S2)
+
+Fixes applied in Sprint 27.65 S2 based on S1 Tier 2 review (verdict: CONCERNS):
+
+| Finding | Severity | Resolution |
+|---------|----------|------------|
+| Shutdown integration test only mocks broker, doesn't verify ordering | MEDIUM | Added `test_shutdown_sequence_ordering` in S2 — verifies cancel_all_orders → order_manager.stop → broker.disconnect call order |
+| `_last_reconciliation` typed as `dict[str, object]`, `type: ignore` in endpoint | LOW | Replaced with `ReconciliationResult` dataclass. `type: ignore[arg-type]` removed from `positions.py`. |
+| SimulatedBroker `cancel_all_orders()` described as "no-op" in close-out | LOW | Corrected: SimulatedBroker's `cancel_all_orders()` clears `_pending_brackets` (not a no-op). |

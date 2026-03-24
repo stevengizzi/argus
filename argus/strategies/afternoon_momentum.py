@@ -713,10 +713,16 @@ class AfternoonMomentumStrategy(BaseStrategy):
         elif failed_condition is None:
             failed_condition = "trend_alignment"
 
-        # Condition 8/8: Consolidation quality (tightness + positions)
-        active_positions = sum(1 for s in self._symbol_state.values() if s.position_active)
+        # Condition 8/8: Consolidation quality (tightness + positions, 0 = disabled)
         max_positions = self._pm_config.risk_limits.max_concurrent_positions
-        positions_ok = active_positions < max_positions
+        if max_positions > 0:
+            active_positions = sum(
+                1 for s in self._symbol_state.values() if s.position_active
+            )
+            positions_ok = active_positions < max_positions
+        else:
+            active_positions = 0
+            positions_ok = True
         entry_price = close
         stop_price = state.midday_low * (1 - self._pm_config.stop_buffer_pct)
         risk_per_share = entry_price - stop_price

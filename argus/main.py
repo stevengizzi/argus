@@ -718,6 +718,7 @@ class ArgusSystem:
             config=order_manager_config,
             trade_logger=self._trade_logger,
             db_manager=self._db,
+            broker_source=self._config.system.broker_source,
         )
         await self._order_manager.start()
         # Reconstruct open positions from broker

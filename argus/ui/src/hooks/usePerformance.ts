@@ -1,7 +1,7 @@
 /**
  * TanStack Query hook for performance data.
  *
- * Fetches performance metrics for a given period. 30s polling.
+ * Fetches performance metrics for a given period. 60s polling.
  * Uses keepPreviousData to maintain stable UI during period changes.
  *
  * Optional strategyId parameter filters metrics to a single strategy.
@@ -46,8 +46,8 @@ export function usePerformance(
         ? getPerformance(period, queryOptions)
         : getPerformance(period);
     },
-    staleTime: 30_000, // Data is fresh for 30 seconds
-    refetchInterval: 30_000, // Poll every 30 seconds while tab is active
+    staleTime: 60_000, // Data is fresh for 60 seconds
+    refetchInterval: 60_000, // Poll every 60 seconds while tab is active
     refetchOnWindowFocus: false, // Don't refetch when user tabs back
     placeholderData: keepPreviousData, // Show stale data while refetching
     enabled: opts?.enabled ?? true,

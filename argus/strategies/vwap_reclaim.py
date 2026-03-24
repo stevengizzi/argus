@@ -424,10 +424,16 @@ class VwapReclaimStrategy(BaseStrategy):
             logger.debug("%s: Internal risk limits hit, reset to ABOVE_VWAP", symbol)
             return None
 
-        # 3. Concurrent positions check
-        active_positions = sum(1 for s in self._symbol_state.values() if s.position_active)
+        # 3. Concurrent positions check (0 = disabled)
         max_positions = self._vwap_config.risk_limits.max_concurrent_positions
-        positions_ok = active_positions < max_positions
+        if max_positions > 0:
+            active_positions = sum(
+                1 for s in self._symbol_state.values() if s.position_active
+            )
+            positions_ok = active_positions < max_positions
+        else:
+            active_positions = 0
+            positions_ok = True
         self.record_evaluation(
             symbol,
             EvaluationEventType.CONDITION_CHECK,

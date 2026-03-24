@@ -166,7 +166,7 @@ async def get_reconciliation(
             timestamp=datetime.now(UTC).isoformat(),
         )
     return ReconciliationResponse(
-        status=str(result.get("status", "synced")),
-        discrepancies=list(result.get("discrepancies", [])),  # type: ignore[arg-type]
-        timestamp=str(result.get("timestamp", datetime.now(UTC).isoformat())),
+        status=result.status,
+        discrepancies=list(result.discrepancies),
+        timestamp=result.timestamp,
     )
