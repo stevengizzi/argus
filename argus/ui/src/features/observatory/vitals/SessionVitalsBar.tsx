@@ -13,6 +13,7 @@ import type { ObservatoryView } from '../hooks/useObservatoryKeyboard';
 import type { UseSessionVitalsResult } from '../hooks/useSessionVitals';
 import type { UseDebriefModeResult } from '../hooks/useDebriefMode';
 import { DebriefDatePicker } from './DebriefDatePicker';
+import { RegimeVitals } from './RegimeVitals';
 
 interface SessionVitalsBarProps {
   currentView: ObservatoryView;
@@ -114,6 +115,9 @@ export function SessionVitalsBar({
         <div className="w-px h-4 bg-argus-border" />
         <MetricCell label="Trades" value={metrics.totalTrades} />
       </div>
+
+      {/* Regime dimensions */}
+      <RegimeVitals regime={vitals.regimeVector} />
 
       {/* Right section — Diagnostics */}
       <div className="flex items-center gap-3 shrink-0" data-testid="diagnostics-section">

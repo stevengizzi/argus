@@ -55,6 +55,7 @@ function mockVitals(overrides: Partial<UseSessionVitalsResult> = {}): UseSession
     connectionStatus: { databento: true, ibkr: true, ws: true },
     closestMiss: { symbol: 'SMCI', strategy: 'AfMo', conditions_passed: 6, conditions_total: 8 },
     topBlocker: { condition_name: 'volume_ratio', rejection_count: 64, percentage: 43 },
+    regimeVector: null,
     marketTime: '10:47 AM ET',
     isLive: true,
     ...overrides,

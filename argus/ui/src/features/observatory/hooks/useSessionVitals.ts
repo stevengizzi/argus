@@ -15,6 +15,7 @@ import { getObservatorySessionSummary, getToken } from '../../../api/client';
 import type {
   ObservatoryBlockerEntry,
   ObservatoryClosestMissSummary,
+  RegimeVectorSummary,
 } from '../../../api/types';
 
 export interface ConnectionStatus {
@@ -35,6 +36,7 @@ export interface UseSessionVitalsResult {
   connectionStatus: ConnectionStatus;
   closestMiss: ObservatoryClosestMissSummary | null;
   topBlocker: ObservatoryBlockerEntry | null;
+  regimeVector: RegimeVectorSummary | null;
   marketTime: string;
   isLive: boolean;
 }
@@ -179,11 +181,14 @@ export function useSessionVitals({
       ? summaryData.top_blockers[0]
       : null;
 
+  const regimeVector = summaryData?.regime_vector_summary ?? null;
+
   return {
     metrics,
     connectionStatus,
     closestMiss,
     topBlocker,
+    regimeVector,
     marketTime: isDebrief ? `Reviewing ${date}` : marketTime,
     isLive: !isDebrief,
   };

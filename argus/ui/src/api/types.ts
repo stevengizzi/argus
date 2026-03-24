@@ -746,6 +746,28 @@ export interface ObservatoryClosestMissSummary {
   conditions_total: number;
 }
 
+export interface RegimeVectorSummary {
+  computed_at: string;
+  trend_score: number;
+  trend_conviction: number;
+  volatility_level: number;
+  volatility_direction: number;
+  universe_breadth_score: number | null;
+  breadth_thrust: boolean | null;
+  average_correlation: number | null;
+  correlation_regime: 'dispersed' | 'normal' | 'concentrated' | null;
+  sector_rotation_phase: 'risk_on' | 'risk_off' | 'mixed' | 'transitioning' | null;
+  leading_sectors: string[];
+  lagging_sectors: string[];
+  opening_drive_strength: number | null;
+  first_30min_range_ratio: number | null;
+  vwap_slope: number | null;
+  direction_change_count: number | null;
+  intraday_character: 'trending' | 'choppy' | 'reversal' | 'breakout' | null;
+  primary_regime: string;
+  regime_confidence: number;
+}
+
 export interface ObservatorySessionSummaryResponse {
   total_evaluations: number;
   total_signals: number;
@@ -753,6 +775,7 @@ export interface ObservatorySessionSummaryResponse {
   symbols_evaluated: number;
   top_blockers: ObservatoryBlockerEntry[];
   closest_miss: ObservatoryClosestMissSummary | null;
+  regime_vector_summary?: RegimeVectorSummary | null;
   date: string;
   timestamp: string;
 }
