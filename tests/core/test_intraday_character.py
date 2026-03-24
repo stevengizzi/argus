@@ -511,3 +511,85 @@ class TestSPYFiltering:
         snapshot = detector.get_intraday_snapshot()
         assert snapshot["intraday_character"] is None
         assert len(detector._bars) == 0
+
+
+class TestConfigurability:
+    """Verify configurability of spy_symbol and first_bar_minutes."""
+
+    def test_custom_spy_symbol_filters_correctly(self) -> None:
+        """on_candle ignores non-matching symbols when spy_symbol is custom."""
+        config = _make_config(min_spy_bars=2, classification_times=["09:31"])
+        detector = IntradayCharacterDetector(config, spy_symbol="QQQ")
+        detector.set_atr_20(2.0)
+        detector.set_prior_day_range(3.0)
+
+        # SPY candles should be ignored when spy_symbol is "QQQ"
+        spy_bars = [
+            _make_candle(9, 30, 500.0, 501.0, 499.0, 500.5, 100_000, symbol="SPY"),
+            _make_candle(9, 31, 500.5, 501.5, 500.0, 501.0, 100_000, symbol="SPY"),
+        ]
+        for bar in spy_bars:
+            detector.on_candle(bar)
+
+        assert len(detector._bars) == 0
+        assert detector.get_intraday_snapshot()["intraday_character"] is None
+
+        # QQQ candles should be accepted
+        qqq_bars = [
+            _make_candle(9, 30, 500.0, 501.0, 499.0, 500.5, 100_000, symbol="QQQ"),
+            _make_candle(9, 31, 500.5, 501.5, 500.0, 501.0, 100_000, symbol="QQQ"),
+        ]
+        for bar in qqq_bars:
+            detector.on_candle(bar)
+
+        assert len(detector._bars) == 2
+        assert detector.get_intraday_snapshot()["intraday_character"] is not None
+
+    def test_first_bar_minutes_config_affects_direction_count(self) -> None:
+        """Direction change count uses first_bar_minutes from config, not hardcoded 5.
+
+        12 bars with pattern: 3 up, 3 down, 3 up, 3 down (±1.0 each).
+        Lookback=3 sees 3 direction flips; lookback=5 sees 2.
+        """
+        config_3 = _make_config(
+            min_spy_bars=3,
+            first_bar_minutes=3,
+            classification_times=["09:41"],
+        )
+        config_5 = _make_config(
+            min_spy_bars=3,
+            first_bar_minutes=5,
+            classification_times=["09:41"],
+        )
+        detector_3 = IntradayCharacterDetector(config_3)
+        detector_5 = IntradayCharacterDetector(config_5)
+
+        for det in (detector_3, detector_5):
+            det.set_atr_20(2.0)
+            det.set_prior_day_range(10.0)
+
+        # 12 bars: 3 up (+1), 3 down (-1), 3 up (+1), 3 down (-1)
+        # Closes: 501, 502, 503, 502, 501, 500, 501, 502, 503, 502, 501, 500
+        price = 500.0
+        deltas = [1.0] * 3 + [-1.0] * 3 + [1.0] * 3 + [-1.0] * 3
+        bars: list[CandleEvent] = []
+        for i, delta in enumerate(deltas):
+            close = price + delta
+            minute = 30 + i
+            bars.append(
+                _make_candle(
+                    9, minute,
+                    price, price + 0.5, price - 0.5, close, 200_000,
+                )
+            )
+            price = close
+
+        for bar in bars:
+            detector_3.on_candle(bar)
+            detector_5.on_candle(bar)
+
+        snap_3 = detector_3.get_intraday_snapshot()
+        snap_5 = detector_5.get_intraday_snapshot()
+
+        assert snap_3["direction_change_count"] == 3
+        assert snap_5["direction_change_count"] == 2
