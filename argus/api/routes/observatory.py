@@ -117,6 +117,7 @@ class SessionSummaryResponse(BaseModel):
     symbols_evaluated: int
     top_blockers: list[BlockerEntry]
     closest_miss: ClosestMissSummary | None
+    regime_vector_summary: dict | None = None
     date: str
     timestamp: str
 
@@ -264,6 +265,14 @@ async def get_session_summary(
             conditions_total=cm["conditions_total"],
         )
 
+    # Read regime vector summary from orchestrator if available
+    regime_vector_summary = None
+    if (
+        state.orchestrator is not None
+        and hasattr(state.orchestrator, "latest_regime_vector_summary")
+    ):
+        regime_vector_summary = state.orchestrator.latest_regime_vector_summary
+
     return SessionSummaryResponse(
         total_evaluations=result["total_evaluations"],
         total_signals=result["total_signals"],
@@ -271,6 +280,7 @@ async def get_session_summary(
         symbols_evaluated=result["symbols_evaluated"],
         top_blockers=[BlockerEntry(**b) for b in result["top_blockers"]],
         closest_miss=closest_miss,
+        regime_vector_summary=regime_vector_summary,
         date=result["date"],
         timestamp=_now_iso(),
     )

@@ -16,6 +16,8 @@ from httpx import ASGITransport, AsyncClient
 
 from argus.analytics.config import ObservatoryConfig
 from argus.analytics.observatory_service import ObservatoryService
+from unittest.mock import MagicMock, PropertyMock
+
 from argus.api.auth import create_access_token, set_jwt_secret
 from argus.api.dependencies import AppState
 from argus.api.server import create_app
@@ -63,6 +65,7 @@ async def _build_observatory_client(
     *,
     enabled: bool = True,
     seed_data: bool = True,
+    orchestrator: object | None = None,
 ) -> tuple[AsyncClient, aiosqlite.Connection, object]:
     """Build an httpx client with Observatory service.
 
@@ -148,6 +151,7 @@ async def _build_observatory_client(
         health_monitor=health_monitor,
         risk_manager=risk_manager,
         order_manager=order_manager,
+        orchestrator=orchestrator,
         strategies={},
         clock=clock,
         config=config,
@@ -321,6 +325,98 @@ async def test_session_summary_endpoint(
 # ---------------------------------------------------------------------------
 # Config-gated disabled test
 # ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_session_summary_includes_regime_vector_summary_field(
+    observatory_client: AsyncClient,
+    auth_headers: dict[str, str],
+) -> None:
+    """SessionSummaryResponse schema includes regime_vector_summary field."""
+    resp = await observatory_client.get(
+        f"/api/v1/observatory/session-summary?date={TEST_DATE}",
+        headers=auth_headers,
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    # Field must be present in response (None when no orchestrator vector)
+    assert "regime_vector_summary" in data
+    assert data["regime_vector_summary"] is None
+
+
+@pytest.mark.asyncio
+async def test_session_summary_with_orchestrator_vector(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Session summary includes regime_vector_summary when orchestrator has a vector."""
+    monkeypatch.setenv("ARGUS_JWT_SECRET", TEST_JWT_SECRET)
+    set_jwt_secret(TEST_JWT_SECRET)
+
+    # Wire a mock orchestrator with a regime vector summary
+    mock_orchestrator = MagicMock()
+    type(mock_orchestrator).latest_regime_vector_summary = PropertyMock(
+        return_value={
+            "trend_score": 0.5,
+            "volatility_level": 0.15,
+            "primary_regime": "bullish_trending",
+            "regime_confidence": 0.7,
+        }
+    )
+
+    client, obs_conn, temp_db = await _build_observatory_client(
+        tmp_path, enabled=True, seed_data=True, orchestrator=mock_orchestrator,
+    )
+
+    token, _ = create_access_token(TEST_JWT_SECRET, expires_hours=24)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    async with client:
+        resp = await client.get(
+            f"/api/v1/observatory/session-summary?date={TEST_DATE}",
+            headers=headers,
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["regime_vector_summary"] is not None
+        assert data["regime_vector_summary"]["trend_score"] == 0.5
+        assert data["regime_vector_summary"]["primary_regime"] == "bullish_trending"
+
+    await obs_conn.close()
+    await temp_db.close()
+
+
+@pytest.mark.asyncio
+async def test_session_summary_null_when_orchestrator_has_no_vector(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Session summary returns regime_vector_summary: null when orchestrator has no vector."""
+    monkeypatch.setenv("ARGUS_JWT_SECRET", TEST_JWT_SECRET)
+    set_jwt_secret(TEST_JWT_SECRET)
+
+    # Wire a mock orchestrator with no regime vector
+    mock_orchestrator = MagicMock()
+    type(mock_orchestrator).latest_regime_vector_summary = PropertyMock(return_value=None)
+
+    client, obs_conn, temp_db = await _build_observatory_client(
+        tmp_path, enabled=True, seed_data=True, orchestrator=mock_orchestrator,
+    )
+
+    token, _ = create_access_token(TEST_JWT_SECRET, expires_hours=24)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    async with client:
+        resp = await client.get(
+            f"/api/v1/observatory/session-summary?date={TEST_DATE}",
+            headers=headers,
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["regime_vector_summary"] is None
+
+    await obs_conn.close()
+    await temp_db.close()
 
 
 @pytest.mark.asyncio

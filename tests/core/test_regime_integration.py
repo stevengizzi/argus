@@ -376,6 +376,69 @@ class TestPreMarket:
         sector.fetch.assert_called_once()
 
 
+class TestOrchestratorRegimeVectorSummary:
+    """Tests for Orchestrator.latest_regime_vector_summary property."""
+
+    def test_returns_none_when_no_v2_vector(self) -> None:
+        """Property returns None when no V2 regime vector has been computed."""
+        from argus.core.orchestrator import Orchestrator
+
+        config = _make_config()
+        event_bus = EventBus()
+        clock = MagicMock()
+        trade_logger = AsyncMock()
+        broker = AsyncMock()
+        data_service = AsyncMock()
+
+        orchestrator = Orchestrator(
+            config=config,
+            event_bus=event_bus,
+            clock=clock,
+            trade_logger=trade_logger,
+            broker=broker,
+            data_service=data_service,
+        )
+
+        assert orchestrator.latest_regime_vector_summary is None
+
+    def test_returns_dict_after_v2_computes_vector(self) -> None:
+        """Property returns a dict after V2 computes a regime vector."""
+        from argus.core.orchestrator import Orchestrator
+
+        config = _make_config()
+        event_bus = EventBus()
+        clock = MagicMock()
+        trade_logger = AsyncMock()
+        broker = AsyncMock()
+        data_service = AsyncMock()
+
+        orchestrator = Orchestrator(
+            config=config,
+            event_bus=event_bus,
+            clock=clock,
+            trade_logger=trade_logger,
+            broker=broker,
+            data_service=data_service,
+        )
+
+        # Manually set a regime vector (simulating V2 computation)
+        orchestrator._latest_regime_vector = RegimeVector(
+            computed_at=datetime.now(UTC),
+            trend_score=0.5,
+            trend_conviction=0.8,
+            volatility_level=0.15,
+            volatility_direction=0.1,
+            primary_regime=MarketRegime.BULLISH_TRENDING,
+            regime_confidence=0.7,
+        )
+
+        result = orchestrator.latest_regime_vector_summary
+        assert result is not None
+        assert isinstance(result, dict)
+        assert "trend_score" in result
+        assert result["primary_regime"] == "bullish_trending"
+
+
 class TestEventBusSubscription:
     """Tests for BreadthCalculator + IntradayCharacterDetector Event Bus subscription."""
 

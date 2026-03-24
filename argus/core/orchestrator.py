@@ -220,6 +220,22 @@ class Orchestrator:
         return self._config.cash_reserve_pct
 
     @property
+    def latest_regime_vector_summary(self) -> dict | None:
+        """Get the latest V2 regime vector as a dict summary.
+
+        Uses duck-typing to avoid importing RegimeVector directly,
+        maintaining the S6 circular-import avoidance pattern.
+
+        Returns:
+            Dict representation of the regime vector, or None if unavailable.
+        """
+        if self._latest_regime_vector is not None and hasattr(
+            self._latest_regime_vector, "to_dict"
+        ):
+            return self._latest_regime_vector.to_dict()
+        return None
+
+    @property
     def pre_market_complete(self) -> bool:
         """Whether pre-market routine has completed today."""
         return self._pre_market_done_today

@@ -172,6 +172,14 @@ async def observatory_websocket(websocket: WebSocket) -> None:
                 and previous_tiers.get(sym) != "near_trigger"
             ]
 
+            # Read regime vector summary from orchestrator if available
+            regime_vector_summary = None
+            if (
+                app_state.orchestrator is not None
+                and hasattr(app_state.orchestrator, "latest_regime_vector_summary")
+            ):
+                regime_vector_summary = app_state.orchestrator.latest_regime_vector_summary
+
             await websocket.send_json({
                 "type": "evaluation_summary",
                 "timestamp": now_iso,
@@ -179,6 +187,7 @@ async def observatory_websocket(websocket: WebSocket) -> None:
                     "evaluations_count": current_eval_count - previous_eval_count,
                     "signals_count": current_signal_count - previous_signal_count,
                     "new_near_triggers": new_near_triggers,
+                    "regime_vector_summary": regime_vector_summary,
                 },
             })
 
