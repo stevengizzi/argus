@@ -1,5 +1,9 @@
 # Sprint 27.65, Session S3: Strategy Fixes
 
+## Parallelization Note
+This session has NO file overlap with S1, S2, S4, or S5. It can run in
+parallel with any of them. It touches only `argus/strategies/` files.
+
 ## Pre-Flight Checks
 Before making any changes:
 1. Read these files to load context:
@@ -8,7 +12,7 @@ Before making any changes:
    - `argus/strategies/pattern_strategy.py`
    - `argus/strategies/base_strategy.py`
    - `argus/strategies/patterns/base.py` (PatternModule ABC)
-   - `docs/sprints/sprint-27.65/S2-closeout.md` (verify S2 complete)
+   - `docs/sprints/sprint-27.65/review-context.md`
 2. Run the test baseline (DEC-328):
    Scoped: `python -m pytest tests/strategies/ -x -q`
    Expected: all passing
@@ -57,18 +61,22 @@ reduce the initial "Insufficient history" dead zone.
      events during its operating window (9:35-11:30 ET).
 
 ### R2: Improve pattern strategy warm-up
-1. In `PatternBasedStrategy`, when the first CandleEvent arrives for a symbol
-   and the candle deque has fewer bars than `lookback_bars`:
-   - Check if candle data for this symbol is available from an in-memory source
-     (DatabentoDataService's candle buffer, or IntradayCandleStore if S4 is done)
-   - If available, backfill the deque with historical bars up to lookback_bars
-   - Log at DEBUG: `"{strategy}: backfilled {N} bars for {symbol}"`
-2. If no backfill source is available (IntradayCandleStore not yet built),
-   implement a fallback: reduce the minimum required history for the first
-   30 minutes of trading. E.g., allow evaluation with 50% of lookback_bars
-   during the first 30 minutes, logging a reduced-confidence flag.
-3. At minimum, investigate why NFLX only has 15/30 bars after 45 minutes —
-   this suggests bars are being dropped or not accumulated correctly.
+1. **Investigate the accumulation rate:** NFLX showed only 15/30 bars after
+   45 minutes. This is too slow for a liquid stock with a candle every minute.
+   Determine if bars are being dropped, if the deque is being reset, or if the
+   strategy isn't receiving all CandleEvents for its watchlist.
+2. **Expose a backfill hook** in `PatternBasedStrategy`: add a method
+   `backfill_candles(symbol: str, bars: list[CandleBar])` that prepends
+   historical bars to the front of the per-symbol deque (respecting max length).
+   This will be wired to IntradayCandleStore in Session S4.5 — for now, just
+   expose the method and test it.
+3. **Temporary fallback** for the current session: if the candle deque has fewer
+   than `lookback_bars` but at least 50% of them, allow evaluation with a
+   `reduced_confidence=True` flag in the evaluation telemetry. Log at INFO:
+   `"{strategy}: evaluating {symbol} with partial history ({N}/{lookback_bars})"`
+   This ensures the strategies produce some data during the warm-up window
+   rather than being completely silent for 30 minutes.
+4. Fix the root cause of slow accumulation if investigation reveals dropped bars.
 
 ## Constraints
 - Do NOT modify: other strategies (ORB, VWAP, AfMo)

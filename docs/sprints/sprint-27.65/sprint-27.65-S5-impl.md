@@ -1,5 +1,10 @@
 # Sprint 27.65, Session S5: Frontend + Observatory Fixes
 
+## Parallelization Note
+This session has NO file overlap with S1, S2, S3, or S4. It touches only
+frontend components, `observatory_service.py`, and `sector_rotation.py`.
+It can run in parallel with any other session.
+
 ## Pre-Flight Checks
 Before making any changes:
 1. Read these files to load context:
@@ -7,12 +12,11 @@ Before making any changes:
    - `argus/analytics/observatory_service.py`
    - `argus/core/sector_rotation.py`
    - `argus/ui/src/` (explore Dashboard, Observatory, and query hook files)
-   - `docs/sprints/sprint-27.65/S4-closeout.md` (verify S4 complete)
-2. Run the test baseline (DEC-328 — final session, full suite):
-   Full suite: `python -m pytest tests/ --ignore=tests/test_main.py -x -q -n auto`
-   Expected: ~3,337+ tests (S1-S4 added tests), all passing
+   - `docs/sprints/sprint-27.65/review-context.md`
+2. Run the test baseline (DEC-328):
+   Scoped: `python -m pytest tests/analytics/ tests/core/test_sector* -x -q`
    Also: `cd argus/ui && npx vitest run`
-   Expected: ~631+ Vitest tests, all passing
+   Expected: all passing
 3. Verify you are on the correct branch
 
 ## Objective
@@ -98,7 +102,7 @@ Verification conditions:
 
 ## Test Targets
 After implementation:
-- Existing tests: all must still pass (full suite — final session)
+- Existing tests: all must still pass
 - New tests to write:
   1. `test_observatory_pipeline_returns_nonzero_counts` — mock UniverseManager and EvaluationEventStore, verify pipeline endpoint returns counts
   2. `test_observatory_pipeline_static_tiers_from_universe_manager` — verify Universe/Viable/Routed come from UM
@@ -138,8 +142,8 @@ After close-out, invoke @reviewer with:
 1. Review context: `docs/sprints/sprint-27.65/review-context.md`
 2. Close-out path: `docs/sprints/sprint-27.65/S5-closeout.md`
 3. Diff range: full sprint diff from sprint start
-4. Test command (final session — full suite):
-   - `python -m pytest tests/ --ignore=tests/test_main.py -x -q -n auto`
+4. Test command:
+   - `python -m pytest tests/analytics/ tests/core/test_sector* -x -q`
    - `cd argus/ui && npx vitest run`
 5. Files NOT to modify: `argus/execution/`, `argus/core/risk_manager.py`, `argus/strategies/`
 

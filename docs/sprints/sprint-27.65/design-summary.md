@@ -19,15 +19,32 @@ trading, this would have been catastrophic.
 
 ## Scope
 
-18 issues organized into 5 sessions:
+18 issues organized into 6 sessions (3 sequential steps with parallelization):
 
-| Session | Name | Issues | Priority |
-|---------|------|--------|----------|
-| S1 | Order Management Safety | #11, #12, #17, #18 | CRITICAL |
-| S2 | Trade Correctness + Risk Config | #14, #1, #16, #9 | HIGH |
-| S3 | Strategy Fixes | #7, #13 | HIGH |
-| S4 | IntradayCandleStore + Live P&L | #4, #5 | MEDIUM |
-| S5 | Frontend + Observatory Fixes | #2, #3, #6, #8, #10 | LOW-MEDIUM |
+| Session | Name | Issues | Priority | Track |
+|---------|------|--------|----------|-------|
+| S1 | Order Management Safety | #11, #12, #17, #18 | CRITICAL | A |
+| S2 | Trade Correctness + Risk Config | #14, #1, #16, #9 | HIGH | A |
+| S3 | Strategy Fixes | #7, #13 | HIGH | B (parallel with S1) |
+| S4 | IntradayCandleStore + Live P&L | #4, #5 | MEDIUM | A |
+| S4.5 | Pattern Backfill Wire-Up + Final Integration | (wires S3 + S4) | MEDIUM | A (after S3 + S4) |
+| S5 | Frontend + Observatory Fixes | #2, #3, #6, #8, #10 | LOW-MEDIUM | C (parallel with S2) |
+
+### Parallel Execution Plan
+
+```
+Time →
+Track A:  ████ S1 ████ → ████ S2 ████ → ████ S4 ████ → ████ S4.5 ████
+Track B:  ████ S3 ████ ─────────────────────────────────────┘ (joins at S4.5)
+Track C:                  ████ S5 ████
+```
+
+- S1 + S3 run in parallel (zero file overlap)
+- S2 + S5 run in parallel (zero file overlap)
+- S4 follows S2 (both touch order_manager.py)
+- S4.5 is the final session — wires S3's backfill hook to S4's candle store,
+  runs full integration test suite
+- **3 sequential steps instead of 6**, calendar time reduced by ~50%
 
 ## Session 1: Order Management Safety (CRITICAL)
 
