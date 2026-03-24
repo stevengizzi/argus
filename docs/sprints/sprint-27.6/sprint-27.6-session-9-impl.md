@@ -72,6 +72,9 @@ Write the close-out report to: `docs/sprints/sprint-27.6/session-9-closeout.md`
 3. Test command: `python -m pytest tests/core/test_operating_conditions.py tests/models/ -x -q -v`
 4. Files NOT to modify: `strategies/*.py`, `orchestrator.py`
 
+The @reviewer will produce its review report and write it to:
+`docs/sprints/sprint-27.6/session-9-review.md`
+
 ## Session-Specific Review Focus
 1. Verify no strategy wiring (operating_conditions parsed but not used in activation)
 2. Verify None RegimeVector fields treated as non-matching (not as "always matches")

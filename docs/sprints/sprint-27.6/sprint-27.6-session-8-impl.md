@@ -68,6 +68,9 @@ Write the close-out report to: `docs/sprints/sprint-27.6/session-8-closeout.md`
 3. Test command: `python -m pytest tests/core/ tests/backtest/ -x -q -v`
 4. Files NOT to modify: `evaluation.py`, `comparison.py`, `ensemble_evaluation.py`, `strategies/*.py`
 
+The @reviewer will produce its review report and write it to:
+`docs/sprints/sprint-27.6/session-8-review.md`
+
 ## Session-Specific Review Focus
 1. Verify E2E tests exercise the full pipeline (not just unit-level)
 2. Verify config-gate isolation test actually asserts zero V2 execution

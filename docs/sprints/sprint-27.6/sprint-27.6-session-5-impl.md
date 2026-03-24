@@ -76,6 +76,9 @@ Write the close-out report to: `docs/sprints/sprint-27.6/session-5-closeout.md`
 3. Test command: `python -m pytest tests/core/test_intraday_character.py -x -q -v`
 4. Files NOT to modify: all existing files
 
+The @reviewer will produce its review report and write it to:
+`docs/sprints/sprint-27.6/session-5-review.md`
+
 ## Session-Specific Review Focus
 1. Verify all thresholds read from config (grep for hardcoded numbers)
 2. Verify priority order: Breakout > Reversal > Trending > Choppy

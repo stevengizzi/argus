@@ -120,6 +120,9 @@ After close-out, invoke @reviewer with:
 4. Test command: `python -m pytest tests/core/test_regime.py tests/core/test_config.py -x -q -v`
 5. Files NOT to modify: `evaluation.py`, `comparison.py`, `orchestrator.py`, `main.py`, `strategies/*.py`
 
+The @reviewer will produce its review report and write it to:
+`docs/sprints/sprint-27.6/session-1-review.md`
+
 ## Session-Specific Review Focus (for @reviewer)
 1. Verify V2 delegates to V1 for primary_regime — no reimplementation of trend/vol scoring
 2. Verify RegimeVector is frozen (immutable after construction)

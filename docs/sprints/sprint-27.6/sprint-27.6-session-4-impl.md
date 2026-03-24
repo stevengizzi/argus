@@ -61,6 +61,9 @@ Write the close-out report to: `docs/sprints/sprint-27.6/session-4-closeout.md`
 3. Test command: `python -m pytest tests/core/test_sector_rotation.py -x -q -v`
 4. Files NOT to modify: all existing files
 
+The @reviewer will produce its review report and write it to:
+`docs/sprints/sprint-27.6/session-4-review.md`
+
 ## Session-Specific Review Focus
 1. Verify circuit breaker on 403 (no retry spam)
 2. Verify graceful degradation (never raises on FMP failure)

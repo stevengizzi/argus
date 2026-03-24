@@ -82,6 +82,9 @@ Follow close-out skill. Write to: `docs/sprints/sprint-27.6/session-2-closeout.m
 4. Test command: `python -m pytest tests/core/test_breadth.py -x -q -v`
 5. Files NOT to modify: `databento_data_service.py`, `regime.py`, `events.py`, `orchestrator.py`, `main.py`
 
+The @reviewer will produce its review report and write it to:
+`docs/sprints/sprint-27.6/session-2-review.md`
+
 ## Session-Specific Review Focus (for @reviewer)
 1. Verify O(1) per-candle update (no loops over all symbols per candle)
 2. Verify deque maxlen is enforced (memory bounded)

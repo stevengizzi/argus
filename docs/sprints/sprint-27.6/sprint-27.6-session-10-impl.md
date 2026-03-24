@@ -92,6 +92,9 @@ After close-out, invoke @reviewer with:
    - Frontend: `cd argus/ui && npx vitest run --reporter=verbose`
 5. Files NOT to modify: all backend Python files
 
+The @reviewer will produce its review report and write it to:
+`docs/sprints/sprint-27.6/session-10-review.md`
+
 ## Session-Specific Review Focus
 1. Verify no backend modifications
 2. Verify graceful None handling (no JS errors in any state)

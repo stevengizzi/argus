@@ -56,6 +56,9 @@ Write the close-out report to: `docs/sprints/sprint-27.6/session-7-closeout.md`
 3. Test command: `python -m pytest tests/backtest/ -x -q -v`
 4. Files NOT to modify: `evaluation.py`, `comparison.py`, `ensemble_evaluation.py`
 
+The @reviewer will produce its review report and write it to:
+`docs/sprints/sprint-27.6/session-7-review.md`
+
 ## Session-Specific Review Focus
 1. Verify V2 in backtest mode has all calculators as None
 2. Verify golden-file test uses frozen fixture (not dynamically generated V1 tags)
