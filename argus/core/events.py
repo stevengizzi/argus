@@ -255,6 +255,11 @@ class PositionUpdatedEvent(Event):
     current_price: float = 0.0
     unrealized_pnl: float = 0.0
     stop_updated_to: float | None = None
+    symbol: str = ""
+    r_multiple: float = 0.0
+    entry_price: float = 0.0
+    shares: int = 0
+    strategy_id: str = ""
 
 
 @dataclass(frozen=True)
@@ -369,6 +374,24 @@ class DataResumedEvent(Event):
     """
 
     provider: str = ""  # "databento", "alpaca", etc.
+
+
+# ---------------------------------------------------------------------------
+# Account Events (Sprint 27.65 S4)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class AccountUpdateEvent(Event):
+    """Periodic account-level metrics pushed via WebSocket.
+
+    Published by the WebSocket bridge's account poll loop. Frontend
+    clients use this for real-time equity and daily P&L display.
+    """
+
+    equity: float = 0.0
+    daily_pnl: float = 0.0
+    buying_power: float = 0.0
 
 
 # ---------------------------------------------------------------------------

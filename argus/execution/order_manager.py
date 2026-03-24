@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import time as _time
 from dataclasses import dataclass, field
 from datetime import datetime, time
 from typing import TYPE_CHECKING, Any
@@ -33,6 +34,7 @@ from argus.core.events import (
     OrderType,
     PositionClosedEvent,
     PositionOpenedEvent,
+    PositionUpdatedEvent,
     ShutdownRequestedEvent,
     Side,
     SignalEvent,
@@ -187,6 +189,10 @@ class OrderManager:
         self._poll_task: asyncio.Task[None] | None = None
         self._running: bool = False
         self._flattened_today: bool = False
+
+        # P&L update throttle: {symbol: last_publish_monotonic} (Sprint 27.65 S4)
+        self._pnl_last_published: dict[str, float] = {}
+        self._pnl_throttle_seconds: float = 1.0
 
     async def start(self) -> None:
         """Start the Order Manager.
@@ -498,6 +504,52 @@ class OrderManager:
             ):
                 await self._flatten_position(position, reason="t2_target")
                 continue
+
+        # Publish throttled P&L updates for open positions (Sprint 27.65 S4)
+        await self._publish_position_pnl(event.symbol, event.price)
+
+    async def _publish_position_pnl(self, symbol: str, current_price: float) -> None:
+        """Compute and publish unrealized P&L for open positions on a symbol.
+
+        Throttled to at most once per second per symbol to avoid flooding.
+
+        Args:
+            symbol: The ticker symbol.
+            current_price: Current market price.
+        """
+        now = _time.monotonic()
+        last = self._pnl_last_published.get(symbol, 0.0)
+        if now - last < self._pnl_throttle_seconds:
+            return
+
+        self._pnl_last_published[symbol] = now
+
+        positions = self._managed_positions.get(symbol)
+        if not positions:
+            return
+
+        for position in positions:
+            if position.is_fully_closed:
+                continue
+
+            # Compute unrealized P&L (long only for V1)
+            unrealized_pnl = (current_price - position.entry_price) * position.shares_remaining
+            risk_per_share = abs(position.entry_price - position.original_stop_price)
+            risk_amount = risk_per_share * position.shares_total
+            r_multiple = unrealized_pnl / risk_amount if risk_amount > 0 else 0.0
+
+            await self._event_bus.publish(
+                PositionUpdatedEvent(
+                    position_id=generate_id(),
+                    symbol=symbol,
+                    current_price=current_price,
+                    unrealized_pnl=round(unrealized_pnl, 2),
+                    r_multiple=round(r_multiple, 3),
+                    entry_price=position.entry_price,
+                    shares=position.shares_remaining,
+                    strategy_id=position.strategy_id,
+                )
+            )
 
     async def _on_circuit_breaker(self, event: CircuitBreakerEvent) -> None:
         """Handle circuit breaker event — trigger emergency flatten."""
@@ -1282,6 +1334,9 @@ class OrderManager:
         Includes a flatten-pending guard to prevent duplicate flatten orders
         (e.g., time-stop loop submitting a new flatten every 5 seconds).
         """
+        # Clear P&L throttle so the close event isn't suppressed (Sprint 27.65 S4)
+        self._pnl_last_published.pop(position.symbol, None)
+
         # Flatten-pending guard: skip if a flatten order is already pending
         existing_order_id = self._flatten_pending.get(position.symbol)
         if existing_order_id is not None:

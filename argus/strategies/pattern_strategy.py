@@ -91,6 +91,8 @@ class PatternBasedStrategy(BaseStrategy):
         self._candle_windows: dict[str, deque[CandleBar]] = {}
         self._last_score: float = 50.0
         self._last_context: dict[str, object] = {}
+        self._candle_store: object | None = None  # IntradayCandleStore, set post-init
+        self._backfilled_symbols: set[str] = set()  # Track symbols already backfilled
 
         # Parse operating window times
         earliest_str = config.operating_window.earliest_entry
@@ -125,6 +127,42 @@ class PatternBasedStrategy(BaseStrategy):
         """
         candle_time = event.timestamp.astimezone(ET).time()
         return self._earliest_entry_time <= candle_time < self._latest_entry_time
+
+    def set_candle_store(self, store: object) -> None:
+        """Set the IntradayCandleStore reference for auto-backfill.
+
+        Args:
+            store: IntradayCandleStore instance (duck-typed to avoid import).
+        """
+        self._candle_store = store
+
+    def _try_backfill_from_store(self, symbol: str) -> None:
+        """Attempt to backfill a symbol's candle window from the candle store.
+
+        Called once per symbol on the first candle received. If the store has
+        bars, they are prepended to the window so pattern detection can start
+        immediately rather than waiting for lookback_bars of live data.
+
+        Args:
+            symbol: The ticker symbol.
+        """
+        if symbol in self._backfilled_symbols:
+            return
+        self._backfilled_symbols.add(symbol)
+
+        if self._candle_store is None:
+            return
+
+        store = self._candle_store
+        if not hasattr(store, "get_bars") or not hasattr(store, "has_bars"):
+            return
+
+        if not store.has_bars(symbol):
+            return
+
+        bars = store.get_bars(symbol)
+        if bars:
+            self.backfill_candles(symbol, bars)
 
     def backfill_candles(self, symbol: str, bars: list[CandleBar]) -> int:
         """Prepend historical bars to a symbol's candle window.
@@ -180,6 +218,9 @@ class PatternBasedStrategy(BaseStrategy):
         # Check watchlist
         if symbol not in self._watchlist:
             return None
+
+        # Auto-backfill from IntradayCandleStore on first candle per symbol
+        self._try_backfill_from_store(symbol)
 
         # Append candle to per-symbol window BEFORE operating window check
         # so bars accumulate during pre-market/early hours (Sprint 27.65 S3 fix)

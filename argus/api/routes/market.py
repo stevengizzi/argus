@@ -136,21 +136,61 @@ async def get_symbol_bars(
     """
     upper_symbol = symbol.upper()
 
-    # Try real data first if DataService is available and has get_historical_candles
+    # --- Priority 1: IntradayCandleStore (live session bars) ---
+    if state.candle_store is not None and state.candle_store.has_bars(upper_symbol):
+        # Parse optional time range
+        start: datetime | None = None
+        end: datetime | None = None
+        if start_time and end_time:
+            start = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
+            end = datetime.fromisoformat(end_time.replace("Z", "+00:00"))
+
+        candle_bars = state.candle_store.get_bars(upper_symbol, start, end)
+
+        # Apply limit (most recent N bars)
+        if len(candle_bars) > limit:
+            candle_bars = candle_bars[-limit:]
+
+        bars = [
+            BarData(
+                timestamp=bar.timestamp.isoformat(),
+                open=round(bar.open, 2),
+                high=round(bar.high, 2),
+                low=round(bar.low, 2),
+                close=round(bar.close, 2),
+                volume=int(bar.volume),
+            )
+            for bar in candle_bars
+        ]
+
+        logger.info(
+            "Bars for %s from candle store: %d bars",
+            upper_symbol,
+            len(bars),
+        )
+
+        return BarsResponse(
+            symbol=upper_symbol,
+            timeframe=timeframe,
+            bars=bars,
+            count=len(bars),
+        )
+
+    # --- Priority 2: DataService historical candles ---
     if state.data_service is not None and hasattr(state.data_service, "get_historical_candles"):
         try:
             # Parse time range
             if start_time and end_time:
-                start = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
-                end = datetime.fromisoformat(end_time.replace("Z", "+00:00"))
+                start_dt = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
+                end_dt = datetime.fromisoformat(end_time.replace("Z", "+00:00"))
             else:
                 # Default: today's trading session
                 now_et = datetime.now(ET_TZ)
-                start = now_et.replace(hour=9, minute=30, second=0, microsecond=0)
-                end = min(now_et, now_et.replace(hour=16, minute=0, second=0, microsecond=0))
+                start_dt = now_et.replace(hour=9, minute=30, second=0, microsecond=0)
+                end_dt = min(now_et, now_et.replace(hour=16, minute=0, second=0, microsecond=0))
 
             df = await state.data_service.get_historical_candles(
-                upper_symbol, timeframe, start, end
+                upper_symbol, timeframe, start_dt, end_dt
             )
 
             if df is not None and not df.empty:
@@ -192,18 +232,19 @@ async def get_symbol_bars(
                     count=len(bars),
                 )
             else:
-                logger.warning(
+                logger.debug(
                     "No bars returned for %s from DataService, falling back to synthetic",
                     upper_symbol,
                 )
 
         except Exception:
-            logger.exception(
+            logger.debug(
                 "Failed to fetch real bars for %s, falling back to synthetic",
                 upper_symbol,
+                exc_info=True,
             )
 
-    # Fallback: synthetic data
+    # --- Priority 3: Synthetic fallback ---
     bars = _generate_synthetic_bars(upper_symbol, min(limit, 390))
     return BarsResponse(
         symbol=upper_symbol,

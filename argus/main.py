@@ -61,6 +61,7 @@ from argus.core.risk_manager import RiskManager
 from argus.data.alpaca_data_service import AlpacaDataService
 from argus.data.alpaca_scanner import AlpacaScanner
 from argus.data.databento_data_service import DatabentoDataService
+from argus.data.intraday_candle_store import IntradayCandleStore
 from argus.data.databento_scanner import DatabentoScanner, DatabentoScannerConfig
 from argus.data.fmp_reference import FMPReferenceClient, FMPReferenceConfig
 from argus.data.fmp_scanner import FMPScannerConfig, FMPScannerSource
@@ -148,6 +149,7 @@ class ArgusSystem:
         self._regime_check_count: int = 0  # Sprint 25.9: counter for INFO logging cadence
         self._bg_refresh_task: asyncio.Task[None] | None = None  # Sprint 25.9: background cache refresh
         self._reconciliation_task: asyncio.Task[None] | None = None  # Sprint 27.65: position recon
+        self._candle_store: IntradayCandleStore | None = None  # Sprint 27.65 S4: intraday bar store
 
     async def start(self) -> None:
         """Initialize and start all components in dependency order.
@@ -769,6 +771,15 @@ class ArgusSystem:
             self._eval_store = None
 
         # --- Phase 10.5: Event Routing ---
+        # IntradayCandleStore — parallel CandleEvent subscriber (Sprint 27.65 S4)
+        self._candle_store = IntradayCandleStore()
+        self._event_bus.subscribe(CandleEvent, self._candle_store.on_candle)
+
+        # Wire candle store into PatternBasedStrategy instances for auto-backfill
+        for strategy in self._strategies.values():
+            if isinstance(strategy, PatternBasedStrategy):
+                strategy.set_candle_store(self._candle_store)
+
         # Subscribe to CandleEvents and route to active strategies (DEC-125)
         self._event_bus.subscribe(CandleEvent, self._on_candle_for_strategies)
         # Subscribe to PositionClosedEvents to update strategy position tracking
@@ -859,6 +870,7 @@ class ArgusSystem:
                     action_manager=self._action_manager,
                     universe_manager=self._universe_manager,
                     telemetry_store=self._eval_store,
+                    candle_store=self._candle_store,
                 )
 
                 # Start ActionManager cleanup task if AI is enabled
@@ -868,7 +880,10 @@ class ArgusSystem:
 
                 # Start WebSocket bridge
                 ws_bridge = get_bridge()
-                ws_bridge.start(self._event_bus, self._order_manager, config.system.api)
+                ws_bridge.start(
+                    self._event_bus, self._order_manager, config.system.api,
+                    broker=self._broker,
+                )
 
                 # Start API server with port-availability guard
                 try:

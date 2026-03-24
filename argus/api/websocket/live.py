@@ -20,6 +20,7 @@ from jose import JWTError
 from argus.api.auth import get_jwt_secret
 from argus.api.serializers import serialize_event
 from argus.core.events import (
+    AccountUpdateEvent,
     AllocationUpdateEvent,
     CircuitBreakerEvent,
     Event,
@@ -65,6 +66,8 @@ EVENT_TYPE_MAP: dict[type[Event], str] = {
     OrderApprovedEvent: "order.approved",
     OrderRejectedEvent: "order.rejected",
     TickEvent: "price.update",
+    # Account events (Sprint 27.65 S4)
+    AccountUpdateEvent: "account.update",
     # Orchestrator events
     RegimeChangeEvent: "orchestrator.regime_change",
     AllocationUpdateEvent: "orchestrator.allocation_update",
@@ -118,10 +121,14 @@ class WebSocketBridge:
         self._order_manager: OrderManager | None = None
         self._config: ApiConfig | None = None
         self._heartbeat_task: asyncio.Task[None] | None = None
+        self._account_poll_task: asyncio.Task[None] | None = None
         self._running = False
 
         # Tick throttling: {symbol: last_send_time_monotonic}
         self._tick_last_sent: dict[str, float] = {}
+
+        # Broker reference for account polling (Sprint 27.65 S4)
+        self._broker: object | None = None
 
     @property
     def clients(self) -> list[ClientConnection]:
@@ -133,6 +140,7 @@ class WebSocketBridge:
         event_bus: EventBus,
         order_manager: OrderManager,
         config: ApiConfig,
+        broker: object | None = None,
     ) -> None:
         """Start the WebSocket bridge.
 
@@ -142,6 +150,7 @@ class WebSocketBridge:
             event_bus: The Event Bus to subscribe to.
             order_manager: The Order Manager for position filtering.
             config: API configuration with WebSocket settings.
+            broker: Optional broker for account polling.
         """
         if self._running:
             logger.warning("WebSocketBridge already running")
@@ -150,6 +159,7 @@ class WebSocketBridge:
         self._event_bus = event_bus
         self._order_manager = order_manager
         self._config = config
+        self._broker = broker
         self._running = True
 
         # Subscribe to all standard events
@@ -181,6 +191,11 @@ class WebSocketBridge:
 
         # Start heartbeat loop
         self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
+
+        # Start account poll loop (Sprint 27.65 S4)
+        if self._broker is not None:
+            self._account_poll_task = asyncio.create_task(self._account_poll_loop())
+
         logger.info("WebSocketBridge started")
 
     def stop(self) -> None:
@@ -196,6 +211,10 @@ class WebSocketBridge:
         if self._heartbeat_task:
             self._heartbeat_task.cancel()
             self._heartbeat_task = None
+
+        if self._account_poll_task:
+            self._account_poll_task.cancel()
+            self._account_poll_task = None
 
         # Unsubscribe from events
         if self._event_bus:
@@ -353,6 +372,43 @@ class WebSocketBridge:
                 break
             except Exception:
                 logger.exception("Error in heartbeat loop")
+
+    async def _account_poll_loop(self) -> None:
+        """Poll broker for account metrics and push via WebSocket.
+
+        Runs every 30 seconds. Publishes account.update messages with
+        equity, daily P&L, and buying power.
+        """
+        interval = 30  # seconds
+
+        while self._running:
+            try:
+                await asyncio.sleep(interval)
+                if not self._running or self._broker is None:
+                    break
+
+                if not hasattr(self._broker, "get_account"):
+                    break
+
+                account = await self._broker.get_account()
+                if account is None:
+                    continue
+
+                message = {
+                    "type": "account.update",
+                    "data": {
+                        "equity": getattr(account, "equity", 0.0),
+                        "daily_pnl": getattr(account, "daily_pnl", 0.0),
+                        "buying_power": getattr(account, "buying_power", 0.0),
+                    },
+                    "sequence": 0,
+                    "timestamp": datetime.now(UTC).isoformat(),
+                }
+                await self._broadcast(message, "account.update")
+            except asyncio.CancelledError:
+                break
+            except Exception:
+                logger.exception("Error in account poll loop")
 
 
 # Module-level singleton
