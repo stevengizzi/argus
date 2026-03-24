@@ -29,7 +29,7 @@ DEC ranges reserved: 363–372 (27.5), 369–378 (27.6), 379–385 (27.7), 386�
 
 - **Active sprint:** None (between sprints)
 - **Next sprint:** 27.7 (Counterfactual Engine)
-- **Tests:** 3,337 pytest + 631 Vitest (0 failures, 0 hangs)
+- **Tests:** 3,412 pytest + 633 Vitest (0 failures, 0 hangs)
 - **Strategies:** 7 active (ORB Breakout, ORB Scalp, VWAP Reclaim, Afternoon Momentum, Red-to-Green, Bull Flag, Flat-Top Breakout)
 - **Infrastructure:** Databento EQUS.MINI (live) + IBKR paper trading (Account U24619949) + FMP Starter (scanning + reference data + daily bars for regime) + Finnhub (news + analyst recs) + Claude API (Copilot + Catalyst Classification) + Universe Manager (config-gated) + Catalyst Pipeline (config-gated) + Intelligence Polling Loop (config-gated) + Reference Data Cache + Quality Engine (config-gated) + Dynamic Position Sizer + Strategy Evaluation Telemetry (ring buffer + SQLite persistence) + Debrief Export (shutdown automation) + Evaluation Framework (MultiObjectiveResult, EnsembleResult, comparison API, slippage model) + Regime Intelligence (RegimeVector 6-dimension, config-gated, Sprint 27.6)
 - **Frontend:** 8-page Command Center (Observatory added Sprint 25) + AI Copilot + Universe Status Card + Intelligence Brief View (all active), Tauri desktop + PWA mobile
@@ -321,9 +321,9 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 
 | Document | What It Covers |
 |----------|---------------|
-| `docs/decision-log.md` | All 362 DEC entries with full rationale (0 new in Sprint 27.6) |
+| `docs/decision-log.md` | All 368 DEC entries with full rationale (6 new in Sprint 27.65) |
 | `docs/dec-index.md` | Quick-reference index with status markers |
-| `docs/sprint-history.md` | Complete sprint history (1–27.6) |
+| `docs/sprint-history.md` | Complete sprint history (1–27.6 + 27.65) |
 | `docs/process-evolution.md` | Workflow evolution narrative |
 | `docs/live-operations.md` | Live trading procedures |
 | `docs/strategies/STRATEGY_*.md` | Per-strategy spec sheets |

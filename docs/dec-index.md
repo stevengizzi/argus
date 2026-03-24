@@ -1,7 +1,7 @@
 # ARGUS — Decision Index
 
-> 362 decisions (DEC-001 through DEC-362)
-> Generated: March 23, 2026 | Source: `docs/decision-log.md`
+> 368 decisions (DEC-001 through DEC-368)
+> Generated: March 25, 2026 | Source: `docs/decision-log.md`
 > Legend: ● Active | ○ Superseded | △ Amended | ✗ Duplicate entry
 
 
@@ -430,3 +430,12 @@
 - ● **DEC-360**: Add `bearish_trending` to All Strategy Allowed Regimes — all 7 strategies now include `bearish_trending`; zero-active WARNING in Orchestrator during market hours. Only `crisis` remains as universal block.
 - ● **DEC-361**: Cache Checkpoint Merge Fix — checkpoint saves write union of existing cache + fresh entries (fresh takes precedence). Prevents data-destructive overwrites during interrupted fetches.
 - ● **DEC-362**: Trust Cache on Startup — `trust_cache_on_startup: true` (default) loads cached reference data immediately, spawns background asyncio task for stale entry refresh with atomic routing table rebuild. Resolves DEF-063.
+
+## Sprint 27.65 — Market Session Safety + Operational Fixes
+
+- ● **DEC-363**: Flatten-pending guard — `_flatten_pending` dict tracks in-flight flatten orders per symbol; prevents duplicate SELL orders on time-stop retry; clears on fill/cancel/reject/close.
+- ● **DEC-364**: Graceful shutdown order cancellation — `cancel_all_orders()` on Broker ABC; IBKRBroker calls `reqGlobalCancel()` before disconnect in shutdown sequence.
+- ● **DEC-365**: Periodic position reconciliation — 60s async task compares OrderManager vs IBKR positions; warn-only (no auto-correct); REST endpoint `/api/v1/positions/reconciliation`.
+- ● **DEC-366**: Bracket leg amendment on fill slippage — delta-based recalculation of stop/target after entry fill; stop first; safety flatten if T1 ≤ fill; skip for SimulatedBroker.
+- ● **DEC-367**: Optional concurrent position limits — `max_concurrent_positions: 0` disables check; paper trading configs set to 0; capital and concentration limits are the real constraints.
+- ● **DEC-368**: IntradayCandleStore — centralized intraday bar accumulator; parallel CandleEvent subscriber; 390 bars/symbol max; query API for market bars endpoint + pattern strategy backfill.

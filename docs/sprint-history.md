@@ -1,7 +1,7 @@
 # ARGUS — Sprint History
 
 > Complete record of all sprints from project inception through current state.
-> Active development began February 14, 2026. As of March 24, 2026 (~39 calendar days), 28 full sprints + 28 sub-sprints completed.
+> Active development began February 14, 2026. As of March 25, 2026 (~40 calendar days), 28 full sprints + 29 sub-sprints completed.
 
 ---
 
@@ -24,6 +24,7 @@
 | R — Backtest Re-Validation | 21.6 | Mar 23 | Databento re-validation + ExecutionRecord logging |
 | S — Evaluation Framework | 27.5 | Mar 23–24 | Universal evaluation infrastructure |
 | T — Regime Intelligence | 27.6 | Mar 24 | Multi-dimensional RegimeVector (6 dimensions) |
+| U — Market Session Safety | 27.65 | Mar 24–25 | Order Manager safety, bracket amendment, IntradayCandleStore |
 
 ---
 
@@ -1551,13 +1552,79 @@
 
 ---
 
+## Sprint 27.65: Market Session Safety + Operational Fixes (March 24–25, 2026)
+
+**Type:** Impromptu (discovered during March 24 paper trading session)
+**Origin:** Real-time log analysis during market session revealed critical Order Manager bug — duplicate flatten orders on time-stop created $2.8M in phantom short positions at IBKR.
+**Sessions:** 6 (S1 + S3 parallel, S2 + S5 parallel, S4 → S4.5 sequential)
+**Tests:** pytest 3,337 → 3,412 (+75), Vitest 631 → 633 (+2) = 77 new tests
+**New DECs:** DEC-363 through DEC-368 (6 decisions)
+**New DEF items:** DEF-094 (ORB Scalp time-stop dominance), DEF-095 (submit-before-cancel bracket amendment), DEF-096 (Protocol type for candle store)
+
+**Session S1: Order Management Safety (CRITICAL)**
+- `_flatten_pending` guard prevents duplicate flatten orders (DEC-363)
+- Graceful shutdown: `cancel_all_orders()` on Broker ABC before disconnect (DEC-364)
+- Periodic position reconciliation: 60s async task, warn-only (DEC-365)
+- +13 tests
+- Verdict: CONCERNS → CONCERNS_RESOLVED (S2 added shutdown ordering test)
+
+**Session S3: Strategy Fixes (parallel with S1)**
+- R2G root cause: `prior_close` never populated — zero evaluations for 30+ minutes
+- Fix: `initialize_prior_closes()` from UM reference data (zero new API calls)
+- Pattern strategy: bar append moved before operating window check (was discarding pre-window candles)
+- `backfill_candles()` hook exposed for IntradayCandleStore wiring
+- +13 tests
+- Verdict: CLEAR
+
+**Session S2: Trade Correctness + Risk Config (parallel with S5)**
+- Bracket leg amendment on fill slippage — delta-based recalculation (DEC-366)
+- ZD scenario prevented: target was below cost basis due to +$0.28 slippage
+- Concurrent position limits optional: 0 = disabled (DEC-367)
+- Zero-R signal guard: suppress signals with < $0.01 profit potential
+- S1 CONCERNS resolved: shutdown ordering test, typed ReconciliationResult
+- +12 tests
+- Verdict: CONCERNS → CONCERNS_RESOLVED (S4.5 added R2G guards)
+
+**Session S5: Frontend + Observatory Fixes (parallel with S2)**
+- Session Timeline: dynamic via `useStrategies()` hook, all 7 strategies shown
+- Observatory Funnel: backend response format aligned with frontend `tiers` type
+- FMP 403: downgraded from ERROR to WARNING ("Starter plan" message)
+- Performance polling: 30s → 60s for non-critical display data
+- DEF-094: ORB Scalp time-stop dominance logged
+- +4 pytest + 2 Vitest
+- Verdict: CLEAR
+
+**Session S4: IntradayCandleStore + Live P&L**
+- IntradayCandleStore: centralized intraday bar accumulator (DEC-368)
+- Market bars endpoint: store → DataService → synthetic fallback (3-tier priority)
+- Real-time P&L via WebSocket: PositionUpdatedEvent on ticks (1/sec/symbol throttle)
+- Account updates via WebSocket: AccountUpdateEvent through event bus (30s poll)
+- Pattern strategy backfill wired (set_candle_store + _try_backfill_from_store)
+- +16 tests
+- Verdict: CONCERNS → CONCERNS_RESOLVED (S4.5 cleaned dead code)
+
+**Session S4.5: Final Integration + Carry-Forward Fixes**
+- R2G zero-R guard and concurrent position guard added (defense-in-depth)
+- AccountUpdateEvent dead code resolved (Option A: publish via event bus)
+- `reduced_confidence` dead code scaffolding removed from pattern_strategy
+- DEF-095, DEF-096 logged
+- S2 and S4 review artifacts updated to CONCERNS_RESOLVED
+- +4 tests
+- Verdict: CLEAR
+
+**Key decisions:** DEC-363 (flatten guard), DEC-364 (shutdown cancel), DEC-365 (position reconciliation), DEC-366 (bracket amendment), DEC-367 (optional concurrent limits), DEC-368 (IntradayCandleStore).
+**Operational script:** `scripts/ibkr_close_all_positions.py` — emergency position cleanup via IB Gateway.
+**Notes:** Most critical impromptu sprint to date. The flatten-pending bug would have been catastrophic in live trading (CNK: 36 duplicate SELL orders × 1,759 shares = 63,324 shares short). Parallelization across 3 tracks reduced calendar time by ~50%. All 6 reviews resolved cleanly. System is now safe for continued paper trading.
+
+---
+
 ## Sprint Statistics
 
-- **Total sprints:** 28 full + 28 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9, 27.5, 27.6)
-- **Total sessions:** ~395+ Claude Code sessions
-- **Total tests:** 3,337 pytest + 631 Vitest = 3,968 total
-- **Total decisions:** 362 (DEC-001 through DEC-362)
-- **Calendar days (active dev):** ~39 (Feb 14 – Mar 24, 2026)
+- **Total sprints:** 28 full + 29 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9, 27.5, 27.6, 27.65)
+- **Total sessions:** ~401+ Claude Code sessions
+- **Total tests:** 3,412 pytest + 633 Vitest = 4,045 total
+- **Total decisions:** 368 (DEC-001 through DEC-368)
+- **Calendar days (active dev):** ~40 (Feb 14 – Mar 25, 2026)
 - **Largest sprint:** 22 (9 implementation + 5 fix + 9 reviews, largest scope)
 - **Cleanest sprint:** 23 (11 sessions, 0 regressions, 0 scope gaps requiring follow-up)
 - **Most test-dense:** Sprint 22 (286 new tests), Sprint 24 (209 new tests), Sprint 23.2 (188 new tests), Sprint 27.6 (171 new tests), Sprint 23 (141 new tests across 23+23.05)

@@ -4374,6 +4374,90 @@ Each entry follows this format:
 
 ---
 
+### DEC-363 | Flatten-Pending Guard
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-24 |
+| **Context** | March 24, 2026 paper trading: `_check_time_stops()` runs every 5 seconds. For timed-out positions, it submitted a new SELL order each cycle without tracking pending orders. CNK: 36 duplicate SELLs (1,759 shares each). CSTM: 58 duplicate SELLs (2,049 shares each). Created $2.8M in phantom short positions at IBKR. |
+| **Decision** | Add `_flatten_pending: dict[str, str]` (symbol → order_id) to OrderManager. Before submitting a flatten order, check if one is already in-flight for that symbol. Only resubmit if previous order was confirmed cancelled/rejected. Clear on fill, cancel, reject, position close, and daily reset. |
+| **Alternatives** | (1) Debounce by timestamp — simpler but doesn't track actual order state. (2) Mark position as "flattening" — works but less granular than tracking the specific order ID. (3) Cancel-and-resubmit on each cycle — exactly the broken behavior that caused the incident. |
+| **Rationale** | Tracking the specific order ID per symbol gives the most precise control. The guard clears on all exit paths (fill, cancel, reject, close) so it never blocks legitimate re-flattening after a confirmed failure. The 5-second poll loop continues checking stops/targets for other positions unaffected. |
+| **Cross-References** | Sprint 27.65 S1, DEC-030 (order manager architecture) |
+| **Status** | Active |
+
+---
+
+### DEC-364 | Graceful Shutdown Order Cancellation
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-24 |
+| **Context** | When ARGUS was shut down during the March 24 incident, dozens of orphaned SELL orders from the retry loop continued executing at IBKR because shutdown didn't cancel pending orders. The cleanup script had to run `reqGlobalCancel()` separately. |
+| **Decision** | Add `cancel_all_orders() -> int` to Broker ABC. IBKRBroker implementation calls `reqGlobalCancel()` and waits up to 5 seconds. Shutdown sequence in main.py calls this BEFORE `order_manager.stop()` and broker disconnect. |
+| **Alternatives** | (1) Cancel orders per-symbol — more targeted but slower and risks missing some. (2) Only cancel on crash (not clean shutdown) — doesn't prevent the common case. |
+| **Rationale** | `reqGlobalCancel()` is a single API call that cancels everything regardless of client ID. This is the safest approach: even if ARGUS has orders from a previous session or a different client ID, they get cancelled. The 5-second wait ensures cancellations propagate before disconnect. |
+| **Cross-References** | Sprint 27.65 S1, DEC-363 (flatten guard), `scripts/ibkr_close_all_positions.py` |
+| **Status** | Active |
+
+---
+
+### DEC-365 | Periodic Position Reconciliation
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-24 |
+| **Context** | During the March 24 incident, ARGUS believed it had 10 open positions while IBKR had $2.8M in phantom shorts. The Risk Manager was blocking new signals based on stale internal state. Early detection of the mismatch would have alerted the operator. |
+| **Decision** | Add a 60-second async task (market hours only) that compares OrderManager's internal positions against IBKR's actual positions. Log WARNING on any discrepancy. Do NOT auto-correct. Expose via `GET /api/v1/positions/reconciliation` endpoint. |
+| **Alternatives** | (1) Auto-correct — too risky, discrepancies may be timing artifacts (order in flight). (2) Reconcile only on startup — misses mid-session drift. (3) Event-driven on every fill — high overhead, most fills are legitimate. |
+| **Rationale** | Warn-only is the safest approach. Auto-correction could close legitimate positions or open unintended ones based on a timing artifact. The 60-second interval balances detection speed against API overhead. The REST endpoint enables the frontend to display reconciliation status. |
+| **Cross-References** | Sprint 27.65 S1, DEC-363 (flatten guard), DEC-364 (shutdown cancel) |
+| **Status** | Active |
+
+---
+
+### DEC-366 | Bracket Leg Amendment on Fill Slippage
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-24 |
+| **Context** | March 24 ZD trade: signal entry=$43.38, actual fill=$43.66 (+$0.28 slippage). Target limit stayed at $43.42 (below cost basis). "Target hit" was a $265 loss. The bracket legs were priced based on signal entry, not actual fill. |
+| **Decision** | After entry fill confirmation, if actual fill price differs from signal entry by more than $0.01, cancel existing bracket legs and resubmit with delta-shifted prices. Stop resubmitted first. Safety check: if amended T1 ≤ fill price for longs, emergency flatten. Skip for SimulatedBroker. |
+| **Alternatives** | (1) Use limit entry orders instead of market — prevents slippage but may miss fills. (2) Set targets relative to fill price at order time — requires knowing fill price before placing brackets, but brackets are submitted atomically with entry. (3) Wider targets to absorb slippage — doesn't solve the structural problem. |
+| **Rationale** | Delta-based amendment preserves the original risk/reward ratio. The stop shifts up with the entry, maintaining the same R distance. Brief sub-second unprotected window between cancel and resubmit is acceptable (stop resubmitted first, emergency flatten on failure). For live trading, submit-before-cancel pattern should be evaluated (DEF-095). |
+| **Cross-References** | Sprint 27.65 S2, DEC-117 (atomic brackets), DEF-095 (submit-before-cancel) |
+| **Status** | Active |
+
+---
+
+### DEC-367 | Optional Concurrent Position Limits
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-24 |
+| **Context** | March 24 session: per-strategy limit of 2 and cross-strategy limit of 10 blocked hundreds of legitimate signals. For paper trading, the purpose is maximum data collection — capital and concentration limits are the real constraints. |
+| **Decision** | `max_concurrent_positions: 0` in strategy configs and system config disables the concurrent position check entirely. Pydantic validation changed from `ge=1` to `ge=0`. Both per-strategy and cross-strategy limits support this convention. |
+| **Alternatives** | (1) Set to very high number (50, 100) — works but arbitrary ceiling. (2) `Optional[int]` with None meaning disabled — more complex config handling. (3) Separate paper vs live config files — already exists (system_live.yaml), but the 0-means-disabled convention is cleaner. |
+| **Rationale** | Zero as sentinel is simple, Pydantic-friendly, and self-documenting. All existing tests that set specific values > 0 continue to work. The convention is clearly logged at startup: "concurrent position limit: disabled". |
+| **Cross-References** | Sprint 27.65 S2, DEC-249 (concentration limits), DEC-336 (check 0 share_count rejection) |
+| **Status** | Active |
+
+---
+
+### DEC-368 | IntradayCandleStore
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-24 |
+| **Context** | March 24 session: trade detail panel candlestick charts showed "Failed to fetch real bars, falling back to synthetic" on every open. Pattern strategies (Bull Flag lookback=30, Flat-Top lookback=20) showed "Insufficient history (15/30)" for liquid stocks 45 minutes after market open because candles outside operating window were discarded. |
+| **Decision** | New `IntradayCandleStore` class subscribes to CandleEvent as a parallel subscriber and accumulates 1-minute bars per symbol in `dict[str, deque[CandleBar]]` (max 390 bars). Market-hours filter. Query API for market bars endpoint and pattern strategy backfill. |
+| **Alternatives** | (1) Query Databento for historical intraday bars — not supported on EQUS.MINI Standard plan for on-demand queries. (2) Store candles in SQLite — overkill for session-scoped data. (3) Expand per-strategy candle deques — doesn't solve the REST API queryability problem. |
+| **Rationale** | Centralized store serves two purposes: (1) queryable intraday bars for the REST API (eliminating synthetic fallback), (2) backfill source for pattern strategies on first candle (eliminating 20-30 minute warm-up dead zone). The store is a parallel subscriber — strategies still get their own CandleEvents unchanged. Thread-safe by design (all access on asyncio thread). |
+| **Cross-References** | Sprint 27.65 S4, DEC-088 (Databento threading), DEC-029 (Event Bus streaming) |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
-*Next DEC: 363*
-*Last updated: 2026-03-23 (Sprint 25.9 doc sync — DEC-360/361/362)*
+*Next DEC: 369*
+*Last updated: 2026-03-25 (Sprint 27.65 doc sync — DEC-363–368)*
