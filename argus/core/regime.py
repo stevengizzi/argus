@@ -10,6 +10,8 @@ V2: RegimeClassifierV2 — multi-dimensional RegimeVector with V1 delegation (Sp
 
 from __future__ import annotations
 
+import asyncio
+import logging
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -18,7 +20,13 @@ from typing import TYPE_CHECKING, Any, Protocol
 import pandas as pd
 
 if TYPE_CHECKING:
+    from argus.core.breadth import BreadthCalculator as BreadthCalcImpl
     from argus.core.config import OrchestratorConfig, RegimeIntelligenceConfig
+    from argus.core.intraday_character import IntradayCharacterDetector
+    from argus.core.market_correlation import MarketCorrelationTracker
+    from argus.core.sector_rotation import SectorRotationAnalyzer
+
+logger = logging.getLogger(__name__)
 
 
 class VolatilityBucket(StrEnum):
@@ -501,25 +509,25 @@ class RegimeClassifierV2:
 
     Optional dimension calculators (breadth, correlation, sector, intraday)
     default to None, filling those dimensions with defaults until the
-    calculators are implemented in later sessions.
+    calculators are wired.
 
     Args:
         config: Orchestrator config (for V1 delegation).
         regime_config: RegimeIntelligenceConfig with dimension-specific settings.
-        breadth: Optional breadth calculator.
-        correlation: Optional correlation calculator.
-        sector: Optional sector rotation calculator.
-        intraday: Optional intraday character calculator.
+        breadth: Optional BreadthCalculator instance.
+        correlation: Optional MarketCorrelationTracker instance.
+        sector: Optional SectorRotationAnalyzer instance.
+        intraday: Optional IntradayCharacterDetector instance.
     """
 
     def __init__(
         self,
         config: OrchestratorConfig,
         regime_config: RegimeIntelligenceConfig,
-        breadth: BreadthCalculator | None = None,
-        correlation: CorrelationCalculator | None = None,
-        sector: SectorRotationCalculator | None = None,
-        intraday: IntradayCalculator | None = None,
+        breadth: BreadthCalcImpl | None = None,
+        correlation: MarketCorrelationTracker | None = None,
+        sector: SectorRotationAnalyzer | None = None,
+        intraday: IntradayCharacterDetector | None = None,
     ) -> None:
         """Initialize V2 classifier with V1 delegation and optional calculators."""
         self._v1_classifier = RegimeClassifier(config)
@@ -551,6 +559,36 @@ class RegimeClassifierV2:
         """
         return self._v1_classifier.compute_indicators(daily_bars)
 
+    async def run_pre_market(
+        self,
+        fetch_daily_bars_fn: Any,
+        get_top_symbols_fn: Any,
+    ) -> None:
+        """Run pre-market data fetches for correlation and sector rotation.
+
+        Executes MarketCorrelationTracker.compute() and SectorRotationAnalyzer.fetch()
+        concurrently via asyncio.gather(). Safe to call when either calculator is None.
+
+        Args:
+            fetch_daily_bars_fn: Async callable (symbol, lookback_days) -> DataFrame | None.
+            get_top_symbols_fn: Callable () -> list[str] of top symbols.
+        """
+        tasks: list[Any] = []
+
+        if self._correlation is not None and self._regime_config.correlation.enabled:
+            tasks.append(
+                self._correlation.compute(fetch_daily_bars_fn, get_top_symbols_fn)
+            )
+
+        if self._sector is not None and self._regime_config.sector_rotation.enabled:
+            tasks.append(self._sector.fetch())
+
+        if tasks:
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            for result in results:
+                if isinstance(result, Exception):
+                    logger.warning("Pre-market V2 task failed: %s", result)
+
     def compute_regime_vector(self, indicators: RegimeIndicators) -> RegimeVector:
         """Compute the full multi-dimensional RegimeVector.
 
@@ -576,35 +614,45 @@ class RegimeClassifierV2:
         vol_level = indicators.spy_realized_vol_20d if indicators.spy_realized_vol_20d is not None else 0.0
         vol_direction = self._compute_vol_direction(indicators)
 
-        # Breadth dimension
+        # Breadth dimension — query snapshot from BreadthCalculator
         breadth_score: float | None = None
         breadth_thrust: bool | None = None
-        if self._breadth is not None:
-            breadth_score, breadth_thrust = self._breadth.compute(indicators)
+        if self._breadth is not None and self._regime_config.breadth.enabled:
+            snap = self._breadth.get_breadth_snapshot()
+            breadth_score = snap.get("universe_breadth_score")
+            breadth_thrust = snap.get("breadth_thrust")
 
-        # Correlation dimension
+        # Correlation dimension — query snapshot from MarketCorrelationTracker
         avg_correlation: float | None = None
         correlation_regime: str | None = None
-        if self._correlation is not None:
-            avg_correlation, correlation_regime = self._correlation.compute(indicators)
+        if self._correlation is not None and self._regime_config.correlation.enabled:
+            snap = self._correlation.get_correlation_snapshot()
+            avg_correlation = snap.get("average_correlation")
+            correlation_regime = snap.get("correlation_regime")
 
-        # Sector rotation dimension
+        # Sector rotation dimension — query snapshot from SectorRotationAnalyzer
         sector_phase: str | None = None
         leading: list[str] = []
         lagging: list[str] = []
-        if self._sector is not None:
-            sector_phase, leading, lagging = self._sector.compute(indicators)
+        if self._sector is not None and self._regime_config.sector_rotation.enabled:
+            snap = self._sector.get_sector_snapshot()
+            sector_phase = snap.get("sector_rotation_phase")
+            leading = snap.get("leading_sectors", [])
+            lagging = snap.get("lagging_sectors", [])
 
-        # Intraday character dimension
+        # Intraday character dimension — query snapshot from IntradayCharacterDetector
         drive_strength: float | None = None
         range_ratio: float | None = None
         vwap_slope: float | None = None
         dir_changes: int | None = None
         intraday_char: str | None = None
-        if self._intraday is not None:
-            drive_strength, range_ratio, vwap_slope, dir_changes, intraday_char = (
-                self._intraday.compute(indicators)
-            )
+        if self._intraday is not None and self._regime_config.intraday.enabled:
+            snap = self._intraday.get_intraday_snapshot()
+            drive_strength = snap.get("opening_drive_strength")
+            range_ratio = snap.get("first_30min_range_ratio")
+            vwap_slope = snap.get("vwap_slope")
+            dir_changes = snap.get("direction_change_count")
+            intraday_char = snap.get("intraday_character")
 
         # Confidence: signal_clarity × data_completeness
         regime_confidence = self._compute_regime_confidence(

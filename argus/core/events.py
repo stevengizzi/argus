@@ -303,6 +303,7 @@ class RegimeChangeEvent(Event):
     old_regime: str = ""
     new_regime: str = ""
     indicators: dict[str, float] = field(default_factory=dict)
+    regime_vector_summary: dict[str, Any] | None = None  # Sprint 27.6: Optional V2 enrichment
 
 
 @dataclass(frozen=True)

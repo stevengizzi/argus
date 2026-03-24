@@ -518,6 +518,72 @@ class ArgusSystem:
             message=f"{len(strategies_created)} strategies created",
         )
 
+        # --- Phase 8.5: Regime Intelligence V2 (Sprint 27.6) ---
+        regime_v2 = None
+        regime_history_store = None
+        breadth_calc = None
+        intraday_detector = None
+        regime_config = config.system.regime_intelligence
+
+        if regime_config.enabled:
+            logger.info("[8.5/12] Initializing regime intelligence V2...")
+            from argus.core.breadth import BreadthCalculator as BreadthCalcImpl
+            from argus.core.intraday_character import IntradayCharacterDetector
+            from argus.core.market_correlation import MarketCorrelationTracker
+            from argus.core.regime import RegimeClassifierV2
+            from argus.core.sector_rotation import SectorRotationAnalyzer
+
+            orchestrator_yaml_pre = load_yaml_file(self._config_dir / "orchestrator.yaml")
+            orchestrator_config_pre = OrchestratorConfig(**orchestrator_yaml_pre)
+
+            # Create dimension calculators
+            breadth_calc = BreadthCalcImpl(regime_config.breadth) if regime_config.breadth.enabled else None
+            correlation_tracker = (
+                MarketCorrelationTracker(regime_config.correlation)
+                if regime_config.correlation.enabled
+                else None
+            )
+
+            fmp_api_key = os.environ.get("FMP_API_KEY", "")
+            sector_analyzer = (
+                SectorRotationAnalyzer(
+                    config=regime_config.sector_rotation,
+                    fmp_base_url="https://financialmodelingprep.com/api",
+                    fmp_api_key=fmp_api_key,
+                )
+                if regime_config.sector_rotation.enabled
+                else None
+            )
+
+            intraday_detector = (
+                IntradayCharacterDetector(
+                    config=regime_config.intraday,
+                    spy_symbol=orchestrator_config_pre.spy_symbol,
+                )
+                if regime_config.intraday.enabled
+                else None
+            )
+
+            regime_v2 = RegimeClassifierV2(
+                config=orchestrator_config_pre,
+                regime_config=regime_config,
+                breadth=breadth_calc,
+                correlation=correlation_tracker,
+                sector=sector_analyzer,
+                intraday=intraday_detector,
+            )
+
+            # Create history store if persistence enabled
+            if regime_config.persist_history:
+                from argus.core.regime_history import RegimeHistoryStore
+
+                history_db_path = str(Path(config.system.data_dir) / "regime_history.db")
+                regime_history_store = RegimeHistoryStore(db_path=history_db_path)
+                await regime_history_store.initialize()
+                logger.info("RegimeHistoryStore initialized: %s", history_db_path)
+
+            logger.info("Regime intelligence V2 ready")
+
         # --- Phase 9: Orchestrator ---
         logger.info("[9/12] Initializing orchestrator...")
         orchestrator_yaml = load_yaml_file(self._config_dir / "orchestrator.yaml")
@@ -529,6 +595,8 @@ class ArgusSystem:
             trade_logger=self._trade_logger,
             broker=self._broker,
             data_service=self._data_service,
+            regime_classifier_v2=regime_v2,
+            regime_history=regime_history_store,
         )
 
         # Register all strategies
@@ -547,6 +615,21 @@ class ArgusSystem:
             self._orchestrator.register_strategy(flat_top_strategy)
 
         await self._orchestrator.start()
+
+        # Run V2 pre-market (correlation + sector rotation, concurrent)
+        if regime_v2 is not None:
+            try:
+                await regime_v2.run_pre_market(
+                    fetch_daily_bars_fn=self._data_service.fetch_daily_bars,
+                    get_top_symbols_fn=(
+                        self._universe_manager.get_top_symbols
+                        if self._universe_manager is not None
+                        and hasattr(self._universe_manager, "get_top_symbols")
+                        else lambda: []
+                    ),
+                )
+            except Exception:
+                logger.warning("V2 pre-market failed — V1 will proceed normally", exc_info=True)
 
         # Run pre-market routine (sets regime, allocations, activates strategies)
         # If mid-day restart, strategies reconstruct their own state
@@ -680,6 +763,25 @@ class ArgusSystem:
         self._event_bus.subscribe(PositionClosedEvent, self._on_position_closed_for_strategies)
         # Subscribe to ShutdownRequestedEvent for auto-shutdown after EOD flatten
         self._event_bus.subscribe(ShutdownRequestedEvent, self._on_shutdown_requested)
+
+        # Subscribe regime intelligence calculators to CandleEvent (Sprint 27.6)
+        # EventBus requires async handlers; wrap sync on_candle methods
+        if breadth_calc is not None:
+            _bc = breadth_calc
+
+            async def _breadth_on_candle(event: CandleEvent) -> None:
+                _bc.on_candle(event)
+
+            self._event_bus.subscribe(CandleEvent, _breadth_on_candle)
+            logger.info("BreadthCalculator subscribed to CandleEvent")
+        if intraday_detector is not None:
+            _id = intraday_detector
+
+            async def _intraday_on_candle(event: CandleEvent) -> None:
+                _id.on_candle(event)
+
+            self._event_bus.subscribe(CandleEvent, _intraday_on_candle)
+            logger.info("IntradayCharacterDetector subscribed to CandleEvent")
 
         # --- Phase 11: Start streaming ---
         logger.info("[11/12] Starting data streams...")

@@ -30,11 +30,12 @@ from argus.core.events import (
     StrategyActivatedEvent,
     StrategySuspendedEvent,
 )
-from argus.core.regime import MarketRegime, RegimeClassifier, RegimeIndicators
+from argus.core.regime import MarketRegime, RegimeClassifier, RegimeClassifierV2, RegimeIndicators
 from argus.core.throttle import PerformanceThrottler, StrategyAllocation, ThrottleAction
 
 if TYPE_CHECKING:
     from argus.analytics.trade_logger import TradeLogger
+    from argus.core.regime_history import RegimeHistoryStore
     from argus.data.service import DataService
     from argus.execution.broker import Broker
     from argus.strategies.base_strategy import BaseStrategy
@@ -62,6 +63,8 @@ class Orchestrator:
         trade_logger: TradeLogger,
         broker: Broker,
         data_service: DataService,
+        regime_classifier_v2: RegimeClassifierV2 | None = None,
+        regime_history: RegimeHistoryStore | None = None,
     ) -> None:
         """Initialize the Orchestrator.
 
@@ -72,6 +75,8 @@ class Orchestrator:
             trade_logger: Trade logger for performance data.
             broker: Broker for account information.
             data_service: Data service for fetching daily bars.
+            regime_classifier_v2: Optional V2 regime classifier (Sprint 27.6).
+            regime_history: Optional regime history store (Sprint 27.6).
         """
         self._config = config
         self._event_bus = event_bus
@@ -79,6 +84,8 @@ class Orchestrator:
         self._trade_logger = trade_logger
         self._broker = broker
         self._data_service = data_service
+        self._regime_classifier_v2 = regime_classifier_v2
+        self._regime_history = regime_history
 
         # Supporting components
         self._regime_classifier = RegimeClassifier(config)
@@ -111,6 +118,9 @@ class Orchestrator:
 
         # Rate-limit counter for SPY data unavailable warnings (DEF-078)
         self._spy_unavailable_count: int = 0
+
+        # V2 regime vector (Sprint 27.6)
+        self._latest_regime_vector: object | None = None
 
     # -------------------------------------------------------------------------
     # Lifecycle
@@ -237,6 +247,16 @@ class Orchestrator:
             new_regime = self._regime_classifier.classify(indicators)
             self._current_indicators = indicators
             self._spy_unavailable_count = 0
+
+            # V2: compute regime vector and persist (fire-and-forget)
+            if self._regime_classifier_v2 is not None:
+                try:
+                    vector = self._regime_classifier_v2.compute_regime_vector(indicators)
+                    self._latest_regime_vector = vector
+                    if self._regime_history is not None:
+                        asyncio.create_task(self._regime_history.record(vector))
+                except Exception:
+                    logger.warning("V2 regime vector computation failed", exc_info=True)
         else:
             self._spy_unavailable_count += 1
             if self._spy_unavailable_count <= 1 or self._spy_unavailable_count % 6 == 0:
@@ -251,11 +271,19 @@ class Orchestrator:
         self._current_regime = new_regime
 
         if old_regime != new_regime:
+            # Enrich with V2 regime vector summary if available
+            vector_summary = None
+            if self._latest_regime_vector is not None and hasattr(
+                self._latest_regime_vector, "to_dict"
+            ):
+                vector_summary = self._latest_regime_vector.to_dict()
+
             await self._event_bus.publish(
                 RegimeChangeEvent(
                     old_regime=old_regime.value,
                     new_regime=new_regime.value,
                     indicators=self._indicators_to_dict(),
+                    regime_vector_summary=vector_summary,
                 )
             )
 
@@ -665,6 +693,16 @@ class Orchestrator:
         self._last_regime_check = self._clock.now()
         self._spy_unavailable_count = 0
 
+        # V2: compute regime vector and persist (fire-and-forget)
+        if self._regime_classifier_v2 is not None:
+            try:
+                vector = self._regime_classifier_v2.compute_regime_vector(indicators)
+                self._latest_regime_vector = vector
+                if self._regime_history is not None:
+                    asyncio.create_task(self._regime_history.record(vector))
+            except Exception:
+                logger.warning("V2 regime vector computation failed", exc_info=True)
+
         return (old_regime, new_regime)
 
     async def _run_regime_recheck(self) -> None:
@@ -674,11 +712,19 @@ class Orchestrator:
         if new_regime != old_regime:
             logger.info("Regime changed intraday: %s → %s", old_regime.value, new_regime.value)
 
+            # Enrich with V2 regime vector summary if available
+            vector_summary = None
+            if self._latest_regime_vector is not None and hasattr(
+                self._latest_regime_vector, "to_dict"
+            ):
+                vector_summary = self._latest_regime_vector.to_dict()
+
             await self._event_bus.publish(
                 RegimeChangeEvent(
                     old_regime=old_regime.value,
                     new_regime=new_regime.value,
                     indicators=self._indicators_to_dict(),
+                    regime_vector_summary=vector_summary,
                 )
             )
 
