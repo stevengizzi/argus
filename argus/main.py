@@ -25,7 +25,7 @@ import signal
 import time
 from dataclasses import replace
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from dotenv import load_dotenv
 
@@ -53,7 +53,14 @@ from argus.core.config import (
     load_yaml_file,
 )
 from argus.core.event_bus import EventBus
-from argus.core.events import CandleEvent, PositionClosedEvent, QualitySignalEvent, ShutdownRequestedEvent
+from argus.core.events import (
+    CandleEvent,
+    OrderRejectedEvent,
+    PositionClosedEvent,
+    QualitySignalEvent,
+    ShutdownRequestedEvent,
+    SignalRejectedEvent,
+)
 from argus.core.health import ComponentStatus, HealthMonitor
 from argus.core.logging_config import setup_logging
 from argus.core.orchestrator import Orchestrator
@@ -150,6 +157,7 @@ class ArgusSystem:
         self._bg_refresh_task: asyncio.Task[None] | None = None  # Sprint 25.9: background cache refresh
         self._reconciliation_task: asyncio.Task[None] | None = None  # Sprint 27.65: position recon
         self._candle_store: IntradayCandleStore | None = None  # Sprint 27.65 S4: intraday bar store
+        self._counterfactual_enabled: bool = False  # Sprint 27.7 S3b sets True after tracker init
 
     async def start(self) -> None:
         """Initialize and start all components in dependency order.
@@ -1268,6 +1276,16 @@ class ArgusSystem:
                     min_grade,
                 )
                 await self._quality_engine.record_quality_history(signal, quality, shares=0)
+                if getattr(self, '_counterfactual_enabled', False):
+                    regime_snapshot = self._capture_regime_snapshot()
+                    await self._event_bus.publish(SignalRejectedEvent(
+                        signal=signal,
+                        rejection_reason=f"Quality grade {quality.grade} below minimum {min_grade}",
+                        rejection_stage="QUALITY_FILTER",
+                        quality_score=quality.score,
+                        quality_grade=quality.grade,
+                        regime_vector_snapshot=regime_snapshot,
+                    ))
                 return
 
             # Dynamic position sizing
@@ -1296,6 +1314,16 @@ class ArgusSystem:
                     abs(signal.entry_price - signal.stop_price),
                 )
                 await self._quality_engine.record_quality_history(signal, quality, shares=0)
+                if getattr(self, '_counterfactual_enabled', False):
+                    regime_snapshot = self._capture_regime_snapshot()
+                    await self._event_bus.publish(SignalRejectedEvent(
+                        signal=signal,
+                        rejection_reason=f"Position sizer returned 0 shares (grade={quality.grade}, score={quality.score:.0f})",
+                        rejection_stage="POSITION_SIZER",
+                        quality_score=quality.score,
+                        quality_grade=quality.grade,
+                        regime_vector_snapshot=regime_snapshot,
+                    ))
                 return
 
             # Record with actual shares
@@ -1325,6 +1353,17 @@ class ArgusSystem:
         result = await self._risk_manager.evaluate_signal(signal)
         await self._event_bus.publish(result)
 
+        if getattr(self, '_counterfactual_enabled', False) and isinstance(result, OrderRejectedEvent):
+            regime_snapshot = self._capture_regime_snapshot()
+            await self._event_bus.publish(SignalRejectedEvent(
+                signal=signal,
+                rejection_reason=result.reason,
+                rejection_stage="RISK_MANAGER",
+                quality_score=getattr(signal, 'quality_score', None),
+                quality_grade=getattr(signal, 'quality_grade', None),
+                regime_vector_snapshot=regime_snapshot,
+            ))
+
     def _grade_meets_minimum(self, grade: str, min_grade: str) -> bool:
         """Check if a quality grade meets the minimum threshold.
 
@@ -1339,6 +1378,18 @@ class ArgusSystem:
 
         grade_order = {g: i for i, g in enumerate(reversed(VALID_GRADES))}
         return grade_order.get(grade, -1) >= grade_order.get(min_grade, 0)
+
+    def _capture_regime_snapshot(self) -> dict[str, Any] | None:
+        """Capture the current regime vector as a dict, if available.
+
+        Returns:
+            RegimeVector.to_dict() or None if no regime vector is set.
+        """
+        if self._orchestrator is not None:
+            rv = getattr(self._orchestrator, 'latest_regime_vector', None)
+            if rv is not None and hasattr(rv, 'to_dict'):
+                return rv.to_dict()
+        return None
 
     async def _on_position_closed_for_strategies(self, event: PositionClosedEvent) -> None:
         """Route PositionClosedEvents to originating strategy.

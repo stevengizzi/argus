@@ -195,6 +195,24 @@ class OrderRejectedEvent(Event):
     reason: str = ""
 
 
+@dataclass(frozen=True)
+class SignalRejectedEvent(Event):
+    """A signal was rejected before reaching order submission.
+
+    Published by _process_signal() when a signal is filtered out by the
+    quality engine, position sizer, or risk manager. The Counterfactual
+    Engine subscribes to this event to track theoretical outcomes.
+    """
+
+    signal: SignalEvent | None = None
+    rejection_reason: str = ""
+    rejection_stage: str = ""  # RejectionStage value: "QUALITY_FILTER", "POSITION_SIZER", "RISK_MANAGER", "SHADOW"
+    quality_score: float | None = None
+    quality_grade: str | None = None
+    regime_vector_snapshot: dict[str, Any] | None = None  # RegimeVector.to_dict() if available
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
 # ---------------------------------------------------------------------------
 # Execution Events
 # ---------------------------------------------------------------------------
