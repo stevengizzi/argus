@@ -10,6 +10,7 @@ Sprint 27.7, Session 1: Core model and tracker logic.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, time as dt_time
@@ -176,6 +177,7 @@ class CounterfactualTracker:
         self._open_positions: dict[str, _OpenPosition] = {}
         self._closed_positions: list[CounterfactualPosition] = []
         self._symbols_to_positions: dict[str, set[str]] = {}
+        self._store: object | None = None  # CounterfactualStore, set via set_store()
 
     def track(
         self,
@@ -205,6 +207,13 @@ class CounterfactualTracker:
                 "Skipping counterfactual for %s/%s — empty target_prices",
                 signal.strategy_id,
                 signal.symbol,
+            )
+            return None
+
+        if signal.entry_price == signal.stop_price:
+            logger.warning(
+                "Zero-R signal skipped for counterfactual tracking: %s %s",
+                signal.strategy_id, signal.symbol,
             )
             return None
 
@@ -258,6 +267,38 @@ class CounterfactualTracker:
                     bar.close,
                     bar.timestamp,
                 )
+
+        # Fire-and-forget persistence for open position
+        if self._store is not None and hasattr(self._store, "write_open"):
+            open_snapshot = CounterfactualPosition(
+                position_id=pos.position_id,
+                symbol=pos.symbol,
+                strategy_id=pos.strategy_id,
+                entry_price=pos.entry_price,
+                stop_price=pos.stop_price,
+                target_price=pos.target_price,
+                time_stop_seconds=pos.time_stop_seconds,
+                rejection_stage=pos.rejection_stage,
+                rejection_reason=pos.rejection_reason,
+                quality_score=pos.quality_score,
+                quality_grade=pos.quality_grade,
+                regime_vector_snapshot=pos.regime_vector_snapshot,
+                signal_metadata=pos.signal_metadata,
+                opened_at=pos.opened_at,
+                closed_at=None,
+                exit_price=None,
+                exit_reason=None,
+                theoretical_pnl=None,
+                theoretical_r_multiple=None,
+                duration_seconds=None,
+                max_adverse_excursion=0.0,
+                max_favorable_excursion=0.0,
+                bars_monitored=0,
+            )
+            try:
+                asyncio.get_event_loop().create_task(self._store.write_open(open_snapshot))
+            except RuntimeError:
+                pass  # No event loop — skip persistence
 
         logger.info(
             "Counterfactual position opened: %s %s/%s entry=%.2f stop=%.2f "
@@ -353,6 +394,14 @@ class CounterfactualTracker:
             p for p in self._closed_positions
             if p.closed_at is not None and p.closed_at >= since
         ]
+
+    def set_store(self, store: object) -> None:
+        """Attach a CounterfactualStore for persistence.
+
+        Args:
+            store: A CounterfactualStore instance (duck-typed to avoid circular import).
+        """
+        self._store = store
 
     # --- Internal helpers ---
 
@@ -468,6 +517,13 @@ class CounterfactualTracker:
             symbol_pids.discard(pos.position_id)
             if not symbol_pids:
                 del self._symbols_to_positions[pos.symbol]
+
+        # Fire-and-forget persistence
+        if self._store is not None and hasattr(self._store, "write_close"):
+            try:
+                asyncio.get_event_loop().create_task(self._store.write_close(closed))
+            except RuntimeError:
+                pass  # No event loop — skip persistence (e.g., tests)
 
         logger.info(
             "Counterfactual position closed: %s %s/%s reason=%s "

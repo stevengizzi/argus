@@ -158,6 +158,9 @@ class ArgusSystem:
         self._reconciliation_task: asyncio.Task[None] | None = None  # Sprint 27.65: position recon
         self._candle_store: IntradayCandleStore | None = None  # Sprint 27.65 S4: intraday bar store
         self._counterfactual_enabled: bool = False  # Sprint 27.7 S3b sets True after tracker init
+        self._counterfactual_tracker: object | None = None  # Sprint 27.7: CounterfactualTracker
+        self._counterfactual_store: object | None = None  # Sprint 27.7: CounterfactualStore
+        self._counterfactual_task: asyncio.Task[None] | None = None  # Sprint 27.7: maintenance task
 
     async def start(self) -> None:
         """Initialize and start all components in dependency order.
@@ -814,6 +817,34 @@ class ArgusSystem:
             self._event_bus.subscribe(CandleEvent, _intraday_on_candle)
             logger.info("IntradayCharacterDetector subscribed to CandleEvent")
 
+        # --- Phase 10.7: Counterfactual Engine (Sprint 27.7) ---
+        from argus.intelligence.startup import build_counterfactual_tracker
+
+        cf_result = await build_counterfactual_tracker(
+            config=config.system,
+            candle_store=self._candle_store,
+        )
+        if cf_result is not None:
+            self._counterfactual_tracker, self._counterfactual_store = cf_result
+            self._counterfactual_enabled = True
+            logger.info("Counterfactual Engine initialized")
+
+            # Subscribe to rejected signals for shadow tracking
+            self._event_bus.subscribe(
+                SignalRejectedEvent,
+                self._on_signal_rejected_for_counterfactual,
+            )
+            # Subscribe to candle events for monitoring open positions
+            self._event_bus.subscribe(
+                CandleEvent,
+                self._counterfactual_tracker.on_candle,
+            )
+
+            # Retention enforcement (once per boot)
+            await self._counterfactual_store.enforce_retention(
+                config.system.counterfactual.retention_days
+            )
+
         # --- Phase 11: Start streaming ---
         logger.info("[11/12] Starting data streams...")
 
@@ -962,6 +993,12 @@ class ArgusSystem:
         self._reconciliation_task = asyncio.create_task(
             self._run_position_reconciliation()
         )
+
+        # Start counterfactual maintenance task (Sprint 27.7)
+        if self._counterfactual_tracker is not None:
+            self._counterfactual_task = asyncio.create_task(
+                self._run_counterfactual_maintenance()
+            )
 
         # Start background cache refresh if trust_cache_on_startup is enabled (DEC-362)
         if (
@@ -1413,6 +1450,73 @@ class ArgusSystem:
                 event.strategy_id,
             )
 
+    async def _on_signal_rejected_for_counterfactual(
+        self, event: SignalRejectedEvent
+    ) -> None:
+        """Route rejected signals to the Counterfactual Engine for shadow tracking.
+
+        Args:
+            event: The SignalRejectedEvent to process.
+        """
+        if self._counterfactual_tracker is None or event.signal is None:
+            return
+        try:
+            from argus.intelligence.counterfactual import RejectionStage
+
+            self._counterfactual_tracker.track(
+                signal=event.signal,
+                rejection_reason=event.rejection_reason,
+                rejection_stage=RejectionStage(event.rejection_stage.lower()),
+                metadata={
+                    "quality_score": event.quality_score,
+                    "quality_grade": event.quality_grade,
+                    "regime_vector_snapshot": event.regime_vector_snapshot,
+                    **(event.metadata or {}),
+                },
+            )
+        except Exception:
+            logger.warning(
+                "Counterfactual tracking failed for %s",
+                event.signal.symbol,
+                exc_info=True,
+            )
+
+    async def _run_counterfactual_maintenance(self) -> None:
+        """Periodic counterfactual timeout check during market hours (60s).
+
+        Also handles EOD close when market hours end.
+        """
+        from datetime import time as dt_time
+        from zoneinfo import ZoneInfo
+
+        et_tz = ZoneInfo("America/New_York")
+        market_open = dt_time(9, 30)
+        market_close = dt_time(16, 0)
+        eod_closed_today = False
+
+        while True:
+            await asyncio.sleep(60)
+            try:
+                if self._counterfactual_tracker is None:
+                    continue
+                now = self._clock.now()
+                now_et = (
+                    now.replace(tzinfo=et_tz) if now.tzinfo is None
+                    else now.astimezone(et_tz)
+                )
+                current_time = now_et.time()
+
+                if market_open <= current_time < market_close:
+                    eod_closed_today = False
+                    self._counterfactual_tracker.check_timeouts()
+                elif not eod_closed_today:
+                    # Market closed — close all remaining counterfactual positions
+                    await self._counterfactual_tracker.close_all_eod()
+                    eod_closed_today = True
+                    logger.info("Counterfactual EOD close completed")
+            except Exception:
+                logger.warning("Counterfactual maintenance failed", exc_info=True)
+
     async def _on_shutdown_requested(self, event: ShutdownRequestedEvent) -> None:
         """Handle shutdown request from Order Manager after EOD flatten.
 
@@ -1529,6 +1633,14 @@ class ArgusSystem:
                 body="Graceful shutdown initiated",
             )
 
+        # --- Counterfactual EOD close (before debrief export) ---
+        if self._counterfactual_tracker is not None:
+            try:
+                await self._counterfactual_tracker.close_all_eod()
+                logger.info("Counterfactual positions closed at shutdown")
+            except Exception:
+                logger.warning("Counterfactual EOD close failed", exc_info=True)
+
         # --- Debrief Export (before tearing down components) ---
         try:
             from argus.analytics.debrief_export import export_debrief_data
@@ -1608,6 +1720,21 @@ class ArgusSystem:
             with _ctxlib3.suppress(asyncio.CancelledError):
                 await self._bg_refresh_task
             logger.info("Background cache refresh task stopped")
+
+        # 0a1c. Stop counterfactual maintenance task (Sprint 27.7)
+        if self._counterfactual_task is not None:
+            import contextlib as _ctxlib_cf
+
+            self._counterfactual_task.cancel()
+            with _ctxlib_cf.suppress(asyncio.CancelledError):
+                await self._counterfactual_task
+            logger.info("Counterfactual maintenance task stopped")
+
+        # 0a1d. Close counterfactual store (Sprint 27.7)
+        if self._counterfactual_store is not None:
+            await self._counterfactual_store.close()
+            self._counterfactual_store = None
+            logger.info("CounterfactualStore closed")
 
         # 0a2. Close evaluation telemetry store
         if self._eval_store is not None:

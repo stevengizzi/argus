@@ -155,6 +155,14 @@ universe_manager:
   fmp_batch_size: 50      # Symbols per FMP batch API call
   trust_cache_on_startup: true  # Load cache immediately; refresh stale in background (DEC-362)
 
+# Counterfactual Engine (Sprint 27.7)
+# Shadow-tracks rejected signals to measure filter accuracy.
+counterfactual:
+  enabled: true
+  retention_days: 90
+  no_data_timeout_seconds: 300
+  eod_close_time: "16:00"
+
 # Observatory (Sprint 25 — The Observatory)
 # Immersive pipeline visualization page for operational visibility.
 observatory:

@@ -182,6 +182,44 @@ def create_quality_components(
     return engine, sizer
 
 
+async def build_counterfactual_tracker(
+    config: object,
+    candle_store: object | None = None,
+) -> tuple[object, object] | None:
+    """Build and initialize the Counterfactual Engine components.
+
+    Returns None if counterfactual.enabled is False.
+
+    Args:
+        config: SystemConfig with a counterfactual attribute.
+        candle_store: Optional IntradayCandleStore for backfill.
+
+    Returns:
+        Tuple of (CounterfactualTracker, CounterfactualStore) if enabled,
+        None if disabled.
+    """
+    from argus.intelligence.counterfactual import CounterfactualTracker
+    from argus.intelligence.counterfactual_store import CounterfactualStore
+
+    cf_config = config.counterfactual  # type: ignore[attr-defined]
+    if not cf_config.enabled:
+        logger.info("Counterfactual Engine disabled in config")
+        return None
+
+    store = CounterfactualStore(db_path="data/counterfactual.db")
+    await store.initialize()
+
+    tracker = CounterfactualTracker(
+        candle_store=candle_store,
+        eod_close_time=cf_config.eod_close_time,
+        no_data_timeout_seconds=cf_config.no_data_timeout_seconds,
+    )
+    tracker.set_store(store)
+
+    logger.info("Counterfactual Engine created (tracker + store)")
+    return tracker, store
+
+
 async def shutdown_intelligence(components: IntelligenceComponents) -> None:
     """Shutdown intelligence pipeline components.
 
