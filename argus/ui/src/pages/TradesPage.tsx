@@ -129,13 +129,16 @@ export function TradesPage() {
     [setSearchParams]
   );
 
-  // Data hook uses local state — fetches all trades matching active filter (no pagination)
-  // With keepPreviousData: isLoading only true on first load, isFetching true during filter changes
+  // Data hook uses local state — fetches all trades matching active filter (no pagination).
+  // limit: 250 (backend max) ensures stats bar computes from the full filtered set,
+  // not just the default 50-trade page. Without this, Win Rate / Net P&L are computed
+  // from a truncated subset and appear unchanged when toggling date filters.
   const { data, isLoading, error, isFetching } = useTrades({
     strategy_id: filters.strategy_id,
     outcome: filters.outcome === 'all' ? undefined : filters.outcome,
     date_from: filters.date_from,
     date_to: filters.date_to,
+    limit: 250,
   });
 
   // Export trades as CSV

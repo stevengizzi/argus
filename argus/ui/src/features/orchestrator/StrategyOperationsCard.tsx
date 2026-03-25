@@ -9,7 +9,7 @@
  * - Operating window: time range and active status
  */
 
-import { Play, Pause, ShieldAlert, ListChecks } from 'lucide-react';
+import { Play, Pause, ShieldAlert, ListChecks, OctagonAlert } from 'lucide-react';
 import { Card } from '../../components/Card';
 import { StrategyBadge, ThrottleBadge } from '../../components/Badge';
 import { AnimatedNumber } from '../../components/AnimatedNumber';
@@ -219,6 +219,24 @@ export function StrategyOperationsCard({ allocation, onViewDecisions }: Strategy
           </div>
         )}
 
+        {/* Suspension section (circuit breaker — not throttled but inactive) */}
+        {!allocation.is_active && !isThrottled && (
+          <div
+            className="p-2 rounded-md bg-red-400/5 border border-red-400/20 space-y-1.5"
+            data-testid="suspension-section"
+          >
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider rounded bg-red-400/15 text-red-400">
+                <OctagonAlert className="w-3 h-3" />
+                Suspended
+              </span>
+            </div>
+            <p className="text-xs text-argus-text-dim" data-testid="suspension-reason">
+              {allocation.reason || 'Circuit breaker — consecutive losses'}
+            </p>
+          </div>
+        )}
+
         {/* Performance today */}
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
           <div className="flex items-center gap-1">
@@ -242,13 +260,26 @@ export function StrategyOperationsCard({ allocation, onViewDecisions }: Strategy
               {formatWindowTime(allocation.operating_window!.earliest_entry)} –{' '}
               {formatWindowTime(allocation.operating_window!.latest_entry)} ET
             </span>
-            <span className={`flex items-center gap-1 ${windowActive ? 'text-argus-profit' : 'text-argus-text-dim'}`}>
+            <span
+              className={`flex items-center gap-1 ${
+                !allocation.is_active
+                  ? 'text-red-400'
+                  : windowActive
+                    ? 'text-argus-profit'
+                    : 'text-argus-text-dim'
+              }`}
+              data-testid="window-status"
+            >
               <span
                 className={`w-1.5 h-1.5 rounded-full ${
-                  windowActive ? 'bg-argus-profit' : 'bg-argus-text-dim'
+                  !allocation.is_active
+                    ? 'bg-red-400'
+                    : windowActive
+                      ? 'bg-argus-profit'
+                      : 'bg-argus-text-dim'
                 }`}
               />
-              {windowActive ? 'Active' : 'Inactive'}
+              {!allocation.is_active ? 'Suspended' : windowActive ? 'Active' : 'Inactive'}
             </span>
           </div>
         )}

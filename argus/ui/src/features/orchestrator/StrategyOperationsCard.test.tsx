@@ -80,6 +80,41 @@ const throttledAllocation: AllocationInfo = {
   daily_pnl: -200,
 };
 
+// Suspended allocation (circuit breaker — not throttled)
+const suspendedAllocation: AllocationInfo = {
+  ...normalAllocation,
+  strategy_id: 'orb_scalp',
+  is_active: false,
+  throttle_action: 'none',
+  is_throttled: false,
+  reason: '5 consecutive losses — circuit breaker triggered',
+  consecutive_losses: 5,
+};
+
+// Suspended allocation with empty reason
+const suspendedNoReasonAllocation: AllocationInfo = {
+  ...normalAllocation,
+  strategy_id: 'orb_scalp',
+  is_active: false,
+  throttle_action: 'none',
+  is_throttled: false,
+  reason: '',
+  consecutive_losses: 5,
+};
+
+// Suspended via throttle (throttle_action='suspend') — should show throttle, not suspension
+const throttleSuspendedAllocation: AllocationInfo = {
+  ...normalAllocation,
+  strategy_id: 'vwap_reclaim',
+  is_active: false,
+  throttle_action: 'suspend',
+  is_throttled: true,
+  reason: 'PerformanceThrottler suspended strategy',
+  consecutive_losses: 6,
+  rolling_sharpe: -1.2,
+  drawdown_pct: 15.0,
+};
+
 describe('StrategyOperationsCard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -116,5 +151,73 @@ describe('StrategyOperationsCard', () => {
     expect(screen.getByText(/Losses:/)).toBeInTheDocument();
     expect(screen.getByText(/Sharpe:/)).toBeInTheDocument();
     expect(screen.getByText(/DD:/)).toBeInTheDocument();
+  });
+
+  it('shows suspension section when inactive and not throttled', () => {
+    render(
+      <TestWrapper>
+        <StrategyOperationsCard allocation={suspendedAllocation} />
+      </TestWrapper>
+    );
+
+    // Should show suspension section with badge
+    const section = screen.getByTestId('suspension-section');
+    expect(section).toBeInTheDocument();
+    expect(section).toHaveTextContent('Suspended');
+
+    // Should show reason
+    expect(screen.getByTestId('suspension-reason')).toHaveTextContent(
+      '5 consecutive losses — circuit breaker triggered'
+    );
+
+    // Should NOT show throttle Override button
+    expect(screen.queryByText('Override Throttle')).not.toBeInTheDocument();
+  });
+
+  it('hides suspension section when active', () => {
+    render(
+      <TestWrapper>
+        <StrategyOperationsCard allocation={normalAllocation} />
+      </TestWrapper>
+    );
+
+    expect(screen.queryByTestId('suspension-section')).not.toBeInTheDocument();
+  });
+
+  it('shows throttle not suspension when throttle_action is suspend', () => {
+    render(
+      <TestWrapper>
+        <StrategyOperationsCard allocation={throttleSuspendedAllocation} />
+      </TestWrapper>
+    );
+
+    // Throttle section should appear (with Override button)
+    expect(screen.getByText('Override Throttle')).toBeInTheDocument();
+
+    // Suspension section should NOT appear
+    expect(screen.queryByTestId('suspension-section')).not.toBeInTheDocument();
+  });
+
+  it('shows default reason when suspension reason is empty', () => {
+    render(
+      <TestWrapper>
+        <StrategyOperationsCard allocation={suspendedNoReasonAllocation} />
+      </TestWrapper>
+    );
+
+    expect(screen.getByTestId('suspension-reason')).toHaveTextContent(
+      'Circuit breaker — consecutive losses'
+    );
+  });
+
+  it('shows suspended status in operating window when inactive', () => {
+    render(
+      <TestWrapper>
+        <StrategyOperationsCard allocation={suspendedAllocation} />
+      </TestWrapper>
+    );
+
+    const windowStatus = screen.getByTestId('window-status');
+    expect(windowStatus).toHaveTextContent('Suspended');
   });
 });
