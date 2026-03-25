@@ -74,10 +74,9 @@ def evaluate_bar_exit(
         return ExitResult(FillExitReason.TARGET_HIT, target_price)
 
     # Priority 3: Time stop
-    # If time stop expired, check if stop also hit on this bar (worst case)
+    # Note: if bar_low <= stop_price, Priority 1 already returned STOPPED_OUT.
+    # Reaching here means stop was not hit on this bar.
     if time_stop_expired:
-        if bar_low <= stop_price:
-            return ExitResult(FillExitReason.STOPPED_OUT, stop_price)
         return ExitResult(FillExitReason.TIME_STOPPED, bar_close)
 
     return None

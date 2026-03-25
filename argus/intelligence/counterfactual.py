@@ -225,7 +225,7 @@ class CounterfactualTracker:
             time_stop_seconds=signal.time_stop_seconds,
             rejection_stage=rejection_stage,
             rejection_reason=rejection_reason,
-            quality_score=signal.quality_score if signal.quality_score else None,
+            quality_score=signal.quality_score if signal.quality_score is not None else None,
             quality_grade=signal.quality_grade if signal.quality_grade else None,
             regime_vector_snapshot=(
                 metadata.get("regime_vector_snapshot")  # type: ignore[union-attr]
