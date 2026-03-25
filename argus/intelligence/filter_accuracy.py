@@ -13,7 +13,8 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass
-from datetime import datetime
+from collections.abc import Callable
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from argus.intelligence.counterfactual_store import CounterfactualStore
@@ -75,7 +76,7 @@ class FilterAccuracyReport:
 
 def _build_breakdown(
     positions: list[dict[str, object]],
-    key_fn: callable,  # type: ignore[valid-type]
+    key_fn: Callable[[dict[str, object]], str],
     min_sample_count: int,
 ) -> list[FilterAccuracyBreakdown]:
     """Group positions by a key function and compute accuracy for each group.
@@ -178,7 +179,6 @@ async def compute_filter_accuracy(
     if end_date is None:
         end_date = now_et
     if start_date is None:
-        from datetime import timedelta
         start_date = end_date - timedelta(days=30)
 
     # Build filter kwargs

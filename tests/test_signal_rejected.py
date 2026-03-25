@@ -171,7 +171,7 @@ class TestSignalRejectedEventCreation:
         event = SignalRejectedEvent(
             signal=signal,
             rejection_reason="Quality grade D below minimum C+",
-            rejection_stage="QUALITY_FILTER",
+            rejection_stage="quality_filter",
             quality_score=35.0,
             quality_grade="D",
             regime_vector_snapshot={"volatility": "low"},
@@ -180,7 +180,7 @@ class TestSignalRejectedEventCreation:
 
         assert event.signal is signal
         assert event.rejection_reason == "Quality grade D below minimum C+"
-        assert event.rejection_stage == "QUALITY_FILTER"
+        assert event.rejection_stage == "quality_filter"
         assert event.quality_score == 35.0
         assert event.quality_grade == "D"
         assert event.regime_vector_snapshot == {"volatility": "low"}
@@ -235,7 +235,7 @@ class TestQualityFilterRejection:
 
         assert len(rejected_events) == 1
         evt = rejected_events[0]
-        assert evt.rejection_stage == "QUALITY_FILTER"
+        assert evt.rejection_stage == "quality_filter"
         assert evt.quality_score == 35.0
         assert evt.quality_grade == "D"
         assert "below minimum" in evt.rejection_reason
@@ -273,7 +273,7 @@ class TestPositionSizerRejection:
 
         assert len(rejected_events) == 1
         evt = rejected_events[0]
-        assert evt.rejection_stage == "POSITION_SIZER"
+        assert evt.rejection_stage == "position_sizer"
         assert evt.quality_score == 55.0
         assert evt.quality_grade == "C+"
         assert "0 shares" in evt.rejection_reason
@@ -322,7 +322,7 @@ class TestRiskManagerRejection:
         # SignalRejectedEvent also published
         assert len(rejected_events) == 1
         evt = rejected_events[0]
-        assert evt.rejection_stage == "RISK_MANAGER"
+        assert evt.rejection_stage == "risk_manager"
         assert evt.rejection_reason == "Daily loss limit exceeded"
 
 

@@ -258,3 +258,15 @@ class TestConfigDisabled:
         assert report.by_grade == []
         assert report.by_strategy == []
         assert report.by_regime == []
+
+    @pytest.mark.asyncio
+    async def test_config_disabled_no_tracking(self) -> None:
+        """When counterfactual.enabled=False, build_counterfactual_tracker returns None."""
+        from argus.core.config import SystemConfig
+        from argus.intelligence.startup import build_counterfactual_tracker
+
+        config = SystemConfig()
+        config.counterfactual.enabled = False
+
+        result = await build_counterfactual_tracker(config=config)
+        assert result is None

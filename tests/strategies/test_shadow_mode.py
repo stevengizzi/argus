@@ -201,7 +201,7 @@ class TestShadowRoutingPublishesEvent:
 
         assert len(rejected_events) == 1
         evt = rejected_events[0]
-        assert evt.rejection_stage == "SHADOW"
+        assert evt.rejection_stage == "shadow"
         assert evt.signal is signal
         assert "Shadow mode" in evt.rejection_reason
 

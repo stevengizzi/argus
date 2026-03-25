@@ -1269,7 +1269,7 @@ class ArgusSystem:
                 await self._event_bus.publish(SignalRejectedEvent(
                     signal=signal,
                     rejection_reason="Shadow mode — signal tracked counterfactually, not executed",
-                    rejection_stage="SHADOW",
+                    rejection_stage="shadow",
                     quality_score=None,
                     quality_grade=None,
                     regime_vector_snapshot=regime_snapshot,
@@ -1336,7 +1336,7 @@ class ArgusSystem:
                     await self._event_bus.publish(SignalRejectedEvent(
                         signal=signal,
                         rejection_reason=f"Quality grade {quality.grade} below minimum {min_grade}",
-                        rejection_stage="QUALITY_FILTER",
+                        rejection_stage="quality_filter",
                         quality_score=quality.score,
                         quality_grade=quality.grade,
                         regime_vector_snapshot=regime_snapshot,
@@ -1374,7 +1374,7 @@ class ArgusSystem:
                     await self._event_bus.publish(SignalRejectedEvent(
                         signal=signal,
                         rejection_reason=f"Position sizer returned 0 shares (grade={quality.grade}, score={quality.score:.0f})",
-                        rejection_stage="POSITION_SIZER",
+                        rejection_stage="position_sizer",
                         quality_score=quality.score,
                         quality_grade=quality.grade,
                         regime_vector_snapshot=regime_snapshot,
@@ -1413,7 +1413,7 @@ class ArgusSystem:
             await self._event_bus.publish(SignalRejectedEvent(
                 signal=signal,
                 rejection_reason=result.reason,
-                rejection_stage="RISK_MANAGER",
+                rejection_stage="risk_manager",
                 quality_score=getattr(signal, 'quality_score', None),
                 quality_grade=getattr(signal, 'quality_grade', None),
                 regime_vector_snapshot=regime_snapshot,
@@ -1484,7 +1484,7 @@ class ArgusSystem:
             self._counterfactual_tracker.track(
                 signal=event.signal,
                 rejection_reason=event.rejection_reason,
-                rejection_stage=RejectionStage(event.rejection_stage.lower()),
+                rejection_stage=RejectionStage(event.rejection_stage),
                 metadata={
                     "quality_score": event.quality_score,
                     "quality_grade": event.quality_grade,

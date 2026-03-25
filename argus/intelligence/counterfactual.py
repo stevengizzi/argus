@@ -296,7 +296,7 @@ class CounterfactualTracker:
                 bars_monitored=0,
             )
             try:
-                asyncio.get_event_loop().create_task(self._store.write_open(open_snapshot))
+                asyncio.get_running_loop().create_task(self._store.write_open(open_snapshot))
             except RuntimeError:
                 pass  # No event loop — skip persistence
 
@@ -521,7 +521,7 @@ class CounterfactualTracker:
         # Fire-and-forget persistence
         if self._store is not None and hasattr(self._store, "write_close"):
             try:
-                asyncio.get_event_loop().create_task(self._store.write_close(closed))
+                asyncio.get_running_loop().create_task(self._store.write_close(closed))
             except RuntimeError:
                 pass  # No event loop — skip persistence (e.g., tests)
 
