@@ -262,7 +262,7 @@ export function StrategyOperationsCard({ allocation, onViewDecisions }: Strategy
             </span>
             <span
               className={`flex items-center gap-1 ${
-                !allocation.is_active
+                !allocation.is_active && !isThrottled
                   ? 'text-red-400'
                   : windowActive
                     ? 'text-argus-profit'
@@ -272,14 +272,14 @@ export function StrategyOperationsCard({ allocation, onViewDecisions }: Strategy
             >
               <span
                 className={`w-1.5 h-1.5 rounded-full ${
-                  !allocation.is_active
+                  !allocation.is_active && !isThrottled
                     ? 'bg-red-400'
                     : windowActive
                       ? 'bg-argus-profit'
                       : 'bg-argus-text-dim'
                 }`}
               />
-              {!allocation.is_active ? 'Suspended' : windowActive ? 'Active' : 'Inactive'}
+              {!allocation.is_active && !isThrottled ? 'Suspended' : windowActive ? 'Active' : 'Inactive'}
             </span>
           </div>
         )}

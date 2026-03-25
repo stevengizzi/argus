@@ -220,4 +220,15 @@ describe('StrategyOperationsCard', () => {
     const windowStatus = screen.getByTestId('window-status');
     expect(windowStatus).toHaveTextContent('Suspended');
   });
+
+  it('does not show suspended window status when throttled', () => {
+    render(
+      <TestWrapper>
+        <StrategyOperationsCard allocation={throttleSuspendedAllocation} />
+      </TestWrapper>
+    );
+
+    const windowStatus = screen.getByTestId('window-status');
+    expect(windowStatus).not.toHaveTextContent('Suspended');
+  });
 });
