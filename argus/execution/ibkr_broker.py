@@ -38,6 +38,7 @@ from argus.execution.ibkr_errors import (
     is_connection_error,
     is_order_rejection,
 )
+from argus.utils.log_throttle import ThrottledLogger
 from argus.models.trading import (
     AccountInfo,
     BracketOrderResult,
@@ -104,6 +105,9 @@ class IBKRBroker(Broker):
 
         # Last known positions (for reconnection verification)
         self._last_known_positions: list = []
+
+        # Rate-limited logger for high-volume IBKR errors
+        self._throttled = ThrottledLogger(logger)
 
         # Wire up ib_async events
         # Note: ib_async is asyncio-native — NO call_soon_threadsafe() needed
@@ -300,6 +304,32 @@ class IBKRBroker(Broker):
         # Downgrade overnight maintenance codes outside market hours
         if error_code in OVERNIGHT_MAINTENANCE_CODES and not self._is_market_hours():
             logger.info("IBKR maintenance %d (outside market hours): %s", error_code, error_string)
+            return
+
+        # Rate-limit high-volume error codes before general classification
+        if error_code == 399:
+            symbol = contract.symbol if contract else "unknown"
+            self._throttled.warn_throttled(
+                f"ibkr_399_{symbol}",
+                f"IBKR error 399 ({symbol}): {error_string}",
+                interval_seconds=60.0,
+            )
+            return
+
+        if error_code == 202:
+            self._throttled.warn_throttled(
+                f"ibkr_202_{req_id}",
+                f"IBKR error 202 (orderId={req_id}): {error_string}",
+                interval_seconds=86400.0,  # effectively once per orderId
+            )
+            return
+
+        if error_code == 10148:
+            self._throttled.warn_throttled(
+                f"ibkr_10148_{req_id}",
+                f"IBKR error 10148 (orderId={req_id}): {error_string}",
+                interval_seconds=86400.0,  # effectively once per orderId
+            )
             return
 
         if error_info.severity == IBKRErrorSeverity.CRITICAL:

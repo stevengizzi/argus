@@ -26,14 +26,20 @@ thresholds:
   c_plus: 30
 
 # Risk percentage ranges per grade for dynamic position sizing [min, max]
+# PAPER TRADING: Values reduced 10x from live targets to prevent capital
+# exhaustion with 30+ concurrent positions. Live values would be:
+#   a_plus: [0.02, 0.03], a: [0.015, 0.02], a_minus: [0.01, 0.015],
+#   b_plus: [0.0075, 0.01], b: [0.005, 0.0075], b_minus: [0.0025, 0.005],
+#   c_plus: [0.0025, 0.0025]
+# Restore to live values before going live.
 risk_tiers:
-  a_plus: [0.02, 0.03]
-  a: [0.015, 0.02]
-  a_minus: [0.01, 0.015]
-  b_plus: [0.0075, 0.01]
-  b: [0.005, 0.0075]
-  b_minus: [0.0025, 0.005]
-  c_plus: [0.0025, 0.0025]
+  a_plus: [0.002, 0.003]
+  a: [0.0015, 0.002]
+  a_minus: [0.001, 0.0015]
+  b_plus: [0.00075, 0.001]
+  b: [0.0005, 0.00075]
+  b_minus: [0.00025, 0.0005]
+  c_plus: [0.00025, 0.00025]
 
 # Minimum quality grade required to place a trade
 min_grade_to_trade: "C+"

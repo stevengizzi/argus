@@ -28,12 +28,14 @@ from argus.core.events import (
     SignalEvent,
 )
 from argus.execution.broker import Broker
+from argus.utils.log_throttle import ThrottledLogger
 
 if TYPE_CHECKING:
     from argus.analytics.trade_logger import TradeLogger
     from argus.execution.order_manager import OrderManager
 
 logger = logging.getLogger(__name__)
+_throttled = ThrottledLogger(logger)
 
 
 # ---------------------------------------------------------------------------
@@ -322,11 +324,10 @@ class RiskManager:
                 min_risk = self._config.account.min_position_risk_dollars
                 risk_per_share = abs(signal.entry_price - signal.stop_price)
                 reduced_risk = max_conc_shares * risk_per_share
-                logger.warning(
-                    "Signal rejected: concentration-reduced shares (%d) risk $%.2f below $%.0f floor",
-                    max_conc_shares,
-                    reduced_risk,
-                    min_risk,
+                _throttled.warn_throttled(
+                    "concentration_floor",
+                    f"Signal rejected: concentration-reduced shares ({max_conc_shares}) "
+                    f"risk ${reduced_risk:.2f} below ${min_risk:.0f} floor",
                 )
                 return OrderRejectedEvent(
                     signal=signal,
@@ -370,9 +371,9 @@ class RiskManager:
 
         if cost > available:
             if available <= 0:
-                logger.warning(
-                    "Signal rejected: cash reserve would be violated (available=%.2f)",
-                    available,
+                _throttled.warn_throttled(
+                    "cash_reserve_violated",
+                    f"Signal rejected: cash reserve would be violated (available={available:.2f})",
                 )
                 return OrderRejectedEvent(
                     signal=signal,
@@ -384,11 +385,10 @@ class RiskManager:
                 min_risk = self._config.account.min_position_risk_dollars
                 risk_per_share = abs(signal.entry_price - signal.stop_price)
                 reduced_risk = reduced * risk_per_share
-                logger.warning(
-                    "Signal rejected: cash-reserve-reduced shares (%d) risk $%.2f below $%.0f floor",
-                    reduced,
-                    reduced_risk,
-                    min_risk,
+                _throttled.warn_throttled(
+                    "cashreserve_floor",
+                    f"Signal rejected: cash-reserve-reduced shares ({reduced}) "
+                    f"risk ${reduced_risk:.2f} below ${min_risk:.0f} floor",
                 )
                 return OrderRejectedEvent(
                     signal=signal,

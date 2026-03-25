@@ -1626,8 +1626,8 @@ class OrderManager:
             internal_qty = internal_positions.get(symbol, 0)
             broker_qty = int(broker_positions.get(symbol, 0))
             if internal_qty != broker_qty:
-                logger.warning(
-                    "Position mismatch: %s — ARGUS=%d, IBKR=%d",
+                logger.debug(
+                    "Position mismatch detail: %s — ARGUS=%d, IBKR=%d",
                     symbol,
                     internal_qty,
                     broker_qty,
@@ -1637,6 +1637,18 @@ class OrderManager:
                     "internal_qty": internal_qty,
                     "broker_qty": broker_qty,
                 })
+
+        # Consolidated summary at WARNING level
+        if discrepancies:
+            symbols = [str(d["symbol"]) for d in discrepancies]
+            preview = ", ".join(symbols[:3])
+            suffix = "..." if len(symbols) > 3 else ""
+            logger.warning(
+                "Position reconciliation: %d mismatch(es) — %s%s (ARGUS vs IBKR)",
+                len(discrepancies),
+                preview,
+                suffix,
+            )
 
         self._last_reconciliation = ReconciliationResult(
             timestamp=self._clock.now().isoformat(),

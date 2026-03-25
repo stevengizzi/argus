@@ -225,8 +225,8 @@ def test_risk_overrides_empty_uses_production(tmp_path: Path) -> None:
     engine = BacktestEngine(config)
     risk_config = engine._load_risk_config(Path("config"))
 
-    # Production values from config/risk_limits.yaml
-    assert risk_config.account.min_position_risk_dollars == 100.0
+    # Values from config/risk_limits.yaml (currently paper-trading: 10.0)
+    assert risk_config.account.min_position_risk_dollars == 10.0
     assert risk_config.account.cash_reserve_pct == 0.20
     assert risk_config.cross_strategy.max_single_stock_pct == 0.05
 
@@ -268,5 +268,5 @@ def test_risk_overrides_unknown_key_warns(
         risk_config = engine._load_risk_config(Path("config"))
 
     assert "Unknown risk override key: bogus.field" in caplog.text
-    # Config still loads successfully with production values
-    assert risk_config.account.min_position_risk_dollars == 100.0
+    # Config still loads successfully with values from risk_limits.yaml (currently paper-trading: 10.0)
+    assert risk_config.account.min_position_risk_dollars == 10.0

@@ -25,13 +25,19 @@ cash_reserve_pct: 0.20
 performance_lookback_days: 20
 
 # Consecutive losing trades before throttling allocation
-consecutive_loss_throttle: 5
+# PAPER TRADING: Set to 999 to disable throttling during data collection.
+# Restore to 5 before going live.
+consecutive_loss_throttle: 999
 
 # Sharpe ratio below which strategy is suspended
-suspension_sharpe_threshold: 0.0
+# PAPER TRADING: Set to -999 to disable suspension during data collection.
+# Restore to 0.0 before going live.
+suspension_sharpe_threshold: -999.0
 
 # Maximum drawdown percentage before suspension
-suspension_drawdown_pct: 0.15
+# PAPER TRADING: Relaxed to 50% to prevent premature suspension.
+# Restore to 0.15 before going live.
+suspension_drawdown_pct: 0.50
 
 # Days of positive performance required before reactivating suspended strategy
 recovery_days_required: 10

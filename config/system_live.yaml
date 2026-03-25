@@ -132,14 +132,16 @@ quality_engine:
     b: 50
     b_minus: 40
     c_plus: 30
+  # PAPER TRADING: Risk tiers reduced 10x from live values.
+  # Restore to live values before going live.
   risk_tiers:
-    a_plus: [0.02, 0.03]
-    a: [0.015, 0.02]
-    a_minus: [0.01, 0.015]
-    b_plus: [0.0075, 0.01]
-    b: [0.005, 0.0075]
-    b_minus: [0.0025, 0.005]
-    c_plus: [0.0025, 0.0025]
+    a_plus: [0.002, 0.003]
+    a: [0.0015, 0.002]
+    a_minus: [0.001, 0.0015]
+    b_plus: [0.00075, 0.001]
+    b: [0.0005, 0.00075]
+    b_minus: [0.00025, 0.0005]
+    c_plus: [0.00025, 0.00025]
   min_grade_to_trade: "C+"
 
 # Universe Manager (Sprint 23 — DEC-263)

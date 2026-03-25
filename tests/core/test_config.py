@@ -1161,6 +1161,7 @@ class TestQualityEngineConfigWiring:
 
         raw = yaml.safe_load(yaml_path.read_text())
         config = QualityEngineConfig(**raw)
-        assert config.risk_tiers.a_plus == [0.02, 0.03]
-        assert config.risk_tiers.b == [0.005, 0.0075]
-        assert config.risk_tiers.c_plus == [0.0025, 0.0025]
+        # Paper-trading values (10x reduction from live)
+        assert config.risk_tiers.a_plus == [0.002, 0.003]
+        assert config.risk_tiers.b == [0.0005, 0.00075]
+        assert config.risk_tiers.c_plus == [0.00025, 0.00025]
