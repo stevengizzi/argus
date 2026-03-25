@@ -30,6 +30,7 @@ from argus.analytics.evaluation import (
     RegimeMetrics,
     from_backtest_result,
 )
+from argus.core.fill_model import FillExitReason, evaluate_bar_exit
 from argus.analytics.slippage_model import (
     SlippageConfidence,
     StrategySlippageModel,
@@ -584,14 +585,30 @@ class BacktestEngine:
             key=lambda b: b.trigger_price,
         )
 
-        # Priority 1: Stop loss (worst case for longs)
-        # When both stop and target could trigger, stop wins
-        if stop_orders and bar_low <= stop_orders[0].trigger_price:
-            results = await self._broker.simulate_price_update(
-                symbol, stop_orders[0].trigger_price
+        # Use shared fill model for stop-vs-target priority decision.
+        # evaluate_bar_exit() encodes worst-case-for-longs priority:
+        # stop > target > time_stop. We check Priority 1 (stop) only
+        # when stop orders exist, then fall through to target iteration.
+        if stop_orders:
+            first_target = (
+                target_orders[0].trigger_price if target_orders else float("inf")
             )
-            await self._publish_fill_events(results)
-            return  # Position closed
+            fill_result = evaluate_bar_exit(
+                bar_high=bar_high,
+                bar_low=bar_low,
+                bar_close=bar_close,
+                stop_price=stop_orders[0].trigger_price,
+                target_price=first_target,
+                time_stop_expired=False,
+            )
+
+            # Priority 1: Stop loss — shared model says STOPPED_OUT
+            if fill_result and fill_result.exit_reason == FillExitReason.STOPPED_OUT:
+                results = await self._broker.simulate_price_update(
+                    symbol, stop_orders[0].trigger_price
+                )
+                await self._publish_fill_events(results)
+                return  # Position closed
 
         # Priority 2: Target(s) — process lowest first (T1 before T2)
         for target in target_orders:
@@ -647,13 +664,26 @@ class BacktestEngine:
             if elapsed < position.time_stop_seconds:
                 continue
 
-            # Time stop triggered — determine fill price
+            # Time stop triggered — use shared fill model for fill price.
+            # Pass bar_high as -inf (target can't trigger — already
+            # checked in Priority 2) and time_stop_expired=True.
             stop_brackets = [
                 b for b in self._broker._pending_brackets
                 if b.symbol == symbol and b.order_type == "stop"
             ]
-            if stop_brackets and bar_low <= stop_brackets[0].trigger_price:
-                fill_price = stop_brackets[0].trigger_price
+            bracket_stop = (
+                stop_brackets[0].trigger_price if stop_brackets else float("inf")
+            )
+            ts_result = evaluate_bar_exit(
+                bar_high=float("-inf"),
+                bar_low=bar_low,
+                bar_close=bar_close,
+                stop_price=bracket_stop,
+                target_price=float("inf"),
+                time_stop_expired=True,
+            )
+            if ts_result and ts_result.exit_reason == FillExitReason.STOPPED_OUT:
+                fill_price = bracket_stop
             else:
                 fill_price = bar_close
 
