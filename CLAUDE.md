@@ -1,13 +1,13 @@
 # ARGUS — Claude Code Context
 
 > Dense, actionable context for Claude Code sessions. No history — see `docs/` for that.
-> Last updated: March 24, 2026 (Sprint 27.6 doc sync)
+> Last updated: March 25, 2026 (Sprint 27.7 doc sync)
 
 ## Active Sprint
 
-**No active sprint.** Sprint 27.6 (Regime Intelligence) completed March 24, 2026.
+**No active sprint.** Sprint 27.7 (Counterfactual Engine) completed March 25, 2026.
 
-Next planned sprint: **27.7 (Counterfactual Engine)** per DEC-358, followed by Sprint 28 (Learning Loop V1).
+Next planned sprint: **28 (Learning Loop V1)**, followed by Sprints 29–31 (Pattern Expansion + Short Selling + Research Console).
 
 ### Roadmap Amendments Adopted (DEC-357, DEC-358)
 Two roadmap amendments adopted March 23, 2026 adding 5 new sprint slots:
@@ -17,7 +17,7 @@ Two roadmap amendments adopted March 23, 2026 adding 5 new sprint slots:
 - **32.5** (Experiment Registry + Promotion Pipeline): Partitioned SQLite registry, cohort-based promotion, simulated-paper screening, overnight experiment queue, kill switches, anti-fragility
 - **33.5** (Adversarial Stress Testing): Historical crisis replay + synthetic stress scenarios as PromotionPipeline gate
 Amendment docs: `docs/amendments/roadmap-amendment-experiment-infrastructure.md`, `docs/amendments/roadmap-amendment-intelligence-architecture.md`
-Build track: ~~21.6~~ ✅ → ~~27.5~~ ✅ → ~~27.6~~ ✅ → 27.7 → 28 → 29–31 → 32 → 32.5 → 33 → 33.5 → 34 → 35–41
+Build track: ~~21.6~~ ✅ → ~~27.5~~ ✅ → ~~27.6~~ ✅ → ~~27.7~~ ✅ → 28 → 29–31 → 32 → 32.5 → 33 → 33.5 → 34 → 35–41
 DEC ranges reserved: 363–372 (27.5), 369–378 (27.6), 379–385 (27.7), 386–395 (32.5), 396–402 (33.5)
 
 ### Known Issues
@@ -28,17 +28,17 @@ DEC ranges reserved: 363–372 (27.5), 369–378 (27.6), 379–385 (27.7), 386�
 ## Current State
 
 - **Active sprint:** None (between sprints)
-- **Next sprint:** 27.7 (Counterfactual Engine)
-- **Tests:** 3,412 pytest + 633 Vitest (0 failures, 0 hangs)
+- **Next sprint:** 28 (Learning Loop V1)
+- **Tests:** ~3,517 pytest + 633 Vitest (0 failures, 0 hangs)
 - **Strategies:** 7 active (ORB Breakout, ORB Scalp, VWAP Reclaim, Afternoon Momentum, Red-to-Green, Bull Flag, Flat-Top Breakout)
-- **Infrastructure:** Databento EQUS.MINI (live) + IBKR paper trading (Account U24619949) + FMP Starter (scanning + reference data + daily bars for regime) + Finnhub (news + analyst recs) + Claude API (Copilot + Catalyst Classification) + Universe Manager (config-gated) + Catalyst Pipeline (config-gated) + Intelligence Polling Loop (config-gated) + Reference Data Cache + Quality Engine (config-gated) + Dynamic Position Sizer + Strategy Evaluation Telemetry (ring buffer + SQLite persistence) + Debrief Export (shutdown automation) + Evaluation Framework (MultiObjectiveResult, EnsembleResult, comparison API, slippage model) + Regime Intelligence (RegimeVector 6-dimension, config-gated, Sprint 27.6)
+- **Infrastructure:** Databento EQUS.MINI (live) + IBKR paper trading (Account U24619949) + FMP Starter (scanning + reference data + daily bars for regime) + Finnhub (news + analyst recs) + Claude API (Copilot + Catalyst Classification) + Universe Manager (config-gated) + Catalyst Pipeline (config-gated) + Intelligence Polling Loop (config-gated) + Reference Data Cache + Quality Engine (config-gated) + Dynamic Position Sizer + Strategy Evaluation Telemetry (ring buffer + SQLite persistence) + Debrief Export (shutdown automation) + Evaluation Framework (MultiObjectiveResult, EnsembleResult, comparison API, slippage model) + Regime Intelligence (RegimeVector 6-dimension, config-gated, Sprint 27.6) + Counterfactual Engine (shadow position tracking, filter accuracy, shadow strategy mode, config-gated, Sprint 27.7)
 - **Frontend:** 8-page Command Center (Observatory added Sprint 25) + AI Copilot + Universe Status Card + Intelligence Brief View (all active), Tauri desktop + PWA mobile
 
 ## Project Structure
 
 ```
 argus/
-├── core/           # Orchestrator, Risk Manager, Portfolio, Event Bus, Regime Intelligence (breadth.py, market_correlation.py, sector_rotation.py, intraday_character.py, regime_history.py)
+├── core/           # Orchestrator, Risk Manager, Portfolio, Event Bus, Regime Intelligence (breadth.py, market_correlation.py, sector_rotation.py, intraday_character.py, regime_history.py), TheoreticalFillModel (fill_model.py)
 ├── strategies/     # BaseStrategy, OrbBaseStrategy, 7 strategy implementations
 │   └── patterns/   # PatternModule ABC, BullFlagPattern, FlatTopBreakoutPattern
 ├── data/           # DataService (Databento/Alpaca/Replay/Backtest), Scanner, IndicatorEngine, UniverseManager, FMPReferenceClient
@@ -62,7 +62,7 @@ argus/
 │   ├── cache.py    # ResponseCache (TTL-based)
 │   └── tools.py    # 5 tool_use definitions with JSON schemas
 ├── intelligence/   # CatalystPipeline, CatalystClassifier, CatalystStorage, BriefingGenerator, startup factory, polling loop (Sprints 23.5 + 23.6), SetupQualityEngine (quality_engine.py), DynamicPositionSizer (position_sizer.py) (Sprint 24)
-├── config/         # system.yaml, system_live.yaml, strategies/*.yaml, regime.yaml
+├── config/         # system.yaml, system_live.yaml, strategies/*.yaml, regime.yaml, counterfactual.yaml
 ├── tests/          # pytest (backend) + Vitest (frontend)
 ├── docs/           # Decision log, sprint history, strategy specs, research reports
 ├── workflow/       # Metarepo submodule (protocols, templates, runner, universal rules)
@@ -322,9 +322,9 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 
 | Document | What It Covers |
 |----------|---------------|
-| `docs/decision-log.md` | All 368 DEC entries with full rationale (6 new in Sprint 27.65) |
+| `docs/decision-log.md` | All 368 DEC entries with full rationale (0 new in Sprint 27.7) |
 | `docs/dec-index.md` | Quick-reference index with status markers |
-| `docs/sprint-history.md` | Complete sprint history (1–27.6 + 27.65) |
+| `docs/sprint-history.md` | Complete sprint history (1–27.7) |
 | `docs/process-evolution.md` | Workflow evolution narrative |
 | `docs/live-operations.md` | Live trading procedures |
 | `docs/strategies/STRATEGY_*.md` | Per-strategy spec sheets |

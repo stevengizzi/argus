@@ -4460,4 +4460,4 @@ Each entry follows this format:
 
 *End of Decision Log v1.0*
 *Next DEC: 369*
-*Last updated: 2026-03-25 (Sprint 27.65 doc sync — DEC-363–368)*
+*Last updated: 2026-03-25 (Sprint 27.7 doc sync — no new DECs, 379–385 range unused)*

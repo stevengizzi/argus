@@ -1,7 +1,7 @@
 # ARGUS — Sprint History
 
 > Complete record of all sprints from project inception through current state.
-> Active development began February 14, 2026. As of March 25, 2026 (~40 calendar days), 28 full sprints + 29 sub-sprints completed.
+> Active development began February 14, 2026. As of March 25, 2026 (~40 calendar days), 29 full sprints + 30 sub-sprints completed.
 
 ---
 
@@ -1618,6 +1618,73 @@
 
 ---
 
+## Sprint 27.7: Counterfactual Engine (March 25, 2026)
+
+**Type:** Planned (DEC-358, Intelligence Architecture amendment)
+**Goal:** Shadow position tracking system for rejected signals — records theoretical outcomes, computes filter accuracy for Learning Loop (Sprint 28), supports shadow-mode strategies.
+**Sessions:** 6 (S1 → S2 → S3a → S3b → S4 → S5, strict sequential) + 1 cleanup session
+**Tests:** pytest 3,412 → ~3,517 (+105), Vitest 633 (unchanged) = ~105 new tests
+**New DECs:** None (reserved range 379–385 unused — all patterns followed established precedent)
+**New DEF items:** None
+
+**Session S1: Core Model + Tracker Logic + Shared Fill Model**
+- TheoreticalFillModel extracted from BacktestEngine: `FillExitReason` enum, `ExitResult` dataclass, `evaluate_bar_exit()` pure function
+- BacktestEngine refactored to call shared fill model (behavior-preserving, 406 backtest tests unchanged)
+- CounterfactualPosition frozen dataclass + CounterfactualTracker with IntradayCandleStore backfill
+- RejectionStage enum (QUALITY_FILTER, POSITION_SIZER, RISK_MANAGER, SHADOW)
+- Named enum `FillExitReason` (not `ExitReason`) to avoid collision with events.py
+- +24 tests (10 fill model + 14 counterfactual)
+- Verdict: CONCERNS (low) — missing zero-R guard, quality_score falsy check (both fixed in S3b)
+
+**Session S2: CounterfactualStore + Config Layer**
+- CounterfactualStore: SQLite in `data/counterfactual.db`, WAL mode, fire-and-forget writes
+- CounterfactualConfig Pydantic model wired into SystemConfig
+- `config/counterfactual.yaml` with 4 fields (enabled, retention_days, no_data_timeout_seconds, eod_close_time)
+- +12 tests
+- Verdict: CLEAR
+
+**Session S3a: SignalRejectedEvent + Rejection Publishing**
+- SignalRejectedEvent frozen dataclass added to events.py
+- Three rejection publish points in `_process_signal()` (quality filter, position sizer, risk manager)
+- `_counterfactual_enabled` flag gates all publishing (default False)
+- `_capture_regime_snapshot()` DRY helper for regime vector capture
+- +12 tests
+- Verdict: CLEAR
+
+**Session S3b: Startup Wiring + Event Subscriptions + EOD Task**
+- `build_counterfactual_tracker()` factory in startup.py
+- Event bus subscriptions: SignalRejectedEvent → tracker handler, CandleEvent → tracker.on_candle
+- `_counterfactual_enabled` flipped True after successful init
+- EOD close in shutdown sequence + 60s maintenance task (timeout checks during market hours)
+- Retention enforcement at boot
+- `counterfactual` section added to system.yaml and system_live.yaml
+- S1 carry-forward fixes applied: zero-R guard, quality_score check
+- +12 tests
+- Verdict: APPROVED_WITH_CONCERNS (low — RejectionStage case mismatch bridged with .lower(), fixed in cleanup)
+
+**Session S4: FilterAccuracy + API Endpoint + Integration Tests**
+- FilterAccuracyBreakdown/FilterAccuracyReport dataclasses
+- `compute_filter_accuracy()` with breakdowns by stage/reason/grade/regime/strategy
+- `GET /api/v1/counterfactual/accuracy` (JWT-protected, date range + strategy filters, min sample threshold)
+- 5 full lifecycle integration tests (rejection → candle processing → accuracy query)
+- +24 tests (13 accuracy + 6 API + 5 integration)
+- Verdict: CLEAR
+
+**Session S5: Shadow Strategy Mode**
+- `StrategyMode` StrEnum (LIVE/SHADOW) in base_strategy.py
+- `mode` field on StrategyConfig (default "live")
+- Shadow routing at top of `_process_signal()` — bypasses quality pipeline and risk manager
+- All 7 strategy YAML configs updated with explicit `mode: live`
+- Shadow + counterfactual disabled = silent drop (no events published)
+- +21 tests
+- Verdict: CLEAR
+
+**Cleanup Session: Post-Review Fixes**
+- 5 low-severity findings addressed: `asyncio.get_running_loop()` migration, RejectionStage case normalization, `Callable` type annotation, `timedelta` import cleanup, config-disabled integration test
+- Single commit, no new tests beyond S5 count
+
+---
+
 ## Data Infrastructure — Full-Universe Cache Population (March 25–26, 2026)
 
 **Type:** Infrastructure work (not a formal sprint — scripting + background download)
@@ -1656,9 +1723,9 @@
 
 ## Sprint Statistics
 
-- **Total sprints:** 28 full + 29 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9, 27.5, 27.6, 27.65)
-- **Total sessions:** ~401+ Claude Code sessions
-- **Total tests:** 3,412 pytest + 633 Vitest = 4,045 total
+- **Total sprints:** 29 full + 30 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9, 27.5, 27.6, 27.65, 27.7)
+- **Total sessions:** ~408+ Claude Code sessions
+- **Total tests:** ~3,517 pytest + 633 Vitest = ~4,150 total
 - **Total decisions:** 368 (DEC-001 through DEC-368)
 - **Calendar days (active dev):** ~40 (Feb 14 – Mar 25, 2026)
 - **Largest sprint:** 22 (9 implementation + 5 fix + 9 reviews, largest scope)

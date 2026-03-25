@@ -439,3 +439,7 @@
 - ● **DEC-366**: Bracket leg amendment on fill slippage — delta-based recalculation of stop/target after entry fill; stop first; safety flatten if T1 ≤ fill; skip for SimulatedBroker.
 - ● **DEC-367**: Optional concurrent position limits — `max_concurrent_positions: 0` disables check; paper trading configs set to 0; capital and concentration limits are the real constraints.
 - ● **DEC-368**: IntradayCandleStore — centralized intraday bar accumulator; parallel CandleEvent subscriber; 390 bars/symbol max; query API for market bars endpoint + pattern strategy backfill.
+
+## Sprint 27.7 — Counterfactual Engine
+
+No new DECs. Reserved range 379–385 unused — all design decisions followed established patterns (DEC-300 config-gating, DEC-345 separate DB, DEC-342 telemetry pattern).

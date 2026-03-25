@@ -115,6 +115,7 @@ SignalEvent(strategy_id, symbol, side, entry_price, stop_price, target_prices, s
 # Risk events
 OrderApprovedEvent(signal_event, modifications: dict | None)
 OrderRejectedEvent(signal_event, reason: str)
+SignalRejectedEvent(signal, rejection_reason, rejection_stage, quality_score, quality_grade, regime_vector_snapshot, metadata)
 
 # Execution events
 OrderSubmittedEvent(order_id, strategy_id, symbol, side, quantity, order_type)
@@ -1353,6 +1354,60 @@ Storage: separate `catalyst.db` SQLite file (DEC-309), path: `{data_dir}/catalys
 - `data/argus.db` — trades, quality history, orchestrator decisions, conversation history, AI usage
 - `data/catalyst.db` — catalyst events and classifications (DEC-309, Sprint 23.6)
 - `data/evaluation.db` — strategy evaluation telemetry events (DEC-345, Sprint 25.6)
+- `data/counterfactual.db` — counterfactual position tracking (DEC-345 pattern, Sprint 27.7)
+
+#### Counterfactual Engine (`intelligence/counterfactual.py`, `counterfactual_store.py`, `filter_accuracy.py`) — Sprint 27.7 ✅
+
+Tracks theoretical outcomes of rejected signals to measure filter accuracy for the Learning Loop.
+
+**Shared Fill Model** (`core/fill_model.py`):
+- `FillExitReason` enum: STOPPED_OUT, TARGET_HIT, TIME_STOPPED, EOD_CLOSED, EXPIRED
+- `ExitResult` frozen dataclass: exit_reason + exit_price
+- `evaluate_bar_exit()` pure function: worst-case-for-longs priority (stop > target > time_stop > EOD)
+- Used by both BacktestEngine and CounterfactualTracker (single source of truth)
+
+**CounterfactualTracker** (`intelligence/counterfactual.py`):
+- Subscribes to `SignalRejectedEvent` via event bus handler in main.py
+- On position open: backfills from IntradayCandleStore (may close immediately if stop breached)
+- Forward monitoring via `CandleEvent` subscription using `evaluate_bar_exit()`
+- MAE/MFE tracking per bar, time stop via elapsed seconds, EOD close via scheduled task
+- No-data timeout (default 300s) expires stale positions
+- Multiple positions per symbol tracked independently via `_symbols_to_positions` dict
+- Zero-R guard: skips signals where entry_price == stop_price
+
+Interface:
+- `track(signal, rejection_reason, rejection_stage, metadata) -> str | None` — returns position_id (ULID)
+- `async on_candle(event: CandleEvent) -> None` — O(1) short-circuit for untracked symbols
+- `async close_all_eod() -> None` — idempotent EOD close
+- `check_timeouts() -> list[str]` — returns expired position_ids
+
+**CounterfactualStore** (`intelligence/counterfactual_store.py`):
+- SQLite in `data/counterfactual.db` (DEC-345 isolated DB pattern)
+- WAL mode, fire-and-forget writes with rate-limited warnings (60s)
+- `write_open()`, `write_close()`, `query()`, `get_closed_positions()`, `enforce_retention()`
+- 90-day default retention, enforced once per boot
+
+**SignalRejectedEvent** (`core/events.py`):
+- Frozen dataclass: signal (SignalEvent), rejection_reason (str), rejection_stage (str), quality_score, quality_grade, regime_vector_snapshot, metadata
+- Published from 3 points in `_process_signal()`: quality filter, position sizer, risk manager
+- Gated by `_counterfactual_enabled` flag (set True after tracker init)
+
+**FilterAccuracy** (`intelligence/filter_accuracy.py`):
+- `compute_filter_accuracy(store, date_range, strategy_filter, min_sample_count)` → `FilterAccuracyReport`
+- Breakdowns by stage, reason, grade, regime, strategy
+- "Correct rejection" = theoretical P&L ≤ 0; min sample threshold (default 10)
+- Read-only (never modifies store data)
+
+**Shadow Strategy Mode:**
+- `StrategyMode` StrEnum (LIVE, SHADOW) in `base_strategy.py`
+- Per-strategy `mode` field on `StrategyConfig` (default "live")
+- Shadow routing at top of `_process_signal()`: bypasses quality pipeline and risk manager
+- Shadow signals published as `SignalRejectedEvent` with `rejection_stage="shadow"`
+- Strategy itself is unaware of its mode
+
+Config: `counterfactual.enabled` in `config/counterfactual.yaml` (DEC-300 pattern). Fields: `enabled`, `retention_days`, `no_data_timeout_seconds`, `eod_close_time`.
+
+REST: `GET /api/v1/counterfactual/accuracy` — JWT-protected, query params: start_date, end_date, strategy_id, min_sample_count.
 
 #### PreMarketEngine (`intelligence/premarket_engine.py`) — NOT YET IMPLEMENTED
 
@@ -1462,6 +1517,7 @@ GET  /api/v1/orderflow/{symbol}          # Current order flow state + 1-min hist
 GET  /api/v1/quality/{symbol}            # Current quality score (Sprint 24)
 GET  /api/v1/quality/history             # Quality score history (Sprint 24)
 GET  /api/v1/quality/distribution        # Today's grade distribution (Sprint 24)
+GET  /api/v1/counterfactual/accuracy     # Filter accuracy breakdowns by stage/reason/grade/regime/strategy (Sprint 27.7)
 GET  /api/v1/learning/calibration        # Predicted vs actual by grade (Sprint 28+)
 GET  /api/v1/learning/insights           # Top recent findings (Sprint 28+)
 
@@ -1671,7 +1727,7 @@ Production-code backtesting engine that runs real ARGUS strategy code against Da
 - **HistoricalDataFeed** (`backtest/historical_data_feed.py`): Downloads Databento OHLCV-1m data via `timeseries.get_range()` with `metadata.get_cost()` pre-validation. Parquet cache layer: `{cache_dir}/{SYMBOL}/{YYYY-MM}.parquet`. Full-universe cache populated March 2026: 24,321 symbols × 153 months across 3 datasets — EQUS.MINI (Apr 2023 – present), XNAS.ITCH (May 2018 – Mar 2023), XNYS.PILLAR (May 2018 – Mar 2023). 44.73 GB on external drive (`/Volumes/LaCie/argus-cache`). Population script: `scripts/populate_historical_cache.py` (ALL_SYMBOLS per-month, $0 cost, resumable, manifest-tracked, `--update` mode for monthly maintenance).
 
 - **BacktestEngine** (`backtest/engine.py`): Assembles production components (strategies, Risk Manager, Order Manager, SimulatedBroker, IndicatorEngine) wired through SynchronousEventBus. Mirrors ReplayHarness component assembly pattern. Features:
-  - **Bar-level fill model** with worst-case-for-longs exit priority: stop > target > time_stop > EOD (same priority as VectorBT sweeps per `.claude/rules/backtesting.md`)
+  - **Bar-level fill model** with worst-case-for-longs exit priority: stop > target > time_stop > EOD (same priority as VectorBT sweeps per `.claude/rules/backtesting.md`). Exit priority logic extracted to shared `TheoreticalFillModel` (`core/fill_model.py`) in Sprint 27.7 — BacktestEngine calls `evaluate_bar_exit()`.
   - **Multi-day orchestration**: Iterates trading days, resets daily state, runs scanner simulation per day
   - **Scanner simulation**: Computes gap from prev_close → day_open, applies scanner filters (same approach as VectorBT backtests)
   - **Strategy factory**: Creates strategy instances from `StrategyType` enum with config overrides
@@ -2151,13 +2207,16 @@ config/
 ├── risk_limits.yaml      # All three levels of risk parameters
 ├── orchestrator.yaml     # Allocation rules, regime thresholds, throttling rules
 ├── regime.yaml           # Regime Intelligence V2 config — 6 dimensions, per-dimension enable flags (Sprint 27.6)
+├── counterfactual.yaml   # Counterfactual Engine config — enabled, retention, timeout, EOD close time (Sprint 27.7)
 ├── notifications.yaml    # Channel configs, alert routing, schedule
 ├── strategies/
 │   ├── orb_breakout.yaml
 │   ├── orb_scalp.yaml
 │   ├── vwap_reclaim.yaml
 │   ├── afternoon_momentum.yaml
-│   └── red_to_green.yaml
+│   ├── red_to_green.yaml
+│   ├── bull_flag.yaml
+│   └── flat_top_breakout.yaml
 └── ui.yaml               # Dashboard preferences, default views
 ```
 

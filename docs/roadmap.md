@@ -1,7 +1,7 @@
 # ARGUS — Strategic Roadmap
 
 > From artisanal strategies to ensemble alpha — the complete path
-> **v2.4 — March 25, 2026** (Sprint 27.65 complete — Market Session Safety + Operational Fixes)
+> **v2.5 — March 25, 2026** (Sprint 27.7 complete — Counterfactual Engine)
 > **Status:** CANONICAL — this is the single source of truth for ARGUS's strategic direction and sprint queue.
 > **Supersedes:** `docs/research/ARGUS_Expanded_Roadmap.md` (Feb 26), `docs/argus_unified_vision_roadmap.md` (Mar 5), `docs/10_PHASE3_SPRINT_PLAN.md` (all forward-looking sections)
 
@@ -78,7 +78,7 @@ These foundations are correct and remain:
 
 ARGUS completed 21 sprints + sub-sprints in ~17 calendar days of active development (Feb 14 – Mar 5). Average sprint: ~0.8 calendar days. However, sprint complexity has been increasing — early sprints (1–5) were dense single-day affairs, while later sprints (21a–21d, 21.5) span multiple days. The roadmap below assumes sprint durations of 1–4 days each depending on complexity, with some parallelism where noted.
 
-**Current state:** Sprint 27.65 complete. 3,412 pytest + 633 Vitest. Seven active strategies (4 original + R2G, Bull Flag, Flat-Top from Sprint 26) with per-candle evaluation telemetry. Sprint 27.65 (impromptu) added critical Order Manager safety: flatten-pending guard (DEC-363), graceful shutdown order cancellation (DEC-364), periodic position reconciliation (DEC-365), bracket amendment on fill slippage (DEC-366), optional concurrent position limits for paper trading (DEC-367), and IntradayCandleStore for queryable intraday bars + pattern strategy backfill (DEC-368). Real-time P&L via WebSocket. R2G prior_close initialization fixed. Observatory pipeline format aligned. `scripts/ibkr_close_all_positions.py` for emergency cleanup. PatternModule ABC established for composable pattern detection. BacktestEngine operational with all 7 strategy types, walk-forward integration, CLI entry point, and risk_overrides for single-strategy backtesting (DEC-359). ExecutionRecord logging captures expected vs actual fill prices for slippage model calibration (DEC-358 §5.1). DEC-132 PARTIALLY RESOLVED — pipeline proven end-to-end with Databento data, Bull Flag validated (Sharpe 2.78), 6 strategies pending full-universe re-validation. Live Databento + IBKR paper trading with 28+ trades across 4 sessions. Eight-page Command Center (Observatory added Sprint 25) + AI Copilot active. FMP Scanner + Universe Manager integrated. Autonomous Sprint Runner implemented (DEC-278–297). NLP Catalyst Pipeline complete (DEC-300–307). Setup Quality Engine + Dynamic Position Sizer complete (DEC-330–341). Strategy Observability complete (DEC-342). Phase 5 Gate complete (March 21, 2026). Evaluation Framework complete (Sprint 27.5 — MultiObjectiveResult, EnsembleResult, Pareto comparison API, slippage model). Regime Intelligence complete (Sprint 27.6 — RegimeVector 6-dimension, 4 calculators, V2 classifier, RegimeHistoryStore, Observatory wiring). Next: Sprint 27.7 (Counterfactual Engine) → Sprint 28 (Learning Loop V1).
+**Current state:** Sprint 27.65 complete. 3,412 pytest + 633 Vitest. Seven active strategies (4 original + R2G, Bull Flag, Flat-Top from Sprint 26) with per-candle evaluation telemetry. Sprint 27.65 (impromptu) added critical Order Manager safety: flatten-pending guard (DEC-363), graceful shutdown order cancellation (DEC-364), periodic position reconciliation (DEC-365), bracket amendment on fill slippage (DEC-366), optional concurrent position limits for paper trading (DEC-367), and IntradayCandleStore for queryable intraday bars + pattern strategy backfill (DEC-368). Real-time P&L via WebSocket. R2G prior_close initialization fixed. Observatory pipeline format aligned. `scripts/ibkr_close_all_positions.py` for emergency cleanup. PatternModule ABC established for composable pattern detection. BacktestEngine operational with all 7 strategy types, walk-forward integration, CLI entry point, and risk_overrides for single-strategy backtesting (DEC-359). ExecutionRecord logging captures expected vs actual fill prices for slippage model calibration (DEC-358 §5.1). DEC-132 PARTIALLY RESOLVED — pipeline proven end-to-end with Databento data, Bull Flag validated (Sharpe 2.78), 6 strategies pending full-universe re-validation. Live Databento + IBKR paper trading with 28+ trades across 4 sessions. Eight-page Command Center (Observatory added Sprint 25) + AI Copilot active. FMP Scanner + Universe Manager integrated. Autonomous Sprint Runner implemented (DEC-278–297). NLP Catalyst Pipeline complete (DEC-300–307). Setup Quality Engine + Dynamic Position Sizer complete (DEC-330–341). Strategy Observability complete (DEC-342). Phase 5 Gate complete (March 21, 2026). Evaluation Framework complete (Sprint 27.5 — MultiObjectiveResult, EnsembleResult, Pareto comparison API, slippage model). Regime Intelligence complete (Sprint 27.6 — RegimeVector 6-dimension, 4 calculators, V2 classifier, RegimeHistoryStore, Observatory wiring). Counterfactual Engine complete (Sprint 27.7 — shadow position tracking, filter accuracy, shadow strategy mode, +105 tests). Next: Sprint 28 (Learning Loop V1).
 
 ---
 
@@ -377,19 +377,20 @@ API auth 401 for unauthenticated requests (DEC-351). Close-position endpoint rou
 
 **Dependencies:** Sprint 27.5 (RegimeMetrics designed for multi-dimensional vectors) ✅.
 
-### Sprint 27.7: Counterfactual Engine (DEC-358)
-**Target:** ~2 days (4 sessions)
+### Sprint 27.7: Counterfactual Engine (DEC-358) ✅ COMPLETE (March 25, 2026)
 
-**Scope:**
-- **CounterfactualTracker** — intercepts every rejected signal from Quality Engine, Risk Manager, and strategy conditions. Records theoretical position (entry, stop, target, time stop, rejection reason, quality score, regime vector).
-- **Shadow position monitoring** — uses existing Databento candle stream (symbols already in viable universe). Fill priority matches BacktestEngine exactly: stop > target > time_stop > EOD.
-- **CounterfactualStore** — SQLite persistence in `data/counterfactual.db`. ~1KB per position, ~5 MB/day at scale.
-- **FilterAccuracy** computation — per-stage, per-reason, per-grade, per-regime accuracy metrics. Answers: "Is the quality filter too aggressive at B grade?" "Which condition is the weakest filter?" "Which regime niches are underserved?"
-- **API:** `GET /api/v1/counterfactual/accuracy`.
-- **Config-gated** via `counterfactual.enabled`.
-- **Tests:** ~50 new.
+**Actual:** 1 day (6 sessions + 1 cleanup). +105 tests (target ~50). 0 new DECs (reserved 379–385 unused — all patterns followed established precedent).
 
-**Dependencies:** Sprint 27.5 (counterfactual outcomes feed MultiObjectiveResult), Sprint 27.6 (positions tagged with RegimeVector). Existing evaluation telemetry and Databento stream.
+**Delivered:**
+- **TheoreticalFillModel** (`core/fill_model.py`) — shared bar-level exit logic extracted from BacktestEngine. `FillExitReason` enum, `ExitResult` dataclass, `evaluate_bar_exit()` pure function. Used by both BacktestEngine and CounterfactualTracker.
+- **CounterfactualTracker** (`intelligence/counterfactual.py`) — intercepts `SignalRejectedEvent` via event bus, opens shadow positions with IntradayCandleStore backfill, monitors via `CandleEvent` using shared fill model, MAE/MFE tracking, EOD close + no-data timeout. `RejectionStage` enum (QUALITY_FILTER, POSITION_SIZER, RISK_MANAGER, SHADOW). Zero-R guard.
+- **CounterfactualStore** (`intelligence/counterfactual_store.py`) — SQLite in `data/counterfactual.db` (DEC-345 pattern), WAL mode, fire-and-forget writes, 90-day retention.
+- **SignalRejectedEvent** (`core/events.py`) — published from 3 points in `_process_signal()`, gated by `_counterfactual_enabled` flag.
+- **FilterAccuracy** (`intelligence/filter_accuracy.py`) — per-stage/reason/grade/regime/strategy accuracy. `GET /api/v1/counterfactual/accuracy` (JWT-protected).
+- **Shadow strategy mode** — `StrategyMode` enum (LIVE/SHADOW) in `base_strategy.py`, shadow routing bypasses quality pipeline and risk manager. All 7 strategy YAMLs updated with explicit `mode: live`.
+- **Config-gated** via `counterfactual.enabled` in `config/counterfactual.yaml`.
+
+**Dependencies:** Sprint 27.5 ✅, Sprint 27.6 ✅. Existing evaluation telemetry and Databento stream.
 
 ### Sprint 28: Learning Loop V1 (DEC-163, DEC-354)
 **Target:** ~3 days
