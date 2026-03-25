@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from argus.ai.config import AIConfig
 from argus.analytics.config import ObservatoryConfig
 from argus.core.regime import RegimeOperatingConditions
-from argus.intelligence.config import CatalystConfig, QualityEngineConfig
+from argus.intelligence.config import CatalystConfig, CounterfactualConfig, QualityEngineConfig
 
 # ---------------------------------------------------------------------------
 # Enums
@@ -266,6 +266,8 @@ class SystemConfig(BaseModel):
     observatory: ObservatoryConfig = Field(default_factory=ObservatoryConfig)
     # Regime Intelligence configuration (Sprint 27.6 — multi-dimensional regime)
     regime_intelligence: RegimeIntelligenceConfig = Field(default_factory=RegimeIntelligenceConfig)
+    # Counterfactual Engine configuration (Sprint 27.7 — shadow position tracking)
+    counterfactual: CounterfactualConfig = Field(default_factory=CounterfactualConfig)
 
     @field_validator("timezone")
     @classmethod

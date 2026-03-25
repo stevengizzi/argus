@@ -231,6 +231,22 @@ class QualityRiskTiersConfig(BaseModel):
         return self
 
 
+class CounterfactualConfig(BaseModel):
+    """Configuration for the Counterfactual Engine (Sprint 27.7).
+
+    Attributes:
+        enabled: Whether counterfactual tracking is active.
+        retention_days: Days of history to keep in the store.
+        no_data_timeout_seconds: Seconds before expiring a position with no data.
+        eod_close_time: Market close time in HH:MM format (ET).
+    """
+
+    enabled: bool = True
+    retention_days: int = 90
+    no_data_timeout_seconds: int = 300
+    eod_close_time: str = "16:00"
+
+
 class QualityEngineConfig(BaseModel):
     """Configuration for the SetupQualityEngine and DynamicPositionSizer.
 
