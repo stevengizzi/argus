@@ -16,6 +16,33 @@ Before making any changes:
    Expected: all passing (Session 3a close-out confirmed full suite)
 3. Verify you are on branch `main` or `sprint-27.7`
 
+## Carry-Forward Fixes (from S1 Review)
+
+Before starting the main S3b work, apply these two fixes in `argus/intelligence/counterfactual.py`:
+
+**F-01 — Zero-R skip guard in `track()`:**
+After the empty `target_prices` guard (the `if not signal.target_prices:` block) and before opening the position, add:
+```python
+if signal.entry_price == signal.stop_price:
+    logger.warning(
+        "Zero-R signal skipped for counterfactual tracking: %s %s",
+        signal.strategy_id, signal.symbol,
+    )
+    return None
+```
+
+**F-03 — quality_score falsy check:**
+Find the line (approximately line 228):
+```python
+quality_score=signal.quality_score if signal.quality_score else None,
+```
+Replace with:
+```python
+quality_score=signal.quality_score if signal.quality_score is not None else None,
+```
+
+Both are one-line defensive fixes flagged by the S1 Tier 2 reviewer. Commit them together as a separate commit before the main S3b work, or include them in the S3b commit — either is fine. Add a test for F-01: call `track()` with a signal where `entry_price == stop_price`, verify it returns None and no position is opened.
+
 ## Objective
 Wire the Counterfactual Engine into the running ARGUS process: build tracker+store in the startup factory, register event bus subscriptions (SignalRejectedEvent → tracker, CandleEvent → tracker), schedule the EOD cleanup task, add counterfactual config to system YAML files, and flip the `_counterfactual_enabled` flag.
 
