@@ -12,6 +12,7 @@ from argus.api.routes.auth import router as auth_router
 from argus.api.routes.briefings import router as briefings_router
 from argus.api.routes.config import router as config_router
 from argus.api.routes.controls import router as controls_router
+from argus.api.routes.counterfactual import router as counterfactual_router
 from argus.api.routes.dashboard import router as dashboard_router
 from argus.api.routes.debrief_search import router as debrief_search_router
 from argus.api.routes.documents import router as documents_router
@@ -55,3 +56,6 @@ api_router.include_router(ai_router, prefix="/ai", tags=["ai"])
 api_router.include_router(universe_router, prefix="/universe", tags=["universe"])
 api_router.include_router(intelligence_router, tags=["intelligence"])
 api_router.include_router(quality_router, prefix="/quality", tags=["quality"])
+api_router.include_router(
+    counterfactual_router, prefix="/counterfactual", tags=["counterfactual"]
+)

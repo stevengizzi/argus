@@ -910,6 +910,7 @@ class ArgusSystem:
                     universe_manager=self._universe_manager,
                     telemetry_store=self._eval_store,
                     candle_store=self._candle_store,
+                    counterfactual_store=self._counterfactual_store,
                 )
 
                 # Start ActionManager cleanup task if AI is enabled

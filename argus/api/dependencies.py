@@ -42,6 +42,7 @@ if TYPE_CHECKING:
     from argus.intelligence.storage import CatalystStorage
     from argus.strategies.base_strategy import BaseStrategy
     from argus.data.intraday_candle_store import IntradayCandleStore
+    from argus.intelligence.counterfactual_store import CounterfactualStore
     from argus.strategies.telemetry_store import EvaluationEventStore
 
 
@@ -114,6 +115,7 @@ class AppState:
     telemetry_store: EvaluationEventStore | None = None
     observatory_service: ObservatoryService | None = None
     candle_store: IntradayCandleStore | None = None
+    counterfactual_store: CounterfactualStore | None = None
 
 
 def get_app_state(request: Request) -> AppState:
