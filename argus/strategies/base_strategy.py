@@ -15,6 +15,7 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
+from enum import StrEnum
 from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
@@ -37,6 +38,13 @@ if TYPE_CHECKING:
     from argus.analytics.trade_logger import TradeLogger
 
 logger = logging.getLogger(__name__)
+
+
+class StrategyMode(StrEnum):
+    """Operating mode for a strategy (Sprint 27.7)."""
+
+    LIVE = "live"      # Normal execution — signals go through quality + risk pipeline
+    SHADOW = "shadow"  # Shadow mode — signals routed to CounterfactualTracker
 
 
 class BaseStrategy(ABC):

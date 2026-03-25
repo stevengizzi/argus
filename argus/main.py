@@ -1259,6 +1259,23 @@ class ArgusSystem:
             signal: The SignalEvent emitted by a strategy.
             strategy: The strategy instance that emitted the signal.
         """
+        # Shadow mode routing (Sprint 27.7)
+        strategy_mode = getattr(
+            getattr(strategy, 'config', None), 'mode', 'live'
+        )
+        if strategy_mode == "shadow":
+            if self._counterfactual_enabled:
+                regime_snapshot = self._capture_regime_snapshot()
+                await self._event_bus.publish(SignalRejectedEvent(
+                    signal=signal,
+                    rejection_reason="Shadow mode — signal tracked counterfactually, not executed",
+                    rejection_stage="SHADOW",
+                    quality_score=None,
+                    quality_grade=None,
+                    regime_vector_snapshot=regime_snapshot,
+                ))
+            return
+
         config = self._config
         bypass = (
             config.system.broker_source == BrokerSource.SIMULATED

@@ -587,6 +587,7 @@ class StrategyConfig(BaseModel):
     name: str
     version: str = "1.0.0"
     enabled: bool = True
+    mode: str = "live"  # StrategyMode — "live" or "shadow" (Sprint 27.7)
     asset_class: str = "us_stocks"
     pipeline_stage: str = "concept"
     family: str = "uncategorized"

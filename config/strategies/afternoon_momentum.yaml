@@ -2,6 +2,7 @@ strategy_id: "strat_afternoon_momentum"
 name: "Afternoon Momentum"
 version: "1.0.0"
 enabled: true
+mode: live  # "live" or "shadow" (Sprint 27.7)
 asset_class: "us_stocks"
 pipeline_stage: "paper_trading"
 family: "momentum"
