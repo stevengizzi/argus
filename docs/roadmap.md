@@ -173,10 +173,10 @@ FMP Starter plan ($22/mo) activated. Dynamic pre-market symbol selection via gai
 - BacktestEngine risk_overrides mechanism for single-strategy backtesting (DEC-359)
 - VectorBT dual file naming support, symbol auto-detection from cache
 - Revalidation harness script (`scripts/revalidate_strategy.py`)
-- **DEC-132 PARTIALLY RESOLVED:** Pipeline proven end-to-end. Bull Flag validated (Sharpe 2.78, 57.5% WR, PF 1.55). 6 strategies require full-universe re-validation (3,000–4,000 symbols) — 28-symbol results are preliminary, not production-representative.
+- **DEC-132 data blocker removed:** Full-universe Parquet cache populated March 2026 (24,321 symbols, 153 months, 3 datasets). Pipeline proven end-to-end, Bull Flag validated (Sharpe 2.78). 6 strategies pending full-universe re-validation runs.
 - **Tests:** 3,010 → 3,051 (+41 pytest)
 
-**Prerequisites for full DEC-132 resolution:** Full-universe historical data cache population (3,000–4,000 symbols × 23+ months of Databento OHLCV-1m data). No automated download process exists. Required for production-representative backtesting in Sprints 28+ (Learning Loop) and 33+ (Statistical Validation).
+**Prerequisites for full DEC-132 resolution:** ~~Full-universe historical data cache population.~~ **RESOLVED** (March 2026): `scripts/populate_historical_cache.py` populated 24,321 symbols × 153 months across EQUS.MINI + XNAS.ITCH + XNYS.PILLAR (44.73 GB on external drive). Production-representative backtesting now available for Sprints 28+ (Learning Loop) and 33+ (Statistical Validation). Pass `--cache-dir /Volumes/LaCie/argus-cache` to CLI tools.
 
 ### Sprint 22: AI Layer MVP + Copilot Activation (DEC-096, DEC-098, DEC-170)
 **Target:** ~3–4 days
@@ -328,7 +328,7 @@ API auth 401 for unauthenticated requests (DEC-351). Close-position endpoint rou
 
 **Delivered:**
 - **SynchronousEventBus** (`argus/core/sync_event_bus.py`): Sequential event dispatch with same interface as async EventBus. Enables deterministic, single-threaded backtesting.
-- **HistoricalDataFeed** (`argus/backtest/historical_data_feed.py`): Databento OHLCV-1m download with `metadata.get_cost()` pre-validation and Parquet cache. XNAS.ITCH + XNYS.TRADES datasets (March 2023 – present).
+- **HistoricalDataFeed** (`argus/backtest/historical_data_feed.py`): Databento OHLCV-1m download with `metadata.get_cost()` pre-validation and Parquet cache. EQUS.MINI (Apr 2023 – present), XNAS.ITCH + XNYS.PILLAR (May 2018 – Mar 2023). Full-universe cache: 24,321 symbols, 153 months, 44.73 GB on external drive. Population script: `scripts/populate_historical_cache.py`.
 - **BacktestEngine** (`argus/backtest/engine.py`): Production-code backtesting engine running real strategy code. Bar-level fill model with worst-case-for-longs priority (stop > target > time_stop > EOD). Multi-day orchestration with scanner simulation. Strategy factory for all 7 strategy types. CLI entry point.
 - **Walk-forward integration**: `oos_engine` parameter on `walk_forward.py` selects BacktestEngine vs Replay Harness for OOS evaluation.
 - **6 sessions** (S1–S6), all CLEAR. 85 new pytest tests. No new DEC entries.

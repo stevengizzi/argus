@@ -1618,6 +1618,42 @@
 
 ---
 
+## Data Infrastructure — Full-Universe Cache Population (March 25–26, 2026)
+
+**Type:** Infrastructure work (not a formal sprint — scripting + background download)
+**Origin:** A-series items from data infrastructure spec. A7 investigation confirmed Databento ALL_SYMBOLS downloads at $0 cost, ~6.4 min/month. Full download completed overnight.
+
+**Script:** `scripts/populate_historical_cache.py`
+- ALL_SYMBOLS per-month downloads (35 API calls for EQUS.MINI, 59 each for XNAS.ITCH + XNYS.PILLAR)
+- Per-month: download → resolve symbology via `request_symbology(client)` → split by symbol → normalize to ARGUS schema → write `{SYMBOL}/{YYYY-MM}.parquet`
+- XNYS.PILLAR overlap skipping: symbols already covered by XNAS.ITCH are skipped
+- Retry logic (3 attempts with backoff) for streaming errors
+- Manifest tracking (`cache_manifest.json`) with per-month metadata
+- Resumable: skips months already in manifest
+- `--update` mode for monthly incremental downloads
+
+**Results:**
+- EQUS.MINI: 35 months (Apr 2023 – Feb 2026), ~11,000 symbols/month
+- XNAS.ITCH: 59 months (May 2018 – Mar 2023), ~8,000–12,000 symbols/month
+- XNYS.PILLAR: 59 months (May 2018 – Mar 2023), ~500–90 new symbols/month (overlap-skipped ~95%)
+- Total: 153 months, 44.73 GB, 24,321 unique symbols
+- Cache location: `/Volumes/LaCie/argus-cache` (external drive)
+- Download time: ~23 hours (1 streaming error retried successfully, 0 data loss)
+- Cost: $0.00
+
+**A-series resolution:**
+- A1 (bulk download): ✅ `populate_historical_cache.py`
+- A2 (continuous maintenance): `--update` mode built; cron not yet scheduled (DEF-097)
+- A3 (download optimization): ✅ Solved — ALL_SYMBOLS eliminates per-symbol API calls
+- A4 (storage planning): ✅ External drive, 500 GB free
+- A5 (XNAS.ITCH + XNYS.PILLAR): ✅ Included in this download
+- A6 (cache integrity): ✅ Manifest + per-file validation
+- A7 (rate limits + cost): ✅ Investigation confirmed $0, no rate limit issues
+
+**DEC-132 status:** Data blocker removed. Full-universe re-validation can proceed.
+
+---
+
 ## Sprint Statistics
 
 - **Total sprints:** 28 full + 29 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9, 27.5, 27.6, 27.65)
