@@ -15,9 +15,16 @@ import logging
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any, Optional, Protocol
 
 import pandas as pd
+
+from argus.data.vix_config import (
+    TermStructureRegime,
+    VolRegimeMomentum,
+    VolRegimePhase,
+    VRPTier,
+)
 
 if TYPE_CHECKING:
     from argus.core.breadth import BreadthCalculator as BreadthCalcImpl
@@ -141,6 +148,13 @@ class RegimeVector:
     direction_change_count: int | None = None
     intraday_character: str | None = None  # "trending", "choppy", "reversal", "breakout"
 
+    # Dimension 7: VIX Landscape (Sprint 27.9)
+    vol_regime_phase: Optional[VolRegimePhase] = None
+    vol_regime_momentum: Optional[VolRegimeMomentum] = None
+    term_structure_regime: Optional[TermStructureRegime] = None
+    variance_risk_premium: Optional[VRPTier] = None
+    vix_close: Optional[float] = None
+
     # Backward compatibility + confidence
     primary_regime: MarketRegime = MarketRegime.RANGE_BOUND
     regime_confidence: float = 0.5
@@ -169,6 +183,11 @@ class RegimeVector:
             "vwap_slope": self.vwap_slope,
             "direction_change_count": self.direction_change_count,
             "intraday_character": self.intraday_character,
+            "vol_regime_phase": self.vol_regime_phase.value if self.vol_regime_phase is not None else None,
+            "vol_regime_momentum": self.vol_regime_momentum.value if self.vol_regime_momentum is not None else None,
+            "term_structure_regime": self.term_structure_regime.value if self.term_structure_regime is not None else None,
+            "variance_risk_premium": self.variance_risk_premium.value if self.variance_risk_premium is not None else None,
+            "vix_close": self.vix_close,
             "primary_regime": self.primary_regime.value,
             "regime_confidence": self.regime_confidence,
         }
@@ -201,6 +220,11 @@ class RegimeVector:
             vwap_slope=data.get("vwap_slope"),
             direction_change_count=data.get("direction_change_count"),
             intraday_character=data.get("intraday_character"),
+            vol_regime_phase=VolRegimePhase(data["vol_regime_phase"]) if data.get("vol_regime_phase") is not None else None,
+            vol_regime_momentum=VolRegimeMomentum(data["vol_regime_momentum"]) if data.get("vol_regime_momentum") is not None else None,
+            term_structure_regime=TermStructureRegime(data["term_structure_regime"]) if data.get("term_structure_regime") is not None else None,
+            variance_risk_premium=VRPTier(data["variance_risk_premium"]) if data.get("variance_risk_premium") is not None else None,
+            vix_close=float(data["vix_close"]) if data.get("vix_close") is not None else None,
             primary_regime=MarketRegime(data["primary_regime"]),
             regime_confidence=float(data["regime_confidence"]),
         )
@@ -252,6 +276,23 @@ class RegimeVector:
             if field_value not in constraint:
                 return False
 
+        # VIX landscape enum checks (Sprint 27.9): condition None → skip,
+        # vector None → match (match-any from vector side),
+        # both non-None → compare equality.
+        vix_enum_checks: list[tuple[StrEnum | None, StrEnum | None]] = [
+            (self.vol_regime_phase, conditions.vol_regime_phase),
+            (self.vol_regime_momentum, conditions.vol_regime_momentum),
+            (self.term_structure_regime, conditions.term_structure_regime),
+            (self.variance_risk_premium, conditions.variance_risk_premium),
+        ]
+        for field_value, constraint in vix_enum_checks:
+            if constraint is None:
+                continue
+            if field_value is None:
+                continue  # match-any from vector side
+            if field_value != constraint:
+                return False
+
         return True
 
 
@@ -290,6 +331,12 @@ class RegimeOperatingConditions:
     correlation_regime: list[str] | None = None
     sector_rotation_phase: list[str] | None = None
     intraday_character: list[str] | None = None
+
+    # VIX landscape enum constraints (Sprint 27.9)
+    vol_regime_phase: Optional[VolRegimePhase] = None
+    vol_regime_momentum: Optional[VolRegimeMomentum] = None
+    term_structure_regime: Optional[TermStructureRegime] = None
+    variance_risk_premium: Optional[VRPTier] = None
 
 
 class BreadthCalculator(Protocol):

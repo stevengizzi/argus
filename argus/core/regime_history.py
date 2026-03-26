@@ -81,9 +81,9 @@ class RegimeHistoryStore:
         self._last_warning_time: float = 0.0
 
     async def initialize(self) -> None:
-        """Create table, indexes, and run retention cleanup.
+        """Create table, indexes, migrate schema, and run retention cleanup.
 
-        Safe to call multiple times (CREATE IF NOT EXISTS).
+        Safe to call multiple times (CREATE IF NOT EXISTS + idempotent migration).
         """
         Path(self._db_path).parent.mkdir(parents=True, exist_ok=True)
         self._db = await aiosqlite.connect(self._db_path)
@@ -94,6 +94,9 @@ class RegimeHistoryStore:
         await self._db.execute(_CREATE_IDX_REGIME_DATE)
         await self._db.commit()
 
+        # Schema migration: add vix_close column if missing (Sprint 27.9)
+        await self._migrate_add_vix_close()
+
         # 7-day retention cleanup
         await self._cleanup_old_records()
 
@@ -103,11 +106,17 @@ class RegimeHistoryStore:
             await self._db.close()
             self._db = None
 
-    async def record(self, regime_vector: RegimeVector) -> None:
+    async def record(
+        self,
+        regime_vector: RegimeVector,
+        vix_close: float | None = None,
+    ) -> None:
         """Write a RegimeVector snapshot. Fire-and-forget with rate-limited warning.
 
         Args:
             regime_vector: The RegimeVector to persist.
+            vix_close: Optional VIX closing price to store alongside the snapshot.
+                Falls back to regime_vector.vix_close if not provided explicitly.
         """
         try:
             if self._db is None:
@@ -125,6 +134,9 @@ class RegimeHistoryStore:
             if regime_vector.breadth_thrust is not None:
                 breadth_thrust_int = 1 if regime_vector.breadth_thrust else 0
 
+            # Use explicit vix_close if provided, else fall back to vector field
+            effective_vix_close = vix_close if vix_close is not None else regime_vector.vix_close
+
             await self._db.execute(
                 """
                 INSERT INTO regime_snapshots (
@@ -134,8 +146,8 @@ class RegimeHistoryStore:
                     universe_breadth_score, breadth_thrust,
                     avg_correlation, correlation_regime,
                     sector_rotation_phase, intraday_character,
-                    regime_vector_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    regime_vector_json, vix_close
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     row_id,
@@ -154,6 +166,7 @@ class RegimeHistoryStore:
                     regime_vector.sector_rotation_phase,
                     regime_vector.intraday_character,
                     vector_json,
+                    effective_vix_close,
                 ),
             )
             await self._db.commit()
@@ -255,6 +268,26 @@ class RegimeHistoryStore:
             "avg_confidence": round(avg_confidence, 4),
             "snapshot_count": len(rows),
         }
+
+    async def _migrate_add_vix_close(self) -> None:
+        """Add vix_close column if it doesn't exist (Sprint 27.9 migration).
+
+        Idempotent: safe to call multiple times. Uses PRAGMA table_info
+        to check for the column before running ALTER TABLE.
+        """
+        if self._db is None:
+            return
+
+        cursor = await self._db.execute("PRAGMA table_info(regime_snapshots)")
+        columns = await cursor.fetchall()
+        column_names = {row[1] for row in columns}
+
+        if "vix_close" not in column_names:
+            await self._db.execute(
+                "ALTER TABLE regime_snapshots ADD COLUMN vix_close REAL"
+            )
+            await self._db.commit()
+            logger.info("RegimeHistoryStore: migrated schema — added vix_close column")
 
     async def _cleanup_old_records(self) -> None:
         """Delete records older than 7 days."""
