@@ -30,6 +30,7 @@ export { PreMarketLayout } from './PreMarketLayout';
 export { UniverseStatusCard } from './UniverseStatusCard';
 export { QualityDistributionCard } from './QualityDistributionCard';
 export { SignalQualityPanel } from './SignalQualityPanel';
+export { VixRegimeCard } from './VixRegimeCard';
 
 // Skeleton exports
 export {

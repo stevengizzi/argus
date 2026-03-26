@@ -48,6 +48,7 @@ import type {
   ObservatoryClosestMissesResponse,
   ObservatorySessionSummaryResponse,
   UniverseStatusResponse,
+  VixCurrentResponse,
   WatchlistResponse,
 } from './types';
 
@@ -743,4 +744,10 @@ export async function getObservatorySessionSummary(
   return fetchWithAuth<ObservatorySessionSummaryResponse>(
     `/observatory/session-summary${query}`
   );
+}
+
+// --- VIX Regime (Sprint 27.9) ---
+
+export async function getVixCurrent(): Promise<VixCurrentResponse> {
+  return fetchWithAuth<VixCurrentResponse>('/vix/current');
 }

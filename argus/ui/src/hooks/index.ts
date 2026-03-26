@@ -77,6 +77,9 @@ export { useUniverseStatus } from './useUniverseStatus';
 // Pipeline status hook (Sprint 23.9)
 export { usePipelineStatus } from './usePipelineStatus';
 
+// VIX Regime hooks (Sprint 27.9)
+export { useVixData } from './useVixData';
+
 // Intelligence hooks (Sprint 23.5)
 export {
   useCatalystsBySymbol,

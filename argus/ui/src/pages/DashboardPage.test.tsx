@@ -28,6 +28,7 @@ vi.mock('../features/dashboard', () => ({
   PreMarketLayout: () => <div data-testid="PreMarketLayout" />,
   UniverseStatusCard: () => <div data-testid="UniverseStatusCard" />,
   SignalQualityPanel: () => <div data-testid="SignalQualityPanel" />,
+  VixRegimeCard: () => null, // Returns null when VIX disabled (default mock state)
 }));
 
 vi.mock('../features/watchlist', () => ({

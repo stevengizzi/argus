@@ -791,3 +791,27 @@ export interface EvaluationEvent {
   metadata: Record<string, unknown>;
 }
 
+// VIX Regime (Sprint 27.9)
+export interface VixRegimeData {
+  vol_regime_phase: string | null;
+  vol_regime_momentum: string | null;
+  term_structure_regime: string | null;
+  vrp_tier: string | null;
+}
+
+export interface VixCurrentResponse {
+  status: 'ok' | 'stale' | 'unavailable';
+  message?: string;
+  data_date?: string;
+  vix_close?: number;
+  vol_of_vol_ratio?: number;
+  vix_percentile?: number;
+  term_structure_proxy?: number;
+  realized_vol_20d?: number;
+  variance_risk_premium?: number;
+  regime?: VixRegimeData;
+  is_stale?: boolean;
+  last_updated?: string;
+  timestamp: string;
+}
+

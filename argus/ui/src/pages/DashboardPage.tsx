@@ -50,6 +50,7 @@ import {
   PreMarketLayout,
   UniverseStatusCard,
   SignalQualityPanel,
+  VixRegimeCard,
 } from '../features/dashboard';
 import { WatchlistSidebar } from '../features/watchlist';
 import { staggerContainer, staggerItem, staggerItemWithChildren } from '../utils/motion';
@@ -124,6 +125,9 @@ export function DashboardPage() {
             <StrategyDeploymentBar />
           </motion.div>
 
+          {/* VIX Regime card — returns null when VIX disabled/unavailable */}
+          <VixRegimeCard />
+
           {/* Session summary card - shows after market close with trades */}
           <SessionSummaryCard />
 
@@ -177,6 +181,9 @@ export function DashboardPage() {
           <motion.div variants={staggerItem}>
             <StrategyDeploymentBar />
           </motion.div>
+
+          {/* VIX Regime card — returns null when VIX disabled/unavailable */}
+          <VixRegimeCard />
 
           <SessionSummaryCard />
 
@@ -269,6 +276,9 @@ export function DashboardPage() {
         <motion.div variants={staggerItem}>
           <StrategyDeploymentBar />
         </motion.div>
+
+        {/* VIX Regime card — returns null when VIX disabled/unavailable */}
+        <VixRegimeCard />
 
         <SessionSummaryCard />
 
