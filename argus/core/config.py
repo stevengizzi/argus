@@ -162,15 +162,6 @@ class HealthConfig(BaseModel):
         return os.environ.get(self.alert_webhook_url_env, "")
 
 
-class StartupConfig(BaseModel):
-    """Configuration for startup behavior (Sprint 27.95 S4).
-
-    Controls how ARGUS handles unknown broker positions at startup.
-    """
-
-    flatten_unknown_positions: bool = True
-
-
 class ReconciliationConfig(BaseModel):
     """Configuration for position reconciliation (Sprint 27.8 + 27.95).
 
@@ -298,8 +289,6 @@ class SystemConfig(BaseModel):
     counterfactual: CounterfactualConfig = Field(default_factory=CounterfactualConfig)
     # VIX Regime configuration (Sprint 27.9 — VIX landscape dimension)
     vix_regime: VixRegimeConfig = Field(default_factory=VixRegimeConfig)
-    # Startup behavior configuration (Sprint 27.95 S4 — zombie cleanup)
-    startup: StartupConfig = Field(default_factory=StartupConfig)
     # Reconciliation configuration (Sprint 27.8 + 27.95 — ghost position fix)
     reconciliation: ReconciliationConfig = Field(default_factory=ReconciliationConfig)
     # Overflow management configuration (Sprint 27.95 — signal overflow routing)

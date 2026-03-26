@@ -22,12 +22,7 @@ from datetime import datetime, time
 from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
 
-from argus.core.config import (
-    BrokerSource,
-    OrderManagerConfig,
-    ReconciliationConfig,
-    StartupConfig,
-)
+from argus.core.config import BrokerSource, OrderManagerConfig, ReconciliationConfig
 from argus.core.event_bus import EventBus
 from argus.core.events import (
     CircuitBreakerEvent,
@@ -160,7 +155,6 @@ class OrderManager:
         broker_source: BrokerSource = BrokerSource.SIMULATED,
         auto_cleanup_orphans: bool = False,
         reconciliation_config: ReconciliationConfig | None = None,
-        startup_config: StartupConfig | None = None,
     ) -> None:
         """Initialize the Order Manager.
 
@@ -176,7 +170,6 @@ class OrderManager:
                 positions (internal_qty > 0, broker_qty == 0). Deprecated — use
                 reconciliation_config.auto_cleanup_orphans instead.
             reconciliation_config: Typed reconciliation settings (Sprint 27.95).
-            startup_config: Startup behavior settings (Sprint 27.95 S4).
         """
         self._event_bus = event_bus
         self._broker = broker
@@ -189,8 +182,6 @@ class OrderManager:
         self._reconciliation_config = reconciliation_config or ReconciliationConfig(
             auto_cleanup_orphans=auto_cleanup_orphans,
         )
-        # Startup config (Sprint 27.95 S4)
-        self._startup_config = startup_config or StartupConfig()
 
         # Active positions: keyed by symbol (list to support multiple positions)
         self._managed_positions: dict[str, list[ManagedPosition]] = {}
@@ -1275,14 +1266,12 @@ class OrderManager:
         before a restart.
 
         1. Query broker for all open positions.
-        2. For each position, check if symbol exists in ARGUS internal tracking.
-           - Known positions: reconstruct as ManagedPosition.
-           - Unknown positions: flatten (if configured) or warn.
-        3. Query broker for all open orders (for known positions).
-        4. For each known position, create a ManagedPosition with:
+        2. Query broker for all open orders.
+        3. For each position, create a ManagedPosition with:
            - Entry price from broker position data.
            - Stop price from any matching stop order.
            - T1/T2 inferred from stop orders and limit orders.
+        4. Subscribe to TickEvents for these symbols.
 
         Limitations:
         - Cannot reconstruct exact entry_time (not available from broker).
@@ -1296,227 +1285,111 @@ class OrderManager:
         """
         try:
             positions = await self._broker.get_positions()
-        except Exception as e:
-            logger.warning(
-                "IBKR portfolio query failed at startup — skipping zombie cleanup: %s",
-                e,
-            )
-            return
 
-        if not positions:
-            logger.info("Order Manager reconstruction: No open positions at broker.")
-            return
+            if not positions:
+                logger.info("Order Manager reconstruction: No open positions at broker.")
+                return
 
-        try:
             orders = await self._broker.get_open_orders()
-        except Exception as e:
-            logger.warning("Failed to query open orders during reconstruction: %s", e)
-            orders = []
 
-        logger.info(
-            "Reconstructing from %d positions and %d open orders at broker",
-            len(positions),
-            len(orders),
-        )
+            logger.info(
+                "Reconstructing %d positions and %d open orders from broker",
+                len(positions),
+                len(orders),
+            )
 
-        # Build order lookup by symbol
-        orders_by_symbol: dict[str, list[object]] = {}
-        for order in orders:
-            symbol = getattr(order, "symbol", "")
-            if symbol:
-                if symbol not in orders_by_symbol:
-                    orders_by_symbol[symbol] = []
-                orders_by_symbol[symbol].append(order)
+            # Build order lookup by symbol
+            orders_by_symbol: dict[str, list] = {}
+            for order in orders:
+                symbol = getattr(order, "symbol", "")
+                if symbol:
+                    if symbol not in orders_by_symbol:
+                        orders_by_symbol[symbol] = []
+                    orders_by_symbol[symbol].append(order)
 
-        # Classify positions: "managed" (has bracket orders) vs "zombie" (no orders).
-        # ARGUS always places bracket orders (stop + targets) for managed positions.
-        # A position WITH associated orders was being actively managed before restart.
-        # A position with NO orders is an orphan/zombie from a prior session.
-        # Also check _managed_positions in case upstream phases pre-populated state.
-        managed_count = 0
-        zombie_count = 0
-        for pos in positions:
-            symbol = getattr(pos, "symbol", str(pos))
-            qty = int(getattr(pos, "qty", 0))
+            for pos in positions:
+                symbol = getattr(pos, "symbol", str(pos))
+                qty = int(getattr(pos, "qty", 0))
+                avg_entry = float(getattr(pos, "avg_entry_price", 0.0))
 
-            has_orders = bool(orders_by_symbol.get(symbol, []))
-            already_known = symbol in self._managed_positions
+                # Find matching stop order
+                stop_price = 0.0
+                stop_order_id = None
+                symbol_orders = orders_by_symbol.get(symbol, [])
+                for order in symbol_orders:
+                    order_type = str(getattr(order, "order_type", "")).lower()
+                    if "stop" in order_type:
+                        stop_price = float(getattr(order, "stop_price", 0) or 0)
+                        stop_order_id = str(getattr(order, "id", ""))
+                        break
 
-            if has_orders or already_known:
-                # Managed position — reconstruct it
-                self._reconstruct_known_position(pos, orders_by_symbol)
-                managed_count += 1
-            elif self._startup_config.flatten_unknown_positions:
-                # Zombie position with no orders — flatten
-                await self._flatten_unknown_position(symbol, qty)
-                zombie_count += 1
-            else:
-                # Zombie but flatten disabled — warn and create RECO entry
-                logger.warning(
-                    "Unknown IBKR position at startup: %s (%d shares) "
-                    "— manual cleanup required",
+                # Find matching limit order (T1)
+                t1_price = 0.0
+                t1_order_id = None
+                t1_shares = 0
+                for order in symbol_orders:
+                    order_type = str(getattr(order, "order_type", "")).lower()
+                    if "limit" in order_type:
+                        t1_price = float(getattr(order, "limit_price", 0) or 0)
+                        t1_order_id = str(getattr(order, "id", ""))
+                        t1_shares = int(getattr(order, "qty", 0) or 0)
+                        break
+
+                managed = ManagedPosition(
+                    symbol=symbol,
+                    strategy_id="reconstructed",
+                    entry_price=avg_entry,
+                    entry_time=self._clock.now(),  # Approximation
+                    shares_total=qty,
+                    shares_remaining=qty,
+                    stop_price=stop_price,
+                    original_stop_price=stop_price,  # Best approximation on reconstruct
+                    stop_order_id=stop_order_id,
+                    t1_price=t1_price,
+                    t1_order_id=t1_order_id,
+                    t1_shares=t1_shares,
+                    t1_filled=(t1_order_id is None and t1_shares == 0),
+                    t2_price=0.0,  # Unknown — position rides to stop or EOD
+                    high_watermark=avg_entry,
+                )
+
+                if symbol not in self._managed_positions:
+                    self._managed_positions[symbol] = []
+                self._managed_positions[symbol].append(managed)
+
+                # Track the stop and T1 orders in pending orders
+                if stop_order_id:
+                    self._pending_orders[stop_order_id] = PendingManagedOrder(
+                        order_id=stop_order_id,
+                        symbol=symbol,
+                        strategy_id="reconstructed",
+                        order_type="stop",
+                        shares=qty,
+                    )
+                if t1_order_id:
+                    self._pending_orders[t1_order_id] = PendingManagedOrder(
+                        order_id=t1_order_id,
+                        symbol=symbol,
+                        strategy_id="reconstructed",
+                        order_type="t1_target",
+                        shares=t1_shares,
+                    )
+
+                logger.info(
+                    "Reconstructed position: %s %d shares @ %.2f (stop=%.2f)",
                     symbol,
                     qty,
+                    avg_entry,
+                    stop_price,
                 )
-                self._create_reco_position(symbol, qty, pos)
-                zombie_count += 1
 
-        logger.info(
-            "Order Manager reconstruction complete: %d positions recovered, "
-            "%d zombies handled",
-            managed_count,
-            zombie_count,
-        )
-
-    async def _flatten_unknown_position(self, symbol: str, qty: int) -> None:
-        """Submit a market SELL order to close an unknown broker position.
-
-        Args:
-            symbol: The ticker symbol.
-            qty: Number of shares to sell.
-        """
-        try:
-            sell_order = Order(
-                strategy_id="startup_cleanup",
-                symbol=symbol,
-                side=OrderSide.SELL,
-                order_type=TradingOrderType.MARKET,
-                quantity=abs(qty),
-            )
-            await self._broker.place_order(sell_order)
             logger.info(
-                "Startup cleanup: flattened unknown position %s (%d shares)",
-                symbol,
-                abs(qty),
+                "Order Manager reconstruction complete: %d positions recovered",
+                len(positions),
             )
+
         except Exception as e:
-            logger.error(
-                "Startup cleanup: failed to flatten %s (%d shares): %s",
-                symbol,
-                abs(qty),
-                e,
-            )
-
-    def _create_reco_position(
-        self, symbol: str, qty: int, pos: object
-    ) -> None:
-        """Create a reconstructed ManagedPosition for UI visibility.
-
-        Used when flatten_unknown_positions is disabled — preserves the
-        existing RECO behavior so operators can see the position.
-
-        Args:
-            symbol: The ticker symbol.
-            qty: Number of shares.
-            pos: The broker position object.
-        """
-        avg_entry = float(getattr(pos, "avg_entry_price", 0.0))
-        managed = ManagedPosition(
-            symbol=symbol,
-            strategy_id="reconstructed",
-            entry_price=avg_entry,
-            entry_time=self._clock.now(),
-            shares_total=abs(qty),
-            shares_remaining=abs(qty),
-            stop_price=0.0,
-            original_stop_price=0.0,
-            stop_order_id=None,
-            t1_price=0.0,
-            t1_order_id=None,
-            t1_shares=0,
-            t1_filled=True,
-            t2_price=0.0,
-            high_watermark=avg_entry,
-        )
-        if symbol not in self._managed_positions:
-            self._managed_positions[symbol] = []
-        self._managed_positions[symbol].append(managed)
-
-    def _reconstruct_known_position(
-        self,
-        pos: object,
-        orders_by_symbol: dict[str, list[object]],
-    ) -> None:
-        """Reconstruct a single known position from broker state.
-
-        Args:
-            pos: The broker position object.
-            orders_by_symbol: Lookup of open orders keyed by symbol.
-        """
-        symbol = getattr(pos, "symbol", str(pos))
-        qty = int(getattr(pos, "qty", 0))
-        avg_entry = float(getattr(pos, "avg_entry_price", 0.0))
-
-        # Find matching stop order
-        stop_price = 0.0
-        stop_order_id = None
-        symbol_orders = orders_by_symbol.get(symbol, [])
-        for order in symbol_orders:
-            order_type = str(getattr(order, "order_type", "")).lower()
-            if "stop" in order_type:
-                stop_price = float(getattr(order, "stop_price", 0) or 0)
-                stop_order_id = str(getattr(order, "id", ""))
-                break
-
-        # Find matching limit order (T1)
-        t1_price = 0.0
-        t1_order_id = None
-        t1_shares = 0
-        for order in symbol_orders:
-            order_type = str(getattr(order, "order_type", "")).lower()
-            if "limit" in order_type:
-                t1_price = float(getattr(order, "limit_price", 0) or 0)
-                t1_order_id = str(getattr(order, "id", ""))
-                t1_shares = int(getattr(order, "qty", 0) or 0)
-                break
-
-        managed = ManagedPosition(
-            symbol=symbol,
-            strategy_id="reconstructed",
-            entry_price=avg_entry,
-            entry_time=self._clock.now(),  # Approximation
-            shares_total=qty,
-            shares_remaining=qty,
-            stop_price=stop_price,
-            original_stop_price=stop_price,  # Best approximation on reconstruct
-            stop_order_id=stop_order_id,
-            t1_price=t1_price,
-            t1_order_id=t1_order_id,
-            t1_shares=t1_shares,
-            t1_filled=(t1_order_id is None and t1_shares == 0),
-            t2_price=0.0,  # Unknown — position rides to stop or EOD
-            high_watermark=avg_entry,
-        )
-
-        if symbol not in self._managed_positions:
-            self._managed_positions[symbol] = []
-        self._managed_positions[symbol].append(managed)
-
-        # Track the stop and T1 orders in pending orders
-        if stop_order_id:
-            self._pending_orders[stop_order_id] = PendingManagedOrder(
-                order_id=stop_order_id,
-                symbol=symbol,
-                strategy_id="reconstructed",
-                order_type="stop",
-                shares=qty,
-            )
-        if t1_order_id:
-            self._pending_orders[t1_order_id] = PendingManagedOrder(
-                order_id=t1_order_id,
-                symbol=symbol,
-                strategy_id="reconstructed",
-                order_type="t1_target",
-                shares=t1_shares,
-            )
-
-        logger.info(
-            "Reconstructed position: %s %d shares @ %.2f (stop=%.2f)",
-            symbol,
-            qty,
-            avg_entry,
-            stop_price,
-        )
+            logger.error("Order Manager reconstruction failed: %s", e)
             # Don't crash — system can still manage new positions
 
     # ---------------------------------------------------------------------------

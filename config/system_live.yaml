@@ -171,11 +171,6 @@ overflow:
   enabled: true
   broker_capacity: 30
 
-# Startup behavior (Sprint 27.95 S4 — Zombie Cleanup)
-# Controls handling of unknown IBKR positions found at startup.
-startup:
-  flatten_unknown_positions: true  # Sell unknown IBKR positions at startup
-
 # Reconciliation (Sprint 27.8 + 27.95 — Ghost Position Fix)
 reconciliation:
   auto_cleanup_orphans: true

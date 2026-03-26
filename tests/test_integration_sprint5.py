@@ -313,7 +313,7 @@ class TestOrderManagerIntegration:
             config=config,
         )
 
-        # Reconstruct (AAPL has a stop order → classified as managed)
+        # Reconstruct
         await order_manager.reconstruct_from_broker()
 
         # Verify position was recovered
