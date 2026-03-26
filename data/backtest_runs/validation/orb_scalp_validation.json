@@ -2,36 +2,38 @@
   "strategy": "orb_scalp",
   "strategy_type": "orb_scalp",
   "date_range": {
-    "start": "2023-04-01",
-    "end": "2025-03-01"
+    "start": "2018-06-01",
+    "end": "2026-03-01"
   },
   "data_source": "databento_ohlcv_1m",
   "engine": "backtest_engine",
   "baseline": {
-    "source": "alpaca_provisional",
-    "oos_sharpe": null,
-    "wfe_pnl": null,
-    "total_trades": 20880,
-    "data_months": 35
-  },
-  "new_results": {
-    "oos_sharpe": -5.332498289089498,
-    "wfe_pnl": -0.3536711834593948,
-    "wfe_sharpe": -1.484017433549851,
-    "total_oos_trades": 390,
-    "avg_win_rate": 0.4705,
-    "avg_profit_factor": 0.7055,
-    "total_windows": 9,
-    "valid_windows": 9,
+    "source": "databento_ohlcv_1m",
+    "oos_sharpe": -5.33,
+    "wfe_pnl": -0.35,
+    "total_trades": 390,
     "data_months": 23
   },
+  "new_results": {
+    "oos_sharpe": -8.852845663241741,
+    "wfe_pnl": -1.9396902388499504,
+    "wfe_sharpe": -18.354441050533083,
+    "total_oos_trades": 2949,
+    "avg_win_rate": 0.3762,
+    "avg_profit_factor": 0.4366,
+    "total_windows": 44,
+    "valid_windows": 44,
+    "data_months": 93
+  },
   "divergence": {
-    "sharpe_diff": null,
-    "wfe_diff": null,
+    "sharpe_diff": 3.522845663241741,
+    "wfe_diff": 1.5896902388499505,
     "win_rate_diff": null,
     "profit_factor_diff": null,
-    "flagged": false,
-    "flags": []
+    "flagged": true,
+    "flags": [
+      "sharpe_divergence"
+    ]
   },
   "status": "WFE_BELOW_THRESHOLD",
   "walk_forward_available": true,

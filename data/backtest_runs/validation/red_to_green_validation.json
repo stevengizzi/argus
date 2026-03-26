@@ -2,17 +2,17 @@
   "strategy": "red_to_green",
   "strategy_type": "red_to_green",
   "date_range": {
-    "start": "2023-04-01",
-    "end": "2025-03-01"
+    "start": "2018-06-01",
+    "end": "2026-03-01"
   },
   "data_source": "databento_ohlcv_1m",
   "engine": "backtest_engine",
   "baseline": {
-    "source": "provisional_alpaca",
+    "source": "databento_ohlcv_1m",
     "oos_sharpe": null,
     "wfe_pnl": null,
-    "total_trades": null,
-    "data_months": null
+    "total_trades": 0,
+    "data_months": 23
   },
   "new_results": {
     "oos_sharpe": 0.0,
@@ -23,7 +23,7 @@
     "avg_profit_factor": 0.0,
     "total_windows": 1,
     "valid_windows": 1,
-    "data_months": 23
+    "data_months": 93
   },
   "divergence": {
     "sharpe_diff": null,

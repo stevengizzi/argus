@@ -2,28 +2,28 @@
   "strategy": "afternoon_momentum",
   "strategy_type": "afternoon_momentum",
   "date_range": {
-    "start": "2023-04-01",
-    "end": "2025-03-01"
+    "start": "2018-06-01",
+    "end": "2026-03-01"
   },
   "data_source": "databento_ohlcv_1m",
   "engine": "backtest_engine",
   "baseline": {
-    "source": "alpaca_provisional",
+    "source": "databento_ohlcv_1m",
     "oos_sharpe": null,
     "wfe_pnl": null,
-    "total_trades": null,
-    "data_months": 35
+    "total_trades": 0,
+    "data_months": 23
   },
   "new_results": {
-    "oos_sharpe": 0.0,
+    "oos_sharpe": -3.5096472644422443,
     "wfe_pnl": 0.0,
     "wfe_sharpe": 0.0,
-    "total_oos_trades": 0,
-    "avg_win_rate": 0.0,
+    "total_oos_trades": 13,
+    "avg_win_rate": 0.0455,
     "avg_profit_factor": 0.0,
-    "total_windows": 9,
-    "valid_windows": 9,
-    "data_months": 23
+    "total_windows": 44,
+    "valid_windows": 44,
+    "data_months": 93
   },
   "divergence": {
     "sharpe_diff": null,
@@ -33,7 +33,7 @@
     "flagged": false,
     "flags": []
   },
-  "status": "ZERO_TRADES",
+  "status": "WFE_BELOW_THRESHOLD",
   "walk_forward_available": true,
   "notes": ""
 }
