@@ -165,6 +165,10 @@ counterfactual:
   no_data_timeout_seconds: 300
   eod_close_time: "16:00"
 
+# Reconciliation (Sprint 27.8 — Ghost Position Fix)
+reconciliation:
+  auto_cleanup_orphans: true
+
 # Observatory (Sprint 25 — The Observatory)
 # Immersive pipeline visualization page for operational visibility.
 observatory:

@@ -50,6 +50,7 @@ class ExitReason(StrEnum):
     MANUAL = "manual"
     CIRCUIT_BREAKER = "circuit_breaker"
     EMERGENCY = "emergency"
+    RECONCILIATION = "reconciliation"
 
 
 class CircuitBreakerLevel(StrEnum):

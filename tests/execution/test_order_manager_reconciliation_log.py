@@ -32,7 +32,8 @@ def order_manager() -> OrderManager:
     return om
 
 
-def test_reconciliation_summary_single_line(
+@pytest.mark.asyncio
+async def test_reconciliation_summary_single_line(
     order_manager: OrderManager, caplog: pytest.LogCaptureFixture
 ) -> None:
     """Multiple mismatches produce a single consolidated WARNING."""
@@ -40,7 +41,7 @@ def test_reconciliation_summary_single_line(
     broker_positions = {"AAPL": 100.0, "TSLA": 50.0, "NVDA": 25.0, "AMD": 10.0}
 
     with caplog.at_level(logging.WARNING):
-        discrepancies = order_manager.reconcile_positions(broker_positions)
+        discrepancies = await order_manager.reconcile_positions(broker_positions)
 
     assert len(discrepancies) == 4
 
@@ -53,14 +54,15 @@ def test_reconciliation_summary_single_line(
     assert "..." in warning_messages[0]
 
 
-def test_reconciliation_detail_at_debug(
+@pytest.mark.asyncio
+async def test_reconciliation_detail_at_debug(
     order_manager: OrderManager, caplog: pytest.LogCaptureFixture
 ) -> None:
     """Per-symbol mismatch detail is logged at DEBUG level."""
     broker_positions = {"AAPL": 100.0, "TSLA": 50.0}
 
     with caplog.at_level(logging.DEBUG):
-        discrepancies = order_manager.reconcile_positions(broker_positions)
+        discrepancies = await order_manager.reconcile_positions(broker_positions)
 
     assert len(discrepancies) == 2
 
@@ -72,13 +74,14 @@ def test_reconciliation_detail_at_debug(
     assert len(tsla_debug) >= 1
 
 
-def test_reconciliation_no_warning_when_synced(
+@pytest.mark.asyncio
+async def test_reconciliation_no_warning_when_synced(
     order_manager: OrderManager, caplog: pytest.LogCaptureFixture
 ) -> None:
     """No WARNING emitted when positions are in sync (no mismatches)."""
     # Empty broker positions, no internal positions → synced
     with caplog.at_level(logging.WARNING):
-        discrepancies = order_manager.reconcile_positions({})
+        discrepancies = await order_manager.reconcile_positions({})
 
     assert len(discrepancies) == 0
     warning_messages = [r.message for r in caplog.records if r.levelno == logging.WARNING]

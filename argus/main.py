@@ -661,32 +661,13 @@ class ArgusSystem:
         )
 
         # Per-strategy health components
-        self._health_monitor.update_component(
-            "strategy_orb_breakout", ComponentStatus.HEALTHY, "ORB Breakout running"
-        )
-        if scalp_strategy is not None:
+        for strategy_id, strategy in strategies.items():
+            status = ComponentStatus.HEALTHY if strategy.is_active else ComponentStatus.DEGRADED
+            label = "active" if strategy.is_active else "regime-filtered"
             self._health_monitor.update_component(
-                "strategy_orb_scalp", ComponentStatus.HEALTHY, "ORB Scalp running"
-            )
-        if vwap_reclaim_strategy is not None:
-            self._health_monitor.update_component(
-                "strategy_vwap_reclaim", ComponentStatus.HEALTHY, "VWAP Reclaim running"
-            )
-        if afternoon_strategy is not None:
-            self._health_monitor.update_component(
-                "strategy_afternoon_momentum", ComponentStatus.HEALTHY, "Afternoon Momentum running"
-            )
-        if r2g_strategy is not None:
-            self._health_monitor.update_component(
-                "strategy_red_to_green", ComponentStatus.HEALTHY, "Red-to-Green running"
-            )
-        if bull_flag_strategy is not None:
-            self._health_monitor.update_component(
-                "strategy_bull_flag", ComponentStatus.HEALTHY, "Bull Flag running"
-            )
-        if flat_top_strategy is not None:
-            self._health_monitor.update_component(
-                "strategy_flat_top_breakout", ComponentStatus.HEALTHY, "Flat-Top Breakout running"
+                f"strategy_{strategy_id}",
+                status,
+                message=f"{strategy.config.name} {label}",
             )
 
         # Store strategies reference for candle routing
@@ -724,6 +705,16 @@ class ArgusSystem:
 
         order_manager_config = OrderManagerConfig(**order_manager_yaml)
 
+        # Read reconciliation config (dict-style, no Pydantic model needed)
+        system_yaml_path = (
+            self._system_config_file
+            if self._system_config_file is not None
+            else self._config_dir / "system.yaml"
+        )
+        system_raw = load_yaml_file(system_yaml_path)
+        reconciliation_yaml = system_raw.get("reconciliation", {})
+        auto_cleanup = reconciliation_yaml.get("auto_cleanup_orphans", False)
+
         self._order_manager = OrderManager(
             event_bus=self._event_bus,
             broker=self._broker,
@@ -732,6 +723,7 @@ class ArgusSystem:
             trade_logger=self._trade_logger,
             db_manager=self._db,
             broker_source=self._config.system.broker_source,
+            auto_cleanup_orphans=auto_cleanup,
         )
         await self._order_manager.start()
         # Reconstruct open positions from broker
@@ -1147,7 +1139,7 @@ class ArgusSystem:
                         if symbol and qty != 0:
                             broker_positions[symbol] = qty
 
-                    discrepancies = self._order_manager.reconcile_positions(
+                    discrepancies = await self._order_manager.reconcile_positions(
                         broker_positions
                     )
                     if discrepancies:

@@ -1154,14 +1154,17 @@ class TestQualityEngineConfigWiring:
         assert config.quality_engine.enabled is False
 
     def test_quality_engine_risk_tiers_loaded_from_yaml(self) -> None:
-        """Risk tiers from YAML match expected values."""
+        """Risk tiers from YAML preserve ordering invariant (A+ > A > B+ > B > C+)."""
         yaml_path = Path("config/quality_engine.yaml")
         if not yaml_path.exists():
             pytest.skip("quality_engine.yaml not present")
 
         raw = yaml.safe_load(yaml_path.read_text())
         config = QualityEngineConfig(**raw)
-        # Paper-trading values (10x reduction from live)
-        assert config.risk_tiers.a_plus == [0.002, 0.003]
-        assert config.risk_tiers.b == [0.0005, 0.00075]
-        assert config.risk_tiers.c_plus == [0.00025, 0.00025]
+        # Assert tiers are ordered: A+ > A > B+ > B > C+ (all positive)
+        assert config.risk_tiers.a_plus[1] > 0  # A+ max is positive
+        assert max(config.risk_tiers.a_plus) > max(config.risk_tiers.a)  # A+ max > A max
+        assert max(config.risk_tiers.a) >= max(config.risk_tiers.b_plus)  # A max >= B+ max
+        assert max(config.risk_tiers.b_plus) >= max(config.risk_tiers.b)  # B+ max >= B max
+        assert max(config.risk_tiers.b) >= max(config.risk_tiers.c_plus)  # B max >= C+ max
+        assert min(config.risk_tiers.c_plus) > 0  # C+ min is positive (not zero)

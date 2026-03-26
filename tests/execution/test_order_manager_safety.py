@@ -414,7 +414,7 @@ async def test_reconciliation_detects_mismatch(
     # Broker reports AAPL=200 shares (mismatch)
     broker_positions: dict[str, float] = {"AAPL": 200.0}
 
-    discrepancies = order_manager.reconcile_positions(broker_positions)
+    discrepancies = await order_manager.reconcile_positions(broker_positions)
 
     assert len(discrepancies) == 1
     assert discrepancies[0]["symbol"] == "AAPL"
@@ -434,7 +434,7 @@ async def test_reconciliation_synced(
     # Broker reports matching position
     broker_positions: dict[str, float] = {"AAPL": 100.0}
 
-    discrepancies = order_manager.reconcile_positions(broker_positions)
+    discrepancies = await order_manager.reconcile_positions(broker_positions)
 
     assert len(discrepancies) == 0
     result = order_manager.last_reconciliation
@@ -450,7 +450,7 @@ async def test_reconciliation_detects_broker_only_position(
     await order_manager.start()
 
     broker_positions: dict[str, float] = {"TSLA": 50.0}
-    discrepancies = order_manager.reconcile_positions(broker_positions)
+    discrepancies = await order_manager.reconcile_positions(broker_positions)
 
     assert len(discrepancies) == 1
     assert discrepancies[0]["symbol"] == "TSLA"
@@ -547,7 +547,7 @@ async def test_reconciliation_no_auto_correct(
     positions_before = order_manager.get_all_positions_flat()
     shares_before = positions_before[0].shares_remaining
 
-    order_manager.reconcile_positions(broker_positions)
+    await order_manager.reconcile_positions(broker_positions)
 
     # State must be unchanged
     positions_after = order_manager.get_all_positions_flat()
@@ -1015,7 +1015,7 @@ async def test_reconciliation_result_typed(
     await _open_position(order_manager)
 
     broker_positions: dict[str, float] = {"AAPL": 200.0}
-    order_manager.reconcile_positions(broker_positions)
+    await order_manager.reconcile_positions(broker_positions)
 
     result = order_manager.last_reconciliation
     assert result is not None

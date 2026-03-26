@@ -153,6 +153,7 @@ class OrderManager:
         trade_logger: Any | None = None,
         db_manager: Any | None = None,
         broker_source: BrokerSource = BrokerSource.SIMULATED,
+        auto_cleanup_orphans: bool = False,
     ) -> None:
         """Initialize the Order Manager.
 
@@ -164,6 +165,8 @@ class OrderManager:
             trade_logger: Optional TradeLogger for persistence.
             db_manager: Optional DatabaseManager for execution record persistence.
             broker_source: Broker type, used to skip amendment for SimulatedBroker.
+            auto_cleanup_orphans: When True, reconciliation auto-closes orphaned
+                positions (internal_qty > 0, broker_qty == 0).
         """
         self._event_bus = event_bus
         self._broker = broker
@@ -172,6 +175,7 @@ class OrderManager:
         self._trade_logger = trade_logger
         self._db_manager = db_manager
         self._broker_source = broker_source
+        self._auto_cleanup_orphans = auto_cleanup_orphans
 
         # Active positions: keyed by symbol (list to support multiple positions)
         self._managed_positions: dict[str, list[ManagedPosition]] = {}
@@ -463,6 +467,22 @@ class OrderManager:
                         pending.symbol,
                     )
                     await self._submit_stop_order(pos, pos.shares_remaining, pos.stop_price)
+                    break
+
+        if pending.order_type == "t1_target":
+            # Clear T1 order ID on the position
+            positions = self._managed_positions.get(pending.symbol, [])
+            for pos in positions:
+                if pos.t1_order_id == event.order_id:
+                    pos.t1_order_id = None
+                    # Check bracket exhaustion: all bracket legs gone
+                    if pos.stop_order_id is None and pos.t1_order_id is None:
+                        logger.warning(
+                            "All bracket legs cancelled for %s — "
+                            "position unprotected, attempting flatten",
+                            pending.symbol,
+                        )
+                        await self._flatten_position(pos, reason="bracket_exhausted")
                     break
 
     async def on_tick(self, event: TickEvent) -> None:
@@ -1598,12 +1618,14 @@ class OrderManager:
             result.extend(positions)
         return result
 
-    def reconcile_positions(
+    async def reconcile_positions(
         self, broker_positions: dict[str, float]
     ) -> list[dict[str, object]]:
         """Compare internal positions against broker-reported positions.
 
-        Warn-only — does NOT auto-correct. Returns a list of discrepancies.
+        Detects discrepancies and logs warnings. When auto_cleanup_orphans
+        is enabled, closes orphaned positions (internal_qty > 0, broker_qty == 0)
+        with ExitReason.RECONCILIATION.
 
         Args:
             broker_positions: Dict of {symbol: quantity} from broker.
@@ -1649,6 +1671,32 @@ class OrderManager:
                 preview,
                 suffix,
             )
+
+        # Auto-cleanup orphaned positions (internal > 0, broker == 0)
+        if self._auto_cleanup_orphans and discrepancies:
+            orphans_to_clean: list[ManagedPosition] = []
+            for d in discrepancies:
+                if int(d["internal_qty"]) > 0 and int(d["broker_qty"]) == 0:  # type: ignore[arg-type]
+                    sym = str(d["symbol"])
+                    for pos in self._managed_positions.get(sym, []):
+                        if not pos.is_fully_closed:
+                            orphans_to_clean.append(pos)
+
+            for pos in orphans_to_clean:
+                pos.shares_remaining = 0
+                pos.realized_pnl = 0.0
+                logger.warning(
+                    "Reconciliation cleanup: closed orphaned position %s "
+                    "(%d shares, strategy=%s)",
+                    pos.symbol,
+                    pos.shares_total,
+                    pos.strategy_id,
+                )
+                await self._close_position(
+                    pos,
+                    exit_price=pos.entry_price,
+                    exit_reason=ExitReason.RECONCILIATION,
+                )
 
         self._last_reconciliation = ReconciliationResult(
             timestamp=self._clock.now().isoformat(),

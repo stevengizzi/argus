@@ -215,6 +215,8 @@ def test_risk_overrides_applied(tmp_path: Path) -> None:
 
 def test_risk_overrides_empty_uses_production(tmp_path: Path) -> None:
     """Empty risk_overrides preserves production YAML values."""
+    import yaml
+
     config = BacktestEngineConfig(
         start_date=date(2025, 6, 16),
         end_date=date(2025, 6, 20),
@@ -225,10 +227,15 @@ def test_risk_overrides_empty_uses_production(tmp_path: Path) -> None:
     engine = BacktestEngine(config)
     risk_config = engine._load_risk_config(Path("config"))
 
-    # Values from config/risk_limits.yaml (currently paper-trading: 10.0)
-    assert risk_config.account.min_position_risk_dollars == 10.0
-    assert risk_config.account.cash_reserve_pct == 0.20
-    assert risk_config.cross_strategy.max_single_stock_pct == 0.05
+    # Read expected values from YAML — test is config-value-independent
+    raw = yaml.safe_load(Path("config/risk_limits.yaml").read_text())
+    yaml_min_risk = raw.get("account", {}).get("min_position_risk_dollars")
+    yaml_cash_reserve = raw.get("account", {}).get("cash_reserve_pct")
+    yaml_max_stock = raw.get("cross_strategy", {}).get("max_single_stock_pct")
+
+    assert risk_config.account.min_position_risk_dollars == yaml_min_risk
+    assert risk_config.account.cash_reserve_pct == yaml_cash_reserve
+    assert risk_config.cross_strategy.max_single_stock_pct == yaml_max_stock
 
 
 def test_risk_overrides_partial(tmp_path: Path) -> None:
@@ -254,6 +261,10 @@ def test_risk_overrides_unknown_key_warns(
     tmp_path: Path, caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Unknown override keys log a warning but don't crash."""
+    import logging
+
+    import yaml
+
     config = BacktestEngineConfig(
         start_date=date(2025, 6, 16),
         end_date=date(2025, 6, 20),
@@ -263,10 +274,11 @@ def test_risk_overrides_unknown_key_warns(
     )
     engine = BacktestEngine(config)
 
-    import logging
     with caplog.at_level(logging.WARNING):
         risk_config = engine._load_risk_config(Path("config"))
 
     assert "Unknown risk override key: bogus.field" in caplog.text
-    # Config still loads successfully with values from risk_limits.yaml (currently paper-trading: 10.0)
-    assert risk_config.account.min_position_risk_dollars == 10.0
+    # Config still loads successfully — verify it matches YAML
+    raw = yaml.safe_load(Path("config/risk_limits.yaml").read_text())
+    yaml_min_risk = raw.get("account", {}).get("min_position_risk_dollars")
+    assert risk_config.account.min_position_risk_dollars == yaml_min_risk
