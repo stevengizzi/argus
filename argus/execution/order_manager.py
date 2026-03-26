@@ -206,6 +206,17 @@ class OrderManager:
         self._running: bool = False
         self._flattened_today: bool = False
 
+        # Stop resubmission retry counter: {symbol: count} (Sprint 27.95 S2)
+        self._stop_retry_count: dict[str, int] = {}
+
+        # Amended bracket prices: {symbol: (stop, t1, t2)} for revision-rejected
+        self._amended_prices: dict[str, tuple[float, float, float]] = {}
+
+        # Fill deduplication: {order_id: last_cumulative_filled_qty}
+        self._last_fill_state: dict[str, float] = {}
+        # Reverse index: {symbol: set(order_ids)} for cleanup on position close
+        self._fill_order_ids_by_symbol: dict[str, set[str]] = {}
+
         # P&L update throttle: {symbol: last_publish_monotonic} (Sprint 27.65 S4)
         self._pnl_last_published: dict[str, float] = {}
         self._pnl_throttle_seconds: float = 1.0
@@ -419,11 +430,32 @@ class OrderManager:
         b) T1 fill → move stop to breakeven, update position
         c) Stop fill → position closed (full or partial)
         d) Flatten fill → position closed
+
+        Includes duplicate fill deduplication: if the same order_id reports
+        the same cumulative filled quantity twice, the second callback is ignored.
         """
+        # Duplicate fill deduplication (Sprint 27.95 S2)
+        order_id = event.order_id
+        cumulative_qty = float(event.fill_quantity)
+        last_qty = self._last_fill_state.get(order_id)
+        if last_qty is not None and cumulative_qty == last_qty:
+            logger.debug(
+                "Duplicate fill callback ignored: order %s cumulative %s",
+                order_id,
+                cumulative_qty,
+            )
+            return
+        self._last_fill_state[order_id] = cumulative_qty
+
         pending = self._pending_orders.pop(event.order_id, None)
         if pending is None:
             logger.debug("Fill for unknown order_id %s, ignoring", event.order_id)
             return
+
+        # Track order→symbol mapping for fill dedup cleanup on position close
+        if pending.symbol not in self._fill_order_ids_by_symbol:
+            self._fill_order_ids_by_symbol[pending.symbol] = set()
+        self._fill_order_ids_by_symbol[pending.symbol].add(order_id)
 
         if pending.order_type == "entry":
             await self._handle_entry_fill(pending, event)
@@ -467,18 +499,21 @@ class OrderManager:
                     event.order_id,
                 )
 
+        # Revision-rejected detection: IBKR may reject bracket amendments
+        is_revision_rejected = "Revision rejected" in (event.reason or "")
+
+        if pending.order_type in ("stop", "t1_target", "t2") and is_revision_rejected:
+            # Bracket amendment was rejected — resubmit as fresh order (not retry flow)
+            await self._handle_revision_rejected(pending, event)
+            return
+
         if pending.order_type == "stop":
             # Critical: position may be unprotected
             positions = self._managed_positions.get(pending.symbol, [])
             for pos in positions:
                 if pos.stop_order_id == event.order_id:
                     pos.stop_order_id = None
-                    # Try to resubmit stop
-                    logger.warning(
-                        "Stop order cancelled for %s. Resubmitting.",
-                        pending.symbol,
-                    )
-                    await self._submit_stop_order(pos, pos.shares_remaining, pos.stop_price)
+                    await self._resubmit_stop_with_retry(pos)
                     break
 
         if pending.order_type == "t1_target":
@@ -539,6 +574,102 @@ class OrderManager:
 
         # Publish throttled P&L updates for open positions (Sprint 27.65 S4)
         await self._publish_position_pnl(event.symbol, event.price)
+
+    async def _resubmit_stop_with_retry(self, position: ManagedPosition) -> None:
+        """Resubmit a cancelled stop order with retry tracking and backoff.
+
+        Increments per-symbol retry counter. If max retries exceeded, triggers
+        emergency flatten. Uses exponential backoff (1s, 2s, 4s) between retries.
+
+        Args:
+            position: The position whose stop was cancelled.
+        """
+        symbol = position.symbol
+        count = self._stop_retry_count.get(symbol, 0) + 1
+        self._stop_retry_count[symbol] = count
+
+        if count > self._config.stop_retry_max:
+            logger.error(
+                "Stop resubmission exhausted for %s after %d attempts "
+                "— triggering emergency flatten",
+                symbol,
+                count,
+            )
+            await self._flatten_position(position, reason="stop_retry_exhausted")
+            return
+
+        # Exponential backoff: 2^(count-1) seconds → 1s, 2s, 4s
+        backoff = 2 ** (count - 1)
+        logger.warning(
+            "Stop order cancelled for %s. Retry %d/%d (backoff %ds).",
+            symbol,
+            count,
+            self._config.stop_retry_max,
+            backoff,
+        )
+        await asyncio.sleep(backoff)
+        await self._submit_stop_order(position, position.shares_remaining, position.stop_price)
+
+    async def _handle_revision_rejected(
+        self, pending: PendingManagedOrder, event: OrderCancelledEvent
+    ) -> None:
+        """Handle IBKR 'Revision rejected' cancel by submitting a fresh order.
+
+        When IBKR rejects a bracket amendment (modify-in-place), we resubmit
+        the order as brand-new instead of entering the normal retry flow.
+        If the fresh order also fails, it enters the stop retry flow.
+
+        Args:
+            pending: The cancelled pending order.
+            event: The cancellation event with reason.
+        """
+        symbol = pending.symbol
+        positions = self._managed_positions.get(symbol, [])
+
+        logger.info(
+            "Bracket amendment rejected for %s — resubmitting as fresh order",
+            symbol,
+        )
+
+        if pending.order_type == "stop":
+            for pos in positions:
+                if pos.stop_order_id == event.order_id:
+                    pos.stop_order_id = None
+                    # Use amended prices if available, otherwise current position prices
+                    amended = self._amended_prices.get(symbol)
+                    stop_price = amended[0] if amended else pos.stop_price
+                    try:
+                        await self._submit_stop_order(
+                            pos, pos.shares_remaining, stop_price,
+                        )
+                    except Exception:
+                        logger.warning(
+                            "Fresh stop order failed for %s after revision rejected "
+                            "— entering retry flow",
+                            symbol,
+                        )
+                        await self._resubmit_stop_with_retry(pos)
+                    break
+
+        elif pending.order_type == "t1_target":
+            for pos in positions:
+                if pos.t1_order_id == event.order_id:
+                    pos.t1_order_id = None
+                    amended = self._amended_prices.get(symbol)
+                    t1_price = amended[1] if amended else pos.t1_price
+                    await self._submit_t1_order(pos, pos.t1_shares, t1_price)
+                    break
+
+        elif pending.order_type == "t2":
+            for pos in positions:
+                if pos.t2_order_id == event.order_id:
+                    pos.t2_order_id = None
+                    amended = self._amended_prices.get(symbol)
+                    t2_price = amended[2] if amended else pos.t2_price
+                    t2_shares = pos.shares_remaining - pos.t1_shares
+                    if t2_shares > 0:
+                        await self._submit_t2_order(pos, t2_shares, t2_price)
+                    break
 
     async def _publish_position_pnl(self, symbol: str, current_price: float) -> None:
         """Compute and publish unrealized P&L for open positions on a symbol.
@@ -789,6 +920,9 @@ class OrderManager:
         position.stop_price = new_stop
         position.t1_price = new_t1
         position.t2_price = new_t2
+
+        # Store amended prices for revision-rejected resubmission (Sprint 27.95 S2)
+        self._amended_prices[position.symbol] = (new_stop, new_t1, new_t2)
 
         await self._submit_stop_order(position, position.shares_remaining, new_stop)
 
@@ -1526,6 +1660,12 @@ class OrderManager:
             # Clean up reconciliation tracking when no positions remain for symbol
             self._broker_confirmed.pop(position.symbol, None)
             self._reconciliation_miss_count.pop(position.symbol, None)
+            # Clean up stop retry, amended prices, and fill dedup state (Sprint 27.95 S2)
+            self._stop_retry_count.pop(position.symbol, None)
+            self._amended_prices.pop(position.symbol, None)
+            # Clean fill dedup entries via reverse index
+            for oid in self._fill_order_ids_by_symbol.pop(position.symbol, set()):
+                self._last_fill_state.pop(oid, None)
 
         logger.info(
             "Position closed: %s | PnL: %.2f | Reason: %s | Hold: %ds",
@@ -1572,6 +1712,10 @@ class OrderManager:
         self._broker_confirmed.clear()
         self._reconciliation_miss_count.clear()
         self._last_reconciliation = None
+        self._stop_retry_count.clear()
+        self._amended_prices.clear()
+        self._last_fill_state.clear()
+        self._fill_order_ids_by_symbol.clear()
 
     @property
     def has_open_positions(self) -> bool:

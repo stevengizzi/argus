@@ -676,7 +676,7 @@ class OrderManagerConfig(BaseModel):
     max_position_duration_minutes: int = Field(default=120, ge=1)  # Hard time stop
     entry_timeout_seconds: int = Field(default=30, ge=1)
     t1_position_pct: float = Field(default=0.5, gt=0, le=1.0)  # 50% at T1
-    stop_retry_max: int = Field(default=1, ge=0)
+    stop_retry_max: int = Field(default=3, ge=0)  # Max stop cancel retries before flatten
     auto_shutdown_after_eod: bool = True  # Gracefully shutdown after EOD flatten
     auto_shutdown_delay_seconds: int = Field(default=60, ge=0)  # Delay before shutdown
 
