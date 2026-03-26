@@ -18,6 +18,12 @@
 - Wrote 11 tests instead of the minimum 5: The spec listed 5 test scenarios but the validators and edge cases naturally produced additional test methods within those scenarios.
 - `get_latest_daily()` returns stale data with `vix_close` preserved but derived metrics as None (per spec), rather than returning None entirely. Returns None only when no data exists at all.
 
+### Post-Review Fixes
+Tier 2 review (CONCERNS) identified enum naming divergence from sprint spec. Fixed:
+- `VolRegimePhase.ELEVATED` → `VOL_EXPANSION` (per spec)
+- `VolRegimeMomentum.RISING/FALLING/STABLE` → `STABILIZING/NEUTRAL/DETERIORATING` (per spec)
+- `TermStructureRegime` expanded from 3 members (CONTANGO/FLAT/BACKWARDATION) to 4 (CONTANGO_LOW/CONTANGO_HIGH/BACKWARDATION_LOW/BACKWARDATION_HIGH) per spec
+
 ### Scope Verification
 | Spec Requirement | Status | Implementation |
 |-----------------|--------|----------------|

@@ -20,28 +20,38 @@ from pydantic import BaseModel, Field, model_validator
 
 
 class VolRegimePhase(StrEnum):
-    """Volatility regime phase classification."""
+    """Volatility regime phase classification.
+
+    Position in vol-of-vol phase space (σ_short/σ_long, VIX_percentile).
+    """
 
     CALM = "calm"
     TRANSITION = "transition"
-    ELEVATED = "elevated"
+    VOL_EXPANSION = "vol_expansion"
     CRISIS = "crisis"
 
 
 class VolRegimeMomentum(StrEnum):
-    """Volatility momentum direction."""
+    """Volatility momentum direction.
 
-    RISING = "rising"
-    FALLING = "falling"
-    STABLE = "stable"
+    5-day directional change in vol-of-vol coordinate space.
+    """
+
+    STABILIZING = "stabilizing"
+    NEUTRAL = "neutral"
+    DETERIORATING = "deteriorating"
 
 
 class TermStructureRegime(StrEnum):
-    """VIX term structure regime (contango vs backwardation)."""
+    """VIX term structure regime.
 
-    CONTANGO = "contango"
-    FLAT = "flat"
-    BACKWARDATION = "backwardation"
+    Position in term structure phase space (VIX/VIX_MA, VIX_percentile).
+    """
+
+    CONTANGO_LOW = "contango_low"
+    CONTANGO_HIGH = "contango_high"
+    BACKWARDATION_LOW = "backwardation_low"
+    BACKWARDATION_HIGH = "backwardation_high"
 
 
 class VRPTier(StrEnum):
