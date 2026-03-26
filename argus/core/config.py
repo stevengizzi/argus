@@ -17,7 +17,12 @@ from argus.ai.config import AIConfig
 from argus.analytics.config import ObservatoryConfig
 from argus.core.regime import RegimeOperatingConditions
 from argus.data.vix_config import VixRegimeConfig
-from argus.intelligence.config import CatalystConfig, CounterfactualConfig, QualityEngineConfig
+from argus.intelligence.config import (
+    CatalystConfig,
+    CounterfactualConfig,
+    OverflowConfig,
+    QualityEngineConfig,
+)
 
 # ---------------------------------------------------------------------------
 # Enums
@@ -157,6 +162,18 @@ class HealthConfig(BaseModel):
         return os.environ.get(self.alert_webhook_url_env, "")
 
 
+class ReconciliationConfig(BaseModel):
+    """Configuration for position reconciliation (Sprint 27.8 + 27.95).
+
+    Controls how the Order Manager handles mismatches between ARGUS
+    internal positions and IBKR portfolio snapshots.
+    """
+
+    auto_cleanup_orphans: bool = False
+    auto_cleanup_unconfirmed: bool = False
+    consecutive_miss_threshold: int = Field(default=3, ge=1)
+
+
 class ApiConfig(BaseModel):
     """Configuration for the Command Center API server (Sprint 14)."""
 
@@ -272,6 +289,10 @@ class SystemConfig(BaseModel):
     counterfactual: CounterfactualConfig = Field(default_factory=CounterfactualConfig)
     # VIX Regime configuration (Sprint 27.9 — VIX landscape dimension)
     vix_regime: VixRegimeConfig = Field(default_factory=VixRegimeConfig)
+    # Reconciliation configuration (Sprint 27.8 + 27.95 — ghost position fix)
+    reconciliation: ReconciliationConfig = Field(default_factory=ReconciliationConfig)
+    # Overflow management configuration (Sprint 27.95 — signal overflow routing)
+    overflow: OverflowConfig = Field(default_factory=OverflowConfig)
 
     @field_validator("timezone")
     @classmethod

@@ -22,7 +22,7 @@ from datetime import datetime, time
 from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
 
-from argus.core.config import BrokerSource, OrderManagerConfig
+from argus.core.config import BrokerSource, OrderManagerConfig, ReconciliationConfig
 from argus.core.event_bus import EventBus
 from argus.core.events import (
     CircuitBreakerEvent,
@@ -154,6 +154,7 @@ class OrderManager:
         db_manager: Any | None = None,
         broker_source: BrokerSource = BrokerSource.SIMULATED,
         auto_cleanup_orphans: bool = False,
+        reconciliation_config: ReconciliationConfig | None = None,
     ) -> None:
         """Initialize the Order Manager.
 
@@ -166,7 +167,9 @@ class OrderManager:
             db_manager: Optional DatabaseManager for execution record persistence.
             broker_source: Broker type, used to skip amendment for SimulatedBroker.
             auto_cleanup_orphans: When True, reconciliation auto-closes orphaned
-                positions (internal_qty > 0, broker_qty == 0).
+                positions (internal_qty > 0, broker_qty == 0). Deprecated — use
+                reconciliation_config.auto_cleanup_orphans instead.
+            reconciliation_config: Typed reconciliation settings (Sprint 27.95).
         """
         self._event_bus = event_bus
         self._broker = broker
@@ -175,7 +178,10 @@ class OrderManager:
         self._trade_logger = trade_logger
         self._db_manager = db_manager
         self._broker_source = broker_source
-        self._auto_cleanup_orphans = auto_cleanup_orphans
+        # Reconciliation config: prefer typed config, fall back to legacy bool
+        self._reconciliation_config = reconciliation_config or ReconciliationConfig(
+            auto_cleanup_orphans=auto_cleanup_orphans,
+        )
 
         # Active positions: keyed by symbol (list to support multiple positions)
         self._managed_positions: dict[str, list[ManagedPosition]] = {}
@@ -185,6 +191,12 @@ class OrderManager:
 
         # Flatten-pending guard: symbol → order_id (prevents duplicate flatten orders)
         self._flatten_pending: dict[str, str] = {}
+
+        # Broker-confirmed entry fill tracking (Sprint 27.95)
+        self._broker_confirmed: dict[str, bool] = {}
+
+        # Consecutive reconciliation miss counter (Sprint 27.95)
+        self._reconciliation_miss_count: dict[str, int] = {}
 
         # Latest reconciliation result
         self._last_reconciliation: ReconciliationResult | None = None
@@ -654,6 +666,9 @@ class OrderManager:
                 target_prices=tuple(target_prices),
             )
         )
+
+        # Mark position as broker-confirmed (Sprint 27.95)
+        self._broker_confirmed[pending.symbol] = True
 
         logger.info(
             "Position opened: %s %d shares @ %.2f (stop=%.2f, T1=%.2f, T2=%.2f)",
@@ -1501,6 +1516,9 @@ class OrderManager:
             positions.remove(position)
         if not positions:
             self._managed_positions.pop(position.symbol, None)
+            # Clean up reconciliation tracking when no positions remain for symbol
+            self._broker_confirmed.pop(position.symbol, None)
+            self._reconciliation_miss_count.pop(position.symbol, None)
 
         logger.info(
             "Position closed: %s | PnL: %.2f | Reason: %s | Hold: %ds",
@@ -1544,6 +1562,8 @@ class OrderManager:
         self._managed_positions.clear()
         self._pending_orders.clear()
         self._flatten_pending.clear()
+        self._broker_confirmed.clear()
+        self._reconciliation_miss_count.clear()
         self._last_reconciliation = None
 
     @property
@@ -1623,9 +1643,10 @@ class OrderManager:
     ) -> list[dict[str, object]]:
         """Compare internal positions against broker-reported positions.
 
-        Detects discrepancies and logs warnings. When auto_cleanup_orphans
-        is enabled, closes orphaned positions (internal_qty > 0, broker_qty == 0)
-        with ExitReason.RECONCILIATION.
+        Detects discrepancies and logs warnings. Broker-confirmed positions
+        are never auto-closed (snapshot may be stale). Unconfirmed positions
+        are cleaned up only after consecutive_miss_threshold consecutive
+        snapshot misses when auto_cleanup_unconfirmed is True.
 
         Args:
             broker_positions: Dict of {symbol: quantity} from broker.
@@ -1634,6 +1655,7 @@ class OrderManager:
             List of discrepancy dicts with symbol, internal_qty, broker_qty.
         """
         discrepancies: list[dict[str, object]] = []
+        recon = self._reconciliation_config
 
         # Build internal position totals by symbol
         internal_positions: dict[str, int] = {}
@@ -1641,6 +1663,11 @@ class OrderManager:
             total_qty = sum(p.shares_remaining for p in positions if not p.is_fully_closed)
             if total_qty > 0:
                 internal_positions[symbol] = total_qty
+
+        # Reset miss counters for symbols found in broker snapshot
+        for symbol in internal_positions:
+            if int(broker_positions.get(symbol, 0)) > 0:
+                self._reconciliation_miss_count[symbol] = 0
 
         # Check all symbols in either set
         all_symbols = set(internal_positions.keys()) | set(broker_positions.keys())
@@ -1672,30 +1699,79 @@ class OrderManager:
                 suffix,
             )
 
-        # Auto-cleanup orphaned positions (internal > 0, broker == 0)
-        if self._auto_cleanup_orphans and discrepancies:
-            orphans_to_clean: list[ManagedPosition] = []
-            for d in discrepancies:
-                if int(d["internal_qty"]) > 0 and int(d["broker_qty"]) == 0:  # type: ignore[arg-type]
-                    sym = str(d["symbol"])
-                    for pos in self._managed_positions.get(sym, []):
-                        if not pos.is_fully_closed:
-                            orphans_to_clean.append(pos)
+        # Process orphan discrepancies (internal > 0, broker == 0)
+        for d in discrepancies:
+            if int(d["internal_qty"]) <= 0 or int(d["broker_qty"]) != 0:  # type: ignore[arg-type]
+                continue
 
-            for pos in orphans_to_clean:
-                pos.shares_remaining = 0
-                pos.realized_pnl = 0.0
+            sym = str(d["symbol"])
+            confirmed = self._broker_confirmed.get(sym, False)
+
+            if confirmed:
+                # Broker-confirmed position — NEVER auto-close. Snapshot may be stale.
                 logger.warning(
-                    "Reconciliation cleanup: closed orphaned position %s "
-                    "(%d shares, strategy=%s)",
-                    pos.symbol,
-                    pos.shares_total,
-                    pos.strategy_id,
+                    "IBKR portfolio snapshot missing confirmed position %s "
+                    "— snapshot may be stale",
+                    sym,
                 )
-                await self._close_position(
-                    pos,
-                    exit_price=pos.entry_price,
-                    exit_reason=ExitReason.RECONCILIATION,
+                self._reconciliation_miss_count[sym] = 0
+                continue
+
+            # Unconfirmed position — apply miss counter logic
+            if recon.auto_cleanup_unconfirmed:
+                miss_count = self._reconciliation_miss_count.get(sym, 0) + 1
+                self._reconciliation_miss_count[sym] = miss_count
+
+                if miss_count >= recon.consecutive_miss_threshold:
+                    # Threshold reached — clean up
+                    for pos in list(self._managed_positions.get(sym, [])):
+                        if not pos.is_fully_closed:
+                            pos.shares_remaining = 0
+                            pos.realized_pnl = 0.0
+                            logger.warning(
+                                "Reconciliation cleanup: closed unconfirmed position %s "
+                                "after %d consecutive misses (%d shares, strategy=%s)",
+                                pos.symbol,
+                                miss_count,
+                                pos.shares_total,
+                                pos.strategy_id,
+                            )
+                            await self._close_position(
+                                pos,
+                                exit_price=pos.entry_price,
+                                exit_reason=ExitReason.RECONCILIATION,
+                            )
+                else:
+                    logger.info(
+                        "Unconfirmed position %s missing from IBKR snapshot "
+                        "(miss %d/%d)",
+                        sym,
+                        miss_count,
+                        recon.consecutive_miss_threshold,
+                    )
+            elif recon.auto_cleanup_orphans:
+                # Legacy behavior: immediate cleanup for any orphan
+                for pos in list(self._managed_positions.get(sym, [])):
+                    if not pos.is_fully_closed:
+                        pos.shares_remaining = 0
+                        pos.realized_pnl = 0.0
+                        logger.warning(
+                            "Reconciliation cleanup: closed orphaned position %s "
+                            "(%d shares, strategy=%s)",
+                            pos.symbol,
+                            pos.shares_total,
+                            pos.strategy_id,
+                        )
+                        await self._close_position(
+                            pos,
+                            exit_price=pos.entry_price,
+                            exit_reason=ExitReason.RECONCILIATION,
+                        )
+            else:
+                # Warn-only mode
+                logger.warning(
+                    "Unconfirmed orphaned position %s — auto-cleanup disabled",
+                    sym,
                 )
 
         self._last_reconciliation = ReconciliationResult(

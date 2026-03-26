@@ -705,15 +705,8 @@ class ArgusSystem:
 
         order_manager_config = OrderManagerConfig(**order_manager_yaml)
 
-        # Read reconciliation config (dict-style, no Pydantic model needed)
-        system_yaml_path = (
-            self._system_config_file
-            if self._system_config_file is not None
-            else self._config_dir / "system.yaml"
-        )
-        system_raw = load_yaml_file(system_yaml_path)
-        reconciliation_yaml = system_raw.get("reconciliation", {})
-        auto_cleanup = reconciliation_yaml.get("auto_cleanup_orphans", False)
+        # Read reconciliation config from typed Pydantic model (Sprint 27.95)
+        reconciliation_config = config.system.reconciliation
 
         self._order_manager = OrderManager(
             event_bus=self._event_bus,
@@ -723,7 +716,7 @@ class ArgusSystem:
             trade_logger=self._trade_logger,
             db_manager=self._db,
             broker_source=self._config.system.broker_source,
-            auto_cleanup_orphans=auto_cleanup,
+            reconciliation_config=reconciliation_config,
         )
         await self._order_manager.start()
         # Reconstruct open positions from broker

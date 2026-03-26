@@ -349,3 +349,10 @@ class TestRejectionStage:
         assert RejectionStage.POSITION_SIZER == "position_sizer"
         assert RejectionStage.RISK_MANAGER == "risk_manager"
         assert RejectionStage.SHADOW == "shadow"
+        assert RejectionStage.BROKER_OVERFLOW == "broker_overflow"
+
+    def test_broker_overflow_stage_has_correct_value(self) -> None:
+        """BROKER_OVERFLOW enum value exists with correct string representation."""
+        stage = RejectionStage.BROKER_OVERFLOW
+        assert stage.value == "broker_overflow"
+        assert str(stage) == "broker_overflow"

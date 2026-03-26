@@ -248,8 +248,9 @@ async def test_reconciliation_cleanup_closes_orphan(
     fixed_clock: FixedClock,
     config: OrderManagerConfig,
 ) -> None:
-    """Orphan detected AND cleaned up when auto_cleanup_orphans=True."""
+    """Unconfirmed orphan detected AND cleaned up when auto_cleanup_orphans=True."""
     om = _make_order_manager(event_bus, mock_broker, fixed_clock, config, auto_cleanup_orphans=True)
+    await om.start()
 
     # Track PositionClosedEvents
     closed_events: list[PositionClosedEvent] = []
@@ -258,7 +259,9 @@ async def test_reconciliation_cleanup_closes_orphan(
 
     event_bus.subscribe(PositionClosedEvent, on_close)
 
-    await _open_position(om)
+    # Inject an unconfirmed position directly (not via entry fill)
+    pos = _make_managed_position(clock=fixed_clock)
+    om._managed_positions["AAPL"] = [pos]
 
     # Broker reports no position for AAPL (orphan)
     discrepancies = await om.reconcile_positions({})
@@ -266,7 +269,7 @@ async def test_reconciliation_cleanup_closes_orphan(
 
     assert len(discrepancies) == 1
 
-    # Position should be cleaned up
+    # Position should be cleaned up (unconfirmed + auto_cleanup_orphans=True)
     positions_after = om.get_all_positions_flat()
     assert len(positions_after) == 0
 
@@ -309,6 +312,7 @@ async def test_reconciliation_cleanup_sets_zero_pnl(
 ) -> None:
     """Synthetic close record has realized_pnl=0 and exit_price=entry_price."""
     om = _make_order_manager(event_bus, mock_broker, fixed_clock, config, auto_cleanup_orphans=True)
+    await om.start()
 
     # Track PositionClosedEvents
     closed_events: list[PositionClosedEvent] = []
@@ -318,7 +322,9 @@ async def test_reconciliation_cleanup_sets_zero_pnl(
 
     event_bus.subscribe(PositionClosedEvent, on_close)
 
-    await _open_position(om)
+    # Inject an unconfirmed position directly (not via entry fill)
+    pos = _make_managed_position(clock=fixed_clock)
+    om._managed_positions["AAPL"] = [pos]
 
     await om.reconcile_positions({})
     await event_bus.drain()
@@ -326,7 +332,7 @@ async def test_reconciliation_cleanup_sets_zero_pnl(
     assert len(closed_events) == 1
     # realized_pnl is 0 and exit_price equals entry_price
     assert closed_events[0].realized_pnl == 0.0
-    assert closed_events[0].exit_price == 150.0  # entry_price from make_signal()
+    assert closed_events[0].exit_price == 150.0  # entry_price from _make_managed_position()
 
 
 # ---------------------------------------------------------------------------

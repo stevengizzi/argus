@@ -38,6 +38,7 @@ class RejectionStage(StrEnum):
     POSITION_SIZER = "position_sizer"
     RISK_MANAGER = "risk_manager"
     SHADOW = "shadow"
+    BROKER_OVERFLOW = "broker_overflow"
 
 
 @dataclass(frozen=True)

@@ -8,7 +8,7 @@ Sprint 23.5 — DEC-164, Sprint 24 S5a — Quality Engine config + Position Size
 
 from __future__ import annotations
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, Field, model_validator
 
 
 class SECEdgarConfig(BaseModel):
@@ -245,6 +245,21 @@ class CounterfactualConfig(BaseModel):
     retention_days: int = 90
     no_data_timeout_seconds: int = 300
     eod_close_time: str = "16:00"
+
+
+class OverflowConfig(BaseModel):
+    """Configuration for overflow management (Sprint 27.95).
+
+    Routes excess signals to counterfactual tracking when broker position
+    capacity is reached, instead of rejecting them outright.
+
+    Attributes:
+        enabled: Whether overflow routing is active.
+        broker_capacity: Maximum number of concurrent broker positions.
+    """
+
+    enabled: bool = True
+    broker_capacity: int = Field(default=30, ge=0)
 
 
 class QualityEngineConfig(BaseModel):

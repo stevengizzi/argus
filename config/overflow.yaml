@@ -1,0 +1,7 @@
+# Overflow Management (Sprint 27.95)
+# Routes excess signals to counterfactual tracking when broker position capacity is reached.
+# Config-gated: set enabled: false to disable entirely (zero overhead).
+
+overflow:
+  enabled: true
+  broker_capacity: 30

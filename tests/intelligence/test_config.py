@@ -6,10 +6,13 @@ from pathlib import Path
 
 import yaml
 
+import pytest
+
 from argus.intelligence.config import (
     CatalystConfig,
     FinnhubConfig,
     FMPNewsConfig,
+    OverflowConfig,
     SECEdgarConfig,
 )
 
@@ -115,3 +118,46 @@ class TestCatalystConfigYamlAlignment:
     def test_yaml_catalyst_briefing_model_is_none(self) -> None:
         raw = yaml.safe_load(_SYSTEM_YAML.read_text())
         assert raw["catalyst"]["briefing"]["model"] is None
+
+
+class TestOverflowConfigDefaults:
+    """Tests for OverflowConfig default values and validation."""
+
+    def test_loads_with_default_values(self) -> None:
+        """OverflowConfig defaults: enabled=True, broker_capacity=30."""
+        cfg = OverflowConfig()
+        assert cfg.enabled is True
+        assert cfg.broker_capacity == 30
+
+    def test_validates_broker_capacity_non_negative(self) -> None:
+        """broker_capacity=0 is valid (effectively disables all positions)."""
+        cfg = OverflowConfig(broker_capacity=0)
+        assert cfg.broker_capacity == 0
+
+    def test_rejects_negative_broker_capacity(self) -> None:
+        """broker_capacity must be >= 0."""
+        with pytest.raises(ValueError):
+            OverflowConfig(broker_capacity=-1)
+
+
+class TestOverflowConfigYamlAlignment:
+    """Verify overflow YAML keys align with OverflowConfig model fields."""
+
+    def test_yaml_overflow_loads_into_config(self) -> None:
+        """system.yaml overflow section parses cleanly into OverflowConfig."""
+        raw = yaml.safe_load(_SYSTEM_YAML.read_text())
+        overflow_data = raw.get("overflow", {})
+        cfg = OverflowConfig(**overflow_data)
+        assert cfg.enabled is True
+        assert cfg.broker_capacity == 30
+
+    def test_yaml_overflow_keys_all_recognized_by_model(self) -> None:
+        """No YAML key under overflow: should be absent from OverflowConfig model."""
+        raw = yaml.safe_load(_SYSTEM_YAML.read_text())
+        overflow_yaml = raw.get("overflow", {})
+        yaml_keys = set(overflow_yaml.keys())
+        model_keys = set(OverflowConfig.model_fields.keys())
+        unrecognized = yaml_keys - model_keys
+        assert not unrecognized, (
+            f"YAML keys not present in OverflowConfig model: {sorted(unrecognized)}"
+        )

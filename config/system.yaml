@@ -40,6 +40,12 @@ health:
   daily_check_enabled: true
   weekly_reconciliation_enabled: true
 
+# Reconciliation (Sprint 27.95 — Reconciliation Redesign)
+reconciliation:
+  auto_cleanup_orphans: false
+  auto_cleanup_unconfirmed: false
+  consecutive_miss_threshold: 3
+
 # Command Center API (Sprint 14 — DEC-099)
 api:
   enabled: true
@@ -154,6 +160,12 @@ counterfactual:
   retention_days: 90
   no_data_timeout_seconds: 300
   eod_close_time: "16:00"
+
+# Overflow Management (Sprint 27.95)
+# Routes excess signals to counterfactual tracking when broker capacity is reached.
+overflow:
+  enabled: true
+  broker_capacity: 30
 
 # Observatory (Sprint 25 — The Observatory)
 # Immersive pipeline visualization page for operational visibility.
