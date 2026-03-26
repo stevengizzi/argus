@@ -24,6 +24,7 @@ dependencies = [
     "uvicorn[standard]>=0.27,<1",
     "python-jose[cryptography]>=3.3,<4",
     "passlib[bcrypt]>=1.7,<2",
+    "yfinance>=0.2.31,<1",
 ]
 
 [project.optional-dependencies]

@@ -106,7 +106,7 @@ class TermStructureBoundaries(BaseModel):
 
     contango_threshold: float = Field(
         default=1.0,
-        description="Ratio above which term structure is contango",
+        description="Ratio at or below which term structure is contango",
     )
     low_high_percentile_split: float = Field(
         default=0.50,
