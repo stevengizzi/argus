@@ -40,6 +40,11 @@ health:
   daily_check_enabled: true
   weekly_reconciliation_enabled: true
 
+# Startup behavior (Sprint 27.95 S4 — Zombie Cleanup)
+# Controls handling of unknown IBKR positions found at startup.
+startup:
+  flatten_unknown_positions: true  # Sell unknown IBKR positions at startup
+
 # Reconciliation (Sprint 27.95 — Reconciliation Redesign)
 reconciliation:
   auto_cleanup_orphans: false

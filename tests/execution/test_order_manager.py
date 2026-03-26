@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from argus.core.clock import FixedClock
-from argus.core.config import OrderManagerConfig
+from argus.core.config import OrderManagerConfig, StartupConfig
 from argus.core.event_bus import EventBus
 from argus.core.events import (
     CircuitBreakerEvent,
@@ -1197,6 +1197,10 @@ async def test_reconstruct_from_broker_recovers_positions(
         config=config,
     )
 
+    # Pre-populate as "known" so reconstruction treats them as recoverable
+    om._managed_positions["AAPL"] = []
+    om._managed_positions["TSLA"] = []
+
     await om.reconstruct_from_broker()
 
     # Verify positions were reconstructed
@@ -1245,6 +1249,250 @@ async def test_reconstruct_from_broker_handles_error(
 
     # Verify system still functional (no positions, but no crash)
     assert len(order_manager._managed_positions) == 0
+
+
+# ---------------------------------------------------------------------------
+# Startup Zombie Cleanup Tests (Sprint 27.95 S4)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_startup_flatten_unknown_positions_enabled(
+    event_bus: EventBus,
+    fixed_clock: FixedClock,
+    config: OrderManagerConfig,
+) -> None:
+    """Unknown IBKR positions flattened when flatten_unknown_positions=True."""
+    mock_broker = MagicMock()
+
+    zombie = MagicMock()
+    zombie.symbol = "ZOMBIE"
+    zombie.qty = 75
+    zombie.avg_entry_price = 42.0
+
+    mock_broker.get_positions = AsyncMock(return_value=[zombie])
+    mock_broker.get_open_orders = AsyncMock(return_value=[])
+    mock_broker.place_order = AsyncMock()
+
+    startup_cfg = StartupConfig(flatten_unknown_positions=True)
+    om = OrderManager(
+        event_bus=event_bus,
+        broker=mock_broker,
+        clock=fixed_clock,
+        config=config,
+        startup_config=startup_cfg,
+    )
+
+    await om.reconstruct_from_broker()
+
+    # Verify sell order was placed
+    mock_broker.place_order.assert_called_once()
+    sell_order = mock_broker.place_order.call_args[0][0]
+    assert sell_order.symbol == "ZOMBIE"
+    assert sell_order.side.value == "sell"
+    assert sell_order.quantity == 75
+
+    # Verify NO managed position was created
+    assert "ZOMBIE" not in om._managed_positions
+
+
+@pytest.mark.asyncio
+async def test_startup_flatten_unknown_positions_disabled(
+    event_bus: EventBus,
+    fixed_clock: FixedClock,
+    config: OrderManagerConfig,
+) -> None:
+    """Unknown IBKR positions logged as warnings when flatten disabled."""
+    mock_broker = MagicMock()
+
+    zombie = MagicMock()
+    zombie.symbol = "ZOMBIE"
+    zombie.qty = 75
+    zombie.avg_entry_price = 42.0
+
+    mock_broker.get_positions = AsyncMock(return_value=[zombie])
+    mock_broker.get_open_orders = AsyncMock(return_value=[])
+    mock_broker.place_order = AsyncMock()
+
+    startup_cfg = StartupConfig(flatten_unknown_positions=False)
+    om = OrderManager(
+        event_bus=event_bus,
+        broker=mock_broker,
+        clock=fixed_clock,
+        config=config,
+        startup_config=startup_cfg,
+    )
+
+    await om.reconstruct_from_broker()
+
+    # Verify NO sell order was placed
+    mock_broker.place_order.assert_not_called()
+
+    # Verify RECO position was created for UI visibility
+    assert "ZOMBIE" in om._managed_positions
+    assert om._managed_positions["ZOMBIE"][0].strategy_id == "reconstructed"
+
+
+@pytest.mark.asyncio
+async def test_startup_empty_ibkr_portfolio(
+    event_bus: EventBus,
+    fixed_clock: FixedClock,
+    config: OrderManagerConfig,
+) -> None:
+    """Empty IBKR portfolio → no action, no crash."""
+    mock_broker = MagicMock()
+    mock_broker.get_positions = AsyncMock(return_value=[])
+    mock_broker.place_order = AsyncMock()
+
+    om = OrderManager(
+        event_bus=event_bus,
+        broker=mock_broker,
+        clock=fixed_clock,
+        config=config,
+    )
+
+    await om.reconstruct_from_broker()
+
+    mock_broker.place_order.assert_not_called()
+    assert len(om._managed_positions) == 0
+
+
+@pytest.mark.asyncio
+async def test_startup_only_known_positions(
+    event_bus: EventBus,
+    fixed_clock: FixedClock,
+    config: OrderManagerConfig,
+) -> None:
+    """All broker positions match ARGUS records → reconstruct, no flattens."""
+    mock_broker = MagicMock()
+
+    known = MagicMock()
+    known.symbol = "AAPL"
+    known.qty = 100
+    known.avg_entry_price = 150.0
+
+    mock_broker.get_positions = AsyncMock(return_value=[known])
+    mock_broker.get_open_orders = AsyncMock(return_value=[])
+    mock_broker.place_order = AsyncMock()
+
+    startup_cfg = StartupConfig(flatten_unknown_positions=True)
+    om = OrderManager(
+        event_bus=event_bus,
+        broker=mock_broker,
+        clock=fixed_clock,
+        config=config,
+        startup_config=startup_cfg,
+    )
+
+    # Pre-populate AAPL as a known internal position
+    om._managed_positions["AAPL"] = []
+
+    await om.reconstruct_from_broker()
+
+    # No sell order placed (position is known)
+    mock_broker.place_order.assert_not_called()
+
+    # Position was reconstructed
+    assert len(om._managed_positions["AAPL"]) == 1
+    assert om._managed_positions["AAPL"][0].entry_price == 150.0
+
+
+@pytest.mark.asyncio
+async def test_startup_mix_known_and_unknown(
+    event_bus: EventBus,
+    fixed_clock: FixedClock,
+    config: OrderManagerConfig,
+) -> None:
+    """Mix of known + unknown → only unknown positions flattened."""
+    mock_broker = MagicMock()
+
+    known = MagicMock()
+    known.symbol = "AAPL"
+    known.qty = 100
+    known.avg_entry_price = 150.0
+
+    zombie = MagicMock()
+    zombie.symbol = "ZOMBIE"
+    zombie.qty = 50
+    zombie.avg_entry_price = 30.0
+
+    mock_broker.get_positions = AsyncMock(return_value=[known, zombie])
+    mock_broker.get_open_orders = AsyncMock(return_value=[])
+    mock_broker.place_order = AsyncMock()
+
+    startup_cfg = StartupConfig(flatten_unknown_positions=True)
+    om = OrderManager(
+        event_bus=event_bus,
+        broker=mock_broker,
+        clock=fixed_clock,
+        config=config,
+        startup_config=startup_cfg,
+    )
+
+    # Pre-populate AAPL as known
+    om._managed_positions["AAPL"] = []
+
+    await om.reconstruct_from_broker()
+
+    # ZOMBIE was flattened
+    mock_broker.place_order.assert_called_once()
+    sell_order = mock_broker.place_order.call_args[0][0]
+    assert sell_order.symbol == "ZOMBIE"
+
+    # AAPL was reconstructed
+    assert len(om._managed_positions["AAPL"]) == 1
+    assert om._managed_positions["AAPL"][0].entry_price == 150.0
+
+    # ZOMBIE was NOT added as managed
+    assert "ZOMBIE" not in om._managed_positions
+
+
+@pytest.mark.asyncio
+async def test_startup_portfolio_query_failure(
+    event_bus: EventBus,
+    fixed_clock: FixedClock,
+    config: OrderManagerConfig,
+) -> None:
+    """IBKR portfolio query failure → graceful skip, no crash."""
+    mock_broker = MagicMock()
+    mock_broker.get_positions = AsyncMock(side_effect=ConnectionError("TWS offline"))
+    mock_broker.place_order = AsyncMock()
+
+    om = OrderManager(
+        event_bus=event_bus,
+        broker=mock_broker,
+        clock=fixed_clock,
+        config=config,
+    )
+
+    # Should not raise
+    await om.reconstruct_from_broker()
+
+    mock_broker.place_order.assert_not_called()
+    assert len(om._managed_positions) == 0
+
+
+def test_startup_config_flatten_field() -> None:
+    """StartupConfig recognizes flatten_unknown_positions field."""
+    cfg = StartupConfig(flatten_unknown_positions=True)
+    assert cfg.flatten_unknown_positions is True
+
+    cfg_off = StartupConfig(flatten_unknown_positions=False)
+    assert cfg_off.flatten_unknown_positions is False
+
+    # Default is True
+    cfg_default = StartupConfig()
+    assert cfg_default.flatten_unknown_positions is True
+
+
+def test_script_has_executable_permission() -> None:
+    """ibkr_close_all_positions.py should have +x permission."""
+    import os
+    from pathlib import Path
+
+    script_path = Path(__file__).parents[2] / "scripts" / "ibkr_close_all_positions.py"
+    assert script_path.exists(), f"Script not found: {script_path}"
+    assert os.access(script_path, os.X_OK), f"Script not executable: {script_path}"
 
 
 # ---------------------------------------------------------------------------
