@@ -37,6 +37,7 @@ if TYPE_CHECKING:
     from argus.analytics.trade_logger import TradeLogger
     from argus.core.regime_history import RegimeHistoryStore
     from argus.data.service import DataService
+    from argus.data.vix_data_service import VIXDataService
     from argus.execution.broker import Broker
     from argus.strategies.base_strategy import BaseStrategy
 
@@ -65,6 +66,7 @@ class Orchestrator:
         data_service: DataService,
         regime_classifier_v2: RegimeClassifierV2 | None = None,
         regime_history: RegimeHistoryStore | None = None,
+        vix_data_service: VIXDataService | None = None,
     ) -> None:
         """Initialize the Orchestrator.
 
@@ -77,6 +79,7 @@ class Orchestrator:
             data_service: Data service for fetching daily bars.
             regime_classifier_v2: Optional V2 regime classifier (Sprint 27.6).
             regime_history: Optional regime history store (Sprint 27.6).
+            vix_data_service: Optional VIX data service (Sprint 27.9).
         """
         self._config = config
         self._event_bus = event_bus
@@ -86,6 +89,7 @@ class Orchestrator:
         self._data_service = data_service
         self._regime_classifier_v2 = regime_classifier_v2
         self._regime_history = regime_history
+        self._vix_data_service = vix_data_service
 
         # Supporting components
         self._regime_classifier = RegimeClassifier(config)
@@ -347,6 +351,22 @@ class Orchestrator:
 
         # 6. Log decisions
         await self._log_decisions(allocations, new_regime)
+
+        # Log VIX regime context if available (Sprint 27.9)
+        if self._vix_data_service is not None and self._vix_data_service.is_ready:
+            latest_vix = self._vix_data_service.get_latest_daily()
+            if latest_vix is not None:
+                vix_close = latest_vix.get("vix_close")
+                vrp = latest_vix.get("variance_risk_premium")
+                data_date = latest_vix.get("data_date")
+                vol_of_vol = latest_vix.get("vol_of_vol_ratio")
+                logger.info(
+                    "VIX regime context: VIX=%.2f, VRP=%s, vol_of_vol=%s (as of %s)",
+                    vix_close if vix_close is not None else 0.0,
+                    f"{vrp:.1f}" if vrp is not None else "N/A",
+                    f"{vol_of_vol:.2f}" if vol_of_vol is not None else "N/A",
+                    data_date or "unknown",
+                )
 
         self._pre_market_done_today = True
         self._last_regime_check = self._clock.now()

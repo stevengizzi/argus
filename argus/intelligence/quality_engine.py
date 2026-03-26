@@ -122,6 +122,10 @@ class SetupQualityEngine:
     def _score_regime_alignment(
         self, regime: MarketRegime, allowed_regimes: list[str]
     ) -> float:
+        # FUTURE (post-Sprint 28): When strategies specify phase-space conditions in
+        # their operating conditions, the regime_alignment dimension (10% weight) can
+        # incorporate VIX regime phase and momentum. Currently dormant — new dimensions
+        # are match-any, so regime_alignment score is unchanged.
         if not allowed_regimes:
             return 70.0
         if regime.value in allowed_regimes:

@@ -321,8 +321,11 @@ def create_app(app_state: AppState) -> FastAPI:
                 app_state.vix_data_service = vix_service
                 vix_initialized_here = True
 
-                # Wire into RegimeClassifierV2 if orchestrator has one
+                # Wire into Orchestrator and RegimeClassifierV2 if available
                 if app_state.orchestrator is not None:
+                    app_state.orchestrator._vix_data_service = vix_service
+                    logger.info("VIXDataService wired into Orchestrator")
+
                     regime_v2 = getattr(
                         app_state.orchestrator, "_regime_classifier_v2", None
                     )

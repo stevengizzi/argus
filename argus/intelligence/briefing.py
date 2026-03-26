@@ -18,6 +18,7 @@ from argus.intelligence.models import ClassifiedCatalyst, IntelligenceBrief
 if TYPE_CHECKING:
     from argus.ai.client import ClaudeClient
     from argus.ai.usage import UsageTracker
+    from argus.data.vix_data_service import VIXDataService
     from argus.intelligence.config import BriefingConfig
     from argus.intelligence.storage import CatalystStorage
 
@@ -71,6 +72,7 @@ class BriefingGenerator:
         storage: CatalystStorage,
         usage_tracker: UsageTracker,
         config: BriefingConfig,
+        vix_data_service: VIXDataService | None = None,
     ) -> None:
         """Initialize the briefing generator.
 
@@ -79,11 +81,13 @@ class BriefingGenerator:
             storage: Catalyst storage for fetching and persisting briefs.
             usage_tracker: Tracks API usage and costs.
             config: Briefing configuration (max_symbols, model override).
+            vix_data_service: Optional VIX data service for regime context.
         """
         self._client = client
         self._storage = storage
         self._usage_tracker = usage_tracker
         self._config = config
+        self._vix_service = vix_data_service
 
     async def generate_brief(
         self,
@@ -343,6 +347,53 @@ class BriefingGenerator:
                     f"- **{cat.symbol}** (score={cat.quality_score:.0f}): {cat.headline}"
                 )
         lines.append("")
+
+        # Append VIX context if available
+        vix_context = self._build_vix_context()
+        if vix_context is not None:
+            lines.append(vix_context)
+            lines.append("")
+
+        return "\n".join(lines)
+
+    def _build_vix_context(self) -> str | None:
+        """Build VIX regime context section for the user message.
+
+        Returns:
+            Formatted VIX context string, or None if unavailable/stale.
+        """
+        if self._vix_service is None or not self._vix_service.is_ready:
+            return None
+        latest = self._vix_service.get_latest_daily()
+        if latest is None:
+            return None
+        # Stale data has None for derived metrics — skip section
+        if latest.get("variance_risk_premium") is None:
+            return None
+
+        vix_close = latest.get("vix_close", "N/A")
+        data_date = latest.get("data_date", "unknown")
+        vrp = latest.get("variance_risk_premium")
+        vrp_str = f"{vrp:.1f}" if vrp is not None else "N/A"
+
+        lines = [
+            "### VIX Regime Context",
+            f"- VIX Close: {vix_close} (as of {data_date})",
+            f"- Variance Risk Premium: {vrp_str}",
+        ]
+
+        # Add optional regime classifications if present
+        vol_of_vol = latest.get("vol_of_vol_ratio")
+        if vol_of_vol is not None:
+            lines.append(f"- Vol-of-Vol Ratio: {vol_of_vol:.2f}")
+
+        vix_pct = latest.get("vix_percentile")
+        if vix_pct is not None:
+            lines.append(f"- VIX Percentile: {vix_pct:.0%}")
+
+        term_proxy = latest.get("term_structure_proxy")
+        if term_proxy is not None:
+            lines.append(f"- Term Structure Proxy: {term_proxy:.3f}")
 
         return "\n".join(lines)
 
