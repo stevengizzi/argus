@@ -221,6 +221,33 @@ class VIXDataService:
         finally:
             conn.close()
 
+    def get_history_range(
+        self, start_date: str, end_date: str
+    ) -> list[dict[str, Any]] | None:
+        """Return daily records within a date range, ordered by date ascending.
+
+        Args:
+            start_date: Start date inclusive (YYYY-MM-DD format).
+            end_date: End date inclusive (YYYY-MM-DD format).
+
+        Returns:
+            List of dicts (oldest first), or None if no data in range.
+        """
+        conn = sqlite3.connect(self._db_path)
+        conn.row_factory = sqlite3.Row
+        try:
+            cursor = conn.execute(
+                "SELECT * FROM vix_daily WHERE date >= ? AND date <= ? "
+                "ORDER BY date ASC",
+                (start_date, end_date),
+            )
+            rows = cursor.fetchall()
+            if not rows:
+                return None
+            return [dict(row) for row in rows]
+        finally:
+            conn.close()
+
     @property
     def is_ready(self) -> bool:
         """True after initial data load is complete."""

@@ -28,6 +28,7 @@ from argus.api.routes.session import router as session_router
 from argus.api.routes.strategies import router as strategies_router
 from argus.api.routes.trades import router as trades_router
 from argus.api.routes.universe import router as universe_router
+from argus.api.routes.vix import router as vix_router
 from argus.api.routes.watchlist import router as watchlist_router
 
 # Main API router that aggregates all route modules
@@ -59,3 +60,4 @@ api_router.include_router(quality_router, prefix="/quality", tags=["quality"])
 api_router.include_router(
     counterfactual_router, prefix="/counterfactual", tags=["counterfactual"]
 )
+api_router.include_router(vix_router, prefix="/vix", tags=["vix"])

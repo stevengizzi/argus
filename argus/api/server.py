@@ -300,6 +300,52 @@ def create_app(app_state: AppState) -> FastAPI:
             except Exception as e:
                 logger.error(f"Failed to initialize ObservatoryService: {e}")
 
+        # Initialize VIXDataService if enabled (Sprint 27.9)
+        vix_initialized_here = False
+        if (
+            app_state.config is not None
+            and app_state.config.vix_regime is not None
+            and app_state.config.vix_regime.enabled
+        ):
+            try:
+                from argus.data.vix_data_service import VIXDataService
+
+                vix_service = VIXDataService(config=app_state.config.vix_regime)
+                try:
+                    await vix_service.initialize()
+                except Exception as e:
+                    logger.warning(
+                        "VIXDataService initialization failed (degraded mode): %s", e
+                    )
+
+                app_state.vix_data_service = vix_service
+                vix_initialized_here = True
+
+                # Wire into RegimeClassifierV2 if orchestrator has one
+                if app_state.orchestrator is not None:
+                    regime_v2 = getattr(
+                        app_state.orchestrator, "_regime_classifier_v2", None
+                    )
+                    if regime_v2 is not None and hasattr(regime_v2, "_vix_data_service"):
+                        regime_v2._vix_data_service = vix_service
+                        logger.info(
+                            "VIXDataService wired into RegimeClassifierV2"
+                        )
+
+                logger.info(
+                    "VIXDataService initialized (ready=%s, stale=%s)",
+                    vix_service.is_ready,
+                    vix_service.is_stale,
+                )
+            except Exception as e:
+                logger.warning("Failed to initialize VIXDataService: %s", e)
+        elif (
+            app_state.config is not None
+            and app_state.config.vix_regime is not None
+            and not app_state.config.vix_regime.enabled
+        ):
+            logger.info("VIXDataService disabled")
+
         # Note: WebSocket bridge is started by main.py before calling run_server().
         # We only need to get a reference to it here for cleanup.
         from argus.api.websocket import get_bridge
@@ -343,6 +389,16 @@ def create_app(app_state: AppState) -> FastAPI:
             app_state.catalyst_storage = None
             app_state.briefing_generator = None
             logger.info("Intelligence pipeline cleaned up")
+
+        # Cleanup VIXDataService update task if we initialized it here
+        if vix_initialized_here and app_state.vix_data_service is not None:
+            update_task = app_state.vix_data_service._update_task
+            if update_task is not None:
+                update_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await update_task
+                logger.info("VIXDataService update task cancelled")
+            app_state.vix_data_service = None
 
         # Cleanup telemetry store (only if created by lifespan, not main.py)
         if telemetry_store is not None and telemetry_store is not _pre_initialized_store:
