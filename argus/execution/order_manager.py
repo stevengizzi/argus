@@ -1490,6 +1490,13 @@ class OrderManager:
             try:
                 from argus.models.trading import OrderSide, Trade
 
+                # For reconciliation closes, use defensive defaults — some
+                # fields may be zero or meaningless on orphaned positions.
+                is_reconciliation = exit_reason == ExitReason.RECONCILIATION
+                stop = getattr(position, "original_stop_price", 0.0) or 0.0
+                t1 = getattr(position, "t1_price", 0.0) or 0.0
+                t2 = getattr(position, "t2_price", 0.0) or 0.0
+
                 trade = Trade(
                     strategy_id=position.strategy_id,
                     symbol=position.symbol,
@@ -1499,10 +1506,10 @@ class OrderManager:
                     exit_price=weighted_exit_price,
                     exit_time=self._clock.now(),
                     shares=position.shares_total,
-                    stop_price=position.original_stop_price,  # Use original, not moved
-                    target_prices=[position.t1_price, position.t2_price],
+                    stop_price=stop if not is_reconciliation else (stop or position.entry_price),
+                    target_prices=[t1, t2],
                     exit_reason=exit_reason,
-                    gross_pnl=position.realized_pnl,
+                    gross_pnl=position.realized_pnl if not is_reconciliation else 0.0,
                     quality_grade=position.quality_grade,
                     quality_score=position.quality_score,
                 )
