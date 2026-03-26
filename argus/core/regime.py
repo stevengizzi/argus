@@ -32,6 +32,7 @@ if TYPE_CHECKING:
     from argus.core.intraday_character import IntradayCharacterDetector
     from argus.core.market_correlation import MarketCorrelationTracker
     from argus.core.sector_rotation import SectorRotationAnalyzer
+    from argus.data.vix_data_service import VIXDataService
 
 logger = logging.getLogger(__name__)
 
@@ -661,6 +662,7 @@ class RegimeClassifierV2:
         correlation: MarketCorrelationTracker | None = None,
         sector: SectorRotationAnalyzer | None = None,
         intraday: IntradayCharacterDetector | None = None,
+        vix_data_service: VIXDataService | None = None,
     ) -> None:
         """Initialize V2 classifier with V1 delegation and optional calculators."""
         self._v1_classifier = RegimeClassifier(config)
@@ -669,6 +671,40 @@ class RegimeClassifierV2:
         self._correlation = correlation
         self._sector = sector
         self._intraday = intraday
+        self._vix_data_service = vix_data_service
+
+        # VIX calculators — instantiated when service provided and config enabled
+        self._vol_phase_calc = None
+        self._vol_momentum_calc = None
+        self._term_structure_calc = None
+        self._vrp_calc = None
+
+        if vix_data_service is not None and regime_config.vix_calculators_enabled:
+            from argus.core.vix_calculators import (
+                TermStructureRegimeCalculator,
+                VarianceRiskPremiumCalculator,
+                VolRegimeMomentumCalculator,
+                VolRegimePhaseCalculator,
+            )
+            from argus.data.vix_config import VixRegimeConfig
+
+            # Get VIX config from the service for boundary access
+            vix_config: VixRegimeConfig = vix_data_service._config
+
+            self._vol_phase_calc = VolRegimePhaseCalculator(
+                vix_data_service, vix_config.vol_regime_boundaries
+            )
+            self._vol_momentum_calc = VolRegimeMomentumCalculator(
+                vix_data_service,
+                vix_config.momentum_window,
+                vix_config.momentum_threshold,
+            )
+            self._term_structure_calc = TermStructureRegimeCalculator(
+                vix_data_service, vix_config.term_structure_boundaries
+            )
+            self._vrp_calc = VarianceRiskPremiumCalculator(
+                vix_data_service, vix_config.vrp_boundaries
+            )
 
     def classify(self, indicators: RegimeIndicators) -> MarketRegime:
         """Classify market regime — delegates entirely to V1.
@@ -787,6 +823,30 @@ class RegimeClassifierV2:
             dir_changes = snap.get("direction_change_count")
             intraday_char = snap.get("intraday_character")
 
+        # VIX landscape dimension (Sprint 27.9)
+        vol_regime_phase: Optional[VolRegimePhase] = None
+        vol_regime_momentum: Optional[VolRegimeMomentum] = None
+        term_structure_regime: Optional[TermStructureRegime] = None
+        variance_risk_premium: Optional[VRPTier] = None
+        vix_close: Optional[float] = None
+
+        if self._vol_phase_calc is not None:
+            vol_regime_phase = self._vol_phase_calc.classify()
+        if self._vol_momentum_calc is not None:
+            vol_regime_momentum = self._vol_momentum_calc.classify()
+        if self._term_structure_calc is not None:
+            term_structure_regime = self._term_structure_calc.classify()
+        if self._vrp_calc is not None:
+            variance_risk_premium = self._vrp_calc.classify()
+
+        # Extract vix_close from VIXDataService latest daily
+        if self._vix_data_service is not None:
+            latest_vix = self._vix_data_service.get_latest_daily()
+            if latest_vix is not None:
+                raw_close = latest_vix.get("vix_close")
+                if raw_close is not None:
+                    vix_close = float(raw_close)
+
         # Confidence: signal_clarity × data_completeness
         regime_confidence = self._compute_regime_confidence(
             primary_regime=primary_regime,
@@ -816,6 +876,11 @@ class RegimeClassifierV2:
             vwap_slope=vwap_slope,
             direction_change_count=dir_changes,
             intraday_character=intraday_char,
+            vol_regime_phase=vol_regime_phase,
+            vol_regime_momentum=vol_regime_momentum,
+            term_structure_regime=term_structure_regime,
+            variance_risk_premium=variance_risk_premium,
+            vix_close=vix_close,
             primary_regime=primary_regime,
             regime_confidence=regime_confidence,
         )

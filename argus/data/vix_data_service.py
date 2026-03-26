@@ -195,6 +195,32 @@ class VIXDataService:
         finally:
             conn.close()
 
+    def get_history(self, days_back: int) -> list[dict[str, Any]] | None:
+        """Return the last N daily records, ordered by date descending.
+
+        Args:
+            days_back: Number of most recent records to return.
+
+        Returns:
+            List of dicts (most recent first), or None if no data.
+        """
+        if days_back < 1:
+            return None
+
+        conn = sqlite3.connect(self._db_path)
+        conn.row_factory = sqlite3.Row
+        try:
+            cursor = conn.execute(
+                "SELECT * FROM vix_daily ORDER BY date DESC LIMIT ?",
+                (days_back,),
+            )
+            rows = cursor.fetchall()
+            if not rows:
+                return None
+            return [dict(row) for row in rows]
+        finally:
+            conn.close()
+
     @property
     def is_ready(self) -> bool:
         """True after initial data load is complete."""

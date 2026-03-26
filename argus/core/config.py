@@ -122,6 +122,7 @@ class RegimeIntelligenceConfig(BaseModel):
 
     enabled: bool = True
     persist_history: bool = True
+    vix_calculators_enabled: bool = True
     breadth: BreadthConfig = Field(default_factory=BreadthConfig)
     correlation: CorrelationConfig = Field(default_factory=CorrelationConfig)
     sector_rotation: SectorRotationConfig = Field(default_factory=SectorRotationConfig)

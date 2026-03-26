@@ -8,6 +8,9 @@ enabled: true
 # Persist regime history to database for post-session analysis
 persist_history: true
 
+# Master enable for all 4 VIX calculators (Sprint 27.9)
+vix_calculators_enabled: true
+
 # ---------------------------------------------------------------------------
 # Dimension 3: Universe Breadth
 # ---------------------------------------------------------------------------
