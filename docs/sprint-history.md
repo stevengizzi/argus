@@ -1,7 +1,7 @@
 # ARGUS — Sprint History
 
 > Complete record of all sprints from project inception through current state.
-> Active development began February 14, 2026. As of March 25, 2026 (~40 calendar days), 29 full sprints + 30 sub-sprints completed.
+> Active development began February 14, 2026. As of March 26, 2026 (~41 calendar days), 29 full sprints + 31 sub-sprints completed.
 
 ---
 
@@ -1721,13 +1721,43 @@
 
 ---
 
+## Sprint 27.75: Paper Trading Operational Hardening (March 26, 2026)
+
+**Type:** Impromptu (DISCOVERED during March 25 market session debrief)
+**Goal:** Address operational noise from paper trading: log rate-limiting, paper-optimized risk config, frontend display bugs, trades page filter fix.
+**Sessions:** 2 (S1: Backend, S2: Frontend)
+**Tests:** pytest 3,517 → 3,528 (+11), Vitest 633 → 638 (+5) = +16 new tests
+**New DECs:** None (all changes followed established patterns)
+**New DEF items:** DEF-098 through DEF-102 (logged in doc-sync)
+
+**Session S1: Backend Log Throttle + Paper Trading Config**
+- `ThrottledLogger` utility class (`argus/utils/log_throttle.py`): per-key rate limiting with configurable interval, burst allowance, summary counts
+- IBKR error 399/202/10148 log rate-limiting via ThrottledLogger
+- Risk Manager rejection log rate-limiting
+- Order Manager reconciliation logging consolidated to single WARNING summary + DEBUG detail
+- Paper trading config: 10x risk tier reduction in `quality_engine.yaml` + `system_live.yaml`, `consecutive_loss_throttle: 999` in `orchestrator.yaml`, `min_position_risk_dollars: 10` in `risk_limits.yaml`
+- +11 pytest tests
+- Verdict: CONCERNS (low — config-coupled test assertions, carried to DEF-101)
+- **Note:** Implementation prompt specified `system_live.yaml` for orchestrator/risk settings, but config architecture loads from `orchestrator.yaml`/`risk_limits.yaml`. Claude Code correctly placed changes in the right files.
+
+**Session S2: Frontend Suspension Display + Trades Filter Fix**
+- StrategyOperationsCard: additive suspension section for circuit-breaker inactive state
+- Trades page `limit: 50` → `limit: 250` fix (root cause of stats not updating on period toggle)
+- Post-sprint manual fix: operating window "Suspended" condition changed from `!allocation.is_active` to `!allocation.is_active && !isThrottled`
+- +5 Vitest tests
+- Verdict: CONCERNS (low — operating window condition, fixed post-sprint)
+
+**Notes:** Focused operational hardening sprint. Primary achievement: log noise reduction from hundreds of lines/minute to rate-limited summaries. Paper trading config enables maximum signal generation for data collection while protecting against capital exhaustion. All changes config-gated or paper-trading-specific. DEF-098 through DEF-102 captured from session debrief analysis.
+
+---
+
 ## Sprint Statistics
 
-- **Total sprints:** 29 full + 30 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9, 27.5, 27.6, 27.65, 27.7)
-- **Total sessions:** ~408+ Claude Code sessions
-- **Total tests:** ~3,517 pytest + 633 Vitest = ~4,150 total
+- **Total sprints:** 29 full + 31 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9, 27.5, 27.6, 27.65, 27.7, 27.75)
+- **Total sessions:** ~410+ Claude Code sessions
+- **Total tests:** ~3,528 pytest + 638 Vitest = ~4,166 total
 - **Total decisions:** 368 (DEC-001 through DEC-368)
-- **Calendar days (active dev):** ~40 (Feb 14 – Mar 25, 2026)
+- **Calendar days (active dev):** ~41 (Feb 14 – Mar 26, 2026)
 - **Largest sprint:** 22 (9 implementation + 5 fix + 9 reviews, largest scope)
 - **Cleanest sprint:** 23 (11 sessions, 0 regressions, 0 scope gaps requiring follow-up)
 - **Most test-dense:** Sprint 22 (286 new tests), Sprint 24 (209 new tests), Sprint 23.2 (188 new tests), Sprint 27.6 (171 new tests), Sprint 23 (141 new tests across 23+23.05)
