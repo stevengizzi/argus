@@ -1789,11 +1789,90 @@
 
 ---
 
+## Sprint 27.9: VIX Regime Intelligence (March 26, 2026)
+
+**Type:** Planned
+**Goal:** Deliver VIX-based regime intelligence infrastructure — VIX data service, 4 threshold-based RegimeVector dimensions, pipeline integration (briefing, regime history, orchestrator) — so Sprint 28 (Learning Loop) has VIX context from day one.
+**Sessions:** 8 (S1a, S1b, S2a, S2b, S2c, S3a, S3b, S4) + 1 micro-fix commit, 0 contingency used
+**Tests:** pytest ~3,542 → ~3,610 (+68), Vitest ~638 → ~645 (+7) = +75 new tests
+**New DECs:** None (all patterns followed established precedent; reserved range DEC-369–378 unused)
+**New DEF items:** DEF-103 (yfinance reliability risk)
+
+**Session S1a: VixRegimeConfig + VIXDataService Skeleton**
+- VixRegimeConfig Pydantic model with 3 boundary sub-models (VolRegimeBoundaries, TermStructureBoundaries, VRPBoundaries) and 4 string enums (VolRegimePhase, VolRegimeMomentum, TermStructureRegime, VRPTier)
+- VIXDataService skeleton with SQLite persistence (`data/vix_landscape.db`), trust-cache-on-startup, staleness self-disable
+- `config/vix_regime.yaml` with all boundary thresholds
+- +11 tests
+- Verdict: CONCERNS_RESOLVED (enum naming reconciled to match spec)
+
+**Session S1b: yfinance Integration + Derived Metrics**
+- yfinance VIX + SPX daily OHLC ingestion with `_flatten_columns()` MultiIndex handler
+- 5 derived metrics: vol-of-vol ratio, VIX percentile rank, term structure proxy, realized vol, variance risk premium
+- Daily update task, `_fetch_range()` helper for DRY
+- `yfinance>=0.2.31,<1` added to pyproject.toml
+- +11 tests
+- Verdict: CONCERNS_RESOLVED (VRP test coverage gap fixed, `_flatten_columns()` input mutation fixed with df.copy())
+
+**Session S2a: RegimeVector Expansion**
+- RegimeVector frozen dataclass expanded from 6 to 11 fields (4 new Optional VIX enum fields + `vix_close: Optional[float]`)
+- `matches_conditions()` treats None as match-any for new dimensions
+- `to_dict()` / `from_dict()` updated with backward compatibility
+- RegimeOperatingConditions expanded with 4 new Optional VIX enum fields
+- RegimeHistoryStore migration: `vix_close REAL` column via idempotent ALTER TABLE
+- +10 tests
+- Verdict: CLEAR
+
+**Session S2b: 4 VIX Calculators + V2 Wiring**
+- VolRegimePhaseCalculator, VolRegimeMomentumCalculator, TermStructureRegimeCalculator, VarianceRiskPremiumCalculator in `core/vix_calculators.py`
+- All wired into RegimeClassifierV2 via `vix_calculators_enabled` config flag
+- All return None gracefully when VIX data unavailable or stale
+- `regime_intelligence.vix_calculators_enabled` added to regime.yaml
+- +11 tests
+- Verdict: CLEAR
+
+**Session S2c: Strategy YAML Match-Any Documentation**
+- All 7 strategy YAML configs updated with comment-only documentation for VIX match-any behavior
+- No functional changes — match-any is the default when `operating_conditions` block omits VIX fields
+- +0 tests (comment-only)
+- Verdict: CLEAR
+
+**Session S3a: VIX Server Init + REST Endpoints**
+- `GET /api/v1/vix/current` — latest VIX data + all classifications + staleness info
+- `GET /api/v1/vix/history?start_date=&end_date=` — historical data with date range filter
+- Both JWT-protected, return `{"status": "unavailable"}` when VIX service absent
+- Unconditional router registration (simplifies testing; graceful unavailable response)
+- `get_history_range()` method added to VIXDataService
+- VIXDataService wired into server.py lifespan (start/stop lifecycle)
+- +12 tests
+- Verdict: CLEAR
+
+**Session S3b: Pipeline Consumer Wiring**
+- BriefingGenerator: VIX context section in user message (VIX close, VRP, vol-of-vol, percentile, term structure). Graceful omission when unavailable
+- Orchestrator: pre-market INFO logging of VIX context (VIX close, phase, momentum, VRP tier, term structure)
+- SetupQualityEngine: FUTURE comment in `_score_regime_alignment()` — dormant until post-Sprint 28
+- RegimeHistoryStore: `vix_close` recorded with each entry (nullable)
+- +6 tests
+- Verdict: CLEAR
+
+**Session S4: Dashboard VIX Widget**
+- VixRegimeCard React component: VIX close, VRP tier badge, vol regime phase label, momentum direction arrow
+- Hidden when `vix_regime.enabled: false` or data unavailable
+- `useVixData` TanStack Query hook with 60s polling
+- TypeScript interfaces for VIX API response types
+- +7 Vitest tests
+- Verdict: CLEAR
+
+**Micro-fix commit:** Added `yfinance>=0.2.31,<1` to pyproject.toml, fixed contango_threshold docstring ("above" → "at or below"), removed dead `vix_update_task` variable from server.py, fixed term structure description.
+
+**Notes:** 8 sessions + micro-fix, zero contingency used. 6 CLEAR verdicts, 2 CONCERNS_RESOLVED (both fixed in-session). Zero new DECs — all implementation followed established patterns (DEC-300 config-gating, DEC-345 separate DB, DEC-362 trust-cache, DEC-277 fail-closed). DEF-103 tracks yfinance reliability as unofficial scraping library (mitigated by SQLite cache + staleness self-disable + FMP fallback option). Sprint delivers VIX context infrastructure so Sprint 28 (Learning Loop V1) can incorporate VIX regime data from day one.
+
+---
+
 ## Sprint Statistics
 
-- **Total sprints:** 29 full + 32 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9, 27.5, 27.6, 27.65, 27.7, 27.75, 27.8)
-- **Total sessions:** ~412+ Claude Code sessions
-- **Total tests:** ~3,542 pytest + 638 Vitest = ~4,180 total
+- **Total sprints:** 29 full + 33 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9, 27.5, 27.6, 27.65, 27.7, 27.75, 27.8, 27.9)
+- **Total sessions:** ~420+ Claude Code sessions
+- **Total tests:** ~3,610 pytest + 645 Vitest = ~4,255 total
 - **Total decisions:** 368 (DEC-001 through DEC-368)
 - **Calendar days (active dev):** ~41 (Feb 14 – Mar 26, 2026)
 - **Largest sprint:** 22 (9 implementation + 5 fix + 9 reviews, largest scope)

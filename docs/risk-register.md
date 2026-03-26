@@ -960,4 +960,18 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 
 ---
 
-*End of Risk & Assumptions Register v1.5*
+### RSK-047 — yfinance Reliability as Unofficial Scraping Library
+
+| Field | Value |
+|-------|-------|
+| **Date Identified** | 2026-03-26 |
+| **Severity** | Low |
+| **Likelihood** | Medium |
+| **Description** | VIXDataService (Sprint 27.9) depends on yfinance, an unofficial Yahoo Finance scraper with no SLA. Yahoo may change their HTML structure or API endpoints at any time, breaking data ingestion. This would cause VIX-based regime dimensions to return None (graceful degradation) but would blind the system to VIX context until fixed. |
+| **Mitigation** | (1) SQLite persistence cache (`data/vix_landscape.db`) survives outages — cached data remains available. (2) Staleness self-disable (`max_staleness_days=3`) — VIX calculators return None after 3 trading days without fresh data, preventing stale classifications. (3) Optional FMP fallback (`fmp_fallback_enabled` config flag) — not yet implemented but architecture supports it. (4) Daily-only frequency — not real-time, so brief outages during off-hours are invisible. (5) All VIX dimensions are Optional in RegimeVector — system operates normally without VIX data. |
+| **Owner** | Steven |
+| **Status** | Open |
+
+---
+
+*End of Risk & Assumptions Register v1.6*

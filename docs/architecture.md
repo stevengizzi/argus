@@ -191,6 +191,7 @@ class DataService(ABC):
 
 **Implementations:**
 - `DatabentoDataService` — **PRIMARY (DEC-082).** Databento US Equities Standard. Live TCP streaming via `databento` Python client (official, async). Subscribes to OHLCV-1m bars and trades streams, publishes CandleEvents and TickEvents through Event Bus. Full universe (no symbol limits). L2 depth (MBP-10) designed from Sprint 12, activated when strategies require it. Single live session with Event Bus fan-out. Session reconnection with exponential backoff.
+- `VIXDataService` — **SUPPLEMENTAL (Sprint 27.9).** Ingests VIX (^VIX) + SPX (^GSPC) daily OHLC from Yahoo Finance (yfinance). Computes 5 derived metrics: vol-of-vol ratio, VIX percentile rank, term structure proxy, realized vol, variance risk premium. Persists to SQLite (`data/vix_landscape.db`). Trust-cache-on-startup pattern (DEC-362). Daily update task during market hours. Self-disables when data exceeds `max_staleness_days` (3 trading days). Config-gated via `vix_regime.enabled` in `config/vix_regime.yaml`. VixRegimeConfig Pydantic model with 3 boundary sub-models (VolRegimeBoundaries, TermStructureBoundaries, VRPBoundaries) and 4 string enums (VolRegimePhase, VolRegimeMomentum, TermStructureRegime, VRPTier). Not a DataService ABC implementation — standalone service wired into server lifespan.
 - `IQFeedDataService` — **SUPPLEMENTAL (future).** IQFeed via Wine/Docker gateway. Forex ticks, Benzinga news, breadth indicators (TICK, TRIN, A/D). Added when forex strategies or Tier 2 news are built.
 - `AlpacaDataService` — **INCUBATOR ONLY (DEC-086).** Live WebSocket via `alpaca-py`. Retained for strategy incubator paper testing. Not used for production data (IEX feed unreliable — DEC-081).
 - `ReplayDataService` — reads historical Parquet files, drips into the system at configurable speed
@@ -709,29 +710,40 @@ class Orchestrator:
 
 ### 3.6.1 Regime Intelligence (Sprint 27.6)
 
-Multi-dimensional regime classification replacing the single `MarketRegime` enum with a continuous `RegimeVector` across 6 dimensions. All data sourced from existing subscriptions ($0 additional cost). Config-gated via `regime_intelligence.enabled` in `config/regime.yaml`.
+Multi-dimensional regime classification replacing the single `MarketRegime` enum with a continuous `RegimeVector` across 10 dimensions (6 original + 4 VIX-based from Sprint 27.9). Config-gated via `regime_intelligence.enabled` in `config/regime.yaml` + `vix_calculators_enabled` flag.
 
-**RegimeVector** (`core/regime.py`): Frozen dataclass capturing market environment across 6 dimensions:
+**RegimeVector** (`core/regime.py`): Frozen dataclass capturing market environment across 11 fields:
 1. **Trend** — `trend_score` (-1.0 bearish to +1.0 bullish) + `trend_conviction` (0.0–1.0). Derived from V1 RegimeClassifier's SPY SMA/ROC indicators.
 2. **Volatility** — `volatility_level` (annualized realized vol, continuous) + `volatility_direction` (-1.0 falling to +1.0 rising). From V1's SPY 20-day realized vol.
 3. **Breadth** — `universe_breadth_score` (fraction of universe above 20-day MA, 0.0–1.0) + `breadth_thrust` (bool, crossed threshold rapidly). Computed from live Databento candle stream.
 4. **Correlation** — `average_correlation` (mean pairwise correlation of top N symbols) + `correlation_regime` ("dispersed"/"normal"/"concentrated"). Computed from cached daily returns.
 5. **Sector Rotation** — `sector_rotation_phase` ("risk_on"/"risk_off"/"mixed"/"transitioning") + `leading_sectors`/`lagging_sectors`. Via FMP sector performance endpoint (graceful degradation on 403).
 6. **Intraday Character** — `opening_drive_strength`, `first_30min_range_ratio`, `vwap_slope`, `direction_change_count` + `intraday_character` ("trending"/"choppy"/"reversal"/"breakout"). From SPY candle analysis at configurable times (default: 9:35/10:00/10:30 ET).
+7. **Vol Regime Phase** (Sprint 27.9) — `vol_regime_phase` (Optional[VolRegimePhase]: CALM/TRANSITION/VOL_EXPANSION/CRISIS). VIX threshold-based classification. None when VIX data unavailable or stale.
+8. **Vol Regime Momentum** (Sprint 27.9) — `vol_regime_momentum` (Optional[VolRegimeMomentum]: STABILIZING/NEUTRAL/DETERIORATING). VIX rate-of-change classification. None when unavailable.
+9. **Term Structure Regime** (Sprint 27.9) — `term_structure_regime` (Optional[TermStructureRegime]: CONTANGO_LOW/CONTANGO_HIGH/BACKWARDATION_LOW/BACKWARDATION_HIGH). VIX term structure proxy classification. None when unavailable.
+10. **Variance Risk Premium** (Sprint 27.9) — `variance_risk_premium` (Optional[VRPTier]: COMPRESSED/NORMAL/ELEVATED/EXTREME) + continuous value. VIX minus realized vol. None when unavailable.
+11. **VIX Close** (Sprint 27.9) — `vix_close` (Optional[float]). Latest VIX closing price for reference. None when unavailable.
 
-Backward-compatible: `primary_regime` field provides the same `MarketRegime` enum for existing consumers. `regime_confidence` (0.0–1.0) provides overall assessment confidence.
+Backward-compatible: `primary_regime` field provides the same `MarketRegime` enum for existing consumers. `regime_confidence` (0.0–1.0) provides overall assessment confidence. `matches_conditions()` treats None as match-any for VIX dimensions (Sprint 27.9). `to_dict()` includes all 11 fields. `from_dict()` backward-compatible with pre-27.9 serialized vectors.
 
-**RegimeOperatingConditions** (`core/regime.py`): Frozen dataclass defining acceptable regime ranges for strategy activation. Float dimensions use `(min, max)` inclusive ranges. String dimensions use list-of-allowed-values. `RegimeVector.matches_conditions()` checks all non-None constraints (AND logic). Empty conditions → always matches (vacuously true).
+**RegimeOperatingConditions** (`core/regime.py`): Frozen dataclass defining acceptable regime ranges for strategy activation. Float dimensions use `(min, max)` inclusive ranges. String dimensions use list-of-allowed-values. 4 new Optional VIX enum fields (Sprint 27.9): `vol_regime_phase`, `vol_regime_momentum`, `term_structure_regime`, `variance_risk_premium`. `RegimeVector.matches_conditions()` checks all non-None constraints (AND logic). Empty conditions → always matches (vacuously true). Strategy YAMLs use match-any (no `operating_conditions` block = None defaults).
 
-**RegimeClassifierV2** (`core/regime.py`): Composes V1 `RegimeClassifier` with 4 dimension calculators. Delegates trend + volatility to V1, adds breadth/correlation/sector/intraday. Constructor takes `OrchestratorConfig`, `RegimeIntelligenceConfig`, and 4 calculator instances. `classify_regime_v2()` async method returns `RegimeVector`.
+**RegimeClassifierV2** (`core/regime.py`): Composes V1 `RegimeClassifier` with 8 dimension calculators (4 original + 4 VIX from Sprint 27.9). Delegates trend + volatility to V1, adds breadth/correlation/sector/intraday + VIX phase/momentum/term structure/VRP. Constructor takes `OrchestratorConfig`, `RegimeIntelligenceConfig`, original 4 calculator instances, and optional VIXDataService reference. VIX calculators return None gracefully when VIX data unavailable or stale. `classify_regime_v2()` async method returns `RegimeVector`.
 
-**Calculators:**
+**Calculators (Original 4 — Sprint 27.6):**
 - `BreadthCalculator` (`core/breadth.py`): Maintains per-symbol state (latest close, MA buffer). `update(symbol, close)` for streaming updates. `compute()` returns `(breadth_score, breadth_thrust)`. Configurable `ma_period`, `thrust_threshold`, `min_symbols`, `min_bars_for_valid`.
 - `MarketCorrelationTracker` (`core/market_correlation.py`): Computes pairwise correlation of top N symbols over lookback window. `compute()` returns `(average_correlation, correlation_regime)`. Uses cached daily returns data (FMP daily bars or computed from Databento). Configurable `lookback_days`, `top_n_symbols`, `dispersed_threshold`, `concentrated_threshold`.
 - `SectorRotationAnalyzer` (`core/sector_rotation.py`): Fetches sector performance from FMP. `compute()` returns `(sector_rotation_phase, leading_sectors, lagging_sectors)`. Graceful degradation on HTTP 403 (FMP Starter plan limitation). Uses `aiohttp` with timeout.
 - `IntradayCharacterDetector` (`core/intraday_character.py`): Analyzes SPY intraday price action. `update(candle)` for streaming bar updates. `classify()` returns `(opening_drive_strength, first_30min_range_ratio, vwap_slope, direction_change_count, intraday_character)`. Configurable `first_bar_minutes`, `classification_times`, `min_spy_bars`, threshold parameters.
 
-**RegimeHistoryStore** (`core/regime_history.py`): SQLite persistence in `data/regime_history.db`. Fire-and-forget writes — exceptions logged, never disrupt trading. 7-day retention with automatic pruning. Stores serialized `RegimeVector` with computed_at timestamp. Schema: `regime_history` table with `id`, `computed_at`, `vector_json`, `primary_regime`, `regime_confidence`.
+**VIX Calculators (4 new — Sprint 27.9, `core/vix_calculators.py`):**
+- `VolRegimePhaseCalculator`: Classifies VIX level into CALM/TRANSITION/VOL_EXPANSION/CRISIS phases using configurable thresholds from VolRegimeBoundaries. Returns None when VIX data unavailable or stale.
+- `VolRegimeMomentumCalculator`: Classifies VIX rate-of-change as STABILIZING/NEUTRAL/DETERIORATING using vol-of-vol ratio and configurable momentum threshold. Returns None when unavailable.
+- `TermStructureRegimeCalculator`: Classifies VIX term structure proxy into CONTANGO_LOW/CONTANGO_HIGH/BACKWARDATION_LOW/BACKWARDATION_HIGH using configurable thresholds from TermStructureBoundaries. Returns None when unavailable.
+- `VarianceRiskPremiumCalculator`: Classifies VIX minus realized vol as COMPRESSED/NORMAL/ELEVATED/EXTREME using VRPBoundaries thresholds, also provides continuous VRP value. Returns None when unavailable.
+
+**RegimeHistoryStore** (`core/regime_history.py`): SQLite persistence in `data/regime_history.db`. Fire-and-forget writes — exceptions logged, never disrupt trading. 7-day retention with automatic pruning. Stores serialized `RegimeVector` with computed_at timestamp. Schema: `regime_history` table with `id`, `computed_at`, `vector_json`, `primary_regime`, `regime_confidence`, `vix_close REAL` (nullable, added Sprint 27.9 via idempotent ALTER TABLE).
 
 **BacktestEngine Integration:** `use_regime_v2: bool` flag on `BacktestEngineConfig`. When enabled, BacktestEngine uses `RegimeClassifierV2` for regime tagging in `to_multi_objective_result()`.
 
@@ -741,10 +753,22 @@ Backward-compatible: `primary_regime` field provides the same `MarketRegime` enu
 ```yaml
 enabled: true
 persist_history: true
+vix_calculators_enabled: true  # Enable VIX calculators in V2 classifier (Sprint 27.9)
 breadth: { enabled: true, ma_period: 20, thrust_threshold: 0.80, min_symbols: 50 }
 correlation: { enabled: true, lookback_days: 20, top_n_symbols: 50, dispersed_threshold: 0.30, concentrated_threshold: 0.60 }
 sector_rotation: { enabled: true }
 intraday: { enabled: true, first_bar_minutes: 5, classification_times: ["09:35","10:00","10:30"], min_spy_bars: 3 }
+```
+
+**VIX Config (`config/vix_regime.yaml`, Sprint 27.9):**
+```yaml
+enabled: true
+max_staleness_days: 3
+fmp_fallback_enabled: false
+vol_regime_boundaries: { calm_upper: 15.0, transition_upper: 20.0, expansion_upper: 30.0 }
+term_structure_boundaries: { contango_threshold: 0.0, high_contango_threshold: 0.05 }
+vrp_boundaries: { compressed_upper: -2.0, normal_upper: 3.0, elevated_upper: 8.0 }
+momentum_threshold: 2.0
 ```
 
 ### 3.7 Order Manager (`execution/order_manager.py`)
@@ -1518,6 +1542,8 @@ GET  /api/v1/quality/{symbol}            # Current quality score (Sprint 24)
 GET  /api/v1/quality/history             # Quality score history (Sprint 24)
 GET  /api/v1/quality/distribution        # Today's grade distribution (Sprint 24)
 GET  /api/v1/counterfactual/accuracy     # Filter accuracy breakdowns by stage/reason/grade/regime/strategy (Sprint 27.7)
+GET  /api/v1/vix/current                 # Latest VIX data + classifications + staleness (Sprint 27.9)
+GET  /api/v1/vix/history                 # Historical VIX data with date range filter (Sprint 27.9)
 GET  /api/v1/learning/calibration        # Predicted vs actual by grade (Sprint 28+)
 GET  /api/v1/learning/insights           # Top recent findings (Sprint 28+)
 
@@ -1883,7 +1909,7 @@ Not yet implemented. Interface will publish `CatalystEvent` to the Event Bus for
 
 ### 6.2 Dashboard Pages
 
-**Overview Dashboard:** Account equity, daily P&L, active strategies at a glance, open positions, recent trades, current market regime, system health indicator, approval queue badge
+**Overview Dashboard:** Account equity, daily P&L, active strategies at a glance, open positions, recent trades, current market regime, system health indicator, approval queue badge, VixRegimeCard widget (VIX close, VRP tier badge, vol regime phase label, momentum direction arrow — hidden when `vix_regime.enabled: false` or data unavailable, TanStack Query 60s polling, Sprint 27.9)
 
 **Strategy Lab:** All strategies in the Incubator Pipeline, filterable by stage. Drill into any strategy for full performance metrics, parameter configuration, and history.
 

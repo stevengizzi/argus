@@ -1,11 +1,11 @@
 # ARGUS — Claude Code Context
 
 > Dense, actionable context for Claude Code sessions. No history — see `docs/` for that.
-> Last updated: March 26, 2026 (Sprint 27.8 doc sync — Operational Cleanup + Validation Tooling)
+> Last updated: March 26, 2026 (Sprint 27.9 doc sync — VIX Regime Intelligence)
 
 ## Active Sprint
 
-**No active sprint.** Sprint 27.8 (Operational Cleanup + Validation Tooling) completed March 26, 2026.
+**No active sprint.** Sprint 27.9 (VIX Regime Intelligence) completed March 26, 2026.
 
 Next planned sprint: **28 (Learning Loop V1)**, followed by Sprints 29–31 (Pattern Expansion + Short Selling + Research Console).
 
@@ -19,7 +19,7 @@ Two roadmap amendments adopted March 23, 2026 adding 5 new sprint slots:
 - **32.5** (Experiment Registry + Promotion Pipeline): Partitioned SQLite registry, cohort-based promotion, simulated-paper screening, overnight experiment queue, kill switches, anti-fragility
 - **33.5** (Adversarial Stress Testing): Historical crisis replay + synthetic stress scenarios as PromotionPipeline gate
 Amendment docs: `docs/amendments/roadmap-amendment-experiment-infrastructure.md`, `docs/amendments/roadmap-amendment-intelligence-architecture.md`
-Build track: ~~21.6~~ ✅ → ~~27.5~~ ✅ → ~~27.6~~ ✅ → ~~27.7~~ ✅ → ~~27.75~~ ✅ → ~~27.8~~ ✅ → 28 → 28.5 → 29–31 → 32 → 32.5 → 33 → 33.5 → 34 → 35–41
+Build track: ~~21.6~~ ✅ → ~~27.5~~ ✅ → ~~27.6~~ ✅ → ~~27.7~~ ✅ → ~~27.75~~ ✅ → ~~27.8~~ ✅ → ~~27.9~~ ✅ → 28 → 28.5 → 29–31 → 32 → 32.5 → 33 → 33.5 → 34 → 35–41
 DEC ranges reserved: 363–372 (27.5), 369–378 (27.6), 379–385 (27.7), 386–395 (32.5), 396–402 (33.5)
 
 ### Known Issues
@@ -31,9 +31,9 @@ DEC ranges reserved: 363–372 (27.5), 369–378 (27.6), 379–385 (27.7), 386�
 
 - **Active sprint:** None (between sprints)
 - **Next sprint:** 28 (Learning Loop V1)
-- **Tests:** ~3,542 pytest + 638 Vitest (0 failures, 0 hangs)
+- **Tests:** ~3,610 pytest + 645 Vitest (0 failures, 0 hangs)
 - **Strategies:** 7 active (ORB Breakout, ORB Scalp, VWAP Reclaim, Afternoon Momentum, Red-to-Green, Bull Flag, Flat-Top Breakout)
-- **Infrastructure:** Databento EQUS.MINI (live) + IBKR paper trading (Account U24619949) + FMP Starter (scanning + reference data + daily bars for regime) + Finnhub (news + analyst recs) + Claude API (Copilot + Catalyst Classification) + Universe Manager (config-gated) + Catalyst Pipeline (config-gated) + Intelligence Polling Loop (config-gated) + Reference Data Cache + Quality Engine (config-gated) + Dynamic Position Sizer + Strategy Evaluation Telemetry (ring buffer + SQLite persistence) + Debrief Export (shutdown automation) + Evaluation Framework (MultiObjectiveResult, EnsembleResult, comparison API, slippage model) + Regime Intelligence (RegimeVector 6-dimension, config-gated, Sprint 27.6) + Counterfactual Engine (shadow position tracking, filter accuracy, shadow strategy mode, config-gated, Sprint 27.7) + ThrottledLogger (log rate-limiting, Sprint 27.75) + Paper trading config overrides (10x risk reduction, throttle disabled, $10 min risk floor, Sprint 27.75)
+- **Infrastructure:** Databento EQUS.MINI (live) + IBKR paper trading (Account U24619949) + FMP Starter (scanning + reference data + daily bars for regime) + Finnhub (news + analyst recs) + Claude API (Copilot + Catalyst Classification) + Universe Manager (config-gated) + Catalyst Pipeline (config-gated) + Intelligence Polling Loop (config-gated) + Reference Data Cache + Quality Engine (config-gated) + Dynamic Position Sizer + Strategy Evaluation Telemetry (ring buffer + SQLite persistence) + Debrief Export (shutdown automation) + Evaluation Framework (MultiObjectiveResult, EnsembleResult, comparison API, slippage model) + Regime Intelligence (RegimeVector 11-field, 8 calculators, config-gated, Sprints 27.6 + 27.9) + VIX Data Service (yfinance daily VIX/SPX, 5 derived metrics, SQLite cache, config-gated, Sprint 27.9) + Counterfactual Engine (shadow position tracking, filter accuracy, shadow strategy mode, config-gated, Sprint 27.7) + ThrottledLogger (log rate-limiting, Sprint 27.75) + Paper trading config overrides (10x risk reduction, throttle disabled, $10 min risk floor, Sprint 27.75)
 - **Frontend:** 8-page Command Center (Observatory added Sprint 25) + AI Copilot + Universe Status Card + Intelligence Brief View (all active), Tauri desktop + PWA mobile
 
 ## Project Structure
@@ -43,7 +43,7 @@ argus/
 ├── core/           # Orchestrator, Risk Manager, Portfolio, Event Bus, Regime Intelligence (breadth.py, market_correlation.py, sector_rotation.py, intraday_character.py, regime_history.py), TheoreticalFillModel (fill_model.py)
 ├── strategies/     # BaseStrategy, OrbBaseStrategy, 7 strategy implementations
 │   └── patterns/   # PatternModule ABC, BullFlagPattern, FlatTopBreakoutPattern
-├── data/           # DataService (Databento/Alpaca/Replay/Backtest), Scanner, IndicatorEngine, UniverseManager, FMPReferenceClient
+├── data/           # DataService (Databento/Alpaca/Replay/Backtest), Scanner, IndicatorEngine, UniverseManager, FMPReferenceClient, VIXDataService
 ├── execution/      # Broker (IBKR/Alpaca/Simulated), Order Manager
 ├── analytics/      # Trade Logger, PerformanceCalculator, DebriefExport, Evaluation Framework
 ├── backtest/       # VectorBT helpers, Replay Harness, BacktestEngine (Sprint 27)
@@ -65,7 +65,7 @@ argus/
 │   └── tools.py    # 5 tool_use definitions with JSON schemas
 ├── intelligence/   # CatalystPipeline, CatalystClassifier, CatalystStorage, BriefingGenerator, startup factory, polling loop (Sprints 23.5 + 23.6), SetupQualityEngine (quality_engine.py), DynamicPositionSizer (position_sizer.py) (Sprint 24)
 ├── utils/          # ThrottledLogger (Sprint 27.75)
-├── config/         # system.yaml, system_live.yaml, strategies/*.yaml, regime.yaml, counterfactual.yaml
+├── config/         # system.yaml, system_live.yaml, strategies/*.yaml, regime.yaml, counterfactual.yaml, vix_regime.yaml
 ├── tests/          # pytest (backend) + Vitest (frontend)
 ├── docs/           # Decision log, sprint history, strategy specs, research reports
 ├── workflow/       # Metarepo submodule (protocols, templates, runner, universal rules)
@@ -251,7 +251,7 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 | ~~DEF-015~~ | ~~DatabentoScanner full-universe scanning~~ | — | **SUPERSEDED by DEC-263:** Full-universe strategy-specific monitoring architecture adopted. Sprint 23 implements Universe Manager with broad Databento subscription (3,000–5,000 symbols), full IndicatorEngine on all symbols, strategy-declared universe filters. |
 | ~~DEF-016~~ | ~~Order Manager `place_bracket_order()` integration~~ | ~~Sprint 17~~ | **DONE** (Sprint 17, DEC-117). Order Manager uses `place_bracket_order()` for atomic entry+stop+T1+T2. ManagedPosition tracks bracket component IDs. SimulatedBroker + IBKRBroker validated. Known limitation: AlpacaBroker bracket child order fills don't route correctly — acceptable, Alpaca is incubator-only (DEC-086). |
 | DEF-017 | Performance-weighted + correlation-adjusted allocation | 20+ days of multi-strategy live data available | V1 uses equal-weight. V2 shifts ±10% based on trailing Sharpe/drawdown. V3 adds CorrelationTracker cross-correlation penalty. CorrelationTracker infrastructure built in Sprint 17 (DEC-116). |
-| DEF-018 | Real VIX data integration | IQFeed subscription activated OR CBOE Databento dataset added | RegimeClassifier V1 uses SPY 20-day realized vol as VIX proxy (DEC-113). Replace with real-time VIX index when data source available. |
+| ~~DEF-018~~ | ~~Real VIX data integration~~ | — | **PARTIALLY RESOLVED** (Sprint 27.9): VIXDataService ingests daily VIX/SPX from yfinance, 4 VIX calculators wired into RegimeClassifierV2. Provides daily VIX context (not real-time intraday). Real-time VIX requires IQFeed or CBOE Databento — deferred until a strategy needs intraday VIX granularity. |
 | DEF-019 | Breadth indicator integration (advance/decline, TICK, TRIN) | IQFeed subscription activated | RegimeClassifier designed for breadth inputs but V1 uses SPY-only signals. IQFeed provides NYSE breadth data. ~$160–250/month. |
 | DEF-020 | Cross-strategy sector exposure check (max_single_sector_pct) | IQFeed subscription activated OR fundamentals data source integrated | Risk Manager cross-strategy checks skip sector exposure in V1 — no sector classification data available (DEC-126). Requires SIC/GICS mapping per symbol. Single-stock cap (5%) provides concentration protection meanwhile. |
 | DEF-021 | Sub-bar backtesting precision for ORB Scalp | Databento tick-level data available for backtesting OR Scalp paper trading results diverge significantly from backtests | Synthetic ticks give ~15s granularity per 1m bar (DEC-053). Scalp targets 30–120s holds — time stops shorter than 60s resolve at nearest bar boundary. Backtesting results are directional guidance, not exact P&L. |
@@ -310,7 +310,7 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 | DEF-088 | PatternParam structured type for `get_default_params()` | Unscheduled | `PatternModule.get_default_params()` returns `dict[str, Any]`. Should return structured `PatternParam` objects with type, range, and description metadata for parameter grid generation and UI. Pre-assigned at Sprint 26 planning. Priority: LOW. |
 | DEF-089 | In-memory ResultsCollector for parallel sweeps | Sprint 32 | Pre-assigned during Sprint 27 planning. BacktestEngine writes results to per-run SQLite databases; parallel sweep orchestration would benefit from an in-memory collector to avoid DB contention. Priority: LOW. |
 | ~~DEF-090~~ | ~~`execution_record.py` stores time_of_day in UTC, should be ET per DEC-061~~ | ~~Sprint 27.5~~ | **RESOLVED** (Sprint 27.5 cleanup): `.astimezone(_ET)` before strftime. |
-| DEF-091 | Add public accessors on V1 RegimeClassifier for trend_score computation and vol thresholds (V2 currently accesses private attributes) | Unscheduled | V2 RegimeClassifierV2 accesses V1 private attributes for trend/vol computation. Add public accessors. Priority: LOW. |
+| DEF-091 | Add public accessors on V1 RegimeClassifier for trend_score computation and vol thresholds; also VIXDataService._config and _update_task private accessor instances (V2/server/routes access private attributes) | Unscheduled | V2 RegimeClassifierV2 accesses V1 private attributes for trend/vol computation. Sprint 27.9 added 3 new instances: regime.py accesses VIXDataService._config, server.py accesses _update_task for shutdown, VIX routes access private attrs. Add public accessors. Priority: LOW. |
 | DEF-092 | Unused Protocol types (BreadthCalculator, CorrelationCalculator, SectorRotationCalculator, IntradayCalculator) in regime.py — V2 switched to concrete types | Unscheduled | Sprint 27.6 S6 switched from Protocol types to concrete types; Protocol definitions remain unused. Remove when confirmed unnecessary. Priority: LOW. |
 | DEF-093 | main.py duplicate orchestrator YAML load (Phase 8.5 + Phase 9) + Orchestrator `_latest_regime_vector` typing | Unscheduled | Two loads of orchestrator config in main.py. Also `_latest_regime_vector` uses `object \| None` — could use `RegimeVector` type. Priority: LOW. |
 | DEF-094 | ORB Scalp time-stop dominance | Unscheduled | March 24 session showed ~80% of scalp exits via 120s time-stop (vs target or stop). Parameters (120s window, 0.3R target) may need tuning after more session data. Track over 5+ sessions before adjusting. Priority: LOW. |
@@ -325,14 +325,15 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 | DEF-100 | IBKR paper trading repricing storm (error 399 spam) | Unscheduled | IBKR paper trading thin-book simulation reprices market orders repeatedly (~1/sec/symbol). Sprint 27.75 log throttling mitigates noise. Underlying issue is IBKR-paper-specific — live trading unaffected. Potential mitigations: limit orders for paper, fill timeout+resubmit. Priority: LOW-MEDIUM. |
 | ~~DEF-101~~ | ~~Tests coupled to paper-trading config values~~ | ~~Sprint 27.8~~ | **RESOLVED** (Sprint 27.8 S1): `test_engine_sizing.py` reads YAML and asserts match (not hardcoded). `test_config.py` uses ordering invariant assertions. Tests now pass regardless of paper vs live config values. |
 | DEF-102 | Trades page server-side stats computation | Unscheduled | TradeStatsBar computes Win Rate/Net P&L client-side from paginated array (limit:250). If filtered period exceeds 250 trades, stats computed from subset. Fix: server-side aggregate stats endpoint. Priority: LOW — monitor trade volume. |
+| DEF-103 | yfinance reliability as unofficial scraping library | Unscheduled | yfinance is an unofficial Yahoo Finance scraper — no SLA, may break on Yahoo HTML/API changes. Mitigations: SQLite persistence cache (survives outage), staleness self-disable (`max_staleness_days=3`), optional FMP fallback (`fmp_fallback_enabled` flag), daily-only frequency (not real-time). Monitor for breakage over 5+ sessions. Priority: LOW. |
 
 ## Reference
 
 | Document | What It Covers |
 |----------|---------------|
-| `docs/decision-log.md` | All 368 DEC entries with full rationale (0 new in Sprints 27.7/27.75) |
+| `docs/decision-log.md` | All 368 DEC entries with full rationale (0 new in Sprints 27.7–27.9) |
 | `docs/dec-index.md` | Quick-reference index with status markers |
-| `docs/sprint-history.md` | Complete sprint history (1–27.8) |
+| `docs/sprint-history.md` | Complete sprint history (1–27.9) |
 | `docs/pre-live-transition-checklist.md` | Config + test values to restore before live trading |
 | `docs/process-evolution.md` | Workflow evolution narrative |
 | `docs/live-operations.md` | Live trading procedures |
