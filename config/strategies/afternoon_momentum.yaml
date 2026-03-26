@@ -3,6 +3,7 @@ name: "Afternoon Momentum"
 version: "1.0.0"
 enabled: true
 mode: live  # "live" or "shadow" (Sprint 27.7)
+# VIX regime dimensions: not yet constrained (match-any). Activate post-Sprint 28.
 asset_class: "us_stocks"
 pipeline_stage: "paper_trading"
 family: "momentum"
