@@ -1,11 +1,11 @@
 # ARGUS — Claude Code Context
 
 > Dense, actionable context for Claude Code sessions. No history — see `docs/` for that.
-> Last updated: March 26, 2026 (Sprint 27.75 + deferred items doc sync)
+> Last updated: March 26, 2026 (Sprint 27.8 doc sync — Operational Cleanup + Validation Tooling)
 
 ## Active Sprint
 
-**No active sprint.** Sprint 27.75 (Paper Trading Operational Hardening) completed March 26, 2026.
+**No active sprint.** Sprint 27.8 (Operational Cleanup + Validation Tooling) completed March 26, 2026.
 
 Next planned sprint: **28 (Learning Loop V1)**, followed by Sprints 29–31 (Pattern Expansion + Short Selling + Research Console).
 
@@ -19,7 +19,7 @@ Two roadmap amendments adopted March 23, 2026 adding 5 new sprint slots:
 - **32.5** (Experiment Registry + Promotion Pipeline): Partitioned SQLite registry, cohort-based promotion, simulated-paper screening, overnight experiment queue, kill switches, anti-fragility
 - **33.5** (Adversarial Stress Testing): Historical crisis replay + synthetic stress scenarios as PromotionPipeline gate
 Amendment docs: `docs/amendments/roadmap-amendment-experiment-infrastructure.md`, `docs/amendments/roadmap-amendment-intelligence-architecture.md`
-Build track: ~~21.6~~ ✅ → ~~27.5~~ ✅ → ~~27.6~~ ✅ → ~~27.7~~ ✅ → ~~27.75~~ ✅ → 28 → 28.5 → 29–31 → 32 → 32.5 → 33 → 33.5 → 34 → 35–41
+Build track: ~~21.6~~ ✅ → ~~27.5~~ ✅ → ~~27.6~~ ✅ → ~~27.7~~ ✅ → ~~27.75~~ ✅ → ~~27.8~~ ✅ → 28 → 28.5 → 29–31 → 32 → 32.5 → 33 → 33.5 → 34 → 35–41
 DEC ranges reserved: 363–372 (27.5), 369–378 (27.6), 379–385 (27.7), 386–395 (32.5), 396–402 (33.5)
 
 ### Known Issues
@@ -31,7 +31,7 @@ DEC ranges reserved: 363–372 (27.5), 369–378 (27.6), 379–385 (27.7), 386�
 
 - **Active sprint:** None (between sprints)
 - **Next sprint:** 28 (Learning Loop V1)
-- **Tests:** ~3,528 pytest + 638 Vitest (0 failures, 0 hangs)
+- **Tests:** ~3,542 pytest + 638 Vitest (0 failures, 0 hangs)
 - **Strategies:** 7 active (ORB Breakout, ORB Scalp, VWAP Reclaim, Afternoon Momentum, Red-to-Green, Bull Flag, Flat-Top Breakout)
 - **Infrastructure:** Databento EQUS.MINI (live) + IBKR paper trading (Account U24619949) + FMP Starter (scanning + reference data + daily bars for regime) + Finnhub (news + analyst recs) + Claude API (Copilot + Catalyst Classification) + Universe Manager (config-gated) + Catalyst Pipeline (config-gated) + Intelligence Polling Loop (config-gated) + Reference Data Cache + Quality Engine (config-gated) + Dynamic Position Sizer + Strategy Evaluation Telemetry (ring buffer + SQLite persistence) + Debrief Export (shutdown automation) + Evaluation Framework (MultiObjectiveResult, EnsembleResult, comparison API, slippage model) + Regime Intelligence (RegimeVector 6-dimension, config-gated, Sprint 27.6) + Counterfactual Engine (shadow position tracking, filter accuracy, shadow strategy mode, config-gated, Sprint 27.7) + ThrottledLogger (log rate-limiting, Sprint 27.75) + Paper trading config overrides (10x risk reduction, throttle disabled, $10 min risk floor, Sprint 27.75)
 - **Frontend:** 8-page Command Center (Observatory added Sprint 25) + AI Copilot + Universe Status Card + Intelligence Brief View (all active), Tauri desktop + PWA mobile
@@ -321,9 +321,9 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 | ~~DEF-086~~ | ~~WebSocket test hangs~~ | ~~Post-sprint~~ | **RESOLVED**: 8 tests rewrote to test bridge pipeline directly via send_queue, eliminating sync/async cross-thread hang. |
 | ~~DEF-087~~ | ~~11 pre-existing test failures~~ | ~~Post-sprint~~ | **RESOLVED**: 4 vectorbt (NumPy 2.x dep upgrade), 1 data_fetcher (Pandas 2.x datetime precision), 4 e2e telemetry (hardcoded date + async flush), 2 integration sprint20 (regime-based allocation assertions). Zero production code changes. |
 | DEF-098 | Trade count inconsistency between Dashboard cards (Daily P&L=96, Positions=53) | Unscheduled | Root cause: paper trading ghost positions — entry fills recorded as trades but bracket legs cancelled by IBKR, positions not resolved through normal close flow. Positions card counts from OrderManager state, P&L/Trades from TradeLogger. Fix depends on DEF-099 resolution. Priority: MEDIUM. |
-| DEF-099 | Position reconciliation ghost positions in paper trading | Sprint 27.8 | IBKR paper trading cancels bracket legs (error 202) after entry fill. ARGUS tracks position, IBKR has none. Causes: unprotected positions, wrong capital calculation, trade count mismatch. Fix: reconciliation auto-cleanup + bracket exhaustion detection. Priority: HIGH. |
+| DEF-099 | Position reconciliation ghost positions in paper trading | Sprint 27.8 | **PARTIALLY RESOLVED** (Sprint 27.8 S1): Reconciliation auto-cleanup (config-gated `reconciliation.auto_cleanup_orphans`) generates synthetic close records for orphaned positions. Bracket exhaustion detection triggers flatten when all bracket legs cancelled. ExitReason.RECONCILIATION distinguishes synthetic from real exits. Monitor over 5+ sessions before marking fully resolved. |
 | DEF-100 | IBKR paper trading repricing storm (error 399 spam) | Unscheduled | IBKR paper trading thin-book simulation reprices market orders repeatedly (~1/sec/symbol). Sprint 27.75 log throttling mitigates noise. Underlying issue is IBKR-paper-specific — live trading unaffected. Potential mitigations: limit orders for paper, fill timeout+resubmit. Priority: LOW-MEDIUM. |
-| DEF-101 | Tests coupled to paper-trading config values (Sprint 27.75 reviewer finding) | Sprint 27.8 | `tests/backtest/test_engine_sizing.py` and `tests/core/test_config.py` had assertions hardcoding paper-trading config values. Rewritten to be config-value-independent (assert ordering invariants + read-from-YAML match). See `docs/pre-live-transition-checklist.md` for remaining config restore items. Priority: LOW (resolved in Sprint 27.8 S1). |
+| ~~DEF-101~~ | ~~Tests coupled to paper-trading config values~~ | ~~Sprint 27.8~~ | **RESOLVED** (Sprint 27.8 S1): `test_engine_sizing.py` reads YAML and asserts match (not hardcoded). `test_config.py` uses ordering invariant assertions. Tests now pass regardless of paper vs live config values. |
 | DEF-102 | Trades page server-side stats computation | Unscheduled | TradeStatsBar computes Win Rate/Net P&L client-side from paginated array (limit:250). If filtered period exceeds 250 trades, stats computed from subset. Fix: server-side aggregate stats endpoint. Priority: LOW — monitor trade volume. |
 
 ## Reference
@@ -332,7 +332,7 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 |----------|---------------|
 | `docs/decision-log.md` | All 368 DEC entries with full rationale (0 new in Sprints 27.7/27.75) |
 | `docs/dec-index.md` | Quick-reference index with status markers |
-| `docs/sprint-history.md` | Complete sprint history (1–27.75) |
+| `docs/sprint-history.md` | Complete sprint history (1–27.8) |
 | `docs/pre-live-transition-checklist.md` | Config + test values to restore before live trading |
 | `docs/process-evolution.md` | Workflow evolution narrative |
 | `docs/live-operations.md` | Live trading procedures |

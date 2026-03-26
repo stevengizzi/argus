@@ -5,10 +5,10 @@ Chains BacktestEngine -> walk-forward -> MultiObjectiveResult -> Pareto comparis
 into a single CLI invocation for the 6-strategy re-validation push.
 
 Usage:
-    python scripts/validate_all_strategies.py --cache-dir /Volumes/LaCie/argus-cache
-    python scripts/validate_all_strategies.py --cache-dir /Volumes/LaCie/argus-cache --strategies orb vwap
-    python scripts/validate_all_strategies.py --cache-dir /Volumes/LaCie/argus-cache --output results.json
-    python scripts/validate_all_strategies.py --cache-dir /Volumes/LaCie/argus-cache --ensemble
+    python scripts/validate_all_strategies.py --cache-dir data/databento_cache
+    python scripts/validate_all_strategies.py --cache-dir data/databento_cache --strategies orb vwap
+    python scripts/validate_all_strategies.py --cache-dir data/databento_cache --output results.json
+    python scripts/validate_all_strategies.py --cache-dir data/databento_cache --ensemble
 """
 
 from __future__ import annotations
@@ -444,11 +444,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         epilog=(
             "Examples:\n"
             "  python scripts/validate_all_strategies.py "
-            "--cache-dir /Volumes/LaCie/argus-cache\n"
+            "--cache-dir data/databento_cache\n"
             "  python scripts/validate_all_strategies.py "
-            "--cache-dir /Volumes/LaCie/argus-cache --strategies orb vwap\n"
+            "--cache-dir data/databento_cache --strategies orb vwap\n"
             "  python scripts/validate_all_strategies.py "
-            "--cache-dir /Volumes/LaCie/argus-cache --output results.json\n"
+            "--cache-dir data/databento_cache --output results.json\n"
         ),
     )
     parser.add_argument(

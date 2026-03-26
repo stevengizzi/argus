@@ -1,7 +1,7 @@
 # ARGUS — Sprint History
 
 > Complete record of all sprints from project inception through current state.
-> Active development began February 14, 2026. As of March 26, 2026 (~41 calendar days), 29 full sprints + 31 sub-sprints completed.
+> Active development began February 14, 2026. As of March 26, 2026 (~41 calendar days), 29 full sprints + 32 sub-sprints completed.
 
 ---
 
@@ -25,6 +25,9 @@
 | S — Evaluation Framework | 27.5 | Mar 23–24 | Universal evaluation infrastructure |
 | T — Regime Intelligence | 27.6 | Mar 24 | Multi-dimensional RegimeVector (6 dimensions) |
 | U — Market Session Safety | 27.65 | Mar 24–25 | Order Manager safety, bracket amendment, IntradayCandleStore |
+| V — Counterfactual Engine | 27.7 | Mar 25 | Shadow position tracking for rejected signals, filter accuracy |
+| W — Paper Trading Hardening | 27.75 | Mar 26 | Log rate-limiting, paper trading config, trades page fix |
+| X — Operational Cleanup | 27.8 | Mar 26 | Ghost position reconciliation fix, validation orchestrator script |
 
 ---
 
@@ -1751,11 +1754,46 @@
 
 ---
 
+## Sprint 27.8: Operational Cleanup + Validation Tooling (March 26, 2026)
+
+**Type:** Impromptu (DISCOVERED during March 25 market session debrief)
+**Goal:** Fix ghost position reconciliation (DEF-099), health monitor inconsistency, decouple config-coupled tests (DEF-101), add validation orchestrator script.
+**Sessions:** 2 (S1: Backend fixes, S2: Validation script), run in parallel
+**Tests:** pytest ~3,528 → ~3,542 (+14), Vitest 638 (unchanged) = +14 new tests
+**New DECs:** None (all patterns followed established precedent)
+**New DEF items:** None (DEF-099 partially resolved, DEF-101 resolved)
+
+**Session S1: Ghost Position Reconciliation + Health + Config-Coupled Tests**
+- `ExitReason.RECONCILIATION` added to events.py
+- `reconcile_positions()` made async; config-gated orphan cleanup: when `reconciliation.auto_cleanup_orphans=true` and ARGUS=N/IBKR=0, generates synthetic close records (exit_price=entry_price, P&L=0)
+- Bracket exhaustion detection in `on_cancel()`: when t1_target cancelled and all bracket legs None, triggers flatten attempt
+- Config wiring: `reconciliation.auto_cleanup_orphans: true` in system_live.yaml, dict-style access in main.py
+- Per-strategy health reporting: replaced 7 hardcoded if-blocks with loop checking `strategy.is_active`, reports DEGRADED for regime-filtered strategies
+- DEF-101 resolved: `test_engine_sizing.py` reads YAML and asserts match, `test_config.py` uses ordering invariant assertions
+- +8 new tests (7 reconciliation + 1 health), 3 rewritten (DEF-101)
+- Judgment calls: `reconcile_positions` sync→async (cleanest approach), used `_close_position` (real method name vs spec's `_close_position_and_log`), QualityRiskTiersConfig has no `.c` field (assertions stop at `c_plus`)
+- Verdict: CLEAR (2 LOW findings: ordering assertions use >=, maintenance note on position state mutation before _close_position)
+
+**Session S2: Validation Orchestrator Script**
+- `scripts/validate_all_strategies.py`: batch validation of all 7 strategies via subprocess calls to revalidate_strategy.py
+- Strategy registry with all 7 strategies and appropriate date ranges
+- Pareto frontier + pairwise comparison + regime robustness + optional ensemble analysis (--ensemble flag)
+- Summary table to stdout, full JSON output with --output flag
+- Error handling: individual strategy failures don't abort batch
+- Zero production code modifications
+- +8 new tests
+- Judgment calls: expectancy derived from PF*WR-(1-WR) since JSON lacks direct field, max_drawdown_pct=0.0 (data limitation)
+- Verdict: CLEAR (0 findings)
+
+**Notes:** Both sessions run in parallel (zero file overlap). S1 addresses DEF-099 (highest-priority paper trading issue) and DEF-101 (config-coupled tests). S2 provides tooling for the 6-strategy re-validation push (Proposal E from March 25 debrief). Combined: root-cause fix for ghost positions + operational tooling for validation pipeline.
+
+---
+
 ## Sprint Statistics
 
-- **Total sprints:** 29 full + 31 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9, 27.5, 27.6, 27.65, 27.7, 27.75)
-- **Total sessions:** ~410+ Claude Code sessions
-- **Total tests:** ~3,528 pytest + 638 Vitest = ~4,166 total
+- **Total sprints:** 29 full + 32 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9, 27.5, 27.6, 27.65, 27.7, 27.75, 27.8)
+- **Total sessions:** ~412+ Claude Code sessions
+- **Total tests:** ~3,542 pytest + 638 Vitest = ~4,180 total
 - **Total decisions:** 368 (DEC-001 through DEC-368)
 - **Calendar days (active dev):** ~41 (Feb 14 – Mar 26, 2026)
 - **Largest sprint:** 22 (9 implementation + 5 fix + 9 reviews, largest scope)
