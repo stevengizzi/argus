@@ -1,0 +1,85 @@
+# VIX Landscape Regime Configuration (Sprint 27.9)
+# Configures the VIX-based volatility dimension of regime intelligence.
+# Data sourced from Yahoo Finance (yfinance) with optional FMP fallback.
+
+# Master toggle — when false, VIX landscape dimension is inactive
+enabled: false
+
+# ---------------------------------------------------------------------------
+# Data Source Symbols
+# ---------------------------------------------------------------------------
+# Yahoo Finance ticker symbols for VIX and S&P 500
+yahoo_symbol_vix: "^VIX"
+yahoo_symbol_spx: "^GSPC"
+
+# ---------------------------------------------------------------------------
+# Rolling Window Sizes (trading days)
+# ---------------------------------------------------------------------------
+# Short window for vol-of-vol ratio numerator
+vol_short_window: 5
+# Long window for vol-of-vol ratio denominator
+vol_long_window: 20
+# Lookback for VIX percentile rank (1 year = 252 trading days)
+percentile_window: 252
+# VIX moving average window for trend detection
+ma_window: 20
+# Realized volatility window for SPX (used in VRP calculation)
+rv_window: 20
+
+# ---------------------------------------------------------------------------
+# Momentum Detection
+# ---------------------------------------------------------------------------
+# Lookback window for VIX momentum measurement
+momentum_window: 5
+# VIX points change threshold for rising/falling classification
+momentum_threshold: 2.0
+
+# ---------------------------------------------------------------------------
+# Update and Staleness
+# ---------------------------------------------------------------------------
+# Seconds between data refresh checks (minimum 60)
+update_interval_seconds: 300
+# Years of historical data to fetch on initial load
+history_years: 3
+# Max business days since last data before marking stale (minimum 1)
+max_staleness_days: 3
+
+# ---------------------------------------------------------------------------
+# FMP Fallback
+# ---------------------------------------------------------------------------
+# Enable FMP as fallback data source (Starter plan may not support ^VIX)
+fmp_fallback_enabled: false
+
+# ---------------------------------------------------------------------------
+# Volatility Regime Boundaries
+# ---------------------------------------------------------------------------
+# 2D classification space: (vol_of_vol_ratio, vix_percentile)
+# calm: low vol-of-vol AND low percentile
+# transition: moderate vol-of-vol OR moderate percentile
+# elevated: anything not calm, transition, or crisis
+# crisis: very high percentile
+vol_regime_boundaries:
+  calm_max_x: 1.0          # Max vol-of-vol ratio for calm
+  calm_max_y: 0.50          # Max VIX percentile for calm
+  transition_max_x: 1.3     # Max vol-of-vol ratio for transition
+  transition_max_y: 0.70    # Max VIX percentile for transition
+  crisis_min_y: 0.85        # Min VIX percentile for crisis
+
+# ---------------------------------------------------------------------------
+# Term Structure Boundaries
+# ---------------------------------------------------------------------------
+# Classifies VIX term structure as contango, flat, or backwardation
+# using the ratio of front-month to back-month VIX (or proxy)
+term_structure_boundaries:
+  contango_threshold: 1.0        # Ratio above which = contango
+  low_high_percentile_split: 0.50  # Split point for low/high sub-classification
+
+# ---------------------------------------------------------------------------
+# Variance Risk Premium (VRP) Boundaries
+# ---------------------------------------------------------------------------
+# VRP = implied vol (VIX) - realized vol
+# Positive VRP = options expensive relative to realized movement
+vrp_boundaries:
+  compressed_max: 0.0       # Max VRP for compressed tier (negative VRP)
+  normal_max: 50.0           # Max VRP for normal tier
+  elevated_max: 150.0        # Max VRP for elevated tier (above = extreme)

@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from argus.ai.config import AIConfig
 from argus.analytics.config import ObservatoryConfig
 from argus.core.regime import RegimeOperatingConditions
+from argus.data.vix_config import VixRegimeConfig
 from argus.intelligence.config import CatalystConfig, CounterfactualConfig, QualityEngineConfig
 
 # ---------------------------------------------------------------------------
@@ -268,6 +269,8 @@ class SystemConfig(BaseModel):
     regime_intelligence: RegimeIntelligenceConfig = Field(default_factory=RegimeIntelligenceConfig)
     # Counterfactual Engine configuration (Sprint 27.7 — shadow position tracking)
     counterfactual: CounterfactualConfig = Field(default_factory=CounterfactualConfig)
+    # VIX Regime configuration (Sprint 27.9 — VIX landscape dimension)
+    vix_regime: VixRegimeConfig = Field(default_factory=VixRegimeConfig)
 
     @field_validator("timezone")
     @classmethod
