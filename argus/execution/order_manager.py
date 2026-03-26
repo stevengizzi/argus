@@ -1307,39 +1307,6 @@ class OrderManager:
             logger.info("Order Manager reconstruction: No open positions at broker.")
             return
 
-        # Snapshot of symbols ARGUS already knows about (populated by prior phases)
-        known_symbols = set(self._managed_positions.keys())
-
-        # Separate known vs unknown broker positions
-        known_positions: list[object] = []
-        for pos in positions:
-            symbol = getattr(pos, "symbol", str(pos))
-            qty = int(getattr(pos, "qty", 0))
-            if symbol in known_symbols:
-                known_positions.append(pos)
-                continue
-
-            # Unknown position — zombie from prior session
-            if self._startup_config.flatten_unknown_positions:
-                await self._flatten_unknown_position(symbol, qty)
-            else:
-                logger.warning(
-                    "Unknown IBKR position at startup: %s (%d shares) "
-                    "— manual cleanup required",
-                    symbol,
-                    qty,
-                )
-                # Create RECO entry for UI visibility (existing behavior)
-                self._create_reco_position(symbol, qty, pos)
-
-        if not known_positions:
-            logger.info(
-                "Order Manager reconstruction: no known positions to recover "
-                "(flattened %d unknown)",
-                len(positions) - len(known_positions),
-            )
-            return
-
         try:
             orders = await self._broker.get_open_orders()
         except Exception as e:
@@ -1347,8 +1314,8 @@ class OrderManager:
             orders = []
 
         logger.info(
-            "Reconstructing %d positions and %d open orders from broker",
-            len(known_positions),
+            "Reconstructing from %d positions and %d open orders at broker",
+            len(positions),
             len(orders),
         )
 
@@ -1361,12 +1328,44 @@ class OrderManager:
                     orders_by_symbol[symbol] = []
                 orders_by_symbol[symbol].append(order)
 
-        for pos in known_positions:
-            self._reconstruct_known_position(pos, orders_by_symbol)
+        # Classify positions: "managed" (has bracket orders) vs "zombie" (no orders).
+        # ARGUS always places bracket orders (stop + targets) for managed positions.
+        # A position WITH associated orders was being actively managed before restart.
+        # A position with NO orders is an orphan/zombie from a prior session.
+        # Also check _managed_positions in case upstream phases pre-populated state.
+        managed_count = 0
+        zombie_count = 0
+        for pos in positions:
+            symbol = getattr(pos, "symbol", str(pos))
+            qty = int(getattr(pos, "qty", 0))
+
+            has_orders = bool(orders_by_symbol.get(symbol, []))
+            already_known = symbol in self._managed_positions
+
+            if has_orders or already_known:
+                # Managed position — reconstruct it
+                self._reconstruct_known_position(pos, orders_by_symbol)
+                managed_count += 1
+            elif self._startup_config.flatten_unknown_positions:
+                # Zombie position with no orders — flatten
+                await self._flatten_unknown_position(symbol, qty)
+                zombie_count += 1
+            else:
+                # Zombie but flatten disabled — warn and create RECO entry
+                logger.warning(
+                    "Unknown IBKR position at startup: %s (%d shares) "
+                    "— manual cleanup required",
+                    symbol,
+                    qty,
+                )
+                self._create_reco_position(symbol, qty, pos)
+                zombie_count += 1
 
         logger.info(
-            "Order Manager reconstruction complete: %d positions recovered",
-            len(known_positions),
+            "Order Manager reconstruction complete: %d positions recovered, "
+            "%d zombies handled",
+            managed_count,
+            zombie_count,
         )
 
     async def _flatten_unknown_position(self, symbol: str, qty: int) -> None:

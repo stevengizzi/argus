@@ -313,10 +313,7 @@ class TestOrderManagerIntegration:
             config=config,
         )
 
-        # Pre-populate AAPL as a known position so reconstruction recovers it
-        order_manager._managed_positions["AAPL"] = []
-
-        # Reconstruct
+        # Reconstruct (AAPL has a stop order → classified as managed)
         await order_manager.reconstruct_from_broker()
 
         # Verify position was recovered

@@ -8,24 +8,25 @@
 | File | Change Type | Rationale |
 |------|-------------|-----------|
 | argus/core/config.py | modified | Added StartupConfig Pydantic model, wired into SystemConfig |
-| argus/execution/order_manager.py | modified | Refactored reconstruct_from_broker() to separate known vs unknown positions; added _flatten_unknown_position(), _create_reco_position(), _reconstruct_known_position() helpers; added startup_config parameter |
+| argus/execution/order_manager.py | modified | Refactored reconstruct_from_broker() with order-based zombie detection; added _flatten_unknown_position(), _create_reco_position(), _reconstruct_known_position() helpers; added startup_config parameter |
 | argus/main.py | modified | Wire startup_config from SystemConfig into OrderManager constructor |
 | config/system.yaml | modified | Added startup.flatten_unknown_positions YAML entry |
 | config/system_live.yaml | modified | Added startup.flatten_unknown_positions YAML entry |
 | scripts/ibkr_close_all_positions.py | modified | chmod +x (permission change only) |
-| tests/execution/test_order_manager.py | modified | Added 8 new startup zombie cleanup tests; fixed existing reconstruction test to pre-populate known positions |
-| tests/test_integration_sprint5.py | modified | Fixed existing reconstruction test to pre-populate known positions |
+| tests/execution/test_order_manager.py | modified | Added 9 new startup zombie cleanup tests (including real-startup-sequence test) |
+| tests/test_integration_sprint5.py | modified | Updated existing reconstruction test comment |
 
 ### Judgment Calls
-- **Extracted 3 helper methods from reconstruct_from_broker():** `_flatten_unknown_position()`, `_create_reco_position()`, `_reconstruct_known_position()`. The prompt specified modifying reconstruction logic; extracting helpers keeps the main method readable while preserving all behavior. Single responsibility principle.
-- **RECO entry creation when flatten disabled:** Prompt said "Optionally still create the RECO entry for UI visibility." Chose to create it (maintain existing behavior) since operators need visibility into positions they chose not to auto-flatten.
-- **Graceful open_orders failure:** If `get_open_orders()` fails after positions are queried, we log a warning and continue with empty orders list rather than aborting reconstruction entirely. This preserves position recovery even if order query fails.
+- **Order-based zombie detection heuristic:** The spec said "if symbol does NOT exist in ARGUS internal position tracking." Since `_managed_positions` is always empty at startup, we use broker open orders as the heuristic instead: a position WITH associated bracket orders (stop/limit) was being managed by ARGUS; a position with NO orders is a zombie. This is safe because ARGUS always places bracket orders for managed positions.
+- **Extracted 3 helper methods from reconstruct_from_broker():** `_flatten_unknown_position()`, `_create_reco_position()`, `_reconstruct_known_position()`. Keeps the main method readable.
+- **RECO entry creation when flatten disabled:** Chose to create it for UI visibility since operators need to see positions they chose not to auto-flatten.
+- **Graceful open_orders failure:** If `get_open_orders()` fails, continue with empty orders list (all positions treated as zombies in that case — conservative/safe).
 
 ### Scope Verification
 | Spec Requirement | Status | Implementation |
 |-----------------|--------|----------------|
 | Find startup position reconstruction logic | DONE | order_manager.py:reconstruct_from_broker() |
-| Replace reconstruction-of-unknowns with conditional flatten | DONE | Known/unknown separation + _flatten_unknown_position() |
+| Replace reconstruction-of-unknowns with conditional flatten | DONE | Order-based heuristic: has_orders=managed, no_orders=zombie |
 | Handle IBKR portfolio query failure gracefully | DONE | try/except on get_positions() with WARNING log |
 | Add config field flatten_unknown_positions | DONE | StartupConfig in config.py, SystemConfig.startup |
 | Wire into SystemConfig | DONE | SystemConfig.startup field |
@@ -33,32 +34,35 @@
 | Add YAML to system_live.yaml | DONE | startup section added |
 | Fix script permissions | DONE | chmod +x applied |
 | Verify shebang line | DONE | #!/usr/bin/env python3 already present |
-| 8+ new tests | DONE | 8 new tests in test_order_manager.py |
+| 8+ new tests | DONE | 9 new tests in test_order_manager.py |
 
 ### Regression Checks
 | Check | Result | Notes |
 |-------|--------|-------|
-| Startup sequence order unchanged | PASS | Phase 10 order: broker connect → OrderManager → reconstruct_from_broker → quality pipeline |
-| Known positions not affected by startup cleanup | PASS | test_startup_only_known_positions + test_startup_mix_known_and_unknown verify this |
-| Normal startup without IBKR positions works | PASS | test_startup_empty_ibkr_portfolio verifies this |
-| Flatten happens BEFORE market data streaming | PASS | reconstruct_from_broker() called in Phase 10, before Phase 10.5 event routing |
+| Startup sequence order unchanged | PASS | Phase 10 order preserved |
+| Known positions not affected by startup cleanup | PASS | Positions with orders always reconstructed |
+| Normal startup without IBKR positions works | PASS | test_startup_empty_ibkr_portfolio |
+| Flatten happens BEFORE market data streaming | PASS | Phase 10, before Phase 10.5 |
 | Flatten uses broker abstraction | PASS | _flatten_unknown_position() calls self._broker.place_order() |
-| Existing reconstruction tests still pass | PASS | Updated 2 tests to pre-populate known positions |
+| Crash recovery: positions with orders not flattened | PASS | test_startup_real_sequence_position_with_orders_not_flattened |
 
 ### Test Results
-- Tests run: 318 (scoped: execution/ + integration_sprint5)
-- Tests passed: 318
+- Tests run: 319 (scoped: execution/ + integration_sprint5)
+- Tests passed: 319
 - Tests failed: 0
-- New tests added: 8
+- New tests added: 9
 - Command used: `python -m pytest tests/execution/ tests/test_integration_sprint5.py -x -q`
-- Full suite: 3655 passed, 9 failed (all 9 are pre-existing xdist-only failures in backtest/counterfactual — pass individually)
+- Full suite (xdist): 3653 passed, 11 failed (all pre-existing xdist-only; pass individually)
+
+### Post-Review Fix
+**F-001 (CRITICAL) — Fixed:** Tier 2 review correctly identified that `_managed_positions` is always empty at startup, so all positions would be classified as unknown and flattened on any mid-session restart. Fix: replaced `_managed_positions` check with broker open orders heuristic. ARGUS always places bracket orders for managed positions, so has_orders=managed, no_orders=zombie. Added `test_startup_real_sequence_position_with_orders_not_flattened` to verify the real startup path.
 
 ### Unfinished Work
 None
 
 ### Notes for Reviewer
-- Two existing tests (test_reconstruct_from_broker_recovers_positions, test_order_manager_reconstruction_with_positions) needed updating to pre-populate _managed_positions with known symbols. This is correct — before this change, ALL broker positions were blindly reconstructed. Now only known positions are reconstructed; unknown ones are flattened or warned.
-- The `orders_by_symbol` dict type annotation was tightened from `dict[str, list]` to `dict[str, list[object]]` for Pylance compliance.
+- The order-based heuristic is conservative: if a position has ANY associated broker order (stop, limit), it's treated as managed and reconstructed. Only truly orphaned positions with zero orders are flattened.
+- Edge case: if `get_open_orders()` fails, all positions have no orders and would be treated as zombies. This is the safe direction (flatten unknown rather than keep unknown).
 
 ---END-CLOSE-OUT---
 
@@ -70,8 +74,8 @@ None
   "verdict": "COMPLETE",
   "tests": {
     "before": 304,
-    "after": 312,
-    "new": 8,
+    "after": 313,
+    "new": 9,
     "all_pass": true
   },
   "files_created": [],
@@ -86,13 +90,20 @@ None
     "tests/test_integration_sprint5.py"
   ],
   "files_should_not_have_modified": [],
-  "scope_additions": [],
+  "scope_additions": [
+    {
+      "description": "Order-based zombie detection heuristic instead of _managed_positions check",
+      "justification": "Tier 2 review F-001: _managed_positions is always empty at startup. Order presence is the only reliable signal for managed vs zombie positions."
+    }
+  ],
   "scope_gaps": [],
   "prior_session_bugs": [],
-  "deferred_observations": [],
+  "deferred_observations": [
+    "Edge case: if get_open_orders() fails, all positions are treated as zombies (conservative). Acceptable for now but could add DB-backed position state persistence in future."
+  ],
   "doc_impacts": [],
   "dec_entries_needed": [],
   "warnings": [],
-  "implementation_notes": "Refactored reconstruct_from_broker() into 3 helper methods for clarity. Two existing tests needed updating to pre-populate known positions — correct behavioral change since unknown positions are now handled differently."
+  "implementation_notes": "Initial implementation used _managed_positions (always empty at boot) to classify known vs unknown. Tier 2 review caught this critical bug. Fixed by using broker open orders as the heuristic: positions with associated bracket orders are managed, positions with no orders are zombies. Added real-startup-sequence integration test."
 }
 ```

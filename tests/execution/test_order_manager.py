@@ -1197,13 +1197,9 @@ async def test_reconstruct_from_broker_recovers_positions(
         config=config,
     )
 
-    # Pre-populate as "known" so reconstruction treats them as recoverable
-    om._managed_positions["AAPL"] = []
-    om._managed_positions["TSLA"] = []
-
     await om.reconstruct_from_broker()
 
-    # Verify positions were reconstructed
+    # Verify positions were reconstructed (both have associated orders)
     assert "AAPL" in om._managed_positions
     assert "TSLA" in om._managed_positions
 
@@ -1363,7 +1359,7 @@ async def test_startup_only_known_positions(
     fixed_clock: FixedClock,
     config: OrderManagerConfig,
 ) -> None:
-    """All broker positions match ARGUS records → reconstruct, no flattens."""
+    """Position with associated orders → reconstruct, no flatten."""
     mock_broker = MagicMock()
 
     known = MagicMock()
@@ -1371,8 +1367,15 @@ async def test_startup_only_known_positions(
     known.qty = 100
     known.avg_entry_price = 150.0
 
+    # AAPL has a stop order → ARGUS was managing it
+    stop_order = MagicMock()
+    stop_order.symbol = "AAPL"
+    stop_order.order_type = "stop"
+    stop_order.stop_price = 148.0
+    stop_order.id = "stop-abc"
+
     mock_broker.get_positions = AsyncMock(return_value=[known])
-    mock_broker.get_open_orders = AsyncMock(return_value=[])
+    mock_broker.get_open_orders = AsyncMock(return_value=[stop_order])
     mock_broker.place_order = AsyncMock()
 
     startup_cfg = StartupConfig(flatten_unknown_positions=True)
@@ -1384,12 +1387,9 @@ async def test_startup_only_known_positions(
         startup_config=startup_cfg,
     )
 
-    # Pre-populate AAPL as a known internal position
-    om._managed_positions["AAPL"] = []
-
     await om.reconstruct_from_broker()
 
-    # No sell order placed (position is known)
+    # No sell order placed (position has orders → known/managed)
     mock_broker.place_order.assert_not_called()
 
     # Position was reconstructed
@@ -1403,7 +1403,7 @@ async def test_startup_mix_known_and_unknown(
     fixed_clock: FixedClock,
     config: OrderManagerConfig,
 ) -> None:
-    """Mix of known + unknown → only unknown positions flattened."""
+    """Position with orders → reconstruct; position without orders → flatten."""
     mock_broker = MagicMock()
 
     known = MagicMock()
@@ -1416,8 +1416,15 @@ async def test_startup_mix_known_and_unknown(
     zombie.qty = 50
     zombie.avg_entry_price = 30.0
 
+    # Only AAPL has an associated order — ZOMBIE has none
+    stop_order = MagicMock()
+    stop_order.symbol = "AAPL"
+    stop_order.order_type = "stop"
+    stop_order.stop_price = 148.0
+    stop_order.id = "stop-abc"
+
     mock_broker.get_positions = AsyncMock(return_value=[known, zombie])
-    mock_broker.get_open_orders = AsyncMock(return_value=[])
+    mock_broker.get_open_orders = AsyncMock(return_value=[stop_order])
     mock_broker.place_order = AsyncMock()
 
     startup_cfg = StartupConfig(flatten_unknown_positions=True)
@@ -1429,17 +1436,14 @@ async def test_startup_mix_known_and_unknown(
         startup_config=startup_cfg,
     )
 
-    # Pre-populate AAPL as known
-    om._managed_positions["AAPL"] = []
-
     await om.reconstruct_from_broker()
 
-    # ZOMBIE was flattened
+    # ZOMBIE was flattened (no orders → zombie)
     mock_broker.place_order.assert_called_once()
     sell_order = mock_broker.place_order.call_args[0][0]
     assert sell_order.symbol == "ZOMBIE"
 
-    # AAPL was reconstructed
+    # AAPL was reconstructed (has stop order → managed)
     assert len(om._managed_positions["AAPL"]) == 1
     assert om._managed_positions["AAPL"][0].entry_price == 150.0
 
@@ -1483,6 +1487,52 @@ def test_startup_config_flatten_field() -> None:
     # Default is True
     cfg_default = StartupConfig()
     assert cfg_default.flatten_unknown_positions is True
+
+
+@pytest.mark.asyncio
+async def test_startup_real_sequence_position_with_orders_not_flattened(
+    event_bus: EventBus,
+    fixed_clock: FixedClock,
+    config: OrderManagerConfig,
+) -> None:
+    """Real startup: empty _managed_positions + position with orders → reconstruct."""
+    mock_broker = MagicMock()
+
+    # IBKR has a position with bracket orders (crash recovery scenario)
+    pos = MagicMock()
+    pos.symbol = "NVDA"
+    pos.qty = 200
+    pos.avg_entry_price = 120.0
+
+    stop = MagicMock()
+    stop.symbol = "NVDA"
+    stop.order_type = "stop"
+    stop.stop_price = 118.0
+    stop.id = "stop-nvda"
+
+    mock_broker.get_positions = AsyncMock(return_value=[pos])
+    mock_broker.get_open_orders = AsyncMock(return_value=[stop])
+    mock_broker.place_order = AsyncMock()
+
+    startup_cfg = StartupConfig(flatten_unknown_positions=True)
+    om = OrderManager(
+        event_bus=event_bus,
+        broker=mock_broker,
+        clock=fixed_clock,
+        config=config,
+        startup_config=startup_cfg,
+    )
+
+    # _managed_positions is empty (real startup state)
+    assert len(om._managed_positions) == 0
+
+    await om.reconstruct_from_broker()
+
+    # Position has orders → reconstructed, NOT flattened
+    mock_broker.place_order.assert_not_called()
+    assert "NVDA" in om._managed_positions
+    assert om._managed_positions["NVDA"][0].entry_price == 120.0
+    assert om._managed_positions["NVDA"][0].stop_price == 118.0
 
 
 def test_script_has_executable_permission() -> None:
