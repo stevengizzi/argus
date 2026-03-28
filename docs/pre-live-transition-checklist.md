@@ -4,7 +4,7 @@
 > and must be restored before transitioning to live trading.
 >
 > **Created:** March 26, 2026 (Sprint 27.75 doc sync)
-> **Last updated:** March 26, 2026
+> **Last updated:** March 28, 2026
 
 ---
 
@@ -65,6 +65,31 @@ After restoring all values:
 2. Verify config loads: `python -c "from argus.config.config import SystemConfig; c = SystemConfig.from_yaml('config/system_live.yaml'); print('OK')"`
 3. Review all risk tier values in the Command Center System page after boot
 4. Verify throttling is active: first 5 consecutive losses on a strategy should trigger suspension
+
+---
+
+## Overflow Routing (Sprint 27.95)
+
+### config/overflow.yaml — Broker Capacity
+Review and tune `broker_capacity` for live account equity:
+- Paper: `broker_capacity: 30` (conservative for $935K paper account)
+- Live: Evaluate based on actual account equity and margin requirements
+
+### config/system.yaml / config/system_live.yaml — Startup Zombie Flatten
+Confirm desired behavior for live:
+- `startup.flatten_unknown_positions: true` (default) — flattens unrecognized IBKR positions at startup
+- Consider setting to `false` for live if manual position management is preferred (note: RECO positions created with `flatten_unknown_positions=false` have `stop_price=0.0` and require manual stop placement)
+
+### config/system.yaml / config/system_live.yaml — Reconciliation Cleanup
+Decide if unconfirmed position cleanup should be enabled for live:
+- `system.yaml`: `auto_cleanup_unconfirmed: false` (default, warn-only)
+- `system_live.yaml`: `auto_cleanup_unconfirmed: true` (paper trading)
+- **For live:** Recommend starting with `false` (warn-only) until reconciliation behavior is validated over multiple sessions
+
+### config/order_manager.yaml — Stop Cancel Retry Max
+Confirm default is appropriate for live latency:
+- `stop_cancel_retry_max: 3` (default) — retries with 1s/2s/4s exponential backoff
+- Live IBKR may have different latency characteristics than paper — monitor and tune
 
 ---
 

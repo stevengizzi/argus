@@ -4458,6 +4458,132 @@ Each entry follows this format:
 
 ---
 
+### DEC-369 | Reconciliation: Broker-Confirmed Positions Never Auto-Closed
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-26 |
+| **Context** | March 26 session — reconciliation trusted IBKR portfolio snapshots (eventually consistent under load) over fill callbacks and auto-closed 336 of 371 real positions. 239 later received exit fills proving they were real. |
+| **Decision** | `_broker_confirmed` dict tracks positions with confirmed IBKR entry fills. Confirmed positions are NEVER auto-closed by reconciliation regardless of config. `_reconciliation_miss_count` provides consecutive miss counter for unconfirmed positions only. |
+| **Alternatives** | (1) Disable reconciliation entirely — loses orphan detection. (2) Trust snapshot only after N consecutive misses for all positions — still risks destroying confirmed positions under sustained load. |
+| **Rationale** | IBKR portfolio snapshots are eventually consistent — under high order volume, stale snapshots can temporarily omit real positions. Fill callbacks are the authoritative source of position existence. Reconciliation should only clean up positions that were never broker-confirmed. |
+| **Cross-References** | Sprint 27.95 S1a, DEC-365 (periodic reconciliation) |
+| **Status** | Active |
+
+---
+
+### DEC-370 | Reconciliation: Auto-Cleanup Unconfirmed Defaults to False (Warn-Only)
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-26 |
+| **Context** | Sprint 27.8 `auto_cleanup_orphans` was the bug — too aggressive. The new `auto_cleanup_unconfirmed` defaults to `false`, making reconciliation fully warn-only by default. |
+| **Decision** | `ReconciliationConfig` with `auto_cleanup_unconfirmed: false` (default), `consecutive_miss_threshold: 3`. Legacy `auto_cleanup_orphans` preserved with backwards-compatible fallback. 4-branch logic: confirmed → warn, unconfirmed+cleanup → miss counter, unconfirmed+legacy → immediate, else → warn. |
+| **Alternatives** | (1) Remove legacy config entirely — breaks existing deployments. (2) Single bool flag — insufficient granularity between confirmed and unconfirmed positions. |
+| **Rationale** | Warn-only default prevents the class of bug that destroyed 336 positions. Operators must explicitly opt into cleanup of unconfirmed positions. Legacy config support ensures backward compatibility. |
+| **Cross-References** | Sprint 27.95 S1a, DEC-277 (fail-closed defaults) |
+| **Status** | Active |
+
+---
+
+### DEC-371 | Trade Logger: RECONCILIATION ExitReason Added to Trading Model
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-26 |
+| **Context** | Separate `ExitReason` enums in `events.py` and `trading.py` — Sprint 27.8 added RECONCILIATION to events.py but missed trading.py, causing Pydantic validation failure on every reconciliation close (336 ERROR logs). |
+| **Decision** | Added `RECONCILIATION` member to `models/trading.py:ExitReason`. Defensive defaults in `_close_position` for reconciliation closes: `stop_price` defaults to `entry_price`, `gross_pnl` forced to 0.0. |
+| **Alternatives** | (1) Consolidate the two ExitReason enums into one — correct long-term but higher blast radius; tracked as DEF-104. (2) Catch the Pydantic error — masks the root cause. |
+| **Rationale** | The immediate fix is to add the missing member. Consolidation of the dual enums is deferred as DEF-104 to minimize blast radius. |
+| **Cross-References** | Sprint 27.95 S1b, DEF-104 (dual enum tech debt) |
+| **Status** | Active |
+
+---
+
+### DEC-372 | Stop Resubmission Cap with Exponential Backoff
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-26 |
+| **Context** | March 26 session — RDW symbol had 68 stop resubmissions in 50 seconds (infinite retry loop on IBKR rejection). |
+| **Decision** | `_resubmit_stop_with_retry` caps retries at `stop_cancel_retry_max` (default 3) with exponential backoff (1s, 2s, 4s). On exhaustion, triggers emergency flatten via `_flatten_position` respecting `_flatten_pending` guard. Counter resets on position close. |
+| **Alternatives** | (1) No retry cap — exactly the broken behavior. (2) Single retry — may be insufficient for transient errors. (3) Linear backoff — less effective at preventing burst. |
+| **Rationale** | Exponential backoff with a hard cap prevents both infinite loops and burst request storms. The flatten-on-exhaustion ensures the position isn't left unprotected. |
+| **Cross-References** | Sprint 27.95 S2, DEC-363 (flatten-pending guard) |
+| **Status** | Active |
+
+---
+
+### DEC-373 | Bracket Amendment Revision-Rejected Handling
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-26 |
+| **Context** | March 26 session — 36 "Revision rejected due to unapproved modification" errors from IBKR when amending bracket legs after fill slippage. |
+| **Decision** | On "Revision rejected" cancellation, submit a fresh stop/target order (not a retry of the cancelled order) using `_amended_prices` dict from DEC-366 bracket amendment. Handles all 3 bracket leg types (stop, T1, T2). If fresh order fails, enters normal stop resubmission flow (subject to retry cap). |
+| **Alternatives** | (1) Retry the amendment — IBKR will reject again. (2) Ignore the rejection — leaves position with incorrect protection levels. |
+| **Rationale** | A fresh order bypasses IBKR's amendment rejection logic. The `_amended_prices` dict already contains the correct post-slippage prices. Falling through to stop resubmission flow provides defense-in-depth with the retry cap from DEC-372. |
+| **Cross-References** | Sprint 27.95 S2, DEC-366 (bracket amendment on slippage) |
+| **Status** | Active |
+
+---
+
+### DEC-374 | Duplicate Fill Callback Deduplication
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-26 |
+| **Context** | March 26 session — 37 orders with duplicate fill callbacks from `ib_async`. |
+| **Decision** | `_last_fill_state: dict[str, tuple[str, float]]` maps `order_id → (order_id, cumulative_qty)`. Duplicate `(order_id, cumulative_qty)` pair → DEBUG log, return early. Increasing cumulative_qty → legitimate partial fill, process normally. `_fill_order_ids_by_symbol` reverse index ensures reliable cleanup on position close. |
+| **Alternatives** | (1) Ignore duplicates — leads to double-counted P&L. (2) Track fill IDs — IBKR doesn't provide unique fill IDs in all callback paths. |
+| **Rationale** | Cumulative quantity is the reliable monotonic indicator of fill progress. Same cumulative quantity = duplicate callback. Increasing cumulative quantity = real partial fill. The reverse index by symbol enables cleanup without iterating the full map. |
+| **Cross-References** | Sprint 27.95 S2 |
+| **Status** | Active |
+
+---
+
+### DEC-375 | Dynamic Overflow Routing to CounterfactualTracker
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-26 |
+| **Context** | March 26 session — ORB Scalp deployed $3.8M into $935K account (208 positions). Paper trading purpose is data collection, not capital efficiency — but broker capacity has limits. |
+| **Decision** | When `OrderManager.open_position_count >= overflow.broker_capacity` (default 30), approved signals are published as `SignalRejectedEvent` with `RejectionStage.BROKER_OVERFLOW` instead of placing IBKR orders. CounterfactualTracker receives and tracks these signals (existing subscription, data-driven — no code changes needed). Config-gated via `overflow.enabled` (default true). Bypassed for `BrokerSource.SIMULATED`. Check placed after Risk Manager approval, before order placement. |
+| **Alternatives** | (1) `max_concurrent_positions` cap — rejects signals entirely, losing learning data. (2) Smaller position sizing — doesn't protect broker capacity under extreme signal volume. |
+| **Rationale** | Overflow routing preserves learning data by channeling excess signals to the CounterfactualTracker instead of discarding them. The broker capacity threshold is tunable per account. The CounterfactualTracker already subscribes to SignalRejectedEvent, so the integration is zero-cost. |
+| **Cross-References** | Sprint 27.95 S3a/S3b/S3c, DEC-367 (concurrent position limits) |
+| **Status** | Active |
+
+---
+
+### DEC-376 | Startup Zombie Cleanup via Order-Based Heuristic
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-28 |
+| **Context** | March 26 session — 8 zombie RECO positions from prior session at startup. `_managed_positions` is always empty at boot, so the spec's "check internal tracking" approach was incorrect. |
+| **Decision** | At startup, query IBKR positions and open orders. Positions WITH associated bracket orders (DEC-117 invariant) are classified as managed and reconstructed. Positions with NO orders are zombies — flattened if `startup.flatten_unknown_positions=true` (default), warned if false. Zero-qty guard skips flatten for ghost positions. Config-gated via `StartupConfig`. |
+| **Alternatives** | (1) DB-backed position persistence — adds crash recovery complexity. (2) Always reconstruct all — keeps zombies alive indefinitely. |
+| **Rationale** | The DEC-117 atomic bracket invariant means every legitimate position has associated bracket orders. Using order presence as the heuristic is both accurate and zero-additional-infrastructure. The startup config makes the behavior explicit and controllable. |
+| **Cross-References** | Sprint 27.95 S4/S5, DEC-117 (atomic bracket orders), DEC-364 (shutdown cancellation) |
+| **Status** | Active |
+
+---
+
+### DEC-377 | Separate Config Fields for Stop Retry Paths
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-28 |
+| **Context** | Sprint 27.95 S2 reused `stop_retry_max` for both broker connectivity retries (`_submit_stop_order`) and IBKR cancel-event retries (`_resubmit_stop_with_retry`). These are distinct failure modes that may need different tuning. |
+| **Decision** | `stop_retry_max` (default 3) controls `_submit_stop_order` internal retry loop. `stop_cancel_retry_max` (default 3) controls `_resubmit_stop_with_retry` cancel-event retry loop. Both on `OrderManagerConfig`. |
+| **Alternatives** | (1) Single shared field — simpler but conflates connectivity retries with cancel-event retries. (2) Enum-based retry policy — over-engineered for two fields. |
+| **Rationale** | Connectivity retries (broker temporarily unreachable) and cancel-event retries (IBKR rejects amended orders) are different failure modes with different expected behavior. Separate fields allow independent tuning, especially as IBKR live trading may have different latency characteristics than paper trading. |
+| **Cross-References** | Sprint 27.95 S5, DEC-372 |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
-*Next DEC: 369*
-*Last updated: 2026-03-25 (Sprint 27.7 doc sync — no new DECs, 379–385 range unused)*
+*Next DEC: 378*
+*Last updated: 2026-03-28 (Sprint 27.95 doc sync — 9 new DECs, DEC-369–377)*

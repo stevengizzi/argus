@@ -1,7 +1,7 @@
 # ARGUS — Decision Index
 
-> 368 decisions (DEC-001 through DEC-368)
-> Generated: March 25, 2026 | Source: `docs/decision-log.md`
+> 377 decisions (DEC-001 through DEC-377)
+> Generated: March 28, 2026 | Source: `docs/decision-log.md`
 > Legend: ● Active | ○ Superseded | △ Amended | ✗ Duplicate entry
 
 
@@ -443,3 +443,15 @@
 ## Sprint 27.7 — Counterfactual Engine
 
 No new DECs. Reserved range 379–385 unused — all design decisions followed established patterns (DEC-300 config-gating, DEC-345 separate DB, DEC-342 telemetry pattern).
+
+## Sprint 27.95 — Broker Safety + Overflow Routing
+
+- ● **DEC-369**: Reconciliation: broker-confirmed positions never auto-closed — `_broker_confirmed` dict tracks IBKR fill-confirmed positions; immune to reconciliation cleanup regardless of config.
+- ● **DEC-370**: Reconciliation: auto-cleanup unconfirmed defaults to false — `auto_cleanup_unconfirmed: false` (default), `consecutive_miss_threshold: 3`; legacy `auto_cleanup_orphans` backward-compatible.
+- ● **DEC-371**: Trade Logger RECONCILIATION ExitReason — added to `models/trading.py:ExitReason`; defensive defaults for reconciliation closes.
+- ● **DEC-372**: Stop resubmission cap with exponential backoff — `stop_cancel_retry_max` (default 3), 1s/2s/4s backoff; flatten on exhaustion.
+- ● **DEC-373**: Bracket amendment revision-rejected handling — fresh stop/target order on "Revision rejected" cancellation using `_amended_prices`.
+- ● **DEC-374**: Duplicate fill callback deduplication — `_last_fill_state` tracks (order_id, cumulative_qty); `_fill_order_ids_by_symbol` reverse index.
+- ● **DEC-375**: Dynamic overflow routing to CounterfactualTracker — `overflow.broker_capacity` (default 30) threshold; approved signals → `SignalRejectedEvent(BROKER_OVERFLOW)`.
+- ● **DEC-376**: Startup zombie cleanup via order-based heuristic — positions WITH bracket orders = managed; NO orders = zombie; `startup.flatten_unknown_positions` config.
+- ● **DEC-377**: Separate config fields for stop retry paths — `stop_retry_max` (connectivity) + `stop_cancel_retry_max` (cancel events); both default 3.

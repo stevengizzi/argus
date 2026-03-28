@@ -1,7 +1,7 @@
 # ARGUS — Sprint History
 
 > Complete record of all sprints from project inception through current state.
-> Active development began February 14, 2026. As of March 26, 2026 (~41 calendar days), 29 full sprints + 32 sub-sprints completed.
+> Active development began February 14, 2026. As of March 28, 2026 (~43 calendar days), 29 full sprints + 34 sub-sprints completed.
 
 ---
 
@@ -28,6 +28,7 @@
 | V — Counterfactual Engine | 27.7 | Mar 25 | Shadow position tracking for rejected signals, filter accuracy |
 | W — Paper Trading Hardening | 27.75 | Mar 26 | Log rate-limiting, paper trading config, trades page fix |
 | X — Operational Cleanup | 27.8 | Mar 26 | Ghost position reconciliation fix, validation orchestrator script |
+| Y — Broker Safety | 27.95 | Mar 26–28 | Reconciliation redesign, overflow routing, order mgmt hardening |
 
 ---
 
@@ -1868,13 +1869,86 @@
 
 ---
 
+## Sprint 27.95: Broker Safety + Overflow Routing (March 26–28, 2026)
+
+**Type:** Impromptu (DISCOVERED during March 26 paper trading session)
+**Goal:** Fix reconciliation position-destruction bug (336 of 371 positions destroyed), add dynamic overflow routing to CounterfactualTracker, harden five related order management failure modes from March 26 market session, and clean up carry-forward review findings.
+**Sessions:** 8 (S1a, S3a, S1b, S2, S4, S3b, S3c, S5)
+**Tests:** pytest ~3,610 → ~3,693 (+83), Vitest 645 → 645 (+0) = +83 new tests
+**New DECs:** DEC-369 through DEC-377 (9 decisions)
+**New DEF items:** DEF-104 (dual ExitReason enum sync), DEF-105 (reconciliation trades inflate total_trades count)
+
+**Session S1a: Reconciliation Redesign (CRITICAL)**
+- `_broker_confirmed` dict tracks positions with confirmed IBKR entry fills — immune to reconciliation (DEC-369)
+- `auto_cleanup_unconfirmed: false` default replaces aggressive `auto_cleanup_orphans` (DEC-370)
+- Legacy config backward compatibility with 4-branch logic
+- +14 tests
+- Verdict: CLEAR
+
+**Session S3a: Overflow Infrastructure**
+- `OverflowConfig` Pydantic model, `config/overflow.yaml`
+- `overflow.enabled` and `overflow.broker_capacity` fields wired into SystemConfig
+- `BROKER_OVERFLOW` added to `RejectionStage` enum
+- +8 tests
+- Verdict: CLEAR
+
+**Session S1b: Trade Logger Reconciliation Fix**
+- `RECONCILIATION` added to `models/trading.py:ExitReason` (DEC-371)
+- Defensive defaults in `_close_position`: `stop_price=entry_price`, `gross_pnl=0.0` for reconciliation closes
+- +5 tests
+- Verdict: CLEAR
+
+**Session S2: Order Management Hardening**
+- Stop resubmission cap with exponential backoff: `stop_cancel_retry_max=3`, flatten on exhaustion (DEC-372)
+- Bracket revision-rejected handling: fresh order on "Revision rejected" cancellation (DEC-373)
+- Duplicate fill callback deduplication via `_last_fill_state` + `_fill_order_ids_by_symbol` reverse index (DEC-374)
+- +16 tests
+- Verdict: CONCERNS_RESOLVED (fill dedup cleanup fixed post-review)
+
+**Session S4: Startup Zombie Cleanup**
+- Order-based heuristic: bracket orders present = managed, no orders = zombie (DEC-376)
+- `startup.flatten_unknown_positions` config (default true)
+- Zero-qty guard for ghost positions
+- +10 tests
+- Verdict: CONCERNS (non-blocking — `_managed_positions` always empty at startup, fixed with order heuristic)
+
+**Session S3b: Overflow Routing Logic**
+- `_check_overflow_routing()` in `_process_signal()`: capacity check after Risk Manager approval
+- Publishes `SignalRejectedEvent(BROKER_OVERFLOW)` when at capacity
+- Bypassed for `BrokerSource.SIMULATED`
+- +12 tests
+- Verdict: CLEAR
+
+**Session S3c: Overflow → Counterfactual Integration Tests**
+- End-to-end tests: overflow signal → CounterfactualTracker receives → shadow position created
+- Config toggle tests: disabled overflow, simulated broker bypass
+- +8 tests
+- Verdict: CLEAR
+
+**Session S5: Carry-Forward Cleanup**
+- Split `stop_retry_max` into connectivity + cancel-event retry configs (DEC-377)
+- Restored S4 code overwritten by S3b (git show recovery)
+- `getattr()` refactored: direct access for normal path, `getattr` only for reconciliation
+- Zero-qty startup zombie guard
+- `SignalRejectedEvent.rejection_stage` comment updated with BROKER_OVERFLOW
+- +10 tests
+- Verdict: CLEAR
+
+**Key decisions:** DEC-369 (broker-confirmed immunity), DEC-370 (warn-only default), DEC-371 (RECONCILIATION ExitReason), DEC-372 (stop retry cap), DEC-373 (revision-rejected handling), DEC-374 (fill dedup), DEC-375 (overflow routing), DEC-376 (startup zombie cleanup), DEC-377 (separate retry configs).
+**Review verdicts:** S1a CLEAR, S3a CLEAR, S1b CLEAR, S2 CONCERNS_RESOLVED, S4 CONCERNS (non-blocking), S3b CLEAR, S3c CLEAR, S5 CLEAR
+**New source files:** 1 (`config/overflow.yaml`)
+**New test files:** 5 (`test_order_manager_reconciliation_redesign.py`, `test_order_manager_hardening.py`, `test_trade_logger_reconciliation.py`, `test_counterfactual_overflow.py`, `test_overflow_routing.py`)
+**Notes:** Most impactful broker-safety sprint since Sprint 27.65. The reconciliation redesign (DEC-369/370) prevents the class of bug that destroyed 336 positions on March 26. Overflow routing (DEC-375) preserves learning data that would otherwise be lost to position cap rejection. Five order management failure modes from the March 26 session hardened. System is now substantially safer for continued paper trading.
+
+---
+
 ## Sprint Statistics
 
-- **Total sprints:** 29 full + 33 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9, 27.5, 27.6, 27.65, 27.7, 27.75, 27.8, 27.9)
-- **Total sessions:** ~420+ Claude Code sessions
-- **Total tests:** ~3,610 pytest + 645 Vitest = ~4,255 total
-- **Total decisions:** 368 (DEC-001 through DEC-368)
-- **Calendar days (active dev):** ~41 (Feb 14 – Mar 26, 2026)
+- **Total sprints:** 29 full + 34 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9, 27.5, 27.6, 27.65, 27.7, 27.75, 27.8, 27.9, 27.95)
+- **Total sessions:** ~430+ Claude Code sessions
+- **Total tests:** ~3,693 pytest + 645 Vitest = ~4,338 total
+- **Total decisions:** 377 (DEC-001 through DEC-377)
+- **Calendar days (active dev):** ~43 (Feb 14 – Mar 28, 2026)
 - **Largest sprint:** 22 (9 implementation + 5 fix + 9 reviews, largest scope)
 - **Cleanest sprint:** 23 (11 sessions, 0 regressions, 0 scope gaps requiring follow-up)
 - **Most test-dense:** Sprint 22 (286 new tests), Sprint 24 (209 new tests), Sprint 23.2 (188 new tests), Sprint 27.6 (171 new tests), Sprint 23 (141 new tests across 23+23.05)

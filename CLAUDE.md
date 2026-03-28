@@ -1,11 +1,11 @@
 # ARGUS — Claude Code Context
 
 > Dense, actionable context for Claude Code sessions. No history — see `docs/` for that.
-> Last updated: March 26, 2026 (Sprint 27.9 doc sync — VIX Regime Intelligence)
+> Last updated: March 28, 2026 (Sprint 27.95 doc sync — Broker Safety + Overflow Routing)
 
 ## Active Sprint
 
-**No active sprint.** Sprint 27.9 (VIX Regime Intelligence) completed March 26, 2026.
+**No active sprint.** Sprint 27.95 (Broker Safety + Overflow Routing) completed March 28, 2026.
 
 Next planned sprint: **28 (Learning Loop V1)**, followed by Sprints 29–31 (Pattern Expansion + Short Selling + Research Console).
 
@@ -19,8 +19,8 @@ Two roadmap amendments adopted March 23, 2026 adding 5 new sprint slots:
 - **32.5** (Experiment Registry + Promotion Pipeline): Partitioned SQLite registry, cohort-based promotion, simulated-paper screening, overnight experiment queue, kill switches, anti-fragility
 - **33.5** (Adversarial Stress Testing): Historical crisis replay + synthetic stress scenarios as PromotionPipeline gate
 Amendment docs: `docs/amendments/roadmap-amendment-experiment-infrastructure.md`, `docs/amendments/roadmap-amendment-intelligence-architecture.md`
-Build track: ~~21.6~~ ✅ → ~~27.5~~ ✅ → ~~27.6~~ ✅ → ~~27.7~~ ✅ → ~~27.75~~ ✅ → ~~27.8~~ ✅ → ~~27.9~~ ✅ → 28 → 28.5 → 29–31 → 32 → 32.5 → 33 → 33.5 → 34 → 35–41
-DEC ranges reserved: 363–372 (27.5), 369–378 (27.6), 379–385 (27.7), 386–395 (32.5), 396–402 (33.5)
+Build track: ~~21.6~~ ✅ → ~~27.5~~ ✅ → ~~27.6~~ ✅ → ~~27.7~~ ✅ → ~~27.75~~ ✅ → ~~27.8~~ ✅ → ~~27.9~~ ✅ → ~~27.95~~ ✅ → 28 → 28.5 → 29–31 → 32 → 32.5 → 33 → 33.5 → 34 → 35–41
+DEC ranges reserved: 379–385 (27.7, unused), 386–395 (32.5), 396–402 (33.5)
 
 ### Known Issues
 - **FMP Starter plan restriction:** FMP news endpoints return 403 on Starter plan ($22/mo). `fmp_news.enabled: false` in `system_live.yaml`. FMP circuit breaker (DEC-323) prevents spam if accidentally enabled.
@@ -31,9 +31,9 @@ DEC ranges reserved: 363–372 (27.5), 369–378 (27.6), 379–385 (27.7), 386�
 
 - **Active sprint:** None (between sprints)
 - **Next sprint:** 28 (Learning Loop V1)
-- **Tests:** ~3,610 pytest + 645 Vitest (0 failures, 0 hangs)
+- **Tests:** ~3,693 pytest + 645 Vitest (0 failures, 0 hangs)
 - **Strategies:** 7 active (ORB Breakout, ORB Scalp, VWAP Reclaim, Afternoon Momentum, Red-to-Green, Bull Flag, Flat-Top Breakout)
-- **Infrastructure:** Databento EQUS.MINI (live) + IBKR paper trading (Account U24619949) + FMP Starter (scanning + reference data + daily bars for regime) + Finnhub (news + analyst recs) + Claude API (Copilot + Catalyst Classification) + Universe Manager (config-gated) + Catalyst Pipeline (config-gated) + Intelligence Polling Loop (config-gated) + Reference Data Cache + Quality Engine (config-gated) + Dynamic Position Sizer + Strategy Evaluation Telemetry (ring buffer + SQLite persistence) + Debrief Export (shutdown automation) + Evaluation Framework (MultiObjectiveResult, EnsembleResult, comparison API, slippage model) + Regime Intelligence (RegimeVector 11-field, 8 calculators, config-gated, Sprints 27.6 + 27.9) + VIX Data Service (yfinance daily VIX/SPX, 5 derived metrics, SQLite cache, config-gated, Sprint 27.9) + Counterfactual Engine (shadow position tracking, filter accuracy, shadow strategy mode, config-gated, Sprint 27.7) + ThrottledLogger (log rate-limiting, Sprint 27.75) + Paper trading config overrides (10x risk reduction, throttle disabled, $10 min risk floor, Sprint 27.75)
+- **Infrastructure:** Databento EQUS.MINI (live) + IBKR paper trading (Account U24619949) + FMP Starter (scanning + reference data + daily bars for regime) + Finnhub (news + analyst recs) + Claude API (Copilot + Catalyst Classification) + Universe Manager (config-gated) + Catalyst Pipeline (config-gated) + Intelligence Polling Loop (config-gated) + Reference Data Cache + Quality Engine (config-gated) + Dynamic Position Sizer + Strategy Evaluation Telemetry (ring buffer + SQLite persistence) + Debrief Export (shutdown automation) + Evaluation Framework (MultiObjectiveResult, EnsembleResult, comparison API, slippage model) + Regime Intelligence (RegimeVector 11-field, 8 calculators, config-gated, Sprints 27.6 + 27.9) + VIX Data Service (yfinance daily VIX/SPX, 5 derived metrics, SQLite cache, config-gated, Sprint 27.9) + Counterfactual Engine (shadow position tracking, filter accuracy, shadow strategy mode, overflow routing, config-gated, Sprints 27.7 + 27.95) + ThrottledLogger (log rate-limiting, Sprint 27.75) + Paper trading config overrides (10x risk reduction, throttle disabled, $10 min risk floor, Sprint 27.75) + Broker-confirmed reconciliation (Sprint 27.95) + Overflow routing (config-gated, Sprint 27.95)
 - **Frontend:** 8-page Command Center (Observatory added Sprint 25) + AI Copilot + Universe Status Card + Intelligence Brief View (all active), Tauri desktop + PWA mobile
 
 ## Project Structure
@@ -326,12 +326,14 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 | ~~DEF-101~~ | ~~Tests coupled to paper-trading config values~~ | ~~Sprint 27.8~~ | **RESOLVED** (Sprint 27.8 S1): `test_engine_sizing.py` reads YAML and asserts match (not hardcoded). `test_config.py` uses ordering invariant assertions. Tests now pass regardless of paper vs live config values. |
 | DEF-102 | Trades page server-side stats computation | Unscheduled | TradeStatsBar computes Win Rate/Net P&L client-side from paginated array (limit:250). If filtered period exceeds 250 trades, stats computed from subset. Fix: server-side aggregate stats endpoint. Priority: LOW — monitor trade volume. |
 | DEF-103 | yfinance reliability as unofficial scraping library | Unscheduled | yfinance is an unofficial Yahoo Finance scraper — no SLA, may break on Yahoo HTML/API changes. Mitigations: SQLite persistence cache (survives outage), staleness self-disable (`max_staleness_days=3`), optional FMP fallback (`fmp_fallback_enabled` flag), daily-only frequency (not real-time). Monitor for breakage over 5+ sessions. Priority: LOW. |
+| DEF-104 | Dual ExitReason enums (`events.py` + `trading.py`) must be kept in sync | Unscheduled | Sprint 27.8 added RECONCILIATION to events.py but missed trading.py, causing 336 Pydantic validation errors. Consolidation candidate for future cleanup sprint. Priority: MEDIUM. |
+| DEF-105 | Reconciliation trades inflate `total_trades` count | Unscheduled | Reconciliation closes are counted as BREAKEVEN trades, inflating Dashboard total_trades and Positions card counts. Related to DEF-098 (trade count inconsistency). Priority: LOW. |
 
 ## Reference
 
 | Document | What It Covers |
 |----------|---------------|
-| `docs/decision-log.md` | All 368 DEC entries with full rationale (0 new in Sprints 27.7–27.9) |
+| `docs/decision-log.md` | All 377 DEC entries with full rationale (9 new in Sprint 27.95: DEC-369–377) |
 | `docs/dec-index.md` | Quick-reference index with status markers |
 | `docs/sprint-history.md` | Complete sprint history (1–27.9) |
 | `docs/pre-live-transition-checklist.md` | Config + test values to restore before live trading |

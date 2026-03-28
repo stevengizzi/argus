@@ -70,6 +70,22 @@ Phase 12/12: Starting API server...
 ARGUS started successfully. System ready.
 ```
 
+#### Startup Zombie Cleanup (Sprint 27.95)
+
+During startup, ARGUS queries IBKR for existing positions and open orders:
+- Positions **with** associated bracket orders → classified as managed, reconstructed
+- Positions **without** orders → classified as zombies:
+  - `startup.flatten_unknown_positions: true` (default): flattened via market order
+  - `startup.flatten_unknown_positions: false`: WARNING logged, position tracked as RECO
+  - **Note:** RECO positions created with `flatten_unknown_positions=false` have `stop_price=0.0` — requires manual stop placement via IBKR TWS/Gateway
+- Zero-quantity ghost positions are silently skipped (no flatten attempt)
+
+Watch for these log messages during startup:
+```
+INFO - Startup: flatting unknown position AAPL (100 shares, no bracket orders)
+WARNING - Startup: unknown position AAPL (100 shares) — flatten disabled, creating RECO position
+```
+
 ### Step 5: Verify in Command Center
 
 1. Open http://localhost:5173 (or your configured UI port)
@@ -152,6 +168,22 @@ ERROR - Max reconnection attempts exceeded for Databento
 ERROR - IBKR connection lost, unable to reconnect
 CRITICAL - Circuit breaker triggered: daily loss limit
 ```
+
+#### Overflow Routing (Sprint 27.95)
+
+When open positions reach `overflow.broker_capacity` (default 30), approved signals are
+routed to CounterfactualTracker instead of IBKR:
+```
+INFO - Overflow routing: 30/30 positions, routing AAPL signal to counterfactual
+```
+
+Monitor overflow activity:
+- **Log messages**: Search for "Overflow routing" in logs
+- **Counterfactual DB**: Query `data/counterfactual.db` for `rejection_stage = 'BROKER_OVERFLOW'`
+- **API endpoint**: `GET /api/v1/counterfactual/accuracy` with date range filter
+
+Config: `overflow.enabled: true` (default), `overflow.broker_capacity: 30` in
+`config/overflow.yaml` and `config/system.yaml`/`system_live.yaml`.
 
 ### Key Events to Watch
 
