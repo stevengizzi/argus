@@ -1,0 +1,46 @@
+# Learning Loop Configuration (Sprint 28)
+# Controls the Learning Loop analysis, recommendation, and config proposal pipeline.
+# Changes here take effect immediately on next application startup.
+
+# Master enable/disable for the Learning Loop
+enabled: true
+
+# Number of days to include in each analysis window
+analysis_window_days: 30
+
+# Minimum total sample count required before producing recommendations
+# Must be >= 5. Below this, analysis is skipped with INSUFFICIENT_DATA.
+min_sample_count: 30
+
+# Minimum samples per regime required for per-regime breakdowns
+min_sample_per_regime: 5
+
+# Maximum absolute weight change allowed per dimension per analysis cycle
+# Range: [0.01, 0.50]
+max_weight_change_per_cycle: 0.10
+
+# Maximum cumulative absolute drift allowed per dimension over the rolling window
+# If exceeded, further proposals for that dimension are deferred. Range: [0.05, 0.50]
+max_cumulative_drift: 0.20
+
+# Rolling window (days) for cumulative drift calculation
+cumulative_drift_window_days: 30
+
+# Whether to auto-trigger analysis after EOD flatten
+auto_trigger_enabled: true
+
+# Number of trading days for cross-strategy correlation analysis
+correlation_window_days: 20
+
+# Days to retain learning reports before cleanup (retention enforcement)
+report_retention_days: 90
+
+# Correlation threshold above which strategy pairs are flagged
+correlation_threshold: 0.7
+
+# Threshold for flagging trade vs counterfactual source divergence
+weight_divergence_threshold: 0.10
+
+# P-value threshold for statistical significance of correlations
+# Range: [0.01, 0.20]
+correlation_p_value_threshold: 0.10

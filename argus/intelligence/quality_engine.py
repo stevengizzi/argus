@@ -18,6 +18,8 @@ from zoneinfo import ZoneInfo
 from argus.core.events import SignalEvent
 from argus.core.ids import generate_id
 from argus.core.regime import MarketRegime
+import yaml
+
 from argus.intelligence.config import QualityEngineConfig
 from argus.intelligence.models import ClassifiedCatalyst
 
@@ -27,6 +29,39 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _ET = ZoneInfo("America/New_York")
+
+_DEFAULT_QE_YAML = "config/quality_engine.yaml"
+
+
+def load_quality_engine_config(
+    yaml_path: str = _DEFAULT_QE_YAML,
+) -> QualityEngineConfig:
+    """Read quality_engine.yaml and return a fresh QualityEngineConfig.
+
+    Used by ConfigProposalManager for validation and by tests. NOT used
+    at runtime — the running QE instance is NOT swapped (Amendment 1).
+
+    Args:
+        yaml_path: Path to the quality_engine.yaml file.
+
+    Returns:
+        A new QualityEngineConfig instance parsed from the YAML file.
+
+    Raises:
+        FileNotFoundError: If the YAML file does not exist.
+        ValueError: If the YAML content fails Pydantic validation.
+    """
+    from pathlib import Path
+
+    path = Path(yaml_path)
+    if not path.exists():
+        raise FileNotFoundError(f"quality_engine.yaml not found: {yaml_path}")
+
+    raw = yaml.safe_load(path.read_text())
+    if not isinstance(raw, dict):
+        raise ValueError(f"quality_engine.yaml root is not a mapping: {yaml_path}")
+
+    return QualityEngineConfig(**raw)
 
 
 @dataclass(frozen=True)

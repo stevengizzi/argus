@@ -4,6 +4,10 @@ Sprint 28 — data models, outcome collection, analysis, and
 config proposal management.
 """
 
+from argus.intelligence.learning.config_proposal_manager import (
+    ConfigProposalManager,
+)
+from argus.intelligence.learning.learning_store import LearningStore
 from argus.intelligence.learning.models import (
     ConfidenceLevel,
     ConfigProposal,
@@ -20,10 +24,12 @@ from argus.intelligence.learning.outcome_collector import OutcomeCollector
 __all__ = [
     "ConfidenceLevel",
     "ConfigProposal",
+    "ConfigProposalManager",
     "CorrelationResult",
     "DataQualityPreamble",
     "LearningLoopConfig",
     "LearningReport",
+    "LearningStore",
     "OutcomeCollector",
     "OutcomeRecord",
     "ThresholdRecommendation",
