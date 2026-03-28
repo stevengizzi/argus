@@ -80,6 +80,19 @@ export { usePipelineStatus } from './usePipelineStatus';
 // VIX Regime hooks (Sprint 27.9)
 export { useVixData } from './useVixData';
 
+// Learning Loop hooks (Sprint 28)
+export {
+  useLearningReport,
+  useLearningReports,
+  useTriggerAnalysis,
+} from './useLearningReport';
+export {
+  useConfigProposals,
+  useApproveProposal,
+  useDismissProposal,
+  useRevertProposal,
+} from './useConfigProposals';
+
 // Intelligence hooks (Sprint 23.5)
 export {
   useCatalystsBySymbol,
