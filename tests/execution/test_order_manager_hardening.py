@@ -495,3 +495,36 @@ async def test_stop_retry_per_symbol_isolation(
     assert pos_tsla.stop_order_id is not None
     assert om._stop_retry_count.get("TSLA") == 1
     mock_sleep.assert_called_once_with(1)  # 2^(1-1) = 1s backoff
+
+
+@pytest.mark.asyncio
+async def test_cancel_retry_uses_stop_cancel_retry_max(
+    event_bus: EventBus,
+    mock_broker: MagicMock,
+    clock: FixedClock,
+) -> None:
+    """_resubmit_stop_with_retry respects stop_cancel_retry_max, not stop_retry_max."""
+    # Set stop_retry_max high (10) and stop_cancel_retry_max low (2)
+    cfg = OrderManagerConfig(stop_retry_max=10, stop_cancel_retry_max=2)
+    om = OrderManager(
+        event_bus=event_bus, broker=mock_broker, clock=clock, config=cfg
+    )
+    await om.start()
+
+    pos = _make_position(symbol="TEST", stop_order_id="stop-test")
+    _inject_position(om, pos)
+
+    # Pre-set retry count to 2 (at the cancel retry limit)
+    om._stop_retry_count["TEST"] = 2
+
+    # Next cancel should trigger emergency flatten (count=3 > stop_cancel_retry_max=2)
+    cancel = OrderCancelledEvent(order_id="stop-test", reason="Cancelled")
+    with patch("asyncio.sleep", new_callable=AsyncMock):
+        await om.on_cancel(cancel)
+
+    # Flatten should have been called (market sell placed)
+    flatten_calls = [
+        c for c in mock_broker.place_order.call_args_list
+        if c[0][0].order_type.value == "market"
+    ]
+    assert len(flatten_calls) >= 1, "Emergency flatten not triggered at stop_cancel_retry_max"

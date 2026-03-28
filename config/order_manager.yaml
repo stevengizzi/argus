@@ -25,5 +25,7 @@ entry_timeout_seconds: 30
 # T1/T2 position split
 t1_position_pct: 0.5  # 50% of position exits at T1
 
-# Stop order retry on failure
+# Max retries for _submit_stop_order broker connectivity failures
 stop_retry_max: 1
+# Max retries for _resubmit_stop_with_retry cancel-event loop (IBKR cancels the stop)
+stop_cancel_retry_max: 3

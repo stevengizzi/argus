@@ -162,6 +162,15 @@ class HealthConfig(BaseModel):
         return os.environ.get(self.alert_webhook_url_env, "")
 
 
+class StartupConfig(BaseModel):
+    """Configuration for startup behavior (Sprint 27.95 S4).
+
+    Controls how ARGUS handles unknown broker positions at startup.
+    """
+
+    flatten_unknown_positions: bool = True
+
+
 class ReconciliationConfig(BaseModel):
     """Configuration for position reconciliation (Sprint 27.8 + 27.95).
 
@@ -289,6 +298,8 @@ class SystemConfig(BaseModel):
     counterfactual: CounterfactualConfig = Field(default_factory=CounterfactualConfig)
     # VIX Regime configuration (Sprint 27.9 — VIX landscape dimension)
     vix_regime: VixRegimeConfig = Field(default_factory=VixRegimeConfig)
+    # Startup behavior configuration (Sprint 27.95 S4 — zombie cleanup)
+    startup: StartupConfig = Field(default_factory=StartupConfig)
     # Reconciliation configuration (Sprint 27.8 + 27.95 — ghost position fix)
     reconciliation: ReconciliationConfig = Field(default_factory=ReconciliationConfig)
     # Overflow management configuration (Sprint 27.95 — signal overflow routing)
@@ -676,7 +687,10 @@ class OrderManagerConfig(BaseModel):
     max_position_duration_minutes: int = Field(default=120, ge=1)  # Hard time stop
     entry_timeout_seconds: int = Field(default=30, ge=1)
     t1_position_pct: float = Field(default=0.5, gt=0, le=1.0)  # 50% at T1
-    stop_retry_max: int = Field(default=3, ge=0)  # Max stop cancel retries before flatten
+    # Max retries for _submit_stop_order broker connectivity failures
+    stop_retry_max: int = Field(default=3, ge=0)
+    # Max retries for _resubmit_stop_with_retry cancel-event loop (IBKR cancels the stop)
+    stop_cancel_retry_max: int = Field(default=3, ge=0)
     auto_shutdown_after_eod: bool = True  # Gracefully shutdown after EOD flatten
     auto_shutdown_delay_seconds: int = Field(default=60, ge=0)  # Delay before shutdown
 

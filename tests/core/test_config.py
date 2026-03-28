@@ -20,6 +20,8 @@ from argus.core.config import (
     OrchestratorConfig,
     ScannerConfig,
     StrategyConfig,
+    OrderManagerConfig,
+    StartupConfig,
     SystemConfig,
     UniverseFilterConfig,
     UniverseManagerConfig,
@@ -1168,3 +1170,70 @@ class TestQualityEngineConfigWiring:
         assert max(config.risk_tiers.b_plus) >= max(config.risk_tiers.b)  # B+ max >= B max
         assert max(config.risk_tiers.b) >= max(config.risk_tiers.c_plus)  # B max >= C+ max
         assert min(config.risk_tiers.c_plus) > 0  # C+ min is positive (not zero)
+
+
+# ---------------------------------------------------------------------------
+# Sprint 27.95 S5 — Config Split + Alignment Tests
+# ---------------------------------------------------------------------------
+
+
+class TestOrderManagerConfigSplit:
+    """Tests for stop_retry_max / stop_cancel_retry_max config split (S5 Fix 3)."""
+
+    def test_both_retry_fields_exist_with_correct_defaults(self) -> None:
+        """OrderManagerConfig has both stop_retry_max and stop_cancel_retry_max."""
+        cfg = OrderManagerConfig()
+        assert cfg.stop_retry_max == 3
+        assert cfg.stop_cancel_retry_max == 3
+
+    def test_retry_fields_independently_configurable(self) -> None:
+        """Both fields can be set to different values."""
+        cfg = OrderManagerConfig(stop_retry_max=1, stop_cancel_retry_max=5)
+        assert cfg.stop_retry_max == 1
+        assert cfg.stop_cancel_retry_max == 5
+
+    def test_order_manager_yaml_keys_match_model(self) -> None:
+        """order_manager.yaml keys match OrderManagerConfig.model_fields."""
+        yaml_path = Path("config/order_manager.yaml")
+        if not yaml_path.exists():
+            pytest.skip("order_manager.yaml not present")
+
+        raw = yaml.safe_load(yaml_path.read_text())
+        yaml_keys = set(raw.keys())
+        model_fields = set(OrderManagerConfig.model_fields.keys())
+        unrecognized = yaml_keys - model_fields
+        assert unrecognized == set(), f"Unrecognized keys in YAML: {unrecognized}"
+
+        # Both retry fields present in YAML
+        assert "stop_retry_max" in yaml_keys
+        assert "stop_cancel_retry_max" in yaml_keys
+
+
+class TestStartupConfigAlignment:
+    """Tests for StartupConfig YAML alignment (S4 + S5)."""
+
+    def test_startup_config_in_system_yaml(self) -> None:
+        """system.yaml has startup.flatten_unknown_positions."""
+        yaml_path = Path("config/system.yaml")
+        if not yaml_path.exists():
+            pytest.skip("system.yaml not present")
+
+        raw = yaml.safe_load(yaml_path.read_text())
+        assert "startup" in raw, "Missing 'startup' section in system.yaml"
+        yaml_keys = set(raw["startup"].keys())
+        model_fields = set(StartupConfig.model_fields.keys())
+        unrecognized = yaml_keys - model_fields
+        assert unrecognized == set(), f"Unrecognized keys: {unrecognized}"
+
+    def test_startup_config_in_system_live_yaml(self) -> None:
+        """system_live.yaml has startup.flatten_unknown_positions."""
+        yaml_path = Path("config/system_live.yaml")
+        if not yaml_path.exists():
+            pytest.skip("system_live.yaml not present")
+
+        raw = yaml.safe_load(yaml_path.read_text())
+        assert "startup" in raw, "Missing 'startup' section in system_live.yaml"
+        yaml_keys = set(raw["startup"].keys())
+        model_fields = set(StartupConfig.model_fields.keys())
+        unrecognized = yaml_keys - model_fields
+        assert unrecognized == set(), f"Unrecognized keys: {unrecognized}"
