@@ -1,15 +1,13 @@
 # ARGUS — Claude Code Context
 
 > Dense, actionable context for Claude Code sessions. No history — see `docs/` for that.
-> Last updated: March 28, 2026 (Sprint 27.95 doc sync — Broker Safety + Overflow Routing)
+> Last updated: March 28, 2026 (Pre-Sprint 28 strategic doc sync)
 
 ## Active Sprint
 
 **No active sprint.** Sprint 27.95 (Broker Safety + Overflow Routing) completed March 28, 2026.
 
-Next planned sprint: **28 (Learning Loop V1)**, followed by Sprints 29–31 (Pattern Expansion + Short Selling + Research Console).
-
-**New sprint slots adopted:** 28.5 (Exit Management — partial profit-taking + regime-adaptive targets).
+Next planned sprint: **28 (Learning Loop V1)** — planning complete (Type C, 10-11 sessions, advisory-only ConfigProposal workflow). Followed by Sprints 28.5 (Exit Management), 29 (Pattern Expansion I), 30 (Short Selling), 31 (Pattern Expansion II).
 
 ### Roadmap Amendments Adopted (DEC-357, DEC-358)
 Two roadmap amendments adopted March 23, 2026 adding 5 new sprint slots:

@@ -1,7 +1,7 @@
 # ARGUS — Strategic Roadmap
 
 > From artisanal strategies to ensemble alpha — the complete path
-> **v2.6 — March 26, 2026** (Sprint 27.9 complete — VIX Regime Intelligence)
+> **v2.7 — March 28, 2026** (Sprint 27.95 complete — Sprint 28 planning finalized)
 > **Status:** CANONICAL — this is the single source of truth for ARGUS's strategic direction and sprint queue.
 > **Supersedes:** `docs/research/ARGUS_Expanded_Roadmap.md` (Feb 26), `docs/argus_unified_vision_roadmap.md` (Mar 5), `docs/10_PHASE3_SPRINT_PLAN.md` (all forward-looking sections)
 
@@ -22,6 +22,34 @@ ARGUS evolves from a **rules-based multi-strategy system** into an **AI-powered 
 The target: **sustainable 5–10%+ monthly returns on deployed capital** at the $100K–$500K scale, with the system running autonomously during US market hours from Cape Town.
 
 The path divides into two halves. Everything through Phase 6 builds a strong AI-enhanced multi-strategy trading system — valuable regardless of what comes after. Phases 7–10 build the ensemble infrastructure and test whether systematic search produces validated ensembles that outperform hand-crafted strategies. If the controlled experiment in Phase 8 fails, ARGUS is still strong. If it succeeds, it becomes something without a comparable at the independent trader scale.
+
+### The Adaptive Trading Ecosystem Model
+
+At steady state, ARGUS operates as an adaptive trading ecosystem where strategies exist in one of five states:
+
+1. **Incubating** — new parameter combinations or pattern mutations being backtested overnight (Sprint 41 Continuous Discovery Pipeline)
+2. **Validating** — promising candidates running in simulated paper (BacktestEngine on recent 20 days, Sprint 32.5 PromotionPipeline) with stress testing (Sprint 33.5)
+3. **Proving** — validated candidates running in real paper trading / counterfactual tracking, accumulating live market data
+4. **Active** — proven strategies trading real capital, continuously monitored against their validation baseline
+5. **Declining** — active strategies showing degrading performance, getting throttled and eventually retired (Sprint 40 Learning Loop V2)
+
+The daily operator workflow at full vision:
+- **Pre-market (10 min):** Review intelligence brief. Check overnight discovery results. Approve/reject pending promotions. Confirm regime classification.
+- **Market hours (passive):** Synapse shows real-time activity. Alerts for anomalous behavior. System runs.
+- **Post-market (15 min):** Review debrief. Check Learning Loop recommendations. Flag strategies for review.
+- **Weekly (30 min):** Deep dive on Performance Workbench. Review cohort promotions. Strategic ensemble assessment.
+
+Total active work: ~45 minutes daily + 30 minutes weekly — exceeding the "few hours per day" goal from the Day Trading Manifesto.
+
+**Key architectural principle:**
+- **Sprint 28 is the observation layer** — it establishes the pattern of correlating predictions with outcomes that V2 runs at micro-strategy scale.
+- **Sprint 32.5 is the action layer** — ExperimentRegistry + PromotionPipeline provide the infrastructure for acting on Learning Loop insights.
+- **Sprint 40–41 close the autonomous loop** — Learning Loop V2 + Continuous Discovery Pipeline create the self-improving system.
+
+**Scale considerations:**
+- Target ensemble scale: 200–800 micro-strategies (V1 ensemble). 2,000+ may require Cython hot-path optimization.
+- Micro-strategies that fire rarely (e.g., twice/month) are not weak — they're precise. Ensemble power comes from having hundreds of precise strategies that collectively cover most market days.
+- At 500+ strategies, human oversight transitions from individual strategy review to cohort-level approval (Sprint 32.5 PromotionPipeline cohort model).
 
 ---
 
@@ -78,7 +106,7 @@ These foundations are correct and remain:
 
 ARGUS completed 21 sprints + sub-sprints in ~17 calendar days of active development (Feb 14 – Mar 5). Average sprint: ~0.8 calendar days. However, sprint complexity has been increasing — early sprints (1–5) were dense single-day affairs, while later sprints (21a–21d, 21.5) span multiple days. The roadmap below assumes sprint durations of 1–4 days each depending on complexity, with some parallelism where noted.
 
-**Current state:** Sprint 27.65 complete. 3,412 pytest + 633 Vitest. Seven active strategies (4 original + R2G, Bull Flag, Flat-Top from Sprint 26) with per-candle evaluation telemetry. Sprint 27.65 (impromptu) added critical Order Manager safety: flatten-pending guard (DEC-363), graceful shutdown order cancellation (DEC-364), periodic position reconciliation (DEC-365), bracket amendment on fill slippage (DEC-366), optional concurrent position limits for paper trading (DEC-367), and IntradayCandleStore for queryable intraday bars + pattern strategy backfill (DEC-368). Real-time P&L via WebSocket. R2G prior_close initialization fixed. Observatory pipeline format aligned. `scripts/ibkr_close_all_positions.py` for emergency cleanup. PatternModule ABC established for composable pattern detection. BacktestEngine operational with all 7 strategy types, walk-forward integration, CLI entry point, and risk_overrides for single-strategy backtesting (DEC-359). ExecutionRecord logging captures expected vs actual fill prices for slippage model calibration (DEC-358 §5.1). DEC-132 PARTIALLY RESOLVED — pipeline proven end-to-end with Databento data, Bull Flag validated (Sharpe 2.78), 6 strategies pending full-universe re-validation. Live Databento + IBKR paper trading with 28+ trades across 4 sessions. Eight-page Command Center (Observatory added Sprint 25) + AI Copilot active. FMP Scanner + Universe Manager integrated. Autonomous Sprint Runner implemented (DEC-278–297). NLP Catalyst Pipeline complete (DEC-300–307). Setup Quality Engine + Dynamic Position Sizer complete (DEC-330–341). Strategy Observability complete (DEC-342). Phase 5 Gate complete (March 21, 2026). Evaluation Framework complete (Sprint 27.5 — MultiObjectiveResult, EnsembleResult, Pareto comparison API, slippage model). Regime Intelligence complete (Sprint 27.6 — RegimeVector 6-dimension, 4 calculators, V2 classifier, RegimeHistoryStore, Observatory wiring). Counterfactual Engine complete (Sprint 27.7 — shadow position tracking, filter accuracy, shadow strategy mode, +105 tests). VIX Regime Intelligence complete (Sprint 27.9 — VIXDataService, 4 VIX calculators, RegimeVector 6→11 fields, pipeline integration, VixRegimeCard dashboard widget, +75 tests). Next: Sprint 28 (Learning Loop V1).
+**Current state:** Sprint 27.95 complete (March 28, 2026). ~3,693 pytest + 645 Vitest (0 failures, 0 hangs). Seven active strategies (4 original + R2G, Bull Flag, Flat-Top from Sprint 26). Sprint 27.95 (Broker Safety + Overflow Routing) delivered broker-confirmed reconciliation (DEC-369), overflow routing to CounterfactualTracker (DEC-375), 5 order management failure modes hardened, 9 new DECs (DEC-369–377). Full infrastructure stack operational: BacktestEngine + Evaluation Framework + Regime Intelligence (11-field RegimeVector) + Counterfactual Engine + VIX Data Service + Quality Engine + NLP Catalyst Pipeline + Universe Manager + AI Copilot. Eight-page Command Center + Observatory. Live Databento + IBKR paper trading. Phase 5 Gate complete (March 21, 2026). Sprint 28 planning complete — Type C with adversarial review, 10–11 sessions, refined scope (OutcomeCollector, WeightAnalyzer, ThresholdAnalyzer, CorrelationAnalyzer, ConfigProposalManager). Next: Sprint 28 (Learning Loop V1).
 
 ---
 
@@ -274,7 +302,7 @@ FMP Starter plan ($22/mo) activated. Dynamic pre-market symbol selection via gai
 
 *Opens with The Observatory for operational visibility, then expands the strategy roster to 13–15+ hand-crafted patterns including short selling. Adds the Learning Loop for self-monitoring. This is the phase where ARGUS becomes a serious multi-strategy system. UI focus: make strategy health, correlation, and pipeline behavior visible.*
 
-**Amendment note (DEC-357, DEC-358):** Phase 6 now includes Sprints 27.5, 27.6, 27.7, and 27.9 between 21.6 and 28. These infrastructure sprints transform Sprint 28 (Learning Loop V1) from basic weight tuning into intelligent system analysis with proper evaluation framework, rich multi-dimensional regime data (including VIX-based dimensions from Sprint 27.9), and 24× more data volume via counterfactual tracking. Paper trading continues running in parallel throughout, accumulating data.
+**Amendment note (DEC-357, DEC-358):** Phase 6 now includes Sprints 27.5, 27.6, 27.7, 27.9, and 27.95 between 21.6 and 28, plus Sprint 28.5 (Exit Management) after 28. These infrastructure sprints transform Sprint 28 (Learning Loop V1) from basic weight tuning into intelligent system analysis with proper evaluation framework, rich multi-dimensional regime data (including VIX-based dimensions from Sprint 27.9), 24× more data volume via counterfactual tracking, and hardened broker safety (Sprint 27.95). Paper trading continues running in parallel throughout, accumulating data.
 
 ### Sprint 25: The Observatory (Phase 5 Gate outcome) ✅ COMPLETE (March 18, 2026)
 
@@ -392,20 +420,58 @@ API auth 401 for unauthenticated requests (DEC-351). Close-position endpoint rou
 
 **Dependencies:** Sprint 27.5 ✅, Sprint 27.6 ✅. Existing evaluation telemetry and Databento stream.
 
+### Sprint 27.75: Paper Trading Operational Hardening ✅ COMPLETE (March 26, 2026)
+
+ThrottledLogger for log rate-limiting. Paper trading config overrides (10x risk reduction, throttle disabled, $10 min risk floor). Reconciliation logging consolidated. Tests: 3,528 pytest + 638 Vitest.
+
+### Sprint 27.8: Operational Cleanup + Validation Tooling ✅ COMPLETE (March 26, 2026)
+
+ExitReason.RECONCILIATION in events.py. Reconciliation auto-cleanup (config-gated). Bracket exhaustion detection. Per-strategy health reporting. `scripts/validate_all_strategies.py` batch revalidation. Tests: ~3,542 pytest + 638 Vitest.
+
+### Sprint 27.9: VIX Regime Intelligence ✅ COMPLETE (March 26, 2026)
+
+VIXDataService (yfinance daily VIX+SPX, 5 derived metrics, SQLite cache). 4 VIX calculators wired into RegimeClassifierV2. RegimeVector expanded from 6 to 11 fields. VixRegimeCard dashboard widget. REST endpoints. Config-gated via `vix_regime.enabled`. Tests: ~3,610 pytest + 645 Vitest. +75 new tests.
+
+### Sprint 27.95: Broker Safety + Overflow Routing ✅ COMPLETE (March 26–28, 2026)
+
+Reconciliation redesign with broker-confirmed positions (DEC-369). Overflow routing to CounterfactualTracker when at broker capacity (DEC-375). Stop resubmission cap with exponential backoff (DEC-372). Bracket revision-rejected handling (DEC-373). Fill dedup (DEC-374). Startup zombie cleanup (DEC-376). 9 new DECs (DEC-369–377). Tests: ~3,693 pytest + 645 Vitest.
+
 ### Sprint 28: Learning Loop V1 (DEC-163, DEC-354)
-**Target:** ~3 days
+**Type:** C (Architecture-Shifting) — adversarial review mandatory
+**Target:** ~4–5 days (10–11 sessions)
 
 **Scope:**
-- **LearningDatabase** (`argus/intelligence/learning.py`): Stores all scored setups (traded and untraded), outcomes, quality scores, regime context. Rolling window analysis.
-- **PostTradeAnalyzer**: Correlates quality scores with outcomes. Weekly batch retraining of Quality Engine weights. V1 uses statistical lookup tables (pattern × catalyst × regime → performance). Consumes `MultiObjectiveResult` and comparison API from Sprint 27.5 — no ad-hoc evaluation metrics. Consumes counterfactual data from Sprint 27.7 — learns from ~288 rejected signals/day in addition to ~12 trades/day (24× more data). Optimizes against multi-dimensional regime vectors from Sprint 27.6, not crude 5-label enum.
-- **Interim experiment storage:** Writes experiment results to SQLite with ExperimentRegistry-compatible schema (DEC-357 modification). Forward-compatible with Sprint 32.5 registry.
-- Performance-aware throttling: Strategies that underperform their historical baseline get throttled. Strategies that outperform get boosted. Recommendations surfaced as action cards for human approval.
-- Correlation monitoring: Pairwise correlation between all active strategies over trailing window. Highly correlated pairs flagged.
-- **UI — Orchestrator page:** Strategy Health Panel — each strategy gets a health band visualization (horizontal bar, green/amber/red against historical baseline). Throttle/boost recommendations as approve/dismiss action cards.
-- **UI — Performance page:** Correlation Matrix heatmap showing pairwise correlation. Highly correlated pairs flagged with warning indicator.
-- **UI — Dashboard:** Weekly insight card from Learning Loop.
-- **UI — System:** Learning Loop health monitoring.
-- **Tests:** ~60 new.
+- **OutcomeCollector** (`argus/intelligence/learning/outcome_collector.py`): Unified read layer across `trades`, `counterfactual_positions`, and `quality_history` tables. Joins traded outcomes with quality scores, regime context, and counterfactual shadow position results. Consumes counterfactual data from Sprint 27.7 — learns from ~288 rejected signals/day in addition to ~12 trades/day (24× more data).
+- **WeightAnalyzer**: Spearman rank correlation between each quality dimension score (pattern strength, catalyst quality, volume profile, historical match, regime alignment) and P&L outcomes. Identifies which dimensions actually predict performance vs. which are noise. Regime analysis adaptive: overall analysis always runs; per-regime analysis runs when sample sizes meet configurable minimum (`min_sample_per_regime`, default 5). Insufficient-data regimes show as "insufficient data" rather than omitted. Consumes `MultiObjectiveResult` and comparison API from Sprint 27.5. Optimizes against multi-dimensional regime vectors from Sprint 27.6.
+- **ThresholdAnalyzer**: Missed-opportunity rates (good counterfactual outcomes rejected at each grade threshold) and correct-rejection rates (bad outcomes correctly filtered). Per-grade accuracy breakdown.
+- **CorrelationAnalyzer**: Pairwise strategy return correlation over trailing window. Highly correlated pairs flagged for portfolio concentration risk.
+- **LearningReport**: Structured output combining weight correlations, threshold analysis, correlation findings, and actionable recommendations. Forward-compatible schema designed for Sprint 32.5 ExperimentRegistry.
+- **LearningStore** (`data/learning.db`): SQLite persistence for reports with full audit trail.
+- **LearningService**: Orchestrates analysis pipeline (OutcomeCollector → analyzers → report → store → recommendations).
+- **ConfigProposalManager**: Bridges Learning Loop recommendations to actual YAML config changes. On human approval, programmatically updates `quality_engine.yaml` and reloads in-memory config via Pydantic validation. Changes queue until next session start (not mid-session). Config change history table for audit trail. Revert capability. `max_change_per_cycle` guard (±0.10 per weight per report). Pydantic validation before every write.
+- **Auto post-session trigger**: Analysis runs automatically after EOD flatten completes, in addition to CLI and REST triggers.
+- **Approval/dismiss UX with decision history**: Each recommendation gets Approve/Dismiss action with optional notes. Decision history persists to SQLite for V2/V3 training data.
+- **Strategy Health Bands**: Observational health status per strategy (visual only — no automated throttle/boost). Automated throttle/boost actions deferred to Sprint 40 (Learning Loop V2).
+- **REST API**: Trigger analysis, retrieve reports, approve/dismiss/revert ConfigProposals.
+- **CLI entry point**: `python -m argus.intelligence.learning --analyze` for manual trigger.
+- **UI — Performance page:** Learning Insights panel (outcome analysis → what the system learned → recommended adjustments). Strategy Health Bands (observational, green/amber/red against historical baseline). Correlation Matrix heatmap showing pairwise correlation with warning indicators.
+- **UI — Dashboard:** Summary card (pending recommendations count, last analysis timestamp, data quality indicator) linking to Performance page detail.
+- **Tests:** ~70 new.
+
+**Key design decisions:**
+- V1 is **advisory-only** — recommendations surface as ConfigProposals requiring human approval. Automated weight application deferred to Sprint 40 (Learning Loop V2).
+- **Spearman rank correlation** replaces statistical lookup tables — lookup tables require data density that early paper trading won't provide.
+- **Strategy parameters are NOT in scope** — Learning Loop observes and recommends Quality Engine meta-parameters (weights, thresholds, risk tiers). Individual strategy parameter tuning is Sprint 32+ (Parameterized Templates + Systematic Search).
+
+### Sprint 28.5: Exit Management
+**Target:** ~2 days (2–3 sessions)
+
+**Scope:**
+- Trailing stops: configurable trailing stop mechanism integrated into Order Manager, Risk Manager awareness.
+- Partial profit-taking: regime-adaptive targets, split exit at T1/T2 with trail on remainder.
+- Time-based exit escalation: progressive tightening of stops as hold time increases.
+- Learning Loop will surface data showing exit management is a major P&L variance driver; this sprint acts on those findings immediately.
+- **Tests:** ~30 new.
 
 ### Phase 6 Gate ★ CRITICAL — LIVE TRADING DECISION POINT ★
 

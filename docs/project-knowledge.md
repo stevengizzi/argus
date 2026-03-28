@@ -91,7 +91,7 @@ Paper trading active with Databento EQUS.MINI + IBKR paper (Account U24619949, D
 
 ### Expanded Vision (DEC-163, DEC-262)
 
-15+ artisanal patterns → ensemble systematic search → self-improving trading intelligence platform. Near-term (Phase 5–6): Setup Quality Engine (0–100 scoring, DEC-239, **Sprint 24 ✅**), NLP Catalyst Pipeline (SEC EDGAR + FMP + Finnhub + Claude API, **Sprint 23.5 ✅**), Dynamic Position Sizer (**Sprint 24 ✅**), **Evaluation Framework (MultiObjectiveResult, EnsembleResult, Pareto dominance — Sprint 27.5 ✅)**, **Regime Intelligence (RegimeVector multi-dimensional — Sprint 27.6 ✅)**, **Counterfactual Engine (shadow position tracking — Sprint 27.7 ✅)**, Learning Loop V1, Short Selling Infrastructure, Universe Manager with full-universe monitoring (DEC-263, **Sprint 23 ✅**). Mid-term (Phase 7–8): BacktestEngine (**Sprint 27 ✅**), parameterized strategy templates, **Experiment Registry + Promotion Pipeline + Anti-Fragility (Sprint 32.5)**, statistical validation, **Adversarial Stress Testing (Sprint 33.5)**, systematic parameter search, controlled experiment (go/no-go gate). Long-term (Phase 9–10): Ensemble Orchestrator V2, Synapse visualization, Continuous Discovery Pipeline, Performance Workbench. Order Flow Model deferred to post-revenue (DEC-238, requires Databento Plus $1,399/mo). Full roadmap: `docs/roadmap.md`.
+15+ artisanal patterns → ensemble systematic search → self-improving trading intelligence platform. Near-term (Phase 5–6): Setup Quality Engine (0–100 scoring, DEC-239, **Sprint 24 ✅**), NLP Catalyst Pipeline (SEC EDGAR + FMP + Finnhub + Claude API, **Sprint 23.5 ✅**), Dynamic Position Sizer (**Sprint 24 ✅**), **Evaluation Framework (MultiObjectiveResult, EnsembleResult, Pareto dominance — Sprint 27.5 ✅)**, **Regime Intelligence (RegimeVector multi-dimensional — Sprint 27.6 ✅)**, **Counterfactual Engine (shadow position tracking — Sprint 27.7 ✅)**, Learning Loop V1, Short Selling Infrastructure, Universe Manager with full-universe monitoring (DEC-263, **Sprint 23 ✅**). Sprint 28 planning complete — refined to advisory-only ConfigProposal workflow (OutcomeCollector, WeightAnalyzer, ThresholdAnalyzer, CorrelationAnalyzer, ConfigProposalManager), Type C with adversarial review, 10–11 sessions. Automated weight application deferred to Sprint 40 (Learning Loop V2). Mid-term (Phase 7–8): BacktestEngine (**Sprint 27 ✅**), parameterized strategy templates, **Experiment Registry + Promotion Pipeline + Anti-Fragility (Sprint 32.5)**, statistical validation, **Adversarial Stress Testing (Sprint 33.5)**, systematic parameter search, controlled experiment (go/no-go gate). Long-term (Phase 9–10): Ensemble Orchestrator V2, Synapse visualization, Continuous Discovery Pipeline, Performance Workbench. Order Flow Model deferred to post-revenue (DEC-238, requires Databento Plus $1,399/mo). Full roadmap: `docs/roadmap.md`.
 
 ---
 
@@ -329,6 +329,12 @@ Universal protocols, templates, and the runner live in the `workflow/` submodule
 | `docs/ui/ux-feature-backlog.md` | Planned UI features |
 | `docs/strategies/STRATEGY_*.md` | Per-strategy spec sheets |
 | `workflow/` | Claude-workflow metarepo (protocols, templates, runner) |
+
+## Key Learnings
+
+- **Learning Loop V1 is advisory-only.** Recommendations surface as ConfigProposals requiring human approval. Automated application deferred to Sprint 40. Every V1 approval/dismiss decision is training data for the system that will eventually be built.
+- **ConfigProposalManager validates through Pydantic before writing.** Changes queue until next session start. `max_change_per_cycle` guard prevents radical reconfiguration from a single report.
+- **Strategy parameters are NOT in Sprint 28 scope.** The Learning Loop observes and recommends Quality Engine meta-parameters (weights, thresholds, risk tiers). Individual strategy parameter tuning is Sprint 32+ (Parameterized Templates + Systematic Search).
 
 ---
 
