@@ -55,6 +55,7 @@ from argus.core.config import (
 from argus.core.event_bus import EventBus
 from argus.core.events import (
     CandleEvent,
+    OrderApprovedEvent,
     OrderRejectedEvent,
     PositionClosedEvent,
     QualitySignalEvent,
@@ -1391,6 +1392,39 @@ class ArgusSystem:
             )
 
         result = await self._risk_manager.evaluate_signal(signal)
+
+        # Overflow check — after RM approval, before order placement (Sprint 27.95 S3b)
+        if (
+            isinstance(result, OrderApprovedEvent)
+            and config.system.broker_source != BrokerSource.SIMULATED
+            and config.system.overflow.enabled
+            and getattr(self, '_order_manager', None) is not None
+            and self._order_manager.open_position_count
+            >= config.system.overflow.broker_capacity
+        ):
+            position_count = self._order_manager.open_position_count
+            capacity = config.system.overflow.broker_capacity
+            logger.info(
+                "Signal overflow to counterfactual: %s %s (%d/%d positions)",
+                signal.strategy_id,
+                signal.symbol,
+                position_count,
+                capacity,
+            )
+            if getattr(self, '_counterfactual_enabled', False):
+                regime_snapshot = self._capture_regime_snapshot()
+                await self._event_bus.publish(SignalRejectedEvent(
+                    signal=signal,
+                    rejection_reason=(
+                        f"Broker capacity reached ({position_count}/{capacity})"
+                    ),
+                    rejection_stage="broker_overflow",
+                    quality_score=getattr(signal, 'quality_score', None),
+                    quality_grade=getattr(signal, 'quality_grade', None),
+                    regime_vector_snapshot=regime_snapshot,
+                ))
+            return
+
         await self._event_bus.publish(result)
 
         if getattr(self, '_counterfactual_enabled', False) and isinstance(result, OrderRejectedEvent):

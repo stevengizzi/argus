@@ -207,7 +207,7 @@ class SignalRejectedEvent(Event):
 
     signal: SignalEvent | None = None
     rejection_reason: str = ""
-    rejection_stage: str = ""  # RejectionStage value: "QUALITY_FILTER", "POSITION_SIZER", "RISK_MANAGER", "SHADOW"
+    rejection_stage: str = ""  # RejectionStage value: "QUALITY_FILTER", "POSITION_SIZER", "RISK_MANAGER", "SHADOW", "BROKER_OVERFLOW"
     quality_score: float | None = None
     quality_grade: str | None = None
     regime_vector_snapshot: dict[str, Any] | None = None  # RegimeVector.to_dict() if available
