@@ -43,20 +43,14 @@ import { CorrelationMatrix } from '../features/performance/CorrelationMatrix';
 import { TradeReplay } from '../features/performance/TradeReplay';
 import { QualityGradeChart } from '../features/performance/QualityGradeChart';
 import { QualityOutcomeScatter } from '../features/debrief/QualityOutcomeScatter';
+import { LearningInsightsPanel } from '../components/learning/LearningInsightsPanel';
+import { useConfigProposals } from '../hooks/useConfigProposals';
 import { staggerContainer, staggerItem } from '../utils/motion';
 import type { PerformancePeriod } from '../api/types';
 import { useCopilotContext } from '../hooks/useCopilotContext';
 
 // Performance tabs
-type PerformanceTab = 'overview' | 'heatmaps' | 'distribution' | 'portfolio' | 'replay';
-
-const TAB_SEGMENTS = [
-  { label: 'Overview', value: 'overview' },
-  { label: 'Heatmaps', value: 'heatmaps' },
-  { label: 'Distribution', value: 'distribution' },
-  { label: 'Portfolio', value: 'portfolio' },
-  { label: 'Replay', value: 'replay' },
-];
+type PerformanceTab = 'overview' | 'heatmaps' | 'distribution' | 'portfolio' | 'replay' | 'learning';
 
 // Error boundary to catch chart rendering errors
 interface ErrorBoundaryProps {
@@ -110,6 +104,23 @@ export function PerformancePage() {
   const [comparisonEnabled, setComparisonEnabled] = useState(false);
 
   const { data, isLoading, error, isFetching } = usePerformance(period);
+
+  // Learning tab: pending proposals count for badge
+  const { data: proposalsData } = useConfigProposals('PENDING');
+  const pendingProposalCount = proposalsData?.proposals?.length ?? 0;
+
+  const tabSegments = [
+    { label: 'Overview', value: 'overview' },
+    { label: 'Heatmaps', value: 'heatmaps' },
+    { label: 'Distribution', value: 'distribution' },
+    { label: 'Portfolio', value: 'portfolio' },
+    { label: 'Replay', value: 'replay' },
+    {
+      label: 'Learning',
+      value: 'learning',
+      ...(pendingProposalCount > 0 ? { count: pendingProposalCount } : {}),
+    },
+  ];
 
   // Register Copilot context
   useCopilotContext('Performance', () => ({
@@ -165,6 +176,9 @@ export function PerformancePage() {
         case 'r':
           setActiveTab('replay');
           break;
+        case 'l':
+          setActiveTab('learning');
+          break;
       }
     };
 
@@ -182,6 +196,7 @@ export function PerformancePage() {
           onPeriodChange={setPeriod}
           activeTab={activeTab}
           onTabChange={setActiveTab}
+          tabSegments={tabSegments}
         />
         <PerformanceSkeleton />
       </div>
@@ -196,6 +211,7 @@ export function PerformancePage() {
           onPeriodChange={setPeriod}
           activeTab={activeTab}
           onTabChange={setActiveTab}
+          tabSegments={tabSegments}
         />
         <Card>
           <div className="text-center py-8">
@@ -222,6 +238,7 @@ export function PerformancePage() {
           onPeriodChange={setPeriod}
           activeTab={activeTab}
           onTabChange={setActiveTab}
+          tabSegments={tabSegments}
         />
         <Card>
           <div className="text-center py-8">
@@ -248,6 +265,7 @@ export function PerformancePage() {
           onPeriodChange={setPeriod}
           activeTab={activeTab}
           onTabChange={setActiveTab}
+          tabSegments={tabSegments}
         />
       </motion.div>
 
@@ -318,6 +336,18 @@ export function PerformancePage() {
             <ReplayTabContent period={period} />
           </motion.div>
         )}
+
+        {activeTab === 'learning' && (
+          <motion.div
+            key="learning"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+          >
+            <LearningInsightsPanel isActive={activeTab === 'learning'} />
+          </motion.div>
+        )}
       </AnimatePresence>
     </motion.div>
   );
@@ -329,9 +359,10 @@ interface PageHeaderProps {
   onPeriodChange: (period: PerformancePeriod) => void;
   activeTab: PerformanceTab;
   onTabChange: (tab: PerformanceTab) => void;
+  tabSegments: Array<{ label: string; value: string; count?: number }>;
 }
 
-function PageHeader({ selectedPeriod, onPeriodChange, activeTab, onTabChange }: PageHeaderProps) {
+function PageHeader({ selectedPeriod, onPeriodChange, activeTab, onTabChange, tabSegments }: PageHeaderProps) {
   return (
     <div className="space-y-4">
       {/* Title and period selector */}
@@ -345,7 +376,7 @@ function PageHeader({ selectedPeriod, onPeriodChange, activeTab, onTabChange }: 
 
       {/* Tab navigation */}
       <SegmentedTab
-        segments={TAB_SEGMENTS}
+        segments={tabSegments}
         activeValue={activeTab}
         onChange={(value) => onTabChange(value as PerformanceTab)}
         size="sm"

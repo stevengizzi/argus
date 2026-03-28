@@ -25,12 +25,15 @@ import type {
  *
  * Gets the most recent report from the list endpoint (limit=1),
  * then fetches full detail. 5-minute stale time.
+ *
+ * @param enabled - Controls whether queries fire (for lazy loading). Default true.
  */
-export function useLearningReport() {
+export function useLearningReport(enabled = true) {
   const latestList = useQuery<ReportsListResponse, Error>({
     queryKey: ['learning', 'reports', 'latest'],
     queryFn: () => getLearningReports({ limit: 1 }),
     staleTime: 5 * 60 * 1000,
+    enabled,
   });
 
   const latestReportId = latestList.data?.reports[0]?.report_id;
@@ -38,7 +41,7 @@ export function useLearningReport() {
   const detail = useQuery<ReportDetailResponse, Error>({
     queryKey: ['learning', 'report', latestReportId],
     queryFn: () => getLearningReport(latestReportId!),
-    enabled: Boolean(latestReportId),
+    enabled: enabled && Boolean(latestReportId),
     staleTime: 5 * 60 * 1000,
   });
 
@@ -52,8 +55,10 @@ export function useLearningReport() {
 
 /**
  * Fetch learning reports with optional date filters.
+ *
+ * @param enabled - Controls whether query fires (for lazy loading). Default true.
  */
-export function useLearningReports(startDate?: string, endDate?: string) {
+export function useLearningReports(startDate?: string, endDate?: string, enabled = true) {
   return useQuery<ReportsListResponse, Error>({
     queryKey: ['learning', 'reports', { startDate, endDate }],
     queryFn: () =>
@@ -62,6 +67,7 @@ export function useLearningReports(startDate?: string, endDate?: string) {
         end_date: endDate,
       }),
     staleTime: 5 * 60 * 1000,
+    enabled,
   });
 }
 

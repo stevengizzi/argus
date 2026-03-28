@@ -23,13 +23,16 @@ import type {
 
 /**
  * Fetch config proposals with optional status filter.
+ *
+ * @param enabled - Controls whether query fires (for lazy loading). Default true.
  */
-export function useConfigProposals(statusFilter?: string) {
+export function useConfigProposals(statusFilter?: string, enabled = true) {
   return useQuery<ProposalsListResponse, Error>({
     queryKey: ['learning', 'proposals', { status: statusFilter }],
     queryFn: () =>
       getConfigProposals(statusFilter ? { status: statusFilter } : undefined),
     staleTime: 60_000,
+    enabled,
   });
 }
 
