@@ -7,6 +7,7 @@ config proposal management.
 from argus.intelligence.learning.config_proposal_manager import (
     ConfigProposalManager,
 )
+from argus.intelligence.learning.learning_service import LearningService
 from argus.intelligence.learning.learning_store import LearningStore
 from argus.intelligence.learning.models import (
     ConfidenceLevel,
@@ -29,6 +30,7 @@ __all__ = [
     "DataQualityPreamble",
     "LearningLoopConfig",
     "LearningReport",
+    "LearningService",
     "LearningStore",
     "OutcomeCollector",
     "OutcomeRecord",
