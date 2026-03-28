@@ -10,13 +10,18 @@ Sprint 28, Session 3b.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import yaml
 from ulid import ULID
+
+if TYPE_CHECKING:
+    from argus.core.event_bus import EventBus
 
 from argus.intelligence.learning.correlation_analyzer import CorrelationAnalyzer
 from argus.intelligence.learning.learning_store import LearningStore
@@ -82,6 +87,62 @@ class LearningService:
         self._store = store
         self._qe_yaml_path = quality_engine_yaml_path
         self._running = False
+
+    def register_auto_trigger(self, event_bus: EventBus) -> None:
+        """Subscribe to SessionEndEvent for automatic post-session analysis.
+
+        Amendment 13: Uses Event Bus subscription, not direct callback.
+
+        Args:
+            event_bus: The system event bus.
+        """
+        from argus.core.events import SessionEndEvent
+
+        event_bus.subscribe(SessionEndEvent, self._on_session_end)
+        logger.info("LearningService auto-trigger registered on SessionEndEvent")
+
+    async def _on_session_end(self, event: object) -> None:
+        """Handle SessionEndEvent — fire-and-forget analysis.
+
+        Amendment 10: Zero-trade guard skips if both trades_count
+        and counterfactual_count are zero. Runs if counterfactual-only.
+        Timeout of 120s. Exceptions logged, never delay shutdown.
+
+        Args:
+            event: SessionEndEvent (typed as object to avoid circular import).
+        """
+        from argus.core.events import SessionEndEvent
+
+        if not isinstance(event, SessionEndEvent):
+            return
+
+        if not self._config.auto_trigger_enabled:
+            logger.info("Auto-trigger disabled — skipping post-session analysis")
+            return
+
+        # Zero-trade guard (Amendment 10)
+        if event.trades_count == 0 and event.counterfactual_count == 0:
+            logger.info(
+                "Zero trades and zero counterfactual — skipping post-session analysis"
+            )
+            return
+
+        logger.info(
+            "Auto-trigger: starting post-session analysis "
+            "(trades=%d, counterfactual=%d, day=%s)",
+            event.trades_count,
+            event.counterfactual_count,
+            event.trading_day,
+        )
+
+        try:
+            await asyncio.wait_for(self.run_analysis(), timeout=120)
+        except asyncio.TimeoutError:
+            logger.warning("Auto-trigger: analysis timed out after 120s")
+        except RuntimeError:
+            logger.warning("Auto-trigger: analysis already running, skipping")
+        except Exception:
+            logger.warning("Auto-trigger: analysis failed", exc_info=True)
 
     async def run_analysis(
         self,

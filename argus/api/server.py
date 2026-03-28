@@ -349,6 +349,91 @@ def create_app(app_state: AppState) -> FastAPI:
         ):
             logger.info("VIXDataService disabled")
 
+        # Initialize Learning Loop if enabled (Sprint 28)
+        learning_initialized_here = False
+        if (
+            app_state.config is not None
+            and app_state.config.learning_loop is not None
+            and app_state.config.learning_loop.enabled
+        ):
+            try:
+                from argus.intelligence.learning.config_proposal_manager import (
+                    ConfigProposalManager,
+                )
+                from argus.intelligence.learning.correlation_analyzer import (
+                    CorrelationAnalyzer,
+                )
+                from argus.intelligence.learning.learning_service import LearningService
+                from argus.intelligence.learning.learning_store import LearningStore
+                from argus.intelligence.learning.outcome_collector import OutcomeCollector
+                from argus.intelligence.learning.threshold_analyzer import (
+                    ThresholdAnalyzer,
+                )
+                from argus.intelligence.learning.weight_analyzer import WeightAnalyzer
+
+                ll_config = app_state.config.learning_loop
+                data_dir = app_state.config.data_dir
+
+                # Initialize store
+                learning_store = LearningStore(
+                    db_path=str(Path(data_dir) / "learning.db")
+                )
+                await learning_store.initialize()
+
+                # Initialize outcome collector
+                outcome_collector = OutcomeCollector(
+                    argus_db_path=str(Path(data_dir) / "argus.db"),
+                    counterfactual_db_path=str(Path(data_dir) / "counterfactual.db"),
+                )
+
+                # Initialize analyzers
+                weight_analyzer = WeightAnalyzer()
+                threshold_analyzer = ThresholdAnalyzer()
+                correlation_analyzer = CorrelationAnalyzer()
+
+                # Initialize LearningService
+                learning_service = LearningService(
+                    config=ll_config,
+                    outcome_collector=outcome_collector,
+                    weight_analyzer=weight_analyzer,
+                    threshold_analyzer=threshold_analyzer,
+                    correlation_analyzer=correlation_analyzer,
+                    store=learning_store,
+                )
+
+                # Initialize ConfigProposalManager
+                config_proposal_manager = ConfigProposalManager(
+                    config=ll_config,
+                    store=learning_store,
+                )
+
+                # Apply pending proposals at startup (Amendment 1)
+                applied_ids = await config_proposal_manager.apply_pending()
+                if applied_ids:
+                    logger.info(
+                        "Applied %d pending config proposals at startup",
+                        len(applied_ids),
+                    )
+
+                # Wire auto-trigger via Event Bus (Amendment 13)
+                learning_service.register_auto_trigger(app_state.event_bus)
+
+                # Attach to app_state
+                app_state.learning_service = learning_service
+                app_state.learning_store = learning_store
+                app_state.config_proposal_manager = config_proposal_manager
+                learning_initialized_here = True
+
+                logger.info("Learning Loop initialized")
+            except Exception as e:
+                logger.error("Failed to initialize Learning Loop: %s", e)
+        elif (
+            app_state.config is not None
+            and app_state.config.learning_loop is not None
+            and not app_state.config.learning_loop.enabled
+        ):
+            logger.info("Learning Loop disabled")
+
         # Note: WebSocket bridge is started by main.py before calling run_server().
         # We only need to get a reference to it here for cleanup.
         from argus.api.websocket import get_bridge
@@ -402,6 +487,13 @@ def create_app(app_state: AppState) -> FastAPI:
                     await update_task
                 logger.info("VIXDataService update task cancelled")
             app_state.vix_data_service = None
+
+        # Cleanup Learning Loop if we initialized it here
+        if learning_initialized_here:
+            app_state.learning_service = None
+            app_state.learning_store = None
+            app_state.config_proposal_manager = None
+            logger.info("Learning Loop cleaned up")
 
         # Cleanup telemetry store (only if created by lifespan, not main.py)
         if telemetry_store is not None and telemetry_store is not _pre_initialized_store:

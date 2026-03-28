@@ -23,6 +23,7 @@ from argus.intelligence.config import (
     OverflowConfig,
     QualityEngineConfig,
 )
+from argus.intelligence.learning.models import LearningLoopConfig
 
 # ---------------------------------------------------------------------------
 # Enums
@@ -304,6 +305,8 @@ class SystemConfig(BaseModel):
     reconciliation: ReconciliationConfig = Field(default_factory=ReconciliationConfig)
     # Overflow management configuration (Sprint 27.95 — signal overflow routing)
     overflow: OverflowConfig = Field(default_factory=OverflowConfig)
+    # Learning Loop configuration (Sprint 28 — adaptive config tuning)
+    learning_loop: LearningLoopConfig = Field(default_factory=LearningLoopConfig)
 
     @field_validator("timezone")
     @classmethod

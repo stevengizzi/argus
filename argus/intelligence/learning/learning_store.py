@@ -368,6 +368,26 @@ class LearningStore:
             rows = await cursor.fetchall()
             return [self._row_to_proposal(dict(r)) for r in rows]  # type: ignore[arg-type]
 
+    async def get_proposal(self, proposal_id: str) -> ConfigProposal | None:
+        """Retrieve a single proposal by ID.
+
+        Args:
+            proposal_id: The proposal ID to look up.
+
+        Returns:
+            ConfigProposal or None if not found.
+        """
+        async with aiosqlite.connect(self._db_path) as conn:
+            conn.row_factory = aiosqlite.Row
+            cursor = await conn.execute(
+                "SELECT * FROM config_proposals WHERE proposal_id = ?",
+                (proposal_id,),
+            )
+            row = await cursor.fetchone()
+            if row is None:
+                return None
+            return self._row_to_proposal(dict(row))  # type: ignore[arg-type]
+
     async def get_pending_proposals(self) -> list[ConfigProposal]:
         """Get all PENDING proposals.
 

@@ -500,6 +500,24 @@ class UniverseUpdateEvent(Event):
 
 
 @dataclass(frozen=True)
+class SessionEndEvent(Event):
+    """Published after EOD flatten completes.
+
+    The Learning Loop subscribes to this event to auto-trigger
+    post-session analysis (Amendment 13).
+
+    Attributes:
+        trading_day: The trading day that just ended (YYYY-MM-DD).
+        trades_count: Number of trades executed during the session.
+        counterfactual_count: Number of counterfactual positions tracked.
+    """
+
+    trading_day: str = ""
+    trades_count: int = 0
+    counterfactual_count: int = 0
+
+
+@dataclass(frozen=True)
 class QualitySignalEvent(Event):
     """Informational event published for UI consumers after quality scoring.
 

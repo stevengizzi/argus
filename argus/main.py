@@ -59,6 +59,7 @@ from argus.core.events import (
     OrderRejectedEvent,
     PositionClosedEvent,
     QualitySignalEvent,
+    SessionEndEvent,
     ShutdownRequestedEvent,
     SignalRejectedEvent,
 )
@@ -1559,8 +1560,8 @@ class ArgusSystem:
     async def _on_shutdown_requested(self, event: ShutdownRequestedEvent) -> None:
         """Handle shutdown request from Order Manager after EOD flatten.
 
-        Schedules graceful shutdown after the configured delay to allow
-        any final operations (trade logging, API responses) to complete.
+        Publishes SessionEndEvent for Learning Loop auto-trigger, then
+        schedules graceful shutdown after the configured delay.
 
         Args:
             event: The shutdown request event with delay configuration.
@@ -1572,6 +1573,9 @@ class ArgusSystem:
             delay,
         )
 
+        # Publish SessionEndEvent for Learning Loop (Amendment 13)
+        await self._publish_session_end_event()
+
         # Schedule the delayed shutdown
         async def delayed_shutdown() -> None:
             await asyncio.sleep(delay)
@@ -1579,6 +1583,45 @@ class ArgusSystem:
             self.request_shutdown()
 
         asyncio.create_task(delayed_shutdown())
+
+    async def _publish_session_end_event(self) -> None:
+        """Publish SessionEndEvent after EOD flatten completes.
+
+        Gathers today's trade count and counterfactual count, then
+        publishes SessionEndEvent on the Event Bus. Fire-and-forget.
+        """
+        from zoneinfo import ZoneInfo
+
+        try:
+            et_tz = ZoneInfo("America/New_York")
+            trading_day = self._clock.now().astimezone(et_tz).strftime("%Y-%m-%d")
+
+            trades_count = 0
+            if self._trade_logger is not None:
+                trades_count = await self._trade_logger.get_todays_trade_count()
+
+            counterfactual_count = 0
+            if self._counterfactual_tracker is not None:
+                closed = getattr(
+                    self._counterfactual_tracker, "_closed_positions", []
+                )
+                counterfactual_count = len(closed)
+
+            await self._event_bus.publish(
+                SessionEndEvent(
+                    trading_day=trading_day,
+                    trades_count=trades_count,
+                    counterfactual_count=counterfactual_count,
+                )
+            )
+            logger.info(
+                "SessionEndEvent published (day=%s, trades=%d, cf=%d)",
+                trading_day,
+                trades_count,
+                counterfactual_count,
+            )
+        except Exception:
+            logger.warning("Failed to publish SessionEndEvent", exc_info=True)
 
     async def _reconstruct_strategy_state(self, symbols: list[str]) -> None:
         """Reconstruct strategy state if restarting mid-day.
