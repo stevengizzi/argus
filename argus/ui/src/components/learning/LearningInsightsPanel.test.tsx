@@ -67,6 +67,7 @@ const mockReport = {
     },
   ],
   correlation_result: null,
+  strategy_metrics: {},
   version: 1,
 };
 

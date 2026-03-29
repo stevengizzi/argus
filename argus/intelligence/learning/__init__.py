@@ -17,6 +17,7 @@ from argus.intelligence.learning.models import (
     LearningLoopConfig,
     LearningReport,
     OutcomeRecord,
+    StrategyMetricsSummary,
     ThresholdRecommendation,
     WeightRecommendation,
 )
@@ -34,6 +35,7 @@ __all__ = [
     "LearningStore",
     "OutcomeCollector",
     "OutcomeRecord",
+    "StrategyMetricsSummary",
     "ThresholdRecommendation",
     "WeightRecommendation",
 ]

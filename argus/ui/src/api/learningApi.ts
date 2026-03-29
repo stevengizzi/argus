@@ -58,6 +58,15 @@ export interface CorrelationResult {
   window_days: number;
 }
 
+export interface StrategyMetricsSummary {
+  strategy_id: string;
+  sharpe: number | null;
+  win_rate: number;
+  expectancy: number;
+  trade_count: number;
+  source: string;
+}
+
 export interface DataQualityPreamble {
   trading_days_count: number;
   total_trades: number;
@@ -77,6 +86,7 @@ export interface LearningReport {
   weight_recommendations: WeightRecommendation[];
   threshold_recommendations: ThresholdRecommendation[];
   correlation_result: CorrelationResult | null;
+  strategy_metrics: Record<string, StrategyMetricsSummary>;
   version: number;
 }
 

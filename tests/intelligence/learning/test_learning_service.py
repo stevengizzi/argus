@@ -65,6 +65,8 @@ def _make_outcome(
     quality_score: float = 75.0,
     pnl: float = 50.0,
     source: str = "trade",
+    r_multiple: float | None = 1.5,
+    timestamp: datetime | None = None,
 ) -> OutcomeRecord:
     """Create a minimal OutcomeRecord."""
     return OutcomeRecord(
@@ -75,9 +77,9 @@ def _make_outcome(
         dimension_scores={"pattern_strength": 80.0, "volume_profile": 70.0},
         regime_context={"primary_regime": "bullish_trending"},
         pnl=pnl,
-        r_multiple=1.5,
+        r_multiple=r_multiple,
         source=source,  # type: ignore[arg-type]
-        timestamp=_NOW - timedelta(days=5),
+        timestamp=timestamp or (_NOW - timedelta(days=5)),
     )
 
 
@@ -555,3 +557,76 @@ def test_grade_to_yaml_key() -> None:
     assert _grade_to_yaml_key("A-") == "a_minus"
     assert _grade_to_yaml_key("B") == "b"
     assert _grade_to_yaml_key("C+") == "c_plus"
+
+
+# --- Strategy metrics computation ---
+
+
+def test_strategy_metrics_win_rate_and_expectancy() -> None:
+    """Verify _compute_strategy_metrics produces correct win rate and expectancy."""
+    records = [
+        _make_outcome(strategy_id="strat_a", pnl=100.0, r_multiple=1.0, source="trade"),
+        _make_outcome(strategy_id="strat_a", pnl=-50.0, r_multiple=-0.5, source="trade"),
+        _make_outcome(strategy_id="strat_a", pnl=200.0, r_multiple=2.0, source="trade"),
+        _make_outcome(strategy_id="strat_a", pnl=-30.0, r_multiple=-0.3, source="trade"),
+        _make_outcome(strategy_id="strat_a", pnl=80.0, r_multiple=0.8, source="trade"),
+    ]
+    result = LearningService._compute_strategy_metrics(records)
+    assert "strat_a" in result
+    m = result["strat_a"]
+    assert m.trade_count == 5
+    assert m.win_rate == pytest.approx(3 / 5)  # 3 positive out of 5
+    assert m.source == "trade"
+    # Expectancy = mean of [1.0, -0.5, 2.0, -0.3, 0.8] = 0.6
+    assert m.expectancy == pytest.approx(0.6)
+    # All same timestamp → 1 trading day → Sharpe is None (< 5 days)
+    assert m.sharpe is None
+
+
+def test_strategy_metrics_sharpe_with_multiple_days() -> None:
+    """Sharpe computed when records span >= 5 trading days."""
+    records = []
+    for i in range(7):
+        records.append(
+            _make_outcome(
+                strategy_id="strat_b",
+                pnl=50.0 + i * 10,
+                r_multiple=0.5 + i * 0.1,
+                source="trade",
+                timestamp=datetime(2026, 3, 10 + i, 10, 30, tzinfo=UTC),
+            )
+        )
+    result = LearningService._compute_strategy_metrics(records)
+    m = result["strat_b"]
+    assert m.sharpe is not None
+    assert m.sharpe > 0  # All positive P&L → positive Sharpe
+    assert m.source == "trade"
+
+
+def test_strategy_metrics_source_selection_combined() -> None:
+    """Falls back to combined source when < 5 trade records but >= 5 total."""
+    records = [
+        _make_outcome(strategy_id="strat_c", pnl=100.0, source="trade"),
+        _make_outcome(strategy_id="strat_c", pnl=-50.0, source="trade"),
+        _make_outcome(strategy_id="strat_c", pnl=80.0, source="counterfactual"),
+        _make_outcome(strategy_id="strat_c", pnl=-20.0, source="counterfactual"),
+        _make_outcome(strategy_id="strat_c", pnl=60.0, source="counterfactual"),
+    ]
+    result = LearningService._compute_strategy_metrics(records)
+    m = result["strat_c"]
+    assert m.source == "combined"
+    assert m.trade_count == 5
+
+
+def test_strategy_metrics_insufficient_data() -> None:
+    """Insufficient source when < 5 total records."""
+    records = [
+        _make_outcome(strategy_id="strat_d", pnl=100.0, source="trade"),
+        _make_outcome(strategy_id="strat_d", pnl=-50.0, source="trade"),
+    ]
+    result = LearningService._compute_strategy_metrics(records)
+    m = result["strat_d"]
+    assert m.source == "insufficient"
+    assert m.trade_count == 2
+    assert m.sharpe is None
+    assert m.win_rate == 0.0

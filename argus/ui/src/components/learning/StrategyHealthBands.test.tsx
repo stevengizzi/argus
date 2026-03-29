@@ -1,33 +1,16 @@
 /**
  * Tests for StrategyHealthBands component.
  *
- * Sprint 28, Session 6c.
+ * Sprint 28, Session S6cf-3.
  */
 
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { StrategyHealthBands } from './StrategyHealthBands';
-import type { LearningReport, WeightRecommendation } from '../../api/learningApi';
-
-function makeWeightRec(overrides?: Partial<WeightRecommendation>): WeightRecommendation {
-  return {
-    dimension: 'pattern_strength',
-    current_weight: 0.30,
-    recommended_weight: 0.35,
-    delta: 0.05,
-    correlation_trade_source: 0.42,
-    correlation_counterfactual_source: 0.38,
-    p_value: 0.023,
-    sample_size: 150,
-    confidence: 'MODERATE',
-    regime_breakdown: {},
-    source_divergence_flag: false,
-    ...overrides,
-  };
-}
+import type { LearningReport, StrategyMetricsSummary } from '../../api/learningApi';
 
 function makeReport(
-  weightRecs: WeightRecommendation[] = [makeWeightRec()]
+  metrics: Record<string, StrategyMetricsSummary> = {}
 ): LearningReport {
   return {
     report_id: 'r1',
@@ -43,9 +26,10 @@ function makeReport(
       earliest_date: '2026-03-01',
       latest_date: '2026-03-28',
     },
-    weight_recommendations: weightRecs,
+    weight_recommendations: [],
     threshold_recommendations: [],
     correlation_result: null,
+    strategy_metrics: metrics,
     version: 1,
   };
 }
@@ -59,22 +43,36 @@ describe('StrategyHealthBands', () => {
     ).toBeInTheDocument();
   });
 
-  it('renders strategy bars with mock data', () => {
-    const report = makeReport([
-      makeWeightRec({ dimension: 'orb_breakout', sample_size: 80 }),
-      makeWeightRec({ dimension: 'vwap_reclaim', sample_size: 45 }),
-    ]);
+  it('renders strategy bars with real metrics', () => {
+    const report = makeReport({
+      strat_orb_breakout: {
+        strategy_id: 'strat_orb_breakout',
+        sharpe: 1.82,
+        win_rate: 0.55,
+        expectancy: 0.42,
+        trade_count: 80,
+        source: 'trade',
+      },
+      strat_vwap_reclaim: {
+        strategy_id: 'strat_vwap_reclaim',
+        sharpe: 0.95,
+        win_rate: 0.48,
+        expectancy: 0.15,
+        trade_count: 45,
+        source: 'trade',
+      },
+    });
 
     render(<StrategyHealthBands report={report} />);
     expect(screen.getByTestId('health-bands')).toBeInTheDocument();
-    expect(screen.getByText('orb breakout')).toBeInTheDocument();
-    expect(screen.getByText('vwap reclaim')).toBeInTheDocument();
+    expect(screen.getByText('Orb Breakout')).toBeInTheDocument();
+    expect(screen.getByText('Vwap Reclaim')).toBeInTheDocument();
     expect(screen.getByText('80 trades')).toBeInTheDocument();
     expect(screen.getByText('45 trades')).toBeInTheDocument();
   });
 
-  it('renders empty state when report has no weight recommendations', () => {
-    const report = makeReport([]);
+  it('renders empty state when report has no strategy metrics', () => {
+    const report = makeReport({});
     render(<StrategyHealthBands report={report} />);
     expect(screen.getByTestId('health-bands-empty')).toBeInTheDocument();
   });

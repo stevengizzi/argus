@@ -30,6 +30,8 @@ from argus.intelligence.learning.models import (
     ConfigProposal,
     LearningLoopConfig,
     LearningReport,
+    OutcomeRecord,
+    StrategyMetricsSummary,
     WeightRecommendation,
 )
 from argus.intelligence.learning.outcome_collector import OutcomeCollector
@@ -219,6 +221,9 @@ class LearningService:
         # Step 4: Build data quality preamble
         data_quality = await self._collector.build_data_quality_preamble(records)
 
+        # Step 4.5: Compute per-strategy metrics
+        strategy_metrics = self._compute_strategy_metrics(records)
+
         # Step 5: Run WeightAnalyzer (overall + per-regime)
         weight_recs = self._weight_analyzer.analyze(
             records, self._config, current_weights
@@ -250,6 +255,7 @@ class LearningService:
             weight_recommendations=enriched_weight_recs,
             threshold_recommendations=threshold_recs,
             correlation_result=correlation_result,
+            strategy_metrics=strategy_metrics,
             version=1,
         )
 
@@ -317,6 +323,97 @@ class LearningService:
                 thresholds[display_key] = int(val)
 
         return weights or _default_weights(), thresholds or _default_thresholds()
+
+    @staticmethod
+    def _compute_strategy_metrics(
+        records: list[OutcomeRecord],
+    ) -> dict[str, StrategyMetricsSummary]:
+        """Compute per-strategy trailing performance metrics.
+
+        Uses trade-sourced records preferentially per Amendment 3 spirit.
+        Falls back to combined (trade + counterfactual) if fewer than
+        5 trade records for a strategy.
+
+        Args:
+            records: All OutcomeRecords from the collection window.
+
+        Returns:
+            Dict of strategy_id -> StrategyMetricsSummary.
+        """
+        from collections import defaultdict
+        from datetime import date
+        from zoneinfo import ZoneInfo
+
+        import numpy as np
+
+        eastern = ZoneInfo("America/New_York")
+
+        # Group by strategy
+        trade_by_strategy: dict[str, list[OutcomeRecord]] = defaultdict(list)
+        all_by_strategy: dict[str, list[OutcomeRecord]] = defaultdict(list)
+        for r in records:
+            all_by_strategy[r.strategy_id].append(r)
+            if r.source == "trade":
+                trade_by_strategy[r.strategy_id].append(r)
+
+        result: dict[str, StrategyMetricsSummary] = {}
+
+        for strategy_id, all_recs in all_by_strategy.items():
+            trade_recs = trade_by_strategy.get(strategy_id, [])
+
+            # Source selection: trade if >= 5 records, else combined
+            if len(trade_recs) >= 5:
+                working = trade_recs
+                source = "trade"
+            elif len(all_recs) >= 5:
+                working = all_recs
+                source = "combined"
+            else:
+                result[strategy_id] = StrategyMetricsSummary(
+                    strategy_id=strategy_id,
+                    sharpe=None,
+                    win_rate=0.0,
+                    expectancy=0.0,
+                    trade_count=len(all_recs),
+                    source="insufficient",
+                )
+                continue
+
+            # Win rate
+            wins = sum(1 for r in working if r.pnl > 0)
+            win_rate = wins / len(working)
+
+            # Expectancy: use r_multiple where available, else raw P&L
+            r_multiples = [r.r_multiple for r in working if r.r_multiple is not None]
+            if len(r_multiples) >= len(working) * 0.5:
+                expectancy = sum(r_multiples) / len(r_multiples)
+            else:
+                expectancy = sum(r.pnl for r in working) / len(working)
+
+            # Sharpe: annualized from daily P&L
+            daily_pnl: dict[date, float] = defaultdict(float)
+            for r in working:
+                et_date = r.timestamp.astimezone(eastern).date()
+                daily_pnl[et_date] += r.pnl
+
+            sharpe: float | None = None
+            if len(daily_pnl) >= 5:
+                daily_values = list(daily_pnl.values())
+                mean_daily = float(np.mean(daily_values))
+                std_daily = float(np.std(daily_values, ddof=1))
+                if std_daily > 0:
+                    sharpe = mean_daily / std_daily * float(np.sqrt(252))
+
+            result[strategy_id] = StrategyMetricsSummary(
+                strategy_id=strategy_id,
+                sharpe=sharpe,
+                win_rate=win_rate,
+                expectancy=expectancy,
+                trade_count=len(working),
+                source=source,
+            )
+
+        return result
 
     @staticmethod
     def _enrich_with_regime(

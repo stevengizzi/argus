@@ -22,6 +22,7 @@ from argus.intelligence.learning.models import (
     LearningReport,
     OutcomeRecord,
     PROPOSAL_STATUSES,
+    StrategyMetricsSummary,
     ThresholdRecommendation,
     WeightRecommendation,
 )
@@ -136,6 +137,60 @@ class TestLearningReportSerialization:
         assert restored.correlation_result is None
         assert restored.weight_recommendations == []
         assert restored.threshold_recommendations == []
+
+    def test_round_trip_with_strategy_metrics(self) -> None:
+        """strategy_metrics round-trips through to_dict/from_dict."""
+        metrics = {
+            "orb_breakout": StrategyMetricsSummary(
+                strategy_id="orb_breakout",
+                sharpe=1.82,
+                win_rate=0.55,
+                expectancy=0.42,
+                trade_count=80,
+                source="trade",
+            ),
+            "vwap_reclaim": StrategyMetricsSummary(
+                strategy_id="vwap_reclaim",
+                sharpe=None,
+                win_rate=0.48,
+                expectancy=-0.1,
+                trade_count=3,
+                source="insufficient",
+            ),
+        }
+        report = LearningReport(
+            report_id="01JTEST_METRICS",
+            generated_at=datetime(2026, 3, 28, tzinfo=timezone.utc),
+            analysis_window_start=datetime(2026, 3, 1, tzinfo=timezone.utc),
+            analysis_window_end=datetime(2026, 3, 28, tzinfo=timezone.utc),
+            data_quality=_make_data_quality(),
+            weight_recommendations=[],
+            threshold_recommendations=[],
+            correlation_result=None,
+            strategy_metrics=metrics,
+        )
+        d = report.to_dict()
+        restored = LearningReport.from_dict(d)
+
+        assert len(restored.strategy_metrics) == 2
+        orb = restored.strategy_metrics["orb_breakout"]
+        assert orb.sharpe == 1.82
+        assert orb.win_rate == 0.55
+        assert orb.expectancy == 0.42
+        assert orb.trade_count == 80
+        assert orb.source == "trade"
+        vwap = restored.strategy_metrics["vwap_reclaim"]
+        assert vwap.sharpe is None
+        assert vwap.source == "insufficient"
+
+    def test_round_trip_backward_compatible_no_strategy_metrics(self) -> None:
+        """Old serialized reports without strategy_metrics deserialize with empty dict."""
+        report = _make_learning_report()
+        d = report.to_dict()
+        # Simulate old format: remove strategy_metrics key
+        d.pop("strategy_metrics", None)
+        restored = LearningReport.from_dict(d)
+        assert restored.strategy_metrics == {}
 
     def test_to_dict_datetime_serialization(self) -> None:
         """Datetimes are serialized as ISO strings."""

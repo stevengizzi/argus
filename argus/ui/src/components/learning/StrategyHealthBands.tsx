@@ -11,7 +11,7 @@
 import { useMemo } from 'react';
 import { Card } from '../Card';
 import { CardHeader } from '../CardHeader';
-import type { LearningReport, WeightRecommendation } from '../../api/learningApi';
+import type { LearningReport } from '../../api/learningApi';
 
 interface StrategyHealthBandsProps {
   report: LearningReport | null;
@@ -63,48 +63,16 @@ function metricLabel(metric: MetricKey): string {
   return 'Expectancy';
 }
 
-/**
- * Extract per-strategy metrics from weight recommendations.
- * Groups by strategy dimension prefix and aggregates available metrics.
- */
-function extractStrategyMetrics(
-  recommendations: WeightRecommendation[]
-): StrategyMetrics[] {
-  const strategyMap = new Map<string, StrategyMetrics>();
-
-  for (const rec of recommendations) {
-    // Dimension names follow pattern: "strategy_name.metric" or just "dimension"
-    // Use sample_size as proxy for trade count
-    const parts = rec.dimension.split('.');
-    const strategyId = parts.length > 1 ? parts[0] : rec.dimension;
-
-    if (!strategyMap.has(strategyId)) {
-      strategyMap.set(strategyId, {
-        strategyId,
-        sharpe: null,
-        winRate: null,
-        expectancy: null,
-        tradeCount: rec.sample_size,
-      });
-    }
-
-    const entry = strategyMap.get(strategyId)!;
-    entry.tradeCount = Math.max(entry.tradeCount, rec.sample_size);
-
-    // Use correlation values as health indicators when available
-    if (rec.correlation_trade_source !== null) {
-      // Map correlation magnitude to a health-like metric
-      entry.sharpe = rec.correlation_trade_source;
-    }
-  }
-
-  return Array.from(strategyMap.values());
-}
-
 export function StrategyHealthBands({ report }: StrategyHealthBandsProps) {
-  const strategies = useMemo(() => {
-    if (!report) return [];
-    return extractStrategyMetrics(report.weight_recommendations);
+  const strategies: StrategyMetrics[] = useMemo(() => {
+    if (!report?.strategy_metrics) return [];
+    return Object.values(report.strategy_metrics).map((m) => ({
+      strategyId: m.strategy_id,
+      sharpe: m.sharpe,
+      winRate: m.win_rate,
+      expectancy: m.expectancy,
+      tradeCount: m.trade_count,
+    }));
   }, [report]);
 
   // Empty state
@@ -134,7 +102,12 @@ export function StrategyHealthBands({ report }: StrategyHealthBandsProps) {
             {/* Strategy name + trade count */}
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium text-argus-text">
-                {strategy.strategyId.replace(/_/g, ' ')}
+                {strategy.strategyId
+                  .replace(/^strat_/i, '')
+                  .replace(/_/g, ' ')
+                  .split(' ')
+                  .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+                  .join(' ')}
               </span>
               <span className="text-xs text-argus-text-dim tabular-nums">
                 {strategy.tradeCount} trades

@@ -9,7 +9,7 @@ Sprint 28, Session 1.
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from enum import StrEnum
 from typing import Literal
@@ -80,6 +80,30 @@ class DataQualityPreamble:
     known_data_gaps: list[str]
     earliest_date: datetime | None
     latest_date: datetime | None
+
+
+@dataclass(frozen=True)
+class StrategyMetricsSummary:
+    """Per-strategy trailing performance metrics.
+
+    Computed from OutcomeRecords during learning analysis.
+    Trade-sourced records used preferentially; combined if insufficient.
+
+    Attributes:
+        strategy_id: Strategy identifier.
+        sharpe: Annualized Sharpe ratio (daily P&L basis), or None if < 5 trading days.
+        win_rate: Proportion of trades with positive P&L.
+        expectancy: Mean R-multiple if available, else mean P&L.
+        trade_count: Number of records used.
+        source: "trade", "combined", or "insufficient".
+    """
+
+    strategy_id: str
+    sharpe: float | None
+    win_rate: float
+    expectancy: float
+    trade_count: int
+    source: str
 
 
 @dataclass(frozen=True)
@@ -181,6 +205,7 @@ class LearningReport:
     weight_recommendations: list[WeightRecommendation]
     threshold_recommendations: list[ThresholdRecommendation]
     correlation_result: CorrelationResult | None
+    strategy_metrics: dict[str, StrategyMetricsSummary] = field(default_factory=dict)
     version: int = 1
 
     def to_dict(self) -> dict[str, object]:
@@ -283,6 +308,21 @@ class LearningReport:
                 window_days=int(cr_raw["window_days"]),
             )
 
+        # Parse strategy metrics (backward-compatible: empty dict if absent)
+        raw_metrics = d.get("strategy_metrics", {})
+        strategy_metrics: dict[str, StrategyMetricsSummary] = {}
+        if isinstance(raw_metrics, dict):
+            for sid, m in raw_metrics.items():
+                if isinstance(m, dict):
+                    strategy_metrics[str(sid)] = StrategyMetricsSummary(
+                        strategy_id=str(m.get("strategy_id", sid)),
+                        sharpe=float(m["sharpe"]) if m.get("sharpe") is not None else None,
+                        win_rate=float(m["win_rate"]),
+                        expectancy=float(m["expectancy"]),
+                        trade_count=int(m["trade_count"]),
+                        source=str(m.get("source", "trade")),
+                    )
+
         return cls(
             report_id=str(d["report_id"]),
             generated_at=_parse_dt_required(d["generated_at"]),
@@ -292,6 +332,7 @@ class LearningReport:
             weight_recommendations=weight_recs,
             threshold_recommendations=threshold_recs,
             correlation_result=correlation_result,
+            strategy_metrics=strategy_metrics,
             version=int(d.get("version", 1)),
         )
 
