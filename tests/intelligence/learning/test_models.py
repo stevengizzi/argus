@@ -75,6 +75,7 @@ def _make_correlation_result() -> CorrelationResult:
         strategy_pairs=[("orb_breakout", "vwap_reclaim")],
         correlation_matrix={("orb_breakout", "vwap_reclaim"): 0.75},
         flagged_pairs=[("orb_breakout", "vwap_reclaim")],
+        overlap_counts={("orb_breakout", "vwap_reclaim"): 15},
         excluded_strategies=["afternoon_momentum"],
         window_days=20,
     )

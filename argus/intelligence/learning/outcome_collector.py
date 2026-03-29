@@ -102,18 +102,6 @@ class OutcomeCollector:
 
         known_gaps: list[str] = []
 
-        # Flag pre-Sprint-27.95 reconciliation artifacts
-        reco_trades = [
-            r for r in trades
-            if r.rejection_reason is not None
-            and "reconciliation" in r.rejection_reason.lower()
-        ]
-        if reco_trades:
-            known_gaps.append(
-                f"{len(reco_trades)} reconciliation-sourced trades "
-                "may have synthetic close prices"
-            )
-
         # Flag if no counterfactual data available
         if not counterfactual and trades:
             known_gaps.append(

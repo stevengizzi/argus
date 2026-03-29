@@ -81,6 +81,7 @@ class CorrelationAnalyzer:
                 strategy_pairs=[],
                 correlation_matrix={},
                 flagged_pairs=[],
+                overlap_counts={},
                 excluded_strategies=excluded_strategies,
                 window_days=config.correlation_window_days,
             )
@@ -89,6 +90,7 @@ class CorrelationAnalyzer:
         strategy_pairs: list[tuple[str, str]] = []
         correlation_matrix: dict[tuple[str, str], float] = {}
         flagged_pairs: list[tuple[str, str]] = []
+        overlap_counts: dict[tuple[str, str], int] = {}
 
         for i, strat_a in enumerate(active_strategies):
             for strat_b in active_strategies[i + 1:]:
@@ -99,6 +101,12 @@ class CorrelationAnalyzer:
                     daily_pnl[strat_a], daily_pnl[strat_b]
                 )
                 correlation_matrix[pair] = corr
+
+                # Count aligned trading days (union — missing days treated as 0)
+                overlap_counts[pair] = len(
+                    set(daily_pnl[strat_a].keys())
+                    | set(daily_pnl[strat_b].keys())
+                )
 
                 if abs(corr) >= config.correlation_threshold:
                     flagged_pairs.append(pair)
@@ -113,6 +121,7 @@ class CorrelationAnalyzer:
             strategy_pairs=strategy_pairs,
             correlation_matrix=correlation_matrix,
             flagged_pairs=flagged_pairs,
+            overlap_counts=overlap_counts,
             excluded_strategies=excluded_strategies,
             window_days=config.correlation_window_days,
         )

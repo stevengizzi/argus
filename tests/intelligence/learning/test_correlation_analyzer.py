@@ -268,3 +268,38 @@ class TestCorrelationAnalyzerSourceSeparation:
 
         assert result.correlation_matrix[("orb", "vwap")] == 0.0
         assert ("orb", "vwap") not in result.flagged_pairs
+
+
+class TestCorrelationAnalyzerOverlapCounts:
+    """Tests for overlap_counts computation."""
+
+    def test_overlap_count_computed_per_pair(self) -> None:
+        """Each pair should have an overlap count equal to the union of trading days."""
+        records = [
+            # orb trades on days 2, 3, 4
+            _make_record("orb", 100.0, _ts(2026, 3, 2)),
+            _make_record("orb", -50.0, _ts(2026, 3, 3)),
+            _make_record("orb", 75.0, _ts(2026, 3, 4)),
+            # vwap trades on days 2, 3 (missing day 4)
+            _make_record("vwap", 80.0, _ts(2026, 3, 2)),
+            _make_record("vwap", -40.0, _ts(2026, 3, 3)),
+        ]
+        config = LearningLoopConfig()
+        analyzer = CorrelationAnalyzer()
+
+        result = analyzer.analyze(records, config)
+
+        # Union of {2,3,4} | {2,3} = {2,3,4} → 3 days
+        assert result.overlap_counts[("orb", "vwap")] == 3
+
+    def test_overlap_count_empty_result(self) -> None:
+        """Early-return path should have empty overlap_counts."""
+        records = [
+            _make_record("orb", 100.0, _ts(2026, 3, 2)),
+        ]
+        config = LearningLoopConfig()
+        analyzer = CorrelationAnalyzer()
+
+        result = analyzer.analyze(records, config)
+
+        assert result.overlap_counts == {}

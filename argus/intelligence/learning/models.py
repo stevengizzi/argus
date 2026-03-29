@@ -144,6 +144,7 @@ class CorrelationResult:
         strategy_pairs: List of strategy pair tuples analyzed.
         correlation_matrix: Correlation values keyed by strategy pair.
         flagged_pairs: Pairs exceeding the correlation threshold.
+        overlap_counts: Number of aligned trading days per pair.
         excluded_strategies: Strategies with zero trades.
         window_days: Number of trading days in the window.
     """
@@ -151,6 +152,7 @@ class CorrelationResult:
     strategy_pairs: list[tuple[str, str]]
     correlation_matrix: dict[tuple[str, str], float]
     flagged_pairs: list[tuple[str, str]]
+    overlap_counts: dict[tuple[str, str], int]
     excluded_strategies: list[str]
     window_days: int
 
@@ -197,6 +199,11 @@ class LearningReport:
                 matrix = cr["correlation_matrix"]
                 cr["correlation_matrix"] = {
                     f"{k[0]}|{k[1]}": v for k, v in matrix.items()
+                }
+            if isinstance(cr, dict) and "overlap_counts" in cr:
+                oc = cr["overlap_counts"]
+                cr["overlap_counts"] = {
+                    f"{k[0]}|{k[1]}": v for k, v in oc.items()
                 }
             if isinstance(cr, dict) and "strategy_pairs" in cr:
                 cr["strategy_pairs"] = [
@@ -259,10 +266,19 @@ class LearningReport:
             assert isinstance(raw_flagged, list)
             flagged_pairs = [(p[0], p[1]) for p in raw_flagged]
 
+            raw_overlap = cr_raw.get("overlap_counts", {})
+            overlap_counts: dict[tuple[str, str], int] = {}
+            if isinstance(raw_overlap, dict):
+                for key_str, val in raw_overlap.items():
+                    parts = key_str.split("|")
+                    if len(parts) == 2:
+                        overlap_counts[(parts[0], parts[1])] = int(val)
+
             correlation_result = CorrelationResult(
                 strategy_pairs=strategy_pairs,
                 correlation_matrix=matrix,
                 flagged_pairs=flagged_pairs,
+                overlap_counts=overlap_counts,
                 excluded_strategies=list(cr_raw.get("excluded_strategies", [])),
                 window_days=int(cr_raw["window_days"]),
             )

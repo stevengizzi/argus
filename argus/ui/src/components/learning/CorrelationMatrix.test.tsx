@@ -12,8 +12,9 @@ import type { CorrelationResult } from '../../api/learningApi';
 function makeCorrelation(overrides?: Partial<CorrelationResult>): CorrelationResult {
   return {
     strategy_pairs: [['orb_breakout', 'vwap_reclaim']],
-    correlation_matrix: { 'orb_breakout:vwap_reclaim': 0.35 },
+    correlation_matrix: { 'orb_breakout|vwap_reclaim': 0.35 },
     flagged_pairs: [],
+    overlap_counts: { 'orb_breakout|vwap_reclaim': 15 },
     excluded_strategies: [],
     window_days: 30,
     ...overrides,
@@ -50,6 +51,7 @@ describe('CorrelationMatrix', () => {
       strategy_pairs: [],
       correlation_matrix: {},
       flagged_pairs: [],
+      overlap_counts: {},
       excluded_strategies: [],
       window_days: 30,
     };

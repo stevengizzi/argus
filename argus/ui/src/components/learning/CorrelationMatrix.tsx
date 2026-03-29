@@ -70,6 +70,7 @@ interface TooltipState {
   stratB: string;
   value: number;
   flagged: boolean;
+  overlapDays: number | null;
 }
 
 export function CorrelationMatrix({ correlationResult }: CorrelationMatrixProps) {
@@ -203,6 +204,11 @@ export function CorrelationMatrix({ correlationResult }: CorrelationMatrixProps)
                       onMouseEnter={(e) => {
                         if (!isDiagonal && value !== null) {
                           const rect = (e.target as SVGRectElement).getBoundingClientRect();
+                          const overlapKey1 = pairKey(rowName, colName);
+                          const overlapKey2 = pairKey(colName, rowName);
+                          const overlapDays = correlationResult.overlap_counts?.[overlapKey1]
+                            ?? correlationResult.overlap_counts?.[overlapKey2]
+                            ?? null;
                           setTooltip({
                             x: rect.left + rect.width / 2,
                             y: rect.top,
@@ -210,6 +216,7 @@ export function CorrelationMatrix({ correlationResult }: CorrelationMatrixProps)
                             stratB: colName,
                             value,
                             flagged,
+                            overlapDays,
                           });
                         }
                       }}
@@ -291,6 +298,11 @@ export function CorrelationMatrix({ correlationResult }: CorrelationMatrixProps)
             <div className="text-argus-text-dim tabular-nums">
               Correlation: {tooltip.value.toFixed(3)}
             </div>
+            {tooltip.overlapDays !== null && (
+              <div className="text-argus-text-dim tabular-nums">
+                Aligned days: {tooltip.overlapDays}
+              </div>
+            )}
             {tooltip.flagged && (
               <div className="text-amber-400 text-[10px] mt-0.5">
                 High correlation flagged

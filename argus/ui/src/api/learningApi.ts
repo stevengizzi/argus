@@ -53,6 +53,7 @@ export interface CorrelationResult {
   strategy_pairs: [string, string][];
   correlation_matrix: Record<string, number>;
   flagged_pairs: [string, string][];
+  overlap_counts: Record<string, number>;
   excluded_strategies: string[];
   window_days: number;
 }
