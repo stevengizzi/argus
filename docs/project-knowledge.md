@@ -11,7 +11,7 @@ ARGUS is a fully automated, AI-enhanced multi-strategy day trading system for US
 
 ## Current State
 
-**Tests:** ~3,837 pytest + 680 Vitest (0 failures in Vitest, 8 pre-existing pytest failures)
+**Tests:** ~3,845 pytest + 680 Vitest (0 Vitest failures, 0 pre-existing pytest failures)
 **Sprints completed:** 1 through 28 + 21.6 + 25.9 + 27.5 + 27.6 + 27.65 + 27.7 + 27.75 + 27.8 + 27.9 + 27.95 (30 full sprints + 34 sub-sprints)
 **Active sprint:** None (between sprints)
 **Next sprint:** 28.5 (Exit Management)
