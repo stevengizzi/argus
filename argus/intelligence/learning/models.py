@@ -14,7 +14,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 
 
 class ConfidenceLevel(StrEnum):
@@ -401,41 +401,6 @@ class LearningLoopConfig(BaseModel):
         default=0.10, ge=0.01, le=0.20
     )
 
-    @field_validator("min_sample_count")
-    @classmethod
-    def validate_min_sample_count(cls, v: int) -> int:
-        """Ensure min_sample_count is at least 5."""
-        if v < 5:
-            msg = "min_sample_count must be >= 5"
-            raise ValueError(msg)
-        return v
-
-    @field_validator("max_weight_change_per_cycle")
-    @classmethod
-    def validate_max_weight_change(cls, v: float) -> float:
-        """Ensure max_weight_change_per_cycle is between 0.01 and 0.50."""
-        if not 0.01 <= v <= 0.50:
-            msg = "max_weight_change_per_cycle must be between 0.01 and 0.50"
-            raise ValueError(msg)
-        return v
-
-    @field_validator("max_cumulative_drift")
-    @classmethod
-    def validate_max_cumulative_drift(cls, v: float) -> float:
-        """Ensure max_cumulative_drift is between 0.05 and 0.50."""
-        if not 0.05 <= v <= 0.50:
-            msg = "max_cumulative_drift must be between 0.05 and 0.50"
-            raise ValueError(msg)
-        return v
-
-    @field_validator("correlation_p_value_threshold")
-    @classmethod
-    def validate_p_value_threshold(cls, v: float) -> float:
-        """Ensure correlation_p_value_threshold is between 0.01 and 0.20."""
-        if not 0.01 <= v <= 0.20:
-            msg = "correlation_p_value_threshold must be between 0.01 and 0.20"
-            raise ValueError(msg)
-        return v
 
 
 # --- Internal helpers ---

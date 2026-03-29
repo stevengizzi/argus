@@ -396,6 +396,11 @@ class CounterfactualTracker:
             if p.closed_at is not None and p.closed_at >= since
         ]
 
+    @property
+    def closed_position_count(self) -> int:
+        """Number of closed counterfactual positions."""
+        return len(self._closed_positions)
+
     def set_store(self, store: object) -> None:
         """Attach a CounterfactualStore for persistence.
 

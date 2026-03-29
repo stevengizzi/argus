@@ -1602,10 +1602,9 @@ class ArgusSystem:
 
             counterfactual_count = 0
             if self._counterfactual_tracker is not None:
-                closed = getattr(
-                    self._counterfactual_tracker, "_closed_positions", []
+                counterfactual_count = getattr(
+                    self._counterfactual_tracker, "closed_position_count", 0
                 )
-                counterfactual_count = len(closed)
 
             await self._event_bus.publish(
                 SessionEndEvent(

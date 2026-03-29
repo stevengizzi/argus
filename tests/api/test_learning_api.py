@@ -500,3 +500,71 @@ async def test_endpoints_require_auth(
         else:
             resp = await client.post(path)
         assert resp.status_code == 401, f"{method} {path} should require auth"
+
+
+@pytest.mark.asyncio
+async def test_learning_disabled_components_are_none(tmp_path: Path) -> None:
+    """When learning_loop.enabled=false, learning components are not initialized."""
+    set_jwt_secret(TEST_JWT_SECRET)
+
+    disabled_config = LearningLoopConfig(enabled=False)
+
+    event_bus = EventBus()
+    clock = FixedClock(datetime(2026, 3, 29, 15, 30, 0, tzinfo=UTC))
+    broker = SimulatedBroker()
+    health_monitor = HealthMonitor(
+        event_bus=event_bus, clock=clock, config=HealthConfig()
+    )
+    risk_config = __import__(
+        "argus.core.config", fromlist=["RiskConfig"]
+    ).RiskConfig()
+    risk_manager = RiskManager(
+        config=risk_config,
+        broker=broker,
+        event_bus=event_bus,
+        clock=clock,
+    )
+    order_manager = OrderManager(
+        broker=broker,
+        event_bus=event_bus,
+        clock=clock,
+        config=OrderManagerConfig(),
+    )
+
+    from argus.analytics.trade_logger import TradeLogger
+    from argus.db.manager import DatabaseManager
+
+    db_manager = DatabaseManager(tmp_path / "argus_test.db")
+    await db_manager.initialize()
+    trade_logger = TradeLogger(db_manager)
+
+    system_config = SystemConfig(
+        api=ApiConfig(
+            password_hash=hash_password(TEST_PASSWORD),
+        ),
+        learning_loop=disabled_config,
+    )
+
+    app_state = AppState(
+        config=system_config,
+        event_bus=event_bus,
+        trade_logger=trade_logger,
+        broker=broker,
+        health_monitor=health_monitor,
+        risk_manager=risk_manager,
+        order_manager=order_manager,
+        clock=clock,
+    )
+    app = create_app(app_state)
+    app.state.app_state = app_state
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as c:
+        # Trigger lifespan by making any request
+        response = await c.get("/api/v1/health")
+        assert response.status_code in (200, 401)
+
+    # Verify learning components were NOT initialized
+    assert app_state.learning_service is None
+    assert app_state.learning_store is None
+    assert app_state.config_proposal_manager is None
