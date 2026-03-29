@@ -1,7 +1,7 @@
 # ARGUS — Sprint History
 
 > Complete record of all sprints from project inception through current state.
-> Active development began February 14, 2026. As of March 28, 2026 (~43 calendar days), 29 full sprints + 34 sub-sprints completed.
+> Active development began February 14, 2026. As of March 29, 2026 (~44 calendar days), 30 full sprints + 34 sub-sprints completed.
 
 ---
 
@@ -29,6 +29,7 @@
 | W — Paper Trading Hardening | 27.75 | Mar 26 | Log rate-limiting, paper trading config, trades page fix |
 | X — Operational Cleanup | 27.8 | Mar 26 | Ghost position reconciliation fix, validation orchestrator script |
 | Y — Broker Safety | 27.95 | Mar 26–28 | Reconciliation redesign, overflow routing, order mgmt hardening |
+| Z — Learning Loop | 28 | Mar 28–29 | Learning Loop V1: outcome analysis, config proposals, Performance UI |
 
 ---
 
@@ -1942,16 +1943,145 @@
 
 ---
 
+## Sprint 28: Learning Loop V1 (March 28–29, 2026)
+
+**Type:** C (Architecture-Shifting) — adversarial review mandatory
+**Goal:** Close the feedback loop between Quality Engine predictions and actual trading outcomes. Build analysis infrastructure, human-approved config proposal pipeline, and Performance page UI.
+**Sessions:** 14 (S1, S2a, S2b, S4, S3a, S3b, S5, S6a, S6b, S6c, S6cf-1, S6cf-2, S6cf-3, S6cf-4)
+**Tests:** pytest ~3,693 → ~3,837 (+144), Vitest 645 → 680 (+35) = +179 new tests
+**New DECs:** None (all design decisions captured in sprint spec + 16 adversarial review amendments; reserved range DEC-378+ not consumed)
+**New DEF items:** DEF-106 (assert statements in models.py from_dict), DEF-107 (unused raiseRec destructured variable)
+**50 files changed, 11,953 insertions, 17 deletions**
+
+**Session S1: OutcomeCollector + Models**
+- OutcomeCollector: read-only queries across trades, counterfactual, quality_history DBs
+- OutcomeRecord dataclass with source separation (trade vs counterfactual)
+- DataQualityPreamble builder for report context
+- LearningLoopConfig Pydantic model + `config/learning_loop.yaml`
+- +16 pytest
+- Verdict: CLEAR
+
+**Session S2a: WeightAnalyzer**
+- Source-separated Spearman correlations per quality dimension
+- P-value significance check, normalized positive correlation weight formula
+- Per-regime breakdown, zero-variance guards
+- max_weight_change_per_cycle guard (±0.10)
+- +14 pytest
+- Verdict: CLEAR
+
+**Session S2b: ConfigProposalManager**
+- Startup-only config application via apply_pending()
+- Atomic YAML writes (tempfile + os.rename)
+- Cumulative drift guard (max 20% over 30-day window)
+- Weight redistribution with sum-to-1.0 invariant
+- Proposal supersession
+- Config change history persistence
+- +18 pytest
+- Verdict: CLEAR
+
+**Session S4: LearningStore** (created ahead of S3a for parallel track)
+- SQLite persistence in data/learning.db (DEC-345 pattern)
+- WAL mode, fire-and-forget, rate-limited warnings
+- 3 tables: learning_reports, config_proposals, config_change_history
+- Retention enforcement protects APPLIED/REVERTED-referenced reports
+- +12 pytest
+- Verdict: CLEAR
+
+**Session S3a: ThresholdAnalyzer**
+- Counterfactual-only analysis (missed opportunity rate, correct rejection rate)
+- Threshold proposal generation (±5 points delta)
+- Both raise and lower can fire simultaneously
+- +10 pytest
+- Verdict: CLEAR
+
+**Session S3b: CorrelationAnalyzer**
+- Pairwise Pearson daily P&L correlations
+- Trade-source preference, flagged pairs at |corr| ≥ threshold
+- Overlap count per pair, excluded strategies tracking
+- +11 pytest
+- Verdict: CLEAR
+
+**Session S5: LearningService + SessionEndEvent + Auto-Trigger**
+- Pipeline orchestrator: collect → analyze → report → persist → supersede → propose
+- Concurrent execution guard
+- SessionEndEvent published after EOD flatten
+- Auto-trigger via Event Bus subscription with zero-trade guard
+- Per-strategy StrategyMetricsSummary (Sharpe, win rate, expectancy)
+- +18 pytest
+- Verdict: CLEAR
+
+**Session S6a: REST API + CLI**
+- 8 JWT-protected endpoints (trigger, reports, proposals, approve/dismiss/revert, config-history)
+- CLI script: scripts/run_learning_analysis.py (--window-days, --strategy-id, --dry-run)
+- +16 pytest
+- Verdict: CLEAR
+
+**Session S6b: LearningInsightsPanel + StrategyHealthBands**
+- Performance page "Learning" tab (6th tab, lazy-loaded, keyboard shortcut 'l')
+- LearningInsightsPanel: weight + threshold recommendation cards with approve/dismiss UX
+- StrategyHealthBands: placeholder bands with mock data
+- +12 Vitest
+- Verdict: CLEAR
+
+**Session S6c: CorrelationMatrix + Dashboard Card**
+- CorrelationMatrix: custom SVG heatmap with tooltip
+- LearningDashboardCard: pending count, last analysis, data quality
+- Responsive 3-column grid on desktop
+- +8 Vitest
+- Verdict: CLEAR
+
+**Session S6cf-1: Batch Findings + Visual Fixes**
+- Fixed critical correlation matrix key delimiter bug (`:` vs `|` — colon conflicts with strategy:strategy pair parsing)
+- Replaced ~8 assert isinstance with if/raise in config_proposal_manager.py and learning.py routes
+- TypeScript strict null fixes
+- +5 Vitest
+- Verdict: CONCERNS (2 findings: DEF-106 assert statements in models.py, DEF-107 unused raiseRec — both LOW)
+
+**Session S6cf-2: Trade Overlap Count + Dead Code Cleanup**
+- CorrelationMatrix tooltip now shows real overlap count from report data
+- Removed dead code and unused imports
+- +4 Vitest
+- Verdict: CLEAR
+
+**Session S6cf-3: Strategy Health Bands Real Data**
+- StrategyHealthBands wired to real per-strategy metrics from learning reports
+- Green/amber/red bands based on Sharpe thresholds
+- Insufficient data handling
+- +4 Vitest
+- Verdict: CLEAR
+
+**Session S6cf-4: Final Polish**
+- LearningInsightsPanel conflicting signal detection and merged display
+- Report selector functionality
+- Minor styling fixes
+- +2 Vitest
+- Verdict: CLEAR
+
+**Adversarial review:** 16 amendments adopted (3 Critical, 4 Significant, 9 Minor). Key amendments: A1 (startup-only application), A2 (cumulative drift guard), A3 (source separation for threshold analysis), A5 (normalized positive correlation weight formula), A9 (atomic YAML writes), A10 (zero-trade guard), A11 (retention protection for referenced reports), A13 (SessionEndEvent auto-trigger), A15 (zero-variance guard).
+
+**Parallelization:** S2a∥S2b parallel, S3a∥S3b parallel, S4 created ahead of S3a (LearningStore needed by both S3a and S3b).
+
+**Key decisions:** None — all design decisions were captured in the sprint spec and its 16 adversarial review amendments. The implementation sessions made no decisions that deviated from the spec.
+**Sessions:** 14
+**Test counts:** pytest 3,693 → ~3,837 (+144), Vitest 645 → 680 (+35) = 179 new tests total
+**Review verdicts:** 12 CLEAR, 2 CONCERNS (S6cf-1: DEF-106/107 both LOW; all resolved)
+**New source files:** ~29 production + ~14 test = ~43
+**Modified source files:** ~7 production + ~2 frontend pages
+**Notes:** First sprint using adversarial review with amendments integrated into implementation prompts. The 16 amendments prevented multiple design flaws (e.g., A1 prevented mid-session config writes, A2 added cumulative drift ceiling, A9 prevented corrupt YAML from partial writes). S6cf-1 discovered and fixed the correlation matrix key delimiter bug (`:` vs `|`) which would have caused runtime failures. ConfigProposalManager is the first ARGUS module that programmatically writes config — startup-only application with atomic writes and drift guard ensures safety.
+
+---
+
 ## Sprint Statistics
 
-- **Total sprints:** 29 full + 34 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9, 27.5, 27.6, 27.65, 27.7, 27.75, 27.8, 27.9, 27.95)
-- **Total sessions:** ~430+ Claude Code sessions
-- **Total tests:** ~3,693 pytest + 645 Vitest = ~4,338 total
+- **Total sprints:** 30 full + 34 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9, 27.5, 27.6, 27.65, 27.7, 27.75, 27.8, 27.9, 27.95)
+- **Total sessions:** ~445+ Claude Code sessions
+- **Total tests:** ~3,837 pytest + 680 Vitest = ~4,517 total
 - **Total decisions:** 377 (DEC-001 through DEC-377)
-- **Calendar days (active dev):** ~43 (Feb 14 – Mar 28, 2026)
+- **Calendar days (active dev):** ~44 (Feb 14 – Mar 29, 2026)
 - **Largest sprint:** 22 (9 implementation + 5 fix + 9 reviews, largest scope)
 - **Cleanest sprint:** 23 (11 sessions, 0 regressions, 0 scope gaps requiring follow-up)
-- **Most test-dense:** Sprint 22 (286 new tests), Sprint 24 (209 new tests), Sprint 23.2 (188 new tests), Sprint 27.6 (171 new tests), Sprint 23 (141 new tests across 23+23.05)
-- **Most Vitest-dense:** 21d (119 new Vitest), Sprint 25 (76 new Vitest), Sprint 24 (51 new Vitest)
+- **Most test-dense:** Sprint 22 (286 new tests), Sprint 24 (209 new tests), Sprint 23.2 (188 new tests), Sprint 28 (179 new tests), Sprint 27.6 (171 new tests), Sprint 23 (141 new tests across 23+23.05)
+- **Most Vitest-dense:** 21d (119 new Vitest), Sprint 25 (76 new Vitest), Sprint 24 (51 new Vitest), Sprint 28 (35 new Vitest)
 - **Crisis sprint:** 8 (VectorBT performance — iterrows() → vectorized, 4 conversations)
 - **Most compaction events:** Sprint 22 (Sessions 3a and 3b both compacted, led to DEC-275)
+- **Most adversarial amendments:** Sprint 28 (16 amendments: 3 Critical, 4 Significant, 9 Minor)

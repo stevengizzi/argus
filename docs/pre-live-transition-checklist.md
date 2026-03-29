@@ -4,7 +4,7 @@
 > and must be restored before transitioning to live trading.
 >
 > **Created:** March 26, 2026 (Sprint 27.75 doc sync)
-> **Last updated:** March 28, 2026
+> **Last updated:** March 29, 2026
 
 ---
 
@@ -90,6 +90,23 @@ Decide if unconfirmed position cleanup should be enabled for live:
 Confirm default is appropriate for live latency:
 - `stop_cancel_retry_max: 3` (default) — retries with 1s/2s/4s exponential backoff
 - Live IBKR may have different latency characteristics than paper — monitor and tune
+
+---
+
+## Learning Loop (Sprint 28)
+
+### config/learning_loop.yaml — Auto-Trigger + Change Limits
+Review before live trading:
+- `auto_trigger_enabled: true` — analysis auto-fires after EOD flatten via SessionEndEvent. May want to disable until confident in analysis quality over multiple sessions.
+- `max_weight_change_per_cycle: 0.10` — maximum ±10% change per quality dimension weight per analysis cycle. Review if appropriate for live.
+- `max_cumulative_drift: 0.20` — 30-day rolling ceiling for total weight drift from original values. Prevents gradual drift beyond 20%.
+
+### ConfigProposalManager — Startup-Only Application
+All config changes from ConfigProposalManager require:
+1. Manual approval (PENDING → APPROVED) via REST API or frontend
+2. System restart to apply (`apply_pending()` runs at startup only)
+
+**No auto-apply risk** — the system never writes config mid-session. This is by design (adversarial review amendment A1).
 
 ---
 

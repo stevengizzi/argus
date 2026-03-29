@@ -1,13 +1,13 @@
 # ARGUS — Claude Code Context
 
 > Dense, actionable context for Claude Code sessions. No history — see `docs/` for that.
-> Last updated: March 28, 2026 (Pre-Sprint 28 strategic doc sync)
+> Last updated: March 29, 2026 (Sprint 28 doc sync — Learning Loop V1)
 
 ## Active Sprint
 
-**No active sprint.** Sprint 27.95 (Broker Safety + Overflow Routing) completed March 28, 2026.
+**No active sprint.** Sprint 28 (Learning Loop V1) completed March 29, 2026.
 
-Next planned sprint: **28 (Learning Loop V1)** — planning complete (Type C, 10-11 sessions, advisory-only ConfigProposal workflow). Followed by Sprints 28.5 (Exit Management), 29 (Pattern Expansion I), 30 (Short Selling), 31 (Pattern Expansion II).
+Next planned sprint: **28.5 (Exit Management)** — trailing stops, partial profit-taking, time-based exit escalation. Followed by Sprints 29 (Pattern Expansion I), 30 (Short Selling), 31 (Pattern Expansion II).
 
 ### Roadmap Amendments Adopted (DEC-357, DEC-358)
 Two roadmap amendments adopted March 23, 2026 adding 5 new sprint slots:
@@ -17,7 +17,7 @@ Two roadmap amendments adopted March 23, 2026 adding 5 new sprint slots:
 - **32.5** (Experiment Registry + Promotion Pipeline): Partitioned SQLite registry, cohort-based promotion, simulated-paper screening, overnight experiment queue, kill switches, anti-fragility
 - **33.5** (Adversarial Stress Testing): Historical crisis replay + synthetic stress scenarios as PromotionPipeline gate
 Amendment docs: `docs/amendments/roadmap-amendment-experiment-infrastructure.md`, `docs/amendments/roadmap-amendment-intelligence-architecture.md`
-Build track: ~~21.6~~ ✅ → ~~27.5~~ ✅ → ~~27.6~~ ✅ → ~~27.7~~ ✅ → ~~27.75~~ ✅ → ~~27.8~~ ✅ → ~~27.9~~ ✅ → ~~27.95~~ ✅ → 28 → 28.5 → 29–31 → 32 → 32.5 → 33 → 33.5 → 34 → 35–41
+Build track: ~~21.6~~ ✅ → ~~27.5~~ ✅ → ~~27.6~~ ✅ → ~~27.7~~ ✅ → ~~27.75~~ ✅ → ~~27.8~~ ✅ → ~~27.9~~ ✅ → ~~27.95~~ ✅ → ~~28~~ ✅ → 28.5 → 29–31 → 32 → 32.5 → 33 → 33.5 → 34 → 35–41
 DEC ranges reserved: 379–385 (27.7, unused), 386–395 (32.5), 396–402 (33.5)
 
 ### Known Issues
@@ -28,10 +28,10 @@ DEC ranges reserved: 379–385 (27.7, unused), 386–395 (32.5), 396–402 (33.5
 ## Current State
 
 - **Active sprint:** None (between sprints)
-- **Next sprint:** 28 (Learning Loop V1)
-- **Tests:** ~3,693 pytest + 645 Vitest (0 failures, 0 hangs)
+- **Next sprint:** 28.5 (Exit Management)
+- **Tests:** ~3,837 pytest + 680 Vitest (0 Vitest failures, 8 pre-existing pytest failures)
 - **Strategies:** 7 active (ORB Breakout, ORB Scalp, VWAP Reclaim, Afternoon Momentum, Red-to-Green, Bull Flag, Flat-Top Breakout)
-- **Infrastructure:** Databento EQUS.MINI (live) + IBKR paper trading (Account U24619949) + FMP Starter (scanning + reference data + daily bars for regime) + Finnhub (news + analyst recs) + Claude API (Copilot + Catalyst Classification) + Universe Manager (config-gated) + Catalyst Pipeline (config-gated) + Intelligence Polling Loop (config-gated) + Reference Data Cache + Quality Engine (config-gated) + Dynamic Position Sizer + Strategy Evaluation Telemetry (ring buffer + SQLite persistence) + Debrief Export (shutdown automation) + Evaluation Framework (MultiObjectiveResult, EnsembleResult, comparison API, slippage model) + Regime Intelligence (RegimeVector 11-field, 8 calculators, config-gated, Sprints 27.6 + 27.9) + VIX Data Service (yfinance daily VIX/SPX, 5 derived metrics, SQLite cache, config-gated, Sprint 27.9) + Counterfactual Engine (shadow position tracking, filter accuracy, shadow strategy mode, overflow routing, config-gated, Sprints 27.7 + 27.95) + ThrottledLogger (log rate-limiting, Sprint 27.75) + Paper trading config overrides (10x risk reduction, throttle disabled, $10 min risk floor, Sprint 27.75) + Broker-confirmed reconciliation (Sprint 27.95) + Overflow routing (config-gated, Sprint 27.95)
+- **Infrastructure:** Databento EQUS.MINI (live) + IBKR paper trading (Account U24619949) + FMP Starter (scanning + reference data + daily bars for regime) + Finnhub (news + analyst recs) + Claude API (Copilot + Catalyst Classification) + Universe Manager (config-gated) + Catalyst Pipeline (config-gated) + Intelligence Polling Loop (config-gated) + Reference Data Cache + Quality Engine (config-gated) + Dynamic Position Sizer + Strategy Evaluation Telemetry (ring buffer + SQLite persistence) + Debrief Export (shutdown automation) + Evaluation Framework (MultiObjectiveResult, EnsembleResult, comparison API, slippage model) + Regime Intelligence (RegimeVector 11-field, 8 calculators, config-gated, Sprints 27.6 + 27.9) + VIX Data Service (yfinance daily VIX/SPX, 5 derived metrics, SQLite cache, config-gated, Sprint 27.9) + Counterfactual Engine (shadow position tracking, filter accuracy, shadow strategy mode, overflow routing, config-gated, Sprints 27.7 + 27.95) + Learning Loop V1 (OutcomeCollector, WeightAnalyzer, ThresholdAnalyzer, CorrelationAnalyzer, LearningService, ConfigProposalManager, LearningStore, config-gated, Sprint 28) + ThrottledLogger (log rate-limiting, Sprint 27.75) + Paper trading config overrides (10x risk reduction, throttle disabled, $10 min risk floor, Sprint 27.75) + Broker-confirmed reconciliation (Sprint 27.95) + Overflow routing (config-gated, Sprint 27.95)
 - **Frontend:** 8-page Command Center (Observatory added Sprint 25) + AI Copilot + Universe Status Card + Intelligence Brief View (all active), Tauri desktop + PWA mobile
 
 ## Project Structure
@@ -62,8 +62,9 @@ argus/
 │   ├── cache.py    # ResponseCache (TTL-based)
 │   └── tools.py    # 5 tool_use definitions with JSON schemas
 ├── intelligence/   # CatalystPipeline, CatalystClassifier, CatalystStorage, BriefingGenerator, startup factory, polling loop (Sprints 23.5 + 23.6), SetupQualityEngine (quality_engine.py), DynamicPositionSizer (position_sizer.py) (Sprint 24)
+│   └── learning/   # Learning Loop V1: OutcomeCollector, WeightAnalyzer, ThresholdAnalyzer, CorrelationAnalyzer, LearningService, ConfigProposalManager, LearningStore (Sprint 28)
 ├── utils/          # ThrottledLogger (Sprint 27.75)
-├── config/         # system.yaml, system_live.yaml, strategies/*.yaml, regime.yaml, counterfactual.yaml, vix_regime.yaml
+├── config/         # system.yaml, system_live.yaml, strategies/*.yaml, regime.yaml, counterfactual.yaml, vix_regime.yaml, learning_loop.yaml
 ├── tests/          # pytest (backend) + Vitest (frontend)
 ├── docs/           # Decision log, sprint history, strategy specs, research reports
 ├── workflow/       # Metarepo submodule (protocols, templates, runner, universal rules)
@@ -78,7 +79,7 @@ argus/
 python -m pytest --ignore=tests/test_main.py -n auto -q  # Full suite (~39s with xdist)
 python -m pytest tests/ -x               # Stop on first failure
 python -m pytest tests/ -x -q            # Fail-fast, quiet
-cd argus/ui && npx vitest run            # Frontend tests (~620)
+cd argus/ui && npx vitest run            # Frontend tests (~680)
 
 # Trading engine
 python -m argus.main                      # Start (paper trading default)
@@ -119,6 +120,12 @@ python -m pytest tests/ai/ -x -q                       # AI module tests only
 python scripts/sprint-runner.py --help                # Show all CLI options
 python scripts/sprint-runner.py run path/to/sprint-package.yaml  # Execute sprint
 python scripts/sprint-runner.py resume --run-dir path/to/run  # Resume from checkpoint
+
+# Learning Loop (Sprint 28)
+python scripts/run_learning_analysis.py               # Manual learning analysis
+python scripts/run_learning_analysis.py --window-days 30  # Custom window
+python scripts/run_learning_analysis.py --strategy-id orb_breakout  # Single strategy
+python scripts/run_learning_analysis.py --dry-run     # Analyze without persisting
 ```
 
 **Environment Variables:**
@@ -326,6 +333,8 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 | DEF-103 | yfinance reliability as unofficial scraping library | Unscheduled | yfinance is an unofficial Yahoo Finance scraper — no SLA, may break on Yahoo HTML/API changes. Mitigations: SQLite persistence cache (survives outage), staleness self-disable (`max_staleness_days=3`), optional FMP fallback (`fmp_fallback_enabled` flag), daily-only frequency (not real-time). Monitor for breakage over 5+ sessions. Priority: LOW. |
 | DEF-104 | Dual ExitReason enums (`events.py` + `trading.py`) must be kept in sync | Unscheduled | Sprint 27.8 added RECONCILIATION to events.py but missed trading.py, causing 336 Pydantic validation errors. Consolidation candidate for future cleanup sprint. Priority: MEDIUM. |
 | DEF-105 | Reconciliation trades inflate `total_trades` count | Unscheduled | Reconciliation closes are counted as BREAKEVEN trades, inflating Dashboard total_trades and Positions card counts. Related to DEF-098 (trade count inconsistency). Priority: LOW. |
+| DEF-106 | `from_dict()` in `models.py` contains ~8 `assert` statements in production deserialization | Unscheduled | Same pattern as assert isinstance fixes done in S6cf-1 (config_proposal_manager.py, learning.py routes). Should be replaced with `if/raise` guards. Priority: LOW. Discovered: Sprint 28 S6cf-1 review (F2). |
+| DEF-107 | Unused `raiseRec` destructured variable in `LearningInsightsPanel.tsx` line 388 | Unscheduled | The `raise` property is aliased as `raiseRec` (reserved word workaround) but never referenced — only `lowerProposal`/`raiseProposal` from the same destructuring are used. Harmless, cosmetic. Priority: LOW. Discovered: Sprint 28 S6cf-1 review (F4). |
 
 ## Reference
 

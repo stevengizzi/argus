@@ -1,7 +1,7 @@
 # ARGUS — Strategic Roadmap
 
 > From artisanal strategies to ensemble alpha — the complete path
-> **v2.7 — March 28, 2026** (Sprint 27.95 complete — Sprint 28 planning finalized)
+> **v2.8 — March 29, 2026** (Sprint 28 complete — Learning Loop V1)
 > **Status:** CANONICAL — this is the single source of truth for ARGUS's strategic direction and sprint queue.
 > **Supersedes:** `docs/research/ARGUS_Expanded_Roadmap.md` (Feb 26), `docs/argus_unified_vision_roadmap.md` (Mar 5), `docs/10_PHASE3_SPRINT_PLAN.md` (all forward-looking sections)
 
@@ -106,7 +106,7 @@ These foundations are correct and remain:
 
 ARGUS completed 21 sprints + sub-sprints in ~17 calendar days of active development (Feb 14 – Mar 5). Average sprint: ~0.8 calendar days. However, sprint complexity has been increasing — early sprints (1–5) were dense single-day affairs, while later sprints (21a–21d, 21.5) span multiple days. The roadmap below assumes sprint durations of 1–4 days each depending on complexity, with some parallelism where noted.
 
-**Current state:** Sprint 27.95 complete (March 28, 2026). ~3,693 pytest + 645 Vitest (0 failures, 0 hangs). Seven active strategies (4 original + R2G, Bull Flag, Flat-Top from Sprint 26). Sprint 27.95 (Broker Safety + Overflow Routing) delivered broker-confirmed reconciliation (DEC-369), overflow routing to CounterfactualTracker (DEC-375), 5 order management failure modes hardened, 9 new DECs (DEC-369–377). Full infrastructure stack operational: BacktestEngine + Evaluation Framework + Regime Intelligence (11-field RegimeVector) + Counterfactual Engine + VIX Data Service + Quality Engine + NLP Catalyst Pipeline + Universe Manager + AI Copilot. Eight-page Command Center + Observatory. Live Databento + IBKR paper trading. Phase 5 Gate complete (March 21, 2026). Sprint 28 planning complete — Type C with adversarial review, 10–11 sessions, refined scope (OutcomeCollector, WeightAnalyzer, ThresholdAnalyzer, CorrelationAnalyzer, ConfigProposalManager). Next: Sprint 28 (Learning Loop V1).
+**Current state:** Sprint 28 complete (March 29, 2026). ~3,837 pytest + 680 Vitest (0 Vitest failures, 8 pre-existing pytest failures). Seven active strategies (4 original + R2G, Bull Flag, Flat-Top from Sprint 26). Sprint 28 (Learning Loop V1) delivered full feedback loop between Quality Engine predictions and actual trading outcomes — OutcomeCollector, WeightAnalyzer, ThresholdAnalyzer, CorrelationAnalyzer, LearningService, ConfigProposalManager, LearningStore, REST API (8 endpoints), CLI, auto-trigger via SessionEndEvent, Performance page Learning tab, Dashboard card. 14 sessions, 16 adversarial review amendments adopted. Full infrastructure stack operational: BacktestEngine + Evaluation Framework + Regime Intelligence (11-field RegimeVector) + Counterfactual Engine + VIX Data Service + Quality Engine + NLP Catalyst Pipeline + Universe Manager + AI Copilot + Learning Loop V1. Eight-page Command Center + Observatory. Live Databento + IBKR paper trading. Phase 5 Gate complete (March 21, 2026). Next: Sprint 28.5 (Exit Management).
 
 ---
 
@@ -436,27 +436,22 @@ VIXDataService (yfinance daily VIX+SPX, 5 derived metrics, SQLite cache). 4 VIX 
 
 Reconciliation redesign with broker-confirmed positions (DEC-369). Overflow routing to CounterfactualTracker when at broker capacity (DEC-375). Stop resubmission cap with exponential backoff (DEC-372). Bracket revision-rejected handling (DEC-373). Fill dedup (DEC-374). Startup zombie cleanup (DEC-376). 9 new DECs (DEC-369–377). Tests: ~3,693 pytest + 645 Vitest.
 
-### Sprint 28: Learning Loop V1 (DEC-163, DEC-354)
-**Type:** C (Architecture-Shifting) — adversarial review mandatory
-**Target:** ~4–5 days (10–11 sessions)
+### Sprint 28: Learning Loop V1 (DEC-163, DEC-354) ✅ COMPLETE (March 29, 2026)
 
-**Scope:**
-- **OutcomeCollector** (`argus/intelligence/learning/outcome_collector.py`): Unified read layer across `trades`, `counterfactual_positions`, and `quality_history` tables. Joins traded outcomes with quality scores, regime context, and counterfactual shadow position results. Consumes counterfactual data from Sprint 27.7 — learns from ~288 rejected signals/day in addition to ~12 trades/day (24× more data).
-- **WeightAnalyzer**: Spearman rank correlation between each quality dimension score (pattern strength, catalyst quality, volume profile, historical match, regime alignment) and P&L outcomes. Identifies which dimensions actually predict performance vs. which are noise. Regime analysis adaptive: overall analysis always runs; per-regime analysis runs when sample sizes meet configurable minimum (`min_sample_per_regime`, default 5). Insufficient-data regimes show as "insufficient data" rather than omitted. Consumes `MultiObjectiveResult` and comparison API from Sprint 27.5. Optimizes against multi-dimensional regime vectors from Sprint 27.6.
-- **ThresholdAnalyzer**: Missed-opportunity rates (good counterfactual outcomes rejected at each grade threshold) and correct-rejection rates (bad outcomes correctly filtered). Per-grade accuracy breakdown.
-- **CorrelationAnalyzer**: Pairwise strategy return correlation over trailing window. Highly correlated pairs flagged for portfolio concentration risk.
-- **LearningReport**: Structured output combining weight correlations, threshold analysis, correlation findings, and actionable recommendations. Forward-compatible schema designed for Sprint 32.5 ExperimentRegistry.
-- **LearningStore** (`data/learning.db`): SQLite persistence for reports with full audit trail.
-- **LearningService**: Orchestrates analysis pipeline (OutcomeCollector → analyzers → report → store → recommendations).
-- **ConfigProposalManager**: Bridges Learning Loop recommendations to actual YAML config changes. On human approval, programmatically updates `quality_engine.yaml` and reloads in-memory config via Pydantic validation. Changes queue until next session start (not mid-session). Config change history table for audit trail. Revert capability. `max_change_per_cycle` guard (±0.10 per weight per report). Pydantic validation before every write.
-- **Auto post-session trigger**: Analysis runs automatically after EOD flatten completes, in addition to CLI and REST triggers.
-- **Approval/dismiss UX with decision history**: Each recommendation gets Approve/Dismiss action with optional notes. Decision history persists to SQLite for V2/V3 training data.
-- **Strategy Health Bands**: Observational health status per strategy (visual only — no automated throttle/boost). Automated throttle/boost actions deferred to Sprint 40 (Learning Loop V2).
-- **REST API**: Trigger analysis, retrieve reports, approve/dismiss/revert ConfigProposals.
-- **CLI entry point**: `python -m argus.intelligence.learning --analyze` for manual trigger.
-- **UI — Performance page:** Learning Insights panel (outcome analysis → what the system learned → recommended adjustments). Strategy Health Bands (observational, green/amber/red against historical baseline). Correlation Matrix heatmap showing pairwise correlation with warning indicators.
-- **UI — Dashboard:** Summary card (pending recommendations count, last analysis timestamp, data quality indicator) linking to Performance page detail.
-- **Tests:** ~70 new.
+**Delivered:**
+- **OutcomeCollector** — read-only queries across trades, counterfactual, quality_history DBs. Source separation (trade vs counterfactual). DataQualityPreamble builder.
+- **WeightAnalyzer** — source-separated Spearman correlations per quality dimension, p-value check, normalized positive correlation weight formula, per-regime breakdown, zero-variance guards.
+- **ThresholdAnalyzer** — counterfactual-only analysis, missed opportunity rate > 0.40 → lower threshold, correct rejection rate < 0.50 → raise threshold.
+- **CorrelationAnalyzer** — pairwise Pearson daily P&L correlations, trade-source preference, flagged pairs, overlap count.
+- **LearningService** — pipeline orchestrator with concurrent guard, auto-trigger via SessionEndEvent, per-strategy metrics.
+- **ConfigProposalManager** — startup-only application, atomic YAML writes, cumulative drift guard (20% over 30 days), sum-to-1.0 invariant, proposal supersession.
+- **LearningStore** — SQLite in `data/learning.db`, 3 tables, retention enforcement.
+- **SessionEndEvent** — published after EOD flatten, carries trade/counterfactual counts.
+- **REST API** — 8 JWT-protected endpoints: trigger, reports, proposals, approve/dismiss/revert, config-history.
+- **CLI** — `scripts/run_learning_analysis.py` with --window-days, --strategy-id, --dry-run.
+- **Frontend** — Performance page "Learning" tab (LearningInsightsPanel, StrategyHealthBands, CorrelationMatrix), Dashboard LearningDashboardCard.
+- **14 sessions**, 16 adversarial review amendments (3 Critical, 4 Significant, 9 Minor), 12 CLEAR / 2 CONCERNS (both resolved).
+- **Tests:** ~3,693+645V → ~3,837+680V (+144 pytest, +35 Vitest).
 
 **Key design decisions:**
 - V1 is **advisory-only** — recommendations surface as ConfigProposals requiring human approval. Automated weight application deferred to Sprint 40 (Learning Loop V2).

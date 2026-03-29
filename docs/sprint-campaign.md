@@ -1,8 +1,8 @@
 # ARGUS Development Campaign — Master Sprint Plan
 
 > From Sprint 21.5 to Full Vision — every step mapped
-> March 28, 2026 | Based on Unified Vision Roadmap v2.7 + Metarepo Workflow System v1.2
-> Updated: Sprint 27.95 complete, Sprint 28 planning finalized
+> March 29, 2026 | Based on Unified Vision Roadmap v2.8 + Metarepo Workflow System v1.2
+> Updated: Sprint 28 complete (Learning Loop V1), Sprint 28.5 next
 
 ---
 
@@ -891,10 +891,10 @@ Broker-confirmed reconciliation (DEC-369). Overflow routing to CounterfactualTra
 
 ---
 
-### Sprint 28: Learning Loop V1
+### Sprint 28: Learning Loop V1 ✅ COMPLETE (March 28–29, 2026)
 
 **Type:** C (Architecture-Shifting) | **Modes:** Adversarial Review, Iterative Judgment Loop
-**Duration:** ~4–5 days | **Sessions:** 10–11 (7–8 backend, 2–3 frontend, +1 visual-review contingency)
+**Actual:** 2 days | **Sessions:** 14 (8 backend, 4 frontend, 2 visual-fix)
 **Depends on:** Sprint 27.95 complete (Counterfactual Engine data accumulating, Evaluation Framework available, Quality Engine operational)
 **Adversarial review:** **YES** — ConfigProposalManager introduces a config modification pipeline. Any module that can programmatically modify live trading configuration warrants adversarial review.
 **Delivers:** OutcomeCollector, WeightAnalyzer, ThresholdAnalyzer, CorrelationAnalyzer, LearningReport, LearningStore, LearningService, ConfigProposalManager, config change history, REST API (trigger + retrieve + approve/dismiss/revert), CLI entry point, auto post-session trigger, Performance page Learning Insights panel + Strategy Health Bands + Correlation Matrix, Dashboard summary card

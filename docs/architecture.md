@@ -1374,11 +1374,12 @@ Events published: `CatalystEvent(symbol, category, quality_score, headline, sour
 
 Storage: separate `catalyst.db` SQLite file (DEC-309), path: `{data_dir}/catalyst.db`.
 
-**Note on SQLite databases:** ARGUS uses three separate SQLite database files to avoid write contention:
+**Note on SQLite databases:** ARGUS uses five separate SQLite database files to avoid write contention:
 - `data/argus.db` — trades, quality history, orchestrator decisions, conversation history, AI usage
 - `data/catalyst.db` — catalyst events and classifications (DEC-309, Sprint 23.6)
 - `data/evaluation.db` — strategy evaluation telemetry events (DEC-345, Sprint 25.6)
 - `data/counterfactual.db` — counterfactual position tracking (DEC-345 pattern, Sprint 27.7)
+- `data/learning.db` — learning reports, config proposals, config change history (DEC-345 pattern, Sprint 28)
 
 #### Counterfactual Engine (`intelligence/counterfactual.py`, `counterfactual_store.py`, `filter_accuracy.py`) — Sprint 27.7 ✅
 
@@ -1448,14 +1449,84 @@ Maps quality grades to risk allocations. Replaces fixed risk_per_trade_pct.
 Interface:
 - `calculate_shares(quality, entry_price, stop_price, allocated_capital, buying_power) -> int`
 
-#### LearningLoop (`intelligence/learning_loop.py`)
-Post-trade analysis and model refinement.
+#### Learning Loop V1 (`intelligence/learning/`) — Sprint 28 ✅
 
-Interface:
-- `record_outcome(trade_id, quality, outcome) -> None`
-- `retrain() -> ModelUpdate` — weekly batch
-- `get_calibration() -> CalibrationReport`
-- `get_insights(period_days) -> list[Insight]`
+Closes the feedback loop between Quality Engine predictions and actual trading outcomes. Advisory-only ConfigProposal workflow — all recommendations require human approval before application. Config-gated via `learning_loop.enabled` in `config/learning_loop.yaml`.
+
+**OutcomeCollector** (`intelligence/learning/outcome_collector.py`):
+- Read-only queries across trades, counterfactual, and quality_history databases
+- Collects `OutcomeRecord` dataclasses with source separation (trade vs counterfactual)
+- `DataQualityPreamble` builder — summarizes data volume and completeness for reports
+- No database writes — pure read layer
+
+**WeightAnalyzer** (`intelligence/learning/weight_analyzer.py`):
+- Source-separated Spearman rank correlations per quality dimension vs P&L outcomes
+- P-value significance check (configurable threshold)
+- Normalized positive correlation weight formula with `max_weight_change_per_cycle` guard (default ±0.10)
+- Per-regime breakdown when sample size meets minimum
+- Zero-variance guards for edge cases (all same scores, all same outcomes)
+
+**ThresholdAnalyzer** (`intelligence/learning/threshold_analyzer.py`):
+- Counterfactual-only analysis — compares rejected signals' theoretical outcomes
+- Missed opportunity rate > 0.40 → recommend lowering grade threshold
+- Correct rejection rate < 0.50 → recommend raising grade threshold
+- Both can fire simultaneously; delta hardcoded at ±5 points for V1
+
+**CorrelationAnalyzer** (`intelligence/learning/correlation_analyzer.py`):
+- Pairwise Pearson daily P&L correlations over trailing window
+- Trade-source preference (falls back to combined if insufficient trade data)
+- Flagged pairs at |correlation| ≥ configurable threshold
+- Overlap count per pair (concurrent positions on same day)
+- Excluded strategies tracking (insufficient data)
+
+**LearningService** (`intelligence/learning/learning_service.py`):
+- Pipeline orchestrator: collect → analyze → report → persist → supersede → propose
+- Concurrent execution guard (prevents parallel analysis runs)
+- Auto-trigger via `SessionEndEvent` subscription after EOD flatten
+- Zero-trade guard: skips analysis if no trades and no counterfactual positions in window
+- Per-strategy `StrategyMetricsSummary` computation: trailing Sharpe (annualized, ddof=1, ≥5 trading days), win rate, expectancy (R-multiple preferred if ≥50% available, else raw P&L)
+- Source preference for metrics: ≥5 trade → trade, ≥5 combined → combined, else insufficient
+
+**ConfigProposalManager** (`intelligence/learning/config_proposal_manager.py`):
+- Startup-only config application via `apply_pending()` — never writes mid-session
+- Atomic YAML writes via tempfile + `os.rename()` on same filesystem
+- Cumulative drift guard: max 20% total weight change over 30-day rolling window
+- Weight redistribution maintains sum-to-1.0 invariant after clamping
+- Proposal supersession: new proposals for same parameter supersede PENDING predecessors
+- Writes to `quality_engine.yaml` (Quality Engine weights and thresholds)
+- Config change history persisted for audit trail and revert capability
+
+**LearningStore** (`intelligence/learning/learning_store.py`):
+- SQLite persistence in `data/learning.db` (DEC-345 isolated DB pattern)
+- WAL mode, fire-and-forget writes with rate-limited warnings
+- 3 tables: `learning_reports`, `config_proposals`, `config_change_history`
+- Retention enforcement protects reports referenced by APPLIED or REVERTED proposals
+
+**SessionEndEvent** (`core/events.py`):
+- Published after EOD flatten in shutdown sequence
+- Carries `trades_count`, `counterfactual_count`, `trading_day`
+- LearningService subscribes via Event Bus for auto-trigger
+
+**REST API** (`api/routes/learning.py`) — 8 JWT-protected endpoints:
+- `POST /api/v1/learning/trigger` — trigger analysis manually
+- `GET /api/v1/learning/reports` — list reports (paginated)
+- `GET /api/v1/learning/reports/{id}` — get specific report
+- `GET /api/v1/learning/proposals` — list config proposals (filterable by status)
+- `POST /api/v1/learning/proposals/{id}/approve` — approve proposal (with optional notes)
+- `POST /api/v1/learning/proposals/{id}/dismiss` — dismiss proposal (with optional notes)
+- `POST /api/v1/learning/proposals/{id}/revert` — revert applied proposal
+- `GET /api/v1/learning/config-history` — config change audit trail
+
+**CLI** (`scripts/run_learning_analysis.py`):
+- `--window-days` (default from config), `--strategy-id` (optional filter), `--dry-run` (skip persistence)
+
+**Frontend:**
+- Performance page "Learning" tab (6th tab, lazy-loaded, keyboard shortcut 'l')
+- `LearningInsightsPanel`: weight + threshold recommendation cards with approve/dismiss UX, conflicting signal detection and merged display
+- `StrategyHealthBands`: real per-strategy metrics (Sharpe, win rate, expectancy) with green/amber/red bands
+- `CorrelationMatrix`: custom SVG heatmap with tooltip including overlap count
+- Dashboard `LearningDashboardCard`: pending count, last analysis timestamp, data quality indicator, "View Insights" link
+- Responsive 3-column grid on desktop
 
 ### 3.Y AI Copilot (`argus/ai/`)
 
@@ -1544,8 +1615,14 @@ GET  /api/v1/quality/distribution        # Today's grade distribution (Sprint 24
 GET  /api/v1/counterfactual/accuracy     # Filter accuracy breakdowns by stage/reason/grade/regime/strategy (Sprint 27.7)
 GET  /api/v1/vix/current                 # Latest VIX data + classifications + staleness (Sprint 27.9)
 GET  /api/v1/vix/history                 # Historical VIX data with date range filter (Sprint 27.9)
-GET  /api/v1/learning/calibration        # Predicted vs actual by grade (Sprint 28+)
-GET  /api/v1/learning/insights           # Top recent findings (Sprint 28+)
+POST /api/v1/learning/trigger             # Trigger learning analysis (Sprint 28)
+GET  /api/v1/learning/reports            # List learning reports, paginated (Sprint 28)
+GET  /api/v1/learning/reports/{id}       # Get specific learning report (Sprint 28)
+GET  /api/v1/learning/proposals          # List config proposals, filterable by status (Sprint 28)
+POST /api/v1/learning/proposals/{id}/approve  # Approve config proposal (Sprint 28)
+POST /api/v1/learning/proposals/{id}/dismiss  # Dismiss config proposal (Sprint 28)
+POST /api/v1/learning/proposals/{id}/revert   # Revert applied config proposal (Sprint 28)
+GET  /api/v1/learning/config-history     # Config change audit trail (Sprint 28)
 
 # AI Copilot endpoints (Sprint 22)
 WS   /api/v1/ai/chat                    # Copilot chat (WebSocket)
@@ -2234,6 +2311,7 @@ config/
 ├── orchestrator.yaml     # Allocation rules, regime thresholds, throttling rules
 ├── regime.yaml           # Regime Intelligence V2 config — 6 dimensions, per-dimension enable flags (Sprint 27.6)
 ├── counterfactual.yaml   # Counterfactual Engine config — enabled, retention, timeout, EOD close time (Sprint 27.7)
+├── learning_loop.yaml    # Learning Loop V1 config — enabled, window_days, auto_trigger, max_weight_change, correlation threshold (Sprint 28)
 ├── notifications.yaml    # Channel configs, alert routing, schedule
 ├── strategies/
 │   ├── orb_breakout.yaml
@@ -2413,4 +2491,4 @@ analytics/
 
 ---
 
-*End of Architecture Document v1.2 (updated Sprint 27.5 — Evaluation Framework)*
+*End of Architecture Document v1.3 (updated Sprint 28 — Learning Loop V1)*
