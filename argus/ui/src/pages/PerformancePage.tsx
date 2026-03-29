@@ -44,7 +44,10 @@ import { TradeReplay } from '../features/performance/TradeReplay';
 import { QualityGradeChart } from '../features/performance/QualityGradeChart';
 import { QualityOutcomeScatter } from '../features/debrief/QualityOutcomeScatter';
 import { LearningInsightsPanel } from '../components/learning/LearningInsightsPanel';
+import { StrategyHealthBands } from '../components/learning/StrategyHealthBands';
+import { CorrelationMatrix as LearningCorrelationMatrix } from '../components/learning/CorrelationMatrix';
 import { useConfigProposals } from '../hooks/useConfigProposals';
+import { useLearningReport } from '../hooks/useLearningReport';
 import { staggerContainer, staggerItem } from '../utils/motion';
 import type { PerformancePeriod } from '../api/types';
 import { useCopilotContext } from '../hooks/useCopilotContext';
@@ -105,8 +108,9 @@ export function PerformancePage() {
 
   const { data, isLoading, error, isFetching } = usePerformance(period);
 
-  // Learning tab: pending proposals count for badge
+  // Learning tab: pending proposals count for badge + report data for health bands / correlation
   const { data: proposalsData } = useConfigProposals('PENDING');
+  const { report: learningReport } = useLearningReport(activeTab === 'learning');
   const pendingProposalCount = proposalsData?.proposals?.length ?? 0;
 
   const tabSegments = [
@@ -344,8 +348,15 @@ export function PerformancePage() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.15 }}
+            className="space-y-4 md:space-y-6"
           >
             <LearningInsightsPanel isActive={activeTab === 'learning'} />
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+              <StrategyHealthBands report={learningReport} />
+              <LearningCorrelationMatrix
+                correlationResult={learningReport?.correlation_result ?? null}
+              />
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

@@ -52,6 +52,7 @@ import {
   SignalQualityPanel,
   VixRegimeCard,
 } from '../features/dashboard';
+import { LearningDashboardCard } from '../components/learning/LearningDashboardCard';
 import { WatchlistSidebar } from '../features/watchlist';
 import { staggerContainer, staggerItem, staggerItemWithChildren } from '../utils/motion';
 import { useIsMultiColumn, useMediaQuery } from '../hooks/useMediaQuery';
@@ -149,6 +150,9 @@ export function DashboardPage() {
           {/* Signal quality histogram */}
           <motion.div variants={staggerItem}><SignalQualityPanel /></motion.div>
 
+          {/* Learning Loop card — returns null when disabled */}
+          <motion.div variants={staggerItem}><LearningDashboardCard /></motion.div>
+
           <motion.div variants={staggerItem}><OpenPositions /></motion.div>
           <motion.div variants={staggerItem}><RecentTrades /></motion.div>
           <motion.div variants={staggerItem}><HealthMini /></motion.div>
@@ -239,7 +243,7 @@ export function DashboardPage() {
 
           {/* Below fold: review-oriented cards */}
           <motion.div
-            className="grid grid-cols-2 gap-6"
+            className="grid grid-cols-3 gap-6"
             variants={staggerItemWithChildren(0.08)}
           >
             <motion.div variants={staggerItem} className="h-full">
@@ -247,6 +251,9 @@ export function DashboardPage() {
             </motion.div>
             <motion.div variants={staggerItem} className="h-full">
               <SignalQualityPanel />
+            </motion.div>
+            <motion.div variants={staggerItem} className="h-full">
+              <LearningDashboardCard />
             </motion.div>
           </motion.div>
         </motion.div>
@@ -328,9 +335,17 @@ export function DashboardPage() {
           </motion.div>
         </motion.div>
 
-        {/* Signal quality histogram */}
-        <motion.div variants={staggerItem}>
-          <SignalQualityPanel />
+        {/* Signal quality histogram + Learning Loop */}
+        <motion.div
+          className="grid grid-cols-2 gap-5"
+          variants={staggerItemWithChildren(0.08)}
+        >
+          <motion.div variants={staggerItem} className="h-full">
+            <SignalQualityPanel />
+          </motion.div>
+          <motion.div variants={staggerItem} className="h-full">
+            <LearningDashboardCard />
+          </motion.div>
         </motion.div>
 
         <motion.div variants={staggerItem}>
