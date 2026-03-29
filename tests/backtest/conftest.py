@@ -1,10 +1,26 @@
 """Pytest fixtures for backtest tests."""
 
+import logging
+from collections.abc import Generator
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 import pandas as pd
 import pytest
+
+
+@pytest.fixture(autouse=True)
+def _restore_argus_logger_level() -> Generator[None, None, None]:
+    """Restore the argus logger level after each test.
+
+    BacktestEngine._setup() sets logging.getLogger("argus").setLevel(WARNING)
+    which persists across tests since loggers are module-level singletons.
+    This pollutes subsequent tests that assert on INFO-level log capture.
+    """
+    argus_logger = logging.getLogger("argus")
+    original_level = argus_logger.level
+    yield
+    argus_logger.setLevel(original_level)
 
 
 @pytest.fixture

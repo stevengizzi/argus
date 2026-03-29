@@ -98,8 +98,12 @@ def minimal_app_state(
     test_risk_manager,
     test_order_manager,
     test_clock,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> AppState:
     """Minimal AppState for lifespan testing."""
+    # Prevent AIConfig auto-detect from picking up ANTHROPIC_API_KEY
+    # leaked into the process by load_dotenv() in argus.main
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     return AppState(
         event_bus=mock_event_bus,
         trade_logger=test_trade_logger,

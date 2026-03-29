@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -18,6 +19,7 @@ from argus.intelligence.counterfactual import (
     CounterfactualTracker,
     RejectionStage,
 )
+from argus.intelligence.counterfactual_store import CounterfactualStore
 
 
 def _make_signal(
@@ -98,7 +100,7 @@ class TestBuildCounterfactualTracker:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_store_initialized_with_table(self) -> None:
+    async def test_store_initialized_with_table(self, tmp_path: Path) -> None:
         """Factory initializes store — table exists after build."""
         from argus.intelligence.startup import build_counterfactual_tracker
 
@@ -107,7 +109,14 @@ class TestBuildCounterfactualTracker:
         config.counterfactual.eod_close_time = "16:00"
         config.counterfactual.no_data_timeout_seconds = 300
 
-        result = await build_counterfactual_tracker(config=config)
+        db_path = str(tmp_path / "counterfactual_test.db")
+        original_init = CounterfactualStore.__init__
+
+        def patched_init(self_store: CounterfactualStore, **kwargs: object) -> None:
+            original_init(self_store, db_path=db_path)
+
+        with patch.object(CounterfactualStore, "__init__", patched_init):
+            result = await build_counterfactual_tracker(config=config)
         assert result is not None
         _, store = result
         count = await store.count()

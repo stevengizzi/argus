@@ -221,7 +221,17 @@ async def test_factory_unknown_raises(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_teardown_cleans_up(tmp_path: Path) -> None:
     """run() with no data returns empty result (no setup/teardown needed)."""
-    config = _make_config(tmp_path, StrategyType.ORB_BREAKOUT, "strat_orb_breakout")
+    empty_cache = tmp_path / "empty_cache"
+    empty_cache.mkdir()
+    config = BacktestEngineConfig(
+        start_date=date(2025, 6, 16),
+        end_date=date(2025, 6, 20),
+        output_dir=tmp_path / "backtest_runs",
+        strategy_type=StrategyType.ORB_BREAKOUT,
+        strategy_id="strat_orb_breakout",
+        cache_dir=empty_cache,
+        log_level="WARNING",
+    )
     engine = BacktestEngine(config)
     result = await engine.run()
 
@@ -1112,8 +1122,16 @@ async def test_results_computed(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_empty_data_returns_empty_result(tmp_path: Path) -> None:
     """No trading days -> BacktestResult with 0 trades."""
-    config = _make_config(
-        tmp_path, StrategyType.ORB_BREAKOUT, "strat_orb_breakout"
+    empty_cache = tmp_path / "empty_cache"
+    empty_cache.mkdir()
+    config = BacktestEngineConfig(
+        start_date=date(2025, 6, 16),
+        end_date=date(2025, 6, 20),
+        output_dir=tmp_path / "backtest_runs",
+        strategy_type=StrategyType.ORB_BREAKOUT,
+        strategy_id="strat_orb_breakout",
+        cache_dir=empty_cache,
+        log_level="WARNING",
     )
     engine = BacktestEngine(config)
     # No bar data, no trading days
