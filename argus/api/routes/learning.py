@@ -282,7 +282,8 @@ async def approve_proposal(
     await store.update_proposal_status(proposal_id, "APPROVED", notes=notes)
 
     updated = await store.get_proposal(proposal_id)
-    assert updated is not None
+    if updated is None:
+        raise HTTPException(status_code=500, detail="Proposal update failed unexpectedly")
     return {
         "proposal": ProposalResponse(
             proposal_id=updated.proposal_id,
@@ -332,7 +333,8 @@ async def dismiss_proposal(
     await store.update_proposal_status(proposal_id, "DISMISSED", notes=notes)
 
     updated = await store.get_proposal(proposal_id)
-    assert updated is not None
+    if updated is None:
+        raise HTTPException(status_code=500, detail="Proposal update failed unexpectedly")
     return {
         "proposal": ProposalResponse(
             proposal_id=updated.proposal_id,
@@ -394,7 +396,8 @@ async def revert_proposal(
     await store.update_proposal_status(proposal_id, "REVERTED", notes=notes)
 
     updated = await store.get_proposal(proposal_id)
-    assert updated is not None
+    if updated is None:
+        raise HTTPException(status_code=500, detail="Proposal update failed unexpectedly")
     return {
         "proposal": ProposalResponse(
             proposal_id=updated.proposal_id,

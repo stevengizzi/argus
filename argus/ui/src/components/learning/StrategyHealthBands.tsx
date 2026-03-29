@@ -114,7 +114,9 @@ export function StrategyHealthBands({ report }: StrategyHealthBandsProps) {
         <CardHeader title="Strategy Health" />
         <div className="text-center py-8" data-testid="health-bands-empty">
           <p className="text-argus-text-dim text-sm">
-            Strategy health data will appear after the first analysis
+            {!report
+              ? 'Strategy health data will appear after the first analysis'
+              : 'Not enough data for strategy health metrics yet'}
           </p>
         </div>
       </Card>

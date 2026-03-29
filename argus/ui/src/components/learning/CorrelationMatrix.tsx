@@ -38,7 +38,7 @@ function correlationColor(value: number): string {
 
 /** Build a lookup key for the correlation_matrix Record. */
 function pairKey(a: string, b: string): string {
-  return `${a}:${b}`;
+  return `${a}|${b}`;
 }
 
 /** Check if a pair is flagged. */
@@ -55,7 +55,8 @@ function isFlagged(
 /** Shorten strategy name for axis labels. */
 function shortenName(name: string): string {
   return name
-    .replace(/_strategy$/i, '')
+    .replace(/^strat_/i, '')      // Strip "strat_" PREFIX (the actual pattern)
+    .replace(/^strategy_/i, '')   // Also handle "strategy_" prefix if present
     .replace(/_/g, ' ')
     .split(' ')
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
@@ -112,8 +113,8 @@ export function CorrelationMatrix({ correlationResult }: CorrelationMatrixProps)
 
   const n = strategies.length;
   const cellSize = Math.min(48, Math.max(28, 280 / n));
-  const labelWidth = 80;
-  const labelHeight = 60;
+  const labelWidth = 120;
+  const labelHeight = 80;
   const svgWidth = labelWidth + n * cellSize;
   const svgHeight = labelHeight + n * cellSize;
   const matrix = correlationResult.correlation_matrix;

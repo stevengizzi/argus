@@ -19,7 +19,7 @@ import { WeightRecommendationCard } from './WeightRecommendationCard';
 import { ThresholdRecommendationCard } from './ThresholdRecommendationCard';
 import { useLearningReport, useLearningReports, useTriggerAnalysis } from '../../hooks/useLearningReport';
 import { useConfigProposals, useApproveProposal, useDismissProposal, useRevertProposal } from '../../hooks/useConfigProposals';
-import type { LearningReport, ConfigProposal } from '../../api/learningApi';
+import type { LearningReport, ConfigProposal, ThresholdRecommendation } from '../../api/learningApi';
 
 interface LearningInsightsPanelProps {
   /** Whether the learning loop is enabled in config. */
@@ -73,6 +73,66 @@ export function LearningInsightsPanel({
     }
     return map;
   }, [proposalsData]);
+
+  // Group proposals by field_path (handles same-grade conflicts where
+  // proposalsByField Map loses one due to key collision)
+  const proposalsByFieldMulti = useMemo(() => {
+    const map = new Map<string, ConfigProposal[]>();
+    if (proposalsData?.proposals) {
+      for (const proposal of proposalsData.proposals) {
+        const existing = map.get(proposal.field_path) ?? [];
+        existing.push(proposal);
+        map.set(proposal.field_path, existing);
+      }
+    }
+    return map;
+  }, [proposalsData]);
+
+  // Separate normal vs conflicting threshold recommendations
+  const { normalThresholds, conflictingThresholds } = useMemo(() => {
+    if (!activeReport?.threshold_recommendations) {
+      return { normalThresholds: [], conflictingThresholds: [] };
+    }
+    const byGrade = new Map<string, ThresholdRecommendation[]>();
+    for (const rec of activeReport.threshold_recommendations) {
+      const existing = byGrade.get(rec.grade) ?? [];
+      existing.push(rec);
+      byGrade.set(rec.grade, existing);
+    }
+    const normal: ThresholdRecommendation[] = [];
+    const conflicting: {
+      grade: string;
+      lower: ThresholdRecommendation;
+      raise: ThresholdRecommendation;
+      lowerProposal: ConfigProposal | undefined;
+      raiseProposal: ConfigProposal | undefined;
+    }[] = [];
+
+    for (const [grade, recs] of byGrade) {
+      if (recs.length === 2) {
+        const lower = recs.find((r) => r.recommended_direction === 'lower');
+        const raise = recs.find((r) => r.recommended_direction === 'raise');
+        if (lower && raise) {
+          const fieldPath = `quality_engine.thresholds.${grade}`;
+          const allProposals = proposalsByFieldMulti.get(fieldPath) ?? [];
+          conflicting.push({
+            grade,
+            lower,
+            raise,
+            lowerProposal: allProposals.find(
+              (p) => p.proposed_value < p.current_value
+            ),
+            raiseProposal: allProposals.find(
+              (p) => p.proposed_value > p.current_value
+            ),
+          });
+          continue;
+        }
+      }
+      normal.push(...recs);
+    }
+    return { normalThresholds: normal, conflictingThresholds: conflicting };
+  }, [activeReport?.threshold_recommendations, proposalsByFieldMulti]);
 
   // Action handlers
   const handleApprove = (proposalId: string, notes?: string) => {
@@ -164,7 +224,9 @@ export function LearningInsightsPanel({
   // --- Main content ---
   const { data_quality, weight_recommendations, threshold_recommendations } = activeReport;
   const pendingCount =
-    weight_recommendations.length + threshold_recommendations.length;
+    weight_recommendations.length +
+    normalThresholds.length +
+    conflictingThresholds.length;
 
   return (
     <div className="space-y-4" data-testid="learning-insights-panel">
@@ -282,19 +344,34 @@ export function LearningInsightsPanel({
         </div>
       )}
 
-      {/* Threshold Recommendations */}
-      {threshold_recommendations.length > 0 && (
+      {weight_recommendations.length === 0 && (
         <div>
           <h4 className="text-xs font-medium text-argus-text-dim uppercase tracking-wide mb-2">
-            Threshold Recommendations ({threshold_recommendations.length})
+            Weight Recommendations
+          </h4>
+          <p className="text-sm text-argus-text-dim py-3">
+            No weight adjustments recommended — insufficient significant
+            correlations between quality dimensions and trade outcomes. More
+            trading data will improve signal strength.
+          </p>
+        </div>
+      )}
+
+      {/* Threshold Recommendations */}
+      {(normalThresholds.length > 0 || conflictingThresholds.length > 0) && (
+        <div>
+          <h4 className="text-xs font-medium text-argus-text-dim uppercase tracking-wide mb-2">
+            Threshold Recommendations (
+            {normalThresholds.length + conflictingThresholds.length})
           </h4>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {threshold_recommendations.map((rec) => {
+            {/* Normal (single-direction) threshold cards */}
+            {normalThresholds.map((rec) => {
               const fieldPath = `quality_engine.thresholds.${rec.grade}`;
               const proposal = proposalsByField.get(fieldPath);
               return (
                 <ThresholdRecommendationCard
-                  key={rec.grade}
+                  key={`${rec.grade}-${rec.recommended_direction}`}
                   recommendation={rec}
                   proposalId={proposal?.proposal_id ?? ''}
                   status={proposal?.status ?? 'PENDING'}
@@ -305,6 +382,93 @@ export function LearningInsightsPanel({
                 />
               );
             })}
+
+            {/* Conflicting (same-grade, both directions) combined cards */}
+            {conflictingThresholds.map(
+              ({ grade, lower, raise: raiseRec, lowerProposal, raiseProposal }) => (
+                <div
+                  key={`conflict-${grade}`}
+                  className="rounded-lg border border-amber-500/30 bg-argus-surface-1 p-4 space-y-3"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium text-argus-text">
+                      Grade {grade.toUpperCase()}
+                    </span>
+                    <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-400/10 text-amber-400">
+                      Conflicting
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-x-4 text-sm">
+                    <div className="text-argus-text-dim">Missed opp. rate</div>
+                    <div className="text-right text-argus-text">
+                      {(lower.missed_opportunity_rate * 100).toFixed(1)}%
+                    </div>
+                    <div className="text-argus-text-dim">Correct rej. rate</div>
+                    <div className="text-right text-argus-text">
+                      {(lower.correct_rejection_rate * 100).toFixed(1)}%
+                    </div>
+                    <div className="text-argus-text-dim">Sample size</div>
+                    <div className="text-right text-argus-text">
+                      {lower.sample_size}
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-gray-400">
+                    High missed opportunity rate suggests lowering, but low correct
+                    rejection rate suggests raising. Manual review recommended.
+                  </p>
+
+                  {/* Action buttons — only show when both proposals are PENDING */}
+                  {lowerProposal?.status === 'PENDING' &&
+                    raiseProposal?.status === 'PENDING' && (
+                      <div className="flex gap-2 pt-1">
+                        <button
+                          className="text-xs px-3 py-1 rounded border border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/10"
+                          onClick={() =>
+                            lowerProposal &&
+                            handleApprove(lowerProposal.proposal_id)
+                          }
+                        >
+                          Approve Lower
+                        </button>
+                        <button
+                          className="text-xs px-3 py-1 rounded border border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/10"
+                          onClick={() =>
+                            raiseProposal &&
+                            handleApprove(raiseProposal.proposal_id)
+                          }
+                        >
+                          Approve Raise
+                        </button>
+                        <button
+                          className="text-xs px-3 py-1 rounded text-gray-400 hover:text-gray-300"
+                          onClick={() => {
+                            if (lowerProposal)
+                              handleDismiss(lowerProposal.proposal_id);
+                            if (raiseProposal)
+                              handleDismiss(raiseProposal.proposal_id);
+                          }}
+                        >
+                          Dismiss Both
+                        </button>
+                      </div>
+                    )}
+
+                  {/* Show resolved state if proposals are no longer pending */}
+                  {(lowerProposal?.status && lowerProposal.status !== 'PENDING') && (
+                    <div className="text-xs text-argus-text-dim">
+                      Lower: {lowerProposal.status}
+                    </div>
+                  )}
+                  {(raiseProposal?.status && raiseProposal.status !== 'PENDING') && (
+                    <div className="text-xs text-argus-text-dim">
+                      Raise: {raiseProposal.status}
+                    </div>
+                  )}
+                </div>
+              )
+            )}
           </div>
         </div>
       )}

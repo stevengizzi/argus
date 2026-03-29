@@ -15,11 +15,11 @@ from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
+import yaml
+
 from argus.core.events import SignalEvent
 from argus.core.ids import generate_id
 from argus.core.regime import MarketRegime
-import yaml
-
 from argus.intelligence.config import QualityEngineConfig
 from argus.intelligence.models import ClassifiedCatalyst
 

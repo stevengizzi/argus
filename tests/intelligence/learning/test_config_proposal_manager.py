@@ -319,6 +319,8 @@ async def test_pydantic_validation_failure_leaves_yaml_unchanged(
         proposal_id="prop-bad",
         field_path="thresholds.a_plus",
         current_value=90.0,
+        # Relies on QualityThresholdsConfig validating values in [0, 100] range.
+        # If that validator is ever relaxed, this test needs a different invalid value.
         proposed_value=200.0,  # > 100, Pydantic will reject
     )
     await store.save_proposal(proposal)

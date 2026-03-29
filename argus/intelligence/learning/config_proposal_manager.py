@@ -102,7 +102,8 @@ class ConfigProposalManager:
         """
         raw = Path(self._yaml_path).read_text()
         parsed = yaml.safe_load(raw)
-        assert isinstance(parsed, dict)
+        if not isinstance(parsed, dict):
+            raise ValueError(f"Expected YAML to parse as dict, got {type(parsed).__name__}")
         return parsed
 
     def _write_yaml_atomic(self, data: dict[str, object]) -> None:
@@ -164,6 +165,9 @@ class ConfigProposalManager:
                     dimension,
                     self._config.cumulative_drift_window_days,
                 )
+                # NOTE: When processing multiple proposals in a single batch, later proposals
+                # use current_value from analysis time, not post-prior-proposal values.
+                # This is conservative by design — drift may be overcounted, never undercounted.
                 proposed_delta = abs(proposal.proposed_value - proposal.current_value)
                 if current_drift + proposed_delta > self._config.max_cumulative_drift:
                     logger.info(
@@ -251,7 +255,8 @@ class ConfigProposalManager:
         if proposal.field_path.startswith("weights."):
             current_yaml = self._read_yaml()
             weights = current_yaml.get("weights", {})
-            assert isinstance(weights, dict)
+            if not isinstance(weights, dict):
+                raise ValueError(f"Expected weights to be a dict, got {type(weights).__name__}")
 
             dimension = proposal.field_path.split(".", 1)[1]
             if dimension not in _WEIGHT_DIMENSIONS:
