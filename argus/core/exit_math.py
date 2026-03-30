@@ -110,7 +110,7 @@ def compute_escalation_stop(
     if not enabled:
         return None
 
-    if time_stop_seconds is None:
+    if time_stop_seconds is None or time_stop_seconds <= 0:
         return None
 
     if not phases:

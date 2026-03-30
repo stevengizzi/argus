@@ -39,10 +39,10 @@
 | All functions return correct types | PASS | Type hints present, 25 test assertions verify |
 
 ### Test Results
-- Tests run: 25
-- Tests passed: 25
+- Tests run: 26
+- Tests passed: 26
 - Tests failed: 0
-- New tests added: 25
+- New tests added: 26
 - Command used: `python -m pytest tests/unit/core/test_exit_math.py -x -q -v`
 - Baseline verified: 3,845 pytest + 680 Vitest (all passing before and after)
 
@@ -52,6 +52,9 @@ None
 ### Notes for Reviewer
 - The `phases` parameter in `compute_escalation_stop` uses `list[tuple[float, str]]` rather than a config object. S2 will create the Pydantic models that unpack into these calls.
 - The `_STOP_TO_FRACTION` lookup dict maps StopToLevel → float multiplier, keeping the escalation formula clean and extensible.
+
+### Post-Review Fixes
+**F1 (MEDIUM): `time_stop_seconds == 0.0` ZeroDivisionError guard** — Added `or time_stop_seconds <= 0` to the None guard in `compute_escalation_stop`. Added `test_zero_time_stop_returns_none` test. 26 tests passing.
 
 ---END-CLOSE-OUT---
 
@@ -63,8 +66,8 @@ None
   "verdict": "COMPLETE",
   "tests": {
     "before": 3845,
-    "after": 3870,
-    "new": 25,
+    "after": 3871,
+    "new": 26,
     "all_pass": true
   },
   "files_created": [

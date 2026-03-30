@@ -210,6 +210,17 @@ class TestComputeEscalationStop:
         )
         assert result is None
 
+    def test_zero_time_stop_returns_none(self) -> None:
+        """When time_stop_seconds is 0.0, escalation returns None (no ZeroDivisionError)."""
+        result = compute_escalation_stop(
+            entry_price=100.0,
+            high_watermark=110.0,
+            elapsed_seconds=60.0,
+            time_stop_seconds=0.0,
+            phases=self.PHASES,
+        )
+        assert result is None
+
     def test_disabled_returns_none(self) -> None:
         """When enabled=False, escalation returns None."""
         result = compute_escalation_stop(
