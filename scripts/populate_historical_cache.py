@@ -67,8 +67,9 @@ DATASETS = {
     },
 }
 
-# Candidate mount paths for external drive (macOS)
+# Candidate cache directory paths (local repo default, legacy external drive fallbacks)
 CANDIDATE_CACHE_DIRS = [
+    str(Path(__file__).resolve().parent.parent / "data" / "databento_cache"),
     "/Volumes/LaCie/argus-cache",
     "/LaCie/argus-cache",
 ]

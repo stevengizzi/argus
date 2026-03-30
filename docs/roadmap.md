@@ -203,7 +203,7 @@ FMP Starter plan ($22/mo) activated. Dynamic pre-market symbol selection via gai
 - **DEC-132 data blocker removed:** Full-universe Parquet cache populated March 2026 (24,321 symbols, 153 months, 3 datasets). Pipeline proven end-to-end, Bull Flag validated (Sharpe 2.78). 6 strategies pending full-universe re-validation runs.
 - **Tests:** 3,010 → 3,051 (+41 pytest)
 
-**Prerequisites for full DEC-132 resolution:** ~~Full-universe historical data cache population.~~ **RESOLVED** (March 2026): `scripts/populate_historical_cache.py` populated 24,321 symbols × 153 months across EQUS.MINI + XNAS.ITCH + XNYS.PILLAR (44.73 GB on external drive). Production-representative backtesting now available for Sprints 28+ (Learning Loop) and 33+ (Statistical Validation). Pass `--cache-dir /Volumes/LaCie/argus-cache` to CLI tools.
+**Prerequisites for full DEC-132 resolution:** ~~Full-universe historical data cache population.~~ **RESOLVED** (March 2026): `scripts/populate_historical_cache.py` populated 24,321 symbols × 153 months across EQUS.MINI + XNAS.ITCH + XNYS.PILLAR (44.73 GB on external drive). Production-representative backtesting now available for Sprints 28+ (Learning Loop) and 33+ (Statistical Validation). Pass `--cache-dir data/databento_cache` to CLI tools.
 
 ### Sprint 22: AI Layer MVP + Copilot Activation (DEC-096, DEC-098, DEC-170)
 **Target:** ~3–4 days
