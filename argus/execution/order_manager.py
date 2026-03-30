@@ -28,6 +28,7 @@ from argus.core.config import (
     OrderManagerConfig,
     ReconciliationConfig,
     StartupConfig,
+    deep_update,
 )
 from argus.core.event_bus import EventBus
 from argus.core.events import (
@@ -91,6 +92,13 @@ class ManagedPosition:
     time_stop_seconds: int | None = None  # Per-position time stop from signal (DEC-122)
     quality_grade: str = ""     # From signal, set at entry fill
     quality_score: float = 0.0  # From signal, set at entry fill
+
+    # Exit management fields (Sprint 28.5 S4a)
+    trail_active: bool = False  # Whether trailing stop is currently active
+    trail_stop_price: float = 0.0  # Current computed trail stop price
+    escalation_phase_index: int = -1  # Index into phases list (-1 = no phase reached)
+    exit_config: ExitManagementConfig | None = None  # Per-strategy resolved config
+    atr_value: float | None = None  # Captured from signal at entry
 
     @property
     def is_fully_closed(self) -> bool:
@@ -163,6 +171,7 @@ class OrderManager:
         reconciliation_config: ReconciliationConfig | None = None,
         startup_config: StartupConfig | None = None,
         exit_config: ExitManagementConfig | None = None,
+        strategy_exit_overrides: dict[str, dict[str, Any]] | None = None,
     ) -> None:
         """Initialize the Order Manager.
 
@@ -180,6 +189,8 @@ class OrderManager:
             reconciliation_config: Typed reconciliation settings (Sprint 27.95).
             startup_config: Startup behavior settings (Sprint 27.95 S4).
             exit_config: Exit management config (trailing stops, escalation). Sprint 28.5.
+            strategy_exit_overrides: Per-strategy exit_management YAML overrides
+                keyed by strategy_id. Deep-merged with global exit_config (AMD-1).
         """
         self._event_bus = event_bus
         self._broker = broker
@@ -196,6 +207,10 @@ class OrderManager:
         self._startup_config = startup_config or StartupConfig()
         # Exit management config (trailing stops, escalation — Sprint 28.5)
         self._exit_config = exit_config
+        # Per-strategy exit overrides: raw YAML dicts keyed by strategy_id
+        self._strategy_exit_overrides = strategy_exit_overrides or {}
+        # Cache for merged per-strategy ExitManagementConfig (computed once per strategy)
+        self._exit_config_cache: dict[str, ExitManagementConfig] = {}
 
         # Active positions: keyed by symbol (list to support multiple positions)
         self._managed_positions: dict[str, list[ManagedPosition]] = {}
@@ -258,6 +273,40 @@ class OrderManager:
             with contextlib.suppress(asyncio.CancelledError):
                 await self._poll_task
         logger.info("OrderManager stopped")
+
+    # ---------------------------------------------------------------------------
+    # Exit Config Resolution
+    # ---------------------------------------------------------------------------
+
+    def _get_exit_config(self, strategy_id: str) -> ExitManagementConfig:
+        """Return the resolved ExitManagementConfig for a strategy.
+
+        If the strategy has a per-strategy override in its YAML
+        (``exit_management:`` key), deep-merges the override into the global
+        config using :func:`deep_update` (AMD-1 field-level merge).  The
+        merged result is validated via Pydantic and cached per strategy_id.
+
+        Args:
+            strategy_id: The strategy identifier to look up.
+
+        Returns:
+            The resolved ExitManagementConfig (global or merged).
+        """
+        if strategy_id in self._exit_config_cache:
+            return self._exit_config_cache[strategy_id]
+
+        global_config = self._exit_config or ExitManagementConfig()
+
+        override = self._strategy_exit_overrides.get(strategy_id)
+        if override:
+            base_dict = global_config.model_dump()
+            merged_dict = deep_update(base_dict, override)
+            resolved = ExitManagementConfig(**merged_dict)
+        else:
+            resolved = global_config
+
+        self._exit_config_cache[strategy_id] = resolved
+        return resolved
 
     # ---------------------------------------------------------------------------
     # Event Handlers
@@ -789,6 +838,8 @@ class OrderManager:
             time_stop_seconds=signal.time_stop_seconds,  # Per-position time stop (DEC-122)
             quality_grade=signal.quality_grade,
             quality_score=signal.quality_score,
+            exit_config=self._get_exit_config(pending.strategy_id),
+            atr_value=signal.atr_value,
         )
 
         # Add to managed positions

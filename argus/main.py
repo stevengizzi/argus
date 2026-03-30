@@ -721,6 +721,17 @@ class ArgusSystem:
         exit_mgmt_yaml = load_yaml_file(self._config_dir / "exit_management.yaml")
         exit_config = ExitManagementConfig(**exit_mgmt_yaml)
 
+        # Scan strategy YAMLs for per-strategy exit_management overrides (S4a)
+        strategy_exit_overrides: dict[str, Any] = {}
+        strategies_dir = self._config_dir / "strategies"
+        if strategies_dir.is_dir():
+            for yaml_path in sorted(strategies_dir.glob("*.yaml")):
+                strat_yaml = load_yaml_file(yaml_path)
+                if "exit_management" in strat_yaml and "strategy_id" in strat_yaml:
+                    strategy_exit_overrides[strat_yaml["strategy_id"]] = strat_yaml[
+                        "exit_management"
+                    ]
+
         # Read reconciliation and startup configs from typed Pydantic models
         reconciliation_config = config.system.reconciliation
         startup_config = config.system.startup
@@ -736,6 +747,7 @@ class ArgusSystem:
             reconciliation_config=reconciliation_config,
             startup_config=startup_config,
             exit_config=exit_config,
+            strategy_exit_overrides=strategy_exit_overrides,
         )
         await self._order_manager.start()
         # Reconstruct open positions from broker
