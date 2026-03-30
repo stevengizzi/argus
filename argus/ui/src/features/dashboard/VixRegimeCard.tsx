@@ -44,7 +44,7 @@ function formatDateLabel(dateStr: string): string {
 /** Skeleton placeholder for loading state. */
 function VixRegimeCardSkeleton() {
   return (
-    <Card className="h-full">
+    <Card>
       <CardHeader title="VIX Regime" />
       <div className="animate-pulse space-y-3">
         <div className="h-8 bg-argus-surface-2 rounded w-28" />
@@ -82,7 +82,7 @@ export function VixRegimeCard() {
     : 'bg-emerald-400';
 
   return (
-    <Card className="h-full">
+    <Card>
       <CardHeader
         title="VIX Regime"
         icon={<Activity className="w-4 h-4 text-argus-text-dim" />}
