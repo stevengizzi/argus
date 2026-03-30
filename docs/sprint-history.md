@@ -1,7 +1,7 @@
 # ARGUS — Sprint History
 
 > Complete record of all sprints from project inception through current state.
-> Active development began February 14, 2026. As of March 29, 2026 (~44 calendar days), 30 full sprints + 34 sub-sprints completed.
+> Active development began February 14, 2026. As of March 30, 2026 (~45 calendar days), 30 full sprints + 35 sub-sprints completed.
 
 ---
 
@@ -30,6 +30,7 @@
 | X — Operational Cleanup | 27.8 | Mar 26 | Ghost position reconciliation fix, validation orchestrator script |
 | Y — Broker Safety | 27.95 | Mar 26–28 | Reconciliation redesign, overflow routing, order mgmt hardening |
 | Z — Learning Loop | 28 | Mar 28–29 | Learning Loop V1: outcome analysis, config proposals, Performance UI |
+| AA — Exit Management | 28.5 | Mar 30 | Trailing stops, exit escalation, BacktestEngine/CounterfactualTracker alignment |
 
 ---
 
@@ -2071,16 +2072,79 @@
 
 ---
 
+## Sprint 28.5: Exit Management (March 30, 2026)
+
+**Type:** B (Cross-Cutting Enhancement) — adversarial review amendments pre-integrated
+**Goal:** Configurable per-strategy trailing stops (ATR/percent/fixed), partial profit-taking with trail on T1 remainder, and time-based exit escalation (progressive stop tightening) for Order Manager, BacktestEngine, and CounterfactualTracker.
+**Sessions:** 6 (S1, S2, S3, S4a, S4b, S5)
+**Tests:** pytest 3,845 → 3,955 (+110), Vitest 680 → 680 (+0)
+**New DECs:** None (reserved range DEC-378–385 unused)
+**New DEF items:** DEF-108 (R2G atr_value=None sync limitation), DEF-109 (V1 trailing stop config dead code), DEF-110 (exit reason misattribution on escalation-failure + trail-active)
+**New files:** 12 (1 production + 1 config + 10 test)
+**Modified files:** 12
+
+**Session S1: Exit Math Pure Functions**
+- `core/exit_math.py`: `StopToLevel` enum, `compute_trail_stop_price()` (ATR/percent/fixed modes), `compute_escalation_stop()` (phase-based), `validate_time_stop()`
+- Post-review: added time_stop_seconds ≤ 0 guard (AMD-5/12)
+- +26 pytest
+- Verdict: COMPLETE
+
+**Session S2: Config Models + SignalEvent atr_value**
+- 4 Pydantic models: `TrailingStopConfig`, `ExitEscalationConfig`, `ExitEscalationPhase`, `ExitManagementConfig`
+- `deep_update()` utility for per-strategy override merging
+- `config/exit_management.yaml` with global defaults
+- `SignalEvent.atr_value: float | None` field
+- AMD-1/5/10/11 verified
+- +27 pytest
+- Verdict: COMPLETE
+
+**Session S3: Strategy ATR Emission + main.py Config Loading**
+- All 7 strategies emit `atr_value` (R2G emits None — sync `_build_signal`, DEF-108)
+- `main.py` loads exit management config, passes to Order Manager
+- AMD-9 (all strategies), AMD-10 (deprecation warning for legacy trailing stop config)
+- +10 pytest
+- Verdict: COMPLETE
+
+**Session S4a: Order Manager Exit Config + Position Trail State**
+- 5 ManagedPosition fields: `trail_active`, `trail_high`, `trail_stop_price`, `escalation_level`, `escalation_last_update`
+- `_get_exit_config(strategy_id)` with deep merge + LRU cache
+- +8 pytest
+- Verdict: COMPLETE
+
+**Session S4b: Order Manager Trailing Stop + Escalation Logic (Safety-Critical)**
+- Trail activation after T1 fill, `on_tick` trail check with belt-and-suspenders flatten
+- Escalation in poll loop with phase progression
+- AMD-2/3/4/6/8 verified
+- Post-review: rewrote T9/T17 to test production code directly, added defense-in-depth guard
+- +18 pytest
+- Verdict: COMPLETE
+
+**Session S5: BacktestEngine + CounterfactualTracker Alignment**
+- `_BacktestPosition` dataclass with trail/escalation state
+- AMD-7 bar-processing order: escalation → trail → fill model
+- CounterfactualTracker trail/escalation state backfill on position open
+- +21 pytest
+- Verdict: COMPLETE
+
+**Adversarial review:** 12 amendments pre-integrated into implementation prompts. Key amendments: AMD-1 (stop_to_level validation), AMD-2 (trail activation timing), AMD-3 (escalation only tightens), AMD-7 (bar-processing order consistency), AMD-8 (escalation never widens guard), AMD-9 (all strategies emit atr_value).
+
+**Key decisions:** None — all design captured in sprint spec + 12 adversarial review amendments. Reserved range DEC-378–385 unused.
+**Review verdicts:** S1 CONCERNS (resolved in-session), S2 CLEAR, S3 CLEAR, S4a CLEAR, S4b CONCERNS (resolved in-session), S5 CLEAR
+**Zero issues** across all 6 sessions. No bugs, no scope gaps, no escalation triggers.
+**Notes:** Clean sprint. Exit management touches 3 critical code paths (Order Manager, BacktestEngine, CounterfactualTracker) with consistent AMD-7 bar-processing order across all three. Belt-and-suspenders pattern ensures broker stop always protects even if client-side trail check fails. The `exit_math.py` pure function library enables testing exit logic independently of the components that use it.
+
+---
+
 ## Sprint Statistics
 
-- **Total sprints:** 30 full + 34 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9, 27.5, 27.6, 27.65, 27.7, 27.75, 27.8, 27.9, 27.95)
-- **Total sessions:** ~445+ Claude Code sessions
-- **Total tests:** ~3,837 pytest + 680 Vitest = ~4,517 total
+- **Total sprints:** 30 full + 35 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9, 27.5, 27.6, 27.65, 27.7, 27.75, 27.8, 27.9, 27.95, 28.5)
+- **Total sessions:** ~451+ Claude Code sessions
+- **Total tests:** ~3,955 pytest + 680 Vitest = ~4,635 total
 - **Total decisions:** 377 (DEC-001 through DEC-377)
-- **Calendar days (active dev):** ~44 (Feb 14 – Mar 29, 2026)
+- **Calendar days (active dev):** ~45 (Feb 14 – Mar 30, 2026)
 - **Largest sprint:** 22 (9 implementation + 5 fix + 9 reviews, largest scope)
 - **Cleanest sprint:** 23 (11 sessions, 0 regressions, 0 scope gaps requiring follow-up)
-- **Most test-dense:** Sprint 22 (286 new tests), Sprint 24 (209 new tests), Sprint 23.2 (188 new tests), Sprint 28 (179 new tests), Sprint 27.6 (171 new tests), Sprint 23 (141 new tests across 23+23.05)
+- **Most test-dense:** Sprint 22 (286 new tests), Sprint 24 (209 new tests), Sprint 23.2 (188 new tests), Sprint 28 (179 new tests), Sprint 27.6 (171 new tests), Sprint 23 (141 new tests across 23+23.05), Sprint 28.5 (110 new tests)
 - **Most Vitest-dense:** 21d (119 new Vitest), Sprint 25 (76 new Vitest), Sprint 24 (51 new Vitest), Sprint 28 (35 new Vitest)
 - **Crisis sprint:** 8 (VectorBT performance — iterrows() → vectorized, 4 conversations)
 - **Most compaction events:** Sprint 22 (Sessions 3a and 3b both compacted, led to DEC-275)

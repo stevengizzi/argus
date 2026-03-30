@@ -1,7 +1,7 @@
 # ARGUS — Strategic Roadmap
 
 > From artisanal strategies to ensemble alpha — the complete path
-> **v2.8 — March 29, 2026** (Sprint 28 complete — Learning Loop V1)
+> **v2.9 — March 30, 2026** (Sprint 28.5 complete — Exit Management)
 > **Status:** CANONICAL — this is the single source of truth for ARGUS's strategic direction and sprint queue.
 > **Supersedes:** `docs/research/ARGUS_Expanded_Roadmap.md` (Feb 26), `docs/argus_unified_vision_roadmap.md` (Mar 5), `docs/10_PHASE3_SPRINT_PLAN.md` (all forward-looking sections)
 
@@ -106,7 +106,7 @@ These foundations are correct and remain:
 
 ARGUS completed 21 sprints + sub-sprints in ~17 calendar days of active development (Feb 14 – Mar 5). Average sprint: ~0.8 calendar days. However, sprint complexity has been increasing — early sprints (1–5) were dense single-day affairs, while later sprints (21a–21d, 21.5) span multiple days. The roadmap below assumes sprint durations of 1–4 days each depending on complexity, with some parallelism where noted.
 
-**Current state:** Sprint 28 complete (March 29, 2026). ~3,837 pytest + 680 Vitest (0 Vitest failures, 8 pre-existing pytest failures). Seven active strategies (4 original + R2G, Bull Flag, Flat-Top from Sprint 26). Sprint 28 (Learning Loop V1) delivered full feedback loop between Quality Engine predictions and actual trading outcomes — OutcomeCollector, WeightAnalyzer, ThresholdAnalyzer, CorrelationAnalyzer, LearningService, ConfigProposalManager, LearningStore, REST API (8 endpoints), CLI, auto-trigger via SessionEndEvent, Performance page Learning tab, Dashboard card. 14 sessions, 16 adversarial review amendments adopted. Full infrastructure stack operational: BacktestEngine + Evaluation Framework + Regime Intelligence (11-field RegimeVector) + Counterfactual Engine + VIX Data Service + Quality Engine + NLP Catalyst Pipeline + Universe Manager + AI Copilot + Learning Loop V1. Eight-page Command Center + Observatory. Live Databento + IBKR paper trading. Phase 5 Gate complete (March 21, 2026). Next: Sprint 28.5 (Exit Management).
+**Current state:** Sprint 28.5 complete (March 30, 2026). ~3,955 pytest + 680 Vitest (0 Vitest failures, 0 pre-existing pytest failures). Seven active strategies (4 original + R2G, Bull Flag, Flat-Top from Sprint 26). Sprint 28.5 (Exit Management) delivered configurable per-strategy trailing stops (ATR/percent/fixed), partial profit-taking with trail on T1 remainder, and time-based exit escalation across Order Manager, BacktestEngine, and CounterfactualTracker. 6 sessions, 12 adversarial review amendments verified, +110 tests, 0 issues. Full infrastructure stack operational: BacktestEngine + Evaluation Framework + Regime Intelligence (11-field RegimeVector) + Counterfactual Engine + VIX Data Service + Quality Engine + NLP Catalyst Pipeline + Universe Manager + AI Copilot + Learning Loop V1 + Exit Management. Eight-page Command Center + Observatory. Live Databento + IBKR paper trading. Phase 5 Gate complete (March 21, 2026). Next: Sprint 29 (Pattern Expansion I).
 
 ---
 
@@ -458,15 +458,18 @@ Reconciliation redesign with broker-confirmed positions (DEC-369). Overflow rout
 - **Spearman rank correlation** replaces statistical lookup tables — lookup tables require data density that early paper trading won't provide.
 - **Strategy parameters are NOT in scope** — Learning Loop observes and recommends Quality Engine meta-parameters (weights, thresholds, risk tiers). Individual strategy parameter tuning is Sprint 32+ (Parameterized Templates + Systematic Search).
 
-### Sprint 28.5: Exit Management
-**Target:** ~2 days (2–3 sessions)
+### Sprint 28.5: Exit Management ✅ COMPLETE (March 30, 2026)
 
-**Scope:**
-- Trailing stops: configurable trailing stop mechanism integrated into Order Manager, Risk Manager awareness.
-- Partial profit-taking: regime-adaptive targets, split exit at T1/T2 with trail on remainder.
-- Time-based exit escalation: progressive tightening of stops as hold time increases.
-- Learning Loop will surface data showing exit management is a major P&L variance driver; this sprint acts on those findings immediately.
-- **Tests:** ~30 new.
+**Delivered:**
+- **Trailing stops:** Configurable per-strategy trailing stop mechanism (ATR/percent/fixed modes) in Order Manager, with belt-and-suspenders pattern (broker stop + client-side trail check). Trail activates after T1 fill on remainder shares.
+- **Partial profit-taking:** T1/T2 split with trail on T1 remainder.
+- **Time-based exit escalation:** Progressive stop tightening via phase-based configuration in poll loop.
+- **Pure function library:** `core/exit_math.py` — `compute_trail_stop_price()`, `compute_escalation_stop()`, `validate_time_stop()`.
+- **Config:** `config/exit_management.yaml` with per-strategy overrides via deep merge.
+- **BacktestEngine + CounterfactualTracker alignment:** AMD-7 bar-processing order (escalation → trail → fill model) consistent across all three exit-aware components.
+- **SignalEvent `atr_value` field:** All 7 strategies emit ATR for trail distance computation.
+- **6 sessions** (S1, S2, S3, S4a, S4b, S5), 12 adversarial review amendments verified, 0 issues.
+- **Tests:** pytest +110 (3,845 → 3,955), Vitest +0. New DEFs: 108, 109, 110. No new DECs.
 
 ### Phase 6 Gate ★ CRITICAL — LIVE TRADING DECISION POINT ★
 

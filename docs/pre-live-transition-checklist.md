@@ -4,7 +4,7 @@
 > and must be restored before transitioning to live trading.
 >
 > **Created:** March 26, 2026 (Sprint 27.75 doc sync)
-> **Last updated:** March 29, 2026
+> **Last updated:** March 30, 2026
 
 ---
 
@@ -110,7 +110,47 @@ All config changes from ConfigProposalManager require:
 
 ---
 
+## Exit Management (Sprint 28.5)
+
+### config/exit_management.yaml — Trailing Stop Parameters
+Review trailing stop parameters for each strategy before live trading:
+- `trailing_stop.enabled`: Confirm which strategies should have active trailing stops
+- `trailing_stop.mode`: Verify ATR/percent/fixed is appropriate per strategy
+- `trailing_stop.atr_multiplier`: Review multiplier values — paper trading defaults may be conservative
+- `trailing_stop.percent_distance`: Review percent distances for strategies using percent mode
+- `trailing_stop.activation`: `on_t1` (default) activates trail after T1 fill; `immediate` activates on entry
+
+### config/exit_management.yaml — Escalation Schedules
+Review exit escalation phase schedules:
+- `escalation.enabled`: Confirm which strategies should have active escalation
+- `escalation.phases`: Review `after_seconds` and `stop_distance` values — ensure appropriate for live position sizes and volatility
+- Phase ordering: Must be ascending by `after_seconds` (Pydantic enforces)
+
+### Trail Distances for Live Position Sizes
+Paper trading uses 10x reduced risk (quality_engine.yaml). Live positions will be larger, which means:
+- Trail distances (ATR multiplier, percent, fixed) may need adjustment for wider spreads on larger orders
+- Belt-and-suspenders pattern: Verify that both broker stop and client-side trail check fire correctly with real IBKR
+- Test bracket leg amendment (AMD) pattern with real IBKR — paper trading may have different latency characteristics
+
+### Belt-and-Suspenders Verification with Real IBKR
+Confirm the following before live trading:
+- Broker stop orders are correctly maintained as server-side safety net
+- Client-side `on_tick` trail check correctly triggers flatten when price breaches trail stop
+- Bracket leg amendment (cancel + resubmit stop at new trail level) works reliably with live IBKR latency
+- Exit reason logging correctly distinguishes TRAILING_STOP from other exit types (note: DEF-110 cosmetic misattribution on escalation-failure positions)
+
+### Legacy Trailing Stop Config (DEF-109)
+`OrderManagerConfig.enable_trailing_stop` and `trailing_stop_atr_multiplier` are dead code after Sprint 28.5.
+- These fields are no longer referenced in `on_tick`
+- Can be removed in a future cleanup sprint
+- Do NOT set these expecting trailing stop behavior — use `config/exit_management.yaml` instead
+
+---
+
 ## Cross-References
 - DEF-101: Tests coupled to paper-trading config values
+- DEF-108: R2G atr_value=None sync limitation (uses percent fallback)
+- DEF-109: V1 trailing stop config dead code on OrderManagerConfig
+- DEF-110: Exit reason misattribution on escalation-failure + trail-active positions
 - Sprint 27.75 S1 close-out: `docs/sprints/sprint-27.75/session-1-closeout.md`
 - Sprint 27.75 S1 review: `docs/sprints/sprint-27.75/session-1-review.md` (Finding F1)

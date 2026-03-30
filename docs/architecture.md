@@ -110,7 +110,7 @@ WatchlistEvent(date, symbols: list[WatchlistItem])
 UniverseUpdateEvent(viable_count, routing_table_size, cache_age_minutes, per_strategy_counts)
 
 # Strategy events
-SignalEvent(strategy_id, symbol, side, entry_price, stop_price, target_prices, share_count, rationale)
+SignalEvent(strategy_id, symbol, side, entry_price, stop_price, target_prices, share_count, rationale, atr_value)
 
 # Risk events
 OrderApprovedEvent(signal_event, modifications: dict | None)
@@ -818,7 +818,9 @@ class OrderManager:
     async def on_tick(self, event: TickEvent) -> None:
         """Primary position management trigger. On each tick:
         - Check T2 price reached → flatten remaining shares
-        - Trailing stop updates (if configured)
+        - Trailing stop: update trail_high watermark, compute trail stop via
+          exit_math.compute_trail_stop_price(), flatten if price ≤ trail stop
+          (belt-and-suspenders with broker stop as safety net)
         """
 
     async def on_cancel(self, event: OrderCancelledEvent) -> None:
@@ -866,11 +868,13 @@ class ExecutionRecord:
 ```
 
 **Position Management Architecture:**
-- **Primary:** Event-driven via `TickEvent` subscription. On each tick, evaluates T2 price exit conditions for open positions.
-- **Fallback:** 5-second polling loop handles time-based exits (time stops, EOD flatten). Checked via `clock.now()` against configured thresholds.
+- **Primary:** Event-driven via `TickEvent` subscription. On each tick, evaluates T2 price exit conditions and trailing stop conditions for open positions.
+- **Fallback:** 5-second polling loop handles time-based exits (time stops, EOD flatten) and exit escalation (progressive stop tightening). Checked via `clock.now()` against configured thresholds.
 - **EOD Flatten:** Checked in the fallback poll loop (not APScheduler per DEC-041). Default 3:50 PM ET, configurable via `eod_flatten_time` and `eod_flatten_timezone`.
 - **Stop Management:** Cancel-and-resubmit pattern (not modify-in-place) per DEC-040. When T1 fills, old stop is cancelled and new stop at breakeven is submitted.
 - **T1/T2 Split:** Entry uses market order, then separate limit orders for T1 target and stop. T2 exit is via tick monitoring + market flatten order.
+- **Trailing Stops (Sprint 28.5):** After T1 fill, trail activates on remainder. `on_tick` updates `trail_high` watermark and computes trail stop via `exit_math.compute_trail_stop_price()` (ATR/percent/fixed modes). Belt-and-suspenders: broker stop order updated via AMD (approve-modify-delete) pattern, plus client-side flatten if price ≤ trail stop. Config: `config/exit_management.yaml` with per-strategy overrides merged via `deep_update()`.
+- **Exit Escalation (Sprint 28.5):** Progressive stop tightening in poll loop based on hold time. Phases defined in `ExitEscalationConfig` (e.g., after 5min tighten to 0.5×, after 10min to 0.25×). Uses `exit_math.compute_escalation_stop()`. Escalation only tightens — never widens stop (AMD-8 guard).
 
 **Data Models:**
 ```python
@@ -891,6 +895,12 @@ class ManagedPosition:
     stop_order_id: str | None = None
     t1_order_id: str | None = None
     realized_pnl: float = 0.0
+    # Exit Management fields (Sprint 28.5)
+    trail_active: bool = False
+    trail_high: float | None = None
+    trail_stop_price: float | None = None
+    escalation_level: int = 0
+    escalation_last_update: datetime | None = None
 
 @dataclass
 class PendingManagedOrder:
@@ -1434,6 +1444,35 @@ Config: `counterfactual.enabled` in `config/counterfactual.yaml` (DEC-300 patter
 
 REST: `GET /api/v1/counterfactual/accuracy` — JWT-protected, query params: start_date, end_date, strategy_id, min_sample_count.
 
+#### Exit Management (`core/exit_math.py`, `config/exit_management.yaml`) — Sprint 28.5 ✅
+
+Configurable per-strategy trailing stops, partial profit-taking with trail on T1 remainder, and time-based exit escalation (progressive stop tightening). Integrated into Order Manager, BacktestEngine, and CounterfactualTracker.
+
+**Pure Functions** (`core/exit_math.py`):
+- `compute_trail_stop_price(trail_high, mode, distance, entry_price, atr_value)` → `float` — ATR/percent/fixed modes via `StopToLevel` enum
+- `compute_escalation_stop(entry_price, current_stop, initial_risk, phases, elapsed_seconds)` → `float | None` — phase-based progressive tightening, returns None if no escalation applies
+- `validate_time_stop(time_stop_seconds)` → `int` — guards ≤ 0 values
+
+**Config Models** (`core/config.py`):
+- `TrailingStopConfig`: enabled, mode (atr/percent/fixed), atr_multiplier, percent_distance, fixed_distance, activation (on_t1/immediate)
+- `ExitEscalationConfig`: enabled, phases list (sorted ascending by after_seconds)
+- `ExitEscalationPhase`: after_seconds, stop_to_level (StopToLevel enum), stop_distance (fraction of initial risk)
+- `ExitManagementConfig`: trailing_stop + escalation sub-configs
+- `deep_update(base, override)` utility for per-strategy override merging
+
+**Config** (`config/exit_management.yaml`):
+- Global defaults (trailing stop disabled, escalation disabled)
+- Per-strategy overrides via `strategy_exit_overrides` in system config
+- Order Manager loads via `_get_exit_config(strategy_id)` with deep merge + LRU cache
+
+**Integration Points:**
+- **Order Manager** (`on_tick`): Trail activation after T1 fill, watermark tracking, belt-and-suspenders flatten. Poll loop: escalation check with phase progression.
+- **BacktestEngine** (`_BacktestPosition` dataclass): Trail/escalation state per position, AMD-7 bar-processing order (escalation → trail → fill model).
+- **CounterfactualTracker**: Trail/escalation state backfilled on position open, same AMD-7 processing order.
+- **SignalEvent**: `atr_value: float | None` field emitted by all 7 strategies for ATR-based trail distance computation. R2G emits None (sync `_build_signal`, uses percent fallback — DEF-108).
+
+**Belt-and-suspenders pattern:** Broker stop order is always maintained as a safety net (server-side protection). Client-side trail check in `on_tick` fires flatten if price breaches trail stop before broker stop triggers. Ensures protection even if broker stop update fails.
+
 #### PreMarketEngine (`intelligence/premarket_engine.py`) — NOT YET IMPLEMENTED
 
 Automated 4:00 AM → 9:25 AM pipeline. **Status:** Planned for Sprint 24+. CatalystPipeline (Sprint 23.5) provides the briefing generation component.
@@ -1831,6 +1870,7 @@ Production-code backtesting engine that runs real ARGUS strategy code against Da
 
 - **BacktestEngine** (`backtest/engine.py`): Assembles production components (strategies, Risk Manager, Order Manager, SimulatedBroker, IndicatorEngine) wired through SynchronousEventBus. Mirrors ReplayHarness component assembly pattern. Features:
   - **Bar-level fill model** with worst-case-for-longs exit priority: stop > target > time_stop > EOD (same priority as VectorBT sweeps per `.claude/rules/backtesting.md`). Exit priority logic extracted to shared `TheoreticalFillModel` (`core/fill_model.py`) in Sprint 27.7 — BacktestEngine calls `evaluate_bar_exit()`.
+  - **Exit Management (Sprint 28.5):** `_BacktestPosition` dataclass with trail/escalation state fields. Per-bar processing follows AMD-7 ordering: escalation check → trail watermark update + trail stop check → fill model. Exit config loaded per strategy via `_get_exit_config()` with deep merge. Trail activates after T1 fill. Escalation progresses through phases based on elapsed seconds.
   - **Multi-day orchestration**: Iterates trading days, resets daily state, runs scanner simulation per day
   - **Scanner simulation**: Computes gap from prev_close → day_open, applies scanner filters (same approach as VectorBT backtests)
   - **Strategy factory**: Creates strategy instances from `StrategyType` enum with config overrides
@@ -1942,6 +1982,7 @@ argus/backtest/
 ├── walk_forward.py       # Walk-forward analysis framework
 └── report_generator.py   # HTML report generation
 argus/core/
+├── exit_math.py          # Pure functions: trailing stop, escalation, time stop validation (Sprint 28.5)
 ├── sync_event_bus.py     # SynchronousEventBus for deterministic backtesting (Sprint 27)
 data/
 ├── historical/           # Downloaded Parquet files (gitignored)

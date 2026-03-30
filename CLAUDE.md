@@ -1,13 +1,13 @@
 # ARGUS — Claude Code Context
 
 > Dense, actionable context for Claude Code sessions. No history — see `docs/` for that.
-> Last updated: March 29, 2026 (Sprint 28 doc sync — Learning Loop V1)
+> Last updated: March 30, 2026 (Sprint 28.5 doc sync — Exit Management)
 
 ## Active Sprint
 
-**No active sprint.** Sprint 28 (Learning Loop V1) completed March 29, 2026.
+**No active sprint.** Sprint 28.5 (Exit Management) completed March 30, 2026.
 
-Next planned sprint: **28.5 (Exit Management)** — trailing stops, partial profit-taking, time-based exit escalation. Followed by Sprints 29 (Pattern Expansion I), 30 (Short Selling), 31 (Pattern Expansion II).
+Next planned sprint: **29 (Pattern Expansion I)** — new strategy patterns. Followed by Sprints 30 (Short Selling), 31 (Pattern Expansion II).
 
 ### Roadmap Amendments Adopted (DEC-357, DEC-358)
 Two roadmap amendments adopted March 23, 2026 adding 5 new sprint slots:
@@ -17,7 +17,7 @@ Two roadmap amendments adopted March 23, 2026 adding 5 new sprint slots:
 - **32.5** (Experiment Registry + Promotion Pipeline): Partitioned SQLite registry, cohort-based promotion, simulated-paper screening, overnight experiment queue, kill switches, anti-fragility
 - **33.5** (Adversarial Stress Testing): Historical crisis replay + synthetic stress scenarios as PromotionPipeline gate
 Amendment docs: `docs/amendments/roadmap-amendment-experiment-infrastructure.md`, `docs/amendments/roadmap-amendment-intelligence-architecture.md`
-Build track: ~~21.6~~ ✅ → ~~27.5~~ ✅ → ~~27.6~~ ✅ → ~~27.7~~ ✅ → ~~27.75~~ ✅ → ~~27.8~~ ✅ → ~~27.9~~ ✅ → ~~27.95~~ ✅ → ~~28~~ ✅ → 28.5 → 29–31 → 32 → 32.5 → 33 → 33.5 → 34 → 35–41
+Build track: ~~21.6~~ ✅ → ~~27.5~~ ✅ → ~~27.6~~ ✅ → ~~27.7~~ ✅ → ~~27.75~~ ✅ → ~~27.8~~ ✅ → ~~27.9~~ ✅ → ~~27.95~~ ✅ → ~~28~~ ✅ → ~~28.5~~ ✅ → 29–31 → 32 → 32.5 → 33 → 33.5 → 34 → 35–41
 DEC ranges reserved: 379–385 (27.7, unused), 386–395 (32.5), 396–402 (33.5)
 
 ### Known Issues
@@ -28,17 +28,17 @@ DEC ranges reserved: 379–385 (27.7, unused), 386–395 (32.5), 396–402 (33.5
 ## Current State
 
 - **Active sprint:** None (between sprints)
-- **Next sprint:** 28.5 (Exit Management)
-- **Tests:** ~3,845 pytest + 680 Vitest (0 Vitest failures, 0 pre-existing pytest failures)
+- **Next sprint:** 29 (Pattern Expansion I)
+- **Tests:** ~3,955 pytest + 680 Vitest (0 Vitest failures, 0 pre-existing pytest failures)
 - **Strategies:** 7 active (ORB Breakout, ORB Scalp, VWAP Reclaim, Afternoon Momentum, Red-to-Green, Bull Flag, Flat-Top Breakout)
-- **Infrastructure:** Databento EQUS.MINI (live) + IBKR paper trading (Account U24619949) + FMP Starter (scanning + reference data + daily bars for regime) + Finnhub (news + analyst recs) + Claude API (Copilot + Catalyst Classification) + Universe Manager (config-gated) + Catalyst Pipeline (config-gated) + Intelligence Polling Loop (config-gated) + Reference Data Cache + Quality Engine (config-gated) + Dynamic Position Sizer + Strategy Evaluation Telemetry (ring buffer + SQLite persistence) + Debrief Export (shutdown automation) + Evaluation Framework (MultiObjectiveResult, EnsembleResult, comparison API, slippage model) + Regime Intelligence (RegimeVector 11-field, 8 calculators, config-gated, Sprints 27.6 + 27.9) + VIX Data Service (yfinance daily VIX/SPX, 5 derived metrics, SQLite cache, config-gated, Sprint 27.9) + Counterfactual Engine (shadow position tracking, filter accuracy, shadow strategy mode, overflow routing, config-gated, Sprints 27.7 + 27.95) + Learning Loop V1 (OutcomeCollector, WeightAnalyzer, ThresholdAnalyzer, CorrelationAnalyzer, LearningService, ConfigProposalManager, LearningStore, config-gated, Sprint 28) + ThrottledLogger (log rate-limiting, Sprint 27.75) + Paper trading config overrides (10x risk reduction, throttle disabled, $10 min risk floor, Sprint 27.75) + Broker-confirmed reconciliation (Sprint 27.95) + Overflow routing (config-gated, Sprint 27.95)
+- **Infrastructure:** Databento EQUS.MINI (live) + IBKR paper trading (Account U24619949) + FMP Starter (scanning + reference data + daily bars for regime) + Finnhub (news + analyst recs) + Claude API (Copilot + Catalyst Classification) + Universe Manager (config-gated) + Catalyst Pipeline (config-gated) + Intelligence Polling Loop (config-gated) + Reference Data Cache + Quality Engine (config-gated) + Dynamic Position Sizer + Strategy Evaluation Telemetry (ring buffer + SQLite persistence) + Debrief Export (shutdown automation) + Evaluation Framework (MultiObjectiveResult, EnsembleResult, comparison API, slippage model) + Regime Intelligence (RegimeVector 11-field, 8 calculators, config-gated, Sprints 27.6 + 27.9) + VIX Data Service (yfinance daily VIX/SPX, 5 derived metrics, SQLite cache, config-gated, Sprint 27.9) + Counterfactual Engine (shadow position tracking, filter accuracy, shadow strategy mode, overflow routing, config-gated, Sprints 27.7 + 27.95) + Learning Loop V1 (OutcomeCollector, WeightAnalyzer, ThresholdAnalyzer, CorrelationAnalyzer, LearningService, ConfigProposalManager, LearningStore, config-gated, Sprint 28) + Exit Management (trailing stops ATR/percent/fixed, exit escalation, belt-and-suspenders, config-gated per strategy, Sprint 28.5) + ThrottledLogger (log rate-limiting, Sprint 27.75) + Paper trading config overrides (10x risk reduction, throttle disabled, $10 min risk floor, Sprint 27.75) + Broker-confirmed reconciliation (Sprint 27.95) + Overflow routing (config-gated, Sprint 27.95)
 - **Frontend:** 8-page Command Center (Observatory added Sprint 25) + AI Copilot + Universe Status Card + Intelligence Brief View (all active), Tauri desktop + PWA mobile
 
 ## Project Structure
 
 ```
 argus/
-├── core/           # Orchestrator, Risk Manager, Portfolio, Event Bus, Regime Intelligence (breadth.py, market_correlation.py, sector_rotation.py, intraday_character.py, regime_history.py), TheoreticalFillModel (fill_model.py)
+├── core/           # Orchestrator, Risk Manager, Portfolio, Event Bus, Regime Intelligence (breadth.py, market_correlation.py, sector_rotation.py, intraday_character.py, regime_history.py), TheoreticalFillModel (fill_model.py), Exit Math (exit_math.py)
 ├── strategies/     # BaseStrategy, OrbBaseStrategy, 7 strategy implementations
 │   └── patterns/   # PatternModule ABC, BullFlagPattern, FlatTopBreakoutPattern
 ├── data/           # DataService (Databento/Alpaca/Replay/Backtest), Scanner, IndicatorEngine, UniverseManager, FMPReferenceClient, VIXDataService
@@ -64,7 +64,7 @@ argus/
 ├── intelligence/   # CatalystPipeline, CatalystClassifier, CatalystStorage, BriefingGenerator, startup factory, polling loop (Sprints 23.5 + 23.6), SetupQualityEngine (quality_engine.py), DynamicPositionSizer (position_sizer.py) (Sprint 24)
 │   └── learning/   # Learning Loop V1: OutcomeCollector, WeightAnalyzer, ThresholdAnalyzer, CorrelationAnalyzer, LearningService, ConfigProposalManager, LearningStore (Sprint 28)
 ├── utils/          # ThrottledLogger (Sprint 27.75)
-├── config/         # system.yaml, system_live.yaml, strategies/*.yaml, regime.yaml, counterfactual.yaml, vix_regime.yaml, learning_loop.yaml
+├── config/         # system.yaml, system_live.yaml, strategies/*.yaml, regime.yaml, counterfactual.yaml, vix_regime.yaml, learning_loop.yaml, exit_management.yaml
 ├── tests/          # pytest (backend) + Vitest (frontend)
 ├── docs/           # Decision log, sprint history, strategy specs, research reports
 ├── workflow/       # Metarepo submodule (protocols, templates, runner, universal rules)
@@ -76,7 +76,7 @@ argus/
 
 ```bash
 # Tests
-python -m pytest --ignore=tests/test_main.py -n auto -q  # Full suite (~39s with xdist)
+python -m pytest --ignore=tests/test_main.py -n auto -q  # Full suite (~3,955 tests, ~39s with xdist)
 python -m pytest tests/ -x               # Stop on first failure
 python -m pytest tests/ -x -q            # Fail-fast, quiet
 cd argus/ui && npx vitest run            # Frontend tests (~680)
@@ -262,7 +262,7 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 | DEF-021 | Sub-bar backtesting precision for ORB Scalp | Databento tick-level data available for backtesting OR Scalp paper trading results diverge significantly from backtests | Synthetic ticks give ~15s granularity per 1m bar (DEC-053). Scalp targets 30–120s holds — time stops shorter than 60s resolve at nearest bar boundary. Backtesting results are directional guidance, not exact P&L. |
 | DEF-022 | VwapBaseStrategy ABC extraction | Second VWAP-based strategy designed (e.g., VWAP Fade) | No shared logic exists yet — VwapReclaimStrategy inherits directly from BaseStrategy (DEC-136). If a second VWAP variant is built, extract shared VWAP crossover tracking into a VwapBaseStrategy ABC. Follows the OrbBaseStrategy extraction pattern (DEC-120). |
 | ~~DEF-023~~ | ~~Watchlist Endpoint Production Implementation~~ | — | **PARTIALLY RESOLVED** (Sprint 21.7): Watchlist endpoint now reads from `cached_watchlist` (scan_source, selection_reason populated). Remaining: current_price, sparkline, strategy state aggregation. |
-| DEF-024 | Trailing Stop Mechanism | Walk-forward shows afternoon moves routinely exceed T2 targets | Order Manager trailing stop logic, Risk Manager awareness, VectorBT sweep support, backtesting infrastructure. Touches cross-cutting concerns across execution, risk, and backtesting layers. T1/T2 fixed targets proven across four strategies — trailing stop adds complexity only if data shows clear benefit. DEC-158. |
+| ~~DEF-024~~ | ~~Trailing Stop Mechanism~~ | — | **RESOLVED** (Sprint 28.5): Configurable per-strategy trailing stops (ATR/percent/fixed), partial profit-taking with trail on T1 remainder, time-based exit escalation. Implemented in Order Manager, BacktestEngine, and CounterfactualTracker. `config/exit_management.yaml` with per-strategy overrides. |
 | DEF-025 | Shared Consolidation Base Class | Second consolidation-based strategy designed (e.g., Midday Range Breakout) | AfternoonMomentumStrategy inherits directly from BaseStrategy (DEC-152). If a second consolidation variant is built, extract shared midday range tracking into a ConsolidationBaseStrategy ABC. Follows the OrbBaseStrategy extraction pattern (DEC-120). |
 | ~~DEF-026~~ | ~~FTS5 full-text search~~ | — | **RESOLVED** (DEC-200): LIKE queries shipped as V1 solution. FTS5 deferred to >10K entries. |
 | ~~DEF-027~~ | ~~Journal trade linking UI~~ | — | **RESOLVED** (DEC-201): Full search UI with TradeSearchInput shipped in Sprint 21c. |
@@ -335,6 +335,9 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 | DEF-105 | Reconciliation trades inflate `total_trades` count | Unscheduled | Reconciliation closes are counted as BREAKEVEN trades, inflating Dashboard total_trades and Positions card counts. Related to DEF-098 (trade count inconsistency). Priority: LOW. |
 | DEF-106 | `from_dict()` in `models.py` contains ~8 `assert` statements in production deserialization | Unscheduled | Same pattern as assert isinstance fixes done in S6cf-1 (config_proposal_manager.py, learning.py routes). Should be replaced with `if/raise` guards. Priority: LOW. Discovered: Sprint 28 S6cf-1 review (F2). |
 | DEF-107 | Unused `raiseRec` destructured variable in `LearningInsightsPanel.tsx` line 388 | Unscheduled | The `raise` property is aliased as `raiseRec` (reserved word workaround) but never referenced — only `lowerProposal`/`raiseProposal` from the same destructuring are used. Harmless, cosmetic. Priority: LOW. Discovered: Sprint 28 S6cf-1 review (F4). |
+| DEF-108 | R2G `_build_signal` sync limitation — emits `atr_value=None` | Unscheduled | Red-to-Green strategy's `_build_signal` is synchronous, so it emits `atr_value=None`. If R2G ever needs ATR-based trailing stops, the method or its caller would need refactoring. Currently uses percent fallback as designed. Priority: LOW. Discovered: Sprint 28.5 S3. |
+| DEF-109 | V1 trailing stop config dead code on `OrderManagerConfig` | Unscheduled | Legacy `enable_trailing_stop` and `trailing_stop_atr_multiplier` fields on `OrderManagerConfig` are no longer referenced in `on_tick` after Sprint 28.5 replaced the V1 skeleton. Dead code. Priority: LOW. Discovered: Sprint 28.5 S4b. |
+| DEF-110 | Exit reason misattribution on escalation-failure + trail-active positions | Unscheduled | In `_handle_flatten_fill`, exit reason is set to `TRAILING_STOP` based on `position.trail_active`. If escalation stop update fails (AMD-3) on a trail-active position, the flatten is logged as TRAILING_STOP rather than an escalation-related reason. Cosmetic — position closes correctly. Priority: LOW. Discovered: Sprint 28.5 S4b. |
 
 ## Reference
 
@@ -342,7 +345,7 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 |----------|---------------|
 | `docs/decision-log.md` | All 377 DEC entries with full rationale (9 new in Sprint 27.95: DEC-369–377) |
 | `docs/dec-index.md` | Quick-reference index with status markers |
-| `docs/sprint-history.md` | Complete sprint history (1–27.9) |
+| `docs/sprint-history.md` | Complete sprint history (1–28.5) |
 | `docs/pre-live-transition-checklist.md` | Config + test values to restore before live trading |
 | `docs/process-evolution.md` | Workflow evolution narrative |
 | `docs/live-operations.md` | Live trading procedures |
