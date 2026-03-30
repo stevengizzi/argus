@@ -30,6 +30,11 @@ from argus.core.config import (
     StartupConfig,
     deep_update,
 )
+from argus.core.exit_math import (
+    compute_effective_stop,
+    compute_escalation_stop,
+    compute_trailing_stop,
+)
 from argus.core.event_bus import EventBus
 from argus.core.events import (
     CircuitBreakerEvent,
@@ -612,16 +617,39 @@ class OrderManager:
             if event.price > position.high_watermark:
                 position.high_watermark = event.price
 
-            # Check trailing stop (if enabled)
-            if self._config.enable_trailing_stop and position.t1_filled:
-                trail_distance = (
-                    position.high_watermark
-                    * self._config.trailing_stop_atr_multiplier
-                    * 0.01  # Simplified: use % instead of ATR for V1
+            # --- after_profit_pct trail activation (Sprint 28.5) ---
+            if (
+                not position.trail_active
+                and position.exit_config is not None
+                and position.exit_config.trailing_stop.enabled
+                and position.exit_config.trailing_stop.activation == "after_profit_pct"
+            ):
+                unrealized_pct = (
+                    (event.price - position.entry_price) / position.entry_price
                 )
-                trailing_stop_price = position.high_watermark - trail_distance
-                if event.price <= trailing_stop_price:
-                    await self._flatten_position(position, reason="trailing_stop")
+                if unrealized_pct >= position.exit_config.trailing_stop.activation_profit_pct:
+                    position.trail_active = True
+
+            # --- Trail stop check (Sprint 28.5) ---
+            if position.trail_active and position.exit_config:
+                trail_cfg = position.exit_config.trailing_stop
+                new_trail = compute_trailing_stop(
+                    position.high_watermark, position.atr_value,
+                    trail_type=trail_cfg.type, atr_multiplier=trail_cfg.atr_multiplier,
+                    trail_percent=trail_cfg.percent, fixed_distance=trail_cfg.fixed_distance,
+                    min_trail_distance=trail_cfg.min_trail_distance, enabled=trail_cfg.enabled,
+                )
+                if new_trail is not None:
+                    # Ratchet up only — trail price never decreases
+                    position.trail_stop_price = max(position.trail_stop_price, new_trail)
+
+                effective_stop = compute_effective_stop(
+                    position.stop_price,
+                    position.trail_stop_price or None,
+                    None,  # escalation checked in poll loop
+                )
+                if event.price <= effective_stop:
+                    await self._trail_flatten(position, event.price)
                     continue
 
             # Check T2 target (market order, don't wait for limit fill)
@@ -876,6 +904,22 @@ class OrderManager:
             t2_price,
         )
 
+        # --- Immediate trail activation (Sprint 28.5) ---
+        if (
+            position.exit_config is not None
+            and position.exit_config.trailing_stop.enabled
+            and position.exit_config.trailing_stop.activation == "immediate"
+        ):
+            position.trail_active = True
+            trail_cfg = position.exit_config.trailing_stop
+            initial_trail = compute_trailing_stop(
+                position.high_watermark, position.atr_value,
+                trail_type=trail_cfg.type, atr_multiplier=trail_cfg.atr_multiplier,
+                trail_percent=trail_cfg.percent, fixed_distance=trail_cfg.fixed_distance,
+                min_trail_distance=trail_cfg.min_trail_distance, enabled=trail_cfg.enabled,
+            )
+            position.trail_stop_price = initial_trail if initial_trail is not None else 0.0
+
         # --- Bracket amendment on fill slippage (Sprint 27.65 S2) ---
         await self._amend_bracket_on_slippage(position, signal, event.fill_price)
 
@@ -1062,6 +1106,22 @@ class OrderManager:
 
         await self._submit_stop_order(position, position.shares_remaining, breakeven_price)
 
+        # --- Trail activation after T1 fill (Sprint 28.5) ---
+        if (
+            position.exit_config is not None
+            and position.exit_config.trailing_stop.enabled
+            and position.exit_config.trailing_stop.activation == "after_t1"
+        ):
+            position.trail_active = True
+            trail_cfg = position.exit_config.trailing_stop
+            initial_trail = compute_trailing_stop(
+                position.high_watermark, position.atr_value,
+                trail_type=trail_cfg.type, atr_multiplier=trail_cfg.atr_multiplier,
+                trail_percent=trail_cfg.percent, fixed_distance=trail_cfg.fixed_distance,
+                min_trail_distance=trail_cfg.min_trail_distance, enabled=trail_cfg.enabled,
+            )
+            position.trail_stop_price = initial_trail if initial_trail is not None else 0.0
+
         logger.info(
             "T1 hit for %s: %d shares @ %.2f (PnL: +%.2f). "
             "Stop moved to breakeven %.2f for %d remaining shares.",
@@ -1193,6 +1253,8 @@ class OrderManager:
         exit_reason = ExitReason.TIME_STOP
         if self._flattened_today:
             exit_reason = ExitReason.EOD_FLATTEN
+        elif position.trail_active:
+            exit_reason = ExitReason.TRAILING_STOP
 
         await self._close_position(position, event.fill_price, exit_reason)
 
@@ -1256,6 +1318,39 @@ class OrderManager:
                                 self._config.max_position_duration_minutes,
                             )
                             await self._flatten_position(position, reason="time_stop")
+                            continue
+
+                        # --- Escalation check (Sprint 28.5, AMD-3/6/8) ---
+                        if (
+                            position.exit_config is not None
+                            and position.exit_config.escalation.enabled
+                        ):
+                            phases = [
+                                (p.elapsed_pct, p.stop_to.value)
+                                for p in position.exit_config.escalation.phases
+                            ]
+                            esc_stop = compute_escalation_stop(
+                                position.entry_price,
+                                position.high_watermark,
+                                elapsed_seconds,
+                                position.time_stop_seconds,
+                                phases=phases,
+                                enabled=True,
+                            )
+                            if esc_stop is not None:
+                                effective = compute_effective_stop(
+                                    position.stop_price,
+                                    position.trail_stop_price or None,
+                                    esc_stop,
+                                )
+                                if effective > position.stop_price:
+                                    # AMD-8: skip if flatten already pending
+                                    if symbol in self._flatten_pending:
+                                        continue
+                                    # AMD-6: does NOT count against stop_cancel_retry_max
+                                    await self._escalation_update_stop(
+                                        position, effective
+                                    )
 
             except asyncio.CancelledError:
                 break
@@ -1685,6 +1780,175 @@ class OrderManager:
             )
         except Exception:
             logger.exception("Failed to submit T2 order for %s", position.symbol)
+
+    async def _trail_flatten(
+        self, position: ManagedPosition, current_price: float
+    ) -> None:
+        """Flatten a position due to trail stop hit (AMD-2, AMD-4, AMD-8).
+
+        Order of operations is safety-critical:
+        1. AMD-8: Check _flatten_pending — complete no-op if already pending
+        2. AMD-4: Check shares_remaining > 0 — no-op if zero
+        3. Submit market sell FIRST (AMD-2: sell before cancel)
+        4. Cancel broker safety stop SECOND
+
+        If broker safety stop fills before cancel, DEC-374 dedup handles it.
+
+        Args:
+            position: The position to flatten.
+            current_price: Current market price (for logging).
+        """
+        symbol = position.symbol
+
+        # Step 1 (AMD-8): Complete no-op if flatten already pending
+        if symbol in self._flatten_pending:
+            return
+
+        # Step 2 (AMD-4): No-op if no shares remain
+        if position.shares_remaining <= 0:
+            position.trail_active = False
+            position.trail_stop_price = 0.0
+            return
+
+        logger.info(
+            "Trail stop triggered for %s: trail=%.2f, price=%.2f",
+            symbol,
+            position.trail_stop_price,
+            current_price,
+        )
+
+        # Step 3: Submit market sell FIRST (AMD-2)
+        try:
+            order = Order(
+                strategy_id=position.strategy_id,
+                symbol=symbol,
+                side=OrderSide.SELL,
+                order_type=TradingOrderType.MARKET,
+                quantity=position.shares_remaining,
+            )
+            result = await self._broker.place_order(order)
+            flatten_order_id = result.order_id
+
+            pending = PendingManagedOrder(
+                order_id=flatten_order_id,
+                symbol=symbol,
+                strategy_id=position.strategy_id,
+                order_type="flatten",
+                shares=position.shares_remaining,
+            )
+            self._pending_orders[flatten_order_id] = pending
+            self._flatten_pending[symbol] = flatten_order_id
+
+            # Handle immediate fill (SimulatedBroker)
+            if result.status == OrderStatus.FILLED:
+                fill_event = OrderFilledEvent(
+                    order_id=flatten_order_id,
+                    fill_price=result.filled_avg_price,
+                    fill_quantity=result.filled_quantity,
+                )
+                await self.on_fill(fill_event)
+        except Exception:
+            logger.exception(
+                "CRITICAL: Trail flatten sell failed for %s (%d shares unprotected)",
+                symbol,
+                position.shares_remaining,
+            )
+            return
+
+        # Step 4: Cancel broker safety stop SECOND (AMD-2)
+        if position.stop_order_id:
+            try:
+                await self._broker.cancel_order(position.stop_order_id)
+            except Exception:
+                logger.debug("Could not cancel safety stop %s", position.stop_order_id)
+            self._pending_orders.pop(position.stop_order_id, None)
+            position.stop_order_id = None
+
+        # Cancel T1 if still open
+        if position.t1_order_id and not position.t1_filled:
+            try:
+                await self._broker.cancel_order(position.t1_order_id)
+            except Exception:
+                logger.debug("Could not cancel T1 %s", position.t1_order_id)
+            self._pending_orders.pop(position.t1_order_id, None)
+            position.t1_order_id = None
+
+        # Cancel T2 if still open
+        if position.t2_order_id:
+            try:
+                await self._broker.cancel_order(position.t2_order_id)
+            except Exception:
+                logger.debug("Could not cancel T2 %s", position.t2_order_id)
+            self._pending_orders.pop(position.t2_order_id, None)
+            position.t2_order_id = None
+
+    async def _escalation_update_stop(
+        self, position: ManagedPosition, new_stop_price: float
+    ) -> None:
+        """Update broker stop to escalation price (AMD-3, AMD-6).
+
+        Single-attempt submission — NOT through retry loop. If submission
+        fails, immediately flattens position for safety.
+
+        Does NOT increment _stop_retry_count (AMD-6).
+
+        Args:
+            position: The position to update.
+            new_stop_price: The new escalation stop price.
+        """
+        symbol = position.symbol
+
+        # AMD-8: Defense-in-depth — skip if flatten already pending
+        if symbol in self._flatten_pending:
+            return
+
+        # Cancel current broker stop
+        if position.stop_order_id:
+            try:
+                await self._broker.cancel_order(position.stop_order_id)
+            except Exception:
+                logger.debug(
+                    "Could not cancel stop %s for escalation update", position.stop_order_id
+                )
+            self._pending_orders.pop(position.stop_order_id, None)
+            position.stop_order_id = None
+
+        # Submit new stop at escalation price (single attempt — AMD-3)
+        try:
+            order = Order(
+                strategy_id=position.strategy_id,
+                symbol=symbol,
+                side=OrderSide.SELL,
+                order_type=TradingOrderType.STOP,
+                quantity=position.shares_remaining,
+                stop_price=new_stop_price,
+            )
+            result = await self._broker.place_order(order)
+            position.stop_order_id = result.order_id
+
+            self._pending_orders[result.order_id] = PendingManagedOrder(
+                order_id=result.order_id,
+                symbol=symbol,
+                strategy_id=position.strategy_id,
+                order_type="stop",
+                shares=position.shares_remaining,
+            )
+
+            position.stop_price = new_stop_price
+            logger.info(
+                "Escalation stop updated for %s: new_stop=%.2f",
+                symbol,
+                new_stop_price,
+            )
+        except Exception:
+            logger.error(
+                "Escalation stop submission failed for %s (attempted=%.2f) "
+                "— triggering flatten",
+                symbol,
+                new_stop_price,
+                exc_info=True,
+            )
+            await self._flatten_position(position, reason="escalation_failure")
 
     async def _flatten_position(self, position: ManagedPosition, reason: str) -> None:
         """Cancel all open orders for this position and submit market sell.
