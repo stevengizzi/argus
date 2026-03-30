@@ -8,12 +8,13 @@ from __future__ import annotations
 
 from enum import StrEnum
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import yaml
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from argus.ai.config import AIConfig
+from argus.core.exit_math import StopToLevel
 from argus.analytics.config import ObservatoryConfig
 from argus.core.regime import RegimeOperatingConditions
 from argus.data.vix_config import VixRegimeConfig
@@ -24,6 +25,41 @@ from argus.intelligence.config import (
     QualityEngineConfig,
 )
 from argus.intelligence.learning.models import LearningLoopConfig
+
+# ---------------------------------------------------------------------------
+# Utilities
+# ---------------------------------------------------------------------------
+
+
+def deep_update(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
+    """Recursively merge *override* into *base* at the field level (AMD-1).
+
+    Returns a new dict; neither input is mutated.  When both base and
+    override have a dict value for the same key, the merge recurses.
+    Otherwise the override value wins.
+
+    Args:
+        base: The default / global config dict.
+        override: The per-strategy (or per-context) overrides.
+
+    Returns:
+        A new dict with override values merged into base.
+    """
+    merged: dict[str, Any] = {}
+    for key in base:
+        if key in override:
+            if isinstance(base[key], dict) and isinstance(override[key], dict):
+                merged[key] = deep_update(base[key], override[key])
+            else:
+                merged[key] = override[key]
+        else:
+            merged[key] = base[key]
+    # Include keys present in override but not in base
+    for key in override:
+        if key not in base:
+            merged[key] = override[key]
+    return merged
+
 
 # ---------------------------------------------------------------------------
 # Enums
@@ -182,6 +218,75 @@ class ReconciliationConfig(BaseModel):
     auto_cleanup_orphans: bool = False
     auto_cleanup_unconfirmed: bool = False
     consecutive_miss_threshold: int = Field(default=3, ge=1)
+
+
+class TrailingStopConfig(BaseModel):
+    """Configuration for trailing stop behavior (Sprint 28.5).
+
+    Controls how the trailing stop distance is computed and when it activates.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    type: Literal["atr", "percent", "fixed"] = "atr"
+    atr_multiplier: float = Field(default=2.5, gt=0)
+    percent: float = Field(default=0.02, gt=0, le=0.2)
+    fixed_distance: float = Field(default=0.50, gt=0)
+    activation: Literal["after_t1", "after_profit_pct", "immediate"] = "after_t1"
+    activation_profit_pct: float = Field(default=0.005, ge=0)
+    min_trail_distance: float = Field(default=0.05, ge=0)
+
+
+class EscalationPhase(BaseModel):
+    """A single time-based escalation phase (Sprint 28.5, AMD-5).
+
+    Defines at what fraction of the time stop the stop should ratchet
+    to a given profit level.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    elapsed_pct: float = Field(gt=0, le=1.0)
+    stop_to: StopToLevel
+
+
+class ExitEscalationConfig(BaseModel):
+    """Configuration for time-based exit escalation (Sprint 28.5).
+
+    As time progresses toward the time stop, the stop is ratcheted
+    through escalation phases toward profit.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    phases: list[EscalationPhase] = Field(default_factory=list)
+
+    @field_validator("phases")
+    @classmethod
+    def validate_phases_sorted(cls, v: list[EscalationPhase]) -> list[EscalationPhase]:
+        """Phases must be sorted by elapsed_pct ascending."""
+        for i in range(1, len(v)):
+            if v[i].elapsed_pct <= v[i - 1].elapsed_pct:
+                raise ValueError(
+                    f"Phases must be sorted by elapsed_pct ascending, "
+                    f"but phase {i} ({v[i].elapsed_pct}) <= phase {i - 1} ({v[i - 1].elapsed_pct})"
+                )
+        return v
+
+
+class ExitManagementConfig(BaseModel):
+    """Top-level exit management configuration (Sprint 28.5).
+
+    Groups trailing stop and escalation configs. Global defaults live in
+    config/exit_management.yaml; per-strategy overrides use deep_update().
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    trailing_stop: TrailingStopConfig = Field(default_factory=TrailingStopConfig)
+    escalation: ExitEscalationConfig = Field(default_factory=ExitEscalationConfig)
 
 
 class ApiConfig(BaseModel):

@@ -173,6 +173,7 @@ class SignalEvent(Event):
     signal_context: dict[str, object] = field(default_factory=dict)  # Strategy-specific metadata
     quality_score: float = 0.0  # Populated by Quality Engine after scoring
     quality_grade: str = ""  # Populated by Quality Engine after scoring
+    atr_value: float | None = None  # ATR at signal time; used by exit management (Sprint 28.5)
 
 
 # ---------------------------------------------------------------------------

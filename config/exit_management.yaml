@@ -1,0 +1,46 @@
+# Exit Management Configuration (Sprint 28.5)
+# Global defaults for trailing stops and time-based exit escalation.
+# Per-strategy overrides use deep_update() to merge at the field level (AMD-1).
+
+trailing_stop:
+  # Whether trailing stop is active (strategies must also opt-in)
+  enabled: false
+
+  # Trailing stop method: "atr" | "percent" | "fixed"
+  #   atr     — trail distance = atr_value * atr_multiplier
+  #   percent — trail distance = high_watermark * percent
+  #   fixed   — trail distance = fixed_distance (dollars)
+  type: "atr"
+
+  # ATR multiplier for "atr" type (must be > 0)
+  atr_multiplier: 2.5
+
+  # Percentage of high watermark for "percent" type (must be > 0, <= 0.2)
+  percent: 0.02
+
+  # Fixed dollar distance for "fixed" type (must be > 0)
+  fixed_distance: 0.50
+
+  # When the trailing stop activates:
+  #   after_t1         — activates after T1 target is hit
+  #   after_profit_pct — activates after position reaches activation_profit_pct
+  #   immediate        — activates immediately on entry
+  activation: "after_t1"
+
+  # Profit percentage threshold for "after_profit_pct" activation (>= 0)
+  activation_profit_pct: 0.005
+
+  # Minimum trail distance floor applied to all trail types (>= 0, dollars)
+  min_trail_distance: 0.05
+
+escalation:
+  # Whether time-based exit escalation is active
+  enabled: false
+
+  # Escalation phases — as time progresses toward the time stop, the stop
+  # ratchets through these phases. Each phase specifies:
+  #   elapsed_pct — fraction of time_stop_seconds elapsed (0 < pct <= 1.0)
+  #   stop_to     — profit level for the stop:
+  #                  breakeven | quarter_profit | half_profit | three_quarter_profit
+  # Phases MUST be sorted by elapsed_pct ascending.
+  phases: []
