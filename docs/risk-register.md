@@ -956,7 +956,8 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 | **Description** | With DEC-357 and DEC-358 adopted, Phase 6 now includes five consecutive sprints (21.6, 27.5, 27.6, 27.7, 28) before the Learning Loop produces its first actionable result. That's ~12–15 days of infrastructure building before the feedback loop closes. Risk: morale and momentum may suffer from extended infrastructure phase without visible trading system improvement. |
 | **Mitigation** | (1) Paper trading continues running in parallel throughout, accumulating data that makes Sprint 28 more powerful when it arrives. (2) Each infrastructure sprint has clear, testable deliverables — not speculative design. (3) If implementation runs faster than estimated, opportunities exist to absorb 27.6 or 27.7 scope into adjacent sprints. (4) The three infrastructure sprints (27.5, 27.6, 27.7) transform Sprint 28 from basic weight tuning into intelligent system analysis with 24× more data — the delay pays for itself in Sprint 28 quality. |
 | **Owner** | Steven |
-| **Status** | Open |
+| **Status** | Closed |
+| **Closed** | 2026-03-30 — Entire infrastructure arc (Sprints 27–28.5, 13 sprints in ~8 calendar days) completed successfully. Learning Loop V1, Exit Management, Counterfactual Engine, Evaluation Framework, Regime Intelligence, VIX Data Service, Broker Safety all operational. Morale and momentum concerns did not materialize. |
 
 ---
 
@@ -970,6 +971,22 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 | **Description** | VIXDataService (Sprint 27.9) depends on yfinance, an unofficial Yahoo Finance scraper with no SLA. Yahoo may change their HTML structure or API endpoints at any time, breaking data ingestion. This would cause VIX-based regime dimensions to return None (graceful degradation) but would blind the system to VIX context until fixed. |
 | **Mitigation** | (1) SQLite persistence cache (`data/vix_landscape.db`) survives outages — cached data remains available. (2) Staleness self-disable (`max_staleness_days=3`) — VIX calculators return None after 3 trading days without fresh data, preventing stale classifications. (3) Optional FMP fallback (`fmp_fallback_enabled` config flag) — not yet implemented but architecture supports it. (4) Daily-only frequency — not real-time, so brief outages during off-hours are invisible. (5) All VIX dimensions are Optional in RegimeVector — system operates normally without VIX data. |
 | **Owner** | Steven |
+| **Status** | Open |
+
+---
+
+### RSK-048 — Quality Engine Grade Clustering Under Partial Signal
+
+| Field | Value |
+|-------|-------|
+| **Date Identified** | 2026-03-30 |
+| **Category** | System Effectiveness |
+| **Severity** | Medium |
+| **Likelihood** | Medium-High |
+| **Description** | Escalation of RSK-045. With 752+ trades/day under current configuration, there is now sufficient data to measure whether the Quality Engine's partial signal (55% of designed input — pattern_strength 30%, historical_match 15%, regime_alignment 10%; catalyst_quality and volume_profile return neutral 50.0 defaults) produces meaningful grade differentiation. If grades cluster tightly (e.g., 80%+ of trades in B to B+ range), the Dynamic Position Sizer is barely differentiating between setups, defeating the purpose of quality-based sizing. The Learning Loop should be detecting this — if it recommends weight redistribution away from stubbed dimensions, that's the system self-correcting. |
+| **Mitigation** | (1) Paper trading data audit (DEC-381, week of April 6+) will include grade distribution analysis. (2) Learning Loop V1 WeightAnalyzer should surface low-correlation dimensions for weight reduction. (3) If clustering is confirmed, consider: reweighting active dimensions to use full 0–100 range, or temporarily setting catalyst_quality and volume_profile weights to 0 and redistributing to active dimensions. (4) FMP Premium upgrade ($59/mo, DEC-356) would activate volume_profile dimension. |
+| **Detection** | Query `quality_history` table for grade distribution. Flag if >70% of trades receive the same grade or if grade standard deviation < 5 points. |
+| **Owner** | Learning Loop / Quality Engine |
 | **Status** | Open |
 
 ---

@@ -318,7 +318,7 @@ Based on the roadmap's per-sprint duration estimates. Start date: March 5, 2026.
 | 29 | Apr | Apr | Pattern Expansion I |
 | 30 | Apr | Apr | Short Selling + Pattern Expansion II |
 | 31 | Apr–May | May | Pattern Expansion III + Research Console |
-| **Phase 6 Gate** | **May** | **May** | Strategic check-in + CPA consultation gate |
+| **Phase 6 Gate** | **May** | **May** | Strategic check-in + live trading decision gate |
 | 32 | May | May | Parameterized Strategy Templates |
 | **32.5** | **May** | **May–Jun** | **Experiment Registry + Promotion Pipeline (DEC-357)** |
 | **Phase 7 Gate** | **Jun** | **Jun** | Strategic check-in + data sufficiency (RESOLVED) |
@@ -1002,10 +1002,10 @@ Broker-confirmed reconciliation (DEC-369). Overflow routing to CounterfactualTra
 ### Sprint 29: Pattern Expansion I
 
 **Type:** B (Mixed Backend + Frontend) | **Modes:** Iterative Judgment Loop
-**Duration:** ~2–3 days | **Sessions:** 3–5 (2–3 backend, 1–2 frontend)
+**Duration:** ~2–3 days | **Sessions:** 4–6 (3–4 backend incl. PatternParam + 4 patterns, 1–2 frontend)
 **Depends on:** Sprint 28.5 complete
 **Adversarial review:** No
-**Delivers:** 2–3 additional pattern modules (Dip-and-Rip, HOD Break, Gap-and-Go), Pattern Library cards
+**Delivers:** 4 additional pattern modules (ABCD, Dip-and-Rip, HOD Break, Gap-and-Go per DEC-378), PatternParam structured type (DEF-088), Pattern Library cards. Optionally Pre-Market High Break.
 
 **Choreography:**
 
@@ -1063,7 +1063,7 @@ Broker-confirmed reconciliation (DEC-369). Overflow routing to CounterfactualTra
 
 ### Phase 6 Gate
 
-**Trigger:** Sprint 31 complete
+**Trigger:** Sprint 31A complete (DEC-379)
 **Protocol:** Strategic Check-In (`strategic-check-in.md`) + Documentation Compression + Codebase Health Audit
 
 This is the most significant non-Phase-8 gate because **live trading with real capital could begin during or after Phase 6** (per roadmap).
@@ -1071,9 +1071,8 @@ This is the most significant non-Phase-8 gate because **live trading with real c
 **[Claude.ai]** Strategic Check-In Conversation:
 
 1. **Progress review:** 13–15 strategies active? Learning Loop working? Correlation monitoring producing useful data? Evaluation Framework, Regime Intelligence, and Counterfactual Engine all operational?
-2. **Paper trading assessment:** Sharpe > 2.0? Positive expectancy across strategies? No catastrophic drawdowns? If yes → CPA consultation gate is met.
-3. **CPA consultation decision:** Is it time to consult with a CPA about tax implications of live trading? Log as DEC entry.
-4. **Live trading readiness:** Are you confident enough in the system to deploy real capital? If yes → schedule live-minimum deployment during Phase 7 or Phase 8. Log as DEC entry.
+2. **Paper trading assessment:** Sharpe > 2.0? Positive expectancy across strategies? No catastrophic drawdowns?
+3. **Live trading readiness:** Are you confident enough in the system to deploy real capital? If yes → schedule live-minimum deployment during Phase 7 or Phase 8. Log as DEC entry. (CPA consultation removed per DEC-380; tax intelligence built into ARGUS as post-revenue automation.)
 5. **Phase 7 readiness:** Are the existing strategies ready to be templatized? Is the Experiment Registry pipeline design still correct after observing real Learning Loop behavior?
 6. **Historical data sufficiency:** RESOLVED (DEC-358) — XNAS.ITCH + XNYS.PILLAR provide 96 months of OHLCV-1m at $0. No purchase needed.
 7. **Velocity calibration:** Update session estimates for Phase 7–8 based on Phase 5–6 actuals.
@@ -1088,13 +1087,13 @@ This is the most significant non-Phase-8 gate because **live trading with real c
 - Compress Project Knowledge
 - Run Tier A Compression Check
 
-**Output:** Updated roadmap, CPA decision, live-trading decision, data-purchase decision, velocity adjustments, codebase health report.
+**Output:** Updated roadmap, live-trading decision, velocity adjustments, codebase health report.
 
 ---
 
 ## 6. Phase 7: Infrastructure Unification (Sprints 32–32.5)
 
-*Builds parameterized strategy templates and experiment infrastructure for the ensemble vision. BacktestEngine already complete (Sprint 27). Research Console and parallel sweep infrastructure part of Sprint 31 (Phase 6). Target: ~2–2.5 weeks.*
+*Builds parallel sweep infrastructure, parameterized strategy templates, and experiment infrastructure for the ensemble vision. BacktestEngine already complete (Sprint 27). Research Console deferred to post-32.5 per DEC-379. Target: ~2–2.5 weeks.*
 
 ---
 

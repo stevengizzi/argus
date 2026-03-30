@@ -106,7 +106,7 @@ These foundations are correct and remain:
 
 ARGUS completed 21 sprints + sub-sprints in ~17 calendar days of active development (Feb 14 – Mar 5). Average sprint: ~0.8 calendar days. However, sprint complexity has been increasing — early sprints (1–5) were dense single-day affairs, while later sprints (21a–21d, 21.5) span multiple days. The roadmap below assumes sprint durations of 1–4 days each depending on complexity, with some parallelism where noted.
 
-**Current state:** Sprint 28.5 complete (March 30, 2026). ~3,955 pytest + 680 Vitest (0 Vitest failures, 0 pre-existing pytest failures). Seven active strategies (4 original + R2G, Bull Flag, Flat-Top from Sprint 26). Sprint 28.5 (Exit Management) delivered configurable per-strategy trailing stops (ATR/percent/fixed), partial profit-taking with trail on T1 remainder, and time-based exit escalation across Order Manager, BacktestEngine, and CounterfactualTracker. 6 sessions, 12 adversarial review amendments verified, +110 tests, 0 issues. Full infrastructure stack operational: BacktestEngine + Evaluation Framework + Regime Intelligence (11-field RegimeVector) + Counterfactual Engine + VIX Data Service + Quality Engine + NLP Catalyst Pipeline + Universe Manager + AI Copilot + Learning Loop V1 + Exit Management. Eight-page Command Center + Observatory. Live Databento + IBKR paper trading. Phase 5 Gate complete (March 21, 2026). Next: Sprint 29 (Pattern Expansion I).
+**Current state:** Sprint 28.5 complete (March 30, 2026). ~3,955 pytest + 680 Vitest (0 Vitest failures, 0 pre-existing pytest failures). Seven active strategies (4 original + R2G, Bull Flag, Flat-Top from Sprint 26). Sprint 28.5 (Exit Management) delivered configurable per-strategy trailing stops (ATR/percent/fixed), partial profit-taking with trail on T1 remainder, and time-based exit escalation across Order Manager, BacktestEngine, and CounterfactualTracker. 6 sessions, 12 adversarial review amendments verified, +110 tests, 0 issues. Full infrastructure stack operational: BacktestEngine + Evaluation Framework + Regime Intelligence (11-field RegimeVector) + Counterfactual Engine + VIX Data Service + Quality Engine + NLP Catalyst Pipeline + Universe Manager + AI Copilot + Learning Loop V1 + Exit Management. Eight-page Command Center + Observatory. Live Databento + IBKR paper trading. Phase 5 Gate complete (March 21, 2026). Strategic check-in completed March 30 (DEC-378–381). Next: Sprint 29 (Pattern Expansion I — ABCD + Dip-and-Rip + HOD Break + Gap-and-Go + PatternParam structured type).
 
 ---
 
@@ -161,7 +161,6 @@ Paper trading runs in parallel with the Build Track. Gates are calendar-limited 
 - **Key metric:** System-level Sharpe > 2.0 over rolling 30-day windows
 
 ### Gate 5: Live Trading (User Decision)
-- CPA consultation complete
 - Explicit go/no-go by user
 - Start at minimum size ($25K, 10-share positions)
 - Shadow system runs indefinitely in parallel
@@ -473,17 +472,16 @@ Reconciliation redesign with broker-confirmed positions (DEC-369). Overflow rout
 
 ### Phase 6 Gate ★ CRITICAL — LIVE TRADING DECISION POINT ★
 
-**Trigger:** Sprint 31 complete (after Pattern Expansion + Short Selling).
+**Trigger:** Sprint 31A complete (after Pattern Expansion + Short Selling).
 **Protocol:** Strategic Check-In (`strategic-check-in.md`) + Codebase Health Audit (`codebase-health-audit.md`) + Documentation Compression.
 
-**ARGUS state at this gate:** 13–15 hand-crafted strategies (including at least one short strategy) with AI quality filtering, NLP catalysts, dynamic sizing, and performance-aware learning loop. Paper trading has been running for 6–8 weeks at this point. All strategies validated with BacktestEngine + 3 years of Databento data.
+**ARGUS state at this gate:** 15 hand-crafted strategies (including at least one short strategy) with AI quality filtering, NLP catalysts, dynamic sizing, and performance-aware learning loop. Paper trading has been running for 6–8 weeks at this point. All strategies validated with BacktestEngine + 3 years of Databento data.
 
-**What you see:** 13–15 strategy cards in the Pattern Library. Health bands on every strategy in the Orchestrator. Correlation heatmap on Performance. Short exposure indicator on Dashboard. Quality-graded signals firing throughout the day. Morning intelligence briefs. AI-generated debrief narratives.
+**What you see:** 15 strategy cards in the Pattern Library. Health bands on every strategy in the Orchestrator. Correlation heatmap on Performance. Short exposure indicator on Dashboard. Quality-graded signals firing throughout the day. Morning intelligence briefs. AI-generated debrief narratives.
 
 **Critical decisions at this gate:**
-1. **CPA consultation** — Tax strategy for live trading (wash sale tracking, entity structure, estimated payments).
-2. **Live trading decision** — If paper trading results are strong (Sharpe > 2.0, positive expectancy, no catastrophic drawdowns), this is the natural point for Gate 5 (live minimum deployment). **Live trading with real capital could begin during or after Phase 6.**
-3. **Ensemble go/no-go** — Confirm commitment to the ensemble research path (Phases 7–10). If choosing to defer, ARGUS continues as a strong artisanal multi-strategy system. Historical data is already available at no cost (DEC-353).
+1. **Live trading decision** — If paper trading results are strong (Sharpe > 2.0, positive expectancy, no catastrophic drawdowns), this is the natural point for Gate 5 (live minimum deployment). **Live trading with real capital could begin during or after Phase 6.** (CPA consultation removed per DEC-380; tax intelligence built into ARGUS via post-revenue Tax Intelligence Automation.)
+2. **Ensemble go/no-go** — Confirm commitment to the ensemble research path (Phases 7–10). If choosing to defer, ARGUS continues as a strong artisanal multi-strategy system. Historical data is already available at no cost (DEC-353).
 
 **Elapsed time from start:** ~5–7 weeks.
 
@@ -495,16 +493,17 @@ Reconciliation redesign with broker-confirmed positions (DEC-369). Overflow rout
 
 **Amendment note (DEC-357):** Phase 7 gains Sprint 32.5 (Experiment Registry + Promotion Pipeline + Anti-Fragility + Hypothesis Generation Design) after Sprint 32. Sprint 33 scope decreases as evaluation framework and experiment storage already exist.
 
-### Sprint 29: Pattern Expansion I (DEC-167)
+### Sprint 29: Pattern Expansion I (DEC-167, DEC-378)
 **Target:** ~2–3 days
 
 **Scope:**
-- **Dip-and-Rip**, **HOD Break**, **Gap-and-Go** pattern modules. Each through stages 1–3.
+- **Dip-and-Rip**, **HOD Break**, **Gap-and-Go**, **ABCD** pattern modules (DEC-378). Each through stages 1–3.
 - Optionally **Pre-Market High Break** if velocity allows.
-- Each module implements PatternLibrary interface. Walk-forward validated. Quality Engine integration.
-- **UI:** Pattern Library gains 3–4 new strategy cards.
-- **10–11 strategies/patterns active.**
-- **Tests:** ~60 new.
+- Each module implements PatternModule interface with **structured PatternParam** metadata (DEF-088 promoted to Sprint 29 per DEC-378) — `get_default_params()` returns `PatternParam` objects with type, range, and description for parameter grid generation and UI. All existing patterns (Bull Flag, Flat-Top Breakout) retrofitted.
+- Walk-forward validated. Quality Engine integration. `_calculate_pattern_strength()` on each.
+- **UI:** Pattern Library gains 4–5 new strategy cards.
+- **11–12 strategies/patterns active.**
+- **Tests:** ~80 new.
 
 ### Sprint 30: Short Selling Infrastructure + Pattern Expansion II (DEC-166, DEC-167)
 **Target:** ~3 days
@@ -517,37 +516,43 @@ Reconciliation redesign with broker-confirmed positions (DEC-369). Overflow rout
 - **13–15 strategies/patterns active (including first short strategy).**
 - **Tests:** ~80 new.
 
-### Sprint 31: Pattern Expansion III + Research Console (NEW PAGE)
-**Target:** ~3 days
+### Sprint 31A: Pattern Expansion III (DEC-379)
+**Target:** ~1–2 days
+
+**Scope:**
+- Additional pattern modules to reach 15 total strategies. All implement PatternModule with structured PatternParam metadata (from Sprint 29 DEF-088 resolution).
+- Walk-forward validated. Quality Engine integration.
+- **UI:** Pattern Library gains remaining strategy cards.
+- **15 strategies/patterns active.**
+- **Tests:** ~40 new.
+
+### Sprint 31.5: Parallel Sweep Infrastructure (DEC-379)
+**Target:** ~3–4 days
 
 **Scope (backend):**
-- Additional pattern modules to reach 15 total strategies.
-- **Research Console** backend API endpoints for backtest run management.
+- Multiprocessing harness for BacktestEngine. Parameter grid specification format (consumes PatternParam metadata from Sprint 29).
+- Worker pool distributing parameter combinations across CPU cores.
+- Result aggregation pipeline. Progress monitoring.
+- Cloud burst configuration (spin up high-core-count instance for sweep days).
+
+**Tests:** ~60 new.
+
+### Sprint 31B: Research Console (NEW PAGE) — Deferred post-32.5 (DEC-379)
+**Target:** ~3 days
+
+**Note:** Deferred from original Sprint 31 position to after Sprint 32.5. Research Console is developer UX for strategy research visibility — valuable but not on the optimization critical path (32 → 32.5 → 33 → 33.5 → 34).
 
 **Scope (frontend):** **Research Console** — Command Center page 9. Mission control for strategy research.
 - **Run Manager:** Shows backtest runs in progress (progress bar, ETA), queued runs, completed runs. Each completed run: equity curve thumbnail, Sharpe, win rate, max drawdown, trade count.
 - **Result Comparison:** Select 2–4 completed runs to compare side-by-side — overlaid equity curves, key metrics comparison table.
 - **Run Configuration:** Form interface to configure BacktestEngine runs — select strategy, parameter values, symbol set, date range. Launch from UI.
-
-**State after:** A new backtesting path exists alongside VectorBT + Replay Harness. It runs real production strategy code at 5–10x async Replay Harness speed. Results match exactly. The entire research workflow is visible on the Research Console.
-
-**Tests:** ~80 new.
-
-### Sprint 31: Parallel Sweep Infrastructure
-**Target:** ~3–4 days
-
-**Scope (backend):**
-- Multiprocessing harness for BacktestEngine. Parameter grid specification format.
-- Worker pool distributing parameter combinations across CPU cores.
-- Result aggregation pipeline. Progress monitoring.
-- Cloud burst configuration (spin up high-core-count instance for sweep days).
-
-**Scope (frontend):** Research Console upgrades:
 - **Sweep Manager:** Like Run Manager but for multi-parameter sweeps. Progress: "12,400 / 48,000 combinations. ETA: 2.3 hours."
 - **Sweep Heatmap:** 2D heatmap for any two-parameter sweep. Color = performance metric (Sharpe, win rate, etc.). Hover: full metrics for that cell. Click: detailed results. Progressive rendering as results arrive.
 - **Parameter Landscape (3D):** Three.js surface plot for three-parameter exploration. Rotate, zoom, click on peaks and valleys. Toggle between Sharpe, win rate, max drawdown surfaces.
 
-**Tests:** ~60 new.
+**State after:** The entire research workflow is visible on the Research Console. Combined scope from both original Sprint 31 entries.
+
+**Tests:** ~80 new.
 
 ### Sprint 32: Parameterized Strategy Templates
 **Target:** ~3–4 days
@@ -859,13 +864,14 @@ Each grouping mode rearranges with smooth fly-through animation — nodes flow f
 | Phase | Sprints | Focus | Duration | Cumulative |
 |-------|---------|-------|----------|------------|
 | 5: Foundation Completion | 21.5–24 | Live trading, AI layer, quality filtering | ~2–3 weeks | Weeks 1–3 |
-| 6: Strategy Expansion | 25–28 | 13–15 artisanal strategies, short selling, Learning Loop V1 | ~2–3 weeks | Weeks 3–6 |
-| 7: Infrastructure Unification | 29–31 | BacktestEngine, templates, Research Console | ~2–2.5 weeks | Weeks 6–8.5 |
-| 8: Controlled Experiment | 32–34 | Statistical framework, ORB search, go/no-go | ~2–2.5 weeks | Weeks 8.5–11 |
-| 9: Ensemble Scaling | 35–38 | Cross-family search, Synapse, live ensemble | ~3–4 weeks | Weeks 11–15 |
-| 10: Full Vision | 39–41 | Learning Loop V2, discovery pipeline, workbench | ~2.5–3.5 weeks | Weeks 15–18+ |
+| 6: Strategy Expansion | 25–31A | 15 artisanal strategies, short selling, Learning Loop V1, Exit Management | ~2–3 weeks | Weeks 3–6 |
+| 7: Infrastructure Unification | 31.5–32.5 | Parallel sweeps, templates, experiment registry | ~2–2.5 weeks | Weeks 6–8.5 |
+| 7.5: Research Console | 31B | Research Console (deferred from Phase 6 per DEC-379) | ~0.5 week | Week 9 |
+| 8: Controlled Experiment | 33–35 | Statistical framework, stress testing, ORB search, go/no-go | ~2–2.5 weeks | Weeks 9–11.5 |
+| 9: Ensemble Scaling | 36–39 | Cross-family search, Synapse, live ensemble | ~3–4 weeks | Weeks 11.5–15.5 |
+| 10: Full Vision | 40–42 | Learning Loop V2, discovery pipeline, workbench | ~2.5–3.5 weeks | Weeks 15.5–19+ |
 
-**Total: ~41 sprints across ~18+ weeks / 4.5+ months**
+**Total: ~42+ sprints across ~19+ weeks / 4.5+ months**
 
 ---
 
@@ -881,9 +887,11 @@ Each grouping mode rearranges with smooth fly-through animation — nodes flow f
 | 26 | Pattern Library: +3–4 cards. Dashboard: +Short Exposure indicator (prep) |
 | 27 | Pattern Library: +Parabolic Short + 1–2 cards. Dashboard: Short Exposure active. Orchestrator: +short positions |
 | 28 | Orchestrator: +Strategy Health Panel with health bands + throttle/boost cards. Performance: +Correlation Matrix. Dashboard: +weekly insight card |
-| 29 | **+Research Console (page 9):** Run Manager, Result Comparison, Run Configuration |
-| 30 | Research Console: +Sweep Manager, +Sweep Heatmap, +Parameter Landscape (3D) |
-| 31 | Pattern Library: evolves to template gallery with instance browser and template explorer |
+| 29 | Pattern Library: +4–5 new strategy cards (ABCD, Dip-and-Rip, HOD Break, Gap-and-Go) |
+| 30 | Pattern Library: +Parabolic Short + 1–2 cards. Dashboard: Short Exposure active. Orchestrator: +short positions |
+| 31A | Pattern Library: remaining strategy cards to reach 15 total |
+| 31B (post-32.5) | **+Research Console (page 9):** Run Manager, Result Comparison, Run Configuration, Sweep Manager, Sweep Heatmap, Parameter Landscape (3D) |
+| 32 | Pattern Library: evolves to template gallery with instance browser and template explorer |
 | 32 | Research Console: +Data Split Visualizer, +FDR Report, +Smoothness Heatmap overlay |
 | 33 | Research Console: live progressive sweep rendering, staged validation views |
 | 34 | Research Console: +Correlation Cluster Map, +Regime Breakdown, +Go/No-Go Dashboard |
@@ -933,6 +941,26 @@ The original Orchestrator V2 concept (enhanced rules-based for ~15 strategies) i
 ## 16. Post-Revenue Backlog
 
 Items deferred until monthly trading income justifies their cost or complexity. These are tracked here so nothing is lost from previous roadmap iterations.
+
+### Tax Intelligence Automation (DEC-380)
+
+**Trigger:** Live trading active, real tax liability being generated.
+
+**Tax Compliance Automation (~2–3 days):**
+- **Wash sale rule tracking and avoidance** — automatic detection of wash sale violations across all strategies; proactive avoidance mode that blocks re-entry into a symbol within the 30-day wash sale window when a loss was realized. Config-gated (can disable avoidance for strategies where re-entry is more valuable than tax benefit).
+- **Cost basis method optimization** — support FIFO, LIFO, and specific identification; recommend optimal method per position based on tax impact. Track cost basis per lot.
+- **Trade log export** — compatible export formats for TradeLog, GainsKeeper, and standard CPA handoff (CSV + PDF summary). Include wash sale adjustments, cost basis, holding periods.
+
+**Tax Planning Intelligence (~1–2 days):**
+- **Section 475 MTM election analysis** — model P&L impact of mark-to-market vs standard accounting based on actual trading patterns. Present recommendation with projected tax difference.
+- **Estimated tax payment calculator** — quarterly estimated payment amounts based on realized P&L, projected annual income, and applicable tax brackets. Push notification reminders before quarterly deadlines (April 15, June 15, September 15, January 15).
+- **Year-end tax planning** — tax-loss harvesting opportunities, strategy-level P&L attribution for Schedule D, short-term vs long-term classification (all day trades are short-term, but system should track for any swing positions).
+
+**AI Copilot Tax Context (~0.5 day):**
+- Tax-aware recommendations in AI Copilot — "You have $X in unrealized losses that could offset today's gains if harvested before year-end."
+- Tax impact preview on trade proposals — estimated tax liability of proposed position.
+
+**UI:** Performance page gains "Tax" tab with year-to-date liability, wash sale exposure, estimated payments timeline, and export controls.
 
 ### Order Flow Intelligence (DEC-238)
 

@@ -369,7 +369,7 @@ Every trade is recorded with full metadata: strategy, asset class, entry/exit pr
 ### 11.2 Tax Considerations
 - **Short-term capital gains:** Day trading profits are taxed as ordinary income
 - **Wash Sale Rule:** System tracks and flags wash sales automatically
-- **Mark-to-Market (Section 475):** Election should be evaluated with a CPA; the system supports both MTM and standard accounting
+- **Mark-to-Market (Section 475):** Election analysis built into Tax Intelligence Automation (DEC-380 horizon item); the system supports both MTM and standard accounting
 - **Crypto:** Taxed as property; separate cost basis tracking
 - **Forex (Section 988 vs 1256):** System will support both elections when forex is added
 - **Futures (Section 1256):** 60/40 long-term/short-term treatment when futures are added
@@ -377,7 +377,7 @@ Every trade is recorded with full metadata: strategy, asset class, entry/exit pr
 ### 11.3 Reporting
 - Real-time P&L dashboard (daily, monthly, quarterly, annual)
 - Estimated tax liability calculator based on configurable tax bracket
-- Exportable trade logs compatible with tax software and CPA handoff
+- Exportable trade logs compatible with tax software (TradeLog, GainsKeeper) — Tax Intelligence Automation horizon item (DEC-380)
 - Integration with dedicated trader tax services (TradeLog, GainsKeeper) evaluated for Phase 2
 
 ---

@@ -4584,6 +4584,62 @@ Each entry follows this format:
 
 ---
 
+### DEC-378 | Strategic Check-In: Sprint 29 Scope Expansion
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-30 |
+| **Context** | Strategic check-in post-Sprint 28.5. Sprint 29 (Pattern Expansion I) scope reviewed for optimization stack acceleration and ensemble diversity. DEF-088 (PatternParam structured type) identified as Sprint 32 prerequisite that should be built alongside new PatternModule implementations. |
+| **Decision** | Sprint 29 scope expanded: (1) **ABCD pattern mandatory** as 4th required pattern alongside Dip-and-Rip, HOD Break, Gap-and-Go. (2) **Pre-Market High Break optional** (velocity-dependent). (3) **DEF-088 promoted to Sprint 29** — `PatternModule.get_default_params()` returns structured `PatternParam` objects with type, range, and description metadata instead of `dict[str, Any]`. All Sprint 29 patterns implement structured params from the start. |
+| **Alternatives** | (1) Keep Sprint 29 scope as-is (3 mandatory, 1 optional) — misses ABCD's unique geometric/harmonic basis. (2) Defer DEF-088 to Sprint 32 — requires retrofitting all existing patterns rather than building it in. |
+| **Rationale** | ABCD adds harmonic/Fibonacci-based pattern detection — fundamentally different from pure price action and momentum patterns. Highly parameterizable (Fibonacci levels, leg ratios, time ratios), making it an ideal candidate for Sprint 32 parameterized templates and Sprint 34 systematic search. DEF-088 in Sprint 29 eliminates Sprint 32 retrofit burden; every pattern built from Sprint 29 onward has machine-readable parameter metadata. |
+| **Cross-References** | DEF-088, Sprint 29, Sprint 32, Sprint 34 |
+| **Status** | Active |
+
+---
+
+### DEC-379 | Strategic Check-In: Sprint 31 Decomposition + Research Console Deferral
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-30 |
+| **Context** | Strategic check-in identified Sprint 31 as overloaded (two distinct scopes under one number) and Research Console as non-critical-path for optimization capability. Parallel Sweep Infrastructure was a second "Sprint 31" in the roadmap — numbering conflict. |
+| **Decision** | Sprint 31 decomposed: (1) **Sprint 31A** — Pattern Expansion III (reach 15 total strategies). Quick sprint, 1–2 days. (2) **Sprint 31.5** — Parallel Sweep Infrastructure (multiprocessing BacktestEngine harness). Renumbered from duplicate "Sprint 31". (3) **Research Console deferred to post-Sprint 32.5** — becomes Sprint 31B, scheduled after Experiment Registry + Promotion Pipeline. The optimization stack (32 → 32.5 → 33 → 33.5 → 34) is the critical path; Research Console is developer UX that doesn't advance it. |
+| **Alternatives** | (1) Keep Sprint 31 as-is — overloaded scope, numbering conflict unresolved. (2) Defer Research Console indefinitely — too aggressive; it's still valuable for strategy research visibility. |
+| **Rationale** | Every sprint between now and Sprint 32.5 that isn't advancing parameterized templates or experiment infrastructure delays the self-optimization stack. Research Console is useful but doesn't compound — parameterized templates do, because every day of paper trading after Sprint 32 generates data in a format the experiment framework can consume. |
+| **Cross-References** | Sprint 31, Sprint 32, Sprint 32.5 |
+| **Status** | Active |
+
+---
+
+### DEC-380 | Strategic Check-In: CPA Consultation Removed; Tax Intelligence Automation Added
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-30 |
+| **Context** | Strategic check-in reviewed Gate 5 and Phase 6 Gate requirements. CPA consultation was listed as a gate prerequisite for live trading. User determined external CPA consultation is unnecessary and prefers building tax intelligence directly into ARGUS. |
+| **Decision** | (1) **CPA consultation removed** as a gate requirement from Gate 5, Phase 6 Gate, and all validation milestones. No longer a prerequisite for live trading. (2) **Tax Intelligence Automation** added to post-revenue horizon roadmap: automated wash sale rule tracking and avoidance, Section 475 MTM election analysis and modeling, estimated tax payment calculation based on realized P&L, cost basis method optimization (FIFO/LIFO/specific identification), trade log export compatible with tax software (TradeLog, GainsKeeper), AI Copilot tax-aware recommendations. |
+| **Alternatives** | (1) Keep CPA as optional recommendation — adds ambiguity to gate criteria. (2) Build tax automation in Phase 6 — premature before live trading generates real tax liability. |
+| **Rationale** | External CPA consultation is a bottleneck that doesn't align with the self-contained trading intelligence platform vision. Tax compliance intelligence should be built INTO ARGUS as an automated subsystem, consistent with the "system runs, you supervise" operational model. Deferred to post-revenue because tax optimization is only actionable with real trading income. |
+| **Cross-References** | Gate 5, Phase 6 Gate, Post-Revenue Backlog |
+| **Status** | Active |
+
+---
+
+### DEC-381 | Strategic Check-In: Paper Trading Data Audit Deferred
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-30 |
+| **Context** | Strategic check-in identified need to audit paper trading data quality and gate progress. However, Sprint 28.5 was deployed during market hours on March 30, and trade volume flood gates were only opened in the last few days (previously <30 trades/day, now 752+/day). Current data represents a transitional configuration period. |
+| **Decision** | First comprehensive paper trading data audit deferred to the week of April 6, 2026 (5+ full trading sessions under current configuration). Audit should cover: per-strategy Sharpe/win rate/expectancy, Learning Loop proposal status, exit management effectiveness (trailing vs time-stop vs target exit distribution), overall system Sharpe, quality grade distribution clustering analysis per RSK-045. |
+| **Alternatives** | (1) Audit immediately — data from transitional period would produce misleading conclusions. (2) Defer indefinitely — loses urgency; data accumulates without review. |
+| **Rationale** | Infrastructure changes during Sprint 27–28.5 arc changed system behavior significantly (exit management, learning loop, overflow routing, broker safety). Clean data accumulation under the stable post-28.5 configuration starts March 31. Five full sessions provides minimum statistical basis for per-strategy assessment. |
+| **Cross-References** | RSK-045, Learning Loop V1, Sprint 28.5 |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
-*Next DEC: 378*
-*Last updated: 2026-03-28 (Sprint 27.95 doc sync — 9 new DECs, DEC-369–377)*
+*Next DEC: 382*
+*Last updated: 2026-03-30 (Strategic Check-In doc sync — 4 new DECs, DEC-378–381)*

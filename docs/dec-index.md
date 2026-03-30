@@ -455,3 +455,10 @@ No new DECs. Reserved range 379–385 unused — all design decisions followed e
 - ● **DEC-375**: Dynamic overflow routing to CounterfactualTracker — `overflow.broker_capacity` (default 30) threshold; approved signals → `SignalRejectedEvent(BROKER_OVERFLOW)`.
 - ● **DEC-376**: Startup zombie cleanup via order-based heuristic — positions WITH bracket orders = managed; NO orders = zombie; `startup.flatten_unknown_positions` config.
 - ● **DEC-377**: Separate config fields for stop retry paths — `stop_retry_max` (connectivity) + `stop_cancel_retry_max` (cancel events); both default 3.
+
+## Strategic Check-In — March 30, 2026
+
+- ● **DEC-378**: Sprint 29 scope expansion — ABCD pattern mandatory (4th required alongside Dip-and-Rip, HOD Break, Gap-and-Go); Pre-Market High Break optional; DEF-088 (PatternParam structured type) promoted to Sprint 29 for Sprint 32 prerequisite.
+- ● **DEC-379**: Sprint 31 decomposition — 31A (Pattern Expansion III), 31.5 (Parallel Sweep Infrastructure, renumbered), Research Console deferred to post-32.5 (becomes Sprint 31B). Optimization stack is critical path.
+- ● **DEC-380**: CPA consultation removed from all gates; Tax Intelligence Automation added to post-revenue horizon (wash sale tracking, Section 475 analysis, estimated payments, cost basis optimization, tax software export).
+- ● **DEC-381**: Paper trading data audit deferred to week of April 6+ (5+ clean sessions under post-28.5 stable configuration needed).
