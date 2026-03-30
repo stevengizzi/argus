@@ -157,6 +157,11 @@ quality_engine:
     c_plus: [0.0025, 0.0025]
   min_grade_to_trade: "C+"
 
+# VIX Regime Intelligence (Sprint 27.9)
+# VIX landscape dimension of regime intelligence. Detailed params in vix_regime.yaml.
+vix_regime:
+  enabled: true
+
 # Counterfactual Engine (Sprint 27.7)
 # Shadow-tracks rejected signals to measure filter accuracy.
 counterfactual:

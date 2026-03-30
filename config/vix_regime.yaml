@@ -3,7 +3,7 @@
 # Data sourced from Yahoo Finance (yfinance) with optional FMP fallback.
 
 # Master toggle — when false, VIX landscape dimension is inactive
-enabled: false
+enabled: true
 
 # ---------------------------------------------------------------------------
 # Data Source Symbols

@@ -87,7 +87,7 @@ class TestConfigYamlMatchesPydanticModel:
 
         # Verify round-trip: YAML can construct a valid config
         config = VixRegimeConfig(**raw)
-        assert config.enabled is False
+        assert config.enabled is True
         assert config.vol_short_window == 5
         assert config.vol_long_window == 20
 
