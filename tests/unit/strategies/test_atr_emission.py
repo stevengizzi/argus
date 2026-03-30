@@ -378,7 +378,7 @@ class TestExitManagementConfigLoading:
         data = load_yaml_file(yaml_path)
         config = ExitManagementConfig(**data)
 
-        assert config.trailing_stop.enabled is False
+        assert config.trailing_stop.enabled is True  # Enabled as of Sprint 28.5 config
         assert config.trailing_stop.atr_multiplier == 2.5
         assert config.escalation.enabled is False
 

@@ -181,18 +181,17 @@ def test_exit_management_config_round_trip_from_yaml() -> None:
     assert _EXIT_YAML.exists(), f"Missing {_EXIT_YAML}"
     raw = yaml.safe_load(_EXIT_YAML.read_text())
     cfg = ExitManagementConfig(**raw)
-    # Verify defaults match Pydantic model defaults
-    default_cfg = ExitManagementConfig()
-    assert cfg.trailing_stop.enabled == default_cfg.trailing_stop.enabled
-    assert cfg.trailing_stop.type == default_cfg.trailing_stop.type
-    assert cfg.trailing_stop.atr_multiplier == default_cfg.trailing_stop.atr_multiplier
-    assert cfg.trailing_stop.percent == default_cfg.trailing_stop.percent
-    assert cfg.trailing_stop.fixed_distance == default_cfg.trailing_stop.fixed_distance
-    assert cfg.trailing_stop.activation == default_cfg.trailing_stop.activation
-    assert cfg.trailing_stop.activation_profit_pct == default_cfg.trailing_stop.activation_profit_pct
-    assert cfg.trailing_stop.min_trail_distance == default_cfg.trailing_stop.min_trail_distance
-    assert cfg.escalation.enabled == default_cfg.escalation.enabled
-    assert cfg.escalation.phases == default_cfg.escalation.phases
+    # Verify YAML values load correctly (enabled=true as of Sprint 28.5 config change)
+    assert cfg.trailing_stop.enabled is True
+    assert cfg.trailing_stop.type == "atr"
+    assert cfg.trailing_stop.atr_multiplier == 2.5
+    assert cfg.trailing_stop.percent == 0.02
+    assert cfg.trailing_stop.fixed_distance == 0.50
+    assert cfg.trailing_stop.activation == "after_t1"
+    assert cfg.trailing_stop.activation_profit_pct == 0.005
+    assert cfg.trailing_stop.min_trail_distance == 0.05
+    assert cfg.escalation.enabled is False
+    assert cfg.escalation.phases == []
 
 
 # ---------------------------------------------------------------------------

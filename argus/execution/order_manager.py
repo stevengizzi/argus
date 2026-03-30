@@ -55,6 +55,7 @@ from argus.core.events import (
 from argus.core.ids import generate_id
 from argus.execution.broker import Broker
 from argus.models.trading import Order, OrderSide, OrderStatus
+from argus.utils.log_throttle import ThrottledLogger
 from argus.models.trading import OrderType as TradingOrderType
 
 if TYPE_CHECKING:
@@ -223,8 +224,12 @@ class OrderManager:
         # Orders awaiting fill confirmation: keyed by order_id
         self._pending_orders: dict[str, PendingManagedOrder] = {}
 
-        # Flatten-pending guard: symbol → order_id (prevents duplicate flatten orders)
-        self._flatten_pending: dict[str, str] = {}
+        # Flatten-pending guard: symbol → (order_id, monotonic_time, retry_count)
+        # Prevents duplicate flatten orders; timeout resubmits stale ones (Sprint 28.75)
+        self._flatten_pending: dict[str, tuple[str, float, int]] = {}
+
+        # Throttled logger for high-frequency messages (Sprint 28.75)
+        self._throttled = ThrottledLogger(logger)
 
         # Broker-confirmed entry fill tracking (Sprint 27.95)
         self._broker_confirmed: dict[str, bool] = {}
@@ -559,7 +564,8 @@ class OrderManager:
 
         # Clear flatten-pending guard if this was a flatten order
         if pending.order_type == "flatten":
-            if self._flatten_pending.get(pending.symbol) == event.order_id:
+            entry = self._flatten_pending.get(pending.symbol)
+            if entry is not None and entry[0] == event.order_id:
                 self._flatten_pending.pop(pending.symbol, None)
                 logger.info(
                     "Flatten-pending cleared for %s (order %s cancelled)",
@@ -1352,6 +1358,9 @@ class OrderManager:
                                         position, effective
                                     )
 
+                # --- Flatten-pending timeout (Sprint 28.75, R2) ---
+                await self._check_flatten_pending_timeouts()
+
             except asyncio.CancelledError:
                 break
             except Exception:
@@ -1781,6 +1790,99 @@ class OrderManager:
         except Exception:
             logger.exception("Failed to submit T2 order for %s", position.symbol)
 
+    async def _check_flatten_pending_timeouts(self) -> None:
+        """Cancel and resubmit stale flatten orders (Sprint 28.75, R2).
+
+        Iterates over _flatten_pending entries. If any entry has exceeded
+        flatten_pending_timeout_seconds, cancel the stale order and resubmit
+        a fresh market sell. Stops retrying after max_flatten_retries.
+        """
+        timeout = self._config.flatten_pending_timeout_seconds
+        max_retries = self._config.max_flatten_retries
+        now = _time.monotonic()
+
+        for symbol, (order_id, placed_at, retry_count) in list(
+            self._flatten_pending.items()
+        ):
+            elapsed = now - placed_at
+            if elapsed < timeout:
+                continue
+
+            # Max retries exhausted — stop retrying
+            if retry_count >= max_retries:
+                logger.error(
+                    "Flatten for %s exhausted %d retries — giving up "
+                    "(position requires manual intervention or EOD flatten)",
+                    symbol,
+                    max_retries,
+                )
+                # Remove from pending so it doesn't log every poll cycle
+                self._flatten_pending.pop(symbol, None)
+                continue
+
+            logger.warning(
+                "Flatten order for %s timed out after %ds. Resubmitting. "
+                "(retry %d/%d, order %s)",
+                symbol,
+                int(elapsed),
+                retry_count + 1,
+                max_retries,
+                order_id,
+            )
+
+            # Cancel stale order
+            try:
+                await self._broker.cancel_order(order_id)
+            except Exception:
+                logger.debug("Could not cancel stale flatten order %s", order_id)
+            self._pending_orders.pop(order_id, None)
+
+            # Find the position to get shares_remaining and strategy_id
+            positions = self._managed_positions.get(symbol, [])
+            position = next(
+                (p for p in positions if not p.is_fully_closed), None
+            )
+            if position is None or position.shares_remaining <= 0:
+                self._flatten_pending.pop(symbol, None)
+                continue
+
+            # Resubmit fresh market sell
+            try:
+                order = Order(
+                    strategy_id=position.strategy_id,
+                    symbol=symbol,
+                    side=OrderSide.SELL,
+                    order_type=TradingOrderType.MARKET,
+                    quantity=position.shares_remaining,
+                )
+                result = await self._broker.place_order(order)
+                new_pending = PendingManagedOrder(
+                    order_id=result.order_id,
+                    symbol=symbol,
+                    strategy_id=position.strategy_id,
+                    order_type="flatten",
+                    shares=position.shares_remaining,
+                )
+                self._pending_orders[result.order_id] = new_pending
+                self._flatten_pending[symbol] = (
+                    result.order_id, _time.monotonic(), retry_count + 1,
+                )
+
+                # Handle immediate fill (SimulatedBroker)
+                if result.status == OrderStatus.FILLED:
+                    fill_event = OrderFilledEvent(
+                        order_id=result.order_id,
+                        fill_price=result.filled_avg_price,
+                        fill_quantity=result.filled_quantity,
+                    )
+                    await self.on_fill(fill_event)
+            except Exception:
+                logger.exception(
+                    "CRITICAL: Flatten resubmit failed for %s (%d shares unprotected)",
+                    symbol,
+                    position.shares_remaining,
+                )
+
     async def _trail_flatten(
         self, position: ManagedPosition, current_price: float
     ) -> None:
@@ -1837,7 +1939,7 @@ class OrderManager:
                 shares=position.shares_remaining,
             )
             self._pending_orders[flatten_order_id] = pending
-            self._flatten_pending[symbol] = flatten_order_id
+            self._flatten_pending[symbol] = (flatten_order_id, _time.monotonic(), 0)
 
             # Handle immediate fill (SimulatedBroker)
             if result.status == OrderStatus.FILLED:
@@ -1960,12 +2062,13 @@ class OrderManager:
         self._pnl_last_published.pop(position.symbol, None)
 
         # Flatten-pending guard: skip if a flatten order is already pending
-        existing_order_id = self._flatten_pending.get(position.symbol)
-        if existing_order_id is not None:
-            logger.info(
-                "Time-stop for %s: flatten already pending (order %s)",
-                position.symbol,
-                existing_order_id,
+        existing_entry = self._flatten_pending.get(position.symbol)
+        if existing_entry is not None:
+            self._throttled.warn_throttled(
+                f"flatten_pending:{position.symbol}",
+                f"Flatten already pending for {position.symbol} "
+                f"(order {existing_entry[0]})",
+                interval_seconds=60.0,
             )
             return
 
@@ -2017,7 +2120,9 @@ class OrderManager:
                 self._pending_orders[result.order_id] = pending
 
                 # Track flatten as pending (prevents duplicates)
-                self._flatten_pending[position.symbol] = result.order_id
+                self._flatten_pending[position.symbol] = (
+                    result.order_id, _time.monotonic(), 0,
+                )
 
                 # Handle immediate fill (SimulatedBroker fills market orders synchronously)
                 if result.status == OrderStatus.FILLED:
@@ -2321,10 +2426,11 @@ class OrderManager:
 
             if confirmed:
                 # Broker-confirmed position — NEVER auto-close. Snapshot may be stale.
-                logger.warning(
-                    "IBKR portfolio snapshot missing confirmed position %s "
-                    "— snapshot may be stale",
-                    sym,
+                self._throttled.warn_throttled(
+                    f"recon_missing:{sym}",
+                    f"IBKR portfolio snapshot missing confirmed position {sym} "
+                    f"— snapshot may be stale",
+                    interval_seconds=600.0,  # 10 minutes per symbol
                 )
                 self._reconciliation_miss_count[sym] = 0
                 continue

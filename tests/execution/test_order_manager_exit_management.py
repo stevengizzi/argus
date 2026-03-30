@@ -423,7 +423,7 @@ class TestTrailFlatten:
         position.trail_stop_price = 153.0
 
         # Simulate an existing flatten-pending
-        om._flatten_pending["AAPL"] = "existing-flatten-order"
+        om._flatten_pending["AAPL"] = ("existing-flatten-order", 0.0, 0)
 
         mock_broker.place_order.reset_mock()
         mock_broker.cancel_order.reset_mock()
@@ -735,7 +735,7 @@ class TestEscalationFlattenPendingGuard:
         position.high_watermark = 153.0
 
         # Set flatten pending BEFORE calling _escalation_update_stop
-        om._flatten_pending["AAPL"] = "existing-flatten"
+        om._flatten_pending["AAPL"] = ("existing-flatten", 0.0, 0)
 
         mock_broker.place_order.reset_mock()
         mock_broker.cancel_order.reset_mock()

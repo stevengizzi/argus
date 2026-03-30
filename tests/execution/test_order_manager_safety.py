@@ -223,7 +223,7 @@ async def test_flatten_pending_clears_on_fill(
     # First flatten
     await order_manager._flatten_position(pos, reason="time_stop")
     assert "AAPL" in order_manager._flatten_pending
-    flatten_order_id = order_manager._flatten_pending["AAPL"]
+    flatten_order_id = order_manager._flatten_pending["AAPL"][0]
 
     # Simulate fill
     fill_event = OrderFilledEvent(
@@ -252,7 +252,7 @@ async def test_flatten_pending_clears_on_cancel(
 
     await order_manager._flatten_position(pos, reason="time_stop")
     assert "AAPL" in order_manager._flatten_pending
-    flatten_order_id = order_manager._flatten_pending["AAPL"]
+    flatten_order_id = order_manager._flatten_pending["AAPL"][0]
 
     # Simulate cancellation from broker
     cancel_event = OrderCancelledEvent(
@@ -279,7 +279,7 @@ async def test_flatten_pending_clears_on_reject(
     pos = positions[0]
 
     await order_manager._flatten_position(pos, reason="time_stop")
-    flatten_order_id = order_manager._flatten_pending["AAPL"]
+    flatten_order_id = order_manager._flatten_pending["AAPL"][0]
 
     # Simulate rejection (IBKR sends cancel event for rejections too)
     cancel_event = OrderCancelledEvent(
@@ -309,7 +309,7 @@ async def test_flatten_pending_clears_on_position_close(
     pos = positions[0]
 
     # Manually set a flatten-pending entry
-    order_manager._flatten_pending["AAPL"] = "some-order-id"
+    order_manager._flatten_pending["AAPL"] = ("some-order-id", 0.0, 0)
 
     # Close position via _close_position (simulating stop hit)
     await order_manager._close_position(pos, 148.0, ExitReason.STOP_LOSS)
@@ -335,7 +335,7 @@ async def test_flatten_pending_does_not_block_normal_stop_loss(
     stop_order_id = pos.stop_order_id
 
     # Even with flatten-pending set, stop fill should still work
-    order_manager._flatten_pending["AAPL"] = "some-pending-flatten"
+    order_manager._flatten_pending["AAPL"] = ("some-pending-flatten", 0.0, 0)
 
     # Simulate stop fill
     assert stop_order_id is not None
