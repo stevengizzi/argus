@@ -722,7 +722,7 @@ class ArgusSystem:
         exit_config = ExitManagementConfig(**exit_mgmt_yaml)
 
         # Scan strategy YAMLs for per-strategy exit_management overrides (S4a)
-        strategy_exit_overrides: dict[str, Any] = {}
+        strategy_exit_overrides: dict[str, dict[str, Any]] = {}
         strategies_dir = self._config_dir / "strategies"
         if strategies_dir.is_dir():
             for yaml_path in sorted(strategies_dir.glob("*.yaml")):
