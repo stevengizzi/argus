@@ -24,6 +24,7 @@ from zoneinfo import ZoneInfo
 
 from argus.core.config import (
     BrokerSource,
+    ExitManagementConfig,
     OrderManagerConfig,
     ReconciliationConfig,
     StartupConfig,
@@ -161,6 +162,7 @@ class OrderManager:
         auto_cleanup_orphans: bool = False,
         reconciliation_config: ReconciliationConfig | None = None,
         startup_config: StartupConfig | None = None,
+        exit_config: ExitManagementConfig | None = None,
     ) -> None:
         """Initialize the Order Manager.
 
@@ -177,6 +179,7 @@ class OrderManager:
                 reconciliation_config.auto_cleanup_orphans instead.
             reconciliation_config: Typed reconciliation settings (Sprint 27.95).
             startup_config: Startup behavior settings (Sprint 27.95 S4).
+            exit_config: Exit management config (trailing stops, escalation). Sprint 28.5.
         """
         self._event_bus = event_bus
         self._broker = broker
@@ -191,6 +194,8 @@ class OrderManager:
         )
         # Startup config (Sprint 27.95 S4)
         self._startup_config = startup_config or StartupConfig()
+        # Exit management config (trailing stops, escalation — Sprint 28.5)
+        self._exit_config = exit_config
 
         # Active positions: keyed by symbol (list to support multiple positions)
         self._managed_positions: dict[str, list[ManagedPosition]] = {}

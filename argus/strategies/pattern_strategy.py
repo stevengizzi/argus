@@ -340,6 +340,11 @@ class PatternBasedStrategy(BaseStrategy):
             )
             return None
 
+        # ATR(14) on 1-min bars per AMD-9 standardization
+        atr_value: float | None = None
+        if self._data_service is not None:
+            atr_value = await self._data_service.get_indicator(symbol, "atr_14")
+
         # Build signal
         signal = SignalEvent(
             strategy_id=self.strategy_id,
@@ -358,6 +363,7 @@ class PatternBasedStrategy(BaseStrategy):
             time_stop_seconds=time_stop_seconds,
             pattern_strength=score,
             signal_context=self._last_context,
+            atr_value=atr_value,
         )
 
         signal_metadata: dict[str, object] = {

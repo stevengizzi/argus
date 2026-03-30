@@ -120,6 +120,11 @@ class OrbScalpStrategy(OrbBaseStrategy):
             signal_context,
         )
 
+        # ATR(14) on 1-min bars per AMD-9 standardization
+        atr_value: float | None = None
+        if self._data_service is not None:
+            atr_value = await self._data_service.get_indicator(symbol, "atr_14")
+
         signal = SignalEvent(
             strategy_id=self.strategy_id,
             symbol=symbol,
@@ -135,6 +140,7 @@ class OrbScalpStrategy(OrbBaseStrategy):
             time_stop_seconds=self._scalp_config.max_hold_seconds,
             pattern_strength=pattern_strength,
             signal_context=signal_context,
+            atr_value=atr_value,
         )
 
         # Mark breakout as triggered

@@ -887,6 +887,7 @@ class RedToGreenStrategy(BaseStrategy):
             signal_context=signal_context,
             time_stop_seconds=self._r2g_config.time_stop_minutes * 60,
             rationale=f"R2G: {level_type.value} reclaim on {symbol}",
+            atr_value=None,  # No async IndicatorEngine access in sync _build_signal — trail falls back to percent mode
         )
 
         self.record_evaluation(

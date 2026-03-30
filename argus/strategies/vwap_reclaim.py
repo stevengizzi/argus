@@ -572,8 +572,13 @@ class VwapReclaimStrategy(BaseStrategy):
             )
             return None
 
+        # ATR(14) on 1-min bars per AMD-9 standardization
+        atr_value: float | None = None
+        if self._data_service is not None:
+            atr_value = await self._data_service.get_indicator(symbol, "atr_14")
+
         # All conditions pass — build signal
-        return self._build_signal(symbol, candle, state, vwap)
+        return self._build_signal(symbol, candle, state, vwap, atr_value)
 
     def _calculate_pattern_strength(
         self,
@@ -696,6 +701,7 @@ class VwapReclaimStrategy(BaseStrategy):
         candle: CandleEvent,
         state: VwapSymbolState,
         vwap: float,
+        atr_value: float | None = None,
     ) -> SignalEvent | None:
         """Build a SignalEvent for VWAP reclaim entry.
 
@@ -704,6 +710,7 @@ class VwapReclaimStrategy(BaseStrategy):
             candle: The reclaim candle.
             state: The symbol's state (contains pullback_low).
             vwap: The current VWAP value.
+            atr_value: ATR(14) value for exit management, or None if unavailable.
 
         Returns:
             SignalEvent with T1/T2 targets, or None if position size is 0.
@@ -738,6 +745,7 @@ class VwapReclaimStrategy(BaseStrategy):
             time_stop_seconds=self._vwap_config.time_stop_minutes * 60,
             pattern_strength=pattern_strength,
             signal_context=signal_context,
+            atr_value=atr_value,  # ATR(14) on 1-min bars per AMD-9 standardization
         )
 
         # Emit SIGNAL_GENERATED before state transition

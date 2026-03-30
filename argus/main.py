@@ -703,9 +703,23 @@ class ArgusSystem:
         # --- Phase 10: Order Manager ---
         logger.info("[10/12] Starting order manager...")
         order_manager_yaml = load_yaml_file(self._config_dir / "order_manager.yaml")
-        from argus.core.config import OrderManagerConfig
+        from argus.core.config import ExitManagementConfig, OrderManagerConfig
 
         order_manager_config = OrderManagerConfig(**order_manager_yaml)
+
+        # AMD-10: Warn if legacy trailing stop fields are active in order_manager.yaml
+        if order_manager_yaml.get("enable_trailing_stop") is True or (
+            order_manager_yaml.get("trailing_stop_atr_multiplier", 2.0) != 2.0
+        ):
+            logger.warning(
+                "Legacy trailing stop config detected (enable_trailing_stop / "
+                "trailing_stop_atr_multiplier). These fields are deprecated — use "
+                "config/exit_management.yaml instead. Legacy fields are ignored."
+            )
+
+        # Load exit management config (Sprint 28.5)
+        exit_mgmt_yaml = load_yaml_file(self._config_dir / "exit_management.yaml")
+        exit_config = ExitManagementConfig(**exit_mgmt_yaml)
 
         # Read reconciliation and startup configs from typed Pydantic models
         reconciliation_config = config.system.reconciliation
@@ -721,6 +735,7 @@ class ArgusSystem:
             broker_source=self._config.system.broker_source,
             reconciliation_config=reconciliation_config,
             startup_config=startup_config,
+            exit_config=exit_config,
         )
         await self._order_manager.start()
         # Reconstruct open positions from broker

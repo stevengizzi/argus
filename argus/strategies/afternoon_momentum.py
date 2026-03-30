@@ -1030,6 +1030,7 @@ class AfternoonMomentumStrategy(BaseStrategy):
             time_stop_seconds=time_stop_seconds,
             pattern_strength=pattern_strength,
             signal_context=signal_context,
+            atr_value=atr,  # ATR(14) on 1-min bars per AMD-9 standardization
         )
 
         # Emit SIGNAL_GENERATED before state transition
