@@ -20,9 +20,15 @@ from typing import TYPE_CHECKING
 from ulid import ULID
 from zoneinfo import ZoneInfo
 
+from argus.core.exit_math import (
+    compute_effective_stop,
+    compute_escalation_stop,
+    compute_trailing_stop,
+)
 from argus.core.fill_model import FillExitReason, ExitResult, evaluate_bar_exit
 
 if TYPE_CHECKING:
+    from argus.core.config import ExitManagementConfig
     from argus.core.events import CandleEvent, SignalEvent
     from argus.data.intraday_candle_store import IntradayCandleStore
 
@@ -142,6 +148,14 @@ class _OpenPosition:
     last_bar_time: datetime | None = None
     last_known_price: float | None = None
 
+    # Exit management fields (Sprint 28.5 S5)
+    high_watermark: float = 0.0  # Highest bar high since entry
+    trail_active: bool = False
+    trail_stop_price: float = 0.0
+    escalation_phase_index: int = -1
+    exit_config: ExitManagementConfig | None = None
+    atr_value: float | None = None
+
 
 class CounterfactualTracker:
     """Tracks rejected signals as shadow positions using bar-level fill model.
@@ -162,6 +176,7 @@ class CounterfactualTracker:
         candle_store: IntradayCandleStore | None = None,
         eod_close_time: str = "16:00",
         no_data_timeout_seconds: int = 300,
+        exit_configs: dict[str, ExitManagementConfig] | None = None,
     ) -> None:
         """Initialize the counterfactual tracker.
 
@@ -169,11 +184,14 @@ class CounterfactualTracker:
             candle_store: Optional IntradayCandleStore for backfill on track().
             eod_close_time: Market close time as HH:MM (ET).
             no_data_timeout_seconds: Timeout before marking position as EXPIRED.
+            exit_configs: Per-strategy ExitManagementConfig, keyed by strategy_id.
+                Used to set trail/escalation state on shadow positions.
         """
         self._candle_store = candle_store
         hours, minutes = eod_close_time.split(":")
         self._eod_close_time = dt_time(int(hours), int(minutes))
         self._no_data_timeout_seconds = no_data_timeout_seconds
+        self._exit_configs: dict[str, ExitManagementConfig] = exit_configs or {}
 
         self._open_positions: dict[str, _OpenPosition] = {}
         self._closed_positions: list[CounterfactualPosition] = []
@@ -225,6 +243,9 @@ class CounterfactualTracker:
         if metadata:
             signal_metadata.update(metadata)
 
+        # Look up exit config for this strategy
+        exit_cfg = self._exit_configs.get(signal.strategy_id)
+
         pos = _OpenPosition(
             position_id=position_id,
             symbol=signal.symbol,
@@ -245,7 +266,28 @@ class CounterfactualTracker:
             signal_metadata=signal_metadata,
             opened_at=now_et,
             last_known_price=signal.entry_price,
+            high_watermark=signal.entry_price,
+            exit_config=exit_cfg,
+            atr_value=signal.atr_value,
         )
+
+        # Set initial trail activation based on mode
+        if exit_cfg is not None and exit_cfg.trailing_stop.enabled:
+            if exit_cfg.trailing_stop.activation == "immediate":
+                pos.trail_active = True
+                trail_cfg = exit_cfg.trailing_stop
+                initial_trail = compute_trailing_stop(
+                    pos.high_watermark, pos.atr_value,
+                    trail_type=trail_cfg.type,
+                    atr_multiplier=trail_cfg.atr_multiplier,
+                    trail_percent=trail_cfg.percent,
+                    fixed_distance=trail_cfg.fixed_distance,
+                    min_trail_distance=trail_cfg.min_trail_distance,
+                    enabled=trail_cfg.enabled,
+                )
+                pos.trail_stop_price = (
+                    initial_trail if initial_trail is not None else 0.0
+                )
 
         self._open_positions[position_id] = pos
         if signal.symbol not in self._symbols_to_positions:
@@ -419,9 +461,12 @@ class CounterfactualTracker:
         bar_close: float,
         bar_timestamp: datetime,
     ) -> None:
-        """Process a single bar for an open position.
+        """Process a single bar for an open position using AMD-7 ordering.
 
-        Updates MAE/MFE and checks for exit via the shared fill model.
+        AMD-7 bar-processing order:
+        1. Compute effective stop from PRIOR bar's trail/escalation state
+        2. Evaluate exit with current bar
+        3. If not exited: update high_watermark, trail, escalation for next bar
 
         Args:
             position_id: ID of the open position.
@@ -448,6 +493,39 @@ class CounterfactualTracker:
         if favorable > pos.max_favorable_excursion:
             pos.max_favorable_excursion = favorable
 
+        # --- AMD-7 Step 1: Effective stop from PRIOR state ---
+        trail_stop: float | None = None
+        if pos.trail_active and pos.trail_stop_price > 0:
+            trail_stop = pos.trail_stop_price
+
+        escalation_stop: float | None = None
+        if (
+            pos.exit_config is not None
+            and pos.exit_config.escalation.enabled
+        ):
+            elapsed = (bar_timestamp - pos.opened_at).total_seconds()
+            phases = [
+                (p.elapsed_pct, p.stop_to.value)
+                for p in pos.exit_config.escalation.phases
+            ]
+            time_stop_secs = (
+                float(pos.time_stop_seconds)
+                if pos.time_stop_seconds is not None
+                else None
+            )
+            escalation_stop = compute_escalation_stop(
+                entry_price=pos.entry_price,
+                high_watermark=pos.high_watermark,
+                elapsed_seconds=elapsed,
+                time_stop_seconds=time_stop_secs,
+                phases=phases,
+                enabled=pos.exit_config.escalation.enabled,
+            )
+
+        effective_stop = compute_effective_stop(
+            pos.stop_price, trail_stop, escalation_stop,
+        )
+
         # Check time stop expiration
         time_stop_expired = False
         if pos.time_stop_seconds is not None:
@@ -455,18 +533,68 @@ class CounterfactualTracker:
             if elapsed >= pos.time_stop_seconds:
                 time_stop_expired = True
 
-        # Evaluate exit using shared fill model
+        # --- AMD-7 Step 2: Evaluate exit with current bar ---
         result = evaluate_bar_exit(
             bar_high=bar_high,
             bar_low=bar_low,
             bar_close=bar_close,
-            stop_price=pos.stop_price,
+            stop_price=effective_stop,
             target_price=pos.target_price,
             time_stop_expired=time_stop_expired,
         )
 
         if result is not None:
             self._close_position(pos, result.exit_reason, result.exit_price)
+            return
+
+        # --- AMD-7 Step 3: Update state for NEXT bar ---
+        pos.high_watermark = max(pos.high_watermark, bar_high)
+
+        if pos.exit_config is not None and pos.exit_config.trailing_stop.enabled:
+            # after_profit_pct activation
+            if (
+                not pos.trail_active
+                and pos.exit_config.trailing_stop.activation == "after_profit_pct"
+            ):
+                unrealized_pct = (
+                    (bar_high - pos.entry_price) / pos.entry_price
+                )
+                if unrealized_pct >= pos.exit_config.trailing_stop.activation_profit_pct:
+                    pos.trail_active = True
+
+            # Recompute trail stop for next bar
+            if pos.trail_active:
+                trail_cfg = pos.exit_config.trailing_stop
+                new_trail = compute_trailing_stop(
+                    pos.high_watermark, pos.atr_value,
+                    trail_type=trail_cfg.type,
+                    atr_multiplier=trail_cfg.atr_multiplier,
+                    trail_percent=trail_cfg.percent,
+                    fixed_distance=trail_cfg.fixed_distance,
+                    min_trail_distance=trail_cfg.min_trail_distance,
+                    enabled=trail_cfg.enabled,
+                )
+                if new_trail is not None:
+                    pos.trail_stop_price = max(
+                        pos.trail_stop_price, new_trail
+                    )
+
+        # Advance escalation phase index
+        if (
+            pos.exit_config is not None
+            and pos.exit_config.escalation.enabled
+        ):
+            elapsed = (bar_timestamp - pos.opened_at).total_seconds()
+            time_stop_secs = (
+                float(pos.time_stop_seconds)
+                if pos.time_stop_seconds is not None
+                else None
+            )
+            if time_stop_secs is not None and time_stop_secs > 0:
+                elapsed_pct = elapsed / time_stop_secs
+                for i, phase in enumerate(pos.exit_config.escalation.phases):
+                    if elapsed_pct >= phase.elapsed_pct:
+                        pos.escalation_phase_index = i
 
     def _close_position(
         self,

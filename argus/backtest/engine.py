@@ -17,7 +17,7 @@ import argparse
 import asyncio
 import json
 import logging
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
@@ -29,6 +29,11 @@ from argus.analytics.evaluation import (
     MultiObjectiveResult,
     RegimeMetrics,
     from_backtest_result,
+)
+from argus.core.exit_math import (
+    compute_effective_stop,
+    compute_escalation_stop,
+    compute_trailing_stop,
 )
 from argus.core.fill_model import FillExitReason, evaluate_bar_exit
 from argus.analytics.slippage_model import (
@@ -46,6 +51,7 @@ from argus.core.clock import FixedClock
 from argus.core.config import (
     AfternoonMomentumConfig,
     BullFlagConfig,
+    ExitManagementConfig,
     FlatTopBreakoutConfig,
     OrbBreakoutConfig,
     OrbScalpConfig,
@@ -55,6 +61,7 @@ from argus.core.config import (
     RegimeIntelligenceConfig,
     RiskConfig,
     VwapReclaimConfig,
+    deep_update,
     load_yaml_file,
 )
 from argus.core.events import CandleEvent, OrderFilledEvent
@@ -78,6 +85,43 @@ from argus.strategies.vwap_reclaim import VwapReclaimStrategy
 logger = logging.getLogger(__name__)
 
 ET = ZoneInfo("America/New_York")
+
+
+@dataclass
+class _BacktestPosition:
+    """Trail/escalation state tracked per open position in BacktestEngine.
+
+    Parallel to ManagedPosition's trail fields but maintained by the engine
+    for AMD-7 bar-level processing. Keyed by symbol in the engine's
+    ``_bt_positions`` dict.
+
+    Attributes:
+        symbol: Stock symbol.
+        strategy_id: Strategy that generated the signal.
+        entry_price: Entry fill price.
+        entry_time: Entry fill timestamp.
+        stop_price: Original stop price from the signal.
+        high_watermark: Highest bar high since entry.
+        trail_active: Whether trailing stop is currently active.
+        trail_stop_price: Current computed trailing stop price.
+        escalation_phase_index: Index of last triggered escalation phase.
+        exit_config: Resolved ExitManagementConfig for this position.
+        atr_value: ATR captured from signal at entry.
+        t1_filled: Whether T1 target has been hit.
+    """
+
+    symbol: str
+    strategy_id: str
+    entry_price: float
+    entry_time: datetime
+    stop_price: float
+    high_watermark: float
+    trail_active: bool = False
+    trail_stop_price: float = 0.0
+    escalation_phase_index: int = -1
+    exit_config: ExitManagementConfig | None = None
+    atr_value: float | None = None
+    t1_filled: bool = False
 
 
 class BacktestEngine:
@@ -142,6 +186,13 @@ class BacktestEngine:
                     config.slippage_model_path,
                     exc,
                 )
+
+        # Trail/escalation state per open position (AMD-7 bar processing)
+        self._bt_positions: dict[str, _BacktestPosition] = {}
+
+        # Exit management config (loaded in _setup, passed to OrderManager)
+        self._exit_config: ExitManagementConfig | None = None
+        self._strategy_exit_overrides: dict[str, dict[str, Any]] = {}
 
         # Bar data and trading days populated by _load_data()
         self._bar_data: dict[str, pd.DataFrame] = {}
@@ -279,6 +330,11 @@ class BacktestEngine:
         risk_config = self._load_risk_config(config_dir)
         order_manager_config = self._load_order_manager_config(config_dir)
 
+        # Load exit management config (Sprint 28.5 S5)
+        self._exit_config, self._strategy_exit_overrides = (
+            self._load_exit_management_config(config_dir)
+        )
+
         # Initialize RiskManager
         self._risk_manager = RiskManager(
             config=risk_config,
@@ -295,6 +351,8 @@ class BacktestEngine:
             clock=self._clock,
             config=order_manager_config,
             trade_logger=self._trade_logger,
+            exit_config=self._exit_config,
+            strategy_exit_overrides=self._strategy_exit_overrides,
         )
         await self._order_manager.start()
 
@@ -482,6 +540,7 @@ class BacktestEngine:
         await self._risk_manager.reset_daily_state()
         self._order_manager.reset_daily_state()
         self._data_service.reset_daily_state()
+        self._bt_positions.clear()  # Trail state is intraday only
 
         # c. Set strategy watchlist
         self._strategy.set_watchlist(watchlist)
@@ -544,6 +603,134 @@ class BacktestEngine:
 
     # --- Bar-level fill model ---
 
+    def _sync_bt_position(
+        self,
+        symbol: str,
+        bar_timestamp: datetime,
+    ) -> _BacktestPosition | None:
+        """Ensure a _BacktestPosition exists for a symbol with a managed position.
+
+        Checks OrderManager for managed positions on this symbol. If a
+        _BacktestPosition doesn't exist yet, creates one from the managed
+        position's data. If the managed position is fully closed, removes
+        the _BacktestPosition.
+
+        Args:
+            symbol: The stock symbol.
+            bar_timestamp: Current bar timestamp (used as fallback entry_time).
+
+        Returns:
+            The _BacktestPosition, or None if no active managed position.
+        """
+        if self._order_manager is None:
+            return None
+
+        managed_dict = self._order_manager.get_managed_positions()
+        positions = managed_dict.get(symbol, [])
+        active = [p for p in positions if not p.is_fully_closed]
+
+        if not active:
+            self._bt_positions.pop(symbol, None)
+            return None
+
+        # Use first active position (single-strategy backtest)
+        managed = active[0]
+
+        if symbol not in self._bt_positions:
+            exit_config = self._get_exit_config(managed.strategy_id)
+            bt_pos = _BacktestPosition(
+                symbol=symbol,
+                strategy_id=managed.strategy_id,
+                entry_price=managed.entry_price,
+                entry_time=managed.entry_time,
+                stop_price=managed.original_stop_price,
+                high_watermark=managed.high_watermark,
+                exit_config=exit_config,
+                atr_value=managed.atr_value,
+                t1_filled=managed.t1_filled,
+            )
+
+            # Immediate trail activation
+            if (
+                exit_config.trailing_stop.enabled
+                and exit_config.trailing_stop.activation == "immediate"
+            ):
+                bt_pos.trail_active = True
+                trail_cfg = exit_config.trailing_stop
+                initial_trail = compute_trailing_stop(
+                    bt_pos.high_watermark, bt_pos.atr_value,
+                    trail_type=trail_cfg.type,
+                    atr_multiplier=trail_cfg.atr_multiplier,
+                    trail_percent=trail_cfg.percent,
+                    fixed_distance=trail_cfg.fixed_distance,
+                    min_trail_distance=trail_cfg.min_trail_distance,
+                    enabled=trail_cfg.enabled,
+                )
+                bt_pos.trail_stop_price = (
+                    initial_trail if initial_trail is not None else 0.0
+                )
+
+            self._bt_positions[symbol] = bt_pos
+
+        bt_pos = self._bt_positions[symbol]
+
+        # Sync T1 filled from managed position (for after_t1 activation)
+        if managed.t1_filled and not bt_pos.t1_filled:
+            bt_pos.t1_filled = True
+            if (
+                bt_pos.exit_config is not None
+                and bt_pos.exit_config.trailing_stop.enabled
+                and bt_pos.exit_config.trailing_stop.activation == "after_t1"
+                and not bt_pos.trail_active
+            ):
+                bt_pos.trail_active = True
+
+        return bt_pos
+
+    def _compute_escalation_for_position(
+        self,
+        bt_pos: _BacktestPosition,
+        bar_timestamp: datetime,
+    ) -> float | None:
+        """Compute escalation stop for a _BacktestPosition.
+
+        Args:
+            bt_pos: The backtest position with escalation state.
+            bar_timestamp: Current bar timestamp.
+
+        Returns:
+            Escalation stop price, or None if not applicable.
+        """
+        if bt_pos.exit_config is None or not bt_pos.exit_config.escalation.enabled:
+            return None
+
+        elapsed = (bar_timestamp - bt_pos.entry_time).total_seconds()
+        phases = [
+            (p.elapsed_pct, p.stop_to.value)
+            for p in bt_pos.exit_config.escalation.phases
+        ]
+
+        # Use ManagedPosition's time_stop_seconds if available
+        managed_dict = (
+            self._order_manager.get_managed_positions()
+            if self._order_manager else {}
+        )
+        managed_list = managed_dict.get(bt_pos.symbol, [])
+        time_stop_seconds: float | None = None
+        for m in managed_list:
+            if not m.is_fully_closed and m.time_stop_seconds is not None:
+                time_stop_seconds = float(m.time_stop_seconds)
+                break
+
+        return compute_escalation_stop(
+            entry_price=bt_pos.entry_price,
+            high_watermark=bt_pos.high_watermark,
+            elapsed_seconds=elapsed,
+            time_stop_seconds=time_stop_seconds,
+            phases=phases,
+            enabled=bt_pos.exit_config.escalation.enabled,
+        )
+
     async def _check_bracket_orders(
         self,
         symbol: str,
@@ -554,13 +741,13 @@ class BacktestEngine:
     ) -> None:
         """Check pending bracket orders against a bar's OHLC.
 
-        Implements worst-case-for-longs priority:
-        1. Stop loss — bar.low <= stop_price → fill at stop_price
-        2. Target — bar.high >= target_price → fill at target_price
-        3. Time stop — elapsed >= time_stop_seconds → fill at bar.close
-           (but use stop_price if bar.low also hits stop)
+        Implements AMD-7 bar-processing order:
+        1. Compute effective stop from PRIOR bar's trail/escalation state
+        2. Evaluate exit with current bar
+        3. If not exited: update high_watermark, trail, escalation for next bar
 
-        When both stop and target trigger on the same bar, stop wins.
+        When both stop and target trigger on the same bar, stop wins
+        (worst-case-for-longs priority).
 
         Args:
             symbol: The bar's symbol.
@@ -571,6 +758,18 @@ class BacktestEngine:
         """
         if self._broker is None or self._event_bus is None:
             return
+
+        # --- AMD-7 Step 1: Effective stop from PRIOR state ---
+        bt_pos = self._sync_bt_position(symbol, bar_timestamp)
+        effective_trail_stop: float | None = None
+        escalation_stop: float | None = None
+
+        if bt_pos is not None:
+            if bt_pos.trail_active and bt_pos.trail_stop_price > 0:
+                effective_trail_stop = bt_pos.trail_stop_price
+            escalation_stop = self._compute_escalation_for_position(
+                bt_pos, bar_timestamp
+            )
 
         # Collect pending brackets for this symbol
         stop_orders = [
@@ -585,30 +784,54 @@ class BacktestEngine:
             key=lambda b: b.trigger_price,
         )
 
+        # --- AMD-7 Step 2: Evaluate exit with current bar ---
+        # Compute effective stop: max(original bracket stop, trail, escalation)
+        bracket_stop = (
+            stop_orders[0].trigger_price if stop_orders else float("-inf")
+        )
+        effective_stop = compute_effective_stop(
+            bracket_stop if bracket_stop != float("-inf") else 0.0,
+            effective_trail_stop,
+            escalation_stop,
+        )
+
         # Use shared fill model for stop-vs-target priority decision.
-        # evaluate_bar_exit() encodes worst-case-for-longs priority:
-        # stop > target > time_stop. We check Priority 1 (stop) only
-        # when stop orders exist, then fall through to target iteration.
-        if stop_orders:
+        if stop_orders or effective_trail_stop is not None or escalation_stop is not None:
             first_target = (
                 target_orders[0].trigger_price if target_orders else float("inf")
             )
-            fill_result = evaluate_bar_exit(
-                bar_high=bar_high,
-                bar_low=bar_low,
-                bar_close=bar_close,
-                stop_price=stop_orders[0].trigger_price,
-                target_price=first_target,
-                time_stop_expired=False,
-            )
 
-            # Priority 1: Stop loss — shared model says STOPPED_OUT
-            if fill_result and fill_result.exit_reason == FillExitReason.STOPPED_OUT:
-                results = await self._broker.simulate_price_update(
-                    symbol, stop_orders[0].trigger_price
+            # Only evaluate if we have a meaningful stop price
+            if effective_stop > 0:
+                fill_result = evaluate_bar_exit(
+                    bar_high=bar_high,
+                    bar_low=bar_low,
+                    bar_close=bar_close,
+                    stop_price=effective_stop,
+                    target_price=first_target,
+                    time_stop_expired=False,
                 )
-                await self._publish_fill_events(results)
-                return  # Position closed
+
+                # Priority 1: Stop loss — shared model says STOPPED_OUT
+                if (
+                    fill_result
+                    and fill_result.exit_reason == FillExitReason.STOPPED_OUT
+                ):
+                    # Trail/escalation stop may differ from bracket stop.
+                    # If trail/escalation triggered (effective > bracket), close
+                    # at effective stop price via OrderManager flatten.
+                    if effective_stop > bracket_stop and bt_pos is not None:
+                        self._broker.set_price(symbol, effective_stop)
+                        await self._order_manager.close_position(
+                            symbol, reason="trail_stop"
+                        )
+                    else:
+                        results = await self._broker.simulate_price_update(
+                            symbol, stop_orders[0].trigger_price
+                        )
+                        await self._publish_fill_events(results)
+                    self._bt_positions.pop(symbol, None)
+                    return  # Position closed
 
         # Priority 2: Target(s) — process lowest first (T1 before T2)
         for target in target_orders:
@@ -625,10 +848,68 @@ class BacktestEngine:
                     )
                     await self._publish_fill_events(results)
 
+                    # after_t1 activation: re-sync to detect T1 fill
+                    self._sync_bt_position(symbol, bar_timestamp)
+
         # Priority 3: Time stop
         await self._check_time_stop(
             symbol, bar_low, bar_close, bar_timestamp
         )
+
+        # --- AMD-7 Step 3: Update state for NEXT bar ---
+        bt_pos = self._bt_positions.get(symbol)
+        if bt_pos is not None and bt_pos.exit_config is not None:
+            # Update high watermark from current bar's high
+            bt_pos.high_watermark = max(bt_pos.high_watermark, bar_high)
+
+            # after_profit_pct activation check
+            if (
+                not bt_pos.trail_active
+                and bt_pos.exit_config.trailing_stop.enabled
+                and bt_pos.exit_config.trailing_stop.activation == "after_profit_pct"
+            ):
+                unrealized_pct = (
+                    (bar_high - bt_pos.entry_price) / bt_pos.entry_price
+                )
+                if unrealized_pct >= bt_pos.exit_config.trailing_stop.activation_profit_pct:
+                    bt_pos.trail_active = True
+
+            # Recompute trail stop for next bar
+            if bt_pos.trail_active:
+                trail_cfg = bt_pos.exit_config.trailing_stop
+                new_trail = compute_trailing_stop(
+                    bt_pos.high_watermark, bt_pos.atr_value,
+                    trail_type=trail_cfg.type,
+                    atr_multiplier=trail_cfg.atr_multiplier,
+                    trail_percent=trail_cfg.percent,
+                    fixed_distance=trail_cfg.fixed_distance,
+                    min_trail_distance=trail_cfg.min_trail_distance,
+                    enabled=trail_cfg.enabled,
+                )
+                if new_trail is not None:
+                    bt_pos.trail_stop_price = max(
+                        bt_pos.trail_stop_price, new_trail
+                    )
+
+            # Advance escalation phase index
+            if bt_pos.exit_config.escalation.enabled:
+                elapsed = (bar_timestamp - bt_pos.entry_time).total_seconds()
+                managed_dict = (
+                    self._order_manager.get_managed_positions()
+                    if self._order_manager else {}
+                )
+                managed_list = managed_dict.get(symbol, [])
+                ts: float | None = None
+                for m in managed_list:
+                    if not m.is_fully_closed and m.time_stop_seconds is not None:
+                        ts = float(m.time_stop_seconds)
+                        break
+                if ts is not None and ts > 0:
+                    elapsed_pct = elapsed / ts
+                    phases = bt_pos.exit_config.escalation.phases
+                    for i, phase in enumerate(phases):
+                        if elapsed_pct >= phase.elapsed_pct:
+                            bt_pos.escalation_phase_index = i
 
     async def _check_time_stop(
         self,
@@ -1044,6 +1325,60 @@ class BacktestEngine:
             data = load_yaml_file(om_file)
             return OrderManagerConfig(**data)
         return OrderManagerConfig()
+
+    def _load_exit_management_config(
+        self, config_dir: Path,
+    ) -> tuple[ExitManagementConfig | None, dict[str, dict[str, Any]]]:
+        """Load exit management config from YAML (Sprint 28.5 S5).
+
+        Loads global exit_management.yaml and scans strategy YAMLs for
+        per-strategy exit_management overrides (same pattern as main.py).
+
+        Args:
+            config_dir: Path to the config directory.
+
+        Returns:
+            Tuple of (global ExitManagementConfig, per-strategy overrides dict).
+        """
+        exit_file = config_dir / "exit_management.yaml"
+        if exit_file.exists():
+            data = load_yaml_file(exit_file)
+            exit_config = ExitManagementConfig(**data)
+        else:
+            exit_config = ExitManagementConfig()
+
+        strategy_overrides: dict[str, dict[str, Any]] = {}
+        strategies_dir = config_dir / "strategies"
+        if strategies_dir.is_dir():
+            for yaml_path in sorted(strategies_dir.glob("*.yaml")):
+                strat_yaml = load_yaml_file(yaml_path)
+                if "exit_management" in strat_yaml and "strategy_id" in strat_yaml:
+                    strategy_overrides[strat_yaml["strategy_id"]] = strat_yaml[
+                        "exit_management"
+                    ]
+
+        return exit_config, strategy_overrides
+
+    def _get_exit_config(self, strategy_id: str) -> ExitManagementConfig:
+        """Return the resolved ExitManagementConfig for a strategy.
+
+        Deep-merges per-strategy override into global config (AMD-1).
+
+        Args:
+            strategy_id: The strategy identifier to look up.
+
+        Returns:
+            The resolved ExitManagementConfig.
+        """
+        global_config = self._exit_config or ExitManagementConfig()
+
+        override = self._strategy_exit_overrides.get(strategy_id)
+        if override:
+            base_dict = global_config.model_dump()
+            merged_dict = deep_update(base_dict, override)
+            return ExitManagementConfig(**merged_dict)
+
+        return global_config
 
     # --- Regime tagging (Sprint 27.5 S2) ---
 
