@@ -4,7 +4,7 @@
 
 trailing_stop:
   # Whether trailing stop is active (strategies must also opt-in)
-  enabled: false
+  enabled: true
 
   # Trailing stop method: "atr" | "percent" | "fixed"
   #   atr     — trail distance = atr_value * atr_multiplier
