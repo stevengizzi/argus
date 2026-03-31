@@ -7,7 +7,12 @@ Pure detection logic with no operating window or state management concerns.
 
 from __future__ import annotations
 
-from argus.strategies.patterns.base import CandleBar, PatternDetection, PatternModule
+from argus.strategies.patterns.base import (
+    CandleBar,
+    PatternDetection,
+    PatternModule,
+    PatternParam,
+)
 
 
 class FlatTopBreakoutPattern(PatternModule):
@@ -29,6 +34,8 @@ class FlatTopBreakoutPattern(PatternModule):
         breakout_volume_multiplier: Breakout volume vs avg consolidation volume.
         target_1_r: First target as R-multiple of risk.
         target_2_r: Second target as R-multiple of risk.
+        min_score_threshold: Minimum detection confidence to emit signal.
+        max_range_narrowing: Maximum range narrowing ratio for consolidation.
     """
 
     def __init__(
@@ -39,6 +46,8 @@ class FlatTopBreakoutPattern(PatternModule):
         breakout_volume_multiplier: float = 1.3,
         target_1_r: float = 1.0,
         target_2_r: float = 2.0,
+        min_score_threshold: float = 0.0,
+        max_range_narrowing: float = 1.0,
     ) -> None:
         self._resistance_touches = resistance_touches
         self._resistance_tolerance_pct = resistance_tolerance_pct
@@ -46,6 +55,8 @@ class FlatTopBreakoutPattern(PatternModule):
         self._breakout_volume_multiplier = breakout_volume_multiplier
         self._target_1_r = target_1_r
         self._target_2_r = target_2_r
+        self._min_score_threshold = min_score_threshold
+        self._max_range_narrowing = max_range_narrowing
 
     @property
     def name(self) -> str:
@@ -303,17 +314,91 @@ class FlatTopBreakoutPattern(PatternModule):
         total = touch_score + consol_score + vol_score + bo_score
         return max(0.0, min(100.0, total))
 
-    def get_default_params(self) -> dict[str, object]:
-        """Return default parameter values for Flat-Top Breakout pattern.
+    def get_default_params(self) -> list[PatternParam]:
+        """Return structured parameter metadata for Flat-Top Breakout pattern.
 
         Returns:
-            Dictionary of parameter names to default values.
+            List of PatternParam describing each tunable parameter.
         """
-        return {
-            "resistance_touches": self._resistance_touches,
-            "resistance_tolerance_pct": self._resistance_tolerance_pct,
-            "consolidation_min_bars": self._consolidation_min_bars,
-            "breakout_volume_multiplier": self._breakout_volume_multiplier,
-            "target_1_r": self._target_1_r,
-            "target_2_r": self._target_2_r,
-        }
+        return [
+            PatternParam(
+                name="resistance_touches",
+                param_type=int,
+                default=self._resistance_touches,
+                min_value=2,
+                max_value=6,
+                step=1,
+                description="Minimum distinct candles touching resistance",
+                category="detection",
+            ),
+            PatternParam(
+                name="resistance_tolerance_pct",
+                param_type=float,
+                default=self._resistance_tolerance_pct,
+                min_value=0.001,
+                max_value=0.004,
+                step=0.001,
+                description="Max spread of highs for resistance cluster",
+                category="detection",
+            ),
+            PatternParam(
+                name="consolidation_min_bars",
+                param_type=int,
+                default=self._consolidation_min_bars,
+                min_value=5,
+                max_value=25,
+                step=5,
+                description="Minimum bars of consolidation below resistance",
+                category="detection",
+            ),
+            PatternParam(
+                name="breakout_volume_multiplier",
+                param_type=float,
+                default=self._breakout_volume_multiplier,
+                min_value=1.0,
+                max_value=2.0,
+                step=0.2,
+                description="Required breakout volume vs avg consolidation volume",
+                category="filtering",
+            ),
+            PatternParam(
+                name="target_1_r",
+                param_type=float,
+                default=self._target_1_r,
+                min_value=0.5,
+                max_value=2.0,
+                step=0.5,
+                description="First target as R-multiple of risk",
+                category="scoring",
+            ),
+            PatternParam(
+                name="target_2_r",
+                param_type=float,
+                default=self._target_2_r,
+                min_value=1.0,
+                max_value=4.0,
+                step=1.0,
+                description="Second target as R-multiple of risk",
+                category="scoring",
+            ),
+            PatternParam(
+                name="min_score_threshold",
+                param_type=float,
+                default=self._min_score_threshold,
+                min_value=0.0,
+                max_value=40.0,
+                step=10.0,
+                description="Minimum confidence score to emit detection",
+                category="filtering",
+            ),
+            PatternParam(
+                name="max_range_narrowing",
+                param_type=float,
+                default=self._max_range_narrowing,
+                min_value=0.6,
+                max_value=1.2,
+                step=0.2,
+                description="Maximum range narrowing ratio for valid consolidation",
+                category="filtering",
+            ),
+        ]

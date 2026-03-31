@@ -261,8 +261,9 @@ class TestPatternStrategyAtrEmission:
             def score(self, detection: PatternDetection) -> float:
                 return 75.0
 
-            def get_default_params(self) -> dict[str, object]:
-                return {}
+            def get_default_params(self) -> list["PatternParam"]:
+                from argus.strategies.patterns.base import PatternParam
+                return []
 
         config = StrategyConfig(
             strategy_id="pattern_stub",
@@ -325,8 +326,9 @@ class TestPatternStrategyAtrEmission:
             def score(self, detection: PatternDetection) -> float:
                 return 75.0
 
-            def get_default_params(self) -> dict[str, object]:
-                return {}
+            def get_default_params(self) -> list["PatternParam"]:
+                from argus.strategies.patterns.base import PatternParam
+                return []
 
         config = StrategyConfig(
             strategy_id="pattern_stub",

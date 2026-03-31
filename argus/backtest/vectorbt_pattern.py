@@ -37,7 +37,12 @@ from argus.backtest.walk_forward import (
     WalkForwardConfig,
     compute_parameter_stability,
 )
-from argus.strategies.patterns.base import CandleBar, PatternDetection, PatternModule
+from argus.strategies.patterns.base import (
+    CandleBar,
+    PatternDetection,
+    PatternModule,
+    PatternParam,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -354,6 +359,21 @@ def _compute_sharpe(
     return (mean_r / std_r) * (annualization_factor**0.5)
 
 
+def params_to_dict(params: list[PatternParam]) -> dict[str, object]:
+    """Extract default values from a list of PatternParam as a flat dict.
+
+    Converts the structured PatternParam list back to the legacy
+    ``{name: default}`` format for code that expects the old dict interface.
+
+    Args:
+        params: List of PatternParam objects.
+
+    Returns:
+        Dictionary mapping parameter names to their default values.
+    """
+    return {p.name: p.default for p in params}
+
+
 class PatternBacktester:
     """Generic backtester for any PatternModule implementation.
 
@@ -466,44 +486,56 @@ class PatternBacktester:
         return candidates
 
     def build_parameter_grid(self) -> list[dict[str, object]]:
-        """Build a parameter grid from the pattern's default parameters.
+        """Build a parameter grid from the pattern's PatternParam metadata.
 
-        Creates variations at ±20% and ±40% around each numeric default,
-        then computes the Cartesian product of all parameter variations.
+        For each PatternParam with numeric type and complete range metadata
+        (min_value, max_value, step), generates values from min to max
+        stepping by step. The default value is always included in the grid.
 
-        Integer parameters are rounded and deduplicated.
-        Non-numeric parameters are kept at their default value.
+        For bool params, both True and False are included.
+        For params with incomplete range metadata, only the default is used.
 
         Returns:
             List of parameter dicts, each a unique combination.
         """
-        defaults = self._pattern.get_default_params()
+        param_list = self._pattern.get_default_params()
 
         per_param_values: dict[str, list[object]] = {}
 
-        for name, default_val in defaults.items():
-            if isinstance(default_val, int):
-                base = float(default_val)
-                raw_values = sorted({
-                    max(1, round(base * 0.6)),
-                    max(1, round(base * 0.8)),
-                    default_val,
-                    round(base * 1.2),
-                    round(base * 1.4),
-                })
-                per_param_values[name] = list(raw_values)
-            elif isinstance(default_val, float):
-                values = sorted({
-                    round(default_val * 0.6, 6),
-                    round(default_val * 0.8, 6),
-                    default_val,
-                    round(default_val * 1.2, 6),
-                    round(default_val * 1.4, 6),
-                })
-                per_param_values[name] = list(values)
+        for param in param_list:
+            if param.param_type is bool:
+                per_param_values[param.name] = [True, False]
+            elif (
+                param.param_type in (int, float)
+                and param.min_value is not None
+                and param.max_value is not None
+                and param.step is not None
+                and param.step > 0
+            ):
+                values: list[float] = []
+                current = param.min_value
+                while current <= param.max_value + param.step * 0.01:
+                    values.append(current)
+                    current += param.step
+
+                # Ensure default is included
+                default_val = float(param.default)
+                if default_val not in values:
+                    values.append(default_val)
+                    values.sort()
+
+                if param.param_type is int:
+                    int_values: list[object] = list(
+                        dict.fromkeys(round(v) for v in values)
+                    )
+                    per_param_values[param.name] = int_values
+                else:
+                    rounded: list[object] = list(
+                        dict.fromkeys(round(v, 6) for v in values)
+                    )
+                    per_param_values[param.name] = rounded
             else:
-                # Non-numeric: keep default only
-                per_param_values[name] = [default_val]
+                per_param_values[param.name] = [param.default]
 
         param_names = list(per_param_values.keys())
         param_value_lists = [per_param_values[n] for n in param_names]

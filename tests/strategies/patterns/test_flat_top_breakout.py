@@ -313,7 +313,7 @@ def test_config_yaml_key_validation() -> None:
 
 
 def test_get_default_params() -> None:
-    """get_default_params returns dict with expected keys."""
+    """get_default_params returns list[PatternParam] with expected values."""
     pattern = FlatTopBreakoutPattern(
         resistance_touches=4,
         resistance_tolerance_pct=0.003,
@@ -325,13 +325,14 @@ def test_get_default_params() -> None:
 
     params = pattern.get_default_params()
 
-    assert isinstance(params, dict)
-    assert params["resistance_touches"] == 4
-    assert params["resistance_tolerance_pct"] == 0.003
-    assert params["consolidation_min_bars"] == 15
-    assert params["breakout_volume_multiplier"] == 1.5
-    assert params["target_1_r"] == 1.0
-    assert params["target_2_r"] == 2.5
+    assert isinstance(params, list)
+    defaults = {p.name: p.default for p in params}
+    assert defaults["resistance_touches"] == 4
+    assert defaults["resistance_tolerance_pct"] == 0.003
+    assert defaults["consolidation_min_bars"] == 15
+    assert defaults["breakout_volume_multiplier"] == 1.5
+    assert defaults["target_1_r"] == 1.0
+    assert defaults["target_2_r"] == 2.5
 
 
 def test_breakout_below_resistance_rejected() -> None:

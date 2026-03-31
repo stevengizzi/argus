@@ -130,8 +130,15 @@ class MockPattern(PatternModule):
     def score(self, detection: PatternDetection) -> float:
         return self._score_value
 
-    def get_default_params(self) -> dict[str, object]:
-        return {"lookback": self._lookback}
+    def get_default_params(self) -> list["PatternParam"]:
+        from argus.strategies.patterns.base import PatternParam
+        return [
+            PatternParam(
+                name="lookback", param_type=int, default=self._lookback,
+                min_value=5, max_value=50, step=5,
+                description="Lookback window", category="detection",
+            ),
+        ]
 
 
 BASE_TIME = datetime(2026, 3, 23, 14, 0, 0, tzinfo=UTC)  # 10:00 ET

@@ -7,7 +7,12 @@ logic with no operating window or state management concerns.
 
 from __future__ import annotations
 
-from argus.strategies.patterns.base import CandleBar, PatternDetection, PatternModule
+from argus.strategies.patterns.base import (
+    CandleBar,
+    PatternDetection,
+    PatternModule,
+    PatternParam,
+)
 
 
 class BullFlagPattern(PatternModule):
@@ -24,6 +29,9 @@ class BullFlagPattern(PatternModule):
         flag_max_bars: Maximum candles in flag consolidation.
         flag_max_retrace_pct: Max retracement of pole height (e.g. 0.50 = 50%).
         breakout_volume_multiplier: Breakout volume vs avg flag volume.
+        min_score_threshold: Minimum detection confidence to emit signal.
+        pole_strength_cap_pct: Pole move % that earns maximum score credit.
+        breakout_excess_cap_pct: Breakout excess % that earns maximum score credit.
     """
 
     def __init__(
@@ -33,12 +41,18 @@ class BullFlagPattern(PatternModule):
         flag_max_bars: int = 20,
         flag_max_retrace_pct: float = 0.50,
         breakout_volume_multiplier: float = 1.3,
+        min_score_threshold: float = 0.0,
+        pole_strength_cap_pct: float = 0.10,
+        breakout_excess_cap_pct: float = 0.02,
     ) -> None:
         self._pole_min_bars = pole_min_bars
         self._pole_min_move_pct = pole_min_move_pct
         self._flag_max_bars = flag_max_bars
         self._flag_max_retrace_pct = flag_max_retrace_pct
         self._breakout_volume_multiplier = breakout_volume_multiplier
+        self._min_score_threshold = min_score_threshold
+        self._pole_strength_cap_pct = pole_strength_cap_pct
+        self._breakout_excess_cap_pct = breakout_excess_cap_pct
 
     @property
     def name(self) -> str:
@@ -262,16 +276,91 @@ class BullFlagPattern(PatternModule):
         total = pole_score + tightness_score + vol_score + bo_score
         return max(0.0, min(100.0, total))
 
-    def get_default_params(self) -> dict[str, object]:
-        """Return default parameter values for Bull Flag pattern.
+    def get_default_params(self) -> list[PatternParam]:
+        """Return structured parameter metadata for Bull Flag pattern.
 
         Returns:
-            Dictionary of parameter names to default values.
+            List of PatternParam describing each tunable parameter.
         """
-        return {
-            "pole_min_bars": self._pole_min_bars,
-            "pole_min_move_pct": self._pole_min_move_pct,
-            "flag_max_bars": self._flag_max_bars,
-            "flag_max_retrace_pct": self._flag_max_retrace_pct,
-            "breakout_volume_multiplier": self._breakout_volume_multiplier,
-        }
+        return [
+            PatternParam(
+                name="pole_min_bars",
+                param_type=int,
+                default=self._pole_min_bars,
+                min_value=3,
+                max_value=10,
+                step=2,
+                description="Minimum candles for pole formation",
+                category="detection",
+            ),
+            PatternParam(
+                name="pole_min_move_pct",
+                param_type=float,
+                default=self._pole_min_move_pct,
+                min_value=0.01,
+                max_value=0.08,
+                step=0.02,
+                description="Minimum pole move as fraction of price",
+                category="detection",
+            ),
+            PatternParam(
+                name="flag_max_bars",
+                param_type=int,
+                default=self._flag_max_bars,
+                min_value=10,
+                max_value=30,
+                step=5,
+                description="Maximum candles in flag consolidation",
+                category="detection",
+            ),
+            PatternParam(
+                name="flag_max_retrace_pct",
+                param_type=float,
+                default=self._flag_max_retrace_pct,
+                min_value=0.30,
+                max_value=0.70,
+                step=0.10,
+                description="Max retracement of pole height as fraction",
+                category="detection",
+            ),
+            PatternParam(
+                name="breakout_volume_multiplier",
+                param_type=float,
+                default=self._breakout_volume_multiplier,
+                min_value=1.0,
+                max_value=2.0,
+                step=0.2,
+                description="Required breakout volume vs avg flag volume",
+                category="filtering",
+            ),
+            PatternParam(
+                name="min_score_threshold",
+                param_type=float,
+                default=self._min_score_threshold,
+                min_value=0.0,
+                max_value=40.0,
+                step=10.0,
+                description="Minimum confidence score to emit detection",
+                category="filtering",
+            ),
+            PatternParam(
+                name="pole_strength_cap_pct",
+                param_type=float,
+                default=self._pole_strength_cap_pct,
+                min_value=0.05,
+                max_value=0.20,
+                step=0.05,
+                description="Pole move pct that earns maximum score credit",
+                category="scoring",
+            ),
+            PatternParam(
+                name="breakout_excess_cap_pct",
+                param_type=float,
+                default=self._breakout_excess_cap_pct,
+                min_value=0.01,
+                max_value=0.04,
+                step=0.01,
+                description="Breakout excess pct that earns maximum score credit",
+                category="scoring",
+            ),
+        ]

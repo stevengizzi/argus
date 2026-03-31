@@ -242,8 +242,9 @@ class _StubPattern(PatternModule):
     def score(self, detection: PatternDetection, bars: list[CandleBar]) -> float:
         return 50.0
 
-    def get_default_params(self) -> dict[str, object]:
-        return {}
+    def get_default_params(self) -> list["PatternParam"]:
+        from argus.strategies.patterns.base import PatternParam
+        return []
 
 
 def _make_pattern_strategy(
