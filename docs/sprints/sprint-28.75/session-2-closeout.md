@@ -51,7 +51,7 @@
 - Tests run: 3,966 pytest + 688 Vitest = 4,654 total
 - Tests passed: 3,966 pytest + 687 Vitest = 4,653
 - Tests failed: 0 pytest + 1 Vitest (pre-existing GoalTracker.test.tsx)
-- New tests added: 3 pytest + 8 Vitest = 11
+- New tests added: 3 pytest + 9 Vitest = 12
 - Command used: `python -m pytest --ignore=tests/test_main.py -n auto -q` && `cd argus/ui && npx vitest run`
 
 ### Unfinished Work
@@ -62,6 +62,8 @@ None — all 6 requirements implemented.
 - The `compute_metrics` function was NOT modified — the original `exit_price is not None` filter is correct since all Trade model instances require exit_price.
 - The stats endpoint reuses `compute_metrics` for consistency with the dashboard summary endpoint.
 - R3 uses limit=250 (API max) not 500. The prompt suggested 500 but the API enforces `le=250`. Badge count uses `total_count` which is the true server-side count.
+- Post-review fixes (Tier 2 F1): Added OpenPositions.test.tsx test verifying limit=250 for closed tab.
+- Post-review fixes (Tier 2 F2): Stats endpoint now uses `count_trades()` to determine exact limit for `query_trades()`, ensuring metrics cover the full dataset. `total_trades` now comes from `metrics.total_trades` for internal consistency.
 
 ---END-CLOSE-OUT---
 

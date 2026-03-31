@@ -103,16 +103,8 @@ async def get_trade_stats(
     """
     from argus.analytics.performance import compute_metrics
 
-    # Query ALL matching trades (high limit, no pagination)
-    trades_data = await state.trade_logger.query_trades(
-        strategy_id=strategy_id,
-        date_from=date_from,
-        date_to=date_to,
-        outcome=outcome,
-        limit=10000,
-        offset=0,
-    )
-
+    # Query ALL matching trades — use count_trades() to get true total,
+    # then fetch that exact count so metrics cover the full dataset.
     total_count = await state.trade_logger.count_trades(
         strategy_id=strategy_id,
         date_from=date_from,
@@ -120,10 +112,19 @@ async def get_trade_stats(
         outcome=outcome,
     )
 
+    trades_data = await state.trade_logger.query_trades(
+        strategy_id=strategy_id,
+        date_from=date_from,
+        date_to=date_to,
+        outcome=outcome,
+        limit=max(total_count, 1),
+        offset=0,
+    )
+
     metrics = compute_metrics(trades_data)
 
     return TradeStatsResponse(
-        total_trades=total_count,
+        total_trades=metrics.total_trades,
         wins=metrics.wins,
         losses=metrics.losses,
         win_rate=metrics.win_rate,
