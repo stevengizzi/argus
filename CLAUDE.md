@@ -7,7 +7,7 @@
 
 **No active sprint.** Sprint 28.75 (Post-Session Operational + UI Fixes) completed March 30, 2026.
 
-Next planned sprint: **29 (Pattern Expansion I)** — ABCD, Dip-and-Rip, HOD Break, Gap-and-Go patterns + PatternParam structured type (DEC-378, DEF-088). Followed by Sprints 30 (Short Selling + Parabolic Short), 31A (Pattern Expansion III to 15 strategies), 31.5 (Parallel Sweep), 32 (Parameterized Templates), 32.5 (Experiment Registry), 31B (Research Console, deferred per DEC-379).
+Last completed sprint: **29 (Pattern Expansion I)** — 5 new PatternModule patterns (Dip-and-Rip, HOD Break, Gap-and-Go, ABCD, Pre-Market High Break), PatternParam structured metadata, Bull Flag + Flat-Top retrofit, PatternBacktester grid generation from PatternParam ranges. 12 active strategies. +213 tests. DEF-088 resolved. Next: Sprint 30 (Short Selling + Parabolic Short), then 31A (Pattern Expansion III to 15 strategies), 31.5 (Parallel Sweep), 32 (Parameterized Templates), 32.5 (Experiment Registry), 31B (Research Console, deferred per DEC-379).
 
 ### Roadmap Amendments Adopted (DEC-357, DEC-358)
 Two roadmap amendments adopted March 23, 2026 adding 5 new sprint slots:
@@ -28,9 +28,9 @@ DEC ranges reserved: 379–385 (27.7, unused), 386–395 (32.5), 396–402 (33.5
 ## Current State
 
 - **Active sprint:** None (between sprints)
-- **Next sprint:** 29 (Pattern Expansion I — DEC-378: ABCD mandatory, DEF-088 promoted)
-- **Tests:** ~3,966 pytest + 688 Vitest (1 pre-existing Vitest failure in GoalTracker.test.tsx, 0 pre-existing pytest failures)
-- **Strategies:** 7 active (ORB Breakout, ORB Scalp, VWAP Reclaim, Afternoon Momentum, Red-to-Green, Bull Flag, Flat-Top Breakout)
+- **Next sprint:** 30 (Short Selling + Parabolic Short)
+- **Tests:** ~4,178 pytest + 689 Vitest (1 pre-existing Vitest failure in GoalTracker.test.tsx, 0 pre-existing pytest failures)
+- **Strategies:** 12 active (ORB Breakout, ORB Scalp, VWAP Reclaim, Afternoon Momentum, Red-to-Green, Bull Flag, Flat-Top Breakout, Dip-and-Rip, HOD Break, Gap-and-Go, ABCD, Pre-Market High Break)
 - **Infrastructure:** Databento EQUS.MINI (live) + IBKR paper trading (Account U24619949) + FMP Starter (scanning + reference data + daily bars for regime) + Finnhub (news + analyst recs) + Claude API (Copilot + Catalyst Classification) + Universe Manager (config-gated) + Catalyst Pipeline (config-gated) + Intelligence Polling Loop (config-gated) + Reference Data Cache + Quality Engine (config-gated) + Dynamic Position Sizer + Strategy Evaluation Telemetry (ring buffer + SQLite persistence) + Debrief Export (shutdown automation) + Evaluation Framework (MultiObjectiveResult, EnsembleResult, comparison API, slippage model) + Regime Intelligence (RegimeVector 11-field, 8 calculators, config-gated, Sprints 27.6 + 27.9) + VIX Data Service (yfinance daily VIX/SPX, 5 derived metrics, SQLite cache, config-gated, Sprint 27.9) + Counterfactual Engine (shadow position tracking, filter accuracy, shadow strategy mode, overflow routing, config-gated, Sprints 27.7 + 27.95) + Learning Loop V1 (OutcomeCollector, WeightAnalyzer, ThresholdAnalyzer, CorrelationAnalyzer, LearningService, ConfigProposalManager, LearningStore, config-gated, Sprint 28) + Exit Management (trailing stops ATR/percent/fixed, exit escalation, belt-and-suspenders, config-gated per strategy, Sprint 28.5) + ThrottledLogger (log rate-limiting, Sprint 27.75) + Paper trading config overrides (10x risk reduction, throttle disabled, $10 min risk floor, Sprint 27.75) + Broker-confirmed reconciliation (Sprint 27.95) + Overflow routing (config-gated, Sprint 27.95)
 - **Frontend:** 8-page Command Center (Observatory added Sprint 25) + AI Copilot + Universe Status Card + Intelligence Brief View (all active), Tauri desktop + PWA mobile
 
@@ -39,8 +39,8 @@ DEC ranges reserved: 379–385 (27.7, unused), 386–395 (32.5), 396–402 (33.5
 ```
 argus/
 ├── core/           # Orchestrator, Risk Manager, Portfolio, Event Bus, Regime Intelligence (breadth.py, market_correlation.py, sector_rotation.py, intraday_character.py, regime_history.py), TheoreticalFillModel (fill_model.py), Exit Math (exit_math.py)
-├── strategies/     # BaseStrategy, OrbBaseStrategy, 7 strategy implementations
-│   └── patterns/   # PatternModule ABC, BullFlagPattern, FlatTopBreakoutPattern
+├── strategies/     # BaseStrategy, OrbBaseStrategy, 12 strategy implementations
+│   └── patterns/   # PatternModule ABC, PatternParam, 7 patterns (BullFlag, FlatTop, DipAndRip, HODBreak, GapAndGo, ABCD, PreMarketHighBreak)
 ├── data/           # DataService (Databento/Alpaca/Replay/Backtest), Scanner, IndicatorEngine, UniverseManager, FMPReferenceClient, VIXDataService
 ├── execution/      # Broker (IBKR/Alpaca/Simulated), Order Manager
 ├── analytics/      # Trade Logger, PerformanceCalculator, DebriefExport, Evaluation Framework
@@ -76,7 +76,7 @@ argus/
 
 ```bash
 # Tests
-python -m pytest --ignore=tests/test_main.py -n auto -q  # Full suite (~3,966 tests, ~39s with xdist)
+python -m pytest --ignore=tests/test_main.py -n auto -q  # Full suite (~4,178 tests, ~49s with xdist)
 python -m pytest tests/ -x               # Stop on first failure
 python -m pytest tests/ -x -q            # Fail-fast, quiet
 cd argus/ui && npx vitest run            # Frontend tests (~688)
@@ -312,7 +312,7 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 | DEF-082 | Quality engine catalyst_quality and volume_profile always 50.0 (neutral default) | Unscheduled | Expected when no real-time RVOL or symbol-specific catalysts. Will become useful as data sources are enriched. Priority: LOW. |
 | ~~DEF-083~~ | ~~API auth 403→401~~ | ~~Sprint 25.8~~ | **RESOLVED** (Sprint 25.8, DEC-351): `HTTPBearer(auto_error=False)` + explicit 401. 35 tests fixed. |
 | DEF-084 | Full test suite runtime optimization | Partially resolved | FMP rate limit configurable (454s→39s with xdist). Remaining slow tests: `test_stale_data_detection/recovery` (10s each). `slow` marker registered in pyproject.toml. Priority: LOW. |
-| DEF-088 | PatternParam structured type for `get_default_params()` | **Sprint 29 (DEC-378)** | `PatternModule.get_default_params()` returns `dict[str, Any]`. Should return structured `PatternParam` objects with type, range, and description metadata for parameter grid generation and UI. Pre-assigned at Sprint 26 planning. **Promoted to Sprint 29** per DEC-378 strategic check-in — Sprint 32 prerequisite, build alongside new patterns. |
+| ~~DEF-088~~ | ~~PatternParam structured type for `get_default_params()`~~ | ~~Sprint 29 (DEC-378)~~ | **RESOLVED** (Sprint 29 S1–S2): `PatternParam` frozen dataclass with 8 fields (name, param_type, default, min_value, max_value, step, description, category). `get_default_params()` returns `list[PatternParam]`. All 7 PatternModule patterns retrofitted. PatternBacktester grid generation uses PatternParam ranges. |
 | DEF-089 | In-memory ResultsCollector for parallel sweeps | Sprint 32 | Pre-assigned during Sprint 27 planning. BacktestEngine writes results to per-run SQLite databases; parallel sweep orchestration would benefit from an in-memory collector to avoid DB contention. Priority: LOW. |
 | ~~DEF-090~~ | ~~`execution_record.py` stores time_of_day in UTC, should be ET per DEC-061~~ | ~~Sprint 27.5~~ | **RESOLVED** (Sprint 27.5 cleanup): `.astimezone(_ET)` before strftime. |
 | DEF-091 | Add public accessors on V1 RegimeClassifier for trend_score computation and vol thresholds; also VIXDataService._config and _update_task private accessor instances (V2/server/routes access private attributes) | Unscheduled | V2 RegimeClassifierV2 accesses V1 private attributes for trend/vol computation. Sprint 27.9 added 3 new instances: regime.py accesses VIXDataService._config, server.py accesses _update_task for shutdown, VIX routes access private attrs. Add public accessors. Priority: LOW. |
@@ -348,6 +348,10 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 | ~~DEF-118~~ | ~~Avg R missing from Trades page summary~~ | — | **RESOLVED** (Sprint 28.75 S2): Added to TradeStatsBar via stats endpoint. |
 | ~~DEF-119~~ | ~~Open positions colored P&L + exit price~~ | — | **RESOLVED** (Sprint 28.75 S2): Current price colored green/red relative to entry. P&L column already existed. |
 | ~~DEF-120~~ | ~~VixRegimeCard fills entire viewport~~ | — | **RESOLVED** (Sprint 28.75 S2): Removed h-full, wrapped in motion.div staggerItem on all layouts. |
+| DEF-121 | PatternBacktester `_create_pattern_by_name()` — extend for Sprint 29 patterns | Sprint 32 (formal parameter sweeps) | Currently supports bull_flag, flat_top_breakout, abcd. Missing: dip_and_rip, hod_break, gap_and_go, premarket_high_break. Extend when formal parameter sweeps run. Priority: LOW. |
+| DEF-122 | ABCD swing detection O(n³) optimization | Sprint 32 (parameter sweeps at scale) | ABCDPattern swing detection iterates O(n³) over candle history. PatternBacktester full sweep times out. Needs precomputed swing cache or algorithmic optimization before Sprint 32 parameter sweeps. Priority: MEDIUM. |
+| DEF-123 | `build_parameter_grid()` float accumulation cleanup | Sprint 31.5 (Parallel Sweep Infrastructure) | While-loop float addition mitigated by round(v,6) + dedup but should use integer-stepping or numpy.arange. Cosmetic. Priority: LOW. |
+| DEF-124 | Pattern constructor params not wired from config YAML at runtime | Sprint 32 (Parameterized Strategy Templates) | All PatternModule patterns use constructor defaults. YAML detection params exist for backtester grid generation only. Sprint 32 introduces mechanism to pipe YAML params into pattern instances at startup. Priority: LOW. |
 
 ## Reference
 

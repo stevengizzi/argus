@@ -106,7 +106,7 @@ These foundations are correct and remain:
 
 ARGUS completed 21 sprints + sub-sprints in ~17 calendar days of active development (Feb 14 – Mar 5). Average sprint: ~0.8 calendar days. However, sprint complexity has been increasing — early sprints (1–5) were dense single-day affairs, while later sprints (21a–21d, 21.5) span multiple days. The roadmap below assumes sprint durations of 1–4 days each depending on complexity, with some parallelism where noted.
 
-**Current state:** Sprint 28.5 complete (March 30, 2026). ~3,955 pytest + 680 Vitest (0 Vitest failures, 0 pre-existing pytest failures). Seven active strategies (4 original + R2G, Bull Flag, Flat-Top from Sprint 26). Sprint 28.5 (Exit Management) delivered configurable per-strategy trailing stops (ATR/percent/fixed), partial profit-taking with trail on T1 remainder, and time-based exit escalation across Order Manager, BacktestEngine, and CounterfactualTracker. 6 sessions, 12 adversarial review amendments verified, +110 tests, 0 issues. Full infrastructure stack operational: BacktestEngine + Evaluation Framework + Regime Intelligence (11-field RegimeVector) + Counterfactual Engine + VIX Data Service + Quality Engine + NLP Catalyst Pipeline + Universe Manager + AI Copilot + Learning Loop V1 + Exit Management. Eight-page Command Center + Observatory. Live Databento + IBKR paper trading. Phase 5 Gate complete (March 21, 2026). Strategic check-in completed March 30 (DEC-378–381). Next: Sprint 29 (Pattern Expansion I — ABCD + Dip-and-Rip + HOD Break + Gap-and-Go + PatternParam structured type).
+**Current state:** Sprint 29 complete (March 31, 2026). ~4,178 pytest + 689 Vitest (0 pre-existing pytest failures). Twelve active strategies (7 from Sprint 26 + 5 new PatternModule patterns from Sprint 29). Sprint 28.5 (Exit Management) delivered configurable per-strategy trailing stops (ATR/percent/fixed), partial profit-taking with trail on T1 remainder, and time-based exit escalation across Order Manager, BacktestEngine, and CounterfactualTracker. 6 sessions, 12 adversarial review amendments verified, +110 tests, 0 issues. Full infrastructure stack operational: BacktestEngine + Evaluation Framework + Regime Intelligence (11-field RegimeVector) + Counterfactual Engine + VIX Data Service + Quality Engine + NLP Catalyst Pipeline + Universe Manager + AI Copilot + Learning Loop V1 + Exit Management. Eight-page Command Center + Observatory. Live Databento + IBKR paper trading. Phase 5 Gate complete (March 21, 2026). Strategic check-in completed March 30 (DEC-378–381). Next: Sprint 30 (Short Selling + Parabolic Short).
 
 ---
 
@@ -493,17 +493,19 @@ Reconciliation redesign with broker-confirmed positions (DEC-369). Overflow rout
 
 **Amendment note (DEC-357):** Phase 7 gains Sprint 32.5 (Experiment Registry + Promotion Pipeline + Anti-Fragility + Hypothesis Generation Design) after Sprint 32. Sprint 33 scope decreases as evaluation framework and experiment storage already exist.
 
-### Sprint 29: Pattern Expansion I (DEC-167, DEC-378)
-**Target:** ~2–3 days
+### Sprint 29: Pattern Expansion I (DEC-167, DEC-378) ✅
+**Completed:** March 30–31, 2026 (2 days, 10 sessions)
 
-**Scope:**
-- **Dip-and-Rip**, **HOD Break**, **Gap-and-Go**, **ABCD** pattern modules (DEC-378). Each through stages 1–3.
-- Optionally **Pre-Market High Break** if velocity allows.
-- Each module implements PatternModule interface with **structured PatternParam** metadata (DEF-088 promoted to Sprint 29 per DEC-378) — `get_default_params()` returns `PatternParam` objects with type, range, and description for parameter grid generation and UI. All existing patterns (Bull Flag, Flat-Top Breakout) retrofitted.
-- Walk-forward validated. Quality Engine integration. `_calculate_pattern_strength()` on each.
-- **UI:** Pattern Library gains 4–5 new strategy cards.
-- **11–12 strategies/patterns active.**
-- **Tests:** ~80 new.
+**Delivered:**
+- **Dip-and-Rip**, **HOD Break**, **Gap-and-Go**, **ABCD**, **Pre-Market High Break** (stretch scope delivered) pattern modules. All implement PatternModule ABC.
+- **PatternParam** frozen dataclass (DEF-088 resolved) — `get_default_params()` returns `list[PatternParam]` with type, range, step, description, category. Bull Flag + Flat-Top Breakout retrofitted.
+- **PatternBacktester** grid generation from PatternParam metadata (replaced ±20%/±40% variations).
+- `set_reference_data()` hook + `initialize_reference_data()` on PatternBasedStrategy for prior close / PM context.
+- Quality Engine integration automatic via `share_count=0` pipeline. Counterfactual tracking automatic.
+- **No UI changes** (frontend locked for sprint).
+- **12 strategies/patterns active.**
+- **Tests:** +213 new (4,178 pytest + 689 Vitest).
+- **Deferred to Sprint 32:** Runtime YAML→constructor param wiring (DEF-124), `_create_pattern_by_name()` extension for 4 remaining patterns (DEF-121), ABCD O(n³) sweep optimization (DEF-122). Deferred to Sprint 31.5: grid float accumulation cleanup (DEF-123).
 
 ### Sprint 30: Short Selling Infrastructure + Pattern Expansion II (DEC-166, DEC-167)
 **Target:** ~3 days
@@ -527,10 +529,12 @@ Reconciliation redesign with broker-confirmed positions (DEC-369). Overflow rout
 - **Tests:** ~40 new.
 
 ### Sprint 31.5: Parallel Sweep Infrastructure (DEC-379)
+**Prerequisites from Sprint 29:** DEF-123 (grid float accumulation cleanup).
 **Target:** ~3–4 days
 
 **Scope (backend):**
 - Multiprocessing harness for BacktestEngine. Parameter grid specification format (consumes PatternParam metadata from Sprint 29).
+- **Prerequisites from Sprint 29:** DEF-121 (extend `_create_pattern_by_name()` for remaining 4 patterns), DEF-122 (ABCD O(n³) optimization), DEF-124 (runtime YAML→constructor param wiring). Also wire Bull Flag/Flat-Top dead-code constructor params into detect()/score().
 - Worker pool distributing parameter combinations across CPU cores.
 - Result aggregation pipeline. Progress monitoring.
 - Cloud burst configuration (spin up high-core-count instance for sweep days).

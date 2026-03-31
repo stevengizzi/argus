@@ -1,7 +1,7 @@
 # ARGUS — Sprint History
 
 > Complete record of all sprints from project inception through current state.
-> Active development began February 14, 2026. As of March 30, 2026 (~45 calendar days), 30 full sprints + 36 sub-sprints completed.
+> Active development began February 14, 2026. As of March 31, 2026 (~46 calendar days), 31 full sprints + 37 sub-sprints completed.
 
 ---
 
@@ -32,6 +32,7 @@
 | Z — Learning Loop | 28 | Mar 28–29 | Learning Loop V1: outcome analysis, config proposals, Performance UI |
 | AA — Exit Management | 28.5 | Mar 30 | Trailing stops, exit escalation, BacktestEngine/CounterfactualTracker alignment |
 | AB — Post-Session Fixes | 28.75 | Mar 30 | Flatten-pending timeout, log rate-limiting, server-side trade stats, UI fixes |
+| Pattern Expansion I | 29 | Mar 30–31 | PatternParam, 5 new PatternModule patterns (DnR, HOD, GnG, ABCD, PMH), 12 active strategies |
 
 ---
 
@@ -2176,9 +2177,51 @@
 
 ---
 
+## Sprint 29: Pattern Expansion I (March 30–31, 2026)
+
+**Starting state:** ~3,966 pytest + 688 Vitest. 7 active strategies. PatternModule ABC operational with Bull Flag + Flat-Top Breakout.
+**Ending state:** 4,178 pytest + 689 Vitest (+213). 12 active strategies. PatternParam metadata infrastructure complete.
+**Sessions:** 8 implementation + 1 targeted fix + 1 batch fix = 10 total
+**Execution mode:** Human-in-the-loop
+**New DECs:** None (all design decisions followed established patterns: DEC-300 config-gating, DEC-345 separate DB, DEC-342 telemetry)
+**New DEF items:** DEF-121 through DEF-124
+**New files:** ~15 (5 pattern modules, 5 strategy YAMLs, 5 universe filter YAMLs, 1 smoke test script, test files)
+**Modified files:** ~15 (config.py, main.py, pattern base/strategy/__init__, backtester, test files)
+
+**Sprint deliverables:**
+- **PatternParam** frozen dataclass (8 fields) + `set_reference_data()` hook + `initialize_reference_data()` on PatternBasedStrategy + `indicators["symbol"]` wiring (S1 + S5-fix)
+- **Bull Flag + Flat-Top Breakout retrofit** to `list[PatternParam]` with ≥8 params each, PatternBacktester grid generation from PatternParam ranges (S2)
+- **DipAndRipPattern** — intraday dip + recovery, volume confirmation, VWAP/level interaction. Window: 9:45–11:30 AM. 10 PatternParams. (S3)
+- **HODBreakPattern** — dynamic HOD tracking, ATR consolidation, multi-test resistance, hold-bar breakout. Window: 10:00–15:30. 12→11 PatternParams. (S4)
+- **GapAndGoPattern** — gap-up continuation, VWAP hold, pullback/direct entry modes. First `set_reference_data()` consumer. Window: 9:35–10:30 AM. 14 PatternParams. (S5)
+- **ABCDPattern** — harmonic swing detection, Fibonacci validation, leg ratio checking, completion zone. Window: 10:00–15:00. 14→13 PatternParams. Highest complexity (S6a core + S6b config/wiring)
+- **PreMarketHighBreakPattern** — PM high from deque candles (ET timezone), breakout + hold-bar + volume. Window: 9:35–10:30 AM. 13 PatternParams. (S7, stretch scope)
+- **Integration verification** — all 12 strategies load, smoke backtests, 52 integration tests. Fixed 4 prior-session bugs: Gap-and-Go + PM High Break missing main.py wiring (S5/S7 origin), missing universe filter YAMLs for Dip-and-Rip + HOD Break (S3/S4 origin). (S8)
+- **Batch fix** — aligned DipAndRipConfig Pydantic defaults, documented HOD Break dual scoring weights, removed dead `min_score_threshold` from HOD Break + ABCD, deduplicated PM High Break scoring, fixed PatternParam category labels across all 5 patterns.
+
+**Smoke backtest results (5 symbols × 6 months):**
+- ABCD: 5,948 detections (high — measured-move is common)
+- HOD Break: 10 detections (reasonable — HOD consolidation is rare)
+- Pre-Market High Break: 60 detections (NVDA/TSLA only — sufficient PM activity)
+- Dip-and-Rip: 0 (expected — needs real RVOL, not basic OHLCV)
+- Gap-and-Go: 0 (expected — needs gap data from prior close)
+
+**Key architectural decisions:**
+- Exit overrides placed in strategy YAMLs (not exit_management.yaml) — ExitManagementConfig has `extra="forbid"`. Established as convention for all Sprint 29 patterns.
+- UniverseFilterConfig gained 3 optional fields (min_relative_volume, min_gap_percent, min_premarket_volume). Enforcement at detection level, not UM routing level.
+- Pattern constructor params not wired from YAML at runtime — deferred to Sprint 32 (Parameterized Templates).
+- PatternBacktester `_create_pattern_by_name()` extended for ABCD only; remaining 4 patterns deferred to Sprint 32.
+
+**Deferred to Sprint 31.5:** `build_parameter_grid()` float accumulation cleanup (DEF-123).
+**Deferred to Sprint 32:** Runtime YAML→constructor param wiring (DEF-124), `_create_pattern_by_name()` extension (DEF-121), ABCD O(n³) optimization (DEF-122), Bull Flag/Flat-Top dead-code constructor param wiring.
+
+**Session verdicts:** S1 CLEAR → S2 CLEAR → S3 CLEAR → S4 CLEAR → S5 CONCERNS (indicators["symbol"] not populated) → S5-fix CLEAR → S6a CLEAR → S6b CLEAR → S7 CLEAR → S8 CLEAR → Batch-fix CLEAR
+
+---
+
 ## Sprint Statistics
 
-- **Total sprints:** 30 full + 36 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9, 27.5, 27.6, 27.65, 27.7, 27.75, 27.8, 27.9, 27.95, 28.5, 28.75)
+- **Total sprints:** 31 full + 37 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9, 27.5, 27.6, 27.65, 27.7, 27.75, 27.8, 27.9, 27.95, 28.5, 28.75, 29)
 - **Total sessions:** ~453+ Claude Code sessions
 - **Total tests:** ~3,966 pytest + 688 Vitest = ~4,654 total
 - **Total decisions:** 377 (DEC-001 through DEC-377)
