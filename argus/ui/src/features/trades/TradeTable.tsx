@@ -96,6 +96,9 @@ function getExitReasonVariant(
   if (reason === 'time_stop' || reason === 'time' || reason === 'timeout') {
     return 'warning';
   }
+  if (reason === 'trailing_stop') {
+    return 'warning';
+  }
   if (reason === 'eod' || reason === 'end_of_day') {
     return 'neutral';
   }
@@ -113,6 +116,7 @@ function formatExitReason(exitReason: string | null): string {
   if (reason === 'target_2') return 'T2';
   if (reason === 'stop_loss') return 'SL';
   if (reason === 'time_stop' || reason === 'timeout') return 'TIME';
+  if (reason === 'trailing_stop') return 'Trail';
   if (reason === 'end_of_day') return 'EOD';
   return exitReason.toUpperCase().replace('_', ' ');
 }

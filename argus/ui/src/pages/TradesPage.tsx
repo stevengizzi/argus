@@ -139,7 +139,7 @@ export function TradesPage() {
     outcome: filters.outcome === 'all' ? undefined : filters.outcome,
     date_from: filters.date_from,
     date_to: filters.date_to,
-    limit: 250,
+    limit: 1000,
   });
 
   // Server-side stats (resolves DEF-102 / DEF-117)

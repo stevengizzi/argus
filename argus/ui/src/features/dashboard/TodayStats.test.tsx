@@ -28,7 +28,7 @@ const mockPerformanceData: PerformanceResponse = {
   date_to: today,
   metrics: {
     total_trades: 12,
-    win_rate: 58,
+    win_rate: 0.58,
     profit_factor: 1.8,
     net_pnl: 850,
     gross_pnl: 950,
@@ -143,7 +143,7 @@ describe('TodayStats', () => {
     render(<TodayStats />);
 
     expect(screen.getByText('Win Rate')).toBeInTheDocument();
-    expect(screen.getByText('58%')).toBeInTheDocument();
+    expect(screen.getByText('58.0%')).toBeInTheDocument();
   });
 
   it('renders avg R-multiple', () => {
@@ -235,7 +235,7 @@ describe('TodayStats', () => {
         <TodayStats
           data={{
             trade_count: 8,
-            win_rate: 65,
+            win_rate: 0.65,
             avg_r: 0.9,
             best_trade: { symbol: 'TSLA', pnl: 450 },
           }}
@@ -248,7 +248,7 @@ describe('TodayStats', () => {
 
       // Should show values from props
       expect(screen.getByText('8')).toBeInTheDocument();
-      expect(screen.getByText('65%')).toBeInTheDocument();
+      expect(screen.getByText('65.0%')).toBeInTheDocument();
       expect(screen.getByText('+0.9R')).toBeInTheDocument();
       expect(screen.getByText('TSLA')).toBeInTheDocument();
     });

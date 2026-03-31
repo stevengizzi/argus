@@ -87,6 +87,8 @@ vi.mock('../../stores/live', () => ({
   },
 }));
 
+let mockPositionFilter = 'open';
+
 vi.mock('../../stores/positionsUI', () => ({
   usePositionsUIStore: (selector: (state: {
     displayMode: string;
@@ -97,7 +99,7 @@ vi.mock('../../stores/positionsUI', () => ({
     const state = {
       displayMode: 'table',
       setDisplayMode: vi.fn(),
-      positionFilter: 'open',
+      positionFilter: mockPositionFilter,
       setPositionFilter: vi.fn(),
     };
     return selector(state);
@@ -132,6 +134,7 @@ describe('OpenPositions', () => {
 
   beforeEach(() => {
     queryClient = createTestQueryClient();
+    mockPositionFilter = 'open';
     vi.clearAllMocks();
   });
 
@@ -189,5 +192,58 @@ describe('OpenPositions', () => {
     if (headerCell) {
       expect(headerCell).toHaveClass('cursor-pointer');
     }
+  });
+
+  it('renders shares column with shares_remaining value', () => {
+    renderWithProviders(<OpenPositions />);
+
+    // Shares header should appear in desktop and/or tablet layouts
+    const sharesHeaders = screen.getAllByText('Shares');
+    expect(sharesHeaders.length).toBeGreaterThan(0);
+
+    // Position with shares_remaining=100 should show "100" in a cell
+    const sharesCells = screen.getAllByText('100');
+    expect(sharesCells.length).toBeGreaterThan(0);
+  });
+
+  it('renders trailing_stop exit reason as Trail badge', () => {
+    // Switch to "all" view so closed trades are visible
+    mockPositionFilter = 'all';
+
+    // Set up closed trades with trailing_stop exit
+    mockUseTrades.mockReturnValue({
+      data: {
+        trades: [{
+          id: 'trade-001',
+          strategy_id: 'orb_breakout',
+          symbol: 'NVDA',
+          side: 'long',
+          entry_price: 150.0,
+          entry_time: '2026-03-31T10:00:00Z',
+          exit_price: 153.0,
+          exit_time: '2026-03-31T11:00:00Z',
+          shares: 50,
+          pnl_dollars: 150.0,
+          pnl_r_multiple: 1.0,
+          exit_reason: 'trailing_stop',
+          hold_duration_seconds: 3600,
+          commission: 1.0,
+          market_regime: 'bullish',
+          stop_price: 148.0,
+          target_prices: [153.0],
+          quality_grade: null,
+          quality_score: null,
+        }],
+        total_count: 1,
+      },
+      isLoading: false,
+      error: null,
+    });
+
+    renderWithProviders(<OpenPositions />);
+
+    // Should render "Trail" not "TRAILING STOP"
+    const trailBadges = screen.getAllByText('Trail');
+    expect(trailBadges.length).toBeGreaterThan(0);
   });
 });

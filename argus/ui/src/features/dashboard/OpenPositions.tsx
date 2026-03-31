@@ -44,6 +44,7 @@ const exitReasonLabels: Record<string, string> = {
   target_2: 'T2',
   stop_loss: 'SL',
   time_stop: 'TIME',
+  trailing_stop: 'Trail',
   eod: 'EOD',
 };
 
@@ -52,6 +53,7 @@ const exitReasonVariants: Record<string, 'success' | 'danger' | 'warning' | 'neu
   target_2: 'success',
   stop_loss: 'danger',
   time_stop: 'warning',
+  trailing_stop: 'warning',
   eod: 'neutral',
 };
 
@@ -284,6 +286,7 @@ export function OpenPositions() {
                 >
                   Symbol<SortIndicator field="symbol" />
                 </th>
+                <th className="px-4 py-2 text-right font-medium w-16 hidden sm:table-cell">Shares</th>
                 <th className="px-4 py-2 text-left font-medium w-28">Strategy</th>
                 <th
                   className="px-4 py-2 text-right font-medium cursor-pointer hover:text-argus-text select-none w-20"
@@ -312,7 +315,7 @@ export function OpenPositions() {
               {sortedPositions.length > 0 && (
                 <>
                   <tr className="bg-argus-surface-2/50">
-                    <td colSpan={7} className="px-4 py-1.5 text-xs font-medium text-argus-accent">
+                    <td colSpan={8} className="px-4 py-1.5 text-xs font-medium text-argus-accent">
                       Open Positions
                     </td>
                   </tr>
@@ -330,6 +333,7 @@ export function OpenPositions() {
                           {pos.symbol}
                         </button>
                       </td>
+                      <td className="px-4 py-3 text-right tabular-nums hidden sm:table-cell">{pos.shares_remaining}</td>
                       <td className="px-4 py-3">
                         <StrategyBadge strategyId={pos.strategy_id} />
                       </td>
@@ -357,7 +361,7 @@ export function OpenPositions() {
               {trades.length > 0 && (
                 <>
                   <tr className="bg-argus-surface-2/50">
-                    <td colSpan={7} className="px-4 py-1.5 text-xs font-medium text-argus-text-dim">
+                    <td colSpan={8} className="px-4 py-1.5 text-xs font-medium text-argus-text-dim">
                       Closed Today
                     </td>
                   </tr>
@@ -371,6 +375,7 @@ export function OpenPositions() {
                           {trade.symbol}
                         </button>
                       </td>
+                      <td className="px-4 py-3 text-right tabular-nums hidden sm:table-cell">{trade.shares}</td>
                       <td className="px-4 py-3">
                         <StrategyBadge strategyId={trade.strategy_id} />
                       </td>
@@ -533,6 +538,7 @@ export function OpenPositions() {
                   Symbol<SortIndicator field="symbol" />
                 </th>
                 <th className="px-4 py-2 text-left font-medium">Strategy</th>
+                <th className="px-4 py-2 text-right font-medium">Shares</th>
                 <th className="px-4 py-2 text-left font-medium">Side</th>
                 <th className="px-4 py-2 text-right font-medium">Entry</th>
                 <th className="px-4 py-2 text-right font-medium">Current</th>
@@ -576,6 +582,7 @@ export function OpenPositions() {
                   <td className="px-4 py-3">
                     <StrategyBadge strategyId={pos.strategy_id} />
                   </td>
+                  <td className="px-4 py-3 text-right tabular-nums">{pos.shares_remaining}</td>
                   <td className="px-4 py-3">
                     <Badge variant={pos.side === 'long' ? 'success' : 'danger'}>
                       {pos.side.toUpperCase()}
@@ -612,6 +619,7 @@ export function OpenPositions() {
             <thead className="sticky top-0 z-10 bg-argus-surface">
               <tr className="bg-argus-surface-2 text-argus-text-dim text-xs uppercase tracking-wider">
                 <th className="px-4 py-2 text-left font-medium">Symbol</th>
+                <th className="px-4 py-2 text-right font-medium">Shares</th>
                 <th className="px-4 py-2 text-right font-medium">Entry</th>
                 <th className="px-4 py-2 text-right font-medium">Current</th>
                 <th className="px-4 py-2 text-right font-medium">P&L</th>
@@ -634,6 +642,7 @@ export function OpenPositions() {
                       {pos.symbol}
                     </button>
                   </td>
+                  <td className="px-4 py-3 text-right tabular-nums">{pos.shares_remaining}</td>
                   <td className="px-4 py-3 text-right tabular-nums">{formatPrice(pos.entry_price)}</td>
                   <td className={`px-4 py-3 text-right tabular-nums ${
                     pos.livePrice > pos.entry_price ? 'text-argus-profit' : pos.livePrice < pos.entry_price ? 'text-argus-loss' : ''
