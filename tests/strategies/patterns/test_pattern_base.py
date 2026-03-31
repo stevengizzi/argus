@@ -1,4 +1,4 @@
-"""Tests for the PatternModule ABC, CandleBar, and PatternDetection dataclasses."""
+"""Tests for the PatternModule ABC, CandleBar, PatternDetection, and PatternParam."""
 
 from __future__ import annotations
 
@@ -7,7 +7,12 @@ from datetime import datetime, timezone
 
 import pytest
 
-from argus.strategies.patterns.base import CandleBar, PatternDetection, PatternModule
+from argus.strategies.patterns.base import (
+    CandleBar,
+    PatternDetection,
+    PatternModule,
+    PatternParam,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -44,8 +49,19 @@ class MockPattern(PatternModule):
     def score(self, detection: PatternDetection) -> float:
         return max(0.0, min(100.0, detection.confidence))
 
-    def get_default_params(self) -> dict[str, object]:
-        return {"lookback": 20, "threshold": 0.5}
+    def get_default_params(self) -> list[PatternParam]:
+        return [
+            PatternParam(
+                name="lookback", param_type=int, default=20,
+                min_value=5, max_value=50, step=5,
+                description="Lookback window", category="detection",
+            ),
+            PatternParam(
+                name="threshold", param_type=float, default=0.5,
+                min_value=0.1, max_value=1.0, step=0.1,
+                description="Detection threshold", category="detection",
+            ),
+        ]
 
 
 # ---------------------------------------------------------------------------
@@ -180,8 +196,11 @@ class TestPatternModule:
         assert score == 75.0
 
         params = pattern.get_default_params()
-        assert "lookback" in params
-        assert "threshold" in params
+        assert isinstance(params, list)
+        assert len(params) == 2
+        param_names = [p.name for p in params]
+        assert "lookback" in param_names
+        assert "threshold" in param_names
 
     def test_score_bounds(self) -> None:
         """Mock pattern's score returns value clamped to 0–100."""
@@ -210,3 +229,114 @@ class TestPatternModule:
         pattern = MockPattern()
         assert isinstance(pattern.lookback_bars, int)
         assert pattern.lookback_bars > 0
+
+
+# ---------------------------------------------------------------------------
+# PatternParam tests
+# ---------------------------------------------------------------------------
+
+
+class TestPatternParam:
+    def test_construction_with_all_fields(self) -> None:
+        """PatternParam stores all 8 fields correctly."""
+        param = PatternParam(
+            name="pole_min_bars",
+            param_type=int,
+            default=5,
+            min_value=2,
+            max_value=20,
+            step=1,
+            description="Minimum bars for pole",
+            category="detection",
+        )
+        assert param.name == "pole_min_bars"
+        assert param.param_type is int
+        assert param.default == 5
+        assert param.min_value == 2
+        assert param.max_value == 20
+        assert param.step == 1
+        assert param.description == "Minimum bars for pole"
+        assert param.category == "detection"
+
+    def test_frozen_immutability(self) -> None:
+        """PatternParam is frozen — attribute assignment raises."""
+        param = PatternParam(
+            name="threshold",
+            param_type=float,
+            default=0.5,
+        )
+        with pytest.raises(FrozenInstanceError):
+            param.name = "other"  # type: ignore[misc]
+        with pytest.raises(FrozenInstanceError):
+            param.default = 0.9  # type: ignore[misc]
+
+    def test_int_param_with_range(self) -> None:
+        """Int parameter with min/max/step stores numeric metadata."""
+        param = PatternParam(
+            name="lookback",
+            param_type=int,
+            default=20,
+            min_value=5,
+            max_value=50,
+            step=5,
+            category="detection",
+        )
+        assert param.param_type is int
+        assert param.min_value == 5
+        assert param.max_value == 50
+        assert param.step == 5
+        assert isinstance(param.default, int)
+
+    def test_float_param_with_range(self) -> None:
+        """Float parameter with min/max/step stores numeric metadata."""
+        param = PatternParam(
+            name="retrace_pct",
+            param_type=float,
+            default=0.50,
+            min_value=0.10,
+            max_value=0.80,
+            step=0.05,
+            description="Max retracement of pole",
+            category="filtering",
+        )
+        assert param.param_type is float
+        assert param.min_value == 0.10
+        assert param.max_value == 0.80
+        assert param.step == 0.05
+        assert isinstance(param.default, float)
+
+    def test_bool_param_no_range(self) -> None:
+        """Bool parameter has None for min/max/step."""
+        param = PatternParam(
+            name="require_volume_spike",
+            param_type=bool,
+            default=True,
+            description="Require volume spike on breakout",
+            category="filtering",
+        )
+        assert param.param_type is bool
+        assert param.default is True
+        assert param.min_value is None
+        assert param.max_value is None
+        assert param.step is None
+
+    def test_set_reference_data_default_noop(self) -> None:
+        """Default set_reference_data() does not raise."""
+        pattern = MockPattern()
+        # Should not raise with empty dict
+        pattern.set_reference_data({})
+        # Should not raise with populated dict
+        pattern.set_reference_data({"prior_closes": {"AAPL": 150.0}})
+
+    def test_default_optional_fields(self) -> None:
+        """Optional fields default to None/empty string."""
+        param = PatternParam(
+            name="simple",
+            param_type=int,
+            default=10,
+        )
+        assert param.min_value is None
+        assert param.max_value is None
+        assert param.step is None
+        assert param.description == ""
+        assert param.category == ""

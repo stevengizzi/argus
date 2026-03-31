@@ -30,7 +30,10 @@ from argus.strategies.patterns.base import CandleBar, PatternDetection, PatternM
 from argus.strategies.telemetry import EvaluationEventType, EvaluationResult
 
 if TYPE_CHECKING:
+    from typing import Any
+
     from argus.analytics.trade_logger import TradeLogger
+    from argus.data.fmp_reference import SymbolReferenceData
     from argus.data.service import DataService
 
 logger = logging.getLogger(__name__)
@@ -135,6 +138,30 @@ class PatternBasedStrategy(BaseStrategy):
             store: IntradayCandleStore instance (duck-typed to avoid import).
         """
         self._candle_store = store
+
+    def initialize_reference_data(
+        self, ref_data: dict[str, SymbolReferenceData]
+    ) -> None:
+        """Forward Universe Manager reference data to the wrapped pattern.
+
+        Builds a ``prior_closes`` dict from SymbolReferenceData and passes
+        it to the pattern's ``set_reference_data()`` hook. No-op when
+        *ref_data* is empty.
+
+        Args:
+            ref_data: Mapping of symbol to SymbolReferenceData from the
+                      Universe Manager cache.
+        """
+        if not ref_data:
+            return
+
+        prior_closes: dict[str, float] = {}
+        for sym, srd in ref_data.items():
+            if srd.prev_close is not None:
+                prior_closes[sym] = srd.prev_close
+
+        data: dict[str, Any] = {"prior_closes": prior_closes}
+        self._pattern.set_reference_data(data)
 
     def _try_backfill_from_store(self, symbol: str) -> None:
         """Attempt to backfill a symbol's candle window from the candle store.

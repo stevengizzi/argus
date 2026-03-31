@@ -6,7 +6,12 @@ implements the PatternModule ABC and can be composed with PatternBasedStrategy
 to create a fully functional trading strategy.
 """
 
-from argus.strategies.patterns.base import CandleBar, PatternDetection, PatternModule
+from argus.strategies.patterns.base import (
+    CandleBar,
+    PatternDetection,
+    PatternModule,
+    PatternParam,
+)
 from argus.strategies.patterns.bull_flag import BullFlagPattern
 from argus.strategies.patterns.flat_top_breakout import FlatTopBreakoutPattern
 
@@ -27,4 +32,5 @@ __all__ = [
     "PatternBasedStrategy",
     "PatternDetection",
     "PatternModule",
+    "PatternParam",
 ]

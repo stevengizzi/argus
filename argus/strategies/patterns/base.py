@@ -13,6 +13,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -62,6 +63,34 @@ class PatternDetection:
     stop_price: float
     target_prices: tuple[float, ...] = ()
     metadata: dict[str, object] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class PatternParam:
+    """Structured parameter metadata for pattern modules.
+
+    Provides type, range, and description metadata for parameter grid
+    generation, UI display, and sweep automation.
+
+    Attributes:
+        name: Parameter name matching the constructor kwarg.
+        param_type: Python type (int, float, bool).
+        default: Default value for this parameter.
+        min_value: Numeric range minimum (None for non-numeric).
+        max_value: Numeric range maximum (None for non-numeric).
+        step: Grid step size for parameter sweeps (None for non-numeric).
+        description: Human-readable description.
+        category: Grouping label (detection, scoring, filtering).
+    """
+
+    name: str
+    param_type: type
+    default: Any
+    min_value: float | None = None
+    max_value: float | None = None
+    step: float | None = None
+    description: str = ""
+    category: str = ""
 
 
 class PatternModule(ABC):
@@ -119,11 +148,23 @@ class PatternModule(ABC):
         """
 
     @abstractmethod
-    def get_default_params(self) -> dict[str, object]:
-        """Return default parameter values for this pattern.
+    def get_default_params(self) -> list[PatternParam]:
+        """Return structured parameter metadata for this pattern.
 
-        Used by Pattern Library UI and future BacktestEngine.
+        Used by Pattern Library UI, BacktestEngine sweep grid generation,
+        and parameter documentation.
 
         Returns:
-            Dictionary of parameter names to default values.
+            List of PatternParam describing each tunable parameter.
+        """
+
+    def set_reference_data(self, data: dict[str, Any]) -> None:
+        """Receive reference data from Universe Manager (prior closes, etc.).
+
+        Default no-op. Override in patterns that need external reference data
+        such as prior close prices for gap calculations.
+
+        Args:
+            data: Reference data dict. Expected keys include
+                  ``prior_closes: dict[str, float]`` when available.
         """
