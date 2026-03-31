@@ -1,0 +1,69 @@
+strategy_id: "strat_gap_and_go"
+name: "Gap-and-Go"
+version: "1.0.0"
+enabled: true
+mode: live  # "live" or "shadow" (Sprint 27.7)
+asset_class: "us_stocks"
+pipeline_stage: "exploration"
+family: "momentum"
+description_short: "Gap-up continuation: high relative volume gap maintains momentum after open."
+time_window_display: "9:35 AM–10:30 AM"
+operating_window:
+  earliest_entry: "09:35"
+  latest_entry: "10:30"
+  force_close: "15:50"
+# Pattern detection parameters
+min_gap_percent: 3.0
+min_relative_volume: 2.0
+volume_check_bars: 5
+min_vwap_hold_bars: 3
+vwap_check_window: 8
+entry_mode: "first_pullback"
+stop_mode: "tighter"
+target_ratio: 1.0
+target_1_r: 1.0
+target_2_r: 2.0
+time_stop_minutes: 20
+risk_limits:
+  max_loss_per_trade_pct: 0.01
+  max_daily_loss_pct: 0.03
+  max_trades_per_day: 6
+  max_concurrent_positions: 0
+benchmarks:
+  min_win_rate: 0.45
+  min_profit_factor: 1.1
+  min_sharpe: 0.3
+  max_drawdown_pct: 0.12
+backtest_summary:
+  status: "pending"
+  data_source: null
+  universe_size: null
+  universe_note: null
+  oos_sharpe: null
+  wfe_pnl: null
+  total_trades: null
+  avg_win_rate: null
+  avg_profit_factor: null
+  data_range: null
+  data_months: null
+  last_run: null
+  prior_baseline: null
+universe_filter:
+  min_price: 3.0
+  max_price: 150.0
+  min_avg_volume: 200000
+  min_gap_percent: 3.0
+exit_management:
+  trailing_stop:
+    enabled: true
+    type: "percent"
+    percent: 0.015
+    activation: "after_profit_pct"
+    activation_profit_pct: 0.003
+  escalation:
+    enabled: true
+    phases:
+      - elapsed_pct: 0.75
+        stop_to: "breakeven"
+      - elapsed_pct: 1.0
+        stop_to: "half_profit"

@@ -1,0 +1,4 @@
+min_price: 3.0
+max_price: 150.0
+min_avg_volume: 200000
+min_gap_percent: 3.0

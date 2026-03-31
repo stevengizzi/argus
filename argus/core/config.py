@@ -328,6 +328,7 @@ class UniverseFilterConfig(BaseModel):
     min_float: float | None = None  # shares
     min_avg_volume: int | None = None
     min_relative_volume: float | None = None  # minimum relative volume (RVOL)
+    min_gap_percent: float | None = None  # minimum gap-up/gap-down percent
     sectors: list[str] = Field(default_factory=list)  # empty = all sectors
     exclude_sectors: list[str] = Field(default_factory=list)  # empty = no exclusions
 
@@ -1089,6 +1090,41 @@ class HODBreakConfig(StrategyConfig):
     target_1_r: float = Field(default=1.0, gt=0)
     target_2_r: float = Field(default=2.0, gt=0)
     time_stop_minutes: int = Field(default=45, ge=1)
+
+
+class GapAndGoConfig(StrategyConfig):
+    """Gap-and-Go continuation pattern strategy configuration (Sprint 29).
+
+    Detects gap-up continuations — stocks gapping up on high relative
+    volume that maintain momentum after the open. Requires prior close
+    data via set_reference_data() hook.
+    Operates 9:35 AM - 10:30 AM ET.
+    """
+
+    # Gap detection
+    min_gap_percent: float = Field(default=3.0, gt=0, le=20.0)
+
+    # Volume confirmation
+    min_relative_volume: float = Field(default=2.0, gt=0, le=20.0)
+    volume_check_bars: int = Field(default=5, ge=1, le=15)
+
+    # VWAP hold
+    min_vwap_hold_bars: int = Field(default=3, ge=1, le=15)
+    vwap_check_window: int = Field(default=8, ge=1, le=15)
+
+    # Entry mode
+    entry_mode: str = Field(default="first_pullback")
+
+    # Stop mode
+    stop_mode: str = Field(default="tighter")
+
+    # Target
+    target_ratio: float = Field(default=1.0, gt=0, le=5.0)
+
+    # Targets and stops
+    target_1_r: float = Field(default=1.0, gt=0)
+    target_2_r: float = Field(default=2.0, gt=0)
+    time_stop_minutes: int = Field(default=20, ge=1)
 
 
 # ---------------------------------------------------------------------------

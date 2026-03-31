@@ -15,6 +15,7 @@ from argus.strategies.patterns.base import (
 from argus.strategies.patterns.bull_flag import BullFlagPattern
 from argus.strategies.patterns.dip_and_rip import DipAndRipPattern
 from argus.strategies.patterns.flat_top_breakout import FlatTopBreakoutPattern
+from argus.strategies.patterns.gap_and_go import GapAndGoPattern
 from argus.strategies.patterns.hod_break import HODBreakPattern
 
 
@@ -32,6 +33,7 @@ __all__ = [
     "CandleBar",
     "DipAndRipPattern",
     "FlatTopBreakoutPattern",
+    "GapAndGoPattern",
     "HODBreakPattern",
     "PatternBasedStrategy",
     "PatternDetection",
