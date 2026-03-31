@@ -395,3 +395,29 @@ async def test_reconstruct_state_delegation() -> None:
     await strategy.reconstruct_state(mock_logger)
     # BaseStrategy.reconstruct_state queries today's trades via get_trades_by_date
     mock_logger.get_trades_by_date.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_indicators_include_symbol_key() -> None:
+    """Verify indicators dict passed to detect() contains 'symbol' matching candle."""
+
+    captured_indicators: dict[str, object] = {}
+
+    class CapturingPattern(MockPattern):
+        def detect(
+            self,
+            candles: list[CandleBar],
+            indicators: dict[str, float],
+        ) -> PatternDetection | None:
+            captured_indicators.update(indicators)
+            return None
+
+    pattern = CapturingPattern(lookback=1)
+    config = _make_config()
+    strategy = PatternBasedStrategy(pattern=pattern, config=config)
+    strategy.set_watchlist(["TSLA"])
+
+    await strategy.on_candle(_make_candle(symbol="TSLA"))
+
+    assert "symbol" in captured_indicators
+    assert captured_indicators["symbol"] == "TSLA"

@@ -319,6 +319,9 @@ class PatternBasedStrategy(BaseStrategy):
                 if value is not None:
                     indicators[name] = value
 
+        # Expose symbol so patterns can look up per-symbol reference data
+        indicators["symbol"] = symbol
+
         # Run pattern detection
         detection = self._pattern.detect(list(window), indicators)
 
