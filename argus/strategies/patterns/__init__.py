@@ -15,6 +15,7 @@ from argus.strategies.patterns.base import (
 from argus.strategies.patterns.bull_flag import BullFlagPattern
 from argus.strategies.patterns.dip_and_rip import DipAndRipPattern
 from argus.strategies.patterns.flat_top_breakout import FlatTopBreakoutPattern
+from argus.strategies.patterns.hod_break import HODBreakPattern
 
 
 def __getattr__(name: str) -> object:
@@ -31,6 +32,7 @@ __all__ = [
     "CandleBar",
     "DipAndRipPattern",
     "FlatTopBreakoutPattern",
+    "HODBreakPattern",
     "PatternBasedStrategy",
     "PatternDetection",
     "PatternModule",

@@ -1,0 +1,68 @@
+strategy_id: "strat_hod_break"
+name: "HOD Break"
+version: "1.0.0"
+enabled: true
+mode: live  # "live" or "shadow" (Sprint 27.7)
+asset_class: "us_stocks"
+pipeline_stage: "exploration"
+family: "continuation"
+description_short: "High-of-day breakout continuation: consolidation near session high, volume-confirmed breakout."
+time_window_display: "10:00 AM–3:30 PM"
+operating_window:
+  earliest_entry: "10:00"
+  latest_entry: "15:30"
+  force_close: "15:50"
+# Pattern detection parameters
+hod_proximity_percent: 0.003
+consolidation_min_bars: 5
+consolidation_max_range_atr: 0.8
+breakout_margin_percent: 0.001
+min_hold_bars: 2
+min_breakout_volume_ratio: 1.5
+stop_buffer_atr_mult: 0.5
+target_ratio: 2.0
+target_1_r: 1.0
+target_2_r: 2.0
+time_stop_minutes: 45
+risk_limits:
+  max_loss_per_trade_pct: 0.01
+  max_daily_loss_pct: 0.03
+  max_trades_per_day: 6
+  max_concurrent_positions: 0
+benchmarks:
+  min_win_rate: 0.45
+  min_profit_factor: 1.1
+  min_sharpe: 0.3
+  max_drawdown_pct: 0.12
+backtest_summary:
+  status: "pending"
+  data_source: null
+  universe_size: null
+  universe_note: null
+  oos_sharpe: null
+  wfe_pnl: null
+  total_trades: null
+  avg_win_rate: null
+  avg_profit_factor: null
+  data_range: null
+  data_months: null
+  last_run: null
+  prior_baseline: null
+universe_filter:
+  min_price: 5.0
+  max_price: 500.0
+  min_avg_volume: 300000
+exit_management:
+  trailing_stop:
+    enabled: true
+    type: "atr"
+    atr_multiplier: 2.0
+    activation: "after_profit_pct"
+    activation_profit_pct: 0.0075
+  escalation:
+    enabled: true
+    phases:
+      - elapsed_pct: 0.67
+        stop_to: "breakeven"
+      - elapsed_pct: 1.0
+        stop_to: "half_profit"

@@ -1061,6 +1061,36 @@ class DipAndRipConfig(StrategyConfig):
     time_stop_minutes: int = Field(default=30, ge=1)
 
 
+class HODBreakConfig(StrategyConfig):
+    """HOD Break continuation pattern strategy configuration (Sprint 29).
+
+    Detects high-of-day breakout continuations — consolidation near
+    session high followed by volume-confirmed breakout.
+    Operates 10:00 AM - 3:30 PM ET.
+    """
+
+    # HOD tracking
+    hod_proximity_percent: float = Field(default=0.003, gt=0, le=0.01)
+
+    # Consolidation parameters
+    consolidation_min_bars: int = Field(default=5, ge=2, le=30)
+    consolidation_max_range_atr: float = Field(default=0.8, gt=0, le=3.0)
+
+    # Breakout confirmation
+    breakout_margin_percent: float = Field(default=0.001, gt=0, le=0.01)
+    min_hold_bars: int = Field(default=2, ge=1, le=10)
+    min_breakout_volume_ratio: float = Field(default=1.5, gt=0, le=10.0)
+
+    # Stop and target
+    stop_buffer_atr_mult: float = Field(default=0.5, gt=0, le=2.0)
+    target_ratio: float = Field(default=2.0, gt=0, le=5.0)
+
+    # Targets and stops
+    target_1_r: float = Field(default=1.0, gt=0)
+    target_2_r: float = Field(default=2.0, gt=0)
+    time_stop_minutes: int = Field(default=45, ge=1)
+
+
 # ---------------------------------------------------------------------------
 # Config Loader
 # ---------------------------------------------------------------------------
@@ -1291,6 +1321,23 @@ def load_dip_and_rip_config(path: Path) -> DipAndRipConfig:
     """
     data = load_yaml_file(path)
     return DipAndRipConfig(**data)
+
+
+def load_hod_break_config(path: Path) -> HODBreakConfig:
+    """Load HOD Break strategy configuration from a YAML file.
+
+    Args:
+        path: Path to the HOD Break strategy YAML file.
+
+    Returns:
+        Validated HODBreakConfig instance.
+
+    Raises:
+        FileNotFoundError: If the file does not exist.
+        pydantic.ValidationError: If validation fails.
+    """
+    data = load_yaml_file(path)
+    return HODBreakConfig(**data)
 
 
 def load_scanner_config(path: Path) -> ScannerConfig:
