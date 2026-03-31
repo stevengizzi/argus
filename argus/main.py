@@ -45,6 +45,7 @@ from argus.core.config import (
     load_afternoon_momentum_config,
     load_bull_flag_config,
     load_config,
+    load_dip_and_rip_config,
     load_flat_top_breakout_config,
     load_orb_config,
     load_orb_scalp_config,
@@ -87,7 +88,7 @@ from argus.execution.alpaca_broker import AlpacaBroker
 from argus.execution.order_manager import OrderManager
 from argus.strategies.afternoon_momentum import AfternoonMomentumStrategy
 from argus.strategies.pattern_strategy import PatternBasedStrategy
-from argus.strategies.patterns import BullFlagPattern, FlatTopBreakoutPattern
+from argus.strategies.patterns import BullFlagPattern, DipAndRipPattern, FlatTopBreakoutPattern
 from argus.strategies.red_to_green import RedToGreenStrategy
 from argus.strategies.telemetry_store import EvaluationEventStore
 from argus.strategies.orb_breakout import OrbBreakoutStrategy
@@ -527,6 +528,22 @@ class ArgusSystem:
                 flat_top_strategy.set_watchlist(symbols)
             strategies_created.append("FlatTopBreakout")
 
+        # Dip-and-Rip (optional — PatternBasedStrategy wrapping DipAndRipPattern)
+        dip_and_rip_strategy: PatternBasedStrategy | None = None
+        dip_and_rip_yaml = self._config_dir / "strategies" / "dip_and_rip.yaml"
+        if dip_and_rip_yaml.exists():
+            dip_and_rip_config = load_dip_and_rip_config(dip_and_rip_yaml)
+            dip_and_rip_pattern = DipAndRipPattern()
+            dip_and_rip_strategy = PatternBasedStrategy(
+                pattern=dip_and_rip_pattern,
+                config=dip_and_rip_config,
+                data_service=self._data_service,
+                clock=self._clock,
+            )
+            if not use_universe_manager:
+                dip_and_rip_strategy.set_watchlist(symbols)
+            strategies_created.append("DipAndRip")
+
         # Note: is_active and allocated_capital set by Orchestrator in Phase 9
         self._health_monitor.update_component(
             "strategy",
@@ -629,6 +646,8 @@ class ArgusSystem:
             self._orchestrator.register_strategy(bull_flag_strategy)
         if flat_top_strategy is not None:
             self._orchestrator.register_strategy(flat_top_strategy)
+        if dip_and_rip_strategy is not None:
+            self._orchestrator.register_strategy(dip_and_rip_strategy)
 
         await self._orchestrator.start()
 

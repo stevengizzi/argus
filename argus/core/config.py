@@ -327,6 +327,7 @@ class UniverseFilterConfig(BaseModel):
     max_market_cap: float | None = None  # USD
     min_float: float | None = None  # shares
     min_avg_volume: int | None = None
+    min_relative_volume: float | None = None  # minimum relative volume (RVOL)
     sectors: list[str] = Field(default_factory=list)  # empty = all sectors
     exclude_sectors: list[str] = Field(default_factory=list)  # empty = no exclusions
 
@@ -1029,6 +1030,37 @@ class FlatTopBreakoutConfig(StrategyConfig):
     time_stop_minutes: int = Field(default=30, ge=1)
 
 
+class DipAndRipConfig(StrategyConfig):
+    """Dip-and-Rip momentum reversal pattern strategy configuration (Sprint 29).
+
+    Detects sharp intraday dips followed by rapid recoveries.
+    Enters on confirmed recovery with volume. Operates 9:45 AM - 11:30 AM ET.
+    """
+
+    # Dip detection parameters
+    dip_lookback: int = Field(default=10, ge=2, le=30)
+    min_dip_percent: float = Field(default=0.02, gt=0, le=0.10)
+    max_dip_bars: int = Field(default=5, ge=1, le=20)
+
+    # Recovery parameters
+    min_recovery_percent: float = Field(default=0.50, gt=0, le=1.0)
+    max_recovery_bars: int = Field(default=8, ge=1, le=30)
+    max_recovery_ratio: float = Field(default=1.5, gt=0, le=5.0)
+    entry_threshold_percent: float = Field(default=0.60, gt=0, le=1.0)
+
+    # Volume filtering
+    min_recovery_volume_ratio: float = Field(default=1.3, gt=0, le=10.0)
+
+    # Stop and target
+    stop_buffer_atr_mult: float = Field(default=0.3, gt=0, le=2.0)
+    target_ratio: float = Field(default=1.5, gt=0, le=5.0)
+
+    # Targets and stops
+    target_1_r: float = Field(default=1.0, gt=0)
+    target_2_r: float = Field(default=2.0, gt=0)
+    time_stop_minutes: int = Field(default=30, ge=1)
+
+
 # ---------------------------------------------------------------------------
 # Config Loader
 # ---------------------------------------------------------------------------
@@ -1242,6 +1274,23 @@ def load_flat_top_breakout_config(path: Path) -> FlatTopBreakoutConfig:
     """
     data = load_yaml_file(path)
     return FlatTopBreakoutConfig(**data)
+
+
+def load_dip_and_rip_config(path: Path) -> DipAndRipConfig:
+    """Load Dip-and-Rip strategy configuration from a YAML file.
+
+    Args:
+        path: Path to the Dip-and-Rip strategy YAML file.
+
+    Returns:
+        Validated DipAndRipConfig instance.
+
+    Raises:
+        FileNotFoundError: If the file does not exist.
+        pydantic.ValidationError: If validation fails.
+    """
+    data = load_yaml_file(path)
+    return DipAndRipConfig(**data)
 
 
 def load_scanner_config(path: Path) -> ScannerConfig:
