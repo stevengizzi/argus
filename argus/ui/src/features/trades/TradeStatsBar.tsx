@@ -1,32 +1,23 @@
 /**
  * Trade stats bar showing summary statistics for the current filtered set.
  *
- * Displays: total trades, win rate, net P&L.
+ * Displays: total trades, win rate, net P&L, avg R.
+ * Uses server-side stats endpoint (resolves DEF-102 / DEF-117).
  * Container is stable; content dims during filter transitions.
  */
 
 import { MetricCard } from '../../components/MetricCard';
 import { formatCurrency, formatPercentRaw, formatPnl } from '../../utils/format';
-import type { Trade } from '../../api/types';
+import type { TradeStatsResponse } from '../../api/types';
 
 interface TradeStatsBarProps {
-  trades: Trade[];
-  totalCount: number;
+  stats: TradeStatsResponse;
   isTransitioning?: boolean;
 }
 
-export function TradeStatsBar({ trades, totalCount, isTransitioning = false }: TradeStatsBarProps) {
-  // Calculate stats from the filtered trades
-  const wins = trades.filter((t) => (t.pnl_dollars ?? 0) > 0).length;
-  const losses = trades.filter((t) => (t.pnl_dollars ?? 0) < 0).length;
-
-  // Win rate calculation (only count completed trades with P&L)
-  const tradesWithPnl = trades.filter((t) => t.pnl_dollars !== null);
-  const winRate = tradesWithPnl.length > 0 ? (wins / tradesWithPnl.length) * 100 : 0;
-
-  // Net P&L calculation
-  const netPnl = trades.reduce((sum, t) => sum + (t.pnl_dollars ?? 0), 0);
-  const pnlFormatted = formatPnl(netPnl);
+export function TradeStatsBar({ stats, isTransitioning = false }: TradeStatsBarProps) {
+  const { total_trades, wins, losses, win_rate, net_pnl, avg_r } = stats;
+  const pnlFormatted = formatPnl(net_pnl);
 
   return (
     <div className="bg-argus-surface border border-argus-border rounded-lg p-3 md:p-4">
@@ -39,7 +30,7 @@ export function TradeStatsBar({ trades, totalCount, isTransitioning = false }: T
         <div className="flex-1 min-w-0">
           <MetricCard
             label="Trades"
-            value={totalCount.toString()}
+            value={total_trades.toString()}
             subValue={`${wins}W / ${losses}L`}
           />
         </div>
@@ -47,17 +38,25 @@ export function TradeStatsBar({ trades, totalCount, isTransitioning = false }: T
         <div className="flex-1 min-w-0">
           <MetricCard
             label="Win Rate"
-            value={formatPercentRaw(winRate)}
-            trend={winRate >= 50 ? 'up' : winRate > 0 ? 'down' : 'neutral'}
+            value={formatPercentRaw(win_rate)}
+            trend={win_rate >= 50 ? 'up' : win_rate > 0 ? 'down' : 'neutral'}
           />
         </div>
         <div className="w-px h-8 bg-argus-border hidden sm:block flex-shrink-0" />
         <div className="hidden sm:block flex-1 min-w-0">
           <MetricCard
             label="Net P&L"
-            value={netPnl >= 0 ? formatCurrency(netPnl) : formatCurrency(netPnl)}
-            trend={netPnl > 0 ? 'up' : netPnl < 0 ? 'down' : 'neutral'}
+            value={formatCurrency(net_pnl)}
+            trend={net_pnl > 0 ? 'up' : net_pnl < 0 ? 'down' : 'neutral'}
             className={pnlFormatted.className}
+          />
+        </div>
+        <div className="w-px h-8 bg-argus-border hidden sm:block flex-shrink-0" />
+        <div className="hidden sm:block flex-1 min-w-0">
+          <MetricCard
+            label="Avg R"
+            value={avg_r != null ? `${avg_r >= 0 ? '+' : ''}${avg_r.toFixed(2)}R` : '—'}
+            trend={avg_r != null ? (avg_r > 0 ? 'up' : avg_r < 0 ? 'down' : 'neutral') : 'neutral'}
           />
         </div>
       </div>

@@ -8,7 +8,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { TradeTable, type SortState } from '../features/trades/TradeTable';
 import { TradeStatsBar } from '../features/trades/TradeStatsBar';
-import type { Trade } from '../api/types';
+import type { Trade, TradeStatsResponse } from '../api/types';
 
 // Mock Zustand store
 vi.mock('../stores/symbolDetailUI', () => ({
@@ -64,24 +64,30 @@ describe('TradesPage — DEF-067: no pagination controls', () => {
   });
 });
 
-describe('TradesPage — DEF-068: metrics from full dataset', () => {
-  it('computes win rate and net P&L from full trade array', () => {
-    const trades = [
-      makeTrade({ pnl_dollars: 500 }),
-      makeTrade({ pnl_dollars: -200 }),
-      makeTrade({ pnl_dollars: 100 }),
-    ];
+describe('TradesPage — DEF-068: metrics from server-side stats', () => {
+  it('renders server-side stats (win rate, net P&L, avg R)', () => {
+    const stats: TradeStatsResponse = {
+      total_trades: 3,
+      wins: 2,
+      losses: 1,
+      win_rate: 66.67,
+      net_pnl: 400.0,
+      avg_r: 0.85,
+      timestamp: new Date().toISOString(),
+    };
 
     render(
-      <TradeStatsBar trades={trades} totalCount={3} />
+      <TradeStatsBar stats={stats} />
     );
 
-    // Win rate: 2 wins / 3 trades = 66.67%
+    // Win rate from server
     expect(screen.getByText('66.67%')).toBeInTheDocument();
-    // Net P&L: 500 - 200 + 100 = 400
+    // Net P&L from server
     expect(screen.getByText('$400.00')).toBeInTheDocument();
-    // Trade count
+    // Trade count from server
     expect(screen.getByText('3')).toBeInTheDocument();
+    // Avg R from server
+    expect(screen.getByText('+0.85R')).toBeInTheDocument();
   });
 });
 

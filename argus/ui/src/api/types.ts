@@ -94,6 +94,17 @@ export interface TradesBatchResponse {
   timestamp: string;
 }
 
+// Trade Stats (server-side aggregation)
+export interface TradeStatsResponse {
+  total_trades: number;
+  wins: number;
+  losses: number;
+  win_rate: number;
+  net_pnl: number;
+  avg_r: number | null;
+  timestamp: string;
+}
+
 // Performance
 export interface MetricsData {
   total_trades: number;

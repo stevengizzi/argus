@@ -127,7 +127,9 @@ export function DashboardPage() {
           </motion.div>
 
           {/* VIX Regime card — returns null when VIX disabled/unavailable */}
-          <VixRegimeCard />
+          <motion.div variants={staggerItem}>
+            <VixRegimeCard />
+          </motion.div>
 
           {/* Session summary card - shows after market close with trades */}
           <SessionSummaryCard />
@@ -187,7 +189,9 @@ export function DashboardPage() {
           </motion.div>
 
           {/* VIX Regime card — returns null when VIX disabled/unavailable */}
-          <VixRegimeCard />
+          <motion.div variants={staggerItem}>
+            <VixRegimeCard />
+          </motion.div>
 
           <SessionSummaryCard />
 
@@ -285,7 +289,9 @@ export function DashboardPage() {
         </motion.div>
 
         {/* VIX Regime card — returns null when VIX disabled/unavailable */}
-        <VixRegimeCard />
+        <motion.div variants={staggerItem}>
+          <VixRegimeCard />
+        </motion.div>
 
         <SessionSummaryCard />
 

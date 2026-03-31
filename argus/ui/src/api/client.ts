@@ -45,6 +45,7 @@ import type {
   TradeReplayResponse,
   TradesBatchResponse,
   TradesResponse,
+  TradeStatsResponse,
   ObservatoryClosestMissesResponse,
   ObservatorySessionSummaryResponse,
   UniverseStatusResponse,
@@ -188,6 +189,24 @@ export async function getTrades(params?: {
   }
   const query = searchParams.toString();
   return fetchWithAuth<TradesResponse>(`/trades${query ? `?${query}` : ''}`);
+}
+
+export async function getTradeStats(params?: {
+  strategy_id?: string;
+  date_from?: string;
+  date_to?: string;
+  outcome?: 'win' | 'loss' | 'breakeven';
+}): Promise<TradeStatsResponse> {
+  const searchParams = new URLSearchParams();
+  if (params) {
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined) {
+        searchParams.set(key, String(value));
+      }
+    });
+  }
+  const query = searchParams.toString();
+  return fetchWithAuth<TradeStatsResponse>(`/trades/stats${query ? `?${query}` : ''}`);
 }
 
 export async function getTradesByIds(ids: string[]): Promise<TradesBatchResponse> {

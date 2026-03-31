@@ -20,6 +20,7 @@ import {
   TradeTableSkeleton,
 } from '../features/trades';
 import { useTrades } from '../hooks/useTrades';
+import { useTradeStats } from '../hooks/useTradeStats';
 import { staggerContainer, staggerItem } from '../utils/motion';
 import { getToken } from '../api/client';
 import type { Trade } from '../api/types';
@@ -141,6 +142,14 @@ export function TradesPage() {
     limit: 250,
   });
 
+  // Server-side stats (resolves DEF-102 / DEF-117)
+  const { data: statsData, isFetching: statsFetching } = useTradeStats({
+    strategy_id: filters.strategy_id,
+    outcome: filters.outcome === 'all' ? undefined : filters.outcome,
+    date_from: filters.date_from,
+    date_to: filters.date_to,
+  });
+
   // Export trades as CSV
   const handleExportCsv = useCallback(async () => {
     setIsExporting(true);
@@ -240,11 +249,10 @@ export function TradesPage() {
       <motion.div variants={staggerItem}>
         {isLoading ? (
           <TradeStatsBarSkeleton />
-        ) : data ? (
+        ) : statsData ? (
           <TradeStatsBar
-            trades={data.trades}
-            totalCount={data.total_count}
-            isTransitioning={isFetching}
+            stats={statsData}
+            isTransitioning={isFetching || statsFetching}
           />
         ) : null}
       </motion.div>
