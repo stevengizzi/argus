@@ -6,6 +6,7 @@ implements the PatternModule ABC and can be composed with PatternBasedStrategy
 to create a fully functional trading strategy.
 """
 
+from argus.strategies.patterns.abcd import ABCDPattern
 from argus.strategies.patterns.base import (
     CandleBar,
     PatternDetection,
@@ -29,6 +30,7 @@ def __getattr__(name: str) -> object:
 
 
 __all__ = [
+    "ABCDPattern",
     "BullFlagPattern",
     "CandleBar",
     "DipAndRipPattern",

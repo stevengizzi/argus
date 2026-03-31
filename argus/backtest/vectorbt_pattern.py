@@ -982,6 +982,20 @@ def _create_pattern_by_name(name: str, config_path: Path) -> PatternModule:
             target_1_r=config.get("target_1_r", 1.0),
             target_2_r=config.get("target_2_r", 2.0),
         )
+    elif name == "abcd":
+        from argus.strategies.patterns.abcd import ABCDPattern
+
+        return ABCDPattern(
+            swing_lookback=config.get("swing_lookback", 5),
+            min_swing_atr_mult=config.get("min_swing_atr_mult", 0.5),
+            fib_b_min=config.get("fib_b_min", 0.382),
+            fib_b_max=config.get("fib_b_max", 0.618),
+            completion_tolerance_percent=config.get(
+                "completion_tolerance_percent", 1.0
+            ),
+            stop_buffer_atr_mult=config.get("stop_buffer_atr_mult", 0.5),
+            target_extension=config.get("target_extension", 1.272),
+        )
     else:
         raise ValueError(f"Unknown pattern: {name}")
 

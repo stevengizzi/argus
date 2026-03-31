@@ -45,6 +45,7 @@ from argus.core.config import (
     load_afternoon_momentum_config,
     load_bull_flag_config,
     load_config,
+    load_abcd_config,
     load_dip_and_rip_config,
     load_flat_top_breakout_config,
     load_hod_break_config,
@@ -89,7 +90,7 @@ from argus.execution.alpaca_broker import AlpacaBroker
 from argus.execution.order_manager import OrderManager
 from argus.strategies.afternoon_momentum import AfternoonMomentumStrategy
 from argus.strategies.pattern_strategy import PatternBasedStrategy
-from argus.strategies.patterns import BullFlagPattern, DipAndRipPattern, FlatTopBreakoutPattern, HODBreakPattern
+from argus.strategies.patterns import ABCDPattern, BullFlagPattern, DipAndRipPattern, FlatTopBreakoutPattern, HODBreakPattern
 from argus.strategies.red_to_green import RedToGreenStrategy
 from argus.strategies.telemetry_store import EvaluationEventStore
 from argus.strategies.orb_breakout import OrbBreakoutStrategy
@@ -561,6 +562,22 @@ class ArgusSystem:
                 hod_break_strategy.set_watchlist(symbols)
             strategies_created.append("HODBreak")
 
+        # ABCD Harmonic (optional — PatternBasedStrategy wrapping ABCDPattern)
+        abcd_strategy: PatternBasedStrategy | None = None
+        abcd_yaml = self._config_dir / "strategies" / "abcd.yaml"
+        if abcd_yaml.exists():
+            abcd_config = load_abcd_config(abcd_yaml)
+            abcd_pattern = ABCDPattern()
+            abcd_strategy = PatternBasedStrategy(
+                pattern=abcd_pattern,
+                config=abcd_config,
+                data_service=self._data_service,
+                clock=self._clock,
+            )
+            if not use_universe_manager:
+                abcd_strategy.set_watchlist(symbols)
+            strategies_created.append("ABCD")
+
         # Note: is_active and allocated_capital set by Orchestrator in Phase 9
         self._health_monitor.update_component(
             "strategy",
@@ -667,6 +684,8 @@ class ArgusSystem:
             self._orchestrator.register_strategy(dip_and_rip_strategy)
         if hod_break_strategy is not None:
             self._orchestrator.register_strategy(hod_break_strategy)
+        if abcd_strategy is not None:
+            self._orchestrator.register_strategy(abcd_strategy)
 
         await self._orchestrator.start()
 

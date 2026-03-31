@@ -1127,6 +1127,33 @@ class GapAndGoConfig(StrategyConfig):
     time_stop_minutes: int = Field(default=20, ge=1)
 
 
+class ABCDConfig(StrategyConfig):
+    """ABCD harmonic pattern strategy configuration (Sprint 29).
+
+    Detects measured-move ABCD patterns where the CD leg mirrors
+    the AB leg with Fibonacci retracement at B and C points.
+    Operates 10:00 AM - 3:00 PM ET.
+    """
+
+    # Pattern class identifier for registry lookup
+    pattern_class: str = Field(default="ABCDPattern")
+
+    # Targets and stops
+    target_1_r: float = Field(default=1.0, gt=0)
+    target_2_r: float = Field(default=2.0, gt=0)
+    time_stop_minutes: int = Field(default=60, ge=1)
+
+    # Allowed market regimes
+    allowed_regimes: list[str] = Field(
+        default_factory=lambda: [
+            "bullish_trending",
+            "bearish_trending",
+            "neutral",
+            "high_volatility",
+        ]
+    )
+
+
 # ---------------------------------------------------------------------------
 # Config Loader
 # ---------------------------------------------------------------------------
@@ -1374,6 +1401,23 @@ def load_hod_break_config(path: Path) -> HODBreakConfig:
     """
     data = load_yaml_file(path)
     return HODBreakConfig(**data)
+
+
+def load_abcd_config(path: Path) -> ABCDConfig:
+    """Load ABCD harmonic pattern strategy configuration from a YAML file.
+
+    Args:
+        path: Path to the ABCD strategy YAML file.
+
+    Returns:
+        Validated ABCDConfig instance.
+
+    Raises:
+        FileNotFoundError: If the file does not exist.
+        pydantic.ValidationError: If validation fails.
+    """
+    data = load_yaml_file(path)
+    return ABCDConfig(**data)
 
 
 def load_scanner_config(path: Path) -> ScannerConfig:
