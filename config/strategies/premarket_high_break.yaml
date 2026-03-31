@@ -1,0 +1,69 @@
+strategy_id: "strat_premarket_high_break"
+name: "Pre-Market High Break"
+version: "1.0.0"
+enabled: true
+mode: live  # "live" or "shadow" (Sprint 27.7)
+asset_class: "us_stocks"
+pipeline_stage: "exploration"
+family: "breakout"
+description_short: "Pre-market high breakout: volume-confirmed break above PM session high with hold confirmation."
+time_window_display: "9:35 AM-10:30 AM"
+operating_window:
+  earliest_entry: "09:35"
+  latest_entry: "10:30"
+  force_close: "15:50"
+# Pattern detection parameters
+min_pm_candles: 3
+min_pm_volume: 10000
+breakout_margin_percent: 0.0015
+min_breakout_volume_ratio: 1.5
+min_hold_bars: 2
+pm_high_proximity_percent: 0.002
+stop_buffer_atr_mult: 0.5
+target_ratio: 1.5
+target_1_r: 1.0
+target_2_r: 2.0
+time_stop_minutes: 30
+risk_limits:
+  max_loss_per_trade_pct: 0.01
+  max_daily_loss_pct: 0.03
+  max_trades_per_day: 5
+  max_concurrent_positions: 0
+benchmarks:
+  min_win_rate: 0.45
+  min_profit_factor: 1.1
+  min_sharpe: 0.3
+  max_drawdown_pct: 0.12
+backtest_summary:
+  status: "pending"
+  data_source: null
+  universe_size: null
+  universe_note: null
+  oos_sharpe: null
+  wfe_pnl: null
+  total_trades: null
+  avg_win_rate: null
+  avg_profit_factor: null
+  data_range: null
+  data_months: null
+  last_run: null
+  prior_baseline: null
+universe_filter:
+  min_price: 5.0
+  max_price: 200.0
+  min_avg_volume: 300000
+  min_premarket_volume: 50000
+exit_management:
+  trailing_stop:
+    enabled: true
+    type: "atr"
+    atr_multiplier: 1.5
+    activation: "after_profit_pct"
+    activation_profit_pct: 0.005
+  escalation:
+    enabled: true
+    phases:
+      - elapsed_pct: 0.67
+        stop_to: "breakeven"
+      - elapsed_pct: 1.0
+        stop_to: "half_profit"

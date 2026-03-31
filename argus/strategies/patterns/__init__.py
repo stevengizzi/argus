@@ -18,6 +18,7 @@ from argus.strategies.patterns.dip_and_rip import DipAndRipPattern
 from argus.strategies.patterns.flat_top_breakout import FlatTopBreakoutPattern
 from argus.strategies.patterns.gap_and_go import GapAndGoPattern
 from argus.strategies.patterns.hod_break import HODBreakPattern
+from argus.strategies.patterns.premarket_high_break import PreMarketHighBreakPattern
 
 
 def __getattr__(name: str) -> object:
@@ -41,4 +42,5 @@ __all__ = [
     "PatternDetection",
     "PatternModule",
     "PatternParam",
+    "PreMarketHighBreakPattern",
 ]

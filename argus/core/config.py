@@ -329,6 +329,7 @@ class UniverseFilterConfig(BaseModel):
     min_avg_volume: int | None = None
     min_relative_volume: float | None = None  # minimum relative volume (RVOL)
     min_gap_percent: float | None = None  # minimum gap-up/gap-down percent
+    min_premarket_volume: int | None = None  # minimum pre-market volume
     sectors: list[str] = Field(default_factory=list)  # empty = all sectors
     exclude_sectors: list[str] = Field(default_factory=list)  # empty = no exclusions
 
