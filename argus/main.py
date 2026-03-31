@@ -48,8 +48,10 @@ from argus.core.config import (
     load_abcd_config,
     load_dip_and_rip_config,
     load_flat_top_breakout_config,
+    load_gap_and_go_config,
     load_hod_break_config,
     load_orb_config,
+    load_premarket_high_break_config,
     load_orb_scalp_config,
     load_red_to_green_config,
     load_vwap_reclaim_config,
@@ -90,7 +92,7 @@ from argus.execution.alpaca_broker import AlpacaBroker
 from argus.execution.order_manager import OrderManager
 from argus.strategies.afternoon_momentum import AfternoonMomentumStrategy
 from argus.strategies.pattern_strategy import PatternBasedStrategy
-from argus.strategies.patterns import ABCDPattern, BullFlagPattern, DipAndRipPattern, FlatTopBreakoutPattern, HODBreakPattern
+from argus.strategies.patterns import ABCDPattern, BullFlagPattern, DipAndRipPattern, FlatTopBreakoutPattern, GapAndGoPattern, HODBreakPattern, PreMarketHighBreakPattern
 from argus.strategies.red_to_green import RedToGreenStrategy
 from argus.strategies.telemetry_store import EvaluationEventStore
 from argus.strategies.orb_breakout import OrbBreakoutStrategy
@@ -578,6 +580,41 @@ class ArgusSystem:
                 abcd_strategy.set_watchlist(symbols)
             strategies_created.append("ABCD")
 
+        # Gap-and-Go (optional — PatternBasedStrategy wrapping GapAndGoPattern)
+        gap_and_go_strategy: PatternBasedStrategy | None = None
+        gap_and_go_yaml = self._config_dir / "strategies" / "gap_and_go.yaml"
+        if gap_and_go_yaml.exists():
+            gap_and_go_config = load_gap_and_go_config(gap_and_go_yaml)
+            gap_and_go_pattern = GapAndGoPattern()
+            gap_and_go_strategy = PatternBasedStrategy(
+                pattern=gap_and_go_pattern,
+                config=gap_and_go_config,
+                data_service=self._data_service,
+                clock=self._clock,
+            )
+            if not use_universe_manager:
+                gap_and_go_strategy.set_watchlist(symbols)
+            strategies_created.append("GapAndGo")
+
+        # Pre-Market High Break (optional — PatternBasedStrategy wrapping
+        # PreMarketHighBreakPattern)
+        pm_high_break_strategy: PatternBasedStrategy | None = None
+        pm_high_yaml = (
+            self._config_dir / "strategies" / "premarket_high_break.yaml"
+        )
+        if pm_high_yaml.exists():
+            pm_high_config = load_premarket_high_break_config(pm_high_yaml)
+            pm_high_pattern = PreMarketHighBreakPattern()
+            pm_high_break_strategy = PatternBasedStrategy(
+                pattern=pm_high_pattern,
+                config=pm_high_config,
+                data_service=self._data_service,
+                clock=self._clock,
+            )
+            if not use_universe_manager:
+                pm_high_break_strategy.set_watchlist(symbols)
+            strategies_created.append("PreMarketHighBreak")
+
         # Note: is_active and allocated_capital set by Orchestrator in Phase 9
         self._health_monitor.update_component(
             "strategy",
@@ -686,6 +723,10 @@ class ArgusSystem:
             self._orchestrator.register_strategy(hod_break_strategy)
         if abcd_strategy is not None:
             self._orchestrator.register_strategy(abcd_strategy)
+        if gap_and_go_strategy is not None:
+            self._orchestrator.register_strategy(gap_and_go_strategy)
+        if pm_high_break_strategy is not None:
+            self._orchestrator.register_strategy(pm_high_break_strategy)
 
         await self._orchestrator.start()
 

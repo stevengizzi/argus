@@ -1155,6 +1155,35 @@ class ABCDConfig(StrategyConfig):
     )
 
 
+class PreMarketHighBreakConfig(StrategyConfig):
+    """Pre-Market High Break pattern strategy configuration (Sprint 29).
+
+    Detects breakouts above the pre-market session high with volume
+    confirmation and hold-bar validation. Requires pre-market candle
+    data via set_reference_data() hook.
+    Operates 9:35 AM - 10:30 AM ET.
+    """
+
+    # Pre-market session
+    min_pm_candles: int = Field(default=3, ge=1, le=20)
+    min_pm_volume: int = Field(default=10000, ge=0)
+
+    # Breakout detection
+    breakout_margin_percent: float = Field(default=0.0015, ge=0, le=0.05)
+    min_breakout_volume_ratio: float = Field(default=1.5, gt=0, le=10.0)
+    min_hold_bars: int = Field(default=2, ge=1, le=10)
+    pm_high_proximity_percent: float = Field(default=0.002, ge=0, le=0.05)
+
+    # Stop and target
+    stop_buffer_atr_mult: float = Field(default=0.5, gt=0, le=3.0)
+    target_ratio: float = Field(default=1.5, gt=0, le=5.0)
+
+    # Targets and stops
+    target_1_r: float = Field(default=1.0, gt=0)
+    target_2_r: float = Field(default=2.0, gt=0)
+    time_stop_minutes: int = Field(default=30, ge=1)
+
+
 # ---------------------------------------------------------------------------
 # Config Loader
 # ---------------------------------------------------------------------------
@@ -1419,6 +1448,42 @@ def load_abcd_config(path: Path) -> ABCDConfig:
     """
     data = load_yaml_file(path)
     return ABCDConfig(**data)
+
+
+def load_gap_and_go_config(path: Path) -> GapAndGoConfig:
+    """Load Gap-and-Go strategy configuration from a YAML file.
+
+    Args:
+        path: Path to the Gap-and-Go strategy YAML file.
+
+    Returns:
+        Validated GapAndGoConfig instance.
+
+    Raises:
+        FileNotFoundError: If the file does not exist.
+        pydantic.ValidationError: If validation fails.
+    """
+    data = load_yaml_file(path)
+    return GapAndGoConfig(**data)
+
+
+def load_premarket_high_break_config(
+    path: Path,
+) -> PreMarketHighBreakConfig:
+    """Load Pre-Market High Break strategy configuration from a YAML file.
+
+    Args:
+        path: Path to the Pre-Market High Break strategy YAML file.
+
+    Returns:
+        Validated PreMarketHighBreakConfig instance.
+
+    Raises:
+        FileNotFoundError: If the file does not exist.
+        pydantic.ValidationError: If validation fails.
+    """
+    data = load_yaml_file(path)
+    return PreMarketHighBreakConfig(**data)
 
 
 def load_scanner_config(path: Path) -> ScannerConfig:
