@@ -10,7 +10,7 @@ Before making any changes:
 2. Run the scoped test baseline:
    `python -m pytest tests/strategies/patterns/ -x -q --timeout=30`
    Expected: all passing
-3. Verify you are on branch `sprint-29`
+3. Verify you are on branch `main`
 
 ## Objective
 Implement the HOD Break pattern as a PatternModule. This pattern detects high-of-day breakout continuations — stocks consolidating near their session high then breaking out with volume. Primary midday coverage provider (10:00–15:30 window).

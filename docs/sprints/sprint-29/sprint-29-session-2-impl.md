@@ -10,7 +10,7 @@ Before making any changes:
 2. Run the scoped test baseline:
    `python -m pytest tests/strategies/patterns/ tests/backtest/ -x -q --timeout=30`
    Expected: all passing (full suite confirmed by S1 close-out)
-3. Verify you are on branch `sprint-29`
+3. Verify you are on branch `main`
 
 ## Objective
 Convert Bull Flag and Flat-Top Breakout `get_default_params()` returns from `dict[str, Any]` to `list[PatternParam]` with complete metadata (ranges, steps, descriptions, categories). Update PatternBacktester to generate parameter sweep grids from PatternParam metadata instead of hardcoded ±20%/±40% percentage variations.

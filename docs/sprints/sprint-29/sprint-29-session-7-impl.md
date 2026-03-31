@@ -10,7 +10,7 @@ Before making any changes:
 2. Run the scoped test baseline:
    `python -m pytest tests/strategies/patterns/ -x -q --timeout=30`
    Expected: all passing
-3. Verify you are on branch `sprint-29`
+3. Verify you are on branch `main`
 
 ## Objective
 Implement the Pre-Market High Break pattern as a PatternModule. This pattern detects breakouts above the pre-market session high. The PM high is computed from extended-hours candles already present in PatternBasedStrategy's candle deque (EQUS.MINI delivers 4:00 AM–9:30 AM ET candles, and Sprint 27.65's fix accumulates bars before the operating window check).

@@ -12,7 +12,7 @@ Before making any changes:
    Expected: ~4,040+ tests, all passing (S1–S7 cumulative)
    Also run: `cd argus/ui && npx vitest run --reporter=verbose 2>&1 | tail -20`
    Expected: 680 tests, all passing
-3. Verify you are on branch `sprint-29`
+3. Verify you are on branch `main`
 
 ## Objective
 Final verification session. Confirm all 5 new patterns (or 4 if PM High Break was skipped) load correctly in the full system, configs parse without error, universe filters route correctly, exit overrides apply, and smoke backtests produce reasonable results. This session produces NO new code in the success path — only tests and verification. Fixes are permitted only if issues are discovered, and must be documented.

@@ -9,7 +9,7 @@ Before making any changes:
 2. Run the test baseline:
    Full suite: `python -m pytest tests/ -x -q --timeout=30 -n auto`
    Expected: ~3,966 tests + 688 Vitest, all passing
-3. Verify you are on the correct branch (create `sprint-29` branch if needed)
+3. Verify you are on branch `main`
 
 ## Objective
 Define the PatternParam frozen dataclass, update the PatternModule ABC `get_default_params()` return type from `dict[str, Any]` to `list[PatternParam]`, and add an optional `set_reference_data()` method. This establishes the structured parameter metadata foundation for all PatternModule patterns and the reference data hook for patterns needing prior close / pre-market context.

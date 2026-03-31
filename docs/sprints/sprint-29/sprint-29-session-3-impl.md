@@ -10,7 +10,7 @@ Before making any changes:
 2. Run the scoped test baseline:
    `python -m pytest tests/strategies/patterns/ -x -q --timeout=30`
    Expected: all passing
-3. Verify you are on branch `sprint-29`
+3. Verify you are on branch `main`
 
 ## Objective
 Implement the Dip-and-Rip pattern as a PatternModule. This pattern detects sharp intraday dips followed by rapid recoveries — a momentum reversal play. Includes strategy config YAML, universe filter, exit management override, and strategy registration.

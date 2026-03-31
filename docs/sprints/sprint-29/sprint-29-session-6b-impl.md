@@ -10,7 +10,7 @@ Before making any changes:
 2. Run the scoped test baseline:
    `python -m pytest tests/strategies/patterns/ -x -q --timeout=30`
    Expected: all passing (including S6a's ABCD tests)
-3. Verify you are on branch `sprint-29`
+3. Verify you are on branch `main`
 
 ## Objective
 Create ABCD strategy config, universe filter, exit management override, and register the strategy. Run a smoke backtest to verify end-to-end functionality. This is the lightweight wiring session after S6a's algorithm work.

@@ -8,7 +8,7 @@ Before making any changes:
 2. Run the scoped test baseline:
    `python -m pytest tests/strategies/patterns/ -x -q --timeout=30`
    Expected: all passing
-3. Verify you are on branch `sprint-29`
+3. Verify you are on branch `main`
 
 ## Objective
 Build the ABCD harmonic pattern algorithm: swing point detection, Fibonacci retracement validation, leg ratio checking, and completion zone calculation. This is the algorithm-heavy session — no config wiring or strategy registration (that's S6b). Self-contained implementation and testing.
