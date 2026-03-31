@@ -236,7 +236,7 @@ async def test_emergency_flatten_respects_flatten_pending_guard(
     _inject_position(om, pos)
 
     # Mark a flatten as already pending
-    om._flatten_pending["AAPL"] = "existing-flatten-order"
+    om._flatten_pending["AAPL"] = ("existing-flatten-order", 0.0, 0)
     om._stop_retry_count["AAPL"] = 3
 
     cancel = OrderCancelledEvent(order_id="stop-1", reason="Cancelled")

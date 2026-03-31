@@ -801,6 +801,9 @@ class OrderManagerConfig(BaseModel):
     stop_cancel_retry_max: int = Field(default=3, ge=0)
     auto_shutdown_after_eod: bool = True  # Gracefully shutdown after EOD flatten
     auto_shutdown_delay_seconds: int = Field(default=60, ge=0)  # Delay before shutdown
+    # Flatten-pending timeout: cancel+resubmit stale flatten orders (Sprint 28.75)
+    flatten_pending_timeout_seconds: int = Field(default=120, ge=10)
+    max_flatten_retries: int = Field(default=3, ge=1)
 
 
 # ---------------------------------------------------------------------------

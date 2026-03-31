@@ -70,12 +70,14 @@ vi.mock('../../hooks/usePositions', () => ({
   }),
 }));
 
+const mockUseTrades = vi.fn().mockReturnValue({
+  data: { trades: [], total_count: 0 },
+  isLoading: false,
+  error: null,
+});
+
 vi.mock('../../hooks/useTrades', () => ({
-  useTrades: () => ({
-    data: { trades: [] },
-    isLoading: false,
-    error: null,
-  }),
+  useTrades: (...args: unknown[]) => mockUseTrades(...args),
 }));
 
 vi.mock('../../stores/live', () => ({
@@ -163,6 +165,15 @@ describe('OpenPositions', () => {
     if (row) {
       expect(row).toHaveClass('cursor-pointer');
     }
+  });
+
+  it('closed tab queries with limit=250 (DEF-115)', () => {
+    renderWithProviders(<OpenPositions />);
+
+    // useTrades should be called with limit: 250 (API max, up from 50)
+    expect(mockUseTrades).toHaveBeenCalledWith(
+      expect.objectContaining({ limit: 250 })
+    );
   });
 
   it('shows sortable column headers', () => {

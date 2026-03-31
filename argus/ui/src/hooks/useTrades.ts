@@ -30,7 +30,7 @@ export function useTrades(params?: UseTradesParams, options?: UseTradesOptions) 
     queryFn: () => getTrades(params),
     staleTime: 30_000, // Data is fresh for 30 seconds
     refetchInterval: 30_000, // Poll every 30 seconds while tab is active
-    refetchOnWindowFocus: false, // Don't refetch when user tabs back
+    refetchOnWindowFocus: true, // Refetch when user tabs back (connectivity loss recovery)
     placeholderData: keepPreviousData, // Show stale data while refetching
     enabled: options?.enabled ?? true,
   });

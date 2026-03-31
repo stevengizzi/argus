@@ -64,6 +64,76 @@ class TradesBatchResponse(BaseModel):
     timestamp: str
 
 
+class TradeStatsResponse(BaseModel):
+    """Aggregate stats for filtered trades."""
+
+    total_trades: int
+    wins: int
+    losses: int
+    win_rate: float
+    net_pnl: float
+    avg_r: float | None
+    timestamp: str
+
+
+@router.get("/stats", response_model=TradeStatsResponse)
+async def get_trade_stats(
+    _auth: dict = Depends(require_auth),  # noqa: B008
+    state: AppState = Depends(get_app_state),  # noqa: B008
+    strategy_id: str | None = Query(None, description="Filter by strategy ID"),
+    date_from: str | None = Query(None, description="Start date filter (YYYY-MM-DD)"),
+    date_to: str | None = Query(None, description="End date filter (YYYY-MM-DD)"),
+    outcome: Literal["win", "loss", "breakeven"] | None = Query(
+        None, description="Filter by trade outcome"
+    ),
+) -> TradeStatsResponse:
+    """Get aggregate statistics for filtered trades.
+
+    Computes stats from the full filtered dataset server-side,
+    avoiding the pagination limit that affects client-side computation.
+
+    Args:
+        strategy_id: Optional strategy filter.
+        date_from: Optional start date (ISO YYYY-MM-DD).
+        date_to: Optional end date (ISO YYYY-MM-DD).
+        outcome: Optional outcome filter ("win", "loss", "breakeven").
+
+    Returns:
+        Aggregate trade statistics.
+    """
+    from argus.analytics.performance import compute_metrics
+
+    # Query ALL matching trades — use count_trades() to get true total,
+    # then fetch that exact count so metrics cover the full dataset.
+    total_count = await state.trade_logger.count_trades(
+        strategy_id=strategy_id,
+        date_from=date_from,
+        date_to=date_to,
+        outcome=outcome,
+    )
+
+    trades_data = await state.trade_logger.query_trades(
+        strategy_id=strategy_id,
+        date_from=date_from,
+        date_to=date_to,
+        outcome=outcome,
+        limit=max(total_count, 1),
+        offset=0,
+    )
+
+    metrics = compute_metrics(trades_data)
+
+    return TradeStatsResponse(
+        total_trades=metrics.total_trades,
+        wins=metrics.wins,
+        losses=metrics.losses,
+        win_rate=metrics.win_rate,
+        net_pnl=metrics.net_pnl,
+        avg_r=metrics.avg_r_multiple if metrics.total_trades > 0 else None,
+        timestamp=datetime.now(UTC).isoformat(),
+    )
+
+
 @router.get("", response_model=TradesResponse)
 async def get_trades(
     _auth: dict = Depends(require_auth),  # noqa: B008

@@ -78,7 +78,7 @@ export function OpenPositions() {
   // Filter trades to today (ET) to show only "Closed Today"
   const todayET = useMemo(() => getTodayET(), []);
   const { data: tradesData, isLoading: tradesLoading } = useTrades({
-    limit: 50,
+    limit: 250,
     date_from: todayET,
     date_to: todayET,
   });
@@ -94,6 +94,7 @@ export function OpenPositions() {
   // Extract positions array for stable dependency
   const positions = positionsData?.positions;
   const trades = tradesData?.trades ?? [];
+  const closedTotalCount = tradesData?.total_count ?? trades.length;
 
   // Merge REST positions with WebSocket price updates
   const enrichedPositions = useMemo<EnrichedPosition[]>(() => {
@@ -129,7 +130,7 @@ export function OpenPositions() {
     {
       label: 'All',
       value: 'all',
-      count: enrichedPositions.length + trades.length,
+      count: enrichedPositions.length + closedTotalCount,
     },
     {
       label: 'Open',
@@ -140,9 +141,9 @@ export function OpenPositions() {
     {
       label: 'Closed',
       value: 'closed',
-      count: trades.length,
+      count: closedTotalCount,
     },
-  ], [enrichedPositions.length, trades.length]);
+  ], [enrichedPositions.length, closedTotalCount]);
 
   // Toggle sort direction or change field
   const handleSort = (field: SortField) => {
@@ -581,7 +582,9 @@ export function OpenPositions() {
                     </Badge>
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums">{formatPrice(pos.entry_price)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{formatPrice(pos.livePrice)}</td>
+                  <td className={`px-4 py-3 text-right tabular-nums ${
+                    pos.livePrice > pos.entry_price ? 'text-argus-profit' : pos.livePrice < pos.entry_price ? 'text-argus-loss' : ''
+                  }`}>{formatPrice(pos.livePrice)}</td>
                   <td className="px-4 py-3 text-right">
                     <PnlValue value={pos.livePnl} size="sm" flash />
                   </td>
@@ -632,7 +635,9 @@ export function OpenPositions() {
                     </button>
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums">{formatPrice(pos.entry_price)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{formatPrice(pos.livePrice)}</td>
+                  <td className={`px-4 py-3 text-right tabular-nums ${
+                    pos.livePrice > pos.entry_price ? 'text-argus-profit' : pos.livePrice < pos.entry_price ? 'text-argus-loss' : ''
+                  }`}>{formatPrice(pos.livePrice)}</td>
                   <td className="px-4 py-3 text-right">
                     <PnlValue value={pos.livePnl} size="sm" flash />
                   </td>

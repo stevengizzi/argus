@@ -404,6 +404,65 @@ class TestTradesEndpoint:
             assert trade["strategy_id"] == "orb_breakout"
 
 
+class TestTradeStatsEndpoint:
+    """Tests for GET /api/v1/trades/stats endpoint."""
+
+    @pytest.mark.asyncio
+    async def test_stats_returns_aggregate_metrics(
+        self,
+        client_with_trades: AsyncClient,
+        auth_headers: dict[str, str],
+    ) -> None:
+        """Stats endpoint returns correct aggregate metrics."""
+        response = await client_with_trades.get(
+            "/api/v1/trades/stats",
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "total_trades" in data
+        assert "wins" in data
+        assert "losses" in data
+        assert "win_rate" in data
+        assert "net_pnl" in data
+        assert "avg_r" in data
+        assert "timestamp" in data
+
+        # We seeded 15 trades: 9 wins, 6 losses
+        assert data["total_trades"] == 15
+        assert data["wins"] == 9
+        assert data["losses"] == 6
+        assert data["win_rate"] > 0
+        assert isinstance(data["net_pnl"], (int, float))
+
+    @pytest.mark.asyncio
+    async def test_stats_with_strategy_filter(
+        self,
+        client_with_trades: AsyncClient,
+        auth_headers: dict[str, str],
+    ) -> None:
+        """Stats endpoint respects strategy_id filter."""
+        response = await client_with_trades.get(
+            "/api/v1/trades/stats?strategy_id=orb_breakout",
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        # orb_breakout: 9 trades (4 wins, 5 losses)
+        assert data["total_trades"] == 9
+
+    @pytest.mark.asyncio
+    async def test_stats_unauthenticated(
+        self,
+        client_with_trades: AsyncClient,
+    ) -> None:
+        """Returns 401 without valid auth."""
+        response = await client_with_trades.get("/api/v1/trades/stats")
+        assert response.status_code == 401
+
+
 class TestTradeResponseFields:
     """Tests for TradeResponse field completeness."""
 
