@@ -807,6 +807,8 @@ class OrderManagerConfig(BaseModel):
     # Flatten-pending timeout: cancel+resubmit stale flatten orders (Sprint 28.75)
     flatten_pending_timeout_seconds: int = Field(default=120, ge=10)
     max_flatten_retries: int = Field(default=3, ge=1)
+    # Max flatten retry cycles before abandoning (Sprint 29.5)
+    max_flatten_cycles: int = Field(default=2, ge=1)
 
 
 # ---------------------------------------------------------------------------

@@ -109,6 +109,10 @@ class IBKRBroker(Broker):
         # Rate-limited logger for high-volume IBKR errors
         self._throttled = ThrottledLogger(logger)
 
+        # Symbols that received IBKR error 404 (qty mismatch on SELL).
+        # Order Manager queries this to re-check broker qty before retry.
+        self.error_404_symbols: set[str] = set()
+
         # Wire up ib_async events
         # Note: ib_async is asyncio-native — NO call_soon_threadsafe() needed
         # (unlike Databento Sprint 12). Event handlers fire on the same event loop.
@@ -329,6 +333,19 @@ class IBKRBroker(Broker):
                 f"ibkr_10148_{req_id}",
                 f"IBKR error 10148 (orderId={req_id}): {error_string}",
                 interval_seconds=86400.0,  # effectively once per orderId
+            )
+            return
+
+        # Error 404: qty mismatch on SELL order (Sprint 29.5 R1).
+        # Track the symbol so Order Manager can re-query broker qty on next retry.
+        if error_code == 404:
+            symbol = contract.symbol if contract else "unknown"
+            self.error_404_symbols.add(symbol)
+            logger.warning(
+                "IBKR error 404 (qty mismatch) for %s (orderId=%d): %s",
+                symbol,
+                req_id,
+                error_string,
             )
             return
 

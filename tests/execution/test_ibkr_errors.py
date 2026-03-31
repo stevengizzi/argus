@@ -172,6 +172,7 @@ class TestErrorMapCompleteness:
             201,
             202,
             203,
+            404,
             # Account
             321,
             # Data

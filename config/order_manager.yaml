@@ -29,3 +29,10 @@ t1_position_pct: 0.5  # 50% of position exits at T1
 stop_retry_max: 1
 # Max retries for _resubmit_stop_with_retry cancel-event loop (IBKR cancels the stop)
 stop_cancel_retry_max: 3
+
+# Flatten-pending timeout and retry (Sprint 28.75 + 29.5)
+flatten_pending_timeout_seconds: 120
+max_flatten_retries: 3
+# Max cycles (each cycle = max_flatten_retries attempts) before abandoning
+# Abandoned symbols skip flatten until EOD final pass (Sprint 29.5)
+max_flatten_cycles: 2
