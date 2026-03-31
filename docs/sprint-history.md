@@ -1,7 +1,7 @@
 # ARGUS — Sprint History
 
 > Complete record of all sprints from project inception through current state.
-> Active development began February 14, 2026. As of March 30, 2026 (~45 calendar days), 30 full sprints + 35 sub-sprints completed.
+> Active development began February 14, 2026. As of March 30, 2026 (~45 calendar days), 30 full sprints + 36 sub-sprints completed.
 
 ---
 
@@ -31,6 +31,7 @@
 | Y — Broker Safety | 27.95 | Mar 26–28 | Reconciliation redesign, overflow routing, order mgmt hardening |
 | Z — Learning Loop | 28 | Mar 28–29 | Learning Loop V1: outcome analysis, config proposals, Performance UI |
 | AA — Exit Management | 28.5 | Mar 30 | Trailing stops, exit escalation, BacktestEngine/CounterfactualTracker alignment |
+| AB — Post-Session Fixes | 28.75 | Mar 30 | Flatten-pending timeout, log rate-limiting, server-side trade stats, UI fixes |
 
 ---
 
@@ -2133,13 +2134,53 @@
 **Zero issues** across all 6 sessions. No bugs, no scope gaps, no escalation triggers.
 **Notes:** Clean sprint. Exit management touches 3 critical code paths (Order Manager, BacktestEngine, CounterfactualTracker) with consistent AMD-7 bar-processing order across all three. Belt-and-suspenders pattern ensures broker stop always protects even if client-side trail check fails. The `exit_math.py` pure function library enables testing exit logic independently of the components that use it.
 
+## Sprint 28.75: Post-Session Operational + UI Fixes (March 30, 2026)
+
+**Type:** Impromptu — bugs discovered during March 30 market session debrief
+**Goal:** Fix operational and UI bugs found in March 30, 2026 market session (820 positions opened, 597 closed, 39% win rate, -$20,922 P&L in bearish regime with VIX at 30.00).
+**Sessions:** 2 (S1 backend, S2 frontend)
+**Tests:** pytest 3,955 → 3,966 (+11), Vitest 680 → 688 (+8)
+**New DECs:** None
+**New DEF items:** DEF-111 through DEF-120 (all resolved)
+**New files:** 4 (test files + hook)
+**Modified files:** ~20
+
+**Pre-sprint fix (same day, separate from sprint):**
+- VIX config wiring fix: `config/vix_regime.yaml` was a standalone file never loaded by `load_config()`. Added `vix_regime: enabled: true` to both `system.yaml` and `system_live.yaml`. Same pattern as Sprint 28.5 trailing stop config issue.
+
+**Session S1: Backend — Flatten-Pending Timeout + Log Rate-Limiting**
+- Flatten-pending timeout mechanism: `flatten_pending_timeout_seconds` (120s) + `max_flatten_retries` (3) on OrderManagerConfig. Stale flatten orders cancelled and resubmitted. Exhausted retries removed from `_flatten_pending`. Type changed from `dict[str, str]` to `dict[str, tuple[str, float, int]]` (DEF-112)
+- ThrottledLogger rate-limiting: "flatten already pending" (60s/symbol, DEF-113), "IBKR portfolio snapshot missing" (600s/symbol, DEF-114)
+- Trailing stop verification: code paths confirmed correct (DEF-111 — config timing issue, not code bug; operator changed YAML mid-session but ARGUS loads at startup only)
+- +5 pytest
+- Verdict: COMPLETE
+
+**Session S2: Frontend — UI Fixes + Server-Side Trade Stats**
+- VixRegimeCard sizing fix: removed h-full, wrapped in motion.div staggerItem (DEF-120)
+- TodayStats win rate display: `winRate > 0` → `trades > 0` (DEF-116)
+- Closed positions tab: limit 50 → 250, badge uses total_count (DEF-115)
+- Server-side trade stats: new `GET /api/v1/trades/stats` endpoint replaces client-side computation from paginated subset (DEF-117, subsumes DEF-102)
+- Avg R metric added to TradeStatsBar (DEF-118)
+- Open positions: current price colored green/red relative to entry (DEF-119)
+- +6 pytest, +8 Vitest
+- Verdict: COMPLETE
+
+**March 30 session observations (not DEF items):**
+- 820 positions opened, 597 closed, 39% WR, -$20,922 P&L
+- Flat-Top Breakout: 494 trades (61% volume) at 31.2% WR in bearish regime
+- 80 emergency flattens from stop retry exhaustion (DEC-372 working as designed)
+- 762 signals overflow-routed to counterfactual (DEC-375 working as designed)
+- 190 revision-rejected events handled via DEC-373 fresh order resubmission
+- Best trade: SWMR +$2,119 (Bull Flag T1)
+- Strategic question flagged: should Flat-Top Breakout be regime-gated more aggressively in bearish conditions? (DEC-381, deferred to paper data audit)
+
 ---
 
 ## Sprint Statistics
 
-- **Total sprints:** 30 full + 35 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9, 27.5, 27.6, 27.65, 27.7, 27.75, 27.8, 27.9, 27.95, 28.5)
-- **Total sessions:** ~451+ Claude Code sessions
-- **Total tests:** ~3,955 pytest + 680 Vitest = ~4,635 total
+- **Total sprints:** 30 full + 36 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9, 27.5, 27.6, 27.65, 27.7, 27.75, 27.8, 27.9, 27.95, 28.5, 28.75)
+- **Total sessions:** ~453+ Claude Code sessions
+- **Total tests:** ~3,966 pytest + 688 Vitest = ~4,654 total
 - **Total decisions:** 377 (DEC-001 through DEC-377)
 - **Calendar days (active dev):** ~45 (Feb 14 – Mar 30, 2026)
 - **Largest sprint:** 22 (9 implementation + 5 fix + 9 reviews, largest scope)

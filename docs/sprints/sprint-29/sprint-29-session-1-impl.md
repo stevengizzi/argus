@@ -8,7 +8,7 @@ Before making any changes:
    - `argus/strategies/patterns/bull_flag.py` (reference: current `get_default_params()` return)
 2. Run the test baseline:
    Full suite: `python -m pytest tests/ -x -q --timeout=30 -n auto`
-   Expected: ~3,955 tests, all passing
+   Expected: ~3,966 tests + 688 Vitest, all passing
 3. Verify you are on the correct branch (create `sprint-29` branch if needed)
 
 ## Objective

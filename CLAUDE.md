@@ -1,11 +1,11 @@
 # ARGUS — Claude Code Context
 
 > Dense, actionable context for Claude Code sessions. No history — see `docs/` for that.
-> Last updated: March 30, 2026 (Sprint 28.5 doc sync — Exit Management)
+> Last updated: March 30, 2026 (Sprint 28.75 doc sync — Post-Session Operational + UI Fixes)
 
 ## Active Sprint
 
-**No active sprint.** Sprint 28.5 (Exit Management) completed March 30, 2026.
+**No active sprint.** Sprint 28.75 (Post-Session Operational + UI Fixes) completed March 30, 2026.
 
 Next planned sprint: **29 (Pattern Expansion I)** — ABCD, Dip-and-Rip, HOD Break, Gap-and-Go patterns + PatternParam structured type (DEC-378, DEF-088). Followed by Sprints 30 (Short Selling + Parabolic Short), 31A (Pattern Expansion III to 15 strategies), 31.5 (Parallel Sweep), 32 (Parameterized Templates), 32.5 (Experiment Registry), 31B (Research Console, deferred per DEC-379).
 
@@ -17,7 +17,7 @@ Two roadmap amendments adopted March 23, 2026 adding 5 new sprint slots:
 - **32.5** (Experiment Registry + Promotion Pipeline): Partitioned SQLite registry, cohort-based promotion, simulated-paper screening, overnight experiment queue, kill switches, anti-fragility
 - **33.5** (Adversarial Stress Testing): Historical crisis replay + synthetic stress scenarios as PromotionPipeline gate
 Amendment docs: `docs/amendments/roadmap-amendment-experiment-infrastructure.md`, `docs/amendments/roadmap-amendment-intelligence-architecture.md`
-Build track: ~~21.6~~ ✅ → ~~27.5~~ ✅ → ~~27.6~~ ✅ → ~~27.7~~ ✅ → ~~27.75~~ ✅ → ~~27.8~~ ✅ → ~~27.9~~ ✅ → ~~27.95~~ ✅ → ~~28~~ ✅ → ~~28.5~~ ✅ → 29–31 → 32 → 32.5 → 33 → 33.5 → 34 → 35–41
+Build track: ~~21.6~~ ✅ → ~~27.5~~ ✅ → ~~27.6~~ ✅ → ~~27.7~~ ✅ → ~~27.75~~ ✅ → ~~27.8~~ ✅ → ~~27.9~~ ✅ → ~~27.95~~ ✅ → ~~28~~ ✅ → ~~28.5~~ ✅ → ~~28.75~~ ✅ → 29–31 → 32 → 32.5 → 33 → 33.5 → 34 → 35–41
 DEC ranges reserved: 379–385 (27.7, unused), 386–395 (32.5), 396–402 (33.5)
 
 ### Known Issues
@@ -29,7 +29,7 @@ DEC ranges reserved: 379–385 (27.7, unused), 386–395 (32.5), 396–402 (33.5
 
 - **Active sprint:** None (between sprints)
 - **Next sprint:** 29 (Pattern Expansion I — DEC-378: ABCD mandatory, DEF-088 promoted)
-- **Tests:** ~3,955 pytest + 680 Vitest (0 Vitest failures, 0 pre-existing pytest failures)
+- **Tests:** ~3,966 pytest + 688 Vitest (1 pre-existing Vitest failure in GoalTracker.test.tsx, 0 pre-existing pytest failures)
 - **Strategies:** 7 active (ORB Breakout, ORB Scalp, VWAP Reclaim, Afternoon Momentum, Red-to-Green, Bull Flag, Flat-Top Breakout)
 - **Infrastructure:** Databento EQUS.MINI (live) + IBKR paper trading (Account U24619949) + FMP Starter (scanning + reference data + daily bars for regime) + Finnhub (news + analyst recs) + Claude API (Copilot + Catalyst Classification) + Universe Manager (config-gated) + Catalyst Pipeline (config-gated) + Intelligence Polling Loop (config-gated) + Reference Data Cache + Quality Engine (config-gated) + Dynamic Position Sizer + Strategy Evaluation Telemetry (ring buffer + SQLite persistence) + Debrief Export (shutdown automation) + Evaluation Framework (MultiObjectiveResult, EnsembleResult, comparison API, slippage model) + Regime Intelligence (RegimeVector 11-field, 8 calculators, config-gated, Sprints 27.6 + 27.9) + VIX Data Service (yfinance daily VIX/SPX, 5 derived metrics, SQLite cache, config-gated, Sprint 27.9) + Counterfactual Engine (shadow position tracking, filter accuracy, shadow strategy mode, overflow routing, config-gated, Sprints 27.7 + 27.95) + Learning Loop V1 (OutcomeCollector, WeightAnalyzer, ThresholdAnalyzer, CorrelationAnalyzer, LearningService, ConfigProposalManager, LearningStore, config-gated, Sprint 28) + Exit Management (trailing stops ATR/percent/fixed, exit escalation, belt-and-suspenders, config-gated per strategy, Sprint 28.5) + ThrottledLogger (log rate-limiting, Sprint 27.75) + Paper trading config overrides (10x risk reduction, throttle disabled, $10 min risk floor, Sprint 27.75) + Broker-confirmed reconciliation (Sprint 27.95) + Overflow routing (config-gated, Sprint 27.95)
 - **Frontend:** 8-page Command Center (Observatory added Sprint 25) + AI Copilot + Universe Status Card + Intelligence Brief View (all active), Tauri desktop + PWA mobile
@@ -76,10 +76,10 @@ argus/
 
 ```bash
 # Tests
-python -m pytest --ignore=tests/test_main.py -n auto -q  # Full suite (~3,955 tests, ~39s with xdist)
+python -m pytest --ignore=tests/test_main.py -n auto -q  # Full suite (~3,966 tests, ~39s with xdist)
 python -m pytest tests/ -x               # Stop on first failure
 python -m pytest tests/ -x -q            # Fail-fast, quiet
-cd argus/ui && npx vitest run            # Frontend tests (~680)
+cd argus/ui && npx vitest run            # Frontend tests (~688)
 
 # Trading engine
 python -m argus.main                      # Start (paper trading default)
@@ -329,7 +329,7 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 | DEF-099 | Position reconciliation ghost positions in paper trading | Sprint 27.8 | **PARTIALLY RESOLVED** (Sprint 27.8 S1): Reconciliation auto-cleanup (config-gated `reconciliation.auto_cleanup_orphans`) generates synthetic close records for orphaned positions. Bracket exhaustion detection triggers flatten when all bracket legs cancelled. ExitReason.RECONCILIATION distinguishes synthetic from real exits. Monitor over 5+ sessions before marking fully resolved. |
 | DEF-100 | IBKR paper trading repricing storm (error 399 spam) | Unscheduled | IBKR paper trading thin-book simulation reprices market orders repeatedly (~1/sec/symbol). Sprint 27.75 log throttling mitigates noise. Underlying issue is IBKR-paper-specific — live trading unaffected. Potential mitigations: limit orders for paper, fill timeout+resubmit. Priority: LOW-MEDIUM. |
 | ~~DEF-101~~ | ~~Tests coupled to paper-trading config values~~ | ~~Sprint 27.8~~ | **RESOLVED** (Sprint 27.8 S1): `test_engine_sizing.py` reads YAML and asserts match (not hardcoded). `test_config.py` uses ordering invariant assertions. Tests now pass regardless of paper vs live config values. |
-| DEF-102 | Trades page server-side stats computation | Unscheduled | TradeStatsBar computes Win Rate/Net P&L client-side from paginated array (limit:250). If filtered period exceeds 250 trades, stats computed from subset. Fix: server-side aggregate stats endpoint. Priority: LOW — monitor trade volume. |
+| ~~DEF-102~~ | ~~Trades page server-side stats computation~~ | — | **RESOLVED** (Sprint 28.75 S2, subsumed by DEF-117): Server-side `GET /api/v1/trades/stats` endpoint replaces client-side computation from paginated subset. |
 | DEF-103 | yfinance reliability as unofficial scraping library | Unscheduled | yfinance is an unofficial Yahoo Finance scraper — no SLA, may break on Yahoo HTML/API changes. Mitigations: SQLite persistence cache (survives outage), staleness self-disable (`max_staleness_days=3`), optional FMP fallback (`fmp_fallback_enabled` flag), daily-only frequency (not real-time). Monitor for breakage over 5+ sessions. Priority: LOW. |
 | DEF-104 | Dual ExitReason enums (`events.py` + `trading.py`) must be kept in sync | Unscheduled | Sprint 27.8 added RECONCILIATION to events.py but missed trading.py, causing 336 Pydantic validation errors. Consolidation candidate for future cleanup sprint. Priority: MEDIUM. |
 | DEF-105 | Reconciliation trades inflate `total_trades` count | Unscheduled | Reconciliation closes are counted as BREAKEVEN trades, inflating Dashboard total_trades and Positions card counts. Related to DEF-098 (trade count inconsistency). Priority: LOW. |
@@ -338,14 +338,24 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 | DEF-108 | R2G `_build_signal` sync limitation — emits `atr_value=None` | Unscheduled | Red-to-Green strategy's `_build_signal` is synchronous, so it emits `atr_value=None`. If R2G ever needs ATR-based trailing stops, the method or its caller would need refactoring. Currently uses percent fallback as designed. Priority: LOW. Discovered: Sprint 28.5 S3. |
 | DEF-109 | V1 trailing stop config dead code on `OrderManagerConfig` | Unscheduled | Legacy `enable_trailing_stop` and `trailing_stop_atr_multiplier` fields on `OrderManagerConfig` are no longer referenced in `on_tick` after Sprint 28.5 replaced the V1 skeleton. Dead code. Priority: LOW. Discovered: Sprint 28.5 S4b. |
 | DEF-110 | Exit reason misattribution on escalation-failure + trail-active positions | Unscheduled | In `_handle_flatten_fill`, exit reason is set to `TRAILING_STOP` based on `position.trail_active`. If escalation stop update fails (AMD-3) on a trail-active position, the flatten is logged as TRAILING_STOP rather than an escalation-related reason. Cosmetic — position closes correctly. Priority: LOW. Discovered: Sprint 28.5 S4b. |
+| ~~DEF-111~~ | ~~Trail stops not firing in live session~~ | — | **RESOLVED** (Sprint 28.75 S1): Config timing — operator changed YAML mid-session; ARGUS loads at startup only. Code paths verified correct. Trail will be live on next session boot. |
+| ~~DEF-112~~ | ~~Flatten-pending orders hang indefinitely~~ | — | **RESOLVED** (Sprint 28.75 S1): Added `flatten_pending_timeout_seconds` (120s) + `max_flatten_retries` (3) to OrderManagerConfig. Stale flatten orders cancelled and resubmitted. |
+| ~~DEF-113~~ | ~~"flatten already pending" log spam (2,003/session)~~ | — | **RESOLVED** (Sprint 28.75 S1): ThrottledLogger, 60s per-symbol suppression. |
+| ~~DEF-114~~ | ~~"IBKR portfolio snapshot missing" log spam~~ | — | **RESOLVED** (Sprint 28.75 S1): ThrottledLogger, 600s per-symbol suppression. |
+| ~~DEF-115~~ | ~~Closed positions tab capped at 50~~ | — | **RESOLVED** (Sprint 28.75 S2): Limit increased to 250 (API max). Badge uses total_count. |
+| ~~DEF-116~~ | ~~TodayStats win rate shows 0%~~ | — | **RESOLVED** (Sprint 28.75 S2): Frontend display logic: `winRate > 0` → `trades > 0`. Backend compute_metrics was correct. |
+| ~~DEF-117~~ | ~~Trades page stats freeze + filter bug~~ | — | **RESOLVED** (Sprint 28.75 S2): New server-side `GET /api/v1/trades/stats` endpoint. refetchOnWindowFocus enabled. Subsumes DEF-102. |
+| ~~DEF-118~~ | ~~Avg R missing from Trades page summary~~ | — | **RESOLVED** (Sprint 28.75 S2): Added to TradeStatsBar via stats endpoint. |
+| ~~DEF-119~~ | ~~Open positions colored P&L + exit price~~ | — | **RESOLVED** (Sprint 28.75 S2): Current price colored green/red relative to entry. P&L column already existed. |
+| ~~DEF-120~~ | ~~VixRegimeCard fills entire viewport~~ | — | **RESOLVED** (Sprint 28.75 S2): Removed h-full, wrapped in motion.div staggerItem on all layouts. |
 
 ## Reference
 
 | Document | What It Covers |
 |----------|---------------|
-| `docs/decision-log.md` | All 377 DEC entries with full rationale (9 new in Sprint 27.95: DEC-369–377) |
+| `docs/decision-log.md` | All 377 DEC entries with full rationale (no new DECs in Sprint 28.75) |
 | `docs/dec-index.md` | Quick-reference index with status markers |
-| `docs/sprint-history.md` | Complete sprint history (1–28.5) |
+| `docs/sprint-history.md` | Complete sprint history (1–28.75) |
 | `docs/pre-live-transition-checklist.md` | Config + test values to restore before live trading |
 | `docs/process-evolution.md` | Workflow evolution narrative |
 | `docs/live-operations.md` | Live trading procedures |

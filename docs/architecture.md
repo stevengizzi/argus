@@ -760,7 +760,7 @@ sector_rotation: { enabled: true }
 intraday: { enabled: true, first_bar_minutes: 5, classification_times: ["09:35","10:00","10:30"], min_spy_bars: 3 }
 ```
 
-**VIX Config (`config/vix_regime.yaml`, Sprint 27.9):**
+**VIX Config (`config/vix_regime.yaml`, Sprint 27.9; runtime config wired through `system.yaml`/`system_live.yaml` under `vix_regime:` key):**
 ```yaml
 enabled: true
 max_staleness_days: 3
@@ -833,6 +833,8 @@ class OrderManager:
         """Close all positions at market. Called from poll loop when
         clock.now() >= eod_flatten_time. Sets _flattened_today flag."""
 ```
+
+**Sprint 28.75 flatten-pending timeout (DEF-112):** `flatten_pending_timeout_seconds` (default 120s) + `max_flatten_retries` (default 3) on OrderManagerConfig. Stale flatten orders cancelled and resubmitted. Exhausted retries removed from `_flatten_pending` (caught by EOD flatten). `_flatten_pending` type changed from `dict[str, str]` to `dict[str, tuple[str, float, int]]` (order_id, monotonic_time, retry_count). ThrottledLogger rate-limiting on "flatten already pending" (60s/symbol) and "IBKR portfolio snapshot missing" (600s/symbol).
 
 #### ExecutionRecord Logging (`execution/execution_record.py`) — Sprint 21.6 ✅
 
@@ -1684,8 +1686,9 @@ GET/PUT/DELETE   /api/v1/debrief/journal/{id}        # Get / update / delete ent
 GET              /api/v1/debrief/journal/tags        # List all journal tags
 GET              /api/v1/debrief/search              # Unified search across all 3 types
 
-# Trade batch endpoint (Sprint 21c, DEC-203)
+# Trade batch + stats endpoints (Sprint 21c, DEC-203; Sprint 28.75)
 GET  /api/v1/trades/batch?ids=<ULIDs>           # Batch fetch trades by ID (max 50)
+GET  /api/v1/trades/stats                        # Server-side aggregate trade stats (Sprint 28.75, DEF-117 — replaces client-side computation)
 
 # Performance analytics endpoints (Sprint 21d)
 GET  /api/v1/performance/heatmap                # Trade activity heatmap data (hour×DOW grid)
