@@ -420,7 +420,8 @@ class PreMarketHighBreakPattern(PatternModule):
     def score(self, detection: PatternDetection) -> float:
         """Score a detected pre-market high break pattern (0-100).
 
-        Components:
+        Delegates to _compute_confidence() to maintain a single scoring
+        formula. Components (30/25/25/20 weighting):
             - PM high quality (30): more touches + longer establishment
             - Breakout volume (25): higher volume ratio
             - Gap context (25): gap up > flat > gap down
@@ -433,43 +434,13 @@ class PreMarketHighBreakPattern(PatternModule):
             Quality score between 0 and 100.
         """
         meta = detection.metadata
-
-        # PM high quality (0-30): touches + establishment
-        touches = int(meta.get("pm_high_touch_count", 1))
-        estab = int(meta.get("pm_high_establishment_bars", 0))
-        touch_score = min(touches / 5.0, 1.0) * 20
-        estab_score = min(estab / 10.0, 1.0) * 10
-        pm_quality = touch_score + estab_score
-
-        # Breakout volume (0-25)
-        vol_ratio = float(meta.get("breakout_volume_ratio", 1.0))
-        vol_score = (
-            min((vol_ratio - 1.0) / 2.0, 1.0) * 25 if vol_ratio > 1.0 else 0.0
+        return self._compute_confidence(
+            touch_count=int(meta.get("pm_high_touch_count", 1)),
+            establishment_bars=int(meta.get("pm_high_establishment_bars", 0)),
+            volume_ratio=float(meta.get("breakout_volume_ratio", 1.0)),
+            gap_percent=float(meta.get("gap_percent", 0.0)),
+            vwap_distance_pct=float(meta.get("vwap_distance_pct", 0.0)),
         )
-
-        # Gap context (0-25)
-        gap_pct = float(meta.get("gap_percent", 0.0))
-        if gap_pct >= self._gap_up_bonus_pct:
-            gap_score = 25.0
-        elif gap_pct > 0:
-            gap_score = 15.0 + (gap_pct / self._gap_up_bonus_pct) * 10.0
-        elif gap_pct > -1.0:
-            gap_score = 10.0
-        else:
-            gap_score = 5.0
-
-        # VWAP distance (0-20)
-        vwap_dist = float(meta.get("vwap_distance_pct", 0.0))
-        if vwap_dist <= 0.02:
-            vwap_score = 20.0
-        elif vwap_dist >= self._vwap_extended_pct:
-            vwap_score = 4.0
-        else:
-            frac = (vwap_dist - 0.02) / (self._vwap_extended_pct - 0.02)
-            vwap_score = 20.0 - frac * 16.0
-
-        total = pm_quality + vol_score + gap_score + vwap_score
-        return max(0.0, min(100.0, total))
 
     def get_default_params(self) -> list[PatternParam]:
         """Return structured parameter metadata for PM High Break pattern.
@@ -546,7 +517,7 @@ class PreMarketHighBreakPattern(PatternModule):
                 max_value=1.0,
                 step=0.1,
                 description="ATR multiplier for stop below PM high",
-                category="detection",
+                category="trade",
             ),
             PatternParam(
                 name="target_ratio",
@@ -556,7 +527,7 @@ class PreMarketHighBreakPattern(PatternModule):
                 max_value=3.0,
                 step=0.5,
                 description="PM range multiplier for target above PM high",
-                category="scoring",
+                category="trade",
             ),
             PatternParam(
                 name="target_1_r",
@@ -566,7 +537,7 @@ class PreMarketHighBreakPattern(PatternModule):
                 max_value=2.0,
                 step=0.5,
                 description="First target as R-multiple of risk",
-                category="scoring",
+                category="trade",
             ),
             PatternParam(
                 name="target_2_r",
@@ -576,7 +547,7 @@ class PreMarketHighBreakPattern(PatternModule):
                 max_value=4.0,
                 step=1.0,
                 description="Second target as R-multiple of risk",
-                category="scoring",
+                category="trade",
             ),
             PatternParam(
                 name="min_score_threshold",

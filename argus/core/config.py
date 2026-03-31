@@ -1058,8 +1058,8 @@ class DipAndRipConfig(StrategyConfig):
     target_ratio: float = Field(default=1.5, gt=0, le=5.0)
 
     # Targets and stops
-    target_1_r: float = Field(default=1.0, gt=0)
-    target_2_r: float = Field(default=2.0, gt=0)
+    target_1_r: float = Field(default=1.5, gt=0)
+    target_2_r: float = Field(default=2.5, gt=0)
     time_stop_minutes: int = Field(default=30, ge=1)
 
 

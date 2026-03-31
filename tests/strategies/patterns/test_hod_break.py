@@ -434,10 +434,10 @@ class TestPatternParams:
     """Test get_default_params() completeness."""
 
     def test_param_count(self) -> None:
-        """Should return ~12 PatternParam entries."""
+        """Should return ~11 PatternParam entries."""
         pattern = HODBreakPattern()
         params = pattern.get_default_params()
-        assert len(params) == 12
+        assert len(params) == 11
 
     def test_all_params_are_pattern_param(self) -> None:
         """All entries must be PatternParam instances."""
@@ -454,7 +454,7 @@ class TestPatternParams:
     def test_param_categories_populated(self) -> None:
         """All params must have a category (detection, scoring, filtering)."""
         pattern = HODBreakPattern()
-        valid_categories = {"detection", "scoring", "filtering"}
+        valid_categories = {"detection", "scoring", "filtering", "trade"}
         for param in pattern.get_default_params():
             assert param.category in valid_categories, (
                 f"{param.name} has invalid category: {param.category}"

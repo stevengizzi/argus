@@ -463,7 +463,7 @@ class GapAndGoPattern(PatternModule):
                 max_value=3.0,
                 step=0.5,
                 description="Gap size multiplier for target from entry",
-                category="detection",
+                category="trade",
             ),
             PatternParam(
                 name="prior_day_avg_volume",

@@ -509,7 +509,7 @@ class DipAndRipPattern(PatternModule):
                 max_value=1.0,
                 step=0.1,
                 description="ATR multiplier for stop buffer below dip low",
-                category="detection",
+                category="trade",
             ),
             PatternParam(
                 name="target_ratio",
@@ -519,6 +519,6 @@ class DipAndRipPattern(PatternModule):
                 max_value=3.0,
                 step=0.25,
                 description="Target = dip range * this ratio from dip low",
-                category="detection",
+                category="trade",
             ),
         ]

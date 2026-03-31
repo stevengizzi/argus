@@ -41,7 +41,6 @@ class ABCDPattern(PatternModule):
         completion_tolerance_percent: D-zone tolerance as percentage.
         stop_buffer_atr_mult: ATR multiple below C for stop placement.
         target_extension: Fibonacci extension for target from D.
-        min_score_threshold: Minimum score to emit detection.
     """
 
     def __init__(
@@ -59,7 +58,6 @@ class ABCDPattern(PatternModule):
         completion_tolerance_percent: float = 1.0,
         stop_buffer_atr_mult: float = 0.5,
         target_extension: float = 1.272,
-        min_score_threshold: float = 0.0,
     ) -> None:
         self._swing_lookback = swing_lookback
         self._min_swing_atr_mult = min_swing_atr_mult
@@ -74,7 +72,6 @@ class ABCDPattern(PatternModule):
         self._completion_tolerance_percent = completion_tolerance_percent
         self._stop_buffer_atr_mult = stop_buffer_atr_mult
         self._target_extension = target_extension
-        self._min_score_threshold = min_score_threshold
 
     @property
     def name(self) -> str:
@@ -571,15 +568,5 @@ class ABCDPattern(PatternModule):
                 step=0.1,
                 description="Fibonacci extension multiplier for target from D",
                 category="trade",
-            ),
-            PatternParam(
-                name="min_score_threshold",
-                param_type=float,
-                default=self._min_score_threshold,
-                min_value=0.0,
-                max_value=40.0,
-                step=10.0,
-                description="Minimum score to emit detection",
-                category="filtering",
             ),
         ]

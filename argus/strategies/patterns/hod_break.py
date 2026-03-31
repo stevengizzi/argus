@@ -40,7 +40,6 @@ class HODBreakPattern(PatternModule):
         target_ratio: Measured move multiplier for target from breakout point.
         target_1_r: First target as R-multiple of risk.
         target_2_r: Second target as R-multiple of risk.
-        min_score_threshold: Minimum score to emit detection.
         vwap_extended_pct: VWAP distance above which score degrades (default 0.05).
     """
 
@@ -56,7 +55,6 @@ class HODBreakPattern(PatternModule):
         target_ratio: float = 2.0,
         target_1_r: float = 1.0,
         target_2_r: float = 2.0,
-        min_score_threshold: float = 0.0,
         vwap_extended_pct: float = 0.05,
     ) -> None:
         self._hod_proximity_percent = hod_proximity_percent
@@ -69,7 +67,6 @@ class HODBreakPattern(PatternModule):
         self._target_ratio = target_ratio
         self._target_1_r = target_1_r
         self._target_2_r = target_2_r
-        self._min_score_threshold = min_score_threshold
         self._vwap_extended_pct = vwap_extended_pct
 
     @property
@@ -273,7 +270,13 @@ class HODBreakPattern(PatternModule):
         hod_touch_count: int,
         vwap_distance_pct: float,
     ) -> float:
-        """Compute detection confidence from pattern quality metrics.
+        """Compute detection confidence (0-100).
+
+        Uses equal 25/25/25/25 weights for detection confidence.
+        This differs from score() which uses spec-mandated 30/25/25/20
+        weights for quality scoring. The distinction is intentional —
+        confidence measures detection reliability, score measures setup
+        quality for the Quality Engine.
 
         Args:
             consol_range: Consolidation price range.
@@ -432,7 +435,7 @@ class HODBreakPattern(PatternModule):
                 max_value=1.0,
                 step=0.1,
                 description="ATR multiplier for stop below consolidation low",
-                category="detection",
+                category="trade",
             ),
             PatternParam(
                 name="target_ratio",
@@ -442,7 +445,7 @@ class HODBreakPattern(PatternModule):
                 max_value=4.0,
                 step=0.5,
                 description="Measured move multiplier (consol range x ratio)",
-                category="scoring",
+                category="trade",
             ),
             PatternParam(
                 name="target_1_r",
@@ -452,7 +455,7 @@ class HODBreakPattern(PatternModule):
                 max_value=2.0,
                 step=0.5,
                 description="First target as R-multiple of risk",
-                category="scoring",
+                category="trade",
             ),
             PatternParam(
                 name="target_2_r",
@@ -462,17 +465,7 @@ class HODBreakPattern(PatternModule):
                 max_value=4.0,
                 step=1.0,
                 description="Second target as R-multiple of risk",
-                category="scoring",
-            ),
-            PatternParam(
-                name="min_score_threshold",
-                param_type=float,
-                default=self._min_score_threshold,
-                min_value=0.0,
-                max_value=40.0,
-                step=10.0,
-                description="Minimum confidence score to emit detection",
-                category="filtering",
+                category="trade",
             ),
             PatternParam(
                 name="vwap_extended_pct",

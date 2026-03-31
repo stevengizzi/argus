@@ -457,11 +457,11 @@ class TestABCDScoring:
 class TestPatternParams:
     """Tests for get_default_params()."""
 
-    def test_param_count_at_least_14(self) -> None:
-        """get_default_params returns >= 14 PatternParam entries."""
+    def test_param_count_at_least_13(self) -> None:
+        """get_default_params returns >= 13 PatternParam entries."""
         pattern = ABCDPattern()
         params = pattern.get_default_params()
-        assert len(params) >= 14
+        assert len(params) >= 13
 
     def test_params_have_metadata(self) -> None:
         """All params have name, description, category, type, range."""
