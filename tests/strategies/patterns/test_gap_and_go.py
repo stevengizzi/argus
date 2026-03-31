@@ -486,6 +486,51 @@ class TestPatternName:
         assert GapAndGoPattern().lookback_bars == 15
 
 
+class TestProductionIntegration:
+    """Tests for production-like usage (no indicators['symbol'] key)."""
+
+    def test_detect_works_with_single_prior_close(self) -> None:
+        """Pattern detects when only one prior close is set (no symbol key)."""
+        pattern = GapAndGoPattern()
+        pattern.set_reference_data({"prior_closes": {"TSLA": 100.0}})
+
+        candles, indicators = _build_gap_and_go_candles()
+        # Remove symbol key — simulates production PatternBasedStrategy
+        indicators.pop("symbol", None)
+
+        result = pattern.detect(candles, indicators)
+        assert result is not None
+        assert result.pattern_type == "gap_and_go"
+
+    def test_detect_returns_none_with_ambiguous_prior_closes(self) -> None:
+        """Pattern returns None when multiple prior closes match the gap."""
+        pattern = GapAndGoPattern(min_gap_percent=3.0)
+        # Both prior closes would produce a valid gap for open=104
+        pattern.set_reference_data({
+            "prior_closes": {"TSLA": 100.0, "AAPL": 100.5}
+        })
+
+        candles, indicators = _build_gap_and_go_candles(
+            prior_close=100.0, gap_open=104.0
+        )
+        indicators.pop("symbol", None)
+
+        result = pattern.detect(candles, indicators)
+        # Ambiguous: 2 matches → None
+        assert result is None
+
+    def test_min_score_threshold_filters_low_confidence(self) -> None:
+        """min_score_threshold rejects detections below the threshold."""
+        pattern = GapAndGoPattern(min_score_threshold=99.0)
+        pattern.set_reference_data({"prior_closes": {"TSLA": 100.0}})
+
+        candles, indicators = _build_gap_and_go_candles()
+        result = pattern.detect(candles, indicators)
+
+        # Confidence is capped well below 99 → should be rejected
+        assert result is None
+
+
 class TestEdgeCases:
     """Edge cases and safety checks."""
 

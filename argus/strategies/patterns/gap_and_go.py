@@ -123,10 +123,21 @@ class GapAndGoPattern(PatternModule):
         first_candle = candles[0]
 
         # --- Gap calculation ---
-        # Symbol extracted from indicator key convention or first candle
-        # Prior close must be set via set_reference_data()
-        symbol = str(indicators.get("symbol", ""))
-        prior_close = self._prior_closes.get(symbol)
+        # Prior close must be set via set_reference_data().
+        # Resolve prior close: check indicators["symbol"] first (explicit),
+        # then fall back to matching against all known prior closes.
+        prior_close: float | None = None
+        symbol_key = str(indicators.get("symbol", ""))
+        if symbol_key and symbol_key in self._prior_closes:
+            prior_close = self._prior_closes[symbol_key]
+        elif self._prior_closes:
+            # Single-symbol optimization: if only one prior close stored, use it
+            if len(self._prior_closes) == 1:
+                prior_close = next(iter(self._prior_closes.values()))
+            else:
+                # Match first candle open against prior closes to find best gap
+                prior_close = self._find_matching_prior_close(first_candle.open)
+
         if prior_close is None or prior_close <= 0:
             return None
 
@@ -212,6 +223,10 @@ class GapAndGoPattern(PatternModule):
         # Confidence based on gap quality
         confidence = min(gap_percent / 10.0, 1.0) * 50 + min(volume_ratio / 5.0, 1.0) * 50
 
+        # Min score threshold filter
+        if self._min_score_threshold > 0 and confidence < self._min_score_threshold:
+            return None
+
         return PatternDetection(
             pattern_type="gap_and_go",
             confidence=confidence,
@@ -231,6 +246,32 @@ class GapAndGoPattern(PatternModule):
                 "has_catalyst": bool(indicators.get("has_catalyst", False)),
             },
         )
+
+    def _find_matching_prior_close(self, open_price: float) -> float | None:
+        """Find the prior close that produces a qualifying gap for this open.
+
+        When the symbol is not explicitly provided via indicators, this
+        method searches all known prior closes to find one that produces
+        a gap >= min_gap_percent.  If exactly one match is found it is
+        returned; otherwise returns None (ambiguous or no match).
+
+        Args:
+            open_price: First candle open price.
+
+        Returns:
+            Matching prior close price, or None.
+        """
+        matches: list[float] = []
+        for pc in self._prior_closes.values():
+            if pc <= 0:
+                continue
+            gap_pct = (open_price - pc) / pc * 100
+            if gap_pct >= self._min_gap_percent:
+                matches.append(pc)
+
+        if len(matches) == 1:
+            return matches[0]
+        return None
 
     def _detect_first_pullback(
         self, candles: list[CandleBar]
