@@ -125,9 +125,9 @@ class TestConfigValidation:
         assert config.timezone == "UTC"
 
     def test_daily_loss_limit_out_of_range(self) -> None:
-        """Daily loss limit > 20% is rejected."""
+        """Daily loss limit > 100% is rejected."""
         with pytest.raises(ValidationError):
-            ArgusConfig(risk={"account": {"daily_loss_limit_pct": 0.25}})
+            ArgusConfig(risk={"account": {"daily_loss_limit_pct": 1.5}})
 
     def test_negative_heartbeat_rejected(self) -> None:
         """Heartbeat interval must be >= 1."""

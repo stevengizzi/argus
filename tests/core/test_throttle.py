@@ -574,6 +574,52 @@ class TestCustomThresholds:
 # ---------------------------------------------------------------------------
 
 
+class TestThrottlerSuspendBypass:
+    """Tests for the suspend_enabled config-gated bypass (Sprint 29.5)."""
+
+    def test_throttler_suspend_disabled_returns_none(self) -> None:
+        """When suspend_enabled=False, evaluate() returns NONE regardless of trade history."""
+        config = OrchestratorConfig(
+            consecutive_loss_throttle=5,
+            suspension_sharpe_threshold=0.0,
+            suspension_drawdown_pct=0.15,
+        )
+        throttler = PerformanceThrottler(config, suspend_enabled=False)
+
+        # 10 consecutive losses + terrible daily P&L — would normally SUSPEND
+        trades = [make_trade(net_pnl=-50.0) for _ in range(10)]
+        daily_pnl = make_daily_pnl(
+            [100.0] * 10 + [-200.0, -100.0, -100.0]
+        )
+
+        result = throttler.check("test_strategy", trades, daily_pnl)
+        assert result == ThrottleAction.NONE
+
+    def test_throttler_suspend_enabled_normal_behavior(self) -> None:
+        """When suspend_enabled=True, existing throttle behavior is preserved."""
+        config = OrchestratorConfig(
+            consecutive_loss_throttle=5,
+            suspension_sharpe_threshold=0.0,
+            suspension_drawdown_pct=0.15,
+        )
+        throttler = PerformanceThrottler(config, suspend_enabled=True)
+
+        # 5 consecutive losses → should REDUCE
+        trades = [make_trade(net_pnl=-50.0) for _ in range(5)]
+        daily_pnl = make_daily_pnl([50.0] * 10)
+
+        result = throttler.check("test_strategy", trades, daily_pnl)
+        assert result == ThrottleAction.REDUCE
+
+    def test_orchestrator_config_throttler_flag(self) -> None:
+        """OrchestratorConfig loads throttler_suspend_enabled with default True."""
+        config = OrchestratorConfig()
+        assert config.throttler_suspend_enabled is True
+
+        config_disabled = OrchestratorConfig(throttler_suspend_enabled=False)
+        assert config_disabled.throttler_suspend_enabled is False
+
+
 class TestNoTradeHistory:
     """Tests for throttler behavior when a strategy has no trade history."""
 

@@ -428,8 +428,8 @@ class SystemConfig(BaseModel):
 class AccountRiskConfig(BaseModel):
     """Account-level risk limits."""
 
-    daily_loss_limit_pct: float = Field(default=0.03, gt=0, le=0.2)
-    weekly_loss_limit_pct: float = Field(default=0.05, gt=0, le=0.3)
+    daily_loss_limit_pct: float = Field(default=0.03, gt=0, le=1.0)
+    weekly_loss_limit_pct: float = Field(default=0.05, gt=0, le=1.0)
     cash_reserve_pct: float = Field(default=0.20, ge=0, le=0.5)
     max_concurrent_positions: int = Field(default=10, ge=0)  # 0 = disabled (no limit)
     emergency_shutdown_enabled: bool = True
@@ -632,6 +632,9 @@ class OrchestratorConfig(BaseModel):
     pre_market_time: str = "09:25"  # HH:MM in market timezone
     eod_review_time: str = "16:05"  # HH:MM in market timezone
     poll_interval_seconds: int = Field(default=30, ge=1)
+
+    # Throttler suspend bypass (paper trading data capture)
+    throttler_suspend_enabled: bool = True
 
     # Correlation limits
     correlation_enabled: bool = True

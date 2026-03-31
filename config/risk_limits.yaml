@@ -1,6 +1,7 @@
 account:
-  daily_loss_limit_pct: 0.03
-  weekly_loss_limit_pct: 0.05
+  # PAPER TRADING: Set to 1.0 (100%) to maximize data capture. Restore to 0.03/0.05 before live trading.
+  daily_loss_limit_pct: 1.0
+  weekly_loss_limit_pct: 1.0
   cash_reserve_pct: 0.20
   max_concurrent_positions: 0
   emergency_shutdown_enabled: true

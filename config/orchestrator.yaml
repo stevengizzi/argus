@@ -42,6 +42,9 @@ suspension_drawdown_pct: 0.50
 # Days of positive performance required before reactivating suspended strategy
 recovery_days_required: 10
 
+# PAPER TRADING: Disabled to allow all strategies to trade. Restore to true before live.
+throttler_suspend_enabled: false
+
 # ---------------------------------------------------------------------------
 # Regime Detection
 # ---------------------------------------------------------------------------
