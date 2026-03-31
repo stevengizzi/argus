@@ -415,6 +415,43 @@ class TestEodFlattenBrokerOnly:
         assert "TSLA" in sell_symbols
 
     @pytest.mark.asyncio
+    async def test_eod_flatten_broker_only_after_market_close(
+        self,
+        event_bus: EventBus,
+        mock_broker: MagicMock,
+    ) -> None:
+        """EOD Pass 2 executes even after 16:00 ET (force_execute=True)."""
+        # Clock at 16:05 ET = 20:05 UTC — outside normal market hours
+        after_close_clock = FixedClock(
+            datetime(2026, 3, 30, 20, 5, 0, tzinfo=UTC)
+        )
+        om = _make_om(event_bus, mock_broker, after_close_clock)
+
+        # Broker reports an untracked position
+        tsla_pos = MagicMock()
+        tsla_pos.symbol = "TSLA"
+        tsla_pos.qty = 200
+
+        mock_broker.get_positions = AsyncMock(return_value=[tsla_pos])
+        mock_broker.place_order = AsyncMock(
+            return_value=OrderResult(
+                order_id="eod-force-1",
+                broker_order_id="broker-eod-force-1",
+                status=OrderStatus.PENDING,
+            )
+        )
+
+        await om.eod_flatten()
+
+        # TSLA should have been flattened immediately (not queued)
+        assert len(om._startup_flatten_queue) == 0
+        sell_symbols = [
+            call[0][0].symbol
+            for call in mock_broker.place_order.call_args_list
+        ]
+        assert "TSLA" in sell_symbols
+
+    @pytest.mark.asyncio
     async def test_eod_flatten_broker_query_failure(
         self,
         event_bus: EventBus,

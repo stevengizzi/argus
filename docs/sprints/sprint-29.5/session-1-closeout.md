@@ -54,6 +54,14 @@ None
 - Startup queue drain fires in the poll loop, not via event subscription. The queue empties on first drain, so repeated poll iterations are no-ops.
 - _flatten_unknown_position now checks market hours via clock (not datetime.now), making it testable with FixedClock
 
+### Post-Review Fixes
+The following findings from the Tier 2 review were addressed in this session:
+| Finding | Fix | Commit |
+|---------|-----|--------|
+| F1: EOD Pass 2 market-hours gate | Added `force_execute=True` param to `_flatten_unknown_position`, passed from EOD Pass 2 | see below |
+| F2: Dead-code `_flatten_abandoned` in `_suppress_log` | Removed unreachable condition | see below |
+| F3: `et_tz2`/`now_et2` naming | Added clarifying comment | see below |
+
 ---END-CLOSE-OUT---
 
 ```json:structured-closeout

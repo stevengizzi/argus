@@ -1301,6 +1301,9 @@ class OrderManager:
 
                 # Drain startup flatten queue at market open (Sprint 29.5 R4)
                 if self._startup_flatten_queue:
+                    # Separate ET time for startup queue drain — distinct from
+                    # eod_flatten's et_tz/now_et which are inside a conditional
+                    # guard and may not be in scope.
                     et_tz2 = ZoneInfo("America/New_York")
                     if now.tzinfo is not None:
                         now_et2 = now.astimezone(et_tz2)
@@ -1323,10 +1326,7 @@ class OrderManager:
 
                         # Determine if flatten is already pending/abandoned
                         # for log suppression (Sprint 29.5 R5)
-                        _suppress_log = (
-                            symbol in self._flatten_pending
-                            or symbol in self._flatten_abandoned
-                        )
+                        _suppress_log = symbol in self._flatten_pending
 
                         # Per-position time stop from signal (DEC-122)
                         if (
@@ -1460,7 +1460,9 @@ class OrderManager:
                         symbol,
                         qty,
                     )
-                    await self._flatten_unknown_position(symbol, qty)
+                    await self._flatten_unknown_position(
+                        symbol, qty, force_execute=True,
+                    )
         except Exception as e:
             logger.error("EOD flatten: broker position query failed: %s", e)
 
@@ -1614,7 +1616,9 @@ class OrderManager:
             zombie_count,
         )
 
-    async def _flatten_unknown_position(self, symbol: str, qty: int) -> None:
+    async def _flatten_unknown_position(
+        self, symbol: str, qty: int, *, force_execute: bool = False,
+    ) -> None:
         """Submit a market SELL order to close an unknown broker position.
 
         If the market is not open (before 9:30 ET or after 16:00 ET),
@@ -1624,6 +1628,9 @@ class OrderManager:
         Args:
             symbol: The ticker symbol.
             qty: Number of shares to sell.
+            force_execute: If True, skip the market-hours gate and execute
+                immediately. Used by EOD Pass 2 where we must close
+                positions regardless of clock time.
         """
         # Check if market is open (Sprint 29.5 R4)
         et_tz = ZoneInfo("America/New_York")
@@ -1634,7 +1641,7 @@ class OrderManager:
             now_et = now.replace(tzinfo=et_tz)
         market_open = time(9, 30)
         market_close = time(16, 0)
-        if not (market_open <= now_et.time() < market_close):
+        if not force_execute and not (market_open <= now_et.time() < market_close):
             self._startup_flatten_queue.append((symbol, abs(qty)))
             logger.info(
                 "Queued startup flatten for %s (%d shares) "
