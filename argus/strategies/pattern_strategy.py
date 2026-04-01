@@ -96,6 +96,7 @@ class PatternBasedStrategy(BaseStrategy):
         self._last_context: dict[str, object] = {}
         self._candle_store: object | None = None  # IntradayCandleStore, set post-init
         self._backfilled_symbols: set[str] = set()  # Track symbols already backfilled
+        self._config_fingerprint: str | None = None
 
         # Parse operating window times
         earliest_str = config.operating_window.earliest_entry
@@ -130,6 +131,15 @@ class PatternBasedStrategy(BaseStrategy):
         """
         candle_time = event.timestamp.astimezone(ET).time()
         return self._earliest_entry_time <= candle_time < self._latest_entry_time
+
+    @property
+    def config_fingerprint(self) -> str | None:
+        """Return the parameter fingerprint set at construction time.
+
+        Returns:
+            16-char hex fingerprint string, or None if not yet set.
+        """
+        return self._config_fingerprint
 
     def set_candle_store(self, store: object) -> None:
         """Set the IntradayCandleStore reference for auto-backfill.

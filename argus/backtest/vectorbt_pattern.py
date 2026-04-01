@@ -945,59 +945,66 @@ def run_pattern_backtest(
     }
 
 
-def _create_pattern_by_name(name: str, config_path: Path) -> PatternModule:
-    """Create a PatternModule instance by name, using config defaults.
+def _load_pattern_config(name: str, config_path: Path) -> object:
+    """Load the appropriate Pydantic config model for a pattern name.
 
     Args:
-        name: Pattern name ("bull_flag" or "flat_top_breakout").
+        name: Snake-case pattern name (e.g., "bull_flag").
+        config_path: Path to the YAML config file.
+
+    Returns:
+        Populated Pydantic StrategyConfig instance.
+
+    Raises:
+        ValueError: If *name* is not a recognised pattern.
+    """
+    from argus.core.config import (
+        load_abcd_config,
+        load_bull_flag_config,
+        load_dip_and_rip_config,
+        load_flat_top_breakout_config,
+        load_gap_and_go_config,
+        load_hod_break_config,
+        load_premarket_high_break_config,
+    )
+
+    loaders = {
+        "bull_flag": load_bull_flag_config,
+        "flat_top_breakout": load_flat_top_breakout_config,
+        "dip_and_rip": load_dip_and_rip_config,
+        "hod_break": load_hod_break_config,
+        "gap_and_go": load_gap_and_go_config,
+        "abcd": load_abcd_config,
+        "premarket_high_break": load_premarket_high_break_config,
+    }
+
+    if name not in loaders:
+        known = sorted(loaders)
+        raise ValueError(f"Unknown pattern '{name}'. Known patterns: {known}")
+
+    return loaders[name](config_path)
+
+
+def _create_pattern_by_name(name: str, config_path: Path) -> PatternModule:
+    """Create a PatternModule instance by name, loading config from YAML.
+
+    Resolves DEF-121 — all 7 PatternModule patterns are supported via the
+    generic factory rather than hardcoded constructors.
+
+    Args:
+        name: Snake-case pattern name (e.g., "bull_flag", "gap_and_go").
         config_path: Path to YAML config with pattern parameters.
 
     Returns:
-        PatternModule instance.
+        PatternModule instance constructed with params from *config_path*.
 
     Raises:
-        ValueError: If pattern name is unknown.
+        ValueError: If *name* is not a recognised pattern.
     """
-    with open(config_path) as f:
-        config = yaml.safe_load(f)
+    from argus.strategies.patterns.factory import build_pattern_from_config
 
-    if name == "bull_flag":
-        from argus.strategies.patterns.bull_flag import BullFlagPattern
-
-        return BullFlagPattern(
-            pole_min_bars=config.get("pole_min_bars", 5),
-            pole_min_move_pct=config.get("pole_min_move_pct", 0.03),
-            flag_max_bars=config.get("flag_max_bars", 20),
-            flag_max_retrace_pct=config.get("flag_max_retrace_pct", 0.50),
-            breakout_volume_multiplier=config.get("breakout_volume_multiplier", 1.3),
-        )
-    elif name == "flat_top_breakout":
-        from argus.strategies.patterns.flat_top_breakout import FlatTopBreakoutPattern
-
-        return FlatTopBreakoutPattern(
-            resistance_touches=config.get("resistance_touches", 3),
-            resistance_tolerance_pct=config.get("resistance_tolerance_pct", 0.002),
-            consolidation_min_bars=config.get("consolidation_min_bars", 10),
-            breakout_volume_multiplier=config.get("breakout_volume_multiplier", 1.3),
-            target_1_r=config.get("target_1_r", 1.0),
-            target_2_r=config.get("target_2_r", 2.0),
-        )
-    elif name == "abcd":
-        from argus.strategies.patterns.abcd import ABCDPattern
-
-        return ABCDPattern(
-            swing_lookback=config.get("swing_lookback", 5),
-            min_swing_atr_mult=config.get("min_swing_atr_mult", 0.5),
-            fib_b_min=config.get("fib_b_min", 0.382),
-            fib_b_max=config.get("fib_b_max", 0.618),
-            completion_tolerance_percent=config.get(
-                "completion_tolerance_percent", 1.0
-            ),
-            stop_buffer_atr_mult=config.get("stop_buffer_atr_mult", 0.5),
-            target_extension=config.get("target_extension", 1.272),
-        )
-    else:
-        raise ValueError(f"Unknown pattern: {name}")
+    config = _load_pattern_config(name, config_path)
+    return build_pattern_from_config(config, name)  # type: ignore[arg-type]
 
 
 def main() -> None:

@@ -68,8 +68,9 @@ class TradeLogger:
                 gross_pnl, commission, net_pnl, r_multiple,
                 hold_duration_seconds, outcome, rationale, notes,
                 quality_grade, quality_score,
-                mfe_r, mae_r, mfe_price, mae_price
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                mfe_r, mae_r, mfe_price, mae_price,
+                config_fingerprint
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
 
         params = (
@@ -100,6 +101,7 @@ class TradeLogger:
             trade.mae_r,
             trade.mfe_price,
             trade.mae_price,
+            trade.config_fingerprint,
         )
 
         await self._db.execute(sql, params)
@@ -800,4 +802,5 @@ class TradeLogger:
             mae_r=float(r["mae_r"]) if r.get("mae_r") is not None else None,
             mfe_price=float(r["mfe_price"]) if r.get("mfe_price") is not None else None,
             mae_price=float(r["mae_price"]) if r.get("mae_price") is not None else None,
+            config_fingerprint=r.get("config_fingerprint"),
         )

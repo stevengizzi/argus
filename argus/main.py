@@ -92,7 +92,11 @@ from argus.execution.alpaca_broker import AlpacaBroker
 from argus.execution.order_manager import OrderManager
 from argus.strategies.afternoon_momentum import AfternoonMomentumStrategy
 from argus.strategies.pattern_strategy import PatternBasedStrategy
-from argus.strategies.patterns import ABCDPattern, BullFlagPattern, DipAndRipPattern, FlatTopBreakoutPattern, GapAndGoPattern, HODBreakPattern, PreMarketHighBreakPattern
+from argus.strategies.patterns.factory import (
+    build_pattern_from_config,
+    compute_parameter_fingerprint,
+    get_pattern_class,
+)
 from argus.strategies.red_to_green import RedToGreenStrategy
 from argus.strategies.telemetry_store import EvaluationEventStore
 from argus.strategies.orb_base import OrbBaseStrategy
@@ -506,12 +510,15 @@ class ArgusSystem:
         bull_flag_yaml = self._config_dir / "strategies" / "bull_flag.yaml"
         if bull_flag_yaml.exists():
             bull_flag_config = load_bull_flag_config(bull_flag_yaml)
-            bull_flag_pattern = BullFlagPattern()
+            bull_flag_pattern = build_pattern_from_config(bull_flag_config, "bull_flag")
             bull_flag_strategy = PatternBasedStrategy(
                 pattern=bull_flag_pattern,
                 config=bull_flag_config,
                 data_service=self._data_service,
                 clock=self._clock,
+            )
+            bull_flag_strategy._config_fingerprint = compute_parameter_fingerprint(
+                bull_flag_config, get_pattern_class("bull_flag")
             )
             if not use_universe_manager:
                 bull_flag_strategy.set_watchlist(symbols)
@@ -522,12 +529,15 @@ class ArgusSystem:
         flat_top_yaml = self._config_dir / "strategies" / "flat_top_breakout.yaml"
         if flat_top_yaml.exists():
             flat_top_config = load_flat_top_breakout_config(flat_top_yaml)
-            flat_top_pattern = FlatTopBreakoutPattern()
+            flat_top_pattern = build_pattern_from_config(flat_top_config, "flat_top_breakout")
             flat_top_strategy = PatternBasedStrategy(
                 pattern=flat_top_pattern,
                 config=flat_top_config,
                 data_service=self._data_service,
                 clock=self._clock,
+            )
+            flat_top_strategy._config_fingerprint = compute_parameter_fingerprint(
+                flat_top_config, get_pattern_class("flat_top_breakout")
             )
             if not use_universe_manager:
                 flat_top_strategy.set_watchlist(symbols)
@@ -538,12 +548,15 @@ class ArgusSystem:
         dip_and_rip_yaml = self._config_dir / "strategies" / "dip_and_rip.yaml"
         if dip_and_rip_yaml.exists():
             dip_and_rip_config = load_dip_and_rip_config(dip_and_rip_yaml)
-            dip_and_rip_pattern = DipAndRipPattern()
+            dip_and_rip_pattern = build_pattern_from_config(dip_and_rip_config, "dip_and_rip")
             dip_and_rip_strategy = PatternBasedStrategy(
                 pattern=dip_and_rip_pattern,
                 config=dip_and_rip_config,
                 data_service=self._data_service,
                 clock=self._clock,
+            )
+            dip_and_rip_strategy._config_fingerprint = compute_parameter_fingerprint(
+                dip_and_rip_config, get_pattern_class("dip_and_rip")
             )
             if not use_universe_manager:
                 dip_and_rip_strategy.set_watchlist(symbols)
@@ -554,12 +567,15 @@ class ArgusSystem:
         hod_break_yaml = self._config_dir / "strategies" / "hod_break.yaml"
         if hod_break_yaml.exists():
             hod_break_config = load_hod_break_config(hod_break_yaml)
-            hod_break_pattern = HODBreakPattern()
+            hod_break_pattern = build_pattern_from_config(hod_break_config, "hod_break")
             hod_break_strategy = PatternBasedStrategy(
                 pattern=hod_break_pattern,
                 config=hod_break_config,
                 data_service=self._data_service,
                 clock=self._clock,
+            )
+            hod_break_strategy._config_fingerprint = compute_parameter_fingerprint(
+                hod_break_config, get_pattern_class("hod_break")
             )
             if not use_universe_manager:
                 hod_break_strategy.set_watchlist(symbols)
@@ -570,12 +586,15 @@ class ArgusSystem:
         abcd_yaml = self._config_dir / "strategies" / "abcd.yaml"
         if abcd_yaml.exists():
             abcd_config = load_abcd_config(abcd_yaml)
-            abcd_pattern = ABCDPattern()
+            abcd_pattern = build_pattern_from_config(abcd_config, "abcd")
             abcd_strategy = PatternBasedStrategy(
                 pattern=abcd_pattern,
                 config=abcd_config,
                 data_service=self._data_service,
                 clock=self._clock,
+            )
+            abcd_strategy._config_fingerprint = compute_parameter_fingerprint(
+                abcd_config, get_pattern_class("abcd")
             )
             if not use_universe_manager:
                 abcd_strategy.set_watchlist(symbols)
@@ -586,12 +605,15 @@ class ArgusSystem:
         gap_and_go_yaml = self._config_dir / "strategies" / "gap_and_go.yaml"
         if gap_and_go_yaml.exists():
             gap_and_go_config = load_gap_and_go_config(gap_and_go_yaml)
-            gap_and_go_pattern = GapAndGoPattern()
+            gap_and_go_pattern = build_pattern_from_config(gap_and_go_config, "gap_and_go")
             gap_and_go_strategy = PatternBasedStrategy(
                 pattern=gap_and_go_pattern,
                 config=gap_and_go_config,
                 data_service=self._data_service,
                 clock=self._clock,
+            )
+            gap_and_go_strategy._config_fingerprint = compute_parameter_fingerprint(
+                gap_and_go_config, get_pattern_class("gap_and_go")
             )
             if not use_universe_manager:
                 gap_and_go_strategy.set_watchlist(symbols)
@@ -605,12 +627,15 @@ class ArgusSystem:
         )
         if pm_high_yaml.exists():
             pm_high_config = load_premarket_high_break_config(pm_high_yaml)
-            pm_high_pattern = PreMarketHighBreakPattern()
+            pm_high_pattern = build_pattern_from_config(pm_high_config, "premarket_high_break")
             pm_high_break_strategy = PatternBasedStrategy(
                 pattern=pm_high_pattern,
                 config=pm_high_config,
                 data_service=self._data_service,
                 clock=self._clock,
+            )
+            pm_high_break_strategy._config_fingerprint = compute_parameter_fingerprint(
+                pm_high_config, get_pattern_class("premarket_high_break")
             )
             if not use_universe_manager:
                 pm_high_break_strategy.set_watchlist(symbols)

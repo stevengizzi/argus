@@ -207,6 +207,7 @@ class Trade(BaseModel):
     mae_r: float | None = None
     mfe_price: float | None = None
     mae_price: float | None = None
+    config_fingerprint: str | None = None
 
     def model_post_init(self, __context: object) -> None:
         """Calculate derived fields after initialization."""

@@ -114,6 +114,15 @@ class DatabaseManager:
             except Exception:
                 pass  # Column already exists
 
+        # Migration: add config_fingerprint column to trades (Sprint 32 S3)
+        try:
+            await self._connection.execute(
+                "ALTER TABLE trades ADD COLUMN config_fingerprint TEXT"
+            )
+            await self._connection.commit()
+        except Exception:
+            pass  # Column already exists
+
     @asynccontextmanager
     async def connection(self) -> AsyncIterator[aiosqlite.Connection]:
         """Get a database connection context manager.

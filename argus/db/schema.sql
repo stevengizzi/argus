@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS trades (
     notes TEXT,
     quality_grade TEXT,              -- e.g., 'B+', 'A-', '' for legacy
     quality_score REAL,              -- 0-100, NULL for legacy trades
+    config_fingerprint TEXT,         -- 16-char SHA-256 prefix of detection params (Sprint 32)
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
