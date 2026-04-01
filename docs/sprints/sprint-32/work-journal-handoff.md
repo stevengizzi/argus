@@ -16,7 +16,7 @@
 
 **Test baseline:** ~4,212 pytest + 700 Vitest (0 pre-existing pytest failures, 1 pre-existing Vitest failure in GoalTracker.test.tsx)
 
-**Branch:** `sprint-32` from `main`
+**Branch:** `main`
 
 ## Session Breakdown
 

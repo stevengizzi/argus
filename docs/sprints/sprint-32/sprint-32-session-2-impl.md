@@ -10,7 +10,7 @@ Before making any changes:
 2. Run the test baseline (DEC-328 — Session 2+):
    Scoped: `python -m pytest tests/test_config_param_alignment.py -v`
    Expected: all passing (full suite confirmed by S1 close-out)
-3. Verify you are on branch: `sprint-32`
+3. Verify you are on branch: `main`
 4. Verify Session 1 changes are committed (28 new config fields present)
 
 ## Objective

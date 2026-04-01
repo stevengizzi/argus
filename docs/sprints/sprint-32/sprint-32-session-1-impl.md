@@ -15,7 +15,7 @@ Before making any changes:
 2. Run the test baseline (DEC-328 — Session 1 of sprint):
    Full suite: `python -m pytest tests/ -n auto -q`
    Expected: ~4,212 tests, all passing
-3. Verify you are on the correct branch: `sprint-32` (create from `main`)
+3. Verify you are on the correct branch: `main`
 
 ## Objective
 Add all missing detection parameter fields to the 6 incomplete PatternModule Pydantic config models so that every pattern constructor kwarg has a corresponding validated config field. DipAndRipConfig is already complete and serves as the reference pattern.
