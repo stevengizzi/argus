@@ -125,6 +125,16 @@ class CounterfactualStore:
         await self._conn.execute(_CREATE_IDX_STAGE)
         await self._conn.execute(_CREATE_IDX_SYMBOL)
         await self._conn.commit()
+
+        # Migration: add variant_id column (Sprint 32.5 S5)
+        try:
+            await self._conn.execute(
+                "ALTER TABLE counterfactual_positions ADD COLUMN variant_id TEXT"
+            )
+            await self._conn.commit()
+        except Exception:
+            pass  # Column already exists
+
         logger.info("CounterfactualStore initialized: %s", self._db_path)
 
     async def write_open(self, position: CounterfactualPosition) -> None:
@@ -259,6 +269,110 @@ class CounterfactualStore:
         )
         rows = await cursor.fetchall()
         return [self._row_to_dict(row) for row in rows]
+
+    async def query_positions(
+        self,
+        *,
+        strategy_id: str | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        rejection_stage: str | None = None,
+        limit: int = 500,
+        offset: int = 0,
+    ) -> list[dict[str, object]]:
+        """Query shadow positions with optional filters and pagination.
+
+        Returns all positions (active and closed), ordered by entry time
+        descending (most recent first). Supports SQL-level pagination.
+
+        Args:
+            strategy_id: Optional filter by strategy_id.
+            date_from: ISO date/datetime string lower bound on opened_at (inclusive).
+            date_to: ISO date/datetime string upper bound on opened_at (inclusive).
+            rejection_stage: Optional filter by rejection_stage.
+            limit: Maximum rows to return (default 500).
+            offset: Number of rows to skip for pagination (default 0).
+
+        Returns:
+            List of position dicts ordered by opened_at DESC.
+        """
+        if self._conn is None:
+            return []
+
+        conditions: list[str] = []
+        params: list[object] = []
+
+        if strategy_id is not None:
+            conditions.append("strategy_id = ?")
+            params.append(strategy_id)
+        if date_from is not None:
+            conditions.append("opened_at >= ?")
+            params.append(date_from)
+        if date_to is not None:
+            conditions.append("opened_at <= ?")
+            params.append(date_to)
+        if rejection_stage is not None:
+            conditions.append("rejection_stage = ?")
+            params.append(rejection_stage)
+
+        where = " AND ".join(conditions) if conditions else "1=1"
+        params.append(limit)
+        params.append(offset)
+
+        cursor = await self._conn.execute(
+            f"SELECT * FROM counterfactual_positions "  # noqa: S608
+            f"WHERE {where} ORDER BY opened_at DESC LIMIT ? OFFSET ?",
+            tuple(params),
+        )
+        rows = await cursor.fetchall()
+        return [self._row_to_dict(row) for row in rows]
+
+    async def count_positions(
+        self,
+        *,
+        strategy_id: str | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        rejection_stage: str | None = None,
+    ) -> int:
+        """Count shadow positions matching the given filters.
+
+        Args:
+            strategy_id: Optional filter by strategy_id.
+            date_from: ISO date/datetime string lower bound on opened_at.
+            date_to: ISO date/datetime string upper bound on opened_at.
+            rejection_stage: Optional filter by rejection_stage.
+
+        Returns:
+            Total number of matching rows.
+        """
+        if self._conn is None:
+            return 0
+
+        conditions: list[str] = []
+        params: list[object] = []
+
+        if strategy_id is not None:
+            conditions.append("strategy_id = ?")
+            params.append(strategy_id)
+        if date_from is not None:
+            conditions.append("opened_at >= ?")
+            params.append(date_from)
+        if date_to is not None:
+            conditions.append("opened_at <= ?")
+            params.append(date_to)
+        if rejection_stage is not None:
+            conditions.append("rejection_stage = ?")
+            params.append(rejection_stage)
+
+        where = " AND ".join(conditions) if conditions else "1=1"
+
+        cursor = await self._conn.execute(
+            f"SELECT COUNT(*) FROM counterfactual_positions WHERE {where}",  # noqa: S608
+            tuple(params),
+        )
+        row = await cursor.fetchone()
+        return int(row[0]) if row else 0  # type: ignore[index]
 
     async def get_closed_positions(
         self,

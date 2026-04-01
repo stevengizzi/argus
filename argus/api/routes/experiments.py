@@ -142,6 +142,68 @@ async def get_baseline(
     }
 
 
+@router.get("/variants")
+async def list_variants_with_metrics(
+    _auth: dict = Depends(require_auth),  # noqa: B008
+    state: AppState = Depends(get_app_state),  # noqa: B008
+) -> dict:
+    """List all variants with experiment metrics where available.
+
+    Returns each variant's definition plus joined experiment metrics
+    (status, shadow_trade_count, win_rate, expectancy, sharpe).
+    503 if experiment pipeline is disabled.
+    """
+    store = _get_experiment_store(state)
+    try:
+        variants = await store.query_variants_with_metrics()
+    except Exception as exc:
+        logger.error("Failed to query variants with metrics: %s", exc, exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to query variants: {exc}",
+        ) from exc
+    return {
+        "variants": variants,
+        "count": len(variants),
+        "timestamp": datetime.now(UTC).isoformat(),
+    }
+
+
+@router.get("/promotions")
+async def list_promotion_events(
+    limit: int = Query(default=100, ge=1, le=500, description="Max results per page"),
+    offset: int = Query(default=0, ge=0, description="Rows to skip for pagination"),
+    _auth: dict = Depends(require_auth),  # noqa: B008
+    state: AppState = Depends(get_app_state),  # noqa: B008
+) -> dict:
+    """List promotion and demotion events with pagination.
+
+    Returns events ordered by timestamp descending, joined with variant
+    pattern_name for display. 503 if experiment pipeline is disabled.
+
+    Query params:
+        limit: Maximum results (default 100).
+        offset: Pagination offset (default 0).
+    """
+    store = _get_experiment_store(state)
+    try:
+        events = await store.query_promotion_events(limit=limit, offset=offset)
+        total_count = await store.count_promotion_events()
+    except Exception as exc:
+        logger.error("Failed to query promotion events: %s", exc, exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to query promotions: {exc}",
+        ) from exc
+    return {
+        "events": events,
+        "total_count": total_count,
+        "limit": limit,
+        "offset": offset,
+        "timestamp": datetime.now(UTC).isoformat(),
+    }
+
+
 @router.get("/{experiment_id}")
 async def get_experiment(
     experiment_id: str,

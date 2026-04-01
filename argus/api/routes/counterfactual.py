@@ -57,6 +57,74 @@ class FilterAccuracyResponse(BaseModel):
 # --- Endpoints ---
 
 
+@router.get("/positions")
+async def get_counterfactual_positions(
+    strategy_id: str | None = Query(default=None, description="Filter by strategy ID"),
+    date_from: str | None = Query(default=None, description="ISO 8601 start date for opened_at"),
+    date_to: str | None = Query(default=None, description="ISO 8601 end date for opened_at"),
+    rejection_stage: str | None = Query(default=None, description="Filter by rejection stage"),
+    limit: int = Query(default=500, ge=1, le=2000, description="Max results per page"),
+    offset: int = Query(default=0, ge=0, description="Rows to skip for pagination"),
+    _auth: dict = Depends(require_auth),  # noqa: B008
+    state: AppState = Depends(get_app_state),  # noqa: B008
+) -> dict:
+    """Get shadow (counterfactual) positions with optional filters and pagination.
+
+    Returns all positions (active and closed) matching the filters.
+    Returns an empty list when the counterfactual store is not available.
+
+    Query params:
+        strategy_id: Optional strategy filter.
+        date_from: ISO 8601 start date for opened_at (inclusive).
+        date_to: ISO 8601 end date for opened_at (inclusive).
+        rejection_stage: Optional rejection stage filter.
+        limit: Maximum results (default 500).
+        offset: Pagination offset (default 0).
+
+    Returns:
+        Dict with ``positions`` list, ``total_count``, ``limit``,
+        ``offset``, and ``timestamp``.
+    """
+    if state.counterfactual_store is None:
+        return {
+            "positions": [],
+            "total_count": 0,
+            "limit": limit,
+            "offset": offset,
+            "timestamp": datetime.now(_ET).isoformat(),
+        }
+
+    try:
+        positions = await state.counterfactual_store.query_positions(
+            strategy_id=strategy_id,
+            date_from=date_from,
+            date_to=date_to,
+            rejection_stage=rejection_stage,
+            limit=limit,
+            offset=offset,
+        )
+        total_count = await state.counterfactual_store.count_positions(
+            strategy_id=strategy_id,
+            date_from=date_from,
+            date_to=date_to,
+            rejection_stage=rejection_stage,
+        )
+    except Exception as exc:
+        logger.error("Failed to query counterfactual positions: %s", exc, exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to query positions: {exc}",
+        ) from exc
+
+    return {
+        "positions": positions,
+        "total_count": total_count,
+        "limit": limit,
+        "offset": offset,
+        "timestamp": datetime.now(_ET).isoformat(),
+    }
+
+
 @router.get("/accuracy", response_model=FilterAccuracyResponse)
 async def get_counterfactual_accuracy(
     start_date: str | None = Query(default=None, description="ISO 8601 start date"),

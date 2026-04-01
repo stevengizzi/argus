@@ -554,6 +554,140 @@ class ExperimentStore:
             rows = await cursor.fetchall()
             return [self._row_to_promotion_event(dict(r)) for r in rows]  # type: ignore[arg-type]
 
+    async def query_variants_with_metrics(self) -> list[dict[str, object]]:
+        """Return all variant definitions joined with available experiment metrics.
+
+        Performs a LEFT JOIN between variants and experiments on
+        (base_pattern, parameter_fingerprint) to attach status, shadow trade
+        count, and key backtest metrics (win_rate, expectancy, sharpe) where
+        a matching experiment record exists.
+
+        Returns:
+            List of variant dicts ordered by created_at DESC. Each dict
+            contains: variant_id, pattern_name, detection_params,
+            exit_overrides, config_fingerprint, mode, status,
+            trade_count, shadow_trade_count, win_rate, expectancy, sharpe.
+            Metrics fields are None when no experiment record matches.
+        """
+        import json as _json
+
+        sql = """
+            SELECT
+                v.variant_id,
+                v.base_pattern AS pattern_name,
+                v.parameters_json AS detection_params_json,
+                v.exit_overrides AS exit_overrides_json,
+                v.parameter_fingerprint AS config_fingerprint,
+                v.mode,
+                v.source,
+                v.created_at,
+                e.status,
+                e.shadow_trades,
+                e.shadow_expectancy,
+                e.backtest_result_json
+            FROM variants v
+            LEFT JOIN experiments e
+                ON v.base_pattern = e.pattern_name
+                AND v.parameter_fingerprint = e.parameter_fingerprint
+            ORDER BY v.created_at DESC
+        """  # noqa: S608
+        async with aiosqlite.connect(self._db_path) as conn:
+            conn.row_factory = aiosqlite.Row
+            cursor = await conn.execute(sql)
+            rows = await cursor.fetchall()
+
+        results: list[dict[str, object]] = []
+        for row in rows:
+            raw = dict(row)  # type: ignore[arg-type]
+            backtest_raw = raw.get("backtest_result_json")
+            backtest: dict[str, object] | None = (
+                _json.loads(str(backtest_raw)) if backtest_raw is not None else None
+            )
+            results.append(
+                {
+                    "variant_id": raw["variant_id"],
+                    "pattern_name": raw["pattern_name"],
+                    "detection_params": _json.loads(str(raw["detection_params_json"])),
+                    "exit_overrides": (
+                        _json.loads(str(raw["exit_overrides_json"]))
+                        if raw.get("exit_overrides_json") is not None
+                        else None
+                    ),
+                    "config_fingerprint": raw["config_fingerprint"],
+                    "mode": raw["mode"],
+                    "status": raw.get("status"),
+                    "trade_count": 0,
+                    "shadow_trade_count": int(raw["shadow_trades"])  # type: ignore[arg-type]
+                    if raw.get("shadow_trades") is not None
+                    else 0,
+                    "win_rate": float(backtest["win_rate"])  # type: ignore[index]
+                    if backtest is not None and "win_rate" in backtest
+                    else None,
+                    "expectancy": float(backtest["expectancy_per_trade"])  # type: ignore[index]
+                    if backtest is not None and "expectancy_per_trade" in backtest
+                    else None,
+                    "sharpe": float(backtest["sharpe_ratio"])  # type: ignore[index]
+                    if backtest is not None and "sharpe_ratio" in backtest
+                    else None,
+                }
+            )
+        return results
+
+    async def query_promotion_events(
+        self,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[dict[str, object]]:
+        """Query promotion/demotion events with pagination.
+
+        JOINs promotion_events with variants to include pattern_name.
+        Returns events ordered by timestamp DESC.
+
+        Args:
+            limit: Maximum rows to return (default 100).
+            offset: Number of rows to skip for pagination (default 0).
+
+        Returns:
+            List of event dicts, each with: event_id, variant_id,
+            pattern_name, event_type, from_mode, to_mode, timestamp,
+            trigger_reason, metrics_snapshot.
+        """
+        sql = """
+            SELECT
+                pe.event_id,
+                pe.variant_id,
+                v.base_pattern AS pattern_name,
+                pe.action AS event_type,
+                pe.previous_mode AS from_mode,
+                pe.new_mode AS to_mode,
+                pe.timestamp,
+                pe.reason AS trigger_reason,
+                pe.comparison_verdict_json AS metrics_snapshot,
+                pe.shadow_trades,
+                pe.shadow_expectancy
+            FROM promotion_events pe
+            LEFT JOIN variants v ON pe.variant_id = v.variant_id
+            ORDER BY pe.timestamp DESC
+            LIMIT ? OFFSET ?
+        """  # noqa: S608
+        async with aiosqlite.connect(self._db_path) as conn:
+            conn.row_factory = aiosqlite.Row
+            cursor = await conn.execute(sql, (limit, offset))
+            rows = await cursor.fetchall()
+
+        return [dict(row) for row in rows]  # type: ignore[arg-type]
+
+    async def count_promotion_events(self) -> int:
+        """Return total number of promotion events for pagination.
+
+        Returns:
+            Total row count in promotion_events table.
+        """
+        async with aiosqlite.connect(self._db_path) as conn:
+            cursor = await conn.execute("SELECT COUNT(*) FROM promotion_events")
+            row = await cursor.fetchone()
+            return int(row[0]) if row else 0  # type: ignore[index]
+
     # ---------------------------------------------------------------------------
     # Maintenance
     # ---------------------------------------------------------------------------

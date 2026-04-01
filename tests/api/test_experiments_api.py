@@ -23,7 +23,12 @@ from argus.core.risk_manager import RiskManager
 from argus.execution.order_manager import OrderManager
 from argus.execution.simulated_broker import SimulatedBroker
 from argus.intelligence.experiments.config import ExperimentConfig
-from argus.intelligence.experiments.models import ExperimentRecord, ExperimentStatus
+from argus.intelligence.experiments.models import (
+    ExperimentRecord,
+    ExperimentStatus,
+    PromotionEvent,
+    VariantDefinition,
+)
 from argus.intelligence.experiments.store import ExperimentStore
 
 TEST_PASSWORD = "testpassword123"
@@ -483,3 +488,231 @@ async def test_run_sweep_dry_run_does_not_trigger_task(
     assert data["grid_size"] == 1
     # run_sweep should NOT have been called in dry_run mode
     mock_instance.run_sweep.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Tests — GET /variants (Sprint 32.5 S5)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+async def store_with_variant(experiment_store: ExperimentStore) -> ExperimentStore:
+    """Provide an ExperimentStore with one variant and one matching experiment."""
+    now = datetime.now(UTC)
+    variant = VariantDefinition(
+        variant_id="VAR_001",
+        base_pattern="bull_flag",
+        parameter_fingerprint="abc123def456abcd",
+        parameters={"pole_min_move_pct": 0.04},
+        mode="shadow",
+        source="grid_sweep",
+        created_at=now,
+        exit_overrides={"trailing_stop.atr_multiplier": 2.5},
+    )
+    await experiment_store.save_variant(variant)
+
+    record = ExperimentRecord(
+        experiment_id="EXP_VAR_001",
+        pattern_name="bull_flag",
+        parameter_fingerprint="abc123def456abcd",
+        parameters={"pole_min_move_pct": 0.04},
+        status=ExperimentStatus.COMPLETED,
+        backtest_result={
+            "total_trades": 42,
+            "expectancy_per_trade": 0.15,
+            "sharpe_ratio": 1.8,
+            "win_rate": 0.55,
+        },
+        shadow_trades=12,
+        shadow_expectancy=0.10,
+        is_baseline=False,
+        created_at=now,
+        updated_at=now,
+    )
+    await experiment_store.save_experiment(record)
+    return experiment_store
+
+
+@pytest.mark.asyncio
+async def test_list_variants_happy_path(
+    store_with_variant: ExperimentStore,
+    tmp_path: "Path",
+    auth_headers: dict[str, str],
+) -> None:
+    """GET /experiments/variants returns variant with joined metrics."""
+    from argus.analytics.trade_logger import TradeLogger
+    from argus.core.clock import FixedClock
+    from argus.core.config import ApiConfig, HealthConfig, OrderManagerConfig, RiskConfig, SystemConfig
+    from argus.core.event_bus import EventBus
+    from argus.core.health import HealthMonitor
+    from argus.core.risk_manager import RiskManager
+    from argus.db.manager import DatabaseManager
+    from argus.execution.order_manager import OrderManager
+    from argus.execution.simulated_broker import SimulatedBroker
+    from argus.intelligence.experiments.config import ExperimentConfig
+    from argus.api.auth import create_access_token, hash_password, set_jwt_secret
+
+    TEST_JWT = "test-jwt-secret-for-argus-api-testing-minimum-32-chars"
+    set_jwt_secret(TEST_JWT)
+
+    event_bus = EventBus()
+    clock = FixedClock(datetime(2026, 2, 23, 15, 30, 0, tzinfo=UTC))
+    db_manager = DatabaseManager(tmp_path / "argus_var_test.db")
+    await db_manager.initialize()
+    trade_logger = TradeLogger(db_manager)
+    broker = SimulatedBroker(initial_cash=100_000.0)
+    await broker.connect()
+    health_monitor = HealthMonitor(
+        event_bus=event_bus, clock=clock, config=HealthConfig(),
+        broker=broker, trade_logger=trade_logger,
+    )
+    risk_manager = RiskManager(
+        config=RiskConfig(), broker=broker, event_bus=event_bus, clock=clock,
+    )
+    order_manager = OrderManager(
+        broker=broker, event_bus=event_bus, clock=clock,
+        config=OrderManagerConfig(), trade_logger=trade_logger,
+    )
+    system_config = SystemConfig(
+        api=ApiConfig(password_hash=hash_password("testpassword123")),
+        experiments=ExperimentConfig(enabled=True),
+    )
+    state = AppState(
+        event_bus=event_bus, trade_logger=trade_logger, broker=broker,
+        health_monitor=health_monitor, risk_manager=risk_manager,
+        order_manager=order_manager, clock=clock, config=system_config,
+        experiment_store=store_with_variant,
+    )
+    async with await _make_client(state) as client:
+        resp = await client.get("/api/v1/experiments/variants", headers=auth_headers)
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["count"] == 1
+    assert "timestamp" in data
+    variant = data["variants"][0]
+    assert variant["variant_id"] == "VAR_001"
+    assert variant["pattern_name"] == "bull_flag"
+    assert variant["mode"] == "shadow"
+    assert variant["shadow_trade_count"] == 12
+    assert variant["win_rate"] == pytest.approx(0.55)
+    assert variant["expectancy"] == pytest.approx(0.15)
+    assert variant["sharpe"] == pytest.approx(1.8)
+    assert variant["exit_overrides"] == {"trailing_stop.atr_multiplier": 2.5}
+
+
+@pytest.mark.asyncio
+async def test_list_variants_503_when_disabled(
+    app_state_experiments_disabled: AppState,
+    auth_headers: dict[str, str],
+) -> None:
+    """GET /experiments/variants returns 503 when experiments.enabled is False."""
+    async with await _make_client(app_state_experiments_disabled) as client:
+        resp = await client.get("/api/v1/experiments/variants", headers=auth_headers)
+    assert resp.status_code == 503
+
+
+# ---------------------------------------------------------------------------
+# Tests — GET /promotions (Sprint 32.5 S5)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+async def store_with_promotion(experiment_store: ExperimentStore) -> ExperimentStore:
+    """Provide an ExperimentStore with a variant and a promotion event."""
+    now = datetime.now(UTC)
+    variant = VariantDefinition(
+        variant_id="VAR_PROMO_001",
+        base_pattern="flat_top_breakout",
+        parameter_fingerprint="def456abc123beef",
+        parameters={"resistance_tolerance_pct": 0.005},
+        mode="live",
+        source="manual",
+        created_at=now,
+    )
+    await experiment_store.save_variant(variant)
+
+    event = PromotionEvent(
+        event_id="PROMO_001",
+        variant_id="VAR_PROMO_001",
+        action="promote",
+        previous_mode="shadow",
+        new_mode="live",
+        reason="Shadow variant Pareto-dominates live variant after 35 shadow trades (6 days)",
+        comparison_verdict="ComparisonVerdict.DOMINATES",
+        shadow_trades=35,
+        shadow_expectancy=0.20,
+        timestamp=now,
+    )
+    await experiment_store.save_promotion_event(event)
+    return experiment_store
+
+
+@pytest.mark.asyncio
+async def test_list_promotions_happy_path(
+    store_with_promotion: ExperimentStore,
+    tmp_path: "Path",
+    auth_headers: dict[str, str],
+) -> None:
+    """GET /experiments/promotions returns events with pattern_name joined."""
+    from argus.analytics.trade_logger import TradeLogger
+    from argus.core.clock import FixedClock
+    from argus.core.config import ApiConfig, HealthConfig, OrderManagerConfig, RiskConfig, SystemConfig
+    from argus.core.event_bus import EventBus
+    from argus.core.health import HealthMonitor
+    from argus.core.risk_manager import RiskManager
+    from argus.db.manager import DatabaseManager
+    from argus.execution.order_manager import OrderManager
+    from argus.execution.simulated_broker import SimulatedBroker
+    from argus.intelligence.experiments.config import ExperimentConfig
+    from argus.api.auth import hash_password, set_jwt_secret
+
+    TEST_JWT = "test-jwt-secret-for-argus-api-testing-minimum-32-chars"
+    set_jwt_secret(TEST_JWT)
+
+    event_bus = EventBus()
+    clock = FixedClock(datetime(2026, 2, 23, 15, 30, 0, tzinfo=UTC))
+    db_manager = DatabaseManager(tmp_path / "argus_promo_test.db")
+    await db_manager.initialize()
+    trade_logger = TradeLogger(db_manager)
+    broker = SimulatedBroker(initial_cash=100_000.0)
+    await broker.connect()
+    health_monitor = HealthMonitor(
+        event_bus=event_bus, clock=clock, config=HealthConfig(),
+        broker=broker, trade_logger=trade_logger,
+    )
+    risk_manager = RiskManager(
+        config=RiskConfig(), broker=broker, event_bus=event_bus, clock=clock,
+    )
+    order_manager = OrderManager(
+        broker=broker, event_bus=event_bus, clock=clock,
+        config=OrderManagerConfig(), trade_logger=trade_logger,
+    )
+    system_config = SystemConfig(
+        api=ApiConfig(password_hash=hash_password("testpassword123")),
+        experiments=ExperimentConfig(enabled=True),
+    )
+    state = AppState(
+        event_bus=event_bus, trade_logger=trade_logger, broker=broker,
+        health_monitor=health_monitor, risk_manager=risk_manager,
+        order_manager=order_manager, clock=clock, config=system_config,
+        experiment_store=store_with_promotion,
+    )
+    async with await _make_client(state) as client:
+        resp = await client.get("/api/v1/experiments/promotions", headers=auth_headers)
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total_count"] == 1
+    assert len(data["events"]) == 1
+    assert "limit" in data
+    assert "offset" in data
+    assert "timestamp" in data
+    evt = data["events"][0]
+    assert evt["event_id"] == "PROMO_001"
+    assert evt["variant_id"] == "VAR_PROMO_001"
+    assert evt["pattern_name"] == "flat_top_breakout"
+    assert evt["event_type"] == "promote"
+    assert evt["from_mode"] == "shadow"
+    assert evt["to_mode"] == "live"
+    assert evt["trigger_reason"] is not None
