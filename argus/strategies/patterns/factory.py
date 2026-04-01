@@ -191,31 +191,55 @@ def build_pattern_from_config(
 def compute_parameter_fingerprint(
     config: StrategyConfig,
     pattern_class: type[PatternModule],
+    exit_overrides: dict[str, Any] | None = None,
 ) -> str:
     """Compute a deterministic 16-character hex fingerprint of detection params.
 
     Only detection parameters (those declared in ``get_default_params()``)
-    contribute to the hash.  Base ``StrategyConfig`` fields such as
+    contribute to the hash by default.  Base ``StrategyConfig`` fields such as
     ``strategy_id``, ``name``, and ``operating_window`` are excluded.
 
-    The algorithm:
+    When *exit_overrides* is non-empty, the fingerprint is computed over a
+    namespaced structure so that two variants differing only in exit
+    configuration receive distinct fingerprints.  Passing ``None`` or ``{}``
+    produces the **same hash** as the detection-only variant (backward compat).
+
+    The algorithm — detection-only (exit_overrides is None or empty):
     1. Extract detection params via :func:`extract_detection_params`.
     2. Serialise to canonical JSON with sorted keys and compact separators.
     3. Compute SHA-256 of the UTF-8 encoded JSON string.
     4. Return the first 16 hex characters.
 
-    The result is deterministic across process restarts: identical detection
-    parameter values always produce the same fingerprint.
+    The algorithm — with exit overrides (exit_overrides is non-empty):
+    1. Extract detection params as above.
+    2. Build namespaced dict:
+       ``{"detection": {sorted detection params}, "exit": {sorted exit overrides}}``.
+    3. Serialise to canonical JSON (sort_keys=True, compact separators).
+    4. SHA-256 → first 16 hex characters.
+
+    The result is deterministic across process restarts: identical inputs
+    always produce the same fingerprint.
 
     Args:
         config: Strategy Pydantic config instance.
         pattern_class: The PatternModule class defining the parameter space.
+        exit_overrides: Optional dict of exit management overrides. When None
+            or empty, the hash is identical to the detection-only variant.
 
     Returns:
         First 16 hex characters of the SHA-256 hash.
     """
     detection_params = extract_detection_params(config, pattern_class)
-    canonical = json.dumps(detection_params, sort_keys=True, separators=(",", ":"))
+
+    if exit_overrides:
+        payload: dict[str, object] = {
+            "detection": detection_params,
+            "exit": exit_overrides,
+        }
+        canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    else:
+        canonical = json.dumps(detection_params, sort_keys=True, separators=(",", ":"))
+
     digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
     return digest[:16]
 

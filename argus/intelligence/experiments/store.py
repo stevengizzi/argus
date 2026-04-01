@@ -146,6 +146,16 @@ class ExperimentStore:
             await conn.execute(_CREATE_IDX_PROMO_VARIANT)
             await conn.execute(_CREATE_IDX_PROMO_TS)
             await conn.commit()
+
+            # Migration: add exit_overrides column to variants (Sprint 32.5 S1)
+            try:
+                await conn.execute(
+                    "ALTER TABLE variants ADD COLUMN exit_overrides TEXT"
+                )
+                await conn.commit()
+            except Exception:
+                pass  # Column already exists
+
         logger.info("ExperimentStore initialized: %s", self._db_path)
 
     async def close(self) -> None:
@@ -375,8 +385,8 @@ class ExperimentStore:
                     """
                     INSERT OR REPLACE INTO variants
                     (variant_id, base_pattern, parameter_fingerprint,
-                     parameters_json, mode, source, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                     parameters_json, mode, source, created_at, exit_overrides)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         variant.variant_id,
@@ -386,6 +396,9 @@ class ExperimentStore:
                         variant.mode,
                         variant.source,
                         variant.created_at.isoformat(),
+                        json.dumps(variant.exit_overrides)
+                        if variant.exit_overrides is not None
+                        else None,
                     ),
                 )
                 await conn.commit()
@@ -634,6 +647,12 @@ class ExperimentStore:
         Returns:
             VariantDefinition instance.
         """
+        exit_overrides_raw = row.get("exit_overrides")
+        exit_overrides: dict[str, object] | None = (
+            json.loads(str(exit_overrides_raw))
+            if exit_overrides_raw is not None
+            else None
+        )
         return VariantDefinition(
             variant_id=str(row["variant_id"]),
             base_pattern=str(row["base_pattern"]),
@@ -642,6 +661,7 @@ class ExperimentStore:
             mode=str(row["mode"]),
             source=str(row["source"]),
             created_at=datetime.fromisoformat(str(row["created_at"])),
+            exit_overrides=exit_overrides,
         )
 
     @staticmethod

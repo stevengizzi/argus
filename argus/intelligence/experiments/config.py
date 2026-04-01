@@ -3,7 +3,7 @@
 Config-gated via ``experiments.enabled``. When disabled, ExperimentStore is
 not initialized and all REST endpoints return 503.
 
-Sprint 32, Session 8.
+Sprint 32, Session 8. Exit sweep params added Sprint 32.5, Session 1.
 """
 
 from __future__ import annotations
@@ -11,6 +11,27 @@ from __future__ import annotations
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
+
+
+class ExitSweepParam(BaseModel):
+    """Definition of a single exit-management parameter to sweep.
+
+    Attributes:
+        name: Human-readable parameter name (e.g. ``"atr_multiplier"``).
+        path: Dot-delimited path within the exit config
+            (e.g. ``"trailing_stop.atr_multiplier"``).
+        min_value: Inclusive lower bound of the sweep range.
+        max_value: Inclusive upper bound of the sweep range.
+        step: Step size between sweep values.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    name: str
+    path: str
+    min_value: float
+    max_value: float
+    step: float
 
 
 class ExperimentConfig(BaseModel):
@@ -37,6 +58,9 @@ class ExperimentConfig(BaseModel):
             ExperimentRunner for backtesting.
         variants: Variant definitions keyed by pattern name. Each value is a
             list of variant config dicts consumed by VariantSpawner.
+        exit_sweep_params: Optional list of exit-management parameters to
+            include in parameter sweeps. When None, only detection parameters
+            are swept.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -51,3 +75,4 @@ class ExperimentConfig(BaseModel):
     promotion_query_limit: int = Field(default=1000, ge=100, le=50_000)
     cache_dir: str = "data/databento_cache"
     variants: dict[str, list[dict[str, Any]]] = Field(default_factory=dict)
+    exit_sweep_params: list[ExitSweepParam] | None = None

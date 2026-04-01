@@ -42,6 +42,9 @@ class VariantDefinition:
         source: How this variant was created ("manual", "grid_sweep",
             "learning_loop").
         created_at: UTC creation timestamp.
+        exit_overrides: Optional dict of exit management parameter overrides
+            for this variant (e.g. ``{"trailing_stop.atr_multiplier": 2.5}``).
+            None means this variant uses the default exit configuration.
     """
 
     variant_id: str
@@ -51,6 +54,7 @@ class VariantDefinition:
     mode: str
     source: str
     created_at: datetime
+    exit_overrides: dict[str, Any] | None = None
 
 
 @dataclass

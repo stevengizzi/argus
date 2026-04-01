@@ -299,3 +299,62 @@ class TestComputeParameterFingerprint:
         assert compute_parameter_fingerprint(config_enabled, BullFlagPattern) == (
             compute_parameter_fingerprint(config_disabled, BullFlagPattern)
         )
+
+    # --- Sprint 32.5 S1: exit_overrides backward-compat and expansion ---
+
+    def test_golden_hash_backward_compat(self) -> None:
+        """Detection-only fingerprint must equal the pre-expansion golden hash."""
+        config = _bull_flag_config()
+        fp = compute_parameter_fingerprint(config, BullFlagPattern)
+        assert fp == "8b396d4d14db4198"
+
+    def test_none_exit_overrides_matches_golden_hash(self) -> None:
+        """Passing exit_overrides=None must produce the same hash as omitting it."""
+        config = _bull_flag_config()
+        fp_default = compute_parameter_fingerprint(config, BullFlagPattern)
+        fp_none = compute_parameter_fingerprint(config, BullFlagPattern, exit_overrides=None)
+        assert fp_default == fp_none
+
+    def test_empty_exit_overrides_matches_detection_only(self) -> None:
+        """exit_overrides={} must produce the same hash as exit_overrides=None."""
+        config = _bull_flag_config()
+        fp_none = compute_parameter_fingerprint(config, BullFlagPattern, exit_overrides=None)
+        fp_empty = compute_parameter_fingerprint(config, BullFlagPattern, exit_overrides={})
+        assert fp_none == fp_empty
+
+    def test_nonempty_exit_overrides_produces_different_fingerprint(self) -> None:
+        """Non-empty exit_overrides must yield a fingerprint distinct from detection-only."""
+        config = _bull_flag_config()
+        fp_detection = compute_parameter_fingerprint(config, BullFlagPattern)
+        fp_with_exit = compute_parameter_fingerprint(
+            config, BullFlagPattern, exit_overrides={"trailing_stop.atr_multiplier": 2.5}
+        )
+        assert fp_detection != fp_with_exit
+
+    def test_different_exit_overrides_produce_different_fingerprints(self) -> None:
+        """Two variants differing only in exit_overrides receive distinct fingerprints."""
+        config = _bull_flag_config()
+        fp_a = compute_parameter_fingerprint(
+            config, BullFlagPattern, exit_overrides={"trailing_stop.atr_multiplier": 2.0}
+        )
+        fp_b = compute_parameter_fingerprint(
+            config, BullFlagPattern, exit_overrides={"trailing_stop.atr_multiplier": 3.0}
+        )
+        assert fp_a != fp_b
+
+    def test_exit_overrides_fingerprint_is_deterministic(self) -> None:
+        """Same exit_overrides dict always produces the same fingerprint."""
+        config = _bull_flag_config()
+        overrides = {"trailing_stop.atr_multiplier": 2.5, "escalation.trigger_r": 1.0}
+        fp_first = compute_parameter_fingerprint(config, BullFlagPattern, exit_overrides=overrides)
+        fp_second = compute_parameter_fingerprint(config, BullFlagPattern, exit_overrides=overrides)
+        assert fp_first == fp_second
+
+    def test_exit_overrides_result_is_16_hex_chars(self) -> None:
+        """Fingerprint with exit_overrides still returns exactly 16 hex chars."""
+        config = _bull_flag_config()
+        fp = compute_parameter_fingerprint(
+            config, BullFlagPattern, exit_overrides={"trailing_stop.atr_multiplier": 2.5}
+        )
+        assert len(fp) == 16
+        assert all(c in "0123456789abcdef" for c in fp)
