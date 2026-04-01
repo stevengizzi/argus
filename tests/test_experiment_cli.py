@@ -28,7 +28,7 @@ def test_experiment_config_default_values() -> None:
     cfg = ExperimentConfig()
     assert cfg.enabled is False
     assert cfg.auto_promote is False
-    assert cfg.max_shadow_variants_per_pattern == 5
+    assert cfg.max_variants_per_pattern == 5
     assert cfg.backtest_min_trades == 20
     assert cfg.backtest_min_expectancy == 0.0
     assert cfg.promotion_min_shadow_days == 5
@@ -53,10 +53,10 @@ def test_experiment_config_rejects_unknown_keys() -> None:
 def test_experiment_config_field_constraints() -> None:
     """ExperimentConfig rejects out-of-range field values."""
     with pytest.raises(Exception):
-        ExperimentConfig(max_shadow_variants_per_pattern=0)
+        ExperimentConfig(max_variants_per_pattern=0)
 
     with pytest.raises(Exception):
-        ExperimentConfig(max_shadow_variants_per_pattern=51)
+        ExperimentConfig(max_variants_per_pattern=51)
 
     with pytest.raises(Exception):
         ExperimentConfig(backtest_min_trades=0)

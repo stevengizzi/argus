@@ -8,6 +8,8 @@ Sprint 32, Session 8.
 
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -19,7 +21,7 @@ class ExperimentConfig(BaseModel):
             initialized and all experiment endpoints return 503.
         auto_promote: When True, PromotionEvaluator runs autonomously at
             session end via the Learning Loop auto-trigger.
-        max_shadow_variants_per_pattern: Maximum shadow variants allowed per
+        max_variants_per_pattern: Maximum variants (shadow or live) allowed per
             base pattern at any one time.
         backtest_min_trades: Minimum trade count for an experiment to pass
             the backtest pre-filter (COMPLETED vs FAILED).
@@ -29,6 +31,8 @@ class ExperimentConfig(BaseModel):
             activity required before promotion is evaluated.
         promotion_min_shadow_trades: Minimum number of shadow trades required
             before promotion is evaluated.
+        promotion_query_limit: Maximum number of records fetched from the
+            counterfactual store and trade logger during promotion evaluation.
         cache_dir: Path to the Databento/Parquet cache directory used by
             ExperimentRunner for backtesting.
         variants: Variant definitions keyed by pattern name. Each value is a
@@ -39,10 +43,11 @@ class ExperimentConfig(BaseModel):
 
     enabled: bool = False
     auto_promote: bool = False
-    max_shadow_variants_per_pattern: int = Field(default=5, ge=1, le=50)
+    max_variants_per_pattern: int = Field(default=5, ge=1, le=50)
     backtest_min_trades: int = Field(default=20, ge=1)
     backtest_min_expectancy: float = Field(default=0.0)
     promotion_min_shadow_days: int = Field(default=5, ge=1)
     promotion_min_shadow_trades: int = Field(default=30, ge=1)
+    promotion_query_limit: int = Field(default=1000, ge=100, le=50_000)
     cache_dir: str = "data/databento_cache"
-    variants: dict = Field(default_factory=dict)
+    variants: dict[str, list[dict[str, Any]]] = Field(default_factory=dict)

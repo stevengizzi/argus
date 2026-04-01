@@ -77,6 +77,7 @@ class PromotionEvaluator:
         self._min_shadow_days: int = int(
             config.get("promotion_min_shadow_days", 5)
         )
+        self._query_limit: int = int(config.get("promotion_query_limit", 1000))
 
     # ---------------------------------------------------------------------------
     # Public API
@@ -349,7 +350,7 @@ class PromotionEvaluator:
             MultiObjectiveResult, or None if fewer than 2 trades.
         """
         trades = await self._trade_logger.query_trades(
-            strategy_id=strategy_id, limit=1000
+            strategy_id=strategy_id, limit=self._query_limit
         )
         if not trades:
             return None
@@ -377,7 +378,7 @@ class PromotionEvaluator:
         if self._counterfactual_store is None:
             return None
         positions = await self._counterfactual_store.query(
-            strategy_id=strategy_id, limit=1000
+            strategy_id=strategy_id, limit=self._query_limit
         )
         closed = [
             p for p in positions
@@ -402,7 +403,7 @@ class PromotionEvaluator:
         if self._counterfactual_store is None:
             return 0
         positions = await self._counterfactual_store.query(
-            strategy_id=strategy_id, limit=1000
+            strategy_id=strategy_id, limit=self._query_limit
         )
         unique_days: set[str] = set()
         for pos in positions:

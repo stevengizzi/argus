@@ -38,7 +38,7 @@ def _two_variant_config(
 ) -> dict[str, object]:
     """Returns an experiments config with two distinct bull_flag variants."""
     return {
-        "max_shadow_variants_per_pattern": max_per_pattern,
+        "max_variants_per_pattern": max_per_pattern,
         "variants": {
             "bull_flag": [
                 {
@@ -125,7 +125,7 @@ async def test_duplicate_fingerprint_with_base_is_skipped(
 
     base_params = extract_detection_params(base_config, pattern_class)
     config = {
-        "max_shadow_variants_per_pattern": 5,
+        "max_variants_per_pattern": 5,
         "variants": {
             "bull_flag": [
                 {
@@ -150,7 +150,7 @@ async def test_invalid_variant_params_are_skipped_not_fatal(
 ) -> None:
     """Invalid Pydantic params → logged and skipped; valid sibling still spawns."""
     config = {
-        "max_shadow_variants_per_pattern": 5,
+        "max_variants_per_pattern": 5,
         "variants": {
             "bull_flag": [
                 {
@@ -181,7 +181,7 @@ async def test_shadow_mode_sets_config_mode_shadow(
 ) -> None:
     """Variant with mode: shadow → strategy.config.mode == 'shadow'."""
     config = {
-        "max_shadow_variants_per_pattern": 5,
+        "max_variants_per_pattern": 5,
         "variants": {
             "bull_flag": [
                 {
@@ -207,7 +207,7 @@ async def test_live_mode_sets_config_mode_live(
 ) -> None:
     """Variant with mode: live → strategy.config.mode == 'live'."""
     config = {
-        "max_shadow_variants_per_pattern": 5,
+        "max_variants_per_pattern": 5,
         "variants": {
             "bull_flag": [
                 {
@@ -227,7 +227,7 @@ async def test_live_mode_sets_config_mode_live(
 
 
 @pytest.mark.asyncio
-async def test_max_shadow_variants_per_pattern_respected(
+async def test_max_variants_per_pattern_respected(
     experiment_store: ExperimentStore,
     base_strategies: dict[str, tuple[BullFlagConfig, PatternBasedStrategy]],
 ) -> None:
@@ -262,7 +262,7 @@ async def test_empty_variants_config_yields_zero_variants(
 ) -> None:
     """Empty variants dict → zero variants (experiments.enabled=false code path)."""
     config: dict[str, object] = {
-        "max_shadow_variants_per_pattern": 5,
+        "max_variants_per_pattern": 5,
         "variants": {},
     }
     spawner = VariantSpawner(experiment_store, config)
@@ -284,7 +284,7 @@ async def test_variant_receives_same_watchlist_as_base(
     strategies = {"bull_flag": (base_config, base_strat)}
 
     config = {
-        "max_shadow_variants_per_pattern": 5,
+        "max_variants_per_pattern": 5,
         "variants": {
             "bull_flag": [
                 {

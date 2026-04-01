@@ -159,8 +159,19 @@ class _BoolAndStringPattern(PatternModule):
 
 def _make_store_mock(existing_records: list[ExperimentRecord] | None = None) -> MagicMock:
     """Build an AsyncMock-backed ExperimentStore."""
+    records = existing_records or []
+
+    async def _get_by_fingerprint(
+        pattern_name: str, fingerprint: str
+    ) -> ExperimentRecord | None:
+        for r in records:
+            if r.pattern_name == pattern_name and r.parameter_fingerprint == fingerprint:
+                return r
+        return None
+
     store = MagicMock()
-    store.list_experiments = AsyncMock(return_value=existing_records or [])
+    store.list_experiments = AsyncMock(return_value=records)
+    store.get_by_fingerprint = _get_by_fingerprint
     store.save_experiment = AsyncMock(return_value=None)
     return store
 

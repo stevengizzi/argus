@@ -299,6 +299,39 @@ async def test_get_experiment_returns_none_for_missing_id(
 
 
 @pytest.mark.asyncio
+async def test_get_by_fingerprint_returns_matching_experiment(
+    store: ExperimentStore,
+) -> None:
+    """get_by_fingerprint returns the correct record when fingerprint matches."""
+    exp = _make_experiment(pattern_name="bull_flag")
+    exp.parameter_fingerprint = "unique_fp_abc123"
+    await store.save_experiment(exp)
+
+    result = await store.get_by_fingerprint("bull_flag", "unique_fp_abc123")
+    assert result is not None
+    assert result.experiment_id == exp.experiment_id
+    assert result.parameter_fingerprint == "unique_fp_abc123"
+
+
+@pytest.mark.asyncio
+async def test_get_by_fingerprint_returns_none_when_not_found(
+    store: ExperimentStore,
+) -> None:
+    """get_by_fingerprint returns None when no record matches."""
+    exp = _make_experiment(pattern_name="bull_flag")
+    exp.parameter_fingerprint = "fp_exists"
+    await store.save_experiment(exp)
+
+    # Wrong fingerprint
+    result = await store.get_by_fingerprint("bull_flag", "fp_does_not_exist")
+    assert result is None
+
+    # Wrong pattern name
+    result = await store.get_by_fingerprint("flat_top", "fp_exists")
+    assert result is None
+
+
+@pytest.mark.asyncio
 async def test_experiment_with_backtest_result_serializes_correctly(
     store: ExperimentStore,
 ) -> None:

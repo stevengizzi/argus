@@ -229,6 +229,16 @@ async def test_get_experiment_requires_jwt(
 
 
 @pytest.mark.asyncio
+async def test_get_baseline_requires_jwt(
+    app_state_with_experiments: AppState,
+) -> None:
+    """GET /experiments/baseline/{pattern} returns 401 or 403 without auth token."""
+    async with await _make_client(app_state_with_experiments) as client:
+        resp = await client.get("/api/v1/experiments/baseline/bull_flag")
+    assert resp.status_code in (401, 403)
+
+
+@pytest.mark.asyncio
 async def test_run_sweep_requires_jwt(
     app_state_with_experiments: AppState,
 ) -> None:

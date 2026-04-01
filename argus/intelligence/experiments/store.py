@@ -87,6 +87,10 @@ _CREATE_IDX_EXP_CREATED = (
     "CREATE INDEX IF NOT EXISTS idx_exp_created_at "
     "ON experiments(created_at)"
 )
+_CREATE_IDX_EXP_FINGERPRINT = (
+    "CREATE INDEX IF NOT EXISTS idx_exp_pattern_fingerprint "
+    "ON experiments(pattern_name, parameter_fingerprint)"
+)
 _CREATE_IDX_VAR_PATTERN = (
     "CREATE INDEX IF NOT EXISTS idx_var_base_pattern "
     "ON variants(base_pattern)"
@@ -136,6 +140,7 @@ class ExperimentStore:
             await conn.execute(_CREATE_IDX_EXP_PATTERN)
             await conn.execute(_CREATE_IDX_EXP_STATUS)
             await conn.execute(_CREATE_IDX_EXP_CREATED)
+            await conn.execute(_CREATE_IDX_EXP_FINGERPRINT)
             await conn.execute(_CREATE_IDX_VAR_PATTERN)
             await conn.execute(_CREATE_IDX_VAR_CREATED)
             await conn.execute(_CREATE_IDX_PROMO_VARIANT)
@@ -264,6 +269,36 @@ class ExperimentStore:
                 LIMIT 1
                 """,
                 (pattern_name,),
+            )
+            row = await cursor.fetchone()
+            if row is None:
+                return None
+            return self._row_to_experiment(dict(row))  # type: ignore[arg-type]
+
+    async def get_by_fingerprint(
+        self, pattern_name: str, fingerprint: str
+    ) -> ExperimentRecord | None:
+        """Retrieve an experiment by pattern name and parameter fingerprint.
+
+        Uses the composite index on (pattern_name, parameter_fingerprint) for
+        an O(log n) lookup instead of a full table scan.
+
+        Args:
+            pattern_name: Pattern name to scope the search.
+            fingerprint: 16-character hex fingerprint to match.
+
+        Returns:
+            ExperimentRecord or None if not found.
+        """
+        async with aiosqlite.connect(self._db_path) as conn:
+            conn.row_factory = aiosqlite.Row
+            cursor = await conn.execute(
+                """
+                SELECT * FROM experiments
+                WHERE pattern_name = ? AND parameter_fingerprint = ?
+                LIMIT 1
+                """,
+                (pattern_name, fingerprint),
             )
             row = await cursor.fetchone()
             if row is None:

@@ -2,11 +2,12 @@
 # Config-gated: system starts in experiments.enabled: false
 enabled: false
 auto_promote: false  # When true, PromotionEvaluator runs autonomously at session end
-max_shadow_variants_per_pattern: 5
+max_variants_per_pattern: 5  # Caps total variants per pattern (shadow + live)
 backtest_min_trades: 20
 backtest_min_expectancy: 0.0
 promotion_min_shadow_days: 5
 promotion_min_shadow_trades: 30
+promotion_query_limit: 1000  # Max records fetched from counterfactual/trade store during evaluation
 cache_dir: "data/databento_cache"
 
 # Variant definitions — each pattern can have multiple named variants

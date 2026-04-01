@@ -81,7 +81,7 @@ class VariantSpawner:
         variants_config: dict[str, list[dict[str, Any]]] = (
             self._config.get("variants") or {}
         )
-        max_per_pattern: int = self._config.get("max_shadow_variants_per_pattern", 5)
+        max_per_pattern: int = self._config.get("max_variants_per_pattern", 5)
 
         spawned: list[PatternBasedStrategy] = []
 
@@ -121,7 +121,7 @@ class VariantSpawner:
             for variant_def in variant_defs:
                 if spawned_count >= max_per_pattern:
                     logger.warning(
-                        "VariantSpawner: max_shadow_variants_per_pattern=%d reached for "
+                        "VariantSpawner: max_variants_per_pattern=%d reached for "
                         "'%s' — remaining variants skipped",
                         max_per_pattern,
                         pattern_name,

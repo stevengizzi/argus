@@ -182,7 +182,7 @@ class ExperimentRunner:
         for i, params in enumerate(grid):
             fingerprint = _compute_fingerprint(params)
 
-            existing = await self._find_by_fingerprint(pattern_name, fingerprint)
+            existing = await self._store.get_by_fingerprint(pattern_name, fingerprint)
             if existing is not None:
                 logger.info(
                     "[%d/%d] pattern=%s fingerprint=%s status=SKIPPED (already exists)",
@@ -345,26 +345,6 @@ class ExperimentRunner:
             "date_range must be provided as argument or configured via "
             "'backtest_start_date' / 'backtest_end_date' in the experiment config."
         )
-
-    async def _find_by_fingerprint(
-        self, pattern_name: str, fingerprint: str
-    ) -> ExperimentRecord | None:
-        """Look up an existing experiment by pattern name + fingerprint.
-
-        Args:
-            pattern_name: Pattern to scope the search.
-            fingerprint: 16-character hex fingerprint to match.
-
-        Returns:
-            Matching ExperimentRecord, or None if not found.
-        """
-        existing = await self._store.list_experiments(
-            pattern_name=pattern_name, limit=10_000
-        )
-        for exp in existing:
-            if exp.parameter_fingerprint == fingerprint:
-                return exp
-        return None
 
 
 # ---------------------------------------------------------------------------
