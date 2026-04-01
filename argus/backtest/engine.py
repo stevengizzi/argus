@@ -49,10 +49,13 @@ from argus.backtest.metrics import BacktestResult, compute_metrics
 from argus.backtest.scanner_simulator import ScannerSimulator
 from argus.core.clock import FixedClock
 from argus.core.config import (
+    ABCDConfig,
     AfternoonMomentumConfig,
     BullFlagConfig,
+    DipAndRipConfig,
     ExitManagementConfig,
     FlatTopBreakoutConfig,
+    HODBreakConfig,
     OrbBreakoutConfig,
     OrbScalpConfig,
     OrchestratorConfig,
@@ -77,8 +80,11 @@ from argus.strategies.base_strategy import BaseStrategy
 from argus.strategies.orb_breakout import OrbBreakoutStrategy
 from argus.strategies.orb_scalp import OrbScalpStrategy
 from argus.strategies.pattern_strategy import PatternBasedStrategy
+from argus.strategies.patterns.abcd import ABCDPattern
 from argus.strategies.patterns.bull_flag import BullFlagPattern
+from argus.strategies.patterns.dip_and_rip import DipAndRipPattern
 from argus.strategies.patterns.flat_top_breakout import FlatTopBreakoutPattern
+from argus.strategies.patterns.hod_break import HODBreakPattern
 from argus.strategies.red_to_green import RedToGreenStrategy
 from argus.strategies.vwap_reclaim import VwapReclaimStrategy
 
@@ -1033,6 +1039,12 @@ class BacktestEngine:
             return self._create_bull_flag_strategy(config_dir)
         elif strategy_type == StrategyType.FLAT_TOP_BREAKOUT:
             return self._create_flat_top_breakout_strategy(config_dir)
+        elif strategy_type == StrategyType.DIP_AND_RIP:
+            return self._create_dip_and_rip_strategy(config_dir)
+        elif strategy_type == StrategyType.HOD_BREAK:
+            return self._create_hod_break_strategy(config_dir)
+        elif strategy_type == StrategyType.ABCD:
+            return self._create_abcd_strategy(config_dir)
         else:
             raise ValueError(f"Unknown strategy type: {strategy_type}")
 
@@ -1237,6 +1249,102 @@ class BacktestEngine:
 
         config = self._apply_config_overrides(config)
         pattern = FlatTopBreakoutPattern()
+
+        return PatternBasedStrategy(
+            pattern=pattern,
+            config=config,
+            data_service=self._data_service,
+            clock=self._clock,
+        )
+
+    def _create_dip_and_rip_strategy(
+        self, config_dir: Path
+    ) -> PatternBasedStrategy:
+        """Create PatternBasedStrategy wrapping DipAndRipPattern.
+
+        Args:
+            config_dir: Path to the config directory.
+
+        Returns:
+            Configured PatternBasedStrategy with DipAndRipPattern.
+        """
+        yaml_file = config_dir / "strategies" / "dip_and_rip.yaml"
+        if yaml_file.exists():
+            data = load_yaml_file(yaml_file)
+            config = DipAndRipConfig(**data)
+        else:
+            config = DipAndRipConfig(
+                strategy_id="strat_dip_and_rip",
+                name="Dip-and-Rip",
+            )
+
+        config = self._apply_config_overrides(config)
+        pattern = DipAndRipPattern()
+
+        return PatternBasedStrategy(
+            pattern=pattern,
+            config=config,
+            data_service=self._data_service,
+            clock=self._clock,
+        )
+
+    def _create_hod_break_strategy(
+        self, config_dir: Path
+    ) -> PatternBasedStrategy:
+        """Create PatternBasedStrategy wrapping HODBreakPattern.
+
+        Args:
+            config_dir: Path to the config directory.
+
+        Returns:
+            Configured PatternBasedStrategy with HODBreakPattern.
+        """
+        yaml_file = config_dir / "strategies" / "hod_break.yaml"
+        if yaml_file.exists():
+            data = load_yaml_file(yaml_file)
+            config = HODBreakConfig(**data)
+        else:
+            config = HODBreakConfig(
+                strategy_id="strat_hod_break",
+                name="HOD Break",
+            )
+
+        config = self._apply_config_overrides(config)
+        pattern = HODBreakPattern()
+
+        return PatternBasedStrategy(
+            pattern=pattern,
+            config=config,
+            data_service=self._data_service,
+            clock=self._clock,
+        )
+
+    def _create_abcd_strategy(
+        self, config_dir: Path
+    ) -> PatternBasedStrategy:
+        """Create PatternBasedStrategy wrapping ABCDPattern.
+
+        NOTE: ABCDPattern swing detection is O(n³) per DEF-122 — backtests
+        will run noticeably slower than other patterns. Do NOT optimize here.
+
+        Args:
+            config_dir: Path to the config directory.
+
+        Returns:
+            Configured PatternBasedStrategy with ABCDPattern.
+        """
+        yaml_file = config_dir / "strategies" / "abcd.yaml"
+        if yaml_file.exists():
+            data = load_yaml_file(yaml_file)
+            config = ABCDConfig(**data)
+        else:
+            config = ABCDConfig(
+                strategy_id="strat_abcd",
+                name="ABCD",
+            )
+
+        config = self._apply_config_overrides(config)
+        pattern = ABCDPattern()
 
         return PatternBasedStrategy(
             pattern=pattern,

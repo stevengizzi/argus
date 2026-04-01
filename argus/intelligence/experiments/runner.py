@@ -35,6 +35,12 @@ _SECONDS_PER_GRID_POINT = 30
 _PATTERN_TO_STRATEGY_TYPE: dict[str, StrategyType] = {
     "bull_flag": StrategyType.BULL_FLAG,
     "flat_top_breakout": StrategyType.FLAT_TOP_BREAKOUT,
+    "dip_and_rip": StrategyType.DIP_AND_RIP,
+    "hod_break": StrategyType.HOD_BREAK,
+    # NOTE: ABCD swing detection is O(n³) per DEF-122 — backtesting a single
+    # symbol/month with default params will run noticeably slower than other
+    # patterns.  Do NOT optimize here; just document and accept the limitation.
+    "abcd": StrategyType.ABCD,
 }
 
 

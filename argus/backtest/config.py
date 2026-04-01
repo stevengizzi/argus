@@ -18,6 +18,9 @@ class StrategyType(StrEnum):
     RED_TO_GREEN = "red_to_green"
     BULL_FLAG = "bull_flag"
     FLAT_TOP_BREAKOUT = "flat_top_breakout"
+    DIP_AND_RIP = "dip_and_rip"
+    HOD_BREAK = "hod_break"
+    ABCD = "abcd"
 
 
 class DataFetcherConfig(BaseModel):
