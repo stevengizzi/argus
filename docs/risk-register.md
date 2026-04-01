@@ -991,4 +991,32 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 
 ---
 
-*End of Risk & Assumptions Register v1.6*
+### RSK-049 — Shadow Variant Throughput Impact
+| Field | Value |
+|-------|-------|
+| **Date Identified** | 2026-04-01 |
+| **Category** | System Performance |
+| **Severity** | High |
+| **Likelihood** | Medium |
+| **Description** | Running dozens of shadow strategy variants simultaneously may cause throughput degradation to live strategy signal processing. Each shadow variant subscribes to CandleEvents on the Event Bus. As the variant repertoire grows (Sprint 32+), the aggregate Event Bus subscriber count and per-event handler time may introduce latency in the live signal path. |
+| **Mitigation** | `max_shadow_variants_per_pattern` config cap (default 5). Performance benchmarking during Sprint 32 implementation. Escalation to Tier 3 if >10% throughput impact measured in any session. |
+| **Owner** | Sprint 32 implementation |
+| **Status** | Open |
+
+---
+
+### RSK-050 — Promotion Oscillation
+| Field | Value |
+|-------|-------|
+| **Date Identified** | 2026-04-01 |
+| **Category** | System Stability |
+| **Severity** | Medium |
+| **Likelihood** | Medium |
+| **Description** | A variant may be repeatedly promoted and demoted due to changing market regimes, creating instability and unnecessary mode switches. Each mode switch disrupts position tracking continuity and may create confusing audit trails. |
+| **Mitigation** | Minimum shadow days threshold before promotion eligibility. Hysteresis in PromotionEvaluator — recently promoted variants immune from demotion for `promotion_min_shadow_days`. PromotionEvent audit trail enables detection of oscillation patterns. |
+| **Owner** | Sprint 32 PromotionEvaluator design |
+| **Status** | Open |
+
+---
+
+*End of Risk & Assumptions Register v1.7*

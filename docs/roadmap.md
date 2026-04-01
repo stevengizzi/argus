@@ -25,31 +25,43 @@ The path divides into two halves. Everything through Phase 6 builds a strong AI-
 
 ### The Adaptive Trading Ecosystem Model
 
-At steady state, ARGUS operates as an adaptive trading ecosystem where strategies exist in one of five states:
+At steady state, ARGUS operates as a fully autonomous evolutionary ecosystem where hundreds to thousands of strategy variants run simultaneously. Each variant is an independent agent — deployment is non-zero-sum. The system continuously promotes and demotes variants between live and shadow based on accumulated performance evidence.
 
-1. **Incubating** — new parameter combinations or pattern mutations being backtested overnight (Sprint 41 Continuous Discovery Pipeline)
-2. **Validating** — promising candidates running in simulated paper (BacktestEngine on recent 20 days, Sprint 32.5 PromotionPipeline) with stress testing (Sprint 33.5)
-3. **Proving** — validated candidates running in real paper trading / counterfactual tracking, accumulating live market data
-4. **Active** — proven strategies trading real capital, continuously monitored against their validation baseline
-5. **Declining** — active strategies showing degrading performance, getting throttled and eventually retired (Sprint 40 Learning Loop V2)
+Strategy variants exist in one of five states:
 
-The daily operator workflow at full vision:
-- **Pre-market (10 min):** Review intelligence brief. Check overnight discovery results. Approve/reject pending promotions. Confirm regime classification.
-- **Market hours (passive):** Synapse shows real-time activity. Alerts for anomalous behavior. System runs.
-- **Post-market (15 min):** Review debrief. Check Learning Loop recommendations. Flag strategies for review.
-- **Weekly (30 min):** Deep dive on Performance Workbench. Review cohort promotions. Strategic ensemble assessment.
+1. **Incubating** — new parameter combinations being backtested as pre-filter (Sprint 32 ExperimentRunner, Sprint 41 Continuous Discovery Pipeline)
+2. **Validating** — pre-filter survivors running in shadow mode, accumulating live market data via CounterfactualTracker
+3. **Proving** — shadow variants that have demonstrated sustained edge, approaching promotion thresholds
+4. **Active** — variants trading real capital, continuously monitored. Any number can be active simultaneously.
+5. **Resting** — previously active variants demoted to shadow due to degrading performance. Still running, still accumulating data, eligible for re-promotion.
 
-Total active work: ~45 minutes daily + 30 minutes weekly — exceeding the "few hours per day" goal from the Day Trading Manifesto.
+Variants are never deleted — the repertoire only grows. A variant in "Resting" state may re-emerge when market conditions shift back in its favor.
+
+Three phases of repertoire growth:
+1. **Parameterized variants** (Sprint 32): Multiply existing PatternModule templates into variant families
+2. **Standalone retrofit** (~Sprint 33): Bring non-PatternModule strategies into the same variant framework
+3. **Novel discovery** (Sprint 36+): ARGUS generates new detection logic via AI analysis
+
+The operator's daily routine at full vision requires **zero ARGUS interaction**. The system runs as a fully automatic process, sending pings to the operator's device throughout the day. The operator optionally checks in to:
+- See all positions and intelligence at work during the trading day
+- Watch real-time decision-making rationale for each deployed strategy
+- View the Synapse visualization of the full landscape of active/shadow variants
+- Read intelligence history reports — both quantitative dashboards and narrative briefings with strong data visualizations
+- Drill into any individual strategy variant's track record over time
+- Manually override (rarely used)
+
+Autonomous promotion is tested and validated during paper trading — the switch to live trading is the confidence gate for full autonomy, not a trigger to begin testing it.
 
 **Key architectural principle:**
-- **Sprint 28 is the observation layer** — it establishes the pattern of correlating predictions with outcomes that V2 runs at micro-strategy scale.
-- **Sprint 32.5 is the action layer** — ExperimentRegistry + PromotionPipeline provide the infrastructure for acting on Learning Loop insights.
-- **Sprint 40–41 close the autonomous loop** — Learning Loop V2 + Continuous Discovery Pipeline create the self-improving system.
+- **Sprint 28 is the observation layer** — it establishes the pattern of correlating predictions with outcomes.
+- **Sprint 32 is the action layer** — Pattern Factory + Experiment Pipeline + Variant Spawner + Promotion Evaluator provide the complete infrastructure for autonomous parameter optimization and strategy variant management. (Absorbs original Sprint 32.5 scope.)
+- **Sprint 40–41 close the autonomous loop** — Learning Loop V2 + Continuous Discovery Pipeline create the fully self-improving system.
+- **Shadow performance is the real validation gate** — backtests are pre-filters. A variant earns live capital only through sustained demonstrated edge in actual market conditions via CounterfactualTracker.
 
 **Scale considerations:**
 - Target ensemble scale: 200–800 micro-strategies (V1 ensemble). 2,000+ may require Cython hot-path optimization.
 - Micro-strategies that fire rarely (e.g., twice/month) are not weak — they're precise. Ensemble power comes from having hundreds of precise strategies that collectively cover most market days.
-- At 500+ strategies, human oversight transitions from individual strategy review to cohort-level approval (Sprint 32.5 PromotionPipeline cohort model).
+- At 500+ strategies, human oversight transitions from individual strategy review to cohort-level approval (Sprint 32 PromotionEvaluator cohort model).
 
 ---
 
@@ -475,7 +487,7 @@ Reconciliation redesign with broker-confirmed positions (DEC-369). Overflow rout
 **Trigger:** Sprint 31A complete (after Pattern Expansion III). Short Selling (Sprint 30) now follows the gate rather than preceding it — deferred per April 1 strategic review until long strategies are profitable.
 **Protocol:** Strategic Check-In (`strategic-check-in.md`) + Codebase Health Audit (`codebase-health-audit.md`) + Documentation Compression.
 
-**ARGUS state at this gate:** 15 hand-crafted long-only strategies with parameterized templates (Sprint 32), experiment infrastructure (Sprint 32.5), AI quality filtering, NLP catalysts, dynamic sizing, and performance-aware learning loop. Paper trading has been running for 8–10 weeks at this point. All strategies validated with BacktestEngine + 3 years of Databento data. Short selling deferred to post-gate.
+**ARGUS state at this gate:** 15 hand-crafted long-only strategies with parameterized templates and experiment infrastructure (Sprint 32 — merged 32+32.5), AI quality filtering, NLP catalysts, dynamic sizing, and performance-aware learning loop. Paper trading has been running for 8–10 weeks at this point. All strategies validated with BacktestEngine + 3 years of Databento data. Short selling deferred to post-gate.
 
 **What you see:** 15 strategy cards in the Pattern Library. Health bands on every strategy in the Orchestrator. Correlation heatmap on Performance. Quality-graded signals firing throughout the day. Morning intelligence briefs. AI-generated debrief narratives. MFE/MAE lifecycle data on every trade. Parameterized templates tunable from config.
 
@@ -487,11 +499,11 @@ Reconciliation redesign with broker-confirmed positions (DEC-369). Overflow rout
 
 ---
 
-## 8. Phase 7: Infrastructure Unification (Sprints 29–32.5)
+## 8. Phase 7: Infrastructure Unification (Sprints 29–32)
 
-*Parameterized strategy templates and experiment infrastructure first (Sprint 32 pulled forward), then expands strategy roster and adds short selling. BacktestEngine (Sprint 27) provides the foundation. Sprint 32/32.5 enable data-driven parameter tuning before adding more strategies. UI focus: the Research Console makes strategy research visible and interactive.*
+*Parameterized strategy templates and experiment infrastructure (Sprint 32 — merged 32+32.5), then expands strategy roster and adds short selling. BacktestEngine (Sprint 27) provides the foundation. Sprint 32 enables data-driven parameter tuning and variant spawning before adding more strategies. UI focus: the Research Console makes strategy research visible and interactive.*
 
-**Amendment note (DEC-357):** Phase 7 gains Sprint 32.5 (Experiment Registry + Promotion Pipeline + Anti-Fragility + Hypothesis Generation Design) after Sprint 32. Sprint 33 scope decreases as evaluation framework and experiment storage already exist.
+**Amendment note (DEC-357):** Sprint 32.5 (Experiment Registry + Promotion Pipeline) merged into Sprint 32 per April 1, 2026 planning session. Sprint 33 scope decreases as evaluation framework and experiment storage already exist (now in Sprint 32).
 
 ### Sprint 29: Pattern Expansion I (DEC-167, DEC-378) ✅
 **Completed:** March 30–31, 2026 (2 days, 10 sessions)
@@ -554,10 +566,10 @@ Reconciliation redesign with broker-confirmed positions (DEC-369). Overflow rout
 
 **Tests:** ~60 new.
 
-### Sprint 31B: Research Console (NEW PAGE) — Deferred post-32.5 (DEC-379)
+### Sprint 31B: Research Console (NEW PAGE) — Deferred post-32 (DEC-379)
 **Target:** ~3 days
 
-**Note:** Deferred from original Sprint 31 position to after Sprint 32.5. Research Console is developer UX for strategy research visibility — valuable but not on the optimization critical path (32 → 32.5 → 33 → 33.5 → 34).
+**Note:** Deferred from original Sprint 31 position to after Sprint 32. Research Console is developer UX for strategy research visibility — valuable but not on the optimization critical path (32 → 33 → 33.5 → 34).
 
 **Scope (frontend):** **Research Console** — Command Center page 9. Mission control for strategy research.
 - **Run Manager:** Shows backtest runs in progress (progress bar, ETA), queued runs, completed runs. Each completed run: equity curve thumbnail, Sharpe, win rate, max drawdown, trade count.
@@ -571,44 +583,37 @@ Reconciliation redesign with broker-confirmed positions (DEC-369). Overflow rout
 
 **Tests:** ~80 new.
 
-### Sprint 32: Parameterized Strategy Templates
-**Target:** ~3–4 days
+### Sprint 32: Parameterized Templates + Experiment Pipeline (merged 32+32.5)
+**Target:** ~5–7 days (8 sessions)
 
-**Scope:**
-- **StrategyTemplate** base class: Defines a strategy as a parameterized template with declared parameter ranges, filter dimensions, and validation criteria.
-- Convert existing strategies (ORB Breakout, VWAP Reclaim, etc.) to template format. Template parameters include all tunable values — entry thresholds, targets, stops, time windows, volume filters, market cap filters, sector filters.
-- **Template Gallery** on Pattern Library page: Evolves from individual strategy cards to template cards showing parameter ranges, instance count, and a mini sweep heatmap for each template.
-- **Template Explorer:** Click a template → see all configured instances, parameter ranges, and which regions of parameter space have been explored.
+**Scope (merged from original Sprint 32 + Sprint 32.5 per April 1, 2026 planning session):**
+- **YAML→constructor wiring** for all 7 PatternModule patterns (DEF-124 resolved)
+- **Generic pattern factory** — instantiate any pattern from config YAML without hand-coded dispatch
+- **Parameter fingerprint** — hash of parameter values for experiment deduplication
+- **VariantSpawner** — spawns shadow strategy instances from pattern templates + parameter sets
+- **ExperimentRegistry** — SQLite-backed persistent storage for every experiment run. Partitioned by `(strategy_family, batch_id)`. Pre-computed aggregate views via SQLite triggers: per-family success rates, meta-learning summaries. Archival policy for REVERTED experiments.
+- **ExperimentRunner (backtest pre-filter)** — runs BacktestEngine on each candidate variant before shadow activation. Eliminates obviously bad parameter combinations before they consume shadow compute. Config-gated via `experiments.enabled`.
+- **PromotionEvaluator** — autonomous promotion/demotion based on CounterfactualTracker accumulated evidence. Promotion thresholds configurable. Kill switches at cohort and individual level.
+- **PromotionCohort** — primary unit of promotion (20–50 variants evaluated together). HIGH-confidence variants may form size-1 cohorts.
+- **ExperimentQueue + background worker** — overnight autonomous operation. Market-hours-aware scheduling. Priority ordering: learning_loop > systematic_search > discovery_pipeline > manual.
+- **Anti-Fragility Integration (DEC-358):** Loss-driven queue priority, post-mortem automation on cohort revert, drawdown-accelerated experimentation.
+- **CLI + REST API:** `experiments` subcommand + 15+ endpoints for experiments, cohorts, queue, promotion pipeline.
+- **Config-gated:** `experiments.enabled` flag. All existing strategies unaffected when disabled.
 
-**State after:** Every strategy exists as both a hand-tuned instance (the artisanal version from Phase 6) and a parameterized template (ready for systematic search). The Pattern Library shows both views.
+**State after:** The full variant lifecycle is operational — spawn → backtest pre-filter → shadow → CounterfactualTracker evaluation → autonomous promotion → live. The repertoire can grow without human intervention.
 
-**Tests:** ~60 new.
+**Tests:** ~155 new.
 
-### Sprint 32.5: Experiment Registry + Promotion Pipeline (DEC-357)
-**Target:** ~4–5 days (9 sessions)
-
-**Scope:**
-- **ExperimentRegistry** — persistent storage for every experiment ARGUS runs, designed for millions of entries. Partitioned by `(strategy_family, batch_id)`. Separate tables for core metadata vs full results. Pre-computed aggregate views via SQLite triggers: per-family success rates, per-type success rates (meta-learning), per-batch summaries. Archival policy for old REVERTED experiments.
-- **PromotionCohort** — primary unit of promotion (20–50 strategies evaluated together, not individually). Formation rules by cohort type (INDIVIDUAL, FAMILY_SWEEP, CROSS_FAMILY, DISCOVERY_BATCH). HIGH-confidence strategies may form size-1 cohorts; LOW/ENSEMBLE_ONLY strategies require cohort of ≥10.
-- **PromotionPipeline** — 8 stages: BACKTEST_VALIDATED → STRESS_TESTED (if Sprint 33.5 adopted) → SIMULATED_PAPER → PAPER_ACTIVE → PAPER_CONFIRMED → LIVE_PENDING_VETO → LIVE_ACTIVE → STABLE/REVERTED. Simulated-paper screening (BacktestEngine on recent 20 days) breaks the paper validation bottleneck from ~8 years to ~2 months.
-- **Kill switches** — cohort level (5-day Pareto-dominated by baseline → auto-revert) and individual level (negative marginal Sharpe for 10 days → remove strategy, keep rest of cohort).
-- **Human veto window** — 24–72h depending on cohort type. Veto via API endpoint + Command Center UI (DEC-357 modification); ntfy.sh for notifications only.
-- **ExperimentQueue + background worker** — overnight autonomous operation. Market-hours-aware scheduling (~200 experiments/night sequential, ~6,400 with cloud burst from Sprint 31). Priority ordering: learning_loop > systematic_search > discovery_pipeline > manual.
-- **Anti-Fragility Integration (DEC-358):** Loss-driven queue priority (investigate failures during drawdowns, explore during profits). Post-mortem automation on cohort revert (diagnose toxic strategies, check vulnerability of other cohorts). Drawdown-accelerated experimentation (80/20 diagnostic/exploration split during drawdown, increased monitoring frequency).
-- **Hypothesis Generation Design document** — architecture for 4 generation methods (niche identification, pattern mutation, literature mining, anomaly detection) with `GeneratedHypothesis` interface specification. Committed to `docs/design/hypothesis-generation-architecture.md`. Design only — implementation at Sprint 41.
-- **API:** 20+ endpoints for experiments, cohorts, queue, meta-learning, promotion pipeline.
-- **Tests:** ~95 new.
-
-**Dependencies:** Sprint 27.5 (MultiObjectiveResult, EnsembleResult, comparison API), Sprint 32 (templates define parameter space), Sprint 28 (retrofitted to write to registry). Existing ntfy.sh integration (DEC-279), BacktestEngine (Sprint 27).
+**Dependencies:** Sprint 27.5 (MultiObjectiveResult, EnsembleResult), Sprint 27.7 (CounterfactualTracker for shadow evaluation), Sprint 27 (BacktestEngine for pre-filter), Sprint 28 (retrofitted to write to registry). DEF-124 (YAML→constructor wiring) resolved in this sprint.
 
 ### Phase 7 Gate
 
-**Trigger:** Sprint 32.5 complete.
+**Trigger:** Sprint 32 complete.
 **Protocol:** Strategic Check-In (`strategic-check-in.md`) + Documentation Compression.
 
-**Historical data sufficiency — RESOLVED (DEC-358).** XNAS.ITCH + XNYS.PILLAR provide OHLCV-1m back to May 2018 (~96 months) at $0 on Standard plan. Three-way splits across 96 months provide ample statistical power. The data purchase concern from the original roadmap is no longer applicable. BacktestEngine's HistoricalDataFeed gains exchange-specific dataset mode in Sprint 33.5.
+**Historical data sufficiency — RESOLVED (DEC-358).** XNAS.ITCH + XNYS.PILLAR provide OHLCV-1m back to May 2018 (~96 months) at $0 on Standard plan. Three-way splits across 96 months provide ample statistical power.
 
-**Key assessment:** Confirm Sprint 32.5 scope based on paper trading experience. Adjust cohort sizes, veto windows, kill switch thresholds. Review overnight compute capacity — is sequential worker sufficient for Sprint 33, or should Sprint 31 parallelism be prioritized?
+**Key assessment:** Confirm experiment pipeline health. Review promotion threshold calibration from first shadow variant evaluations. Review overnight compute capacity — is sequential worker sufficient for Sprint 33, or should Sprint 31 parallelism be prioritized?
 
 ---
 
@@ -626,7 +631,7 @@ Reconciliation redesign with broker-confirmed positions (DEC-369). Overflow rout
 - Three-way data split infrastructure (train / selection / validation). With XNAS.ITCH + XNYS.PILLAR providing 96 months of data (DEC-358), three-way splits have ample statistical power.
 - Smoothness prior — neighboring parameter/filter cells must show correlated performance for any cell to be considered valid.
 - Out-of-sample ensemble validation metrics. Walk-forward at ensemble level.
-- **Note:** Scope reduced from original plan — evaluation framework (Sprint 27.5), experiment storage (Sprint 32.5), and aggregate views already exist. Sprint 33 focuses purely on statistical methods.
+- **Note:** Scope reduced from original plan — evaluation framework (Sprint 27.5), experiment storage (Sprint 32, merged from 32.5), and aggregate views already exist. Sprint 33 focuses purely on statistical methods.
 
 **Scope (frontend):** Research Console — Validation Dashboard:
 - **Data Split Visualizer:** Timeline bar showing train / selection / validation partitions.
@@ -646,7 +651,7 @@ Reconciliation redesign with broker-confirmed positions (DEC-369). Overflow rout
 - **Exchange-specific HistoricalDataFeed mode** — queries XNAS.ITCH + XNYS.PILLAR separately and merges results for pre-March-2023 data. Also benefits Sprint 33 statistical validation with 96 months of data instead of 35.
 - **Tests:** ~55 new.
 
-**Dependencies:** Sprint 32.5 (PromotionPipeline for Stage 1.5 gate), Sprint 27.5 (BacktestEngine with MultiObjectiveResult), Sprint 27.6 (regime transition detection quality is a metric), BacktestEngine (Sprint 27).
+**Dependencies:** Sprint 32 (PromotionPipeline for Stage 1.5 gate — merged from 32.5), Sprint 27.5 (BacktestEngine with MultiObjectiveResult), Sprint 27.6 (regime transition detection quality is a metric), BacktestEngine (Sprint 27).
 
 ### Sprint 34: ORB Family Systematic Search ★ THE PIVOTAL EXPERIMENT ★
 **Target:** ~4–5 days (compute-heavy — may need cloud burst)
@@ -882,7 +887,7 @@ Each grouping mode rearranges with smooth fly-through animation — nodes flow f
 |-------|---------|-------|----------|------------|
 | 5: Foundation Completion | 21.5–24 | Live trading, AI layer, quality filtering | ~2–3 weeks | Weeks 1–3 |
 | 6: Strategy Expansion | 25–31A | 15 artisanal strategies, short selling, Learning Loop V1, Exit Management | ~2–3 weeks | Weeks 3–6 |
-| 7: Infrastructure Unification | 31.5–32.5 | Parallel sweeps, templates, experiment registry | ~2–2.5 weeks | Weeks 6–8.5 |
+| 7: Infrastructure Unification | 31.5–32 | Parallel sweeps, templates, experiment registry (merged into Sprint 32) | ~2–2.5 weeks | Weeks 6–8.5 |
 | 7.5: Research Console | 31B | Research Console (deferred from Phase 6 per DEC-379) | ~0.5 week | Week 9 |
 | 8: Controlled Experiment | 33–35 | Statistical framework, stress testing, ORB search, go/no-go | ~2–2.5 weeks | Weeks 9–11.5 |
 | 9: Ensemble Scaling | 36–39 | Cross-family search, Synapse, live ensemble | ~3–4 weeks | Weeks 11.5–15.5 |
@@ -907,7 +912,7 @@ Each grouping mode rearranges with smooth fly-through animation — nodes flow f
 | 29 | Pattern Library: +4–5 new strategy cards (ABCD, Dip-and-Rip, HOD Break, Gap-and-Go) |
 | 30 | Pattern Library: +Parabolic Short + 1–2 cards. Dashboard: Short Exposure active. Orchestrator: +short positions |
 | 31A | Pattern Library: remaining strategy cards to reach 15 total |
-| 31B (post-32.5) | **+Research Console (page 9):** Run Manager, Result Comparison, Run Configuration, Sweep Manager, Sweep Heatmap, Parameter Landscape (3D) |
+| 31B (post-32) | **+Research Console (page 9):** Run Manager, Result Comparison, Run Configuration, Sweep Manager, Sweep Heatmap, Parameter Landscape (3D) |
 | 32 | Pattern Library: evolves to template gallery with instance browser and template explorer |
 | 32 | Research Console: +Data Split Visualizer, +FDR Report, +Smoothness Heatmap overlay |
 | 33 | Research Console: live progressive sweep rendering, staged validation views |

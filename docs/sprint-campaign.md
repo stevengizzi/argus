@@ -260,8 +260,7 @@ CHOREOGRAPHY:
 | **28.5** | **Exit Management** | **B** | **iterative-judgment** | **2–3** | **2** | **No** | **No** | ✅ |
 | 29 | Pattern Expansion I | B | iterative-judgment | 3–5 | 2–3 | No | No | ✅ |
 | 29.5 | Post-Session Operational Sweep | A | standard | 7 | 1 | No | No | ✅ |
-| 32 | Parameterized Strategy Templates (pulled forward) | C | adversarial, iterative-judgment | 5–7 | 3–4 | **Yes** | No | — |
-| **32.5** | **Experiment Registry + Promotion Pipeline + Anti-Fragility** | **A** | **standard** | **9** | **4–5** | **No** | **No** | — |
+| 32 | Parameterized Templates + Experiment Pipeline (merged 32+32.5) | C | adversarial, iterative-judgment | 8 | 5–7 | **Yes** | No | — |
 | 31A | Pattern Expansion III | B | iterative-judgment | 5–7 | 3 | No | **Phase 6 Gate** | — |
 | 30 | Short Selling Infrastructure + Parabolic Short (deferred) | B | iterative-judgment | 5–7 | 3 | No | No | — |
 | 31.5 | Parallel Sweep Infrastructure | B | iterative-judgment | 3–5 | 2 | No | No | — |
@@ -285,7 +284,7 @@ CHOREOGRAPHY:
 
 **Totals:** ~35 sprints (including sub-sprints) | ~155–210 sessions | ~17–22 weeks estimated
 
-*Note: 5 new sprint slots added by DEC-357/DEC-358 (Sprints 27.5, 27.6, 27.7, 32.5, 33.5). Impromptu sprints 27.65, 27.75, 27.8, 27.9, 27.95 added during Phase 6 for operational hardening. Sprint 28.5 (Exit Management) added during Sprint 28 planning. Sprint 28 reclassified from Type B to Type C with mandatory adversarial review (ConfigProposalManager introduces config modification pipeline).*
+*Note: 5 new sprint slots added by DEC-357/DEC-358 (Sprints 27.5, 27.6, 27.7, 32.5, 33.5). Sprint 32.5 merged into Sprint 32 per April 1, 2026 planning session — Sprint 32 now delivers both parameterized templates and experiment infrastructure. Impromptu sprints 27.65, 27.75, 27.8, 27.9, 27.95 added during Phase 6 for operational hardening. Sprint 28.5 (Exit Management) added during Sprint 28 planning. Sprint 28 reclassified from Type B to Type C with mandatory adversarial review (ConfigProposalManager introduces config modification pipeline).*
 
 ---
 
@@ -319,8 +318,7 @@ Based on the roadmap's per-sprint duration estimates. Start date: March 5, 2026.
 | **28.5** | **Apr** | **Apr** | **Exit Management (~2 days)** |
 | 29 | Mar 30–31 | Mar 31 | ✅ Pattern Expansion I |
 | 29.5 | Mar 31–Apr 1 | Apr 1 | ✅ Post-Session Operational Sweep |
-| 32 | Apr | Apr | Parameterized Strategy Templates (pulled forward) |
-| **32.5** | **Apr** | **Apr–May** | **Experiment Registry + Promotion Pipeline (DEC-357)** |
+| **32** | **Apr** | **Apr–May** | **Parameterized Templates + Experiment Pipeline (merged 32+32.5, 8 sessions)** |
 | 31A | May | May | Pattern Expansion III |
 | **Phase 6 Gate** | **May** | **May** | Strategic check-in + live trading decision gate |
 | 30 | May–Jun | Jun | Short Selling + Parabolic Short (deferred) |
@@ -356,8 +354,8 @@ Phase 6 (Linear Chain — includes amendment infrastructure + operational sprint
   (obs)  (R2G)  (BE)   (reval)  (eval)   (regime) (safety)  (cntfct) (operational hardening)
                                                                                     │
                                                                                     ▼
-                                              28 ──→ 28.5 ──→ 29 ──→ 29.5 ──→ 32 ──→ 32.5 ──→ 31A
-                                              (learn) (exit)  (exp-I) (ops)   (tmpl)  (registry) (exp-III)
+                                              28 ──→ 28.5 ──→ 29 ──→ 29.5 ──→ 32 ──→ 31A
+                                              (learn) (exit)  (exp-I) (ops)   (tmpl+registry) (exp-III)
                                                                                                      │
                                                                                                      ▼
                                                                                                 PHASE 6 GATE
@@ -415,9 +413,9 @@ Phase 10 (Linear Chain):
 | 27.7 requires 27.6 | Counterfactual positions tagged with RegimeVector |
 | 28 requires 27.95 | Learning Loop consumes evaluation framework (27.5), regime vectors (27.6), counterfactual data (27.7), and broker safety infrastructure (27.95) |
 | 28.5 requires 28 | Exit Management acts on Learning Loop data about exit variance |
-| 32.5 requires 27.5 + 32 | Experiment Registry consumes MultiObjectiveResult; templates define parameter space |
-| 33.5 requires 32.5 | Stress testing is a PromotionPipeline gate |
-| Phase 8 requires Phase 7 | The experiment (Sprint 34) needs sweeps (31), templates (32), and experiment infrastructure (32.5) |
+| 32 requires 27.5 + 27.7 | Sprint 32 (merged) consumes MultiObjectiveResult + CounterfactualTracker; templates define parameter space |
+| 33.5 requires 32 | Stress testing is a PromotionPipeline gate (PromotionPipeline now in Sprint 32) |
+| Phase 8 requires Phase 7 | The experiment (Sprint 34) needs sweeps (31), templates, and experiment infrastructure (all in Sprint 32) |
 | 32 pulled forward into Phase 6 | Longs need parameter tuning before adding short selling (April 1 strategic review) |
 | Phase 9 requires Phase 8 GO | If NO-GO, Phase 9 does not execute |
 | Sprint 38b requires Three.js research | A mini-discovery session before implementation (see Sprint 38b choreography) |
@@ -1096,19 +1094,21 @@ This is the most significant non-Phase-8 gate because **live trading with real c
 
 ---
 
-## 6. Phase 7: Infrastructure Unification (Sprints 32–32.5)
+## 6. Phase 7: Infrastructure Unification (Sprint 32)
 
-*Builds parallel sweep infrastructure, parameterized strategy templates, and experiment infrastructure for the ensemble vision. BacktestEngine already complete (Sprint 27). Research Console deferred to post-32.5 per DEC-379. Target: ~2–2.5 weeks.*
+*Parameterized strategy templates and experiment infrastructure delivered in a single combined sprint (Sprint 32, merged from original 32+32.5). BacktestEngine already complete (Sprint 27). Research Console deferred to post-32 per DEC-379. Target: ~2 weeks.*
 
 ---
 
-### Sprint 32: Parameterized Strategy Templates
+### Sprint 32: Parameterized Templates + Experiment Pipeline (merged 32+32.5)
+
+> **NOTE (April 1, 2026):** Sprint 32 now absorbs the original Sprint 32.5 (Experiment Registry + Promotion Pipeline) scope per planning session. Sprint 32.5 no longer exists as a standalone sprint.
 
 **Type:** C (Architecture-Shifting) | **Modes:** Adversarial Review, Iterative Judgment Loop
-**Duration:** ~3–4 days | **Sessions:** 5–7 (3 backend, 2–4 frontend)
-**Depends on:** Phase 6 Gate complete
-**Adversarial review:** **YES** — significant refactor of strategy architecture (Roadmap Contradiction Note). Strategies become templates. Risk Manager, Orchestrator, Order Manager must see no difference.
-**Delivers:** Template system, template configuration schema, template registry, existing strategies refactored as templates, Pattern Library evolution to template gallery
+**Duration:** ~5–7 days | **Sessions:** 8 (4–5 backend, 2–3 frontend)
+**Depends on:** Sprint 29.5 complete
+**Adversarial review:** **YES** — YAML→constructor wiring, variant spawning architecture, promotion evaluator autonomy. Strategies must see no behavioral difference when experiments disabled.
+**Delivers:** YAML→constructor wiring, generic pattern factory, parameter fingerprint, VariantSpawner, ExperimentRegistry (SQLite), ExperimentRunner (backtest pre-filter), PromotionEvaluator (autonomous), PromotionCohort, ExperimentQueue, CLI + REST API. Config-gated via `experiments.enabled`.
 
 **Choreography:**
 
@@ -1175,14 +1175,14 @@ This is the most significant non-Phase-8 gate because **live trading with real c
 
 ### Phase 7 Gate
 
-**Trigger:** Sprint 32.5 complete
+**Trigger:** Sprint 32 complete (merged 32+32.5)
 **Protocol:** Strategic Check-In (`strategic-check-in.md`) + Documentation Compression
 
 **[Claude.ai]** Strategic Check-In Conversation:
 
 1. **Progress review:** Templates validated? Experiment Registry operational? Promotion Pipeline stages tested? Anti-fragility logic wired?
 2. **Data sufficiency:** RESOLVED (DEC-358). XNAS.ITCH + XNYS.PILLAR provide 96 months of OHLCV-1m at $0. Exchange-specific HistoricalDataFeed mode built in Sprint 33.5.
-3. **Experiment pipeline calibration:** Confirm Sprint 32.5 cohort sizes, veto windows, and kill switch thresholds based on paper trading experience. Review overnight compute capacity — is sequential worker sufficient for Sprint 33, or should Sprint 31 parallelism be prioritized?
+3. **Experiment pipeline calibration:** Confirm Sprint 32 cohort sizes, veto windows, and kill switch thresholds based on paper trading experience. Review overnight compute capacity — is sequential worker sufficient for Sprint 33, or should Sprint 31 parallelism be prioritized?
 4. **Phase 8 readiness:** Is the BacktestEngine fast enough for the controlled experiment (Sprint 34)? Do the templates cover the ORB family adequately for systematic search?
 5. **Velocity calibration:** Update estimates for Phase 8.
 6. **Risk review:** Any new risks from Phase 7 implementation? Cloud burst infrastructure ready?
@@ -1206,7 +1206,7 @@ This is the most significant non-Phase-8 gate because **live trading with real c
 **Type:** B (Mixed Backend + Frontend) | **Modes:** Adversarial Review, Iterative Judgment Loop
 **Duration:** ~3–4 days | **Sessions:** 5–7 (3 backend, 2–4 frontend)
 **Depends on:** Phase 7 Gate complete
-**Note:** Scope reduced from original plan — evaluation framework (Sprint 27.5), experiment storage (Sprint 32.5), and aggregate views already exist. Sprint 33 focuses purely on statistical methods.
+**Note:** Scope reduced from original plan — evaluation framework (Sprint 27.5), experiment storage (Sprint 32, merged from 32.5), and aggregate views already exist. Sprint 33 focuses purely on statistical methods.
 **Adversarial review:** **YES** — if the statistical methodology is wrong, the entire Phase 8 experiment is worthless. This is the highest-stakes adversarial review in the campaign.
 **Delivers:** FDR correction (Benjamini-Hochberg), minimum trade count thresholds, three-way data splits (96 months of data available), smoothness prior, Research Console Validation Dashboard
 
@@ -1934,7 +1934,7 @@ Summary of all gates and checkpoints in the campaign, with exact protocols and t
 |------|-------------|----------|--------------|---------------|
 | Phase 5 Gate | 24 | `strategic-check-in.md` + Doc Compression | Phase boundary | Paper trading health, Phase 6 readiness |
 | Phase 6 Gate | 31 | `strategic-check-in.md` + `codebase-health-audit.md` + Doc Compression | Phase boundary + 4–6 sprint cadence | **CPA consultation, live trading decision** |
-| Phase 7 Gate | 32.5 | `strategic-check-in.md` + Doc Compression | Phase boundary | **Data sufficiency RESOLVED (DEC-358). Confirm experiment pipeline thresholds.** |
+| Phase 7 Gate | 32 | `strategic-check-in.md` + Doc Compression | Phase boundary | **Data sufficiency RESOLVED (DEC-358). Confirm experiment pipeline thresholds.** |
 | Phase 8 Gate | 35 | **Custom Gate Review** (see Section 7) | Phase boundary | **GO/NO-GO — pivotal campaign decision** |
 | Phase 9 Gate | 39b | `strategic-check-in.md` + `codebase-health-audit.md` + Doc Compression | Phase boundary + 4–6 sprint cadence | Ensemble paper trading health, scale performance |
 | Phase 10 Gate | 42 | `strategic-check-in.md` + Final Doc Reconciliation | Campaign completion | Full system review, horizon planning |
