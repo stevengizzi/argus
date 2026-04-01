@@ -1010,6 +1010,11 @@ class BullFlagConfig(StrategyConfig):
     # Breakout confirmation
     breakout_volume_multiplier: float = Field(default=1.3, gt=0, le=10.0)
 
+    # Detection scoring parameters
+    min_score_threshold: float = Field(default=0.0, ge=0, le=100.0)
+    pole_strength_cap_pct: float = Field(default=0.10, gt=0, le=1.0)
+    breakout_excess_cap_pct: float = Field(default=0.02, gt=0, le=0.50)
+
     # Targets and stops
     target_1_r: float = Field(default=1.0, gt=0)
     target_2_r: float = Field(default=2.0, gt=0)
@@ -1033,6 +1038,10 @@ class FlatTopBreakoutConfig(StrategyConfig):
 
     # Breakout confirmation
     breakout_volume_multiplier: float = Field(default=1.3, gt=0, le=10.0)
+
+    # Detection scoring parameters
+    min_score_threshold: float = Field(default=0.0, ge=0, le=100.0)
+    max_range_narrowing: float = Field(default=1.0, ge=0, le=2.0)
 
     # Targets and stops
     target_1_r: float = Field(default=1.0, gt=0)
@@ -1095,6 +1104,9 @@ class HODBreakConfig(StrategyConfig):
     stop_buffer_atr_mult: float = Field(default=0.5, gt=0, le=2.0)
     target_ratio: float = Field(default=2.0, gt=0, le=5.0)
 
+    # VWAP scoring parameter
+    vwap_extended_pct: float = Field(default=0.05, gt=0, le=0.10)
+
     # Targets and stops
     target_1_r: float = Field(default=1.0, gt=0)
     target_2_r: float = Field(default=2.0, gt=0)
@@ -1130,6 +1142,14 @@ class GapAndGoConfig(StrategyConfig):
     # Target
     target_ratio: float = Field(default=1.0, gt=0, le=5.0)
 
+    # Detection scoring parameters
+    prior_day_avg_volume: float = Field(default=0.0, ge=0)
+    min_score_threshold: float = Field(default=0.0, ge=0, le=100.0)
+    gap_atr_cap: float = Field(default=5.0, gt=0, le=10.0)
+    volume_score_cap: float = Field(default=5.0, gt=0, le=20.0)
+    vwap_hold_score_divisor: float = Field(default=8.0, gt=0, le=10.0)
+    catalyst_base_score: float = Field(default=10.0, ge=0, le=25.0)
+
     # Targets and stops
     target_1_r: float = Field(default=1.0, gt=0)
     target_2_r: float = Field(default=2.0, gt=0)
@@ -1146,6 +1166,27 @@ class ABCDConfig(StrategyConfig):
 
     # Pattern class identifier for registry lookup
     pattern_class: str = Field(default="ABCDPattern")
+
+    # Swing detection parameters
+    swing_lookback: int = Field(default=5, ge=2, le=20)
+    min_swing_atr_mult: float = Field(default=0.5, gt=0, le=5.0)
+
+    # Fibonacci parameters
+    fib_b_min: float = Field(default=0.382, gt=0, le=1.0)
+    fib_b_max: float = Field(default=0.618, gt=0, le=1.0)
+    fib_c_min: float = Field(default=0.500, gt=0, le=1.0)
+    fib_c_max: float = Field(default=0.786, gt=0, le=1.5)
+
+    # Leg ratio parameters
+    leg_price_ratio_min: float = Field(default=0.8, gt=0, le=2.0)
+    leg_price_ratio_max: float = Field(default=1.2, gt=0, le=3.0)
+    leg_time_ratio_min: float = Field(default=0.5, gt=0, le=2.0)
+    leg_time_ratio_max: float = Field(default=2.0, gt=0, le=5.0)
+
+    # Completion and trade parameters
+    completion_tolerance_percent: float = Field(default=1.0, ge=0, le=5.0)
+    stop_buffer_atr_mult: float = Field(default=0.5, gt=0, le=3.0)
+    target_extension: float = Field(default=1.272, gt=0, le=3.0)
 
     # Targets and stops
     target_1_r: float = Field(default=1.0, gt=0)
@@ -1185,6 +1226,11 @@ class PreMarketHighBreakConfig(StrategyConfig):
     # Stop and target
     stop_buffer_atr_mult: float = Field(default=0.5, gt=0, le=3.0)
     target_ratio: float = Field(default=1.5, gt=0, le=5.0)
+
+    # Detection scoring parameters
+    min_score_threshold: float = Field(default=0.0, ge=0, le=100.0)
+    vwap_extended_pct: float = Field(default=0.05, gt=0, le=0.10)
+    gap_up_bonus_pct: float = Field(default=1.0, ge=0, le=20.0)
 
     # Targets and stops
     target_1_r: float = Field(default=1.0, gt=0)
