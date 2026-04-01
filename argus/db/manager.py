@@ -99,6 +99,21 @@ class DatabaseManager:
         except Exception:
             pass  # Column already exists
 
+        # Migration: add MFE/MAE columns to trades (Sprint 29.5 S6)
+        for col_def in (
+            "mfe_r REAL",
+            "mae_r REAL",
+            "mfe_price REAL",
+            "mae_price REAL",
+        ):
+            try:
+                await self._connection.execute(
+                    f"ALTER TABLE trades ADD COLUMN {col_def}"
+                )
+                await self._connection.commit()
+            except Exception:
+                pass  # Column already exists
+
     @asynccontextmanager
     async def connection(self) -> AsyncIterator[aiosqlite.Connection]:
         """Get a database connection context manager.

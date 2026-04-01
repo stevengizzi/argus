@@ -203,6 +203,10 @@ class Trade(BaseModel):
     notes: str = ""
     quality_grade: str = ""
     quality_score: float = 0.0
+    mfe_r: float | None = None
+    mae_r: float | None = None
+    mfe_price: float | None = None
+    mae_price: float | None = None
 
     def model_post_init(self, __context: object) -> None:
         """Calculate derived fields after initialization."""

@@ -106,6 +106,14 @@ class ManagedPosition:
     exit_config: ExitManagementConfig | None = None  # Per-strategy resolved config
     atr_value: float | None = None  # Captured from signal at entry
 
+    # MFE/MAE tracking (Sprint 29.5 S6)
+    mfe_price: float = 0.0      # Highest price reached while position open
+    mae_price: float = 0.0      # Lowest price reached while position open
+    mfe_r: float = 0.0          # MFE in R-multiples
+    mae_r: float = 0.0          # MAE in R-multiples (negative)
+    mfe_time: datetime | None = None  # When MFE was reached
+    mae_time: datetime | None = None  # When MAE was reached
+
     @property
     def is_fully_closed(self) -> bool:
         """Return True if no shares remain."""
@@ -630,6 +638,20 @@ class OrderManager:
             if event.price > position.high_watermark:
                 position.high_watermark = event.price
 
+            # Update MFE/MAE (Sprint 29.5 S6) — O(1) comparisons, no DB lookups
+            if event.price > position.mfe_price:
+                position.mfe_price = event.price
+                position.mfe_time = self._clock.now()
+                risk = position.entry_price - position.original_stop_price
+                if risk > 0:
+                    position.mfe_r = (event.price - position.entry_price) / risk
+            if event.price < position.mae_price:
+                position.mae_price = event.price
+                position.mae_time = self._clock.now()
+                risk = position.entry_price - position.original_stop_price
+                if risk > 0:
+                    position.mae_r = -((position.entry_price - event.price) / risk)
+
             # --- after_profit_pct trail activation (Sprint 28.5) ---
             if (
                 not position.trail_active
@@ -881,6 +903,8 @@ class OrderManager:
             quality_score=signal.quality_score,
             exit_config=self._get_exit_config(pending.strategy_id),
             atr_value=signal.atr_value,
+            mfe_price=event.fill_price,
+            mae_price=event.fill_price,
         )
 
         # Add to managed positions
@@ -2417,6 +2441,10 @@ class OrderManager:
                     gross_pnl=position.realized_pnl if not is_reconciliation else 0.0,
                     quality_grade=position.quality_grade,
                     quality_score=position.quality_score,
+                    mfe_r=position.mfe_r if position.mfe_r != 0.0 else None,
+                    mae_r=position.mae_r if position.mae_r != 0.0 else None,
+                    mfe_price=position.mfe_price if position.mfe_price != 0.0 else None,
+                    mae_price=position.mae_price if position.mae_price != 0.0 else None,
                 )
                 await self._trade_logger.log_trade(trade)
             except Exception:
