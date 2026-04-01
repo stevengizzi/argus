@@ -173,6 +173,8 @@ class ArgusSystem:
         self._counterfactual_tracker: object | None = None  # Sprint 27.7: CounterfactualTracker
         self._counterfactual_store: object | None = None  # Sprint 27.7: CounterfactualStore
         self._counterfactual_task: asyncio.Task[None] | None = None  # Sprint 27.7: maintenance task
+        self._promotion_evaluator: object | None = None  # Sprint 32 S7: PromotionEvaluator
+        self._experiments_auto_promote: bool = False  # Sprint 32 S7: auto_promote config flag
 
     async def start(self) -> None:
         """Initialize and start all components in dependency order.
@@ -816,6 +818,9 @@ class ArgusSystem:
                     )
                     _experiment_store = ExperimentStore(db_path=_experiment_db_path)
                     await _experiment_store.initialize()
+                    self._experiments_auto_promote = bool(
+                        _experiments_yaml.get("auto_promote", False)
+                    )
 
                     _variant_spawner = VariantSpawner(
                         _experiment_store, _experiments_yaml
@@ -828,6 +833,21 @@ class ArgusSystem:
 
                     for _variant_strategy in _variant_strategies:
                         self._orchestrator.register_strategy(_variant_strategy)
+
+                    # Wire promotion evaluator (Sprint 32 S7).
+                    # Counterfactual store and trade logger may be None if
+                    # their subsystems are disabled; PromotionEvaluator accepts
+                    # duck-typed dependencies and handles missing data gracefully.
+                    from argus.intelligence.experiments.promotion import (
+                        PromotionEvaluator,
+                    )
+
+                    self._promotion_evaluator = PromotionEvaluator(
+                        store=_experiment_store,
+                        counterfactual_store=self._counterfactual_store,
+                        trade_logger=self._trade_logger,
+                        config=_experiments_yaml,
+                    )
 
                     logger.info(
                         "[9/12] Experiment variants spawned: %d",
@@ -1861,6 +1881,49 @@ class ArgusSystem:
             )
         except Exception:
             logger.warning("Failed to publish SessionEndEvent", exc_info=True)
+
+        # --- Autonomous promotion evaluator (Sprint 32 S7) ---
+        # Runs after SessionEndEvent is published so the Learning Loop (which
+        # subscribes to that event) has been triggered first.
+        # Gated by experiments.enabled (self._promotion_evaluator is only set
+        # when experiments are enabled) AND experiments.auto_promote.
+        # Wrapped in try/except — promotion failure must NOT prevent shutdown.
+        if self._promotion_evaluator is not None and self._experiments_auto_promote:
+            try:
+                from argus.intelligence.experiments.promotion import PromotionEvaluator
+
+                evaluator: PromotionEvaluator = self._promotion_evaluator  # type: ignore[assignment]
+                promotion_events = await evaluator.evaluate_all_variants()
+                for promo_event in promotion_events:
+                    if promo_event.action == "promote":
+                        logger.info(
+                            "Promoted variant %s from shadow to live",
+                            promo_event.variant_id,
+                        )
+                    else:
+                        logger.info(
+                            "Demoted variant %s from live to shadow",
+                            promo_event.variant_id,
+                        )
+                    # Apply mode change to in-memory strategy so subsequent signals
+                    # are routed correctly without restart.
+                    # _process_signal() reads strategy.config.mode at signal time,
+                    # making this the first intraday mode adaptation in ARGUS.
+                    if self._orchestrator is not None:
+                        strategies = self._orchestrator.get_strategies()
+                        matching = strategies.get(promo_event.variant_id)
+                        if matching is not None and hasattr(matching, "config"):
+                            matching.config.mode = promo_event.new_mode
+                            logger.debug(
+                                "In-memory mode updated: %s → %s",
+                                promo_event.variant_id,
+                                promo_event.new_mode,
+                            )
+            except Exception:
+                logger.warning(
+                    "Promotion evaluator failed — session cleanup continues",
+                    exc_info=True,
+                )
 
     async def _reconstruct_strategy_state(self, symbols: list[str]) -> None:
         """Reconstruct strategy state if restarting mid-day.
