@@ -641,6 +641,9 @@ class OrchestratorConfig(BaseModel):
     min_correlation_days: int = Field(default=20, ge=5)
     max_combined_correlated_allocation: float = Field(default=0.60, gt=0, le=1.0)
 
+    # ORB family mutual exclusion (DEC-261)
+    orb_family_mutual_exclusion: bool = True
+
 
 class NotificationChannelConfig(BaseModel):
     """Configuration for a single notification channel."""

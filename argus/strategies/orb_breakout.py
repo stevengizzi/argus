@@ -144,7 +144,8 @@ class OrbBreakoutStrategy(OrbBaseStrategy):
         state.breakout_triggered = True
         state.position_active = True
         # DEC-261: Mark symbol as triggered for ORB family exclusion
-        OrbBaseStrategy._orb_family_triggered_symbols.add(symbol)
+        if OrbBaseStrategy.mutual_exclusion_enabled:
+            OrbBaseStrategy._orb_family_triggered_symbols.add(symbol)
 
         self.record_evaluation(
             symbol,

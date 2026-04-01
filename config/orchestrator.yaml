@@ -78,6 +78,10 @@ poll_interval_seconds: 30
 # Correlation Limits
 # ---------------------------------------------------------------------------
 
+# ORB family mutual exclusion (DEC-261)
+# PAPER TRADING: Disabled to allow both ORB strategies to fire on same symbol. Restore to true before live.
+orb_family_mutual_exclusion: false
+
 # Enable correlation-based allocation limits
 correlation_enabled: true
 

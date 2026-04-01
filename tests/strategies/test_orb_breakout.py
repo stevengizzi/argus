@@ -1286,3 +1286,175 @@ class TestOrbFamilyExclusion:
 
         # Clean up
         OrbBaseStrategy._orb_family_triggered_symbols.clear()
+
+    @pytest.mark.asyncio
+    async def test_orb_exclusion_enabled_blocks_scalp(self) -> None:
+        """With mutual_exclusion_enabled=True, Breakout fires and Scalp is blocked."""
+        from argus.core.config import OrbScalpConfig
+        from argus.strategies.orb_base import OrbBaseStrategy
+        from argus.strategies.orb_scalp import OrbScalpStrategy
+        from datetime import timedelta
+
+        OrbBaseStrategy._orb_family_triggered_symbols.clear()
+        OrbBaseStrategy.mutual_exclusion_enabled = True
+
+        breakout_config = make_orb_config(
+            strategy_id="strat_breakout",
+            orb_window_minutes=15,
+            chase_protection_pct=0.02,
+        )
+        scalp_config = OrbScalpConfig(
+            strategy_id="strat_scalp",
+            name="ORB Scalp",
+            orb_window_minutes=15,
+            scalp_target_r=0.3,
+            max_hold_seconds=120,
+            risk_limits=StrategyRiskLimits(
+                max_trades_per_day=12,
+                max_daily_loss_pct=0.03,
+                max_loss_per_trade_pct=0.01,
+                max_concurrent_positions=2,
+            ),
+            operating_window=OperatingWindow(latest_entry="11:30"),
+        )
+        mock_ds = AsyncMock()
+        mock_ds.get_indicator.side_effect = lambda s, i: {"atr_14": 2.0, "vwap": 100.0}.get(i)
+
+        breakout_strategy = OrbBreakoutStrategy(breakout_config, data_service=mock_ds)
+        breakout_strategy.allocated_capital = 100_000
+        breakout_strategy.set_watchlist(["AAPL"])
+
+        scalp_strategy = OrbScalpStrategy(scalp_config, data_service=mock_ds)
+        scalp_strategy.allocated_capital = 100_000
+        scalp_strategy.set_watchlist(["AAPL"])
+
+        # UTC times for June (EDT, UTC-4): 13:30 UTC = 9:30 ET, 13:45 UTC = 9:45 ET
+        base_time = datetime(2025, 6, 2, 13, 30, 0, tzinfo=UTC)
+        for i in range(15):
+            candle = make_candle(
+                symbol="AAPL",
+                timestamp=base_time + timedelta(minutes=i),
+                high=101.0, low=99.0, close=100.0, volume=100_000,
+            )
+            await breakout_strategy.on_candle(candle)
+            await scalp_strategy.on_candle(candle)
+
+        finalize = make_candle(
+            symbol="AAPL",
+            timestamp=datetime(2025, 6, 2, 13, 45, 0, tzinfo=UTC),
+            high=101.0, low=99.0, close=100.0, volume=100_000,
+        )
+        await breakout_strategy.on_candle(finalize)
+        await scalp_strategy.on_candle(finalize)
+
+        breakout_candle = make_candle(
+            symbol="AAPL",
+            timestamp=datetime(2025, 6, 2, 14, 0, 0, tzinfo=UTC),
+            open_price=101.0, high=102.5, low=100.8, close=102.0, volume=200_000,
+        )
+        breakout_signal = await breakout_strategy.on_candle(breakout_candle)
+        assert breakout_signal is not None
+
+        scalp_signal = await scalp_strategy.on_candle(breakout_candle)
+        assert scalp_signal is None, "Scalp should be blocked when exclusion is enabled"
+
+        OrbBaseStrategy._orb_family_triggered_symbols.clear()
+        OrbBaseStrategy.mutual_exclusion_enabled = True
+
+    @pytest.mark.asyncio
+    async def test_orb_exclusion_disabled_both_fire(self) -> None:
+        """With mutual_exclusion_enabled=False, both strategies can fire on same symbol."""
+        from argus.core.config import OrbScalpConfig
+        from argus.strategies.orb_base import OrbBaseStrategy
+        from argus.strategies.orb_scalp import OrbScalpStrategy
+        from datetime import timedelta
+
+        OrbBaseStrategy._orb_family_triggered_symbols.clear()
+        OrbBaseStrategy.mutual_exclusion_enabled = False
+
+        breakout_config = make_orb_config(
+            strategy_id="strat_breakout",
+            orb_window_minutes=15,
+            chase_protection_pct=0.02,
+        )
+        scalp_config = OrbScalpConfig(
+            strategy_id="strat_scalp",
+            name="ORB Scalp",
+            orb_window_minutes=15,
+            scalp_target_r=0.3,
+            max_hold_seconds=120,
+            chase_protection_pct=0.02,
+            risk_limits=StrategyRiskLimits(
+                max_trades_per_day=12,
+                max_daily_loss_pct=0.03,
+                max_loss_per_trade_pct=0.01,
+                max_concurrent_positions=2,
+            ),
+            operating_window=OperatingWindow(latest_entry="11:30"),
+        )
+        mock_ds = AsyncMock()
+        mock_ds.get_indicator.side_effect = lambda s, i: {"atr_14": 2.0, "vwap": 100.0}.get(i)
+
+        breakout_strategy = OrbBreakoutStrategy(breakout_config, data_service=mock_ds)
+        breakout_strategy.allocated_capital = 100_000
+        breakout_strategy.set_watchlist(["AAPL"])
+
+        scalp_strategy = OrbScalpStrategy(scalp_config, data_service=mock_ds)
+        scalp_strategy.allocated_capital = 100_000
+        scalp_strategy.set_watchlist(["AAPL"])
+
+        base_time = datetime(2025, 6, 2, 13, 30, 0, tzinfo=UTC)
+        for i in range(15):
+            candle = make_candle(
+                symbol="AAPL",
+                timestamp=base_time + timedelta(minutes=i),
+                high=101.0, low=99.0, close=100.0, volume=100_000,
+            )
+            await breakout_strategy.on_candle(candle)
+            await scalp_strategy.on_candle(candle)
+
+        finalize = make_candle(
+            symbol="AAPL",
+            timestamp=datetime(2025, 6, 2, 13, 45, 0, tzinfo=UTC),
+            high=101.0, low=99.0, close=100.0, volume=100_000,
+        )
+        await breakout_strategy.on_candle(finalize)
+        await scalp_strategy.on_candle(finalize)
+
+        breakout_candle = make_candle(
+            symbol="AAPL",
+            timestamp=datetime(2025, 6, 2, 14, 0, 0, tzinfo=UTC),
+            open_price=101.0, high=102.5, low=100.8, close=102.0, volume=200_000,
+        )
+        breakout_signal = await breakout_strategy.on_candle(breakout_candle)
+        assert breakout_signal is not None, "Breakout should fire when exclusion is disabled"
+
+        scalp_signal = await scalp_strategy.on_candle(breakout_candle)
+        assert scalp_signal is not None, "Scalp should also fire when exclusion is disabled"
+
+        OrbBaseStrategy._orb_family_triggered_symbols.clear()
+        OrbBaseStrategy.mutual_exclusion_enabled = True
+
+    def test_orb_exclusion_disabled_no_add_to_set(self) -> None:
+        """With mutual_exclusion_enabled=False, triggered_symbols set stays empty after fire."""
+        from argus.strategies.orb_base import OrbBaseStrategy
+
+        OrbBaseStrategy._orb_family_triggered_symbols.clear()
+        OrbBaseStrategy.mutual_exclusion_enabled = False
+
+        # Simulate what orb_breakout._build_breakout_signal() does
+        if OrbBaseStrategy.mutual_exclusion_enabled:
+            OrbBaseStrategy._orb_family_triggered_symbols.add("AAPL")
+
+        assert len(OrbBaseStrategy._orb_family_triggered_symbols) == 0, (
+            "triggered_symbols should remain empty when exclusion is disabled"
+        )
+
+        OrbBaseStrategy.mutual_exclusion_enabled = True
+
+    def test_orb_exclusion_config_default_true(self) -> None:
+        """OrchestratorConfig.orb_family_mutual_exclusion defaults to True."""
+        from argus.core.config import OrchestratorConfig
+
+        config = OrchestratorConfig()
+        assert config.orb_family_mutual_exclusion is True

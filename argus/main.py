@@ -95,6 +95,7 @@ from argus.strategies.pattern_strategy import PatternBasedStrategy
 from argus.strategies.patterns import ABCDPattern, BullFlagPattern, DipAndRipPattern, FlatTopBreakoutPattern, GapAndGoPattern, HODBreakPattern, PreMarketHighBreakPattern
 from argus.strategies.red_to_green import RedToGreenStrategy
 from argus.strategies.telemetry_store import EvaluationEventStore
+from argus.strategies.orb_base import OrbBaseStrategy
 from argus.strategies.orb_breakout import OrbBreakoutStrategy
 from argus.strategies.orb_scalp import OrbScalpStrategy
 from argus.strategies.vwap_reclaim import VwapReclaimStrategy
@@ -692,6 +693,11 @@ class ArgusSystem:
         logger.info("[9/12] Initializing orchestrator...")
         orchestrator_yaml = load_yaml_file(self._config_dir / "orchestrator.yaml")
         orchestrator_config = OrchestratorConfig(**orchestrator_yaml)
+        OrbBaseStrategy.mutual_exclusion_enabled = orchestrator_config.orb_family_mutual_exclusion
+        logger.info(
+            "[9/12] ORB family mutual exclusion: %s",
+            orchestrator_config.orb_family_mutual_exclusion,
+        )
         self._orchestrator = Orchestrator(
             config=orchestrator_config,
             event_bus=self._event_bus,

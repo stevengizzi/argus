@@ -102,6 +102,10 @@ class OrbBaseStrategy(BaseStrategy):
     # triggered on today. Prevents co-firing (DEC-261).
     _orb_family_triggered_symbols: ClassVar[set[str]] = set()
 
+    # When False, both ORB strategies can fire on the same symbol independently.
+    # Set via OrchestratorConfig.orb_family_mutual_exclusion at startup.
+    mutual_exclusion_enabled: ClassVar[bool] = True
+
     def __init__(
         self,
         config: OrbConfigProtocol,
@@ -601,7 +605,10 @@ class OrbBaseStrategy(BaseStrategy):
         # Phase 2: Breakout Detection
         if state.or_complete and state.or_valid and not state.breakout_triggered:
             # DEC-261: ORB family same-symbol exclusion — first to fire wins
-            if symbol in OrbBaseStrategy._orb_family_triggered_symbols:
+            if (
+                OrbBaseStrategy.mutual_exclusion_enabled
+                and symbol in OrbBaseStrategy._orb_family_triggered_symbols
+            ):
                 self.record_evaluation(
                     symbol,
                     EvaluationEventType.CONDITION_CHECK,
