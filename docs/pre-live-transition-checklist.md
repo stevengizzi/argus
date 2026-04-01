@@ -154,10 +154,29 @@ Confirm the following before live trading:
 
 ---
 
+## Experiment Pipeline (Sprint 32)
+
+### config/experiments.yaml — Experiment Feature Flags
+Review before transitioning to live trading:
+- `experiments.enabled`: paper=true (for testing variant spawning), live=TBD (start with false, enable after paper pipeline confidence)
+- `experiments.auto_promote`: paper=true (for testing autonomous promotion loop), live=false (manual approval initially — promotions affect real capital allocation)
+- `experiments.max_variants_per_pattern`: paper=5 (observe shadow compute load), live=3 (reduce shadow overhead while trading real capital)
+- `experiments.promotion_min_shadow_days`: paper=5 (faster testing cycles), live=10 (more evidence required before promoting a variant to trade real capital)
+- `experiments.promotion_min_shadow_trades`: paper=30 (faster testing cycles), live=50 (statistically significant evidence before live promotion)
+
+### Parameter Fingerprint Column on Trades
+`config_fingerprint` column was added to the trades table in Sprint 32 (nullable). Non-PatternModule strategies (ORB Breakout, ORB Scalp, VWAP Reclaim, Afternoon Momentum, Red-to-Green) will have NULL fingerprints. Only PatternModule-based strategies populate this field. No migration needed for live trading.
+
+### Shadow Variant Capital
+Shadow-mode variant signals bypass quality pipeline and risk manager (routing directly to CounterfactualTracker). Shadow variants do NOT consume capital regardless of `experiments.enabled`. Only variants explicitly promoted to LIVE status trade real capital.
+
+---
+
 ## Cross-References
 - DEF-101: Tests coupled to paper-trading config values
 - DEF-108: R2G atr_value=None sync limitation (uses percent fallback)
 - DEF-109: V1 trailing stop config dead code on OrderManagerConfig
 - DEF-110: Exit reason misattribution on escalation-failure + trail-active positions
+- DEF-134: BacktestEngine strategy type support for all 7 patterns (required before full experiment sweeps)
 - Sprint 27.75 S1 close-out: `docs/sprints/sprint-27.75/session-1-closeout.md`
 - Sprint 27.75 S1 review: `docs/sprints/sprint-27.75/session-1-review.md` (Finding F1)

@@ -33,6 +33,8 @@
 | AA — Exit Management | 28.5 | Mar 30 | Trailing stops, exit escalation, BacktestEngine/CounterfactualTracker alignment |
 | AB — Post-Session Fixes | 28.75 | Mar 30 | Flatten-pending timeout, log rate-limiting, server-side trade stats, UI fixes |
 | Pattern Expansion I | 29 | Mar 30–31 | PatternParam, 5 new PatternModule patterns (DnR, HOD, GnG, ABCD, PMH), 12 active strategies |
+| Post-Session Sweep | 29.5 | Mar 31–Apr 1 | Flatten safety, paper data-capture mode, MFE/MAE tracking, ORB Scalp fix, UI fixes |
+| AC — Parameterized Templates | 32 | Apr 1, 2026 | Pattern factory, parameter fingerprint, experiment pipeline, variant spawner, promotion evaluator |
 
 ---
 
@@ -2243,13 +2245,49 @@
 
 ---
 
+## Sprint 32: Parameterized Strategy Templates + Experiment Pipeline (April 1, 2026)
+
+**Goal:** Build complete parameter externalization and experiment pipeline for PatternModule strategies — from YAML→constructor wiring through variant spawning, backtest pre-filtering, shadow tracking, and autonomous promotion/demotion. Merged original Sprint 32 + Sprint 32.5 scope per April 1 planning session.
+
+**Starting state:** 4,212 pytest + 700 Vitest. 12 active strategies.
+**Ending state:** 4,405 pytest + 700 Vitest (+193 pytest). Vitest unchanged.
+**Sessions:** 8 implementation + 1 micro-fix (fingerprint OM→Trade wiring) + 1 cleanup (7 code quality fixes)
+**Execution mode:** Human-in-the-loop
+**New DECs:** None — all design decisions followed established patterns (factory introspection, DEC-345 store pattern, DEC-300 config gating, DEC-375 overflow routing for shadow variants). DEC-382–395 range reserved but released back to pool.
+**New DEF items:** DEF-134 (created). DEF-121, DEF-124 resolved.
+**New files:** 16 (factory.py, 5 experiments package modules, ExperimentConfig, routes/experiments.py, run_experiment.py, experiments.yaml, 6 test files)
+**Modified files:** ~17 (config.py, main.py, vectorbt_pattern.py, trade_logger.py, pattern_strategy.py, db/schema.sql, db/manager.py, models/trading.py, api/dependencies.py, api/routes/__init__.py, api/server.py, execution/order_manager.py, and pattern YAML configs)
+
+**Sprint deliverables:**
+- **Pydantic config alignment (S1):** 28 missing detection param fields added across 6 pattern configs, defaults corrected to match constructor truth (7 discrepancies fixed). PatternParam cross-validation tests.
+- **Generic pattern factory (S2):** `build_pattern_from_config()` with PatternParam introspection, no hardcoded switch statements. `get_pattern_class()` with lazy import + caching. `compute_parameter_fingerprint()` — SHA-256 of canonical JSON of detection params, first 16 hex chars. `extract_detection_params()` discovers valid param names from `get_default_params()`.
+- **Runtime wiring + PatternBacktester extension (S3):** All 7 PatternModule patterns construct via factory in main.py. PatternBacktester `_create_pattern_by_name()` supports all 7 via factory delegation. DEF-121 resolved.
+- **ExperimentStore (S4):** SQLite registry in `data/experiments.db` (DEC-345 pattern), WAL mode, 3 tables (experiment_records, variant_definitions, promotion_events), 90-day retention.
+- **VariantSpawner (S5):** Reads `config/experiments.yaml`, deduplicates by fingerprint, registers variants with Orchestrator as shadow-mode PatternBasedStrategy instances.
+- **ExperimentRunner (S6):** Grid generation from PatternParam metadata, BacktestEngine pre-filter per grid point. Currently supports bull_flag + flat_top_breakout only — DEF-134 tracks expanding to all 7.
+- **Parameter fingerprint end-to-end (micro-fix):** `_fingerprint_registry: dict[str, str | None]` on OrderManager, `register_strategy_fingerprint()` method, `config_fingerprint` column on trades table wired from strategy → OM → TradeLogger → DB at trade close.
+- **PromotionEvaluator (S7):** Autonomous shadow→live promotion and live→shadow demotion via Pareto comparison (5 metrics), configurable promotion thresholds, hysteresis guard (prevents oscillation), wired to SessionEndEvent. None-guard for counterfactual_store=None.
+- **CLI + REST API (S8):** `scripts/run_experiment.py` standalone CLI (`--pattern`, `--cache-dir`, `--params`, `--dry-run`). 4 JWT-protected REST endpoints (`GET /api/v1/experiments`, `/{id}`, `/baseline/{pattern}`, `POST /run` via BackgroundTasks). ExperimentConfig Pydantic model with `extra="forbid"`.
+- **Cleanup:** 5 of 7 code quality fixes implemented (2 already clean); `max_shadow_variants_per_pattern` renamed to `max_variants_per_pattern`.
+
+**Config-gated:** `experiments.enabled: false` by default. All experiment features degrade gracefully when disabled (API returns 503, spawner skips, promotion skips). System unchanged when disabled.
+
+**Session verdicts:** S1 CONCERNS_RESOLVED → S2 CLEAR → S3 CLEAR → S4 CLEAR → S5 CLEAR → micro-fix CLEAR → S6 CLEAR → S7 CONCERNS_RESOLVED → S8 CLEAR → cleanup CLEAR
+
+**Key learnings:**
+- Spec default values frequently diverged from actual pattern constructor defaults. Cross-validation tests that programmatically compare PatternParam metadata against Pydantic config fields catch these at test time.
+- Pydantic Field bounds (ge/le/gt/lt) must be validated against PatternParam min_value/max_value ranges — a tighter Pydantic bound silently rejects valid sweep values.
+- ExperimentRunner BacktestEngine integration only supports 2 of 7 patterns; extending to all 7 requires strategy factory additions in engine.py (DEF-134).
+
+---
+
 ## Sprint Statistics
 
-- **Total sprints:** 31 full + 38 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9, 27.5, 27.6, 27.65, 27.7, 27.75, 27.8, 27.9, 27.95, 28.5, 28.75, 29, 29.5)
-- **Total sessions:** ~453+ Claude Code sessions
-- **Total tests:** ~4,212 pytest + 700 Vitest = ~4,912 total
-- **Total decisions:** 381 (DEC-001 through DEC-377, DEC-378 Sprint 29, no new DECs in 29.5)
-- **Calendar days (active dev):** ~46 (Feb 14 – Apr 1, 2026)
+- **Total sprints:** 32 full + 38 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9, 27.5, 27.6, 27.65, 27.7, 27.75, 27.8, 27.9, 27.95, 28.5, 28.75, 29, 29.5)
+- **Total sessions:** ~464+ Claude Code sessions
+- **Total tests:** ~4,405 pytest + 700 Vitest = ~5,105 total
+- **Total decisions:** 381 (DEC-001 through DEC-381; no new DECs in Sprints 32 or 29.5)
+- **Calendar days (active dev):** ~47 (Feb 14 – Apr 1, 2026)
 - **Largest sprint:** 22 (9 implementation + 5 fix + 9 reviews, largest scope)
 - **Cleanest sprint:** 23 (11 sessions, 0 regressions, 0 scope gaps requiring follow-up)
 - **Most test-dense:** Sprint 22 (286 new tests), Sprint 24 (209 new tests), Sprint 23.2 (188 new tests), Sprint 28 (179 new tests), Sprint 27.6 (171 new tests), Sprint 23 (141 new tests across 23+23.05), Sprint 28.5 (110 new tests)

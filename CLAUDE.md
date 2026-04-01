@@ -1,13 +1,13 @@
 # ARGUS — Claude Code Context
 
 > Dense, actionable context for Claude Code sessions. No history — see `docs/` for that.
-> Last updated: April 1, 2026 (Sprint 29.5 doc sync — Post-Session Operational Sweep)
+> Last updated: April 1, 2026 (Sprint 32 doc sync — Parameterized Templates + Experiment Pipeline)
 
 ## Active Sprint
 
-**Active sprint: 32 (Parameterized Templates + Experiment Pipeline).** Merged Sprint 32 + 32.5 scope per April 1 planning session. 8 sessions. Delivers: YAML→constructor wiring for 7 PatternModule patterns, generic pattern factory, parameter fingerprint, variant spawner, experiment registry (SQLite), backtest pre-filter via BacktestEngine, autonomous promotion evaluator, CLI + REST API. Config-gated via `experiments.enabled`.
+**Active sprint: 32.5 (Experiment Pipeline Completion + Visibility).** 8 sessions. Scope: DEF-131 (Experiments + Counterfactual UI), DEF-132 (Exit params as variant dimensions), DEF-134 (BacktestEngine all 7 patterns), DEF-133 (Adaptive Capital Intelligence vision document).
 
-Last completed sprint: **29.5 (Post-Session Operational Sweep)** — Flatten/zombie safety overhaul, paper trading data-capture mode, win rate display fix + UI improvements, real-time WS position updates, log noise reduction, MFE/MAE trade lifecycle tracking, ORB Scalp exclusion fix. +34 pytest, +11 Vitest.
+Last completed sprint: **32 (Parameterized Templates + Experiment Pipeline)** — YAML→constructor wiring for 7 PatternModule patterns, generic pattern factory, parameter fingerprint, variant spawner, ExperimentStore (SQLite), backtest pre-filter via BacktestEngine, autonomous PromotionEvaluator, CLI + REST API. +193 pytest. Config-gated via `experiments.enabled`. DEF-121 resolved.
 
 ### Roadmap Amendments Adopted (DEC-357, DEC-358)
 Two roadmap amendments adopted March 23, 2026 adding 5 new sprint slots:
@@ -29,8 +29,8 @@ RSK items: RSK-049 (shadow variant throughput impact), RSK-050 (promotion oscill
 
 ## Current State
 
-- **Active sprint:** 32 (Parameterized Templates + Experiment Pipeline — merged 32+32.5, 8 sessions)
-- **Tests:** ~4,212 pytest + 700 Vitest (1 pre-existing Vitest failure in GoalTracker.test.tsx, 0 pre-existing pytest failures)
+- **Active sprint:** 32.5 (Experiment Pipeline Completion + Visibility — 8 sessions)
+- **Tests:** ~4,405 pytest + 700 Vitest (1 pre-existing Vitest failure in GoalTracker.test.tsx, 0 pre-existing pytest failures)
 - **Strategies:** 12 active (ORB Breakout, ORB Scalp, VWAP Reclaim, Afternoon Momentum, Red-to-Green, Bull Flag, Flat-Top Breakout, Dip-and-Rip, HOD Break, Gap-and-Go, ABCD, Pre-Market High Break)
 - **Infrastructure:** Databento EQUS.MINI (live) + IBKR paper trading (Account U24619949) + FMP Starter (scanning + reference data + daily bars for regime) + Finnhub (news + analyst recs) + Claude API (Copilot + Catalyst Classification) + Universe Manager (config-gated) + Catalyst Pipeline (config-gated) + Intelligence Polling Loop (config-gated) + Reference Data Cache + Quality Engine (config-gated) + Dynamic Position Sizer + Strategy Evaluation Telemetry (ring buffer + SQLite persistence) + Debrief Export (shutdown automation) + Evaluation Framework (MultiObjectiveResult, EnsembleResult, comparison API, slippage model) + Regime Intelligence (RegimeVector 11-field, 8 calculators, config-gated, Sprints 27.6 + 27.9) + VIX Data Service (yfinance daily VIX/SPX, 5 derived metrics, SQLite cache, config-gated, Sprint 27.9) + Counterfactual Engine (shadow position tracking, filter accuracy, shadow strategy mode, overflow routing, config-gated, Sprints 27.7 + 27.95) + Learning Loop V1 (OutcomeCollector, WeightAnalyzer, ThresholdAnalyzer, CorrelationAnalyzer, LearningService, ConfigProposalManager, LearningStore, config-gated, Sprint 28) + Exit Management (trailing stops ATR/percent/fixed, exit escalation, belt-and-suspenders, config-gated per strategy, Sprint 28.5) + ThrottledLogger (log rate-limiting, Sprint 27.75) + Paper trading config overrides (10x risk reduction, throttle disabled, $10 min risk floor, Sprint 27.75) + Broker-confirmed reconciliation (Sprint 27.95) + Overflow routing (config-gated, Sprint 27.95)
 - **Frontend:** 8-page Command Center (Observatory added Sprint 25) + AI Copilot + Universe Status Card + Intelligence Brief View (all active), Tauri desktop + PWA mobile
@@ -349,22 +349,23 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 | ~~DEF-118~~ | ~~Avg R missing from Trades page summary~~ | — | **RESOLVED** (Sprint 28.75 S2): Added to TradeStatsBar via stats endpoint. |
 | ~~DEF-119~~ | ~~Open positions colored P&L + exit price~~ | — | **RESOLVED** (Sprint 28.75 S2): Current price colored green/red relative to entry. P&L column already existed. |
 | ~~DEF-120~~ | ~~VixRegimeCard fills entire viewport~~ | — | **RESOLVED** (Sprint 28.75 S2): Removed h-full, wrapped in motion.div staggerItem on all layouts. |
-| DEF-121 | PatternBacktester `_create_pattern_by_name()` — extend for Sprint 29 patterns | Sprint 32 (formal parameter sweeps) | Currently supports bull_flag, flat_top_breakout, abcd. Missing: dip_and_rip, hod_break, gap_and_go, premarket_high_break. Extend when formal parameter sweeps run. Priority: LOW. |
+| ~~DEF-121~~ | ~~PatternBacktester `_create_pattern_by_name()` — extend for Sprint 29 patterns~~ | ~~Sprint 32~~ | **RESOLVED** (Sprint 32 S3 — PatternBacktester supports all 7 patterns via factory delegation). |
 | DEF-122 | ABCD swing detection O(n³) optimization | Sprint 32 (parameter sweeps at scale) | ABCDPattern swing detection iterates O(n³) over candle history. PatternBacktester full sweep times out. Needs precomputed swing cache or algorithmic optimization before Sprint 32 parameter sweeps. Priority: MEDIUM. |
 | DEF-123 | `build_parameter_grid()` float accumulation cleanup | Sprint 31.5 (Parallel Sweep Infrastructure) | While-loop float addition mitigated by round(v,6) + dedup but should use integer-stepping or numpy.arange. Cosmetic. Priority: LOW. |
-| DEF-124 | Pattern constructor params not wired from config YAML at runtime | Sprint 32 (Parameterized Strategy Templates) | All PatternModule patterns use constructor defaults. YAML detection params exist for backtester grid generation only. Sprint 32 introduces mechanism to pipe YAML params into pattern instances at startup. Priority: LOW. |
+| ~~DEF-124~~ | ~~Pattern constructor params not wired from config YAML at runtime~~ | ~~Sprint 32~~ | **RESOLVED** (Sprint 32 — generic pattern factory `build_pattern_from_config()` wires YAML params into pattern constructors via PatternParam introspection at startup). |
 | DEF-125 | Time-of-day signal conditioning | Sprint 32 (Parameterized Templates) | March 31 session data shows 10:00 AM hour is the worst-performing (-$6,906, 31.1% win rate) while 12:00+ is nearly breakeven. No strategy currently adjusts behavior based on time-of-day beyond operating window. Add time-of-day as a parameter dimension. |
 | DEF-126 | Regime-strategy interaction profiles | Sprint 32.5 (Experiment Registry) | Per-strategy regime sensitivity tuning. Needs RegimeVector × strategy performance matrix. Each strategy should have its own regime sensitivity profile rather than treating all strategies equally within a regime. |
 | DEF-127 | Virtual scrolling for trades table | Unscheduled | TradesPage limit raised from 250 to 1000 (Sprint 29.5 S3). Full virtual scrolling (react-virtual) deferred until 1000 becomes insufficient. |
 | DEF-128 | IBKR error 404 root cause: multi-position qty divergence prevention | Sprint 30 | When Argus tracks multiple positions on the same symbol, IBKR merges them. Partial closes can cause qty mismatch. Sprint 29.5 S1 added re-query-qty fix; preventing the divergence in the first place is a deeper fix. |
+| DEF-134 | BacktestEngine strategy type support for all 7 PatternModule patterns | Sprint 32.5 | ExperimentRunner uses BacktestEngine for pre-filter sweeps. Currently only bull_flag + flat_top_breakout are supported as BacktestEngine strategy types (via strategy factory in engine.py). Missing: dip_and_rip, hod_break, gap_and_go, abcd, premarket_high_break. Experiment pipeline is only 29% functional without this. Priority: HIGH. Discovered: Sprint 32 S6. |
 
 ## Reference
 
 | Document | What It Covers |
 |----------|---------------|
-| `docs/decision-log.md` | All 377 DEC entries with full rationale (no new DECs in Sprint 28.75) |
+| `docs/decision-log.md` | All 381 DEC entries with full rationale (no new DECs in Sprint 32 — all design decisions followed established patterns) |
 | `docs/dec-index.md` | Quick-reference index with status markers |
-| `docs/sprint-history.md` | Complete sprint history (1–28.75) |
+| `docs/sprint-history.md` | Complete sprint history (1–29.5 + 32 + sub-sprints) |
 | `docs/pre-live-transition-checklist.md` | Config + test values to restore before live trading |
 | `docs/process-evolution.md` | Workflow evolution narrative |
 | `docs/live-operations.md` | Live trading procedures |

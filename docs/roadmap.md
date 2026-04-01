@@ -1,7 +1,7 @@
 # ARGUS — Strategic Roadmap
 
 > From artisanal strategies to ensemble alpha — the complete path
-> **v2.9 — March 30, 2026** (Sprint 28.5 complete — Exit Management)
+> **v3.0 — April 1, 2026** (Sprint 32 complete — Parameterized Templates + Experiment Pipeline)
 > **Status:** CANONICAL — this is the single source of truth for ARGUS's strategic direction and sprint queue.
 > **Supersedes:** `docs/research/ARGUS_Expanded_Roadmap.md` (Feb 26), `docs/argus_unified_vision_roadmap.md` (Mar 5), `docs/10_PHASE3_SPRINT_PLAN.md` (all forward-looking sections)
 
@@ -118,7 +118,7 @@ These foundations are correct and remain:
 
 ARGUS completed 21 sprints + sub-sprints in ~17 calendar days of active development (Feb 14 – Mar 5). Average sprint: ~0.8 calendar days. However, sprint complexity has been increasing — early sprints (1–5) were dense single-day affairs, while later sprints (21a–21d, 21.5) span multiple days. The roadmap below assumes sprint durations of 1–4 days each depending on complexity, with some parallelism where noted.
 
-**Current state:** Sprint 29.5 complete (April 1, 2026). ~4,212 pytest + 700 Vitest (0 pre-existing pytest failures). Twelve active strategies with MFE/MAE tracking, real-time WS position updates, flatten safety overhaul, and paper data-capture mode (loss limits disabled, throttler suspension disabled, ORB exclusion disabled). Full infrastructure stack operational: BacktestEngine + Evaluation Framework + Regime Intelligence (11-field RegimeVector) + Counterfactual Engine + VIX Data Service + Quality Engine + NLP Catalyst Pipeline + Universe Manager + AI Copilot + Learning Loop V1 + Exit Management + MFE/MAE Tracking. Eight-page Command Center + Observatory. Live Databento + IBKR paper trading. Phase 5 Gate complete (March 21, 2026). Strategic check-in completed March 30 (DEC-378–381). Next: Sprint 32 (Parameterized Strategy Templates — pulled forward per April 1 strategic review; longs need tuning before adding short selling).
+**Current state:** Sprint 32 complete (April 1, 2026). ~4,405 pytest + 700 Vitest (0 pre-existing pytest failures). Twelve active strategies. Full infrastructure stack operational: BacktestEngine + Evaluation Framework + Regime Intelligence (11-field RegimeVector) + Counterfactual Engine + VIX Data Service + Quality Engine + NLP Catalyst Pipeline + Universe Manager + AI Copilot + Learning Loop V1 + Exit Management + MFE/MAE Tracking + **Experiment Pipeline** (pattern factory, parameter fingerprinting, variant spawning, backtest pre-filter, autonomous promotion/demotion). Eight-page Command Center + Observatory. Live Databento + IBKR paper trading. Phase 5 Gate complete (March 21, 2026). Strategic check-in completed March 30 (DEC-378–381). Next: Sprint 32.5 (Experiment Pipeline Completion + Visibility).
 
 ---
 
@@ -583,37 +583,51 @@ Reconciliation redesign with broker-confirmed positions (DEC-369). Overflow rout
 
 **Tests:** ~80 new.
 
-### Sprint 32: Parameterized Templates + Experiment Pipeline (merged 32+32.5)
+### Sprint 32: Parameterized Templates + Experiment Pipeline (merged 32+32.5) ✅ COMPLETE (April 1, 2026)
+**Actual:** ~5 days (8 sessions + 1 micro-fix + 1 cleanup). +193 pytest.
+
+**Delivered:**
+- **Pydantic config alignment:** 28 missing detection param fields across 6 pattern configs. 7 default value discrepancies corrected (constructor truth over spec). Cross-validation tests.
+- **Generic pattern factory** (`strategies/patterns/factory.py`): `build_pattern_from_config()` with PatternParam introspection, `compute_parameter_fingerprint()` SHA-256, `extract_detection_params()`. No hardcoded dispatch.
+- **Runtime wiring:** All 7 PatternModule patterns construct via factory in main.py. DEF-124 resolved.
+- **PatternBacktester extension:** `_create_pattern_by_name()` supports all 7 patterns via factory. DEF-121 resolved.
+- **ExperimentStore:** SQLite `data/experiments.db`, 3 tables, 90-day retention. DEC-345 pattern.
+- **VariantSpawner:** Reads `config/experiments.yaml`, deduplicates by fingerprint, registers shadow variants with Orchestrator.
+- **ExperimentRunner (backtest pre-filter):** Grid generation from PatternParam metadata, BacktestEngine pre-filter per grid point. Supports bull_flag + flat_top_breakout (2 of 7) — DEF-134 tracks remaining 5.
+- **Parameter fingerprint end-to-end:** `config_fingerprint` column on trades table, `_fingerprint_registry` on OrderManager.
+- **PromotionEvaluator:** Autonomous shadow→live promotion and live→shadow demotion via Pareto comparison, hysteresis guard, wired to SessionEndEvent.
+- **CLI + REST API:** `scripts/run_experiment.py` + 4 JWT-protected endpoints. `ExperimentConfig` with `extra="forbid"`.
+- **Config-gated:** `experiments.enabled: false` default. All features degrade gracefully when disabled.
+
+**State after:** The core variant lifecycle is operational — spawn → backtest pre-filter → shadow → CounterfactualTracker evaluation → autonomous promotion → live. Remaining gaps: 5 of 7 patterns not yet supported in ExperimentRunner (DEF-134), no UI visibility (DEF-131), exit params not yet variant dimensions (DEF-132).
+
+**Tests:** 4,212 → 4,405 (+193 pytest).
+**DECs:** None. DEC-382–395 reserved range released.
+**DEFs:** DEF-121 ✅, DEF-124 ✅ resolved. DEF-134 opened.
+
+### Sprint 32.5: Experiment Pipeline Completion + Visibility
 **Target:** ~5–7 days (8 sessions)
 
-**Scope (merged from original Sprint 32 + Sprint 32.5 per April 1, 2026 planning session):**
-- **YAML→constructor wiring** for all 7 PatternModule patterns (DEF-124 resolved)
-- **Generic pattern factory** — instantiate any pattern from config YAML without hand-coded dispatch
-- **Parameter fingerprint** — hash of parameter values for experiment deduplication
-- **VariantSpawner** — spawns shadow strategy instances from pattern templates + parameter sets
-- **ExperimentRegistry** — SQLite-backed persistent storage for every experiment run. Partitioned by `(strategy_family, batch_id)`. Pre-computed aggregate views via SQLite triggers: per-family success rates, meta-learning summaries. Archival policy for REVERTED experiments.
-- **ExperimentRunner (backtest pre-filter)** — runs BacktestEngine on each candidate variant before shadow activation. Eliminates obviously bad parameter combinations before they consume shadow compute. Config-gated via `experiments.enabled`.
-- **PromotionEvaluator** — autonomous promotion/demotion based on CounterfactualTracker accumulated evidence. Promotion thresholds configurable. Kill switches at cohort and individual level.
-- **PromotionCohort** — primary unit of promotion (20–50 variants evaluated together). HIGH-confidence variants may form size-1 cohorts.
-- **ExperimentQueue + background worker** — overnight autonomous operation. Market-hours-aware scheduling. Priority ordering: learning_loop > systematic_search > discovery_pipeline > manual.
-- **Anti-Fragility Integration (DEC-358):** Loss-driven queue priority, post-mortem automation on cohort revert, drawdown-accelerated experimentation.
-- **CLI + REST API:** `experiments` subcommand + 15+ endpoints for experiments, cohorts, queue, promotion pipeline.
-- **Config-gated:** `experiments.enabled` flag. All existing strategies unaffected when disabled.
+**Scope:**
+- **DEF-134 (BacktestEngine all 7 patterns):** Add strategy type support for dip_and_rip, hod_break, gap_and_go, abcd, premarket_high_break to BacktestEngine strategy factory (`backtest/engine.py`). Prerequisite for ExperimentRunner to pre-filter all pattern types.
+- **DEF-132 (Exit params as variant dimensions):** Include exit parameters (trailing stop config, escalation phases, targets) in the variant specification. A complete variant = detection params + exit params. Fingerprint must incorporate both.
+- **DEF-131 (Experiments + Counterfactual UI):** Experiments page (Command Center page 9) — experiment list, variant status table, promotion history, shadow vs live comparison charts. Counterfactual filter accuracy visualization. Shadow trade timeline.
+- **DEF-133 (Adaptive Capital Intelligence vision):** Produce vision document for replacing stacked guardrail risk model with unified allocation intelligence using continuous sizing. Phased roadmap: Kelly-inspired sizing with uncertainty (~Sprint 34–35) → full AllocationIntelligence (~Sprint 38+).
 
-**State after:** The full variant lifecycle is operational — spawn → backtest pre-filter → shadow → CounterfactualTracker evaluation → autonomous promotion → live. The repertoire can grow without human intervention.
+**State after:** Experiment pipeline is fully functional for all 7 pattern types. The operator can observe active experiments and variant performance in the Command Center. Exit parameter tuning is now a dimension of variant search. A clear architecture vision exists for the transition from guardrail-based to intelligence-based capital allocation.
 
-**Tests:** ~155 new.
+**Tests:** ~80 new.
 
-**Dependencies:** Sprint 27.5 (MultiObjectiveResult, EnsembleResult), Sprint 27.7 (CounterfactualTracker for shadow evaluation), Sprint 27 (BacktestEngine for pre-filter), Sprint 28 (retrofitted to write to registry). DEF-124 (YAML→constructor wiring) resolved in this sprint.
+**Dependencies:** Sprint 32 (ExperimentRunner, VariantSpawner, PromotionEvaluator), Sprint 27.7 (CounterfactualTracker UI data).
 
 ### Phase 7 Gate
 
-**Trigger:** Sprint 32 complete.
+**Trigger:** Sprint 32.5 complete.
 **Protocol:** Strategic Check-In (`strategic-check-in.md`) + Documentation Compression.
 
 **Historical data sufficiency — RESOLVED (DEC-358).** XNAS.ITCH + XNYS.PILLAR provide OHLCV-1m back to May 2018 (~96 months) at $0 on Standard plan. Three-way splits across 96 months provide ample statistical power.
 
-**Key assessment:** Confirm experiment pipeline health. Review promotion threshold calibration from first shadow variant evaluations. Review overnight compute capacity — is sequential worker sufficient for Sprint 33, or should Sprint 31 parallelism be prioritized?
+**Key assessment:** Confirm experiment pipeline health across all 7 pattern types (DEF-134 resolved by Sprint 32.5). Review promotion threshold calibration from first shadow variant evaluations. Review overnight compute capacity — is sequential worker sufficient for Sprint 33, or should Sprint 31.5 parallelism be prioritized first?
 
 ---
 
@@ -983,6 +997,29 @@ Items deferred until monthly trading income justifies their cost or complexity. 
 - Tax impact preview on trade proposals — estimated tax liability of proposed position.
 
 **UI:** Performance page gains "Tax" tab with year-to-date liability, wash sale exposure, estimated payments timeline, and export controls.
+
+### Adaptive Capital Intelligence (DEF-133)
+
+**Trigger:** Experiment pipeline has demonstrated sustained multi-variant operation and promotion/demotion cycles are stable (~Sprint 36+). Requires evidence base from multiple promoted variants with different parameter fingerprints.
+
+**Context:** Current stacked-guardrail risk model (quality tier → risk%, daily limit, concentration cap) approximates the right behavior but is not optimal. Each guard layer was designed independently and their interactions aren't holistically optimized. Adaptive Capital Intelligence replaces this with a unified allocation model.
+
+**Phase 1: Kelly-Inspired Sizing with Uncertainty (~Sprint 34–35)**
+- Per-variant Kelly fraction computation using historical win rate, avg win, avg loss from CounterfactualTracker + live trade records
+- Uncertainty discount: Kelly fraction × (1 - uncertainty_factor) where uncertainty_factor decreases with trade count (new variants get heavy discounting, mature variants get less)
+- Daily portfolio-level Kelly constraint: sum of active position Kelly fractions capped at portfolio-level Kelly fraction
+- Replace quality-tier lookup table with continuous sizing function. Tier system becomes a guardrail fallback, not primary sizing.
+- Regime-conditional sizing: Kelly parameters estimated separately per regime label; allocation uses current-regime parameters
+- Config: `config/adaptive_capital.yaml` with `kelly_fraction_cap`, `uncertainty_discount_schedule`, `regime_conditional_enabled`
+
+**Phase 2: Full AllocationIntelligence (~Sprint 38+)**
+- AllocationIntelligence service: unified capital allocation that sees all active signals simultaneously
+- Correlated signal penalty: when two signals fire simultaneously on correlated strategies, aggregate position size is reduced below sum of individual sizes
+- Regime-variant interaction matrix: tracks which parameter fingerprints perform in which regimes; dynamically up/down-weights during intraday regime transitions
+- Anti-fragility integration: detected correlation spikes → temporary allocation reduction for correlated family clusters; loss streaks → variant-level size reduction with automatic re-expansion on recovery
+- Full integration with Ensemble Orchestrator V2 (Sprint 38) for position consolidation
+
+**Why post-revenue:** Sizing optimization is only meaningful with sufficient real capital and real execution data. Paper trading provides qualitative validation but Kelly fraction estimation requires statistically significant real-money trade records to be trustworthy.
 
 ### Order Flow Intelligence (DEC-238)
 

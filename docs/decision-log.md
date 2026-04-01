@@ -4640,6 +4640,19 @@ Each entry follows this format:
 
 ---
 
+## Sprint 32 — Parameterized Strategy Templates + Experiment Pipeline
+
+No new DECs. All design decisions in Sprint 32 followed established project patterns:
+- Pattern factory introspection (follows DEC-300 config-gating pattern)
+- ExperimentStore SQLite persistence (follows DEC-345 separate DB pattern)
+- Experiment config gating via `experiments.enabled` (follows DEC-300 config-gating pattern)
+- VariantSpawner overflow routing for shadow variants (follows DEC-375 pattern)
+- PromotionEvaluator Pareto comparison (follows analytics/comparison.py established API)
+
+DEC-382–395 range reserved during planning is released back to the pool for future sprints.
+
+---
+
 *End of Decision Log v1.0*
 *Next DEC: 382*
 *Last updated: 2026-03-30 (Strategic Check-In doc sync — 4 new DECs, DEC-378–381)*

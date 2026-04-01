@@ -462,3 +462,7 @@ No new DECs. Reserved range 379–385 unused — all design decisions followed e
 - ● **DEC-379**: Sprint 31 decomposition — 31A (Pattern Expansion III), 31.5 (Parallel Sweep Infrastructure, renumbered), Research Console deferred to post-32.5 (becomes Sprint 31B). Optimization stack is critical path.
 - ● **DEC-380**: CPA consultation removed from all gates; Tax Intelligence Automation added to post-revenue horizon (wash sale tracking, Section 475 analysis, estimated payments, cost basis optimization, tax software export).
 - ● **DEC-381**: Paper trading data audit deferred to week of April 6+ (5+ clean sessions under post-28.5 stable configuration needed).
+
+## Sprint 32 — Parameterized Strategy Templates + Experiment Pipeline
+
+No new DECs. Reserved range DEC-382–395 unused — all design decisions followed established patterns (factory introspection, DEC-345 store pattern, DEC-300 config-gating, DEC-375 overflow routing for shadow variants).

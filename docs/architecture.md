@@ -2504,7 +2504,135 @@ analytics/
 
 ---
 
-## 15. Technology Stack Summary
+## 15. Experiment Pipeline (Sprint 32)
+
+Complete variant lifecycle infrastructure for autonomous parameter optimization. Config-gated via `experiments.enabled` (default: false). All existing strategies are unaffected when disabled.
+
+### 15.1 Pattern Factory (`strategies/patterns/factory.py`)
+
+Generic pattern instantiation with PatternParam introspection:
+- **`build_pattern_from_config(pattern_name, config_dict)`** — maps config dict keys to PatternParam-declared detection params. No hardcoded switch statements. Unknown keys are silently ignored; missing required params fall back to PatternParam defaults.
+- **`get_pattern_class(pattern_name)`** — returns the pattern class with lazy import + module-level caching. Fails fast with a clear error for unknown patterns.
+- **`compute_parameter_fingerprint(pattern_name, config_dict)`** — SHA-256 of canonical JSON (sorted keys, `separators=(',', ':')`) of detection params only. Returns first 16 hex characters. Non-detection fields (strategy_id, name, enabled, operating_window) are excluded so variants with the same parameters get the same fingerprint regardless of identity.
+- **`extract_detection_params(pattern_name)`** — introspects `get_default_params()` to return the set of valid detection param names for a pattern. Used by factory and spawner to filter config dicts.
+
+All 7 PatternModule patterns in `main.py` now construct via `build_pattern_from_config()`. PatternBacktester `_create_pattern_by_name()` also delegates to factory (DEF-121 resolved).
+
+### 15.2 Experiment Models (`intelligence/experiments/models.py`)
+
+Core dataclasses for the experiment lifecycle:
+- **`ExperimentRecord`** — frozen dataclass: experiment_id (ULID), pattern_name, fingerprint, config_dict, status (ExperimentStatus enum), backtest_result (MultiObjectiveResult | None), shadow_days, shadow_trades, promotion_events.
+- **`VariantDefinition`** — frozen dataclass: strategy_id, pattern_name, fingerprint, config_dict, registered_at. Identifies a specific parameter combination instantiated as a shadow strategy.
+- **`PromotionEvent`** — frozen dataclass: event_id (ULID), strategy_id, event_type (PROMOTED/DEMOTED/KILLED), reason, timestamp, metrics_snapshot.
+- **`ExperimentStatus`** enum: PENDING → BACKTESTING → SHADOW → LIVE → DEMOTED → KILLED.
+
+### 15.3 ExperimentStore (`intelligence/experiments/store.py`)
+
+SQLite persistence following the DEC-345 pattern:
+- Database: `data/experiments.db`
+- WAL mode, fire-and-forget writes via asyncio tasks
+- 3 tables: `experiment_records`, `variant_definitions`, `promotion_events`
+- 90-day retention enforcement at startup and daily
+- Methods: `save_experiment()`, `update_experiment_status()`, `get_experiment()`, `list_experiments()`, `save_variant()`, `get_variant_by_fingerprint()`, `save_promotion_event()`, `get_promotion_history()`
+
+### 15.4 VariantSpawner (`intelligence/experiments/spawner.py`)
+
+Shadow strategy instantiation from `config/experiments.yaml`:
+- Reads `variants` list from experiments YAML config
+- For each variant: computes fingerprint, checks ExperimentStore for duplicates, builds PatternBasedStrategy via factory with `mode: shadow`
+- Skips duplicates by fingerprint (idempotent on restart)
+- Registers each new variant with Orchestrator via `register_strategy()`
+- Shadow variants are identical to live strategies except: signals bypass quality pipeline and risk manager, routed directly to CounterfactualTracker
+- Max variants per pattern enforced by `max_variants_per_pattern` config field
+
+### 15.5 ExperimentRunner (`intelligence/experiments/runner.py`)
+
+Backtest pre-filter for candidate parameter combinations:
+- Grid generation from PatternParam metadata (`min_value`, `max_value`, `step`)
+- For each grid point: runs BacktestEngine, evaluates MultiObjectiveResult, stores result in ExperimentStore
+- **Current limitation:** Supports bull_flag + flat_top_breakout only as BacktestEngine strategy types (DEF-134). Remaining 5 patterns require strategy factory additions in `backtest/engine.py`.
+- Config-gated pre-filter thresholds: `min_sharpe`, `min_trade_count`, `min_win_rate`
+- CLI: `scripts/run_experiment.py --pattern bull_flag --dry-run` for standalone sweep execution
+
+### 15.6 PromotionEvaluator (`intelligence/experiments/promotion.py`)
+
+Autonomous promote/demote based on accumulated shadow evidence:
+- Wired to `SessionEndEvent` (fires after EOD flatten)
+- For each shadow variant: queries CounterfactualTracker results, computes MultiObjectiveResult, runs `compare()` against current live results for same pattern
+- **Promotion logic:** `ComparisonVerdict.DOMINATES` + minimum shadow days + minimum shadow trades → `register_strategy_fingerprint()` + promote variant to live mode
+- **Demotion logic:** Live variant `DOMINATED` by its own replacement + hysteresis guard (must be demoted for N consecutive sessions) → demote to shadow mode, promote replacement
+- **Hysteresis guard:** Prevents oscillation (RSK-050). Configurable `promotion_hysteresis_sessions` threshold.
+- Writes PromotionEvent to ExperimentStore on every state change
+- `counterfactual_store=None` guard: gracefully skips if counterfactual tracking is disabled
+
+### 15.7 Variant Lifecycle
+
+```
+PENDING (config/experiments.yaml entry)
+  ↓ ExperimentRunner (BacktestEngine pre-filter)
+BACKTESTING
+  ↓ pre-filter pass (Sharpe/trades/win_rate thresholds)
+SHADOW (VariantSpawner registers with Orchestrator)
+  ↓ CounterfactualTracker accumulates live market evidence
+  ↓ PromotionEvaluator checks after each SessionEndEvent
+LIVE (Pareto dominance + min shadow days/trades threshold)
+  ↓ (if performance degrades below promotion threshold)
+DEMOTED → SHADOW (hysteresis guard, re-evaluate)
+  ↓ (if KILLED via manual kill switch or catastrophic performance)
+KILLED
+```
+
+Variants are never deleted from ExperimentStore — only status transitions occur. A DEMOTED variant remains eligible for re-promotion when market conditions change.
+
+### 15.8 REST API
+
+JWT-protected endpoints under `/api/v1/experiments`:
+- `GET /api/v1/experiments` — list all experiments with optional `?status=` filter
+- `GET /api/v1/experiments/{id}` — get specific experiment details including backtest result and promotion history
+- `GET /api/v1/experiments/baseline/{pattern}` — get baseline MultiObjectiveResult for a live pattern (for comparison)
+- `POST /api/v1/experiments/run` — trigger a sweep for a pattern via BackgroundTasks (non-blocking)
+
+All endpoints return 503 when `experiments.enabled: false`.
+
+### 15.9 Config
+
+`config/experiments.yaml`:
+```yaml
+enabled: false
+max_variants_per_pattern: 5
+auto_promote: true
+promotion_min_shadow_days: 5
+promotion_min_shadow_trades: 30
+promotion_hysteresis_sessions: 3
+runner:
+  min_sharpe: 0.5
+  min_trade_count: 20
+  min_win_rate: 0.35
+variants: []  # List of {pattern_name, params} to spawn as shadow strategies
+```
+
+### 15.10 Directory Structure
+
+```
+intelligence/experiments/
+├── __init__.py
+├── models.py       # ExperimentRecord, VariantDefinition, PromotionEvent, ExperimentStatus (Sprint 32)
+├── store.py        # ExperimentStore — SQLite data/experiments.db (Sprint 32)
+├── spawner.py      # VariantSpawner — reads config, registers shadow variants (Sprint 32)
+├── runner.py       # ExperimentRunner — grid generation + BacktestEngine pre-filter (Sprint 32)
+├── promotion.py    # PromotionEvaluator — autonomous promote/demote (Sprint 32)
+└── config.py       # ExperimentConfig Pydantic model (Sprint 32)
+
+strategies/patterns/
+└── factory.py      # build_pattern_from_config(), compute_parameter_fingerprint() (Sprint 32)
+
+scripts/
+└── run_experiment.py  # Standalone sweep CLI (Sprint 32)
+```
+
+---
+
+## 16. Technology Stack Summary
 
 | Component | Technology |
 |-----------|-----------|
