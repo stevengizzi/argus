@@ -1147,7 +1147,7 @@ class GapAndGoConfig(StrategyConfig):
     min_score_threshold: float = Field(default=0.0, ge=0, le=100.0)
     gap_atr_cap: float = Field(default=5.0, gt=0, le=10.0)
     volume_score_cap: float = Field(default=5.0, gt=0, le=20.0)
-    vwap_hold_score_divisor: float = Field(default=8.0, gt=0, le=10.0)
+    vwap_hold_score_divisor: float = Field(default=8.0, gt=0, le=15.0)
     catalyst_base_score: float = Field(default=10.0, ge=0, le=25.0)
 
     # Targets and stops

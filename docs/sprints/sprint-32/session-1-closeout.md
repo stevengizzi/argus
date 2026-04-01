@@ -94,6 +94,17 @@ All 4,260 tests pass. 0 pre-existing failures introduced.
 
 ---
 
+## Post-Review Fix (F1)
+
+**Finding:** `GapAndGoConfig.vwap_hold_score_divisor` had `le=10.0` but the
+corresponding `PatternParam.max_value=15.0`, meaning valid sweep values 10–15
+would be rejected by Pydantic.
+
+**Fix:** Changed `le=10.0` → `le=15.0` in `argus/core/config.py`.
+Tests re-run: 150 passed (no regressions). Committed in same session.
+
+---
+
 ## Context State
 
 GREEN — session completed well within context limits. No compaction.
