@@ -21,6 +21,8 @@ class StrategyType(StrEnum):
     DIP_AND_RIP = "dip_and_rip"
     HOD_BREAK = "hod_break"
     ABCD = "abcd"
+    GAP_AND_GO = "gap_and_go"
+    PREMARKET_HIGH_BREAK = "premarket_high_break"
 
 
 class DataFetcherConfig(BaseModel):

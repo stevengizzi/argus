@@ -42,6 +42,10 @@ _PATTERN_TO_STRATEGY_TYPE: dict[str, StrategyType] = {
     # symbol/month with default params will run noticeably slower than other
     # patterns.  Do NOT optimize here; just document and accept the limitation.
     "abcd": StrategyType.ABCD,
+    # Reference-data patterns (Sprint 32.5 S4): BacktestEngine derives prior
+    # closes from the Parquet cache and calls set_reference_data() each day.
+    "gap_and_go": StrategyType.GAP_AND_GO,
+    "premarket_high_break": StrategyType.PREMARKET_HIGH_BREAK,
 }
 
 

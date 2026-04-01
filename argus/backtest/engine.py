@@ -55,11 +55,13 @@ from argus.core.config import (
     DipAndRipConfig,
     ExitManagementConfig,
     FlatTopBreakoutConfig,
+    GapAndGoConfig,
     HODBreakConfig,
     OrbBreakoutConfig,
     OrbScalpConfig,
     OrchestratorConfig,
     OrderManagerConfig,
+    PreMarketHighBreakConfig,
     RedToGreenConfig,
     RegimeIntelligenceConfig,
     RiskConfig,
@@ -84,7 +86,9 @@ from argus.strategies.patterns.abcd import ABCDPattern
 from argus.strategies.patterns.bull_flag import BullFlagPattern
 from argus.strategies.patterns.dip_and_rip import DipAndRipPattern
 from argus.strategies.patterns.flat_top_breakout import FlatTopBreakoutPattern
+from argus.strategies.patterns.gap_and_go import GapAndGoPattern
 from argus.strategies.patterns.hod_break import HODBreakPattern
+from argus.strategies.patterns.premarket_high_break import PreMarketHighBreakPattern
 from argus.strategies.red_to_green import RedToGreenStrategy
 from argus.strategies.vwap_reclaim import VwapReclaimStrategy
 
@@ -550,6 +554,11 @@ class BacktestEngine:
 
         # c. Set strategy watchlist
         self._strategy.set_watchlist(watchlist)
+
+        # c2. Supply reference data (prior closes) to pattern-based strategies.
+        # GapAndGoPattern and PreMarketHighBreakPattern read prior_closes via
+        # set_reference_data(); all other patterns use the base no-op.
+        self._supply_daily_reference_data(trading_day, watchlist)
 
         # d. Get today's bars (all symbols, sorted by timestamp)
         daily_bars = self._get_daily_bars(trading_day, watchlist)
@@ -1045,6 +1054,10 @@ class BacktestEngine:
             return self._create_hod_break_strategy(config_dir)
         elif strategy_type == StrategyType.ABCD:
             return self._create_abcd_strategy(config_dir)
+        elif strategy_type == StrategyType.GAP_AND_GO:
+            return self._create_gap_and_go_strategy(config_dir)
+        elif strategy_type == StrategyType.PREMARKET_HIGH_BREAK:
+            return self._create_premarket_high_break_strategy(config_dir)
         else:
             raise ValueError(f"Unknown strategy type: {strategy_type}")
 
@@ -1353,6 +1366,75 @@ class BacktestEngine:
             clock=self._clock,
         )
 
+    def _create_gap_and_go_strategy(
+        self, config_dir: Path
+    ) -> PatternBasedStrategy:
+        """Create PatternBasedStrategy wrapping GapAndGoPattern.
+
+        Gap-and-Go requires prior close via set_reference_data() each day.
+        BacktestEngine supplies this through _supply_daily_reference_data().
+
+        Args:
+            config_dir: Path to the config directory.
+
+        Returns:
+            Configured PatternBasedStrategy with GapAndGoPattern.
+        """
+        yaml_file = config_dir / "strategies" / "gap_and_go.yaml"
+        if yaml_file.exists():
+            data = load_yaml_file(yaml_file)
+            config = GapAndGoConfig(**data)
+        else:
+            config = GapAndGoConfig(
+                strategy_id="strat_gap_and_go",
+                name="Gap-and-Go",
+            )
+
+        config = self._apply_config_overrides(config)
+        pattern = GapAndGoPattern()
+
+        return PatternBasedStrategy(
+            pattern=pattern,
+            config=config,
+            data_service=self._data_service,
+            clock=self._clock,
+        )
+
+    def _create_premarket_high_break_strategy(
+        self, config_dir: Path
+    ) -> PatternBasedStrategy:
+        """Create PatternBasedStrategy wrapping PreMarketHighBreakPattern.
+
+        Pre-Market High Break uses PM candles already in the candle window
+        (fed by BacktestEngine before market hours). Prior close is supplied
+        via set_reference_data() each day for gap context scoring.
+
+        Args:
+            config_dir: Path to the config directory.
+
+        Returns:
+            Configured PatternBasedStrategy with PreMarketHighBreakPattern.
+        """
+        yaml_file = config_dir / "strategies" / "premarket_high_break.yaml"
+        if yaml_file.exists():
+            data = load_yaml_file(yaml_file)
+            config = PreMarketHighBreakConfig(**data)
+        else:
+            config = PreMarketHighBreakConfig(
+                strategy_id="strat_premarket_high_break",
+                name="Pre-Market High Break",
+            )
+
+        config = self._apply_config_overrides(config)
+        pattern = PreMarketHighBreakPattern()
+
+        return PatternBasedStrategy(
+            pattern=pattern,
+            config=config,
+            data_service=self._data_service,
+            clock=self._clock,
+        )
+
     def _apply_config_overrides(self, config: object) -> object:
         """Apply config_overrides from BacktestEngineConfig to a strategy config.
 
@@ -1386,6 +1468,80 @@ class BacktestEngine:
                 config_dict[parts[-1]] = value
 
         return config.__class__(**config_dict)  # type: ignore[return-value]
+
+    # --- Reference data helpers (Sprint 32.5 S4) ---
+
+    def _derive_prior_closes(
+        self, trading_day: date, symbols: list[str]
+    ) -> dict[str, float]:
+        """Derive prior-day close prices for a list of symbols.
+
+        Finds the most recent trading day before *trading_day* in
+        ``self._trading_days`` and returns the last bar close for each
+        symbol on that day.  Returns an empty dict when *trading_day* is
+        the first day in the data range (no prior day available).
+
+        Args:
+            trading_day: The current simulation date.
+            symbols: Symbols to look up.
+
+        Returns:
+            Mapping of symbol → prior close price.  Symbols with no
+            prior-day data are omitted.
+        """
+        try:
+            day_idx = self._trading_days.index(trading_day)
+        except ValueError:
+            return {}
+
+        if day_idx == 0:
+            return {}
+
+        prior_day = self._trading_days[day_idx - 1]
+        prior_closes: dict[str, float] = {}
+
+        for symbol in symbols:
+            if symbol not in self._bar_data:
+                continue
+            df = self._bar_data[symbol]
+            prior_mask = df["trading_date"] == prior_day
+            prior_df = df[prior_mask]
+            if prior_df.empty:
+                continue
+            # Last bar's close is the prior day close
+            prior_closes[symbol] = float(prior_df.iloc[-1]["close"])
+
+        return prior_closes
+
+    def _supply_daily_reference_data(
+        self, trading_day: date, symbols: list[str]
+    ) -> None:
+        """Supply per-day reference data to the pattern if it supports it.
+
+        Computes prior closes from the Parquet cache and calls
+        ``set_reference_data()`` on the wrapped PatternModule.  Non-pattern
+        strategies (OrbBreakout, etc.) are unaffected — their patterns use
+        the default no-op ``set_reference_data()``.
+
+        Logs DEBUG when the first trading day has no prior data available.
+
+        Args:
+            trading_day: The current simulation date.
+            symbols: Symbols active on this day.
+        """
+        if not isinstance(self._strategy, PatternBasedStrategy):
+            return
+
+        prior_closes = self._derive_prior_closes(trading_day, symbols)
+
+        if not prior_closes:
+            logger.debug(
+                "No prior closes available for %s — first day or no prior data. "
+                "Reference-data patterns will skip detection this day.",
+                trading_day,
+            )
+
+        self._strategy._pattern.set_reference_data({"prior_closes": prior_closes})
 
     # --- Config loading ---
 
