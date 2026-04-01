@@ -9,7 +9,7 @@
 
 import { useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { ScrollText, Download, AlertCircle } from 'lucide-react';
+import { ScrollText, Download, AlertCircle, Ghost } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import {
   TradeFilters,
@@ -19,6 +19,7 @@ import {
   TradeStatsBarSkeleton,
   TradeTableSkeleton,
 } from '../features/trades';
+import { ShadowTradesTab } from '../features/trades/ShadowTradesTab';
 import { useTrades } from '../hooks/useTrades';
 import { useTradeStats } from '../hooks/useTradeStats';
 import { staggerContainer, staggerItem } from '../utils/motion';
@@ -35,11 +36,14 @@ interface FilterState {
   date_to: string | undefined;
 }
 
+type ActiveTab = 'live' | 'shadow';
+
 export function TradesPage() {
   const [, setSearchParams] = useSearchParams();
   const [selectedTrade, setSelectedTrade] = useState<Trade | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<ActiveTab>('live');
 
   // Register Copilot context (defined early, uses state below)
   useCopilotContext('Trades', () => ({
@@ -240,53 +244,91 @@ export function TradesPage() {
         )}
       </motion.div>
 
-      {/* Filters - controlled by local state */}
+      {/* Tab bar */}
       <motion.div variants={staggerItem}>
-        <TradeFilters filters={filters} onFiltersChange={updateFilters} />
+        <div className="flex gap-1 border-b border-argus-border" data-testid="trades-tab-bar">
+          <button
+            onClick={() => setActiveTab('live')}
+            className={`flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
+              activeTab === 'live'
+                ? 'border-argus-accent text-argus-accent'
+                : 'border-transparent text-argus-text-muted hover:text-argus-text'
+            }`}
+            data-testid="tab-live-trades"
+          >
+            <ScrollText className="w-4 h-4" />
+            Live Trades
+          </button>
+          <button
+            onClick={() => setActiveTab('shadow')}
+            className={`flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
+              activeTab === 'shadow'
+                ? 'border-argus-accent text-argus-accent'
+                : 'border-transparent text-argus-text-muted hover:text-argus-text'
+            }`}
+            data-testid="tab-shadow-trades"
+          >
+            <Ghost className="w-4 h-4" />
+            Shadow Trades
+          </button>
+        </div>
       </motion.div>
 
-      {/* Stats bar - container persists, content transitions */}
-      <motion.div variants={staggerItem}>
-        {isLoading ? (
-          <TradeStatsBarSkeleton />
-        ) : statsData ? (
-          <TradeStatsBar
-            stats={statsData}
-            isTransitioning={isFetching || statsFetching}
+      {activeTab === 'live' ? (
+        <>
+          {/* Filters - controlled by local state */}
+          <motion.div variants={staggerItem}>
+            <TradeFilters filters={filters} onFiltersChange={updateFilters} />
+          </motion.div>
+
+          {/* Stats bar - container persists, content transitions */}
+          <motion.div variants={staggerItem}>
+            {isLoading ? (
+              <TradeStatsBarSkeleton />
+            ) : statsData ? (
+              <TradeStatsBar
+                stats={statsData}
+                isTransitioning={isFetching || statsFetching}
+              />
+            ) : null}
+          </motion.div>
+
+          {/* Content area - container persists, content transitions */}
+          <motion.div variants={staggerItem}>
+            {isLoading ? (
+              <TradeTableSkeleton />
+            ) : error ? (
+              <div className="bg-argus-surface border border-argus-border rounded-lg p-8 text-center">
+                <p className="text-argus-loss">Error loading trades: {error.message}</p>
+              </div>
+            ) : data ? (
+              <TradeTable
+                trades={data.trades}
+                totalCount={data.total_count}
+                isLoading={isLoading}
+                isTransitioning={isFetching}
+                hasFilters={Boolean(
+                  filters.strategy_id ||
+                    filters.outcome !== 'all' ||
+                    filters.date_from ||
+                    filters.date_to
+                )}
+                onTradeClick={setSelectedTrade}
+              />
+            ) : null}
+          </motion.div>
+
+          {/* Trade detail panel */}
+          <TradeDetailPanel
+            trade={selectedTrade}
+            onClose={() => setSelectedTrade(null)}
           />
-        ) : null}
-      </motion.div>
-
-      {/* Content area - container persists, content transitions */}
-      <motion.div variants={staggerItem}>
-        {isLoading ? (
-          <TradeTableSkeleton />
-        ) : error ? (
-          <div className="bg-argus-surface border border-argus-border rounded-lg p-8 text-center">
-            <p className="text-argus-loss">Error loading trades: {error.message}</p>
-          </div>
-        ) : data ? (
-          <TradeTable
-            trades={data.trades}
-            totalCount={data.total_count}
-            isLoading={isLoading}
-            isTransitioning={isFetching}
-            hasFilters={Boolean(
-              filters.strategy_id ||
-                filters.outcome !== 'all' ||
-                filters.date_from ||
-                filters.date_to
-            )}
-            onTradeClick={setSelectedTrade}
-          />
-        ) : null}
-      </motion.div>
-
-      {/* Trade detail panel */}
-      <TradeDetailPanel
-        trade={selectedTrade}
-        onClose={() => setSelectedTrade(null)}
-      />
+        </>
+      ) : (
+        <motion.div variants={staggerItem}>
+          <ShadowTradesTab />
+        </motion.div>
+      )}
     </motion.div>
   );
 }

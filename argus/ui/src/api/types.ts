@@ -94,6 +94,40 @@ export interface TradesBatchResponse {
   timestamp: string;
 }
 
+// Shadow (counterfactual) trades
+export interface ShadowTrade {
+  position_id: string;
+  symbol: string;
+  strategy_id: string;
+  variant_id: string | null;
+  entry_price: number;
+  stop_price: number;
+  target_price: number;
+  time_stop_seconds: number | null;
+  rejection_stage: string;
+  rejection_reason: string;
+  quality_score: number | null;
+  quality_grade: string | null;
+  opened_at: string;
+  closed_at: string | null;
+  exit_price: number | null;
+  exit_reason: string | null;
+  theoretical_pnl: number | null;
+  theoretical_r_multiple: number | null;
+  duration_seconds: number | null;
+  max_adverse_excursion: number | null;
+  max_favorable_excursion: number | null;
+  bars_monitored: number;
+}
+
+export interface ShadowTradesResponse {
+  positions: ShadowTrade[];
+  total_count: number;
+  limit: number;
+  offset: number;
+  timestamp: string;
+}
+
 // Trade Stats (server-side aggregation)
 export interface TradeStatsResponse {
   total_trades: number;
@@ -823,6 +857,50 @@ export interface VixCurrentResponse {
   regime?: VixRegimeData;
   is_stale?: boolean;
   last_updated?: string;
+  timestamp: string;
+}
+
+// Experiments (Sprint 32 / 32.5)
+export interface ExperimentVariant {
+  variant_id: string;
+  pattern_name: string;
+  detection_params: Record<string, unknown>;
+  exit_overrides: Record<string, unknown> | null;
+  config_fingerprint: string;
+  mode: 'live' | 'shadow';
+  status: string | null;
+  trade_count: number;
+  shadow_trade_count: number;
+  win_rate: number | null;
+  expectancy: number | null;
+  sharpe: number | null;
+}
+
+export interface ExperimentVariantsResponse {
+  variants: ExperimentVariant[];
+  count: number;
+  timestamp: string;
+}
+
+export interface PromotionEvent {
+  event_id: string;
+  variant_id: string;
+  pattern_name: string | null;
+  event_type: string;
+  from_mode: string;
+  to_mode: string;
+  timestamp: string;
+  trigger_reason: string;
+  metrics_snapshot: string | null;
+  shadow_trades: number | null;
+  shadow_expectancy: number | null;
+}
+
+export interface PromotionEventsResponse {
+  events: PromotionEvent[];
+  total_count: number;
+  limit: number;
+  offset: number;
   timestamp: string;
 }
 

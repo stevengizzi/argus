@@ -46,11 +46,14 @@ import type {
   TradesBatchResponse,
   TradesResponse,
   TradeStatsResponse,
+  ShadowTradesResponse,
   ObservatoryClosestMissesResponse,
   ObservatorySessionSummaryResponse,
   UniverseStatusResponse,
   VixCurrentResponse,
   WatchlistResponse,
+  ExperimentVariantsResponse,
+  PromotionEventsResponse,
 } from './types';
 
 const API_BASE = '/api/v1';
@@ -214,6 +217,27 @@ export async function getTradesByIds(ids: string[]): Promise<TradesBatchResponse
     return { trades: [], count: 0, timestamp: new Date().toISOString() };
   }
   return fetchWithAuth<TradesBatchResponse>(`/trades/batch?ids=${ids.join(',')}`);
+}
+
+// Counterfactual (shadow trades) endpoints
+export async function getShadowTrades(params?: {
+  strategy_id?: string;
+  date_from?: string;
+  date_to?: string;
+  rejection_stage?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<ShadowTradesResponse> {
+  const searchParams = new URLSearchParams();
+  if (params) {
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined) {
+        searchParams.set(key, String(value));
+      }
+    });
+  }
+  const query = searchParams.toString();
+  return fetchWithAuth<ShadowTradesResponse>(`/counterfactual/positions${query ? `?${query}` : ''}`);
 }
 
 // Performance endpoints
@@ -769,4 +793,21 @@ export async function getObservatorySessionSummary(
 
 export async function getVixCurrent(): Promise<VixCurrentResponse> {
   return fetchWithAuth<VixCurrentResponse>('/vix/current');
+}
+
+// --- Experiments (Sprint 32 / 32.5) ---
+
+export async function getExperimentVariants(): Promise<ExperimentVariantsResponse> {
+  return fetchWithAuth<ExperimentVariantsResponse>('/experiments/variants');
+}
+
+export async function getPromotionEvents(params?: {
+  limit?: number;
+  offset?: number;
+}): Promise<PromotionEventsResponse> {
+  const query = new URLSearchParams();
+  if (params?.limit !== undefined) query.set('limit', String(params.limit));
+  if (params?.offset !== undefined) query.set('offset', String(params.offset));
+  const qs = query.toString();
+  return fetchWithAuth<PromotionEventsResponse>(`/experiments/promotions${qs ? `?${qs}` : ''}`);
 }
