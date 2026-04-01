@@ -7,7 +7,7 @@
    - `argus/ui/src/features/orchestrator/SessionOverview.tsx`
    - `argus/ui/src/features/orchestrator/StrategyCoverageTimeline.tsx`
 2. Run scoped tests: `python -m pytest tests/api/test_orchestrator*.py -x -q && cd argus/ui && npx vitest run src/features/orchestrator/`
-3. Verify branch: `sprint-32.75-session-3`
+3. Verify branch: `main`
 4. Confirm S1 merged
 
 ## Objective

@@ -20,7 +20,6 @@ Before making any changes:
    ```
    Expected: ~4,441 pytest passing, ~708 Vitest (1 pre-existing failure)
 3. Verify you are on branch: `main`
-4. Create working branch: `git checkout -b sprint-32.5-session-8`
 
 ## Objective
 Write the Adaptive Capital Intelligence architectural vision document (DEF-133) and perform full doc-sync for Sprint 32.5.

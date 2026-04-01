@@ -7,7 +7,7 @@
    - `argus/ui/src/features/dashboard/VixRegimeCard.tsx`
    - `argus/ui/src/features/dashboard/OpenPositions.tsx`
 2. Run scoped tests: `cd argus/ui && npx vitest run src/pages/DashboardPage.test.tsx src/features/dashboard/`
-3. Verify branch: `sprint-32.75-session-2`
+3. Verify branch: `main`
 4. Confirm S1 merged (strategy identity constants available)
 
 ## Objective

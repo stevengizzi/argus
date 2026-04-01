@@ -3,7 +3,7 @@
 ## Pre-Flight Checks
 1. Read: `docs/sprints/sprint-32.75/review-context.md`, `argus/api/routes/positions.py` (existing position endpoint pattern), `argus/data/intraday_candle_store.py` (IntradayCandleStore API), `argus/api/routes/__init__.py` (route registration)
 2. Scoped tests: `python -m pytest tests/api/ -x -q`
-3. Branch: `sprint-32.75-session-6`
+3. Verify branch: `main`
 
 ## Objective
 Create REST endpoints for Arena page initial data load — position list with levels and candle history per symbol.

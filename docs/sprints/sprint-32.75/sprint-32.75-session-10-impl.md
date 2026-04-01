@@ -3,7 +3,7 @@
 ## Pre-Flight Checks
 1. Read: `docs/sprints/sprint-32.75/review-context.md`, `argus/ui/src/pages/ArenaPage.tsx` (S8), `argus/ui/src/features/arena/ArenaCard.tsx` (S9), `argus/api/routes/arena.py` (S6 — check response schema)
 2. Scoped tests: `cd argus/ui && npx vitest run src/features/arena/ src/hooks/useArenaData*`
-3. Branch: `sprint-32.75-session-10`
+3. Verify branch: `main`
 4. S6, S8, S9 merged
 
 ## Objective

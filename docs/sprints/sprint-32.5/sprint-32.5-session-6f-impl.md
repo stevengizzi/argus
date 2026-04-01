@@ -9,7 +9,7 @@
 2. Read the S6 close-out: `docs/sprints/sprint-32.5/session-6-closeout.md`
 3. Identify specific visual/UX issues from the review
 4. Run scoped tests: `cd argus/ui && npx vitest run`
-5. Create working branch: `git checkout -b sprint-32.5-session-6f`
+5. Verify branch: `main`
 
 ## Objective
 Fix visual/UX issues discovered during S6 review. Scope limited to the Shadow Trades tab and related components. No new features.

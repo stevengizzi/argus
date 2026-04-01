@@ -8,7 +8,7 @@
    - `argus/ui/src/components/AllocationDonut.tsx`
    - `argus/ui/src/features/dashboard/SessionTimeline.tsx`
 2. Run full test suite (first session): `cd argus && python -m pytest -x -q -n auto && cd argus/ui && npx vitest run`
-3. Verify branch: `sprint-32.75-session-1`
+3. Verify branch: `main`
 
 ## Objective
 Add all 5 new PatternModule strategies to every strategy identity map in the frontend so they display unique colors, badges, and names instead of grey "STRA" fallbacks.

@@ -3,7 +3,7 @@
 ## Pre-Flight Checks
 1. Read: `docs/sprints/sprint-32.75/review-context.md`, `config/overflow.yaml`, `argus/execution/ibkr_broker.py` (reconnect logic), `argus/strategies/base_strategy.py` (operating window)
 2. Scoped tests: `python -m pytest tests/execution/test_ibkr*.py tests/strategies/test_base*.py -x -q`
-3. Branch: `sprint-32.75-session-5`
+3. Verify branch: `main`
 
 ## Objective
 Raise overflow broker capacity to 60, add post-reconnect portfolio query delay, add per-strategy end-of-window evaluation summary logging, create IBC setup documentation.

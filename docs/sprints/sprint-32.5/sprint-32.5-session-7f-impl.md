@@ -9,7 +9,7 @@
 2. Read the S7 close-out: `docs/sprints/sprint-32.5/session-7-closeout.md`
 3. Identify specific visual/UX issues from the review
 4. Run scoped tests: `cd argus/ui && npx vitest run`
-5. Create working branch: `git checkout -b sprint-32.5-session-7f`
+5. Verify branch: `main`
 
 ## Objective
 Fix visual/UX issues discovered during S7 review. Scope limited to the Experiments Dashboard page. No new features.
