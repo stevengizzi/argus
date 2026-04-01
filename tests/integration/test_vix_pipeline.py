@@ -13,6 +13,9 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime, timedelta
+from zoneinfo import ZoneInfo
+
+_ET = ZoneInfo("America/New_York")
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -320,7 +323,7 @@ class TestRegimeHistoryVixClose:
 
         await store.record(vector)
 
-        today_str = datetime.now(UTC).strftime("%Y-%m-%d")
+        today_str = datetime.now(_ET).strftime("%Y-%m-%d")
         rows = await store.get_regime_history(today_str)
         assert len(rows) >= 1
         assert rows[0]["vix_close"] == pytest.approx(18.5, abs=0.01)
@@ -349,7 +352,7 @@ class TestRegimeHistoryVixClose:
 
         await store.record(vector)
 
-        today_str = datetime.now(UTC).strftime("%Y-%m-%d")
+        today_str = datetime.now(_ET).strftime("%Y-%m-%d")
         rows = await store.get_regime_history(today_str)
         assert len(rows) >= 1
         assert rows[0]["vix_close"] is None

@@ -141,6 +141,13 @@ IBKR_ERROR_MAP: dict[int, IBKRErrorInfo] = {
         "Order cancelled",
         "log",
     ),
+    404: IBKRErrorInfo(
+        404,
+        IBKRErrorSeverity.WARNING,
+        "order",
+        "Order held while securities are located (qty mismatch on SELL)",
+        "verify_state",
+    ),
     203: IBKRErrorInfo(
         203,
         IBKRErrorSeverity.CRITICAL,

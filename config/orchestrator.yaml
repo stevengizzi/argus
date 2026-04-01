@@ -42,6 +42,9 @@ suspension_drawdown_pct: 0.50
 # Days of positive performance required before reactivating suspended strategy
 recovery_days_required: 10
 
+# PAPER TRADING: Disabled to allow all strategies to trade. Restore to true before live.
+throttler_suspend_enabled: false
+
 # ---------------------------------------------------------------------------
 # Regime Detection
 # ---------------------------------------------------------------------------
@@ -74,6 +77,10 @@ poll_interval_seconds: 30
 # ---------------------------------------------------------------------------
 # Correlation Limits
 # ---------------------------------------------------------------------------
+
+# ORB family mutual exclusion (DEC-261)
+# PAPER TRADING: Disabled to allow both ORB strategies to fire on same symbol. Restore to true before live.
+orb_family_mutual_exclusion: false
 
 # Enable correlation-based allocation limits
 correlation_enabled: true

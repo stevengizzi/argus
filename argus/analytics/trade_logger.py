@@ -67,8 +67,9 @@ class TradeLogger:
                 shares, stop_price, target_prices, exit_reason,
                 gross_pnl, commission, net_pnl, r_multiple,
                 hold_duration_seconds, outcome, rationale, notes,
-                quality_grade, quality_score
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                quality_grade, quality_score,
+                mfe_r, mae_r, mfe_price, mae_price
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
 
         params = (
@@ -95,6 +96,10 @@ class TradeLogger:
             trade.notes,
             trade.quality_grade,
             trade.quality_score if trade.quality_score is not None else None,
+            trade.mfe_r,
+            trade.mae_r,
+            trade.mfe_price,
+            trade.mae_price,
         )
 
         await self._db.execute(sql, params)
@@ -791,4 +796,8 @@ class TradeLogger:
             notes=r["notes"] or "",
             quality_grade=r.get("quality_grade", "") or "",
             quality_score=float(r["quality_score"]) if r.get("quality_score") is not None else 0.0,
+            mfe_r=float(r["mfe_r"]) if r.get("mfe_r") is not None else None,
+            mae_r=float(r["mae_r"]) if r.get("mae_r") is not None else None,
+            mfe_price=float(r["mfe_price"]) if r.get("mfe_price") is not None else None,
+            mae_price=float(r["mae_price"]) if r.get("mae_price") is not None else None,
         )

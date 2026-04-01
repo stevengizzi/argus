@@ -38,8 +38,8 @@ export function TradeStatsBar({ stats, isTransitioning = false }: TradeStatsBarP
         <div className="flex-1 min-w-0">
           <MetricCard
             label="Win Rate"
-            value={formatPercentRaw(win_rate)}
-            trend={win_rate >= 50 ? 'up' : win_rate > 0 ? 'down' : 'neutral'}
+            value={formatPercentRaw(win_rate * 100)}
+            trend={win_rate * 100 >= 50 ? 'up' : win_rate > 0 ? 'down' : 'neutral'}
           />
         </div>
         <div className="w-px h-8 bg-argus-border hidden sm:block flex-shrink-0" />

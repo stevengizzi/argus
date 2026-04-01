@@ -93,7 +93,9 @@ class Orchestrator:
 
         # Supporting components
         self._regime_classifier = RegimeClassifier(config)
-        self._throttler = PerformanceThrottler(config)
+        self._throttler = PerformanceThrottler(
+            config, suspend_enabled=config.throttler_suspend_enabled
+        )
         self._correlation_tracker = CorrelationTracker()
 
         # Strategy registry

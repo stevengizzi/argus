@@ -21,8 +21,8 @@ export function useTradeStats(params?: UseTradeStatsParams) {
   return useQuery<TradeStatsResponse, Error>({
     queryKey: ['trade-stats', params],
     queryFn: () => getTradeStats(params),
-    staleTime: 30_000,
-    refetchInterval: 30_000,
+    staleTime: 10_000,
+    refetchInterval: 10_000,
     refetchOnWindowFocus: true,
     placeholderData: keepPreviousData,
   });

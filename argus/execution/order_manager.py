@@ -106,6 +106,14 @@ class ManagedPosition:
     exit_config: ExitManagementConfig | None = None  # Per-strategy resolved config
     atr_value: float | None = None  # Captured from signal at entry
 
+    # MFE/MAE tracking (Sprint 29.5 S6)
+    mfe_price: float = 0.0      # Highest price reached while position open
+    mae_price: float = 0.0      # Lowest price reached while position open
+    mfe_r: float = 0.0          # MFE in R-multiples
+    mae_r: float = 0.0          # MAE in R-multiples (negative)
+    mfe_time: datetime | None = None  # When MFE was reached
+    mae_time: datetime | None = None  # When MAE was reached
+
     @property
     def is_fully_closed(self) -> bool:
         """Return True if no shares remain."""
@@ -250,6 +258,13 @@ class OrderManager:
 
         # Amended bracket prices: {symbol: (stop, t1, t2)} for revision-rejected
         self._amended_prices: dict[str, tuple[float, float, float]] = {}
+
+        # Flatten circuit breaker: cycle count and abandoned set (Sprint 29.5 R2)
+        self._flatten_cycle_count: dict[str, int] = {}
+        self._flatten_abandoned: set[str] = set()
+
+        # Startup flatten queue: (symbol, qty) tuples queued for market open (Sprint 29.5 R4)
+        self._startup_flatten_queue: list[tuple[str, int]] = []
 
         # Fill deduplication: {order_id: last_cumulative_filled_qty}
         self._last_fill_state: dict[str, float] = {}
@@ -623,6 +638,20 @@ class OrderManager:
             if event.price > position.high_watermark:
                 position.high_watermark = event.price
 
+            # Update MFE/MAE (Sprint 29.5 S6) — O(1) comparisons, no DB lookups
+            if event.price > position.mfe_price:
+                position.mfe_price = event.price
+                position.mfe_time = self._clock.now()
+                risk = position.entry_price - position.original_stop_price
+                if risk > 0:
+                    position.mfe_r = (event.price - position.entry_price) / risk
+            if event.price < position.mae_price:
+                position.mae_price = event.price
+                position.mae_time = self._clock.now()
+                risk = position.entry_price - position.original_stop_price
+                if risk > 0:
+                    position.mae_r = -((position.entry_price - event.price) / risk)
+
             # --- after_profit_pct trail activation (Sprint 28.5) ---
             if (
                 not position.trail_active
@@ -874,6 +903,8 @@ class OrderManager:
             quality_score=signal.quality_score,
             exit_config=self._get_exit_config(pending.strategy_id),
             atr_value=signal.atr_value,
+            mfe_price=event.fill_price,
+            mae_price=event.fill_price,
         )
 
         # Add to managed positions
@@ -1292,37 +1323,79 @@ class OrderManager:
                         self._flattened_today = True
                         continue
 
+                # Drain startup flatten queue at market open (Sprint 29.5 R4)
+                if self._startup_flatten_queue:
+                    # Separate ET time for startup queue drain — distinct from
+                    # eod_flatten's et_tz/now_et which are inside a conditional
+                    # guard and may not be in scope.
+                    et_tz2 = ZoneInfo("America/New_York")
+                    if now.tzinfo is not None:
+                        now_et2 = now.astimezone(et_tz2)
+                    else:
+                        now_et2 = now.replace(tzinfo=et_tz2)
+                    if now_et2.time() >= time(9, 30):
+                        await self._drain_startup_flatten_queue()
+
                 # Check time stops on all positions
                 for symbol, positions in list(self._managed_positions.items()):
                     for position in positions:
                         if position.is_fully_closed:
                             continue
 
+                        # Skip flatten for abandoned symbols (Sprint 29.5 R2)
+                        if symbol in self._flatten_abandoned:
+                            continue
+
                         elapsed_seconds = (now - position.entry_time).total_seconds()
+
+                        # Determine if flatten is already pending/abandoned
+                        # for log suppression (Sprint 29.5 R5)
+                        _suppress_log = symbol in self._flatten_pending
 
                         # Per-position time stop from signal (DEC-122)
                         if (
                             position.time_stop_seconds is not None
                             and elapsed_seconds >= position.time_stop_seconds
                         ):
-                            logger.info(
-                                "Time stop for %s: open %.0f sec (limit=%d sec)",
-                                symbol,
-                                elapsed_seconds,
-                                position.time_stop_seconds,
-                            )
+                            if _suppress_log:
+                                self._throttled.warn_throttled(
+                                    f"time_stop:{symbol}",
+                                    f"Time stop for {symbol}: open "
+                                    f"{elapsed_seconds:.0f} sec "
+                                    f"(limit={position.time_stop_seconds} sec"
+                                    f", flatten pending)",
+                                    interval_seconds=60.0,
+                                )
+                            else:
+                                logger.info(
+                                    "Time stop for %s: open %.0f sec (limit=%d sec)",
+                                    symbol,
+                                    elapsed_seconds,
+                                    position.time_stop_seconds,
+                                )
                             await self._flatten_position(position, reason="time_stop")
                             continue
 
                         # Fallback: global max_position_duration_minutes
                         elapsed_minutes = elapsed_seconds / 60
                         if elapsed_minutes >= self._config.max_position_duration_minutes:
-                            logger.info(
-                                "Time stop for %s: open %.1f min (limit=%d min)",
-                                symbol,
-                                elapsed_minutes,
-                                self._config.max_position_duration_minutes,
-                            )
+                            if _suppress_log:
+                                self._throttled.warn_throttled(
+                                    f"time_stop:{symbol}",
+                                    f"Time stop for {symbol}: open "
+                                    f"{elapsed_minutes:.1f} min "
+                                    f"(limit="
+                                    f"{self._config.max_position_duration_minutes}"
+                                    f" min, flatten pending)",
+                                    interval_seconds=60.0,
+                                )
+                            else:
+                                logger.info(
+                                    "Time stop for %s: open %.1f min (limit=%d min)",
+                                    symbol,
+                                    elapsed_minutes,
+                                    self._config.max_position_duration_minutes,
+                                )
                             await self._flatten_position(position, reason="time_stop")
                             continue
 
@@ -1373,17 +1446,49 @@ class OrderManager:
     async def eod_flatten(self) -> None:
         """Close all positions at market. Scheduled at eod_flatten_time.
 
-        1. Cancel all open orders (stops, targets)
-        2. Close all remaining positions at market
-        3. If auto_shutdown_after_eod is enabled, request system shutdown
+        1. Clear abandoned set (EOD gets one final attempt for everything)
+        2. Cancel all open orders (stops, targets)
+        3. Close all remaining positions at market
+        4. Flatten broker-only positions not tracked by ARGUS
+        5. If auto_shutdown_after_eod is enabled, request system shutdown
         """
         logger.info("EOD flatten triggered — closing all positions")
         self._flattened_today = True
+
+        # Clear abandoned set — EOD is the last resort (Sprint 29.5 R2)
+        if self._flatten_abandoned:
+            logger.info(
+                "EOD clearing %d abandoned flatten symbols: %s",
+                len(self._flatten_abandoned),
+                sorted(self._flatten_abandoned),
+            )
+            self._flatten_abandoned.clear()
+            self._flatten_cycle_count.clear()
 
         for _symbol, positions in list(self._managed_positions.items()):
             for position in positions:
                 if not position.is_fully_closed:
                     await self._flatten_position(position, reason="eod_flatten")
+
+        # Pass 2: Flatten broker-only positions not tracked by ARGUS (Sprint 29.5 R3)
+        try:
+            broker_positions = await self._broker.get_positions()
+            managed_symbols = set(self._managed_positions.keys())
+            for pos in broker_positions:
+                symbol = getattr(pos, "symbol", str(pos))
+                qty = int(getattr(pos, "qty", 0))
+                if symbol not in managed_symbols and qty > 0:
+                    logger.warning(
+                        "EOD flatten: closing untracked broker position "
+                        "%s (%d shares)",
+                        symbol,
+                        qty,
+                    )
+                    await self._flatten_unknown_position(
+                        symbol, qty, force_execute=True,
+                    )
+        except Exception as e:
+            logger.error("EOD flatten: broker position query failed: %s", e)
 
         # Request auto-shutdown if enabled
         if self._config.auto_shutdown_after_eod:
@@ -1535,13 +1640,41 @@ class OrderManager:
             zombie_count,
         )
 
-    async def _flatten_unknown_position(self, symbol: str, qty: int) -> None:
+    async def _flatten_unknown_position(
+        self, symbol: str, qty: int, *, force_execute: bool = False,
+    ) -> None:
         """Submit a market SELL order to close an unknown broker position.
+
+        If the market is not open (before 9:30 ET or after 16:00 ET),
+        queues the flatten for execution at market open instead of
+        submitting immediately (Sprint 29.5 R4).
 
         Args:
             symbol: The ticker symbol.
             qty: Number of shares to sell.
+            force_execute: If True, skip the market-hours gate and execute
+                immediately. Used by EOD Pass 2 where we must close
+                positions regardless of clock time.
         """
+        # Check if market is open (Sprint 29.5 R4)
+        et_tz = ZoneInfo("America/New_York")
+        now = self._clock.now()
+        if now.tzinfo is not None:
+            now_et = now.astimezone(et_tz)
+        else:
+            now_et = now.replace(tzinfo=et_tz)
+        market_open = time(9, 30)
+        market_close = time(16, 0)
+        if not force_execute and not (market_open <= now_et.time() < market_close):
+            self._startup_flatten_queue.append((symbol, abs(qty)))
+            logger.info(
+                "Queued startup flatten for %s (%d shares) "
+                "— will execute at market open",
+                symbol,
+                abs(qty),
+            )
+            return
+
         try:
             sell_order = Order(
                 strategy_id="startup_cleanup",
@@ -1563,6 +1696,42 @@ class OrderManager:
                 abs(qty),
                 e,
             )
+
+    async def _drain_startup_flatten_queue(self) -> None:
+        """Execute queued startup zombie flattens (Sprint 29.5 R4).
+
+        Called from the poll loop when market opens. Drains the entire
+        queue and submits market sell orders for each entry.
+        """
+        if not self._startup_flatten_queue:
+            return
+
+        queue = list(self._startup_flatten_queue)
+        self._startup_flatten_queue.clear()
+
+        logger.info(
+            "Draining startup flatten queue: %d positions", len(queue)
+        )
+        for symbol, qty in queue:
+            try:
+                sell_order = Order(
+                    strategy_id="startup_cleanup",
+                    symbol=symbol,
+                    side=OrderSide.SELL,
+                    order_type=TradingOrderType.MARKET,
+                    quantity=abs(qty),
+                )
+                await self._broker.place_order(sell_order)
+                logger.info(
+                    "Startup queue: flattened %s (%d shares)", symbol, abs(qty)
+                )
+            except Exception as e:
+                logger.error(
+                    "Startup queue: failed to flatten %s (%d shares): %s",
+                    symbol,
+                    abs(qty),
+                    e,
+                )
 
     def _create_reco_position(
         self, symbol: str, qty: int, pos: object
@@ -1808,16 +1977,32 @@ class OrderManager:
             if elapsed < timeout:
                 continue
 
-            # Max retries exhausted — stop retrying
+            # Max retries exhausted — increment cycle count, possibly abandon
             if retry_count >= max_retries:
-                logger.error(
-                    "Flatten for %s exhausted %d retries — giving up "
-                    "(position requires manual intervention or EOD flatten)",
-                    symbol,
-                    max_retries,
-                )
-                # Remove from pending so it doesn't log every poll cycle
                 self._flatten_pending.pop(symbol, None)
+                cycle = self._flatten_cycle_count.get(symbol, 0) + 1
+                self._flatten_cycle_count[symbol] = cycle
+                max_cycles = self._config.max_flatten_cycles
+                if cycle >= max_cycles:
+                    self._flatten_abandoned.add(symbol)
+                    total_attempts = cycle * max_retries
+                    logger.error(
+                        "Flatten for %s abandoned after %d cycles "
+                        "(%d total attempts) — requires manual intervention "
+                        "or EOD flatten",
+                        symbol,
+                        cycle,
+                        total_attempts,
+                    )
+                else:
+                    logger.error(
+                        "Flatten for %s exhausted %d retries (cycle %d/%d) "
+                        "— will retry on next flatten attempt",
+                        symbol,
+                        max_retries,
+                        cycle,
+                        max_cycles,
+                    )
                 continue
 
             logger.warning(
@@ -1846,6 +2031,42 @@ class OrderManager:
                 self._flatten_pending.pop(symbol, None)
                 continue
 
+            # Re-query broker qty if error 404 was flagged (Sprint 29.5 R1)
+            sell_qty = position.shares_remaining
+            broker_404_symbols = getattr(self._broker, "error_404_symbols", None)
+            if broker_404_symbols is not None and symbol in broker_404_symbols:
+                broker_404_symbols.discard(symbol)
+                try:
+                    broker_positions = await self._broker.get_positions()
+                    broker_qty = 0
+                    for bp in broker_positions:
+                        if getattr(bp, "symbol", "") == symbol:
+                            broker_qty = abs(int(getattr(bp, "qty", 0)))
+                            break
+                    if broker_qty == 0:
+                        logger.info(
+                            "IBKR position already closed for %s — "
+                            "removing from flatten pending",
+                            symbol,
+                        )
+                        self._flatten_pending.pop(symbol, None)
+                        continue
+                    if broker_qty != position.shares_remaining:
+                        logger.warning(
+                            "Flatten qty mismatch for %s: ARGUS=%d, IBKR=%d "
+                            "— using IBKR qty",
+                            symbol,
+                            position.shares_remaining,
+                            broker_qty,
+                        )
+                        sell_qty = broker_qty
+                except Exception:
+                    logger.warning(
+                        "Broker re-query failed for %s — using ARGUS qty %d",
+                        symbol,
+                        position.shares_remaining,
+                    )
+
             # Resubmit fresh market sell
             try:
                 order = Order(
@@ -1853,7 +2074,7 @@ class OrderManager:
                     symbol=symbol,
                     side=OrderSide.SELL,
                     order_type=TradingOrderType.MARKET,
-                    quantity=position.shares_remaining,
+                    quantity=sell_qty,
                 )
                 result = await self._broker.place_order(order)
                 new_pending = PendingManagedOrder(
@@ -1861,7 +2082,7 @@ class OrderManager:
                     symbol=symbol,
                     strategy_id=position.strategy_id,
                     order_type="flatten",
-                    shares=position.shares_remaining,
+                    shares=sell_qty,
                 )
                 self._pending_orders[result.order_id] = new_pending
                 self._flatten_pending[symbol] = (
@@ -1880,7 +2101,7 @@ class OrderManager:
                 logger.exception(
                     "CRITICAL: Flatten resubmit failed for %s (%d shares unprotected)",
                     symbol,
-                    position.shares_remaining,
+                    sell_qty,
                 )
 
     async def _trail_flatten(
@@ -2061,6 +2282,14 @@ class OrderManager:
         # Clear P&L throttle so the close event isn't suppressed (Sprint 27.65 S4)
         self._pnl_last_published.pop(position.symbol, None)
 
+        # Skip if flatten has been abandoned for this symbol (Sprint 29.5 R2)
+        if position.symbol in self._flatten_abandoned:
+            logger.debug(
+                "Flatten skipped for %s — abandoned (awaiting EOD)",
+                position.symbol,
+            )
+            return
+
         # Flatten-pending guard: skip if a flatten order is already pending
         existing_entry = self._flatten_pending.get(position.symbol)
         if existing_entry is not None:
@@ -2212,6 +2441,16 @@ class OrderManager:
                     gross_pnl=position.realized_pnl if not is_reconciliation else 0.0,
                     quality_grade=position.quality_grade,
                     quality_score=position.quality_score,
+                    # mfe_price/mae_price are initialized to entry_price (non-zero) for real trades.
+                    # The 0.0 check catches reconciliation/synthetic positions that were never
+                    # through _handle_entry_fill and should store NULL instead of misleading 0.0.
+                    mfe_price=position.mfe_price if position.mfe_price != 0.0 else None,
+                    mae_price=position.mae_price if position.mae_price != 0.0 else None,
+                    # R-multiples: 0.0 means "no excursion" (valid data), distinct from NULL (legacy/no data).
+                    # Only reconciliation positions have mfe_price=0.0; their R-multiples are also 0.0,
+                    # but the price-level NULL (above) already signals "no real data" for those trades.
+                    mfe_r=position.mfe_r if position.mfe_price != 0.0 else None,
+                    mae_r=position.mae_r if position.mae_price != 0.0 else None,
                 )
                 await self._trade_logger.log_trade(trade)
             except Exception:

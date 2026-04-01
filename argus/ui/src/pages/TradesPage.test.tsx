@@ -6,14 +6,49 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { TradeTable, type SortState } from '../features/trades/TradeTable';
 import { TradeStatsBar } from '../features/trades/TradeStatsBar';
+import { useTrades } from '../hooks/useTrades';
 import type { Trade, TradeStatsResponse } from '../api/types';
 
 // Mock Zustand store
 vi.mock('../stores/symbolDetailUI', () => ({
   useSymbolDetailUI: () => vi.fn(),
 }));
+
+// Mocks for TradesPage render (limit=1000 test)
+vi.mock('../hooks/useTrades', () => ({
+  useTrades: vi.fn(() => ({
+    data: { trades: [], total_count: 0 },
+    isLoading: false,
+    error: null,
+    isFetching: false,
+  })),
+}));
+
+vi.mock('../hooks/useTradeStats', () => ({
+  useTradeStats: vi.fn(() => ({ data: null, isLoading: false })),
+}));
+
+vi.mock('../hooks/useCopilotContext', () => ({
+  useCopilotContext: vi.fn(),
+}));
+
+vi.mock('../features/trades', () => ({
+  TradeFilters: () => null,
+  TradeStatsBar: () => null,
+  TradeTable: () => null,
+  TradeDetailPanel: () => null,
+  TradeStatsBarSkeleton: () => null,
+  TradeTableSkeleton: () => null,
+}));
+
+vi.mock('../api/client', async () => {
+  const actual = await vi.importActual<typeof import('../api/client')>('../api/client');
+  return { ...actual, getToken: vi.fn(() => null) };
+});
 
 function makeTrade(overrides: Partial<Trade> = {}): Trade {
   return {
@@ -70,7 +105,7 @@ describe('TradesPage — DEF-068: metrics from server-side stats', () => {
       total_trades: 3,
       wins: 2,
       losses: 1,
-      win_rate: 66.67,
+      win_rate: 0.6667,
       net_pnl: 400.0,
       avg_r: 0.85,
       timestamp: new Date().toISOString(),
@@ -80,7 +115,7 @@ describe('TradesPage — DEF-068: metrics from server-side stats', () => {
       <TradeStatsBar stats={stats} />
     );
 
-    // Win rate from server
+    // Win rate from server (0.6667 × 100 = 66.67%)
     expect(screen.getByText('66.67%')).toBeInTheDocument();
     // Net P&L from server
     expect(screen.getByText('$400.00')).toBeInTheDocument();
@@ -167,5 +202,26 @@ describe('TradesPage — DEF-073: sortable columns', () => {
     fireEvent.click(pnlHeader);
     // Sort indicator should be gone
     expect(pnlHeader.querySelector('svg')).toBeNull();
+  });
+});
+
+describe('TradesPage — trades limit set to 1000', () => {
+  it('passes limit=1000 to useTrades', async () => {
+    const { TradesPage } = await import('../pages/TradesPage');
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <TradesPage />
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+
+    expect(vi.mocked(useTrades)).toHaveBeenCalledWith(
+      expect.objectContaining({ limit: 1000 }),
+    );
   });
 });

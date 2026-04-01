@@ -63,13 +63,21 @@ class PerformanceThrottler:
     Returns the worst action (SUSPEND > REDUCE > NONE).
     """
 
-    def __init__(self, config: OrchestratorConfig) -> None:
+    def __init__(
+        self,
+        config: OrchestratorConfig,
+        suspend_enabled: bool = True,
+    ) -> None:
         """Initialize the performance throttler.
 
         Args:
             config: Orchestrator configuration with throttling thresholds.
+            suspend_enabled: When False, evaluate() always returns NONE,
+                bypassing all throttle/suspend checks. Used for paper
+                trading data capture.
         """
         self._config = config
+        self._suspend_enabled = suspend_enabled
 
     def check(
         self,
@@ -88,6 +96,10 @@ class PerformanceThrottler:
         Returns:
             The worst applicable ThrottleAction (SUSPEND > REDUCE > NONE).
         """
+        # Config-gated bypass: skip all checks when suspension is disabled
+        if not self._suspend_enabled:
+            return ThrottleAction.NONE
+
         actions: list[ThrottleAction] = []
 
         # DEF-080: No trade history → no throttle action.

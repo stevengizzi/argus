@@ -277,10 +277,11 @@ class RiskManager:
         # 3. Weekly loss limit check
         weekly_limit = account.equity * self._config.account.weekly_loss_limit_pct
         if self._weekly_realized_pnl < 0 and abs(self._weekly_realized_pnl) >= weekly_limit:
-            logger.warning(
-                "Signal rejected: weekly loss limit reached (pnl=%.2f, limit=%.2f)",
-                self._weekly_realized_pnl,
-                weekly_limit,
+            _throttled.warn_throttled(
+                "weekly_loss_limit",
+                f"Signal rejected: weekly loss limit reached "
+                f"(pnl={self._weekly_realized_pnl:.2f}, limit={weekly_limit:.2f})",
+                interval_seconds=60.0,
             )
             return OrderRejectedEvent(
                 signal=signal,

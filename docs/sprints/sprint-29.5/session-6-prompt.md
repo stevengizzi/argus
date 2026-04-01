@@ -2,8 +2,14 @@
 
 ## Pre-Flight Checks
 1. Read: `argus/execution/order_manager.py` (ManagedPosition class, `_handle_position_tick` or equivalent tick handler, `_log_trade` or trade close path), `argus/analytics/trade_logger.py`, `argus/analytics/debrief_export.py`, `argus/db/manager.py` (trades table schema)
-2. Run scoped baseline: `python -m pytest tests/execution/test_order_manager.py tests/analytics/ -x -q`
-3. Verify branch: `sprint-29.5`
+2. **Fix prior-session regression first:**
+   - Find `test_trades_limit_bounds` (likely in `tests/api/test_trades.py` or similar).
+   - This test asserts the old `le=250` API boundary. S3 changed the limit to `le=1000`.
+   - Update the test to reflect the new boundary (1000, not 250). Verify it passes.
+   - Commit this fix separately: `git commit -m "fix: update test_trades_limit_bounds for S3 le=1000 change"`
+3. Run scoped baseline: `python -m pytest tests/execution/test_order_manager.py tests/analytics/ tests/api/test_trades.py -x -q`
+   Expected: all passing (including the fixed limit bounds test)
+4. Verify branch: `sprint-29.5`
 
 ## Objective
 Track Maximum Favorable Excursion (MFE) and Maximum Adverse Excursion (MAE) on every managed position in real-time, persist to trade records on close, and include in debrief export for post-session "was the trade green before it went red" analysis.
@@ -79,10 +85,12 @@ Track Maximum Favorable Excursion (MFE) and Maximum Adverse Excursion (MAE) on e
 | Position tick handler performance | MFE/MAE is pure comparison — no perf regression |
 | Debrief export includes all prior fields | Existing debrief tests pass, new fields are additive |
 | DB migration doesn't lose data | ALTER TABLE ADD COLUMN preserves existing rows |
+| test_trades_limit_bounds passes | Pre-flight fix confirmed |
 
 ## Definition of Done
+- [ ] test_trades_limit_bounds pre-flight fix committed
 - [ ] All requirements implemented
-- [ ] All existing tests pass
+- [ ] All existing tests pass (including fixed limit bounds)
 - [ ] 8+ new tests
 - [ ] Close-out report written to `docs/sprints/sprint-29.5/session-6-closeout.md`
 - [ ] Tier 2 review completed via @reviewer subagent
@@ -99,3 +107,4 @@ Files NOT modified: `argus/intelligence/`, `argus/backtest/`, `argus/strategies/
 2. Verify R-multiple calculation uses original_stop_price, not current trail stop
 3. Verify zero-risk guard (entry == stop) doesn't cause division by zero
 4. Verify DB migration is additive (ALTER TABLE ADD COLUMN), not destructive
+5. Verify test_trades_limit_bounds fix is correct (boundary at 1000, not 250)

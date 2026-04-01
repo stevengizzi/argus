@@ -16,6 +16,6 @@ export function usePositions(params?: UsePositionsParams) {
   return useQuery<PositionsResponse, Error>({
     queryKey: ['positions', params?.strategy_id],
     queryFn: () => getPositions(params),
-    refetchInterval: 5_000, // 5 seconds
+    refetchInterval: 15_000, // 15s — WS position.updated is the primary update path
   });
 }

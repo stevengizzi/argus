@@ -2,6 +2,7 @@
  * Tests for TradeStatsBar component.
  *
  * Sprint 28.75, Session 2 (DEF-118 — Avg R metric).
+ * Sprint 29.5, Session 3 (win rate × 100 fix).
  */
 
 import { describe, it, expect } from 'vitest';
@@ -13,7 +14,7 @@ const mockStats: TradeStatsResponse = {
   total_trades: 126,
   wins: 68,
   losses: 50,
-  win_rate: 53.97,
+  win_rate: 0.5397,
   net_pnl: 1234.56,
   avg_r: 0.42,
   timestamp: new Date().toISOString(),
@@ -64,5 +65,23 @@ describe('TradeStatsBar', () => {
     );
     const contentDiv = container.querySelector('.opacity-40');
     expect(contentDiv).toBeTruthy();
+  });
+
+  it('displays win rate as correct percentage from proportion', () => {
+    const stats: TradeStatsResponse = {
+      ...mockStats,
+      win_rate: 0.395,
+    };
+    render(<TradeStatsBar stats={stats} />);
+    expect(screen.getByText('39.50%')).toBeInTheDocument();
+  });
+
+  it('displays zero win rate correctly', () => {
+    const stats: TradeStatsResponse = {
+      ...mockStats,
+      win_rate: 0,
+    };
+    render(<TradeStatsBar stats={stats} />);
+    expect(screen.getByText('0.00%')).toBeInTheDocument();
   });
 });

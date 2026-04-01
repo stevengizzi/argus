@@ -109,6 +109,25 @@ describe('TradeTable quality column', () => {
   });
 });
 
+describe('TradeTable exit reason labels', () => {
+  it('renders trailing_stop as Trail badge', () => {
+    const trailingTrade: Trade = {
+      ...baseTrade,
+      exit_reason: 'trailing_stop',
+    };
+
+    render(
+      <TradeTable
+        trades={[trailingTrade]}
+        totalCount={1}
+      />
+    );
+
+    // Should show "Trail" not "TRAILING STOP"
+    expect(screen.getAllByText('Trail').length).toBeGreaterThan(0);
+  });
+});
+
 describe('TradeTable quality sort', () => {
   const trades: Trade[] = [
     { ...baseTrade, id: '1', symbol: 'AAPL', quality_grade: 'B+', quality_score: 70 },

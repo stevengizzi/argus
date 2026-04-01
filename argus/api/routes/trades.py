@@ -145,7 +145,7 @@ async def get_trades(
     outcome: Literal["win", "loss", "breakeven"] | None = Query(
         None, description="Filter by trade outcome"
     ),
-    limit: int = Query(50, ge=1, le=250, description="Max results per page"),
+    limit: int = Query(50, ge=1, le=1000, description="Max results per page"),
     offset: int = Query(0, ge=0, description="Number of results to skip"),
 ) -> TradesResponse:
     """Get trade history with filtering and pagination.

@@ -121,9 +121,9 @@ export function TodayStats({ data: propData, useSummaryData }: TodayStatsProps) 
             Win Rate
           </div>
           <div className={`text-lg font-semibold tabular-nums ${
-            winRate >= 50 ? 'text-argus-profit' : winRate > 0 ? 'text-argus-loss' : 'text-argus-text'
+            winRate * 100 >= 50 ? 'text-argus-profit' : winRate > 0 ? 'text-argus-loss' : 'text-argus-text'
           }`}>
-            {trades > 0 ? `${winRate.toFixed(0)}%` : '—'}
+            {trades > 0 ? `${(winRate * 100).toFixed(1)}%` : '—'}
           </div>
         </div>
 

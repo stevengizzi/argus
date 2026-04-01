@@ -25,8 +25,15 @@ Same 10x restoration as quality_engine.yaml. Check that risk_tiers section match
 ### config/orchestrator.yaml — Performance Throttling
 Restore:
 - `consecutive_loss_throttle: 5` (paper: `999`)
-- `suspension_sharpe_threshold: 0.0` (paper: verify current value)
-- `suspension_drawdown_pct: 0.15` (paper: verify current value)
+- `suspension_sharpe_threshold: 0.0` (paper: `-999.0`)
+- `suspension_drawdown_pct: 0.15` (paper: `0.50`)
+- `throttler_suspend_enabled: true` (paper: `false`) — Sprint 29.5
+- `orb_family_mutual_exclusion: true` (paper: `false`) — Sprint 29.5
+
+### config/risk_limits.yaml — Loss Limits (Sprint 29.5)
+Restore:
+- `daily_loss_limit_pct: 0.03` (paper: `1.0`)
+- `weekly_loss_limit_pct: 0.05` (paper: `1.0`)
 
 ### config/risk_limits.yaml — Position Risk Floor
 Restore:

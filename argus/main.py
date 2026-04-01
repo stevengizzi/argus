@@ -95,6 +95,7 @@ from argus.strategies.pattern_strategy import PatternBasedStrategy
 from argus.strategies.patterns import ABCDPattern, BullFlagPattern, DipAndRipPattern, FlatTopBreakoutPattern, GapAndGoPattern, HODBreakPattern, PreMarketHighBreakPattern
 from argus.strategies.red_to_green import RedToGreenStrategy
 from argus.strategies.telemetry_store import EvaluationEventStore
+from argus.strategies.orb_base import OrbBaseStrategy
 from argus.strategies.orb_breakout import OrbBreakoutStrategy
 from argus.strategies.orb_scalp import OrbScalpStrategy
 from argus.strategies.vwap_reclaim import VwapReclaimStrategy
@@ -692,6 +693,11 @@ class ArgusSystem:
         logger.info("[9/12] Initializing orchestrator...")
         orchestrator_yaml = load_yaml_file(self._config_dir / "orchestrator.yaml")
         orchestrator_config = OrchestratorConfig(**orchestrator_yaml)
+        OrbBaseStrategy.mutual_exclusion_enabled = orchestrator_config.orb_family_mutual_exclusion
+        logger.info(
+            "[9/12] ORB family mutual exclusion: %s",
+            orchestrator_config.orb_family_mutual_exclusion,
+        )
         self._orchestrator = Orchestrator(
             config=orchestrator_config,
             event_bus=self._event_bus,
@@ -1261,14 +1267,10 @@ class ArgusSystem:
                         if symbol and qty != 0:
                             broker_positions[symbol] = qty
 
-                    discrepancies = await self._order_manager.reconcile_positions(
+                    # Order Manager logs consolidated mismatch summary at WARNING
+                    await self._order_manager.reconcile_positions(
                         broker_positions
                     )
-                    if discrepancies:
-                        logger.warning(
-                            "Position reconciliation: %d mismatch(es) found",
-                            len(discrepancies),
-                        )
             except Exception as e:
                 logger.error("Position reconciliation error: %s", e)
 
@@ -1891,50 +1893,26 @@ class ArgusSystem:
             get_bridge().stop()
             logger.info("API server stopped")
 
-        # 0a. Stop evaluation health check task
-        if self._eval_check_task is not None:
-            import contextlib as _ctxlib
+        # 0a. Cancel all background tasks in batch
+        background_tasks: list[asyncio.Task[None]] = []
+        task_names: list[str] = []
+        for task, name in [
+            (self._eval_check_task, "evaluation health check"),
+            (self._regime_task, "regime reclassification"),
+            (self._reconciliation_task, "position reconciliation"),
+            (self._bg_refresh_task, "background cache refresh"),
+            (self._counterfactual_task, "counterfactual maintenance"),
+        ]:
+            if task is not None:
+                task.cancel()
+                background_tasks.append(task)
+                task_names.append(name)
 
-            self._eval_check_task.cancel()
-            with _ctxlib.suppress(asyncio.CancelledError):
-                await self._eval_check_task
-            logger.info("Evaluation health check task stopped")
-
-        # 0a1. Stop regime reclassification task
-        if self._regime_task is not None:
-            import contextlib as _ctxlib2
-
-            self._regime_task.cancel()
-            with _ctxlib2.suppress(asyncio.CancelledError):
-                await self._regime_task
-            logger.info("Regime reclassification task stopped")
-
-        # 0a1a. Stop position reconciliation task (Sprint 27.65)
-        if self._reconciliation_task is not None:
-            import contextlib as _ctxlib_recon
-
-            self._reconciliation_task.cancel()
-            with _ctxlib_recon.suppress(asyncio.CancelledError):
-                await self._reconciliation_task
-            logger.info("Position reconciliation task stopped")
-
-        # 0a1b. Stop background cache refresh task (DEC-362)
-        if self._bg_refresh_task is not None:
-            import contextlib as _ctxlib3
-
-            self._bg_refresh_task.cancel()
-            with _ctxlib3.suppress(asyncio.CancelledError):
-                await self._bg_refresh_task
-            logger.info("Background cache refresh task stopped")
-
-        # 0a1c. Stop counterfactual maintenance task (Sprint 27.7)
-        if self._counterfactual_task is not None:
-            import contextlib as _ctxlib_cf
-
-            self._counterfactual_task.cancel()
-            with _ctxlib_cf.suppress(asyncio.CancelledError):
-                await self._counterfactual_task
-            logger.info("Counterfactual maintenance task stopped")
+        if background_tasks:
+            await asyncio.gather(*background_tasks, return_exceptions=True)
+            logger.info(
+                "Background tasks stopped: %s", ", ".join(task_names)
+            )
 
         # 0a1d. Close counterfactual store (Sprint 27.7)
         if self._counterfactual_store is not None:

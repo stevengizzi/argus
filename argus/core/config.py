@@ -428,8 +428,8 @@ class SystemConfig(BaseModel):
 class AccountRiskConfig(BaseModel):
     """Account-level risk limits."""
 
-    daily_loss_limit_pct: float = Field(default=0.03, gt=0, le=0.2)
-    weekly_loss_limit_pct: float = Field(default=0.05, gt=0, le=0.3)
+    daily_loss_limit_pct: float = Field(default=0.03, gt=0, le=1.0)
+    weekly_loss_limit_pct: float = Field(default=0.05, gt=0, le=1.0)
     cash_reserve_pct: float = Field(default=0.20, ge=0, le=0.5)
     max_concurrent_positions: int = Field(default=10, ge=0)  # 0 = disabled (no limit)
     emergency_shutdown_enabled: bool = True
@@ -633,10 +633,16 @@ class OrchestratorConfig(BaseModel):
     eod_review_time: str = "16:05"  # HH:MM in market timezone
     poll_interval_seconds: int = Field(default=30, ge=1)
 
+    # Throttler suspend bypass (paper trading data capture)
+    throttler_suspend_enabled: bool = True
+
     # Correlation limits
     correlation_enabled: bool = True
     min_correlation_days: int = Field(default=20, ge=5)
     max_combined_correlated_allocation: float = Field(default=0.60, gt=0, le=1.0)
+
+    # ORB family mutual exclusion (DEC-261)
+    orb_family_mutual_exclusion: bool = True
 
 
 class NotificationChannelConfig(BaseModel):
@@ -807,6 +813,8 @@ class OrderManagerConfig(BaseModel):
     # Flatten-pending timeout: cancel+resubmit stale flatten orders (Sprint 28.75)
     flatten_pending_timeout_seconds: int = Field(default=120, ge=10)
     max_flatten_retries: int = Field(default=3, ge=1)
+    # Max flatten retry cycles before abandoning (Sprint 29.5)
+    max_flatten_cycles: int = Field(default=2, ge=1)
 
 
 # ---------------------------------------------------------------------------

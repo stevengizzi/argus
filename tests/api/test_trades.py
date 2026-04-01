@@ -346,7 +346,7 @@ class TestTradesEndpoint:
         client_with_trades: AsyncClient,
         auth_headers: dict[str, str],
     ) -> None:
-        """Limit parameter respects bounds (1-250)."""
+        """Limit parameter respects bounds (1-1000)."""
         # Valid limit
         response = await client_with_trades.get(
             "/api/v1/trades?limit=100",
@@ -355,9 +355,16 @@ class TestTradesEndpoint:
         assert response.status_code == 200
         assert response.json()["limit"] == 100
 
+        # Limit at max boundary (1000) should be accepted
+        response = await client_with_trades.get(
+            "/api/v1/trades?limit=1000",
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
+
         # Limit too high should be rejected
         response = await client_with_trades.get(
-            "/api/v1/trades?limit=500",
+            "/api/v1/trades?limit=1001",
             headers=auth_headers,
         )
         assert response.status_code == 422  # Validation error

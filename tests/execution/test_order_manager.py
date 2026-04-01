@@ -4102,3 +4102,177 @@ async def test_close_position_not_found_returns_false(
     await order_manager.stop()
 
     assert result is False
+
+
+# ---------------------------------------------------------------------------
+# MFE/MAE Tests (Sprint 29.5 S6)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_mfe_mae_initialized_at_entry(
+    order_manager: OrderManager,
+    mock_broker: MagicMock,
+) -> None:
+    """mfe_price and mae_price are set to entry_price when position opens."""
+    await order_manager.start()
+
+    approved = make_approved(make_signal(entry_price=150.0, stop_price=148.0))
+    await order_manager.on_approved(approved)
+
+    position = order_manager._managed_positions["AAPL"][0]
+    assert position.mfe_price == position.entry_price
+    assert position.mae_price == position.entry_price
+    assert position.mfe_r == 0.0
+    assert position.mae_r == 0.0
+    assert position.mfe_time is None
+    assert position.mae_time is None
+
+    await order_manager.stop()
+
+
+@pytest.mark.asyncio
+async def test_mfe_updated_on_price_increase(
+    order_manager: OrderManager,
+    mock_broker: MagicMock,
+) -> None:
+    """Tick above entry_price updates mfe_price, mfe_r, and mfe_time."""
+    await order_manager.start()
+
+    approved = make_approved(make_signal(entry_price=150.0, stop_price=148.0))
+    await order_manager.on_approved(approved)
+
+    await order_manager.on_tick(TickEvent(symbol="AAPL", price=153.0))
+
+    position = order_manager._managed_positions["AAPL"][0]
+    assert position.mfe_price == 153.0
+    assert position.mfe_r > 0.0
+    assert position.mfe_time is not None
+    # mae should be unchanged (price did not go below entry)
+    assert position.mae_price == 150.0
+    assert position.mae_time is None
+
+    await order_manager.stop()
+
+
+@pytest.mark.asyncio
+async def test_mae_updated_on_price_decrease(
+    order_manager: OrderManager,
+    mock_broker: MagicMock,
+) -> None:
+    """Tick below entry_price updates mae_price, mae_r (negative), and mae_time."""
+    await order_manager.start()
+
+    approved = make_approved(make_signal(entry_price=150.0, stop_price=148.0))
+    await order_manager.on_approved(approved)
+
+    await order_manager.on_tick(TickEvent(symbol="AAPL", price=149.0))
+
+    position = order_manager._managed_positions["AAPL"][0]
+    assert position.mae_price == 149.0
+    assert position.mae_r < 0.0
+    assert position.mae_time is not None
+    # mfe should be unchanged (price did not go above entry)
+    assert position.mfe_price == 150.0
+    assert position.mfe_time is None
+
+    await order_manager.stop()
+
+
+@pytest.mark.asyncio
+async def test_mfe_mae_r_calculation_correct(
+    order_manager: OrderManager,
+    mock_broker: MagicMock,
+) -> None:
+    """R-multiple: entry=100, stop=98, price=103 → mfe_r=1.5."""
+    await order_manager.start()
+
+    signal = make_signal(
+        symbol="AAPL",
+        entry_price=100.0,
+        stop_price=98.0,
+        target_prices=(103.0, 106.0),
+    )
+    approved = make_approved(signal)
+    await order_manager.on_approved(approved)
+
+    # Override entry_price on position to 100.0 (bracket fills at 150.0 by default in mock)
+    # Use a signal where entry/stop are well-defined and tick at 103.0 above fill
+    position = order_manager._managed_positions["AAPL"][0]
+    # The fill price in mock is 150.0 — reset fields to simulate entry=100, stop=98
+    position.entry_price = 100.0
+    position.original_stop_price = 98.0
+    position.mfe_price = 100.0
+    position.mae_price = 100.0
+
+    await order_manager.on_tick(TickEvent(symbol="AAPL", price=103.0))
+
+    assert position.mfe_r == pytest.approx(1.5)
+
+    await order_manager.stop()
+
+
+@pytest.mark.asyncio
+async def test_mfe_mae_preserved_on_neutral_tick(
+    order_manager: OrderManager,
+    mock_broker: MagicMock,
+) -> None:
+    """A tick at the same price as current MFE does not overwrite mfe_time."""
+    await order_manager.start()
+
+    approved = make_approved(make_signal(entry_price=150.0, stop_price=148.0))
+    await order_manager.on_approved(approved)
+
+    # First tick raises MFE and sets mfe_time
+    await order_manager.on_tick(TickEvent(symbol="AAPL", price=152.0))
+    position = order_manager._managed_positions["AAPL"][0]
+    first_mfe_time = position.mfe_time
+    assert first_mfe_time is not None
+
+    # Second tick at same price: mfe_price is not > 152.0, so mfe_time is not updated
+    await order_manager.on_tick(TickEvent(symbol="AAPL", price=152.0))
+    assert position.mfe_time == first_mfe_time
+
+    await order_manager.stop()
+
+
+@pytest.mark.asyncio
+async def test_mfe_mae_persisted_to_trade_log(
+    order_manager: OrderManager,
+    mock_broker: MagicMock,
+) -> None:
+    """MFE/MAE values are included in the trade logged on position close."""
+    logged_trades: list = []
+
+    class MockTradeLogger:
+        async def log_trade(self, trade: object) -> None:
+            logged_trades.append(trade)
+
+    order_manager._trade_logger = MockTradeLogger()  # type: ignore[assignment]
+    await order_manager.start()
+
+    approved = make_approved(make_signal(entry_price=150.0, stop_price=148.0))
+    await order_manager.on_approved(approved)
+
+    # Tick up then close via stop fill
+    await order_manager.on_tick(TickEvent(symbol="AAPL", price=153.0))
+
+    position = order_manager._managed_positions["AAPL"][0]
+    stop_order_id = position.stop_order_id
+
+    fill_event = OrderFilledEvent(
+        order_id=stop_order_id,
+        fill_price=148.0,
+        fill_quantity=100,
+    )
+    await order_manager.on_fill(fill_event)
+
+    assert len(logged_trades) == 1
+    trade = logged_trades[0]
+    assert trade.mfe_price == 153.0
+    assert trade.mfe_r is not None
+    assert trade.mfe_r > 0.0
+    # mae should be entry_price (no adverse tick), so mae_r=0.0 → stored as None
+    assert trade.mae_r is None or trade.mae_r == 0.0
+
+    await order_manager.stop()
