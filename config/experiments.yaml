@@ -1,0 +1,27 @@
+# Experiment Pipeline Configuration
+# Config-gated: system starts in experiments.enabled: false
+enabled: false
+auto_promote: false  # When true, PromotionEvaluator runs autonomously at session end
+max_shadow_variants_per_pattern: 5
+backtest_min_trades: 20
+backtest_min_expectancy: 0.0
+promotion_min_shadow_days: 5
+promotion_min_shadow_trades: 30
+cache_dir: "data/databento_cache"
+
+# Variant definitions — each pattern can have multiple named variants
+# Variants not defined here use the base strategy config only
+variants: {}
+# Example:
+# variants:
+#   bull_flag:
+#     - variant_id: "strat_bull_flag__v2_tight_flag"
+#       mode: "shadow"
+#       params:
+#         flag_max_retrace_pct: 0.35
+#         pole_min_move_pct: 0.05
+#     - variant_id: "strat_bull_flag__v3_loose"
+#       mode: "shadow"
+#       params:
+#         flag_max_retrace_pct: 0.65
+#         flag_max_bars: 30

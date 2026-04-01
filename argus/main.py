@@ -759,6 +759,87 @@ class ArgusSystem:
         if pm_high_break_strategy is not None:
             self._orchestrator.register_strategy(pm_high_break_strategy)
 
+        # --- Experiment Variant Spawning (Sprint 32, Session 5) ---
+        # Config-gated: skipped entirely when experiments.enabled is false (default).
+        # Failure is non-fatal — base system startup continues regardless.
+        _experiments_yaml_path = self._config_dir / "experiments.yaml"
+        if _experiments_yaml_path.exists():
+            _experiments_yaml = load_yaml_file(_experiments_yaml_path)
+            if _experiments_yaml.get("enabled", False):
+                try:
+                    from argus.intelligence.experiments import ExperimentStore
+                    from argus.intelligence.experiments.spawner import VariantSpawner
+
+                    # Map pattern snake_case name → (config, strategy) for each
+                    # registered base PatternBasedStrategy
+                    _base_pattern_strategies: dict[
+                        str, tuple[Any, PatternBasedStrategy]
+                    ] = {}
+                    if bull_flag_strategy is not None:
+                        _base_pattern_strategies["bull_flag"] = (
+                            bull_flag_strategy.config,
+                            bull_flag_strategy,
+                        )
+                    if flat_top_strategy is not None:
+                        _base_pattern_strategies["flat_top_breakout"] = (
+                            flat_top_strategy.config,
+                            flat_top_strategy,
+                        )
+                    if dip_and_rip_strategy is not None:
+                        _base_pattern_strategies["dip_and_rip"] = (
+                            dip_and_rip_strategy.config,
+                            dip_and_rip_strategy,
+                        )
+                    if hod_break_strategy is not None:
+                        _base_pattern_strategies["hod_break"] = (
+                            hod_break_strategy.config,
+                            hod_break_strategy,
+                        )
+                    if abcd_strategy is not None:
+                        _base_pattern_strategies["abcd"] = (
+                            abcd_strategy.config,
+                            abcd_strategy,
+                        )
+                    if gap_and_go_strategy is not None:
+                        _base_pattern_strategies["gap_and_go"] = (
+                            gap_and_go_strategy.config,
+                            gap_and_go_strategy,
+                        )
+                    if pm_high_break_strategy is not None:
+                        _base_pattern_strategies["premarket_high_break"] = (
+                            pm_high_break_strategy.config,
+                            pm_high_break_strategy,
+                        )
+
+                    _experiment_db_path = str(
+                        Path(config.system.data_dir) / "experiments.db"
+                    )
+                    _experiment_store = ExperimentStore(db_path=_experiment_db_path)
+                    await _experiment_store.initialize()
+
+                    _variant_spawner = VariantSpawner(
+                        _experiment_store, _experiments_yaml
+                    )
+                    _variant_strategies = await _variant_spawner.spawn_variants(
+                        _base_pattern_strategies,
+                        data_service=self._data_service,
+                        clock=self._clock,
+                    )
+
+                    for _variant_strategy in _variant_strategies:
+                        self._orchestrator.register_strategy(_variant_strategy)
+
+                    logger.info(
+                        "[9/12] Experiment variants spawned: %d",
+                        len(_variant_strategies),
+                    )
+                except Exception:
+                    logger.error(
+                        "Experiment variant spawning failed — "
+                        "base system startup continues",
+                        exc_info=True,
+                    )
+
         await self._orchestrator.start()
 
         # Run V2 pre-market (correlation + sector rotation, concurrent)
