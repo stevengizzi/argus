@@ -6,14 +6,49 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { TradeTable, type SortState } from '../features/trades/TradeTable';
 import { TradeStatsBar } from '../features/trades/TradeStatsBar';
+import { useTrades } from '../hooks/useTrades';
 import type { Trade, TradeStatsResponse } from '../api/types';
 
 // Mock Zustand store
 vi.mock('../stores/symbolDetailUI', () => ({
   useSymbolDetailUI: () => vi.fn(),
 }));
+
+// Mocks for TradesPage render (limit=1000 test)
+vi.mock('../hooks/useTrades', () => ({
+  useTrades: vi.fn(() => ({
+    data: { trades: [], total_count: 0 },
+    isLoading: false,
+    error: null,
+    isFetching: false,
+  })),
+}));
+
+vi.mock('../hooks/useTradeStats', () => ({
+  useTradeStats: vi.fn(() => ({ data: null, isLoading: false })),
+}));
+
+vi.mock('../hooks/useCopilotContext', () => ({
+  useCopilotContext: vi.fn(),
+}));
+
+vi.mock('../features/trades', () => ({
+  TradeFilters: () => null,
+  TradeStatsBar: () => null,
+  TradeTable: () => null,
+  TradeDetailPanel: () => null,
+  TradeStatsBarSkeleton: () => null,
+  TradeTableSkeleton: () => null,
+}));
+
+vi.mock('../api/client', async () => {
+  const actual = await vi.importActual<typeof import('../api/client')>('../api/client');
+  return { ...actual, getToken: vi.fn(() => null) };
+});
 
 function makeTrade(overrides: Partial<Trade> = {}): Trade {
   return {
@@ -171,12 +206,22 @@ describe('TradesPage — DEF-073: sortable columns', () => {
 });
 
 describe('TradesPage — trades limit set to 1000', () => {
-  it('TradesPage imports useTrades with limit 1000', async () => {
-    // Verify the source code contains the updated limit
-    const tradesPageModule = await import('../pages/TradesPage');
-    // The component itself is the proof — if it renders and calls useTrades
-    // with limit: 1000, the API will accept up to 1000 trades.
-    // We verify the module loaded successfully (the limit is in the source).
-    expect(tradesPageModule.TradesPage).toBeDefined();
+  it('passes limit=1000 to useTrades', async () => {
+    const { TradesPage } = await import('../pages/TradesPage');
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <TradesPage />
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+
+    expect(vi.mocked(useTrades)).toHaveBeenCalledWith(
+      expect.objectContaining({ limit: 1000 }),
+    );
   });
 });

@@ -2441,10 +2441,16 @@ class OrderManager:
                     gross_pnl=position.realized_pnl if not is_reconciliation else 0.0,
                     quality_grade=position.quality_grade,
                     quality_score=position.quality_score,
-                    mfe_r=position.mfe_r if position.mfe_r != 0.0 else None,
-                    mae_r=position.mae_r if position.mae_r != 0.0 else None,
+                    # mfe_price/mae_price are initialized to entry_price (non-zero) for real trades.
+                    # The 0.0 check catches reconciliation/synthetic positions that were never
+                    # through _handle_entry_fill and should store NULL instead of misleading 0.0.
                     mfe_price=position.mfe_price if position.mfe_price != 0.0 else None,
                     mae_price=position.mae_price if position.mae_price != 0.0 else None,
+                    # R-multiples: 0.0 means "no excursion" (valid data), distinct from NULL (legacy/no data).
+                    # Only reconciliation positions have mfe_price=0.0; their R-multiples are also 0.0,
+                    # but the price-level NULL (above) already signals "no real data" for those trades.
+                    mfe_r=position.mfe_r if position.mfe_price != 0.0 else None,
+                    mae_r=position.mae_r if position.mae_price != 0.0 else None,
                 )
                 await self._trade_logger.log_trade(trade)
             except Exception:
