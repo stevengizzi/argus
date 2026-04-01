@@ -21,6 +21,7 @@ from typing import Any
 from argus.backtest.config import BacktestEngineConfig, StrategyType
 from argus.backtest.engine import BacktestEngine
 from argus.core.ids import generate_id
+from argus.intelligence.experiments.config import ExitSweepParam
 from argus.intelligence.experiments.models import ExperimentRecord, ExperimentStatus
 from argus.intelligence.experiments.store import ExperimentStore
 from argus.strategies.patterns.base import PatternParam
@@ -77,6 +78,7 @@ class ExperimentRunner:
         self,
         pattern_name: str,
         param_subset: list[str] | None = None,
+        exit_sweep_params: list[ExitSweepParam] | None = None,
     ) -> list[dict[str, Any]]:
         """Build a deterministic cartesian-product grid from PatternParam metadata.
 
@@ -87,47 +89,95 @@ class ExperimentRunner:
         - string / no range: ``[default]`` only
         - if ``param_subset`` given and param not in it: ``[default]`` only
 
+        When *exit_sweep_params* is provided and non-empty, the detection grid
+        is crossed with an exit parameter grid.  Each resulting grid point has
+        the form ``{"detection_params": {...}, "exit_overrides": {...}}`` where
+        ``exit_overrides`` keys are the dot-path strings from
+        ``ExitSweepParam.path`` (e.g. ``"trailing_stop.atr_multiplier"``).
+
+        When *exit_sweep_params* is absent or empty, the return format is
+        identical to the current behaviour (list of flat detection param dicts).
+
         Logs a WARNING if the cartesian product exceeds 500 points.
 
         Args:
             pattern_name: Snake_case or PascalCase pattern name.
             param_subset: If provided, only params in this list are varied;
                 all others use their default values.
+            exit_sweep_params: Optional exit-management parameters to sweep.
+                When provided, the grid is the cross-product of detection ×
+                exit dimensions.
 
         Returns:
-            List of param dicts, each a complete detection parameter set.
+            When *exit_sweep_params* is absent: list of flat detection param
+            dicts (current behaviour).  When present: list of structured dicts
+            ``{"detection_params": {...}, "exit_overrides": {...}}``.
 
         Raises:
             ValueError: If ``pattern_name`` is not a registered pattern.
         """
         pattern_class = get_pattern_class(pattern_name)
         instance = pattern_class()
-        params: list[PatternParam] = instance.get_default_params()
+        pattern_params: list[PatternParam] = instance.get_default_params()
 
         param_ranges: dict[str, list[Any]] = {
             param.name: _generate_param_values(param, param_subset)
-            for param in params
+            for param in pattern_params
         }
 
         keys = list(param_ranges.keys())
         combos = list(itertools.product(*[param_ranges[k] for k in keys]))
+        detection_grid: list[dict[str, Any]] = [dict(zip(keys, combo)) for combo in combos]
 
-        if len(combos) > _GRID_CAP:
+        if not exit_sweep_params:
+            if len(detection_grid) > _GRID_CAP:
+                logger.warning(
+                    "Grid for pattern '%s' has %d points (cap=%d). "
+                    "Use param_subset to reduce the search space.",
+                    pattern_name,
+                    len(detection_grid),
+                    _GRID_CAP,
+                )
+            logger.info(
+                "Generated parameter grid for pattern '%s': %d points",
+                pattern_name,
+                len(detection_grid),
+            )
+            return detection_grid
+
+        # Build exit grid from ExitSweepParam definitions
+        exit_ranges: dict[str, list[float]] = {
+            p.path: _generate_exit_values(p) for p in exit_sweep_params
+        }
+        exit_keys = list(exit_ranges.keys())
+        exit_combos = list(itertools.product(*[exit_ranges[k] for k in exit_keys]))
+        exit_grid: list[dict[str, Any]] = [
+            dict(zip(exit_keys, combo)) for combo in exit_combos
+        ]
+
+        # Cross-product: detection × exit
+        combined: list[dict[str, Any]] = [
+            {"detection_params": detection, "exit_overrides": exit_override}
+            for detection, exit_override in itertools.product(detection_grid, exit_grid)
+        ]
+
+        if len(combined) > _GRID_CAP:
             logger.warning(
                 "Grid for pattern '%s' has %d points (cap=%d). "
                 "Use param_subset to reduce the search space.",
                 pattern_name,
-                len(combos),
+                len(combined),
                 _GRID_CAP,
             )
-
-        grid = [dict(zip(keys, combo)) for combo in combos]
         logger.info(
-            "Generated parameter grid for pattern '%s': %d points",
+            "Generated parameter grid for pattern '%s': %d points "
+            "(%d detection × %d exit)",
             pattern_name,
-            len(grid),
+            len(combined),
+            len(detection_grid),
+            len(exit_grid),
         )
-        return grid
+        return combined
 
     # ---------------------------------------------------------------------------
     # Sweep orchestration
@@ -141,6 +191,7 @@ class ExperimentRunner:
         date_range: tuple[str, str] | None = None,
         symbols: list[str] | None = None,
         dry_run: bool = False,
+        exit_sweep_params: list[ExitSweepParam] | None = None,
     ) -> list[ExperimentRecord]:
         """Run BacktestEngine for every point in the parameter grid.
 
@@ -151,6 +202,11 @@ class ExperimentRunner:
         4. Apply pre-filter: expectancy < min or trades < min → FAILED.
         5. Persist record and log progress.
 
+        When *exit_sweep_params* is provided, the grid is the cross-product of
+        detection × exit dimensions.  BacktestEngine receives only the
+        detection params as ``config_overrides``; the exit params are stored in
+        the ExperimentRecord alongside the detection params.
+
         Args:
             pattern_name: Snake_case or PascalCase pattern name.
             cache_dir: Path to the Databento/Parquet cache directory.
@@ -160,6 +216,8 @@ class ExperimentRunner:
             symbols: Symbols to include.  ``None`` = BacktestEngine
                 auto-detection from cache.
             dry_run: Log grid size and sample configs; skip all backtest runs.
+            exit_sweep_params: Optional exit-management parameters to sweep.
+                When present, grid includes exit dimensions.
 
         Returns:
             List of ExperimentRecord for all processed grid points (skipped
@@ -168,7 +226,7 @@ class ExperimentRunner:
         Raises:
             ValueError: If date range cannot be resolved.
         """
-        grid = self.generate_parameter_grid(pattern_name, param_subset)
+        grid = self.generate_parameter_grid(pattern_name, param_subset, exit_sweep_params)
 
         if dry_run:
             sample = grid[:3] if len(grid) > 3 else grid
@@ -186,6 +244,12 @@ class ExperimentRunner:
         total = len(grid)
 
         for i, params in enumerate(grid):
+            # Support both detection-only (flat dict) and exit-sweep (structured dict)
+            if "detection_params" in params:
+                detection_params: dict[str, Any] = params["detection_params"]
+            else:
+                detection_params = params
+
             fingerprint = _compute_fingerprint(params)
 
             existing = await self._store.get_by_fingerprint(pattern_name, fingerprint)
@@ -242,7 +306,7 @@ class ExperimentRunner:
                     start_date=start_date,
                     end_date=end_date,
                     cache_dir=Path(cache_dir),
-                    config_overrides=params,
+                    config_overrides=detection_params,
                 )
                 engine = BacktestEngine(engine_config)
                 result = await engine.run()
@@ -356,6 +420,21 @@ class ExperimentRunner:
 # ---------------------------------------------------------------------------
 # Module-level helpers (pure functions, no class state)
 # ---------------------------------------------------------------------------
+
+
+def _generate_exit_values(param: ExitSweepParam) -> list[float]:
+    """Generate sweep values for a single ExitSweepParam.
+
+    Step-spaced floats from *min_value* to *max_value* (inclusive).
+
+    Args:
+        param: ExitSweepParam descriptor.
+
+    Returns:
+        List of float values spanning [min_value, max_value] at *step* intervals.
+    """
+    n_steps = round((param.max_value - param.min_value) / param.step)
+    return [round(param.min_value + i * param.step, 6) for i in range(n_steps + 1)]
 
 
 def _generate_param_values(

@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import ValidationError
 
+from argus.core.config import deep_update
 from argus.core.ids import generate_id
 from argus.intelligence.experiments.models import (
     ExperimentRecord,
@@ -35,6 +36,30 @@ if TYPE_CHECKING:
     from argus.data.service import DataService
 
 logger = logging.getLogger(__name__)
+
+
+def _dotpath_to_nested(flat: dict[str, Any]) -> dict[str, Any]:
+    """Convert a flat dot-path dict into a nested dict for deep_update.
+
+    For example, ``{"trailing_stop.atr_multiplier": 2.5}`` becomes
+    ``{"trailing_stop": {"atr_multiplier": 2.5}}``.
+
+    Args:
+        flat: Dict whose keys are dot-delimited paths.
+
+    Returns:
+        Equivalent nested dict.
+    """
+    nested: dict[str, Any] = {}
+    for dotpath, value in flat.items():
+        parts = dotpath.split(".")
+        current = nested
+        for part in parts[:-1]:
+            if part not in current or not isinstance(current[part], dict):
+                current[part] = {}
+            current = current[part]
+        current[parts[-1]] = value
+    return nested
 
 
 class VariantSpawner:
@@ -131,6 +156,16 @@ class VariantSpawner:
                 variant_id: str = variant_def.get("variant_id", "")
                 variant_mode: str = variant_def.get("mode", "shadow")
                 variant_params: dict[str, Any] = variant_def.get("params") or {}
+                # Flat dot-path exit overrides (e.g. {"trailing_stop.atr_multiplier": 2.5})
+                exit_overrides_raw: dict[str, Any] | None = (
+                    variant_def.get("exit_overrides") or None
+                )
+                # Nested form ready for deep_update at runtime
+                exit_overrides_nested: dict[str, Any] | None = (
+                    _dotpath_to_nested(exit_overrides_raw)
+                    if exit_overrides_raw
+                    else None
+                )
 
                 if not variant_id:
                     logger.warning(
@@ -155,9 +190,9 @@ class VariantSpawner:
                     )
                     continue
 
-                # Compute fingerprint for this variant's detection params
+                # Compute fingerprint covering detection params + exit overrides
                 variant_fingerprint = compute_parameter_fingerprint(
-                    params_config, pattern_class
+                    params_config, pattern_class, exit_overrides=exit_overrides_raw
                 )
 
                 # Skip if fingerprint matches the base strategy
@@ -220,6 +255,8 @@ class VariantSpawner:
                     clock=clock,
                 )
                 variant_strategy._config_fingerprint = variant_fingerprint
+                # Nested exit overrides stored for OrderManager registration by caller
+                variant_strategy._exit_overrides = exit_overrides_nested
 
                 # Copy watchlist from base strategy (UM will override if active)
                 if base_strategy.watchlist:
@@ -235,6 +272,7 @@ class VariantSpawner:
                     mode=variant_mode,
                     source="manual",
                     created_at=now,
+                    exit_overrides=exit_overrides_raw,
                 )
                 await self._experiment_store.save_variant(variant_definition)
 
