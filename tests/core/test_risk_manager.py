@@ -1854,3 +1854,48 @@ class TestCrossStrategyRiskEdgeCases:
         result = await rm.evaluate_signal(signal)
 
         assert isinstance(result, OrderApprovedEvent)
+
+
+class TestWeeklyLimitThrottling:
+    """Tests for weekly loss limit warning throttling (Sprint 29.5 S5)."""
+
+    @pytest.mark.asyncio
+    async def test_weekly_limit_warning_throttled(self) -> None:
+        """Simulate 10 rejections in 5s, verify only 1 WARNING emitted."""
+        import logging
+
+        config = make_risk_config(weekly_loss_limit_pct=0.05)
+        broker = SimulatedBroker(initial_cash=100_000)
+        await broker.connect()
+        bus = EventBus()
+        rm = RiskManager(config=config, broker=broker, event_bus=bus)
+        await rm.initialize()
+
+        # Force weekly P&L past the limit
+        rm._weekly_realized_pnl = -6000.0  # 6% > 5% limit
+
+        # Reset the throttle state so first call in this test is "first"
+        from argus.core.risk_manager import _throttled
+
+        _throttled.reset()
+
+        warnings: list[str] = []
+        rm_logger = logging.getLogger("argus.core.risk_manager")
+
+        class CapHandler(logging.Handler):
+            def emit(self, record: logging.LogRecord) -> None:
+                if record.levelno == logging.WARNING:
+                    warnings.append(record.getMessage())
+
+        handler = CapHandler()
+        rm_logger.addHandler(handler)
+        try:
+            for _ in range(10):
+                signal = make_signal()
+                await rm.evaluate_signal(signal)
+
+            # ThrottledLogger: first call emits, remaining 9 suppressed within 60s
+            weekly_warnings = [w for w in warnings if "weekly loss limit" in w]
+            assert len(weekly_warnings) == 1
+        finally:
+            rm_logger.removeHandler(handler)

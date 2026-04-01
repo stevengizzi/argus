@@ -2300,3 +2300,43 @@ class TestIBKRBrokerReconstruction:
             assert len(result["positions"]) == 1
             assert result["positions"][0].symbol == "GOOG"
             assert result["open_orders"][0]["order_id"] == "01RECONNECT123"
+
+
+# ---------------------------------------------------------------------------
+# Log Noise Reduction Tests (Sprint 29.5 S5)
+# ---------------------------------------------------------------------------
+
+
+class TestIBKRLogNoiseReduction:
+    """Tests for ib_async.wrapper log filtering and error code re-logging."""
+
+    def test_ib_async_wrapper_log_level_set(self) -> None:
+        """Verify ib_async.wrapper logger level is ERROR after module import."""
+        import logging
+
+        wrapper_logger = logging.getLogger("ib_async.wrapper")
+        assert wrapper_logger.level == logging.ERROR
+
+    @pytest.mark.asyncio
+    async def test_ibkr_error_404_logged_at_warning(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """Verify error 404 is re-logged through Argus logger at WARNING."""
+        import logging
+
+        with patch("argus.execution.ibkr_broker.IB", return_value=mock_ib):
+            broker = IBKRBroker(ibkr_config, event_bus)
+
+            contract = MagicMock()
+            contract.symbol = "AAPL"
+
+            with patch.object(
+                logging.getLogger("argus.execution.ibkr_broker"),
+                "warning",
+            ) as mock_warn:
+                broker._on_error(12345, 404, "Order held while securities are located", contract)
+
+            mock_warn.assert_called_once()
+            call_args = mock_warn.call_args
+            assert "404" in str(call_args)
+            assert "AAPL" in str(call_args)

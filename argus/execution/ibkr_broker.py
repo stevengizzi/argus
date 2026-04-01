@@ -55,6 +55,11 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Mute ib_async.wrapper's high-volume validation warnings (order repricing,
+# market-data farm messages, etc.). Actionable codes (404, 202) are re-logged
+# through the Argus logger in _on_error().
+logging.getLogger("ib_async.wrapper").setLevel(logging.ERROR)
+
 
 class IBKRBroker(Broker):
     """Production execution broker using Interactive Brokers via ib_async.
