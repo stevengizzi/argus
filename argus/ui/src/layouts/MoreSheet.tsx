@@ -16,7 +16,7 @@
 import { useEffect, useCallback } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { TrendingUp, Telescope, GraduationCap, Activity } from 'lucide-react';
+import { TrendingUp, Telescope, GraduationCap, Activity, FlaskConical } from 'lucide-react';
 import { DURATION, EASE } from '../utils/motion';
 
 interface MoreSheetProps {
@@ -29,6 +29,7 @@ const MORE_ITEMS = [
   { to: '/observatory', icon: Telescope, label: 'Observatory' },
   { to: '/debrief', icon: GraduationCap, label: 'The Debrief' },
   { to: '/system', icon: Activity, label: 'System' },
+  { to: '/experiments', icon: FlaskConical, label: 'Experiments' },
 ] as const;
 
 export function MoreSheet({ isOpen, onClose }: MoreSheetProps) {

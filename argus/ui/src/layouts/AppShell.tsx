@@ -38,6 +38,7 @@ const NAV_ROUTES = [
   '/patterns',
   '/debrief',
   '/system',
+  '/experiments',
 ];
 
 export function AppShell({ paperMode = true }: AppShellProps) {

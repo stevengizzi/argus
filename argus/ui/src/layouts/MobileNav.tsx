@@ -14,7 +14,7 @@ import { LayoutDashboard, ScrollText, Gauge, BookOpen, MoreHorizontal } from 'lu
 import { MoreSheet } from './MoreSheet';
 
 // Routes that live in the More sheet
-const MORE_ROUTES = ['/performance', '/observatory', '/debrief', '/system'];
+const MORE_ROUTES = ['/performance', '/observatory', '/debrief', '/system', '/experiments'];
 
 // Primary navigation items (5 tabs)
 const NAV_ITEMS: Array<{

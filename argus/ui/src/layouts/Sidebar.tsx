@@ -13,7 +13,7 @@
  */
 
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, ScrollText, TrendingUp, Gauge, Telescope, BookOpen, GraduationCap, Activity, LogOut } from 'lucide-react';
+import { LayoutDashboard, ScrollText, TrendingUp, Gauge, Telescope, BookOpen, GraduationCap, Activity, FlaskConical, LogOut } from 'lucide-react';
 import { useAuthStore } from '../stores/auth';
 import { useLiveStore } from '../stores/live';
 
@@ -37,6 +37,7 @@ const NAV_ITEMS: Array<{
   { to: '/debrief', icon: GraduationCap, label: 'The Debrief', divider: true },
   // Maintain group
   { to: '/system', icon: Activity, label: 'System' },
+  { to: '/experiments', icon: FlaskConical, label: 'Experiments' },
 ];
 
 interface NavItemProps {

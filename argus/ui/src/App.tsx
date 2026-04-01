@@ -22,6 +22,10 @@ const ObservatoryPage = lazy(() =>
   import('./features/observatory/ObservatoryPage').then((m) => ({ default: m.ObservatoryPage }))
 );
 
+const ExperimentsPage = lazy(() =>
+  import('./pages/ExperimentsPage').then((m) => ({ default: m.ExperimentsPage }))
+);
+
 function App() {
   const init = useAuthStore((state) => state.init);
 
@@ -60,6 +64,15 @@ function App() {
           } />
           <Route path="debrief" element={<DebriefPage />} />
           <Route path="system" element={<SystemPage />} />
+          <Route path="experiments" element={
+            <Suspense fallback={
+              <div className="flex items-center justify-center h-full">
+                <span className="text-sm text-argus-text-dim">Loading Experiments…</span>
+              </div>
+            }>
+              <ExperimentsPage />
+            </Suspense>
+          } />
           <Route path="dev/connection" element={<ConnectionTest />} />
         </Route>
 
