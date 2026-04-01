@@ -2219,13 +2219,37 @@
 
 ---
 
+## Sprint 29.5: Post-Session Operational Sweep (Mar 31 – Apr 1, 2026)
+
+**Goal:** Fix all operational, safety, UI, and data-capture issues from the March 31 market session.
+
+**Test count before → after:** 4,178 pytest + 689 Vitest → 4,212 pytest + 700 Vitest (+34 pytest, +11 Vitest, +2 VIX test fixes)
+
+**Sessions:**
+- S1: Flatten/Zombie Safety Overhaul — IBKR error 404 root-cause fix (re-query broker qty), global flatten circuit breaker (`_flatten_abandoned`, `max_flatten_cycles`), EOD broker-only flatten Pass 2, startup zombie queue for market open, time-stop log suppression. +14 tests. CONCERNS_RESOLVED (3 LOW findings: EOD market-hours gate, dead-code branch, variable naming — all fixed in post-review commit).
+- S2: Paper Trading Data-Capture Mode — `daily_loss_limit_pct: 1.0`, `weekly_loss_limit_pct: 1.0`, `throttler_suspend_enabled: false` on OrchestratorConfig. Pydantic validators relaxed (le=0.2→le=1.0). +3 tests. CLEAR.
+- S3: Win Rate Bug + UI Fixes — win_rate × 100 conversion in TradeStatsBar + TodayStats, trades table limit 250→1000, Shares column in Dashboard positions, "Trail" badge abbreviation, stats polling 30s→10s. +6 Vitest tests. CONCERNS (weak limit test — accepted).
+- S4: Real-Time Position Updates via WebSocket — `usePositionUpdates` hook consuming WS `position.updated` events, merges into positions query cache, REST polling reduced 5s→15s. +5 Vitest tests. CLEAR.
+- S5: Log Noise Reduction — `ib_async.wrapper` set to ERROR level, weekly loss limit warning throttled (60s), reconciliation duplicate WARNING removed, asyncio shutdown task batch cancellation. +4 tests. CLEAR.
+- S6: MFE/MAE Trade Lifecycle Tracking — 6 fields on ManagedPosition (mfe_price/mae_price/mfe_r/mae_r/mfe_time/mae_time), O(1) tick update, 4 new DB columns (ALTER TABLE), debrief export via dynamic column discovery. Pre-flight: fixed test_trades_limit_bounds regression from S3. +8 tests. CLEAR.
+- S7: ORB Scalp Exclusion Fix — `orb_family_mutual_exclusion` config flag on OrchestratorConfig (default true), ClassVar on OrbBaseStrategy, guards in orb_breakout.py + orb_scalp.py. +4 tests. CLEAR.
+- Final cleanup: VIX pipeline test fixes (UTC/ET mismatch), limit test strengthening, MFE/MAE semantic fix (mfe_r gates on mfe_price != 0.0).
+
+**DEFs logged:** DEF-125 (time-of-day conditioning), DEF-126 (regime-strategy profiles), DEF-127 (virtual scrolling), DEF-128 (IBKR qty divergence prevention)
+
+**No new DECs** — all changes followed established patterns.
+
+**Session verdicts:** S1 CONCERNS_RESOLVED → S2 CLEAR → S3 CONCERNS (accepted) → S4 CLEAR → S5 CLEAR → S6 CLEAR → S7 CLEAR → Final-cleanup CLEAN
+
+---
+
 ## Sprint Statistics
 
-- **Total sprints:** 31 full + 37 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9, 27.5, 27.6, 27.65, 27.7, 27.75, 27.8, 27.9, 27.95, 28.5, 28.75, 29)
+- **Total sprints:** 31 full + 38 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9, 27.5, 27.6, 27.65, 27.7, 27.75, 27.8, 27.9, 27.95, 28.5, 28.75, 29, 29.5)
 - **Total sessions:** ~453+ Claude Code sessions
-- **Total tests:** ~3,966 pytest + 688 Vitest = ~4,654 total
-- **Total decisions:** 377 (DEC-001 through DEC-377)
-- **Calendar days (active dev):** ~45 (Feb 14 – Mar 30, 2026)
+- **Total tests:** ~4,212 pytest + 700 Vitest = ~4,912 total
+- **Total decisions:** 381 (DEC-001 through DEC-377, DEC-378 Sprint 29, no new DECs in 29.5)
+- **Calendar days (active dev):** ~46 (Feb 14 – Apr 1, 2026)
 - **Largest sprint:** 22 (9 implementation + 5 fix + 9 reviews, largest scope)
 - **Cleanest sprint:** 23 (11 sessions, 0 regressions, 0 scope gaps requiring follow-up)
 - **Most test-dense:** Sprint 22 (286 new tests), Sprint 24 (209 new tests), Sprint 23.2 (188 new tests), Sprint 28 (179 new tests), Sprint 27.6 (171 new tests), Sprint 23 (141 new tests across 23+23.05), Sprint 28.5 (110 new tests)

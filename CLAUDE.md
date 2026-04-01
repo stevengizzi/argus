@@ -1,13 +1,13 @@
 # ARGUS — Claude Code Context
 
 > Dense, actionable context for Claude Code sessions. No history — see `docs/` for that.
-> Last updated: March 30, 2026 (Sprint 28.75 doc sync — Post-Session Operational + UI Fixes)
+> Last updated: April 1, 2026 (Sprint 29.5 doc sync — Post-Session Operational Sweep)
 
 ## Active Sprint
 
-**No active sprint.** Sprint 28.75 (Post-Session Operational + UI Fixes) completed March 30, 2026.
+**No active sprint.** Sprint 29.5 (Post-Session Operational Sweep) completed April 1, 2026.
 
-Last completed sprint: **29 (Pattern Expansion I)** — 5 new PatternModule patterns (Dip-and-Rip, HOD Break, Gap-and-Go, ABCD, Pre-Market High Break), PatternParam structured metadata, Bull Flag + Flat-Top retrofit, PatternBacktester grid generation from PatternParam ranges. 12 active strategies. +213 tests. DEF-088 resolved. Next: Sprint 30 (Short Selling + Parabolic Short), then 31A (Pattern Expansion III to 15 strategies), 31.5 (Parallel Sweep), 32 (Parameterized Templates), 32.5 (Experiment Registry), 31B (Research Console, deferred per DEC-379).
+Last completed sprint: **29.5 (Post-Session Operational Sweep)** — flatten/zombie safety overhaul (IBKR 404 fix, global flatten circuit breaker, EOD broker-only pass, startup queue), paper data-capture mode (risk limits + throttler disabled), win rate fix + UI improvements, real-time position updates via WebSocket, log noise reduction, MFE/MAE trade lifecycle tracking, ORB Scalp mutual exclusion configurable. +34 pytest, +11 Vitest. DEF-125 through DEF-128 logged. Next: Sprint 30 (Short Selling + Parabolic Short), then 31A (Pattern Expansion III to 15 strategies), 31.5 (Parallel Sweep), 32 (Parameterized Templates), 32.5 (Experiment Registry), 31B (Research Console, deferred per DEC-379).
 
 ### Roadmap Amendments Adopted (DEC-357, DEC-358)
 Two roadmap amendments adopted March 23, 2026 adding 5 new sprint slots:
@@ -17,7 +17,7 @@ Two roadmap amendments adopted March 23, 2026 adding 5 new sprint slots:
 - **32.5** (Experiment Registry + Promotion Pipeline): Partitioned SQLite registry, cohort-based promotion, simulated-paper screening, overnight experiment queue, kill switches, anti-fragility
 - **33.5** (Adversarial Stress Testing): Historical crisis replay + synthetic stress scenarios as PromotionPipeline gate
 Amendment docs: `docs/amendments/roadmap-amendment-experiment-infrastructure.md`, `docs/amendments/roadmap-amendment-intelligence-architecture.md`
-Build track: ~~21.6~~ ✅ → ~~27.5~~ ✅ → ~~27.6~~ ✅ → ~~27.7~~ ✅ → ~~27.75~~ ✅ → ~~27.8~~ ✅ → ~~27.9~~ ✅ → ~~27.95~~ ✅ → ~~28~~ ✅ → ~~28.5~~ ✅ → ~~28.75~~ ✅ → 29–31 → 32 → 32.5 → 33 → 33.5 → 34 → 35–41
+Build track: ~~21.6~~ ✅ → ~~27.5~~ ✅ → ~~27.6~~ ✅ → ~~27.7~~ ✅ → ~~27.75~~ ✅ → ~~27.8~~ ✅ → ~~27.9~~ ✅ → ~~27.95~~ ✅ → ~~28~~ ✅ → ~~28.5~~ ✅ → ~~28.75~~ ✅ → ~~29~~ ✅ → ~~29.5~~ ✅ → 30–31 → 32 → 32.5 → 33 → 33.5 → 34 → 35–41
 DEC ranges reserved: 379–385 (27.7, unused), 386–395 (32.5), 396–402 (33.5)
 
 ### Known Issues
@@ -29,7 +29,7 @@ DEC ranges reserved: 379–385 (27.7, unused), 386–395 (32.5), 396–402 (33.5
 
 - **Active sprint:** None (between sprints)
 - **Next sprint:** 30 (Short Selling + Parabolic Short)
-- **Tests:** ~4,178 pytest + 689 Vitest (1 pre-existing Vitest failure in GoalTracker.test.tsx, 0 pre-existing pytest failures)
+- **Tests:** ~4,212 pytest + 700 Vitest (1 pre-existing Vitest failure in GoalTracker.test.tsx, 0 pre-existing pytest failures)
 - **Strategies:** 12 active (ORB Breakout, ORB Scalp, VWAP Reclaim, Afternoon Momentum, Red-to-Green, Bull Flag, Flat-Top Breakout, Dip-and-Rip, HOD Break, Gap-and-Go, ABCD, Pre-Market High Break)
 - **Infrastructure:** Databento EQUS.MINI (live) + IBKR paper trading (Account U24619949) + FMP Starter (scanning + reference data + daily bars for regime) + Finnhub (news + analyst recs) + Claude API (Copilot + Catalyst Classification) + Universe Manager (config-gated) + Catalyst Pipeline (config-gated) + Intelligence Polling Loop (config-gated) + Reference Data Cache + Quality Engine (config-gated) + Dynamic Position Sizer + Strategy Evaluation Telemetry (ring buffer + SQLite persistence) + Debrief Export (shutdown automation) + Evaluation Framework (MultiObjectiveResult, EnsembleResult, comparison API, slippage model) + Regime Intelligence (RegimeVector 11-field, 8 calculators, config-gated, Sprints 27.6 + 27.9) + VIX Data Service (yfinance daily VIX/SPX, 5 derived metrics, SQLite cache, config-gated, Sprint 27.9) + Counterfactual Engine (shadow position tracking, filter accuracy, shadow strategy mode, overflow routing, config-gated, Sprints 27.7 + 27.95) + Learning Loop V1 (OutcomeCollector, WeightAnalyzer, ThresholdAnalyzer, CorrelationAnalyzer, LearningService, ConfigProposalManager, LearningStore, config-gated, Sprint 28) + Exit Management (trailing stops ATR/percent/fixed, exit escalation, belt-and-suspenders, config-gated per strategy, Sprint 28.5) + ThrottledLogger (log rate-limiting, Sprint 27.75) + Paper trading config overrides (10x risk reduction, throttle disabled, $10 min risk floor, Sprint 27.75) + Broker-confirmed reconciliation (Sprint 27.95) + Overflow routing (config-gated, Sprint 27.95)
 - **Frontend:** 8-page Command Center (Observatory added Sprint 25) + AI Copilot + Universe Status Card + Intelligence Brief View (all active), Tauri desktop + PWA mobile
@@ -352,6 +352,10 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 | DEF-122 | ABCD swing detection O(n³) optimization | Sprint 32 (parameter sweeps at scale) | ABCDPattern swing detection iterates O(n³) over candle history. PatternBacktester full sweep times out. Needs precomputed swing cache or algorithmic optimization before Sprint 32 parameter sweeps. Priority: MEDIUM. |
 | DEF-123 | `build_parameter_grid()` float accumulation cleanup | Sprint 31.5 (Parallel Sweep Infrastructure) | While-loop float addition mitigated by round(v,6) + dedup but should use integer-stepping or numpy.arange. Cosmetic. Priority: LOW. |
 | DEF-124 | Pattern constructor params not wired from config YAML at runtime | Sprint 32 (Parameterized Strategy Templates) | All PatternModule patterns use constructor defaults. YAML detection params exist for backtester grid generation only. Sprint 32 introduces mechanism to pipe YAML params into pattern instances at startup. Priority: LOW. |
+| DEF-125 | Time-of-day signal conditioning | Sprint 32 (Parameterized Templates) | March 31 session data shows 10:00 AM hour is the worst-performing (-$6,906, 31.1% win rate) while 12:00+ is nearly breakeven. No strategy currently adjusts behavior based on time-of-day beyond operating window. Add time-of-day as a parameter dimension. |
+| DEF-126 | Regime-strategy interaction profiles | Sprint 32.5 (Experiment Registry) | Per-strategy regime sensitivity tuning. Needs RegimeVector × strategy performance matrix. Each strategy should have its own regime sensitivity profile rather than treating all strategies equally within a regime. |
+| DEF-127 | Virtual scrolling for trades table | Unscheduled | TradesPage limit raised from 250 to 1000 (Sprint 29.5 S3). Full virtual scrolling (react-virtual) deferred until 1000 becomes insufficient. |
+| DEF-128 | IBKR error 404 root cause: multi-position qty divergence prevention | Sprint 30 | When Argus tracks multiple positions on the same symbol, IBKR merges them. Partial closes can cause qty mismatch. Sprint 29.5 S1 added re-query-qty fix; preventing the divergence in the first place is a deeper fix. |
 
 ## Reference
 

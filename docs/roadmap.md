@@ -507,6 +507,19 @@ Reconciliation redesign with broker-confirmed positions (DEC-369). Overflow rout
 - **Tests:** +213 new (4,178 pytest + 689 Vitest).
 - **Deferred to Sprint 32:** Runtime YAML→constructor param wiring (DEF-124), `_create_pattern_by_name()` extension for 4 remaining patterns (DEF-121), ABCD O(n³) sweep optimization (DEF-122). Deferred to Sprint 31.5: grid float accumulation cleanup (DEF-123).
 
+### Sprint 29.5: Post-Session Operational Sweep ✅
+**Completed:** March 31 – April 1, 2026 (7 sessions + final cleanup)
+
+**Delivered:**
+- **Flatten/Zombie Safety Overhaul (S1):** IBKR error 404 root-cause fix (re-query broker qty before resubmit), global flatten circuit breaker (`_flatten_abandoned` + `max_flatten_cycles`), EOD broker-only flatten Pass 2 (cleans zombie positions not in `_managed_positions`), startup zombie queue drained at 9:30 ET, time-stop log suppression via ThrottledLogger.
+- **Paper Trading Data-Capture Mode (S2):** `daily_loss_limit_pct: 1.0`, `weekly_loss_limit_pct: 1.0`, `throttler_suspend_enabled: false` on OrchestratorConfig — maximum signal data collection for session analysis.
+- **Win Rate Bug + UI Fixes (S3):** win_rate × 100 conversion in TradeStatsBar + TodayStats, trades table limit 250→1000, Shares column, "Trail" badge, stats polling 30s→10s.
+- **Real-Time Position Updates (S4):** `usePositionUpdates` hook consuming WS `position.updated` events, merges into TanStack Query cache, REST polling reduced 5s→15s.
+- **Log Noise Reduction (S5):** `ib_async.wrapper` → ERROR level, weekly loss limit warning throttled (60s), asyncio shutdown task batch cancellation.
+- **MFE/MAE Trade Lifecycle Tracking (S6):** 6 fields on ManagedPosition, O(1) tick update, 4 new DB columns, debrief export auto-picks up via dynamic column discovery.
+- **ORB Scalp Exclusion Fix (S7):** `orb_family_mutual_exclusion` config flag (default true); `false` disables DEC-261 to enable independent ORB Scalp data capture.
+- **Tests:** +34 pytest, +11 Vitest (4,212 + 700 total). No new DECs. DEF-125 through DEF-128 logged.
+
 ### Sprint 30: Short Selling Infrastructure + Pattern Expansion II (DEC-166, DEC-167)
 **Target:** ~3 days
 
