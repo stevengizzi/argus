@@ -106,7 +106,7 @@ These foundations are correct and remain:
 
 ARGUS completed 21 sprints + sub-sprints in ~17 calendar days of active development (Feb 14 – Mar 5). Average sprint: ~0.8 calendar days. However, sprint complexity has been increasing — early sprints (1–5) were dense single-day affairs, while later sprints (21a–21d, 21.5) span multiple days. The roadmap below assumes sprint durations of 1–4 days each depending on complexity, with some parallelism where noted.
 
-**Current state:** Sprint 29 complete (March 31, 2026). ~4,178 pytest + 689 Vitest (0 pre-existing pytest failures). Twelve active strategies (7 from Sprint 26 + 5 new PatternModule patterns from Sprint 29). Sprint 28.5 (Exit Management) delivered configurable per-strategy trailing stops (ATR/percent/fixed), partial profit-taking with trail on T1 remainder, and time-based exit escalation across Order Manager, BacktestEngine, and CounterfactualTracker. 6 sessions, 12 adversarial review amendments verified, +110 tests, 0 issues. Full infrastructure stack operational: BacktestEngine + Evaluation Framework + Regime Intelligence (11-field RegimeVector) + Counterfactual Engine + VIX Data Service + Quality Engine + NLP Catalyst Pipeline + Universe Manager + AI Copilot + Learning Loop V1 + Exit Management. Eight-page Command Center + Observatory. Live Databento + IBKR paper trading. Phase 5 Gate complete (March 21, 2026). Strategic check-in completed March 30 (DEC-378–381). Next: Sprint 30 (Short Selling + Parabolic Short).
+**Current state:** Sprint 29.5 complete (April 1, 2026). ~4,212 pytest + 700 Vitest (0 pre-existing pytest failures). Twelve active strategies with MFE/MAE tracking, real-time WS position updates, flatten safety overhaul, and paper data-capture mode (loss limits disabled, throttler suspension disabled, ORB exclusion disabled). Full infrastructure stack operational: BacktestEngine + Evaluation Framework + Regime Intelligence (11-field RegimeVector) + Counterfactual Engine + VIX Data Service + Quality Engine + NLP Catalyst Pipeline + Universe Manager + AI Copilot + Learning Loop V1 + Exit Management + MFE/MAE Tracking. Eight-page Command Center + Observatory. Live Databento + IBKR paper trading. Phase 5 Gate complete (March 21, 2026). Strategic check-in completed March 30 (DEC-378–381). Next: Sprint 32 (Parameterized Strategy Templates — pulled forward per April 1 strategic review; longs need tuning before adding short selling).
 
 ---
 
@@ -127,7 +127,7 @@ The Command Center evolves from 8 pages to 11 across this roadmap:
 | System | Built | API health monitoring | Unchanged | BacktestEngine monitoring | Pipeline health |
 | Observatory | **Built (Sprint 25)** | — | Strategy-specific views | Ensemble pipeline viz | Full ensemble observatory |
 | Copilot | Shell built | Activated (Sprint 22) | Ensemble-aware context | Research assistant mode | Full ensemble copilot |
-| Research Console | — | — | — | **New (Sprint 30)** | Discovery pipeline view |
+| Research Console | — | — | — | **New (Sprint 31B)** | Discovery pipeline view |
 | Synapse | — | — | — | — | **New (Sprint 38–39)** |
 
 ---
@@ -472,12 +472,12 @@ Reconciliation redesign with broker-confirmed positions (DEC-369). Overflow rout
 
 ### Phase 6 Gate ★ CRITICAL — LIVE TRADING DECISION POINT ★
 
-**Trigger:** Sprint 31A complete (after Pattern Expansion + Short Selling).
+**Trigger:** Sprint 31A complete (after Pattern Expansion III). Short Selling (Sprint 30) now follows the gate rather than preceding it — deferred per April 1 strategic review until long strategies are profitable.
 **Protocol:** Strategic Check-In (`strategic-check-in.md`) + Codebase Health Audit (`codebase-health-audit.md`) + Documentation Compression.
 
-**ARGUS state at this gate:** 15 hand-crafted strategies (including at least one short strategy) with AI quality filtering, NLP catalysts, dynamic sizing, and performance-aware learning loop. Paper trading has been running for 6–8 weeks at this point. All strategies validated with BacktestEngine + 3 years of Databento data.
+**ARGUS state at this gate:** 15 hand-crafted long-only strategies with parameterized templates (Sprint 32), experiment infrastructure (Sprint 32.5), AI quality filtering, NLP catalysts, dynamic sizing, and performance-aware learning loop. Paper trading has been running for 8–10 weeks at this point. All strategies validated with BacktestEngine + 3 years of Databento data. Short selling deferred to post-gate.
 
-**What you see:** 15 strategy cards in the Pattern Library. Health bands on every strategy in the Orchestrator. Correlation heatmap on Performance. Short exposure indicator on Dashboard. Quality-graded signals firing throughout the day. Morning intelligence briefs. AI-generated debrief narratives.
+**What you see:** 15 strategy cards in the Pattern Library. Health bands on every strategy in the Orchestrator. Correlation heatmap on Performance. Quality-graded signals firing throughout the day. Morning intelligence briefs. AI-generated debrief narratives. MFE/MAE lifecycle data on every trade. Parameterized templates tunable from config.
 
 **Critical decisions at this gate:**
 1. **Live trading decision** — If paper trading results are strong (Sharpe > 2.0, positive expectancy, no catastrophic drawdowns), this is the natural point for Gate 5 (live minimum deployment). **Live trading with real capital could begin during or after Phase 6.** (CPA consultation removed per DEC-380; tax intelligence built into ARGUS via post-revenue Tax Intelligence Automation.)
@@ -489,7 +489,7 @@ Reconciliation redesign with broker-confirmed positions (DEC-369). Overflow rout
 
 ## 8. Phase 7: Infrastructure Unification (Sprints 29–32.5)
 
-*Expands the strategy roster and adds short selling, then builds parameterized strategy system and experiment infrastructure for the ensemble vision. BacktestEngine (Sprint 27) provides the foundation. Nothing in this phase changes live trading behavior — it's building the research infrastructure in parallel. UI focus: the Research Console makes strategy research visible and interactive.*
+*Parameterized strategy templates and experiment infrastructure first (Sprint 32 pulled forward), then expands strategy roster and adds short selling. BacktestEngine (Sprint 27) provides the foundation. Sprint 32/32.5 enable data-driven parameter tuning before adding more strategies. UI focus: the Research Console makes strategy research visible and interactive.*
 
 **Amendment note (DEC-357):** Phase 7 gains Sprint 32.5 (Experiment Registry + Promotion Pipeline + Anti-Fragility + Hypothesis Generation Design) after Sprint 32. Sprint 33 scope decreases as evaluation framework and experiment storage already exist.
 

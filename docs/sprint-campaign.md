@@ -256,15 +256,17 @@ CHOREOGRAPHY:
 | 27.8 | Operational Cleanup + Validation Tooling | A | standard | 3 | 1 | No | No | ✅ |
 | 27.9 | VIX Regime Intelligence | A | standard | 6 | 1 | No | No | ✅ |
 | 27.95 | Broker Safety + Overflow Routing | A | standard | 5 | 2 | No | No | ✅ |
-| **28** | **Learning Loop V1** | **C** | **adversarial, iterative-judgment** | **10–11** | **4–5** | **Yes** | **No** | — |
-| **28.5** | **Exit Management** | **B** | **iterative-judgment** | **2–3** | **2** | **No** | **No** | — |
-| 29 | Pattern Expansion I | B | iterative-judgment | 3–5 | 2–3 | No | No | — |
-| 30 | Short Selling Infrastructure + Pattern Expansion II | B | iterative-judgment | 5–7 | 3 | No | No | — |
-| 31 | Pattern Expansion III + Research Console | B | iterative-judgment | 5–7 | 3 | No | **Phase 6 Gate** | — |
-| **Phase 7: Infrastructure Unification** | | | | | | | | |
-| 32 | Parameterized Strategy Templates | C | adversarial, iterative-judgment | 5–7 | 3–4 | **Yes** | No | — |
-| **32.5** | **Experiment Registry + Promotion Pipeline + Anti-Fragility** | **A** | **standard** | **9** | **4–5** | **No** | **Phase 7 Gate** | — |
-| **Phase 8: Controlled Experiment** | | | | | | | | |
+| **28** | **Learning Loop V1** | **C** | **adversarial, iterative-judgment** | **10–11** | **4–5** | **Yes** | **No** | ✅ |
+| **28.5** | **Exit Management** | **B** | **iterative-judgment** | **2–3** | **2** | **No** | **No** | ✅ |
+| 29 | Pattern Expansion I | B | iterative-judgment | 3–5 | 2–3 | No | No | ✅ |
+| 29.5 | Post-Session Operational Sweep | A | standard | 7 | 1 | No | No | ✅ |
+| 32 | Parameterized Strategy Templates (pulled forward) | C | adversarial, iterative-judgment | 5–7 | 3–4 | **Yes** | No | — |
+| **32.5** | **Experiment Registry + Promotion Pipeline + Anti-Fragility** | **A** | **standard** | **9** | **4–5** | **No** | **No** | — |
+| 31A | Pattern Expansion III | B | iterative-judgment | 5–7 | 3 | No | **Phase 6 Gate** | — |
+| 30 | Short Selling Infrastructure + Parabolic Short (deferred) | B | iterative-judgment | 5–7 | 3 | No | No | — |
+| 31.5 | Parallel Sweep Infrastructure | B | iterative-judgment | 3–5 | 2 | No | No | — |
+| 31B | Research Console (deferred per DEC-379) | B | iterative-judgment | 3–5 | 2 | No | No | — |
+| **Phase 7: Controlled Experiment** | | | | | | | | |
 | 33 | Statistical Validation Framework | B | adversarial, iterative-judgment | 5–7 | 3–4 | **Yes** | No | — |
 | **33.5** | **Adversarial Stress Testing** | **A** | **standard** | **5** | **3** | **No** | **No** | — |
 | 34 | ORB Family Systematic Search | D | research, adversarial | 5–8 | 4–5 | **Yes** | No | — |
@@ -315,13 +317,14 @@ Based on the roadmap's per-sprint duration estimates. Start date: March 5, 2026.
 | 27.95 | Mar 26 | Mar 28 | ✅ Complete (Broker Safety + Overflow Routing) |
 | **28** | **late Mar** | **early Apr** | **Learning Loop V1 (Type C, 10–11 sessions)** |
 | **28.5** | **Apr** | **Apr** | **Exit Management (~2 days)** |
-| 29 | Apr | Apr | Pattern Expansion I |
-| 30 | Apr | Apr | Short Selling + Pattern Expansion II |
-| 31 | Apr–May | May | Pattern Expansion III + Research Console |
+| 29 | Mar 30–31 | Mar 31 | ✅ Pattern Expansion I |
+| 29.5 | Mar 31–Apr 1 | Apr 1 | ✅ Post-Session Operational Sweep |
+| 32 | Apr | Apr | Parameterized Strategy Templates (pulled forward) |
+| **32.5** | **Apr** | **Apr–May** | **Experiment Registry + Promotion Pipeline (DEC-357)** |
+| 31A | May | May | Pattern Expansion III |
 | **Phase 6 Gate** | **May** | **May** | Strategic check-in + live trading decision gate |
-| 32 | May | May | Parameterized Strategy Templates |
-| **32.5** | **May** | **May–Jun** | **Experiment Registry + Promotion Pipeline (DEC-357)** |
-| **Phase 7 Gate** | **Jun** | **Jun** | Strategic check-in + data sufficiency (RESOLVED) |
+| 30 | May–Jun | Jun | Short Selling + Parabolic Short (deferred) |
+| 31.5 | Jun | Jun | Parallel Sweep Infrastructure |
 | 33 | Jun | Jun | Statistical Validation Framework |
 | **33.5** | **Jun** | **Jun** | **Adversarial Stress Testing (DEC-358)** |
 | 34 | Jun–Jul | Jul | ORB Systematic Search; may need cloud burst |
@@ -353,21 +356,20 @@ Phase 6 (Linear Chain — includes amendment infrastructure + operational sprint
   (obs)  (R2G)  (BE)   (reval)  (eval)   (regime) (safety)  (cntfct) (operational hardening)
                                                                                     │
                                                                                     ▼
-                                                              28 ──→ 28.5 ──→ 29 ──→ 30 ──→ 31
-                                                              (learn) (exit)  (exp-I) (short) (exp-III)
-                                                                                                  │
-                                                                                                  ▼
-                                                                                             PHASE 6 GATE
-                                                                                             (CPA consultation gate)
+                                              28 ──→ 28.5 ──→ 29 ──→ 29.5 ──→ 32 ──→ 32.5 ──→ 31A
+                                              (learn) (exit)  (exp-I) (ops)   (tmpl)  (registry) (exp-III)
+                                                                                                     │
+                                                                                                     ▼
+                                                                                                PHASE 6 GATE
+                                                                                                     │
+                                                                                                     ▼
+                                                                                          30 ──→ 31.5 ──→ 31B
+                                                                                          (short) (sweep)  (console)
 
 Phase 7 (Linear Chain):
 
-  32 ──→ 32.5
-  (tmpl)  (registry+pipeline+anti-fragility)
-              │
-              ▼
-         PHASE 7 GATE
-         (data sufficiency RESOLVED — DEC-358)
+  33 ──→ 33.5 ──→ 34
+  (stats) (stress)  (ORB search)
 
 Phase 8 (Linear Chain):
 
@@ -416,6 +418,7 @@ Phase 10 (Linear Chain):
 | 32.5 requires 27.5 + 32 | Experiment Registry consumes MultiObjectiveResult; templates define parameter space |
 | 33.5 requires 32.5 | Stress testing is a PromotionPipeline gate |
 | Phase 8 requires Phase 7 | The experiment (Sprint 34) needs sweeps (31), templates (32), and experiment infrastructure (32.5) |
+| 32 pulled forward into Phase 6 | Longs need parameter tuning before adding short selling (April 1 strategic review) |
 | Phase 9 requires Phase 8 GO | If NO-GO, Phase 9 does not execute |
 | Sprint 38b requires Three.js research | A mini-discovery session before implementation (see Sprint 38b choreography) |
 
@@ -423,7 +426,7 @@ Phase 10 (Linear Chain):
 
 | Window | What Could Overlap | Conditions |
 |--------|-------------------|------------|
-| Phase 6 + Phase 7 start | Sprint 32 could overlap with Sprint 30–31 | Only if Phase 6 is on track and you have bandwidth |
+| Phase 6 (post-gate) | Sprint 30 could overlap with Sprint 31.5/31B | After Phase 6 Gate, short selling and sweep infra are independent |
 | Sprint 38a + 38b prep | Three.js mini-discovery during 38a implementation | Research conversation doesn't block backend work |
 | Sprint 39a + 39b prep | Frontend planning during backend WebSocket work | Planning doesn't block implementation |
 
@@ -726,7 +729,7 @@ Since this sprint is already in progress, pick up from current state:
 
 ## 5. Phase 6: Strategy Expansion — Artisanal (Sprints 25–31)
 
-*Opens with The Observatory for operational visibility, then expands the strategy roster to 13–15+ hand-crafted patterns including short selling. Adds the Learning Loop for self-monitoring, and exit management for P&L optimization. Includes infrastructure sprints 27.5–27.95 that transform Sprint 28 (Learning Loop V1) from basic weight tuning into intelligent system analysis. Target: ~5–7 weeks.*
+*Opens with The Observatory for operational visibility, then expands the strategy roster to 12+ hand-crafted patterns. Adds the Learning Loop for self-monitoring, exit management for P&L optimization, and parameterized strategy templates + experiment infrastructure (Sprints 32/32.5, pulled forward per April 1 strategic review). Includes infrastructure sprints 27.5–27.95 that transform Sprint 28 (Learning Loop V1) from basic weight tuning into intelligent system analysis. Short selling deferred to post-Phase 6 Gate. Target: ~7–9 weeks.*
 
 ---
 
@@ -1019,6 +1022,8 @@ Broker-confirmed reconciliation (DEC-369). Overflow routing to CounterfactualTra
 
 ### Sprint 30: Short Selling Infrastructure + Pattern Expansion II
 
+> **NOTE (April 1, 2026):** Sprint 30 deferred until after Phase 6 Gate. Sprint 32 (Parameterized Strategy Templates) pulled forward — long strategies need tuning before adding short selling. The choreography below remains valid; execution timing has shifted.
+
 **Type:** B (Mixed Backend + Frontend) | **Modes:** Iterative Judgment Loop
 **Duration:** ~3 days | **Sessions:** 3–5 (2–3 backend, 1–2 frontend)
 **Depends on:** Sprint 29 complete
@@ -1070,10 +1075,10 @@ This is the most significant non-Phase-8 gate because **live trading with real c
 
 **[Claude.ai]** Strategic Check-In Conversation:
 
-1. **Progress review:** 13–15 strategies active? Learning Loop working? Correlation monitoring producing useful data? Evaluation Framework, Regime Intelligence, and Counterfactual Engine all operational?
+1. **Progress review:** 15 long-only strategies active with parameterized templates? Learning Loop working? Experiment Registry producing controlled results? Correlation monitoring producing useful data? Evaluation Framework, Regime Intelligence, and Counterfactual Engine all operational?
 2. **Paper trading assessment:** Sharpe > 2.0? Positive expectancy across strategies? No catastrophic drawdowns?
 3. **Live trading readiness:** Are you confident enough in the system to deploy real capital? If yes → schedule live-minimum deployment during Phase 7 or Phase 8. Log as DEC entry. (CPA consultation removed per DEC-380; tax intelligence built into ARGUS as post-revenue automation.)
-5. **Phase 7 readiness:** Are the existing strategies ready to be templatized? Is the Experiment Registry pipeline design still correct after observing real Learning Loop behavior?
+5. **Post-gate readiness:** Is the short selling infrastructure worth building now? Is the long-side performance sufficient? Are parameterized templates producing measurable improvements?
 6. **Historical data sufficiency:** RESOLVED (DEC-358) — XNAS.ITCH + XNYS.PILLAR provide 96 months of OHLCV-1m at $0. No purchase needed.
 7. **Velocity calibration:** Update session estimates for Phase 7–8 based on Phase 5–6 actuals.
 
