@@ -434,6 +434,35 @@ def create_app(app_state: AppState) -> FastAPI:
         ):
             logger.info("Learning Loop disabled")
 
+        # Initialize Experiment pipeline if enabled (Sprint 32)
+        experiments_initialized_here = False
+        if (
+            app_state.config is not None
+            and app_state.config.experiments is not None
+            and app_state.config.experiments.enabled
+        ):
+            try:
+                from pathlib import Path as _Path
+
+                from argus.intelligence.experiments.store import ExperimentStore
+
+                data_dir = app_state.config.data_dir
+                experiment_store = ExperimentStore(
+                    db_path=str(_Path(data_dir) / "experiments.db")
+                )
+                await experiment_store.initialize()
+                app_state.experiment_store = experiment_store
+                experiments_initialized_here = True
+                logger.info("ExperimentStore initialized")
+            except Exception as e:
+                logger.error("Failed to initialize ExperimentStore: %s", e)
+        elif (
+            app_state.config is not None
+            and app_state.config.experiments is not None
+            and not app_state.config.experiments.enabled
+        ):
+            logger.info("Experiment pipeline disabled")
+
         # Note: WebSocket bridge is started by main.py before calling run_server().
         # We only need to get a reference to it here for cleanup.
         from argus.api.websocket import get_bridge
@@ -494,6 +523,11 @@ def create_app(app_state: AppState) -> FastAPI:
             app_state.learning_store = None
             app_state.config_proposal_manager = None
             logger.info("Learning Loop cleaned up")
+
+        # Cleanup Experiment pipeline if we initialized it here
+        if experiments_initialized_here:
+            app_state.experiment_store = None
+            logger.info("ExperimentStore cleaned up")
 
         # Cleanup telemetry store (only if created by lifespan, not main.py)
         if telemetry_store is not None and telemetry_store is not _pre_initialized_store:

@@ -44,6 +44,7 @@ if TYPE_CHECKING:
     from argus.data.intraday_candle_store import IntradayCandleStore
     from argus.data.vix_data_service import VIXDataService
     from argus.intelligence.counterfactual_store import CounterfactualStore
+    from argus.intelligence.experiments.store import ExperimentStore
     from argus.intelligence.learning.config_proposal_manager import ConfigProposalManager
     from argus.intelligence.learning.learning_service import LearningService
     from argus.intelligence.learning.learning_store import LearningStore
@@ -124,6 +125,7 @@ class AppState:
     learning_service: LearningService | None = None
     learning_store: LearningStore | None = None
     config_proposal_manager: ConfigProposalManager | None = None
+    experiment_store: ExperimentStore | None = None
 
 
 def get_app_state(request: Request) -> AppState:

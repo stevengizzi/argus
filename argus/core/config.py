@@ -24,6 +24,7 @@ from argus.intelligence.config import (
     OverflowConfig,
     QualityEngineConfig,
 )
+from argus.intelligence.experiments.config import ExperimentConfig
 from argus.intelligence.learning.models import LearningLoopConfig
 
 # ---------------------------------------------------------------------------
@@ -415,6 +416,8 @@ class SystemConfig(BaseModel):
     overflow: OverflowConfig = Field(default_factory=OverflowConfig)
     # Learning Loop configuration (Sprint 28 — adaptive config tuning)
     learning_loop: LearningLoopConfig = Field(default_factory=LearningLoopConfig)
+    # Experiment pipeline configuration (Sprint 32 — parameterized templates)
+    experiments: ExperimentConfig = Field(default_factory=ExperimentConfig)
 
     @field_validator("timezone")
     @classmethod

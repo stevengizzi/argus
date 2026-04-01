@@ -18,6 +18,7 @@ from argus.api.routes.debrief_search import router as debrief_search_router
 from argus.api.routes.documents import router as documents_router
 from argus.api.routes.health import router as health_router
 from argus.api.routes.intelligence import router as intelligence_router
+from argus.api.routes.experiments import router as experiments_router
 from argus.api.routes.learning import router as learning_router
 from argus.api.routes.journal import router as journal_router
 from argus.api.routes.market import router as market_router
@@ -63,3 +64,4 @@ api_router.include_router(
 )
 api_router.include_router(vix_router, prefix="/vix", tags=["vix"])
 api_router.include_router(learning_router, prefix="/learning", tags=["learning"])
+api_router.include_router(experiments_router, prefix="/experiments", tags=["experiments"])
