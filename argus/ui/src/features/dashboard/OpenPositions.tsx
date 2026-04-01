@@ -21,6 +21,7 @@ import { PositionTimeline } from '../../components/PositionTimeline';
 import { TradeDetailPanel } from '../trades/TradeDetailPanel';
 import { PositionDetailPanel } from './PositionDetailPanel';
 import { usePositions } from '../../hooks/usePositions';
+import { usePositionUpdates } from '../../hooks/usePositionUpdates';
 import { useTrades } from '../../hooks/useTrades';
 import { useLiveStore } from '../../stores/live';
 import { usePositionsUIStore } from '../../stores/positionsUI';
@@ -71,6 +72,9 @@ type SortField = 'symbol' | 'pnl' | 'r' | 'time';
 type SortDir = 'asc' | 'desc';
 
 export function OpenPositions() {
+  // Merge WS position.updated events into the positions query cache
+  usePositionUpdates();
+
   const [selectedTrade, setSelectedTrade] = useState<Trade | null>(null);
   const [selectedPosition, setSelectedPosition] = useState<EnrichedPosition | null>(null);
   const [sortField, setSortField] = useState<SortField>('time');
