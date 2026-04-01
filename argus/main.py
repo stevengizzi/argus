@@ -964,6 +964,13 @@ class ArgusSystem:
         await self._order_manager.reconstruct_from_broker()
         self._health_monitor.update_component("order_manager", ComponentStatus.HEALTHY)
 
+        # Wire strategy fingerprints into Order Manager (Sprint 32 scope gap fix)
+        for strategy in self._orchestrator.get_strategies().values():
+            fingerprint = getattr(strategy, "config_fingerprint", None)
+            self._order_manager.register_strategy_fingerprint(
+                strategy.strategy_id, fingerprint
+            )
+
         # Wire Risk Manager to Order Manager for cross-strategy checks
         self._risk_manager.set_order_manager(self._order_manager)
 

@@ -277,3 +277,148 @@ def test_create_pattern_by_name_unknown_raises() -> None:
 
     with pytest.raises(ValueError, match="Unknown pattern"):
         _create_pattern_by_name("nonexistent_pattern", _CONFIG_DIR / "bull_flag.yaml")
+
+
+# ---------------------------------------------------------------------------
+# Test 10: OrderManager wires config_fingerprint into logged trade record
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_order_manager_wires_fingerprint_into_trade_record() -> None:
+    """register_strategy_fingerprint() causes log_trade() to receive the fingerprint."""
+    from datetime import datetime, timezone
+    from unittest.mock import AsyncMock, MagicMock
+
+    from argus.db.manager import DatabaseManager
+    from argus.analytics.trade_logger import TradeLogger
+    from argus.execution.order_manager import OrderManager, ManagedPosition
+    from argus.core.config import OrderManagerConfig
+    from argus.models.trading import ExitReason, OrderSide
+
+    # Minimal OM setup with an in-memory TradeLogger
+    db = DatabaseManager(":memory:")
+    await db.initialize()
+    trade_logger = TradeLogger(db)
+
+    event_bus = MagicMock()
+    event_bus.subscribe = MagicMock()
+    event_bus.publish = AsyncMock()
+
+    broker = MagicMock()
+    clock = MagicMock()
+    clock.now.return_value = datetime(2025, 6, 1, 15, 30, tzinfo=timezone.utc)
+
+    om = OrderManager(
+        event_bus=event_bus,
+        broker=broker,
+        clock=clock,
+        config=OrderManagerConfig(),
+        trade_logger=trade_logger,
+    )
+
+    # Register a fingerprint for the test strategy
+    om.register_strategy_fingerprint("bull_flag", "abc123def456abcd")
+
+    # Build a ManagedPosition whose strategy_id matches the registered fingerprint
+    entry_time = datetime(2025, 6, 1, 14, 0, tzinfo=timezone.utc)
+    position = ManagedPosition(
+        symbol="AAPL",
+        strategy_id="bull_flag",
+        entry_price=150.0,
+        entry_time=entry_time,
+        shares_total=100,
+        shares_remaining=0,
+        stop_price=148.0,
+        original_stop_price=148.0,
+        stop_order_id=None,
+        t1_price=153.0,
+        t1_order_id=None,
+        t1_shares=50,
+        t1_filled=True,
+        t2_price=156.0,
+        high_watermark=153.0,
+        realized_pnl=300.0,
+        quality_grade="A",
+        quality_score=85.0,
+        mfe_price=153.5,
+        mae_price=149.5,
+        mfe_r=1.75,
+        mae_r=-0.25,
+    )
+
+    # Invoke the private close path — this logs the trade via TradeLogger
+    await om._close_position(position, exit_price=153.0, exit_reason=ExitReason.TARGET_1)
+
+    trades = await trade_logger.query_trades(strategy_id="bull_flag", limit=1)
+    assert len(trades) == 1
+    trade_id = trades[0]["id"]
+    retrieved = await trade_logger.get_trade(trade_id)
+    assert retrieved is not None
+    assert retrieved.config_fingerprint == "abc123def456abcd"
+
+
+@pytest.mark.asyncio
+async def test_order_manager_non_pattern_strategy_gets_none_fingerprint() -> None:
+    """Strategies absent from the fingerprint registry produce config_fingerprint=None."""
+    from datetime import datetime, timezone
+    from unittest.mock import AsyncMock, MagicMock
+
+    from argus.db.manager import DatabaseManager
+    from argus.analytics.trade_logger import TradeLogger
+    from argus.execution.order_manager import OrderManager, ManagedPosition
+    from argus.core.config import OrderManagerConfig
+    from argus.models.trading import ExitReason
+
+    db = DatabaseManager(":memory:")
+    await db.initialize()
+    trade_logger = TradeLogger(db)
+
+    event_bus = MagicMock()
+    event_bus.subscribe = MagicMock()
+    event_bus.publish = AsyncMock()
+
+    broker = MagicMock()
+    clock = MagicMock()
+    clock.now.return_value = datetime(2025, 6, 1, 15, 30, tzinfo=timezone.utc)
+
+    om = OrderManager(
+        event_bus=event_bus,
+        broker=broker,
+        clock=clock,
+        config=OrderManagerConfig(),
+        trade_logger=trade_logger,
+    )
+    # orb_breakout is NOT registered — should resolve to None
+
+    entry_time = datetime(2025, 6, 1, 14, 0, tzinfo=timezone.utc)
+    position = ManagedPosition(
+        symbol="TSLA",
+        strategy_id="orb_breakout",
+        entry_price=200.0,
+        entry_time=entry_time,
+        shares_total=50,
+        shares_remaining=0,
+        stop_price=197.0,
+        original_stop_price=197.0,
+        stop_order_id=None,
+        t1_price=204.0,
+        t1_order_id=None,
+        t1_shares=25,
+        t1_filled=True,
+        t2_price=208.0,
+        high_watermark=204.0,
+        realized_pnl=200.0,
+        mfe_price=204.5,
+        mae_price=199.0,
+        mfe_r=1.5,
+        mae_r=-0.33,
+    )
+
+    await om._close_position(position, exit_price=204.0, exit_reason=ExitReason.TARGET_1)
+
+    trades = await trade_logger.query_trades(strategy_id="orb_breakout", limit=1)
+    assert len(trades) == 1
+    trade_id = trades[0]["id"]
+    retrieved = await trade_logger.get_trade(trade_id)
+    assert retrieved is not None
+    assert retrieved.config_fingerprint is None

@@ -275,6 +275,11 @@ class OrderManager:
         self._pnl_last_published: dict[str, float] = {}
         self._pnl_throttle_seconds: float = 1.0
 
+        # Strategy fingerprint registry: strategy_id → config_fingerprint (Sprint 32 scope gap fix)
+        # Populated via register_strategy_fingerprint() after strategies are created.
+        # Non-pattern strategies are absent from the registry; their trades get None.
+        self._fingerprint_registry: dict[str, str | None] = {}
+
     async def start(self) -> None:
         """Start the Order Manager.
 
@@ -289,6 +294,21 @@ class OrderManager:
         self._running = True
         self._poll_task = asyncio.create_task(self._poll_loop())
         logger.info("OrderManager started")
+
+    def register_strategy_fingerprint(
+        self, strategy_id: str, fingerprint: str | None
+    ) -> None:
+        """Register a config fingerprint for a strategy.
+
+        Called once per PatternBasedStrategy after startup. Non-pattern
+        strategies need not be registered — absent entries resolve to None.
+
+        Args:
+            strategy_id: The strategy's identifier string.
+            fingerprint: 16-char hex fingerprint from compute_parameter_fingerprint(),
+                or None if the strategy has no fingerprint.
+        """
+        self._fingerprint_registry[strategy_id] = fingerprint
 
     async def stop(self) -> None:
         """Stop the Order Manager. Cancel the poll task."""
@@ -2426,6 +2446,8 @@ class OrderManager:
                     t1 = position.t1_price or 0.0
                     t2 = position.t2_price or 0.0
 
+                config_fingerprint = self._fingerprint_registry.get(position.strategy_id)
+
                 trade = Trade(
                     strategy_id=position.strategy_id,
                     symbol=position.symbol,
@@ -2441,6 +2463,7 @@ class OrderManager:
                     gross_pnl=position.realized_pnl if not is_reconciliation else 0.0,
                     quality_grade=position.quality_grade,
                     quality_score=position.quality_score,
+                    config_fingerprint=config_fingerprint,
                     # mfe_price/mae_price are initialized to entry_price (non-zero) for real trades.
                     # The 0.0 check catches reconciliation/synthetic positions that were never
                     # through _handle_entry_fill and should store NULL instead of misleading 0.0.
