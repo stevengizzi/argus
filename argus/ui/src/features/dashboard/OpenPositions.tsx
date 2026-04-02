@@ -266,7 +266,7 @@ export function OpenPositions() {
     // Timeline view - show both open and closed
     if (displayMode === 'timeline') {
       return (
-        <div className="p-4 pt-0 max-h-[420px] overflow-y-auto">
+        <div className="p-4 pt-0 h-full overflow-y-auto">
           <PositionTimeline
             positions={enrichedPositions}
             closedTrades={trades}
@@ -280,7 +280,7 @@ export function OpenPositions() {
     return (
       <>
         {/* Desktop/Tablet combined table */}
-        <div className="hidden md:block max-h-[420px] overflow-y-auto overflow-x-auto">
+        <div className="hidden md:block h-full overflow-y-auto overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="sticky top-0 z-10 bg-argus-surface">
               <tr className="bg-argus-surface-2 text-argus-text-dim text-xs uppercase tracking-wider">
@@ -518,7 +518,7 @@ export function OpenPositions() {
     // Timeline view - show only open positions
     if (displayMode === 'timeline') {
       return (
-        <div className="p-4 pt-0 max-h-[420px] overflow-y-auto">
+        <div className="p-4 pt-0 h-full overflow-y-auto">
           <PositionTimeline
             positions={enrichedPositions}
             onPositionClick={handleTimelineClick}
@@ -531,7 +531,7 @@ export function OpenPositions() {
     return (
       <>
         {/* Desktop table (lg and up) */}
-        <div className="hidden lg:block max-h-[420px] overflow-y-auto overflow-x-auto">
+        <div className="hidden lg:block h-full overflow-y-auto overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="sticky top-0 z-10 bg-argus-surface">
               <tr className="bg-argus-surface-2 text-argus-text-dim text-xs uppercase tracking-wider">
@@ -618,7 +618,7 @@ export function OpenPositions() {
         </div>
 
         {/* Tablet table (md to lg) */}
-        <div className="hidden md:block lg:hidden max-h-[420px] overflow-y-auto overflow-x-auto">
+        <div className="hidden md:block lg:hidden h-full overflow-y-auto overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="sticky top-0 z-10 bg-argus-surface">
               <tr className="bg-argus-surface-2 text-argus-text-dim text-xs uppercase tracking-wider">
@@ -713,7 +713,7 @@ export function OpenPositions() {
     // Timeline view - show only closed trades
     if (displayMode === 'timeline') {
       return (
-        <div className="p-4 pt-0 max-h-[420px] overflow-y-auto">
+        <div className="p-4 pt-0 h-full overflow-y-auto">
           <PositionTimeline
             positions={[]}
             closedTrades={trades}
@@ -727,7 +727,7 @@ export function OpenPositions() {
     return (
       <>
         {/* Desktop/Tablet table */}
-        <div className="hidden md:block max-h-[420px] overflow-y-auto overflow-x-auto">
+        <div className="hidden md:block h-full overflow-y-auto overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="sticky top-0 z-10 bg-argus-surface">
               <tr className="bg-argus-surface-2 text-argus-text-dim text-xs uppercase tracking-wider">
@@ -837,7 +837,7 @@ export function OpenPositions() {
 
   return (
     <>
-      <Card noPadding>
+      <Card noPadding fullHeight>
         <div className="p-4 pb-0">
           {/* Custom header: filter toggle left-aligned next to title, view toggle right-aligned */}
           <div className="flex items-center justify-between mb-3 min-h-10">
@@ -898,11 +898,13 @@ export function OpenPositions() {
           </div>
         </div>
 
-        {positionFilter === 'all'
-          ? renderAllPositions()
-          : positionFilter === 'open'
-          ? renderOpenPositions()
-          : renderClosedTrades()}
+        <div className="flex-1 min-h-0 overflow-hidden">
+          {positionFilter === 'all'
+            ? renderAllPositions()
+            : positionFilter === 'open'
+            ? renderOpenPositions()
+            : renderClosedTrades()}
+        </div>
       </Card>
 
       {/* Trade detail panel - opens when clicking a closed trade on timeline */}

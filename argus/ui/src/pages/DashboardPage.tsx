@@ -134,7 +134,7 @@ export function DashboardPage() {
         {/* Main content area */}
         <motion.div
           key="dashboard-desktop"
-          className="flex-1 min-w-0 space-y-3"
+          className="flex-1 min-w-0 flex flex-col gap-3 h-[calc(100vh-3rem)]"
           variants={staggerContainer(0.06)}
           initial="hidden"
           animate="show"
@@ -153,12 +153,11 @@ export function DashboardPage() {
 
           {/* Row 3: Positions (70%) | Timeline + Quality stacked (30%) */}
           <motion.div
-            className="flex gap-3"
+            className="flex gap-3 flex-1 min-h-0"
             variants={staggerItem}
-            style={{ minHeight: '320px' }}
           >
             {/* Left: Positions table — 70% */}
-            <div className="flex-[7] min-w-0">
+            <div className="flex-[7] min-w-0 h-full">
               <OpenPositions />
             </div>
 
