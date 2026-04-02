@@ -16,7 +16,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { LayoutGrid } from 'lucide-react';
 import { ArenaStatsBar } from '../features/arena/ArenaStatsBar';
 import { ArenaControls } from '../features/arena/ArenaControls';
-import { ArenaCard } from '../features/arena/ArenaCard';
+import { ArenaCard } from '../features/arena';
 import { useArenaWebSocket } from '../features/arena/useArenaWebSocket';
 import { useArenaData, sortPositions, filterPositions } from '../hooks/useArenaData';
 import type { ArenaSortMode } from '../features/arena/ArenaControls';

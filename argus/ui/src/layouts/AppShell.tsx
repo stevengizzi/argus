@@ -28,18 +28,18 @@ interface AppShellProps {
 // This persists across re-renders and prevents content flash during transitions.
 const outletCache = new Map<string, React.ReactNode>();
 
-// Navigation routes for keyboard shortcuts (1–9; /arena at index 9 has no single-key shortcut)
+// Navigation routes for keyboard shortcuts (1–9 and 0)
 const NAV_ROUTES = [
-  '/',
-  '/trades',
-  '/performance',
-  '/orchestrator',
-  '/observatory',
-  '/patterns',
-  '/debrief',
-  '/system',
-  '/experiments',
-  '/arena',
+  '/',           // 1 = Dashboard
+  '/trades',     // 2 = Trades
+  '/performance',// 3 = Performance
+  '/arena',      // 4 = The Arena
+  '/orchestrator',// 5 = Orchestrator
+  '/observatory',// 6 = Observatory
+  '/patterns',   // 7 = Pattern Library
+  '/debrief',    // 8 = The Debrief
+  '/system',     // 9 = System
+  '/experiments',// 0 = Experiments
 ];
 
 export function AppShell({ paperMode = true }: AppShellProps) {
@@ -63,7 +63,7 @@ export function AppShell({ paperMode = true }: AppShellProps) {
   }, [connect, disconnect]);
 
   // Global keyboard shortcuts for mobile (Sidebar handles desktop but mobile needs this)
-  // 1-7 for navigation, Cmd/Ctrl+K for copilot
+  // 1-9 and 0 for navigation, Cmd/Ctrl+K for copilot
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Ignore if typing in an input or textarea
@@ -90,16 +90,13 @@ export function AppShell({ paperMode = true }: AppShellProps) {
         return;
       }
 
-      // 'a' shortcut for Arena
-      if (e.key === 'a') {
-        navigate('/arena');
-        return;
-      }
-
-      // Numeric shortcuts for navigation
+      // Numeric shortcuts for navigation (1–9, 0)
       const keyNum = parseInt(e.key, 10);
-      if (keyNum >= 1 && keyNum <= NAV_ROUTES.length) {
-        navigate(NAV_ROUTES[keyNum - 1]);
+      if (!isNaN(keyNum) && keyNum >= 0 && keyNum <= 9) {
+        const routeIndex = keyNum === 0 ? 9 : keyNum - 1;
+        if (routeIndex < NAV_ROUTES.length) {
+          navigate(NAV_ROUTES[routeIndex]);
+        }
       }
     };
 

@@ -16,6 +16,7 @@ from pydantic import BaseModel
 from argus.api.auth import require_auth
 from argus.api.dependencies import AppState, get_app_state
 from argus.api.routes.controls import ControlResponse
+from argus.models.trading import Trade
 
 router = APIRouter(tags=["orchestrator"])
 
@@ -247,7 +248,7 @@ async def get_orchestrator_status(
     # so date(exit_time) in SQLite matches the ET date for all intraday exits (DEC-061).
     today_et_date = datetime.now(et_tz).date()
     trades_today_all = await state.trade_logger.get_trades_by_date(today_et_date)
-    trades_by_strategy: dict[str, list] = {}
+    trades_by_strategy: dict[str, list[Trade]] = {}
     for _trade in trades_today_all:
         trades_by_strategy.setdefault(_trade.strategy_id, []).append(_trade)
 

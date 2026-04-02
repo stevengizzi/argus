@@ -49,11 +49,12 @@ export function ArenaStatsBar({
     ? 'text-argus-loss'
     : 'text-argus-text';
 
-  const rPositive = netR >= 0;
-  const rClass = rPositive ? 'text-argus-profit' : 'text-argus-loss';
+  const rPositive = netR > 0;
+  const rNeutral = netR === 0;
+  const rClass = rNeutral ? 'text-argus-text-dim' : rPositive ? 'text-argus-profit' : 'text-argus-loss';
 
   const pnlSign = pnlPositive ? '+' : pnlNegative ? '-' : '';
-  const rSign = rPositive ? '+' : '';
+  const rSign = rNeutral ? '' : rPositive ? '+' : '';
 
   return (
     <div

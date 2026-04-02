@@ -144,6 +144,24 @@ describe('filterPositions', () => {
     filterPositions(positions, 'strat_orb_breakout');
     expect(positions).toHaveLength(3);
   });
+
+  it('matches when position strategy_id lacks strat_ prefix but filter has it', () => {
+    const unprefixed = [
+      makePosition({ symbol: 'A', strategy_id: 'orb_breakout' }),
+      makePosition({ symbol: 'B', strategy_id: 'vwap_reclaim' }),
+    ];
+    const result = filterPositions(unprefixed, 'strat_orb_breakout');
+    expect(result).toHaveLength(1);
+    expect(result[0].symbol).toBe('A');
+  });
+
+  it('matches when both sides have strat_ prefix', () => {
+    const prefixed = [
+      makePosition({ symbol: 'X', strategy_id: 'strat_orb_breakout' }),
+      makePosition({ symbol: 'Y', strategy_id: 'strat_vwap_reclaim' }),
+    ];
+    expect(filterPositions(prefixed, 'strat_orb_breakout')).toHaveLength(1);
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -17,7 +17,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-from jose import JWTError, jwt
+from jose import jwt
 
 from argus.api.auth import get_jwt_secret
 from argus.api.dependencies import AppState
@@ -266,7 +266,7 @@ async def arena_websocket(websocket: WebSocket) -> None:
         try:
             jwt_secret = get_jwt_secret()
             jwt.decode(token, jwt_secret, algorithms=["HS256"])
-        except (JWTError, Exception):
+        except Exception:
             await websocket.close(code=4001)
             return
 
@@ -381,7 +381,7 @@ async def arena_websocket(websocket: WebSocket) -> None:
                 while True:
                     msg = await send_queue.get()
                     await websocket.send_json(msg)
-            except (WebSocketDisconnect, Exception):
+            except Exception:
                 pass
 
         sender_task: asyncio.Task[None] = asyncio.create_task(sender())

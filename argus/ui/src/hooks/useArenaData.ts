@@ -73,12 +73,23 @@ export function sortPositions(positions: ArenaPosition[], mode: ArenaSortMode): 
 }
 
 /**
+ * Normalize a strategy ID to always include the "strat_" prefix.
+ * Handles both "orb_breakout" and "strat_orb_breakout" formats.
+ */
+function normalizeStrategyId(id: string): string {
+  return id.startsWith('strat_') ? id : `strat_${id}`;
+}
+
+/**
  * Filter positions by strategy. "all" returns the full array unchanged.
+ * Normalizes both the position strategy_id and the filter value to the
+ * "strat_" prefix format so REST and WS positions match dropdown keys.
  * Returns a new array (does not mutate).
  */
 export function filterPositions(positions: ArenaPosition[], strategyFilter: string): ArenaPosition[] {
   if (strategyFilter === 'all') return positions;
-  return positions.filter((p) => p.strategy_id === strategyFilter);
+  const normalizedFilter = normalizeStrategyId(strategyFilter);
+  return positions.filter((p) => normalizeStrategyId(p.strategy_id) === normalizedFilter);
 }
 
 // ---------------------------------------------------------------------------

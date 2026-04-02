@@ -74,6 +74,7 @@ class ArenaCandlesResponse(BaseModel):
 
     symbol: str
     candles: list[CandleBarResponse]
+    timestamp: str
 
 
 # ---------------------------------------------------------------------------
@@ -182,7 +183,7 @@ async def get_arena_candles(
         Symbol and list of OHLCV bars with Unix timestamps.
     """
     if state.candle_store is None:
-        return ArenaCandlesResponse(symbol=symbol, candles=[])
+        return ArenaCandlesResponse(symbol=symbol, candles=[], timestamp=datetime.now(UTC).isoformat())
 
     bars = state.candle_store.get_latest(symbol, count=minutes)
 
@@ -198,4 +199,4 @@ async def get_arena_candles(
         for bar in bars
     ]
 
-    return ArenaCandlesResponse(symbol=symbol, candles=candles)
+    return ArenaCandlesResponse(symbol=symbol, candles=candles, timestamp=datetime.now(UTC).isoformat())

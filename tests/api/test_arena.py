@@ -342,3 +342,14 @@ async def test_candles_minutes_param_limits_count(
     assert response.status_code == 200
     # 35 bars stored, requesting 10 — should get at most 10
     assert len(response.json()["candles"]) <= 10
+
+
+@pytest.mark.asyncio
+async def test_candles_response_includes_timestamp(
+    arena_client: AsyncClient,
+    auth_headers: dict[str, str],
+) -> None:
+    """GET /arena/candles response includes a timestamp field (Sprint 14 convention)."""
+    response = await arena_client.get("/api/v1/arena/candles/AAPL", headers=auth_headers)
+    assert response.status_code == 200
+    assert "timestamp" in response.json()
