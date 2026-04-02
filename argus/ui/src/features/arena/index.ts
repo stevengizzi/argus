@@ -6,3 +6,5 @@ export { ArenaStatsBar } from './ArenaStatsBar';
 export type { ArenaStatsBarProps } from './ArenaStatsBar';
 export { ArenaControls } from './ArenaControls';
 export type { ArenaControlsProps, ArenaSortMode } from './ArenaControls';
+export { useArenaWebSocket } from './useArenaWebSocket';
+export type { UseArenaWebSocketResult, LiveOverlay, LiveArenaStats } from './useArenaWebSocket';

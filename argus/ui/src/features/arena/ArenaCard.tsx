@@ -5,7 +5,7 @@
  * and a stop-to-T1 progress bar. Purely presentational — no data fetching.
  */
 
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect, useState, useMemo } from 'react';
 import { MiniChart } from './MiniChart';
 import type { MiniChartHandle, CandleData } from './MiniChart';
 import { getStrategyDisplay } from '../../utils/strategyConfig';
@@ -21,6 +21,14 @@ export interface ArenaCardProps {
   target_prices: number[];
   trailing_stop_price?: number;
   candles: CandleData[];
+  /** Live current price from WS tick — used for progress bar when available. */
+  currentPrice?: number;
+  /**
+   * Called after MiniChart mounts so the WS hook can register the chart handle.
+   * Receives symbol + handle so the parent can pass a stable `registerChartRef`
+   * reference directly without wrapping it in a per-symbol closure each render.
+   */
+  onChartMount?: (symbol: string, handle: MiniChartHandle | null) => void;
 }
 
 function formatHoldTime(seconds: number): string {
@@ -63,6 +71,8 @@ export function ArenaCard({
   target_prices,
   trailing_stop_price,
   candles,
+  currentPrice,
+  onChartMount,
 }: ArenaCardProps) {
   const chartRef = useRef<MiniChartHandle>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(hold_seconds);
@@ -75,11 +85,28 @@ export function ArenaCard({
     return () => clearInterval(interval);
   }, [hold_seconds]);
 
+  // Notify the WS hook when the MiniChart handle is available.
+  // Including `symbol` in deps ensures re-registration if symbol ever changes.
+  useEffect(() => {
+    if (!onChartMount) return;
+    onChartMount(symbol, chartRef.current);
+    return () => onChartMount(symbol, null);
+  }, [onChartMount, symbol]);
+
+  // Stabilize targetPrices reference so MiniChart's price-line effect only
+  // re-runs when the values actually change (S9 carry-forward).
+  const stableTargetPrices = useMemo(
+    () => target_prices,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [target_prices.join(',')],
+  );
+
   const strategyConfig = getStrategyDisplay(strategy_id);
   const pnlPositive = pnl >= 0;
-  const t1Price = target_prices[0] ?? 0;
+  const t1Price = stableTargetPrices[0] ?? 0;
   const latestClose = candles[candles.length - 1]?.close ?? entry_price;
-  const progressPct = computeProgressPct(latestClose, stop_price, t1Price);
+  const priceForProgress = currentPrice ?? latestClose;
+  const progressPct = computeProgressPct(priceForProgress, stop_price, t1Price);
 
   return (
     <div
@@ -128,7 +155,7 @@ export function ArenaCard({
           candles={candles}
           entryPrice={entry_price}
           stopPrice={stop_price}
-          targetPrices={target_prices}
+          targetPrices={stableTargetPrices}
           trailingStopPrice={trailing_stop_price}
         />
       </div>

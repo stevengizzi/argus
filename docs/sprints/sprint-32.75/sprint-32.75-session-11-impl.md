@@ -34,6 +34,25 @@ Wire the Arena WebSocket to MiniChart instances for sub-second live candle forma
 - Chart update must use TradingView LC's `update()` method (not `setData()`)
 - If rAF batching proves too complex within compaction budget, defer to S12 and use direct updates
 
+## Review Carry-Forwards (from prior sessions)
+1. **useMemo for targetPrices (S9 F2):** When building ArenaCard props from
+   position data, stabilize `targetPrices` arrays with `useMemo` (or equivalent
+   stable reference) before passing to MiniChart. Without this, every parent
+   re-render creates a new array literal, triggering MiniChart's price-line
+   useEffect to remove and recreate all lines — at 30-chart scale this is
+   measurable. Apply the same treatment to any other array/object props passed
+   to MiniChart from the parent.
+
+2. **Strategy filter bug (S10 visual review):** The strategy filter in
+   ArenaControls produces zero results for all selections. Root cause: the
+   dropdown values (from `STRATEGY_DISPLAY` keys in `strategyConfig.ts`) don't
+   match the `strategy_id` format returned by the Arena REST API. When wiring
+   position state updates from WebSocket messages, ensure `strategy_id` values
+   are consistent with whatever format the filter comparison uses. This fix
+   belongs in S12f, but be aware of the format when handling
+   `arena_position_opened` payloads — use the raw `strategy_id` from the
+   backend, don't transform it.
+
 ## Test Targets
 - useArenaWebSocket dispatches tick to correct chart ref
 - Live candle formation: updateCandle creates/updates forming candle correctly
