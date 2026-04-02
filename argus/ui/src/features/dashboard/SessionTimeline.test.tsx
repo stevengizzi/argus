@@ -81,8 +81,8 @@ describe('SessionTimeline', () => {
 
     // Should have multiple rect elements for strategy bars
     const rects = container.querySelectorAll('svg rect');
-    // At least 8: 1 background + 7 strategy bars
-    expect(rects.length).toBeGreaterThanOrEqual(8);
+    // At least 13: 1 background + 12 strategy bars
+    expect(rects.length).toBeGreaterThanOrEqual(13);
   });
 
   it('renders status text based on time', () => {
@@ -110,7 +110,7 @@ describe('SessionTimeline', () => {
     expect(foundStatus).toBe(true);
   });
 
-  it('renders all 7 strategy letters when API unavailable (fallback)', () => {
+  it('renders all 12 strategy letters when API unavailable (fallback)', () => {
     // useStrategies returns undefined data — fallback to all strategies
     mockUseStrategies.mockReturnValue({
       data: undefined,
@@ -120,7 +120,7 @@ describe('SessionTimeline', () => {
 
     renderWithProviders(<SessionTimeline />);
 
-    // All 7 strategy letters must be present
+    // All 12 strategy letters must be present
     expect(screen.getByText('O')).toBeInTheDocument(); // ORB Breakout
     expect(screen.getByText('S')).toBeInTheDocument(); // ORB Scalp
     expect(screen.getByText('V')).toBeInTheDocument(); // VWAP Reclaim
@@ -128,6 +128,11 @@ describe('SessionTimeline', () => {
     expect(screen.getByText('F')).toBeInTheDocument(); // Bull Flag
     expect(screen.getByText('T')).toBeInTheDocument(); // Flat-Top Breakout
     expect(screen.getByText('A')).toBeInTheDocument(); // Afternoon Momentum
+    expect(screen.getByText('D')).toBeInTheDocument(); // Dip-and-Rip
+    expect(screen.getByText('H')).toBeInTheDocument(); // HOD Break
+    expect(screen.getByText('G')).toBeInTheDocument(); // Gap-and-Go
+    expect(screen.getByText('X')).toBeInTheDocument(); // ABCD
+    expect(screen.getByText('P')).toBeInTheDocument(); // PM High Break
   });
 
   it('filters to registered strategies from API (dynamic source)', () => {

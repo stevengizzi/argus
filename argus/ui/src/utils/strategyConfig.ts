@@ -83,6 +83,46 @@ export const STRATEGY_DISPLAY: Record<string, StrategyDisplayConfig> = {
     tailwindColor: 'violet-400',
     badgeId: 'strat_flat_top_breakout',
   },
+  strat_dip_and_rip: {
+    name: 'Dip-and-Rip',
+    shortName: 'DIP',
+    letter: 'D',
+    color: '#fb7185',
+    tailwindColor: 'rose-400',
+    badgeId: 'strat_dip_and_rip',
+  },
+  strat_hod_break: {
+    name: 'HOD Break',
+    shortName: 'HOD',
+    letter: 'H',
+    color: '#34d399',
+    tailwindColor: 'emerald-400',
+    badgeId: 'strat_hod_break',
+  },
+  strat_gap_and_go: {
+    name: 'Gap-and-Go',
+    shortName: 'GAP',
+    letter: 'G',
+    color: '#38bdf8',
+    tailwindColor: 'sky-400',
+    badgeId: 'strat_gap_and_go',
+  },
+  strat_abcd: {
+    name: 'ABCD',
+    shortName: 'ABCD',
+    letter: 'X',
+    color: '#f472b6',
+    tailwindColor: 'pink-400',
+    badgeId: 'strat_abcd',
+  },
+  strat_premarket_high_break: {
+    name: 'PM High Break',
+    shortName: 'PMH',
+    letter: 'P',
+    color: '#a3e635',
+    tailwindColor: 'lime-400',
+    badgeId: 'strat_premarket_high_break',
+  },
 };
 
 /**
@@ -97,6 +137,11 @@ export const STRATEGY_BORDER_CLASSES: Record<string, string> = {
   strat_red_to_green: 'border-l-orange-400',
   strat_bull_flag: 'border-l-cyan-400',
   strat_flat_top_breakout: 'border-l-violet-400',
+  strat_dip_and_rip: 'border-l-rose-400',
+  strat_hod_break: 'border-l-emerald-400',
+  strat_gap_and_go: 'border-l-sky-400',
+  strat_abcd: 'border-l-pink-400',
+  strat_premarket_high_break: 'border-l-lime-400',
 };
 
 /**
@@ -111,6 +156,11 @@ export const STRATEGY_BAR_CLASSES: Record<string, string> = {
   strat_red_to_green: 'bg-orange-400',
   strat_bull_flag: 'bg-cyan-400',
   strat_flat_top_breakout: 'bg-violet-400',
+  strat_dip_and_rip: 'bg-rose-400',
+  strat_hod_break: 'bg-emerald-400',
+  strat_gap_and_go: 'bg-sky-400',
+  strat_abcd: 'bg-pink-400',
+  strat_premarket_high_break: 'bg-lime-400',
 };
 
 /**

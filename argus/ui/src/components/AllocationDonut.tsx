@@ -38,6 +38,11 @@ const STRATEGY_COLORS: Record<string, string> = {
   red_to_green: '#fb923c',  // orange-400
   bull_flag: '#22d3ee',      // cyan-400
   flat_top_breakout: '#a78bfa', // violet-400
+  dip_and_rip: '#fb7185',      // rose-400
+  hod_break: '#34d399',        // emerald-400
+  gap_and_go: '#38bdf8',       // sky-400
+  abcd: '#f472b6',             // pink-400
+  premarket_high_break: '#a3e635', // lime-400
 };
 
 const RESERVE_COLOR = '#71717a'; // zinc-500 (legend dot)
@@ -61,6 +66,11 @@ const STRATEGY_DISPLAY_NAMES: Record<string, string> = {
   red_to_green: 'Red-to-Green',
   bull_flag: 'Bull Flag',
   flat_top_breakout: 'Flat-Top',
+  dip_and_rip: 'Dip-and-Rip',
+  hod_break: 'HOD Break',
+  gap_and_go: 'Gap-and-Go',
+  abcd: 'ABCD',
+  premarket_high_break: 'PM High Break',
 };
 
 function getStrategyDisplayName(strategyId: string): string {

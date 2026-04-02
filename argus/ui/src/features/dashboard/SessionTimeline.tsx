@@ -90,6 +90,46 @@ const ALL_STRATEGY_WINDOWS: StrategyWindow[] = [
     color: getStrategyColor('strat_afternoon_momentum'),
     row: 0, // Can use row 0 since it doesn't overlap with ORB
   },
+  {
+    id: 'strat_dip_and_rip',
+    letter: 'D',
+    startMinute: 9 * 60 + 45, // 9:45 AM
+    endMinute: 11 * 60 + 30, // 11:30 AM
+    color: getStrategyColor('strat_dip_and_rip'),
+    row: 6,
+  },
+  {
+    id: 'strat_hod_break',
+    letter: 'H',
+    startMinute: 10 * 60, // 10:00 AM
+    endMinute: 15 * 60 + 30, // 3:30 PM
+    color: getStrategyColor('strat_hod_break'),
+    row: 7,
+  },
+  {
+    id: 'strat_gap_and_go',
+    letter: 'G',
+    startMinute: 9 * 60 + 35, // 9:35 AM
+    endMinute: 10 * 60 + 30, // 10:30 AM
+    color: getStrategyColor('strat_gap_and_go'),
+    row: 8,
+  },
+  {
+    id: 'strat_abcd',
+    letter: 'X',
+    startMinute: 10 * 60, // 10:00 AM
+    endMinute: 15 * 60, // 3:00 PM
+    color: getStrategyColor('strat_abcd'),
+    row: 9,
+  },
+  {
+    id: 'strat_premarket_high_break',
+    letter: 'P',
+    startMinute: 9 * 60 + 35, // 9:35 AM
+    endMinute: 10 * 60 + 30, // 10:30 AM
+    color: getStrategyColor('strat_premarket_high_break'),
+    row: 10,
+  },
 ];
 
 // Convert minutes from midnight to percentage of trading day
@@ -111,10 +151,10 @@ function getCurrentMinutesET(): number {
   return hours * 60 + minutes;
 }
 
-// Timeline dimensions — scaled for up to 6 rows
+// Timeline dimensions — scaled for up to 11 rows
 const BAR_HEIGHT = 7;
 const BAR_GAP = 1;
-const MAX_ROWS = 6;
+const MAX_ROWS = 11;
 const TRACK_HEIGHT = BAR_HEIGHT * MAX_ROWS + BAR_GAP * (MAX_ROWS - 1); // 47
 const TIMELINE_Y = 14;
 const LABEL_Y = TIMELINE_Y + TRACK_HEIGHT + 12; // below track

@@ -43,12 +43,68 @@ describe('strategyConfig', () => {
       expect(getStrategyDisplay('strat_red_to_green').name).toBe('Red-to-Green');
       expect(getStrategyDisplay('strat_bull_flag').name).toBe('Bull Flag');
       expect(getStrategyDisplay('strat_flat_top_breakout').name).toBe('Flat-Top Breakout');
+      expect(getStrategyDisplay('strat_dip_and_rip').name).toBe('Dip-and-Rip');
+      expect(getStrategyDisplay('strat_hod_break').name).toBe('HOD Break');
+      expect(getStrategyDisplay('strat_gap_and_go').name).toBe('Gap-and-Go');
+      expect(getStrategyDisplay('strat_abcd').name).toBe('ABCD');
+      expect(getStrategyDisplay('strat_premarket_high_break').name).toBe('PM High Break');
     });
 
     it('returns correct short names for new strategies', () => {
       expect(getStrategyDisplay('strat_red_to_green').shortName).toBe('R2G');
       expect(getStrategyDisplay('strat_bull_flag').shortName).toBe('FLAG');
       expect(getStrategyDisplay('strat_flat_top_breakout').shortName).toBe('FLAT');
+      expect(getStrategyDisplay('strat_dip_and_rip').shortName).toBe('DIP');
+      expect(getStrategyDisplay('strat_hod_break').shortName).toBe('HOD');
+      expect(getStrategyDisplay('strat_gap_and_go').shortName).toBe('GAP');
+      expect(getStrategyDisplay('strat_abcd').shortName).toBe('ABCD');
+      expect(getStrategyDisplay('strat_premarket_high_break').shortName).toBe('PMH');
+    });
+
+    it('returns correct config for all 12 strategy IDs with strat_ prefix', () => {
+      const allStrategyIds = [
+        'strat_orb_breakout',
+        'strat_orb_scalp',
+        'strat_vwap_reclaim',
+        'strat_afternoon_momentum',
+        'strat_red_to_green',
+        'strat_bull_flag',
+        'strat_flat_top_breakout',
+        'strat_dip_and_rip',
+        'strat_hod_break',
+        'strat_gap_and_go',
+        'strat_abcd',
+        'strat_premarket_high_break',
+      ];
+      for (const id of allStrategyIds) {
+        const config = getStrategyDisplay(id);
+        // All known strategies must have a non-grey color
+        expect(config.color).not.toBe('#6b7280');
+        // badgeId must match the input
+        expect(config.badgeId).toBe(id);
+      }
+    });
+
+    it('returns correct config for all 12 strategy IDs without strat_ prefix', () => {
+      const nonPrefixedIds = [
+        'orb_breakout',
+        'orb_scalp',
+        'vwap_reclaim',
+        'afternoon_momentum',
+        'red_to_green',
+        'bull_flag',
+        'flat_top_breakout',
+        'dip_and_rip',
+        'hod_break',
+        'gap_and_go',
+        'abcd',
+        'premarket_high_break',
+      ];
+      for (const id of nonPrefixedIds) {
+        const config = getStrategyDisplay(id);
+        // All known strategies must have a non-grey color
+        expect(config.color).not.toBe('#6b7280');
+      }
     });
 
     it('returns grey fallback for unknown strategies', () => {
@@ -75,6 +131,11 @@ describe('strategyConfig', () => {
       expect(getStrategyColor('strat_red_to_green')).toBe('#fb923c');
       expect(getStrategyColor('strat_bull_flag')).toBe('#22d3ee');
       expect(getStrategyColor('strat_flat_top_breakout')).toBe('#a78bfa');
+      expect(getStrategyColor('strat_dip_and_rip')).toBe('#fb7185');
+      expect(getStrategyColor('strat_hod_break')).toBe('#34d399');
+      expect(getStrategyColor('strat_gap_and_go')).toBe('#38bdf8');
+      expect(getStrategyColor('strat_abcd')).toBe('#f472b6');
+      expect(getStrategyColor('strat_premarket_high_break')).toBe('#a3e635');
     });
 
     it('returns grey fallback for unknown strategies', () => {
@@ -89,6 +150,11 @@ describe('strategyConfig', () => {
       expect(getStrategyBorderClass('strat_red_to_green')).toBe('border-l-orange-400');
       expect(getStrategyBorderClass('strat_bull_flag')).toBe('border-l-cyan-400');
       expect(getStrategyBorderClass('strat_flat_top_breakout')).toBe('border-l-violet-400');
+      expect(getStrategyBorderClass('strat_dip_and_rip')).toBe('border-l-rose-400');
+      expect(getStrategyBorderClass('strat_hod_break')).toBe('border-l-emerald-400');
+      expect(getStrategyBorderClass('strat_gap_and_go')).toBe('border-l-sky-400');
+      expect(getStrategyBorderClass('strat_abcd')).toBe('border-l-pink-400');
+      expect(getStrategyBorderClass('strat_premarket_high_break')).toBe('border-l-lime-400');
     });
 
     it('returns grey fallback for unknown strategies', () => {
@@ -103,6 +169,11 @@ describe('strategyConfig', () => {
       expect(getStrategyBarClass('strat_red_to_green')).toBe('bg-orange-400');
       expect(getStrategyBarClass('strat_bull_flag')).toBe('bg-cyan-400');
       expect(getStrategyBarClass('strat_flat_top_breakout')).toBe('bg-violet-400');
+      expect(getStrategyBarClass('strat_dip_and_rip')).toBe('bg-rose-400');
+      expect(getStrategyBarClass('strat_hod_break')).toBe('bg-emerald-400');
+      expect(getStrategyBarClass('strat_gap_and_go')).toBe('bg-sky-400');
+      expect(getStrategyBarClass('strat_abcd')).toBe('bg-pink-400');
+      expect(getStrategyBarClass('strat_premarket_high_break')).toBe('bg-lime-400');
     });
 
     it('returns grey fallback for unknown strategies', () => {
