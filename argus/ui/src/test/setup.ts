@@ -29,6 +29,11 @@ global.ResizeObserver = class ResizeObserver {
   disconnect() {}
 };
 
+// Prevent WebSocket leaks from hanging Vitest workers (Sprint 32.8 fix)
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
 // Mock matchMedia
 Object.defineProperty(window, 'matchMedia', {
   writable: true,

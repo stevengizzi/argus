@@ -16,6 +16,16 @@ import { ArenaStatsBar } from '../features/arena/ArenaStatsBar';
 import { ArenaControls } from '../features/arena/ArenaControls';
 import { Sidebar } from '../layouts/Sidebar';
 
+vi.mock('../features/arena/useArenaWebSocket', () => ({
+  useArenaWebSocket: vi.fn(() => ({
+    positions: [],
+    stats: { position_count: 0, total_pnl: 0, net_r: 0, entries_5m: 0, exits_5m: 0 },
+    liveOverlays: {},
+    wsStatus: 'disconnected' as const,
+    registerChartRef: vi.fn(),
+  })),
+}));
+
 vi.mock('../hooks/useArenaData', () => ({
   useArenaData: vi.fn(() => ({
     positions: [],
