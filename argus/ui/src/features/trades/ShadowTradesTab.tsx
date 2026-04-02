@@ -8,7 +8,7 @@
  */
 
 import { useState } from 'react';
-import { Ghost, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Ghost, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { useShadowTrades } from '../../hooks/useShadowTrades';
 import { useStrategies } from '../../hooks/useStrategies';
 import { GRADE_COLORS } from '../../constants/qualityConstants';
@@ -60,7 +60,7 @@ interface GradeBadgeProps {
 }
 
 function GradeBadge({ grade }: GradeBadgeProps) {
-  if (!grade) return <span className="text-argus-text-muted text-xs">—</span>;
+  if (!grade) return <span className="text-argus-text-dim text-xs">—</span>;
   const color = GRADE_COLORS[grade] ?? '#9ca3af';
   return (
     <span
@@ -77,7 +77,7 @@ interface PnlCellProps {
 }
 
 function PnlCell({ value }: PnlCellProps) {
-  if (value === null) return <span className="text-argus-text-muted text-xs">—</span>;
+  if (value === null) return <span className="text-argus-text-dim text-xs">—</span>;
   const isPositive = value >= 0;
   const sign = isPositive ? '+' : '-';
   return (
@@ -92,7 +92,7 @@ interface RMultipleCellProps {
 }
 
 function RMultipleCell({ value }: RMultipleCellProps) {
-  if (value === null) return <span className="text-argus-text-muted text-xs">—</span>;
+  if (value === null) return <span className="text-argus-text-dim text-xs">—</span>;
   const isPositive = value >= 0;
   return (
     <span className={isPositive ? 'text-argus-profit' : 'text-argus-loss'}>
@@ -123,7 +123,7 @@ function SummaryStats({ trades, totalCount }: SummaryStatsProps) {
       : null;
 
   const statClass = 'flex flex-col gap-0.5';
-  const labelClass = 'text-xs text-argus-text-muted uppercase tracking-wide';
+  const labelClass = 'text-xs text-argus-text-dim uppercase tracking-wide';
   const valueClass = 'text-sm font-semibold text-argus-text';
 
   return (
@@ -191,7 +191,7 @@ function ShadowFilters({ filters, onFiltersChange }: ShadowFiltersProps) {
     <div className="flex flex-wrap gap-3 items-end">
       {/* Strategy selector */}
       <div className="flex flex-col gap-1">
-        <label className="text-xs text-argus-text-muted">Strategy</label>
+        <label className="text-xs text-argus-text-dim">Strategy</label>
         <select
           className="bg-argus-surface border border-argus-border rounded-md px-3 py-1.5 text-sm text-argus-text focus:outline-none focus:ring-1 focus:ring-argus-accent"
           value={filters.strategy_id ?? ''}
@@ -210,7 +210,7 @@ function ShadowFilters({ filters, onFiltersChange }: ShadowFiltersProps) {
 
       {/* Rejection stage selector */}
       <div className="flex flex-col gap-1">
-        <label className="text-xs text-argus-text-muted">Rejection Stage</label>
+        <label className="text-xs text-argus-text-dim">Rejection Stage</label>
         <select
           className="bg-argus-surface border border-argus-border rounded-md px-3 py-1.5 text-sm text-argus-text focus:outline-none focus:ring-1 focus:ring-argus-accent"
           value={filters.rejection_stage ?? ''}
@@ -229,7 +229,7 @@ function ShadowFilters({ filters, onFiltersChange }: ShadowFiltersProps) {
 
       {/* Date range */}
       <div className="flex flex-col gap-1">
-        <label className="text-xs text-argus-text-muted">From</label>
+        <label className="text-xs text-argus-text-dim">From</label>
         <input
           type="date"
           className="bg-argus-surface border border-argus-border rounded-md px-3 py-1.5 text-sm text-argus-text focus:outline-none focus:ring-1 focus:ring-argus-accent"
@@ -240,7 +240,7 @@ function ShadowFilters({ filters, onFiltersChange }: ShadowFiltersProps) {
         />
       </div>
       <div className="flex flex-col gap-1">
-        <label className="text-xs text-argus-text-muted">To</label>
+        <label className="text-xs text-argus-text-dim">To</label>
         <input
           type="date"
           className="bg-argus-surface border border-argus-border rounded-md px-3 py-1.5 text-sm text-argus-text focus:outline-none focus:ring-1 focus:ring-argus-accent"
@@ -262,8 +262,8 @@ function EmptyState() {
       className="flex flex-col items-center justify-center py-16 gap-4 text-center"
       data-testid="shadow-empty-state"
     >
-      <Ghost className="w-10 h-10 text-argus-text-muted opacity-40" />
-      <p className="text-argus-text-muted text-sm max-w-sm">
+      <Ghost className="w-10 h-10 text-argus-text-dim opacity-40" />
+      <p className="text-argus-text-dim text-sm max-w-sm">
         No shadow trades recorded yet. Shadow trades appear when signals are rejected by the
         quality filter, position sizer, or risk manager.
       </p>
@@ -279,7 +279,7 @@ interface ShadowTableProps {
 
 function ShadowTable({ trades }: ShadowTableProps) {
   const thClass =
-    'px-3 py-2 text-left text-xs font-medium text-argus-text-muted uppercase tracking-wide whitespace-nowrap';
+    'px-3 py-2 text-left text-xs font-medium text-argus-text-dim uppercase tracking-wide whitespace-nowrap';
   const tdClass =
     'px-3 py-2 text-sm text-argus-text whitespace-nowrap';
 
@@ -318,10 +318,10 @@ function ShadowTable({ trades }: ShadowTableProps) {
               >
                 <td className={`${tdClass} font-semibold`}>{trade.symbol}</td>
                 <td className={tdClass}>{trade.strategy_id}</td>
-                <td className={`${tdClass} text-argus-text-muted`}>
+                <td className={`${tdClass} text-argus-text-dim`}>
                   {trade.variant_id ?? '—'}
                 </td>
-                <td className={`${tdClass} text-argus-text-muted`}>{entryDisplay}</td>
+                <td className={`${tdClass} text-argus-text-dim`}>{entryDisplay}</td>
                 <td className={tdClass}>${trade.entry_price.toFixed(2)}</td>
                 <td className={tdClass}>
                   {trade.exit_price !== null ? `$${trade.exit_price.toFixed(2)}` : '—'}
@@ -341,7 +341,7 @@ function ShadowTable({ trades }: ShadowTableProps) {
                 <td className={tdClass}>
                   <StageBadge stage={trade.rejection_stage} />
                 </td>
-                <td className={`${tdClass} text-argus-text-muted max-w-[180px] truncate`}>
+                <td className={`${tdClass} text-argus-text-dim max-w-[180px] truncate`}>
                   {trade.rejection_reason}
                 </td>
                 <td className={tdClass}>
@@ -371,7 +371,7 @@ function Pagination({ offset, limit, totalCount, onOffsetChange }: PaginationPro
   if (totalPages <= 1) return null;
 
   return (
-    <div className="flex items-center justify-between text-sm text-argus-text-muted">
+    <div className="flex items-center justify-between text-sm text-argus-text-dim">
       <span>
         Page {currentPage} of {totalPages} ({totalCount} total)
       </span>
@@ -399,7 +399,11 @@ function Pagination({ offset, limit, totalCount, onOffsetChange }: PaginationPro
 
 // --- Main component ---
 
-export function ShadowTradesTab() {
+interface ShadowTradesTabProps {
+  enabled?: boolean;
+}
+
+export function ShadowTradesTab({ enabled = true }: ShadowTradesTabProps) {
   const [filters, setFilters] = useState<FiltersState>({
     strategy_id: undefined,
     date_from: undefined,
@@ -413,11 +417,10 @@ export function ShadowTradesTab() {
     setOffset(0); // reset pagination on filter change
   };
 
-  const { data, isLoading, error } = useShadowTrades({
-    ...filters,
-    limit: PAGE_SIZE,
-    offset,
-  });
+  const { data, isLoading, error } = useShadowTrades(
+    { ...filters, limit: PAGE_SIZE, offset },
+    enabled,
+  );
 
   const trades = data?.positions ?? [];
   const totalCount = data?.total_count ?? 0;
@@ -426,13 +429,20 @@ export function ShadowTradesTab() {
     <div className="space-y-4" data-testid="shadow-trades-tab">
       <ShadowFilters filters={filters} onFiltersChange={updateFilters} />
 
-      {isLoading ? (
-        <div className="py-16 text-center text-argus-text-muted text-sm">
-          Loading shadow trades…
+      {error ? (
+        <div
+          className="py-8 text-center text-argus-loss text-sm"
+          data-testid="shadow-error-state"
+        >
+          Unable to load shadow trades: {error.message}
         </div>
-      ) : error ? (
-        <div className="py-8 text-center text-argus-loss text-sm">
-          Error loading shadow trades: {error.message}
+      ) : isLoading || !data ? (
+        <div
+          className="flex items-center justify-center py-16 gap-2 text-argus-text-dim text-sm"
+          data-testid="shadow-loading-state"
+        >
+          <Loader2 className="w-4 h-4 animate-spin" />
+          Loading shadow trades…
         </div>
       ) : trades.length === 0 ? (
         <>

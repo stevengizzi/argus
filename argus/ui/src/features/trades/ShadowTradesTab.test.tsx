@@ -120,7 +120,40 @@ describe('ShadowTradesTab — renders without error', () => {
     render(<ShadowTradesTab />, { wrapper });
 
     expect(screen.getByTestId('shadow-trades-tab')).toBeInTheDocument();
+    expect(screen.getByTestId('shadow-loading-state')).toBeInTheDocument();
     expect(screen.getByText(/loading shadow trades/i)).toBeInTheDocument();
+  });
+
+  it('shows loading state when data is undefined even if isLoading is false', () => {
+    vi.mocked(useShadowTrades).mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      error: null,
+      isFetching: true,
+      isPending: true,
+    } as ReturnType<typeof useShadowTrades>);
+
+    render(<ShadowTradesTab />, { wrapper });
+
+    expect(screen.getByTestId('shadow-loading-state')).toBeInTheDocument();
+  });
+});
+
+describe('ShadowTradesTab — error state', () => {
+  it('shows error message when API call fails', () => {
+    vi.mocked(useShadowTrades).mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      error: new Error('Service unavailable'),
+      isFetching: false,
+      isPending: false,
+    } as ReturnType<typeof useShadowTrades>);
+
+    render(<ShadowTradesTab />, { wrapper });
+
+    expect(screen.getByTestId('shadow-error-state')).toBeInTheDocument();
+    expect(screen.getByText(/unable to load shadow trades/i)).toBeInTheDocument();
+    expect(screen.getByText(/service unavailable/i)).toBeInTheDocument();
   });
 });
 
@@ -202,15 +235,18 @@ describe('TradesPage — tab switching', () => {
     // Tab bar is present
     expect(screen.getByTestId('trades-tab-bar')).toBeInTheDocument();
 
-    // Default is Live Trades — shadow tab not mounted
-    expect(screen.queryByTestId('shadow-trades-tab')).not.toBeInTheDocument();
+    // Default is Live Trades — shadow tab is mounted but hidden
+    expect(screen.getByTestId('shadow-trades-tab')).toBeInTheDocument();
+    expect(screen.getByTestId('shadow-trades-tab').closest('.hidden')).not.toBeNull();
 
-    // Switch to Shadow Trades
+    // Switch to Shadow Trades — shadow tab becomes visible
     fireEvent.click(screen.getByTestId('tab-shadow-trades'));
     expect(screen.getByTestId('shadow-trades-tab')).toBeInTheDocument();
+    expect(screen.getByTestId('shadow-trades-tab').closest('.hidden')).toBeNull();
 
-    // Switch back to Live Trades — shadow tab unmounts
+    // Switch back to Live Trades — shadow tab hidden again
     fireEvent.click(screen.getByTestId('tab-live-trades'));
-    expect(screen.queryByTestId('shadow-trades-tab')).not.toBeInTheDocument();
+    expect(screen.getByTestId('shadow-trades-tab')).toBeInTheDocument();
+    expect(screen.getByTestId('shadow-trades-tab').closest('.hidden')).not.toBeNull();
   });
 });

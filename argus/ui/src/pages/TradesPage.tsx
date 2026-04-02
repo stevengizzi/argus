@@ -252,7 +252,7 @@ export function TradesPage() {
             className={`flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
               activeTab === 'live'
                 ? 'border-argus-accent text-argus-accent'
-                : 'border-transparent text-argus-text-muted hover:text-argus-text'
+                : 'border-transparent text-argus-text-dim hover:text-argus-text'
             }`}
             data-testid="tab-live-trades"
           >
@@ -264,7 +264,7 @@ export function TradesPage() {
             className={`flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
               activeTab === 'shadow'
                 ? 'border-argus-accent text-argus-accent'
-                : 'border-transparent text-argus-text-muted hover:text-argus-text'
+                : 'border-transparent text-argus-text-dim hover:text-argus-text'
             }`}
             data-testid="tab-shadow-trades"
           >
@@ -274,61 +274,61 @@ export function TradesPage() {
         </div>
       </motion.div>
 
-      {activeTab === 'live' ? (
-        <>
-          {/* Filters - controlled by local state */}
-          <motion.div variants={staggerItem}>
-            <TradeFilters filters={filters} onFiltersChange={updateFilters} />
-          </motion.div>
-
-          {/* Stats bar - container persists, content transitions */}
-          <motion.div variants={staggerItem}>
-            {isLoading ? (
-              <TradeStatsBarSkeleton />
-            ) : statsData ? (
-              <TradeStatsBar
-                stats={statsData}
-                isTransitioning={isFetching || statsFetching}
-              />
-            ) : null}
-          </motion.div>
-
-          {/* Content area - container persists, content transitions */}
-          <motion.div variants={staggerItem}>
-            {isLoading ? (
-              <TradeTableSkeleton />
-            ) : error ? (
-              <div className="bg-argus-surface border border-argus-border rounded-lg p-8 text-center">
-                <p className="text-argus-loss">Error loading trades: {error.message}</p>
-              </div>
-            ) : data ? (
-              <TradeTable
-                trades={data.trades}
-                totalCount={data.total_count}
-                isLoading={isLoading}
-                isTransitioning={isFetching}
-                hasFilters={Boolean(
-                  filters.strategy_id ||
-                    filters.outcome !== 'all' ||
-                    filters.date_from ||
-                    filters.date_to
-                )}
-                onTradeClick={setSelectedTrade}
-              />
-            ) : null}
-          </motion.div>
-
-          {/* Trade detail panel */}
-          <TradeDetailPanel
-            trade={selectedTrade}
-            onClose={() => setSelectedTrade(null)}
-          />
-        </>
-      ) : (
+      {/* Live Trades tab content — always mounted to avoid remount reinitialization issues */}
+      <div className={activeTab === 'live' ? undefined : 'hidden'}>
+        {/* Filters - controlled by local state */}
         <motion.div variants={staggerItem}>
-          <ShadowTradesTab />
+          <TradeFilters filters={filters} onFiltersChange={updateFilters} />
         </motion.div>
-      )}
+
+        {/* Stats bar - container persists, content transitions */}
+        <motion.div variants={staggerItem}>
+          {isLoading ? (
+            <TradeStatsBarSkeleton />
+          ) : statsData ? (
+            <TradeStatsBar
+              stats={statsData}
+              isTransitioning={isFetching || statsFetching}
+            />
+          ) : null}
+        </motion.div>
+
+        {/* Content area - container persists, content transitions */}
+        <motion.div variants={staggerItem}>
+          {isLoading ? (
+            <TradeTableSkeleton />
+          ) : error ? (
+            <div className="bg-argus-surface border border-argus-border rounded-lg p-8 text-center">
+              <p className="text-argus-loss">Error loading trades: {error.message}</p>
+            </div>
+          ) : data ? (
+            <TradeTable
+              trades={data.trades}
+              totalCount={data.total_count}
+              isLoading={isLoading}
+              isTransitioning={isFetching}
+              hasFilters={Boolean(
+                filters.strategy_id ||
+                  filters.outcome !== 'all' ||
+                  filters.date_from ||
+                  filters.date_to
+              )}
+              onTradeClick={setSelectedTrade}
+            />
+          ) : null}
+        </motion.div>
+
+        {/* Trade detail panel */}
+        <TradeDetailPanel
+          trade={selectedTrade}
+          onClose={() => setSelectedTrade(null)}
+        />
+      </div>
+
+      {/* Shadow Trades tab content — always mounted, fetch disabled when hidden */}
+      <div className={activeTab === 'shadow' ? undefined : 'hidden'}>
+        <ShadowTradesTab enabled={activeTab === 'shadow'} />
+      </div>
     </motion.div>
   );
 }
