@@ -287,7 +287,7 @@ export function TradesPage() {
       </motion.div>
 
       {/* Live Trades tab content — always mounted to avoid remount reinitialization issues */}
-      <div className={activeTab === 'live' ? undefined : 'hidden'}>
+      <div className={activeTab === 'live' ? 'space-y-4' : 'hidden'}>
         {/* Filters - controlled by local state */}
         <motion.div variants={staggerItem}>
           <TradeFilters filters={filters} onFiltersChange={updateFilters} />

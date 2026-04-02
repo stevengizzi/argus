@@ -188,8 +188,8 @@ export function TradeTable({
       {/* Scrollable container: ~20 rows visible */}
       <div className="overflow-x-auto overflow-y-auto max-h-[800px]" data-testid="trade-table-scroll">
         <table className="w-full table-fixed">
-          <thead className="sticky top-0 z-10">
-            <tr className="bg-argus-surface-2">
+          <thead className="sticky top-0 z-10 bg-argus-surface-2">
+            <tr>
               {/* Phone: combined date/symbol column */}
               <th className="lg:hidden px-3 py-2 text-xs font-medium uppercase tracking-wide text-argus-text-dim text-left">
                 Trade
@@ -282,7 +282,7 @@ export function TradeTable({
           </thead>
           {/* Table body dims during filter transitions */}
           <tbody
-            className={`divide-y divide-argus-border transition-opacity duration-200 ${
+            className={`divide-y divide-argus-border bg-argus-surface transition-opacity duration-200 ${
               isTransitioning ? 'opacity-40' : 'opacity-100'
             }`}
           >

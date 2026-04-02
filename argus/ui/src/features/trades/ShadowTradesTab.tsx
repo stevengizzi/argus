@@ -125,23 +125,13 @@ function RMultipleCell({ value }: RMultipleCellProps) {
 // --- Summary stats ---
 
 interface SummaryStatsProps {
-  trades: ShadowTrade[];
+  winRate: number | null;
+  avgPnl: number | null;
+  avgR: number | null;
   totalCount: number;
 }
 
-function SummaryStats({ trades, totalCount }: SummaryStatsProps) {
-  const closed = trades.filter((t) => t.theoretical_pnl !== null);
-  const wins = closed.filter((t) => (t.theoretical_pnl ?? 0) > 0);
-  const winRate = closed.length > 0 ? wins.length / closed.length : null;
-  const avgPnl =
-    closed.length > 0
-      ? closed.reduce((sum, t) => sum + (t.theoretical_pnl ?? 0), 0) / closed.length
-      : null;
-  const withR = trades.filter((t) => t.theoretical_r_multiple !== null);
-  const avgR =
-    withR.length > 0
-      ? withR.reduce((sum, t) => sum + (t.theoretical_r_multiple ?? 0), 0) / withR.length
-      : null;
+function SummaryStats({ winRate, avgPnl, avgR, totalCount }: SummaryStatsProps) {
 
   const statClass = 'flex flex-col gap-0.5';
   const labelClass = 'text-xs text-argus-text-dim uppercase tracking-wide';
@@ -551,20 +541,23 @@ export function ShadowTradesTab({ enabled = true }: ShadowTradesTabProps) {
   const apiDateTo = filters.date_to ? `${filters.date_to}T23:59:59` : filters.date_to;
 
   // Accumulate pages; deduplicate by position_id to handle keepPreviousData stale returns
-  const { data, isLoading, isFetching, error } = useShadowTrades(
+  const { data, isLoading, isFetching, error, isPlaceholderData } = useShadowTrades(
     { ...filters, date_to: apiDateTo, limit: PAGE_SIZE, offset },
     enabled,
   );
 
+  // Guard against keepPreviousData returning stale results from prior filter params.
+  // Without this check, the effect would repopulate allTrades with old positions while
+  // totalCount already reflects the new filter — causing stats to appear "stuck".
   useEffect(() => {
-    if (!data) return;
+    if (!data || isPlaceholderData) return;
     setAllTrades((prev) => {
       if (offset === 0) return data.positions;
       const existingIds = new Set(prev.map((t) => t.position_id));
       const newTrades = data.positions.filter((t) => !existingIds.has(t.position_id));
       return newTrades.length > 0 ? [...prev, ...newTrades] : prev;
     });
-  }, [data, offset]);
+  }, [data, offset, isPlaceholderData]);
 
   const hasMore = data ? offset + PAGE_SIZE < data.total_count : false;
   const totalCount = data?.total_count ?? 0;
@@ -642,6 +635,26 @@ export function ShadowTradesTab({ enabled = true }: ShadowTradesTabProps) {
 
   const isLoadingMore = isFetching && offset > 0;
 
+  // Compute summary stats from the current allTrades snapshot.
+  // useMemo ensures these recompute exactly when allTrades changes (e.g. on filter switch).
+  const summaryStats = useMemo(() => {
+    const withPnl = allTrades.filter((t) => t.theoretical_pnl !== null);
+    const winRate =
+      withPnl.length > 0
+        ? withPnl.filter((t) => t.theoretical_pnl! > 0).length / withPnl.length
+        : null;
+    const avgPnl =
+      withPnl.length > 0
+        ? withPnl.reduce((sum, t) => sum + t.theoretical_pnl!, 0) / withPnl.length
+        : null;
+    const withR = allTrades.filter((t) => t.theoretical_r_multiple !== null);
+    const avgR =
+      withR.length > 0
+        ? withR.reduce((sum, t) => sum + t.theoretical_r_multiple!, 0) / withR.length
+        : null;
+    return { winRate, avgPnl, avgR };
+  }, [allTrades]);
+
   return (
     <div className="space-y-4" data-testid="shadow-trades-tab">
       <ShadowFilters
@@ -670,12 +683,17 @@ export function ShadowTradesTab({ enabled = true }: ShadowTradesTabProps) {
         </div>
       ) : allTrades.length === 0 ? (
         <>
-          <SummaryStats trades={[]} totalCount={0} />
+          <SummaryStats winRate={null} avgPnl={null} avgR={null} totalCount={0} />
           <EmptyState />
         </>
       ) : (
         <>
-          <SummaryStats trades={allTrades} totalCount={totalCount} />
+          <SummaryStats
+            winRate={summaryStats.winRate}
+            avgPnl={summaryStats.avgPnl}
+            avgR={summaryStats.avgR}
+            totalCount={totalCount}
+          />
           <ShadowTable
             trades={displayTrades}
             sortKey={sortKey}
