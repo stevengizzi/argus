@@ -15,6 +15,7 @@ import {
   createSeriesMarkers,
   CandlestickSeries,
   type IChartApi,
+  type IPriceLine,
   type ISeriesApi,
   type ISeriesMarkersPluginApi,
   type CandlestickData,
@@ -106,6 +107,7 @@ export function TradeChart({
   const chartRef = useRef<IChartApi | null>(null);
   const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const markersPluginRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
+  const priceLinesRef = useRef<IPriceLine[]>([]);
 
   // Compute time range for data fetching (null if dates are invalid)
   const timeRange = useMemo(
@@ -218,13 +220,14 @@ export function TradeChart({
     // Set candlestick data
     candleSeries.setData(chartData.candles);
 
-    // Clear existing price lines
-    // Note: We recreate them each time data changes
+    // Remove all previously created price lines before recreating
+    priceLinesRef.current.forEach(line => candleSeries.removePriceLine(line));
+    priceLinesRef.current = [];
 
     // Add price level overlays
     // Entry price: Blue dashed line (only if valid)
     if (isValidPrice(entryPrice)) {
-      candleSeries.createPriceLine({
+      const entryLine = candleSeries.createPriceLine({
         price: entryPrice,
         color: '#3b82f6', // Blue
         lineWidth: 1,
@@ -232,11 +235,12 @@ export function TradeChart({
         axisLabelVisible: true,
         title: `Entry`,
       });
+      priceLinesRef.current.push(entryLine);
     }
 
     // Stop price: Red solid line
     if (isValidPrice(stopPrice)) {
-      candleSeries.createPriceLine({
+      const stopLine = candleSeries.createPriceLine({
         price: stopPrice,
         color: '#ef4444', // Red
         lineWidth: 1,
@@ -244,11 +248,12 @@ export function TradeChart({
         axisLabelVisible: true,
         title: 'Stop',
       });
+      priceLinesRef.current.push(stopLine);
     }
 
     // T1 price: Green dashed line
     if (isValidPrice(targetPrices?.[0])) {
-      candleSeries.createPriceLine({
+      const t1Line = candleSeries.createPriceLine({
         price: targetPrices![0],
         color: '#22c55e', // Green
         lineWidth: 1,
@@ -256,11 +261,12 @@ export function TradeChart({
         axisLabelVisible: true,
         title: 'T1',
       });
+      priceLinesRef.current.push(t1Line);
     }
 
     // T2 price: Green dotted line
     if (isValidPrice(targetPrices?.[1])) {
-      candleSeries.createPriceLine({
+      const t2Line = candleSeries.createPriceLine({
         price: targetPrices![1],
         color: '#22c55e', // Green
         lineWidth: 1,
@@ -268,11 +274,12 @@ export function TradeChart({
         axisLabelVisible: true,
         title: 'T2',
       });
+      priceLinesRef.current.push(t2Line);
     }
 
     // Exit price: Orange solid line (closed trades only, if differs from entry by > $0.01)
     if (!isOpen && isValidPrice(exitPrice) && isValidPrice(entryPrice) && Math.abs(exitPrice - entryPrice) > 0.01) {
-      candleSeries.createPriceLine({
+      const exitLine = candleSeries.createPriceLine({
         price: exitPrice,
         color: '#f97316', // Orange
         lineWidth: 1,
@@ -280,11 +287,12 @@ export function TradeChart({
         axisLabelVisible: true,
         title: 'Exit',
       });
+      priceLinesRef.current.push(exitLine);
     }
 
     // Current price: Cyan dashed line (open positions only)
     if (isOpen && isValidPrice(currentPrice)) {
-      candleSeries.createPriceLine({
+      const currentLine = candleSeries.createPriceLine({
         price: currentPrice,
         color: '#06b6d4', // Cyan
         lineWidth: 1,
@@ -292,6 +300,7 @@ export function TradeChart({
         axisLabelVisible: true,
         title: 'Current',
       });
+      priceLinesRef.current.push(currentLine);
     }
 
     // Add markers for entry/exit via plugin
@@ -325,6 +334,14 @@ export function TradeChart({
 
     // Fit content after data update
     chart.timeScale().fitContent();
+
+    return () => {
+      const series = candleSeriesRef.current;
+      if (series) {
+        priceLinesRef.current.forEach(line => series.removePriceLine(line));
+        priceLinesRef.current = [];
+      }
+    };
   }, [chartData, entryPrice, exitPrice, stopPrice, targetPrices, currentPrice, isOpen]);
 
   const hasNoBars = !isLoading && !error && (!barsData?.bars?.length);

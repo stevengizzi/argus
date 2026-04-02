@@ -404,6 +404,119 @@ class TestDashboardPositionsIteration:
         assert len(positions) == 1
 
 
+class TestDashboardFullPortfolioContext:
+    """Test Dashboard context includes all positions (>5) and portfolio aggregates."""
+
+    @pytest.fixture
+    def builder(self) -> SystemContextBuilder:
+        """Create a SystemContextBuilder instance."""
+        return SystemContextBuilder()
+
+    @pytest.mark.asyncio
+    async def test_dashboard_includes_all_positions_when_more_than_five_exist(
+        self, builder: SystemContextBuilder
+    ) -> None:
+        """Test that Dashboard context includes all open positions when there are >5."""
+        from datetime import datetime, timezone
+
+        def _make_position(symbol_idx: int, unrealized_sign: float) -> MagicMock:
+            pos = MagicMock()
+            pos.strategy_id = f"strategy_{symbol_idx % 3}"
+            pos.shares_remaining = 100
+            pos.entry_price = 100.0
+            pos.original_stop_price = 98.0
+            pos.realized_pnl = 0.0
+            pos.is_fully_closed = False
+            pos.entry_time = datetime(2026, 4, 1, 14, 0, 0, tzinfo=timezone.utc)
+            return pos
+
+        positions_by_symbol = {
+            f"SYM{i}": [_make_position(i, 1.0 if i % 2 == 0 else -1.0)]
+            for i in range(8)
+        }
+
+        mock_order_manager = MagicMock()
+        mock_order_manager.get_managed_positions.return_value = positions_by_symbol
+
+        mock_data_service = MagicMock()
+        mock_data_service.get_current_price = AsyncMock(return_value=102.0)
+
+        state = MockAppState()
+        state.order_manager = mock_order_manager
+        state.data_service = mock_data_service
+
+        context = await builder.build_context(
+            page="Dashboard",
+            context_data={},
+            app_state=state,
+        )
+
+        positions = context["page_context"]["positions"]
+        assert len(positions) == 8, "All 8 positions should be included (not capped at 5)"
+
+        # Every position should have the enriched fields
+        for pos in positions:
+            assert "current_price" in pos
+            assert "side" in pos
+            assert pos["side"] == "long"
+            assert "r_multiple" in pos
+            assert "hold_duration_seconds" in pos
+
+    @pytest.mark.asyncio
+    async def test_dashboard_portfolio_summary_includes_aggregates(
+        self, builder: SystemContextBuilder
+    ) -> None:
+        """Test that portfolio_summary includes aggregated position statistics."""
+        from datetime import datetime, timezone
+
+        winning_pos = MagicMock()
+        winning_pos.strategy_id = "orb_breakout"
+        winning_pos.shares_remaining = 100
+        winning_pos.entry_price = 100.0
+        winning_pos.original_stop_price = 98.0
+        winning_pos.realized_pnl = 0.0
+        winning_pos.is_fully_closed = False
+        winning_pos.entry_time = datetime(2026, 4, 1, 14, 0, 0, tzinfo=timezone.utc)
+
+        losing_pos = MagicMock()
+        losing_pos.strategy_id = "vwap_reclaim"
+        losing_pos.shares_remaining = 50
+        losing_pos.entry_price = 200.0
+        losing_pos.original_stop_price = 198.0
+        losing_pos.realized_pnl = 0.0
+        losing_pos.is_fully_closed = False
+        losing_pos.entry_time = datetime(2026, 4, 1, 14, 0, 0, tzinfo=timezone.utc)
+
+        mock_order_manager = MagicMock()
+        mock_order_manager.get_managed_positions.return_value = {
+            "AAPL": [winning_pos],   # current_price 102 → unrealized +200
+            "TSLA": [losing_pos],    # current_price 198 → unrealized -100
+        }
+
+        mock_data_service = MagicMock()
+        # AAPL → 102 (winning), TSLA → 198 (losing)
+        mock_data_service.get_current_price = AsyncMock(side_effect=[102.0, 198.0])
+
+        state = MockAppState()
+        state.order_manager = mock_order_manager
+        state.data_service = mock_data_service
+
+        context = await builder.build_context(
+            page="Dashboard",
+            context_data={},
+            app_state=state,
+        )
+
+        summary = context["page_context"]["portfolio_summary"]
+        assert summary["total_position_count"] == 2
+        assert summary["winning_count"] == 1
+        assert summary["losing_count"] == 1
+        assert "count_by_strategy" in summary
+        assert summary["count_by_strategy"]["orb_breakout"] == 1
+        assert summary["count_by_strategy"]["vwap_reclaim"] == 1
+        assert "total_unrealized_pnl" in summary
+
+
 class TestDebriefDateFilter:
     """Test Debrief context uses ET timezone for date filtering."""
 
