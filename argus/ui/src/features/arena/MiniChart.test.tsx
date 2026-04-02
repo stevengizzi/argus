@@ -8,6 +8,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, act } from '@testing-library/react';
 import { createRef } from 'react';
 import * as LWC from 'lightweight-charts';
+import type { UTCTimestamp } from 'lightweight-charts';
 import { MiniChart } from './MiniChart';
 import type { MiniChartHandle, CandleData } from './MiniChart';
 
@@ -29,7 +30,10 @@ const mockAddSeries = vi.fn(() => ({
   removePriceLine: mockRemovePriceLine,
   update: mockUpdate,
 }));
-const mockTimeScale = vi.fn(() => ({ fitContent: mockFitContent }));
+const mockTimeScale = vi.fn(() => ({
+  fitContent: mockFitContent,
+  setVisibleRange: vi.fn(),
+}));
 
 vi.mock('lightweight-charts', () => ({
   createChart: vi.fn(() => ({
@@ -40,6 +44,9 @@ vi.mock('lightweight-charts', () => ({
   })),
   CandlestickSeries: 'CandlestickSeries',
   LineStyle: { Solid: 0, Dotted: 1, Dashed: 2, LargeDashed: 3 },
+  // Use an inline factory so no module-level variable is referenced directly
+  // in the outer factory object (which would cause a TDZ error after hoisting).
+  createSeriesMarkers: vi.fn(() => ({ setMarkers: vi.fn(), markers: vi.fn(() => []) })),
 }));
 
 // --- Fixtures ---
@@ -179,5 +186,59 @@ describe('MiniChart', () => {
   it('renders the container div with correct data-testid', () => {
     const { getByTestId } = render(<MiniChart candles={SAMPLE_CANDLES} />);
     expect(getByTestId('mini-chart-container')).toBeInTheDocument();
+  });
+
+  it('creates an entry marker via createSeriesMarkers when entryTime is provided', () => {
+    // entryTime matches the second candle (1700000060)
+    render(
+      <MiniChart
+        candles={SAMPLE_CANDLES}
+        entryPrice={151}
+        entryTime={1700000060 as UTCTimestamp}
+      />,
+    );
+
+    const createSeriesMarkersMock = vi.mocked(LWC.createSeriesMarkers);
+    expect(createSeriesMarkersMock).toHaveBeenCalledOnce();
+    const markers = createSeriesMarkersMock.mock.calls[0][1] as Array<{
+      time: UTCTimestamp;
+      shape: string;
+      position: string;
+    }>;
+    expect(markers).toHaveLength(1);
+    expect(markers[0].shape).toBe('arrowUp');
+    expect(markers[0].position).toBe('belowBar');
+    expect(markers[0].time).toBeLessThanOrEqual(1700000060);
+  });
+
+  it('does not call createSeriesMarkers when entryTime is not provided', () => {
+    render(
+      <MiniChart candles={SAMPLE_CANDLES} entryPrice={151} />,
+    );
+
+    expect(vi.mocked(LWC.createSeriesMarkers)).not.toHaveBeenCalled();
+  });
+
+  it('entry price line has axisLabelVisible false; stop and T1 have axisLabelVisible true; trail has axisLabelVisible false', () => {
+    render(
+      <MiniChart
+        candles={SAMPLE_CANDLES}
+        entryPrice={151}
+        stopPrice={148}
+        targetPrices={[155]}
+        trailingStopPrice={150}
+      />,
+    );
+
+    const calls = mockCreatePriceLine.mock.calls as Array<[{ title: string; axisLabelVisible: boolean }]>;
+    const entryCall = calls.find((c) => c[0].title === 'Entry');
+    const stopCall = calls.find((c) => c[0].title === 'Stop');
+    const t1Call = calls.find((c) => c[0].title === 'T1');
+    const trailCall = calls.find((c) => c[0].title === 'Trail');
+
+    expect(entryCall?.[0].axisLabelVisible).toBe(false);
+    expect(stopCall?.[0].axisLabelVisible).toBe(true);
+    expect(t1Call?.[0].axisLabelVisible).toBe(true);
+    expect(trailCall?.[0].axisLabelVisible).toBe(false);
   });
 });

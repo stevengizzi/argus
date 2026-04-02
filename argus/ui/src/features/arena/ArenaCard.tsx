@@ -8,6 +8,7 @@
 import { useRef, useEffect, useState, useMemo } from 'react';
 import { MiniChart } from './MiniChart';
 import type { MiniChartHandle, CandleData } from './MiniChart';
+import type { UTCTimestamp } from 'lightweight-charts';
 import { getStrategyDisplay } from '../../utils/strategyConfig';
 
 export interface ArenaCardProps {
@@ -21,6 +22,8 @@ export interface ArenaCardProps {
   target_prices: number[];
   trailing_stop_price?: number;
   candles: CandleData[];
+  /** ISO 8601 entry timestamp — used to place the entry marker on MiniChart. */
+  entry_time?: string;
   /** Live current price from WS tick — used for progress bar when available. */
   currentPrice?: number;
   /**
@@ -70,6 +73,7 @@ export function ArenaCard({
   stop_price,
   target_prices,
   trailing_stop_price,
+  entry_time,
   candles,
   currentPrice,
   onChartMount,
@@ -107,11 +111,13 @@ export function ArenaCard({
   const latestClose = candles[candles.length - 1]?.close ?? entry_price;
   const priceForProgress = currentPrice ?? latestClose;
   const progressPct = computeProgressPct(priceForProgress, stop_price, t1Price);
+  const entryTime = entry_time
+    ? (Math.floor(new Date(entry_time).getTime() / 1000) as UTCTimestamp)
+    : undefined;
 
   return (
     <div
       className="rounded-lg bg-argus-surface-2 flex flex-col overflow-hidden"
-      style={{ border: `1px solid ${strategyConfig.color}` }}
       data-testid="arena-card"
     >
       {/* Header row: strategy badge + symbol (left), P&L + R (right) */}
@@ -157,22 +163,31 @@ export function ArenaCard({
           stopPrice={stop_price}
           targetPrices={stableTargetPrices}
           trailingStopPrice={trailing_stop_price}
+          entryTime={entryTime}
         />
       </div>
 
       {/* Footer: progress bar then hold timer */}
       <div className="px-3 pb-2 pt-1">
-        {/* Red-to-green gradient track; white pip marks current price position */}
-        <div
-          className="relative h-1 rounded-full mb-2 overflow-visible"
-          style={{ background: 'linear-gradient(to right, #ef4444, #22c55e)' }}
-          data-testid="progress-bar-track"
-        >
+        {/* Stop/T1 labels + red-to-green gradient track */}
+        <div className="flex items-center gap-1 mb-2">
+          <span className="text-[10px] text-argus-text-dim" data-testid="progress-label-stop">
+            Stop
+          </span>
           <div
-            className="absolute top-1/2 -translate-y-1/2 w-1.5 h-2.5 rounded-sm bg-white/80"
-            style={{ left: `calc(${progressPct}% - 3px)` }}
-            data-testid="progress-bar-indicator"
-          />
+            className="relative flex-1 h-1 rounded-full overflow-visible"
+            style={{ background: 'linear-gradient(to right, #ef4444, #22c55e)' }}
+            data-testid="progress-bar-track"
+          >
+            <div
+              className="absolute top-1/2 -translate-y-1/2 w-1.5 h-2.5 rounded-sm bg-white/80"
+              style={{ left: `calc(${progressPct}% - 3px)` }}
+              data-testid="progress-bar-indicator"
+            />
+          </div>
+          <span className="text-[10px] text-argus-text-dim" data-testid="progress-label-t1">
+            T1
+          </span>
         </div>
         <span
           className="text-xs text-argus-text-dim tabular-nums"

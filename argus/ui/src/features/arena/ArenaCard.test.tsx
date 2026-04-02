@@ -70,6 +70,18 @@ describe('ArenaCard', () => {
     expect(screen.getByTestId('arena-card')).toBeInTheDocument();
   });
 
+  it('arena card container has no inline border style', () => {
+    render(<ArenaCard {...DEFAULT_PROPS} />);
+    const card = screen.getByTestId('arena-card');
+    expect(card.getAttribute('style')).toBeNull();
+  });
+
+  it('progress bar area shows Stop and T1 labels', () => {
+    render(<ArenaCard {...DEFAULT_PROPS} />);
+    expect(screen.getByTestId('progress-label-stop')).toHaveTextContent('Stop');
+    expect(screen.getByTestId('progress-label-t1')).toHaveTextContent('T1');
+  });
+
   describe('P&L formatting', () => {
     it('formats positive P&L with green color class and + prefix', () => {
       render(<ArenaCard {...DEFAULT_PROPS} pnl={125.50} />);

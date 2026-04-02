@@ -112,6 +112,25 @@ export function ArenaPage() {
     sortMode,
   );
 
+  // When a specific strategy is filtered, compute stats from visible positions
+  // rather than the WebSocket aggregate (which covers all positions).
+  const filteredStats =
+    strategyFilter !== 'all'
+      ? {
+          position_count: displayPositions.length,
+          total_pnl: displayPositions.reduce((sum, pos) => {
+            const overlay = liveOverlays[pos.symbol];
+            return sum + (overlay?.unrealized_pnl ?? pos.unrealized_pnl);
+          }, 0),
+          net_r: displayPositions.reduce((sum, pos) => {
+            const overlay = liveOverlays[pos.symbol];
+            return sum + (overlay?.r_multiple ?? pos.r_multiple);
+          }, 0),
+          entries_5m: stats.entries_5m,
+          exits_5m: stats.exits_5m,
+        }
+      : stats;
+
   const isDisconnected = wsStatus === 'disconnected' || wsStatus === 'error';
 
   return (
@@ -119,13 +138,13 @@ export function ArenaPage() {
       className="-m-4 md:-m-5 min-[1024px]:-m-6 min-[1024px]:-mt-6 flex flex-col overflow-hidden h-[calc(100vh-0px)] min-[1024px]:h-[calc(100vh-0px)]"
       data-testid="arena-page"
     >
-      {/* Top stats strip — 48px fixed height, live from WS */}
+      {/* Top stats strip — 48px fixed height; uses filtered stats when filter is active */}
       <ArenaStatsBar
-        positionCount={stats.position_count}
-        totalPnl={stats.total_pnl}
-        netR={stats.net_r}
-        entries5m={stats.entries_5m}
-        exits5m={stats.exits_5m}
+        positionCount={filteredStats.position_count}
+        totalPnl={filteredStats.total_pnl}
+        netR={filteredStats.net_r}
+        entries5m={filteredStats.entries_5m}
+        exits5m={filteredStats.exits_5m}
       />
 
       {/* Sort + filter controls */}
@@ -212,6 +231,7 @@ export function ArenaPage() {
                       trailing_stop_price={
                         (overlay?.trailing_stop_price || pos.trailing_stop_price) || undefined
                       }
+                      entry_time={pos.entry_time}
                       candles={candlesBySymbol[pos.symbol] ?? []}
                       onChartMount={registerChartRef}
                     />

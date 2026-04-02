@@ -9,10 +9,12 @@
 import { useRef, useEffect, useImperativeHandle, forwardRef } from 'react';
 import {
   createChart,
+  createSeriesMarkers,
   CandlestickSeries,
   LineStyle,
   type IChartApi,
   type ISeriesApi,
+  type ISeriesMarkersPluginApi,
   type CandlestickData,
   type UTCTimestamp,
 } from 'lightweight-charts';
@@ -40,6 +42,7 @@ export interface MiniChartProps {
   stopPrice?: number;
   targetPrices?: number[];
   trailingStopPrice?: number;
+  entryTime?: UTCTimestamp;
   width?: number;
   height?: number;
 }
@@ -52,7 +55,7 @@ function isValidPrice(value: unknown): value is number {
 
 export const MiniChart = forwardRef<MiniChartHandle, MiniChartProps>(
   function MiniChart(
-    { candles, entryPrice, stopPrice, targetPrices, trailingStopPrice, width, height = 160 },
+    { candles, entryPrice, stopPrice, targetPrices, trailingStopPrice, entryTime, width, height = 160 },
     ref,
   ) {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -60,6 +63,7 @@ export const MiniChart = forwardRef<MiniChartHandle, MiniChartProps>(
     const seriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
     const priceLinesRef = useRef<PriceLine[]>([]);
     const trailingStopLineRef = useRef<PriceLine | null>(null);
+    const markersPluginRef = useRef<ISeriesMarkersPluginApi<UTCTimestamp> | null>(null);
 
     // Chart creation and cleanup — re-runs only when dimensions change.
     useEffect(() => {
@@ -110,6 +114,7 @@ export const MiniChart = forwardRef<MiniChartHandle, MiniChartProps>(
         resizeObserver.disconnect();
         priceLinesRef.current = [];
         trailingStopLineRef.current = null;
+        markersPluginRef.current = null;
         chart.remove();
         chartRef.current = null;
         seriesRef.current = null;
@@ -125,6 +130,33 @@ export const MiniChart = forwardRef<MiniChartHandle, MiniChartProps>(
       if (candles.length > 0) {
         series.setData(candles as CandlestickData<UTCTimestamp>[]);
         chart.timeScale().fitContent();
+
+        if (entryTime !== undefined) {
+          // Find the last candle at or before entry time for the marker.
+          const markerCandle = [...candles].reverse().find((c) => c.time <= entryTime);
+          if (markerCandle) {
+            const marker = {
+              time: markerCandle.time,
+              position: 'belowBar' as const,
+              color: '#3b82f6',
+              shape: 'arrowUp' as const,
+              text: '',
+            };
+            if (markersPluginRef.current) {
+              markersPluginRef.current.setMarkers([marker]);
+            } else {
+              markersPluginRef.current = createSeriesMarkers(series, [marker]);
+            }
+          }
+
+          // Auto-zoom: show ~5 bars before entry through latest candle.
+          const lastCandleTime = candles[candles.length - 1].time;
+          const fromTime = Math.max(candles[0].time, entryTime - 5 * 60) as UTCTimestamp;
+          const toTime = (lastCandleTime + 60) as UTCTimestamp;
+          chart.timeScale().setVisibleRange({ from: fromTime, to: toTime });
+        } else if (markersPluginRef.current) {
+          markersPluginRef.current.setMarkers([]);
+        }
       }
 
       // Remove existing static price lines before recreating them.
@@ -144,7 +176,7 @@ export const MiniChart = forwardRef<MiniChartHandle, MiniChartProps>(
             color: '#3b82f6',
             lineWidth: 1,
             lineStyle: LineStyle.Dashed,
-            axisLabelVisible: true,
+            axisLabelVisible: false,
             title: 'Entry',
           }),
         );
@@ -192,11 +224,11 @@ export const MiniChart = forwardRef<MiniChartHandle, MiniChartProps>(
           color: '#eab308',
           lineWidth: 1,
           lineStyle: LineStyle.Dashed,
-          axisLabelVisible: true,
+          axisLabelVisible: false,
           title: 'Trail',
         });
       }
-    }, [candles, entryPrice, stopPrice, targetPrices, trailingStopPrice]);
+    }, [candles, entryPrice, stopPrice, targetPrices, trailingStopPrice, entryTime]);
 
     // Imperative handle for live updates from S11 WebSocket feed.
     useImperativeHandle(ref, () => ({
@@ -217,7 +249,7 @@ export const MiniChart = forwardRef<MiniChartHandle, MiniChartProps>(
             color: '#eab308',
             lineWidth: 1,
             lineStyle: LineStyle.Dashed,
-            axisLabelVisible: true,
+            axisLabelVisible: false,
             title: 'Trail',
           });
         }

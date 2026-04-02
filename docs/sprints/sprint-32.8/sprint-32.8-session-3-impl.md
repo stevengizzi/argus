@@ -10,7 +10,7 @@ Before making any changes:
 2. Run scoped test baseline:
    Vitest: `cd argus/ui && npx vitest run src/features/arena/ src/pages/ArenaPage`
    Expected: all passing (DEF-138 `ArenaPage.test.tsx` WS mock may fail — known pre-existing)
-3. Verify you are on the correct branch: `sprint-32.8`
+3. Verify you are on the correct branch: `main`
 
 ## Objective
 Polish Arena card visuals: remove colored borders, add entry candle markers, auto-zoom to entry point, reduce label clutter, label the progress bar, and make stats reflect active filters.

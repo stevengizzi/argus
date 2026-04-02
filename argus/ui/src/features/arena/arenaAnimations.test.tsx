@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { computePriorityScore } from '../../pages/ArenaPage';
 
 // ---------------------------------------------------------------------------
@@ -153,5 +153,53 @@ describe('ArenaPage animation wrappers', () => {
     render(<ArenaPage />);
     const wrappers = screen.getAllByTestId('arena-card-wrapper');
     expect(wrappers).toHaveLength(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Filtered stats
+// ---------------------------------------------------------------------------
+
+describe('ArenaPage filtered stats', () => {
+  it('uses WS stats when filter is all, switches to computed stats when filter is active', () => {
+    const position = {
+      symbol: 'NVDA',
+      strategy_id: 'orb_breakout',
+      side: 'long' as const,
+      shares: 50,
+      entry_price: 500,
+      current_price: 502,
+      stop_price: 490,
+      target_prices: [515],
+      trailing_stop_price: null,
+      unrealized_pnl: 42.50,
+      r_multiple: 0.25,
+      hold_duration_seconds: 60,
+      quality_grade: 'B',
+      entry_time: '2024-01-15T09:30:00Z',
+    };
+
+    vi.mocked(useArenaWebSocket).mockReturnValue({
+      ...DEFAULT_HOOK_RESULT,
+      positions: [position],
+      // WS stats deliberately differ from position-level values.
+      stats: { position_count: 1, total_pnl: 999, net_r: 5.0, entries_5m: 3, exits_5m: 1 },
+    });
+
+    render(<ArenaPage />);
+
+    // With 'all' filter active (default): WS total_pnl of 999 is used.
+    expect(screen.getByTestId('stat-total-pnl')).toHaveTextContent('$999.00');
+    expect(screen.getByTestId('stat-entries-5m')).toHaveTextContent('3');
+
+    // Change filter to a specific strategy — computed stats take over.
+    fireEvent.change(screen.getByTestId('strategy-filter-select'), {
+      target: { value: 'orb_breakout' },
+    });
+
+    // Computed total_pnl = unrealized_pnl of the single visible position = 42.50
+    expect(screen.getByTestId('stat-total-pnl')).toHaveTextContent('$42.50');
+    // entries/exits still come from WS stats
+    expect(screen.getByTestId('stat-entries-5m')).toHaveTextContent('3');
   });
 });
