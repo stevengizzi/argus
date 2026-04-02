@@ -20,7 +20,7 @@ export function TradeStatsBar({ stats, isTransitioning = false }: TradeStatsBarP
   const pnlFormatted = formatPnl(net_pnl);
 
   return (
-    <div className="bg-argus-surface border border-argus-border rounded-lg p-3 md:p-4">
+    <div className="bg-argus-surface-2/50 border border-argus-border rounded-lg px-4 py-3">
       {/* Fixed-width layout prevents content-driven width shifts when filtering */}
       <div
         className={`flex items-center justify-between gap-4 transition-opacity duration-200 ${

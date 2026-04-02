@@ -45,6 +45,10 @@ vi.mock('../features/trades', () => ({
   TradeTableSkeleton: () => null,
 }));
 
+vi.mock('../features/trades/ShadowTradesTab', () => ({
+  ShadowTradesTab: () => <div data-testid="shadow-trades-tab-mock" />,
+}));
+
 vi.mock('../api/client', async () => {
   const actual = await vi.importActual<typeof import('../api/client')>('../api/client');
   return { ...actual, getToken: vi.fn(() => null) };
@@ -223,5 +227,62 @@ describe('TradesPage — trades limit set to 1000', () => {
     expect(vi.mocked(useTrades)).toHaveBeenCalledWith(
       expect.objectContaining({ limit: 1000 }),
     );
+  });
+});
+
+describe('TradesPage — l/s hotkeys for tab switching', () => {
+  async function renderTradesPage() {
+    const { TradesPage } = await import('../pages/TradesPage');
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    return render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <TradesPage />
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+  }
+
+  it('test_hotkey_l_switches_to_live — pressing l activates Live tab', async () => {
+    await renderTradesPage();
+
+    // Switch to shadow tab first via click
+    fireEvent.click(screen.getByTestId('tab-shadow-trades'));
+    expect(screen.getByTestId('tab-shadow-trades').className).toContain('text-argus-accent');
+
+    // Press 'l' to switch back to live
+    fireEvent.keyDown(document, { key: 'l' });
+    expect(screen.getByTestId('tab-live-trades').className).toContain('text-argus-accent');
+    expect(screen.getByTestId('tab-shadow-trades').className).not.toContain('text-argus-accent');
+  });
+
+  it('test_hotkey_s_switches_to_shadow — pressing s activates Shadow tab', async () => {
+    await renderTradesPage();
+
+    // Start on live tab (default)
+    expect(screen.getByTestId('tab-live-trades').className).toContain('text-argus-accent');
+
+    // Press 's' to switch to shadow
+    fireEvent.keyDown(document, { key: 's' });
+    expect(screen.getByTestId('tab-shadow-trades').className).toContain('text-argus-accent');
+    expect(screen.getByTestId('tab-live-trades').className).not.toContain('text-argus-accent');
+  });
+
+  it('test_hotkey_ignored_in_input — hotkeys do not fire when input is focused', async () => {
+    await renderTradesPage();
+
+    // Start on live tab
+    expect(screen.getByTestId('tab-live-trades').className).toContain('text-argus-accent');
+
+    // Simulate an input element being focused
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    input.focus();
+
+    // Press 's' — should be ignored because input is focused
+    fireEvent.keyDown(document, { key: 's' });
+    expect(screen.getByTestId('tab-live-trades').className).toContain('text-argus-accent');
+
+    document.body.removeChild(input);
   });
 });

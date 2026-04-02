@@ -10,7 +10,7 @@ Before making any changes:
 2. Run scoped test baseline:
    Vitest: `cd argus/ui && npx vitest run src/pages/DashboardPage`
    Expected: all passing
-3. Verify you are on the correct branch: `sprint-32.8` (or `main`)
+3. Verify you are on the correct branch: `main`
 
 ## Objective
 Refactor the Dashboard into a dense 4-row layout that shows the primary operational workflow (vitals, allocation, positions + timeline + signal quality) without scrolling on a 1080p display.

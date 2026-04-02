@@ -1,58 +1,43 @@
 /**
  * Dashboard page - main command post view.
  *
+ * Sprint 32.8 Session 2: Dense 4-row layout — vitals, allocation,
+ * positions + timeline + quality, AI + learning. No scroll on 1080p.
+ *
  * Sprint 21d Dashboard Summary: Uses aggregate endpoint for instant card loading.
  * - Single `useDashboardSummary()` hook fetches all dashboard data in one request
- * - TodayStats and GoalTracker receive data as props (no individual loading states)
- * - Other cards continue using their own hooks (they're fast enough)
+ * - VitalsStrip and TodayStats section receive data as props (no individual loading states)
  *
- * Sprint 21d Session 5 (DEC-204): Dashboard scope refinement.
- * - OrchestratorStatusStrip at top (click to Orchestrator page)
- * - StrategyDeploymentBar below status strip
- * - GoalTracker in third position of top row
- * - PreMarketLayout when market_status === 'pre_market' or ?premarket=true
+ * Layout (desktop, ≥1024px):
+ *   Row 1: VitalsStrip (equity, P&L, today's stats, VIX) — full width
+ *   Row 2: StrategyDeploymentBar — full width, ~40px
+ *   Row 3: OpenPositions (70%) | SessionTimeline + SignalQualityPanel stacked (30%)
+ *   Row 4: AIInsightCard (50%) | LearningDashboardCard (50%)
  *
- * Sprint 21d Session 4 (DEC-204): Dashboard scope refinement.
- * - OrchestratorStatusStrip at top (click to Orchestrator page)
- * - Removed RiskAllocationPanel (migrated to Orchestrator page)
- * - Narrowed to ambient awareness: account, P&L, market status, positions, trades, health
+ * Tablet (640–1023px): stacked layout, all sections full width.
+ * Phone (<640px): single-column stacked.
  *
- * Responsive grid layout with three breakpoints:
- * - Phone (<640px): Single column stacked layout with flat vertical stagger
- * - Tablet (640-1023px): Two-column grid with grouped stagger
- * - Desktop (>=1024px): Full three-column layout with grouped stagger + watchlist sidebar
- *
- * Stagger animation is responsive:
- * - Multi-column (tablet+): Cards in a row stagger left-to-right within grid groups
- * - Single column (phone): All cards as direct children, stagger top-to-bottom linearly
- *
- * Watchlist sidebar:
- * - Desktop: 280px right sidebar, collapsible
- * - Tablet/Mobile: Floating button opens overlay panel
+ * GoalTracker and UniverseStatusCard are NOT rendered on this page.
+ * The components themselves are not deleted — they may be used elsewhere.
  */
 
 import { motion } from 'framer-motion';
 import { useSearchParams } from 'react-router-dom';
 import {
-  AccountSummary,
   AIInsightCard,
-  DailyPnlCard,
   MarketStatusCard,
-  TodayStats,
   SessionTimeline,
   OpenPositions,
   SessionSummaryCard,
   OrchestratorStatusStrip,
   StrategyDeploymentBar,
-  GoalTracker,
   PreMarketLayout,
-  UniverseStatusCard,
   SignalQualityPanel,
-  VixRegimeCard,
+  VitalsStrip,
 } from '../features/dashboard';
 import { LearningDashboardCard } from '../components/learning/LearningDashboardCard';
 import { WatchlistSidebar } from '../features/watchlist';
-import { staggerContainer, staggerItem, staggerItemWithChildren } from '../utils/motion';
+import { staggerContainer, staggerItem } from '../utils/motion';
 import { useIsMultiColumn, useMediaQuery } from '../hooks/useMediaQuery';
 import { useDashboardSummary } from '../hooks/useDashboardSummary';
 import { useCopilotContext } from '../hooks/useCopilotContext';
@@ -81,8 +66,6 @@ export function DashboardPage() {
     (typeof window !== 'undefined' && localStorage.getItem('argus_premarket') === 'true');
 
   // Render pre-market layout when applicable
-  // Desktop: flex wrapper positions sidebar on right (same as active-market layout)
-  // Tablet/Mobile: WatchlistSidebar renders its own FAB + overlay
   if (isPreMarket) {
     if (isDesktop) {
       return (
@@ -114,132 +97,93 @@ export function DashboardPage() {
           initial="hidden"
           animate="show"
         >
-          {/* Orchestrator status strip */}
           <motion.div variants={staggerItem}>
             <OrchestratorStatusStrip />
           </motion.div>
 
-          {/* Strategy deployment bar */}
           <motion.div variants={staggerItem}>
             <StrategyDeploymentBar />
           </motion.div>
 
-          {/* Session summary card - shows after market close with trades */}
           <SessionSummaryCard />
 
-          <motion.div variants={staggerItem}><AccountSummary /></motion.div>
-          <motion.div variants={staggerItem}><DailyPnlCard /></motion.div>
-          <motion.div variants={staggerItem}><GoalTracker data={summaryData?.goals} useSummaryData /></motion.div>
-
-          {/* VIX Regime card — compact, after GoalTracker */}
           <motion.div variants={staggerItem}>
-            <VixRegimeCard />
+            <VitalsStrip todayStats={summaryData?.today_stats} />
           </motion.div>
 
-          {/* 3-card row: Market Status | Today's Stats | Session Timeline */}
           <motion.div variants={staggerItem}><MarketStatusCard /></motion.div>
-          <motion.div variants={staggerItem}><TodayStats data={summaryData?.today_stats} useSummaryData /></motion.div>
-          <motion.div variants={staggerItem}><SessionTimeline /></motion.div>
-
-          {/* Signal quality histogram */}
-          <motion.div variants={staggerItem}><SignalQualityPanel /></motion.div>
-
-          {/* AI Insight card */}
-          <motion.div variants={staggerItem}><AIInsightCard /></motion.div>
-
-          {/* Universe status card */}
-          <motion.div variants={staggerItem}><UniverseStatusCard /></motion.div>
-
-          {/* Learning Loop card — returns null when disabled */}
-          <motion.div variants={staggerItem}><LearningDashboardCard /></motion.div>
 
           <motion.div variants={staggerItem}><OpenPositions /></motion.div>
+
+          <motion.div variants={staggerItem}><SessionTimeline /></motion.div>
+          <motion.div variants={staggerItem}><SignalQualityPanel /></motion.div>
+
+          <motion.div variants={staggerItem}><AIInsightCard /></motion.div>
+          <motion.div variants={staggerItem}><LearningDashboardCard /></motion.div>
         </motion.div>
 
-        {/* Watchlist overlay for mobile/tablet */}
         <WatchlistSidebar />
       </>
     );
   }
 
-  // Desktop: grid layout with grouped stagger + right sidebar
+  // Desktop: dense 4-row layout + right sidebar
   if (isDesktop) {
     return (
       <div className="flex gap-6 -mr-6 -mb-6">
         {/* Main content area */}
         <motion.div
           key="dashboard-desktop"
-          className="flex-1 min-w-0 space-y-6"
-          variants={staggerContainer(0.08)}
+          className="flex-1 min-w-0 space-y-3"
+          variants={staggerContainer(0.06)}
           initial="hidden"
           animate="show"
         >
-          {/* Orchestrator status strip */}
+          {/* Row 1: VitalsStrip — full width */}
           <motion.div variants={staggerItem}>
-            <OrchestratorStatusStrip />
+            <VitalsStrip todayStats={summaryData?.today_stats} />
           </motion.div>
 
-          {/* Strategy deployment bar */}
+          {/* Row 2: Strategy allocation bar — full width, ~40px */}
           <motion.div variants={staggerItem}>
             <StrategyDeploymentBar />
           </motion.div>
 
           <SessionSummaryCard />
 
-          {/* 4-col row: Account | DailyPnl | GoalTracker | VixRegime */}
+          {/* Row 3: Positions (70%) | Timeline + Quality stacked (30%) */}
           <motion.div
-            className="grid grid-cols-4 gap-6"
-            variants={staggerItemWithChildren(0.08)}
+            className="flex gap-3"
+            variants={staggerItem}
+            style={{ minHeight: '320px' }}
           >
-            <motion.div variants={staggerItem} className="h-full">
-              <AccountSummary />
-            </motion.div>
-            <motion.div variants={staggerItem} className="h-full">
-              <DailyPnlCard />
-            </motion.div>
-            <motion.div variants={staggerItem} className="h-full">
-              <GoalTracker data={summaryData?.goals} useSummaryData />
-            </motion.div>
-            <motion.div variants={staggerItem} className="h-full">
-              <VixRegimeCard />
-            </motion.div>
+            {/* Left: Positions table — 70% */}
+            <div className="flex-[7] min-w-0">
+              <OpenPositions />
+            </div>
+
+            {/* Right: SessionTimeline (top) + SignalQualityPanel (bottom) — 30% */}
+            <div className="flex-[3] flex flex-col gap-3 min-w-0">
+              <div className="flex-1 min-h-0">
+                <SessionTimeline />
+              </div>
+              <div className="flex-1 min-h-0">
+                <SignalQualityPanel />
+              </div>
+            </div>
           </motion.div>
 
-          {/* Positions — promoted above fold */}
-          <motion.div variants={staggerItem}>
-            <OpenPositions />
-          </motion.div>
-
-          {/* 3-col row: Today's Stats | Session Timeline | Signal Quality */}
+          {/* Row 4: AI Insight (50%) | Learning Loop (50%) — matched heights */}
           <motion.div
-            className="grid grid-cols-3 gap-6"
-            variants={staggerItemWithChildren(0.08)}
+            className="grid grid-cols-2 gap-3"
+            variants={staggerItem}
           >
-            <motion.div variants={staggerItem} className="h-full">
-              <TodayStats data={summaryData?.today_stats} useSummaryData />
-            </motion.div>
-            <motion.div variants={staggerItem} className="h-full">
-              <SessionTimeline />
-            </motion.div>
-            <motion.div variants={staggerItem} className="h-full">
-              <SignalQualityPanel />
-            </motion.div>
-          </motion.div>
-
-          {/* Below fold: AI Insight + Universe Status + Learning */}
-          <motion.div
-            className="grid grid-cols-3 gap-6"
-            variants={staggerItemWithChildren(0.08)}
-          >
-            <motion.div variants={staggerItem} className="h-full">
+            <div className="h-full">
               <AIInsightCard />
-            </motion.div>
-            <motion.div variants={staggerItem} className="h-full">
-              <UniverseStatusCard />
-            </motion.div>
-            <motion.div variants={staggerItem} className="h-full">
+            </div>
+            <div className="h-full">
               <LearningDashboardCard />
-            </motion.div>
+            </div>
           </motion.div>
         </motion.div>
 
@@ -249,97 +193,43 @@ export function DashboardPage() {
     );
   }
 
-  // Tablet: grid layout with grouped stagger + floating overlay button
+  // Tablet: stacked layout with floating overlay button
   return (
     <>
       <motion.div
         key="dashboard-tablet"
-        className="space-y-5"
+        className="space-y-4"
         variants={staggerContainer(0.08)}
         initial="hidden"
         animate="show"
       >
-        {/* Orchestrator status strip */}
         <motion.div variants={staggerItem}>
           <OrchestratorStatusStrip />
         </motion.div>
 
-        {/* Strategy deployment bar */}
         <motion.div variants={staggerItem}>
           <StrategyDeploymentBar />
         </motion.div>
 
         <SessionSummaryCard />
 
-        {/* 3-col row: Account | DailyPnl | VixRegime */}
-        <motion.div
-          className="grid grid-cols-3 gap-5"
-          variants={staggerItemWithChildren(0.08)}
-        >
-          <motion.div variants={staggerItem} className="h-full">
-            <AccountSummary />
-          </motion.div>
-          <motion.div variants={staggerItem} className="h-full">
-            <DailyPnlCard />
-          </motion.div>
-          <motion.div variants={staggerItem} className="h-full">
-            <VixRegimeCard />
-          </motion.div>
-        </motion.div>
-
-        {/* GoalTracker - full width on tablet */}
         <motion.div variants={staggerItem}>
-          <GoalTracker data={summaryData?.goals} useSummaryData />
+          <VitalsStrip todayStats={summaryData?.today_stats} />
         </motion.div>
 
-        {/* 3-card row: Market Status | Today's Stats | Session Timeline */}
-        <motion.div
-          className="grid grid-cols-3 gap-5"
-          variants={staggerItemWithChildren(0.08)}
-        >
-          <motion.div variants={staggerItem} className="h-full">
-            <MarketStatusCard />
-          </motion.div>
-          <motion.div variants={staggerItem} className="h-full">
-            <TodayStats data={summaryData?.today_stats} useSummaryData />
-          </motion.div>
-          <motion.div variants={staggerItem} className="h-full">
-            <SessionTimeline />
-          </motion.div>
-        </motion.div>
-
-        {/* Signal Quality + AI Insight row */}
-        <motion.div
-          className="grid grid-cols-2 gap-5"
-          variants={staggerItemWithChildren(0.08)}
-        >
-          <motion.div variants={staggerItem} className="h-full">
-            <SignalQualityPanel />
-          </motion.div>
-          <motion.div variants={staggerItem} className="h-full">
-            <AIInsightCard />
-          </motion.div>
-        </motion.div>
-
-        {/* Universe Status + Learning Loop */}
-        <motion.div
-          className="grid grid-cols-2 gap-5"
-          variants={staggerItemWithChildren(0.08)}
-        >
-          <motion.div variants={staggerItem} className="h-full">
-            <UniverseStatusCard />
-          </motion.div>
-          <motion.div variants={staggerItem} className="h-full">
-            <LearningDashboardCard />
-          </motion.div>
-        </motion.div>
+        <motion.div variants={staggerItem}><MarketStatusCard /></motion.div>
 
         <motion.div variants={staggerItem}>
           <OpenPositions />
         </motion.div>
+
+        <motion.div variants={staggerItem}><SessionTimeline /></motion.div>
+        <motion.div variants={staggerItem}><SignalQualityPanel /></motion.div>
+
+        <motion.div variants={staggerItem}><AIInsightCard /></motion.div>
+        <motion.div variants={staggerItem}><LearningDashboardCard /></motion.div>
       </motion.div>
 
-      {/* Watchlist overlay for tablet */}
       <WatchlistSidebar />
     </>
   );

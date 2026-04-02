@@ -7,7 +7,7 @@
  * Containers and headers persist during filter changes - only data values transition.
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { ScrollText, Download, AlertCircle, Ghost } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
@@ -44,6 +44,18 @@ export function TradesPage() {
   const [isExporting, setIsExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<ActiveTab>('live');
+
+  // Keyboard shortcuts: 'l' → live tab, 's' → shadow tab
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const tag = (document.activeElement as HTMLElement)?.tagName?.toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+      if (e.key === 'l') setActiveTab('live');
+      if (e.key === 's') setActiveTab('shadow');
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Register Copilot context (defined early, uses state below)
   useCopilotContext('Trades', () => ({

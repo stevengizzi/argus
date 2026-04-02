@@ -31,6 +31,7 @@ export { UniverseStatusCard } from './UniverseStatusCard';
 export { QualityDistributionCard } from './QualityDistributionCard';
 export { SignalQualityPanel } from './SignalQualityPanel';
 export { VixRegimeCard } from './VixRegimeCard';
+export { VitalsStrip } from './VitalsStrip';
 
 // Skeleton exports
 export {

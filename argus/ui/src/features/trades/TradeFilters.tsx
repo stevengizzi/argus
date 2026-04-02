@@ -107,7 +107,7 @@ export function TradeFilters({ filters, onFiltersChange }: TradeFiltersProps) {
   ], [allTradesData?.total_count, winsData?.total_count, lossesData?.total_count, beData?.total_count]);
 
   return (
-    <div className="bg-argus-surface border border-argus-border rounded-lg p-3 md:p-4">
+    <div className="bg-argus-surface-2/50 border border-argus-border rounded-lg px-4 py-3">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:gap-4">
         {/* Strategy dropdown */}
         <div className="flex-1 min-w-0 lg:max-w-[200px]">
@@ -117,7 +117,7 @@ export function TradeFilters({ filters, onFiltersChange }: TradeFiltersProps) {
           <select
             value={strategy_id || ''}
             onChange={(e) => onFiltersChange({ strategy_id: e.target.value || undefined })}
-            className="w-full bg-argus-surface-2 border border-argus-border rounded-md px-3 py-2 text-sm text-argus-text focus:outline-none focus:ring-1 focus:ring-argus-accent min-h-[44px]"
+            className="w-full bg-argus-surface-2 border border-argus-border rounded-md px-3 py-1.5 text-sm text-argus-text focus:outline-none focus:ring-1 focus:ring-argus-accent"
           >
             <option value="">All Strategies</option>
             {strategiesData?.strategies.map((s) => (
@@ -163,7 +163,7 @@ export function TradeFilters({ filters, onFiltersChange }: TradeFiltersProps) {
                     onFiltersChange({ date_from: newFrom });
                   }
                 }}
-                className="w-full bg-argus-surface-2 border border-argus-border rounded-md px-2 py-2 text-sm text-argus-text focus:outline-none focus:ring-1 focus:ring-argus-accent min-h-[44px]"
+                className="w-full bg-argus-surface-2 border border-argus-border rounded-md px-2 py-1.5 text-sm text-argus-text focus:outline-none focus:ring-1 focus:ring-argus-accent"
               />
             </div>
             <div className="flex-1 min-w-0">
@@ -184,7 +184,7 @@ export function TradeFilters({ filters, onFiltersChange }: TradeFiltersProps) {
                   }
                   onFiltersChange({ date_to: newTo });
                 }}
-                className="w-full bg-argus-surface-2 border border-argus-border rounded-md px-2 py-2 text-sm text-argus-text focus:outline-none focus:ring-1 focus:ring-argus-accent min-h-[44px]"
+                className="w-full bg-argus-surface-2 border border-argus-border rounded-md px-2 py-1.5 text-sm text-argus-text focus:outline-none focus:ring-1 focus:ring-argus-accent"
               />
             </div>
           </div>

@@ -839,58 +839,63 @@ export function OpenPositions() {
     <>
       <Card noPadding>
         <div className="p-4 pb-0">
-          <CardHeader
-            title="Positions"
-            subtitle={
-              positionFilter === 'all'
-                ? `${enrichedPositions.length} open, ${trades.length} closed`
-                : positionFilter === 'open'
-                ? `${enrichedPositions.length} open`
-                : `${trades.length} today`
-            }
-            action={
-              <div className="flex items-center gap-2">
-                {/* All / Open / Closed toggle — inline with header */}
-                <SegmentedTab
-                  segments={filterSegments}
-                  activeValue={positionFilter}
-                  onChange={(value) => setPositionFilter(value as 'all' | 'open' | 'closed')}
-                  size="sm"
-                  layoutId="positions-view-filter"
-                />
-
-                {/* Table / Timeline display mode toggle */}
-                {showDisplayModeToggle && (
-                  <div className="flex gap-1 p-0.5 bg-argus-surface-2 rounded-md">
-                    <button
-                      onClick={() => setDisplayMode('table')}
-                      className={`p-1.5 rounded transition-colors ${
-                        displayMode === 'table'
-                          ? 'bg-argus-surface text-argus-accent'
-                          : 'text-argus-text-dim hover:text-argus-text'
-                      }`}
-                      aria-label="Table view"
-                      title="Table view"
-                    >
-                      <List className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => setDisplayMode('timeline')}
-                      className={`p-1.5 rounded transition-colors ${
-                        displayMode === 'timeline'
-                          ? 'bg-argus-surface text-argus-accent'
-                          : 'text-argus-text-dim hover:text-argus-text'
-                      }`}
-                      aria-label="Timeline view"
-                      title="Timeline view"
-                    >
-                      <GanttChart className="w-4 h-4" />
-                    </button>
-                  </div>
-                )}
+          {/* Custom header: filter toggle left-aligned next to title, view toggle right-aligned */}
+          <div className="flex items-center justify-between mb-3 min-h-10">
+            <div className="flex items-center gap-3">
+              <div>
+                <h3 className="text-sm font-medium uppercase tracking-wider text-argus-text-dim whitespace-nowrap">
+                  Positions
+                </h3>
+                <p className="text-xs text-argus-text-dim mt-0.5">
+                  {positionFilter === 'all'
+                    ? `${enrichedPositions.length} open, ${trades.length} closed`
+                    : positionFilter === 'open'
+                    ? `${enrichedPositions.length} open`
+                    : `${trades.length} today`}
+                </p>
               </div>
-            }
-          />
+              {/* All / Open / Closed toggle — left-aligned next to title */}
+              <SegmentedTab
+                segments={filterSegments}
+                activeValue={positionFilter}
+                onChange={(value) => setPositionFilter(value as 'all' | 'open' | 'closed')}
+                size="sm"
+                layoutId="positions-view-filter"
+              />
+            </div>
+
+            <div className="flex items-center gap-2">
+              {/* Table / Timeline display mode toggle — stays right-aligned */}
+              {showDisplayModeToggle && (
+                <div className="flex gap-1 p-0.5 bg-argus-surface-2 rounded-md">
+                  <button
+                    onClick={() => setDisplayMode('table')}
+                    className={`p-1.5 rounded transition-colors ${
+                      displayMode === 'table'
+                        ? 'bg-argus-surface text-argus-accent'
+                        : 'text-argus-text-dim hover:text-argus-text'
+                    }`}
+                    aria-label="Table view"
+                    title="Table view"
+                  >
+                    <List className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => setDisplayMode('timeline')}
+                    className={`p-1.5 rounded transition-colors ${
+                      displayMode === 'timeline'
+                        ? 'bg-argus-surface text-argus-accent'
+                        : 'text-argus-text-dim hover:text-argus-text'
+                    }`}
+                    aria-label="Timeline view"
+                    title="Timeline view"
+                  >
+                    <GanttChart className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
         {positionFilter === 'all'

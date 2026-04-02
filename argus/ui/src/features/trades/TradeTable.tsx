@@ -297,7 +297,7 @@ export function TradeTable({
                   className={`transition-colors duration-150 cursor-pointer ${getRowBgClass(trade.pnl_dollars)}`}
                 >
                   {/* Phone: combined date/symbol with strategy badge */}
-                  <td className="px-3 py-2.5 text-sm lg:hidden">
+                  <td className="px-3 py-2 text-sm lg:hidden">
                     <div className="flex flex-col gap-1">
                       <div className="flex items-center gap-2">
                         <button
@@ -314,11 +314,11 @@ export function TradeTable({
                     </div>
                   </td>
                   {/* Desktop: date */}
-                  <td className="hidden lg:table-cell px-3 py-2.5 text-sm tabular-nums text-argus-text-dim">
+                  <td className="hidden lg:table-cell px-3 py-2 text-sm tabular-nums text-argus-text-dim">
                     {formatDate(trade.entry_time)}
                   </td>
                   {/* Desktop: symbol */}
-                  <td className="hidden lg:table-cell px-3 py-2.5 text-sm font-medium">
+                  <td className="hidden lg:table-cell px-3 py-2 text-sm font-medium">
                     <button
                       onClick={(e) => handleSymbolClick(e, trade.symbol)}
                       className="hover:text-argus-accent hover:underline transition-colors cursor-pointer"
@@ -327,11 +327,11 @@ export function TradeTable({
                     </button>
                   </td>
                   {/* Tablet+: strategy badge */}
-                  <td className="hidden md:table-cell px-3 py-2.5 text-sm">
+                  <td className="hidden md:table-cell px-3 py-2 text-sm">
                     <StrategyBadge strategyId={trade.strategy_id} />
                   </td>
                   {/* Desktop: side */}
-                  <td className="hidden lg:table-cell px-3 py-2.5 text-sm">
+                  <td className="hidden lg:table-cell px-3 py-2 text-sm">
                     <span
                       className={
                         trade.side === 'long' ? 'text-argus-profit' : 'text-argus-loss'
@@ -341,31 +341,31 @@ export function TradeTable({
                     </span>
                   </td>
                   {/* Tablet+: entry price */}
-                  <td className="hidden md:table-cell px-3 py-2.5 text-sm tabular-nums text-right">
+                  <td className="hidden md:table-cell px-3 py-2 text-sm tabular-nums text-right">
                     {formatPrice(trade.entry_price)}
                   </td>
                   {/* Tablet+: exit price */}
-                  <td className="hidden md:table-cell px-3 py-2.5 text-sm tabular-nums text-right">
+                  <td className="hidden md:table-cell px-3 py-2 text-sm tabular-nums text-right">
                     {trade.exit_price !== null ? formatPrice(trade.exit_price) : '—'}
                   </td>
                   {/* All: P&L */}
                   <td
-                    className={`px-3 py-2.5 text-sm tabular-nums text-right font-medium ${pnlFormatted.className}`}
+                    className={`px-3 py-2 text-sm tabular-nums text-right font-medium ${pnlFormatted.className}`}
                   >
                     {trade.pnl_dollars !== null ? pnlFormatted.text : '—'}
                   </td>
                   {/* Tablet+: R-multiple */}
                   <td
-                    className={`hidden md:table-cell px-3 py-2.5 text-sm tabular-nums text-right ${rFormatted.className}`}
+                    className={`hidden md:table-cell px-3 py-2 text-sm tabular-nums text-right ${rFormatted.className}`}
                   >
                     {trade.pnl_r_multiple !== null ? rFormatted.text : '—'}
                   </td>
                   {/* Desktop: shares */}
-                  <td className="hidden lg:table-cell px-3 py-2.5 text-sm tabular-nums text-right">
+                  <td className="hidden lg:table-cell px-3 py-2 text-sm tabular-nums text-right">
                     {trade.shares}
                   </td>
                   {/* Tablet+: quality grade */}
-                  <td className="hidden md:table-cell px-3 py-2.5 text-center">
+                  <td className="hidden md:table-cell px-3 py-2 text-center">
                     {trade.quality_grade ? (
                       <QualityBadge
                         grade={trade.quality_grade}
@@ -376,13 +376,13 @@ export function TradeTable({
                     )}
                   </td>
                   {/* All: exit reason */}
-                  <td className="px-3 py-2.5 text-center">
+                  <td className="px-3 py-2 text-center">
                     <Badge variant={getExitReasonVariant(trade.exit_reason)}>
                       {formatExitReason(trade.exit_reason)}
                     </Badge>
                   </td>
                   {/* Desktop: hold duration */}
-                  <td className="hidden lg:table-cell px-3 py-2.5 text-sm tabular-nums text-right text-argus-text-dim">
+                  <td className="hidden lg:table-cell px-3 py-2 text-sm tabular-nums text-right text-argus-text-dim">
                     {trade.hold_duration_seconds !== null
                       ? formatDuration(trade.hold_duration_seconds)
                       : '—'}

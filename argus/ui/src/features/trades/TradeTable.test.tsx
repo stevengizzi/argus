@@ -128,6 +128,19 @@ describe('TradeTable exit reason labels', () => {
   });
 });
 
+describe('TradeTable row density', () => {
+  it('test_trade_table_row_density — live trades rows use compact py-2 class not py-2.5', () => {
+    render(<TradeTable trades={[baseTrade]} totalCount={1} />);
+
+    const rows = document.querySelectorAll('tbody tr');
+    expect(rows.length).toBeGreaterThan(0);
+    const cells = rows[0].querySelectorAll('td');
+    Array.from(cells).forEach((cell) => {
+      expect(cell.className).not.toContain('py-2.5');
+    });
+  });
+});
+
 describe('TradeTable quality sort', () => {
   const trades: Trade[] = [
     { ...baseTrade, id: '1', symbol: 'AAPL', quality_grade: 'B+', quality_score: 70 },
