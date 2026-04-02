@@ -199,13 +199,6 @@ interface FiltersState {
   rejection_stage: string | undefined;
 }
 
-interface OutcomeCounts {
-  all: number;
-  win: number;
-  loss: number;
-  be: number;
-}
-
 interface ShadowFiltersProps {
   filters: FiltersState;
   onFiltersChange: (updates: Partial<FiltersState>) => void;
@@ -213,7 +206,6 @@ interface ShadowFiltersProps {
   onOutcomeChange: (outcome: ShadowOutcomeFilter) => void;
   quickFilter: QuickFilter;
   onQuickFilterChange: (label: QuickFilter) => void;
-  outcomeCounts: OutcomeCounts;
 }
 
 function ShadowFilters({
@@ -223,120 +215,97 @@ function ShadowFilters({
   onOutcomeChange,
   quickFilter,
   onQuickFilterChange,
-  outcomeCounts,
 }: ShadowFiltersProps) {
   const { data: strategiesData } = useStrategies();
   const strategies = strategiesData?.strategies ?? [];
 
-  const outcomeSegments: SegmentedTabSegment[] = useMemo(
-    () => [
-      { label: 'All', value: 'all', count: outcomeCounts.all },
-      { label: 'Wins', value: 'win', count: outcomeCounts.win, countVariant: 'success' as const },
-      { label: 'Losses', value: 'loss', count: outcomeCounts.loss, countVariant: 'danger' as const },
-      { label: 'BE', value: 'be', count: outcomeCounts.be },
-    ],
-    [outcomeCounts]
-  );
+  const outcomeSegments: SegmentedTabSegment[] = [
+    { label: 'All', value: 'all' },
+    { label: 'Wins', value: 'win', countVariant: 'success' as const },
+    { label: 'Losses', value: 'loss', countVariant: 'danger' as const },
+    { label: 'BE', value: 'be' },
+  ];
 
   return (
-    <div className="flex flex-col gap-3">
-      {/* Row 1: strategy, stage, date range */}
-      <div className="flex flex-wrap gap-3 items-end">
-        {/* Strategy selector */}
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-argus-text-dim">Strategy</label>
-          <select
-            className="bg-argus-surface border border-argus-border rounded-md px-3 py-1.5 text-sm text-argus-text focus:outline-none focus:ring-1 focus:ring-argus-accent"
-            value={filters.strategy_id ?? ''}
-            onChange={(e) => onFiltersChange({ strategy_id: e.target.value || undefined })}
-          >
-            <option value="">All strategies</option>
-            {strategies.map((s) => (
-              <option key={s.strategy_id} value={s.strategy_id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
-        </div>
+    <div className="flex flex-wrap gap-2 items-center">
+      {/* Strategy selector */}
+      <select
+        aria-label="Strategy"
+        className="bg-argus-surface border border-argus-border rounded-md px-3 py-1.5 text-sm text-argus-text focus:outline-none focus:ring-1 focus:ring-argus-accent"
+        value={filters.strategy_id ?? ''}
+        onChange={(e) => onFiltersChange({ strategy_id: e.target.value || undefined })}
+      >
+        <option value="">All strategies</option>
+        {strategies.map((s) => (
+          <option key={s.strategy_id} value={s.strategy_id}>
+            {s.name}
+          </option>
+        ))}
+      </select>
 
-        {/* Rejection stage selector */}
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-argus-text-dim">Rejection Stage</label>
-          <select
-            className="bg-argus-surface border border-argus-border rounded-md px-3 py-1.5 text-sm text-argus-text focus:outline-none focus:ring-1 focus:ring-argus-accent"
-            value={filters.rejection_stage ?? ''}
-            onChange={(e) => onFiltersChange({ rejection_stage: e.target.value || undefined })}
-          >
-            <option value="">All stages</option>
-            {ALL_STAGES.map((stage) => (
-              <option key={stage} value={stage}>
-                {REJECTION_STAGE_LABELS[stage]}
-              </option>
-            ))}
-          </select>
-        </div>
+      {/* Rejection stage selector */}
+      <select
+        aria-label="Rejection Stage"
+        className="bg-argus-surface border border-argus-border rounded-md px-3 py-1.5 text-sm text-argus-text focus:outline-none focus:ring-1 focus:ring-argus-accent"
+        value={filters.rejection_stage ?? ''}
+        onChange={(e) => onFiltersChange({ rejection_stage: e.target.value || undefined })}
+      >
+        <option value="">All stages</option>
+        {ALL_STAGES.map((stage) => (
+          <option key={stage} value={stage}>
+            {REJECTION_STAGE_LABELS[stage]}
+          </option>
+        ))}
+      </select>
 
-        {/* Date range */}
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-argus-text-dim">From</label>
-          <input
-            type="date"
-            className="bg-argus-surface border border-argus-border rounded-md px-3 py-1.5 text-sm text-argus-text focus:outline-none focus:ring-1 focus:ring-argus-accent"
-            value={filters.date_from ?? ''}
-            onChange={(e) => onFiltersChange({ date_from: e.target.value || undefined })}
-            data-testid="shadow-date-from"
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-argus-text-dim">To</label>
-          <input
-            type="date"
-            className="bg-argus-surface border border-argus-border rounded-md px-3 py-1.5 text-sm text-argus-text focus:outline-none focus:ring-1 focus:ring-argus-accent"
-            value={filters.date_to ?? ''}
-            onChange={(e) => onFiltersChange({ date_to: e.target.value || undefined })}
-            data-testid="shadow-date-to"
-          />
-        </div>
-      </div>
+      {/* Outcome toggle */}
+      <SegmentedTab
+        segments={outcomeSegments}
+        activeValue={outcome}
+        onChange={(v) => onOutcomeChange(v as ShadowOutcomeFilter)}
+        size="sm"
+        layoutId="shadow-outcome-filter"
+      />
 
-      {/* Row 2: outcome toggle + time presets */}
-      <div className="flex flex-wrap gap-3 items-end justify-between">
-        {/* Outcome toggle */}
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-argus-text-dim">Outcome</label>
-          <SegmentedTab
-            segments={outcomeSegments}
-            activeValue={outcome}
-            onChange={(v) => onOutcomeChange(v as ShadowOutcomeFilter)}
-            size="sm"
-            layoutId="shadow-outcome-filter"
-          />
-        </div>
+      {/* Time preset buttons */}
+      {(['today', 'week', 'month', 'all'] as const).map((label) => (
+        <button
+          key={label}
+          onClick={() => onQuickFilterChange(label)}
+          className={`px-3 py-1 text-xs rounded transition-colors ${
+            quickFilter === label
+              ? 'bg-argus-accent text-white'
+              : 'bg-argus-surface-2 text-argus-text-dim hover:text-argus-text hover:bg-argus-surface-3'
+          }`}
+          data-testid={`shadow-quick-filter-${label}`}
+        >
+          {label === 'today'
+            ? 'Today'
+            : label === 'week'
+            ? 'Week'
+            : label === 'month'
+            ? 'Month'
+            : 'All'}
+        </button>
+      ))}
 
-        {/* Time preset buttons */}
-        <div className="flex items-center gap-1">
-          {(['today', 'week', 'month', 'all'] as const).map((label) => (
-            <button
-              key={label}
-              onClick={() => onQuickFilterChange(label)}
-              className={`px-3 py-1 text-xs rounded transition-colors ${
-                quickFilter === label
-                  ? 'bg-argus-accent text-white'
-                  : 'bg-argus-surface-2 text-argus-text-dim hover:text-argus-text hover:bg-argus-surface-3'
-              }`}
-              data-testid={`shadow-quick-filter-${label}`}
-            >
-              {label === 'today'
-                ? 'Today'
-                : label === 'week'
-                ? 'Week'
-                : label === 'month'
-                ? 'Month'
-                : 'All'}
-            </button>
-          ))}
-        </div>
-      </div>
+      {/* Date range */}
+      <input
+        type="date"
+        aria-label="From date"
+        className="bg-argus-surface border border-argus-border rounded-md px-3 py-1.5 text-sm text-argus-text focus:outline-none focus:ring-1 focus:ring-argus-accent"
+        value={filters.date_from ?? ''}
+        onChange={(e) => onFiltersChange({ date_from: e.target.value || undefined })}
+        data-testid="shadow-date-from"
+      />
+      <input
+        type="date"
+        aria-label="To date"
+        className="bg-argus-surface border border-argus-border rounded-md px-3 py-1.5 text-sm text-argus-text focus:outline-none focus:ring-1 focus:ring-argus-accent"
+        value={filters.date_to ?? ''}
+        onChange={(e) => onFiltersChange({ date_to: e.target.value || undefined })}
+        data-testid="shadow-date-to"
+      />
     </div>
   );
 }
@@ -642,17 +611,6 @@ export function ShadowTradesTab({ enabled = true }: ShadowTradesTabProps) {
     [sortKey]
   );
 
-  // Outcome counts computed from all loaded trades
-  const outcomeCounts: OutcomeCounts = useMemo(
-    () => ({
-      all: allTrades.length,
-      win: allTrades.filter((t) => t.theoretical_pnl !== null && t.theoretical_pnl > 0).length,
-      loss: allTrades.filter((t) => t.theoretical_pnl !== null && t.theoretical_pnl < 0).length,
-      be: allTrades.filter((t) => t.theoretical_pnl === null || t.theoretical_pnl === 0).length,
-    }),
-    [allTrades]
-  );
-
   // Client-side outcome filter then sort
   const displayTrades = useMemo(() => {
     const filtered =
@@ -688,7 +646,6 @@ export function ShadowTradesTab({ enabled = true }: ShadowTradesTabProps) {
         onOutcomeChange={(o) => setOutcome(o)}
         quickFilter={quickFilter}
         onQuickFilterChange={handleQuickFilterChange}
-        outcomeCounts={outcomeCounts}
       />
 
       {error ? (

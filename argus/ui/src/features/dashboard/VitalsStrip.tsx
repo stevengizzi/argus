@@ -105,7 +105,7 @@ export function VitalsStrip({ todayStats }: VitalsStripProps) {
       <Divider />
 
       {/* Section 2: Daily P&L */}
-      <div className="flex-1 min-w-[130px] flex flex-col justify-center">
+      <div className="flex-[2] min-w-[130px] flex flex-col justify-center">
         <div className="text-[10px] uppercase tracking-wider text-argus-text-dim mb-1">
           Daily P&L
         </div>
@@ -135,7 +135,7 @@ export function VitalsStrip({ todayStats }: VitalsStripProps) {
         </div>
         {accountData && (
           <div className="text-[10px] text-argus-text-dim mt-0.5">
-            {accountData.daily_trades_count} trade{accountData.daily_trades_count !== 1 ? 's' : ''} today
+            {trades} trade{trades !== 1 ? 's' : ''} today
           </div>
         )}
       </div>

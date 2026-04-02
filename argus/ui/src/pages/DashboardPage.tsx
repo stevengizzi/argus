@@ -175,13 +175,13 @@ export function DashboardPage() {
 
           {/* Row 4: AI Insight (50%) | Learning Loop (50%) — matched heights */}
           <motion.div
-            className="grid grid-cols-2 gap-3"
+            className="grid grid-cols-2 gap-3 items-stretch"
             variants={staggerItem}
           >
-            <div className="h-full">
+            <div className="flex flex-col">
               <AIInsightCard />
             </div>
-            <div className="h-full">
+            <div className="flex flex-col">
               <LearningDashboardCard />
             </div>
           </motion.div>

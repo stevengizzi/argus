@@ -107,8 +107,8 @@ export function TradeFilters({ filters, onFiltersChange }: TradeFiltersProps) {
   ], [allTradesData?.total_count, winsData?.total_count, lossesData?.total_count, beData?.total_count]);
 
   return (
-    <div className="bg-argus-surface-2/50 border border-argus-border rounded-lg px-4 py-3">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:gap-4">
+    <div className="bg-argus-surface-2/50 border border-argus-border rounded-lg px-4 py-2">
+      <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:gap-3">
         {/* Strategy dropdown */}
         <div className="flex-1 min-w-0 lg:max-w-[200px]">
           <label className="block text-xs text-argus-text-dim uppercase tracking-wide mb-1">

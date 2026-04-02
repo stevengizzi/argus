@@ -116,6 +116,7 @@ export function ArenaCard({
     : undefined;
 
   return (
+    // No border — cards use bg-argus-surface-2 background only (S3 cleanup)
     <div
       className="rounded-lg bg-argus-surface-2 flex flex-col overflow-hidden"
       data-testid="arena-card"

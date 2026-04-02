@@ -266,7 +266,7 @@ export function OpenPositions() {
     // Timeline view - show both open and closed
     if (displayMode === 'timeline') {
       return (
-        <div className="p-4 pt-0">
+        <div className="p-4 pt-0 max-h-[420px] overflow-y-auto">
           <PositionTimeline
             positions={enrichedPositions}
             closedTrades={trades}
@@ -518,7 +518,7 @@ export function OpenPositions() {
     // Timeline view - show only open positions
     if (displayMode === 'timeline') {
       return (
-        <div className="p-4 pt-0">
+        <div className="p-4 pt-0 max-h-[420px] overflow-y-auto">
           <PositionTimeline
             positions={enrichedPositions}
             onPositionClick={handleTimelineClick}
@@ -713,7 +713,7 @@ export function OpenPositions() {
     // Timeline view - show only closed trades
     if (displayMode === 'timeline') {
       return (
-        <div className="p-4 pt-0">
+        <div className="p-4 pt-0 max-h-[420px] overflow-y-auto">
           <PositionTimeline
             positions={[]}
             closedTrades={trades}

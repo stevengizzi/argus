@@ -53,10 +53,12 @@ export function SignalQualityPanel() {
   if (isLoading) {
     return (
       <Card fullHeight>
-        <p className="text-xs font-medium text-argus-text-dim uppercase tracking-wider mb-3">
-          Signal Quality
-        </p>
-        <div className="h-[180px] bg-argus-surface-2 rounded animate-pulse" />
+        <div className="flex flex-col h-full">
+          <p className="text-xs font-medium text-argus-text-dim uppercase tracking-wider mb-3 flex-shrink-0">
+            Signal Quality
+          </p>
+          <div className="flex-1 min-h-0 bg-argus-surface-2 rounded animate-pulse" />
+        </div>
       </Card>
     );
   }
@@ -66,14 +68,16 @@ export function SignalQualityPanel() {
   if (!hasData) {
     return (
       <Card fullHeight>
-        <p className="text-xs font-medium text-argus-text-dim uppercase tracking-wider mb-3">
-          Signal Quality
-        </p>
-        <div
-          className="flex items-center justify-center h-[180px]"
-          data-testid="signal-quality-empty"
-        >
-          <p className="text-sm text-argus-text-dim">No quality data yet</p>
+        <div className="flex flex-col h-full">
+          <p className="text-xs font-medium text-argus-text-dim uppercase tracking-wider mb-3 flex-shrink-0">
+            Signal Quality
+          </p>
+          <div
+            className="flex-1 flex items-center justify-center"
+            data-testid="signal-quality-empty"
+          >
+            <p className="text-sm text-argus-text-dim">No quality data yet</p>
+          </div>
         </div>
       </Card>
     );
@@ -89,39 +93,41 @@ export function SignalQualityPanel() {
 
   return (
     <Card fullHeight>
-      <p className="text-xs font-medium text-argus-text-dim uppercase tracking-wider mb-3">
-        Signal Quality
-      </p>
-      <div data-testid="signal-quality-histogram">
-        <ResponsiveContainer width="100%" height={180}>
-          <BarChart data={bars} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
-            <XAxis
-              dataKey="grade"
-              tick={{ fill: '#9ca3af', fontSize: 11 }}
-              axisLine={false}
-              tickLine={false}
-            />
-            <YAxis
-              tick={{ fill: '#6b7280', fontSize: 10 }}
-              axisLine={false}
-              tickLine={false}
-              allowDecimals={false}
-            />
-            <Tooltip content={<HistogramTooltip />} cursor={{ fill: 'rgba(255,255,255,0.05)' }} isAnimationActive={false} />
-            <Bar dataKey="count" radius={[3, 3, 0, 0]} maxBarSize={28} isAnimationActive={false}>
-              {bars.map(bar => (
-                <Cell key={bar.grade} fill={bar.color} />
-              ))}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
+      <div className="flex flex-col h-full">
+        <p className="text-xs font-medium text-argus-text-dim uppercase tracking-wider mb-3 flex-shrink-0">
+          Signal Quality
+        </p>
+        <div className="flex-1 min-h-0" data-testid="signal-quality-histogram">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={bars} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
+              <XAxis
+                dataKey="grade"
+                tick={{ fill: '#9ca3af', fontSize: 11 }}
+                axisLine={false}
+                tickLine={false}
+              />
+              <YAxis
+                tick={{ fill: '#6b7280', fontSize: 10 }}
+                axisLine={false}
+                tickLine={false}
+                allowDecimals={false}
+              />
+              <Tooltip content={<HistogramTooltip />} cursor={{ fill: 'rgba(255,255,255,0.05)' }} isAnimationActive={false} />
+              <Bar dataKey="count" radius={[3, 3, 0, 0]} maxBarSize={28} isAnimationActive={false}>
+                {bars.map(bar => (
+                  <Cell key={bar.grade} fill={bar.color} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+        <p
+          className="text-xs text-argus-text-dim mt-2 flex-shrink-0"
+          data-testid="signal-quality-counter"
+        >
+          Signals today: {passed} passed / {data.filtered} filtered
+        </p>
       </div>
-      <p
-        className="text-xs text-argus-text-dim mt-2"
-        data-testid="signal-quality-counter"
-      >
-        Signals today: {passed} passed / {data.filtered} filtered
-      </p>
     </Card>
   );
 }

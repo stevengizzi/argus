@@ -73,7 +73,7 @@ export function LearningDashboardCard({ enabled = true }: LearningDashboardCardP
   };
 
   return (
-    <div data-testid="learning-dashboard-card">
+    <div data-testid="learning-dashboard-card" className="h-full">
     <Card className="h-full">
       <CardHeader
         title="Learning Loop"
