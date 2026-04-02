@@ -355,4 +355,54 @@ describe('useArenaWebSocket', () => {
     unmount();
     expect(wsInstance!.close).toHaveBeenCalled();
   });
+
+  // -------------------------------------------------------------------------
+  // Sprint 32.8 S1: arena_tick_price handler
+  // -------------------------------------------------------------------------
+
+  it('processes arena_tick_price and updates forming candle without overwriting P&L data', () => {
+    const { result } = renderHook(() => useArenaWebSocket(EMPTY_POSITIONS));
+    const handle = makeMiniChartHandle();
+
+    act(() => {
+      connectAndAuth();
+      result.current.registerChartRef('AAPL', handle);
+
+      // First, an arena_tick arrives setting P&L context
+      sendMessage({
+        type: 'arena_tick',
+        symbol: 'AAPL',
+        price: 185.0,
+        unrealized_pnl: 200.0,
+        r_multiple: 0.8,
+        trailing_stop_price: 183.0,
+      });
+    });
+
+    // Confirm P&L from arena_tick is visible
+    expect(result.current.liveOverlays['AAPL']).toMatchObject({
+      unrealized_pnl: 200.0,
+      r_multiple: 0.8,
+    });
+
+    act(() => {
+      // Now arena_tick_price arrives at a higher frequency with just price
+      sendMessage({
+        type: 'arena_tick_price',
+        symbol: 'AAPL',
+        price: 186.50,
+        timestamp: '2026-04-01T14:30:01Z',
+      });
+    });
+
+    // Forming candle updated with new price
+    expect(handle.updateCandle).toHaveBeenLastCalledWith(
+      expect.objectContaining({ close: 186.50 }),
+    );
+
+    // current_price updated from arena_tick_price
+    expect(result.current.liveOverlays['AAPL']).toMatchObject({
+      current_price: 186.50,
+    });
+  });
 });

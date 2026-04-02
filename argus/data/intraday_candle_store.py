@@ -27,12 +27,12 @@ logger = logging.getLogger(__name__)
 
 ET = ZoneInfo("America/New_York")
 
-# Market hours boundaries (ET)
-_MARKET_OPEN = dt_time(9, 30)
+# Session boundaries (ET): pre-market opens at 4:00 AM, regular close at 4:00 PM
+_MARKET_OPEN = dt_time(4, 0)
 _MARKET_CLOSE = dt_time(16, 0)
 
-# Full trading day of 1-minute bars
-_MAX_BARS_PER_SYMBOL = 390
+# 12 hours of 1-minute bars (4:00 AM to 4:00 PM ET)
+_MAX_BARS_PER_SYMBOL = 720
 
 
 class IntradayCandleStore:
@@ -42,7 +42,7 @@ class IntradayCandleStore:
     access for the market bars API endpoint and pattern strategy backfill.
 
     Attributes:
-        _bars: Per-symbol deque of CandleBars, capped at 390 (full day).
+        _bars: Per-symbol deque of CandleBars, capped at 720 (12-hour session).
     """
 
     def __init__(self) -> None:
@@ -52,8 +52,8 @@ class IntradayCandleStore:
     async def on_candle(self, event: CandleEvent) -> None:
         """Handle a CandleEvent from the Event Bus.
 
-        Filters out pre-market/post-market bars and stores only market-hours
-        1-minute bars.
+        Filters out overnight bars and stores pre-market (4:00 AM ET+) through
+        regular-session 1-minute bars.
 
         Args:
             event: The CandleEvent to process.

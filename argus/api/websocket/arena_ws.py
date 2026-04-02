@@ -26,6 +26,7 @@ from argus.core.events import (
     PositionClosedEvent,
     PositionOpenedEvent,
     PositionUpdatedEvent,
+    TickEvent,
 )
 
 if TYPE_CHECKING:
@@ -199,21 +200,6 @@ def compute_r_multiple(
     return (exit_price - entry_price) / abs(risk)
 
 
-def _get_trailing_stop_price(symbol: str, order_manager: OrderManager) -> float:
-    """Look up the trailing stop price for a symbol from OrderManager.
-
-    Args:
-        symbol: The symbol to look up.
-        order_manager: The OrderManager instance.
-
-    Returns:
-        trail_stop_price of the first open position for symbol, or 0.0.
-    """
-    for position in order_manager.get_all_positions_flat():
-        if position.symbol == symbol and not position.is_fully_closed:
-            return position.trail_stop_price
-    return 0.0
-
 
 def _prune_ring_buffer(buf: deque[float], cutoff: float) -> None:
     """Remove timestamps older than cutoff from the front of the deque.
@@ -287,6 +273,8 @@ async def arena_websocket(websocket: WebSocket) -> None:
         # Tracked unrealized P&L and R per symbol for stats
         unrealized_pnl_map: dict[str, float] = {}
         r_multiple_map: dict[str, float] = {}
+        # Cached trail stop price per symbol — updated at 1 Hz from on_position_updated
+        trail_stop_cache: dict[str, float] = {}
         # Ring buffers: monotonic timestamps of recent opens/closes
         recent_entries: deque[float] = deque()
         recent_exits: deque[float] = deque()
@@ -317,8 +305,23 @@ async def arena_websocket(websocket: WebSocket) -> None:
                 return
             unrealized_pnl_map[event.symbol] = event.unrealized_pnl
             r_multiple_map[event.symbol] = event.r_multiple
-            trail = _get_trailing_stop_price(event.symbol, order_manager)
+            trail = 0.0
+            for pos in order_manager.get_all_positions_flat():
+                if pos.symbol == event.symbol and not pos.is_fully_closed:
+                    trail = pos.trail_stop_price
+                    break
+            trail_stop_cache[event.symbol] = trail
             _enqueue(build_arena_tick(event, trail))
+
+        async def on_tick(event: TickEvent) -> None:
+            if event.symbol not in tracked_symbols:
+                return
+            _enqueue({
+                "type": "arena_tick_price",
+                "symbol": event.symbol,
+                "price": event.price,
+                "timestamp": event.timestamp.isoformat(),
+            })
 
         async def on_candle(event: CandleEvent) -> None:
             if event.symbol not in tracked_symbols:
@@ -354,6 +357,7 @@ async def arena_websocket(websocket: WebSocket) -> None:
         event_bus.subscribe(CandleEvent, on_candle)
         event_bus.subscribe(PositionOpenedEvent, on_position_opened)
         event_bus.subscribe(PositionClosedEvent, on_position_closed)
+        event_bus.subscribe(TickEvent, on_tick)
 
         # --- Stats timer task -------------------------------------------------
         async def stats_loop() -> None:
@@ -401,6 +405,7 @@ async def arena_websocket(websocket: WebSocket) -> None:
             event_bus.unsubscribe(CandleEvent, on_candle)
             event_bus.unsubscribe(PositionOpenedEvent, on_position_opened)
             event_bus.unsubscribe(PositionClosedEvent, on_position_closed)
+            event_bus.unsubscribe(TickEvent, on_tick)
 
             stats_task.cancel()
             sender_task.cancel()

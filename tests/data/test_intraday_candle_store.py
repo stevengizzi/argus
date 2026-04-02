@@ -69,7 +69,7 @@ async def test_candle_store_get_bars_time_range() -> None:
 
 @pytest.mark.asyncio
 async def test_candle_store_max_length() -> None:
-    """Verify deque doesn't exceed 390 per symbol."""
+    """Verify deque doesn't exceed 720 per symbol."""
     store = IntradayCandleStore()
 
     # Add 395 bars (9:30 to 16:05 — but market close filter will drop some)
@@ -79,7 +79,7 @@ async def test_candle_store_max_length() -> None:
         if hour < 16:
             await store.on_candle(_make_candle("AAPL", hour, minute))
 
-    assert store.bar_count("AAPL") <= 390
+    assert store.bar_count("AAPL") <= 720
 
 
 @pytest.mark.asyncio
@@ -112,13 +112,14 @@ async def test_candle_store_reset() -> None:
 
 @pytest.mark.asyncio
 async def test_candle_store_filters_pre_market() -> None:
-    """Pre-market bars (before 9:30 ET) should not be stored."""
+    """Bars from 4:00 AM ET onward are stored; overnight bars are filtered."""
     store = IntradayCandleStore()
-    await store.on_candle(_make_candle("AAPL", 8, 30))  # Pre-market
-    await store.on_candle(_make_candle("AAPL", 9, 0))   # Pre-market
-    await store.on_candle(_make_candle("AAPL", 9, 30))  # Market open — stored
+    await store.on_candle(_make_candle("AAPL", 3, 59))  # Overnight — filtered
+    await store.on_candle(_make_candle("AAPL", 4, 0))   # Pre-market open — stored
+    await store.on_candle(_make_candle("AAPL", 8, 30))  # Pre-market — stored
+    await store.on_candle(_make_candle("AAPL", 9, 30))  # Regular session — stored
 
-    assert store.bar_count("AAPL") == 1
+    assert store.bar_count("AAPL") == 3
 
 
 @pytest.mark.asyncio
@@ -169,3 +170,49 @@ async def test_candle_store_get_bars_no_filter() -> None:
 
     bars = store.get_bars("AAPL")
     assert len(bars) == 5
+
+
+# ---------------------------------------------------------------------------
+# Sprint 32.8 S1: Pre-market widening tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_candle_store_accepts_premarket_bars() -> None:
+    """CandleEvent at 8:00 AM ET is stored after widening to 4:00 AM ET."""
+    store = IntradayCandleStore()
+    await store.on_candle(_make_candle("AAPL", 8, 0))   # Pre-market — now stored
+    await store.on_candle(_make_candle("AAPL", 4, 0))   # Pre-market open — stored
+    await store.on_candle(_make_candle("AAPL", 6, 30))  # Pre-market — stored
+
+    assert store.bar_count("AAPL") == 3
+
+
+@pytest.mark.asyncio
+async def test_candle_store_rejects_overnight_bars() -> None:
+    """CandleEvent at 3:00 AM ET is still rejected (before 4:00 AM boundary)."""
+    store = IntradayCandleStore()
+    await store.on_candle(_make_candle("AAPL", 3, 0))   # Overnight — rejected
+    await store.on_candle(_make_candle("AAPL", 3, 59))  # Overnight — rejected
+    await store.on_candle(_make_candle("AAPL", 4, 0))   # Pre-market open — stored
+
+    assert store.bar_count("AAPL") == 1
+
+
+@pytest.mark.asyncio
+async def test_candle_store_max_bars_increased() -> None:
+    """Verify max bars per symbol is 720 (12-hour session)."""
+    from argus.data.intraday_candle_store import _MAX_BARS_PER_SYMBOL
+
+    assert _MAX_BARS_PER_SYMBOL == 720
+
+    store = IntradayCandleStore()
+    # Fill 720 bars across 4 AM to 4 PM (12 hours × 60 bars)
+    count = 0
+    for h in range(4, 16):
+        for m in range(60):
+            await store.on_candle(_make_candle("AAPL", h, m))
+            count += 1
+
+    # All bars within the 4 AM–4 PM window should be stored (up to 720)
+    assert store.bar_count("AAPL") == 720

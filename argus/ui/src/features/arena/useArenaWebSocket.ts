@@ -241,6 +241,26 @@ export function useArenaWebSocket(initialPositions: ArenaPosition[]): UseArenaWe
           break;
         }
 
+        case 'arena_tick_price': {
+          const symbol = msg.symbol as string;
+          if (!rafPendingRef.current.has(symbol)) {
+            // No existing batch — create entry with price only (P&L defaults to 0)
+            const existing = rafPendingRef.current.get(symbol);
+            rafPendingRef.current.set(symbol, {
+              price: msg.price as number,
+              unrealized_pnl: existing?.unrealized_pnl ?? 0,
+              r_multiple: existing?.r_multiple ?? 0,
+              trailing_stop_price: existing?.trailing_stop_price ?? 0,
+            });
+          } else {
+            // Existing batch entry from arena_tick — update only price
+            const batch = rafPendingRef.current.get(symbol)!;
+            batch.price = msg.price as number;
+          }
+          scheduleRaf();
+          break;
+        }
+
         case 'arena_candle': {
           const symbol = msg.symbol as string;
           const time = (new Date(msg.time as string).getTime() / 1000) as UTCTimestamp;
