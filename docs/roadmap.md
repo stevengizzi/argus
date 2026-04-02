@@ -118,7 +118,7 @@ These foundations are correct and remain:
 
 ARGUS completed 21 sprints + sub-sprints in ~17 calendar days of active development (Feb 14 – Mar 5). Average sprint: ~0.8 calendar days. However, sprint complexity has been increasing — early sprints (1–5) were dense single-day affairs, while later sprints (21a–21d, 21.5) span multiple days. The roadmap below assumes sprint durations of 1–4 days each depending on complexity, with some parallelism where noted.
 
-**Current state:** Sprint 32.5 complete (April 1, 2026). ~4,489 pytest + 711 Vitest (0 pre-existing pytest failures). Twelve active strategies. Full infrastructure stack operational: BacktestEngine + Evaluation Framework + Regime Intelligence (11-field RegimeVector) + Counterfactual Engine + VIX Data Service + Quality Engine + NLP Catalyst Pipeline + Universe Manager + AI Copilot + Learning Loop V1 + Exit Management + MFE/MAE Tracking + **Experiment Pipeline** (pattern factory, parameter fingerprinting, exit params as variant dimensions, BacktestEngine all 7 patterns, variant spawning, backtest pre-filter, autonomous promotion/demotion). Nine-page Command Center (Experiments page added, Shadow Trades tab added to Trade Log). Live Databento + IBKR paper trading. Phase 7 Gate pending (post-32.5). Next: Sprint 31A (Pattern Expansion III — reach 15 strategies).
+**Current state:** Sprint 32.75 complete (April 2, 2026). ~4,530 pytest + 805 Vitest. Twelve active strategies. Full infrastructure stack operational: BacktestEngine + Evaluation Framework + Regime Intelligence (11-field RegimeVector) + Counterfactual Engine + VIX Data Service + Quality Engine + NLP Catalyst Pipeline + Universe Manager + AI Copilot + Learning Loop V1 + Exit Management + MFE/MAE Tracking + **Experiment Pipeline** (pattern factory, parameter fingerprinting, exit params as variant dimensions, BacktestEngine all 7 patterns, variant spawning, backtest pre-filter, autonomous promotion/demotion) + **The Arena** (real-time multi-position visualization — 10th Command Center page). Ten-page Command Center. Live Databento + IBKR paper trading. Phase 7 Gate pending (post-32.5). Next: Sprint 31A (Pattern Expansion III — reach 15 strategies).
 
 ---
 
@@ -126,18 +126,20 @@ ARGUS completed 21 sprints + sub-sprints in ~17 calendar days of active developm
 
 Every capability must be visible the moment it exists. Terminal-only development phases are a failure mode — they disconnect the builder from the system and erode confidence in what the system is actually doing. The design north star remains "Bloomberg Terminal meets modern fintech" and the aspiration remains "a portal, not a tool."
 
-The Command Center evolves from 8 pages to 11 across this roadmap:
+The Command Center evolves from 10 pages to 12 across this roadmap:
 
 | Page | Current | Phase 5 | Phase 6 | Phase 7–8 | Phase 9–10 |
 |------|---------|---------|---------|-----------|------------|
 | Dashboard | Built | Quality scores visible | Strategy health bands, short exposure | Ensemble health metrics | Full ensemble dashboard |
 | Trades | Built | Quality badge per trade | Unchanged | Unchanged | Strategy family attribution |
 | Performance | Built | Unchanged | Learning Loop panel, correlation matrix | Sweep comparison views | Ensemble analytics suite |
+| The Arena | **Built (Sprint 32.75)** | — | Enhanced multi-position analytics | Strategy comparison overlay | Ensemble position view |
 | Orchestrator | Built | Catalyst alerts | Throttle/boost panel | Template activation view | Ensemble activation map |
 | Pattern Library | Built | Unchanged | New strategy cards | Template gallery evolution | Template + ensemble browser |
 | The Debrief | Built | AI-generated summaries | Unchanged | Research session recaps | Ensemble debrief |
 | System | Built | API health monitoring | Unchanged | BacktestEngine monitoring | Pipeline health |
 | Observatory | **Built (Sprint 25)** | — | Strategy-specific views | Ensemble pipeline viz | Full ensemble observatory |
+| Experiments | **Built (Sprint 32.5)** | — | Sweep visualization | Variant genealogy tree | Full experiment suite |
 | Copilot | Shell built | Activated (Sprint 22) | Ensemble-aware context | Research assistant mode | Full ensemble copilot |
 | Research Console | — | — | — | **New (Sprint 31B)** | Discovery pipeline view |
 | Synapse | — | — | — | — | **New (Sprint 38–39)** |
@@ -605,24 +607,39 @@ Reconciliation redesign with broker-confirmed positions (DEC-369). Overflow rout
 **DECs:** None. DEC-382–395 reserved range released.
 **DEFs:** DEF-121 ✅, DEF-124 ✅ resolved. DEF-134 opened.
 
-### Sprint 32.5: Experiment Pipeline Completion + Visibility
-**Target:** ~5–7 days (8 sessions)
+### Sprint 32.5: Experiment Pipeline Completion + Visibility ✅ COMPLETE (April 1, 2026)
+**Actual:** ~1 day (8 sessions + S6f fix). +84 pytest, +11 Vitest.
 
-**Scope:**
-- **DEF-134 (BacktestEngine all 7 patterns):** Add strategy type support for dip_and_rip, hod_break, gap_and_go, abcd, premarket_high_break to BacktestEngine strategy factory (`backtest/engine.py`). Prerequisite for ExperimentRunner to pre-filter all pattern types.
-- **DEF-132 (Exit params as variant dimensions):** Include exit parameters (trailing stop config, escalation phases, targets) in the variant specification. A complete variant = detection params + exit params. Fingerprint must incorporate both.
-- **DEF-131 (Experiments + Counterfactual UI):** Experiments page (Command Center page 9) — experiment list, variant status table, promotion history, shadow vs live comparison charts. Counterfactual filter accuracy visualization. Shadow trade timeline.
-- **DEF-133 (Adaptive Capital Intelligence vision):** Produce vision document for replacing stacked guardrail risk model with unified allocation intelligence using continuous sizing. Phased roadmap: Kelly-inspired sizing with uncertainty (~Sprint 34–35) → full AllocationIntelligence (~Sprint 38+).
+**Delivered:**
+- **DEF-132** — `ExitSweepParam` model, `exit_overrides` on VariantDefinition, fingerprint expansion, spawner `deep_update` wiring, runner exit grid cross-product.
+- **DEF-134** — StrategyType enum extended to all 7 patterns; `_supply_daily_reference_data()` for GapAndGo/PreMarketHighBreak.
+- **DEF-131** — 3 new REST endpoints (`/counterfactual/positions`, `/experiments/variants`, `/experiments/promotions`), Shadow Trades tab on Trade Log, Experiments page as 9th Command Center page.
+- **DEF-133** — `docs/architecture/allocation-intelligence-vision.md` — 9-section vision.
 
-**State after:** Experiment pipeline is fully functional for all 7 pattern types. The operator can observe active experiments and variant performance in the Command Center. Exit parameter tuning is now a dimension of variant search. A clear architecture vision exists for the transition from guardrail-based to intelligence-based capital allocation.
+**Tests:** 4,405 → 4,489 (+84 pytest, +11 Vitest).
+**DECs:** None.
+**DEFs:** DEF-131 ✅, DEF-132 ✅, DEF-133 ✅, DEF-134 ✅ resolved. DEF-135 opened (visual verification deferred). DEF-136 opened (GoalTracker pre-existing).
 
-**Tests:** ~80 new.
+### Sprint 32.75: The Arena + UI/Operational Sweep ✅ COMPLETE (April 2, 2026)
+**Actual:** ~1 day (13 sessions: S1–S12 + S12f). +41 pytest, +94 Vitest.
 
-**Dependencies:** Sprint 32 (ExperimentRunner, VariantSpawner, PromotionEvaluator), Sprint 27.7 (CounterfactualTracker UI data).
+**Delivered:**
+- **The Arena** — Real-time multi-position visualization, 10th Command Center page. Arena REST (`GET /arena/positions`, `GET /arena/candles/{symbol}`), WebSocket `/ws/v1/arena` (5 message types), 6 React components (ArenaPage, ArenaCard, MiniChart, ArenaControls, ArenaStatsBar, useArenaWebSocket, useArenaData).
+- **Strategy identity system** — All 12 strategies with unique colors, badge glyphs, single-letter identifiers across all UI components.
+- **Dashboard overhaul** — Removed redundant cards, repositioned VixRegimeCard, inlined position toggle.
+- **UI bug fixes** — Orchestrator P&L column, TradeChart price line dedup, AI Copilot context, catalyst clickable links.
+- **Operational fixes** — `overflow.broker_capacity` raised 30→60, IBKRBroker 3s post-reconnect delay, window summary infrastructure on BaseStrategy, IBC setup guide (`docs/ibc-setup.md`).
+- **DEF-136 resolved** — GoalTracker.test.tsx vi.useFakeTimers fix.
+
+**Tests:** 4,489 → 4,530 pytest (+41), 711 → 805 Vitest (+94).
+**DECs:** None.
+**DEFs:** DEF-136 ✅ resolved. DEF-137, DEF-138 opened (both LOW pre-existing).
+
+**State after:** Command Center has 10 pages. All paper trading operational issues from Sprint 32.5 resolved. Arena provides real-time multi-position awareness during live sessions.
 
 ### Phase 7 Gate
 
-**Trigger:** Sprint 32.5 complete.
+**Trigger:** Sprint 32.5 complete (was prerequisite; 32.75 is a sweep sprint that doesn't block gate).
 **Protocol:** Strategic Check-In (`strategic-check-in.md`) + Documentation Compression.
 
 **Historical data sufficiency — RESOLVED (DEC-358).** XNAS.ITCH + XNYS.PILLAR provide OHLCV-1m back to May 2018 (~96 months) at $0 on Standard plan. Three-way splits across 96 months provide ample statistical power.

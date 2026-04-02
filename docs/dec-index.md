@@ -1,7 +1,7 @@
 # ARGUS — Decision Index
 
 > 381 decisions (DEC-001 through DEC-381)
-> Generated: April 1, 2026 (Sprint 32.5 doc sync — no new DECs in Sprint 32.5) | Source: `docs/decision-log.md`
+> Generated: April 2, 2026 (Sprint 32.75 doc sync — no new DECs in Sprints 32.5 or 32.75) | Source: `docs/decision-log.md`
 > Legend: ● Active | ○ Superseded | △ Amended | ✗ Duplicate entry
 
 
@@ -466,3 +466,11 @@ No new DECs. Reserved range 379–385 unused — all design decisions followed e
 ## Sprint 32 — Parameterized Strategy Templates + Experiment Pipeline
 
 No new DECs. Reserved range DEC-382–395 unused — all design decisions followed established patterns (factory introspection, DEC-345 store pattern, DEC-300 config-gating, DEC-375 overflow routing for shadow variants).
+
+## Sprint 32.5 — Experiment Pipeline Completion + Visibility
+
+No new DECs. All design decisions followed established patterns (DEC-345 store pattern for ExperimentStore, DEC-300 config-gating for new endpoints, DEC-375 overflow routing for shadow variants, exit params wired via deep_update pattern).
+
+## Sprint 32.75 — The Arena + UI/Operational Sweep
+
+No new DECs. All design decisions followed established patterns (Arena WS follows observatory WS pattern, Arena REST follows existing route patterns, IBKRBroker reconnect delay is a hardcoded operational choice not requiring a DEC, overflow broker_capacity change is a config value adjustment). Next DEC: 382.

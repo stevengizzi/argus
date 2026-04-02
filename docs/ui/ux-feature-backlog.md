@@ -9,20 +9,22 @@
 
 ## Design Vision & Principles
 
-### The Vision: Eight-Page Command Center + AI Copilot
+### The Vision: Ten-Page Command Center + AI Copilot
 
-ARGUS's Command Center is an 8-page application with a contextual AI Copilot (DEC-170) accessible from every page. Each page has a focused purpose:
+ARGUS's Command Center is a 10-page application with a contextual AI Copilot (DEC-170) accessible from every page. Each page has a focused purpose:
 
 | Page | Purpose | Primary User Question |
 |------|---------|----------------------|
 | **Dashboard** | Ambient awareness | "How am I doing right now?" |
 | **Trade Log** | Trade history | "What trades happened and why?" |
 | **Performance** | Quantitative analytics | "How have I been performing, and where are the patterns?" |
+| **The Arena** ✅ Sprint 32.75 | Real-time position monitoring | "What are all my open positions doing right now?" |
 | **Orchestrator** | Operational control | "What is the system doing, why, and how do I change it?" |
 | **Pattern Library** | Strategy encyclopedia | "How does each strategy work, and how has it performed?" |
 | **The Debrief** | Knowledge accumulation | "What have I learned, and what should I review?" |
 | **System** | Infrastructure health | "Is everything running correctly?" |
 | **Observatory** | Pipeline visualization | "What is the pipeline doing with every symbol right now?" |
+| **Experiments** ✅ Sprint 32.5 | Variant management | "How are my parameterized variants performing in shadow mode?" |
 
 The **AI Copilot** is a persistent slide-out chat panel (desktop: right 35%, mobile: full-screen overlay) triggered by a floating button or `c` keyboard shortcut. Context-aware — automatically receives page context, selected entities, and system state.
 
@@ -49,7 +51,7 @@ The **AI Copilot** is a persistent slide-out chat panel (desktop: right 35%, mob
 - **Learn:** Debrief 📚
 - **Maintain:** System ⚙️
 
-Keyboard shortcuts: `1`–`8` page navigation (sidebar), `Cmd+K` copilot, `w` watchlist toggle. Observatory internal: `f`/`m`/`r`/`t` for views, `[`/`]` for tiers, `Tab` for symbols, `Shift+R`/`Shift+F` for camera.
+Keyboard shortcuts: `1`–`9` + `0` page navigation (0 = Experiments, 4 = The Arena), `Cmd+K` copilot, `w` watchlist toggle. Observatory internal: `f`/`m`/`r`/`t` for views, `[`/`]` for tiers, `Tab` for symbols, `Shift+R`/`Shift+F` for camera.
 
 **Mobile (bottom tab bar):** 5 primary tabs + More menu.
 - Tabs: Dashboard | Trades | Orchestrator | Patterns | More
@@ -663,6 +665,8 @@ Refactor Performance page from fixed 5-tab layout to customizable widget grid us
 | **23+** | Sunburst, regime timeline, symbol heatmap, configurable grid, notifications | ~36h | Refinement & customization |
 | **24** | Flow indicator, L2 heatmap, entry snapshot | ~14h | Order flow UI |
 | **25** ✅ | Observatory page (4 views, detail panel, vitals, debrief mode, Three.js 3D) | ~14 sessions | Pipeline visualization |
+| **32.5** ✅ | Experiments page (9th page), Shadow Trades tab on Trade Log, Experiments variants/promotions UI | ~11 Vitest | Experiment pipeline visibility |
+| **32.75** ✅ | The Arena (10th page), strategy identity system (colors/badges/letters), Dashboard overhaul, Arena REST + WS, AI Copilot context, catalyst links, TradeChart dedup | ~94 Vitest | Real-time position monitoring |
 | **30** | Calibration chart, weekly insight, learning loop health | ~8h | Learning loop UI |
 
 ---
@@ -693,5 +697,18 @@ Refactor Performance page from fixed 5-tab layout to customizable widget grid us
 - Dashboard renders interactive in <1 second on LAN
 - Animations never drop below 60fps
 - Charts with >1000 data points use canvas (not SVG)
-- WebSocket updates batch via requestAnimationFrame
+- WebSocket updates batch via requestAnimationFrame (rAF batching used in Arena WS — Sprint 32.75)
 - AI Copilot streams partial responses immediately
+
+---
+
+## Deferred Items From Sprint 32.75
+
+### DEF-137 — `test_history_store_migration` hardcoded date decay [LOW]
+`tests/core/test_regime_vector_expansion.py` uses hardcoded date "2026-03-25" which falls outside the 7-day retention window of RegimeHistoryStore. Test fails after ~7 days. Fix: use `datetime.now(UTC) - timedelta(days=1)` or mock the clock. Assign to next cleanup sprint.
+
+### DEF-138 — `ArenaPage.test.tsx` WebSocket mock missing [LOW]
+`useArenaWebSocket` creates a real `WebSocket` in jsdom (no mock provided), which never closes. Vitest hangs instead of timing out cleanly. Fix: add `vi.mock('../hooks/useArenaWebSocket')` at the top of `ArenaPage.test.tsx` (same pattern used for `useArenaData` mock in the same file). Assign to next frontend test cleanup sprint.
+
+### Window summary wiring — BaseStrategy subclasses [LOW]
+`BaseStrategy._log_window_summary()` and helpers are implemented but not yet wired into any of the 12 strategy subclasses. Wiring touches all 12 strategies + tests. Deferred to a dedicated sprint. This would provide per-session evaluation coverage metrics in logs.

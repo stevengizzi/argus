@@ -1700,6 +1700,10 @@ GET  /api/v1/goals                              # GoalsConfig (monthly target, r
 # Market data endpoint (Sprint 21a)
 GET  /api/v1/market/{symbol}/bars               # Synthetic OHLCV for dev mode symbol charts
 
+# Arena endpoints (Sprint 32.75)
+GET  /api/v1/arena/positions                    # All open managed positions (no JWT required for polling)
+GET  /api/v1/arena/candles/{symbol}             # Historical OHLCV bars from IntradayCandleStore (JWT-protected)
+
 ```
 
 ### WebSocket
@@ -1708,6 +1712,13 @@ ws://host/ws/v1/live?token={jwt}
   → Streams: position.opened/closed/updated, order.submitted/filled/cancelled/approved/rejected,
     price.update (throttled, positions only), system.heartbeat, system.circuit_breaker,
     scanner.watchlist, strategy.signal
+
+ws://host/ws/v1/arena?token={jwt}                          # Sprint 32.75
+  → arena_tick (live price/pnl/r_multiple/trail_stop per open position, 1/sec/symbol)
+  → arena_candle (live + forming 1-min OHLCV bars)
+  → arena_position_opened (new position snapshot)
+  → arena_position_closed (symbol, exit_price, exit_reason, final_pnl)
+  → arena_stats (aggregate stats: open_count, total_unrealized_pnl, win/loss counts)
 ```
 
 ### Authentication
@@ -1729,6 +1740,8 @@ Seven pages delivered with responsive design across four breakpoints (DEC-169). 
 **Dashboard** (`/`): Ambient awareness surface (DEC-204). OrchestratorStatusStrip (clickable → Orchestrator page). StrategyDeploymentBar (per-strategy capital deployment with accent colors, click → Pattern Library or Orchestrator, DEC-219). GoalTracker (2-column pace dashboard with avg daily P&L and need/day metrics, color-coded pace indicator, DEC-220). Three-card row: MarketStatus (merged Market + Market Regime, DEC-221), TodayStats (2×2 metrics grid), SessionTimeline (SVG strategy windows with "now" marker, click → Orchestrator). Positions panel with table/timeline toggle and three-way filter All/Open/Closed (DEC-128). Recent trades list. SessionSummaryCard after hours (DEC-131). PreMarketLayout with placeholder cards (DEC-213, time-gated, data wired Sprint 23). Dashboard aggregate endpoint for single-request data loading (DEC-222). useSummaryData hook disabling pattern (DEC-223).
 
 **Trade Log** (`/trades`): Filter bar (strategy, outcome, date range), stats summary row (total trades, win rate, net P&L), paginated trade table with color-coded exit reason badges. Row click opens TradeDetailPanel.
+
+**The Arena** (`/arena`): Real-time multi-position visualization — 10th Command Center page (Sprint 32.75). Responsive grid of ArenaCard components (1–3 columns). Each card shows a MiniChart (live 1-min Lightweight Charts seeded from `GET /arena/candles/{symbol}` and updated via WS), position P&L badge (green/red), R-multiple, strategy badge (unique color + letter), and trail stop indicator. Cards with `pattern_score > 0.7` span 2 grid columns (priority sizing). Framer Motion AnimatePresence for card entry/exit with flash animation on position open. ArenaControls filter bar (strategy filter, sort by age/pnl/r). ArenaStatsBar aggregate row (open count, total P&L, net R — neutral color when netR=0). Disconnection overlay on WS loss. Keyboard shortcut: `4`.
 
 **Performance** (`/performance`): Five-tab layout (DEC-218, DEC-228). Overview: MetricsGrid, EquityCurve (Lightweight Charts), DailyPnlChart, StrategyBreakdown, comparison toggle. Heatmaps: TradeActivityHeatmap (D3, DEC-206), CalendarPnlView. Distribution: RMultipleHistogram (Recharts), RiskWaterfall — side-by-side on desktop (DEC-227). Portfolio: PortfolioTreemap (D3, DEC-207), CorrelationMatrix — side-by-side 60/40 on desktop (DEC-227). Replay: TradeReplay (DEC-209) with trade selector and Lightweight Charts playback. Unified diverging color scale across all P&L charts (DEC-224). Dynamic WCAG text contrast (DEC-225). Strategy-level single-letter labels (DEC-226). Tab keyboard shortcuts: o/h/d/p/r (DEC-228). Performance Workbench customizable layout deferred (DEC-229).
 
@@ -1761,11 +1774,11 @@ Seven pages delivered with responsive design across four breakpoints (DEC-169). 
 
 | Surface | Navigation | Pages |
 |---------|-----------|-------|
-| Desktop (≥1024px) | Icon sidebar with group dividers | All 9 pages visible |
-| Tablet (640–1023px) | Icon sidebar | All 9 pages visible |
-| Mobile (<640px) | Bottom tab bar (5 tabs) + More sheet | Dash, Trades, Orch, Patterns, More → (Performance, Debrief, System, Observatory, Experiments) |
+| Desktop (≥1024px) | Icon sidebar with group dividers | All 10 pages visible |
+| Tablet (640–1023px) | Icon sidebar | All 10 pages visible |
+| Mobile (<640px) | Bottom tab bar (5 tabs) + More sheet | Dash, Trades, Orch, Patterns, More → (Performance, Arena, Debrief, System, Observatory, Experiments) |
 
-Global keyboard shortcuts: `1`–`9` page navigation, `w` watchlist toggle, `c` copilot toggle (DEC-199).
+Global keyboard shortcuts: `1`–`9` + `0` page navigation (0 = Experiments, 4 = The Arena), `w` watchlist toggle, `c` copilot toggle (DEC-199). All 10 pages accessible via keyboard.
 
 ### Tech Stack (Frontend)
 
@@ -2441,6 +2454,51 @@ Push-based pipeline updates, independent from the AI chat WebSocket (`/ws/v1/ai/
 ### 13.4 ObservatoryConfig (`analytics/config.py`)
 
 Pydantic BaseModel wired into SystemConfig. Config-gated feature with `observatory.enabled` (default: true). YAML section: `observatory:` in system.yaml / system_live.yaml.
+
+---
+
+## 13.5 The Arena (Sprint 32.75)
+
+Real-time multi-position visualization — 10th Command Center page. Shows all open managed positions simultaneously, each in its own card with live price chart and P&L data.
+
+### 13.5.1 Arena REST API (`api/routes/arena.py`)
+
+**Endpoints:**
+- `GET /api/v1/arena/positions` — Returns all open managed positions from `OrderManager.get_managed_positions()`. No pagination — maximum is `overflow.broker_capacity` (typically 60). Includes entry_price, current_price, unrealized_pnl, r_multiple, trail_stop_price (if active), strategy_id, symbol, share_count.
+- `GET /api/v1/arena/candles/{symbol}` — Returns historical OHLCV bars from `IntradayCandleStore` for the given symbol (up to 390 bars = full trading day). Used to seed MiniChart on card load. JWT-protected.
+
+### 13.5.2 Arena WebSocket (`/ws/v1/arena`)
+
+**Channel:** `ws://host/ws/v1/arena` (`api/websocket/arena_ws.py`)
+
+**Authentication:** JWT token required via `?token={jwt}` query parameter.
+
+**Message types (server → client):**
+
+| Type | Payload | Frequency |
+|------|---------|-----------|
+| `arena_tick` | symbol, price, unrealized_pnl, r_multiple, trail_stop_price | Per tick per open position (throttled 1/sec/symbol) |
+| `arena_candle` | symbol, OHLCV, timestamp, is_forming | Per completed + forming bar per symbol |
+| `arena_position_opened` | Full position snapshot | On new position open |
+| `arena_position_closed` | symbol, exit_price, exit_reason, final_pnl | On position close |
+| `arena_stats` | open_count, total_unrealized_pnl, win_count, loss_count | On position open/close |
+
+**Single active position per symbol:** V1 simplification — `arena_tick` trail_stop from first symbol match; `arena_position_closed` discards on first symbol close. Multi-position same-symbol overlay deferred (DEF-138 backend protocol change needed, S7 F1).
+
+### 13.5.3 Arena Frontend (`ui/src/features/arena/`)
+
+**Components:**
+- `ArenaPage.tsx` — Root page. Responsive grid (1/2/3 columns based on viewport). Framer Motion AnimatePresence for card entry/exit.
+- `ArenaCard.tsx` — Per-position card. Contains MiniChart + P&L badge + R-multiple + strategy badge. Priority sizing: cards with `pattern_score > 0.7` span 2 grid columns. Flash animation on position open. Disconnection overlay renders over card on WS loss.
+- `MiniChart.tsx` — Lightweight Charts mini instance seeded from `GET /arena/candles/{symbol}` on mount, updated via `arena_candle` WS messages. Live candle formation (partial bar updated in place).
+- `ArenaControls.tsx` — Filter bar: strategy filter (normalizeStrategyId for case-insensitive match), sort by age/pnl/r-multiple. Persists to session state via Zustand.
+- `ArenaStatsBar.tsx` — Aggregate bar: open positions count, total unrealized P&L, win/loss counts, net R. NetR colored green/red/neutral; neutral when netR = 0.
+
+**Hooks:**
+- `useArenaWebSocket.ts` — WS connection management, message dispatch, reconnect backoff. rAF batching for 60fps rendering.
+- `useArenaData.ts` — REST polling for initial positions load + refresh on reconnect.
+
+**Keyboard shortcut:** `4` (global nav, same as all Command Center pages).
 
 ---
 

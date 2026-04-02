@@ -275,9 +275,14 @@ IBKR enforces a nightly server restart. IB Gateway will disconnect:
 ./scripts/start_live.sh --with-ui
 ```
 
-### Docker Option (Recommended for Unattended Operation)
+### IBC (Recommended for Unattended Operation)
 
-For auto-restart capability, consider the IBKR Gateway Docker image:
+IBC automates IBKR Gateway startup and reconnection after nightly resets without Docker. See **`docs/ibc-setup.md`** for the full setup guide including:
+- IBC installation and configuration
+- macOS launchd plist template for automatic startup at login
+- Gateway reconnection behavior after nightly disconnect
+
+IBC is the preferred approach for macOS (Cape Town setup). Docker is also an option:
 
 ```bash
 docker run -d \
@@ -289,7 +294,9 @@ docker run -d \
   ghcr.io/gnzsnz/ib-gateway:stable
 ```
 
-This container auto-restarts after nightly disconnects.
+### Post-Reconnect Behavior (Sprint 32.75)
+
+After ARGUS reconnects to IBKR, `IBKRBroker` waits **3 seconds** before querying the portfolio position snapshot. If the snapshot returns empty (common immediately after reconnect), it retries once after another 3s. This prevents false "no positions" state from an immediately-reconnected session. The 3s delay is hardcoded — evaluate for live trading (may need adjustment for lower-latency setups).
 
 ---
 

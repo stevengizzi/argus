@@ -2318,13 +2318,57 @@
 
 ---
 
+## Sprint 32.75: The Arena + UI/Operational Sweep (April 2, 2026)
+
+**Goal:** Deliver The Arena (real-time multi-chart position visualization — 10th Command Center page), fix 13 UI bugs/polish items, and resolve 5 operational issues.
+
+**Starting state:** 4,489 pytest + 711 Vitest. 12 active strategies. 9-page Command Center.
+**Ending state:** 4,530 pytest + 805 Vitest (+41 pytest, +94 Vitest). Pre-existing: DEF-137 (`test_history_store_migration` hardcoded date), DEF-138 (`ArenaPage.test.tsx` WS mock).
+**Sessions:** 13 (S1–S12 + S12f)
+**Execution mode:** Human-in-the-loop
+**New DECs:** None — all design decisions followed established patterns.
+**DEF items resolved:** DEF-136 (GoalTracker.test.tsx — vi.useFakeTimers date mock)
+**DEF items created:** DEF-137 (test_history_store_migration hardcoded date), DEF-138 (ArenaPage.test.tsx WS mock missing)
+**New files:** 16 source + 13 test (ArenaPage.tsx, ArenaCard.tsx, ArenaControls.tsx, ArenaStatsBar.tsx, MiniChart.tsx, useArenaWebSocket.ts, useArenaData.ts, ArenaPage.test.tsx, arena_ws.py, arena.py route, test_arena_ws.py, test_arena_routes.py, base_strategy window summary helpers, docs/ibc-setup.md, + test files)
+**Modified files:** ~20 source (IBKRBroker reconnect delay, overflow config broker_capacity→60, Sidebar/MobileNav/MoreSheet +Arena, App.tsx, AppShell.tsx, Orchestrator P&L query, TradeChart dedup, AI Copilot context, catalyst link, arena_ws broadcast wiring, BaseStrategy window methods, + test updates)
+
+**Sprint deliverables by session:**
+
+- **S1 — Strategy identity system:** All 12 strategies assigned unique colors, badge glyphs (Unicode symbols), and single-letter identifiers. Shared `STRATEGY_IDENTITY` registry consumed by PatternCard, StrategyCoverageTimeline, CapitalAllocation, TradesPage badges, and all new Arena components.
+- **S2 — Dashboard overhaul:** Removed RecentTrades and HealthMini cards (redundant with Trade Log). Repositioned VixRegimeCard to second row. Swapped SignalQuality and AIInsight card positions. OpenPositions show/hide toggle inlined into card header (no separate toggle button).
+- **S3 — UI bug fixes batch 1:** Orchestrator P&L column fix — replaced broken `getattr` pattern with `trade_logger.get_trades_by_date()` query. Catalyst headlines now render as clickable links with `source_url` or Google search fallback.
+- **S4 — UI bug fixes batch 2:** TradeChart price line deduplication via `useRef` tracking — prevents duplicate price lines on data updates (Lightweight Charts v5 imperative API issue). AI Copilot context expanded to all open positions (up to 50) with portfolio summary aggregates (total P&L, win rate, avg R).
+- **S5 — Operational fixes:** `overflow.broker_capacity` raised from 30 to 60 in `config/overflow.yaml` for paper trading capacity. IBKRBroker: 3s post-reconnect delay before portfolio query + retry-once on empty positions (prevents stale snapshot). Window summary logging infrastructure added to BaseStrategy (`_log_window_summary()`, `_maybe_log_window_summary()`, `_track_symbol_evaluated()`, `_track_signal_generated()`, `_track_signal_rejected()`). IBC setup guide written at `docs/ibc-setup.md` with launchd plist template for macOS autostart.
+- **S6 — Arena backend:** `GET /api/v1/arena/positions` (all open managed positions), `GET /api/v1/arena/candles/{symbol}` (IntradayCandleStore bars). Arena REST route registered in server.py lifespan. 8 pytest.
+- **S7 — Arena WebSocket:** `arena_ws.py` — 5 message types (arena_tick, arena_candle, arena_position_opened, arena_position_closed, arena_stats). WS auth via `?token={jwt}`. Registered on /ws/v1/arena. Broadcast wired into OrderManager tick events and PositionOpened/Closed events. 9 pytest.
+- **S8 — Arena card components:** ArenaCard (per-position card shell), MiniChart (Lightweight Charts mini instance with seed from REST + live updates), ArenaStatsBar. 18 Vitest.
+- **S9 — Arena controls + page:** ArenaControls (strategy filter with normalizeStrategyId, sort options), ArenaPage layout (responsive grid, AnimatePresence shell). 14 Vitest.
+- **S10 — Arena REST + WS hooks:** `useArenaData` (REST polling + reconnect refresh), WebSocket protocol types (`ArenaTickMessage`, `ArenaCandleMessage`, `ArenaPositionOpenedMessage`, etc.). 12 Vitest.
+- **S11 — Arena live data integration:** `useArenaWebSocket` (WS connection management, rAF batching for 60fps), live candle formation in MiniChart (partial bar updated in place), trailing stop updates from `arena_tick`, position add/remove via WS events. 24 Vitest.
+- **S12 — Arena animations + polish:** Framer Motion AnimatePresence card entry/exit with flash animation on open, priority sizing (span 2 columns for score>0.7), disconnection overlay on WS loss. 18 Vitest. Keyboard shortcut `4` for Arena, Experiments moved to `0`.
+- **S12f — Filter + keyboard fixes:** Strategy filter bug fixed via normalizeStrategyId case normalization. Keyboard shortcuts corrected (1–9 + 0, Arena=4, Experiments=0). `ArenaCandlesResponse` missing `timestamp` field added. `orchestrator.py` bare list annotation fixed. `arena_ws.py` redundant except tuples cleaned. ArenaStatsBar netR=0 neutral color. ArenaCard barrel import fixed. `makeOnChartMount` instability fix.
+
+**Deferred (not in scope):**
+- Window summary wiring into 12 strategy subclasses — touches all strategies, deferred to dedicated sprint.
+- Multi-position per symbol overlay keying in arena_ws.py — requires backend protocol change (V1 uses first-match simplification).
+
+**Session verdicts:** S1 APPROVED → S2 APPROVED → S3 APPROVED → S4 APPROVED → S5 APPROVED → S6 APPROVED → S7 APPROVED → S8 APPROVED → S9 APPROVED → S10 APPROVED → S11 APPROVED → S12 APPROVED → S12f CLEAN
+
+**Key learnings:**
+- Arena live candle formation requires distinguishing "forming bar" (current minute in progress) from "closed bar" — MiniChart keeps a `formingBar` ref updated by `arena_candle` messages with `is_forming: true`, replaced on close.
+- Strategy filter normalization (`normalizeStrategyId`) is essential — strategy IDs from the backend use snake_case, UI uses display names; a lookup map is needed at the filter boundary.
+- Lightweight Charts v5 `addLineSeries` is idempotent at the React level only if you track the series refs and avoid re-calling on re-render. `useRef` per series type solves the duplicate line problem (S4 fix generalizable).
+- rAF batching (requestAnimationFrame) for WS tick processing prevents 60+ React state updates/second from WS tick floods. Batch all tick updates into a single `setState` per animation frame.
+
+---
+
 ## Sprint Statistics
 
-- **Total sprints:** 32 full + 39 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9, 27.5, 27.6, 27.65, 27.7, 27.75, 27.8, 27.9, 27.95, 28.5, 28.75, 29, 29.5, 32.5)
-- **Total sessions:** ~474+ Claude Code sessions
-- **Total tests:** ~4,489 pytest + 711 Vitest = ~5,200 total
-- **Total decisions:** 381 (DEC-001 through DEC-381; no new DECs in Sprints 29.5, 32, or 32.5)
-- **Calendar days (active dev):** ~47 (Feb 14 – Apr 1, 2026)
+- **Total sprints:** 32 full + 40 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9, 27.5, 27.6, 27.65, 27.7, 27.75, 27.8, 27.9, 27.95, 28.5, 28.75, 29, 29.5, 32.5, 32.75)
+- **Total sessions:** ~487+ Claude Code sessions
+- **Total tests:** ~4,530 pytest + 805 Vitest = ~5,335 total
+- **Total decisions:** 381 (DEC-001 through DEC-381; no new DECs in Sprints 29.5, 32, 32.5, or 32.75)
+- **Calendar days (active dev):** ~48 (Feb 14 – Apr 2, 2026)
 - **Largest sprint:** 22 (9 implementation + 5 fix + 9 reviews, largest scope)
 - **Cleanest sprint:** 23 (11 sessions, 0 regressions, 0 scope gaps requiring follow-up)
 - **Most test-dense:** Sprint 22 (286 new tests), Sprint 24 (209 new tests), Sprint 23.2 (188 new tests), Sprint 28 (179 new tests), Sprint 27.6 (171 new tests), Sprint 23 (141 new tests across 23+23.05), Sprint 28.5 (110 new tests)

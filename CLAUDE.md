@@ -1,13 +1,13 @@
 # ARGUS — Claude Code Context
 
 > Dense, actionable context for Claude Code sessions. No history — see `docs/` for that.
-> Last updated: April 1, 2026 (Sprint 32.5 doc sync — Experiment Pipeline Completion + Visibility)
+> Last updated: April 2, 2026 (Sprint 32.75 doc sync — The Arena + UI/Operational Sweep)
 
 ## Active Sprint
 
 **Active sprint: 31A (Pattern Expansion III — reach 15 strategies).**
 
-Last completed sprint: **32.5 (Experiment Pipeline Completion + Visibility)** — exit params as variant dimensions (DEF-132), BacktestEngine all 7 patterns (DEF-134), 3 new REST endpoints, Shadow Trades tab on Trade Log, Experiments page as 9th Command Center page (DEF-131), Adaptive Capital Intelligence vision document (DEF-133). +84 pytest, +13 Vitest. No new DECs.
+Last completed sprint: **32.75 (The Arena + UI/Operational Sweep)** — 10th Command Center page (The Arena: real-time multi-chart position visualization), 13 UI bugs/polish items, 5 operational fixes, strategy identity system (unique colors/badges/letters), Dashboard overhaul, Arena REST + WebSocket, IBC setup guide. +41 pytest, +94 Vitest. No new DECs.
 
 ### Roadmap Amendments Adopted (DEC-357, DEC-358)
 Two roadmap amendments adopted March 23, 2026 adding 5 new sprint slots:
@@ -17,7 +17,7 @@ Two roadmap amendments adopted March 23, 2026 adding 5 new sprint slots:
 - **32.5** (Experiment Registry + Promotion Pipeline): Partitioned SQLite registry, cohort-based promotion, simulated-paper screening, overnight experiment queue, kill switches, anti-fragility
 - **33.5** (Adversarial Stress Testing): Historical crisis replay + synthetic stress scenarios as PromotionPipeline gate
 Amendment docs: `docs/amendments/roadmap-amendment-experiment-infrastructure.md`, `docs/amendments/roadmap-amendment-intelligence-architecture.md`
-Build track: ~~21.6~~ ✅ → ~~27.5~~ ✅ → ~~27.6~~ ✅ → ~~27.7~~ ✅ → ~~27.75~~ ✅ → ~~27.8~~ ✅ → ~~27.9~~ ✅ → ~~27.95~~ ✅ → ~~28~~ ✅ → ~~28.5~~ ✅ → ~~28.75~~ ✅ → ~~29~~ ✅ → ~~29.5~~ ✅ → ~~32~~ ✅ → ~~32.5~~ ✅ → **31A** → 30 → 31.5 → 33 → 33.5 → 34 → 35–41
+Build track: ~~21.6~~ ✅ → ~~27.5~~ ✅ → ~~27.6~~ ✅ → ~~27.7~~ ✅ → ~~27.75~~ ✅ → ~~27.8~~ ✅ → ~~27.9~~ ✅ → ~~27.95~~ ✅ → ~~28~~ ✅ → ~~28.5~~ ✅ → ~~28.75~~ ✅ → ~~29~~ ✅ → ~~29.5~~ ✅ → ~~32~~ ✅ → ~~32.5~~ ✅ → ~~32.75~~ ✅ → **31A** → 30 → 31.5 → 33 → 33.5 → 34 → 35–41
 DEC ranges reserved: 396–402 (33.5)
 DEF items: DEF-129 (non-PatternModule variant support), DEF-130 (intraday parameter adaptation)
 RSK items: RSK-049 (shadow variant throughput impact), RSK-050 (promotion oscillation)
@@ -26,14 +26,15 @@ RSK items: RSK-049 (shadow variant throughput impact), RSK-050 (promotion oscill
 - **FMP Starter plan restriction:** FMP news endpoints return 403 on Starter plan ($22/mo). `fmp_news.enabled: false` in `system_live.yaml`. FMP circuit breaker (DEC-323) prevents spam if accidentally enabled.
 - **Pre-existing xdist failures (DEF-048):** 4 test_main.py tests fail under `-n auto` (same `load_dotenv`/`AIConfig` race): `test_both_strategies_created`, `test_multi_strategy_health_status`, `test_candle_event_routing_subscribed`, `test_12_phase_startup_creates_orchestrator`. Pre-existing on clean HEAD. Priority: LOW.
 - **Test isolation (DEF-049):** `test_orchestrator_uses_strategies_from_registry` fails when run in isolation but passes in full suite. Pre-existing.
+- **Regime vector migration date (DEF-137):** `test_history_store_migration` in `tests/core/test_regime_vector_expansion.py` — hardcoded date "2026-03-25" causes failure after 7-day retention prune. Priority: LOW.
 
 ## Current State
 
 - **Active sprint:** 31A (Pattern Expansion III — reach 15 strategies)
-- **Tests:** ~4,489 pytest + 711 Vitest (0 pre-existing failures — DEF-136 resolved in Sprint 32.75, 0 pre-existing pytest failures)
+- **Tests:** ~4,530 pytest + 805 Vitest (DEF-137: `test_history_store_migration` hardcoded date decay; DEF-138: `ArenaPage.test.tsx` WS mock missing — both LOW priority pre-existing)
 - **Strategies:** 12 active (ORB Breakout, ORB Scalp, VWAP Reclaim, Afternoon Momentum, Red-to-Green, Bull Flag, Flat-Top Breakout, Dip-and-Rip, HOD Break, Gap-and-Go, ABCD, Pre-Market High Break)
 - **Infrastructure:** Databento EQUS.MINI (live) + IBKR paper trading (Account U24619949) + FMP Starter (scanning + reference data + daily bars for regime) + Finnhub (news + analyst recs) + Claude API (Copilot + Catalyst Classification) + Universe Manager (config-gated) + Catalyst Pipeline (config-gated) + Intelligence Polling Loop (config-gated) + Reference Data Cache + Quality Engine (config-gated) + Dynamic Position Sizer + Strategy Evaluation Telemetry (ring buffer + SQLite persistence) + Debrief Export (shutdown automation) + Evaluation Framework (MultiObjectiveResult, EnsembleResult, comparison API, slippage model) + Regime Intelligence (RegimeVector 11-field, 8 calculators, config-gated, Sprints 27.6 + 27.9) + VIX Data Service (yfinance daily VIX/SPX, 5 derived metrics, SQLite cache, config-gated, Sprint 27.9) + Counterfactual Engine (shadow position tracking, filter accuracy, shadow strategy mode, overflow routing, config-gated, Sprints 27.7 + 27.95) + Learning Loop V1 (OutcomeCollector, WeightAnalyzer, ThresholdAnalyzer, CorrelationAnalyzer, LearningService, ConfigProposalManager, LearningStore, config-gated, Sprint 28) + Exit Management (trailing stops ATR/percent/fixed, exit escalation, belt-and-suspenders, config-gated per strategy, Sprint 28.5) + ThrottledLogger (log rate-limiting, Sprint 27.75) + Paper trading config overrides (10x risk reduction, throttle disabled, $10 min risk floor, Sprint 27.75) + Broker-confirmed reconciliation (Sprint 27.95) + Overflow routing (config-gated, Sprint 27.95)
-- **Frontend:** 9-page Command Center (Experiments page added Sprint 32.5, Shadow Trades tab added to Trade Log) + AI Copilot + Universe Status Card + Intelligence Brief View (all active), Tauri desktop + PWA mobile
+- **Frontend:** 10-page Command Center (Arena page added Sprint 32.75, Experiments page added Sprint 32.5, Shadow Trades tab added to Trade Log) + AI Copilot + Universe Status Card + Intelligence Brief View (all active), Tauri desktop + PWA mobile. Pages: Dashboard, Trade Log, Performance, The Arena, Orchestrator, Pattern Library, The Debrief, System, Observatory, Experiments. Keyboard shortcuts: 1–9 + 0 (0 = Experiments). All 12 strategies have unique colors, badges, single-letter identifiers.
 
 ## Project Structure
 
@@ -47,9 +48,12 @@ argus/
 ├── analytics/      # Trade Logger, PerformanceCalculator, DebriefExport, Evaluation Framework
 ├── backtest/       # VectorBT helpers, Replay Harness, BacktestEngine (Sprint 27)
 ├── api/            # FastAPI REST + WebSocket, JWT auth
-│   └── websocket/  # ai_chat.py (WS streaming)
+│   ├── routes/     # arena.py (GET /api/v1/arena/positions, GET /api/v1/arena/candles/{symbol})
+│   └── websocket/  # ai_chat.py (WS streaming), arena_ws.py (/ws/v1/arena — 5 message types)
 ├── ui/             # React frontend (Vite + TypeScript + Tailwind v4)
-│   └── features/copilot/  # CopilotPanel, ChatMessage, ActionCard
+│   └── features/
+│       ├── copilot/  # CopilotPanel, ChatMessage, ActionCard
+│       └── arena/    # ArenaPage, ArenaCard, ArenaControls, ArenaStatsBar, MiniChart, useArenaWebSocket, useArenaData
 ├── ai/             # Claude API integration (Sprint 22, active)
 │   ├── client.py   # ClaudeClient (API wrapper, rate limiting, tool_use)
 │   ├── config.py   # AIConfig (token budgets, TTLs, cost rates)
@@ -77,10 +81,10 @@ argus/
 
 ```bash
 # Tests
-python -m pytest --ignore=tests/test_main.py -n auto -q  # Full suite (~4,178 tests, ~49s with xdist)
+python -m pytest --ignore=tests/test_main.py -n auto -q  # Full suite (~4,530 tests, ~49s with xdist)
 python -m pytest tests/ -x               # Stop on first failure
 python -m pytest tests/ -x -q            # Fail-fast, quiet
-cd argus/ui && npx vitest run            # Frontend tests (~688)
+cd argus/ui && npx vitest run            # Frontend tests (~805)
 
 # Trading engine
 python -m argus.main                      # Start (paper trading default)
@@ -362,15 +366,17 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 | ~~DEF-133~~ | ~~Adaptive Capital Intelligence Vision Document~~ | — | **RESOLVED** (Sprint 32.5 S8): `docs/architecture/allocation-intelligence-vision.md` — 9-section vision for replacing stacked guardrails with unified `AllocationIntelligence` service. Phase 1 (~Sprint 34–35), Phase 2 (~Sprint 38+). |
 | ~~DEF-134~~ | ~~BacktestEngine strategy type support for all 7 PatternModule patterns~~ | — | **RESOLVED** (Sprint 32.5 S3+S4): `StrategyType` enum extended to all 7 patterns; `_supply_daily_reference_data()` added for GapAndGo/PreMarketHighBreak. All patterns runnable via `scripts/run_experiment.py`. |
 | DEF-135 | Full visual verification of Shadow Trades tab + Experiments page with live data | Unscheduled | S6 visual items 2–5 (table styling, rejection badges, grade badges, P&L coloring) and S7 visual items 2–5 (variant table, promotion log, pattern comparison) untestable until counterfactual positions and experiment variants accumulate during paper trading. Verify after first week with `experiments.enabled=true`. |
-| DEF-136 | GoalTracker.test.tsx — 3 pre-existing Vitest failures | Unscheduled | `getByText` ambiguity + date arithmetic ("Ahead of pace" vs "Behind pace"). Tracked since Sprint 32; surfaced explicitly in Sprint 32.5. Priority: LOW. |
+| ~~DEF-136~~ | ~~GoalTracker.test.tsx — 3 pre-existing Vitest failures~~ | — | **RESOLVED** (Sprint 32.75): `vi.useFakeTimers` date mock applied; `getByText` ambiguity fixed with `getByTestId`. |
+| DEF-137 | `test_history_store_migration` hardcoded date decay | Unscheduled | `tests/core/test_regime_vector_expansion.py` — hardcoded date "2026-03-25" causes test failure after 7-day retention prune. Needs dynamic date or mocked clock. Priority: LOW. |
+| DEF-138 | `ArenaPage.test.tsx` WebSocket mock missing | Unscheduled | `useArenaWebSocket` creates real WebSocket in jsdom which never closes, causing Vitest hang. Fix: `vi.mock` for `useArenaWebSocket` (same pattern used for `useArenaData` mock). Priority: LOW. |
 
 ## Reference
 
 | Document | What It Covers |
 |----------|---------------|
-| `docs/decision-log.md` | All 381 DEC entries with full rationale (no new DECs in Sprint 32 — all design decisions followed established patterns) |
+| `docs/decision-log.md` | All 381 DEC entries with full rationale (no new DECs in Sprints 32–32.75 — all design decisions followed established patterns) |
 | `docs/dec-index.md` | Quick-reference index with status markers |
-| `docs/sprint-history.md` | Complete sprint history (1–29.5 + 32 + sub-sprints) |
+| `docs/sprint-history.md` | Complete sprint history (1–29.5 + 32–32.75 + sub-sprints) |
 | `docs/pre-live-transition-checklist.md` | Config + test values to restore before live trading |
 | `docs/process-evolution.md` | Workflow evolution narrative |
 | `docs/live-operations.md` | Live trading procedures |

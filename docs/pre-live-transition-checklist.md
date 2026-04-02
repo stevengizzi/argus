@@ -79,8 +79,9 @@ After restoring all values:
 
 ### config/overflow.yaml — Broker Capacity
 Review and tune `broker_capacity` for live account equity:
-- Paper: `broker_capacity: 30` (conservative for $935K paper account)
-- Live: Evaluate based on actual account equity and margin requirements
+- Paper: `broker_capacity: 60` (raised from 30 in Sprint 32.75 for paper trading capacity)
+- Live: Evaluate based on actual account equity and margin requirements — 60 may be too high for a small live account; consider reducing to 10–20 for initial live sessions
+- Note: At 60, paper trading rarely hits the overflow cap; live trading with real buying-power constraints will likely need a lower cap
 
 ### config/system.yaml / config/system_live.yaml — Startup Zombie Flatten
 Confirm desired behavior for live:
@@ -92,6 +93,12 @@ Decide if unconfirmed position cleanup should be enabled for live:
 - `system.yaml`: `auto_cleanup_unconfirmed: false` (default, warn-only)
 - `system_live.yaml`: `auto_cleanup_unconfirmed: true` (paper trading)
 - **For live:** Recommend starting with `false` (warn-only) until reconciliation behavior is validated over multiple sessions
+
+### IBKRBroker — Post-Reconnect Delay (Sprint 32.75)
+After IBKR reconnects, `IBKRBroker` waits 3 seconds before querying the portfolio snapshot, then retries once if the result is empty:
+- Paper: Works well at 3s on paper trading environment
+- Live: Live IBKR may have faster portfolio snapshot availability — monitor first session, shorten delay if portfolio is consistently available in <1s
+- The delay is hardcoded in `execution/ibkr_broker.py` — requires code change to tune
 
 ### config/order_manager.yaml — Stop Cancel Retry Max
 Confirm default is appropriate for live latency:
