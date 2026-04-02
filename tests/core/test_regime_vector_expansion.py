@@ -11,7 +11,7 @@ Verifies:
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import aiosqlite
 import pytest
@@ -242,6 +242,9 @@ class TestHistoryStoreMigration:
         from pathlib import Path
 
         db_path = str(Path(str(tmp_path)) / "test_regime_history.db")
+        old_date = (datetime.now(UTC) - timedelta(days=1)).strftime("%Y-%m-%d")
+        old_ts = (datetime.now(UTC) - timedelta(days=1)).strftime("%Y-%m-%dT10:00:00-04:00")
+        new_date = datetime.now(UTC).strftime("%Y-%m-%d")
 
         # Step 1: Create DB with OLD schema (no vix_close column)
         db = await aiosqlite.connect(db_path)
@@ -277,8 +280,8 @@ class TestHistoryStoreMigration:
             """,
             (
                 "old-row-001",
-                "2026-03-25T10:00:00-04:00",
-                "2026-03-25",
+                old_ts,
+                old_date,
                 "bullish_trending",
                 0.75,
                 0.5,
@@ -296,15 +299,15 @@ class TestHistoryStoreMigration:
         await store.initialize()
 
         # Step 3: Insert a new row WITH vix_close via record()
-        vector = _make_vector()
+        vector = _make_vector(computed_at=datetime.now(UTC))
         await store.record(vector, vix_close=22.5)
 
         # Step 4: Read back all rows
-        rows = await store.get_regime_history("2026-03-25")
+        rows = await store.get_regime_history(old_date)
         assert len(rows) == 1
         assert rows[0]["vix_close"] is None  # old row has NULL
 
-        rows_new = await store.get_regime_history("2026-03-26")
+        rows_new = await store.get_regime_history(new_date)
         assert len(rows_new) == 1
         assert rows_new[0]["vix_close"] == 22.5
 
