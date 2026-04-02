@@ -11,7 +11,7 @@ Before making any changes:
 2. Run scoped test baseline:
    Vitest: `cd argus/ui && npx vitest run src/features/trades/ src/pages/TradesPage`
    Expected: all passing
-3. Verify you are on the correct branch: `sprint-32.8`
+3. Verify you are on the correct branch: `main`
 
 ## Objective
 Unify Live Trades and Shadow Trades tab styling to share the Shadow tab's denser, higher-contrast visual style. Add `l`/`s` keyboard shortcuts for tab switching.

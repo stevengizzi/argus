@@ -11,7 +11,7 @@ Before making any changes:
 2. Run scoped test baseline:
    Vitest: `cd argus/ui && npx vitest run src/features/trades/ src/pages/TradesPage`
    Expected: all passing (including S4's new tests)
-3. Verify you are on the correct branch: `sprint-32.8`
+3. Verify you are on the correct branch: `main`
 4. Confirm Session 4 is complete and merged (this session depends on S4's styling)
 
 ## Objective

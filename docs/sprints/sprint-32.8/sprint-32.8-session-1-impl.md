@@ -12,7 +12,7 @@ Before making any changes:
    Expected: ~4,530 tests passing (DEF-137 `test_history_store_migration` may have hardcoded date decay — known pre-existing)
    Vitest: `cd argus/ui && npx vitest run`
    Expected: ~805 tests passing (DEF-138 `ArenaPage.test.tsx` WS mock — known pre-existing)
-3. Verify you are on the correct branch: `main` (or create `sprint-32.8` branch)
+3. Verify you are on the correct branch: `main`
 
 ## Objective
 Make Arena charts update at the actual Databento trade stream rate instead of the 1 Hz Order Manager throttle, and enable pre-market candle data on Arena charts.
