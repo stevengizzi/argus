@@ -2289,7 +2289,7 @@
 **Goal:** Complete the experiment pipeline (exit params as variant dimensions, all 7 patterns in BacktestEngine), add REST API visibility for shadow positions and experiment variants, build UI surfaces (Shadow Trades tab + Experiments Dashboard), and document the Adaptive Capital Intelligence vision.
 
 **Starting state:** 4,405 pytest + 700 Vitest. 12 active strategies.
-**Ending state:** 4,489 pytest + 713 Vitest (+84 pytest, +13 Vitest). Vitest pre-existing failures: 3 (GoalTracker, DEF-136).
+**Ending state:** 4,489 pytest + 711 Vitest (+84 pytest, +11 Vitest). Vitest pre-existing failures: 3 (GoalTracker, DEF-136).
 **Sessions:** 8 (S1–S7 + S8 doc-sync) + S6f (visual review fix)
 **Execution mode:** Human-in-the-loop
 **New DECs:** None — all design decisions followed established patterns.
@@ -2322,7 +2322,7 @@
 
 - **Total sprints:** 32 full + 39 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9, 27.5, 27.6, 27.65, 27.7, 27.75, 27.8, 27.9, 27.95, 28.5, 28.75, 29, 29.5, 32.5)
 - **Total sessions:** ~474+ Claude Code sessions
-- **Total tests:** ~4,489 pytest + 713 Vitest = ~5,202 total
+- **Total tests:** ~4,489 pytest + 711 Vitest = ~5,200 total
 - **Total decisions:** 381 (DEC-001 through DEC-381; no new DECs in Sprints 29.5, 32, or 32.5)
 - **Calendar days (active dev):** ~47 (Feb 14 – Apr 1, 2026)
 - **Largest sprint:** 22 (9 implementation + 5 fix + 9 reviews, largest scope)
