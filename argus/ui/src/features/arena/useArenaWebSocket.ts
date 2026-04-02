@@ -34,10 +34,13 @@ export interface LiveArenaStats {
   exits_5m: number;
 }
 
+export type WsStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
+
 export interface UseArenaWebSocketResult {
   positions: ArenaPosition[];
   stats: LiveArenaStats;
   liveOverlays: Record<string, LiveOverlay>;
+  wsStatus: WsStatus;
   registerChartRef: (symbol: string, handle: MiniChartHandle | null) => void;
 }
 
@@ -97,6 +100,7 @@ export function useArenaWebSocket(initialPositions: ArenaPosition[]): UseArenaWe
   const [positions, setPositions] = useState<ArenaPosition[]>(initialPositions);
   const [stats, setStats] = useState<LiveArenaStats>(DEFAULT_STATS);
   const [liveOverlays, setLiveOverlays] = useState<Record<string, LiveOverlay>>({});
+  const [wsStatus, setWsStatus] = useState<WsStatus>('connecting');
 
   // True once auth_success is received; prevents REST refetches from clobbering
   // WS-managed position state.
@@ -222,6 +226,7 @@ export function useArenaWebSocket(initialPositions: ArenaPosition[]): UseArenaWe
       switch (msg.type) {
         case 'auth_success': {
           wsConnectedRef.current = true;
+          setWsStatus('connected');
           break;
         }
 
@@ -296,8 +301,13 @@ export function useArenaWebSocket(initialPositions: ArenaPosition[]): UseArenaWe
       }
     };
 
+    ws.onerror = () => {
+      setWsStatus('error');
+    };
+
     ws.onclose = () => {
       wsConnectedRef.current = false;
+      setWsStatus('disconnected');
     };
 
     return () => {
@@ -311,5 +321,5 @@ export function useArenaWebSocket(initialPositions: ArenaPosition[]): UseArenaWe
     };
   }, []); // Run once on mount — WS lifecycle tied to component lifetime.
 
-  return { positions, stats, liveOverlays, registerChartRef };
+  return { positions, stats, liveOverlays, wsStatus, registerChartRef };
 }

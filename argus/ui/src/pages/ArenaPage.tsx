@@ -8,10 +8,11 @@
  *
  * Sprint 32.75, Session 10 (API wiring + card rendering).
  * Sprint 32.75, Session 11 (live WS data — ticks, candles, position add/remove, stats).
- * Animation layer added in S12.
+ * Sprint 32.75, Session 12 (AnimatePresence, priority sizing, disconnection overlay).
  */
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { LayoutGrid } from 'lucide-react';
 import { ArenaStatsBar } from '../features/arena/ArenaStatsBar';
 import { ArenaControls } from '../features/arena/ArenaControls';
@@ -19,6 +20,43 @@ import { ArenaCard } from '../features/arena/ArenaCard';
 import { useArenaWebSocket } from '../features/arena/useArenaWebSocket';
 import { useArenaData, sortPositions, filterPositions } from '../hooks/useArenaData';
 import type { ArenaSortMode } from '../features/arena/ArenaControls';
+
+export type { ArenaSortMode };
+
+// ---------------------------------------------------------------------------
+// Priority score computation
+// ---------------------------------------------------------------------------
+
+/**
+ * Compute attention-weighted priority score (0–1) for a position card.
+ *
+ * Score is high when price is near stop (danger) or near T1 (opportunity).
+ * Score is low when price is midway between entry and targets.
+ *
+ * @param currentPrice - Live price from WS tick or latest candle close.
+ * @param entryPrice   - Position entry price.
+ * @param stopPrice    - Stop-loss price.
+ * @param t1Price      - First target price.
+ * @returns Priority score in [0, 1]. Returns 0 for degenerate ranges.
+ */
+export function computePriorityScore(
+  currentPrice: number,
+  entryPrice: number,
+  stopPrice: number,
+  t1Price: number,
+): number {
+  if (entryPrice <= stopPrice || t1Price <= entryPrice) return 0;
+
+  const clamp = (v: number) => Math.max(0, Math.min(1, v));
+  const proximityToStop = clamp((currentPrice - stopPrice) / (entryPrice - stopPrice));
+  const proximityToT1 = clamp((t1Price - currentPrice) / (t1Price - entryPrice));
+
+  return 1 - Math.min(proximityToStop, proximityToT1);
+}
+
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
 
 export function ArenaPage() {
   const [sortMode, setSortMode] = useState<ArenaSortMode>('entry_time');
@@ -28,14 +66,53 @@ export function ArenaPage() {
   const { positions: initialPositions, candlesBySymbol, isLoading } = useArenaData();
 
   // WS layer: live position list, aggregate stats, tick overlays, chart dispatch.
-  // registerChartRef is stable (useCallback([])) — passed directly as onChartMount
-  // so ArenaCard's registration effect never re-fires on ArenaPage re-renders.
-  const { positions, stats, liveOverlays, registerChartRef } = useArenaWebSocket(initialPositions);
+  const { positions, stats, liveOverlays, wsStatus, registerChartRef } =
+    useArenaWebSocket(initialPositions);
+
+  // Priority spans: keyed by `${strategy_id}-${symbol}-${entry_time}`.
+  // Recomputed every 2 seconds to avoid layout thrashing.
+  const [prioritySpans, setPrioritySpans] = useState<Record<string, number>>({});
+  const liveOverlaysRef = useRef(liveOverlays);
+  liveOverlaysRef.current = liveOverlays;
+  const positionsRef = useRef(positions);
+  positionsRef.current = positions;
+  const candlesBySymbolRef = useRef(candlesBySymbol);
+  candlesBySymbolRef.current = candlesBySymbol;
+
+  useEffect(() => {
+    function recomputeSpans(): void {
+      const isMobile = window.innerWidth < 640;
+      const next: Record<string, number> = {};
+
+      positionsRef.current.forEach((pos) => {
+        const key = `${pos.strategy_id}-${pos.symbol}-${pos.entry_time}`;
+        if (isMobile) {
+          next[key] = 1;
+          return;
+        }
+        const overlay = liveOverlaysRef.current[pos.symbol];
+        const latestClose =
+          candlesBySymbolRef.current[pos.symbol]?.slice(-1)[0]?.close ?? pos.entry_price;
+        const currentPrice = overlay?.current_price ?? latestClose;
+        const t1Price = pos.target_prices[0] ?? 0;
+        const score = computePriorityScore(currentPrice, pos.entry_price, pos.stop_price, t1Price);
+        next[key] = score > 0.7 ? 2 : 1;
+      });
+
+      setPrioritySpans(next);
+    }
+
+    recomputeSpans();
+    const intervalId = setInterval(recomputeSpans, 2000);
+    return () => clearInterval(intervalId);
+  }, []); // Stable: reads via refs to avoid stale closure
 
   const displayPositions = sortPositions(
     filterPositions(positions, strategyFilter),
     sortMode,
   );
+
+  const isDisconnected = wsStatus === 'disconnected' || wsStatus === 'error';
 
   return (
     <div
@@ -60,7 +137,19 @@ export function ArenaPage() {
       />
 
       {/* Grid or empty state */}
-      <div className="flex-1 overflow-auto p-3 pb-24 min-[1024px]:pb-3">
+      <div className="relative flex-1 overflow-auto p-3 pb-24 min-[1024px]:pb-3">
+        {/* Disconnection overlay banner */}
+        {isDisconnected && (
+          <div
+            className="absolute inset-x-0 top-0 z-20 p-3"
+            data-testid="arena-disconnect-overlay"
+          >
+            <div className="w-full bg-argus-surface/90 border border-argus-warning/50 text-argus-warning text-sm px-4 py-2 rounded-lg text-center pointer-events-none">
+              Connection lost — reconnecting...
+            </div>
+          </div>
+        )}
+
         {!isLoading && displayPositions.length === 0 ? (
           <div
             className="flex flex-col items-center justify-center h-full gap-3 text-argus-text-dim"
@@ -75,28 +164,61 @@ export function ArenaPage() {
             style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}
             data-testid="arena-grid"
           >
-            {displayPositions.map((pos) => {
-              const overlay = liveOverlays[pos.symbol];
-              return (
-                <ArenaCard
-                  key={`${pos.strategy_id}-${pos.symbol}-${pos.entry_time}`}
-                  symbol={pos.symbol}
-                  strategy_id={pos.strategy_id}
-                  pnl={overlay?.unrealized_pnl ?? pos.unrealized_pnl}
-                  r_multiple={overlay?.r_multiple ?? pos.r_multiple}
-                  currentPrice={overlay?.current_price}
-                  hold_seconds={pos.hold_duration_seconds}
-                  entry_price={pos.entry_price}
-                  stop_price={pos.stop_price}
-                  target_prices={pos.target_prices}
-                  trailing_stop_price={
-                    (overlay?.trailing_stop_price || pos.trailing_stop_price) || undefined
-                  }
-                  candles={candlesBySymbol[pos.symbol] ?? []}
-                  onChartMount={registerChartRef}
-                />
-              );
-            })}
+            <AnimatePresence mode="popLayout">
+              {displayPositions.map((pos) => {
+                const overlay = liveOverlays[pos.symbol];
+                const pnl = overlay?.unrealized_pnl ?? pos.unrealized_pnl;
+                const pnlPositive = pnl >= 0;
+                const key = `${pos.strategy_id}-${pos.symbol}-${pos.entry_time}`;
+                const span = prioritySpans[key] ?? 1;
+
+                return (
+                  <motion.div
+                    key={key}
+                    layout
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, transition: { duration: 0.5, delay: 0.3 } }}
+                    transition={{ duration: 0.3, layout: { duration: 0.5 } }}
+                    style={{
+                      gridColumn: span > 1 ? 'span 2' : undefined,
+                      position: 'relative',
+                    }}
+                    data-testid="arena-card-wrapper"
+                  >
+                    {/* Flash overlay — invisible at rest, flashes on exit */}
+                    <motion.div
+                      className="absolute inset-0 rounded-lg pointer-events-none z-10"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 0 }}
+                      exit={{
+                        opacity: [0, 0.15, 0],
+                        transition: { duration: 0.8, times: [0, 0.375, 1] },
+                      }}
+                      style={{
+                        backgroundColor: pnlPositive ? '#22c55e' : '#ef4444',
+                      }}
+                    />
+                    <ArenaCard
+                      symbol={pos.symbol}
+                      strategy_id={pos.strategy_id}
+                      pnl={pnl}
+                      r_multiple={overlay?.r_multiple ?? pos.r_multiple}
+                      currentPrice={overlay?.current_price}
+                      hold_seconds={pos.hold_duration_seconds}
+                      entry_price={pos.entry_price}
+                      stop_price={pos.stop_price}
+                      target_prices={pos.target_prices}
+                      trailing_stop_price={
+                        (overlay?.trailing_stop_price || pos.trailing_stop_price) || undefined
+                      }
+                      candles={candlesBySymbol[pos.symbol] ?? []}
+                      onChartMount={registerChartRef}
+                    />
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
           </div>
         )}
       </div>

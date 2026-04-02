@@ -90,6 +90,12 @@ export function AppShell({ paperMode = true }: AppShellProps) {
         return;
       }
 
+      // 'a' shortcut for Arena
+      if (e.key === 'a') {
+        navigate('/arena');
+        return;
+      }
+
       // Numeric shortcuts for navigation
       const keyNum = parseInt(e.key, 10);
       if (keyNum >= 1 && keyNum <= NAV_ROUTES.length) {
