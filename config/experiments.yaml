@@ -1,6 +1,8 @@
 # Experiment Pipeline Configuration
-# Config-gated: system starts in experiments.enabled: false
-enabled: false
+# Enabled Sprint 32.9. With variants: {} this is a no-op — infrastructure
+# initializes but spawns 0 variants. Configure variants after running
+# parameter sweeps via scripts/run_experiment.py.
+enabled: true
 auto_promote: false  # When true, PromotionEvaluator runs autonomously at session end
 max_variants_per_pattern: 5  # Caps total variants per pattern (shadow + live)
 backtest_min_trades: 20

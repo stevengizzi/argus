@@ -1,4 +1,4 @@
-# Sprint 32.9, Session 2: Margin Circuit Breaker + Intelligence Fix (DEF-141, DEF-142)
+# Sprint 32.9, Session 2: Margin Circuit Breaker + Intelligence Fix + Reconciliation Fix (DEF-141, DEF-142)
 
 ## Pre-Flight Checks
 Before making any changes:
@@ -6,15 +6,18 @@ Before making any changes:
    - `CLAUDE.md`
    - `argus/execution/order_manager.py` (focus on: order rejection callbacks, `_on_order_rejected()` or equivalent, signal processing flow for new entries)
    - `argus/intelligence/startup.py` (focus on the polling loop — search for variable `symbols`)
+   - `argus/main.py` (~line 1399 — reconciliation loop with `getattr(pos, "qty", 0)`)
    - `config/system_live.yaml`
    - Session 1 close-out: `docs/sprints/sprint-32.9/session-1-closeout.md`
+   - Session 3 close-out: `docs/sprints/sprint-32.9/session-3-closeout.md`
+   (S2 runs after S1 and S3 have been merged.)
 2. Run the scoped test baseline:
    `python -m pytest tests/execution/ tests/intelligence/ -x -q`
-   Expected: all passing (full suite confirmed by S1 close-out)
-3. Verify you are on branch `main` with Session 1 committed
+   Expected: all passing (full suite confirmed by S1 and S3 close-outs)
+3. Verify you are on branch `main` with Sessions 1 and 3 committed
 
 ## Objective
-Add a permanent margin rejection circuit breaker that halts new entries when IBKR rejects too many orders for insufficient margin. Fix the intelligence polling crash from an unbound variable.
+Add a permanent margin rejection circuit breaker that halts new entries when IBKR rejects too many orders for insufficient margin. Fix the intelligence polling crash from an unbound variable. Fix the last remaining `"qty"` → `"shares"` attribute mismatch in the reconciliation loop.
 
 ## Background
 On April 2, IBKR rejected 718 orders for "insufficient margin" during the session. Each rejected bracket leg left an orphaned position at IBKR consuming margin, creating a positive feedback loop: more orphaned positions → less margin → more rejections. By 1:24 PM ET, reconciliation showed 200 position mismatches. The system had no awareness it was hitting margin limits.
@@ -71,7 +74,7 @@ Add to `OrderManagerConfig`:
 - `margin_rejection_threshold: int = 10`
 - `margin_circuit_reset_positions: int = 20`
 
-Add corresponding keys to `config/system_live.yaml`.
+Add corresponding keys to `config/order_manager.yaml` (this is where OrderManagerConfig fields live — NOT system_live.yaml, per S1's judgment call #2).
 
 ### 6. DEF-141: Intelligence polling crash
 
@@ -83,6 +86,19 @@ In `argus/intelligence/startup.py`:
   - Logs ERROR with exc_info=True
   - Continues to the next polling cycle (do NOT re-raise)
   - This prevents a single bad cycle from killing the entire polling task
+
+### 7. S1 deferred item: main.py reconciliation `qty` → `shares` fix
+
+In `argus/main.py` (~line 1399), the reconciliation loop reads:
+```python
+qty = float(getattr(pos, "qty", 0))
+```
+
+This has the same root cause as the S1 fixes — `Position` model uses `shares`, not `qty`. The result is that `broker_positions` dict is always empty (every position has qty=0, fails the `qty != 0` check), meaning `reconcile_positions()` receives no broker data.
+
+Fix: change to `float(getattr(pos, "shares", 0))`.
+
+This is the last known instance of the `qty` attribute mismatch in the entire codebase. After this fix, grep the full `argus/` directory to confirm zero remaining `getattr(.*"qty"` reads from Position objects (note: `getattr(order, "qty"` in order_manager.py line ~1909 reads from an Order object and is correct — leave it).
 
 ## Constraints
 - Do NOT modify: `eod_flatten()` (Session 1 owns this), strategy files, UI, API routes
@@ -100,24 +116,28 @@ New tests to write:
 6. `test_margin_circuit_resets_on_position_drop` — set circuit open with count=15, mock broker.get_positions() returning 10 positions, trigger check, verify circuit resets
 7. `test_margin_circuit_daily_reset` — set circuit open, trigger daily reset, verify circuit closed and count zeroed
 8. `test_polling_loop_survives_exception` — mock a source that raises, verify polling loop continues
+9. `test_reconciliation_reads_shares_not_qty` — verify main.py reconciliation loop reads `shares` attribute and builds non-empty broker_positions dict
 
-Minimum new test count: 7
-Test command: `python -m pytest tests/execution/ tests/intelligence/ -x -q`
+Minimum new test count: 8
+Test command (FINAL SESSION — full suite): `python -m pytest --ignore=tests/test_main.py -n auto -q`
 
 ## Config Validation
-Write a test that loads `config/system_live.yaml` and verifies:
+Write a test that loads `config/order_manager.yaml` and verifies:
 - `margin_rejection_threshold` → OrderManagerConfig field
 - `margin_circuit_reset_positions` → OrderManagerConfig field
 
 ## Regression Checklist (Session-Specific)
 | Check | How to Verify |
 |-------|---------------|
-| EOD flatten from S1 still works | `python -m pytest tests/execution/test_*eod* tests/execution/test_*flatten* -x -q` |
+| EOD flatten from S1 still works | `python -m pytest tests/execution/test_*sprint329* -x -q` |
+| Signal cutoff from S3 still works | `python -m pytest tests/core/test_signal_cutoff.py -x -q` |
+| Quality engine from S3 still works | `python -m pytest tests/intelligence/test_quality_config.py -x -q` |
 | Normal entry order flow (circuit closed) | Existing order tests pass |
 | Bracket orders never blocked by circuit | New test |
 | Flatten orders never blocked by circuit | New test |
 | Overflow routing still works | Existing overflow tests |
 | Intelligence polling loop starts and runs | New test |
+| No `getattr(pos/bp, "qty"` remaining for Position objects | `grep -rn '"qty"' argus/` and verify only Order reads remain |
 
 ## Definition of Done
 - [ ] Margin rejection counter tracking implemented
@@ -128,8 +148,10 @@ Write a test that loads `config/system_live.yaml` and verifies:
 - [ ] Daily reset implemented
 - [ ] Intelligence polling crash fixed
 - [ ] Polling loop wrapped in try/except
+- [ ] main.py reconciliation `qty` → `shares` fixed
+- [ ] No remaining Position-object `qty` reads in codebase
 - [ ] Config fields added and validated
-- [ ] All 7+ new tests passing
+- [ ] All 8+ new tests passing
 - [ ] All existing tests passing
 - [ ] Close-out report written to file
 - [ ] Tier 2 review completed
@@ -143,7 +165,7 @@ Provide the @reviewer with:
 1. Review context: Sprint 32.9 scope
 2. Close-out report: docs/sprints/sprint-32.9/session-2-closeout.md
 3. Diff range: `git diff HEAD~1`
-4. Test command: `python -m pytest tests/execution/ tests/intelligence/ -x -q`
+4. Test command (FINAL SESSION — full suite): `python -m pytest --ignore=tests/test_main.py -n auto -q`
 5. Files that should NOT have been modified: anything in `argus/strategies/`, `argus/ui/`, `argus/api/routes/`, `argus/backtest/`
 
 ## Session-Specific Review Focus (for @reviewer)
@@ -154,6 +176,8 @@ Provide the @reviewer with:
 5. Verify the `symbols` fix in startup.py doesn't change semantics — just ensures variable is always defined
 6. Verify try/except in polling loop logs the actual exception (not silently swallowing)
 7. Verify no changes to EOD flatten (Session 1's domain)
+8. Verify main.py reconciliation now reads `shares` and grep confirms no remaining Position-object `qty` reads
+9. Verify all S1 and S3 changes still work (full suite pass as final session)
 
 ## Sprint-Level Escalation Criteria
 - Any change to bracket order logic (stops, targets, amendments)

@@ -36,3 +36,9 @@ max_flatten_retries: 3
 # Max cycles (each cycle = max_flatten_retries attempts) before abandoning
 # Abandoned symbols skip flatten until EOD final pass (Sprint 29.5)
 max_flatten_cycles: 2
+
+# EOD flatten fill verification (Sprint 32.9)
+# Seconds to wait for fill callbacks before declaring Pass 1 complete
+eod_flatten_timeout_seconds: 30
+# If true, retry timed-out EOD flattens once via broker re-query
+eod_flatten_retry_rejected: true

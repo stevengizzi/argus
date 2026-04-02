@@ -16,7 +16,7 @@ Before making any changes:
    - `config/strategies/flat_top_breakout.yaml`
    - `config/experiments.yaml`
    - `docs/pre-live-transition-checklist.md`
-   - Session 2 close-out: `docs/sprints/sprint-32.9/session-2-closeout.md`
+   - (Running in parallel with S1 — no prior close-out to read)
 2. Run the scoped test baseline:
    `python -m pytest tests/core/ tests/intelligence/ -x -q`
    Expected: all passing (full suite confirmed by S2 close-out)
@@ -186,7 +186,7 @@ New tests to write:
 10. `test_experiments_enabled` — load experiments.yaml, verify enabled is true
 
 Minimum new test count: 8
-Test command (FINAL SESSION — full suite): `python -m pytest --ignore=tests/test_main.py -n auto -q`
+Test command: `python -m pytest tests/core/ tests/intelligence/ -x -q`
 
 ## Config Validation
 Write tests that verify:
@@ -230,7 +230,7 @@ Provide the @reviewer with:
 1. Review context: Sprint 32.9 scope
 2. Close-out report: docs/sprints/sprint-32.9/session-3-closeout.md
 3. Diff range: `git diff HEAD~1`
-4. Test command (FINAL SESSION): `python -m pytest --ignore=tests/test_main.py -n auto -q`
+4. Test command: `python -m pytest tests/core/ tests/intelligence/ -x -q`
 5. Files that should NOT have been modified: `argus/execution/order_manager.py`, `argus/strategies/patterns/`, `argus/ui/`, `argus/backtest/`
 
 ## Session-Specific Review Focus (for @reviewer)

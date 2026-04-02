@@ -2,7 +2,7 @@ strategy_id: "strat_abcd"
 name: "ABCD"
 version: "1.0.0"
 enabled: true
-mode: live  # "live" or "shadow" (Sprint 27.7)
+mode: shadow  # Demoted Sprint 32.9 — 567 trades at 21.9% win rate. Evaluate for promotion after parameter optimization via Experiment Pipeline.
 asset_class: "us_stocks"
 pipeline_stage: "exploration"
 family: "harmonic"

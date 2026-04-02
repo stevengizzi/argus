@@ -647,6 +647,10 @@ class OrchestratorConfig(BaseModel):
     # ORB family mutual exclusion (DEC-261)
     orb_family_mutual_exclusion: bool = True
 
+    # Pre-EOD signal cutoff (Sprint 32.9)
+    signal_cutoff_enabled: bool = True
+    signal_cutoff_time: str = "15:30"  # HH:MM ET — no new entries after this time
+
 
 class NotificationChannelConfig(BaseModel):
     """Configuration for a single notification channel."""
@@ -818,6 +822,10 @@ class OrderManagerConfig(BaseModel):
     max_flatten_retries: int = Field(default=3, ge=1)
     # Max flatten retry cycles before abandoning (Sprint 29.5)
     max_flatten_cycles: int = Field(default=2, ge=1)
+    # EOD flatten fill-verification timeout (Sprint 32.9)
+    eod_flatten_timeout_seconds: int = Field(default=30, ge=1)
+    # Retry timed-out/rejected EOD flattens once via broker re-query (Sprint 32.9)
+    eod_flatten_retry_rejected: bool = True
 
 
 # ---------------------------------------------------------------------------

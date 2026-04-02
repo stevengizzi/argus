@@ -179,6 +179,23 @@ Shadow-mode variant signals bypass quality pipeline and risk manager (routing di
 
 ---
 
+## Sprint 32.9 additions
+
+- [ ] `max_concurrent_positions`: review 50 for live (may need adjustment based on capital and margin)
+- [ ] `overflow.broker_capacity`: review 50 for live (should match or exceed max_concurrent_positions)
+- [ ] `signal_cutoff_time`: review "15:30" for live (consider market close dynamics)
+- [ ] `signal_cutoff_enabled`: keep true for live
+- [ ] `margin_rejection_threshold`: review 10 for live (may need adjustment)
+- [ ] `margin_circuit_reset_positions`: review 20 for live
+- [ ] `eod_flatten_timeout_seconds`: review 30 for live
+- [ ] `strat_abcd` mode: evaluate for promotion after parameter optimization
+- [ ] `strat_flat_top_breakout` mode: evaluate for promotion after parameter optimization
+- [ ] Quality engine weights: restore `historical_match` weight when real data available
+- [ ] Quality engine thresholds: re-evaluate after observing grade distribution with new weights
+- [ ] `experiments.enabled`: keep true, configure `auto_promote` based on confidence
+
+---
+
 ## Cross-References
 - DEF-101: Tests coupled to paper-trading config values
 - DEF-108: R2G atr_value=None sync limitation (uses percent fallback)

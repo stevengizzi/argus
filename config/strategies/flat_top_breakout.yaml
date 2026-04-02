@@ -2,7 +2,7 @@ strategy_id: "strat_flat_top_breakout"
 name: "Flat-Top Breakout"
 version: "1.0.0"
 enabled: true
-mode: live  # "live" or "shadow" (Sprint 27.7)
+mode: shadow  # Demoted Sprint 32.9 — 96 trades at 18.8% win rate, avg R -0.71. Evaluate for promotion after parameter optimization.
 # VIX regime dimensions: not yet constrained (match-any). Activate post-Sprint 28.
 asset_class: "us_stocks"
 pipeline_stage: "exploration"

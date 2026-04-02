@@ -280,6 +280,10 @@ class OrderManager:
         # Non-pattern strategies are absent from the registry; their trades get None.
         self._fingerprint_registry: dict[str, str | None] = {}
 
+        # EOD flatten fill-verification events: symbol → asyncio.Event (Sprint 32.9)
+        # Set in _close_position and on_cancel when a flatten order resolves.
+        self._eod_flatten_events: dict[str, asyncio.Event] = {}
+
     async def start(self) -> None:
         """Start the Order Manager.
 
@@ -607,6 +611,10 @@ class OrderManager:
                     pending.symbol,
                     event.order_id,
                 )
+                # Signal EOD flatten verification event if waiting (Sprint 32.9)
+                eod_event = self._eod_flatten_events.get(pending.symbol)
+                if eod_event is not None:
+                    eod_event.set()
 
         # Revision-rejected detection: IBKR may reject bracket amendments
         is_revision_rejected = "Revision rejected" in (event.reason or "")
@@ -1467,13 +1475,15 @@ class OrderManager:
         """Close all positions at market. Scheduled at eod_flatten_time.
 
         1. Clear abandoned set (EOD gets one final attempt for everything)
-        2. Cancel all open orders (stops, targets)
-        3. Close all remaining positions at market
-        4. Flatten broker-only positions not tracked by ARGUS
-        5. If auto_shutdown_after_eod is enabled, request system shutdown
+        2. Close all managed positions at market (Pass 1) with fill verification
+        3. Wait for fill callbacks with eod_flatten_timeout_seconds timeout
+        4. Flatten broker-only positions not tracked by ARGUS (Pass 2)
+        5. Post-flatten verification query; log CRITICAL if positions remain
+        6. If auto_shutdown_after_eod is enabled, request system shutdown
         """
         logger.info("EOD flatten triggered — closing all positions")
         self._flattened_today = True
+        eod_timeout = float(self._config.eod_flatten_timeout_seconds)
 
         # Clear abandoned set — EOD is the last resort (Sprint 29.5 R2)
         if self._flatten_abandoned:
@@ -1485,19 +1495,74 @@ class OrderManager:
             self._flatten_abandoned.clear()
             self._flatten_cycle_count.clear()
 
+        # --- Pass 1: Managed positions with fill verification (Sprint 32.9) ---
+        self._eod_flatten_events = {}
         for _symbol, positions in list(self._managed_positions.items()):
             for position in positions:
-                if not position.is_fully_closed:
+                if not position.is_fully_closed and position.shares_remaining > 0:
+                    if position.symbol not in self._eod_flatten_events:
+                        self._eod_flatten_events[position.symbol] = asyncio.Event()
                     await self._flatten_position(position, reason="eod_flatten")
 
-        # Pass 2: Flatten broker-only positions not tracked by ARGUS (Sprint 29.5 R3)
+        filled: list[str] = []
+        timed_out: list[str] = []
+        if self._eod_flatten_events:
+            try:
+                await asyncio.wait_for(
+                    asyncio.gather(
+                        *[e.wait() for e in self._eod_flatten_events.values()]
+                    ),
+                    timeout=eod_timeout,
+                )
+                filled = list(self._eod_flatten_events.keys())
+            except asyncio.TimeoutError:
+                for sym, event in self._eod_flatten_events.items():
+                    if event.is_set():
+                        filled.append(sym)
+                    else:
+                        timed_out.append(sym)
+
+            logger.info(
+                "EOD flatten Pass 1: %d filled, %d timed out",
+                len(filled),
+                len(timed_out),
+            )
+
+            # Retry timed-out positions once with re-queried broker qty (Sprint 32.9)
+            if timed_out and self._config.eod_flatten_retry_rejected:
+                try:
+                    retry_positions = await self._broker.get_positions()
+                    broker_qty_map: dict[str, int] = {
+                        getattr(p, "symbol", ""): int(getattr(p, "shares", 0))
+                        for p in retry_positions
+                    }
+                    for sym in timed_out:
+                        retry_qty = broker_qty_map.get(sym, 0)
+                        if retry_qty > 0:
+                            logger.warning(
+                                "EOD flatten: retrying %s (%d shares from broker)",
+                                sym,
+                                retry_qty,
+                            )
+                            await self._flatten_unknown_position(
+                                sym, retry_qty, force_execute=True
+                            )
+                except Exception as e:
+                    logger.error("EOD flatten: retry pass failed: %s", e)
+
+        self._eod_flatten_events = {}
+        pass1_filled_set = set(filled)
+
+        # --- Pass 2: Broker-only positions (Sprint 29.5 R3 + Sprint 32.9 shares fix) ---
         try:
             broker_positions = await self._broker.get_positions()
             managed_symbols = set(self._managed_positions.keys())
+            p2_submitted = 0
             for pos in broker_positions:
                 symbol = getattr(pos, "symbol", str(pos))
-                qty = int(getattr(pos, "qty", 0))
-                if symbol not in managed_symbols and qty > 0:
+                qty = int(getattr(pos, "shares", 0))
+                if symbol not in managed_symbols and symbol not in pass1_filled_set and qty > 0:
+                    p2_submitted += 1
                     logger.warning(
                         "EOD flatten: closing untracked broker position "
                         "%s (%d shares)",
@@ -1507,10 +1572,28 @@ class OrderManager:
                     await self._flatten_unknown_position(
                         symbol, qty, force_execute=True,
                     )
+            if p2_submitted > 0:
+                logger.info(
+                    "EOD flatten Pass 2: %d broker-only positions submitted",
+                    p2_submitted,
+                )
         except Exception as e:
             logger.error("EOD flatten: broker position query failed: %s", e)
 
-        # Request auto-shutdown if enabled
+        # Post-flatten verification (Sprint 32.9)
+        try:
+            remaining = await self._broker.get_positions()
+            if remaining:
+                remaining_syms = [getattr(p, "symbol", str(p)) for p in remaining]
+                logger.critical(
+                    "EOD flatten: %d positions remain after both passes: %s",
+                    len(remaining),
+                    remaining_syms,
+                )
+        except Exception as e:
+            logger.error("EOD flatten: post-verification query failed: %s", e)
+
+        # Request auto-shutdown AFTER verification (Sprint 32.9: moved after verify)
         if self._config.auto_shutdown_after_eod:
             delay = self._config.auto_shutdown_delay_seconds
             logger.info(
@@ -1622,7 +1705,7 @@ class OrderManager:
         zombie_count = 0
         for pos in positions:
             symbol = getattr(pos, "symbol", str(pos))
-            qty = int(getattr(pos, "qty", 0))
+            qty = int(getattr(pos, "shares", 0))
 
             has_orders = bool(orders_by_symbol.get(symbol, []))
             already_known = symbol in self._managed_positions
@@ -1800,7 +1883,7 @@ class OrderManager:
             orders_by_symbol: Lookup of open orders keyed by symbol.
         """
         symbol = getattr(pos, "symbol", str(pos))
-        qty = int(getattr(pos, "qty", 0))
+        qty = int(getattr(pos, "shares", 0))
         avg_entry = float(getattr(pos, "avg_entry_price", 0.0))
 
         # Find matching stop order
@@ -2061,7 +2144,7 @@ class OrderManager:
                     broker_qty = 0
                     for bp in broker_positions:
                         if getattr(bp, "symbol", "") == symbol:
-                            broker_qty = abs(int(getattr(bp, "qty", 0)))
+                            broker_qty = abs(int(getattr(bp, "shares", 0)))
                             break
                     if broker_qty == 0:
                         logger.info(
@@ -2397,6 +2480,11 @@ class OrderManager:
         """Finalize a fully closed position. Log trade, publish event, clean up."""
         # Clear flatten-pending guard for this symbol
         self._flatten_pending.pop(position.symbol, None)
+
+        # Signal EOD flatten verification event if waiting (Sprint 32.9)
+        eod_event = self._eod_flatten_events.get(position.symbol)
+        if eod_event is not None:
+            eod_event.set()
 
         hold_seconds = int((self._clock.now() - position.entry_time).total_seconds())
 

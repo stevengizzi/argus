@@ -466,10 +466,10 @@ class TestRMRejectionUnaffected:
 
 
 class TestOverflowConfigCapacity:
-    """Tests that overflow.yaml broker_capacity is set to 60 (Sprint 32.75 S5)."""
+    """Tests that overflow.yaml broker_capacity is set to 50 (Sprint 32.9 S3)."""
 
     def test_overflow_yaml_broker_capacity_is_60(self) -> None:
-        """overflow.yaml broker_capacity must be 60 after S5 update."""
+        """overflow.yaml broker_capacity must be 50 after Sprint 32.9 reduction."""
         import yaml
         from pathlib import Path
 
@@ -477,8 +477,8 @@ class TestOverflowConfigCapacity:
         with config_path.open() as fh:
             data = yaml.safe_load(fh)
 
-        assert data["overflow"]["broker_capacity"] == 60, (
-            f"Expected broker_capacity=60 but got {data['overflow']['broker_capacity']}"
+        assert data["overflow"]["broker_capacity"] == 50, (
+            f"Expected broker_capacity=50 but got {data['overflow']['broker_capacity']}"
         )
 
     def test_overflow_config_loads_with_capacity_60(self) -> None:

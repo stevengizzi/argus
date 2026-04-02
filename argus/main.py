@@ -175,6 +175,7 @@ class ArgusSystem:
         self._counterfactual_task: asyncio.Task[None] | None = None  # Sprint 27.7: maintenance task
         self._promotion_evaluator: object | None = None  # Sprint 32 S7: PromotionEvaluator
         self._experiments_auto_promote: bool = False  # Sprint 32 S7: auto_promote config flag
+        self._cutoff_logged: bool = False  # Sprint 32.9: one-shot log per session for signal cutoff
 
     async def start(self) -> None:
         """Initialize and start all components in dependency order.
@@ -1508,6 +1509,25 @@ class ArgusSystem:
             signal: The SignalEvent emitted by a strategy.
             strategy: The strategy instance that emitted the signal.
         """
+        # Pre-EOD signal cutoff (Sprint 32.9) — no new entries after cutoff time
+        orchestrator_cfg = getattr(self._config, "orchestrator", None)
+        _clock = getattr(self, "_clock", None)
+        if orchestrator_cfg is not None and _clock is not None and getattr(orchestrator_cfg, "signal_cutoff_enabled", False):
+            from datetime import time as dt_time
+            from zoneinfo import ZoneInfo
+            et_tz = ZoneInfo("America/New_York")
+            now_et = _clock.now().astimezone(et_tz)
+            cutoff = dt_time.fromisoformat(orchestrator_cfg.signal_cutoff_time)
+            if now_et.time() >= cutoff:
+                if not self._cutoff_logged:
+                    logger.info(
+                        "Pre-EOD signal cutoff active at %s ET — "
+                        "no new entries until next session",
+                        now_et.time().isoformat()[:5],
+                    )
+                    self._cutoff_logged = True
+                return
+
         # Shadow mode routing (Sprint 27.7)
         strategy_mode = getattr(
             getattr(strategy, 'config', None), 'mode', 'live'

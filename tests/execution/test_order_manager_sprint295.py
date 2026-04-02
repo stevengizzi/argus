@@ -191,7 +191,7 @@ class TestFlattenError404:
         # Broker reports different qty (e.g. 80 instead of position's 50)
         broker_pos = MagicMock()
         broker_pos.symbol = "AAPL"
-        broker_pos.qty = 80
+        broker_pos.shares = 80
         mock_broker.get_positions = AsyncMock(return_value=[broker_pos])
 
         # Set up flatten pending with expired timeout
@@ -385,10 +385,10 @@ class TestEodFlattenBrokerOnly:
         # Broker reports tracked AAPL + untracked TSLA
         aapl_pos = MagicMock()
         aapl_pos.symbol = "AAPL"
-        aapl_pos.qty = 50
+        aapl_pos.shares = 50
         tsla_pos = MagicMock()
         tsla_pos.symbol = "TSLA"
-        tsla_pos.qty = 200
+        tsla_pos.shares = 200
 
         # Reset place_order to track new calls
         mock_broker.place_order = AsyncMock(
@@ -430,7 +430,7 @@ class TestEodFlattenBrokerOnly:
         # Broker reports an untracked position
         tsla_pos = MagicMock()
         tsla_pos.symbol = "TSLA"
-        tsla_pos.qty = 200
+        tsla_pos.shares = 200
 
         mock_broker.get_positions = AsyncMock(return_value=[tsla_pos])
         mock_broker.place_order = AsyncMock(

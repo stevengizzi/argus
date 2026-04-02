@@ -1159,15 +1159,15 @@ async def test_reconstruct_from_broker_recovers_positions(
     """Mock broker with open positions and orders → ManagedPositions created."""
     mock_broker = MagicMock()
 
-    # Create mock positions
+    # Create mock positions (use `shares` — the Position model attribute)
     pos1 = MagicMock()
     pos1.symbol = "AAPL"
-    pos1.qty = 100
+    pos1.shares = 100
     pos1.avg_entry_price = 150.0
 
     pos2 = MagicMock()
     pos2.symbol = "TSLA"
-    pos2.qty = 50
+    pos2.shares = 50
     pos2.avg_entry_price = 200.0
 
     mock_broker.get_positions = AsyncMock(return_value=[pos1, pos2])
@@ -1263,7 +1263,7 @@ async def test_startup_flatten_unknown_positions_enabled(
 
     zombie = MagicMock()
     zombie.symbol = "ZOMBIE"
-    zombie.qty = 75
+    zombie.shares = 75
     zombie.avg_entry_price = 42.0
 
     mock_broker.get_positions = AsyncMock(return_value=[zombie])
@@ -1303,7 +1303,7 @@ async def test_startup_flatten_unknown_positions_disabled(
 
     zombie = MagicMock()
     zombie.symbol = "ZOMBIE"
-    zombie.qty = 75
+    zombie.shares = 75
     zombie.avg_entry_price = 42.0
 
     mock_broker.get_positions = AsyncMock(return_value=[zombie])
@@ -1364,7 +1364,7 @@ async def test_startup_only_known_positions(
 
     known = MagicMock()
     known.symbol = "AAPL"
-    known.qty = 100
+    known.shares = 100
     known.avg_entry_price = 150.0
 
     # AAPL has a stop order → ARGUS was managing it
@@ -1408,12 +1408,12 @@ async def test_startup_mix_known_and_unknown(
 
     known = MagicMock()
     known.symbol = "AAPL"
-    known.qty = 100
+    known.shares = 100
     known.avg_entry_price = 150.0
 
     zombie = MagicMock()
     zombie.symbol = "ZOMBIE"
-    zombie.qty = 50
+    zombie.shares = 50
     zombie.avg_entry_price = 30.0
 
     # Only AAPL has an associated order — ZOMBIE has none
@@ -1501,7 +1501,7 @@ async def test_startup_real_sequence_position_with_orders_not_flattened(
     # IBKR has a position with bracket orders (crash recovery scenario)
     pos = MagicMock()
     pos.symbol = "NVDA"
-    pos.qty = 200
+    pos.shares = 200
     pos.avg_entry_price = 120.0
 
     stop = MagicMock()
@@ -1546,7 +1546,7 @@ async def test_startup_zero_qty_zombie_skips_flatten(
 
     ghost = MagicMock()
     ghost.symbol = "GHOST"
-    ghost.qty = 0
+    ghost.shares = 0
     ghost.avg_entry_price = 50.0
 
     mock_broker.get_positions = AsyncMock(return_value=[ghost])

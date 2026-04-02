@@ -1,17 +1,26 @@
 """Tests for QualityEngineConfig and sub-config validators.
 
 Sprint 24, Session 5a.
+Sprint 32.9, Session 3: weight recalibration + grade differentiation tests.
 """
 
+from pathlib import Path
+
 import pytest
+import yaml
 from pydantic import ValidationError
 
+from argus.core.events import Side, SignalEvent
+from argus.core.regime import MarketRegime
 from argus.intelligence.config import (
     QualityEngineConfig,
     QualityRiskTiersConfig,
     QualityThresholdsConfig,
     QualityWeightsConfig,
 )
+from argus.intelligence.quality_engine import SetupQualityEngine
+
+_CONFIG_DIR = Path(__file__).parents[2] / "config"
 
 
 class TestQualityWeightsConfig:
@@ -107,3 +116,97 @@ class TestQualityEngineConfig:
         """Unknown grade string raises ValidationError."""
         with pytest.raises(ValidationError, match="min_grade_to_trade"):
             QualityEngineConfig(min_grade_to_trade="D")
+
+
+# ---------------------------------------------------------------------------
+# Sprint 32.9 — weight recalibration tests
+# ---------------------------------------------------------------------------
+
+
+class TestQualityWeightsRecalibration:
+    """Tests for Sprint 32.9 quality weight recalibration.
+
+    Verifies that the updated quality_engine.yaml has historical_match=0.0
+    and that the weights still sum to 1.0 (Pydantic validator passes).
+    """
+
+    def test_quality_weights_sum_to_one(self) -> None:
+        """Weights from quality_engine.yaml load into QualityWeightsConfig and sum to 1.0."""
+        raw = yaml.safe_load((_CONFIG_DIR / "quality_engine.yaml").read_text())
+        weights_data = raw["weights"]
+        config = QualityWeightsConfig(**weights_data)
+        total = (
+            config.pattern_strength
+            + config.catalyst_quality
+            + config.volume_profile
+            + config.historical_match
+            + config.regime_alignment
+        )
+        assert abs(total - 1.0) < 0.001
+
+    def test_historical_match_weight_is_zero(self) -> None:
+        """historical_match weight is 0.0 after Sprint 32.9 recalibration."""
+        raw = yaml.safe_load((_CONFIG_DIR / "quality_engine.yaml").read_text())
+        weights_data = raw["weights"]
+        assert weights_data["historical_match"] == 0.0
+
+    def test_quality_grades_differentiate(self) -> None:
+        """Signals with different pattern_strength and rvol produce distinct grades spanning A through C.
+
+        With new weights (pattern_strength=0.375, volume_profile=0.275, historical_match=0.0)
+        and recalibrated thresholds, signals should produce a range of grades —
+        not the uniform B clustering observed before Sprint 32.9.
+        """
+        raw = yaml.safe_load((_CONFIG_DIR / "quality_engine.yaml").read_text())
+        config = QualityEngineConfig(**raw)
+        engine = SetupQualityEngine(config)
+
+        def score(pattern_strength: float, rvol: float | None) -> str:
+            signal = SignalEvent(
+                strategy_id="test",
+                symbol="AAPL",
+                side=Side.LONG,
+                entry_price=100.0,
+                stop_price=99.0,
+                target_prices=(102.0,),
+                share_count=0,
+                pattern_strength=pattern_strength,
+            )
+            result = engine.score_setup(
+                signal=signal,
+                catalysts=[],
+                rvol=rvol,
+                regime=MarketRegime.BULLISH_TRENDING,
+                allowed_regimes=[],
+            )
+            return result.grade
+
+        grade_high = score(80.0, 3.0)   # high pattern + high volume → should be A+ or A
+        grade_mid = score(50.0, None)   # medium pattern + no rvol → should be B range
+        grade_low = score(10.0, 0.3)   # low pattern + low volume → should be C+ or below
+
+        assert grade_high in ("A+", "A", "A-"), f"High signal should be A-tier, got {grade_high}"
+        assert grade_mid in ("B+", "B", "B-"), f"Mid signal should be B-tier, got {grade_mid}"
+        # grade_low may be below minimum (below C+), confirmed by score < 40
+        signal_low = SignalEvent(
+            strategy_id="test",
+            symbol="AAPL",
+            side=Side.LONG,
+            entry_price=100.0,
+            stop_price=99.0,
+            target_prices=(102.0,),
+            share_count=0,
+            pattern_strength=10.0,
+        )
+        result_low = engine.score_setup(
+            signal=signal_low,
+            catalysts=[],
+            rvol=0.3,
+            regime=MarketRegime.BULLISH_TRENDING,
+            allowed_regimes=[],
+        )
+        assert result_low.score < config.thresholds.c_plus, (
+            f"Low signal score {result_low.score} should be below C+ threshold "
+            f"{config.thresholds.c_plus}"
+        )
+        assert grade_high != grade_mid, "High and mid signals should have different grades"

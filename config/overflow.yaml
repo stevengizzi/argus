@@ -4,4 +4,4 @@
 
 overflow:
   enabled: true
-  broker_capacity: 60
+  broker_capacity: 50

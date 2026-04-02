@@ -292,7 +292,7 @@ class TestOrderManagerIntegration:
 
         pos1 = MagicMock()
         pos1.symbol = "AAPL"
-        pos1.qty = 100
+        pos1.shares = 100
         pos1.avg_entry_price = 150.0
 
         stop_order = MagicMock()

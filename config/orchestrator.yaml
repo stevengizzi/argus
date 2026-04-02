@@ -82,6 +82,15 @@ poll_interval_seconds: 30
 # PAPER TRADING: Disabled to allow both ORB strategies to fire on same symbol. Restore to true before live.
 orb_family_mutual_exclusion: false
 
+# ---------------------------------------------------------------------------
+# Pre-EOD Signal Cutoff (Sprint 32.9)
+# ---------------------------------------------------------------------------
+
+# Block new entry signals after this time to reduce position count before market close.
+# Does NOT affect position management (trailing stops, time stops, bracket fills, flatten).
+signal_cutoff_enabled: true
+signal_cutoff_time: "15:30"
+
 # Enable correlation-based allocation limits
 correlation_enabled: true
 

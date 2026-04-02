@@ -1,29 +1,37 @@
 # Quality Engine Configuration (Sprint 24)
 # Scores trade setups across 5 dimensions and maps grades to risk tiers.
 #
-# NOTE: With Historical Match stubbed at 50 (Sprint 24), effective score range
-# is ~7.5 to ~92.5. Grade thresholds are PROVISIONAL — recalibrate after
-# Sprint 28 when historical match has real data.
+# Weights recalibrated Sprint 32.9: historical_match zeroed (stub returning constant 50).
+# Weight redistributed to pattern_strength and volume_profile — the dimensions that
+# actually differentiate. Restore historical_match weight when it has real data
+# (post-Learning Loop V2 or historical match implementation).
+#
+# Thresholds recalibrated for actual score distribution (~35-77 range).
+# Previous thresholds were calibrated for theoretical 0-100 range, causing all
+# signals to cluster in B grade. These thresholds distribute grades across the
+# actual signal population.
 
 enabled: true
 
 # Per-dimension weights (must sum to 1.0)
 weights:
-  pattern_strength: 0.30
-  catalyst_quality: 0.25
-  volume_profile: 0.20
-  historical_match: 0.15
-  regime_alignment: 0.10
+  pattern_strength: 0.375   # was 0.30 — absorbed half of historical_match
+  catalyst_quality: 0.25    # unchanged
+  volume_profile: 0.275     # was 0.20 — absorbed half of historical_match
+  historical_match: 0.0     # was 0.15 — stub returning constant 50, zero information
+  regime_alignment: 0.10    # unchanged
 
 # Score-to-grade thresholds (inclusive lower bounds, strictly descending)
+# Recalibrated for actual score range (~35-77). Previous values caused all signals
+# to cluster in B grade — see Sprint 32.9 session notes.
 thresholds:
-  a_plus: 90
-  a: 80
-  a_minus: 70
-  b_plus: 60
-  b: 50
-  b_minus: 40
-  c_plus: 30
+  a_plus: 72    # was 90 — now achievable with exceptional pattern + volume
+  a: 66         # was 80
+  a_minus: 61   # was 70
+  b_plus: 56    # was 60
+  b: 51         # was 50
+  b_minus: 46   # was 40
+  c_plus: 40    # was 30
 
 # Risk percentage ranges per grade for dynamic position sizing [min, max]
 # PAPER TRADING: Values reduced 10x from live targets to prevent capital
