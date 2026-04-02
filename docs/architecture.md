@@ -1761,9 +1761,9 @@ Seven pages delivered with responsive design across four breakpoints (DEC-169). 
 
 | Surface | Navigation | Pages |
 |---------|-----------|-------|
-| Desktop (≥1024px) | Icon sidebar with group dividers | All 8 pages visible |
-| Tablet (640–1023px) | Icon sidebar | All 8 pages visible |
-| Mobile (<640px) | Bottom tab bar (5 tabs) + More sheet | Dash, Trades, Orch, Patterns, More → (Performance, Debrief, System) |
+| Desktop (≥1024px) | Icon sidebar with group dividers | All 9 pages visible |
+| Tablet (640–1023px) | Icon sidebar | All 9 pages visible |
+| Mobile (<640px) | Bottom tab bar (5 tabs) + More sheet | Dash, Trades, Orch, Patterns, More → (Performance, Debrief, System, Observatory, Experiments) |
 
 Global keyboard shortcuts: `1`–`7` page navigation, `w` watchlist toggle, `c` copilot toggle (DEC-199).
 
@@ -2504,7 +2504,7 @@ analytics/
 
 ---
 
-## 15. Experiment Pipeline (Sprint 32)
+## 15. Experiment Pipeline (Sprints 32 + 32.5)
 
 Complete variant lifecycle infrastructure for autonomous parameter optimization. Config-gated via `experiments.enabled` (default: false). All existing strategies are unaffected when disabled.
 
@@ -2548,9 +2548,9 @@ Shadow strategy instantiation from `config/experiments.yaml`:
 ### 15.5 ExperimentRunner (`intelligence/experiments/runner.py`)
 
 Backtest pre-filter for candidate parameter combinations:
-- Grid generation from PatternParam metadata (`min_value`, `max_value`, `step`)
+- Grid generation from PatternParam metadata (`min_value`, `max_value`, `step`) × optional `exit_sweep_params` cross-product (Sprint 32.5)
 - For each grid point: runs BacktestEngine, evaluates MultiObjectiveResult, stores result in ExperimentStore
-- **Current limitation:** Supports bull_flag + flat_top_breakout only as BacktestEngine strategy types (DEF-134). Remaining 5 patterns require strategy factory additions in `backtest/engine.py`.
+- Supports **all 7 PatternModule patterns** via `_PATTERN_TO_STRATEGY_TYPE` mapping (DEF-134 resolved Sprint 32.5)
 - Config-gated pre-filter thresholds: `min_sharpe`, `min_trade_count`, `min_win_rate`
 - CLI: `scripts/run_experiment.py --pattern bull_flag --dry-run` for standalone sweep execution
 
@@ -2586,15 +2586,34 @@ Variants are never deleted from ExperimentStore — only status transitions occu
 
 ### 15.8 REST API
 
-JWT-protected endpoints under `/api/v1/experiments`:
+JWT-protected endpoints under `/api/v1/experiments` (Sprint 32) and `/api/v1/counterfactual` (Sprint 32.5):
 - `GET /api/v1/experiments` — list all experiments with optional `?status=` filter
 - `GET /api/v1/experiments/{id}` — get specific experiment details including backtest result and promotion history
 - `GET /api/v1/experiments/baseline/{pattern}` — get baseline MultiObjectiveResult for a live pattern (for comparison)
 - `POST /api/v1/experiments/run` — trigger a sweep for a pattern via BackgroundTasks (non-blocking)
+- `GET /api/v1/experiments/variants` — all variant definitions with mode, fingerprint, metrics; 503 when experiments disabled *(Sprint 32.5)*
+- `GET /api/v1/experiments/promotions` — promotion/demotion event history with pagination; 503 when experiments disabled *(Sprint 32.5)*
+- `GET /api/v1/counterfactual/positions` — shadow positions with strategy/date/rejection-stage filters + pagination *(Sprint 32.5)*
 
-All endpoints return 503 when `experiments.enabled: false`.
+All experiment endpoints return 503 when `experiments.enabled: false`.
 
-### 15.9 Config
+### 15.9 UI (Sprint 32.5)
+
+Two new surfaces added to the Command Center:
+- **Shadow Trades tab** — second tab on the Trade Log page (keyboard shortcut `2` or tab click). Filter bar (strategy, rejection stage, date range), summary stats (total shadow trades, win rate, avg P&L), 13-column table (symbol, stage badge, grade badge, entry, stop, target, result P&L, MFE/MAE, duration, exit reason, strategy), pagination, empty state.
+- **Experiments page** — 9th Command Center page (route `/experiments`, keyboard shortcut `9`, FlaskConical icon). Variant status table grouped by pattern (sortable by Win Rate, Expectancy, Sharpe), promotion event log, pattern comparison on group-header click (best Sharpe + best win rate highlighted), disabled state (503 → instructions to enable in `config/experiments.yaml`), empty state (0 variants → instructions to run `scripts/run_experiment.py`).
+
+### 15.10 Allocation Intelligence Vision
+
+The long-range architectural direction for capital allocation is documented in `docs/architecture/allocation-intelligence-vision.md`. Key points:
+- **Problem:** Stacked guardrail chain asks "does this violate limits?" instead of "what is optimal capital?"
+- **Vision:** Single `AllocationIntelligence` service replacing stacked chain with continuous sizing output
+- **6 dimensions:** Edge estimation with uncertainty (Kelly), portfolio correlation penalty, opportunity cost, time-of-day weighting, drawdown response curve, variant track record
+- **Phase 1** (~Sprint 34–35): Kelly-inspired sizing within existing Risk Manager boundary
+- **Phase 2** (~Sprint 38+): Full AllocationIntelligence unification, Hard Floor as separate non-bypassable layer
+- **Hard Floor** (non-overridable in all phases): circuit breakers, position size floor (0.25R), concentration limits, buying power check
+
+### 15.11 Config
 
 `config/experiments.yaml`:
 ```yaml
@@ -2611,7 +2630,7 @@ runner:
 variants: []  # List of {pattern_name, params} to spawn as shadow strategies
 ```
 
-### 15.10 Directory Structure
+### 15.12 Directory Structure
 
 ```
 intelligence/experiments/

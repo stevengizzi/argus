@@ -1096,13 +1096,15 @@ This is the most significant non-Phase-8 gate because **live trading with real c
 
 ## 6. Phase 7: Infrastructure Unification (Sprint 32)
 
-*Parameterized strategy templates and experiment infrastructure delivered in a single combined sprint (Sprint 32, merged from original 32+32.5). BacktestEngine already complete (Sprint 27). Research Console deferred to post-32 per DEC-379. Target: ~2 weeks.*
+*Parameterized strategy templates and experiment infrastructure delivered across Sprint 32 (merged from original 32+32.5) and Sprint 32.5 (Experiment Pipeline Completion + Visibility). BacktestEngine already complete (Sprint 27). Research Console deferred to post-32 per DEC-379. Both sprints complete as of April 1, 2026.*
 
 ---
 
 ### Sprint 32: Parameterized Templates + Experiment Pipeline (merged 32+32.5)
 
-> **NOTE (April 1, 2026):** Sprint 32 now absorbs the original Sprint 32.5 (Experiment Registry + Promotion Pipeline) scope per planning session. Sprint 32.5 no longer exists as a standalone sprint.
+> **STATUS (April 1, 2026): COMPLETE.** Sprint 32 delivered the core experiment pipeline. Sprint 32.5 delivered completion and visibility (exit params as variant dimensions, BacktestEngine all 7 patterns, Shadow Trades tab, Experiments 9th page, Allocation Intelligence vision). Phase 7 Gate now pending.
+>
+> **NOTE (April 1, 2026, planning):** Sprint 32 originally absorbed Sprint 32.5 scope per planning session. Sprint 32.5 was subsequently run as a separate 8-session sprint due to scope remaining after Sprint 32.
 
 **Type:** C (Architecture-Shifting) | **Modes:** Adversarial Review, Iterative Judgment Loop
 **Duration:** ~5–7 days | **Sessions:** 8 (4–5 backend, 2–3 frontend)

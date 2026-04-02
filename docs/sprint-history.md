@@ -35,6 +35,7 @@
 | Pattern Expansion I | 29 | Mar 30–31 | PatternParam, 5 new PatternModule patterns (DnR, HOD, GnG, ABCD, PMH), 12 active strategies |
 | Post-Session Sweep | 29.5 | Mar 31–Apr 1 | Flatten safety, paper data-capture mode, MFE/MAE tracking, ORB Scalp fix, UI fixes |
 | AC — Parameterized Templates | 32 | Apr 1, 2026 | Pattern factory, parameter fingerprint, experiment pipeline, variant spawner, promotion evaluator |
+| AD — Experiment Pipeline Completion | 32.5 | Apr 1, 2026 | Exit params as variant dimensions, BacktestEngine all 7 patterns, Shadow Trades tab, Experiments 9th page, allocation intelligence vision |
 
 ---
 
@@ -2281,12 +2282,48 @@
 
 ---
 
+---
+
+## Sprint 32.5: Experiment Pipeline Completion + Visibility (April 1, 2026)
+
+**Goal:** Complete the experiment pipeline (exit params as variant dimensions, all 7 patterns in BacktestEngine), add REST API visibility for shadow positions and experiment variants, build UI surfaces (Shadow Trades tab + Experiments Dashboard), and document the Adaptive Capital Intelligence vision.
+
+**Starting state:** 4,405 pytest + 700 Vitest. 12 active strategies.
+**Ending state:** 4,489 pytest + 713 Vitest (+84 pytest, +13 Vitest). Vitest pre-existing failures: 3 (GoalTracker, DEF-136).
+**Sessions:** 8 (S1–S7 + S8 doc-sync) + S6f (visual review fix)
+**Execution mode:** Human-in-the-loop
+**New DECs:** None — all design decisions followed established patterns.
+**DEF items resolved:** DEF-131, DEF-132, DEF-133, DEF-134
+**DEF items created:** DEF-135 (visual verification deferred), DEF-136 (GoalTracker pre-existing failures)
+**New files:** 12 (test_exit_params.py, test_engine_new_patterns.py, test_engine_refdata_patterns.py, ExperimentsPage.tsx, ExperimentsPage.test.tsx, useExperiments.ts, useShadowTrades.ts, ShadowTradesTab.tsx, ShadowTradesTab.test.tsx, docs/architecture/allocation-intelligence-vision.md, plus test updates)
+**Modified files:** ~22 (config.py, models.py, factory.py, store.py, spawner.py, runner.py, backtest/config.py, backtest/engine.py, counterfactual_store.py, routes/counterfactual.py, routes/experiments.py, api/types.ts, api/client.ts, App.tsx, AppShell.tsx, Sidebar.tsx, MobileNav.tsx, MoreSheet.tsx, TradesPage.tsx, plus test files)
+
+**Sprint deliverables:**
+- **DEF-132 S1 — Exit params data model:** `ExitSweepParam` Pydantic model (name, path, min_value, max_value, step), `exit_sweep_params` on ExperimentConfig, `exit_overrides: dict[str, Any] | None` on VariantDefinition, `exit_overrides TEXT` column migration in ExperimentStore, fingerprint expansion to cover exit dimensions (backward-compat when None).
+- **DEF-132 S2 — Spawner + runner exit grid:** `_dotpath_to_nested()` helper, spawner exit_overrides wiring via `deep_update()`, `_exit_overrides` on spawned strategy instance; `_generate_exit_values()` in runner, `generate_parameter_grid()` exit × detection cross-product when `exit_sweep_params` non-empty.
+- **DEF-134 S3 — 3 straightforward patterns:** `DIP_AND_RIP`, `HOD_BREAK`, `ABCD` added to `StrategyType` enum and BacktestEngine strategy factory. ABCD O(n³) DEF-122 comment preserved.
+- **DEF-134 S4 — 2 reference-data patterns:** `GAP_AND_GO`, `PREMARKET_HIGH_BREAK` added; `_derive_prior_closes()` derives prior-day closes from Parquet; `_supply_daily_reference_data()` feeds prior_closes to patterns each day. All 7 patterns now runnable via `scripts/run_experiment.py`.
+- **DEF-131 S5 — REST API enrichment:** `CounterfactualStore.query_positions()` + `count_positions()` + `variant_id` column migration; `ExperimentStore.query_variants_with_metrics()` + `query_promotion_events()` + `count_promotion_events()`; 3 new endpoints: `GET /api/v1/counterfactual/positions`, `GET /api/v1/experiments/variants`, `GET /api/v1/experiments/promotions`.
+- **DEF-131 S6 — Shadow Trades UI:** `ShadowTrade` + `ShadowTradesResponse` TypeScript interfaces, `getShadowTrades()` client function, `useShadowTrades()` TanStack hook (30s polling), `ShadowTradesTab` component (filter bar, 13-column table, pagination, empty state), tab bar on TradesPage (Live | Shadow). Empty state bug fixed in S6f (CSS hidden-class pattern instead of conditional mount).
+- **DEF-131 S7 — Experiments Dashboard:** `useExperimentVariants()` + `usePromotionEvents()` hooks, `ExperimentsPage` component (variant status table grouped by pattern, sortable columns, promotion event log, pattern comparison on group-header click, disabled/empty states), Experiments added as 9th page (route `/experiments`, keyboard shortcut `9`, FlaskConical icon in Sidebar/MobileNav/MoreSheet).
+- **DEF-133 S8 — Allocation Intelligence vision:** `docs/architecture/allocation-intelligence-vision.md` — 9-section architectural vision for `AllocationIntelligence` service. Covers: problem statement (stacked guardrails suboptimal), vision (continuous sizing output), 6 input dimensions (edge/uncertainty, portfolio correlation, opportunity cost, time-of-day, drawdown response, variant track record), phased roadmap (Phase 0 current → Phase 1 ~Sprint 34–35 Kelly-inspired → Phase 2 ~Sprint 38+ full unification), data requirements, architectural sketch, interface design, Hard Floor definition, component relationships.
+
+**Session verdicts:** S1 APPROVED → S2 CLEAR → S3 CLEAR → S4 CLEAR → S5 CLEAR → S6 CLEAR → S6f CLEAN → S7 CLEAR → S8 (docs-only)
+
+**Key learnings:**
+- BacktestEngine reference data supply (prior closes for GapAndGo/PreMarketHighBreak) required a new `_supply_daily_reference_data()` daily hook — patterns that don't use it get a no-op call with negligible cost.
+- Tab visibility via CSS `hidden` class (not conditional mount) prevents state loss on tab switch — the Shadow Trades filter state was reset on every mount/unmount.
+- No divider added between System and Experiments in Sidebar — adding it would have broken Sidebar.test.tsx's assertion of exactly 3 dividers.
+- `retry: false` on experiment hooks is correct: 503 "disabled" state shouldn't retry-spam a backend that will always return 503.
+
+---
+
 ## Sprint Statistics
 
-- **Total sprints:** 32 full + 38 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9, 27.5, 27.6, 27.65, 27.7, 27.75, 27.8, 27.9, 27.95, 28.5, 28.75, 29, 29.5)
-- **Total sessions:** ~464+ Claude Code sessions
-- **Total tests:** ~4,405 pytest + 700 Vitest = ~5,105 total
-- **Total decisions:** 381 (DEC-001 through DEC-381; no new DECs in Sprints 32 or 29.5)
+- **Total sprints:** 32 full + 39 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9, 27.5, 27.6, 27.65, 27.7, 27.75, 27.8, 27.9, 27.95, 28.5, 28.75, 29, 29.5, 32.5)
+- **Total sessions:** ~474+ Claude Code sessions
+- **Total tests:** ~4,489 pytest + 713 Vitest = ~5,202 total
+- **Total decisions:** 381 (DEC-001 through DEC-381; no new DECs in Sprints 29.5, 32, or 32.5)
 - **Calendar days (active dev):** ~47 (Feb 14 – Apr 1, 2026)
 - **Largest sprint:** 22 (9 implementation + 5 fix + 9 reviews, largest scope)
 - **Cleanest sprint:** 23 (11 sessions, 0 regressions, 0 scope gaps requiring follow-up)

@@ -1,13 +1,13 @@
 # ARGUS — Claude Code Context
 
 > Dense, actionable context for Claude Code sessions. No history — see `docs/` for that.
-> Last updated: April 1, 2026 (Sprint 32 doc sync — Parameterized Templates + Experiment Pipeline)
+> Last updated: April 1, 2026 (Sprint 32.5 doc sync — Experiment Pipeline Completion + Visibility)
 
 ## Active Sprint
 
-**Active sprint: 32.5 (Experiment Pipeline Completion + Visibility).** 8 sessions. Scope: DEF-131 (Experiments + Counterfactual UI), DEF-132 (Exit params as variant dimensions), DEF-134 (BacktestEngine all 7 patterns), DEF-133 (Adaptive Capital Intelligence vision document).
+**Active sprint: 31A (Pattern Expansion III — reach 15 strategies).**
 
-Last completed sprint: **32 (Parameterized Templates + Experiment Pipeline)** — YAML→constructor wiring for 7 PatternModule patterns, generic pattern factory, parameter fingerprint, variant spawner, ExperimentStore (SQLite), backtest pre-filter via BacktestEngine, autonomous PromotionEvaluator, CLI + REST API. +193 pytest. Config-gated via `experiments.enabled`. DEF-121 resolved.
+Last completed sprint: **32.5 (Experiment Pipeline Completion + Visibility)** — exit params as variant dimensions (DEF-132), BacktestEngine all 7 patterns (DEF-134), 3 new REST endpoints, Shadow Trades tab on Trade Log, Experiments page as 9th Command Center page (DEF-131), Adaptive Capital Intelligence vision document (DEF-133). +84 pytest, +13 Vitest. No new DECs.
 
 ### Roadmap Amendments Adopted (DEC-357, DEC-358)
 Two roadmap amendments adopted March 23, 2026 adding 5 new sprint slots:
@@ -17,9 +17,9 @@ Two roadmap amendments adopted March 23, 2026 adding 5 new sprint slots:
 - **32.5** (Experiment Registry + Promotion Pipeline): Partitioned SQLite registry, cohort-based promotion, simulated-paper screening, overnight experiment queue, kill switches, anti-fragility
 - **33.5** (Adversarial Stress Testing): Historical crisis replay + synthetic stress scenarios as PromotionPipeline gate
 Amendment docs: `docs/amendments/roadmap-amendment-experiment-infrastructure.md`, `docs/amendments/roadmap-amendment-intelligence-architecture.md`
-Build track: ~~21.6~~ ✅ → ~~27.5~~ ✅ → ~~27.6~~ ✅ → ~~27.7~~ ✅ → ~~27.75~~ ✅ → ~~27.8~~ ✅ → ~~27.9~~ ✅ → ~~27.95~~ ✅ → ~~28~~ ✅ → ~~28.5~~ ✅ → ~~28.75~~ ✅ → ~~29~~ ✅ → ~~29.5~~ ✅ → **32** → 31A → 30 → 31.5 → 33 → 33.5 → 34 → 35–41
-DEC ranges reserved: 382–395 (Sprint 32), 396–402 (33.5)
-DEF items: DEF-129 (non-PatternModule variant support), DEF-130 (intraday parameter adaptation), DEF-131 (Experiments UI page), DEF-132 (variant-specific exit management), DEF-133 (per-variant capital allocation)
+Build track: ~~21.6~~ ✅ → ~~27.5~~ ✅ → ~~27.6~~ ✅ → ~~27.7~~ ✅ → ~~27.75~~ ✅ → ~~27.8~~ ✅ → ~~27.9~~ ✅ → ~~27.95~~ ✅ → ~~28~~ ✅ → ~~28.5~~ ✅ → ~~28.75~~ ✅ → ~~29~~ ✅ → ~~29.5~~ ✅ → ~~32~~ ✅ → ~~32.5~~ ✅ → **31A** → 30 → 31.5 → 33 → 33.5 → 34 → 35–41
+DEC ranges reserved: 396–402 (33.5)
+DEF items: DEF-129 (non-PatternModule variant support), DEF-130 (intraday parameter adaptation)
 RSK items: RSK-049 (shadow variant throughput impact), RSK-050 (promotion oscillation)
 
 ### Known Issues
@@ -29,11 +29,11 @@ RSK items: RSK-049 (shadow variant throughput impact), RSK-050 (promotion oscill
 
 ## Current State
 
-- **Active sprint:** 32.5 (Experiment Pipeline Completion + Visibility — 8 sessions)
-- **Tests:** ~4,405 pytest + 700 Vitest (1 pre-existing Vitest failure in GoalTracker.test.tsx, 0 pre-existing pytest failures)
+- **Active sprint:** 31A (Pattern Expansion III — reach 15 strategies)
+- **Tests:** ~4,489 pytest + 713 Vitest (3 pre-existing Vitest failures in GoalTracker.test.tsx — DEF-136, 0 pre-existing pytest failures)
 - **Strategies:** 12 active (ORB Breakout, ORB Scalp, VWAP Reclaim, Afternoon Momentum, Red-to-Green, Bull Flag, Flat-Top Breakout, Dip-and-Rip, HOD Break, Gap-and-Go, ABCD, Pre-Market High Break)
 - **Infrastructure:** Databento EQUS.MINI (live) + IBKR paper trading (Account U24619949) + FMP Starter (scanning + reference data + daily bars for regime) + Finnhub (news + analyst recs) + Claude API (Copilot + Catalyst Classification) + Universe Manager (config-gated) + Catalyst Pipeline (config-gated) + Intelligence Polling Loop (config-gated) + Reference Data Cache + Quality Engine (config-gated) + Dynamic Position Sizer + Strategy Evaluation Telemetry (ring buffer + SQLite persistence) + Debrief Export (shutdown automation) + Evaluation Framework (MultiObjectiveResult, EnsembleResult, comparison API, slippage model) + Regime Intelligence (RegimeVector 11-field, 8 calculators, config-gated, Sprints 27.6 + 27.9) + VIX Data Service (yfinance daily VIX/SPX, 5 derived metrics, SQLite cache, config-gated, Sprint 27.9) + Counterfactual Engine (shadow position tracking, filter accuracy, shadow strategy mode, overflow routing, config-gated, Sprints 27.7 + 27.95) + Learning Loop V1 (OutcomeCollector, WeightAnalyzer, ThresholdAnalyzer, CorrelationAnalyzer, LearningService, ConfigProposalManager, LearningStore, config-gated, Sprint 28) + Exit Management (trailing stops ATR/percent/fixed, exit escalation, belt-and-suspenders, config-gated per strategy, Sprint 28.5) + ThrottledLogger (log rate-limiting, Sprint 27.75) + Paper trading config overrides (10x risk reduction, throttle disabled, $10 min risk floor, Sprint 27.75) + Broker-confirmed reconciliation (Sprint 27.95) + Overflow routing (config-gated, Sprint 27.95)
-- **Frontend:** 8-page Command Center (Observatory added Sprint 25) + AI Copilot + Universe Status Card + Intelligence Brief View (all active), Tauri desktop + PWA mobile
+- **Frontend:** 9-page Command Center (Experiments page added Sprint 32.5, Shadow Trades tab added to Trade Log) + AI Copilot + Universe Status Card + Intelligence Brief View (all active), Tauri desktop + PWA mobile
 
 ## Project Structure
 
@@ -357,7 +357,12 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 | DEF-126 | Regime-strategy interaction profiles | Sprint 32.5 (Experiment Registry) | Per-strategy regime sensitivity tuning. Needs RegimeVector × strategy performance matrix. Each strategy should have its own regime sensitivity profile rather than treating all strategies equally within a regime. |
 | DEF-127 | Virtual scrolling for trades table | Unscheduled | TradesPage limit raised from 250 to 1000 (Sprint 29.5 S3). Full virtual scrolling (react-virtual) deferred until 1000 becomes insufficient. |
 | DEF-128 | IBKR error 404 root cause: multi-position qty divergence prevention | Sprint 30 | When Argus tracks multiple positions on the same symbol, IBKR merges them. Partial closes can cause qty mismatch. Sprint 29.5 S1 added re-query-qty fix; preventing the divergence in the first place is a deeper fix. |
-| DEF-134 | BacktestEngine strategy type support for all 7 PatternModule patterns | Sprint 32.5 | ExperimentRunner uses BacktestEngine for pre-filter sweeps. Currently only bull_flag + flat_top_breakout are supported as BacktestEngine strategy types (via strategy factory in engine.py). Missing: dip_and_rip, hod_break, gap_and_go, abcd, premarket_high_break. Experiment pipeline is only 29% functional without this. Priority: HIGH. Discovered: Sprint 32 S6. |
+| ~~DEF-131~~ | ~~Experiments + Counterfactual Visibility (API + UI)~~ | — | **RESOLVED** (Sprint 32.5 S5+S6+S6f+S7): 3 new REST endpoints (`/counterfactual/positions`, `/experiments/variants`, `/experiments/promotions`) + Shadow Trades tab on Trade Log + Experiments page as 9th Command Center page. |
+| ~~DEF-132~~ | ~~Exit Parameters as Variant Dimensions~~ | — | **RESOLVED** (Sprint 32.5 S1+S2): `ExitSweepParam` Pydantic model, `exit_overrides` on `VariantDefinition`, fingerprint expansion, spawner `deep_update` wiring, runner exit grid cross-product. |
+| ~~DEF-133~~ | ~~Adaptive Capital Intelligence Vision Document~~ | — | **RESOLVED** (Sprint 32.5 S8): `docs/architecture/allocation-intelligence-vision.md` — 9-section vision for replacing stacked guardrails with unified `AllocationIntelligence` service. Phase 1 (~Sprint 34–35), Phase 2 (~Sprint 38+). |
+| ~~DEF-134~~ | ~~BacktestEngine strategy type support for all 7 PatternModule patterns~~ | — | **RESOLVED** (Sprint 32.5 S3+S4): `StrategyType` enum extended to all 7 patterns; `_supply_daily_reference_data()` added for GapAndGo/PreMarketHighBreak. All patterns runnable via `scripts/run_experiment.py`. |
+| DEF-135 | Full visual verification of Shadow Trades tab + Experiments page with live data | Unscheduled | S6 visual items 2–5 (table styling, rejection badges, grade badges, P&L coloring) and S7 visual items 2–5 (variant table, promotion log, pattern comparison) untestable until counterfactual positions and experiment variants accumulate during paper trading. Verify after first week with `experiments.enabled=true`. |
+| DEF-136 | GoalTracker.test.tsx — 3 pre-existing Vitest failures | Unscheduled | `getByText` ambiguity + date arithmetic ("Ahead of pace" vs "Behind pace"). Tracked since Sprint 32; surfaced explicitly in Sprint 32.5. Priority: LOW. |
 
 ## Reference
 

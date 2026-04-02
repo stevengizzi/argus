@@ -1,7 +1,7 @@
 # ARGUS — Decision Index
 
-> 377 decisions (DEC-001 through DEC-377)
-> Generated: March 28, 2026 | Source: `docs/decision-log.md`
+> 381 decisions (DEC-001 through DEC-381)
+> Generated: April 1, 2026 (Sprint 32.5 doc sync — no new DECs in Sprint 32.5) | Source: `docs/decision-log.md`
 > Legend: ● Active | ○ Superseded | △ Amended | ✗ Duplicate entry
 
 
