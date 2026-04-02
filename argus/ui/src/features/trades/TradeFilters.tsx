@@ -107,119 +107,89 @@ export function TradeFilters({ filters, onFiltersChange }: TradeFiltersProps) {
   ], [allTradesData?.total_count, winsData?.total_count, lossesData?.total_count, beData?.total_count]);
 
   return (
-    <div className="bg-argus-surface-2/50 border border-argus-border rounded-lg px-4 py-2">
-      <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:gap-3">
-        {/* Strategy dropdown */}
-        <div className="flex-1 min-w-0 lg:max-w-[200px]">
-          <label className="block text-xs text-argus-text-dim uppercase tracking-wide mb-1">
-            Strategy
-          </label>
-          <select
-            value={strategy_id || ''}
-            onChange={(e) => onFiltersChange({ strategy_id: e.target.value || undefined })}
-            className="w-full bg-argus-surface-2 border border-argus-border rounded-md px-3 py-1.5 text-sm text-argus-text focus:outline-none focus:ring-1 focus:ring-argus-accent"
-          >
-            <option value="">All Strategies</option>
-            {strategiesData?.strategies.map((s) => (
-              <option key={s.strategy_id} value={s.strategy_id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
-        </div>
+    <div className="bg-argus-surface-2/50 border border-argus-border rounded-lg px-4 py-2 flex flex-wrap items-center gap-2">
+      {/* Strategy dropdown */}
+      <select
+        value={strategy_id || ''}
+        onChange={(e) => onFiltersChange({ strategy_id: e.target.value || undefined })}
+        className="h-8 bg-argus-surface-2 border border-argus-border rounded-md px-3 text-sm text-argus-text focus:outline-none focus:ring-1 focus:ring-argus-accent"
+      >
+        <option value="">All Strategies</option>
+        {strategiesData?.strategies.map((s) => (
+          <option key={s.strategy_id} value={s.strategy_id}>
+            {s.name}
+          </option>
+        ))}
+      </select>
 
-        {/* Outcome segmented tab */}
-        <div className="w-full lg:w-auto lg:flex-shrink-0">
-          <label className="block text-xs text-argus-text-dim uppercase tracking-wide mb-1">
-            Outcome
-          </label>
-          <SegmentedTab
-            segments={outcomeSegments}
-            activeValue={outcome}
-            onChange={(value) => onFiltersChange({ outcome: value as OutcomeFilter })}
-            size="sm"
-            layoutId="trade-outcome-filter"
-          />
-        </div>
+      {/* Outcome segmented tab */}
+      <SegmentedTab
+        segments={outcomeSegments}
+        activeValue={outcome}
+        onChange={(value) => onFiltersChange({ outcome: value as OutcomeFilter })}
+        size="sm"
+        layoutId="trade-outcome-filter"
+      />
 
-        {/* Date range with quick filters */}
-        <div className="flex flex-col gap-2 w-full lg:flex-1">
-          <div className="flex gap-3">
-            <div className="flex-1 min-w-0">
-              <label className="block text-xs text-argus-text-dim uppercase tracking-wide mb-1">
-                From
-              </label>
-              <input
-                type="date"
-                value={date_from || ''}
-                onChange={(e) => {
-                  const newFrom = e.target.value || undefined;
-                  // Clear quick filter when manually changing dates
-                  setQuickFilter('all');
-                  // Clear "To" if new "From" is after current "To"
-                  if (newFrom && date_to && newFrom > date_to) {
-                    onFiltersChange({ date_from: newFrom, date_to: undefined });
-                  } else {
-                    onFiltersChange({ date_from: newFrom });
-                  }
-                }}
-                className="w-full bg-argus-surface-2 border border-argus-border rounded-md px-2 py-1.5 text-sm text-argus-text focus:outline-none focus:ring-1 focus:ring-argus-accent"
-              />
-            </div>
-            <div className="flex-1 min-w-0">
-              <label className="block text-xs text-argus-text-dim uppercase tracking-wide mb-1">
-                To
-              </label>
-              <input
-                type="date"
-                value={date_to || ''}
-                min={date_from || ''}
-                onChange={(e) => {
-                  const newTo = e.target.value || undefined;
-                  // Clear quick filter when manually changing dates
-                  setQuickFilter('all');
-                  // Reject if To is before From (iOS Safari ignores min attribute)
-                  if (newTo && date_from && newTo < date_from) {
-                    return;
-                  }
-                  onFiltersChange({ date_to: newTo });
-                }}
-                className="w-full bg-argus-surface-2 border border-argus-border rounded-md px-2 py-1.5 text-sm text-argus-text focus:outline-none focus:ring-1 focus:ring-argus-accent"
-              />
-            </div>
-          </div>
+      {/* Time preset buttons */}
+      {(['today', 'week', 'month', 'all'] as const).map((label) => (
+        <button
+          key={label}
+          onClick={() => handleQuickFilter(label)}
+          className={`h-8 px-3 text-xs rounded transition-colors ${
+            quickFilter === label
+              ? 'bg-argus-accent text-white'
+              : 'bg-argus-surface-2 text-argus-text-dim hover:text-argus-text hover:bg-argus-surface-3'
+          }`}
+          data-testid={`quick-filter-${label}`}
+        >
+          {label === 'today' ? 'Today' : label === 'week' ? 'Week' : label === 'month' ? 'Month' : 'All'}
+        </button>
+      ))}
 
-          {/* Quick date filter buttons */}
-          <div className="flex items-center gap-1">
-            {(['today', 'week', 'month', 'all'] as const).map((label) => (
-              <button
-                key={label}
-                onClick={() => handleQuickFilter(label)}
-                className={`px-3 py-1 text-xs rounded transition-colors ${
-                  quickFilter === label
-                    ? 'bg-argus-accent text-white'
-                    : 'bg-argus-surface-2 text-argus-text-dim hover:text-argus-text hover:bg-argus-surface-3'
-                }`}
-                data-testid={`quick-filter-${label}`}
-              >
-                {label === 'today' ? 'Today' : label === 'week' ? 'Week' : label === 'month' ? 'Month' : 'All'}
-              </button>
-            ))}
+      {/* Date range */}
+      <input
+        type="date"
+        aria-label="From date"
+        value={date_from || ''}
+        onChange={(e) => {
+          const newFrom = e.target.value || undefined;
+          setQuickFilter('all');
+          if (newFrom && date_to && newFrom > date_to) {
+            onFiltersChange({ date_from: newFrom, date_to: undefined });
+          } else {
+            onFiltersChange({ date_from: newFrom });
+          }
+        }}
+        className="h-8 bg-argus-surface-2 border border-argus-border rounded-md px-3 text-sm text-argus-text focus:outline-none focus:ring-1 focus:ring-argus-accent"
+      />
+      <input
+        type="date"
+        aria-label="To date"
+        value={date_to || ''}
+        min={date_from || ''}
+        onChange={(e) => {
+          const newTo = e.target.value || undefined;
+          setQuickFilter('all');
+          if (newTo && date_from && newTo < date_from) {
+            return;
+          }
+          onFiltersChange({ date_to: newTo });
+        }}
+        className="h-8 bg-argus-surface-2 border border-argus-border rounded-md px-3 text-sm text-argus-text focus:outline-none focus:ring-1 focus:ring-argus-accent"
+      />
 
-            {/* Clear all filters button */}
-            {hasActiveFilters && (
-              <button
-                onClick={handleClearFilters}
-                className="ml-auto flex items-center gap-1 px-2 py-1 text-xs text-argus-text-dim hover:text-argus-text transition-colors"
-                title="Clear all filters"
-              >
-                <X className="w-3 h-3" />
-                Clear
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
+      {/* Clear all filters button */}
+      {hasActiveFilters && (
+        <button
+          onClick={handleClearFilters}
+          className="h-8 flex items-center gap-1 px-2 text-xs text-argus-text-dim hover:text-argus-text transition-colors"
+          title="Clear all filters"
+        >
+          <X className="w-3 h-3" />
+          Clear
+        </button>
+      )}
     </div>
   );
 }

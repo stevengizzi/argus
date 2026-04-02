@@ -53,7 +53,7 @@ export function VitalsStrip({ todayStats }: VitalsStripProps) {
         ? 'var(--color-argus-loss)'
         : 'var(--color-argus-text-dim)';
 
-  const trades = todayStats?.trade_count ?? 0;
+  const trades = accountData?.daily_trades_count ?? 0;
   const winRate = todayStats?.win_rate ?? 0;
   const avgR = todayStats?.avg_r ?? 0;
   const bestTrade = todayStats?.best_trade ?? null;

@@ -227,11 +227,11 @@ function ShadowFilters({
   ];
 
   return (
-    <div className="flex flex-wrap gap-2 items-center">
+    <div className="bg-argus-surface-2/50 border border-argus-border rounded-lg px-4 py-2 flex flex-wrap items-center gap-2">
       {/* Strategy selector */}
       <select
         aria-label="Strategy"
-        className="bg-argus-surface border border-argus-border rounded-md px-3 py-1.5 text-sm text-argus-text focus:outline-none focus:ring-1 focus:ring-argus-accent"
+        className="h-8 bg-argus-surface-2 border border-argus-border rounded-md px-3 text-sm text-argus-text focus:outline-none focus:ring-1 focus:ring-argus-accent"
         value={filters.strategy_id ?? ''}
         onChange={(e) => onFiltersChange({ strategy_id: e.target.value || undefined })}
       >
@@ -246,7 +246,7 @@ function ShadowFilters({
       {/* Rejection stage selector */}
       <select
         aria-label="Rejection Stage"
-        className="bg-argus-surface border border-argus-border rounded-md px-3 py-1.5 text-sm text-argus-text focus:outline-none focus:ring-1 focus:ring-argus-accent"
+        className="h-8 bg-argus-surface-2 border border-argus-border rounded-md px-3 text-sm text-argus-text focus:outline-none focus:ring-1 focus:ring-argus-accent"
         value={filters.rejection_stage ?? ''}
         onChange={(e) => onFiltersChange({ rejection_stage: e.target.value || undefined })}
       >
@@ -272,7 +272,7 @@ function ShadowFilters({
         <button
           key={label}
           onClick={() => onQuickFilterChange(label)}
-          className={`px-3 py-1 text-xs rounded transition-colors ${
+          className={`h-8 px-3 text-xs rounded transition-colors ${
             quickFilter === label
               ? 'bg-argus-accent text-white'
               : 'bg-argus-surface-2 text-argus-text-dim hover:text-argus-text hover:bg-argus-surface-3'
@@ -293,7 +293,7 @@ function ShadowFilters({
       <input
         type="date"
         aria-label="From date"
-        className="bg-argus-surface border border-argus-border rounded-md px-3 py-1.5 text-sm text-argus-text focus:outline-none focus:ring-1 focus:ring-argus-accent"
+        className="h-8 bg-argus-surface-2 border border-argus-border rounded-md px-3 text-sm text-argus-text focus:outline-none focus:ring-1 focus:ring-argus-accent"
         value={filters.date_from ?? ''}
         onChange={(e) => onFiltersChange({ date_from: e.target.value || undefined })}
         data-testid="shadow-date-from"
@@ -301,7 +301,7 @@ function ShadowFilters({
       <input
         type="date"
         aria-label="To date"
-        className="bg-argus-surface border border-argus-border rounded-md px-3 py-1.5 text-sm text-argus-text focus:outline-none focus:ring-1 focus:ring-argus-accent"
+        className="h-8 bg-argus-surface-2 border border-argus-border rounded-md px-3 text-sm text-argus-text focus:outline-none focus:ring-1 focus:ring-argus-accent"
         value={filters.date_to ?? ''}
         onChange={(e) => onFiltersChange({ date_to: e.target.value || undefined })}
         data-testid="shadow-date-to"
@@ -546,9 +546,13 @@ export function ShadowTradesTab({ enabled = true }: ShadowTradesTabProps) {
 
   const sentinelRef = useRef<HTMLDivElement>(null);
 
+  // CounterfactualStore uses raw string comparison on opened_at (ISO datetime).
+  // Append end-of-day time to date_to so records with a time component are included.
+  const apiDateTo = filters.date_to ? `${filters.date_to}T23:59:59` : filters.date_to;
+
   // Accumulate pages; deduplicate by position_id to handle keepPreviousData stale returns
   const { data, isLoading, isFetching, error } = useShadowTrades(
-    { ...filters, limit: PAGE_SIZE, offset },
+    { ...filters, date_to: apiDateTo, limit: PAGE_SIZE, offset },
     enabled,
   );
 
@@ -592,11 +596,12 @@ export function ShadowTradesTab({ enabled = true }: ShadowTradesTabProps) {
 
   const handleQuickFilterChange = useCallback(
     (label: QuickFilter) => {
+      if (label === quickFilter) return;
       setQuickFilter(label);
       const { dateFrom, dateTo } = computeDateRangeForQuickFilter(label);
       updateFilters({ date_from: dateFrom, date_to: dateTo });
     },
-    [updateFilters]
+    [updateFilters, quickFilter]
   );
 
   const handleSort = useCallback(

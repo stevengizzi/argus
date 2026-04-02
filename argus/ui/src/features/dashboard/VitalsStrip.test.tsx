@@ -119,7 +119,7 @@ describe('VitalsStrip', () => {
     expect(screen.getByText("Today's Stats")).toBeTruthy();
     expect(screen.getByText('Trades')).toBeTruthy();
     expect(screen.getByText('Win Rate')).toBeTruthy();
-    expect(screen.getByText('7')).toBeTruthy();
+    expect(screen.getByText('5')).toBeTruthy();
     expect(screen.getByText('71.0%')).toBeTruthy();
   });
 
@@ -131,7 +131,7 @@ describe('VitalsStrip', () => {
 
   it('shows dash placeholders when no todayStats provided', () => {
     renderVitalsStrip();
-    // trade_count defaults to 0, ratios show dash
-    expect(screen.getByText('0')).toBeTruthy();
+    // trades comes from accountData.daily_trades_count (5 in mock); ratios show dash
+    expect(screen.getByText('5')).toBeTruthy();
   });
 });

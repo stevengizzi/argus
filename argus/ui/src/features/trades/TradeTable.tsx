@@ -191,12 +191,12 @@ export function TradeTable({
           <thead className="sticky top-0 z-10">
             <tr className="bg-argus-surface-2">
               {/* Phone: combined date/symbol column */}
-              <th className="lg:hidden px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-left">
+              <th className="lg:hidden px-3 py-2 text-xs font-medium uppercase tracking-wide text-argus-text-dim text-left">
                 Trade
               </th>
               {/* Desktop: separate date column — sortable by entry_time */}
               <th
-                className={`hidden lg:table-cell w-[100px] px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-left ${sortableClass}`}
+                className={`hidden lg:table-cell w-[100px] px-3 py-2 text-xs font-medium uppercase tracking-wide text-argus-text-dim text-left ${sortableClass}`}
                 onClick={() => handleSort('entry_time')}
                 data-testid="sort-entry_time"
               >
@@ -204,7 +204,7 @@ export function TradeTable({
               </th>
               {/* Desktop: separate symbol column — sortable */}
               <th
-                className={`hidden lg:table-cell w-[80px] px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-left ${sortableClass}`}
+                className={`hidden lg:table-cell w-[80px] px-3 py-2 text-xs font-medium uppercase tracking-wide text-argus-text-dim text-left ${sortableClass}`}
                 onClick={() => handleSort('symbol')}
                 data-testid="sort-symbol"
               >
@@ -212,7 +212,7 @@ export function TradeTable({
               </th>
               {/* Tablet+: strategy — sortable */}
               <th
-                className={`hidden md:table-cell w-[70px] px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-left ${sortableClass}`}
+                className={`hidden md:table-cell w-[70px] px-3 py-2 text-xs font-medium uppercase tracking-wide text-argus-text-dim text-left ${sortableClass}`}
                 onClick={() => handleSort('strategy')}
                 data-testid="sort-strategy"
               >
@@ -220,23 +220,23 @@ export function TradeTable({
               </th>
               {/* Desktop only: side — sortable */}
               <th
-                className={`hidden lg:table-cell w-[55px] px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-left ${sortableClass}`}
+                className={`hidden lg:table-cell w-[55px] px-3 py-2 text-xs font-medium uppercase tracking-wide text-argus-text-dim text-left ${sortableClass}`}
                 onClick={() => handleSort('side')}
                 data-testid="sort-side"
               >
                 Side{sortIndicator('side')}
               </th>
               {/* Tablet+: entry price */}
-              <th className="hidden md:table-cell w-[85px] px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-right">
+              <th className="hidden md:table-cell w-[85px] px-3 py-2 text-xs font-medium uppercase tracking-wide text-argus-text-dim text-right">
                 Entry
               </th>
               {/* Tablet+: exit price */}
-              <th className="hidden md:table-cell w-[85px] px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-right">
+              <th className="hidden md:table-cell w-[85px] px-3 py-2 text-xs font-medium uppercase tracking-wide text-argus-text-dim text-right">
                 Exit
               </th>
               {/* All: P&L — sortable */}
               <th
-                className={`w-[90px] px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-right ${sortableClass}`}
+                className={`w-[90px] px-3 py-2 text-xs font-medium uppercase tracking-wide text-argus-text-dim text-right ${sortableClass}`}
                 onClick={() => handleSort('pnl')}
                 data-testid="sort-pnl"
               >
@@ -244,19 +244,19 @@ export function TradeTable({
               </th>
               {/* Tablet+: R-multiple — sortable */}
               <th
-                className={`hidden md:table-cell w-[60px] px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-right ${sortableClass}`}
+                className={`hidden md:table-cell w-[60px] px-3 py-2 text-xs font-medium uppercase tracking-wide text-argus-text-dim text-right ${sortableClass}`}
                 onClick={() => handleSort('r_multiple')}
                 data-testid="sort-r_multiple"
               >
                 R{sortIndicator('r_multiple')}
               </th>
               {/* Desktop only: shares */}
-              <th className="hidden lg:table-cell w-[65px] px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-right">
+              <th className="hidden lg:table-cell w-[65px] px-3 py-2 text-xs font-medium uppercase tracking-wide text-argus-text-dim text-right">
                 Shares
               </th>
               {/* Tablet+: quality grade — sortable */}
               <th
-                className={`hidden md:table-cell w-[60px] px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-center ${sortableClass}`}
+                className={`hidden md:table-cell w-[60px] px-3 py-2 text-xs font-medium uppercase tracking-wide text-argus-text-dim text-center ${sortableClass}`}
                 onClick={() => handleSort('quality')}
                 data-testid="sort-quality"
               >
@@ -264,7 +264,7 @@ export function TradeTable({
               </th>
               {/* All: exit reason — sortable */}
               <th
-                className={`w-[60px] px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-center ${sortableClass}`}
+                className={`w-[60px] px-3 py-2 text-xs font-medium uppercase tracking-wide text-argus-text-dim text-center ${sortableClass}`}
                 onClick={() => handleSort('exit_reason')}
                 data-testid="sort-exit_reason"
               >
@@ -272,7 +272,7 @@ export function TradeTable({
               </th>
               {/* Desktop only: hold duration — sortable */}
               <th
-                className={`hidden lg:table-cell w-[80px] px-3 py-2 text-xs font-medium uppercase tracking-wider text-argus-text-dim text-right ${sortableClass}`}
+                className={`hidden lg:table-cell w-[80px] px-3 py-2 text-xs font-medium uppercase tracking-wide text-argus-text-dim text-right ${sortableClass}`}
                 onClick={() => handleSort('hold_duration')}
                 data-testid="sort-hold_duration"
               >
