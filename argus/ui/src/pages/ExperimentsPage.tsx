@@ -225,22 +225,22 @@ function PatternGroup({
                 const bestSharpe = Math.max(...variants.map((x) => x.sharpe ?? -Infinity));
                 const bestWr = Math.max(...variants.map((x) => x.win_rate ?? -Infinity));
                 return variants.map((v) => {
-                const isBestSharpe = v.sharpe !== null && v.sharpe === bestSharpe && variants.length > 1;
-                const isBestWr = v.win_rate !== null && v.win_rate === bestWr && variants.length > 1;
-                return (
-                  <tr key={v.variant_id} className="border-b border-argus-border/30">
-                    <td className="py-2 font-mono text-xs text-argus-text-dim">{abbrev(v.variant_id)}</td>
-                    <td className="py-2 text-center"><ModeBadge mode={v.mode} /></td>
-                    <td className={`py-2 text-right tabular-nums text-sm ${isBestWr ? 'text-argus-profit font-semibold' : ''}`}>
-                      {fmtPct(v.win_rate)}
-                    </td>
-                    <td className="py-2 text-right tabular-nums text-sm">{fmtNum(v.expectancy)}</td>
-                    <td className={`py-2 text-right tabular-nums text-sm ${isBestSharpe ? 'text-argus-accent font-semibold' : ''}`}>
-                      {fmtNum(v.sharpe)}
-                    </td>
-                  </tr>
-                );
-              });
+                  const isBestSharpe = v.sharpe !== null && v.sharpe === bestSharpe && variants.length > 1;
+                  const isBestWr = v.win_rate !== null && v.win_rate === bestWr && variants.length > 1;
+                  return (
+                    <tr key={v.variant_id} className="border-b border-argus-border/30">
+                      <td className="py-2 font-mono text-xs text-argus-text-dim">{abbrev(v.variant_id)}</td>
+                      <td className="py-2 text-center"><ModeBadge mode={v.mode} /></td>
+                      <td className={`py-2 text-right tabular-nums text-sm ${isBestWr ? 'text-argus-profit font-semibold' : ''}`}>
+                        {fmtPct(v.win_rate)}
+                      </td>
+                      <td className="py-2 text-right tabular-nums text-sm">{fmtNum(v.expectancy)}</td>
+                      <td className={`py-2 text-right tabular-nums text-sm ${isBestSharpe ? 'text-argus-accent font-semibold' : ''}`}>
+                        {fmtNum(v.sharpe)}
+                      </td>
+                    </tr>
+                  );
+                });
               })()}
             </tbody>
           </table>
