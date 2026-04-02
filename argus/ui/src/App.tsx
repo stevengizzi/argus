@@ -26,6 +26,10 @@ const ExperimentsPage = lazy(() =>
   import('./pages/ExperimentsPage').then((m) => ({ default: m.ExperimentsPage }))
 );
 
+const ArenaPage = lazy(() =>
+  import('./pages/ArenaPage').then((m) => ({ default: m.ArenaPage }))
+);
+
 function App() {
   const init = useAuthStore((state) => state.init);
 
@@ -71,6 +75,15 @@ function App() {
               </div>
             }>
               <ExperimentsPage />
+            </Suspense>
+          } />
+          <Route path="arena" element={
+            <Suspense fallback={
+              <div className="flex items-center justify-center h-full">
+                <span className="text-sm text-argus-text-dim">Loading Arena…</span>
+              </div>
+            }>
+              <ArenaPage />
             </Suspense>
           } />
           <Route path="dev/connection" element={<ConnectionTest />} />
