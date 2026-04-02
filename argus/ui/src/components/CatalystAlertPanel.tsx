@@ -93,9 +93,16 @@ function CatalystAlertItem({ catalyst }: CatalystAlertItemProps) {
         </span>
       </div>
 
-      {/* Row 2: Headline */}
+      {/* Row 2: Headline — clickable link */}
       <p className="text-xs text-argus-text leading-snug mb-1">
-        {truncateHeadline(catalyst.headline)}
+        <a
+          href={catalyst.source_url ?? `https://www.google.com/search?q=${encodeURIComponent(catalyst.headline)}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="hover:underline"
+        >
+          {truncateHeadline(catalyst.headline)}
+        </a>
       </p>
 
       {/* Row 3: Source */}

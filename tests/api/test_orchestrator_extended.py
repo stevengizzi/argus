@@ -28,6 +28,7 @@ if TYPE_CHECKING:
     from httpx import AsyncClient
 
     from argus.api.dependencies import AppState
+    from argus.models.trading import Trade
 
 
 # ---------------------------------------------------------------------------
@@ -574,3 +575,177 @@ def test_strategy_windows_time_format() -> None:
         assert time_pattern.match(window["force_close"]), (
             f"Invalid time format for {strategy_id}.force_close"
         )
+
+
+# ---------------------------------------------------------------------------
+# Per-strategy P&L and Trade Count Tests (Sprint 32.75 S3)
+# ---------------------------------------------------------------------------
+
+
+def _make_trade_today(
+    strategy_id: str,
+    gross_pnl: float,
+) -> "Trade":
+    """Create a trade with today's ET date as exit_time."""
+    from argus.models.trading import ExitReason, OrderSide, Trade
+
+    _ET = ZoneInfo("America/New_York")
+    today = datetime.now(_ET).date()
+    entry_time = datetime(today.year, today.month, today.day, 10, 0, 0)
+    exit_time = datetime(today.year, today.month, today.day, 10, 30, 0)
+
+    return Trade(
+        strategy_id=strategy_id,
+        symbol="AAPL",
+        side=OrderSide.BUY,
+        entry_price=150.0,
+        entry_time=entry_time,
+        exit_price=151.0 if gross_pnl >= 0 else 149.0,
+        exit_time=exit_time,
+        shares=100,
+        stop_price=148.0,
+        exit_reason=ExitReason.TARGET_1 if gross_pnl >= 0 else ExitReason.STOP_LOSS,
+        gross_pnl=gross_pnl,
+        commission=1.0,
+    )
+
+
+@pytest.fixture
+async def app_state_with_trades_today(
+    app_state_extended: AppState,
+) -> AppState:
+    """Provide AppState with orb_breakout trades seeded for today."""
+    trade_logger = app_state_extended.trade_logger
+
+    # Two wins + one loss for orb_breakout
+    await trade_logger.log_trade(_make_trade_today("orb_breakout", gross_pnl=100.0))
+    await trade_logger.log_trade(_make_trade_today("orb_breakout", gross_pnl=50.0))
+    await trade_logger.log_trade(_make_trade_today("orb_breakout", gross_pnl=-30.0))
+
+    # One win for orb_scalp — different strategy
+    await trade_logger.log_trade(_make_trade_today("orb_scalp", gross_pnl=80.0))
+
+    return app_state_extended
+
+
+@pytest.fixture
+async def client_with_trades_today(
+    app_state_with_trades_today: AppState,
+    jwt_secret: str,
+) -> "AsyncGenerator[AsyncClient, None]":
+    """Provide client with AppState containing today's trades."""
+    from httpx import ASGITransport, AsyncClient
+
+    app = create_app(app_state_with_trades_today)
+    app.state.app_state = app_state_with_trades_today
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+    ) as client:
+        yield client
+
+
+@pytest.mark.asyncio
+async def test_status_trade_count_today_reflects_logged_trades(
+    client_with_trades_today: AsyncClient,
+    auth_headers: dict[str, str],
+) -> None:
+    """GET /orchestrator/status trade_count_today matches logged trades for each strategy."""
+    response = await client_with_trades_today.get(
+        "/api/v1/orchestrator/status",
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+
+    allocs_by_id = {a["strategy_id"]: a for a in data["allocations"]}
+
+    assert allocs_by_id["orb_breakout"]["trade_count_today"] == 3
+    assert allocs_by_id["orb_scalp"]["trade_count_today"] == 1
+
+
+@pytest.mark.asyncio
+async def test_status_daily_pnl_reflects_logged_trades(
+    client_with_trades_today: AsyncClient,
+    auth_headers: dict[str, str],
+) -> None:
+    """GET /orchestrator/status daily_pnl is non-zero for strategy with trades today."""
+    response = await client_with_trades_today.get(
+        "/api/v1/orchestrator/status",
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+
+    allocs_by_id = {a["strategy_id"]: a for a in data["allocations"]}
+
+    # orb_breakout: gross (100 + 50 - 30) = 120, commission 3×1.0 = 3, net = 117
+    assert allocs_by_id["orb_breakout"]["daily_pnl"] == pytest.approx(117.0, abs=0.01)
+
+
+@pytest.mark.asyncio
+async def test_status_daily_pnl_sums_wins_and_losses(
+    client_with_trades_today: AsyncClient,
+    auth_headers: dict[str, str],
+) -> None:
+    """GET /orchestrator/status daily_pnl correctly nets wins and losses."""
+    response = await client_with_trades_today.get(
+        "/api/v1/orchestrator/status",
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+
+    allocs_by_id = {a["strategy_id"]: a for a in data["allocations"]}
+    orb_pnl = allocs_by_id["orb_breakout"]["daily_pnl"]
+
+    # Should be positive (wins outweigh the loss)
+    assert orb_pnl > 0
+
+
+@pytest.mark.asyncio
+async def test_status_pnl_is_zero_when_no_trades_today(
+    client_extended: AsyncClient,
+    auth_headers: dict[str, str],
+) -> None:
+    """GET /orchestrator/status returns daily_pnl=0 and trade_count_today=0 with no trades."""
+    response = await client_extended.get(
+        "/api/v1/orchestrator/status",
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+
+    for alloc in data["allocations"]:
+        assert alloc["trade_count_today"] == 0
+        assert alloc["daily_pnl"] == 0.0
+
+
+@pytest.mark.asyncio
+async def test_status_pnl_is_independent_per_strategy(
+    client_with_trades_today: AsyncClient,
+    auth_headers: dict[str, str],
+) -> None:
+    """GET /orchestrator/status daily_pnl is isolated per strategy — no cross-contamination."""
+    response = await client_with_trades_today.get(
+        "/api/v1/orchestrator/status",
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+
+    allocs_by_id = {a["strategy_id"]: a for a in data["allocations"]}
+
+    # orb_scalp has only 1 trade (gross 80, commission 1 → net 79)
+    assert allocs_by_id["orb_scalp"]["trade_count_today"] == 1
+    assert allocs_by_id["orb_scalp"]["daily_pnl"] == pytest.approx(79.0, abs=0.01)
+
+    # Strategies with no trades should show 0
+    for strategy_id in ["vwap_reclaim", "afternoon_momentum"]:
+        assert allocs_by_id[strategy_id]["trade_count_today"] == 0
+        assert allocs_by_id[strategy_id]["daily_pnl"] == 0.0
