@@ -1765,7 +1765,7 @@ Seven pages delivered with responsive design across four breakpoints (DEC-169). 
 | Tablet (640–1023px) | Icon sidebar | All 9 pages visible |
 | Mobile (<640px) | Bottom tab bar (5 tabs) + More sheet | Dash, Trades, Orch, Patterns, More → (Performance, Debrief, System, Observatory, Experiments) |
 
-Global keyboard shortcuts: `1`–`7` page navigation, `w` watchlist toggle, `c` copilot toggle (DEC-199).
+Global keyboard shortcuts: `1`–`9` page navigation, `w` watchlist toggle, `c` copilot toggle (DEC-199).
 
 ### Tech Stack (Frontend)
 

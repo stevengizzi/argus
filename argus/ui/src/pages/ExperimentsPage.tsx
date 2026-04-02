@@ -47,7 +47,7 @@ function fmtTimestamp(ts: string): string {
 
 // ─── sub-components ─────────────────────────────────────────────────────────
 
-type SortKey = 'trade_count' | 'shadow_trade_count' | 'win_rate' | 'expectancy' | 'sharpe';
+type SortKey = 'mode' | 'trade_count' | 'shadow_trade_count' | 'win_rate' | 'expectancy' | 'sharpe';
 type SortDir = 'asc' | 'desc';
 
 interface SortState {
@@ -132,6 +132,10 @@ function PatternGroup({
   const sorted = useMemo(() => {
     if (!sort) return variants;
     return [...variants].sort((a, b) => {
+      if (sort.key === 'mode') {
+        const cmp = a.mode.localeCompare(b.mode);
+        return sort.dir === 'asc' ? cmp : -cmp;
+      }
       const av = a[sort.key] ?? -Infinity;
       const bv = b[sort.key] ?? -Infinity;
       return sort.dir === 'asc' ? (av as number) - (bv as number) : (bv as number) - (av as number);
@@ -166,7 +170,7 @@ function PatternGroup({
                 <th className="px-4 py-2 text-left text-xs font-medium text-argus-text-dim">Variant ID</th>
                 <th className="px-4 py-2 text-left text-xs font-medium text-argus-text-dim">Fingerprint</th>
                 <th className="px-4 py-2 text-left">
-                  <SortHeader label="Mode" sortKey="trade_count" current={sort} onSort={onSort} />
+                  <SortHeader label="Mode" sortKey="mode" current={sort} onSort={onSort} />
                 </th>
                 <th className="px-4 py-2 text-right">
                   <SortHeader label="Trades" sortKey="trade_count" current={sort} onSort={onSort} />
@@ -217,25 +221,27 @@ function PatternGroup({
               </tr>
             </thead>
             <tbody>
-              {variants.map((v) => {
+              {(() => {
                 const bestSharpe = Math.max(...variants.map((x) => x.sharpe ?? -Infinity));
                 const bestWr = Math.max(...variants.map((x) => x.win_rate ?? -Infinity));
-                const isBestSharpe = v.sharpe !== null && v.sharpe === bestSharpe && variants.length > 1;
-                const isBestWr = v.win_rate !== null && v.win_rate === bestWr && variants.length > 1;
-                return (
-                  <tr key={v.variant_id} className="border-b border-argus-border/30">
-                    <td className="py-2 font-mono text-xs text-argus-text-dim">{abbrev(v.variant_id)}</td>
-                    <td className="py-2 text-center"><ModeBadge mode={v.mode} /></td>
-                    <td className={`py-2 text-right tabular-nums text-sm ${isBestWr ? 'text-argus-profit font-semibold' : ''}`}>
-                      {fmtPct(v.win_rate)}
-                    </td>
-                    <td className="py-2 text-right tabular-nums text-sm">{fmtNum(v.expectancy)}</td>
-                    <td className={`py-2 text-right tabular-nums text-sm ${isBestSharpe ? 'text-argus-accent font-semibold' : ''}`}>
-                      {fmtNum(v.sharpe)}
-                    </td>
-                  </tr>
-                );
-              })}
+                return variants.map((v) => {
+                  const isBestSharpe = v.sharpe !== null && v.sharpe === bestSharpe && variants.length > 1;
+                  const isBestWr = v.win_rate !== null && v.win_rate === bestWr && variants.length > 1;
+                  return (
+                    <tr key={v.variant_id} className="border-b border-argus-border/30">
+                      <td className="py-2 font-mono text-xs text-argus-text-dim">{abbrev(v.variant_id)}</td>
+                      <td className="py-2 text-center"><ModeBadge mode={v.mode} /></td>
+                      <td className={`py-2 text-right tabular-nums text-sm ${isBestWr ? 'text-argus-profit font-semibold' : ''}`}>
+                        {fmtPct(v.win_rate)}
+                      </td>
+                      <td className="py-2 text-right tabular-nums text-sm">{fmtNum(v.expectancy)}</td>
+                      <td className={`py-2 text-right tabular-nums text-sm ${isBestSharpe ? 'text-argus-accent font-semibold' : ''}`}>
+                        {fmtNum(v.sharpe)}
+                      </td>
+                    </tr>
+                  );
+                });
+              })()}
             </tbody>
           </table>
         </div>

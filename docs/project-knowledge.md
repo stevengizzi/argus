@@ -11,7 +11,7 @@ ARGUS is a fully automated, AI-enhanced multi-strategy day trading system for US
 
 ## Current State
 
-**Tests:** ~4,489 pytest + 713 Vitest (3 pre-existing Vitest failures in GoalTracker.test.tsx — DEF-136, 0 pre-existing pytest failures)
+**Tests:** ~4,489 pytest + 711 Vitest (0 pre-existing failures — DEF-136 resolved in Sprint 32.75, 0 pre-existing pytest failures)
 **Sprints completed:** 1 through 29 + 21.6 + 25.9 + 27.5 + 27.6 + 27.65 + 27.7 + 27.75 + 27.8 + 27.9 + 27.95 + 28.5 + 28.75 + 29.5 + 32 + 32.5 (32 full sprints + 39 sub-sprints)
 **Active sprint:** 31A (Pattern Expansion III — reach 15 strategies)
 **GitHub:** `https://github.com/stevengizzi/argus.git` (public)
@@ -83,7 +83,7 @@ ARGUS is a fully automated, AI-enhanced multi-strategy day trading system for US
 | 29 | Pattern Expansion I | 4178+689V | Mar 30–31 | — (no new DECs) |
 | 29.5 | Post-Session Operational Sweep | 4212+700V | Mar 31–Apr 1 | — (no new DECs) |
 | 32 | Parameterized Templates + Experiment Pipeline | 4405+700V | Apr 1 | — (no new DECs) |
-| 32.5 | Experiment Pipeline Completion + Visibility | 4489+713V | Apr 1 | — (no new DECs) |
+| 32.5 | Experiment Pipeline Completion + Visibility | 4489+711V | Apr 1 | — (no new DECs) |
 
 *Full sprint scopes and session details: `docs/sprint-history.md`*
 

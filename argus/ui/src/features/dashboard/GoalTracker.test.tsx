@@ -4,7 +4,7 @@
  * Sprint 21d Code Review — Enhanced GoalTracker with 2-column layout.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { GoalTracker } from './GoalTracker';
 import type { GoalsConfig, PerformanceResponse } from '../../api/types';
@@ -54,6 +54,15 @@ const createMockPerformanceData = (netPnl: number): PerformanceResponse => ({
 describe('GoalTracker', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Pin to a fixed mid-month date so calculateTradingDays() produces
+    // deterministic results regardless of when the test suite runs.
+    // April 15, 2026 = 9 trading days elapsed, 11 remaining.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-04-15T10:00:00Z'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('renders Monthly Goal header', () => {
