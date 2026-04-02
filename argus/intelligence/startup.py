@@ -297,6 +297,9 @@ async def run_polling_loop(
         else:
             async with poll_lock:
                 try:
+                    # Initialize symbols here so it is always defined in except blocks
+                    # even when firehose=True skips the get_symbols() assignment path
+                    symbols: list[str] = []
                     if firehose:
                         logger.info("Polling in firehose mode (market-wide)")
                         await asyncio.wait_for(
@@ -331,7 +334,7 @@ async def run_polling_loop(
                     logger.info("Polling loop cancelled")
                     raise
                 except Exception as e:
-                    logger.error("Poll cycle failed: %s", e)
+                    logger.error("Poll cycle failed: %s", e, exc_info=True)
 
         # Calculate sleep time
         poll_duration = time.monotonic() - poll_start

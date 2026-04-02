@@ -50,6 +50,7 @@ from argus.core.events import (
     ShutdownRequestedEvent,
     Side,
     SignalEvent,
+    SignalRejectedEvent,
     TickEvent,
 )
 from argus.core.ids import generate_id
@@ -284,6 +285,12 @@ class OrderManager:
         # Set in _close_position and on_cancel when a flatten order resolves.
         self._eod_flatten_events: dict[str, asyncio.Event] = {}
 
+        # Margin circuit breaker (Sprint 32.9 S2)
+        # Counts IBKR Error 201 "insufficient margin" rejections this session.
+        self._margin_rejection_count: int = 0
+        # When True, new entry orders are blocked until positions clear.
+        self._margin_circuit_open: bool = False
+
     async def start(self) -> None:
         """Start the Order Manager.
 
@@ -456,6 +463,25 @@ class OrderManager:
             )
             targets.append(t2_order)
 
+        # Margin circuit breaker gate: block new entries when margin is exhausted (Sprint 32.9 S2)
+        if self._margin_circuit_open:
+            logger.info(
+                "Entry blocked by margin circuit breaker: %s for %s",
+                signal.symbol,
+                signal.strategy_id,
+            )
+            await self._event_bus.publish(
+                SignalRejectedEvent(
+                    signal=signal,
+                    rejection_stage="risk_manager",
+                    rejection_reason=(
+                        f"Margin circuit breaker open — "
+                        f"{self._margin_rejection_count} rejections this session"
+                    ),
+                )
+            )
+            return
+
         # Submit bracket order atomically (DEC-117)
         try:
             bracket_result = await self._broker.place_bracket_order(
@@ -615,6 +641,23 @@ class OrderManager:
                 eod_event = self._eod_flatten_events.get(pending.symbol)
                 if eod_event is not None:
                     eod_event.set()
+
+        # Margin circuit breaker: detect IBKR Error 201 margin rejections (Sprint 32.9 S2)
+        # Only track entry orders — bracket legs and flattens don't consume buying power.
+        if pending.order_type == "entry":
+            reason_text = (event.reason or "").lower()
+            is_margin_rejection = "available funds" in reason_text or "insufficient" in reason_text
+            if is_margin_rejection:
+                self._margin_rejection_count += 1
+                if not self._margin_circuit_open and (
+                    self._margin_rejection_count >= self._config.margin_rejection_threshold
+                ):
+                    self._margin_circuit_open = True
+                    logger.warning(
+                        "Margin circuit breaker OPEN — %d margin rejections this session. "
+                        "New entries blocked until positions clear.",
+                        self._margin_rejection_count,
+                    )
 
         # Revision-rejected detection: IBKR may reject bracket amendments
         is_revision_rejected = "Revision rejected" in (event.reason or "")
@@ -1363,6 +1406,25 @@ class OrderManager:
                         now_et2 = now.replace(tzinfo=et_tz2)
                     if now_et2.time() >= time(9, 30):
                         await self._drain_startup_flatten_queue()
+
+                # Margin circuit breaker auto-reset: check broker position count (Sprint 32.9 S2)
+                if self._margin_circuit_open:
+                    try:
+                        broker_positions = await self._broker.get_positions()
+                        position_count = len(broker_positions)
+                        if position_count < self._config.margin_circuit_reset_positions:
+                            self._margin_circuit_open = False
+                            self._margin_rejection_count = 0
+                            logger.info(
+                                "Margin circuit breaker RESET — position count %d below "
+                                "threshold %d",
+                                position_count,
+                                self._config.margin_circuit_reset_positions,
+                            )
+                    except Exception:
+                        logger.warning(
+                            "Failed to query broker positions for margin circuit reset check"
+                        )
 
                 # Check time stops on all positions
                 for symbol, positions in list(self._managed_positions.items()):
@@ -2632,6 +2694,9 @@ class OrderManager:
         self._amended_prices.clear()
         self._last_fill_state.clear()
         self._fill_order_ids_by_symbol.clear()
+        # Reset margin circuit breaker for new session (Sprint 32.9 S2)
+        self._margin_rejection_count = 0
+        self._margin_circuit_open = False
 
     @property
     def has_open_positions(self) -> bool:

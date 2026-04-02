@@ -42,3 +42,9 @@ max_flatten_cycles: 2
 eod_flatten_timeout_seconds: 30
 # If true, retry timed-out EOD flattens once via broker re-query
 eod_flatten_retry_rejected: true
+
+# Margin circuit breaker (Sprint 32.9 S2)
+# Open circuit after this many IBKR margin rejections this session
+margin_rejection_threshold: 10
+# Auto-reset circuit when broker position count drops below this
+margin_circuit_reset_positions: 20

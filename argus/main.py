@@ -1397,7 +1397,7 @@ class ArgusSystem:
                     broker_positions: dict[str, float] = {}
                     for pos in broker_pos_list:
                         symbol = getattr(pos, "symbol", "")
-                        qty = float(getattr(pos, "qty", 0))
+                        qty = float(getattr(pos, "shares", 0))
                         if symbol and qty != 0:
                             broker_positions[symbol] = qty
 

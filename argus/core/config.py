@@ -826,6 +826,10 @@ class OrderManagerConfig(BaseModel):
     eod_flatten_timeout_seconds: int = Field(default=30, ge=1)
     # Retry timed-out/rejected EOD flattens once via broker re-query (Sprint 32.9)
     eod_flatten_retry_rejected: bool = True
+    # Margin circuit breaker: open after N IBKR margin rejections this session (Sprint 32.9 S2)
+    margin_rejection_threshold: int = Field(default=10, ge=1)
+    # Auto-reset margin circuit when broker position count drops below N (Sprint 32.9 S2)
+    margin_circuit_reset_positions: int = Field(default=20, ge=1)
 
 
 # ---------------------------------------------------------------------------

@@ -13,6 +13,7 @@ Covers:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from datetime import UTC, datetime, time
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
@@ -572,3 +573,390 @@ class TestConfigValidation:
         config = OrderManagerConfig(**raw)
         assert config.eod_flatten_timeout_seconds == raw["eod_flatten_timeout_seconds"]
         assert config.eod_flatten_retry_rejected == raw["eod_flatten_retry_rejected"]
+
+    def test_order_manager_yaml_has_margin_circuit_fields(self) -> None:
+        """config/order_manager.yaml contains margin circuit breaker fields."""
+        config_path = Path(__file__).parents[2] / "config" / "order_manager.yaml"
+        with config_path.open() as f:
+            raw = yaml.safe_load(f)
+
+        assert "margin_rejection_threshold" in raw, (
+            "order_manager.yaml missing margin_rejection_threshold"
+        )
+        assert "margin_circuit_reset_positions" in raw, (
+            "order_manager.yaml missing margin_circuit_reset_positions"
+        )
+
+        config = OrderManagerConfig(**raw)
+        assert config.margin_rejection_threshold == raw["margin_rejection_threshold"]
+        assert config.margin_circuit_reset_positions == raw["margin_circuit_reset_positions"]
+
+
+# ---------------------------------------------------------------------------
+# Test 11: Margin circuit breaker (Sprint 32.9 S2)
+# ---------------------------------------------------------------------------
+
+
+from argus.core.events import OrderCancelledEvent, SignalRejectedEvent
+from argus.execution.order_manager import PendingManagedOrder
+
+
+def _make_om_with_margin_config(
+    event_bus: EventBus,
+    broker: MagicMock,
+    clock: FixedClock,
+    margin_rejection_threshold: int = 10,
+    margin_circuit_reset_positions: int = 20,
+) -> OrderManager:
+    config = OrderManagerConfig(
+        margin_rejection_threshold=margin_rejection_threshold,
+        margin_circuit_reset_positions=margin_circuit_reset_positions,
+        eod_flatten_timeout_seconds=5,
+        auto_shutdown_after_eod=False,
+    )
+    return OrderManager(
+        event_bus=event_bus,
+        broker=broker,
+        clock=clock,
+        config=config,
+        startup_config=StartupConfig(flatten_unknown_positions=False),
+    )
+
+
+def _add_pending_entry(om: OrderManager, order_id: str = "entry-001", symbol: str = "AAPL") -> None:
+    """Inject a pending entry order directly into _pending_orders."""
+    om._pending_orders[order_id] = PendingManagedOrder(
+        order_id=order_id,
+        symbol=symbol,
+        strategy_id="orb_breakout",
+        order_type="entry",
+        shares=100,
+    )
+
+
+class TestMarginCircuitOpens:
+    @pytest.mark.asyncio
+    async def test_margin_circuit_opens_after_threshold(self) -> None:
+        """Circuit opens when margin rejection count reaches threshold."""
+        event_bus = EventBus()
+        broker = _make_broker()
+        clock = _market_hours_clock()
+        om = _make_om_with_margin_config(event_bus, broker, clock, margin_rejection_threshold=10)
+
+        # Simulate 10 margin rejections via on_cancel
+        for i in range(10):
+            order_id = f"entry-{i:03d}"
+            _add_pending_entry(om, order_id=order_id)
+            await om.on_cancel(
+                OrderCancelledEvent(
+                    order_id=order_id,
+                    reason="IBKR rejected: Order rejected due to Available Funds restrictions",
+                )
+            )
+
+        assert om._margin_rejection_count == 10
+        assert om._margin_circuit_open is True
+
+    @pytest.mark.asyncio
+    async def test_margin_circuit_does_not_open_below_threshold(self) -> None:
+        """Circuit stays closed when rejection count is below threshold."""
+        event_bus = EventBus()
+        broker = _make_broker()
+        clock = _market_hours_clock()
+        om = _make_om_with_margin_config(event_bus, broker, clock, margin_rejection_threshold=10)
+
+        # 9 rejections — one short of threshold
+        for i in range(9):
+            order_id = f"entry-{i:03d}"
+            _add_pending_entry(om, order_id=order_id)
+            await om.on_cancel(
+                OrderCancelledEvent(
+                    order_id=order_id,
+                    reason="IBKR rejected: insufficient margin available",
+                )
+            )
+
+        assert om._margin_rejection_count == 9
+        assert om._margin_circuit_open is False
+
+    @pytest.mark.asyncio
+    async def test_non_margin_rejection_does_not_increment_counter(self) -> None:
+        """Revision-rejected and other cancels do not affect the margin counter."""
+        event_bus = EventBus()
+        broker = _make_broker()
+        clock = _market_hours_clock()
+        om = _make_om_with_margin_config(event_bus, broker, clock, margin_rejection_threshold=3)
+
+        _add_pending_entry(om, order_id="entry-001")
+        await om.on_cancel(
+            OrderCancelledEvent(
+                order_id="entry-001",
+                reason="IBKR rejected: Revision rejected",
+            )
+        )
+
+        assert om._margin_rejection_count == 0
+        assert om._margin_circuit_open is False
+
+
+class TestMarginCircuitGate:
+    @pytest.mark.asyncio
+    async def test_margin_circuit_blocks_new_entries(self) -> None:
+        """When circuit is open, on_approved does not submit to broker and publishes SignalRejectedEvent."""
+        event_bus = EventBus()
+        broker = _make_broker()
+        clock = _market_hours_clock()
+        om = _make_om_with_margin_config(event_bus, broker, clock)
+
+        # Force circuit open
+        om._margin_circuit_open = True
+        om._margin_rejection_count = 12
+
+        rejected_events: list[SignalRejectedEvent] = []
+        async def capture_rejected(e: SignalRejectedEvent) -> None:
+            rejected_events.append(e)
+        event_bus.subscribe(SignalRejectedEvent, capture_rejected)
+
+        approved = OrderApprovedEvent(signal=_make_signal("AAPL"), modifications=None)
+        await om.on_approved(approved)
+        await asyncio.sleep(0)
+
+        # Broker must NOT have been called
+        broker.place_bracket_order.assert_not_called()
+        # SignalRejectedEvent must have been published
+        assert len(rejected_events) == 1
+        assert rejected_events[0].rejection_stage == "risk_manager"
+        assert "Margin circuit breaker open" in rejected_events[0].rejection_reason
+
+    @pytest.mark.asyncio
+    async def test_margin_circuit_allows_flatten_orders(self) -> None:
+        """Flatten orders bypass the margin circuit breaker completely."""
+        event_bus = EventBus()
+        broker = _make_broker()
+        clock = _market_hours_clock()
+        om = _make_om_with_margin_config(event_bus, broker, clock)
+
+        # Open position while circuit is still CLOSED, then open circuit
+        position = await _open_position(om, "AAPL")
+        om._margin_circuit_open = True
+
+        # Flatten should still go through to the broker
+        await om._flatten_position(position, reason="test")
+        broker.place_order.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_margin_circuit_allows_bracket_legs(self) -> None:
+        """Stop resubmission paths are not gated by the margin circuit breaker."""
+        event_bus = EventBus()
+        broker = _make_broker()
+        clock = _market_hours_clock()
+        om = _make_om_with_margin_config(event_bus, broker, clock)
+
+        # Circuit open BEFORE the entry — on_approved should block
+        om._margin_circuit_open = True
+
+        # For a position that somehow already exists (e.g., pre-opened before circuit tripped),
+        # stop resubmission uses _resubmit_stop_with_retry → place_order directly.
+        # Verify that path is unblocked by creating a position manually and calling
+        # close_position() which also uses place_order directly.
+        from argus.execution.order_manager import ManagedPosition
+
+        managed = ManagedPosition(
+            symbol="TSLA",
+            strategy_id="orb_breakout",
+            entry_price=200.0,
+            entry_time=datetime(2026, 4, 1, 14, 0, 0, tzinfo=UTC),
+            shares_total=50,
+            shares_remaining=50,
+            stop_price=198.0,
+            original_stop_price=198.0,
+            stop_order_id="stop-001",
+            t1_price=202.0,
+            t1_order_id="t1-001",
+            t1_shares=25,
+            t1_filled=False,
+            t2_price=204.0,
+            high_watermark=200.0,
+        )
+        om._managed_positions["TSLA"] = [managed]
+
+        # close_position → _flatten_unknown_position → place_order (not gated)
+        closed = await om.close_position("TSLA", reason="api_close")
+        assert closed is True
+        broker.place_order.assert_called_once()
+
+
+class TestMarginCircuitReset:
+    @pytest.mark.asyncio
+    async def test_margin_circuit_resets_on_position_drop(self) -> None:
+        """Circuit resets when broker position count drops below threshold."""
+        event_bus = EventBus()
+        broker = _make_broker()
+        clock = _market_hours_clock()
+
+        # Use 1-second poll interval — minimum allowed by config
+        config = OrderManagerConfig(
+            margin_rejection_threshold=10,
+            margin_circuit_reset_positions=20,
+            fallback_poll_interval_seconds=1,
+            auto_shutdown_after_eod=False,
+            eod_flatten_timeout_seconds=5,
+        )
+        om = OrderManager(
+            event_bus=event_bus,
+            broker=broker,
+            clock=clock,
+            config=config,
+            startup_config=StartupConfig(flatten_unknown_positions=False),
+        )
+
+        # Force circuit open
+        om._margin_circuit_open = True
+        om._margin_rejection_count = 15
+        om._flattened_today = True  # prevent EOD flatten
+
+        # Broker returns 10 positions — below threshold of 20
+        ten_positions = [_make_broker_position(f"SYM{i}", 100) for i in range(10)]
+        broker.get_positions = AsyncMock(return_value=ten_positions)
+
+        await om.start()
+        await asyncio.sleep(1.5)  # let one poll cycle complete
+        await om.stop()
+
+        assert om._margin_circuit_open is False
+        assert om._margin_rejection_count == 0
+
+    @pytest.mark.asyncio
+    async def test_margin_circuit_does_not_reset_when_positions_above_threshold(self) -> None:
+        """Circuit stays open when broker position count is still above threshold."""
+        event_bus = EventBus()
+        broker = _make_broker()
+        clock = _market_hours_clock()
+
+        config = OrderManagerConfig(
+            margin_rejection_threshold=10,
+            margin_circuit_reset_positions=20,
+            fallback_poll_interval_seconds=1,
+            auto_shutdown_after_eod=False,
+            eod_flatten_timeout_seconds=5,
+        )
+        om = OrderManager(
+            event_bus=event_bus,
+            broker=broker,
+            clock=clock,
+            config=config,
+            startup_config=StartupConfig(flatten_unknown_positions=False),
+        )
+
+        om._margin_circuit_open = True
+        om._margin_rejection_count = 15
+        om._flattened_today = True
+
+        # 25 positions — above threshold of 20
+        many_positions = [_make_broker_position(f"SYM{i}", 100) for i in range(25)]
+        broker.get_positions = AsyncMock(return_value=many_positions)
+
+        await om.start()
+        await asyncio.sleep(1.5)
+        await om.stop()
+
+        assert om._margin_circuit_open is True  # still open
+
+    @pytest.mark.asyncio
+    async def test_margin_circuit_daily_reset(self) -> None:
+        """reset_daily_state() clears both margin circuit fields."""
+        event_bus = EventBus()
+        broker = _make_broker()
+        clock = _market_hours_clock()
+        om = _make_om_with_margin_config(event_bus, broker, clock)
+
+        om._margin_circuit_open = True
+        om._margin_rejection_count = 42
+
+        om.reset_daily_state()
+
+        assert om._margin_circuit_open is False
+        assert om._margin_rejection_count == 0
+
+
+# ---------------------------------------------------------------------------
+# Test 12: Intelligence polling loop error resilience (DEF-141)
+# ---------------------------------------------------------------------------
+
+
+class TestPollingLoopSurvivesException:
+    @pytest.mark.asyncio
+    async def test_polling_loop_survives_exception(self) -> None:
+        """Polling loop catches exceptions and continues rather than crashing."""
+        from argus.intelligence.startup import run_polling_loop
+        from argus.intelligence import CatalystPipeline
+
+        call_count = {"n": 0}
+        loop_ran_twice = asyncio.Event()
+
+        async def bad_poll(symbols: list[str], firehose: bool = False) -> None:
+            # Yield to event loop before acting so waiters can process between iterations
+            await asyncio.sleep(0)
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                raise RuntimeError("Simulated source crash")
+            # Second call: signal success and allow the test to proceed
+            loop_ran_twice.set()
+
+        pipeline = MagicMock(spec=CatalystPipeline)
+        pipeline.run_poll = bad_poll
+        pipeline._sources = []
+
+        config = MagicMock()
+        # interval=1 ensures the loop uses asyncio.sleep(1) between cycles, providing
+        # a reliable yield point. The test waits up to 5 seconds for 2 cycles.
+        config.polling_interval_premarket_seconds = 1
+        config.polling_interval_session_seconds = 1
+
+        task = asyncio.create_task(
+            run_polling_loop(
+                pipeline=pipeline,
+                config=config,
+                get_symbols=lambda: ["AAPL"],
+                firehose=False,
+            )
+        )
+        try:
+            # Wait up to 5s for the event to be set — 2 poll cycles × 1s interval = ~2s
+            await asyncio.wait_for(asyncio.shield(loop_ran_twice.wait()), timeout=5.0)
+        finally:
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+
+        assert call_count["n"] >= 2, "Polling loop should have continued after the exception"
+
+
+# ---------------------------------------------------------------------------
+# Test 13: Reconciliation reads `shares` not `qty` (DEF-142 main.py fix)
+# ---------------------------------------------------------------------------
+
+
+class TestReconciliationReadsSharesNotQty:
+    def test_reconciliation_reads_shares_attribute(self) -> None:
+        """main.py reconciliation loop reads Position.shares, not Position.qty."""
+        # Verify the source code has the fix (grep-style check)
+        import ast
+        from pathlib import Path
+
+        main_path = Path(__file__).parents[2] / "argus" / "main.py"
+        source = main_path.read_text()
+
+        # The fix should use "shares" not "qty" for Position objects in reconciliation
+        # The line in question reads broker positions for reconcile_positions()
+        assert 'getattr(pos, "shares"' in source or "getattr(pos, 'shares'" in source, (
+            "main.py reconciliation loop should read pos.shares, not pos.qty"
+        )
+        # Should not have the old broken form in the reconciliation context
+        # (order_manager.py may have getattr(order, "qty") for Order objects — that's fine)
+        lines = source.splitlines()
+        for i, line in enumerate(lines):
+            if 'getattr(pos, "qty"' in line or "getattr(pos, 'qty'" in line:
+                raise AssertionError(
+                    f"main.py line {i+1} still reads pos.qty: {line.strip()}"
+                )
