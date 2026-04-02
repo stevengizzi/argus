@@ -828,67 +828,69 @@ export function OpenPositions() {
     );
   };
 
+  const showDisplayModeToggle =
+    positionFilter === 'all'
+      ? enrichedPositions.length > 0 || trades.length > 0
+      : positionFilter === 'open'
+      ? enrichedPositions.length > 0
+      : trades.length > 0;
+
   return (
     <>
       <Card noPadding>
         <div className="p-4 pb-0">
-          <div className="flex items-start justify-between gap-2">
-            <CardHeader
-              title="Positions"
-              subtitle={
-                positionFilter === 'all'
-                  ? `${enrichedPositions.length} open, ${trades.length} closed`
-                  : positionFilter === 'open'
-                  ? `${enrichedPositions.length} open`
-                  : `${trades.length} today`
-              }
-            />
+          <CardHeader
+            title="Positions"
+            subtitle={
+              positionFilter === 'all'
+                ? `${enrichedPositions.length} open, ${trades.length} closed`
+                : positionFilter === 'open'
+                ? `${enrichedPositions.length} open`
+                : `${trades.length} today`
+            }
+            action={
+              <div className="flex items-center gap-2">
+                {/* All / Open / Closed toggle — inline with header */}
+                <SegmentedTab
+                  segments={filterSegments}
+                  activeValue={positionFilter}
+                  onChange={(value) => setPositionFilter(value as 'all' | 'open' | 'closed')}
+                  size="sm"
+                  layoutId="positions-view-filter"
+                />
 
-            {/* Display mode toggle - show when there's data in the current filter view */}
-            {(positionFilter === 'all'
-              ? enrichedPositions.length > 0 || trades.length > 0
-              : positionFilter === 'open'
-              ? enrichedPositions.length > 0
-              : trades.length > 0) && (
-              <div className="flex gap-1 p-0.5 bg-argus-surface-2 rounded-md">
-                <button
-                  onClick={() => setDisplayMode('table')}
-                  className={`p-1.5 rounded transition-colors ${
-                    displayMode === 'table'
-                      ? 'bg-argus-surface text-argus-accent'
-                      : 'text-argus-text-dim hover:text-argus-text'
-                  }`}
-                  aria-label="Table view"
-                  title="Table view"
-                >
-                  <List className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => setDisplayMode('timeline')}
-                  className={`p-1.5 rounded transition-colors ${
-                    displayMode === 'timeline'
-                      ? 'bg-argus-surface text-argus-accent'
-                      : 'text-argus-text-dim hover:text-argus-text'
-                  }`}
-                  aria-label="Timeline view"
-                  title="Timeline view"
-                >
-                  <GanttChart className="w-4 h-4" />
-                </button>
+                {/* Table / Timeline display mode toggle */}
+                {showDisplayModeToggle && (
+                  <div className="flex gap-1 p-0.5 bg-argus-surface-2 rounded-md">
+                    <button
+                      onClick={() => setDisplayMode('table')}
+                      className={`p-1.5 rounded transition-colors ${
+                        displayMode === 'table'
+                          ? 'bg-argus-surface text-argus-accent'
+                          : 'text-argus-text-dim hover:text-argus-text'
+                      }`}
+                      aria-label="Table view"
+                      title="Table view"
+                    >
+                      <List className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => setDisplayMode('timeline')}
+                      className={`p-1.5 rounded transition-colors ${
+                        displayMode === 'timeline'
+                          ? 'bg-argus-surface text-argus-accent'
+                          : 'text-argus-text-dim hover:text-argus-text'
+                      }`}
+                      aria-label="Timeline view"
+                      title="Timeline view"
+                    >
+                      <GanttChart className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-
-          {/* View filter */}
-          <div className="mt-3 mb-2">
-            <SegmentedTab
-              segments={filterSegments}
-              activeValue={positionFilter}
-              onChange={(value) => setPositionFilter(value as 'all' | 'open' | 'closed')}
-              size="sm"
-              layoutId="positions-view-filter"
-            />
-          </div>
+            }
+          />
         </div>
 
         {positionFilter === 'all'

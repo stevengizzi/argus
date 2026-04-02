@@ -46,10 +46,9 @@ function VixRegimeCardSkeleton() {
   return (
     <Card>
       <CardHeader title="VIX Regime" />
-      <div className="animate-pulse space-y-3">
-        <div className="h-8 bg-argus-surface-2 rounded w-28" />
+      <div className="animate-pulse flex items-center gap-3">
+        <div className="h-7 bg-argus-surface-2 rounded w-16" />
         <div className="h-5 bg-argus-surface-2 rounded w-20" />
-        <div className="h-4 bg-argus-surface-2 rounded w-24" />
         <div className="h-4 bg-argus-surface-2 rounded w-16" />
       </div>
     </Card>
@@ -106,11 +105,12 @@ export function VixRegimeCard() {
         }
       />
 
-      {/* VIX Close */}
-      <div className={`mb-3 ${isStale ? 'opacity-60' : ''}`}>
-        <div className="flex items-baseline gap-2">
+      {/* Compact horizontal row: VIX close | VRP | Phase + Momentum */}
+      <div className={`flex items-center gap-3 flex-wrap ${isStale ? 'opacity-60' : ''}`}>
+        {/* VIX Close */}
+        <div className="flex items-baseline gap-1.5">
           <span
-            className="text-3xl font-semibold text-argus-text tabular-nums"
+            className="text-2xl font-semibold text-argus-text tabular-nums"
             data-testid="vix-close"
           >
             {data.vix_close != null ? data.vix_close.toFixed(2) : '--'}
@@ -121,27 +121,28 @@ export function VixRegimeCard() {
             </span>
           )}
         </div>
-        <div className="text-xs text-argus-text-dim">VIX Close</div>
-      </div>
 
-      {/* VRP Tier */}
-      {vrpTier && (
-        <div className={`mb-2 ${isStale ? 'opacity-60' : ''}`}>
-          <span
-            className={`text-xs font-medium uppercase tracking-wider px-2 py-0.5
-              rounded border ${VRP_COLORS[vrpTier] ?? 'bg-argus-surface-2 text-argus-text-dim border-argus-border'}`}
-            data-testid="vrp-tier"
-          >
-            VRP: {vrpTier}
-          </span>
-        </div>
-      )}
+        {/* VRP Tier */}
+        {vrpTier && (
+          <>
+            <span className="text-argus-border select-none">|</span>
+            <span
+              className={`text-xs font-medium uppercase tracking-wider px-2 py-0.5
+                rounded border ${VRP_COLORS[vrpTier] ?? 'bg-argus-surface-2 text-argus-text-dim border-argus-border'}`}
+              data-testid="vrp-tier"
+            >
+              VRP: {vrpTier}
+            </span>
+          </>
+        )}
 
-      {/* Vol Regime Phase + Momentum */}
-      <div className={`flex items-center justify-between text-sm ${isStale ? 'opacity-60' : ''}`}>
+        {/* Vol Regime Phase + Momentum */}
+        {(volPhase || momentumDisplay) && (
+          <span className="text-argus-border select-none">|</span>
+        )}
         {volPhase && (
           <span
-            className={`font-medium ${PHASE_COLORS[volPhase] ?? 'text-argus-text-dim'}`}
+            className={`font-medium text-sm ${PHASE_COLORS[volPhase] ?? 'text-argus-text-dim'}`}
             data-testid="vol-phase"
           >
             {volPhase.replace('_', ' ')}
@@ -149,7 +150,7 @@ export function VixRegimeCard() {
         )}
         {momentumDisplay && (
           <span
-            className={`text-lg font-bold ${momentumDisplay.color}`}
+            className={`text-base font-bold ${momentumDisplay.color}`}
             data-testid="momentum-arrow"
             title={momentum ?? ''}
           >

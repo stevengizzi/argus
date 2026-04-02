@@ -41,8 +41,6 @@ import {
   TodayStats,
   SessionTimeline,
   OpenPositions,
-  RecentTrades,
-  HealthMini,
   SessionSummaryCard,
   OrchestratorStatusStrip,
   StrategyDeploymentBar,
@@ -126,11 +124,6 @@ export function DashboardPage() {
             <StrategyDeploymentBar />
           </motion.div>
 
-          {/* VIX Regime card — returns null when VIX disabled/unavailable */}
-          <motion.div variants={staggerItem}>
-            <VixRegimeCard />
-          </motion.div>
-
           {/* Session summary card - shows after market close with trades */}
           <SessionSummaryCard />
 
@@ -138,10 +131,18 @@ export function DashboardPage() {
           <motion.div variants={staggerItem}><DailyPnlCard /></motion.div>
           <motion.div variants={staggerItem}><GoalTracker data={summaryData?.goals} useSummaryData /></motion.div>
 
+          {/* VIX Regime card — compact, after GoalTracker */}
+          <motion.div variants={staggerItem}>
+            <VixRegimeCard />
+          </motion.div>
+
           {/* 3-card row: Market Status | Today's Stats | Session Timeline */}
           <motion.div variants={staggerItem}><MarketStatusCard /></motion.div>
           <motion.div variants={staggerItem}><TodayStats data={summaryData?.today_stats} useSummaryData /></motion.div>
           <motion.div variants={staggerItem}><SessionTimeline /></motion.div>
+
+          {/* Signal quality histogram */}
+          <motion.div variants={staggerItem}><SignalQualityPanel /></motion.div>
 
           {/* AI Insight card */}
           <motion.div variants={staggerItem}><AIInsightCard /></motion.div>
@@ -149,15 +150,10 @@ export function DashboardPage() {
           {/* Universe status card */}
           <motion.div variants={staggerItem}><UniverseStatusCard /></motion.div>
 
-          {/* Signal quality histogram */}
-          <motion.div variants={staggerItem}><SignalQualityPanel /></motion.div>
-
           {/* Learning Loop card — returns null when disabled */}
           <motion.div variants={staggerItem}><LearningDashboardCard /></motion.div>
 
           <motion.div variants={staggerItem}><OpenPositions /></motion.div>
-          <motion.div variants={staggerItem}><RecentTrades /></motion.div>
-          <motion.div variants={staggerItem}><HealthMini /></motion.div>
         </motion.div>
 
         {/* Watchlist overlay for mobile/tablet */}
@@ -188,16 +184,11 @@ export function DashboardPage() {
             <StrategyDeploymentBar />
           </motion.div>
 
-          {/* VIX Regime card — returns null when VIX disabled/unavailable */}
-          <motion.div variants={staggerItem}>
-            <VixRegimeCard />
-          </motion.div>
-
           <SessionSummaryCard />
 
-          {/* 3-col row: Account | DailyPnl | GoalTracker */}
+          {/* 4-col row: Account | DailyPnl | GoalTracker | VixRegime */}
           <motion.div
-            className="grid grid-cols-3 gap-6"
+            className="grid grid-cols-4 gap-6"
             variants={staggerItemWithChildren(0.08)}
           >
             <motion.div variants={staggerItem} className="h-full">
@@ -209,6 +200,9 @@ export function DashboardPage() {
             <motion.div variants={staggerItem} className="h-full">
               <GoalTracker data={summaryData?.goals} useSummaryData />
             </motion.div>
+            <motion.div variants={staggerItem} className="h-full">
+              <VixRegimeCard />
+            </motion.div>
           </motion.div>
 
           {/* Positions — promoted above fold */}
@@ -216,7 +210,7 @@ export function DashboardPage() {
             <OpenPositions />
           </motion.div>
 
-          {/* 3-col row: Today's Stats | Session Timeline | AI Insight */}
+          {/* 3-col row: Today's Stats | Session Timeline | Signal Quality */}
           <motion.div
             className="grid grid-cols-3 gap-6"
             variants={staggerItemWithChildren(0.08)}
@@ -228,33 +222,20 @@ export function DashboardPage() {
               <SessionTimeline />
             </motion.div>
             <motion.div variants={staggerItem} className="h-full">
-              <AIInsightCard />
+              <SignalQualityPanel />
             </motion.div>
           </motion.div>
 
-          {/* Recent Trades | System Status */}
-          <motion.div
-            className="grid grid-cols-2 gap-6"
-            variants={staggerItemWithChildren(0.08)}
-          >
-            <motion.div variants={staggerItem}>
-              <RecentTrades />
-            </motion.div>
-            <motion.div variants={staggerItem}>
-              <HealthMini />
-            </motion.div>
-          </motion.div>
-
-          {/* Below fold: review-oriented cards */}
+          {/* Below fold: AI Insight + Universe Status + Learning */}
           <motion.div
             className="grid grid-cols-3 gap-6"
             variants={staggerItemWithChildren(0.08)}
           >
             <motion.div variants={staggerItem} className="h-full">
-              <UniverseStatusCard />
+              <AIInsightCard />
             </motion.div>
             <motion.div variants={staggerItem} className="h-full">
-              <SignalQualityPanel />
+              <UniverseStatusCard />
             </motion.div>
             <motion.div variants={staggerItem} className="h-full">
               <LearningDashboardCard />
@@ -288,15 +269,11 @@ export function DashboardPage() {
           <StrategyDeploymentBar />
         </motion.div>
 
-        {/* VIX Regime card — returns null when VIX disabled/unavailable */}
-        <motion.div variants={staggerItem}>
-          <VixRegimeCard />
-        </motion.div>
-
         <SessionSummaryCard />
 
+        {/* 3-col row: Account | DailyPnl | VixRegime */}
         <motion.div
-          className="grid grid-cols-2 gap-5"
+          className="grid grid-cols-3 gap-5"
           variants={staggerItemWithChildren(0.08)}
         >
           <motion.div variants={staggerItem} className="h-full">
@@ -304,6 +281,9 @@ export function DashboardPage() {
           </motion.div>
           <motion.div variants={staggerItem} className="h-full">
             <DailyPnlCard />
+          </motion.div>
+          <motion.div variants={staggerItem} className="h-full">
+            <VixRegimeCard />
           </motion.div>
         </motion.div>
 
@@ -328,20 +308,7 @@ export function DashboardPage() {
           </motion.div>
         </motion.div>
 
-        {/* AI Insight + Universe Status row */}
-        <motion.div
-          className="grid grid-cols-2 gap-5"
-          variants={staggerItemWithChildren(0.08)}
-        >
-          <motion.div variants={staggerItem} className="h-full">
-            <AIInsightCard />
-          </motion.div>
-          <motion.div variants={staggerItem} className="h-full">
-            <UniverseStatusCard />
-          </motion.div>
-        </motion.div>
-
-        {/* Signal quality histogram + Learning Loop */}
+        {/* Signal Quality + AI Insight row */}
         <motion.div
           className="grid grid-cols-2 gap-5"
           variants={staggerItemWithChildren(0.08)}
@@ -350,24 +317,25 @@ export function DashboardPage() {
             <SignalQualityPanel />
           </motion.div>
           <motion.div variants={staggerItem} className="h-full">
+            <AIInsightCard />
+          </motion.div>
+        </motion.div>
+
+        {/* Universe Status + Learning Loop */}
+        <motion.div
+          className="grid grid-cols-2 gap-5"
+          variants={staggerItemWithChildren(0.08)}
+        >
+          <motion.div variants={staggerItem} className="h-full">
+            <UniverseStatusCard />
+          </motion.div>
+          <motion.div variants={staggerItem} className="h-full">
             <LearningDashboardCard />
           </motion.div>
         </motion.div>
 
         <motion.div variants={staggerItem}>
           <OpenPositions />
-        </motion.div>
-
-        <motion.div
-          className="grid grid-cols-2 gap-5"
-          variants={staggerItemWithChildren(0.08)}
-        >
-          <motion.div variants={staggerItem}>
-            <RecentTrades />
-          </motion.div>
-          <motion.div variants={staggerItem}>
-            <HealthMini />
-          </motion.div>
         </motion.div>
       </motion.div>
 
