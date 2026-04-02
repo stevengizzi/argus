@@ -455,10 +455,29 @@ class IBKRBroker(Broker):
             try:
                 await self.connect()
 
+                # Delay before portfolio query to allow IBKR to settle position state.
+                # Must NOT block order submission — only the portfolio snapshot query
+                # is affected here. (S5 post-reconnect stability fix)
+                await asyncio.sleep(3.0)
+
                 # Verify positions match after reconnection
                 post_positions = [
                     (p.contract.symbol, int(p.position)) for p in self._ib.positions()
                 ]
+
+                # If broker returns 0 positions but we had positions before disconnect,
+                # IBKR may not have finished syncing state — retry once after 2s.
+                if len(post_positions) == 0 and len(pre_positions) > 0:
+                    logger.warning(
+                        "Post-reconnect portfolio query returned 0 positions "
+                        "(expected %d from pre-disconnect snapshot). "
+                        "Retrying query in 2s.",
+                        len(pre_positions),
+                    )
+                    await asyncio.sleep(2.0)
+                    post_positions = [
+                        (p.contract.symbol, int(p.position)) for p in self._ib.positions()
+                    ]
 
                 if set(pre_positions) != set(post_positions):
                     logger.warning(

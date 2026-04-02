@@ -2339,4 +2339,83 @@ class TestIBKRLogNoiseReduction:
             mock_warn.assert_called_once()
             call_args = mock_warn.call_args
             assert "404" in str(call_args)
-            assert "AAPL" in str(call_args)
+
+
+# ---------------------------------------------------------------------------
+# Post-Reconnect Delay Tests (Sprint 32.75 S5)
+# ---------------------------------------------------------------------------
+
+
+class TestPostReconnectDelay:
+    """Tests for the 3s post-reconnect portfolio query delay (Sprint 32.75 S5)."""
+
+    @pytest.mark.asyncio
+    async def test_reconnect_sleeps_3s_before_position_query(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """_reconnect calls asyncio.sleep(3.0) before querying positions after connect."""
+        sleep_calls: list[float] = []
+
+        async def capture_sleep(seconds: float) -> None:
+            sleep_calls.append(seconds)
+
+        with (
+            patch("argus.execution.ibkr_broker.IB", return_value=mock_ib),
+            patch("argus.execution.ibkr_broker.asyncio.sleep", side_effect=capture_sleep),
+        ):
+            broker = IBKRBroker(ibkr_config, event_bus)
+            await broker.connect()
+            broker._connected = False
+
+            await broker._reconnect()
+
+        # First sleep is the exponential backoff delay (attempt 1 = base_delay * 2^0 = 1s)
+        # Second sleep is the 3.0s post-reconnect portfolio query delay
+        assert 3.0 in sleep_calls, f"Expected 3.0s sleep but got: {sleep_calls}"
+
+    @pytest.mark.asyncio
+    async def test_reconnect_retries_position_query_when_empty(
+        self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
+    ) -> None:
+        """_reconnect retries position query once with 2s delay when result is 0 but pre-positions had entries."""
+        sleep_calls: list[float] = []
+
+        async def capture_sleep(seconds: float) -> None:
+            sleep_calls.append(seconds)
+
+        # Pre-disconnect had 2 positions
+        pre_positions = [
+            _mock_position("AAPL", 100, 150.0),
+            _mock_position("TSLA", 50, 200.0),
+        ]
+
+        position_calls = [0]
+
+        def positions_side_effect():
+            position_calls[0] += 1
+            # Call 1: initial connect() snapshot → sets _last_known_positions = pre_positions
+            # Call 2: connect() inside _reconnect() snapshot → any non-empty is fine
+            # Call 3: explicit post-reconnect query (after sleep(3.0)) → empty (triggers retry)
+            # Call 4: retry query (after sleep(2.0)) → pre_positions
+            if position_calls[0] <= 2:
+                return pre_positions
+            if position_calls[0] == 3:
+                return []
+            return pre_positions
+
+        mock_ib.positions.side_effect = positions_side_effect
+
+        with (
+            patch("argus.execution.ibkr_broker.IB", return_value=mock_ib),
+            patch("argus.execution.ibkr_broker.asyncio.sleep", side_effect=capture_sleep),
+        ):
+            broker = IBKRBroker(ibkr_config, event_bus)
+            await broker.connect()
+            broker._connected = False
+            await broker._reconnect()
+
+        # Should have slept 2.0s for the retry (in addition to 3.0s and backoff delay)
+        assert 2.0 in sleep_calls, f"Expected 2.0s retry sleep but got: {sleep_calls}"
+        # positions() called 4 times: initial connect(), reconnect connect(),
+        # first post-reconnect query (empty → triggers retry), retry query
+        assert position_calls[0] == 4

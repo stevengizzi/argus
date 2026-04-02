@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+    "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  launchd plist: com.argus.ibgateway
+  Starts IBC (Interactive Brokers Controller) which in turn manages IB Gateway.
+
+  SETUP INSTRUCTIONS:
+  1. Copy this file to ~/Library/LaunchAgents/com.argus.ibgateway.plist
+  2. Replace all placeholders marked with <REPLACE:...> below
+  3. Set credentials via EnvironmentVariables (never hardcode in this file)
+  4. Load with: launchctl load ~/Library/LaunchAgents/com.argus.ibgateway.plist
+
+  REQUIRED SUBSTITUTIONS:
+    <REPLACE:YOUR_USERNAME>       macOS username (run: whoami)
+    <REPLACE:IBC_VERSION>         IBC version number (e.g., 3.19.0)
+    <REPLACE:IBKR_USERNAME>       IBKR account username (or remove and use env var)
+    <REPLACE:IBKR_PASSWORD>       IBKR account password (or remove and use env var)
+
+  SECURITY NOTE:
+  Credentials in EnvironmentVariables are visible to processes owned by this
+  user. For higher security, use macOS Keychain and retrieve via a wrapper
+  script instead of embedding credentials here.
+-->
+<plist version="1.0">
+<dict>
+
+    <!-- Agent label — must be unique on this machine -->
+    <key>Label</key>
+    <string>com.argus.ibgateway</string>
+
+    <!-- Run on load and after crashes -->
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+
+    <!-- Throttle restart on repeated crashes (30 second minimum) -->
+    <key>ThrottleInterval</key>
+    <integer>30</integer>
+
+    <!-- Command: run IBC's shell launcher with the "gateway" profile -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/<REPLACE:YOUR_USERNAME>/ibc/ibc.sh</string>
+        <!-- IBC version number -->
+        <string><REPLACE:IBC_VERSION></string>
+        <!-- IB product: "gateway" (recommended) or "tws" -->
+        <string>gateway</string>
+        <!-- Trading mode: "paper" or "live" -->
+        <string>paper</string>
+        <!-- IBC config file path -->
+        <string>/Users/<REPLACE:YOUR_USERNAME>/ibc/config.ini</string>
+        <!-- IB Gateway installation directory -->
+        <string>/Applications/Trader Workstation/</string>
+        <!-- Java path (use IB Gateway's bundled Java) -->
+        <string>/Applications/Trader Workstation/jars/../jre/Contents/Home/bin/java</string>
+    </array>
+
+    <!-- Environment variables passed to IBC -->
+    <!-- IMPORTANT: Store real credentials outside version control -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <!-- IBKR credentials — substitute via Keychain wrapper or .env loader -->
+        <!-- Remove these entries and use ~/ibc/config.ini ${ENV_VAR} refs instead -->
+        <key>IBKR_USERNAME</key>
+        <string><REPLACE:IBKR_USERNAME></string>
+        <key>IBKR_PASSWORD</key>
+        <string><REPLACE:IBKR_PASSWORD></string>
+        <!-- PATH must include Java — IB Gateway bundles its own JRE -->
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/Applications/Trader Workstation/jars/../jre/Contents/Home/bin</string>
+    </dict>
+
+    <!-- Working directory for IBC -->
+    <key>WorkingDirectory</key>
+    <string>/Users/<REPLACE:YOUR_USERNAME>/ibc</string>
+
+    <!-- Redirect stdout/stderr for debugging -->
+    <key>StandardOutPath</key>
+    <string>/tmp/ibgateway.stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/ibgateway.stderr.log</string>
+
+    <!-- Start only when logged in (IB Gateway requires display for initial auth) -->
+    <!-- Remove this key if running headless with pre-authenticated session -->
+    <key>LimitLoadToSessionType</key>
+    <string>Aqua</string>
+
+</dict>
+</plist>

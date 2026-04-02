@@ -458,3 +458,34 @@ class TestRMRejectionUnaffected:
         # SignalRejectedEvent published with risk_manager stage (not overflow)
         assert len(overflow_events) == 1
         assert overflow_events[0].rejection_stage == "risk_manager"
+
+
+# ---------------------------------------------------------------------------
+# Overflow Config Capacity Tests (Sprint 32.75 S5)
+# ---------------------------------------------------------------------------
+
+
+class TestOverflowConfigCapacity:
+    """Tests that overflow.yaml broker_capacity is set to 60 (Sprint 32.75 S5)."""
+
+    def test_overflow_yaml_broker_capacity_is_60(self) -> None:
+        """overflow.yaml broker_capacity must be 60 after S5 update."""
+        import yaml
+        from pathlib import Path
+
+        config_path = Path(__file__).parent.parent / "config" / "overflow.yaml"
+        with config_path.open() as fh:
+            data = yaml.safe_load(fh)
+
+        assert data["overflow"]["broker_capacity"] == 60, (
+            f"Expected broker_capacity=60 but got {data['overflow']['broker_capacity']}"
+        )
+
+    def test_overflow_config_loads_with_capacity_60(self) -> None:
+        """ArgusSystem reads broker_capacity=60 from overflow config."""
+        system = _build_overflow_system(
+            EventBus(),
+            overflow_enabled=True,
+            broker_capacity=60,
+        )
+        assert system._config.system.overflow.broker_capacity == 60

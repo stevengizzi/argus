@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
-from datetime import datetime
+from datetime import datetime, time
 from enum import StrEnum
 from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
@@ -73,6 +73,13 @@ class BaseStrategy(ABC):
         self._trade_count_today: int = 0
         self._watchlist: set[str] = set()
         self._eval_buffer = StrategyEvaluationBuffer()
+
+        # Window summary counters — reset each day in reset_daily_state()
+        self._window_symbols_evaluated: int = 0
+        self._window_signals_generated: int = 0
+        self._window_signals_rejected: int = 0
+        self._window_rejection_reasons: dict[str, int] = {}
+        self._window_summary_logged: bool = False
 
     # -------------------------------------------------------------------------
     # Identity (from config)
@@ -242,6 +249,11 @@ class BaseStrategy(ABC):
         self._daily_pnl = 0.0
         self._trade_count_today = 0
         self._watchlist = set()
+        self._window_symbols_evaluated = 0
+        self._window_signals_generated = 0
+        self._window_signals_rejected = 0
+        self._window_rejection_reasons = {}
+        self._window_summary_logged = False
         logger.debug("%s: daily state reset", self.strategy_id)
 
     async def reconstruct_state(self, trade_logger: TradeLogger) -> None:
@@ -303,6 +315,77 @@ class BaseStrategy(ABC):
             self._daily_pnl,
             self._trade_count_today,
         )
+
+    # -------------------------------------------------------------------------
+    # Window Summary Tracking
+    # -------------------------------------------------------------------------
+
+    def _track_symbol_evaluated(self) -> None:
+        """Increment the count of symbols evaluated this window.
+
+        Subclasses call this when they assess a symbol against entry criteria,
+        regardless of whether a signal is generated.
+        """
+        self._window_symbols_evaluated += 1
+
+    def _track_signal_generated(self) -> None:
+        """Increment the count of signals generated this window."""
+        self._window_signals_generated += 1
+
+    def _track_signal_rejected(self, reason: str) -> None:
+        """Increment the rejected-signal counter and record the reason.
+
+        Args:
+            reason: Short label for why the signal was suppressed
+                (e.g., "no_volume", "outside_window", "zero_r").
+        """
+        self._window_signals_rejected += 1
+        self._window_rejection_reasons[reason] = (
+            self._window_rejection_reasons.get(reason, 0) + 1
+        )
+
+    def _log_window_summary(self) -> None:
+        """Log the end-of-window evaluation summary at INFO level.
+
+        Emits a single structured log line covering symbols evaluated,
+        signals generated, signals rejected, and the rejection breakdown.
+        Called once per day when the operating window closes.
+        """
+        rejection_breakdown = (
+            ", ".join(
+                f"{reason}={count}"
+                for reason, count in sorted(self._window_rejection_reasons.items())
+            )
+            if self._window_rejection_reasons
+            else "none"
+        )
+        logger.info(
+            "Strategy %s window closed: %d symbols evaluated, "
+            "%d signals generated, %d rejected (%s)",
+            self.name,
+            self._window_symbols_evaluated,
+            self._window_signals_generated,
+            self._window_signals_rejected,
+            rejection_breakdown,
+        )
+
+    def _maybe_log_window_summary(self, candle_time: time) -> None:
+        """Emit the window summary once, the first candle after latest_entry.
+
+        Subclasses call this from on_candle with the ET candle time after
+        checking their own operating-window state. The call is idempotent —
+        only fires once per day (guarded by _window_summary_logged).
+
+        Args:
+            candle_time: The ET time of the incoming candle.
+        """
+        if self._window_summary_logged:
+            return
+        latest_entry_str = self._config.operating_window.latest_entry
+        lh, lm = (int(x) for x in latest_entry_str.split(":"))
+        if candle_time >= time(lh, lm):
+            self._log_window_summary()
+            self._window_summary_logged = True
 
     # -------------------------------------------------------------------------
     # Properties

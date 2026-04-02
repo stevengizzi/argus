@@ -588,3 +588,97 @@ class TestWatchlistPopulatedFromUniverseManager:
         assert set(vwap.watchlist) == {"TSLA", "AAPL"}
         assert isinstance(orb.watchlist, list)
         assert isinstance(vwap.watchlist, list)
+
+
+class TestWindowSummary:
+    """Tests for _log_window_summary() and related window tracking (Sprint 32.75 S5)."""
+
+    def test_log_window_summary_format(self, caplog) -> None:
+        """_log_window_summary logs correct format at INFO level."""
+        import logging
+
+        strategy = ConcreteTestStrategy(make_config(name="Test Strategy"))
+        strategy._window_symbols_evaluated = 12
+        strategy._window_signals_generated = 3
+        strategy._window_signals_rejected = 2
+        strategy._window_rejection_reasons = {"no_volume": 1, "outside_window": 1}
+
+        with caplog.at_level(logging.INFO):
+            strategy._log_window_summary()
+
+        assert len(caplog.records) == 1
+        msg = caplog.records[0].message
+        assert "Test Strategy" in msg
+        assert "12 symbols evaluated" in msg
+        assert "3 signals generated" in msg
+        assert "2 rejected" in msg
+        assert "no_volume=1" in msg
+        assert "outside_window=1" in msg
+
+    def test_log_window_summary_no_rejections(self, caplog) -> None:
+        """_log_window_summary shows 'none' when no rejections recorded."""
+        import logging
+
+        strategy = ConcreteTestStrategy(make_config(name="Test Strategy"))
+        strategy._window_symbols_evaluated = 5
+        strategy._window_signals_generated = 2
+        strategy._window_signals_rejected = 0
+
+        with caplog.at_level(logging.INFO):
+            strategy._log_window_summary()
+
+        assert "none" in caplog.records[0].message
+
+    def test_reset_daily_state_clears_window_counters(self) -> None:
+        """reset_daily_state resets all window summary counters and the logged flag."""
+        strategy = ConcreteTestStrategy(make_config())
+        strategy._window_symbols_evaluated = 10
+        strategy._window_signals_generated = 3
+        strategy._window_signals_rejected = 1
+        strategy._window_rejection_reasons = {"foo": 1}
+        strategy._window_summary_logged = True
+
+        strategy.reset_daily_state()
+
+        assert strategy._window_symbols_evaluated == 0
+        assert strategy._window_signals_generated == 0
+        assert strategy._window_signals_rejected == 0
+        assert strategy._window_rejection_reasons == {}
+        assert strategy._window_summary_logged is False
+
+    def test_maybe_log_window_summary_fires_once_after_latest_entry(self, caplog) -> None:
+        """_maybe_log_window_summary fires exactly once when candle_time >= latest_entry."""
+        import logging
+        from datetime import time
+
+        # Default latest_entry is "11:30" in OperatingWindow
+        strategy = ConcreteTestStrategy(make_config())
+
+        with caplog.at_level(logging.INFO):
+            # Before window close — should not log
+            strategy._maybe_log_window_summary(time(11, 0))
+            assert len(caplog.records) == 0
+
+            # At window close — should log once
+            strategy._maybe_log_window_summary(time(11, 30))
+            assert len(caplog.records) == 1
+
+            # Again — should NOT log a second time
+            strategy._maybe_log_window_summary(time(11, 45))
+            assert len(caplog.records) == 1
+
+    def test_track_helpers_increment_counters(self) -> None:
+        """_track_symbol_evaluated, _track_signal_generated, _track_signal_rejected work."""
+        strategy = ConcreteTestStrategy(make_config())
+
+        strategy._track_symbol_evaluated()
+        strategy._track_symbol_evaluated()
+        strategy._track_signal_generated()
+        strategy._track_signal_rejected("no_volume")
+        strategy._track_signal_rejected("no_volume")
+        strategy._track_signal_rejected("outside_window")
+
+        assert strategy._window_symbols_evaluated == 2
+        assert strategy._window_signals_generated == 1
+        assert strategy._window_signals_rejected == 3
+        assert strategy._window_rejection_reasons == {"no_volume": 2, "outside_window": 1}
