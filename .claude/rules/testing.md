@@ -89,3 +89,22 @@ python -m pytest tests/core/test_orchestrator.py -x -q
 
 Expected full suite runtime: ~39s with `-n auto`, ~208s sequential.
 Only `tests/test_main.py` needs ignoring (DEF-048 xdist issue).
+
+**When a test run appears stuck or output stops mid-way:**
+Do NOT launch a second pytest process. Instead:
+1. Check whether the original process is still running: `pgrep -fl pytest`
+2. Identify the hanging test — the last `PASSED` line in the output is the test before the culprit
+3. Kill all pytest processes before relaunching: `pkill -f pytest && sleep 2`
+4. Fix the hanging test, then rerun
+
+Accumulating multiple pytest processes from repeated relaunches degrades system
+performance, produces confusing partial output, and can corrupt the timing of
+subsequent full-suite runs. Kill first, diagnose second, relaunch third.
+
+**Tests that use real `asyncio.sleep` are wall-clock-bound.**
+Tests that await real time (e.g., poll loop integration tests with 1s intervals)
+cannot be made faster by xdist parallelism — each one occupies a worker for its
+full duration. When writing such tests, document the expected wall-clock cost in
+a comment and set the test timeout expectation accordingly. If a test needs more
+than ~3s of real sleep, reconsider whether it can be tested at a lower level
+(e.g., testing the reset logic directly rather than through the poll loop).
