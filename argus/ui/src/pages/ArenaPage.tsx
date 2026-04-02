@@ -6,25 +6,28 @@
  * Below: ArenaControls sort/filter bar.
  * Remainder: responsive CSS grid of ArenaCards.
  *
- * API wiring and card population are handled in S10.
+ * Sprint 32.75, Session 10 (API wiring + card rendering).
  * Animation layer added in S12.
- *
- * Sprint 32.75, Session 8.
  */
 
 import { useState } from 'react';
 import { LayoutGrid } from 'lucide-react';
 import { ArenaStatsBar } from '../features/arena/ArenaStatsBar';
 import { ArenaControls } from '../features/arena/ArenaControls';
+import { ArenaCard } from '../features/arena/ArenaCard';
+import { useArenaData, sortPositions, filterPositions } from '../hooks/useArenaData';
 import type { ArenaSortMode } from '../features/arena/ArenaControls';
-import type { ArenaCardProps } from '../features/arena/ArenaCard';
 
 export function ArenaPage() {
   const [sortMode, setSortMode] = useState<ArenaSortMode>('entry_time');
   const [strategyFilter, setStrategyFilter] = useState<string>('all');
 
-  // Populated by S10 (API wiring). Empty shell until then.
-  const positions: ArenaCardProps[] = [];
+  const { positions, candlesBySymbol, isLoading, stats } = useArenaData();
+
+  const displayPositions = sortPositions(
+    filterPositions(positions, strategyFilter),
+    sortMode,
+  );
 
   return (
     <div
@@ -32,7 +35,11 @@ export function ArenaPage() {
       data-testid="arena-page"
     >
       {/* Top stats strip — 48px fixed height */}
-      <ArenaStatsBar />
+      <ArenaStatsBar
+        positionCount={stats.position_count}
+        totalPnl={stats.total_pnl}
+        netR={stats.net_r}
+      />
 
       {/* Sort + filter controls */}
       <ArenaControls
@@ -44,7 +51,7 @@ export function ArenaPage() {
 
       {/* Grid or empty state */}
       <div className="flex-1 overflow-auto p-3 pb-24 min-[1024px]:pb-3">
-        {positions.length === 0 ? (
+        {!isLoading && displayPositions.length === 0 ? (
           <div
             className="flex flex-col items-center justify-center h-full gap-3 text-argus-text-dim"
             data-testid="arena-empty-state"
@@ -58,7 +65,21 @@ export function ArenaPage() {
             style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}
             data-testid="arena-grid"
           >
-            {/* ArenaCard items rendered here in S10 */}
+            {displayPositions.map((pos) => (
+              <ArenaCard
+                key={`${pos.strategy_id}-${pos.symbol}-${pos.entry_time}`}
+                symbol={pos.symbol}
+                strategy_id={pos.strategy_id}
+                pnl={pos.unrealized_pnl}
+                r_multiple={pos.r_multiple}
+                hold_seconds={pos.hold_duration_seconds}
+                entry_price={pos.entry_price}
+                stop_price={pos.stop_price}
+                target_prices={pos.target_prices}
+                trailing_stop_price={pos.trailing_stop_price ?? undefined}
+                candles={candlesBySymbol[pos.symbol] ?? []}
+              />
+            ))}
           </div>
         )}
       </div>

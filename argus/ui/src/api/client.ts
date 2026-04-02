@@ -54,6 +54,8 @@ import type {
   WatchlistResponse,
   ExperimentVariantsResponse,
   PromotionEventsResponse,
+  ArenaPositionsResponse,
+  ArenaCandlesResponse,
 } from './types';
 
 const API_BASE = '/api/v1';
@@ -810,4 +812,14 @@ export async function getPromotionEvents(params?: {
   if (params?.offset !== undefined) query.set('offset', String(params.offset));
   const qs = query.toString();
   return fetchWithAuth<PromotionEventsResponse>(`/experiments/promotions${qs ? `?${qs}` : ''}`);
+}
+
+// --- Arena (Sprint 32.75) ---
+
+export async function getArenaPositions(): Promise<ArenaPositionsResponse> {
+  return fetchWithAuth<ArenaPositionsResponse>('/arena/positions');
+}
+
+export async function getArenaCandles(symbol: string, minutes = 30): Promise<ArenaCandlesResponse> {
+  return fetchWithAuth<ArenaCandlesResponse>(`/arena/candles/${symbol}?minutes=${minutes}`);
 }

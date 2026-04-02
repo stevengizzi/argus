@@ -904,3 +904,48 @@ export interface PromotionEventsResponse {
   timestamp: string;
 }
 
+// Arena (Sprint 32.75)
+
+export interface ArenaPosition {
+  symbol: string;
+  strategy_id: string;
+  side: string;
+  shares: number;
+  entry_price: number;
+  current_price: number;
+  stop_price: number;
+  target_prices: number[];
+  trailing_stop_price: number | null;
+  unrealized_pnl: number;
+  r_multiple: number;
+  hold_duration_seconds: number;
+  quality_grade: string;
+  entry_time: string;
+}
+
+export interface ArenaStats {
+  position_count: number;
+  total_pnl: number;
+  net_r: number;
+}
+
+export interface ArenaPositionsResponse {
+  positions: ArenaPosition[];
+  stats: ArenaStats;
+  timestamp: string;
+}
+
+export interface ArenaCandleBar {
+  time: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
+export interface ArenaCandlesResponse {
+  symbol: string;
+  candles: ArenaCandleBar[];
+}
+

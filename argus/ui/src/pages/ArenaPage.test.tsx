@@ -3,15 +3,30 @@
  *
  * Covers: page renders, stats bar fields, controls dropdowns,
  * empty state, and nav registration.
+ *
+ * Updated S10: mock useArenaData so the page tests remain synchronous
+ * and don't require a QueryClientProvider.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { ArenaPage } from './ArenaPage';
 import { ArenaStatsBar } from '../features/arena/ArenaStatsBar';
 import { ArenaControls } from '../features/arena/ArenaControls';
 import { Sidebar } from '../layouts/Sidebar';
+
+vi.mock('../hooks/useArenaData', () => ({
+  useArenaData: vi.fn(() => ({
+    positions: [],
+    candlesBySymbol: {},
+    isLoading: false,
+    error: null,
+    stats: { position_count: 0, total_pnl: 0, net_r: 0 },
+  })),
+  sortPositions: vi.fn((positions: unknown[]) => positions),
+  filterPositions: vi.fn((positions: unknown[]) => positions),
+}));
 
 function wrap(ui: React.ReactElement) {
   return render(<MemoryRouter>{ui}</MemoryRouter>);
