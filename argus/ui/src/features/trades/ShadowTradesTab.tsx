@@ -5,18 +5,39 @@
  * CounterfactualTracker with theoretical P&L, R-multiples, and MFE/MAE.
  *
  * Sprint 32.5, Session 6 — DEF-131.
+ * Sprint 32.8, Session 5 — outcome toggle, time presets, infinite scroll,
+ *   sortable columns, wider Reason column with tooltip.
  */
 
-import { useState } from 'react';
-import { Ghost, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { Ghost, Loader2, ChevronUp, ChevronDown } from 'lucide-react';
 import { useShadowTrades } from '../../hooks/useShadowTrades';
 import { useStrategies } from '../../hooks/useStrategies';
 import { GRADE_COLORS } from '../../constants/qualityConstants';
+import { SegmentedTab } from '../../components/SegmentedTab';
+import { computeDateRangeForQuickFilter, type QuickFilter } from '../../stores/tradeFilters';
 import type { ShadowTrade } from '../../api/types';
+import type { SegmentedTabSegment } from '../../components/SegmentedTab';
 
 // --- Constants ---
 
 const PAGE_SIZE = 50;
+
+type ShadowOutcomeFilter = 'all' | 'win' | 'loss' | 'be';
+
+type SortKey =
+  | 'symbol'
+  | 'strategy_id'
+  | 'opened_at'
+  | 'entry_price'
+  | 'theoretical_pnl'
+  | 'theoretical_r_multiple'
+  | 'max_favorable_excursion'
+  | 'max_adverse_excursion'
+  | 'rejection_stage'
+  | 'quality_grade';
+
+type SortDir = 'asc' | 'desc';
 
 const REJECTION_STAGE_COLORS: Record<string, string> = {
   QUALITY_FILTER: '#60a5fa',   // blue-400
@@ -178,77 +199,143 @@ interface FiltersState {
   rejection_stage: string | undefined;
 }
 
+interface OutcomeCounts {
+  all: number;
+  win: number;
+  loss: number;
+  be: number;
+}
+
 interface ShadowFiltersProps {
   filters: FiltersState;
   onFiltersChange: (updates: Partial<FiltersState>) => void;
+  outcome: ShadowOutcomeFilter;
+  onOutcomeChange: (outcome: ShadowOutcomeFilter) => void;
+  quickFilter: QuickFilter;
+  onQuickFilterChange: (label: QuickFilter) => void;
+  outcomeCounts: OutcomeCounts;
 }
 
-function ShadowFilters({ filters, onFiltersChange }: ShadowFiltersProps) {
+function ShadowFilters({
+  filters,
+  onFiltersChange,
+  outcome,
+  onOutcomeChange,
+  quickFilter,
+  onQuickFilterChange,
+  outcomeCounts,
+}: ShadowFiltersProps) {
   const { data: strategiesData } = useStrategies();
   const strategies = strategiesData?.strategies ?? [];
 
+  const outcomeSegments: SegmentedTabSegment[] = useMemo(
+    () => [
+      { label: 'All', value: 'all', count: outcomeCounts.all },
+      { label: 'Wins', value: 'win', count: outcomeCounts.win, countVariant: 'success' as const },
+      { label: 'Losses', value: 'loss', count: outcomeCounts.loss, countVariant: 'danger' as const },
+      { label: 'BE', value: 'be', count: outcomeCounts.be },
+    ],
+    [outcomeCounts]
+  );
+
   return (
-    <div className="flex flex-wrap gap-3 items-end">
-      {/* Strategy selector */}
-      <div className="flex flex-col gap-1">
-        <label className="text-xs text-argus-text-dim">Strategy</label>
-        <select
-          className="bg-argus-surface border border-argus-border rounded-md px-3 py-1.5 text-sm text-argus-text focus:outline-none focus:ring-1 focus:ring-argus-accent"
-          value={filters.strategy_id ?? ''}
-          onChange={(e) =>
-            onFiltersChange({ strategy_id: e.target.value || undefined })
-          }
-        >
-          <option value="">All strategies</option>
-          {strategies.map((s) => (
-            <option key={s.strategy_id} value={s.strategy_id}>
-              {s.name}
-            </option>
-          ))}
-        </select>
+    <div className="flex flex-col gap-3">
+      {/* Row 1: strategy, stage, date range */}
+      <div className="flex flex-wrap gap-3 items-end">
+        {/* Strategy selector */}
+        <div className="flex flex-col gap-1">
+          <label className="text-xs text-argus-text-dim">Strategy</label>
+          <select
+            className="bg-argus-surface border border-argus-border rounded-md px-3 py-1.5 text-sm text-argus-text focus:outline-none focus:ring-1 focus:ring-argus-accent"
+            value={filters.strategy_id ?? ''}
+            onChange={(e) => onFiltersChange({ strategy_id: e.target.value || undefined })}
+          >
+            <option value="">All strategies</option>
+            {strategies.map((s) => (
+              <option key={s.strategy_id} value={s.strategy_id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Rejection stage selector */}
+        <div className="flex flex-col gap-1">
+          <label className="text-xs text-argus-text-dim">Rejection Stage</label>
+          <select
+            className="bg-argus-surface border border-argus-border rounded-md px-3 py-1.5 text-sm text-argus-text focus:outline-none focus:ring-1 focus:ring-argus-accent"
+            value={filters.rejection_stage ?? ''}
+            onChange={(e) => onFiltersChange({ rejection_stage: e.target.value || undefined })}
+          >
+            <option value="">All stages</option>
+            {ALL_STAGES.map((stage) => (
+              <option key={stage} value={stage}>
+                {REJECTION_STAGE_LABELS[stage]}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Date range */}
+        <div className="flex flex-col gap-1">
+          <label className="text-xs text-argus-text-dim">From</label>
+          <input
+            type="date"
+            className="bg-argus-surface border border-argus-border rounded-md px-3 py-1.5 text-sm text-argus-text focus:outline-none focus:ring-1 focus:ring-argus-accent"
+            value={filters.date_from ?? ''}
+            onChange={(e) => onFiltersChange({ date_from: e.target.value || undefined })}
+            data-testid="shadow-date-from"
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-xs text-argus-text-dim">To</label>
+          <input
+            type="date"
+            className="bg-argus-surface border border-argus-border rounded-md px-3 py-1.5 text-sm text-argus-text focus:outline-none focus:ring-1 focus:ring-argus-accent"
+            value={filters.date_to ?? ''}
+            onChange={(e) => onFiltersChange({ date_to: e.target.value || undefined })}
+            data-testid="shadow-date-to"
+          />
+        </div>
       </div>
 
-      {/* Rejection stage selector */}
-      <div className="flex flex-col gap-1">
-        <label className="text-xs text-argus-text-dim">Rejection Stage</label>
-        <select
-          className="bg-argus-surface border border-argus-border rounded-md px-3 py-1.5 text-sm text-argus-text focus:outline-none focus:ring-1 focus:ring-argus-accent"
-          value={filters.rejection_stage ?? ''}
-          onChange={(e) =>
-            onFiltersChange({ rejection_stage: e.target.value || undefined })
-          }
-        >
-          <option value="">All stages</option>
-          {ALL_STAGES.map((stage) => (
-            <option key={stage} value={stage}>
-              {REJECTION_STAGE_LABELS[stage]}
-            </option>
-          ))}
-        </select>
-      </div>
+      {/* Row 2: outcome toggle + time presets */}
+      <div className="flex flex-wrap gap-3 items-end justify-between">
+        {/* Outcome toggle */}
+        <div className="flex flex-col gap-1">
+          <label className="text-xs text-argus-text-dim">Outcome</label>
+          <SegmentedTab
+            segments={outcomeSegments}
+            activeValue={outcome}
+            onChange={(v) => onOutcomeChange(v as ShadowOutcomeFilter)}
+            size="sm"
+            layoutId="shadow-outcome-filter"
+          />
+        </div>
 
-      {/* Date range */}
-      <div className="flex flex-col gap-1">
-        <label className="text-xs text-argus-text-dim">From</label>
-        <input
-          type="date"
-          className="bg-argus-surface border border-argus-border rounded-md px-3 py-1.5 text-sm text-argus-text focus:outline-none focus:ring-1 focus:ring-argus-accent"
-          value={filters.date_from ?? ''}
-          onChange={(e) =>
-            onFiltersChange({ date_from: e.target.value || undefined })
-          }
-        />
-      </div>
-      <div className="flex flex-col gap-1">
-        <label className="text-xs text-argus-text-dim">To</label>
-        <input
-          type="date"
-          className="bg-argus-surface border border-argus-border rounded-md px-3 py-1.5 text-sm text-argus-text focus:outline-none focus:ring-1 focus:ring-argus-accent"
-          value={filters.date_to ?? ''}
-          onChange={(e) =>
-            onFiltersChange({ date_to: e.target.value || undefined })
-          }
-        />
+        {/* Time preset buttons */}
+        <div className="flex items-center gap-1">
+          {(['today', 'week', 'month', 'all'] as const).map((label) => (
+            <button
+              key={label}
+              onClick={() => onQuickFilterChange(label)}
+              className={`px-3 py-1 text-xs rounded transition-colors ${
+                quickFilter === label
+                  ? 'bg-argus-accent text-white'
+                  : 'bg-argus-surface-2 text-argus-text-dim hover:text-argus-text hover:bg-argus-surface-3'
+              }`}
+              data-testid={`shadow-quick-filter-${label}`}
+            >
+              {label === 'today'
+                ? 'Today'
+                : label === 'week'
+                ? 'Week'
+                : label === 'month'
+                ? 'Month'
+                : 'All'}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -275,13 +362,35 @@ function EmptyState() {
 
 interface ShadowTableProps {
   trades: ShadowTrade[];
+  sortKey: SortKey;
+  sortDir: SortDir;
+  onSort: (key: SortKey) => void;
+  sentinelRef: React.RefObject<HTMLDivElement>;
+  isLoadingMore: boolean;
 }
 
-function ShadowTable({ trades }: ShadowTableProps) {
+function ShadowTable({
+  trades,
+  sortKey,
+  sortDir,
+  onSort,
+  sentinelRef,
+  isLoadingMore,
+}: ShadowTableProps) {
+  const sortableClass =
+    'cursor-pointer select-none hover:text-argus-text transition-colors';
   const thClass =
     'px-3 py-2 text-left text-xs font-medium text-argus-text-dim uppercase tracking-wide whitespace-nowrap';
-  const tdClass =
-    'px-3 py-2 text-sm text-argus-text whitespace-nowrap';
+  const tdClass = 'px-3 py-2 text-sm text-argus-text whitespace-nowrap';
+
+  function SortIndicator({ col }: { col: SortKey }) {
+    if (sortKey !== col) return null;
+    return sortDir === 'asc' ? (
+      <ChevronUp className="w-3 h-3 inline-block ml-0.5" />
+    ) : (
+      <ChevronDown className="w-3 h-3 inline-block ml-0.5" />
+    );
+  }
 
   return (
     <div
@@ -291,25 +400,98 @@ function ShadowTable({ trades }: ShadowTableProps) {
       <table className="min-w-full divide-y divide-argus-border">
         <thead className="bg-argus-surface-2">
           <tr>
-            <th className={thClass}>Symbol</th>
-            <th className={thClass}>Strategy</th>
+            <th
+              className={`${thClass} ${sortableClass}`}
+              onClick={() => onSort('symbol')}
+              data-testid="sort-symbol"
+            >
+              Symbol
+              <SortIndicator col="symbol" />
+            </th>
+            <th
+              className={`${thClass} ${sortableClass}`}
+              onClick={() => onSort('strategy_id')}
+              data-testid="sort-strategy_id"
+            >
+              Strategy
+              <SortIndicator col="strategy_id" />
+            </th>
             <th className={thClass}>Variant</th>
-            <th className={thClass}>Entry Time</th>
-            <th className={thClass}>Entry $</th>
+            <th
+              className={`${thClass} ${sortableClass}`}
+              onClick={() => onSort('opened_at')}
+              data-testid="sort-opened_at"
+            >
+              Entry Time
+              <SortIndicator col="opened_at" />
+            </th>
+            <th
+              className={`${thClass} ${sortableClass}`}
+              onClick={() => onSort('entry_price')}
+              data-testid="sort-entry_price"
+            >
+              Entry $
+              <SortIndicator col="entry_price" />
+            </th>
             <th className={thClass}>Exit $</th>
-            <th className={thClass}>Theo P&L</th>
-            <th className={thClass}>R-Multiple</th>
-            <th className={thClass}>MFE (R)</th>
-            <th className={thClass}>MAE (R)</th>
-            <th className={thClass}>Stage</th>
-            <th className={thClass}>Reason</th>
-            <th className={thClass}>Grade</th>
+            <th
+              className={`${thClass} ${sortableClass}`}
+              onClick={() => onSort('theoretical_pnl')}
+              data-testid="sort-theoretical_pnl"
+            >
+              Theo P&L
+              <SortIndicator col="theoretical_pnl" />
+            </th>
+            <th
+              className={`${thClass} ${sortableClass}`}
+              onClick={() => onSort('theoretical_r_multiple')}
+              data-testid="sort-theoretical_r_multiple"
+            >
+              R-Multiple
+              <SortIndicator col="theoretical_r_multiple" />
+            </th>
+            <th
+              className={`${thClass} ${sortableClass}`}
+              onClick={() => onSort('max_favorable_excursion')}
+              data-testid="sort-max_favorable_excursion"
+            >
+              MFE (R)
+              <SortIndicator col="max_favorable_excursion" />
+            </th>
+            <th
+              className={`${thClass} ${sortableClass}`}
+              onClick={() => onSort('max_adverse_excursion')}
+              data-testid="sort-max_adverse_excursion"
+            >
+              MAE (R)
+              <SortIndicator col="max_adverse_excursion" />
+            </th>
+            <th
+              className={`${thClass} ${sortableClass}`}
+              onClick={() => onSort('rejection_stage')}
+              data-testid="sort-rejection_stage"
+            >
+              Stage
+              <SortIndicator col="rejection_stage" />
+            </th>
+            <th className={`${thClass} min-w-[200px]`}>Reason</th>
+            <th
+              className={`${thClass} ${sortableClass}`}
+              onClick={() => onSort('quality_grade')}
+              data-testid="sort-quality_grade"
+            >
+              Grade
+              <SortIndicator col="quality_grade" />
+            </th>
           </tr>
         </thead>
         <tbody className="divide-y divide-argus-border bg-argus-surface opacity-80">
           {trades.map((trade) => {
             const entryDate = new Date(trade.opened_at);
-            const entryDisplay = `${entryDate.toLocaleDateString()} ${entryDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+            const entryDisplay = `${entryDate.toLocaleDateString()} ${entryDate.toLocaleTimeString(
+              [],
+              { hour: '2-digit', minute: '2-digit' }
+            )}`;
             return (
               <tr
                 key={trade.position_id}
@@ -341,7 +523,11 @@ function ShadowTable({ trades }: ShadowTableProps) {
                 <td className={tdClass}>
                   <StageBadge stage={trade.rejection_stage} />
                 </td>
-                <td className={`${tdClass} text-argus-text-dim max-w-[180px] truncate`}>
+                <td
+                  className={`${tdClass} text-argus-text-dim min-w-[200px] max-w-[280px] truncate`}
+                  title={trade.rejection_reason}
+                  data-testid="reason-cell"
+                >
                   {trade.rejection_reason}
                 </td>
                 <td className={tdClass}>
@@ -352,47 +538,19 @@ function ShadowTable({ trades }: ShadowTableProps) {
           })}
         </tbody>
       </table>
-    </div>
-  );
-}
 
-// --- Pagination ---
+      {/* Sentinel element for IntersectionObserver */}
+      <div ref={sentinelRef} data-testid="shadow-scroll-sentinel" />
 
-interface PaginationProps {
-  offset: number;
-  limit: number;
-  totalCount: number;
-  onOffsetChange: (offset: number) => void;
-}
-
-function Pagination({ offset, limit, totalCount, onOffsetChange }: PaginationProps) {
-  const currentPage = Math.floor(offset / limit) + 1;
-  const totalPages = Math.max(1, Math.ceil(totalCount / limit));
-  if (totalPages <= 1) return null;
-
-  return (
-    <div className="flex items-center justify-between text-sm text-argus-text-dim">
-      <span>
-        Page {currentPage} of {totalPages} ({totalCount} total)
-      </span>
-      <div className="flex gap-2">
-        <button
-          onClick={() => onOffsetChange(Math.max(0, offset - limit))}
-          disabled={offset === 0}
-          className="flex items-center gap-1 px-3 py-1.5 rounded border border-argus-border bg-argus-surface hover:bg-argus-surface-2 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+      {/* Bottom loading indicator */}
+      {isLoadingMore && (
+        <div
+          className="flex justify-center py-3"
+          data-testid="shadow-loading-more"
         >
-          <ChevronLeft className="w-3 h-3" />
-          Prev
-        </button>
-        <button
-          onClick={() => onOffsetChange(offset + limit)}
-          disabled={offset + limit >= totalCount}
-          className="flex items-center gap-1 px-3 py-1.5 rounded border border-argus-border bg-argus-surface hover:bg-argus-surface-2 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-        >
-          Next
-          <ChevronRight className="w-3 h-3" />
-        </button>
-      </div>
+          <Loader2 className="w-4 h-4 animate-spin text-argus-text-dim" />
+        </div>
+      )}
     </div>
   );
 }
@@ -410,24 +568,128 @@ export function ShadowTradesTab({ enabled = true }: ShadowTradesTabProps) {
     date_to: undefined,
     rejection_stage: undefined,
   });
+  const [outcome, setOutcome] = useState<ShadowOutcomeFilter>('all');
+  const [quickFilter, setQuickFilter] = useState<QuickFilter>('all');
+  const [sortKey, setSortKey] = useState<SortKey>('opened_at');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [offset, setOffset] = useState(0);
+  const [allTrades, setAllTrades] = useState<ShadowTrade[]>([]);
 
-  const updateFilters = (updates: Partial<FiltersState>) => {
-    setFilters((prev) => ({ ...prev, ...updates }));
-    setOffset(0); // reset pagination on filter change
-  };
+  const sentinelRef = useRef<HTMLDivElement>(null);
 
-  const { data, isLoading, error } = useShadowTrades(
+  // Accumulate pages; deduplicate by position_id to handle keepPreviousData stale returns
+  const { data, isLoading, isFetching, error } = useShadowTrades(
     { ...filters, limit: PAGE_SIZE, offset },
     enabled,
   );
 
-  const trades = data?.positions ?? [];
+  useEffect(() => {
+    if (!data) return;
+    setAllTrades((prev) => {
+      if (offset === 0) return data.positions;
+      const existingIds = new Set(prev.map((t) => t.position_id));
+      const newTrades = data.positions.filter((t) => !existingIds.has(t.position_id));
+      return newTrades.length > 0 ? [...prev, ...newTrades] : prev;
+    });
+  }, [data, offset]);
+
+  const hasMore = data ? offset + PAGE_SIZE < data.total_count : false;
   const totalCount = data?.total_count ?? 0;
+
+  const loadMore = useCallback(() => {
+    if (!hasMore || isFetching) return;
+    setOffset((prev) => prev + PAGE_SIZE);
+  }, [hasMore, isFetching]);
+
+  // IntersectionObserver wired to sentinel at bottom of table
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) loadMore();
+      },
+      { threshold: 0.1 }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [loadMore]);
+
+  const updateFilters = useCallback((updates: Partial<FiltersState>) => {
+    setFilters((prev) => ({ ...prev, ...updates }));
+    setOffset(0);
+    setAllTrades([]);
+  }, []);
+
+  const handleQuickFilterChange = useCallback(
+    (label: QuickFilter) => {
+      setQuickFilter(label);
+      const { dateFrom, dateTo } = computeDateRangeForQuickFilter(label);
+      updateFilters({ date_from: dateFrom, date_to: dateTo });
+    },
+    [updateFilters]
+  );
+
+  const handleSort = useCallback(
+    (key: SortKey) => {
+      if (sortKey === key) {
+        setSortDir((dir) => (dir === 'asc' ? 'desc' : 'asc'));
+      } else {
+        setSortKey(key);
+        setSortDir('desc');
+      }
+    },
+    [sortKey]
+  );
+
+  // Outcome counts computed from all loaded trades
+  const outcomeCounts: OutcomeCounts = useMemo(
+    () => ({
+      all: allTrades.length,
+      win: allTrades.filter((t) => t.theoretical_pnl !== null && t.theoretical_pnl > 0).length,
+      loss: allTrades.filter((t) => t.theoretical_pnl !== null && t.theoretical_pnl < 0).length,
+      be: allTrades.filter((t) => t.theoretical_pnl === null || t.theoretical_pnl === 0).length,
+    }),
+    [allTrades]
+  );
+
+  // Client-side outcome filter then sort
+  const displayTrades = useMemo(() => {
+    const filtered =
+      outcome === 'all'
+        ? allTrades
+        : allTrades.filter((t) => {
+            if (outcome === 'win') return t.theoretical_pnl !== null && t.theoretical_pnl > 0;
+            if (outcome === 'loss') return t.theoretical_pnl !== null && t.theoretical_pnl < 0;
+            if (outcome === 'be') return t.theoretical_pnl === null || t.theoretical_pnl === 0;
+            return true;
+          });
+
+    return [...filtered].sort((a, b) => {
+      const aVal = a[sortKey] as string | number | null;
+      const bVal = b[sortKey] as string | number | null;
+      if (aVal === null && bVal === null) return 0;
+      if (aVal === null) return sortDir === 'asc' ? 1 : -1;
+      if (bVal === null) return sortDir === 'asc' ? -1 : 1;
+      if (aVal < bVal) return sortDir === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }, [allTrades, outcome, sortKey, sortDir]);
+
+  const isLoadingMore = isFetching && offset > 0;
 
   return (
     <div className="space-y-4" data-testid="shadow-trades-tab">
-      <ShadowFilters filters={filters} onFiltersChange={updateFilters} />
+      <ShadowFilters
+        filters={filters}
+        onFiltersChange={updateFilters}
+        outcome={outcome}
+        onOutcomeChange={(o) => setOutcome(o)}
+        quickFilter={quickFilter}
+        onQuickFilterChange={handleQuickFilterChange}
+        outcomeCounts={outcomeCounts}
+      />
 
       {error ? (
         <div
@@ -444,20 +706,21 @@ export function ShadowTradesTab({ enabled = true }: ShadowTradesTabProps) {
           <Loader2 className="w-4 h-4 animate-spin" />
           Loading shadow trades…
         </div>
-      ) : trades.length === 0 ? (
+      ) : allTrades.length === 0 ? (
         <>
           <SummaryStats trades={[]} totalCount={0} />
           <EmptyState />
         </>
       ) : (
         <>
-          <SummaryStats trades={trades} totalCount={totalCount} />
-          <ShadowTable trades={trades} />
-          <Pagination
-            offset={offset}
-            limit={PAGE_SIZE}
-            totalCount={totalCount}
-            onOffsetChange={setOffset}
+          <SummaryStats trades={allTrades} totalCount={totalCount} />
+          <ShadowTable
+            trades={displayTrades}
+            sortKey={sortKey}
+            sortDir={sortDir}
+            onSort={handleSort}
+            sentinelRef={sentinelRef}
+            isLoadingMore={isLoadingMore}
           />
         </>
       )}

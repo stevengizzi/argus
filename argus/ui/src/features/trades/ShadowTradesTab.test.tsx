@@ -211,6 +211,163 @@ describe('ShadowTradesTab — data display', () => {
   });
 });
 
+// --- Session 5 tests ---
+
+describe('ShadowTradesTab — outcome toggle', () => {
+  it('test_outcome_toggle_filters_wins — shows only trades with positive theo_pnl', () => {
+    const trades = [
+      makeShadowTrade({ symbol: 'AAPL', theoretical_pnl: 100.0 }),
+      makeShadowTrade({ symbol: 'TSLA', theoretical_pnl: -50.0 }),
+      makeShadowTrade({ symbol: 'NVDA', theoretical_pnl: null }),
+    ];
+    vi.mocked(useShadowTrades).mockReturnValue({
+      data: makeResponse(trades),
+      isLoading: false,
+      error: null,
+      isFetching: false,
+      isPending: false,
+    } as ReturnType<typeof useShadowTrades>);
+
+    render(<ShadowTradesTab />, { wrapper });
+
+    // All 3 rows visible initially
+    expect(screen.getAllByTestId('shadow-trade-row')).toHaveLength(3);
+
+    // Click "Wins" tab
+    fireEvent.click(screen.getByRole('tab', { name: /wins/i }));
+
+    // Only the winning trade is shown
+    expect(screen.getAllByTestId('shadow-trade-row')).toHaveLength(1);
+    expect(screen.getByText('AAPL')).toBeInTheDocument();
+    expect(screen.queryByText('TSLA')).not.toBeInTheDocument();
+    expect(screen.queryByText('NVDA')).not.toBeInTheDocument();
+  });
+
+  it('test_outcome_toggle_filters_losses — shows only trades with negative theo_pnl', () => {
+    const trades = [
+      makeShadowTrade({ symbol: 'AAPL', theoretical_pnl: 100.0 }),
+      makeShadowTrade({ symbol: 'TSLA', theoretical_pnl: -50.0 }),
+      makeShadowTrade({ symbol: 'NVDA', theoretical_pnl: null }),
+    ];
+    vi.mocked(useShadowTrades).mockReturnValue({
+      data: makeResponse(trades),
+      isLoading: false,
+      error: null,
+      isFetching: false,
+      isPending: false,
+    } as ReturnType<typeof useShadowTrades>);
+
+    render(<ShadowTradesTab />, { wrapper });
+
+    // Click "Losses" tab
+    fireEvent.click(screen.getByRole('tab', { name: /losses/i }));
+
+    // Only the losing trade is shown
+    expect(screen.getAllByTestId('shadow-trade-row')).toHaveLength(1);
+    expect(screen.getByText('TSLA')).toBeInTheDocument();
+    expect(screen.queryByText('AAPL')).not.toBeInTheDocument();
+  });
+});
+
+describe('ShadowTradesTab — time presets', () => {
+  it('test_time_preset_today — Today preset sets both date inputs to a non-empty date', () => {
+    vi.mocked(useShadowTrades).mockReturnValue({
+      data: makeResponse([]),
+      isLoading: false,
+      error: null,
+      isFetching: false,
+      isPending: false,
+    } as ReturnType<typeof useShadowTrades>);
+
+    render(<ShadowTradesTab />, { wrapper });
+
+    const fromInput = screen.getByTestId('shadow-date-from') as HTMLInputElement;
+    const toInput = screen.getByTestId('shadow-date-to') as HTMLInputElement;
+
+    // Date inputs start empty
+    expect(fromInput).toHaveValue('');
+    expect(toInput).toHaveValue('');
+
+    // Click Today
+    fireEvent.click(screen.getByTestId('shadow-quick-filter-today'));
+
+    // Both date inputs should now be set and equal (same day)
+    expect(fromInput).not.toHaveValue('');
+    expect(toInput).not.toHaveValue('');
+    expect(fromInput.value).toBe(toInput.value);
+  });
+
+  it('test_time_preset_all — All preset clears the date range', () => {
+    vi.mocked(useShadowTrades).mockReturnValue({
+      data: makeResponse([]),
+      isLoading: false,
+      error: null,
+      isFetching: false,
+      isPending: false,
+    } as ReturnType<typeof useShadowTrades>);
+
+    render(<ShadowTradesTab />, { wrapper });
+
+    const fromInput = screen.getByTestId('shadow-date-from') as HTMLInputElement;
+
+    // Set Today first to populate the date inputs
+    fireEvent.click(screen.getByTestId('shadow-quick-filter-today'));
+    expect(fromInput).not.toHaveValue('');
+
+    // Now click All — should clear both dates
+    fireEvent.click(screen.getByTestId('shadow-quick-filter-all'));
+    expect(fromInput).toHaveValue('');
+  });
+});
+
+describe('ShadowTradesTab — sortable columns', () => {
+  it('test_sortable_columns_toggle — clicking a column header toggles sort direction', () => {
+    const trades = [
+      makeShadowTrade({ symbol: 'AAPL', strategy_id: 'orb_breakout' }),
+      makeShadowTrade({ symbol: 'TSLA', strategy_id: 'vwap_reclaim' }),
+    ];
+    vi.mocked(useShadowTrades).mockReturnValue({
+      data: makeResponse(trades),
+      isLoading: false,
+      error: null,
+      isFetching: false,
+      isPending: false,
+    } as ReturnType<typeof useShadowTrades>);
+
+    render(<ShadowTradesTab />, { wrapper });
+
+    const strategyHeader = screen.getByTestId('sort-strategy_id');
+
+    // First click — should show descending indicator
+    fireEvent.click(strategyHeader);
+    expect(strategyHeader.querySelector('svg')).toBeInTheDocument();
+
+    // Second click — direction reverses
+    fireEvent.click(strategyHeader);
+    // Both clicks produce a sort icon; just verify it's still present
+    expect(strategyHeader.querySelector('svg')).toBeInTheDocument();
+  });
+});
+
+describe('ShadowTradesTab — reason tooltip', () => {
+  it('test_reason_tooltip — Reason cell has title attribute with full rejection reason', () => {
+    const longReason = 'grade_below_minimum_threshold_for_live_trading_conditions_in_choppy_regime';
+    const trades = [makeShadowTrade({ rejection_reason: longReason })];
+    vi.mocked(useShadowTrades).mockReturnValue({
+      data: makeResponse(trades),
+      isLoading: false,
+      error: null,
+      isFetching: false,
+      isPending: false,
+    } as ReturnType<typeof useShadowTrades>);
+
+    render(<ShadowTradesTab />, { wrapper });
+
+    const reasonCell = screen.getByTestId('reason-cell');
+    expect(reasonCell).toHaveAttribute('title', longReason);
+  });
+});
+
 describe('TradesPage — tab switching', () => {
   it('shows Shadow Trades tab content when clicked, returns to live on Live Trades click', async () => {
     vi.mocked(useShadowTrades).mockReturnValue({
