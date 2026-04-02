@@ -1,13 +1,13 @@
 # ARGUS — Claude Code Context
 
 > Dense, actionable context for Claude Code sessions. No history — see `docs/` for that.
-> Last updated: April 2, 2026 (Sprint 32.75 doc sync — The Arena + UI/Operational Sweep)
+> Last updated: April 2, 2026 (Sprint 32.8 doc sync — Arena Latency + UI Polish Sweep)
 
 ## Active Sprint
 
 **Active sprint: 31A (Pattern Expansion III — reach 15 strategies).**
 
-Last completed sprint: **32.75 (The Arena + UI/Operational Sweep)** — 10th Command Center page (The Arena: real-time multi-chart position visualization), 13 UI bugs/polish items, 5 operational fixes, strategy identity system (unique colors/badges/letters), Dashboard overhaul, Arena REST + WebSocket, IBC setup guide. +41 pytest, +94 Vitest. No new DECs.
+Last completed sprint: **32.8 (Arena Latency + UI Polish Sweep)** — Arena TickEvent subscription (bypasses 1s throttle, new `arena_tick_price` message type), pre-market candle context (4 AM ET), Arena/Dashboard/Trades visual polish, VitalsStrip component, Dashboard 4-row layout, Trades unified styling + Shadow Trades features. +9 pytest, +41 Vitest. No new DECs. DEF-137 + DEF-138 resolved.
 
 ### Roadmap Amendments Adopted (DEC-357, DEC-358)
 Two roadmap amendments adopted March 23, 2026 adding 5 new sprint slots:
@@ -17,7 +17,7 @@ Two roadmap amendments adopted March 23, 2026 adding 5 new sprint slots:
 - **32.5** (Experiment Registry + Promotion Pipeline): Partitioned SQLite registry, cohort-based promotion, simulated-paper screening, overnight experiment queue, kill switches, anti-fragility
 - **33.5** (Adversarial Stress Testing): Historical crisis replay + synthetic stress scenarios as PromotionPipeline gate
 Amendment docs: `docs/amendments/roadmap-amendment-experiment-infrastructure.md`, `docs/amendments/roadmap-amendment-intelligence-architecture.md`
-Build track: ~~21.6~~ ✅ → ~~27.5~~ ✅ → ~~27.6~~ ✅ → ~~27.7~~ ✅ → ~~27.75~~ ✅ → ~~27.8~~ ✅ → ~~27.9~~ ✅ → ~~27.95~~ ✅ → ~~28~~ ✅ → ~~28.5~~ ✅ → ~~28.75~~ ✅ → ~~29~~ ✅ → ~~29.5~~ ✅ → ~~32~~ ✅ → ~~32.5~~ ✅ → ~~32.75~~ ✅ → **31A** → 30 → 31.5 → 33 → 33.5 → 34 → 35–41
+Build track: ~~21.6~~ ✅ → ~~27.5~~ ✅ → ~~27.6~~ ✅ → ~~27.7~~ ✅ → ~~27.75~~ ✅ → ~~27.8~~ ✅ → ~~27.9~~ ✅ → ~~27.95~~ ✅ → ~~28~~ ✅ → ~~28.5~~ ✅ → ~~28.75~~ ✅ → ~~29~~ ✅ → ~~29.5~~ ✅ → ~~32~~ ✅ → ~~32.5~~ ✅ → ~~32.75~~ ✅ → ~~32.8~~ ✅ → **31A** → 30 → 31.5 → 33 → 33.5 → 34 → 35–41
 DEC ranges reserved: 396–402 (33.5)
 DEF items: DEF-129 (non-PatternModule variant support), DEF-130 (intraday parameter adaptation)
 RSK items: RSK-049 (shadow variant throughput impact), RSK-050 (promotion oscillation)
@@ -26,12 +26,13 @@ RSK items: RSK-049 (shadow variant throughput impact), RSK-050 (promotion oscill
 - **FMP Starter plan restriction:** FMP news endpoints return 403 on Starter plan ($22/mo). `fmp_news.enabled: false` in `system_live.yaml`. FMP circuit breaker (DEC-323) prevents spam if accidentally enabled.
 - **Pre-existing xdist failures (DEF-048):** 4 test_main.py tests fail under `-n auto` (same `load_dotenv`/`AIConfig` race): `test_both_strategies_created`, `test_multi_strategy_health_status`, `test_candle_event_routing_subscribed`, `test_12_phase_startup_creates_orchestrator`. Pre-existing on clean HEAD. Priority: LOW.
 - **Test isolation (DEF-049):** `test_orchestrator_uses_strategies_from_registry` fails when run in isolation but passes in full suite. Pre-existing.
-- **Regime vector migration date (DEF-137):** `test_history_store_migration` in `tests/core/test_regime_vector_expansion.py` — hardcoded date "2026-03-25" causes failure after 7-day retention prune. Priority: LOW.
+- **Startup zombie flatten queue not draining (DEF-139):** Pre-market zombie positions queued in `_startup_flatten_queue` may not drain at market open if the poll loop timing is off. Deferred to operational fixes sprint. Priority: MEDIUM.
+- **EOD flatten reports positions closed but broker retains them (DEF-140):** EOD flatten Pass 2 may not catch all broker-retained positions after Pass 1. Deferred to operational fixes sprint. Priority: MEDIUM.
 
 ## Current State
 
 - **Active sprint:** 31A (Pattern Expansion III — reach 15 strategies)
-- **Tests:** ~4,530 pytest + 805 Vitest (DEF-137: `test_history_store_migration` hardcoded date decay; DEF-138: `ArenaPage.test.tsx` WS mock missing — both LOW priority pre-existing)
+- **Tests:** ~4,539 pytest + 846 Vitest (0 pre-existing failures)
 - **Strategies:** 12 active (ORB Breakout, ORB Scalp, VWAP Reclaim, Afternoon Momentum, Red-to-Green, Bull Flag, Flat-Top Breakout, Dip-and-Rip, HOD Break, Gap-and-Go, ABCD, Pre-Market High Break)
 - **Infrastructure:** Databento EQUS.MINI (live) + IBKR paper trading (Account U24619949) + FMP Starter (scanning + reference data + daily bars for regime) + Finnhub (news + analyst recs) + Claude API (Copilot + Catalyst Classification) + Universe Manager (config-gated) + Catalyst Pipeline (config-gated) + Intelligence Polling Loop (config-gated) + Reference Data Cache + Quality Engine (config-gated) + Dynamic Position Sizer + Strategy Evaluation Telemetry (ring buffer + SQLite persistence) + Debrief Export (shutdown automation) + Evaluation Framework (MultiObjectiveResult, EnsembleResult, comparison API, slippage model) + Regime Intelligence (RegimeVector 11-field, 8 calculators, config-gated, Sprints 27.6 + 27.9) + VIX Data Service (yfinance daily VIX/SPX, 5 derived metrics, SQLite cache, config-gated, Sprint 27.9) + Counterfactual Engine (shadow position tracking, filter accuracy, shadow strategy mode, overflow routing, config-gated, Sprints 27.7 + 27.95) + Learning Loop V1 (OutcomeCollector, WeightAnalyzer, ThresholdAnalyzer, CorrelationAnalyzer, LearningService, ConfigProposalManager, LearningStore, config-gated, Sprint 28) + Exit Management (trailing stops ATR/percent/fixed, exit escalation, belt-and-suspenders, config-gated per strategy, Sprint 28.5) + ThrottledLogger (log rate-limiting, Sprint 27.75) + Paper trading config overrides (10x risk reduction, throttle disabled, $10 min risk floor, Sprint 27.75) + Broker-confirmed reconciliation (Sprint 27.95) + Overflow routing (config-gated, Sprint 27.95)
 - **Frontend:** 10-page Command Center (Arena page added Sprint 32.75, Experiments page added Sprint 32.5, Shadow Trades tab added to Trade Log) + AI Copilot + Universe Status Card + Intelligence Brief View (all active), Tauri desktop + PWA mobile. Pages: Dashboard, Trade Log, Performance, The Arena, Orchestrator, Pattern Library, The Debrief, System, Observatory, Experiments. Keyboard shortcuts: 1–9 + 0 (0 = Experiments). All 12 strategies have unique colors, badges, single-letter identifiers.
@@ -49,7 +50,7 @@ argus/
 ├── backtest/       # VectorBT helpers, Replay Harness, BacktestEngine (Sprint 27)
 ├── api/            # FastAPI REST + WebSocket, JWT auth
 │   ├── routes/     # arena.py (GET /api/v1/arena/positions, GET /api/v1/arena/candles/{symbol})
-│   └── websocket/  # ai_chat.py (WS streaming), arena_ws.py (/ws/v1/arena — 5 message types)
+│   └── websocket/  # ai_chat.py (WS streaming), arena_ws.py (/ws/v1/arena — 6 message types)
 ├── ui/             # React frontend (Vite + TypeScript + Tailwind v4)
 │   └── features/
 │       ├── copilot/  # CopilotPanel, ChatMessage, ActionCard
@@ -367,8 +368,10 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 | ~~DEF-134~~ | ~~BacktestEngine strategy type support for all 7 PatternModule patterns~~ | — | **RESOLVED** (Sprint 32.5 S3+S4): `StrategyType` enum extended to all 7 patterns; `_supply_daily_reference_data()` added for GapAndGo/PreMarketHighBreak. All patterns runnable via `scripts/run_experiment.py`. |
 | DEF-135 | Full visual verification of Shadow Trades tab + Experiments page with live data | Unscheduled | S6 visual items 2–5 (table styling, rejection badges, grade badges, P&L coloring) and S7 visual items 2–5 (variant table, promotion log, pattern comparison) untestable until counterfactual positions and experiment variants accumulate during paper trading. Verify after first week with `experiments.enabled=true`. |
 | ~~DEF-136~~ | ~~GoalTracker.test.tsx — 3 pre-existing Vitest failures~~ | — | **RESOLVED** (Sprint 32.75): `vi.useFakeTimers` date mock applied; `getByText` ambiguity fixed with `getByTestId`. |
-| DEF-137 | `test_history_store_migration` hardcoded date decay | Unscheduled | `tests/core/test_regime_vector_expansion.py` — hardcoded date "2026-03-25" causes test failure after 7-day retention prune. Needs dynamic date or mocked clock. Priority: LOW. |
-| DEF-138 | `ArenaPage.test.tsx` WebSocket mock missing | Unscheduled | `useArenaWebSocket` creates real WebSocket in jsdom which never closes, causing Vitest hang. Fix: `vi.mock` for `useArenaWebSocket` (same pattern used for `useArenaData` mock). Priority: LOW. |
+| ~~DEF-137~~ | ~~`test_history_store_migration` hardcoded date decay~~ | — | **RESOLVED** (Sprint 32.8): Replaced hardcoded `"2026-03-25"` with `datetime.now(UTC) - timedelta(days=1)` in `tests/core/test_regime_vector_expansion.py`. |
+| ~~DEF-138~~ | ~~`ArenaPage.test.tsx` WebSocket mock missing~~ | — | **RESOLVED** (Sprint 32.8): `vi.mock` for `useArenaWebSocket` added to `ArenaPage.test.tsx`. `vitest.config.ts` `testTimeout`/`hookTimeout` set to 10s. |
+| DEF-139 | Startup zombie flatten queue not draining at market open | Unscheduled | `_startup_flatten_queue` in Order Manager may not drain at 9:30 ET if poll loop timing is off. Deferred to operational fixes sprint. Priority: MEDIUM. |
+| DEF-140 | EOD flatten reports positions closed but broker retains them | Unscheduled | EOD flatten Pass 1 may log success while broker retains position; Pass 2 may miss edge cases. Deferred to operational fixes sprint. Priority: MEDIUM. |
 
 ## Reference
 

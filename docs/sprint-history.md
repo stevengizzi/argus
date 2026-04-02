@@ -1,7 +1,7 @@
 # ARGUS — Sprint History
 
 > Complete record of all sprints from project inception through current state.
-> Active development began February 14, 2026. As of March 31, 2026 (~46 calendar days), 31 full sprints + 37 sub-sprints completed.
+> Active development began February 14, 2026. As of April 2, 2026 (~48 calendar days), 32 full sprints + 41 sub-sprints completed.
 
 ---
 
@@ -36,6 +36,8 @@
 | Post-Session Sweep | 29.5 | Mar 31–Apr 1 | Flatten safety, paper data-capture mode, MFE/MAE tracking, ORB Scalp fix, UI fixes |
 | AC — Parameterized Templates | 32 | Apr 1, 2026 | Pattern factory, parameter fingerprint, experiment pipeline, variant spawner, promotion evaluator |
 | AD — Experiment Pipeline Completion | 32.5 | Apr 1, 2026 | Exit params as variant dimensions, BacktestEngine all 7 patterns, Shadow Trades tab, Experiments 9th page, allocation intelligence vision |
+| AE — The Arena + UI/Operational Sweep | 32.75 | Apr 2, 2026 | 10th Command Center page (The Arena), strategy identity system, Dashboard overhaul, Arena REST + WebSocket, IBC setup guide |
+| AF — Arena Latency + UI Polish Sweep | 32.8 | Apr 2, 2026 | Arena TickEvent subscription, arena_tick_price, pre-market candles, VitalsStrip, Dashboard 4-row layout, Trades unification, DEF-137/138 resolved |
 
 ---
 
@@ -2362,12 +2364,47 @@
 
 ---
 
+## Sprint 32.8: Arena Latency + UI Polish Sweep (April 2, 2026)
+
+**Goal:** Fix Arena chart latency via direct TickEvent subscription, add pre-market candle context, and polish Arena/Dashboard/Trades pages for daily operational use.
+
+**Starting state:** 4,530 pytest + 805 Vitest. Pre-existing: DEF-137 (test_history_store_migration), DEF-138 (ArenaPage WS mock).
+**Ending state:** 4,539 pytest + 846 Vitest (+9 pytest, +41 Vitest). 0 pre-existing failures.
+**Sessions:** 8 (S1–S5 implementation + S6f/S6g/S6h visual fixes) + 1 impromptu (Vitest hygiene) + 1 micro-fix (Dashboard height) + 1 standalone (DEF-137 fix)
+**Execution mode:** Human-in-the-loop
+**New DECs:** None — all changes followed established patterns.
+**DEF items resolved:** DEF-137 (test_history_store_migration hardcoded date), DEF-138 (ArenaPage.test.tsx WS mock)
+**DEF items created:** DEF-139 (startup zombie flatten queue not draining at market open), DEF-140 (EOD flatten reports positions closed but broker retains them)
+**New files:** 3 (VitalsStrip.tsx, VitalsStrip.test.tsx, tests/api/websocket/test_arena_ws_tick.py)
+**Modified files:** ~20 across backend + frontend
+
+**Sprint deliverables by session:**
+
+- **S1 — Arena TickEvent subscription:** `arena_ws.py` subscribes directly to `TickEvent` for chart data — bypasses the 1s Order Manager P&L throttle. New `arena_tick_price` message type carries raw price at full Databento tick rate. Existing `arena_tick` (from PositionUpdatedEvent) retained for P&L/R/trail data at 1 Hz. Per-connection `trail_stop_cache: dict[str, float]` populated from PositionUpdatedEvent (replaces removed `_get_trailing_stop_price()`). 9 new pytest for the new WS path.
+- **S2 — Dashboard VitalsStrip + 4-row layout:** New `VitalsStrip` component: single horizontal bar consolidating Equity, Daily P&L (with sparkline), Today's Stats (trades/win rate/avg R/best trade), and VIX Regime. 4-row layout: VitalsStrip → Strategy Allocation Bar → Positions Table (70%) + Session Timeline/Signal Quality stacked (30%) → AI Insight (50%) + Learning Loop (50%). Monthly Goal and Universe cards removed. All/Open/Closed toggle repositioned left, next to "POSITIONS" header. `accountData.daily_trades_count` (uncapped) used for trade count consistency.
+- **S3 — IntradayCandleStore pre-market context:** `_MARKET_OPEN` widened 9:30 AM → 4:00 AM ET for pre-market candle data. `_MAX_BARS_PER_SYMBOL` 390 → 720.
+- **S4 — Trades filter bar unification:** Both Live and Shadow Trades tabs unified to same visual density: compact row height (`py-2`), darker backgrounds (`bg-argus-surface-2/50`), identical filter bar / stats bar / table header styling. Single flex-wrap row on both tabs, all controls `h-8`. `l`/`s` hotkeys for tab switching (with input-focus guard).
+- **S5 — Shadow Trades feature parity:** Outcome toggle (All/Wins/Losses/BE) — client-side filter on `theoretical_pnl`. Time presets (Today/Week/Month/All) with no-op guard on double-click. Infinite scroll replacing pagination (IntersectionObserver, PAGE_SIZE=50, dedup by position_id). 10 sortable columns (client-side sort). Reason column wider (`min-w-[200px]`) with native `title` tooltip. `apiDateTo` computed with `T23:59:59` suffix to fix "Today" timezone mismatch. Summary stats computed via `useMemo([allTrades])` with `isPlaceholderData` guard.
+- **S6f, S6g, S6h — Visual polish fixes:** TradeStatsBar replaced MetricCard with inline grid layout matching Shadow's SummaryStats. `tracking-wider` → `tracking-wide` on all table header cells. Signal Quality panel flex column layout. Positions Timeline `h-full` (replaced fixed `max-h-[420px]`). Row 3 viewport fill: `flex-1 min-h-0`, `h-[calc(100vh-3rem)]` on desktop container. AI Insight and Learning Loop height via `items-stretch`. Arena progress bar "Stop"/"T1" labels, MiniChart entry marker, auto-zoom, axis label visibility, no colored border on ArenaCard.
+- **Vitest hygiene (impromptu):** `vitest.config.ts` `testTimeout: 10_000` + `hookTimeout: 10_000`. `ArenaPage.test.tsx` `vi.mock` for `useArenaWebSocket` — resolves DEF-138. Workflow metarepo updated with test worker hygiene guidance.
+- **DEF-137 fix (standalone):** `tests/core/test_regime_vector_expansion.py` replaced hardcoded `"2026-03-25"` with `datetime.now(UTC) - timedelta(days=1)`.
+
+**Session verdicts:** S1 APPROVED → S2 APPROVED → S3 APPROVED → S4 APPROVED → S5 APPROVED → S6f APPROVED → S6g APPROVED → S6h CLEAN → Vitest hygiene CLEAN → Dashboard height micro-fix CLEAN → DEF-137 fix CLEAN
+
+**Key learnings:**
+- Arena tick data requires two separate WS message types: `arena_tick_price` (raw TickEvent for chart updates at Databento tick rate) and `arena_tick` (PositionUpdatedEvent for P&L/R/trail at 1 Hz). These serve different purposes — the 1s P&L throttle is appropriate for financial display; the tick-rate channel is needed for smooth chart updates.
+- Unmocked WebSocket hooks in Vitest cause fork workers to hang. Any hook that creates a real `WebSocket` in jsdom must be mocked at the test file level with `vi.mock()`. Global `testTimeout`/`hookTimeout` provides a safety net.
+- `useMemo([allTrades])` with `isPlaceholderData` guard prevents stale stats on filter change in paginated/infinite-scroll components. The guard stops the memo from recalculating while new data is still loading (avoids flash of wrong totals).
+- CSS `flex-1 min-h-0` is the correct pattern for a flex child to fill remaining viewport height without overflowing. `h-full` alone on an inner div fails unless all parent divs also have explicit heights.
+
+---
+
 ## Sprint Statistics
 
-- **Total sprints:** 32 full + 40 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9, 27.5, 27.6, 27.65, 27.7, 27.75, 27.8, 27.9, 27.95, 28.5, 28.75, 29, 29.5, 32.5, 32.75)
-- **Total sessions:** ~487+ Claude Code sessions
-- **Total tests:** ~4,530 pytest + 805 Vitest = ~5,335 total
-- **Total decisions:** 381 (DEC-001 through DEC-381; no new DECs in Sprints 29.5, 32, 32.5, or 32.75)
+- **Total sprints:** 32 full + 41 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9, 27.5, 27.6, 27.65, 27.7, 27.75, 27.8, 27.9, 27.95, 28.5, 28.75, 29, 29.5, 32.5, 32.75, 32.8)
+- **Total sessions:** ~497+ Claude Code sessions
+- **Total tests:** ~4,539 pytest + 846 Vitest = ~5,385 total
+- **Total decisions:** 381 (DEC-001 through DEC-381; no new DECs in Sprints 29.5, 32, 32.5, 32.75, or 32.8)
 - **Calendar days (active dev):** ~48 (Feb 14 – Apr 2, 2026)
 - **Largest sprint:** 22 (9 implementation + 5 fix + 9 reviews, largest scope)
 - **Cleanest sprint:** 23 (11 sessions, 0 regressions, 0 scope gaps requiring follow-up)

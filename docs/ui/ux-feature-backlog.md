@@ -667,6 +667,7 @@ Refactor Performance page from fixed 5-tab layout to customizable widget grid us
 | **25** ✅ | Observatory page (4 views, detail panel, vitals, debrief mode, Three.js 3D) | ~14 sessions | Pipeline visualization |
 | **32.5** ✅ | Experiments page (9th page), Shadow Trades tab on Trade Log, Experiments variants/promotions UI | ~11 Vitest | Experiment pipeline visibility |
 | **32.75** ✅ | The Arena (10th page), strategy identity system (colors/badges/letters), Dashboard overhaul, Arena REST + WS, AI Copilot context, catalyst links, TradeChart dedup | ~94 Vitest | Real-time position monitoring |
+| **32.8** ✅ | Arena TickEvent subscription (latency fix), arena_tick_price, pre-market candles, VitalsStrip, Dashboard 4-row layout, Trades unified styling + Shadow Trades features (outcome toggle, time presets, infinite scroll, sortable columns) | ~41 Vitest | Arena latency + daily operations polish |
 | **30** | Calibration chart, weekly insight, learning loop health | ~8h | Learning loop UI |
 
 ---
@@ -698,17 +699,24 @@ Refactor Performance page from fixed 5-tab layout to customizable widget grid us
 - Animations never drop below 60fps
 - Charts with >1000 data points use canvas (not SVG)
 - WebSocket updates batch via requestAnimationFrame (rAF batching used in Arena WS — Sprint 32.75)
+- Any hook that creates a real `WebSocket` in jsdom must be mocked with `vi.mock()` in test files; `vitest.config.ts` uses `testTimeout: 10_000` + `hookTimeout: 10_000` as safety net (Sprint 32.8)
 - AI Copilot streams partial responses immediately
 
 ---
 
-## Deferred Items From Sprint 32.75
+## Deferred Items From Sprint 32.8
 
-### DEF-137 — `test_history_store_migration` hardcoded date decay [LOW]
-`tests/core/test_regime_vector_expansion.py` uses hardcoded date "2026-03-25" which falls outside the 7-day retention window of RegimeHistoryStore. Test fails after ~7 days. Fix: use `datetime.now(UTC) - timedelta(days=1)` or mock the clock. Assign to next cleanup sprint.
+### DEF-139 — Startup zombie flatten queue not draining at market open [MEDIUM]
+Pre-market zombie positions queued in `_startup_flatten_queue` may not drain correctly at market open if the Order Manager poll loop timing doesn't align with the 9:30 ET check. Deferred to dedicated operational fixes sprint. Location: `argus/execution/order_manager.py` — `_drain_startup_flatten_queue()`.
 
-### DEF-138 — `ArenaPage.test.tsx` WebSocket mock missing [LOW]
-`useArenaWebSocket` creates a real `WebSocket` in jsdom (no mock provided), which never closes. Vitest hangs instead of timing out cleanly. Fix: add `vi.mock('../hooks/useArenaWebSocket')` at the top of `ArenaPage.test.tsx` (same pattern used for `useArenaData` mock in the same file). Assign to next frontend test cleanup sprint.
+### DEF-140 — EOD flatten reports positions closed but broker retains them [MEDIUM]
+EOD flatten Pass 1 may log a successful close but the broker (IBKR paper) retains the position in some edge cases. Pass 2 (broker-only sweep) intended to catch this but timing issues may cause false-positives. Deferred to dedicated operational fixes sprint. Location: `argus/execution/order_manager.py` — `eod_flatten()`.
+
+### Outstanding Code-Level Items (Low Priority)
+- Live Trades quick filter missing no-op guard on double-click (`TradeFilters.tsx` — `handleQuickFilter`)
+- `todayStats.trade_count` capped at 1000 by backend query — Dashboard summary API
+- Shadow Trades outcome counts reflect loaded pages only (intentional judgment call, not a bug)
+- Shadow `tbody` has `opacity-80`, Live does not (intentional visual differentiation)
 
 ### Window summary wiring — BaseStrategy subclasses [LOW]
 `BaseStrategy._log_window_summary()` and helpers are implemented but not yet wired into any of the 12 strategy subclasses. Wiring touches all 12 strategies + tests. Deferred to a dedicated sprint. This would provide per-session evaluation coverage metrics in logs.
