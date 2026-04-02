@@ -242,6 +242,15 @@ async def get_orchestrator_status(
         earliest = min(decisions, key=lambda d: d["created_at"])
         pre_market_completed_at = earliest["created_at"]
 
+    # Batch-fetch today's closed trades for per-strategy P&L (avoids N+1 queries)
+    # Use ET date — market hours (9:30–3:55 PM ET) always fall on the same UTC date,
+    # so date(exit_time) in SQLite matches the ET date for all intraday exits (DEC-061).
+    today_et_date = datetime.now(et_tz).date()
+    trades_today_all = await state.trade_logger.get_trades_by_date(today_et_date)
+    trades_by_strategy: dict[str, list] = {}
+    for _trade in trades_today_all:
+        trades_by_strategy.setdefault(_trade.strategy_id, []).append(_trade)
+
     # Build allocations list with extended data
     allocations: list[AllocationInfo] = []
     total_deployed_pct = 0.0
@@ -303,13 +312,12 @@ async def get_orchestrator_status(
                 force_close=window["force_close"],
             )
         is_active = True
-        trade_count_today = 0
-        daily_pnl = 0.0
+        strategy_trades_today = trades_by_strategy.get(strategy_id, [])
+        trade_count_today = len(strategy_trades_today)
+        daily_pnl = sum(t.net_pnl for t in strategy_trades_today)
 
         if strategy is not None:
             is_active = getattr(strategy, "is_active", True)
-            trade_count_today = getattr(strategy, "_trade_count_today", 0)
-            daily_pnl = getattr(strategy, "_daily_pnl", 0.0)
 
         # Get health status from health monitor
         health_status = "healthy"

@@ -168,30 +168,36 @@ class SystemContextBuilder:
         """Build Dashboard page context.
 
         Context includes:
-        - Portfolio summary (equity, daily P&L)
-        - Open positions
+        - Portfolio summary (equity, daily P&L, aggregated position stats)
+        - All open positions (up to 50) with full per-position detail
         - Regime classification
         """
         result: dict[str, Any] = {}
 
-        # Portfolio summary
+        # Portfolio summary (base fields)
         result["portfolio_summary"] = {
             "equity": context_data.get("equity", 0.0),
             "daily_pnl": context_data.get("daily_pnl", 0.0),
             "open_positions": context_data.get("open_positions_count", 0),
         }
 
-        # Open positions
+        # Open positions (up to 50)
+        _max_positions = 50
         if "positions" in context_data:
             result["positions"] = context_data["positions"]
         elif app_state.order_manager is not None:
             try:
+                now_utc = datetime.now(ZoneInfo("UTC"))
                 managed_positions = app_state.order_manager.get_managed_positions()
-                positions_list = []
+                positions_list: list[dict[str, Any]] = []
                 for symbol, pos_list in managed_positions.items():
+                    if len(positions_list) >= _max_positions:
+                        break
                     for pos in pos_list:
+                        if len(positions_list) >= _max_positions:
+                            break
                         if not pos.is_fully_closed:
-                            # Compute unrealized P&L if data service is available
+                            current_price: float | None = None
                             unrealized = 0.0
                             if app_state.data_service is not None:
                                 try:
@@ -204,14 +210,61 @@ class SystemContextBuilder:
                                         ) * pos.shares_remaining
                                 except Exception:
                                     pass
+
+                            try:
+                                original_stop = getattr(pos, "original_stop_price", None)
+                                if isinstance(original_stop, float) and isinstance(pos.entry_price, float):
+                                    risk_per_share = abs(pos.entry_price - original_stop)
+                                    risk_amount = risk_per_share * pos.shares_remaining
+                                    r_multiple = (
+                                        round(unrealized / risk_amount, 3)
+                                        if risk_amount > 0
+                                        else 0.0
+                                    )
+                                else:
+                                    r_multiple = 0.0
+                            except Exception:
+                                r_multiple = 0.0
+
+                            try:
+                                entry_time = getattr(pos, "entry_time", None)
+                                hold_seconds = (
+                                    int((now_utc - entry_time).total_seconds())
+                                    if entry_time is not None
+                                    else 0
+                                )
+                            except Exception:
+                                hold_seconds = 0
+
                             positions_list.append({
                                 "symbol": symbol,
                                 "strategy_id": pos.strategy_id,
+                                "side": "long",
                                 "shares": pos.shares_remaining,
                                 "entry_price": pos.entry_price,
+                                "current_price": current_price,
                                 "unrealized_pnl": unrealized,
                                 "realized_pnl": pos.realized_pnl,
+                                "r_multiple": r_multiple,
+                                "hold_duration_seconds": hold_seconds,
                             })
+
+                # Portfolio aggregates
+                total_unrealized = sum(p["unrealized_pnl"] for p in positions_list)
+                by_strategy: dict[str, int] = {}
+                for p in positions_list:
+                    sid = p["strategy_id"]
+                    by_strategy[sid] = by_strategy.get(sid, 0) + 1
+                winning = sum(1 for p in positions_list if p["unrealized_pnl"] > 0)
+                losing = sum(1 for p in positions_list if p["unrealized_pnl"] < 0)
+
+                result["portfolio_summary"].update({
+                    "total_position_count": len(positions_list),
+                    "total_unrealized_pnl": total_unrealized,
+                    "count_by_strategy": by_strategy,
+                    "winning_count": winning,
+                    "losing_count": losing,
+                })
                 result["positions"] = positions_list
             except Exception as e:
                 logger.warning("Failed to build Dashboard positions: %s", e)

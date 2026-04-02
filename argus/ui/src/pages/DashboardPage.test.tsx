@@ -19,8 +19,6 @@ vi.mock('../features/dashboard', () => ({
   TodayStats: () => <div data-testid="TodayStats" />,
   SessionTimeline: () => <div data-testid="SessionTimeline" />,
   OpenPositions: () => <div data-testid="OpenPositions" />,
-  RecentTrades: () => <div data-testid="RecentTrades" />,
-  HealthMini: () => <div data-testid="HealthMini" />,
   SessionSummaryCard: () => <div data-testid="SessionSummaryCard" />,
   OrchestratorStatusStrip: () => <div data-testid="OrchestratorStatusStrip" />,
   StrategyDeploymentBar: () => <div data-testid="StrategyDeploymentBar" />,
@@ -28,7 +26,7 @@ vi.mock('../features/dashboard', () => ({
   PreMarketLayout: () => <div data-testid="PreMarketLayout" />,
   UniverseStatusCard: () => <div data-testid="UniverseStatusCard" />,
   SignalQualityPanel: () => <div data-testid="SignalQualityPanel" />,
-  VixRegimeCard: () => null, // Returns null when VIX disabled (default mock state)
+  VixRegimeCard: () => <div data-testid="VixRegimeCard" />,
 }));
 
 vi.mock('../features/watchlist', () => ({
@@ -81,7 +79,7 @@ describe('DashboardPage', () => {
     expect(posIdx).toBeLessThan(qualityIdx);
   });
 
-  it('renders all expected dashboard cards', () => {
+  it('renders all expected dashboard cards without RecentTrades or HealthMini', () => {
     const { container } = renderDashboard();
 
     const expectedCards = [
@@ -90,14 +88,13 @@ describe('DashboardPage', () => {
       'AccountSummary',
       'DailyPnlCard',
       'GoalTracker',
+      'VixRegimeCard',
       'OpenPositions',
       'TodayStats',
       'SessionTimeline',
-      'AIInsightCard',
-      'RecentTrades',
-      'HealthMini',
-      'UniverseStatusCard',
       'SignalQualityPanel',
+      'AIInsightCard',
+      'UniverseStatusCard',
       'WatchlistSidebar',
     ];
 
@@ -107,5 +104,40 @@ describe('DashboardPage', () => {
         `Expected card "${testId}" to be rendered`,
       ).toBeTruthy();
     }
+  });
+
+  it('does not render RecentTrades or HealthMini', () => {
+    const { container } = renderDashboard();
+    expect(container.querySelector('[data-testid="RecentTrades"]')).toBeNull();
+    expect(container.querySelector('[data-testid="HealthMini"]')).toBeNull();
+  });
+
+  it('renders SignalQualityPanel before AIInsightCard in DOM order (desktop)', () => {
+    const { container } = renderDashboard();
+
+    const testIds = Array.from(container.querySelectorAll('[data-testid]')).map(
+      (el) => el.getAttribute('data-testid'),
+    );
+
+    const sqIdx = testIds.indexOf('SignalQualityPanel');
+    const aiIdx = testIds.indexOf('AIInsightCard');
+
+    expect(sqIdx).toBeGreaterThan(-1);
+    expect(aiIdx).toBeGreaterThan(-1);
+    expect(sqIdx).toBeLessThan(aiIdx);
+  });
+
+  it('renders VixRegimeCard in the same row as AccountSummary (before OpenPositions)', () => {
+    const { container } = renderDashboard();
+
+    const testIds = Array.from(container.querySelectorAll('[data-testid]')).map(
+      (el) => el.getAttribute('data-testid'),
+    );
+
+    const vixIdx = testIds.indexOf('VixRegimeCard');
+    const posIdx = testIds.indexOf('OpenPositions');
+
+    expect(vixIdx).toBeGreaterThan(-1);
+    expect(vixIdx).toBeLessThan(posIdx);
   });
 });

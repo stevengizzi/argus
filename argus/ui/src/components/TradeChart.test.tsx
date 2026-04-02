@@ -10,13 +10,15 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { TradeChart } from './TradeChart';
 
 // Mock lightweight-charts
-const mockCreatePriceLine = vi.fn();
+const mockRemovePriceLine = vi.fn();
+const mockCreatePriceLine = vi.fn(() => ({ _mockPriceLine: true }));
 const mockSetMarkers = vi.fn();
 const mockSetData = vi.fn();
 const mockFitContent = vi.fn();
 const mockAddSeries = vi.fn(() => ({
   setData: mockSetData,
   createPriceLine: mockCreatePriceLine,
+  removePriceLine: mockRemovePriceLine,
 }));
 const mockTimeScale = vi.fn(() => ({ fitContent: mockFitContent }));
 const mockRemove = vi.fn();
@@ -258,5 +260,74 @@ describe('TradeChart', () => {
         title: 'Current',
       })
     );
+  });
+
+  it('removes price lines before recreating on data update', () => {
+    const { rerender } = render(
+      <TradeChart
+        symbol="TSLA"
+        entryTime="2026-02-25T14:35:00Z"
+        exitTime="2026-02-25T15:00:00Z"
+        entryPrice={250.0}
+        exitPrice={255.0}
+        stopPrice={248.0}
+        targetPrices={[254.0, 258.0]}
+        isOpen={false}
+      />,
+      { wrapper: createWrapper() }
+    );
+
+    // First render: 5 price lines created (entry, stop, T1, T2, exit)
+    expect(mockCreatePriceLine).toHaveBeenCalledTimes(5);
+    expect(mockRemovePriceLine).not.toHaveBeenCalled();
+
+    vi.clearAllMocks();
+    mockCreatePriceLine.mockReturnValue({ _mockPriceLine: true });
+
+    // Rerender with updated currentPrice to trigger second data update
+    rerender(
+      <TradeChart
+        symbol="TSLA"
+        entryTime="2026-02-25T14:35:00Z"
+        exitTime="2026-02-25T15:00:00Z"
+        entryPrice={250.0}
+        exitPrice={256.0}
+        stopPrice={248.0}
+        targetPrices={[254.0, 258.0]}
+        isOpen={false}
+      />
+    );
+
+    // removePriceLine should have been called for each previously created line
+    // before new lines were created — ensuring no duplicates accumulate
+    expect(mockRemovePriceLine).toHaveBeenCalled();
+    expect(mockCreatePriceLine).toHaveBeenCalledTimes(5);
+  });
+
+  it('creates exactly one set of price lines after initial render', () => {
+    vi.mocked(useTradeChartBars).mockReturnValue({
+      data: mockBarsData,
+      isLoading: false,
+      error: null,
+    } as ReturnType<typeof useTradeChartBars>);
+
+    render(
+      <TradeChart
+        symbol="TSLA"
+        entryTime="2026-02-25T14:35:00Z"
+        exitTime="2026-02-25T15:00:00Z"
+        entryPrice={250.0}
+        exitPrice={255.0}
+        stopPrice={248.0}
+        targetPrices={[254.0, 258.0]}
+        isOpen={false}
+      />,
+      { wrapper: createWrapper() }
+    );
+
+    // Exactly 5 calls: entry + stop + T1 + T2 + exit — not doubled
+    expect(mockCreatePriceLine).toHaveBeenCalledTimes(5);
+    // No removals needed on first render (nothing was tracked yet)
+    expect(mockRemovePriceLine).not.toHaveBeenCalled();
   });
 });

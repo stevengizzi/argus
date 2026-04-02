@@ -1,19 +1,19 @@
 /**
  * Icon-only sidebar for desktop (≥1024px).
  *
- * Shows 7 navigation items with group dividers, paper mode badge, status indicator, and logout.
+ * Shows navigation items with group dividers, paper mode badge, status indicator, and logout.
  *
  * Groups:
- * - Monitor: Dashboard, Trades, Performance
- * - Operate: Orchestrator, Patterns
+ * - Monitor: Dashboard, Trades, Performance, The Arena
+ * - Operate: Orchestrator, Observatory, Pattern Library
  * - Learn: Debrief
- * - Maintain: System
+ * - Maintain: System, Experiments
  *
- * Keyboard shortcuts handled in AppShell (1-7 for pages, 'c' for Copilot, 'w' for Watchlist).
+ * Keyboard shortcuts handled in AppShell (1-9 for pages, 'c' for Copilot, 'w' for Watchlist).
  */
 
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, ScrollText, TrendingUp, Gauge, Telescope, BookOpen, GraduationCap, Activity, FlaskConical, LogOut } from 'lucide-react';
+import { LayoutDashboard, ScrollText, TrendingUp, LayoutGrid, Gauge, Telescope, BookOpen, GraduationCap, Activity, FlaskConical, LogOut } from 'lucide-react';
 import { useAuthStore } from '../stores/auth';
 import { useLiveStore } from '../stores/live';
 
@@ -28,7 +28,8 @@ const NAV_ITEMS: Array<{
   // Monitor group
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/trades', icon: ScrollText, label: 'Trades' },
-  { to: '/performance', icon: TrendingUp, label: 'Performance', divider: true },
+  { to: '/performance', icon: TrendingUp, label: 'Performance' },
+  { to: '/arena', icon: LayoutGrid, label: 'The Arena', divider: true },
   // Operate group
   { to: '/orchestrator', icon: Gauge, label: 'Orchestrator' },
   { to: '/observatory', icon: Telescope, label: 'Observatory' },

@@ -228,6 +228,45 @@ describe('CatalystAlertPanel', () => {
     expect(screen.getByText('FMP')).toBeInTheDocument();
   });
 
+  it('renders headline as a clickable link using source_url when available', () => {
+    mockUseRecentCatalysts.mockReturnValue({
+      data: mockCatalystsData, // First item has source_url: 'https://sec.gov/filing'
+      isLoading: false,
+      error: null,
+      isError: false,
+      isSuccess: true,
+      dataUpdatedAt: Date.now(),
+    } as ReturnType<typeof useRecentCatalysts>);
+
+    render(<CatalystAlertPanel />, { wrapper });
+
+    const link = screen.getByText('AAPL Q4 Earnings Beat Expectations').closest('a');
+    expect(link).not.toBeNull();
+    expect(link).toHaveAttribute('href', 'https://sec.gov/filing');
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+  });
+
+  it('renders headline as a search link when source_url is null', () => {
+    mockUseRecentCatalysts.mockReturnValue({
+      data: mockCatalystsData, // Second item has source_url: null
+      isLoading: false,
+      error: null,
+      isError: false,
+      isSuccess: true,
+      dataUpdatedAt: Date.now(),
+    } as ReturnType<typeof useRecentCatalysts>);
+
+    render(<CatalystAlertPanel />, { wrapper });
+
+    const link = screen.getByText('Analyst Upgrades NVDA to Buy').closest('a');
+    expect(link).not.toBeNull();
+    expect(link?.getAttribute('href')).toContain('google.com/search');
+    expect(link?.getAttribute('href')).toContain('Analyst%20Upgrades%20NVDA%20to%20Buy');
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+  });
+
   it('shows relative time for recent items', () => {
     mockUseRecentCatalysts.mockReturnValue({
       data: mockCatalystsData,

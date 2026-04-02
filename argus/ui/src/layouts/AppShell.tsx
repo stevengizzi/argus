@@ -28,7 +28,7 @@ interface AppShellProps {
 // This persists across re-renders and prevents content flash during transitions.
 const outletCache = new Map<string, React.ReactNode>();
 
-// Navigation routes for keyboard shortcuts
+// Navigation routes for keyboard shortcuts (1–9; /arena at index 9 has no single-key shortcut)
 const NAV_ROUTES = [
   '/',
   '/trades',
@@ -39,6 +39,7 @@ const NAV_ROUTES = [
   '/debrief',
   '/system',
   '/experiments',
+  '/arena',
 ];
 
 export function AppShell({ paperMode = true }: AppShellProps) {

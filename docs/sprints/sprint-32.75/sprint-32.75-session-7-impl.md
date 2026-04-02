@@ -3,7 +3,7 @@
 ## Pre-Flight Checks
 1. Read: `docs/sprints/sprint-32.75/review-context.md`, `argus/api/websocket/observatory_ws.py` (established WS pattern), `argus/api/websocket/live.py`, `argus/api/server.py` (WS registration)
 2. Scoped tests: `python -m pytest tests/api/ -x -q`
-3. Verify branch: `main`
+3. Branch: `sprint-32.75-session-7`
 4. S6 merged (REST endpoints available)
 
 ## Objective

@@ -49,4 +49,16 @@ describe('VixRegimeCard', () => {
     render(<VixRegimeCard />);
     expect(screen.getByTestId('momentum-arrow')).toBeInTheDocument();
   });
+
+  it('renders all elements in a single compact horizontal row', () => {
+    const { container } = render(<VixRegimeCard />);
+    // The compact row uses flex layout — all data elements share a parent flex container
+    const flexRow = container.querySelector('.flex.items-center.gap-3');
+    expect(flexRow).toBeTruthy();
+    // All data elements should be inside the same flex row
+    expect(flexRow?.querySelector('[data-testid="vix-close"]')).toBeTruthy();
+    expect(flexRow?.querySelector('[data-testid="vrp-tier"]')).toBeTruthy();
+    expect(flexRow?.querySelector('[data-testid="vol-phase"]')).toBeTruthy();
+    expect(flexRow?.querySelector('[data-testid="momentum-arrow"]')).toBeTruthy();
+  });
 });
