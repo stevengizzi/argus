@@ -6,7 +6,7 @@
    - `argus/ui/src/components/TradeChart.tsx` (lines 210-295)
    - `argus/ai/system_context.py`
 2. Run scoped tests: `python -m pytest tests/ai/ -x -q && cd argus/ui && npx vitest run src/components/TradeChart.test.tsx`
-3. Verify branch: `main`
+3. Branch: `sprint-32.75-session-4`
 
 ## Objective
 Fix the duplicate price labels bug in the position detail chart and enhance AI Insight's portfolio context.
