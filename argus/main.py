@@ -51,6 +51,7 @@ from argus.core.config import (
     load_gap_and_go_config,
     load_hod_break_config,
     load_micro_pullback_config,
+    load_vwap_bounce_config,
     load_orb_config,
     load_premarket_high_break_config,
     load_orb_scalp_config,
@@ -672,6 +673,25 @@ class ArgusSystem:
                 micro_pullback_strategy.set_watchlist(symbols)
             strategies_created.append("MicroPullback")
 
+        # VWAP Bounce (optional — PatternBasedStrategy wrapping VwapBouncePattern)
+        vwap_bounce_strategy: PatternBasedStrategy | None = None
+        vwap_bounce_yaml = self._config_dir / "strategies" / "vwap_bounce.yaml"
+        if vwap_bounce_yaml.exists():
+            vwap_bounce_config = load_vwap_bounce_config(vwap_bounce_yaml)
+            vwap_bounce_pattern = build_pattern_from_config(vwap_bounce_config, "vwap_bounce")
+            vwap_bounce_strategy = PatternBasedStrategy(
+                pattern=vwap_bounce_pattern,
+                config=vwap_bounce_config,
+                data_service=self._data_service,
+                clock=self._clock,
+            )
+            vwap_bounce_strategy._config_fingerprint = compute_parameter_fingerprint(
+                vwap_bounce_config, get_pattern_class("vwap_bounce")
+            )
+            if not use_universe_manager:
+                vwap_bounce_strategy.set_watchlist(symbols)
+            strategies_created.append("VwapBounce")
+
         # Note: is_active and allocated_capital set by Orchestrator in Phase 9
         self._health_monitor.update_component(
             "strategy",
@@ -791,6 +811,8 @@ class ArgusSystem:
             self._orchestrator.register_strategy(pm_high_break_strategy)
         if micro_pullback_strategy is not None:
             self._orchestrator.register_strategy(micro_pullback_strategy)
+        if vwap_bounce_strategy is not None:
+            self._orchestrator.register_strategy(vwap_bounce_strategy)
 
         # --- Experiment Variant Spawning (Sprint 32, Session 5) ---
         # Config-gated: skipped entirely when experiments.enabled is false (default).
@@ -847,6 +869,11 @@ class ArgusSystem:
                         _base_pattern_strategies["micro_pullback"] = (
                             micro_pullback_strategy.config,
                             micro_pullback_strategy,
+                        )
+                    if vwap_bounce_strategy is not None:
+                        _base_pattern_strategies["vwap_bounce"] = (
+                            vwap_bounce_strategy.config,
+                            vwap_bounce_strategy,
                         )
 
                     _experiment_db_path = str(

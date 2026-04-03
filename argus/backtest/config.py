@@ -24,6 +24,7 @@ class StrategyType(StrEnum):
     GAP_AND_GO = "gap_and_go"
     PREMARKET_HIGH_BREAK = "premarket_high_break"
     MICRO_PULLBACK = "micro_pullback"
+    VWAP_BOUNCE = "vwap_bounce"
 
 
 class DataFetcherConfig(BaseModel):

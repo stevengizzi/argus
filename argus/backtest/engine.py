@@ -58,6 +58,7 @@ from argus.core.config import (
     GapAndGoConfig,
     HODBreakConfig,
     MicroPullbackConfig,
+    VwapBounceConfig,
     OrbBreakoutConfig,
     OrbScalpConfig,
     OrchestratorConfig,
@@ -1055,6 +1056,8 @@ class BacktestEngine:
             return self._create_premarket_high_break_strategy(config_dir)
         elif strategy_type == StrategyType.MICRO_PULLBACK:
             return self._create_micro_pullback_strategy(config_dir)
+        elif strategy_type == StrategyType.VWAP_BOUNCE:
+            return self._create_vwap_bounce_strategy(config_dir)
         else:
             raise ValueError(f"Unknown strategy type: {strategy_type}")
 
@@ -1455,6 +1458,37 @@ class BacktestEngine:
 
         config = self._apply_config_overrides(config)
         pattern = build_pattern_from_config(config, "micro_pullback")
+
+        return PatternBasedStrategy(
+            pattern=pattern,
+            config=config,
+            data_service=self._data_service,
+            clock=self._clock,
+        )
+
+    def _create_vwap_bounce_strategy(
+        self, config_dir: Path
+    ) -> PatternBasedStrategy:
+        """Create PatternBasedStrategy wrapping VwapBouncePattern.
+
+        Args:
+            config_dir: Path to the config directory.
+
+        Returns:
+            Configured PatternBasedStrategy with VwapBouncePattern.
+        """
+        yaml_file = config_dir / "strategies" / "vwap_bounce.yaml"
+        if yaml_file.exists():
+            data = load_yaml_file(yaml_file)
+            config = VwapBounceConfig(**data)
+        else:
+            config = VwapBounceConfig(
+                strategy_id="strat_vwap_bounce",
+                name="VWAP Bounce",
+            )
+
+        config = self._apply_config_overrides(config)
+        pattern = build_pattern_from_config(config, "vwap_bounce")
 
         return PatternBasedStrategy(
             pattern=pattern,

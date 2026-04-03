@@ -1591,6 +1591,39 @@ def load_premarket_high_break_config(
     return PreMarketHighBreakConfig(**data)
 
 
+class VwapBounceConfig(StrategyConfig):
+    """VWAP Bounce continuation pattern strategy configuration (Sprint 31A).
+
+    Detects a pullback to VWAP from above followed by a bounce with volume
+    confirmation — a continuation entry complementing VWAP Reclaim.
+    Operates 10:30 AM – 15:00 ET.
+    """
+
+    # VWAP proximity thresholds
+    vwap_approach_distance_pct: float = Field(default=0.005, gt=0, le=0.015)
+    vwap_touch_tolerance_pct: float = Field(default=0.002, gt=0, le=0.005)
+
+    # Bounce confirmation
+    min_bounce_bars: int = Field(default=2, ge=1, le=5)
+    min_bounce_volume_ratio: float = Field(default=1.3, gt=0, le=10.0)
+
+    # Prior trend requirements
+    min_prior_trend_bars: int = Field(default=10, ge=5, le=20)
+    min_price_above_vwap_pct: float = Field(default=0.003, gt=0, le=0.010)
+
+    # Stop and target
+    stop_buffer_atr_mult: float = Field(default=0.5, gt=0, le=2.0)
+    target_ratio: float = Field(default=2.0, gt=0, le=5.0)
+
+    # Scoring gate
+    min_score_threshold: float = Field(default=0.0, ge=0, le=100.0)
+
+    # Targets
+    target_1_r: float = Field(default=1.0, gt=0)
+    target_2_r: float = Field(default=2.0, gt=0)
+    time_stop_minutes: int = Field(default=30, ge=1)
+
+
 def load_micro_pullback_config(path: Path) -> MicroPullbackConfig:
     """Load Micro Pullback strategy configuration from a YAML file.
 
@@ -1606,6 +1639,23 @@ def load_micro_pullback_config(path: Path) -> MicroPullbackConfig:
     """
     data = load_yaml_file(path)
     return MicroPullbackConfig(**data)
+
+
+def load_vwap_bounce_config(path: Path) -> VwapBounceConfig:
+    """Load VWAP Bounce strategy configuration from a YAML file.
+
+    Args:
+        path: Path to the VWAP Bounce strategy YAML file.
+
+    Returns:
+        Validated VwapBounceConfig instance.
+
+    Raises:
+        FileNotFoundError: If the file does not exist.
+        pydantic.ValidationError: If validation fails.
+    """
+    data = load_yaml_file(path)
+    return VwapBounceConfig(**data)
 
 
 def load_scanner_config(path: Path) -> ScannerConfig:
