@@ -1,7 +1,5 @@
 # Experiment Pipeline Configuration
-# Enabled Sprint 32.9. With variants: {} this is a no-op — infrastructure
-# initializes but spawns 0 variants. Configure variants after running
-# parameter sweeps via scripts/run_experiment.py.
+# Enabled Sprint 32.9. Variants added Sprint 31A after parameter sweep.
 enabled: true
 auto_promote: false  # When true, PromotionEvaluator runs autonomously at session end
 max_variants_per_pattern: 5  # Caps total variants per pattern (shadow + live)
@@ -12,19 +10,45 @@ promotion_min_shadow_trades: 30
 promotion_query_limit: 1000  # Max records fetched from counterfactual/trade store during evaluation
 cache_dir: "data/databento_cache"
 
-# Variant definitions — each pattern can have multiple named variants
-# Variants not defined here use the base strategy config only
-variants: {}
-# Example:
-# variants:
-#   bull_flag:
-#     - variant_id: "strat_bull_flag__v2_tight_flag"
-#       mode: "shadow"
-#       params:
-#         flag_max_retrace_pct: 0.35
-#         pole_min_move_pct: 0.05
-#     - variant_id: "strat_bull_flag__v3_loose"
-#       mode: "shadow"
-#       params:
-#         flag_max_retrace_pct: 0.65
-#         flag_max_bars: 30
+# Variant definitions — each pattern can have multiple named variants.
+# Variants not defined here use the base strategy config only.
+#
+# Sprint 31A sweep methodology:
+# - 24 representative momentum symbols (AAPL, NVDA, AMD, TSLA, MARA, RIOT, COIN, HOOD,
+#   GME, AMC, SPCE, PLUG, SNAP, UBER, PLTR, RBLX, AFRM, SOFI, LCID, RIVN, NIO, SMCI,
+#   IONQ, HIMS); full 2025 calendar year (2025-01-01 to 2025-12-31).
+# - Sweeps used build_pattern_from_config() to correctly wire config overrides to pattern
+#   constructors (BacktestEngine default behavior instantiates patterns with no-arg defaults).
+# - Selection criteria: trades >= 30, expectancy > 0, Sharpe > 0.5.
+# - Omitted patterns (defaults failed all criteria or no variant improved over defaults):
+#   bull_flag (best Sharpe -3.295, negative exp across all params),
+#   flat_top_breakout (best Sharpe -2.855, negative exp),
+#   hod_break (positive exp but < 30 trades in all qualifying configs),
+#   gap_and_go (< 30 trades with positive exp on this symbol set),
+#   abcd (Sharpe 1.018 achievable but expectancy remains negative).
+
+exit_sweep_params: null
+
+variants:
+  dip_and_rip:
+    # v2: Tighter dip threshold + elevated volume confirmation + moderate target.
+    # Rationale: Requires a more meaningful 3% dip (vs default 2%), ensures strong
+    # volume on recovery (1.6x vs 1.3x default), and takes profit at 1.5x dip range.
+    # Backtest (2025, 24 symbols): trades=114, Sharpe=1.996, expectancy=0.0443, WR=45.6%
+    - variant_id: "strat_dip_and_rip__v2_tight_dip_quality"
+      mode: "shadow"
+      params:
+        min_dip_percent: 0.03
+        min_recovery_volume_ratio: 1.6
+        target_ratio: 1.5
+
+    # v3: High-conviction filter — strict dip threshold + strong volume surge.
+    # Rationale: Pushes volume requirement to 2.0x (top quartile of recoveries)
+    # and keeps 1.5x target. Fewer trades but highest Sharpe of any tested config.
+    # Backtest (2025, 24 symbols): trades=40, Sharpe=2.628, expectancy=0.0683, WR=45.0%
+    - variant_id: "strat_dip_and_rip__v3_strict_volume"
+      mode: "shadow"
+      params:
+        min_dip_percent: 0.03
+        min_recovery_volume_ratio: 2.0
+        target_ratio: 1.5
