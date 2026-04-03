@@ -1127,6 +1127,44 @@ Pure algorithmic NYSE holiday detection. No external dependencies. Cached per-ye
 
 ---
 
+### 3.8.2 Historical Query Service (`data/historical_query_service.py`) — Sprint 31A.5 ✅
+
+Read-only analytical query layer over the Databento Parquet cache using DuckDB. Config-gated via `historical_query.enabled`. Provides SQL access to the 44.73 GB cache without any data import or ETL.
+
+**Design:**
+- In-memory DuckDB connection (`:memory:`) — no persistent DuckDB file. The Parquet cache IS the persistent store.
+- Lazy initialization: DuckDB is imported and connected only on first query call.
+- `CREATE VIEW` over Parquet directories using `regexp_extract` on file paths to extract symbol names from Databento path conventions (e.g., `TSLA_2025-06.parquet` → `TSLA`).
+- **Databento schema note:** Parquet files use `timestamp` column (not `ts_event`). The VIEW aliases appropriately.
+
+**6 query methods:**
+- `get_available_symbols(min_bars: int = 0) -> list[str]`
+- `get_coverage_summary() -> dict[str, Any]` — total symbols, total bars, date range, size on disk
+- `get_bars(symbol: str, start: datetime, end: datetime) -> pd.DataFrame`
+- `validate_symbol_coverage(symbols: list[str], start: str, end: str) -> dict[str, bool]` — key integration point for sweep tooling; returns per-symbol coverage status
+- `get_cache_health() -> dict[str, Any]` — directory stats, file count, total size
+- `execute_raw_query(sql: str) -> pd.DataFrame` — passthrough for ad-hoc analysis
+
+**REST API** (`api/routes/historical.py`) — 4 JWT-protected endpoints:
+- `GET /api/v1/historical/symbols` — list available symbols (optional `?min_bars=` filter)
+- `GET /api/v1/historical/coverage` — summary statistics
+- `GET /api/v1/historical/bars/{symbol}` — OHLCV bars for date range
+- `POST /api/v1/historical/validate-coverage` — bulk symbol coverage check
+
+**CLI:** `scripts/query_cache.py` — interactive SQL REPL with readline history, dot-commands (`.tables`, `.schema`, `.help`, `.quit`), formatted output.
+
+**Dependency:** `duckdb>=1.0,<2` (added to `pyproject.toml`).
+
+**Phase 2 integration roadmap:**
+- **Sweep Tooling Impromptu:** `validate_symbol_coverage()` pre-filters symbols before parameter sweep
+- **Sprint 31.5:** ExperimentRunner wires DuckDB validation for batch pre-validation + intelligent parallel worker partitioning (DEF-146)
+- **Sprint 31B:** Research Console DuckDB backend for sweep heatmaps and SQL-based visualization (DEF-147)
+- **Sprint 33:** Bootstrap confidence intervals and distributional analysis
+- **Sprint 33.5:** Historical stress scenario queries against full 96-month dataset
+- **Sprint 36+:** Hypothesis-to-SQL pattern mining and full-universe anomaly scanning
+
+---
+
 ### 3.9 System Entry Point (`main.py`)
 
 Wires all components together with a 12-phase startup sequence:

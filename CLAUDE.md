@@ -1,17 +1,17 @@
 # ARGUS — Claude Code Context
 
 > Dense, actionable context for Claude Code sessions. No history — see `docs/` for that.
-> Last updated: April 3, 2026 (Impromptu hotfix — Good Friday Incident + Observability)
+> Last updated: April 3, 2026 (Sprint 31A + 31A.5 complete — Pattern Expansion III + Historical Query Layer)
 
 ## Active Sprint
 
-**Active sprint: 31A (Pattern Expansion III — reach 15 strategies).**
+**Active sprint: Sweep Tooling Impromptu (universe-aware sweep flags — resolves DEF-145).**
 
-Last completed sprint: **32.95 (Debrief Export Enhancement)** — Added 3 missing tests for `counterfactual_summary`, `experiment_summary`, `quality_distribution` export sections (implementation was pre-existing). +3 pytest. No new DECs.
+Last completed sprint: **31A.5 (Historical Query Layer — DuckDB Phase 1, Apr 3, 2026)** — DuckDB-based read-only analytical query layer over Parquet cache. `HistoricalQueryService` (6 query methods, config-gated, lazy init, in-memory DuckDB, VIEW over Parquet), `HistoricalQueryConfig`, `config/historical_query.yaml`, `scripts/query_cache.py` (interactive CLI), `argus/api/routes/historical.py` (4 JWT-protected endpoints). `validate_symbol_coverage()` for ExperimentRunner pre-filter. +50 pytest. No new DECs. Tier 2 verdict: CLEAR. New dependency: `duckdb>=1.0,<2`.
 
-Last impromptu: **Good Friday Hotfix (Apr 3, 2026)** — NYSE holiday calendar + OHLCV-1m observability. Two changes: (1) `argus/core/market_calendar.py` — pure algorithmic NYSE holiday detection (`is_market_holiday()`, `get_next_trading_day()`), integrated into startup log, health monitor holiday suppression, heartbeat holiday context, `_is_market_hours()`, and new `GET /api/v1/market/status` endpoint (no auth); (2) DatabentoDataService per-gate drop counters + first-event sentinels + symbol mapping progress logging + zero-candle WARNING escalation during market hours. +135 pytest. No new DECs.
+Previous: **31A (Pattern Expansion III, Apr 3, 2026)** — DEF-143/144 resolved; PMH 0-trade fix (`lookback_bars` 30→400 + `min_detection_bars=10` + reference data wiring in main.py Phase 9.5); 3 new PatternModule strategies: Micro Pullback (10:00–14:00, EMA-based), VWAP Bounce (10:30–15:00, VWAP support), Narrow Range Breakout (10:00–15:00, volatility compression); parameter sweep across all 10 patterns (2 qualifying Dip-and-Rip variants, 8 non-qualifying). DEF-145 opened (universe-aware sweep tooling). +137 pytest. No new DECs.
 
-Previous: **32.9 (Operational Hardening + Position Safety + Quality Recalibration)** — EOD flatten synchronous verification + zombie queue fix (DEF-139/140 resolved, root cause: `qty`/`shares` mismatch in 4 Order Manager code paths), margin circuit breaker (IBKR Error 201 tracking, 10-rejection threshold, auto-reset on position drop), intelligence polling crash fix (DEF-141), quality engine recalibration (historical_match weight zeroed, grade thresholds recalibrated to actual score range 35–77), pre-EOD signal cutoff at 3:30 PM ET, max_concurrent_positions: 50 enabled, overflow broker_capacity 60→50, ABCD + Flat-Top demoted to shadow mode, experiment pipeline enabled. +40 pytest. No new DECs. DEF-139/140/141/142 resolved.
+Previous: **Good Friday Hotfix (Impromptu, Apr 3, 2026)** — NYSE holiday calendar + OHLCV-1m observability. Two changes: (1) `argus/core/market_calendar.py` — pure algorithmic NYSE holiday detection (`is_market_holiday()`, `get_next_trading_day()`), integrated into startup log, health monitor holiday suppression, heartbeat holiday context, `_is_market_hours()`, and new `GET /api/v1/market/status` endpoint (no auth); (2) DatabentoDataService per-gate drop counters + first-event sentinels + symbol mapping progress logging + zero-candle WARNING escalation during market hours. +135 pytest. No new DECs.
 
 ### Roadmap Amendments Adopted (DEC-357, DEC-358)
 Two roadmap amendments adopted March 23, 2026 adding 5 new sprint slots:
@@ -21,7 +21,7 @@ Two roadmap amendments adopted March 23, 2026 adding 5 new sprint slots:
 - **32.5** (Experiment Registry + Promotion Pipeline): Partitioned SQLite registry, cohort-based promotion, simulated-paper screening, overnight experiment queue, kill switches, anti-fragility
 - **33.5** (Adversarial Stress Testing): Historical crisis replay + synthetic stress scenarios as PromotionPipeline gate
 Amendment docs: `docs/amendments/roadmap-amendment-experiment-infrastructure.md`, `docs/amendments/roadmap-amendment-intelligence-architecture.md`
-Build track: ~~21.6~~ ✅ → ~~27.5~~ ✅ → ~~27.6~~ ✅ → ~~27.7~~ ✅ → ~~27.75~~ ✅ → ~~27.8~~ ✅ → ~~27.9~~ ✅ → ~~27.95~~ ✅ → ~~28~~ ✅ → ~~28.5~~ ✅ → ~~28.75~~ ✅ → ~~29~~ ✅ → ~~29.5~~ ✅ → ~~32~~ ✅ → ~~32.5~~ ✅ → ~~32.75~~ ✅ → ~~32.8~~ ✅ → ~~32.9~~ ✅ → **31A** → 30 → 31.5 → 33 → 33.5 → 34 → 35–41
+Build track: ~~21.6~~ ✅ → ~~27.5~~ ✅ → ~~27.6~~ ✅ → ~~27.7~~ ✅ → ~~27.75~~ ✅ → ~~27.8~~ ✅ → ~~27.9~~ ✅ → ~~27.95~~ ✅ → ~~28~~ ✅ → ~~28.5~~ ✅ → ~~28.75~~ ✅ → ~~29~~ ✅ → ~~29.5~~ ✅ → ~~32~~ ✅ → ~~32.5~~ ✅ → ~~32.75~~ ✅ → ~~32.8~~ ✅ → ~~32.9~~ ✅ → ~~31A~~ ✅ → ~~31A.5~~ ✅ → **Sweep Tooling Impromptu** → 31.5 (Parallel Sweep Infrastructure) → *(launch universe-aware sweeps, all 10 patterns)* → 30 → **Sweep Analysis Impromptu** → 31B → 33 → 33.5 → 34 → 35–41
 DEC ranges reserved: 396–402 (33.5)
 DEF items: DEF-129 (non-PatternModule variant support), DEF-130 (intraday parameter adaptation)
 RSK items: RSK-049 (shadow variant throughput impact), RSK-050 (promotion oscillation)
@@ -35,26 +35,26 @@ RSK items: RSK-049 (shadow variant throughput impact), RSK-050 (promotion oscill
 
 ## Current State
 
-- **Active sprint:** 31A (Pattern Expansion III — reach 15 strategies)
-- **Tests:** ~4,674 pytest + 846 Vitest (0 pre-existing failures)
-- **Strategies:** 10 live + 2 shadow (12 total): live — ORB Breakout, ORB Scalp, VWAP Reclaim, Afternoon Momentum, Red-to-Green, Bull Flag, Dip-and-Rip, HOD Break, Gap-and-Go, Pre-Market High Break; shadow — Flat-Top Breakout, ABCD (demoted Sprint 32.9 S3 for optimization)
-- **Experiment Variants:** 2 Dip-and-Rip variants in shadow mode (`strat_dip_and_rip__v2_tight_dip_quality`: Sharpe 1.996, WR 45.6%; `strat_dip_and_rip__v3_strict_volume`: Sharpe 2.628, WR 45.0%) — first production sweep from experiment pipeline; sweep from 24-symbol momentum set over 2025; configured in `config/experiments.yaml`
-- **Infrastructure:** Databento EQUS.MINI (live) + IBKR paper trading (Account U24619949) + FMP Starter (scanning + reference data + daily bars for regime) + Finnhub (news + analyst recs) + Claude API (Copilot + Catalyst Classification) + Universe Manager (config-gated) + Catalyst Pipeline (config-gated) + Intelligence Polling Loop (config-gated) + Reference Data Cache + Quality Engine (config-gated) + Dynamic Position Sizer + Strategy Evaluation Telemetry (ring buffer + SQLite persistence) + Debrief Export (shutdown automation) + Evaluation Framework (MultiObjectiveResult, EnsembleResult, comparison API, slippage model) + Regime Intelligence (RegimeVector 11-field, 8 calculators, config-gated, Sprints 27.6 + 27.9) + VIX Data Service (yfinance daily VIX/SPX, 5 derived metrics, SQLite cache, config-gated, Sprint 27.9) + Counterfactual Engine (shadow position tracking, filter accuracy, shadow strategy mode, overflow routing, config-gated, Sprints 27.7 + 27.95) + Learning Loop V1 (OutcomeCollector, WeightAnalyzer, ThresholdAnalyzer, CorrelationAnalyzer, LearningService, ConfigProposalManager, LearningStore, config-gated, Sprint 28) + Exit Management (trailing stops ATR/percent/fixed, exit escalation, belt-and-suspenders, config-gated per strategy, Sprint 28.5) + ThrottledLogger (log rate-limiting, Sprint 27.75) + Paper trading config overrides (10x risk reduction, throttle disabled, $10 min risk floor, Sprint 27.75) + Broker-confirmed reconciliation (Sprint 27.95) + Overflow routing (config-gated, Sprint 27.95) + EOD flatten synchronous verification (Sprint 32.9) + Margin circuit breaker (IBKR Error 201, Sprint 32.9) + Pre-EOD signal cutoff 3:30 PM ET (config-gated, Sprint 32.9) + Experiment Pipeline (enabled: true, exercised end-to-end with 2 Dip-and-Rip variants configured in shadow, Sprint 32.9) + **NYSE Holiday Calendar** (`core/market_calendar.py`, Apr 3 hotfix) + **OHLCV-1m Observability** (per-gate drop counters + first-event sentinels + zero-candle escalation in DatabentoDataService, Apr 3 hotfix)
-- **Frontend:** 10-page Command Center (Arena page added Sprint 32.75, Experiments page added Sprint 32.5, Shadow Trades tab added to Trade Log) + AI Copilot + Universe Status Card + Intelligence Brief View (all active), Tauri desktop + PWA mobile. Pages: Dashboard, Trade Log, Performance, The Arena, Orchestrator, Pattern Library, The Debrief, System, Observatory, Experiments. Keyboard shortcuts: 1–9 + 0 (0 = Experiments). All 12 strategies have unique colors, badges, single-letter identifiers.
+- **Active sprint:** Sweep Tooling Impromptu (universe-aware sweep flags)
+- **Tests:** 4,811 pytest + 846 Vitest (0 pre-existing failures)
+- **Strategies:** 13 live + 2 shadow (15 total): live — ORB Breakout, ORB Scalp, VWAP Reclaim, Afternoon Momentum, Red-to-Green, Bull Flag, Dip-and-Rip, HOD Break, Gap-and-Go, Pre-Market High Break, Micro Pullback, VWAP Bounce, Narrow Range Breakout; shadow — Flat-Top Breakout, ABCD (demoted Sprint 32.9 S3 for optimization)
+- **Experiment Variants:** 2 Dip-and-Rip variants in shadow mode (`strat_dip_and_rip__v2_tight_dip_quality`: Sharpe 1.996, WR 45.6%; `strat_dip_and_rip__v3_strict_volume`: Sharpe 2.628, WR 45.0%) — only qualifying variants from 10-pattern sweep (24-symbol momentum set, 2025); 8 non-qualifying patterns need universe-aware re-sweep (DEF-145); configured in `config/experiments.yaml`
+- **Infrastructure:** Databento EQUS.MINI (live) + IBKR paper trading (Account U24619949) + FMP Starter (scanning + reference data + daily bars for regime) + Finnhub (news + analyst recs) + Claude API (Copilot + Catalyst Classification) + Universe Manager (config-gated) + Catalyst Pipeline (config-gated) + Intelligence Polling Loop (config-gated) + Reference Data Cache + Quality Engine (config-gated) + Dynamic Position Sizer + Strategy Evaluation Telemetry (ring buffer + SQLite persistence) + Debrief Export (shutdown automation) + Evaluation Framework (MultiObjectiveResult, EnsembleResult, comparison API, slippage model) + Regime Intelligence (RegimeVector 11-field, 8 calculators, config-gated, Sprints 27.6 + 27.9) + VIX Data Service (yfinance daily VIX/SPX, 5 derived metrics, SQLite cache, config-gated, Sprint 27.9) + Counterfactual Engine (shadow position tracking, filter accuracy, shadow strategy mode, overflow routing, config-gated, Sprints 27.7 + 27.95) + Learning Loop V1 (OutcomeCollector, WeightAnalyzer, ThresholdAnalyzer, CorrelationAnalyzer, LearningService, ConfigProposalManager, LearningStore, config-gated, Sprint 28) + Exit Management (trailing stops ATR/percent/fixed, exit escalation, belt-and-suspenders, config-gated per strategy, Sprint 28.5) + ThrottledLogger (log rate-limiting, Sprint 27.75) + Paper trading config overrides (10x risk reduction, throttle disabled, $10 min risk floor, Sprint 27.75) + Broker-confirmed reconciliation (Sprint 27.95) + Overflow routing (config-gated, Sprint 27.95) + EOD flatten synchronous verification (Sprint 32.9) + Margin circuit breaker (IBKR Error 201, Sprint 32.9) + Pre-EOD signal cutoff 3:30 PM ET (config-gated, Sprint 32.9) + Experiment Pipeline (enabled: true, exercised end-to-end with 2 Dip-and-Rip variants configured in shadow, Sprint 32.9) + **NYSE Holiday Calendar** (`core/market_calendar.py`, Apr 3 hotfix) + **OHLCV-1m Observability** (per-gate drop counters + first-event sentinels + zero-candle escalation in DatabentoDataService, Apr 3 hotfix) + **Historical Query Service** (DuckDB read-only analytical layer over Parquet cache, config-gated, 6 query methods, 4 REST endpoints, CLI, Sprint 31A.5)
+- **Frontend:** 10-page Command Center (Arena page added Sprint 32.75, Experiments page added Sprint 32.5, Shadow Trades tab added to Trade Log) + AI Copilot + Universe Status Card + Intelligence Brief View (all active), Tauri desktop + PWA mobile. Pages: Dashboard, Trade Log, Performance, The Arena, Orchestrator, Pattern Library, The Debrief, System, Observatory, Experiments. Keyboard shortcuts: 1–9 + 0 (0 = Experiments). All 15 strategies have unique colors, badges, single-letter identifiers.
 
 ## Project Structure
 
 ```
 argus/
 ├── core/           # Orchestrator, Risk Manager, Portfolio, Event Bus, Regime Intelligence (breadth.py, market_correlation.py, sector_rotation.py, intraday_character.py, regime_history.py), TheoreticalFillModel (fill_model.py), Exit Math (exit_math.py), NYSE Holiday Calendar (market_calendar.py)
-├── strategies/     # BaseStrategy, OrbBaseStrategy, 12 strategy implementations
-│   └── patterns/   # PatternModule ABC, PatternParam, 7 patterns (BullFlag, FlatTop, DipAndRip, HODBreak, GapAndGo, ABCD, PreMarketHighBreak)
-├── data/           # DataService (Databento/Alpaca/Replay/Backtest), Scanner, IndicatorEngine, UniverseManager, FMPReferenceClient, VIXDataService
+├── strategies/     # BaseStrategy, OrbBaseStrategy, 15 strategy implementations
+│   └── patterns/   # PatternModule ABC, PatternParam, 10 patterns (BullFlag, FlatTop, DipAndRip, HODBreak, GapAndGo, ABCD, PreMarketHighBreak, MicroPullback, VwapBounce, NarrowRangeBreakout)
+├── data/           # DataService (Databento/Alpaca/Replay/Backtest), Scanner, IndicatorEngine, UniverseManager, FMPReferenceClient, VIXDataService, HistoricalQueryService (DuckDB)
 ├── execution/      # Broker (IBKR/Alpaca/Simulated), Order Manager
 ├── analytics/      # Trade Logger, PerformanceCalculator, DebriefExport, Evaluation Framework
 ├── backtest/       # VectorBT helpers, Replay Harness, BacktestEngine (Sprint 27)
 ├── api/            # FastAPI REST + WebSocket, JWT auth
-│   ├── routes/     # arena.py (GET /api/v1/arena/positions, GET /api/v1/arena/candles/{symbol}), market.py (GET /api/v1/market/status — no auth)
+│   ├── routes/     # arena.py (GET /api/v1/arena/positions, GET /api/v1/arena/candles/{symbol}), market.py (GET /api/v1/market/status — no auth), historical.py (GET /api/v1/historical/symbols, /coverage, /bars/{symbol}, POST /validate-coverage)
 │   └── websocket/  # ai_chat.py (WS streaming), arena_ws.py (/ws/v1/arena — 6 message types)
 ├── ui/             # React frontend (Vite + TypeScript + Tailwind v4)
 │   └── features/
@@ -75,7 +75,7 @@ argus/
 ├── intelligence/   # CatalystPipeline, CatalystClassifier, CatalystStorage, BriefingGenerator, startup factory, polling loop (Sprints 23.5 + 23.6), SetupQualityEngine (quality_engine.py), DynamicPositionSizer (position_sizer.py) (Sprint 24)
 │   └── learning/   # Learning Loop V1: OutcomeCollector, WeightAnalyzer, ThresholdAnalyzer, CorrelationAnalyzer, LearningService, ConfigProposalManager, LearningStore (Sprint 28)
 ├── utils/          # ThrottledLogger (Sprint 27.75)
-├── config/         # system.yaml, system_live.yaml, strategies/*.yaml, regime.yaml, counterfactual.yaml, vix_regime.yaml, learning_loop.yaml, exit_management.yaml
+├── config/         # system.yaml, system_live.yaml, strategies/*.yaml, regime.yaml, counterfactual.yaml, vix_regime.yaml, learning_loop.yaml, exit_management.yaml, historical_query.yaml
 ├── tests/          # pytest (backend) + Vitest (frontend)
 ├── docs/           # Decision log, sprint history, strategy specs, research reports
 ├── workflow/       # Metarepo submodule (protocols, templates, runner, universal rules)
@@ -87,10 +87,10 @@ argus/
 
 ```bash
 # Tests
-python -m pytest --ignore=tests/test_main.py -n auto -q  # Full suite (~4,530 tests, ~49s with xdist)
+python -m pytest --ignore=tests/test_main.py -n auto -q  # Full suite (~4,811 tests, ~114s with xdist)
 python -m pytest tests/ -x               # Stop on first failure
 python -m pytest tests/ -x -q            # Fail-fast, quiet
-cd argus/ui && npx vitest run            # Frontend tests (~805)
+cd argus/ui && npx vitest run            # Frontend tests (~846)
 
 # Trading engine
 python -m argus.main                      # Start (paper trading default)
@@ -379,16 +379,21 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 | ~~DEF-140~~ | ~~EOD flatten reports positions closed but broker retains them~~ | — | **RESOLVED** (Sprint 32.9 S1): Same `qty`/`shares` mismatch in Pass 2 + fire-and-forget submission. Fixed attribute + added synchronous fill verification with asyncio.Event per symbol (30s timeout, 1 retry). |
 | ~~DEF-141~~ | ~~Intelligence polling crash: unbound `symbols` variable~~ | — | **RESOLVED** (Sprint 32.9 S2): `symbols: list[str] = []` initialization before conditional branch in `startup.py`. Added try/except with `exc_info=True` around polling loop body. |
 | ~~DEF-142~~ | ~~Quality engine grade compression — all signals scoring B~~ | — | **RESOLVED** (Sprint 32.9 S3): Root cause: `historical_match` stub (constant 50) + `catalyst_quality` (mostly 50) consuming 40% of weight. Fixed: `historical_match` weight zeroed, redistribution to `pattern_strength` (0.375) + `volume_profile` (0.275). Grade thresholds recalibrated to actual score range 35–77 (a_plus: 72, a: 66, a_minus: 61, b_plus: 56, b: 51, b_minus: 46, c_plus: 40). |
-| DEF-143 | BacktestEngine pattern initialization ignores config_overrides | Sprint 31A | `_create_*_strategy()` methods use no-arg constructors (e.g., `ABCDPattern()`) instead of `build_pattern_from_config()`, so `--params` sweeps don't change detection behavior for most patterns. Blocks full experiment pipeline value for 5 of 7 patterns. Priority: HIGH. Likely a 1-session fix in BacktestEngine strategy factory methods. |
-| DEF-144 | Debrief export safety_summary incomplete | Unscheduled | `open_time`, `reset_time`, `entries_blocked`, EOD flatten pass counts, and `signals_skipped` are all `null` in the export — OrderManager doesn't persist these as queryable attributes. The JSONL log has the data but the structured export doesn't. Priority: LOW — JSONL log is sufficient for now. |
+| ~~DEF-143~~ | ~~BacktestEngine pattern initialization ignores config_overrides~~ | — | **RESOLVED** (Sprint 31A S1): All 7 `_create_*_strategy()` methods now use `build_pattern_from_config()`. No-arg constructors removed; config_overrides flow to pattern detection params. |
+| ~~DEF-144~~ | ~~Debrief export safety_summary incomplete~~ | — | **RESOLVED** (Sprint 31A S1+S3): OrderManager 6 new safety tracking attrs (`margin_circuit_breaker_open_time`, `reset_time`, `entries_blocked_count`, `eod_flatten_pass1_count`, `eod_flatten_pass2_count`, `signal_cutoff_skipped_count`) + `increment_signal_cutoff()`. `_export_safety_summary` reads new attrs via isinstance guards. S3 wired `increment_signal_cutoff()` in `_process_signal()` pre-EOD cutoff block. |
+| DEF-145 | Sweep tooling: `--universe-filter` + `--symbols` flags + universe-aware re-sweep | Sweep Tooling Impromptu | `run_experiment.py` needs `--symbols` (explicit list or file) and `--universe-filter` (loads `config/universe_filters/{pattern}.yaml`, applies min_price/max_price/min_avg_volume, wires `validate_symbol_coverage()` from 31A.5 HistoricalQueryService). Resolves NR Breakout (2 trades on momentum set) and VWAP Bounce (negative dollar P&L) mismatches. Priority: HIGH. |
+| DEF-146 | DuckDB BacktestEngine pre-filter wiring (`validate_symbol_coverage()` in ExperimentRunner) | Sprint 31.5 | `HistoricalQueryService.validate_symbol_coverage()` built in Sprint 31A.5 but not yet wired into ExperimentRunner batch pre-validation or parallel worker partitioning. Priority: MEDIUM. |
+| DEF-147 | DuckDB Research Console backend | Sprint 31B | HistoricalQueryService can serve as backend for Research Console page SQL-based sweep visualization and heatmaps. Priority: LOW. |
+| DEF-148 | FRED macro regime service (FredMacroService + RegimeVector expansion) | Sprint 34 | New `argus/data/fred_macro_service.py` following VIXDataService pattern. Daily pull from FRED API (`fredapi`, $0). `MacroSnapshot` dataclass: yield_spread_10y2y, fed_funds_rate, initial_claims, cpi_yoy, pce_yoy, consumer_sentiment. Derived regimes: YieldCurveRegime, EmploymentRegime, InflationRegime, macro_composite_score. RegimeVector 3-4 new Optional fields. Integration: BriefingGenerator, Observatory, BacktestEngine retroactive labeling, Allocation Intelligence. Priority: MEDIUM. |
+| DEF-149 | FRED VIX backup source (VIXCLS fallback in VIXDataService) | Opportunistic | FRED VIXCLS series as fallback when yfinance is unavailable. Priority: LOW. |
 
 ## Reference
 
 | Document | What It Covers |
 |----------|---------------|
-| `docs/decision-log.md` | All 381 DEC entries with full rationale (no new DECs in Sprints 32–32.9 — all design decisions followed established patterns) |
+| `docs/decision-log.md` | All 381 DEC entries with full rationale (no new DECs in Sprints 32–31A.5 — all design decisions followed established patterns) |
 | `docs/dec-index.md` | Quick-reference index with status markers |
-| `docs/sprint-history.md` | Complete sprint history (1–29.5 + 32–32.9 + sub-sprints) |
+| `docs/sprint-history.md` | Complete sprint history (1–29.5 + 32–31A.5 + sub-sprints) |
 | `docs/pre-live-transition-checklist.md` | Config + test values to restore before live trading |
 | `docs/process-evolution.md` | Workflow evolution narrative |
 | `docs/live-operations.md` | Live trading procedures |

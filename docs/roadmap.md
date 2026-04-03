@@ -1,7 +1,7 @@
 # ARGUS — Strategic Roadmap
 
 > From artisanal strategies to ensemble alpha — the complete path
-> **v3.2 — April 2, 2026** (Sprint 32.95 complete — Debrief Export Enhancement; param sweep run, 2 Dip-and-Rip variants configured in shadow, DEF-143/144 added)
+> **v3.3 — April 3, 2026** (Sprint 31A + 31A.5 complete — Pattern Expansion III + Historical Query Layer; 15 strategies; DuckDB phase 1; DEF-143/144 resolved; DEF-145–149 added; build track reordered)
 > **Status:** CANONICAL — this is the single source of truth for ARGUS's strategic direction and sprint queue.
 > **Supersedes:** `docs/research/ARGUS_Expanded_Roadmap.md` (Feb 26), `docs/argus_unified_vision_roadmap.md` (Mar 5), `docs/10_PHASE3_SPRINT_PLAN.md` (all forward-looking sections)
 
@@ -118,7 +118,7 @@ These foundations are correct and remain:
 
 ARGUS completed 21 sprints + sub-sprints in ~17 calendar days of active development (Feb 14 – Mar 5). Average sprint: ~0.8 calendar days. However, sprint complexity has been increasing — early sprints (1–5) were dense single-day affairs, while later sprints (21a–21d, 21.5) span multiple days. The roadmap below assumes sprint durations of 1–4 days each depending on complexity, with some parallelism where noted.
 
-**Current state:** Sprint 32.9 complete (April 2, 2026). ~4,579 pytest + 846 Vitest. 10 live + 2 shadow (12 total) strategies. Full infrastructure stack operational: BacktestEngine + Evaluation Framework + Regime Intelligence (11-field RegimeVector) + Counterfactual Engine + VIX Data Service + Quality Engine + NLP Catalyst Pipeline + Universe Manager + AI Copilot + Learning Loop V1 + Exit Management + MFE/MAE Tracking + **Experiment Pipeline** (enabled, pattern factory, parameter fingerprinting, exit params as variant dimensions, BacktestEngine all 7 patterns, variant spawning, backtest pre-filter, autonomous promotion/demotion) + **The Arena** (real-time multi-position visualization — 10th Command Center page) + **Operational Hardening** (EOD flatten synchronous verification, margin circuit breaker, pre-EOD signal cutoff, max concurrent positions cap). Ten-page Command Center. Live Databento + IBKR paper trading. ABCD + Flat-Top Breakout in shadow mode awaiting optimization. Phase 7 Gate pending (post-32.5). Next: Sprint 31A (Pattern Expansion III — reach 15 strategies).
+**Current state:** Sprint 31A.5 complete (April 3, 2026). 4,811 pytest + 846 Vitest. 13 live + 2 shadow (15 total) strategies. Full infrastructure stack operational: BacktestEngine + Evaluation Framework + Regime Intelligence (11-field RegimeVector) + Counterfactual Engine + VIX Data Service + Quality Engine + NLP Catalyst Pipeline + Universe Manager + AI Copilot + Learning Loop V1 + Exit Management + MFE/MAE Tracking + **Experiment Pipeline** (enabled, pattern factory, parameter fingerprinting, exit params as variant dimensions, BacktestEngine all 10 patterns, variant spawning, backtest pre-filter, autonomous promotion/demotion) + **The Arena** (real-time multi-position visualization — 10th Command Center page) + **Operational Hardening** (EOD flatten synchronous verification, margin circuit breaker, pre-EOD signal cutoff, max concurrent positions cap) + **Historical Query Service** (DuckDB read-only analytical layer over Parquet cache, config-gated, `validate_symbol_coverage()` for sweep pre-filtering). Ten-page Command Center. Live Databento + IBKR paper trading. ABCD + Flat-Top Breakout in shadow mode awaiting optimization. Phase 6 Gate met (15 strategies). Next: Sweep Tooling Impromptu → Sprint 31.5 (Parallel Sweep Infrastructure) → universe-aware sweeps → Sprint 30 (Short Selling).
 
 ---
 
@@ -484,12 +484,12 @@ Reconciliation redesign with broker-confirmed positions (DEC-369). Overflow rout
 - **6 sessions** (S1, S2, S3, S4a, S4b, S5), 12 adversarial review amendments verified, 0 issues.
 - **Tests:** pytest +110 (3,845 → 3,955), Vitest +0. New DEFs: 108, 109, 110. No new DECs.
 
-### Phase 6 Gate ★ CRITICAL — LIVE TRADING DECISION POINT ★
+### Phase 6 Gate ★ CRITICAL — LIVE TRADING DECISION POINT ★ (Sprint 31A COMPLETE — Gate Unlocked)
 
-**Trigger:** Sprint 31A complete (after Pattern Expansion III). Short Selling (Sprint 30) now follows the gate rather than preceding it — deferred per April 1 strategic review until long strategies are profitable.
+**Trigger:** Sprint 31A complete ✅ (April 3, 2026). Short Selling (Sprint 30) follows the gate — deferred per April 1 strategic review until long strategies are profitable.
 **Protocol:** Strategic Check-In (`strategic-check-in.md`) + Codebase Health Audit (`codebase-health-audit.md`) + Documentation Compression.
 
-**ARGUS state at this gate:** 15 hand-crafted long-only strategies with parameterized templates and experiment infrastructure (Sprint 32 — merged 32+32.5), AI quality filtering, NLP catalysts, dynamic sizing, and performance-aware learning loop. Paper trading has been running for 8–10 weeks at this point. All strategies validated with BacktestEngine + 3 years of Databento data. Short selling deferred to post-gate.
+**ARGUS state at this gate:** 15 hand-crafted long-only strategies with parameterized templates and experiment infrastructure, AI quality filtering, NLP catalysts, dynamic sizing, performance-aware learning loop, DuckDB analytical layer. Paper trading has been running. All strategies validated with BacktestEngine + 3 years of Databento data. Short selling deferred to post-gate.
 
 **What you see:** 15 strategy cards in the Pattern Library. Health bands on every strategy in the Orchestrator. Correlation heatmap on Performance. Quality-graded signals firing throughout the day. Morning intelligence briefs. AI-generated debrief narratives. MFE/MAE lifecycle data on every trade. Parameterized templates tunable from config.
 
@@ -534,40 +534,94 @@ Reconciliation redesign with broker-confirmed positions (DEC-369). Overflow rout
 - **ORB Scalp Exclusion Fix (S7):** `orb_family_mutual_exclusion` config flag (default true); `false` disables DEC-261 to enable independent ORB Scalp data capture.
 - **Tests:** +34 pytest, +11 Vitest (4,212 + 700 total). No new DECs. DEF-125 through DEF-128 logged.
 
-### Sprint 30: Short Selling Infrastructure + Pattern Expansion II (DEC-166, DEC-167)
+### Sprint 30: Short Selling Infrastructure (DEC-166, DEC-167)
+**Prerequisites:** Phase 6 Gate ✅ (Sprint 31A complete). Runs in parallel while universe-aware sweeps execute.
 **Target:** ~3 days
 
 **Scope:**
 - **Short selling infrastructure** (`argus/execution/short_selling.py`): Locate/borrow tracking. Inverted risk logic (stop above entry, target below). Short-specific Risk Manager rules. Uptick rule compliance (SSR detection). Short exposure limits (separate from long limits).
 - **Parabolic Short** strategy module: First short strategy. Parabolic extension detection, volume exhaustion, reversal candle patterns. Uses L1 signals only (Order Flow enhancement added post-revenue per DEC-238).
-- 1–2 additional long pattern modules if velocity allows.
-- **UI:** Dashboard gains short exposure indicator (active). Orchestrator gains short position section. Pattern Library gains Parabolic Short + any additional strategy cards.
-- **13–15 strategies/patterns active (including first short strategy).**
+- **UI:** Dashboard gains short exposure indicator (active). Orchestrator gains short position section. Pattern Library gains Parabolic Short strategy card.
+- **16 strategies/patterns active (15 long + 1 short).**
 - **Tests:** ~80 new.
 
-### Sprint 31A: Pattern Expansion III (DEC-379)
-**Target:** ~1–2 days
-
-**Status (as of Apr 2):** Param sweep partially complete — 2 Dip-and-Rip variants in shadow. Full multi-pattern sweep blocked by DEF-143 (BacktestEngine pattern init ignores config_overrides). Fix DEF-143 early in this sprint to unlock reliable optimization for all 7 patterns.
+### Impromptu: Sweep Analysis (post-Sprint 31.5 sweeps)
+**Prerequisite:** Sprint 31.5 complete + universe-aware sweeps finished executing.
+**Target:** ~0.5 days
 
 **Scope:**
-- Additional pattern modules to reach 15 total strategies. All implement PatternModule with structured PatternParam metadata (from Sprint 29 DEF-088 resolution).
-- **Prerequisites:** Fix DEF-143 (BacktestEngine `_create_*_strategy()` must call `build_pattern_from_config()` — HIGH priority, ~1 session). Unblocks reliable parameter sweep results for 5 remaining patterns.
-- Walk-forward validated. Quality Engine integration.
-- **UI:** Pattern Library gains remaining strategy cards.
-- **15 strategies/patterns active.**
-- **Tests:** ~40 new.
+- Analyze sweep results for all 10 patterns against their natural populations (universe_filter.yaml)
+- Identify qualifying variants by pattern type (Sharpe ≥ 1.5, expectancy > 0, trades ≥ 30)
+- Update `config/experiments.yaml` with qualifying variants in shadow mode
+- Update `docs/sprint-history.md` sweep results table
+- Any new DEF items from sweep findings
+
+### Sprint 31A: Pattern Expansion III (DEC-379) ✅ COMPLETE (April 3, 2026)
+**Actual:** ~1 day (6 sessions). +137 pytest.
+
+**Delivered:**
+- **DEF-143 resolved:** All 7 BacktestEngine `_create_*_strategy()` factory methods now use `build_pattern_from_config()`. Parameter sweeps correctly propagate config_overrides to pattern detection logic.
+- **DEF-144 resolved:** OrderManager 6 new safety tracking attrs + `increment_signal_cutoff()`. Debrief export `_export_safety_summary` reads them. Cutoff increment wired in `_process_signal()`.
+- **PMH 0-trade fix:** `lookback_bars` 30→400, `min_detection_bars=10`, reference data wired in main.py Phase 9.5 + periodic refresh. Root cause: deque capacity truncated the 330-candle PM session.
+- **Micro Pullback** pattern (10:00–14:00, EMA-based impulse→pullback→bounce, 12 PatternParams, scoring 30/25/25/20, universe filter min_avg_volume 500K)
+- **VWAP Bounce** pattern (10:30–15:00, approach→touch→bounce, VWAP from indicators dict, prior uptrend validation, scoring 30/25/25/20)
+- **Narrow Range Breakout** pattern (10:00–15:00, narrowing range→consolidation→volume breakout, self-contained ATR, long-only gate, scoring 30/25/25/20, universe filter min_avg_volume 300K)
+- **10-pattern sweep** (24-symbol momentum set): 2 qualifying Dip-and-Rip variants, 8 non-qualifying. Universe-aware re-sweep deferred (DEF-145).
+- **`min_detection_bars` property** on PatternModule base — non-abstract, defaults to `lookback_bars`, overrideable.
+
+**State after:** 15 strategies total (13 live + 2 shadow). Phase 6 Gate met. All 10 PatternModule patterns in BacktestEngine + experiment pipeline.
+
+**Tests:** 4,674 → 4,811 (+137 pytest).
+**DECs:** None.
+**DEFs:** DEF-143 ✅, DEF-144 ✅ resolved. DEF-145 opened (universe-aware sweep tooling).
+
+### Sprint 31A.5: Historical Query Layer — DuckDB Phase 1 ✅ COMPLETE (April 3, 2026)
+**Type:** Impromptu (single session). **Actual:** ~0.5 days. +50 pytest. Tier 2: CLEAR.
+
+**Delivered:**
+- `argus/data/historical_query_service.py` — DuckDB wrapper (config-gated, lazy init, in-memory connection, CREATE VIEW over Parquet cache with `regexp_extract` symbol extraction, 6 query methods)
+- `argus/data/historical_query_config.py` — Pydantic config model
+- `config/historical_query.yaml` — standalone config
+- `scripts/query_cache.py` — interactive CLI SQL tool (readline history, dot-commands)
+- `argus/api/routes/historical.py` — 4 JWT-protected REST endpoints (`GET /symbols`, `GET /coverage`, `GET /bars/{symbol}`, `POST /validate-coverage`)
+- `validate_symbol_coverage()` — pre-filter utility for ExperimentRunner (wired in Sprint 31.5, DEF-146)
+- New dependency: `duckdb>=1.0,<2`
+
+**Notes:** Databento Parquet uses `timestamp` column (not `ts_event`). DuckDB `:memory:` only — Parquet cache is the persistent store. Symbol extracted from path via `regexp_extract`.
+
+**Tests:** 4,761 → 4,811 (+50 pytest).
+**DECs:** None.
+**DEFs:** DEF-146 (wiring into ExperimentRunner), DEF-147 (Research Console backend), DEF-148 (FRED macro service), DEF-149 (FRED VIX fallback) opened.
+
+---
+
+### Impromptu: Universe-Aware Sweep Tooling (NEXT — resolves DEF-145)
+**Prerequisite:** Sprint 31A complete ✅ + Sprint 31A.5 complete ✅
+**Target:** ~0.5 days (1–2 sessions)
+
+**Scope:**
+- Add `--symbols` flag to `scripts/run_experiment.py` (explicit symbol list, comma-separated or file path)
+- Add `--universe-filter` flag that loads `config/universe_filters/{pattern}.yaml` and applies min_price/max_price/min_avg_volume filters against available symbols to produce the symbol list
+- Wire `HistoricalQueryService.validate_symbol_coverage()` into the `--universe-filter` flow to confirm Parquet data exists for candidate symbols in the target date range
+- The sweep uses the *same filter the pattern sees in production*
+
+**Why:** NR Breakout produced only 2 trades and VWAP Bounce had negative dollar P&L on the 24-symbol momentum set. Each pattern needs to be tested against its natural population (e.g., NR Breakout needs lower-volume, less-momentum symbols). This is the prerequisite before universe-aware sweeps can run.
+
+**Tests:** ~15 new.
 
 ### Sprint 31.5: Parallel Sweep Infrastructure (DEC-379)
-**Prerequisites from Sprint 29:** DEF-123 (grid float accumulation cleanup).
+**Prerequisites:** Sprint 31A complete ✅, Sprint 31A.5 complete ✅, Sweep Tooling Impromptu complete.
 **Target:** ~3–4 days
 
 **Scope (backend):**
 - Multiprocessing harness for BacktestEngine. Parameter grid specification format (consumes PatternParam metadata from Sprint 29).
-- **Prerequisites from Sprint 29:** DEF-121 (extend `_create_pattern_by_name()` for remaining 4 patterns), DEF-122 (ABCD O(n³) optimization), DEF-124 (runtime YAML→constructor param wiring). Also wire Bull Flag/Flat-Top dead-code constructor params into detect()/score().
+- **DEF-146:** Wire `HistoricalQueryService.validate_symbol_coverage()` into ExperimentRunner for batch pre-validation and intelligent work partitioning across workers.
+- **DEF-122:** ABCD O(n³) optimization before full-universe sweep.
 - Worker pool distributing parameter combinations across CPU cores.
 - Result aggregation pipeline. Progress monitoring.
 - Cloud burst configuration (spin up high-core-count instance for sweep days).
+
+**State after:** Universe-aware sweeps can launch across all 10 patterns against their natural populations. Sprint 30 runs in parallel.
 
 **Tests:** ~60 new.
 
@@ -687,10 +741,19 @@ Reconciliation redesign with broker-confirmed positions (DEC-369). Overflow rout
 
 **Dependencies:** Sprint 32 (PromotionPipeline for Stage 1.5 gate — merged from 32.5), Sprint 27.5 (BacktestEngine with MultiObjectiveResult), Sprint 27.6 (regime transition detection quality is a metric), BacktestEngine (Sprint 27).
 
-### Sprint 34: ORB Family Systematic Search ★ THE PIVOTAL EXPERIMENT ★
+### Sprint 34: FRED Macro Regime Intelligence + ORB Family Systematic Search ★ THE PIVOTAL EXPERIMENT ★
 **Target:** ~4–5 days (compute-heavy — may need cloud burst)
 
-**Scope:** Take the ORB Breakout template and systematically search:
+**FRED integration (DEF-148, new addition):**
+Before the ORB sweep, add `argus/data/fred_macro_service.py` following VIXDataService pattern:
+- Daily pull from FRED API via `fredapi` ($0 free tier)
+- `MacroSnapshot` dataclass: yield_spread_10y2y, fed_funds_rate, initial_claims, cpi_yoy, pce_yoy, consumer_sentiment
+- Derived regimes: YieldCurveRegime, EmploymentRegime, InflationRegime, macro_composite_score
+- RegimeVector expansion: 3-4 new Optional fields (backward-compatible)
+- Integration: BriefingGenerator macro section, Observatory, BacktestEngine retroactive labeling, Allocation Intelligence macro-weighted deployment
+- SQLite persistence: `data/fred_macro.db`
+
+**ORB sweep scope:** Take the ORB Breakout template and systematically search:
 - Entry parameters: 15–20 values
 - Target parameters: 10–15 values
 - Stop parameters: 5–10 values
@@ -997,6 +1060,14 @@ The original Orchestrator V2 concept (enhanced rules-based for ~15 strategies) i
 ## 16. Post-Revenue Backlog
 
 Items deferred until monthly trading income justifies their cost or complexity. These are tracked here so nothing is lost from previous roadmap iterations.
+
+### Financial Datasets (findatasets.ai) — Bookmarked April 3, 2026
+
+**Trigger:** Post-revenue with budget for fundamental screening.
+
+**Context:** $200/mo Developer plan — 17K+ tickers, financials, SEC filings, insider trades, MCP server. Evaluated April 3, 2026. Not justified now — ARGUS's CatalystPipeline covers SEC 8-Ks/Form 4s, FMP covers scanning. Would become relevant when AI layer evolves toward autonomous fundamental screening. Superior integration path vs. raw SEC EDGAR at scale.
+
+**DEF-149 note:** FRED VIXCLS series is free and can serve as fallback in VIXDataService if yfinance breaks.
 
 ### Tax Intelligence Automation (DEC-380)
 

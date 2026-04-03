@@ -1,7 +1,7 @@
 # ARGUS — Sprint History
 
 > Complete record of all sprints from project inception through current state.
-> Active development began February 14, 2026. As of April 3, 2026 (~49 calendar days), 32 full sprints + 43 sub-sprints completed.
+> Active development began February 14, 2026. As of April 3, 2026 (~49 calendar days), 34 full sprints + 43 sub-sprints + 2 impromptus completed.
 
 ---
 
@@ -42,6 +42,8 @@
 | AH — Debrief Export Enhancement | 32.95 | Apr 2, 2026 | Debrief export test coverage — counterfactual_summary, experiment_summary, quality_distribution, backward_compatible (+3 pytest, single session) |
 | — | Param Sweep (31A Prep) | Apr 2, 2026 | BacktestEngine param sweep across 7 PatternModule patterns; 2 Dip-and-Rip variants configured in shadow (`config/experiments.yaml`); DEF-143 BacktestEngine pattern init gap discovered |
 | AI — Good Friday Incident (Impromptu) | — | Apr 3, 2026 | OHLCV-1m observability (per-gate drop counters, first-event sentinels, zero-candle escalation); NYSE holiday calendar (`core/market_calendar.py`); `GET /api/v1/market/status` (+135 pytest) |
+| AJ — Pattern Expansion III | 31A | Apr 3, 2026 | DEF-143/144 resolved; PMH 0-trade fix; 3 new patterns (Micro Pullback, VWAP Bounce, NR Breakout); 10-pattern sweep; 15 total strategies (+137 pytest) |
+| AK — Historical Query Layer | 31A.5 | Apr 3, 2026 | DuckDB analytical layer over Parquet cache; HistoricalQueryService; CLI + REST; duckdb>=1.0,<2 dependency (+50 pytest) |
 
 ---
 
@@ -2529,12 +2531,66 @@ New module — pure algorithmic NYSE holiday calendar, ported from frontend `ui/
 
 ---
 
+## Sprint 31A: Pattern Expansion III (April 3, 2026)
+
+**Goal:** Reach 15 strategies. Fix DEF-143/DEF-144. Resolve Pre-Market High Break 0-trade root cause. Add 3 new PatternModule strategies. Run full parameter sweep.
+**Sessions:** 6 | **Tests:** +137 pytest (4,674 → 4,811) | **DEFs resolved:** 143, 144 | **New DEFs:** 145 | **New DECs:** 0
+
+| Session | Scope | Verdict | Test Δ |
+|---------|-------|---------|--------|
+| S1 | DEF-143 (BacktestEngine factory fix) + DEF-144 (debrief safety_summary + OrderManager safety attrs) | CLEAR | +15 |
+| S2 | PMH 0-trade fix: `lookback_bars` 30→400, `min_detection_bars=10`, reference data wiring in main.py Phase 9.5 + periodic refresh | CLEAR | +12 |
+| S3 | Micro Pullback pattern (10:00–14:00, EMA-based impulse→pullback→bounce, 12 PatternParams, scoring 30/25/25/20) + `increment_signal_cutoff()` carry-forward from S1 | CLEAR | +17 |
+| S4 | VWAP Bounce pattern (10:30–15:00, approach→touch→bounce, VWAP from indicators dict, prior uptrend validation, scoring 30/25/25/20) | CLEAR | +20 |
+| S5 | Narrow Range Breakout pattern (10:00–15:00, narrowing range→consolidation→volume breakout, self-contained ATR, long-only gate, scoring 30/25/25/20) | CLEAR | +20 |
+| S6 | Parameter sweep across all 10 PatternModule patterns (24-symbol momentum set), experiments.yaml update, registry integration tests | CONCERNS_RESOLVED | +53* |
+
+*S6 delta includes batched S3–S5 commits.
+
+**Sweep results:** 2 qualifying variants (Dip-and-Rip v2: Sharpe 1.996, WR 45.6%; v3: Sharpe 2.628, WR 45.0%). 8 non-qualifying patterns: bull_flag/flat_top/abcd (negative expectancy), hod_break/gap_and_go/premarket (insufficient trades), micro_pullback (breakeven), vwap_bounce/narrow_range (momentum set mismatch). Universe-aware re-sweep needed via Sweep Tooling Impromptu (DEF-145).
+
+**Key fixes:**
+- **DEF-143 resolved:** All 7 `_create_*_strategy()` factory methods now use `build_pattern_from_config()` — parameter sweeps now correctly propagate config_overrides to pattern detection logic.
+- **DEF-144 resolved:** OrderManager gains 6 safety tracking attrs (`margin_circuit_breaker_open_time`, `reset_time`, `entries_blocked_count`, `eod_flatten_pass1_count`, `eod_flatten_pass2_count`, `signal_cutoff_skipped_count`) + `increment_signal_cutoff()`. Debrief export `_export_safety_summary` reads them. S3 wired cutoff increment in `_process_signal()`.
+- **PMH 0-trade root cause:** `lookback_bars=30` truncated the 330-candle PM session. Fixed to 400 + `min_detection_bars=10` threshold separating deque capacity from detection eligibility. Reference data (`prior_close`) now wired via `initialize_reference_data()` in main.py Phase 9.5 + periodic refresh.
+
+---
+
+## Sprint 31A.5: Historical Query Layer — DuckDB Phase 1 (April 3, 2026)
+
+**Goal:** Add DuckDB-based read-only analytical query layer over Parquet cache for experiment pre-filtering and future Research Console.
+**Type:** Impromptu (single session) | **Tests:** +50 pytest (4,761 → 4,811) | **New DEFs:** 146, 147, 148, 149 | **New DECs:** 0 | **Tier 2 verdict:** CLEAR
+
+**New files (8):**
+- `argus/data/historical_query_service.py` — DuckDB wrapper, config-gated, lazy init, in-memory `:memory:` connection, CREATE VIEW over Parquet cache with `regexp_extract` symbol extraction from filenames, 6 query methods (`get_available_symbols`, `get_coverage_summary`, `get_bars`, `validate_symbol_coverage`, `get_cache_health`, `execute_raw_query`)
+- `argus/data/historical_query_config.py` — Pydantic config model
+- `config/historical_query.yaml` — standalone config
+- `scripts/query_cache.py` — interactive CLI SQL tool with readline history and dot-commands
+- `argus/api/routes/historical.py` — 4 JWT-protected REST endpoints: `GET /symbols`, `GET /coverage`, `GET /bars/{symbol}`, `POST /validate-coverage`
+- 3 test files
+
+**Modified files (7):** `config.py` (SystemConfig), `dependencies.py` (AppState), `server.py` (lifespan wiring), `routes/__init__.py` (router registration), `system.yaml`, `system_live.yaml`, `pyproject.toml` (duckdb dependency).
+
+**New dependency:** `duckdb>=1.0,<2`
+
+**Key notes:**
+- Databento Parquet schema uses `timestamp` column (not `ts_event`). VIEW aliases it.
+- Symbol extracted from file path via `regexp_extract` on filename — no separate manifest needed.
+- DuckDB `:memory:` only — Parquet cache is the persistent store.
+- `validate_symbol_coverage()` is the key integration point for Sweep Tooling Impromptu and Sprint 31.5.
+
+**4 LOW-severity style findings (no action):** `_get_service()` missing return type annotation; validate-coverage uses raw dict body instead of Pydantic model; `while True` in CLI REPL (standard); `os.walk`/`os.path.getsize` instead of pathlib in `get_cache_health()`.
+
+**Strategic research findings (April 3):** Comprehensive evaluation of IBKR Historical API, Alpha Vantage, Polygon.io, Bloomberg, yfinance confirmed ARGUS's existing stack is best-in-class. DuckDB ($0 MIT) and FRED API ($0 free tier) are the only additive layers warranted. Financial Datasets (findatasets.ai, $200/mo) bookmarked for post-revenue fundamental screening.
+
+---
+
 ## Sprint Statistics
 
-- **Total sprints:** 32 full + 43 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9, 27.5, 27.6, 27.65, 27.7, 27.75, 27.8, 27.9, 27.95, 28.5, 28.75, 29, 29.5, 32.5, 32.75, 32.8, 32.9, 32.95) + 1 impromptu (Good Friday Apr 3)
-- **Total sessions:** ~540+ Claude Code sessions
-- **Total tests:** ~4,674 pytest + 846 Vitest = ~5,520 total
-- **Total decisions:** 381 (DEC-001 through DEC-381; no new DECs in Sprints 29.5, 32, 32.5, 32.75, 32.8, 32.9, 32.95, or Apr 3 hotfix)
+- **Total sprints:** 34 full + 43 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9, 27.5, 27.6, 27.65, 27.7, 27.75, 27.8, 27.9, 27.95, 28.5, 28.75, 29, 29.5, 32.5, 32.75, 32.8, 32.9, 32.95) + 2 impromptus (Good Friday Apr 3, 31A.5 Apr 3)
+- **Total sessions:** ~547+ Claude Code sessions
+- **Total tests:** 4,811 pytest + 846 Vitest = 5,657 total
+- **Total decisions:** 381 (DEC-001 through DEC-381; no new DECs in Sprints 29.5, 32, 32.5, 32.75, 32.8, 32.9, 32.95, Apr 3 hotfix, 31A, or 31A.5)
 - **Calendar days (active dev):** ~49 (Feb 14 – Apr 3, 2026)
 - **Largest sprint:** 22 (9 implementation + 5 fix + 9 reviews, largest scope)
 - **Cleanest sprint:** 23 (11 sessions, 0 regressions, 0 scope gaps requiring follow-up)

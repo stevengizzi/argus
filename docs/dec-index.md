@@ -473,4 +473,8 @@ No new DECs. All design decisions followed established patterns (DEC-345 store p
 
 ## Sprint 32.75 — The Arena + UI/Operational Sweep
 
-No new DECs. All design decisions followed established patterns (Arena WS follows observatory WS pattern, Arena REST follows existing route patterns, IBKRBroker reconnect delay is a hardcoded operational choice not requiring a DEC, overflow broker_capacity change is a config value adjustment). Next DEC: 382.
+No new DECs. All design decisions followed established patterns (Arena WS follows observatory WS pattern, Arena REST follows existing route patterns, IBKRBroker reconnect delay is a hardcoded operational choice not requiring a DEC, overflow broker_capacity change is a config value adjustment).
+
+## Sprints 32.8, 32.9, 32.95, Good Friday Impromptu (Apr 3), Sprint 31A, Sprint 31A.5
+
+No new DECs across any of these sprints/impromptus. All design decisions followed established patterns (DEC-088 threading, DEC-300 config-gating, DEC-345 DB store pattern, DEC-358 BacktestEngine factory, DEC-379 sprint decomposition, quality engine recalibration is a config value adjustment not requiring a DEC, DuckDB in-memory connection is an implementation detail). Next DEC: 382.
