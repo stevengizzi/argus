@@ -2447,12 +2447,32 @@
 
 ---
 
+## Sprint 32.95: Debrief Export Enhancement (April 2, 2026)
+
+**Goal:** Complete test coverage for the four new debrief JSON export sections added during Sprint 32.9 (`counterfactual_summary`, `experiment_summary`, `safety_summary`, `quality_distribution`).
+
+**Starting state:** 4,579 pytest + 846 Vitest. Implementation already complete in `debrief_export.py` and `main.py`.
+**Ending state:** 4,582 pytest + 846 Vitest (+3 pytest).
+**Sessions:** 1 (impromptu, single session)
+**Execution mode:** Human-in-the-loop
+**New DECs:** None.
+**DEF items resolved:** None.
+
+**What changed:** Added 3 missing tests to `tests/analytics/test_debrief_export.py`:
+- `test_export_experiment_summary_with_data` — creates temp experiments.db with all 3 required tables (variants, experiments, promotion_events), verifies summary structure
+- `test_export_quality_distribution` — tests `_export_quality_distribution()` directly with mocked side_effects for all 3 SQL calls; verifies grade_counts, win_rate computation, dimension_averages
+- `test_export_backward_compatible` — confirms calling without the new Sprint 32.9+ params produces graceful degradation (error dicts for None paths, zero-value defaults for safety_summary)
+
+**Note:** The debrief export implementation itself (all four new sections, updated function signature, call site in main.py) was already in place before this sprint began.
+
+---
+
 ## Sprint Statistics
 
-- **Total sprints:** 32 full + 42 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9, 27.5, 27.6, 27.65, 27.7, 27.75, 27.8, 27.9, 27.95, 28.5, 28.75, 29, 29.5, 32.5, 32.75, 32.8, 32.9)
-- **Total sessions:** ~537+ Claude Code sessions
-- **Total tests:** ~4,579 pytest + 846 Vitest = ~5,425 total
-- **Total decisions:** 381 (DEC-001 through DEC-381; no new DECs in Sprints 29.5, 32, 32.5, 32.75, 32.8, or 32.9)
+- **Total sprints:** 32 full + 43 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9, 27.5, 27.6, 27.65, 27.7, 27.75, 27.8, 27.9, 27.95, 28.5, 28.75, 29, 29.5, 32.5, 32.75, 32.8, 32.9, 32.95)
+- **Total sessions:** ~538+ Claude Code sessions
+- **Total tests:** ~4,582 pytest + 846 Vitest = ~5,428 total
+- **Total decisions:** 381 (DEC-001 through DEC-381; no new DECs in Sprints 29.5, 32, 32.5, 32.75, 32.8, 32.9, or 32.95)
 - **Calendar days (active dev):** ~48 (Feb 14 – Apr 2, 2026)
 - **Largest sprint:** 22 (9 implementation + 5 fix + 9 reviews, largest scope)
 - **Cleanest sprint:** 23 (11 sessions, 0 regressions, 0 scope gaps requiring follow-up)

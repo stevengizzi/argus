@@ -422,3 +422,170 @@ async def test_export_counterfactual_summary_with_live_db(tmp_path: Path) -> Non
     assert cf["by_strategy"]["strat_abcd"]["wins"] == 1
     assert cf["by_rejection_stage"]["shadow"] == 1
     assert cf["by_exit_reason"]["target_hit"] == 1
+
+
+@pytest.mark.asyncio
+async def test_export_experiment_summary_with_data(tmp_path: Path) -> None:
+    """experiment_summary returns structured keys when a valid experiments.db exists."""
+    import aiosqlite
+
+    db_path = tmp_path / "experiments.db"
+    async with aiosqlite.connect(str(db_path)) as conn:
+        await conn.execute(
+            """CREATE TABLE variants (
+                variant_id TEXT PRIMARY KEY,
+                base_pattern TEXT NOT NULL,
+                parameter_fingerprint TEXT NOT NULL,
+                parameters_json TEXT NOT NULL,
+                mode TEXT NOT NULL,
+                source TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )"""
+        )
+        await conn.execute(
+            """CREATE TABLE experiments (
+                experiment_id TEXT PRIMARY KEY,
+                pattern_name TEXT NOT NULL,
+                parameter_fingerprint TEXT NOT NULL,
+                parameters_json TEXT NOT NULL,
+                status TEXT NOT NULL,
+                backtest_result_json TEXT,
+                shadow_trades INTEGER NOT NULL DEFAULT 0,
+                shadow_expectancy REAL,
+                is_baseline INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )"""
+        )
+        await conn.execute(
+            """CREATE TABLE promotion_events (
+                event_id TEXT PRIMARY KEY,
+                variant_id TEXT NOT NULL,
+                action TEXT NOT NULL,
+                previous_mode TEXT NOT NULL,
+                new_mode TEXT NOT NULL,
+                reason TEXT NOT NULL,
+                comparison_verdict_json TEXT,
+                shadow_trades INTEGER NOT NULL DEFAULT 0,
+                shadow_expectancy REAL,
+                timestamp TEXT NOT NULL
+            )"""
+        )
+        await conn.execute(
+            "INSERT INTO variants VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (
+                "var-001", "bull_flag", "abc123", "{}",
+                "shadow", "sweep", f"{SESSION_DATE}T09:00:00",
+            ),
+        )
+        await conn.execute(
+            "INSERT INTO experiments VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                "var-001", "bull_flag", "abc123", "{}", "shadow",
+                None, 5, 0.35, 0,
+                f"{SESSION_DATE}T09:00:00", f"{SESSION_DATE}T09:00:00",
+            ),
+        )
+        await conn.execute(
+            "INSERT INTO promotion_events VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                "evt-001", "var-001", "promote", "shadow", "paper",
+                "good expectancy", None, 5, 0.35, f"{SESSION_DATE}T15:00:00",
+            ),
+        )
+        await conn.commit()
+
+    db = _make_db_mock()
+    eval_store = _make_eval_store_mock()
+    broker = _make_broker_mock()
+    orchestrator = _make_orchestrator_mock()
+
+    result_path = await export_debrief_data(
+        session_date=SESSION_DATE,
+        db=db,
+        eval_store=eval_store,
+        catalyst_db_path=None,
+        broker=broker,
+        orchestrator=orchestrator,
+        output_dir=str(tmp_path),
+        experiment_db_path=str(db_path),
+    )
+
+    assert result_path is not None
+    payload = json.loads(Path(result_path).read_text(encoding="utf-8"))
+
+    exp = payload["experiment_summary"]
+    assert exp["variants_spawned"] == 1
+    assert "bull_flag" in exp["variants_by_pattern"]
+    assert "var-001" in exp["variants_by_pattern"]["bull_flag"]
+    assert exp["promotion_events_today"] == 1
+    assert "var-001" in exp["variant_shadow_trades"]
+    assert exp["variant_shadow_trades"]["var-001"]["trades"] == 5
+    assert exp["variant_shadow_trades"]["var-001"]["pattern_name"] == "bull_flag"
+
+
+@pytest.mark.asyncio
+async def test_export_quality_distribution(tmp_path: Path) -> None:
+    """quality_distribution returns grade_counts and dimension_averages from quality_history."""
+    from argus.analytics.debrief_export import _export_quality_distribution
+
+    db = MagicMock()
+    db.fetch_all = AsyncMock(
+        side_effect=[
+            # grade_counts: (grade, count)
+            [("A+", 2), ("B+", 5), ("B", 3)],
+            # grade_outcomes: (grade, signals, wins, avg_r) WHERE outcome_trade_id IS NOT NULL
+            [("A+", 2, 2, 1.5), ("B+", 3, 2, 0.8)],
+            # dimension_averages: single row of 6 floats
+            [(70.0, 50.0, 60.0, 50.0, 55.0, 62.5)],
+        ]
+    )
+
+    result = await _export_quality_distribution(db, SESSION_DATE)
+
+    assert result["grade_counts"] == {"A+": 2, "B+": 5, "B": 3}
+    assert "A+" in result["grade_outcomes"]
+    assert result["grade_outcomes"]["A+"]["win_rate"] == 1.0
+    assert result["grade_outcomes"]["B+"]["win_rate"] == pytest.approx(0.667, abs=0.001)
+    assert result["dimension_averages"] is not None
+    assert result["dimension_averages"]["pattern_strength"] == 70.0
+    assert result["dimension_averages"]["composite_score"] == 62.5
+
+
+@pytest.mark.asyncio
+async def test_export_backward_compatible(tmp_path: Path) -> None:
+    """export_debrief_data works with default (None) values for new Sprint 32.9+ params."""
+    db = _make_db_mock()
+    eval_store = _make_eval_store_mock()
+    broker = _make_broker_mock()
+    orchestrator = _make_orchestrator_mock()
+
+    # Call without any of the new Sprint 32.9+ keyword parameters
+    result_path = await export_debrief_data(
+        session_date=SESSION_DATE,
+        db=db,
+        eval_store=eval_store,
+        catalyst_db_path=None,
+        broker=broker,
+        orchestrator=orchestrator,
+        output_dir=str(tmp_path),
+    )
+
+    assert result_path is not None
+    payload = json.loads(Path(result_path).read_text(encoding="utf-8"))
+
+    # All top-level keys must be present
+    assert "counterfactual_summary" in payload
+    assert "experiment_summary" in payload
+    assert "safety_summary" in payload
+    assert "quality_distribution" in payload
+
+    # None paths degrade gracefully to error dicts
+    assert "error" in payload["counterfactual_summary"]
+    assert "error" in payload["experiment_summary"]
+
+    # safety_summary with None order_manager returns zero-value defaults, not an error
+    safety = payload["safety_summary"]
+    assert "margin_circuit_breaker" in safety
+    assert safety["margin_circuit_breaker"]["triggered"] is False
+    assert safety["margin_circuit_breaker"]["rejection_count"] == 0
