@@ -1,7 +1,7 @@
 # ARGUS — Strategic Roadmap
 
 > From artisanal strategies to ensemble alpha — the complete path
-> **v3.1 — April 2, 2026** (Sprint 32.9 complete — Operational Hardening + Position Safety + Quality Recalibration)
+> **v3.2 — April 2, 2026** (Sprint 32.95 complete — Debrief Export Enhancement; param sweep run, 2 Dip-and-Rip variants configured in shadow, DEF-143/144 added)
 > **Status:** CANONICAL — this is the single source of truth for ARGUS's strategic direction and sprint queue.
 > **Supersedes:** `docs/research/ARGUS_Expanded_Roadmap.md` (Feb 26), `docs/argus_unified_vision_roadmap.md` (Mar 5), `docs/10_PHASE3_SPRINT_PLAN.md` (all forward-looking sections)
 
@@ -548,8 +548,11 @@ Reconciliation redesign with broker-confirmed positions (DEC-369). Overflow rout
 ### Sprint 31A: Pattern Expansion III (DEC-379)
 **Target:** ~1–2 days
 
+**Status (as of Apr 2):** Param sweep partially complete — 2 Dip-and-Rip variants in shadow. Full multi-pattern sweep blocked by DEF-143 (BacktestEngine pattern init ignores config_overrides). Fix DEF-143 early in this sprint to unlock reliable optimization for all 7 patterns.
+
 **Scope:**
 - Additional pattern modules to reach 15 total strategies. All implement PatternModule with structured PatternParam metadata (from Sprint 29 DEF-088 resolution).
+- **Prerequisites:** Fix DEF-143 (BacktestEngine `_create_*_strategy()` must call `build_pattern_from_config()` — HIGH priority, ~1 session). Unblocks reliable parameter sweep results for 5 remaining patterns.
 - Walk-forward validated. Quality Engine integration.
 - **UI:** Pattern Library gains remaining strategy cards.
 - **15 strategies/patterns active.**

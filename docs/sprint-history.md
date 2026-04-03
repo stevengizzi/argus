@@ -39,6 +39,8 @@
 | AE — The Arena + UI/Operational Sweep | 32.75 | Apr 2, 2026 | 10th Command Center page (The Arena), strategy identity system, Dashboard overhaul, Arena REST + WebSocket, IBC setup guide |
 | AF — Arena Latency + UI Polish Sweep | 32.8 | Apr 2, 2026 | Arena TickEvent subscription, arena_tick_price, pre-market candles, VitalsStrip, Dashboard 4-row layout, Trades unification, DEF-137/138 resolved |
 | AG — Operational Hardening | 32.9 | Apr 2, 2026 | EOD flatten sync verification, zombie fix, margin circuit breaker, signal cutoff, quality recalibration, strategy shadow demotion, experiment pipeline enabled |
+| AH — Debrief Export Enhancement | 32.95 | Apr 2, 2026 | Debrief export test coverage — counterfactual_summary, experiment_summary, quality_distribution, backward_compatible (+3 pytest, single session) |
+| — | Param Sweep (31A Prep) | Apr 2, 2026 | BacktestEngine param sweep across 7 PatternModule patterns; 2 Dip-and-Rip variants configured in shadow (`config/experiments.yaml`); DEF-143 BacktestEngine pattern init gap discovered |
 
 ---
 
@@ -2464,6 +2466,24 @@
 - `test_export_backward_compatible` — confirms calling without the new Sprint 32.9+ params produces graceful degradation (error dicts for None paths, zero-value defaults for safety_summary)
 
 **Note:** The debrief export implementation itself (all four new sections, updated function signature, call site in main.py) was already in place before this sprint began.
+
+---
+
+## Parameter Sweep — Sprint 31A Prep (April 2, 2026)
+
+**Goal:** Run BacktestEngine parameter sweeps across all 7 PatternModule strategies to identify qualifying variants for the experiment pipeline before Sprint 31A begins.
+**Tool:** `scripts/run_experiment.py` against `config/experiments.yaml` variant definitions. 24-symbol momentum universe, 2025 data (~12 months).
+**Sessions:** Operator-run (no implementation sessions).
+
+**Results:**
+- **2 Dip-and-Rip variants qualified** and written to `config/experiments.yaml`:
+  - `strat_dip_and_rip__v2_tight_dip_quality`: Sharpe 1.996, 114 trades, expectancy +0.044, WR 45.6%
+  - `strat_dip_and_rip__v3_strict_volume`: Sharpe 2.628, 40 trades, expectancy +0.068, WR 45.0%
+- **5 patterns produced no qualifying variants** (Bull Flag, Flat-Top, HOD Break, Gap-and-Go, ABCD) — all had negative expectancy or insufficient trade count on the 24-symbol set.
+- **Pre-Market High Break defaults are excellent** (Sharpe 2.788, expectancy +0.31) — no optimization needed; 0 live trades Apr 2 (live/backtest universe gap under investigation).
+- **BacktestEngine pattern init gap discovered (DEF-143):** `_create_*_strategy()` uses no-arg constructors, ignoring `config_overrides`. Sweep results for non-DnR patterns are unreliable until fixed. Dip-and-Rip sweep patched around this. Priority: HIGH, Sprint 31A fix candidate.
+
+**New DEF items:** DEF-143 (BacktestEngine config_overrides ignored — HIGH), DEF-144 (debrief safety_summary incomplete — LOW).
 
 ---
 
