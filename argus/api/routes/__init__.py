@@ -8,6 +8,7 @@ from fastapi import APIRouter
 
 from argus.api.routes.account import router as account_router
 from argus.api.routes.arena import router as arena_router
+from argus.api.routes.historical import router as historical_router
 from argus.api.routes.ai import router as ai_router
 from argus.api.routes.auth import router as auth_router
 from argus.api.routes.briefings import router as briefings_router
@@ -67,3 +68,4 @@ api_router.include_router(vix_router, prefix="/vix", tags=["vix"])
 api_router.include_router(learning_router, prefix="/learning", tags=["learning"])
 api_router.include_router(experiments_router, prefix="/experiments", tags=["experiments"])
 api_router.include_router(arena_router, prefix="/arena", tags=["arena"])
+api_router.include_router(historical_router, prefix="/historical", tags=["historical"])

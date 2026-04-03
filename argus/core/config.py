@@ -17,6 +17,7 @@ from argus.ai.config import AIConfig
 from argus.core.exit_math import StopToLevel
 from argus.analytics.config import ObservatoryConfig
 from argus.core.regime import RegimeOperatingConditions
+from argus.data.historical_query_config import HistoricalQueryConfig
 from argus.data.vix_config import VixRegimeConfig
 from argus.intelligence.config import (
     CatalystConfig,
@@ -418,6 +419,8 @@ class SystemConfig(BaseModel):
     learning_loop: LearningLoopConfig = Field(default_factory=LearningLoopConfig)
     # Experiment pipeline configuration (Sprint 32 — parameterized templates)
     experiments: ExperimentConfig = Field(default_factory=ExperimentConfig)
+    # Historical Query Service configuration (Sprint 31A.5 — DuckDB Parquet layer)
+    historical_query: HistoricalQueryConfig = Field(default_factory=HistoricalQueryConfig)
 
     @field_validator("timezone")
     @classmethod

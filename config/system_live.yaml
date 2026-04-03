@@ -194,3 +194,12 @@ observatory:
   timeline_bucket_seconds: 60       # Timeline view event bucketing (seconds)
   matrix_max_rows: 100              # Maximum rows in Matrix view
   debrief_retention_days: 7         # Days of historical data for Debrief mode
+
+
+# Historical Query Service (Sprint 31A.5 — DuckDB Parquet layer)
+# Read-only SQL access over the Databento Parquet cache.
+historical_query:
+  enabled: true
+  cache_dir: "data/databento_cache"
+  max_memory_mb: 2048
+  default_threads: 4

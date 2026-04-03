@@ -463,6 +463,36 @@ def create_app(app_state: AppState) -> FastAPI:
         ):
             logger.info("Experiment pipeline disabled")
 
+        # Initialize Historical Query Service if enabled (Sprint 31A.5)
+        historical_query_initialized_here = False
+        if (
+            app_state.config is not None
+            and app_state.config.historical_query is not None
+            and app_state.config.historical_query.enabled
+        ):
+            try:
+                from argus.data.historical_query_service import HistoricalQueryService
+
+                historical_query_service = HistoricalQueryService(
+                    config=app_state.config.historical_query
+                )
+                app_state.historical_query_service = historical_query_service
+                historical_query_initialized_here = True
+                if historical_query_service.is_available:
+                    logger.info("Historical Query Service initialized (DuckDB)")
+                else:
+                    logger.warning(
+                        "Historical Query Service enabled but cache unavailable"
+                    )
+            except Exception as e:
+                logger.error("Failed to initialize Historical Query Service: %s", e)
+        elif (
+            app_state.config is not None
+            and app_state.config.historical_query is not None
+            and not app_state.config.historical_query.enabled
+        ):
+            logger.info("Historical Query Service disabled")
+
         # Note: WebSocket bridge is started by main.py before calling run_server().
         # We only need to get a reference to it here for cleanup.
         from argus.api.websocket import get_bridge
@@ -528,6 +558,12 @@ def create_app(app_state: AppState) -> FastAPI:
         if experiments_initialized_here:
             app_state.experiment_store = None
             logger.info("ExperimentStore cleaned up")
+
+        # Cleanup Historical Query Service if we initialized it here
+        if historical_query_initialized_here and app_state.historical_query_service is not None:
+            app_state.historical_query_service.close()
+            app_state.historical_query_service = None
+            logger.info("Historical Query Service closed")
 
         # Cleanup telemetry store (only if created by lifespan, not main.py)
         if telemetry_store is not None and telemetry_store is not _pre_initialized_store:
