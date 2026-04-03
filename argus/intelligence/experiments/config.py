@@ -74,5 +74,7 @@ class ExperimentConfig(BaseModel):
     promotion_min_shadow_trades: int = Field(default=30, ge=1)
     promotion_query_limit: int = Field(default=1000, ge=100, le=50_000)
     cache_dir: str = "data/databento_cache"
+    backtest_start_date: str | None = None
+    backtest_end_date: str | None = None
     variants: dict[str, list[dict[str, Any]]] = Field(default_factory=dict)
     exit_sweep_params: list[ExitSweepParam] | None = None

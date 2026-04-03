@@ -5,7 +5,7 @@
 
 ## Active Sprint
 
-**Active sprint: Sweep Tooling Impromptu (universe-aware sweep flags — resolves DEF-145).**
+**Active sprint: 31A.75 Sweep Tooling Impromptu (universe-aware sweep flags — resolves DEF-145).**
 
 Last completed sprint: **31A.5 (Historical Query Layer — DuckDB Phase 1, Apr 3, 2026)** — DuckDB-based read-only analytical query layer over Parquet cache. `HistoricalQueryService` (6 query methods, config-gated, lazy init, in-memory DuckDB, VIEW over Parquet), `HistoricalQueryConfig`, `config/historical_query.yaml`, `scripts/query_cache.py` (interactive CLI), `argus/api/routes/historical.py` (4 JWT-protected endpoints). `validate_symbol_coverage()` for ExperimentRunner pre-filter. +50 pytest. No new DECs. Tier 2 verdict: CLEAR. New dependency: `duckdb>=1.0,<2`.
 
@@ -21,7 +21,7 @@ Two roadmap amendments adopted March 23, 2026 adding 5 new sprint slots:
 - **32.5** (Experiment Registry + Promotion Pipeline): Partitioned SQLite registry, cohort-based promotion, simulated-paper screening, overnight experiment queue, kill switches, anti-fragility
 - **33.5** (Adversarial Stress Testing): Historical crisis replay + synthetic stress scenarios as PromotionPipeline gate
 Amendment docs: `docs/amendments/roadmap-amendment-experiment-infrastructure.md`, `docs/amendments/roadmap-amendment-intelligence-architecture.md`
-Build track: ~~21.6~~ ✅ → ~~27.5~~ ✅ → ~~27.6~~ ✅ → ~~27.7~~ ✅ → ~~27.75~~ ✅ → ~~27.8~~ ✅ → ~~27.9~~ ✅ → ~~27.95~~ ✅ → ~~28~~ ✅ → ~~28.5~~ ✅ → ~~28.75~~ ✅ → ~~29~~ ✅ → ~~29.5~~ ✅ → ~~32~~ ✅ → ~~32.5~~ ✅ → ~~32.75~~ ✅ → ~~32.8~~ ✅ → ~~32.9~~ ✅ → ~~31A~~ ✅ → ~~31A.5~~ ✅ → **Sweep Tooling Impromptu** → 31.5 (Parallel Sweep Infrastructure) → *(launch universe-aware sweeps, all 10 patterns)* → 30 → **Sweep Analysis Impromptu** → 31B → 33 → 33.5 → 34 → 35–41
+Build track: ~~21.6~~ ✅ → ~~27.5~~ ✅ → ~~27.6~~ ✅ → ~~27.7~~ ✅ → ~~27.75~~ ✅ → ~~27.8~~ ✅ → ~~27.9~~ ✅ → ~~27.95~~ ✅ → ~~28~~ ✅ → ~~28.5~~ ✅ → ~~28.75~~ ✅ → ~~29~~ ✅ → ~~29.5~~ ✅ → ~~32~~ ✅ → ~~32.5~~ ✅ → ~~32.75~~ ✅ → ~~32.8~~ ✅ → ~~32.9~~ ✅ → ~~31A~~ ✅ → ~~31A.5~~ ✅ → **31A.75 Sweep Tooling Impromptu** → 31.5 (Parallel Sweep Infrastructure) → *(launch universe-aware sweeps, all 10 patterns)* → 30 → **Sweep Analysis Impromptu** → 31B → 33 → 33.5 → 34 → 35–41
 DEC ranges reserved: 396–402 (33.5)
 DEF items: DEF-129 (non-PatternModule variant support), DEF-130 (intraday parameter adaptation)
 RSK items: RSK-049 (shadow variant throughput impact), RSK-050 (promotion oscillation)
@@ -35,7 +35,7 @@ RSK items: RSK-049 (shadow variant throughput impact), RSK-050 (promotion oscill
 
 ## Current State
 
-- **Active sprint:** Sweep Tooling Impromptu (universe-aware sweep flags)
+- **Active sprint:** 31A.75 Sweep Tooling Impromptu (universe-aware sweep flags)
 - **Tests:** 4,811 pytest + 846 Vitest (0 pre-existing failures)
 - **Strategies:** 13 live + 2 shadow (15 total): live — ORB Breakout, ORB Scalp, VWAP Reclaim, Afternoon Momentum, Red-to-Green, Bull Flag, Dip-and-Rip, HOD Break, Gap-and-Go, Pre-Market High Break, Micro Pullback, VWAP Bounce, Narrow Range Breakout; shadow — Flat-Top Breakout, ABCD (demoted Sprint 32.9 S3 for optimization)
 - **Experiment Variants:** 2 Dip-and-Rip variants in shadow mode (`strat_dip_and_rip__v2_tight_dip_quality`: Sharpe 1.996, WR 45.6%; `strat_dip_and_rip__v3_strict_volume`: Sharpe 2.628, WR 45.0%) — only qualifying variants from 10-pattern sweep (24-symbol momentum set, 2025); 8 non-qualifying patterns need universe-aware re-sweep (DEF-145); configured in `config/experiments.yaml`
@@ -381,7 +381,7 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 | ~~DEF-142~~ | ~~Quality engine grade compression — all signals scoring B~~ | — | **RESOLVED** (Sprint 32.9 S3): Root cause: `historical_match` stub (constant 50) + `catalyst_quality` (mostly 50) consuming 40% of weight. Fixed: `historical_match` weight zeroed, redistribution to `pattern_strength` (0.375) + `volume_profile` (0.275). Grade thresholds recalibrated to actual score range 35–77 (a_plus: 72, a: 66, a_minus: 61, b_plus: 56, b: 51, b_minus: 46, c_plus: 40). |
 | ~~DEF-143~~ | ~~BacktestEngine pattern initialization ignores config_overrides~~ | — | **RESOLVED** (Sprint 31A S1): All 7 `_create_*_strategy()` methods now use `build_pattern_from_config()`. No-arg constructors removed; config_overrides flow to pattern detection params. |
 | ~~DEF-144~~ | ~~Debrief export safety_summary incomplete~~ | — | **RESOLVED** (Sprint 31A S1+S3): OrderManager 6 new safety tracking attrs (`margin_circuit_breaker_open_time`, `reset_time`, `entries_blocked_count`, `eod_flatten_pass1_count`, `eod_flatten_pass2_count`, `signal_cutoff_skipped_count`) + `increment_signal_cutoff()`. `_export_safety_summary` reads new attrs via isinstance guards. S3 wired `increment_signal_cutoff()` in `_process_signal()` pre-EOD cutoff block. |
-| DEF-145 | Sweep tooling: `--universe-filter` + `--symbols` flags + universe-aware re-sweep | Sweep Tooling Impromptu | `run_experiment.py` needs `--symbols` (explicit list or file) and `--universe-filter` (loads `config/universe_filters/{pattern}.yaml`, applies min_price/max_price/min_avg_volume, wires `validate_symbol_coverage()` from 31A.5 HistoricalQueryService). Resolves NR Breakout (2 trades on momentum set) and VWAP Bounce (negative dollar P&L) mismatches. Priority: HIGH. |
+| DEF-145 | Sweep tooling: `--universe-filter` + `--symbols` flags + universe-aware re-sweep | 31A.75 Sweep Tooling Impromptu | `run_experiment.py` needs `--symbols` (explicit list or file) and `--universe-filter` (loads `config/universe_filters/{pattern}.yaml`, applies min_price/max_price/min_avg_volume, wires `validate_symbol_coverage()` from 31A.5 HistoricalQueryService). Resolves NR Breakout (2 trades on momentum set) and VWAP Bounce (negative dollar P&L) mismatches. Priority: HIGH. |
 | DEF-146 | DuckDB BacktestEngine pre-filter wiring (`validate_symbol_coverage()` in ExperimentRunner) | Sprint 31.5 | `HistoricalQueryService.validate_symbol_coverage()` built in Sprint 31A.5 but not yet wired into ExperimentRunner batch pre-validation or parallel worker partitioning. Priority: MEDIUM. |
 | DEF-147 | DuckDB Research Console backend | Sprint 31B | HistoricalQueryService can serve as backend for Research Console page SQL-based sweep visualization and heatmaps. Priority: LOW. |
 | DEF-148 | FRED macro regime service (FredMacroService + RegimeVector expansion) | Sprint 34 | New `argus/data/fred_macro_service.py` following VIXDataService pattern. Daily pull from FRED API (`fredapi`, $0). `MacroSnapshot` dataclass: yield_spread_10y2y, fed_funds_rate, initial_claims, cpi_yoy, pce_yoy, consumer_sentiment. Derived regimes: YieldCurveRegime, EmploymentRegime, InflationRegime, macro_composite_score. RegimeVector 3-4 new Optional fields. Integration: BriefingGenerator, Observatory, BacktestEngine retroactive labeling, Allocation Intelligence. Priority: MEDIUM. |
