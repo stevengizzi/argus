@@ -2768,7 +2768,11 @@ class TestZeroCandleEscalation:
             with patch("asyncio.sleep", side_effect=fake_sleep):
                 with patch("argus.data.databento_data_service.datetime") as mock_dt:
                     mock_dt.now.return_value = mock_now
-                    await service._data_heartbeat()
+                    with patch(
+                        "argus.core.market_calendar.is_market_holiday",
+                        return_value=(False, None),
+                    ):
+                        await service._data_heartbeat()
 
         assert "possible data feed failure" in caplog.text
         # Should log at WARNING level

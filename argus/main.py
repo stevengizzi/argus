@@ -228,6 +228,14 @@ class ArgusSystem:
             await self._action_manager.initialize()
             logger.info("ActionManager initialized")
 
+        # --- Holiday Check (between Phase 1 and Phase 3) ---
+        from argus.core.market_calendar import get_next_trading_day, is_market_holiday
+
+        _is_holiday, _holiday_name = is_market_holiday()
+        if _is_holiday:
+            logger.info("Market holiday today: %s — US equity markets are closed", _holiday_name)
+            logger.info("Next trading day: %s", get_next_trading_day())
+
         # --- Phase 3: Broker ---
         logger.info("[3/12] Connecting to broker...")
         if config.system.broker_source == BrokerSource.IBKR:

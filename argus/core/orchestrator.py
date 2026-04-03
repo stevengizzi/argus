@@ -128,6 +128,10 @@ class Orchestrator:
         # V2 regime vector (Sprint 27.6)
         self._latest_regime_vector: object | None = None
 
+        # Market holiday state (set during pre-market routine)
+        self._market_holiday: bool = False
+        self._holiday_name: str | None = None
+
     # -------------------------------------------------------------------------
     # Lifecycle
     # -------------------------------------------------------------------------
@@ -253,6 +257,17 @@ class Orchestrator:
     async def run_pre_market(self) -> None:
         """Full pre-market sequence. Called at configured time or on mid-day restart."""
         logger.info("Running pre-market routine")
+
+        # Check for market holiday and cache result for the session
+        from argus.core.market_calendar import get_next_trading_day, is_market_holiday
+
+        self._market_holiday, self._holiday_name = is_market_holiday()
+        if self._market_holiday:
+            logger.info(
+                "Market holiday today: %s — strategies will not be activated",
+                self._holiday_name,
+            )
+            logger.info("Next trading day: %s", get_next_trading_day())
 
         # 0. Reconstruct strategy state (trade counts, daily P&L) from trade log
         for strategy in self._strategies.values():
@@ -813,9 +828,14 @@ class Orchestrator:
     def _is_market_hours(self) -> bool:
         """Check if current time is within regular market hours (9:30–16:00 ET).
 
+        Returns False on market holidays regardless of clock time, suppressing
+        zero-strategy warnings and regime reclassification during closures.
+
         Returns:
-            True if within market hours, False otherwise.
+            True if within market hours on a trading day, False otherwise.
         """
+        if self._market_holiday:
+            return False
         et_tz = ZoneInfo("America/New_York")
         now = self._clock.now()
         now_et = now.astimezone(et_tz)

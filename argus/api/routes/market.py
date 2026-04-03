@@ -13,10 +13,49 @@ from pydantic import BaseModel
 
 from argus.api.auth import require_auth
 from argus.api.dependencies import AppState, get_app_state
+from argus.core.market_calendar import get_next_trading_day, is_market_holiday
 
 router = APIRouter()
 ET_TZ = ZoneInfo("America/New_York")
 logger = logging.getLogger(__name__)
+
+
+class MarketStatusResponse(BaseModel):
+    """Response for GET /api/v1/market/status."""
+
+    is_holiday: bool
+    holiday_name: str | None
+    is_market_hours: bool
+    next_trading_day: str
+
+
+@router.get("/status", response_model=MarketStatusResponse)
+async def get_market_status() -> MarketStatusResponse:
+    """Get current market status including holiday information.
+
+    No authentication required — useful for health checks and frontend context.
+
+    Returns:
+        MarketStatusResponse with holiday, market hours, and next trading day info.
+    """
+    holiday_flag, holiday_name = is_market_holiday()
+    next_day = get_next_trading_day()
+
+    now_et = datetime.now(ET_TZ)
+    in_market_hours = (
+        not holiday_flag
+        and now_et.weekday() < 5
+        and datetime(now_et.year, now_et.month, now_et.day, 9, 30, tzinfo=ET_TZ)
+        <= now_et
+        < datetime(now_et.year, now_et.month, now_et.day, 16, 0, tzinfo=ET_TZ)
+    )
+
+    return MarketStatusResponse(
+        is_holiday=holiday_flag,
+        holiday_name=holiday_name,
+        is_market_hours=in_market_hours,
+        next_trading_day=next_day.isoformat(),
+    )
 
 
 class BarData(BaseModel):

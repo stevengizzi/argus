@@ -1073,12 +1073,24 @@ class DatabentoDataService(DataService):
             )
 
             # Escalate to WARNING for zero candles during market hours after 2 cycles
+            # (suppressed on market holidays — zero candles are expected)
+            from argus.core.market_calendar import is_market_holiday
+
             now_et = datetime.now(tz=_ET).time()
             in_market_hours = _MARKET_OPEN <= now_et < _MARKET_CLOSE
-            if in_market_hours:
+
+            _today_is_holiday, _holiday_name = is_market_holiday()
+
+            if in_market_hours and not _today_is_holiday:
                 self._market_hours_heartbeat_count += 1
 
-            if candle_count == 0 and in_market_hours and self._market_hours_heartbeat_count >= 2:
+            if candle_count == 0 and in_market_hours and _today_is_holiday:
+                logger.info(
+                    "Data heartbeat: 0 candles in last %dm (market holiday: %s — no data expected)",
+                    interval_mins,
+                    _holiday_name,
+                )
+            elif candle_count == 0 and in_market_hours and self._market_hours_heartbeat_count >= 2:
                 logger.warning(
                     "%s during market hours — possible data feed failure",
                     heartbeat_msg,

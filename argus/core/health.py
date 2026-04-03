@@ -538,11 +538,21 @@ class HealthMonitor:
         This method is idempotent — safe to call repeatedly. When evaluations
         appear, the warning stops and the component status returns to HEALTHY.
 
+        On market holidays the check is skipped entirely — zero evaluations are
+        expected and setting strategies to DEGRADED would be a false alarm.
+
         Args:
             strategies: Dict mapping strategy_id to BaseStrategy instances.
             eval_store: The EvaluationEventStore for querying today's events.
             clock: Clock for current time.
         """
+        from argus.core.market_calendar import is_market_holiday
+
+        is_holiday, holiday_name = is_market_holiday()
+        if is_holiday:
+            logger.debug("Skipping evaluation check — market holiday (%s)", holiday_name)
+            return
+
         et_tz = ZoneInfo("America/New_York")
         now = clock.now()
         now_et = now.replace(tzinfo=et_tz) if now.tzinfo is None else now.astimezone(et_tz)

@@ -293,6 +293,8 @@ class TestHealthWarning:
         eval_store: EvaluationEventStore,
     ) -> None:
         """WARNING fires: active strategy, non-empty watchlist, 0 evals, past window + 5 min."""
+        from unittest.mock import patch
+
         config = _make_config(earliest_entry="09:35")
         strat = _TestStrategy(config)
         strat.is_active = True
@@ -300,11 +302,15 @@ class TestHealthWarning:
 
         clock = FixedClock(_now_utc_at_10am_et())
 
-        await health_monitor.check_strategy_evaluations(
-            strategies={"strat_test": strat},
-            eval_store=eval_store,
-            clock=clock,
-        )
+        with patch(
+            "argus.core.market_calendar.is_market_holiday",
+            return_value=(False, None),
+        ):
+            await health_monitor.check_strategy_evaluations(
+                strategies={"strat_test": strat},
+                eval_store=eval_store,
+                clock=clock,
+            )
 
         component = health_monitor.get_status().get("strategy_strat_test")
         assert component is not None
@@ -396,6 +402,8 @@ class TestHealthWarning:
         eval_store: EvaluationEventStore,
     ) -> None:
         """Warning self-corrects when evaluations appear after initial 0-eval warning."""
+        from unittest.mock import patch
+
         config = _make_config(earliest_entry="09:35")
         strat = _TestStrategy(config)
         strat.is_active = True
@@ -404,26 +412,30 @@ class TestHealthWarning:
 
         clock = FixedClock(_now_utc_at_10am_et())
 
-        # First check: 0 evaluations → DEGRADED
-        await health_monitor.check_strategy_evaluations(
-            strategies={"strat_test": strat},
-            eval_store=eval_store,
-            clock=clock,
-        )
-        component = health_monitor.get_status().get("strategy_strat_test")
-        assert component is not None
-        assert component.status == ComponentStatus.DEGRADED
+        with patch(
+            "argus.core.market_calendar.is_market_holiday",
+            return_value=(False, None),
+        ):
+            # First check: 0 evaluations → DEGRADED
+            await health_monitor.check_strategy_evaluations(
+                strategies={"strat_test": strat},
+                eval_store=eval_store,
+                clock=clock,
+            )
+            component = health_monitor.get_status().get("strategy_strat_test")
+            assert component is not None
+            assert component.status == ComponentStatus.DEGRADED
 
-        # Now generate an evaluation
-        await strat.on_candle(_make_candle("AAPL"))
-        await _flush_pending_writes()
+            # Now generate an evaluation
+            await strat.on_candle(_make_candle("AAPL"))
+            await _flush_pending_writes()
 
-        # Second check: evaluations present → self-corrects to HEALTHY
-        await health_monitor.check_strategy_evaluations(
-            strategies={"strat_test": strat},
-            eval_store=eval_store,
-            clock=clock,
-        )
+            # Second check: evaluations present → self-corrects to HEALTHY
+            await health_monitor.check_strategy_evaluations(
+                strategies={"strat_test": strat},
+                eval_store=eval_store,
+                clock=clock,
+            )
         component = health_monitor.get_status().get("strategy_strat_test")
         assert component is not None
         assert component.status == ComponentStatus.HEALTHY
