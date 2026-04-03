@@ -9,6 +9,7 @@ promotion_min_shadow_days: 5
 promotion_min_shadow_trades: 30
 promotion_query_limit: 1000  # Max records fetched from counterfactual/trade store during evaluation
 cache_dir: "data/databento_cache"
+max_workers: 4
 
 # Variant definitions — each pattern can have multiple named variants.
 # Variants not defined here use the base strategy config only.

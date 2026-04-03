@@ -1,0 +1,5 @@
+# Flat-Top Breakout — resistance cluster consolidation + breakout.
+# Needs liquid names with defined resistance levels.
+min_price: 10.0
+max_price: 500.0
+min_avg_volume: 500000

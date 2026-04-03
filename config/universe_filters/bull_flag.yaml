@@ -1,0 +1,5 @@
+# Bull Flag pattern — continuation after pole/flag.
+# Needs liquid mid-to-large cap names with enough volatility for visible poles.
+min_price: 10.0
+max_price: 500.0
+min_avg_volume: 500000

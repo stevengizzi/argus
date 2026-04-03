@@ -138,6 +138,12 @@ Examples:
             "If flag used without value, defaults to --pattern value."
         ),
     )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=None,
+        help="Number of parallel workers (default: from config max_workers, fallback 4)",
+    )
     return parser.parse_args(argv)
 
 
@@ -387,6 +393,7 @@ async def run(args: argparse.Namespace) -> int:
     config = load_config()
     config_dict = config.model_dump()
 
+    workers = args.workers if args.workers is not None else config.max_workers
     cache_dir = args.cache_dir or config.cache_dir
     param_subset = (
         [p.strip() for p in args.params.split(",") if p.strip()]
@@ -480,6 +487,7 @@ async def run(args: argparse.Namespace) -> int:
             symbols=symbols,
             dry_run=False,
             universe_filter=filter_config,
+            workers=workers,
         )
     except ValueError as exc:
         print(f"ERROR: {exc}")
