@@ -26,6 +26,35 @@ cache_dir: "data/databento_cache"
 #   hod_break (positive exp but < 30 trades in all qualifying configs),
 #   gap_and_go (< 30 trades with positive exp on this symbol set),
 #   abcd (Sharpe 1.018 achievable but expectancy remains negative).
+#
+# Sprint 31A S6 sweep — S3–S5 patterns (micro_pullback, vwap_bounce, narrow_range_breakout):
+# NOTE: Cache grew from 24 symbols to 24,321 symbols between S1–S5 sweeps and S6.
+# BacktestEngine auto-detects symbols from cache; no --symbols flag exists in the CLI.
+# Each grid point takes ~40 min on the full cache vs ~2 min on 24 symbols.
+# S6 backtests were run as default-config single-point runs; results extracted from
+# partial DBs (runs killed mid-year due to session constraint, results cover Jan-May 2025).
+# Full-year sweep requires either a symbols-restricted cache copy or a --symbols CLI flag.
+# See DEF-145 for the follow-up sweep task.
+#
+# micro_pullback: Partial backtest (Jan–May 2025, 24 symbols): 417 trades, WR=49.6%,
+#   avg_R=0.0046. January alone looked strong (37 trades, WR=64.9%, avg_R=0.204) due to
+#   IONQ's exceptional volatility. Normalised over 5 months the edge disappears. Default
+#   config does not qualify (expectancy too low for Sharpe > 0.5). No qualifying variant
+#   found. Promising on trending momentum phases; revisit with tighter min_impulse_percent
+#   (0.03–0.04) when 24-symbol sweep infrastructure is available.
+#
+# vwap_bounce: Partial backtest (Jan–Feb 2025, 24 symbols): 154 trades, WR=40.3%,
+#   avg_R=0.055, total_pnl=–$9,025. Positive expectancy in R-multiple terms but negative
+#   dollar P&L. Low win rate on momentum stocks — VWAP bounce entries tend to get stopped
+#   out more on high-beta names. No qualifying variant found. Pattern may benefit from a
+#   tighter vwap_touch_tolerance_pct and min_prior_trend_bars >= 15 filter. Revisit with
+#   24-symbol sweep.
+#
+# narrow_range_breakout: Partial backtest (Jan–Apr 2025): only 2 trades on the 24 target
+#   symbols (avg_R=–0.031). The pattern generated 1,384 trades total (full universe) but
+#   is highly selective on high-beta momentum names — volatility contraction followed by
+#   a clean range expansion breakout rarely sets up cleanly on IONQ/MARA/RIOT style names.
+#   No qualifying variant found. Consider testing on a mid-cap growth universe instead.
 
 exit_sweep_params: null
 

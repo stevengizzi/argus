@@ -672,3 +672,94 @@ def test_estimate_sweep_time_zero_grid() -> None:
 
     result = runner.estimate_sweep_time(0)
     assert "0" in result
+
+
+# ---------------------------------------------------------------------------
+# Integration tests — registry completeness (Sprint 31A S6)
+# ---------------------------------------------------------------------------
+
+
+def test_all_ten_strategy_types_in_pattern_to_strategy_type_map() -> None:
+    """All 10 PatternModule patterns must be registered in _PATTERN_TO_STRATEGY_TYPE.
+
+    Verifies that the ExperimentRunner can dispatch any pattern to a BacktestEngine
+    StrategyType. This guards against adding a new pattern (factory + registry) without
+    wiring the runner map — which would cause every sweep to silently FAIL.
+    """
+    from argus.backtest.config import StrategyType
+    from argus.intelligence.experiments.runner import _PATTERN_TO_STRATEGY_TYPE
+    from argus.strategies.patterns.factory import _SNAKE_CASE_ALIASES
+
+    pattern_names = set(_SNAKE_CASE_ALIASES.keys())
+    assert len(pattern_names) == 10, (  # noqa: PLR2004
+        f"Expected 10 patterns in _SNAKE_CASE_ALIASES, got {len(pattern_names)}"
+    )
+
+    missing = pattern_names - set(_PATTERN_TO_STRATEGY_TYPE.keys())
+    assert not missing, (
+        f"Patterns missing from _PATTERN_TO_STRATEGY_TYPE: {sorted(missing)}"
+    )
+
+    # All mapped values must be valid StrategyType members
+    for name, st in _PATTERN_TO_STRATEGY_TYPE.items():
+        assert isinstance(st, StrategyType), (
+            f"Mapped value for '{name}' is not a StrategyType: {st!r}"
+        )
+
+
+def test_all_ten_patterns_in_pattern_registry() -> None:
+    """All 10 PatternModule patterns must have an entry in _PATTERN_REGISTRY.
+
+    Ensures every pattern is importable via get_pattern_class() — the primary
+    factory entrypoint used by ExperimentRunner and build_pattern_from_config().
+    Also verifies each registered class is a concrete PatternModule subclass.
+    """
+    from argus.strategies.patterns.base import PatternModule
+    from argus.strategies.patterns.factory import (
+        _PATTERN_REGISTRY,
+        _SNAKE_CASE_ALIASES,
+        get_pattern_class,
+    )
+
+    expected_pascal = set(_SNAKE_CASE_ALIASES.values())
+    assert len(expected_pascal) == 10, (  # noqa: PLR2004
+        f"Expected 10 patterns, got {len(expected_pascal)}"
+    )
+
+    missing = expected_pascal - set(_PATTERN_REGISTRY.keys())
+    assert not missing, (
+        f"Patterns missing from _PATTERN_REGISTRY: {sorted(missing)}"
+    )
+
+    # Each alias must resolve to a concrete PatternModule subclass
+    for snake_name in _SNAKE_CASE_ALIASES:
+        cls = get_pattern_class(snake_name)
+        assert issubclass(cls, PatternModule), (
+            f"get_pattern_class('{snake_name}') returned non-PatternModule: {cls!r}"
+        )
+        # Must be instantiable with no arguments
+        instance = cls()
+        assert isinstance(instance.get_default_params(), list)
+
+
+def test_experiments_yaml_loads_without_parse_error() -> None:
+    """config/experiments.yaml must be valid YAML and pass ExperimentConfig validation.
+
+    Catches syntax errors, duplicate keys, and Pydantic field mismatches that
+    would silently break the experiment pipeline at startup.
+    """
+    from pathlib import Path
+
+    import yaml
+
+    from argus.intelligence.experiments.config import ExperimentConfig
+
+    yaml_path = Path("config/experiments.yaml")
+    assert yaml_path.exists(), "config/experiments.yaml not found"
+
+    raw = yaml.safe_load(yaml_path.read_text())
+    assert isinstance(raw, dict), "experiments.yaml must be a YAML mapping at the top level"
+
+    # Pydantic validation — will raise ValidationError on field mismatches
+    config = ExperimentConfig(**raw)
+    assert config.enabled is True or config.enabled is False
