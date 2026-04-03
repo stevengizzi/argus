@@ -1148,3 +1148,305 @@ def test_run_single_backtest_returns_dict() -> None:
     assert "backtest_result" in result
     assert "error" in result
     assert result["params"] == {"int_param": 4}
+
+
+# ---------------------------------------------------------------------------
+# Sprint 31.5 S2 — Universe filter tests (DEF-146)
+# ---------------------------------------------------------------------------
+
+
+import pandas as pd  # noqa: E402 — kept here to keep imports close to usage
+
+from argus.core.config import UniverseFilterConfig  # noqa: E402
+
+
+def _make_service_mock(
+    is_available: bool = True,
+    query_symbols: list[str] | None = None,
+    coverage: dict[str, bool] | None = None,
+    available_symbols: list[str] | None = None,
+) -> MagicMock:
+    """Build a mock HistoricalQueryService for universe filter tests."""
+    service = MagicMock()
+    service.is_available = is_available
+
+    if query_symbols is not None:
+        df = pd.DataFrame(
+            {
+                "symbol": query_symbols,
+                "avg_price": [50.0] * len(query_symbols),
+                "avg_volume": [500_000] * len(query_symbols),
+            }
+        )
+    else:
+        df = pd.DataFrame(columns=["symbol", "avg_price", "avg_volume"])
+    service.query.return_value = df
+
+    service.validate_symbol_coverage.return_value = (
+        coverage if coverage is not None else {}
+    )
+    service.get_available_symbols.return_value = (
+        available_symbols if available_symbols is not None else []
+    )
+    return service
+
+
+# 1. test_run_sweep_with_universe_filter_resolves_symbols
+@pytest.mark.asyncio
+async def test_run_sweep_with_universe_filter_resolves_symbols() -> None:
+    """When universe_filter is provided, run_sweep() calls _resolve_universe_symbols().
+
+    Verifies that the resolved symbol list replaces the original None, and that
+    _resolve_universe_symbols() receives the correct arguments.
+    """
+    store = _make_store_mock()
+    runner = ExperimentRunner(
+        store=store,
+        config={
+            "backtest_min_expectancy": 0.0,
+            "backtest_min_trades": 1,
+            "backtest_start_date": "2025-01-01",
+            "backtest_end_date": "2025-12-31",
+        },
+    )
+
+    universe_filter = UniverseFilterConfig(min_avg_volume=300_000)
+    resolved = ["AAPL", "NVDA"]
+
+    with patch.object(runner, "_resolve_universe_symbols", return_value=resolved) as mock_resolve:
+        with patch(
+            "argus.intelligence.experiments.runner.get_pattern_class",
+            return_value=_TwoParamPattern,
+        ):
+            with patch(
+                "argus.intelligence.experiments.runner.BacktestEngine",
+                return_value=_make_engine_mock(),
+            ):
+                await runner.run_sweep(
+                    pattern_name="bull_flag",
+                    cache_dir="/tmp/cache",
+                    param_subset=[],
+                    date_range=("2025-01-01", "2025-12-31"),
+                    universe_filter=universe_filter,
+                )
+
+    mock_resolve.assert_called_once_with(
+        universe_filter=universe_filter,
+        cache_dir="/tmp/cache",
+        start_date="2025-01-01",
+        end_date="2025-12-31",
+        candidate_symbols=None,
+    )
+
+
+# 2. test_run_sweep_universe_filter_with_candidate_symbols
+@pytest.mark.asyncio
+async def test_run_sweep_universe_filter_with_candidate_symbols() -> None:
+    """When both symbols and universe_filter are provided, candidate_symbols is passed to resolver.
+
+    Ensures the runner passes the user-supplied symbol list as the candidate set
+    so _resolve_universe_symbols() applies the filter only within that set.
+    """
+    store = _make_store_mock()
+    runner = ExperimentRunner(
+        store=store,
+        config={
+            "backtest_min_expectancy": 0.0,
+            "backtest_min_trades": 1,
+            "backtest_start_date": "2025-01-01",
+            "backtest_end_date": "2025-12-31",
+        },
+    )
+
+    universe_filter = UniverseFilterConfig(min_price=10.0)
+    candidate = ["AAPL", "TSLA", "NVDA"]
+    resolved = ["AAPL", "NVDA"]
+
+    with patch.object(runner, "_resolve_universe_symbols", return_value=resolved) as mock_resolve:
+        with patch(
+            "argus.intelligence.experiments.runner.get_pattern_class",
+            return_value=_TwoParamPattern,
+        ):
+            with patch(
+                "argus.intelligence.experiments.runner.BacktestEngine",
+                return_value=_make_engine_mock(),
+            ):
+                await runner.run_sweep(
+                    pattern_name="bull_flag",
+                    cache_dir="/tmp/cache",
+                    param_subset=[],
+                    date_range=("2025-01-01", "2025-12-31"),
+                    symbols=candidate,
+                    universe_filter=universe_filter,
+                )
+
+    mock_resolve.assert_called_once_with(
+        universe_filter=universe_filter,
+        cache_dir="/tmp/cache",
+        start_date="2025-01-01",
+        end_date="2025-12-31",
+        candidate_symbols=candidate,
+    )
+
+
+# 3. test_run_sweep_universe_filter_zero_symbols_raises
+@pytest.mark.asyncio
+async def test_run_sweep_universe_filter_zero_symbols_raises() -> None:
+    """_resolve_universe_symbols() returning [] causes run_sweep() to raise ValueError."""
+    store = _make_store_mock()
+    runner = ExperimentRunner(
+        store=store,
+        config={"backtest_start_date": "2025-01-01", "backtest_end_date": "2025-12-31"},
+    )
+
+    universe_filter = UniverseFilterConfig(min_price=9999.0)  # impossible threshold
+
+    with patch.object(runner, "_resolve_universe_symbols", return_value=[]):
+        with patch(
+            "argus.intelligence.experiments.runner.get_pattern_class",
+            return_value=_TwoParamPattern,
+        ):
+            with pytest.raises(ValueError, match="No symbols remaining"):
+                await runner.run_sweep(
+                    pattern_name="bull_flag",
+                    cache_dir="/tmp/cache",
+                    param_subset=[],
+                    date_range=("2025-01-01", "2025-12-31"),
+                    universe_filter=universe_filter,
+                )
+
+
+# 4. test_run_sweep_universe_filter_service_unavailable_raises
+@pytest.mark.asyncio
+async def test_run_sweep_universe_filter_service_unavailable_raises() -> None:
+    """When HistoricalQueryService is unavailable, run_sweep() raises ValueError."""
+    store = _make_store_mock()
+    runner = ExperimentRunner(
+        store=store,
+        config={"backtest_start_date": "2025-01-01", "backtest_end_date": "2025-12-31"},
+    )
+
+    universe_filter = UniverseFilterConfig(min_avg_volume=100_000)
+    unavailable_service = _make_service_mock(is_available=False)
+
+    with patch(
+        "argus.data.historical_query_service.HistoricalQueryService",
+        return_value=unavailable_service,
+    ):
+        with patch(
+            "argus.intelligence.experiments.runner.get_pattern_class",
+            return_value=_TwoParamPattern,
+        ):
+            with pytest.raises(ValueError, match="unavailable"):
+                await runner.run_sweep(
+                    pattern_name="bull_flag",
+                    cache_dir="/tmp/cache",
+                    param_subset=[],
+                    date_range=("2025-01-01", "2025-12-31"),
+                    universe_filter=universe_filter,
+                )
+
+
+# 5. test_resolve_universe_symbols_static_filters
+def test_resolve_universe_symbols_static_filters() -> None:
+    """_resolve_universe_symbols() builds the correct SQL HAVING clauses and returns filtered symbols.
+
+    Verifies:
+    - Static filters (min_price, max_price, min_avg_volume) appear in the HAVING clause.
+    - Coverage validation is called on the filtered symbol list.
+    - Service is closed after use.
+    - Returned list matches the symbols that pass both filter and coverage.
+    """
+    store = _make_store_mock()
+    runner = ExperimentRunner(store=store, config={})
+
+    filter_cfg = UniverseFilterConfig(min_price=5.0, max_price=200.0, min_avg_volume=300_000)
+    service = _make_service_mock(
+        is_available=True,
+        query_symbols=["AAPL", "NVDA"],
+        coverage={"AAPL": True, "NVDA": False},
+        available_symbols=["AAPL", "MSFT", "NVDA", "TSLA"],
+    )
+
+    with patch(
+        "argus.data.historical_query_service.HistoricalQueryService",
+        return_value=service,
+    ):
+        result = runner._resolve_universe_symbols(
+            universe_filter=filter_cfg,
+            cache_dir="/tmp/cache",
+            start_date="2025-01-01",
+            end_date="2025-12-31",
+        )
+
+    # Only AAPL passes coverage validation (NVDA=False)
+    assert result == ["AAPL"]
+
+    # Static filters must appear in the SQL query
+    query_sql: str = service.query.call_args[0][0]
+    assert "AVG(close) >= 5.0" in query_sql
+    assert "AVG(close) <= 200.0" in query_sql
+    assert "AVG(volume) >= 300000" in query_sql
+
+    # Coverage validation called on filtered symbols
+    service.validate_symbol_coverage.assert_called_once_with(
+        ["AAPL", "NVDA"], "2025-01-01", "2025-12-31", min_bars=100
+    )
+
+    # Service must be closed after use
+    service.close.assert_called_once()
+
+
+# 6. test_cli_delegates_filter_to_runner
+@pytest.mark.asyncio
+async def test_cli_delegates_filter_to_runner() -> None:
+    """When --universe-filter is active, CLI passes universe_filter to run_sweep().
+
+    Verifies that the main run() path does NOT call _apply_universe_filter() inline
+    but instead delegates filtering to the runner via the universe_filter argument.
+    """
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+    from scripts.run_experiment import _apply_universe_filter, run
+
+    args = MagicMock()
+    args.pattern = "narrow_range_breakout"
+    args.cache_dir = None
+    args.params = None
+    args.dry_run = False
+    args.date_range = "2025-01-01,2025-12-31"
+    args.symbols = None
+    args.universe_filter = "narrow_range_breakout"
+
+    # Capture the universe_filter kwarg that run_sweep() receives
+    received_filter: list[object] = []
+
+    async def _fake_run_sweep(**kwargs: object) -> list:
+        received_filter.append(kwargs.get("universe_filter"))
+        return []
+
+    with (
+        patch("scripts.run_experiment.ExperimentStore"),
+        patch("scripts.run_experiment.ExperimentRunner") as mock_runner_cls,
+        patch("scripts.run_experiment._apply_universe_filter") as mock_inline_filter,
+    ):
+        mock_runner_instance = MagicMock()
+        mock_runner_instance.generate_parameter_grid.return_value = [{"p": 1}]
+        mock_runner_instance.estimate_sweep_time.return_value = "~0 minutes for 1 grid points"
+        mock_runner_instance.run_sweep = AsyncMock(side_effect=_fake_run_sweep)
+        mock_runner_cls.return_value = mock_runner_instance
+
+        store_instance = MagicMock()
+        store_instance.initialize = AsyncMock()
+        patch("scripts.run_experiment.ExperimentStore", return_value=store_instance).start()
+
+        await run(args)
+
+    # universe_filter must be a UniverseFilterConfig (not None)
+    assert len(received_filter) == 1
+    assert isinstance(received_filter[0], UniverseFilterConfig)
+
+    # Inline filter function must NOT have been called
+    mock_inline_filter.assert_not_called()

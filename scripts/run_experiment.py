@@ -414,13 +414,14 @@ async def run(args: argparse.Namespace) -> int:
 
     # --- Symbol filtering pipeline ---
     symbols: list[str] | None = None
+    filter_config: UniverseFilterConfig | None = None
 
     # Layer 1: --symbols flag
     if args.symbols:
         symbols = _parse_symbols(args.symbols)
         print(f"Symbols from --symbols: {len(symbols)}")
 
-    # Layer 2: --universe-filter flag
+    # Layer 2: --universe-filter flag — load config; runner handles filtering
     filter_name = args.universe_filter
     if filter_name == "__from_pattern__":
         filter_name = args.pattern
@@ -433,29 +434,6 @@ async def run(args: argparse.Namespace) -> int:
             )
             return 1
         filter_config = _load_universe_filter(filter_name)
-        filtered = _apply_universe_filter(
-            filter_config=filter_config,
-            cache_dir=cache_dir,
-            start_date=start_date_str,
-            end_date=end_date_str,
-            candidate_symbols=symbols,
-        )
-        symbols = filtered
-        print(f"Symbols after universe filter '{filter_name}': {len(symbols)}")
-
-    # Layer 3: Coverage validation
-    if symbols is not None:
-        if start_date_str is not None and end_date_str is not None:
-            symbols = _validate_coverage(
-                symbols=symbols,
-                cache_dir=cache_dir,
-                start_date=start_date_str,
-                end_date=end_date_str,
-            )
-            print(f"Symbols after coverage validation: {len(symbols)}")
-        if not symbols:
-            print("ERROR: No symbols remaining after filtering. Aborting.")
-            return 1
 
     store = ExperimentStore()
     runner = ExperimentRunner(store=store, config=config_dict)
@@ -474,8 +452,10 @@ async def run(args: argparse.Namespace) -> int:
         print(f"Varying params: {', '.join(param_subset)}")
 
     if args.dry_run:
-        if symbols is not None:
-            print(f"Symbols: {len(symbols)} (filtered)")
+        if filter_config is not None:
+            print(f"Symbols: universe filter '{filter_name}' (resolved at sweep time)")
+        elif symbols is not None:
+            print(f"Symbols: {len(symbols)} (from --symbols)")
         else:
             print("Symbols: all (auto-detect from cache)")
         sample = grid[:3] if len(grid) > 3 else grid
@@ -491,14 +471,19 @@ async def run(args: argparse.Namespace) -> int:
     print(f"\nStarting sweep against cache at: {cache_dir}")
     print("(This may take several minutes...)\n")
 
-    records = await runner.run_sweep(
-        pattern_name=args.pattern,
-        cache_dir=cache_dir,
-        param_subset=param_subset,
-        date_range=date_range,
-        symbols=symbols,
-        dry_run=False,
-    )
+    try:
+        records = await runner.run_sweep(
+            pattern_name=args.pattern,
+            cache_dir=cache_dir,
+            param_subset=param_subset,
+            date_range=date_range,
+            symbols=symbols,
+            dry_run=False,
+            universe_filter=filter_config,
+        )
+    except ValueError as exc:
+        print(f"ERROR: {exc}")
+        return 1
 
     _print_summary_table(records)
     return 0

@@ -18,7 +18,7 @@ import logging
 from concurrent.futures import ProcessPoolExecutor
 from datetime import UTC, date, datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from argus.backtest.config import BacktestEngineConfig, StrategyType
 from argus.backtest.engine import BacktestEngine
@@ -29,7 +29,23 @@ from argus.intelligence.experiments.store import ExperimentStore
 from argus.strategies.patterns.base import PatternParam
 from argus.strategies.patterns.factory import get_pattern_class
 
+if TYPE_CHECKING:
+    from argus.core.config import UniverseFilterConfig
+
 logger = logging.getLogger(__name__)
+
+# Dynamic filter fields that require real-time or reference data and cannot be
+# evaluated against historical OHLCV data alone.  Mirrored from run_experiment.py.
+_DYNAMIC_FILTER_FIELDS = (
+    "min_relative_volume",
+    "min_gap_percent",
+    "min_premarket_volume",
+    "min_market_cap",
+    "max_market_cap",
+    "min_float",
+    "sectors",
+    "exclude_sectors",
+)
 
 _GRID_CAP = 500
 _SECONDS_PER_GRID_POINT = 30
@@ -290,6 +306,7 @@ class ExperimentRunner:
         dry_run: bool = False,
         exit_sweep_params: list[ExitSweepParam] | None = None,
         workers: int = 1,
+        universe_filter: UniverseFilterConfig | None = None,
     ) -> list[ExperimentRecord]:
         """Run BacktestEngine for every point in the parameter grid.
 
@@ -321,13 +338,22 @@ class ExperimentRunner:
                 dispatches non-duplicate grid points to a
                 ``ProcessPoolExecutor``.  Fingerprint dedup and all
                 ``ExperimentStore`` writes always occur in the main process.
+            universe_filter: When provided, applies static price/volume filters
+                against the Parquet cache (via DuckDB) and validates per-symbol
+                bar coverage before dispatching the grid.  When *symbols* is
+                also provided, filtering is applied to that candidate set;
+                otherwise all symbols in the cache are candidates.  Raises
+                ``ValueError`` if the service is unavailable or no symbols
+                survive filtering.
 
         Returns:
             List of ExperimentRecord for all processed grid points (skipped
             duplicates are excluded).
 
         Raises:
-            ValueError: If date range cannot be resolved.
+            ValueError: If date range cannot be resolved, the
+                HistoricalQueryService is unavailable, or no symbols remain
+                after filtering.
         """
         grid = self.generate_parameter_grid(pattern_name, param_subset, exit_sweep_params)
 
@@ -342,6 +368,21 @@ class ExperimentRunner:
             return []
 
         start_date, end_date = self._resolve_date_range(date_range)
+
+        # Apply universe filter before grid dispatch (DEF-146)
+        if universe_filter is not None:
+            symbols = self._resolve_universe_symbols(
+                universe_filter=universe_filter,
+                cache_dir=cache_dir,
+                start_date=start_date.isoformat(),
+                end_date=end_date.isoformat(),
+                candidate_symbols=symbols,
+            )
+            if not symbols:
+                raise ValueError(
+                    "No symbols remaining after universe filtering and coverage validation"
+                )
+
         strategy_type = _PATTERN_TO_STRATEGY_TYPE.get(pattern_name)
         records: list[ExperimentRecord] = []
         total = len(grid)
@@ -619,6 +660,129 @@ class ExperimentRunner:
     # ---------------------------------------------------------------------------
     # Private helpers
     # ---------------------------------------------------------------------------
+
+    def _resolve_universe_symbols(
+        self,
+        universe_filter: UniverseFilterConfig,
+        cache_dir: str,
+        start_date: str,
+        end_date: str,
+        candidate_symbols: list[str] | None = None,
+    ) -> list[str]:
+        """Filter symbols via DuckDB static filters and coverage validation.
+
+        Applies ``min_price``, ``max_price``, and ``min_avg_volume`` from
+        *universe_filter* against historical OHLCV averages in the Parquet
+        cache.  Dynamic filters (RVOL, gap %, market cap, float, sectors) that
+        require real-time or reference data are logged as skipped.
+
+        When *candidate_symbols* is None, all symbols in the cache are used as
+        candidates.  When provided, only the intersection of *candidate_symbols*
+        and the cache contents is evaluated.
+
+        After static filtering, ``validate_symbol_coverage()`` drops symbols
+        without at least 100 bars in the date range.
+
+        The HistoricalQueryService connection is always closed before returning,
+        even on error.
+
+        Args:
+            universe_filter: UniverseFilterConfig with static filter criteria.
+            cache_dir: Path to the Databento Parquet cache directory.
+            start_date: Inclusive start date (YYYY-MM-DD).
+            end_date: Inclusive end date (YYYY-MM-DD).
+            candidate_symbols: When provided, restrict results to this set.
+
+        Returns:
+            Sorted list of symbols that pass all static filters and coverage
+            validation.
+
+        Raises:
+            ValueError: If the HistoricalQueryService is unavailable (cache
+                missing or empty).
+        """
+        from argus.data.historical_query_config import HistoricalQueryConfig  # lazy
+        from argus.data.historical_query_service import HistoricalQueryService  # lazy
+
+        service = HistoricalQueryService(
+            HistoricalQueryConfig(enabled=True, cache_dir=cache_dir)
+        )
+
+        if not service.is_available:
+            raise ValueError(
+                f"HistoricalQueryService unavailable — cache not found or empty at: {cache_dir}"
+            )
+
+        try:
+            # Log dynamic filters that cannot be evaluated historically.
+            for field_name in _DYNAMIC_FILTER_FIELDS:
+                value = getattr(universe_filter, field_name, None)
+                is_non_empty = value is not None and value != [] and value != ""
+                if is_non_empty:
+                    logger.warning(
+                        "Skipping dynamic filter '%s' (not applicable to historical sweeps)",
+                        field_name,
+                    )
+
+            # Determine the candidate symbol set.
+            if candidate_symbols is None:
+                all_symbols: list[str] = service.get_available_symbols()
+            else:
+                all_symbols = list(candidate_symbols)
+
+            # Build parameterized WHERE clause; date params come first.
+            query_params: list[object] = [start_date, end_date]
+            symbol_clause = ""
+            if all_symbols:
+                placeholders = ", ".join("?" for _ in all_symbols)
+                symbol_clause = f" AND symbol IN ({placeholders})"
+                query_params = [start_date, end_date] + list(all_symbols)
+
+            # Build static HAVING clauses from operator-controlled config values.
+            having_clauses: list[str] = ["1=1"]
+            if universe_filter.min_price is not None:
+                having_clauses.append(f"AVG(close) >= {universe_filter.min_price}")
+            if universe_filter.max_price is not None:
+                having_clauses.append(f"AVG(close) <= {universe_filter.max_price}")
+            if universe_filter.min_avg_volume is not None:
+                having_clauses.append(f"AVG(volume) >= {universe_filter.min_avg_volume}")
+
+            having_sql = " AND ".join(having_clauses)
+            sql = (
+                f"SELECT symbol, AVG(close) AS avg_price, AVG(volume) AS avg_volume "
+                f"FROM historical "
+                f"WHERE date >= ? AND date <= ?{symbol_clause} "
+                f"GROUP BY symbol "
+                f"HAVING {having_sql}"
+            )
+
+            df = service.query(sql, query_params)
+            filtered_symbols = sorted(df["symbol"].tolist()) if not df.empty else []
+
+            logger.info("Symbols after universe filter: %d", len(filtered_symbols))
+
+            if not filtered_symbols:
+                return []
+
+            # Coverage validation — drop symbols below 100-bar threshold.
+            coverage = service.validate_symbol_coverage(
+                filtered_symbols, start_date, end_date, min_bars=100
+            )
+            passed = [sym for sym in filtered_symbols if coverage.get(sym, False)]
+            failed = [sym for sym in filtered_symbols if not coverage.get(sym, False)]
+
+            if failed:
+                sample = failed[:20]
+                summary = ", ".join(sample)
+                if len(failed) > 20:  # noqa: PLR2004
+                    summary += f" ... and {len(failed) - 20} more"
+                logger.warning("Symbols dropped (insufficient coverage): %s", summary)
+
+            logger.info("Symbols after coverage validation: %d", len(passed))
+
+            return passed
+        finally:
+            service.close()
 
     def _resolve_date_range(
         self, date_range: tuple[str, str] | None
