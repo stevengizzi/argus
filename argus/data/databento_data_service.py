@@ -122,6 +122,24 @@ class DatabentoDataService(DataService):
         self._candles_since_heartbeat: int = 0
         self._symbols_seen_since_heartbeat: set[str] = set()
 
+        # Per-gate drop counters — reset each heartbeat cycle
+        self._ohlcv_unmapped_since_heartbeat: int = 0
+        self._ohlcv_filtered_universe_since_heartbeat: int = 0
+        self._ohlcv_filtered_active_since_heartbeat: int = 0
+        self._trades_unmapped_since_heartbeat: int = 0
+        self._trades_received_since_heartbeat: int = 0
+
+        # First-event sentinel flags — fire once per session
+        self._ohlcv_unmapped_warned: bool = False
+        self._first_ohlcv_resolved: bool = False
+        self._first_trade_resolved: bool = False
+
+        # Symbol mapping observability
+        self._symbol_mappings_received: int = 0
+
+        # Zero-candle escalation: count heartbeat cycles that fell inside market hours
+        self._market_hours_heartbeat_count: int = 0
+
         # Time-aware warm-up state (Sprint 23.7)
         # Mid-session mode: lazy per-symbol backfill on first candle
         # Pre-market mode: no backfill (indicators build from live stream)
@@ -322,6 +340,9 @@ class DatabentoDataService(DataService):
         self._live_client.start()
         self._last_message_time = time.monotonic()
 
+        # Schedule a post-start symbology_map size log (mappings arrive asynchronously)
+        asyncio.ensure_future(self._log_post_start_symbology_size())
+
         logger.info(
             "Connected to Databento: dataset=%s, symbols=%s",
             self._config.dataset,
@@ -329,6 +350,21 @@ class DatabentoDataService(DataService):
             if isinstance(subscribe_symbols, str)
             else f"{len(subscribe_symbols)} symbols",
         )
+
+    async def _log_post_start_symbology_size(self) -> None:
+        """Log symbology_map size 2 seconds after session start.
+
+        Databento populates symbology_map asynchronously as SymbolMappingMsg
+        records arrive. A brief delay gives the map time to fill before logging.
+        Informational only — does not block startup.
+        """
+        await asyncio.sleep(2.0)
+        if self._live_client is not None:
+            map_size = len(self._live_client.symbology_map)
+            logger.info(
+                "Databento session started: symbology_map contains %d instrument IDs",
+                map_size,
+            )
 
     async def stop(self) -> None:
         """Stop streaming and clean up.
@@ -514,12 +550,24 @@ class DatabentoDataService(DataService):
             return self._live_client.symbology_map.get(instrument_id)
 
     def _on_symbol_mapping(self, msg: Any) -> None:
-        """Handle SymbolMappingMsg (no-op, library handles mapping internally).
+        """Handle SymbolMappingMsg — count arrivals and log progress.
 
-        The Databento library populates symbology_map automatically from these messages.
-        This callback exists for dispatch completeness but performs no action (DEC-242).
+        The Databento library populates symbology_map automatically from these
+        messages. This callback adds observability on top of that (DEC-242).
         """
-        pass
+        self._symbol_mappings_received += 1
+        if self._symbol_mappings_received == 1:
+            raw_symbol = getattr(msg, "stype_in_symbol", "?")
+            logger.info(
+                "First SymbolMappingMsg received (instrument_id=%d → %s)",
+                msg.instrument_id,
+                raw_symbol,
+            )
+        elif self._symbol_mappings_received % 2000 == 0:
+            logger.info(
+                "SymbolMappingMsg progress: %d mappings received",
+                self._symbol_mappings_received,
+            )
 
     def _on_ohlcv(self, msg: Any) -> None:
         """Process OHLCVMsg — convert to CandleEvent, update indicators.
@@ -538,21 +586,40 @@ class DatabentoDataService(DataService):
         # Resolve instrument_id → symbol using Databento's symbology_map
         symbol = self._resolve_symbol(msg.instrument_id)
         if symbol is None:
-            logger.debug(
-                "Unknown instrument_id=%d in OHLCVMsg (mapping not yet received)",
-                msg.instrument_id,
-            )
+            self._ohlcv_unmapped_since_heartbeat += 1
+            if not self._ohlcv_unmapped_warned:
+                self._ohlcv_unmapped_warned = True
+                map_size = len(self._live_client.symbology_map) if self._live_client else 0
+                logger.warning(
+                    "OHLCV-1m record dropped — instrument_id=%d not in symbology_map "
+                    "(%d IDs mapped). This warning logs once; check heartbeat for counts.",
+                    msg.instrument_id,
+                    map_size,
+                )
             return
 
         # Fast-path discard for non-viable symbols (Sprint 23)
         # This must be the FIRST check - before any allocation or computation
         if self._viable_universe is not None and symbol not in self._viable_universe:
+            self._ohlcv_filtered_universe_since_heartbeat += 1
             return
 
         # Skip if we're not tracking this symbol
         # (relevant when subscribing to ALL_SYMBOLS but only trading a subset)
         if self._active_symbols and symbol not in self._active_symbols:
+            self._ohlcv_filtered_active_since_heartbeat += 1
             return
+
+        # Log first successfully resolved OHLCV symbol (once per session)
+        if not self._first_ohlcv_resolved:
+            self._first_ohlcv_resolved = True
+            map_size = len(self._live_client.symbology_map) if self._live_client else 0
+            logger.info(
+                "First OHLCV-1m candle resolved: %s (instrument_id=%d, symbology_map size: %d)",
+                symbol,
+                msg.instrument_id,
+                map_size,
+            )
 
         # Lazy warm-up for mid-session boot (Sprint 23.7)
         # On first candle per symbol, fetch today's historical data before processing
@@ -614,6 +681,7 @@ class DatabentoDataService(DataService):
         """
         symbol = self._resolve_symbol(msg.instrument_id)
         if symbol is None:
+            self._trades_unmapped_since_heartbeat += 1
             return
 
         # Fast-path discard for non-viable symbols (Sprint 23)
@@ -622,6 +690,19 @@ class DatabentoDataService(DataService):
 
         if self._active_symbols and symbol not in self._active_symbols:
             return
+
+        self._trades_received_since_heartbeat += 1
+
+        # Log first successfully resolved trade (once per session)
+        if not self._first_trade_resolved:
+            self._first_trade_resolved = True
+            map_size = len(self._live_client.symbology_map) if self._live_client else 0
+            logger.info(
+                "First trade resolved: %s (instrument_id=%d, symbology_map size: %d)",
+                symbol,
+                msg.instrument_id,
+                map_size,
+            )
 
         ts = datetime.fromtimestamp(msg.ts_event / 1e9, tz=UTC)
 
@@ -938,28 +1019,72 @@ class DatabentoDataService(DataService):
                 self._stale_published = False
 
     async def _data_heartbeat(self) -> None:
-        """Periodic INFO log showing data flow activity.
+        """Periodic log showing data flow activity, including drop counts.
 
-        Logs every 5 minutes with candle count and active symbols.
-        Provides visibility that data is flowing without being too noisy.
+        Logs every 5 minutes. Escalates to WARNING when 0 candles are received
+        during market hours after at least 2 market-hours cycles — the April 3
+        failure mode that was previously invisible at INFO level.
         """
+        _ET = ZoneInfo("America/New_York")
+        _MARKET_OPEN = dt_time(9, 30)
+        _MARKET_CLOSE = dt_time(16, 0)
+
         while self._running:
             await asyncio.sleep(self._heartbeat_interval_seconds)
 
-            # Capture and reset counters
+            # Capture and reset all counters atomically
             candle_count = self._candles_since_heartbeat
             symbols_seen = len(self._symbols_seen_since_heartbeat)
+            ohlcv_unmapped = self._ohlcv_unmapped_since_heartbeat
+            ohlcv_universe = self._ohlcv_filtered_universe_since_heartbeat
+            ohlcv_active = self._ohlcv_filtered_active_since_heartbeat
+            trades_received = self._trades_received_since_heartbeat
+            trades_unmapped = self._trades_unmapped_since_heartbeat
+
             self._candles_since_heartbeat = 0
             self._symbols_seen_since_heartbeat.clear()
+            self._ohlcv_unmapped_since_heartbeat = 0
+            self._ohlcv_filtered_universe_since_heartbeat = 0
+            self._ohlcv_filtered_active_since_heartbeat = 0
+            self._trades_received_since_heartbeat = 0
+            self._trades_unmapped_since_heartbeat = 0
 
-            # Log heartbeat
             interval_mins = int(self._heartbeat_interval_seconds / 60)
-            logger.info(
-                "Data heartbeat: %d candles received in last %dm (%d symbols active)",
-                candle_count,
-                interval_mins,
-                symbols_seen,
+
+            # Build drop suffix — only when any OHLCV record was silently dropped
+            any_ohlcv_drop = ohlcv_unmapped or ohlcv_universe or ohlcv_active
+            drop_suffix = (
+                f" | dropped: {ohlcv_unmapped} unmapped, "
+                f"{ohlcv_universe} universe, {ohlcv_active} active"
+                if any_ohlcv_drop
+                else ""
             )
+
+            # Build trades suffix — only when trades activity is non-zero
+            trades_suffix = (
+                f" | trades: {trades_received} received, {trades_unmapped} unmapped"
+                if trades_received or trades_unmapped
+                else ""
+            )
+
+            heartbeat_msg = (
+                f"Data heartbeat: {candle_count} candles in last {interval_mins}m "
+                f"({symbols_seen} symbols active){drop_suffix}{trades_suffix}"
+            )
+
+            # Escalate to WARNING for zero candles during market hours after 2 cycles
+            now_et = datetime.now(tz=_ET).time()
+            in_market_hours = _MARKET_OPEN <= now_et < _MARKET_CLOSE
+            if in_market_hours:
+                self._market_hours_heartbeat_count += 1
+
+            if candle_count == 0 and in_market_hours and self._market_hours_heartbeat_count >= 2:
+                logger.warning(
+                    "%s during market hours — possible data feed failure",
+                    heartbeat_msg,
+                )
+            else:
+                logger.info(heartbeat_msg)
 
     # ──────────────────────────────────────────────
     # Historical Data / Parquet Cache (DEC-085)

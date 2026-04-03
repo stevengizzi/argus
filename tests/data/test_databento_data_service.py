@@ -2439,3 +2439,575 @@ class TestFetchDailyBars:
 
         assert service.last_update is not None
         assert service.last_update.tzinfo is not None
+
+
+# ─────────────────────────────────────────────────────────────
+# Observability: drop counters, heartbeat, sentinels, mapping
+# ─────────────────────────────────────────────────────────────
+
+def _make_ohlcv_msg(instrument_id: int = 100) -> MockOHLCVMsg:
+    return MockOHLCVMsg(
+        instrument_id=instrument_id,
+        open=150_000_000_000,
+        high=155_000_000_000,
+        low=149_000_000_000,
+        close=154_000_000_000,
+        volume=10_000,
+        ts_event=int(datetime(2026, 4, 3, 14, 31, tzinfo=UTC).timestamp() * 1e9),
+    )
+
+
+def _make_trade_msg(instrument_id: int = 100) -> MockTradeMsg:
+    return MockTradeMsg(
+        instrument_id=instrument_id,
+        price=151_000_000_000,
+        size=500,
+        ts_event=int(datetime(2026, 4, 3, 14, 31, tzinfo=UTC).timestamp() * 1e9),
+    )
+
+
+def _make_service_with_client(
+    event_bus: EventBus,
+    databento_config: DatabentoConfig,
+    data_config: DataServiceConfig,
+    symbology_map: dict[int, str] | None = None,
+) -> object:
+    """Return a DatabentoDataService with a pre-wired mock client."""
+    from argus.data.databento_data_service import DatabentoDataService
+
+    service = DatabentoDataService(
+        event_bus=event_bus,
+        config=databento_config,
+        data_config=data_config,
+    )
+    client = MockLiveClient()
+    client._symbology_map = symbology_map or {}
+    service._live_client = client
+    return service
+
+
+class TestDropCounters:
+    """Per-gate drop counters increment correctly."""
+
+    def test_ohlcv_unmapped_increments_counter(
+        self, mock_databento, event_bus, databento_config, data_config
+    ):
+        """_ohlcv_unmapped_since_heartbeat increments when instrument_id unknown."""
+        service = _make_service_with_client(event_bus, databento_config, data_config)
+        service._on_ohlcv(_make_ohlcv_msg(instrument_id=999))
+        assert service._ohlcv_unmapped_since_heartbeat == 1
+
+    def test_ohlcv_universe_filter_increments_counter(
+        self, mock_databento, event_bus, databento_config, data_config
+    ):
+        """_ohlcv_filtered_universe_since_heartbeat increments for non-viable symbol."""
+        service = _make_service_with_client(
+            event_bus, databento_config, data_config, symbology_map={100: "AAPL"}
+        )
+        service._viable_universe = {"TSLA"}
+        service._on_ohlcv(_make_ohlcv_msg(instrument_id=100))
+        assert service._ohlcv_filtered_universe_since_heartbeat == 1
+        assert service._ohlcv_unmapped_since_heartbeat == 0
+
+    def test_ohlcv_active_filter_increments_counter(
+        self, mock_databento, event_bus, databento_config, data_config
+    ):
+        """_ohlcv_filtered_active_since_heartbeat increments when symbol not active."""
+        service = _make_service_with_client(
+            event_bus, databento_config, data_config, symbology_map={100: "AAPL"}
+        )
+        service._active_symbols = {"TSLA"}
+        service._viable_universe = None
+        service._on_ohlcv(_make_ohlcv_msg(instrument_id=100))
+        assert service._ohlcv_filtered_active_since_heartbeat == 1
+        assert service._ohlcv_unmapped_since_heartbeat == 0
+
+    def test_trade_unmapped_increments_counter(
+        self, mock_databento, event_bus, databento_config, data_config
+    ):
+        """_trades_unmapped_since_heartbeat increments when instrument_id unknown."""
+        service = _make_service_with_client(event_bus, databento_config, data_config)
+        service._on_trade(_make_trade_msg(instrument_id=999))
+        assert service._trades_unmapped_since_heartbeat == 1
+
+    def test_trade_received_increments_after_all_gates_pass(
+        self, mock_databento, event_bus, databento_config, data_config
+    ):
+        """_trades_received_since_heartbeat increments when trade passes all gates."""
+        service = _make_service_with_client(
+            event_bus, databento_config, data_config, symbology_map={100: "AAPL"}
+        )
+        service._active_symbols = {"AAPL"}
+        service._loop = MagicMock()
+        service._loop.is_running.return_value = True
+        service._on_trade(_make_trade_msg(instrument_id=100))
+        assert service._trades_received_since_heartbeat == 1
+        assert service._trades_unmapped_since_heartbeat == 0
+
+    def test_ohlcv_counter_zero_when_candle_passes_all_gates(
+        self, mock_databento, event_bus, databento_config, data_config
+    ):
+        """Drop counters stay zero when OHLCV passes all gates."""
+        service = _make_service_with_client(
+            event_bus, databento_config, data_config, symbology_map={100: "AAPL"}
+        )
+        service._active_symbols = {"AAPL"}
+        service._loop = MagicMock()
+        service._loop.is_running.return_value = True
+        service._on_ohlcv(_make_ohlcv_msg(instrument_id=100))
+        assert service._ohlcv_unmapped_since_heartbeat == 0
+        assert service._ohlcv_filtered_universe_since_heartbeat == 0
+        assert service._ohlcv_filtered_active_since_heartbeat == 0
+
+
+class TestHeartbeatObservability:
+    """Enhanced heartbeat log format and counter reset."""
+
+    @pytest.mark.asyncio
+    async def test_heartbeat_includes_drop_suffix_when_unmapped_nonzero(
+        self, mock_databento, event_bus, databento_config, data_config, caplog
+    ):
+        """Heartbeat log includes '| dropped:' suffix when drop counters are non-zero."""
+        import logging
+        from datetime import time as dt_time
+
+        from argus.data.databento_data_service import DatabentoDataService
+
+        service = DatabentoDataService(
+            event_bus=event_bus,
+            config=databento_config,
+            data_config=data_config,
+        )
+        service._running = True
+        service._ohlcv_unmapped_since_heartbeat = 1200
+        service._ohlcv_filtered_universe_since_heartbeat = 350
+        service._ohlcv_filtered_active_since_heartbeat = 80
+
+        async def fake_sleep(_: float) -> None:
+            service._running = False
+
+        mock_now = MagicMock()
+        mock_now.time.return_value = dt_time(7, 0)  # pre-market — no escalation
+
+        with caplog.at_level(logging.INFO):
+            with patch("asyncio.sleep", side_effect=fake_sleep):
+                with patch("argus.data.databento_data_service.datetime") as mock_dt:
+                    mock_dt.now.return_value = mock_now
+                    await service._data_heartbeat()
+
+        assert "dropped: 1200 unmapped, 350 universe, 80 active" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_heartbeat_omits_drop_suffix_when_all_zero(
+        self, mock_databento, event_bus, databento_config, data_config, caplog
+    ):
+        """Heartbeat log omits '| dropped:' suffix when all drop counters are zero."""
+        import logging
+        from datetime import time as dt_time
+
+        from argus.data.databento_data_service import DatabentoDataService
+
+        service = DatabentoDataService(
+            event_bus=event_bus,
+            config=databento_config,
+            data_config=data_config,
+        )
+        service._running = True
+        service._candles_since_heartbeat = 42
+
+        async def fake_sleep(_: float) -> None:
+            service._running = False
+
+        mock_now = MagicMock()
+        mock_now.time.return_value = dt_time(7, 0)
+
+        with caplog.at_level(logging.INFO):
+            with patch("asyncio.sleep", side_effect=fake_sleep):
+                with patch("argus.data.databento_data_service.datetime") as mock_dt:
+                    mock_dt.now.return_value = mock_now
+                    await service._data_heartbeat()
+
+        assert "dropped:" not in caplog.text
+        assert "Data heartbeat: 42 candles" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_heartbeat_includes_trades_suffix_when_nonzero(
+        self, mock_databento, event_bus, databento_config, data_config, caplog
+    ):
+        """Heartbeat log includes '| trades:' suffix when trades activity is non-zero."""
+        import logging
+        from datetime import time as dt_time
+
+        from argus.data.databento_data_service import DatabentoDataService
+
+        service = DatabentoDataService(
+            event_bus=event_bus,
+            config=databento_config,
+            data_config=data_config,
+        )
+        service._running = True
+        service._trades_received_since_heartbeat = 15000
+        service._trades_unmapped_since_heartbeat = 200
+
+        async def fake_sleep(_: float) -> None:
+            service._running = False
+
+        mock_now = MagicMock()
+        mock_now.time.return_value = dt_time(7, 0)
+
+        with caplog.at_level(logging.INFO):
+            with patch("asyncio.sleep", side_effect=fake_sleep):
+                with patch("argus.data.databento_data_service.datetime") as mock_dt:
+                    mock_dt.now.return_value = mock_now
+                    await service._data_heartbeat()
+
+        assert "trades: 15000 received, 200 unmapped" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_heartbeat_omits_trades_suffix_when_all_zero(
+        self, mock_databento, event_bus, databento_config, data_config, caplog
+    ):
+        """Heartbeat log omits '| trades:' suffix when both trades counters are zero."""
+        import logging
+        from datetime import time as dt_time
+
+        from argus.data.databento_data_service import DatabentoDataService
+
+        service = DatabentoDataService(
+            event_bus=event_bus,
+            config=databento_config,
+            data_config=data_config,
+        )
+        service._running = True
+
+        async def fake_sleep(_: float) -> None:
+            service._running = False
+
+        mock_now = MagicMock()
+        mock_now.time.return_value = dt_time(7, 0)
+
+        with caplog.at_level(logging.INFO):
+            with patch("asyncio.sleep", side_effect=fake_sleep):
+                with patch("argus.data.databento_data_service.datetime") as mock_dt:
+                    mock_dt.now.return_value = mock_now
+                    await service._data_heartbeat()
+
+        assert "trades:" not in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_heartbeat_resets_all_counters_after_cycle(
+        self, mock_databento, event_bus, databento_config, data_config, caplog
+    ):
+        """All drop counters are reset to zero after each heartbeat cycle."""
+        from datetime import time as dt_time
+
+        from argus.data.databento_data_service import DatabentoDataService
+
+        service = DatabentoDataService(
+            event_bus=event_bus,
+            config=databento_config,
+            data_config=data_config,
+        )
+        service._running = True
+        service._ohlcv_unmapped_since_heartbeat = 50
+        service._ohlcv_filtered_universe_since_heartbeat = 20
+        service._ohlcv_filtered_active_since_heartbeat = 10
+        service._trades_received_since_heartbeat = 1000
+        service._trades_unmapped_since_heartbeat = 5
+        service._candles_since_heartbeat = 30
+
+        async def fake_sleep(_: float) -> None:
+            service._running = False
+
+        mock_now = MagicMock()
+        mock_now.time.return_value = dt_time(7, 0)
+
+        with patch("asyncio.sleep", side_effect=fake_sleep):
+            with patch("argus.data.databento_data_service.datetime") as mock_dt:
+                mock_dt.now.return_value = mock_now
+                await service._data_heartbeat()
+
+        assert service._ohlcv_unmapped_since_heartbeat == 0
+        assert service._ohlcv_filtered_universe_since_heartbeat == 0
+        assert service._ohlcv_filtered_active_since_heartbeat == 0
+        assert service._trades_received_since_heartbeat == 0
+        assert service._trades_unmapped_since_heartbeat == 0
+        assert service._candles_since_heartbeat == 0
+
+
+class TestZeroCandleEscalation:
+    """Zero-candle WARNING during market hours after 2 cycles."""
+
+    @pytest.mark.asyncio
+    async def test_zero_candle_warning_during_market_hours_after_two_cycles(
+        self, mock_databento, event_bus, databento_config, data_config, caplog
+    ):
+        """WARNING emitted when 0 candles in market hours with >=2 prior market-hours cycles."""
+        from datetime import time as dt_time
+
+        import logging
+
+        from argus.data.databento_data_service import DatabentoDataService
+
+        service = DatabentoDataService(
+            event_bus=event_bus,
+            config=databento_config,
+            data_config=data_config,
+        )
+        service._running = True
+        service._candles_since_heartbeat = 0
+        service._market_hours_heartbeat_count = 1  # Will become 2 after increment
+
+        async def fake_sleep(_: float) -> None:
+            service._running = False
+
+        mock_now = MagicMock()
+        mock_now.time.return_value = dt_time(10, 30)  # 10:30 AM ET — market hours
+
+        with caplog.at_level(logging.WARNING):
+            with patch("asyncio.sleep", side_effect=fake_sleep):
+                with patch("argus.data.databento_data_service.datetime") as mock_dt:
+                    mock_dt.now.return_value = mock_now
+                    await service._data_heartbeat()
+
+        assert "possible data feed failure" in caplog.text
+        # Should log at WARNING level
+        warning_records = [r for r in caplog.records if r.levelname == "WARNING"]
+        assert any("possible data feed failure" in r.message for r in warning_records)
+
+    @pytest.mark.asyncio
+    async def test_zero_candle_stays_info_outside_market_hours(
+        self, mock_databento, event_bus, databento_config, data_config, caplog
+    ):
+        """No WARNING when 0 candles outside market hours (pre-market)."""
+        from datetime import time as dt_time
+
+        import logging
+
+        from argus.data.databento_data_service import DatabentoDataService
+
+        service = DatabentoDataService(
+            event_bus=event_bus,
+            config=databento_config,
+            data_config=data_config,
+        )
+        service._running = True
+        service._candles_since_heartbeat = 0
+        service._market_hours_heartbeat_count = 5  # Many prior cycles, but pre-market
+
+        async def fake_sleep(_: float) -> None:
+            service._running = False
+
+        mock_now = MagicMock()
+        mock_now.time.return_value = dt_time(7, 0)  # 7 AM ET — pre-market
+
+        with caplog.at_level(logging.INFO):
+            with patch("asyncio.sleep", side_effect=fake_sleep):
+                with patch("argus.data.databento_data_service.datetime") as mock_dt:
+                    mock_dt.now.return_value = mock_now
+                    await service._data_heartbeat()
+
+        warning_records = [r for r in caplog.records if r.levelname == "WARNING"]
+        assert not any("possible data feed failure" in r.message for r in warning_records)
+        assert "Data heartbeat: 0 candles" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_zero_candle_stays_info_in_first_market_hours_cycle(
+        self, mock_databento, event_bus, databento_config, data_config, caplog
+    ):
+        """No WARNING on first market-hours heartbeat cycle (count becomes 1, not >=2)."""
+        import logging
+        from datetime import time as dt_time
+
+        from argus.data.databento_data_service import DatabentoDataService
+
+        service = DatabentoDataService(
+            event_bus=event_bus,
+            config=databento_config,
+            data_config=data_config,
+        )
+        service._running = True
+        service._candles_since_heartbeat = 0
+        service._market_hours_heartbeat_count = 0  # Will become 1 after increment
+
+        async def fake_sleep(_: float) -> None:
+            service._running = False
+
+        mock_now = MagicMock()
+        mock_now.time.return_value = dt_time(9, 35)  # Market hours
+
+        with caplog.at_level(logging.INFO):
+            with patch("asyncio.sleep", side_effect=fake_sleep):
+                with patch("argus.data.databento_data_service.datetime") as mock_dt:
+                    mock_dt.now.return_value = mock_now
+                    await service._data_heartbeat()
+
+        warning_records = [r for r in caplog.records if r.levelname == "WARNING"]
+        assert not any("possible data feed failure" in r.message for r in warning_records)
+
+
+class TestFirstEventSentinels:
+    """First-event sentinel logs fire exactly once per session."""
+
+    def test_first_ohlcv_unmapped_warning_fires_once(
+        self, mock_databento, event_bus, databento_config, data_config, caplog
+    ):
+        """WARNING for unmapped OHLCV fires once even with many unmapped records."""
+        import logging
+
+        service = _make_service_with_client(event_bus, databento_config, data_config)
+
+        with caplog.at_level(logging.WARNING):
+            service._on_ohlcv(_make_ohlcv_msg(instrument_id=999))
+            service._on_ohlcv(_make_ohlcv_msg(instrument_id=998))
+            service._on_ohlcv(_make_ohlcv_msg(instrument_id=997))
+
+        warning_records = [
+            r for r in caplog.records
+            if r.levelname == "WARNING" and "not in symbology_map" in r.message
+        ]
+        assert len(warning_records) == 1
+        assert service._ohlcv_unmapped_since_heartbeat == 3
+
+    def test_first_ohlcv_unmapped_warning_includes_map_size(
+        self, mock_databento, event_bus, databento_config, data_config, caplog
+    ):
+        """First unmapped WARNING includes current symbology_map size."""
+        import logging
+
+        service = _make_service_with_client(
+            event_bus, databento_config, data_config,
+            symbology_map={1: "TSLA", 2: "AAPL"},
+        )
+
+        with caplog.at_level(logging.WARNING):
+            service._on_ohlcv(_make_ohlcv_msg(instrument_id=999))
+
+        assert "2 IDs mapped" in caplog.text
+
+    def test_first_ohlcv_resolved_info_fires_once(
+        self, mock_databento, event_bus, databento_config, data_config, caplog
+    ):
+        """INFO for first resolved OHLCV fires once even with many resolved candles."""
+        import logging
+
+        service = _make_service_with_client(
+            event_bus, databento_config, data_config,
+            symbology_map={100: "AAPL", 200: "TSLA"},
+        )
+        service._active_symbols = {"AAPL", "TSLA"}
+        service._loop = MagicMock()
+        service._loop.is_running.return_value = True
+
+        with caplog.at_level(logging.INFO):
+            service._on_ohlcv(_make_ohlcv_msg(instrument_id=100))
+            service._on_ohlcv(_make_ohlcv_msg(instrument_id=200))
+            service._on_ohlcv(_make_ohlcv_msg(instrument_id=100))
+
+        resolved_records = [
+            r for r in caplog.records
+            if r.levelname == "INFO" and "First OHLCV-1m candle resolved" in r.message
+        ]
+        assert len(resolved_records) == 1
+        assert "AAPL" in resolved_records[0].message
+
+    def test_first_trade_resolved_info_fires_once(
+        self, mock_databento, event_bus, databento_config, data_config, caplog
+    ):
+        """INFO for first resolved trade fires once even with many resolved trades."""
+        import logging
+
+        service = _make_service_with_client(
+            event_bus, databento_config, data_config,
+            symbology_map={100: "AAPL"},
+        )
+        service._active_symbols = {"AAPL"}
+        service._loop = MagicMock()
+        service._loop.is_running.return_value = True
+
+        with caplog.at_level(logging.INFO):
+            service._on_trade(_make_trade_msg(instrument_id=100))
+            service._on_trade(_make_trade_msg(instrument_id=100))
+            service._on_trade(_make_trade_msg(instrument_id=100))
+
+        resolved_records = [
+            r for r in caplog.records
+            if r.levelname == "INFO" and "First trade resolved" in r.message
+        ]
+        assert len(resolved_records) == 1
+        assert "AAPL" in resolved_records[0].message
+
+
+class TestSymbolMappingObservability:
+    """Symbol mapping counter and progress logging."""
+
+    def test_first_mapping_logs_info(
+        self, mock_databento, event_bus, databento_config, data_config, caplog
+    ):
+        """First SymbolMappingMsg triggers an INFO log."""
+        import logging
+
+        service = _make_service_with_client(event_bus, databento_config, data_config)
+
+        msg = MockSymbolMappingMsg(instrument_id=100, stype_in_symbol="AAPL")
+
+        with caplog.at_level(logging.INFO):
+            service._on_symbol_mapping(msg)
+
+        assert "First SymbolMappingMsg received" in caplog.text
+        assert "100" in caplog.text
+        assert "AAPL" in caplog.text
+
+    def test_mapping_counter_increments(
+        self, mock_databento, event_bus, databento_config, data_config
+    ):
+        """_symbol_mappings_received increments with each mapping."""
+        service = _make_service_with_client(event_bus, databento_config, data_config)
+
+        for i in range(5):
+            service._on_symbol_mapping(MockSymbolMappingMsg(instrument_id=i))
+
+        assert service._symbol_mappings_received == 5
+
+    def test_progress_logged_at_2000th_mapping(
+        self, mock_databento, event_bus, databento_config, data_config, caplog
+    ):
+        """INFO log emitted at 2000th mapping."""
+        import logging
+
+        service = _make_service_with_client(event_bus, databento_config, data_config)
+        service._symbol_mappings_received = 1999  # One away from milestone
+
+        with caplog.at_level(logging.INFO):
+            service._on_symbol_mapping(MockSymbolMappingMsg(instrument_id=2000))
+
+        assert "SymbolMappingMsg progress: 2000 mappings received" in caplog.text
+
+    def test_progress_logged_at_4000th_mapping(
+        self, mock_databento, event_bus, databento_config, data_config, caplog
+    ):
+        """INFO log emitted at 4000th mapping (every 2000th)."""
+        import logging
+
+        service = _make_service_with_client(event_bus, databento_config, data_config)
+        service._symbol_mappings_received = 3999
+
+        with caplog.at_level(logging.INFO):
+            service._on_symbol_mapping(MockSymbolMappingMsg(instrument_id=4000))
+
+        assert "SymbolMappingMsg progress: 4000 mappings received" in caplog.text
+
+    def test_no_progress_log_between_milestones(
+        self, mock_databento, event_bus, databento_config, data_config, caplog
+    ):
+        """No progress log emitted for counts between milestones (e.g. 1001)."""
+        import logging
+
+        service = _make_service_with_client(event_bus, databento_config, data_config)
+        service._symbol_mappings_received = 1000  # Not first, not a 2000 milestone
+
+        with caplog.at_level(logging.INFO):
+            service._on_symbol_mapping(MockSymbolMappingMsg(instrument_id=1001))
+
+        assert "SymbolMappingMsg progress" not in caplog.text
+        assert "First SymbolMappingMsg" not in caplog.text
