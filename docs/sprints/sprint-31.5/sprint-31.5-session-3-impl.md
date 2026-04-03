@@ -47,9 +47,10 @@ Create missing universe filter YAML files for Bull Flag and Flat-Top Breakout, a
    ```
    In `run()`, resolve workers count:
    ```python
-   workers = args.workers or config.max_workers
+   workers = args.workers if args.workers is not None else config.max_workers
    ```
    Pass to `runner.run_sweep(..., workers=workers)`.
+   **Note:** Do NOT use `args.workers or config.max_workers` — `0` is falsy in Python, so `--workers 0` would silently fall through to the config default. The `is not None` check is correct.
 
 4. In `config/experiments.yaml`, add below the existing fields:
    ```yaml
