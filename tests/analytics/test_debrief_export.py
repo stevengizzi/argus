@@ -311,6 +311,7 @@ async def test_export_safety_summary_without_order_manager(tmp_path: Path) -> No
 
 @pytest.mark.asyncio
 async def test_export_counterfactual_summary_missing_db(tmp_path: Path) -> None:
+
     """Nonexistent counterfactual_db_path produces an error key in counterfactual_summary."""
     db = _make_db_mock()
     eval_store = _make_eval_store_mock()
@@ -589,3 +590,111 @@ async def test_export_backward_compatible(tmp_path: Path) -> None:
     assert "margin_circuit_breaker" in safety
     assert safety["margin_circuit_breaker"]["triggered"] is False
     assert safety["margin_circuit_breaker"]["rejection_count"] == 0
+
+
+# ---------------------------------------------------------------------------
+# DEF-144: safety_summary reads new tracking attributes (Sprint 31A S1)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_safety_summary_reads_new_tracking_attributes(tmp_path: Path) -> None:
+    """safety_summary returns non-null values when OrderManager tracking attrs are set."""
+    from datetime import UTC, datetime as dt
+
+    db = _make_db_mock()
+    eval_store = _make_eval_store_mock()
+    broker = _make_broker_mock()
+    orchestrator = _make_orchestrator_mock()
+
+    open_ts = dt(2026, 4, 3, 14, 30, 0, tzinfo=UTC)
+    reset_ts = dt(2026, 4, 3, 14, 45, 0, tzinfo=UTC)
+
+    order_manager = MagicMock()
+    order_manager._margin_circuit_open = False
+    order_manager._margin_rejection_count = 5
+    order_manager._config = MagicMock()
+    order_manager._config.margin_rejection_threshold = 10
+    order_manager._config.eod_flatten_timeout_seconds = 30
+    # New tracking attributes — actual typed values (not MagicMock)
+    order_manager.margin_circuit_breaker_open_time = open_ts
+    order_manager.margin_circuit_breaker_reset_time = reset_ts
+    order_manager.margin_entries_blocked_count = 3
+    order_manager.eod_flatten_pass1_count = 8
+    order_manager.eod_flatten_pass2_count = 1
+    order_manager.signal_cutoff_skipped_count = 4
+
+    result_path = await export_debrief_data(
+        session_date=SESSION_DATE,
+        db=db,
+        eval_store=eval_store,
+        catalyst_db_path=None,
+        broker=broker,
+        orchestrator=orchestrator,
+        output_dir=str(tmp_path),
+        order_manager=order_manager,
+    )
+
+    assert result_path is not None
+    payload = json.loads(Path(result_path).read_text(encoding="utf-8"))
+
+    safety = payload["safety_summary"]
+    mcb = safety["margin_circuit_breaker"]
+    assert mcb["open_time"] == open_ts.isoformat()
+    assert mcb["reset_time"] == reset_ts.isoformat()
+    assert mcb["entries_blocked"] == 3
+
+    eod = safety["eod_flatten"]
+    assert eod["pass1_filled"] == 8
+    assert eod["pass2_orphans_found"] == 1
+
+    sc = safety["signal_cutoff"]
+    assert sc["signals_skipped"] == 4
+
+
+@pytest.mark.asyncio
+async def test_safety_summary_null_tracking_attrs_when_no_events(tmp_path: Path) -> None:
+    """safety_summary returns None for datetime attrs and 0 for counters when no events occurred."""
+    db = _make_db_mock()
+    eval_store = _make_eval_store_mock()
+    broker = _make_broker_mock()
+    orchestrator = _make_orchestrator_mock()
+
+    # Simulate an OrderManager with zero-event defaults
+    order_manager = MagicMock()
+    order_manager._margin_circuit_open = False
+    order_manager._margin_rejection_count = 0
+    order_manager._config = MagicMock()
+    order_manager._config.margin_rejection_threshold = 10
+    order_manager._config.eod_flatten_timeout_seconds = 30
+    # Tracking attrs at defaults — None datetimes, zero counters
+    order_manager.margin_circuit_breaker_open_time = None
+    order_manager.margin_circuit_breaker_reset_time = None
+    order_manager.margin_entries_blocked_count = 0
+    order_manager.eod_flatten_pass1_count = 0
+    order_manager.eod_flatten_pass2_count = 0
+    order_manager.signal_cutoff_skipped_count = 0
+
+    result_path = await export_debrief_data(
+        session_date=SESSION_DATE,
+        db=db,
+        eval_store=eval_store,
+        catalyst_db_path=None,
+        broker=broker,
+        orchestrator=orchestrator,
+        output_dir=str(tmp_path),
+        order_manager=order_manager,
+    )
+
+    assert result_path is not None
+    payload = json.loads(Path(result_path).read_text(encoding="utf-8"))
+
+    safety = payload["safety_summary"]
+    # open_time / reset_time must be None (no events happened)
+    assert safety["margin_circuit_breaker"]["open_time"] is None
+    assert safety["margin_circuit_breaker"]["reset_time"] is None
+    # Integer zero counts should come through as 0
+    assert safety["margin_circuit_breaker"]["entries_blocked"] == 0
+    assert safety["eod_flatten"]["pass1_filled"] == 0
+    assert safety["eod_flatten"]["pass2_orphans_found"] == 0
+    assert safety["signal_cutoff"]["signals_skipped"] == 0

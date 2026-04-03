@@ -18,7 +18,7 @@ import contextlib
 import logging
 import time as _time
 from dataclasses import dataclass, field
-from datetime import datetime, time
+from datetime import UTC, datetime, time
 from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
 
@@ -291,6 +291,14 @@ class OrderManager:
         # When True, new entry orders are blocked until positions clear.
         self._margin_circuit_open: bool = False
 
+        # Safety tracking attributes for debrief export (Sprint 31A S1)
+        self.margin_circuit_breaker_open_time: datetime | None = None
+        self.margin_circuit_breaker_reset_time: datetime | None = None
+        self.margin_entries_blocked_count: int = 0
+        self.eod_flatten_pass1_count: int = 0
+        self.eod_flatten_pass2_count: int = 0
+        self.signal_cutoff_skipped_count: int = 0
+
     async def start(self) -> None:
         """Start the Order Manager.
 
@@ -465,6 +473,7 @@ class OrderManager:
 
         # Margin circuit breaker gate: block new entries when margin is exhausted (Sprint 32.9 S2)
         if self._margin_circuit_open:
+            self.margin_entries_blocked_count += 1
             logger.info(
                 "Entry blocked by margin circuit breaker: %s for %s",
                 signal.symbol,
@@ -653,6 +662,7 @@ class OrderManager:
                     self._margin_rejection_count >= self._config.margin_rejection_threshold
                 ):
                     self._margin_circuit_open = True
+                    self.margin_circuit_breaker_open_time = datetime.now(UTC)
                     logger.warning(
                         "Margin circuit breaker OPEN — %d margin rejections this session. "
                         "New entries blocked until positions clear.",
@@ -1415,6 +1425,7 @@ class OrderManager:
                         if position_count < self._config.margin_circuit_reset_positions:
                             self._margin_circuit_open = False
                             self._margin_rejection_count = 0
+                            self.margin_circuit_breaker_reset_time = datetime.now(UTC)
                             logger.info(
                                 "Margin circuit breaker RESET — position count %d below "
                                 "threshold %d",
@@ -1584,6 +1595,7 @@ class OrderManager:
                     else:
                         timed_out.append(sym)
 
+            self.eod_flatten_pass1_count = len(filled)
             logger.info(
                 "EOD flatten Pass 1: %d filled, %d timed out",
                 len(filled),
@@ -1634,6 +1646,7 @@ class OrderManager:
                     await self._flatten_unknown_position(
                         symbol, qty, force_execute=True,
                     )
+            self.eod_flatten_pass2_count = p2_submitted
             if p2_submitted > 0:
                 logger.info(
                     "EOD flatten Pass 2: %d broker-only positions submitted",
@@ -2697,6 +2710,21 @@ class OrderManager:
         # Reset margin circuit breaker for new session (Sprint 32.9 S2)
         self._margin_rejection_count = 0
         self._margin_circuit_open = False
+        # Reset safety tracking counters for new session (Sprint 31A S1)
+        self.margin_circuit_breaker_open_time = None
+        self.margin_circuit_breaker_reset_time = None
+        self.margin_entries_blocked_count = 0
+        self.eod_flatten_pass1_count = 0
+        self.eod_flatten_pass2_count = 0
+        self.signal_cutoff_skipped_count = 0
+
+    def increment_signal_cutoff(self) -> None:
+        """Increment the signal cutoff skip counter.
+
+        Called by the signal processing pipeline in main.py each time a signal
+        is discarded due to the pre-EOD signal cutoff being active.
+        """
+        self.signal_cutoff_skipped_count += 1
 
     @property
     def has_open_positions(self) -> bool:

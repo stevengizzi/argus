@@ -82,13 +82,7 @@ from argus.strategies.base_strategy import BaseStrategy
 from argus.strategies.orb_breakout import OrbBreakoutStrategy
 from argus.strategies.orb_scalp import OrbScalpStrategy
 from argus.strategies.pattern_strategy import PatternBasedStrategy
-from argus.strategies.patterns.abcd import ABCDPattern
-from argus.strategies.patterns.bull_flag import BullFlagPattern
-from argus.strategies.patterns.dip_and_rip import DipAndRipPattern
-from argus.strategies.patterns.flat_top_breakout import FlatTopBreakoutPattern
-from argus.strategies.patterns.gap_and_go import GapAndGoPattern
-from argus.strategies.patterns.hod_break import HODBreakPattern
-from argus.strategies.patterns.premarket_high_break import PreMarketHighBreakPattern
+from argus.strategies.patterns.factory import build_pattern_from_config
 from argus.strategies.red_to_green import RedToGreenStrategy
 from argus.strategies.vwap_reclaim import VwapReclaimStrategy
 
@@ -1230,7 +1224,7 @@ class BacktestEngine:
             )
 
         config = self._apply_config_overrides(config)
-        pattern = BullFlagPattern()
+        pattern = build_pattern_from_config(config, "bull_flag")
 
         return PatternBasedStrategy(
             pattern=pattern,
@@ -1261,7 +1255,7 @@ class BacktestEngine:
             )
 
         config = self._apply_config_overrides(config)
-        pattern = FlatTopBreakoutPattern()
+        pattern = build_pattern_from_config(config, "flat_top_breakout")
 
         return PatternBasedStrategy(
             pattern=pattern,
@@ -1292,7 +1286,7 @@ class BacktestEngine:
             )
 
         config = self._apply_config_overrides(config)
-        pattern = DipAndRipPattern()
+        pattern = build_pattern_from_config(config, "dip_and_rip")
 
         return PatternBasedStrategy(
             pattern=pattern,
@@ -1323,7 +1317,7 @@ class BacktestEngine:
             )
 
         config = self._apply_config_overrides(config)
-        pattern = HODBreakPattern()
+        pattern = build_pattern_from_config(config, "hod_break")
 
         return PatternBasedStrategy(
             pattern=pattern,
@@ -1357,7 +1351,7 @@ class BacktestEngine:
             )
 
         config = self._apply_config_overrides(config)
-        pattern = ABCDPattern()
+        pattern = build_pattern_from_config(config, "abcd")
 
         return PatternBasedStrategy(
             pattern=pattern,
@@ -1391,7 +1385,7 @@ class BacktestEngine:
             )
 
         config = self._apply_config_overrides(config)
-        pattern = GapAndGoPattern()
+        pattern = build_pattern_from_config(config, "gap_and_go")
 
         return PatternBasedStrategy(
             pattern=pattern,
@@ -1426,7 +1420,7 @@ class BacktestEngine:
             )
 
         config = self._apply_config_overrides(config)
-        pattern = PreMarketHighBreakPattern()
+        pattern = build_pattern_from_config(config, "premarket_high_break")
 
         return PatternBasedStrategy(
             pattern=pattern,

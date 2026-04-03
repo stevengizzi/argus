@@ -590,6 +590,14 @@ def _export_safety_summary(
         circuit_open = bool(getattr(order_manager, "_margin_circuit_open", False))
         rejection_count = int(getattr(order_manager, "_margin_rejection_count", 0))
 
+        # Safety tracking attributes (Sprint 31A S1)
+        om_open_time = getattr(order_manager, "margin_circuit_breaker_open_time", None)
+        om_reset_time = getattr(order_manager, "margin_circuit_breaker_reset_time", None)
+        om_entries_blocked = getattr(order_manager, "margin_entries_blocked_count", None)
+        om_pass1_count = getattr(order_manager, "eod_flatten_pass1_count", None)
+        om_pass2_count = getattr(order_manager, "eod_flatten_pass2_count", None)
+        om_cutoff_skipped = getattr(order_manager, "signal_cutoff_skipped_count", None)
+
         # Signal cutoff config (duck-typed from orchestrator config)
         orchestrator_cfg = getattr(orchestrator, "_config", None) if orchestrator is not None else None
         cutoff_enabled = bool(getattr(orchestrator_cfg, "signal_cutoff_enabled", False))
@@ -605,26 +613,23 @@ def _export_safety_summary(
                 "triggered": circuit_open,
                 "rejection_count": rejection_count,
                 "rejection_threshold": int(margin_threshold) if margin_threshold is not None else None,
-                # open_time/reset_time/entries_blocked: not tracked in-memory — derive from JSONL log
-                "open_time": None,
-                "reset_time": None,
-                "entries_blocked": None,
+                "open_time": om_open_time.isoformat() if isinstance(om_open_time, datetime) else None,
+                "reset_time": om_reset_time.isoformat() if isinstance(om_reset_time, datetime) else None,
+                "entries_blocked": int(om_entries_blocked) if isinstance(om_entries_blocked, int) else None,
             },
             "eod_flatten": {
-                # Pass counts not tracked in-memory — derive from JSONL log (Phase 6)
                 "timeout_seconds": int(eod_timeout) if eod_timeout is not None else None,
-                "pass1_filled": None,
+                "pass1_filled": int(om_pass1_count) if isinstance(om_pass1_count, int) else None,
                 "pass1_rejected": None,
                 "pass1_timed_out": None,
-                "pass2_orphans_found": None,
+                "pass2_orphans_found": int(om_pass2_count) if isinstance(om_pass2_count, int) else None,
                 "pass2_filled": None,
                 "positions_remaining_after": None,
             },
             "signal_cutoff": {
                 "active": cutoff_enabled,
                 "cutoff_time": cutoff_time,
-                # signals_skipped: not counted in-memory — derive from JSONL log
-                "signals_skipped": None,
+                "signals_skipped": int(om_cutoff_skipped) if isinstance(om_cutoff_skipped, int) else None,
             },
         }
 

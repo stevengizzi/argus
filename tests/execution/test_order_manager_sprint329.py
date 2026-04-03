@@ -960,3 +960,88 @@ class TestReconciliationReadsSharesNotQty:
                 raise AssertionError(
                     f"main.py line {i+1} still reads pos.qty: {line.strip()}"
                 )
+
+
+# ---------------------------------------------------------------------------
+# DEF-144: margin_entries_blocked_count increments on margin rejection (Sprint 31A S1)
+# ---------------------------------------------------------------------------
+
+
+class TestMarginEntriesBlockedCount:
+    """margin_entries_blocked_count increments each time an entry is blocked by the
+    margin circuit breaker."""
+
+    @pytest.mark.asyncio
+    async def test_margin_entries_blocked_count_increments(self) -> None:
+        """margin_entries_blocked_count increments when margin circuit is open."""
+        event_bus = EventBus()
+        broker = _make_broker()
+        clock = _market_hours_clock()
+        om = _make_om(event_bus, broker, clock)
+        await om.start()
+
+        # Force the circuit open
+        om._margin_circuit_open = True
+
+        assert om.margin_entries_blocked_count == 0
+
+        signal = _make_signal("TSLA")
+        approved = OrderApprovedEvent(signal=signal, modifications=None)
+        await om.on_approved(approved)
+
+        assert om.margin_entries_blocked_count == 1
+
+        # A second blocked entry increments again
+        signal2 = _make_signal("NVDA")
+        approved2 = OrderApprovedEvent(signal=signal2, modifications=None)
+        await om.on_approved(approved2)
+
+        assert om.margin_entries_blocked_count == 2
+
+    @pytest.mark.asyncio
+    async def test_margin_entries_blocked_count_zero_when_circuit_closed(self) -> None:
+        """margin_entries_blocked_count stays 0 when circuit breaker is not open."""
+        event_bus = EventBus()
+        broker = _make_broker()
+        clock = _market_hours_clock()
+        om = _make_om(event_bus, broker, clock)
+        await om.start()
+
+        assert om._margin_circuit_open is False
+        assert om.margin_entries_blocked_count == 0
+
+        # Normal approved entry — should go through
+        signal = _make_signal("AAPL")
+        approved = OrderApprovedEvent(signal=signal, modifications=None)
+        await om.on_approved(approved)
+
+        # Count must still be 0 (entry was not blocked)
+        assert om.margin_entries_blocked_count == 0
+
+    @pytest.mark.asyncio
+    async def test_reset_daily_state_clears_tracking_attrs(self) -> None:
+        """reset_daily_state resets all 6 safety tracking attributes."""
+        event_bus = EventBus()
+        broker = _make_broker()
+        clock = _market_hours_clock()
+        om = _make_om(event_bus, broker, clock)
+        await om.start()
+
+        from datetime import UTC, datetime as dt
+
+        # Set non-zero values on all tracking attrs
+        om.margin_circuit_breaker_open_time = dt(2026, 4, 3, 14, 0, 0, tzinfo=UTC)
+        om.margin_circuit_breaker_reset_time = dt(2026, 4, 3, 14, 30, 0, tzinfo=UTC)
+        om.margin_entries_blocked_count = 5
+        om.eod_flatten_pass1_count = 10
+        om.eod_flatten_pass2_count = 2
+        om.signal_cutoff_skipped_count = 7
+
+        om.reset_daily_state()
+
+        assert om.margin_circuit_breaker_open_time is None
+        assert om.margin_circuit_breaker_reset_time is None
+        assert om.margin_entries_blocked_count == 0
+        assert om.eod_flatten_pass1_count == 0
+        assert om.eod_flatten_pass2_count == 0
+        assert om.signal_cutoff_skipped_count == 0
