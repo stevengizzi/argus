@@ -5,6 +5,7 @@
 **Session:** Sprint 31.5 — Session 1: Parallel Sweep Infrastructure
 **Date:** 2026-04-03
 **Self-Assessment:** MINOR_DEVIATIONS
+**Post-Review Fix:** Applied 2026-04-03 — addressed F1 and F3 from Tier 2 review
 
 ### Change Manifest
 | File | Change Type | Rationale |

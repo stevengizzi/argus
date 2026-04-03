@@ -54,7 +54,7 @@ _PATTERN_TO_STRATEGY_TYPE: dict[str, StrategyType] = {
 }
 
 
-def _run_single_backtest(args: dict) -> dict:
+def _run_single_backtest(args: dict[str, Any]) -> dict[str, Any]:
     """Worker function — runs one BacktestEngine grid point in a subprocess.
 
     Module-level (not a method) so it is picklable by ProcessPoolExecutor.
@@ -76,7 +76,7 @@ def _run_single_backtest(args: dict) -> dict:
 
     fingerprint: str = args["fingerprint"]
 
-    async def _execute() -> dict:
+    async def _execute() -> dict[str, Any]:
         from datetime import date as _date  # noqa: PLC0415
         from pathlib import Path as _Path  # noqa: PLC0415
 
@@ -109,6 +109,11 @@ def _run_single_backtest(args: dict) -> dict:
             )
             backtest_result: dict[str, Any] = mor.to_dict()
         except Exception:
+            # _backtest_result_to_dict is a pure helper in this module — no
+            # side effects, no heavy imports.  Calling it directly (rather than
+            # via local import) is intentional: local imports are used only for
+            # heavy dependencies (BacktestEngine, etc.) that benefit from
+            # deferred loading in subprocess context.
             backtest_result = _backtest_result_to_dict(result)
 
         return {
