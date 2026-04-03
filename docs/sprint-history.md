@@ -1,7 +1,7 @@
 # ARGUS — Sprint History
 
 > Complete record of all sprints from project inception through current state.
-> Active development began February 14, 2026. As of April 3, 2026 (~49 calendar days), 34 full sprints + 43 sub-sprints + 3 impromptus completed.
+> Active development began February 14, 2026. As of April 3, 2026 (~49 calendar days), 34 full sprints + 44 sub-sprints + 3 impromptus completed.
 
 ---
 
@@ -45,6 +45,7 @@
 | AJ — Pattern Expansion III | 31A | Apr 3, 2026 | DEF-143/144 resolved; PMH 0-trade fix; 3 new patterns (Micro Pullback, VWAP Bounce, NR Breakout); 10-pattern sweep; 15 total strategies (+137 pytest) |
 | AK — Historical Query Layer | 31A.5 | Apr 3, 2026 | DuckDB analytical layer over Parquet cache; HistoricalQueryService; CLI + REST; duckdb>=1.0,<2 dependency (+50 pytest) |
 | AL — Universe-Aware Sweep Flags | 31A.75 | Apr 3, 2026 | `--symbols`/`--universe-filter` flags on `run_experiment.py`; `UniverseFilterConfig`; DuckDB coverage validation; DEF-145 resolved (+12 pytest) |
+| AM — Parallel Sweep Infrastructure | 31.5 | Apr 3, 2026 | `ProcessPoolExecutor` parallel sweep execution; `workers` + `universe_filter` params on `run_sweep()`; `--workers` CLI flag; 2 new universe filter YAMLs; DEF-146 resolved (+34 pytest) |
 
 ---
 
@@ -2615,12 +2616,61 @@ New module — pure algorithmic NYSE holiday calendar, ported from frontend `ui/
 
 ---
 
+## Sprint 31.5: Parallel Sweep Infrastructure (April 3, 2026)
+
+**Status:** Complete — 3 sessions, Tier 2 verdicts: S1 CONCERNS_RESOLVED, S2 CLEAR, S3 CLEAR
+**Tests:** 4,823 → 4,857 pytest (+34); Vitest 846 → 846 (+0)
+**New files:** 3 (`config/universe_filters/bull_flag.yaml`, `config/universe_filters/flat_top_breakout.yaml`, `tests/scripts/test_run_experiment_workers.py`)
+**Modified files:** 4 (`argus/intelligence/experiments/runner.py`, `argus/intelligence/experiments/config.py`, `scripts/run_experiment.py`, `config/experiments.yaml`)
+
+**Goal:** Add multiprocessing-based parallel sweep execution to ExperimentRunner, wire universe filtering into the runner's programmatic API (resolving DEF-146), and create missing universe filter configs for Bull Flag and Flat-Top Breakout.
+
+### Session 1 — Parallel Sweep Infra
+
+**Changes:**
+- `argus/intelligence/experiments/runner.py` — Added `workers: int = 1` param on `run_sweep()`; when `workers > 1`, uses `ProcessPoolExecutor` with module-level `_run_single_backtest()` worker function; fingerprint dedup and `ExperimentStore` writes stay in main process for thread safety. Bare `dict` type annotations fixed to `dict[str, Any]` (S1 review F3). Explanatory comment added for non-standard import pattern in worker function (S1 review F1).
+- `argus/intelligence/experiments/config.py` — Added `max_workers: int = 4` field on `ExperimentConfig`.
+- `config/experiments.yaml` — Added `max_workers: 4`.
+- 8 new pytest covering sequential and parallel sweep paths, worker function isolation, fingerprint dedup in parallel mode.
+
+**S1 review findings (all resolved in-session):**
+- F1 (MEDIUM): Inconsistent import pattern in `_run_single_backtest()` worker function — resolved with explanatory comment.
+- F3 (LOW): Bare `dict` type annotations — fixed to `dict[str, Any]`.
+
+### Session 2 — DEF-146: Universe Filtering in ExperimentRunner
+
+**Changes:**
+- `argus/intelligence/experiments/runner.py` — Added `universe_filter: UniverseFilterConfig | None = None` param on `run_sweep()` (backward compatible); private `_resolve_universe_symbols()` method instantiates `HistoricalQueryService(HistoricalQueryConfig)`, applies `min_price`/`max_price`/`min_avg_volume` HAVING clauses via DuckDB SQL, logs skipped dynamic filters, calls `validate_symbol_coverage(min_bars=100)`, closes service in `finally` block; raises `ValueError` if 0 symbols remain after filtering. `_DYNAMIC_FILTER_FIELDS` tuple mirrored from scripts module. `TYPE_CHECKING` guard for `UniverseFilterConfig` import.
+- `scripts/run_experiment.py` — CLI `run()` now passes `universe_filter=filter_config` to runner; standalone `_apply_universe_filter`/`_validate_coverage` utilities preserved.
+- 6 new pytest covering `_resolve_universe_symbols()` paths, empty-universe ValueError, CLI delegation.
+
+**DEF status:** DEF-146 ✅ RESOLVED
+
+**S2 review findings (all informational, no action needed):**
+- F1: `close()` not called on `HistoricalQueryService` on early `ValueError` when `is_available=False` — no actual resource leak (service not started).
+- F2: SQL HAVING clause uses f-string interpolation for config floats — safe (Pydantic-validated, operator-controlled).
+- F3: Tests patch `HistoricalQueryService` at module level rather than import site — works, fragile in theory.
+
+### Session 3 — Filter YAMLs + `--workers` CLI Flag
+
+**Changes:**
+- `config/universe_filters/bull_flag.yaml` — New universe filter config for Bull Flag pattern.
+- `config/universe_filters/flat_top_breakout.yaml` — New universe filter config for Flat-Top Breakout pattern.
+- `scripts/run_experiment.py` — Added `--workers` CLI flag (int, default 1) mapped to `workers` param on `run_sweep()`.
+- `tests/scripts/test_run_experiment_workers.py` — 20 new tests covering `--workers` flag parsing, `run_sweep()` with workers param, universe filter YAML loading for bull_flag and flat_top_breakout.
+
+**Outcome:** All 10 PatternModule patterns now have universe filter configs in `config/universe_filters/`.
+
+**S3 review findings:** None.
+
+---
+
 ## Sprint Statistics
 
-- **Total sprints:** 34 full + 43 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9, 27.5, 27.6, 27.65, 27.7, 27.75, 27.8, 27.9, 27.95, 28.5, 28.75, 29, 29.5, 32.5, 32.75, 32.8, 32.9, 32.95) + 3 impromptus (Good Friday Apr 3, 31A.5 Apr 3, 31A.75 Apr 3)
-- **Total sessions:** ~548+ Claude Code sessions
-- **Total tests:** 4,823 pytest + 846 Vitest = 5,669 total
-- **Total decisions:** 381 (DEC-001 through DEC-381; no new DECs in Sprints 29.5, 32, 32.5, 32.75, 32.8, 32.9, 32.95, Apr 3 hotfix, 31A, 31A.5, or 31A.75)
+- **Total sprints:** 34 full + 44 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9, 27.5, 27.6, 27.65, 27.7, 27.75, 27.8, 27.9, 27.95, 28.5, 28.75, 29, 29.5, 32.5, 32.75, 32.8, 32.9, 32.95, 31.5) + 3 impromptus (Good Friday Apr 3, 31A.5 Apr 3, 31A.75 Apr 3)
+- **Total sessions:** ~551+ Claude Code sessions
+- **Total tests:** 4,857 pytest + 846 Vitest = 5,703 total
+- **Total decisions:** 381 (DEC-001 through DEC-381; no new DECs in Sprints 29.5, 32, 32.5, 32.75, 32.8, 32.9, 32.95, Apr 3 hotfix, 31A, 31A.5, 31A.75, or 31.5)
 - **Calendar days (active dev):** ~49 (Feb 14 – Apr 3, 2026)
 - **Largest sprint:** 22 (9 implementation + 5 fix + 9 reviews, largest scope)
 - **Cleanest sprint:** 23 (11 sessions, 0 regressions, 0 scope gaps requiring follow-up)

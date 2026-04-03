@@ -1,7 +1,7 @@
 # ARGUS — Strategic Roadmap
 
 > From artisanal strategies to ensemble alpha — the complete path
-> **v3.3 — April 3, 2026** (Sprint 31A + 31A.5 complete — Pattern Expansion III + Historical Query Layer; 15 strategies; DuckDB phase 1; DEF-143/144 resolved; DEF-145–149 added; build track reordered)
+> **v3.4 — April 3, 2026** (Sprint 31.5 complete — Parallel Sweep Infrastructure; DEF-146 resolved; all 10 PatternModule patterns have universe filter configs; +34 pytest)
 > **Status:** CANONICAL — this is the single source of truth for ARGUS's strategic direction and sprint queue.
 > **Supersedes:** `docs/research/ARGUS_Expanded_Roadmap.md` (Feb 26), `docs/argus_unified_vision_roadmap.md` (Mar 5), `docs/10_PHASE3_SPRINT_PLAN.md` (all forward-looking sections)
 
@@ -118,7 +118,7 @@ These foundations are correct and remain:
 
 ARGUS completed 21 sprints + sub-sprints in ~17 calendar days of active development (Feb 14 – Mar 5). Average sprint: ~0.8 calendar days. However, sprint complexity has been increasing — early sprints (1–5) were dense single-day affairs, while later sprints (21a–21d, 21.5) span multiple days. The roadmap below assumes sprint durations of 1–4 days each depending on complexity, with some parallelism where noted.
 
-**Current state:** Sprint 31A.75 complete (April 3, 2026). 4,823 pytest + 846 Vitest. 13 live + 2 shadow (15 total) strategies. Full infrastructure stack operational: BacktestEngine + Evaluation Framework + Regime Intelligence (11-field RegimeVector) + Counterfactual Engine + VIX Data Service + Quality Engine + NLP Catalyst Pipeline + Universe Manager + AI Copilot + Learning Loop V1 + Exit Management + MFE/MAE Tracking + **Experiment Pipeline** (enabled, pattern factory, parameter fingerprinting, exit params as variant dimensions, BacktestEngine all 10 patterns, variant spawning, backtest pre-filter, autonomous promotion/demotion) + **The Arena** (real-time multi-position visualization — 10th Command Center page) + **Operational Hardening** (EOD flatten synchronous verification, margin circuit breaker, pre-EOD signal cutoff, max concurrent positions cap) + **Historical Query Service** (DuckDB read-only analytical layer over Parquet cache, config-gated, `validate_symbol_coverage()` for sweep pre-filtering) + **Universe-Aware Sweep Flags** (`--symbols`/`--universe-filter` on `run_experiment.py`, `UniverseFilterConfig`, DuckDB coverage validation, DEF-145 resolved). Ten-page Command Center. Live Databento + IBKR paper trading. ABCD + Flat-Top Breakout in shadow mode awaiting optimization. Phase 6 Gate met (15 strategies). Next: Sprint 31.5 (Parallel Sweep Infrastructure) → universe-aware sweeps → Sprint 30 (Short Selling).
+**Current state:** Sprint 31.5 complete (April 3, 2026). 4,857 pytest + 846 Vitest. 13 live + 2 shadow (15 total) strategies. Full infrastructure stack operational: BacktestEngine + Evaluation Framework + Regime Intelligence (11-field RegimeVector) + Counterfactual Engine + VIX Data Service + Quality Engine + NLP Catalyst Pipeline + Universe Manager + AI Copilot + Learning Loop V1 + Exit Management + MFE/MAE Tracking + **Experiment Pipeline** (enabled, pattern factory, parameter fingerprinting, exit params as variant dimensions, BacktestEngine all 10 patterns, variant spawning, backtest pre-filter, autonomous promotion/demotion) + **The Arena** (real-time multi-position visualization — 10th Command Center page) + **Operational Hardening** (EOD flatten synchronous verification, margin circuit breaker, pre-EOD signal cutoff, max concurrent positions cap) + **Historical Query Service** (DuckDB read-only analytical layer over Parquet cache, config-gated, `validate_symbol_coverage()` for sweep pre-filtering) + **Universe-Aware Sweep Flags** (`--symbols`/`--universe-filter` on `run_experiment.py`, `UniverseFilterConfig`, DuckDB coverage validation, DEF-145 resolved) + **Parallel Sweep Infrastructure** (`ProcessPoolExecutor` parallel execution in ExperimentRunner, `workers`/`universe_filter` params on `run_sweep()`, `max_workers` config, `--workers` CLI flag, DEF-146 resolved, all 10 PatternModule patterns have universe filter YAMLs). Ten-page Command Center. Live Databento + IBKR paper trading. ABCD + Flat-Top Breakout in shadow mode awaiting optimization. Phase 6 Gate met (15 strategies). Next: universe-aware sweeps → Sweep Analysis Impromptu → Sprint 30 (Short Selling).
 
 ---
 
@@ -609,21 +609,20 @@ Reconciliation redesign with broker-confirmed positions (DEC-369). Overflow rout
 
 **Tests:** ~15 new.
 
-### Sprint 31.5: Parallel Sweep Infrastructure (DEC-379)
-**Prerequisites:** Sprint 31A complete ✅, Sprint 31A.5 complete ✅, Sweep Tooling Impromptu complete ✅.
-**Target:** ~3–4 days
+### Sprint 31.5: Parallel Sweep Infrastructure ✅ COMPLETE (April 3, 2026)
+**Actual:** ~1 day (3 sessions). +34 pytest. No new DECs.
 
-**Scope (backend):**
-- Multiprocessing harness for BacktestEngine. Parameter grid specification format (consumes PatternParam metadata from Sprint 29).
-- **DEF-146:** Wire `HistoricalQueryService.validate_symbol_coverage()` into ExperimentRunner for batch pre-validation and intelligent work partitioning across workers.
-- **DEF-122:** ABCD O(n³) optimization before full-universe sweep.
-- Worker pool distributing parameter combinations across CPU cores.
-- Result aggregation pipeline. Progress monitoring.
-- Cloud burst configuration (spin up high-core-count instance for sweep days).
+**Delivered:**
+- **ProcessPoolExecutor parallel execution:** `workers: int = 1` param on `run_sweep()`; module-level `_run_single_backtest()` worker function; fingerprint dedup and `ExperimentStore` writes in main process for thread safety.
+- **ExperimentConfig `max_workers: int = 4`** field; `config/experiments.yaml` updated with `max_workers: 4`.
+- **`--workers` CLI flag** on `scripts/run_experiment.py`.
+- **DEF-146 resolved:** `universe_filter: UniverseFilterConfig | None = None` param on `run_sweep()`; `_resolve_universe_symbols()` private method calls `validate_symbol_coverage(min_bars=100)` via DuckDB; raises `ValueError` if 0 symbols remain; CLI delegates filtering to runner.
+- **Universe filter YAMLs:** `config/universe_filters/bull_flag.yaml`, `config/universe_filters/flat_top_breakout.yaml` added. All 10 PatternModule patterns now have filter configs.
+- Note: DEF-122 (ABCD O(n³) optimization) deferred — not blocking for initial sweeps at reduced ABCD scope.
 
 **State after:** Universe-aware sweeps can launch across all 10 patterns against their natural populations. Sprint 30 runs in parallel.
 
-**Tests:** ~60 new.
+**Tests:** 4,823 → 4,857 pytest (+34).
 
 ### Sprint 31B: Research Console (NEW PAGE) — Deferred post-32 (DEC-379)
 **Target:** ~3 days
@@ -984,7 +983,7 @@ Each grouping mode rearranges with smooth fly-through animation — nodes flow f
 |-------|---------|-------|----------|------------|
 | 5: Foundation Completion | 21.5–24 | Live trading, AI layer, quality filtering | ~2–3 weeks | Weeks 1–3 |
 | 6: Strategy Expansion | 25–31A | 15 artisanal strategies, short selling, Learning Loop V1, Exit Management | ~2–3 weeks | Weeks 3–6 |
-| 7: Infrastructure Unification | 31.5–32 | Parallel sweeps, templates, experiment registry (merged into Sprint 32) | ~2–2.5 weeks | Weeks 6–8.5 |
+| 7: Infrastructure Unification | ~~31.5~~–32 | Parallel sweeps ✅, templates, experiment registry (merged into Sprint 32) | ~2–2.5 weeks | Weeks 6–8.5 |
 | 7.5: Research Console | 31B | Research Console (deferred from Phase 6 per DEC-379) | ~0.5 week | Week 9 |
 | 8: Controlled Experiment | 33–35 | Statistical framework, stress testing, ORB search, go/no-go | ~2–2.5 weeks | Weeks 9–11.5 |
 | 9: Ensemble Scaling | 36–39 | Cross-family search, Synapse, live ensemble | ~3–4 weeks | Weeks 11.5–15.5 |
