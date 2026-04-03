@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+import pytest
 import yaml
 
 from argus.core.config import UniverseFilterConfig
@@ -513,3 +514,57 @@ class TestTimezoneHandling:
         assert len(pm) == 1
         assert len(mkt) == 2
         assert pm[0].timestamp == pm_ts
+
+
+# ---------------------------------------------------------------------------
+# Sprint 31A S2 tests: lookback/min_detection_bars + reference data wiring
+# ---------------------------------------------------------------------------
+
+
+class TestPMHLookbackAndMinDetectionBars:
+    def test_detect_finds_pm_high_from_large_pm_candle_set(self) -> None:
+        """PMH detect() correctly identifies PM high from 300+ PM candles."""
+        from argus.strategies.patterns.base import CandleBar
+
+        pattern = PreMarketHighBreakPattern(
+            min_pm_candles=3,
+            min_pm_volume=5_000.0,
+            min_breakout_volume_ratio=1.5,
+            min_hold_bars=2,
+        )
+        day = (2026, 3, 30)
+
+        # Build 300 PM candles (4 AM to ~9:00 AM ET), with pm_high=55.0 on candle 10
+        pm_candles: list[CandleBar] = []
+        for i in range(300):
+            hour = 4 + i // 60
+            minute = i % 60
+            ts = _utc_from_et(*day, hour, minute)
+            high = 55.0 if i == 10 else 53.0
+            pm_candles.append(_make_candle(ts, 52.5, high, 52.0, 52.8, 200.0))
+
+        # Build 10 market candles above pm_high with volume
+        market_candles: list[CandleBar] = []
+        for i in range(10):
+            ts = _utc_from_et(*day, 9, 35 + i)
+            price = 55.15 + i * 0.05
+            market_candles.append(
+                _make_candle(ts, price - 0.1, price + 0.1, price - 0.2, price, 800.0)
+            )
+
+        candles = pm_candles + market_candles
+        detection = pattern.detect(candles, {"atr": 0.5, "symbol": "TSLA"})
+
+        assert detection is not None
+        assert detection.pattern_type == "premarket_high_break"
+        # PM high must be the max from the full PM set
+        assert detection.metadata["pm_high"] == pytest.approx(55.0, abs=0.01)
+        assert detection.metadata["pm_candle_count"] == 300
+
+    def test_resolve_prior_close_returns_value_when_set_via_set_reference_data(self) -> None:
+        """PMH _resolve_prior_close() returns the stored prior close for a symbol."""
+        pattern = PreMarketHighBreakPattern()
+        pattern.set_reference_data({"prior_closes": {"AAPL": 172.50}})
+
+        prior_close = pattern._resolve_prior_close({"symbol": "AAPL"})
+        assert prior_close == pytest.approx(172.50)

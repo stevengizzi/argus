@@ -65,6 +65,46 @@ class MockPattern(PatternModule):
 
 
 # ---------------------------------------------------------------------------
+# min_detection_bars tests (Sprint 31A S2)
+# ---------------------------------------------------------------------------
+
+
+class TestMinDetectionBars:
+    def test_min_detection_bars_defaults_to_lookback_bars(self) -> None:
+        """PatternModule.min_detection_bars defaults to lookback_bars when not overridden."""
+        pattern = MockPattern()
+        assert pattern.min_detection_bars == pattern.lookback_bars
+
+    def test_pmh_lookback_bars_is_400(self) -> None:
+        """PMH lookback_bars must hold full PM session (4 AM to 10:40 AM ET = ~400 bars)."""
+        from argus.strategies.patterns.premarket_high_break import PreMarketHighBreakPattern
+
+        pmh = PreMarketHighBreakPattern()
+        assert pmh.lookback_bars == 400
+
+    def test_pmh_min_detection_bars_is_10(self) -> None:
+        """PMH can begin detection with 10 bars — enough for min PM candles + a few market bars."""
+        from argus.strategies.patterns.premarket_high_break import PreMarketHighBreakPattern
+
+        pmh = PreMarketHighBreakPattern()
+        assert pmh.min_detection_bars == 10
+
+    def test_pmh_min_detection_bars_less_than_lookback_bars(self) -> None:
+        """PMH min_detection_bars must be strictly less than lookback_bars."""
+        from argus.strategies.patterns.premarket_high_break import PreMarketHighBreakPattern
+
+        pmh = PreMarketHighBreakPattern()
+        assert pmh.min_detection_bars < pmh.lookback_bars
+
+    def test_bull_flag_min_detection_bars_equals_lookback_bars(self) -> None:
+        """BullFlagPattern does not override min_detection_bars — backward compat preserved."""
+        from argus.strategies.patterns.bull_flag import BullFlagPattern
+
+        bf = BullFlagPattern()
+        assert bf.min_detection_bars == bf.lookback_bars
+
+
+# ---------------------------------------------------------------------------
 # CandleBar tests
 # ---------------------------------------------------------------------------
 

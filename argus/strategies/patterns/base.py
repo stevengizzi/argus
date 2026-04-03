@@ -158,6 +158,19 @@ class PatternModule(ABC):
             List of PatternParam describing each tunable parameter.
         """
 
+    @property
+    def min_detection_bars(self) -> int:
+        """Minimum candle count before detection is attempted.
+
+        Defaults to lookback_bars for backward compatibility. Override in
+        patterns that need a large deque (for historical context) but can
+        begin detection with fewer bars.
+
+        PatternBasedStrategy uses lookback_bars for deque maxlen (storage
+        capacity) and min_detection_bars for the detection-eligibility check.
+        """
+        return self.lookback_bars
+
     def set_reference_data(self, data: dict[str, Any]) -> None:
         """Receive reference data from Universe Manager (prior closes, etc.).
 

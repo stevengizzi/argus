@@ -286,8 +286,9 @@ class PatternBasedStrategy(BaseStrategy):
             )
             return None
 
-        # Need full lookback before detecting patterns
-        lookback = self._pattern.lookback_bars
+        # Need min_detection_bars before detecting patterns
+        # (deque maxlen is still lookback_bars — this is just the eligibility check)
+        lookback = self._pattern.min_detection_bars
         bar_count = len(window)
 
         if bar_count < lookback:

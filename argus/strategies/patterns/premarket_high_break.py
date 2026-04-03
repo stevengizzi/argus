@@ -94,9 +94,16 @@ class PreMarketHighBreakPattern(PatternModule):
     def lookback_bars(self) -> int:
         """Number of recent candles needed for detection.
 
-        Includes pre-market candles in deque plus first few market-hours bars.
+        400 bars covers 4:00 AM to ~10:40 AM ET (full PM session + first hour
+        of market hours). Must be large enough to hold all pre-market candles
+        so the PM high can be computed from the complete PM session.
         """
-        return 30
+        return 400
+
+    @property
+    def min_detection_bars(self) -> int:
+        """PMH needs large deque for full PM session but can detect with few bars."""
+        return 10
 
     def set_reference_data(self, data: dict[str, Any]) -> None:
         """Receive reference data from Universe Manager.

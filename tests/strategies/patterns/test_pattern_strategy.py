@@ -421,3 +421,138 @@ async def test_indicators_include_symbol_key() -> None:
 
     assert "symbol" in captured_indicators
     assert captured_indicators["symbol"] == "TSLA"
+
+
+# ---------------------------------------------------------------------------
+# min_detection_bars detection threshold tests (Sprint 31A S2)
+# ---------------------------------------------------------------------------
+
+
+class MockPatternWithMinDetection(MockPattern):
+    """Pattern with lookback_bars=50 but min_detection_bars=3.
+
+    Used to verify PatternBasedStrategy uses min_detection_bars for the
+    detection-eligibility check, not lookback_bars.
+    """
+
+    @property
+    def lookback_bars(self) -> int:
+        return 50
+
+    @property
+    def min_detection_bars(self) -> int:
+        return 3
+
+
+@pytest.mark.asyncio
+async def test_pattern_based_strategy_uses_min_detection_bars_for_eligibility() -> None:
+    """PatternBasedStrategy fires detection after min_detection_bars (not lookback_bars)."""
+    det = _detection(entry=150.0, stop=148.0)
+    pattern = MockPatternWithMinDetection(detection=det, score_value=80.0)
+    config = _make_config()
+    strategy = PatternBasedStrategy(pattern=pattern, config=config)
+    strategy.set_watchlist(["AAPL"])
+
+    # Feed 2 candles — below min_detection_bars (3), no signal
+    for i in range(2):
+        result = await strategy.on_candle(_make_candle(time_offset_minutes=i))
+        assert result is None, f"Should be None on candle {i} (below min_detection_bars)"
+
+    # 3rd candle reaches min_detection_bars → detection runs → signal emitted
+    result = await strategy.on_candle(_make_candle(time_offset_minutes=2))
+    assert result is not None, "Should produce signal after min_detection_bars bars"
+
+
+@pytest.mark.asyncio
+async def test_pattern_without_min_detection_bars_override_uses_lookback_bars() -> None:
+    """Patterns that don't override min_detection_bars wait until lookback_bars."""
+    det = _detection(entry=150.0, stop=148.0)
+    # MockPattern.lookback_bars == 3, min_detection_bars defaults to 3
+    pattern = MockPattern(detection=det, score_value=80.0, lookback=3)
+    config = _make_config()
+    strategy = PatternBasedStrategy(pattern=pattern, config=config)
+    strategy.set_watchlist(["AAPL"])
+
+    # 2 candles — below lookback_bars, no signal
+    for i in range(2):
+        result = await strategy.on_candle(_make_candle(time_offset_minutes=i))
+        assert result is None
+
+    # 3rd candle hits lookback_bars → detection eligible
+    result = await strategy.on_candle(_make_candle(time_offset_minutes=2))
+    assert result is not None
+
+
+# ---------------------------------------------------------------------------
+# initialize_reference_data forwarding tests (Sprint 31A S2)
+# ---------------------------------------------------------------------------
+
+
+def test_initialize_reference_data_forwards_prev_close_to_pattern() -> None:
+    """initialize_reference_data() builds prior_closes and calls pattern.set_reference_data()."""
+    from argus.data.fmp_reference import SymbolReferenceData
+
+    received: dict[str, object] = {}
+
+    class CapturingPattern(MockPattern):
+        def set_reference_data(self, data: dict[str, object]) -> None:
+            received.update(data)
+
+    pattern = CapturingPattern(lookback=5)
+    config = _make_config()
+    strategy = PatternBasedStrategy(pattern=pattern, config=config)
+
+    ref_data = {
+        "AAPL": SymbolReferenceData(symbol="AAPL", prev_close=175.0),
+        "TSLA": SymbolReferenceData(symbol="TSLA", prev_close=200.0),
+    }
+    strategy.initialize_reference_data(ref_data)
+
+    assert "prior_closes" in received
+    prior_closes = received["prior_closes"]
+    assert isinstance(prior_closes, dict)
+    assert prior_closes["AAPL"] == 175.0
+    assert prior_closes["TSLA"] == 200.0
+
+
+def test_initialize_reference_data_skips_symbols_with_no_prev_close() -> None:
+    """initialize_reference_data() omits symbols where prev_close is None."""
+    from argus.data.fmp_reference import SymbolReferenceData
+
+    received: dict[str, object] = {}
+
+    class CapturingPattern(MockPattern):
+        def set_reference_data(self, data: dict[str, object]) -> None:
+            received.update(data)
+
+    pattern = CapturingPattern(lookback=5)
+    config = _make_config()
+    strategy = PatternBasedStrategy(pattern=pattern, config=config)
+
+    ref_data = {
+        "AAPL": SymbolReferenceData(symbol="AAPL", prev_close=175.0),
+        "TSLA": SymbolReferenceData(symbol="TSLA", prev_close=None),
+    }
+    strategy.initialize_reference_data(ref_data)
+
+    prior_closes = received.get("prior_closes", {})
+    assert isinstance(prior_closes, dict)
+    assert "AAPL" in prior_closes
+    assert "TSLA" not in prior_closes
+
+
+def test_initialize_reference_data_empty_ref_data_is_no_op() -> None:
+    """initialize_reference_data() with empty dict does not call set_reference_data."""
+    call_count = 0
+
+    class CountingPattern(MockPattern):
+        def set_reference_data(self, data: dict[str, object]) -> None:
+            nonlocal call_count
+            call_count += 1
+
+    pattern = CountingPattern(lookback=5)
+    config = _make_config()
+    strategy = PatternBasedStrategy(pattern=pattern, config=config)
+
+    strategy.initialize_reference_data({})
+    assert call_count == 0, "set_reference_data should not be called for empty ref_data"

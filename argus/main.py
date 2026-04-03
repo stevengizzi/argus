@@ -939,6 +939,19 @@ class ArgusSystem:
                 valid_ref = {s: r for s, r in ref_data.items() if r is not None}
                 r2g_strategy.initialize_prior_closes(valid_ref)
 
+            # Initialize reference data (prior_closes) for PatternBasedStrategy
+            # patterns that use set_reference_data() — PMH and GapAndGo (Sprint 31A S2)
+            for strategy in strategies.values():
+                if isinstance(strategy, PatternBasedStrategy):
+                    ref_data_pattern = {
+                        sym: self._universe_manager.get_reference_data(sym)
+                        for sym in strategy.watchlist
+                    }
+                    valid_ref_pattern = {
+                        s: r for s, r in ref_data_pattern.items() if r is not None
+                    }
+                    strategy.initialize_reference_data(valid_ref_pattern)
+
         # --- Phase 10: Order Manager ---
         logger.info("[10/12] Starting order manager...")
         order_manager_yaml = load_yaml_file(self._config_dir / "order_manager.yaml")
@@ -1454,6 +1467,18 @@ class ArgusSystem:
                 }
                 valid_ref = {s: r for s, r in ref_data.items() if r is not None}
                 strategy.initialize_prior_closes(valid_ref)
+
+        # Re-initialize reference data for PatternBasedStrategy patterns (Sprint 31A S2)
+        for strategy in self._strategies.values():
+            if isinstance(strategy, PatternBasedStrategy):
+                ref_data_pattern = {
+                    sym: self._universe_manager.get_reference_data(sym)
+                    for sym in strategy.watchlist
+                }
+                valid_ref_pattern = {
+                    s: r for s, r in ref_data_pattern.items() if r is not None
+                }
+                strategy.initialize_reference_data(valid_ref_pattern)
 
         # Update data service viable universe for fast-path discard
         if hasattr(self._data_service, "set_viable_universe"):
