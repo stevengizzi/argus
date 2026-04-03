@@ -46,6 +46,7 @@ _PATTERN_TO_STRATEGY_TYPE: dict[str, StrategyType] = {
     # closes from the Parquet cache and calls set_reference_data() each day.
     "gap_and_go": StrategyType.GAP_AND_GO,
     "premarket_high_break": StrategyType.PREMARKET_HIGH_BREAK,
+    "micro_pullback": StrategyType.MICRO_PULLBACK,
 }
 
 

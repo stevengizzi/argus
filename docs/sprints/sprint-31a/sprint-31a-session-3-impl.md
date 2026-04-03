@@ -117,6 +117,19 @@ min_avg_volume: 500000
 
 Add a Micro Pullback strategy creation block in main.py following the exact pattern of the Dip-and-Rip block (~line 557). Load config from `config/strategies/micro_pullback.yaml`, create pattern via `build_pattern_from_config()`, wrap in `PatternBasedStrategy`, add to strategies list.
 
+### 5b. Wire `increment_signal_cutoff()` in main.py (S1 carry-forward)
+
+S1 added `signal_cutoff_skipped_count` and `increment_signal_cutoff()` to OrderManager but could not wire the call site because S1 was constrained from modifying main.py. Since S3 already modifies main.py, wire this now.
+
+In `_process_signal()` (~line 1529–1537), the pre-EOD signal cutoff block logs and returns when past cutoff time. Before the `return` on ~line 1537, add:
+
+```python
+                if self._order_manager is not None:
+                    self._order_manager.increment_signal_cutoff()
+```
+
+This ensures the debrief export's `safety_summary.signals_skipped` field reflects actual cutoff events. One line, zero risk.
+
 ### 6. Wire into BacktestEngine
 
 In `argus/backtest/config.py`: add `MICRO_PULLBACK = "micro_pullback"` to `StrategyType` enum.
@@ -177,6 +190,7 @@ Write a test that loads `config/strategies/micro_pullback.yaml` and verifies all
 - [ ] MicroPullbackConfig Pydantic model with proper Field bounds
 - [ ] Config YAML + universe filter YAML created
 - [ ] Wired into main.py, BacktestEngine, factory, experiment runner
+- [ ] `increment_signal_cutoff()` wired in main.py `_process_signal()` cutoff block (S1 carry-forward)
 - [ ] Cross-validation tests pass
 - [ ] All existing tests pass
 - [ ] ≥10 new tests written and passing
@@ -190,6 +204,7 @@ Write a test that loads `config/strategies/micro_pullback.yaml` and verifies all
 | Existing strategies untouched | `git diff config/strategies/ -- ':!micro_pullback.yaml'` empty |
 | Factory registry correct | Test: `get_pattern_class("micro_pullback")` returns MicroPullbackPattern |
 | BacktestEngine dispatch works | Test: StrategyType.MICRO_PULLBACK creates strategy |
+| Signal cutoff wiring | `grep -n "increment_signal_cutoff" argus/main.py` returns the call in `_process_signal()` |
 
 ## Sprint-Level Escalation Criteria
 1. Pattern signals appear outside 10:00–14:00 window → STOP
@@ -214,3 +229,4 @@ After close-out, invoke @reviewer with:
 4. Verify config YAML values match constructor defaults exactly
 5. Verify factory registry entries use correct module path and class name
 6. Verify BacktestEngine creation method uses `build_pattern_from_config()` (not no-arg constructor)
+7. Verify `increment_signal_cutoff()` is called before `return` in the pre-EOD cutoff block of `_process_signal()` (S1 carry-forward)

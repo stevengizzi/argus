@@ -23,6 +23,7 @@ class StrategyType(StrEnum):
     ABCD = "abcd"
     GAP_AND_GO = "gap_and_go"
     PREMARKET_HIGH_BREAK = "premarket_high_break"
+    MICRO_PULLBACK = "micro_pullback"
 
 
 class DataFetcherConfig(BaseModel):

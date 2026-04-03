@@ -1253,6 +1253,42 @@ class PreMarketHighBreakConfig(StrategyConfig):
     time_stop_minutes: int = Field(default=30, ge=1)
 
 
+class MicroPullbackConfig(StrategyConfig):
+    """Micro Pullback continuation pattern strategy configuration (Sprint 31A).
+
+    Detects the first shallow pullback to a short-term EMA after a strong
+    impulsive move — a momentum continuation entry with volume confirmation.
+    Operates 10:00 AM – 14:00 ET.
+    """
+
+    # EMA detection
+    ema_period: int = Field(default=9, ge=5, le=21)
+
+    # Impulse detection
+    min_impulse_percent: float = Field(default=0.02, gt=0, le=0.10)
+    min_impulse_bars: int = Field(default=3, ge=2, le=8)
+    max_impulse_bars: int = Field(default=15, ge=5, le=20)
+
+    # Pullback parameters
+    max_pullback_bars: int = Field(default=5, ge=2, le=10)
+    pullback_tolerance_atr: float = Field(default=0.3, gt=0, le=1.0)
+
+    # Volume confirmation
+    min_bounce_volume_ratio: float = Field(default=1.2, gt=0, le=10.0)
+
+    # Stop and target
+    stop_buffer_atr_mult: float = Field(default=0.5, gt=0, le=2.0)
+    target_ratio: float = Field(default=2.0, gt=0, le=5.0)
+
+    # Scoring gate
+    min_score_threshold: float = Field(default=0.0, ge=0, le=100.0)
+
+    # Targets and stops
+    target_1_r: float = Field(default=1.0, gt=0)
+    target_2_r: float = Field(default=2.0, gt=0)
+    time_stop_minutes: int = Field(default=30, ge=1)
+
+
 # ---------------------------------------------------------------------------
 # Config Loader
 # ---------------------------------------------------------------------------
@@ -1553,6 +1589,23 @@ def load_premarket_high_break_config(
     """
     data = load_yaml_file(path)
     return PreMarketHighBreakConfig(**data)
+
+
+def load_micro_pullback_config(path: Path) -> MicroPullbackConfig:
+    """Load Micro Pullback strategy configuration from a YAML file.
+
+    Args:
+        path: Path to the Micro Pullback strategy YAML file.
+
+    Returns:
+        Validated MicroPullbackConfig instance.
+
+    Raises:
+        FileNotFoundError: If the file does not exist.
+        pydantic.ValidationError: If validation fails.
+    """
+    data = load_yaml_file(path)
+    return MicroPullbackConfig(**data)
 
 
 def load_scanner_config(path: Path) -> ScannerConfig:

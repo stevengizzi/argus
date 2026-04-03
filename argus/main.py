@@ -50,6 +50,7 @@ from argus.core.config import (
     load_flat_top_breakout_config,
     load_gap_and_go_config,
     load_hod_break_config,
+    load_micro_pullback_config,
     load_orb_config,
     load_premarket_high_break_config,
     load_orb_scalp_config,
@@ -652,6 +653,25 @@ class ArgusSystem:
                 pm_high_break_strategy.set_watchlist(symbols)
             strategies_created.append("PreMarketHighBreak")
 
+        # Micro Pullback (optional — PatternBasedStrategy wrapping MicroPullbackPattern)
+        micro_pullback_strategy: PatternBasedStrategy | None = None
+        micro_pullback_yaml = self._config_dir / "strategies" / "micro_pullback.yaml"
+        if micro_pullback_yaml.exists():
+            micro_pullback_config = load_micro_pullback_config(micro_pullback_yaml)
+            micro_pullback_pattern = build_pattern_from_config(micro_pullback_config, "micro_pullback")
+            micro_pullback_strategy = PatternBasedStrategy(
+                pattern=micro_pullback_pattern,
+                config=micro_pullback_config,
+                data_service=self._data_service,
+                clock=self._clock,
+            )
+            micro_pullback_strategy._config_fingerprint = compute_parameter_fingerprint(
+                micro_pullback_config, get_pattern_class("micro_pullback")
+            )
+            if not use_universe_manager:
+                micro_pullback_strategy.set_watchlist(symbols)
+            strategies_created.append("MicroPullback")
+
         # Note: is_active and allocated_capital set by Orchestrator in Phase 9
         self._health_monitor.update_component(
             "strategy",
@@ -769,6 +789,8 @@ class ArgusSystem:
             self._orchestrator.register_strategy(gap_and_go_strategy)
         if pm_high_break_strategy is not None:
             self._orchestrator.register_strategy(pm_high_break_strategy)
+        if micro_pullback_strategy is not None:
+            self._orchestrator.register_strategy(micro_pullback_strategy)
 
         # --- Experiment Variant Spawning (Sprint 32, Session 5) ---
         # Config-gated: skipped entirely when experiments.enabled is false (default).
@@ -820,6 +842,11 @@ class ArgusSystem:
                         _base_pattern_strategies["premarket_high_break"] = (
                             pm_high_break_strategy.config,
                             pm_high_break_strategy,
+                        )
+                    if micro_pullback_strategy is not None:
+                        _base_pattern_strategies["micro_pullback"] = (
+                            micro_pullback_strategy.config,
+                            micro_pullback_strategy,
                         )
 
                     _experiment_db_path = str(
@@ -1559,6 +1586,8 @@ class ArgusSystem:
                         now_et.time().isoformat()[:5],
                     )
                     self._cutoff_logged = True
+                if self._order_manager is not None:
+                    self._order_manager.increment_signal_cutoff()
                 return
 
         # Shadow mode routing (Sprint 27.7)
