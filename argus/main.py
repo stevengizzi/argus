@@ -51,6 +51,7 @@ from argus.core.config import (
     load_gap_and_go_config,
     load_hod_break_config,
     load_micro_pullback_config,
+    load_narrow_range_breakout_config,
     load_vwap_bounce_config,
     load_orb_config,
     load_premarket_high_break_config,
@@ -692,6 +693,27 @@ class ArgusSystem:
                 vwap_bounce_strategy.set_watchlist(symbols)
             strategies_created.append("VwapBounce")
 
+        # Narrow Range Breakout (optional — PatternBasedStrategy wrapping NarrowRangeBreakoutPattern)
+        narrow_range_breakout_strategy: PatternBasedStrategy | None = None
+        narrow_range_breakout_yaml = self._config_dir / "strategies" / "narrow_range_breakout.yaml"
+        if narrow_range_breakout_yaml.exists():
+            narrow_range_breakout_config = load_narrow_range_breakout_config(narrow_range_breakout_yaml)
+            narrow_range_breakout_pattern = build_pattern_from_config(
+                narrow_range_breakout_config, "narrow_range_breakout"
+            )
+            narrow_range_breakout_strategy = PatternBasedStrategy(
+                pattern=narrow_range_breakout_pattern,
+                config=narrow_range_breakout_config,
+                data_service=self._data_service,
+                clock=self._clock,
+            )
+            narrow_range_breakout_strategy._config_fingerprint = compute_parameter_fingerprint(
+                narrow_range_breakout_config, get_pattern_class("narrow_range_breakout")
+            )
+            if not use_universe_manager:
+                narrow_range_breakout_strategy.set_watchlist(symbols)
+            strategies_created.append("NarrowRangeBreakout")
+
         # Note: is_active and allocated_capital set by Orchestrator in Phase 9
         self._health_monitor.update_component(
             "strategy",
@@ -813,6 +835,8 @@ class ArgusSystem:
             self._orchestrator.register_strategy(micro_pullback_strategy)
         if vwap_bounce_strategy is not None:
             self._orchestrator.register_strategy(vwap_bounce_strategy)
+        if narrow_range_breakout_strategy is not None:
+            self._orchestrator.register_strategy(narrow_range_breakout_strategy)
 
         # --- Experiment Variant Spawning (Sprint 32, Session 5) ---
         # Config-gated: skipped entirely when experiments.enabled is false (default).
@@ -874,6 +898,11 @@ class ArgusSystem:
                         _base_pattern_strategies["vwap_bounce"] = (
                             vwap_bounce_strategy.config,
                             vwap_bounce_strategy,
+                        )
+                    if narrow_range_breakout_strategy is not None:
+                        _base_pattern_strategies["narrow_range_breakout"] = (
+                            narrow_range_breakout_strategy.config,
+                            narrow_range_breakout_strategy,
                         )
 
                     _experiment_db_path = str(

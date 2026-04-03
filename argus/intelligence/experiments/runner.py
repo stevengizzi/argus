@@ -48,6 +48,7 @@ _PATTERN_TO_STRATEGY_TYPE: dict[str, StrategyType] = {
     "premarket_high_break": StrategyType.PREMARKET_HIGH_BREAK,
     "micro_pullback": StrategyType.MICRO_PULLBACK,
     "vwap_bounce": StrategyType.VWAP_BOUNCE,
+    "narrow_range_breakout": StrategyType.NARROW_RANGE_BREAKOUT,
 }
 
 

@@ -1624,6 +1624,39 @@ class VwapBounceConfig(StrategyConfig):
     time_stop_minutes: int = Field(default=30, ge=1)
 
 
+class NarrowRangeBreakoutConfig(StrategyConfig):
+    """Narrow Range Breakout pattern strategy configuration (Sprint 31A).
+
+    Detects volatility compression via progressively narrowing bar ranges,
+    then enters on a volume-confirmed breakout above the consolidation high.
+    Operates 10:00 AM – 15:00 ET.
+    """
+
+    # Narrowing-sequence detection
+    nr_lookback: int = Field(default=7, ge=4, le=15)
+    min_narrowing_bars: int = Field(default=3, ge=2, le=7)
+    range_decay_tolerance: float = Field(default=1.05, ge=1.0, le=1.15)
+
+    # Breakout confirmation
+    breakout_margin_percent: float = Field(default=0.001, gt=0, le=0.005)
+    min_breakout_volume_ratio: float = Field(default=1.5, gt=0, le=10.0)
+
+    # Consolidation quality gate
+    consolidation_max_range_atr: float = Field(default=0.8, gt=0, le=2.0)
+
+    # Stop and target
+    stop_buffer_atr_mult: float = Field(default=0.5, gt=0, le=2.0)
+    target_ratio: float = Field(default=2.0, gt=0, le=5.0)
+
+    # Scoring gate
+    min_score_threshold: float = Field(default=0.0, ge=0, le=100.0)
+
+    # Targets
+    target_1_r: float = Field(default=1.0, gt=0)
+    target_2_r: float = Field(default=2.0, gt=0)
+    time_stop_minutes: int = Field(default=30, ge=1)
+
+
 def load_micro_pullback_config(path: Path) -> MicroPullbackConfig:
     """Load Micro Pullback strategy configuration from a YAML file.
 
@@ -1656,6 +1689,23 @@ def load_vwap_bounce_config(path: Path) -> VwapBounceConfig:
     """
     data = load_yaml_file(path)
     return VwapBounceConfig(**data)
+
+
+def load_narrow_range_breakout_config(path: Path) -> NarrowRangeBreakoutConfig:
+    """Load Narrow Range Breakout strategy configuration from a YAML file.
+
+    Args:
+        path: Path to the Narrow Range Breakout strategy YAML file.
+
+    Returns:
+        Validated NarrowRangeBreakoutConfig instance.
+
+    Raises:
+        FileNotFoundError: If the file does not exist.
+        pydantic.ValidationError: If validation fails.
+    """
+    data = load_yaml_file(path)
+    return NarrowRangeBreakoutConfig(**data)
 
 
 def load_scanner_config(path: Path) -> ScannerConfig:

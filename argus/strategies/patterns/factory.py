@@ -67,6 +67,10 @@ _PATTERN_REGISTRY: dict[str, tuple[str, str]] = {
         "argus.strategies.patterns.vwap_bounce",
         "VwapBouncePattern",
     ),
+    "NarrowRangeBreakoutPattern": (
+        "argus.strategies.patterns.narrow_range_breakout",
+        "NarrowRangeBreakoutPattern",
+    ),
 }
 
 # Convenience snake_case aliases → PascalCase class name.
@@ -80,6 +84,7 @@ _SNAKE_CASE_ALIASES: dict[str, str] = {
     "premarket_high_break": "PreMarketHighBreakPattern",
     "micro_pullback": "MicroPullbackPattern",
     "vwap_bounce": "VwapBouncePattern",
+    "narrow_range_breakout": "NarrowRangeBreakoutPattern",
 }
 
 # Module-level cache — avoids repeated importlib lookups.
