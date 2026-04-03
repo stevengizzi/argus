@@ -1091,7 +1091,7 @@ class HealthMonitor:
 - Critical alert dispatch via webhook (Discord, Slack, or generic JSON)
 - Daily integrity check (verify all open positions have broker-side stop orders)
 - Weekly reconciliation (compare trade log with broker records)
-- **Zero-evaluation health warning (DEC-344, Sprint 25.5):** `check_strategy_evaluations()` detects active strategies with populated watchlists but zero evaluation events after their operating window + 5 min grace period. Sets component status to DEGRADED. Self-corrects to HEALTHY when evaluations resume (idempotent). Periodic 60s asyncio task in main.py during market hours only (9:30–16:00 ET). Opens/closes its own `EvaluationEventStore` per check cycle to avoid coupling with server.py-managed store lifecycle.
+- **Zero-evaluation health warning (DEC-344, Sprint 25.5):** `check_strategy_evaluations()` detects active strategies with populated watchlists but zero evaluation events after their operating window + 5 min grace period. Sets component status to DEGRADED. Self-corrects to HEALTHY when evaluations resume (idempotent). **Holiday suppression (Apr 3 hotfix):** check skips DEGRADED status on NYSE holidays — calls `is_market_holiday()` from `core/market_calendar.py` before raising DEGRADED. Periodic 60s asyncio task in main.py during market hours only (9:30–16:00 ET). Opens/closes its own `EvaluationEventStore` per check cycle to avoid coupling with server.py-managed store lifecycle.
 
 **Status Model:** STARTING → HEALTHY → DEGRADED → UNHEALTHY → STOPPED
 
@@ -1106,6 +1106,26 @@ health:
   daily_check_enabled: true
   weekly_reconciliation_enabled: true
 ```
+
+### 3.8.1 NYSE Holiday Calendar (`core/market_calendar.py`) — Apr 3 hotfix
+
+Pure algorithmic NYSE holiday detection. No external dependencies. Cached per-year computation.
+
+**Functions:**
+- `get_nyse_holidays(year: int) -> dict[date, str]` — returns all 10 NYSE holidays for the year with their names, applying observed-day shift rules (e.g., Saturday holiday → Friday, Sunday → Monday). Includes Easter via the Anonymous Gregorian algorithm (cross-validated against frontend `ui/src/utils/marketTime.ts`).
+- `is_market_holiday(check_date: date) -> tuple[bool, str | None]` — returns `(True, holiday_name)` or `(False, None)`. Used as a guard in health monitor, orchestrator, and data service.
+- `get_next_trading_day(from_date: date) -> date` — advances past weekends and holidays to find the next valid trading day.
+
+**Integration points:**
+1. `main.py` — startup logs holiday name + next trading day when current date is a holiday
+2. `core/health.py` — `check_strategy_evaluations()` skips DEGRADED status on holidays
+3. `data/databento_data_service.py` — heartbeat logs holiday context instead of zero-candle WARNING
+4. `core/orchestrator.py` — `_is_market_hours()` returns False on NYSE holidays
+5. `api/routes/market.py` — `GET /api/v1/market/status` endpoint (no JWT required)
+
+**Limitation:** Early market close days (e.g., day before Thanksgiving, 1 PM close) are NOT detected — only full-day closures. ARGUS will operate normally on early-close days until this is extended.
+
+---
 
 ### 3.9 System Entry Point (`main.py`)
 
@@ -1703,6 +1723,9 @@ GET  /api/v1/market/{symbol}/bars               # Synthetic OHLCV for dev mode s
 # Arena endpoints (Sprint 32.75)
 GET  /api/v1/arena/positions                    # All open managed positions (no JWT required for polling)
 GET  /api/v1/arena/candles/{symbol}             # Historical OHLCV bars from IntradayCandleStore (JWT-protected)
+
+# Market status endpoint (Apr 3 hotfix)
+GET  /api/v1/market/status                      # NYSE open/closed/holiday status + next trading day (no JWT required)
 
 ```
 

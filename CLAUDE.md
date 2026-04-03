@@ -1,13 +1,15 @@
 # ARGUS — Claude Code Context
 
 > Dense, actionable context for Claude Code sessions. No history — see `docs/` for that.
-> Last updated: April 2, 2026 (Sprint 32.95 doc sync — Debrief Export Enhancement)
+> Last updated: April 3, 2026 (Impromptu hotfix — Good Friday Incident + Observability)
 
 ## Active Sprint
 
 **Active sprint: 31A (Pattern Expansion III — reach 15 strategies).**
 
 Last completed sprint: **32.95 (Debrief Export Enhancement)** — Added 3 missing tests for `counterfactual_summary`, `experiment_summary`, `quality_distribution` export sections (implementation was pre-existing). +3 pytest. No new DECs.
+
+Last impromptu: **Good Friday Hotfix (Apr 3, 2026)** — NYSE holiday calendar + OHLCV-1m observability. Two changes: (1) `argus/core/market_calendar.py` — pure algorithmic NYSE holiday detection (`is_market_holiday()`, `get_next_trading_day()`), integrated into startup log, health monitor holiday suppression, heartbeat holiday context, `_is_market_hours()`, and new `GET /api/v1/market/status` endpoint (no auth); (2) DatabentoDataService per-gate drop counters + first-event sentinels + symbol mapping progress logging + zero-candle WARNING escalation during market hours. +135 pytest. No new DECs.
 
 Previous: **32.9 (Operational Hardening + Position Safety + Quality Recalibration)** — EOD flatten synchronous verification + zombie queue fix (DEF-139/140 resolved, root cause: `qty`/`shares` mismatch in 4 Order Manager code paths), margin circuit breaker (IBKR Error 201 tracking, 10-rejection threshold, auto-reset on position drop), intelligence polling crash fix (DEF-141), quality engine recalibration (historical_match weight zeroed, grade thresholds recalibrated to actual score range 35–77), pre-EOD signal cutoff at 3:30 PM ET, max_concurrent_positions: 50 enabled, overflow broker_capacity 60→50, ABCD + Flat-Top demoted to shadow mode, experiment pipeline enabled. +40 pytest. No new DECs. DEF-139/140/141/142 resolved.
 
@@ -34,17 +36,17 @@ RSK items: RSK-049 (shadow variant throughput impact), RSK-050 (promotion oscill
 ## Current State
 
 - **Active sprint:** 31A (Pattern Expansion III — reach 15 strategies)
-- **Tests:** ~4,582 pytest + 846 Vitest (0 pre-existing failures)
+- **Tests:** ~4,674 pytest + 846 Vitest (0 pre-existing failures)
 - **Strategies:** 10 live + 2 shadow (12 total): live — ORB Breakout, ORB Scalp, VWAP Reclaim, Afternoon Momentum, Red-to-Green, Bull Flag, Dip-and-Rip, HOD Break, Gap-and-Go, Pre-Market High Break; shadow — Flat-Top Breakout, ABCD (demoted Sprint 32.9 S3 for optimization)
 - **Experiment Variants:** 2 Dip-and-Rip variants in shadow mode (`strat_dip_and_rip__v2_tight_dip_quality`: Sharpe 1.996, WR 45.6%; `strat_dip_and_rip__v3_strict_volume`: Sharpe 2.628, WR 45.0%) — first production sweep from experiment pipeline; sweep from 24-symbol momentum set over 2025; configured in `config/experiments.yaml`
-- **Infrastructure:** Databento EQUS.MINI (live) + IBKR paper trading (Account U24619949) + FMP Starter (scanning + reference data + daily bars for regime) + Finnhub (news + analyst recs) + Claude API (Copilot + Catalyst Classification) + Universe Manager (config-gated) + Catalyst Pipeline (config-gated) + Intelligence Polling Loop (config-gated) + Reference Data Cache + Quality Engine (config-gated) + Dynamic Position Sizer + Strategy Evaluation Telemetry (ring buffer + SQLite persistence) + Debrief Export (shutdown automation) + Evaluation Framework (MultiObjectiveResult, EnsembleResult, comparison API, slippage model) + Regime Intelligence (RegimeVector 11-field, 8 calculators, config-gated, Sprints 27.6 + 27.9) + VIX Data Service (yfinance daily VIX/SPX, 5 derived metrics, SQLite cache, config-gated, Sprint 27.9) + Counterfactual Engine (shadow position tracking, filter accuracy, shadow strategy mode, overflow routing, config-gated, Sprints 27.7 + 27.95) + Learning Loop V1 (OutcomeCollector, WeightAnalyzer, ThresholdAnalyzer, CorrelationAnalyzer, LearningService, ConfigProposalManager, LearningStore, config-gated, Sprint 28) + Exit Management (trailing stops ATR/percent/fixed, exit escalation, belt-and-suspenders, config-gated per strategy, Sprint 28.5) + ThrottledLogger (log rate-limiting, Sprint 27.75) + Paper trading config overrides (10x risk reduction, throttle disabled, $10 min risk floor, Sprint 27.75) + Broker-confirmed reconciliation (Sprint 27.95) + Overflow routing (config-gated, Sprint 27.95) + EOD flatten synchronous verification (Sprint 32.9) + Margin circuit breaker (IBKR Error 201, Sprint 32.9) + Pre-EOD signal cutoff 3:30 PM ET (config-gated, Sprint 32.9) + Experiment Pipeline (enabled: true, exercised end-to-end with 2 Dip-and-Rip variants configured in shadow, Sprint 32.9)
+- **Infrastructure:** Databento EQUS.MINI (live) + IBKR paper trading (Account U24619949) + FMP Starter (scanning + reference data + daily bars for regime) + Finnhub (news + analyst recs) + Claude API (Copilot + Catalyst Classification) + Universe Manager (config-gated) + Catalyst Pipeline (config-gated) + Intelligence Polling Loop (config-gated) + Reference Data Cache + Quality Engine (config-gated) + Dynamic Position Sizer + Strategy Evaluation Telemetry (ring buffer + SQLite persistence) + Debrief Export (shutdown automation) + Evaluation Framework (MultiObjectiveResult, EnsembleResult, comparison API, slippage model) + Regime Intelligence (RegimeVector 11-field, 8 calculators, config-gated, Sprints 27.6 + 27.9) + VIX Data Service (yfinance daily VIX/SPX, 5 derived metrics, SQLite cache, config-gated, Sprint 27.9) + Counterfactual Engine (shadow position tracking, filter accuracy, shadow strategy mode, overflow routing, config-gated, Sprints 27.7 + 27.95) + Learning Loop V1 (OutcomeCollector, WeightAnalyzer, ThresholdAnalyzer, CorrelationAnalyzer, LearningService, ConfigProposalManager, LearningStore, config-gated, Sprint 28) + Exit Management (trailing stops ATR/percent/fixed, exit escalation, belt-and-suspenders, config-gated per strategy, Sprint 28.5) + ThrottledLogger (log rate-limiting, Sprint 27.75) + Paper trading config overrides (10x risk reduction, throttle disabled, $10 min risk floor, Sprint 27.75) + Broker-confirmed reconciliation (Sprint 27.95) + Overflow routing (config-gated, Sprint 27.95) + EOD flatten synchronous verification (Sprint 32.9) + Margin circuit breaker (IBKR Error 201, Sprint 32.9) + Pre-EOD signal cutoff 3:30 PM ET (config-gated, Sprint 32.9) + Experiment Pipeline (enabled: true, exercised end-to-end with 2 Dip-and-Rip variants configured in shadow, Sprint 32.9) + **NYSE Holiday Calendar** (`core/market_calendar.py`, Apr 3 hotfix) + **OHLCV-1m Observability** (per-gate drop counters + first-event sentinels + zero-candle escalation in DatabentoDataService, Apr 3 hotfix)
 - **Frontend:** 10-page Command Center (Arena page added Sprint 32.75, Experiments page added Sprint 32.5, Shadow Trades tab added to Trade Log) + AI Copilot + Universe Status Card + Intelligence Brief View (all active), Tauri desktop + PWA mobile. Pages: Dashboard, Trade Log, Performance, The Arena, Orchestrator, Pattern Library, The Debrief, System, Observatory, Experiments. Keyboard shortcuts: 1–9 + 0 (0 = Experiments). All 12 strategies have unique colors, badges, single-letter identifiers.
 
 ## Project Structure
 
 ```
 argus/
-├── core/           # Orchestrator, Risk Manager, Portfolio, Event Bus, Regime Intelligence (breadth.py, market_correlation.py, sector_rotation.py, intraday_character.py, regime_history.py), TheoreticalFillModel (fill_model.py), Exit Math (exit_math.py)
+├── core/           # Orchestrator, Risk Manager, Portfolio, Event Bus, Regime Intelligence (breadth.py, market_correlation.py, sector_rotation.py, intraday_character.py, regime_history.py), TheoreticalFillModel (fill_model.py), Exit Math (exit_math.py), NYSE Holiday Calendar (market_calendar.py)
 ├── strategies/     # BaseStrategy, OrbBaseStrategy, 12 strategy implementations
 │   └── patterns/   # PatternModule ABC, PatternParam, 7 patterns (BullFlag, FlatTop, DipAndRip, HODBreak, GapAndGo, ABCD, PreMarketHighBreak)
 ├── data/           # DataService (Databento/Alpaca/Replay/Backtest), Scanner, IndicatorEngine, UniverseManager, FMPReferenceClient, VIXDataService
@@ -52,7 +54,7 @@ argus/
 ├── analytics/      # Trade Logger, PerformanceCalculator, DebriefExport, Evaluation Framework
 ├── backtest/       # VectorBT helpers, Replay Harness, BacktestEngine (Sprint 27)
 ├── api/            # FastAPI REST + WebSocket, JWT auth
-│   ├── routes/     # arena.py (GET /api/v1/arena/positions, GET /api/v1/arena/candles/{symbol})
+│   ├── routes/     # arena.py (GET /api/v1/arena/positions, GET /api/v1/arena/candles/{symbol}), market.py (GET /api/v1/market/status — no auth)
 │   └── websocket/  # ai_chat.py (WS streaming), arena_ws.py (/ws/v1/arena — 6 message types)
 ├── ui/             # React frontend (Vite + TypeScript + Tailwind v4)
 │   └── features/

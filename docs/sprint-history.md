@@ -1,7 +1,7 @@
 # ARGUS — Sprint History
 
 > Complete record of all sprints from project inception through current state.
-> Active development began February 14, 2026. As of April 2, 2026 (~48 calendar days), 32 full sprints + 41 sub-sprints completed.
+> Active development began February 14, 2026. As of April 3, 2026 (~49 calendar days), 32 full sprints + 43 sub-sprints completed.
 
 ---
 
@@ -41,6 +41,7 @@
 | AG — Operational Hardening | 32.9 | Apr 2, 2026 | EOD flatten sync verification, zombie fix, margin circuit breaker, signal cutoff, quality recalibration, strategy shadow demotion, experiment pipeline enabled |
 | AH — Debrief Export Enhancement | 32.95 | Apr 2, 2026 | Debrief export test coverage — counterfactual_summary, experiment_summary, quality_distribution, backward_compatible (+3 pytest, single session) |
 | — | Param Sweep (31A Prep) | Apr 2, 2026 | BacktestEngine param sweep across 7 PatternModule patterns; 2 Dip-and-Rip variants configured in shadow (`config/experiments.yaml`); DEF-143 BacktestEngine pattern init gap discovered |
+| AI — Good Friday Incident (Impromptu) | — | Apr 3, 2026 | OHLCV-1m observability (per-gate drop counters, first-event sentinels, zero-candle escalation); NYSE holiday calendar (`core/market_calendar.py`); `GET /api/v1/market/status` (+135 pytest) |
 
 ---
 
@@ -2487,13 +2488,54 @@
 
 ---
 
+## Impromptu Hotfix: Good Friday Incident — Observability + Holiday Detection (April 3, 2026)
+
+**Trigger:** Zero OHLCV-1m candles observed across three ARGUS boots during market hours. Root cause: Good Friday (NYSE holiday) — no code bug, but exposed two legitimate gaps that warranted immediate remediation.
+
+**Tests:** 4,539 pytest + 846 Vitest → 4,674 pytest + 846 Vitest (+135 pytest, +0 Vitest). No new DECs.
+
+**New files:** `argus/core/market_calendar.py`
+
+**Modified files:** `main.py`, `core/health.py`, `data/databento_data_service.py`, `core/orchestrator.py`, `api/routes/market.py`
+
+### Change 1: OHLCV-1m Data Pipeline Observability (`data/databento_data_service.py`)
+
+Addressed a permanent blind spot: three silent drop points in the OHLCV-1m processing path (`_dispatch_record` → `_on_ohlcv`) where records could be dropped with zero INFO-level logging:
+
+- Per-gate drop counters in heartbeat: `unmapped`, `filtered-universe`, `filtered-active`
+- Trades received + unmapped counters in heartbeat
+- First-event sentinel logs: first OHLCV unmapped WARNING (once/session), first OHLCV resolved INFO (once/session), first trade resolved INFO (once/session)
+- SymbolMappingMsg progress logging (first received, every 2000th, post-start map size)
+- Zero-candle WARNING escalation during market hours after 2 heartbeat cycles
+- Holiday context logged instead of WARNING when `is_market_holiday()` returns True
+
+### Change 2: NYSE Holiday Calendar (`argus/core/market_calendar.py`)
+
+New module — pure algorithmic NYSE holiday calendar, ported from frontend `ui/src/utils/marketTime.ts`:
+
+- `get_nyse_holidays(year)` — all 10 NYSE holidays with observed-day shift rules
+- `is_market_holiday(date)` → `(bool, str | None)` — used by 4 components
+- `get_next_trading_day(date)` → next non-weekend, non-holiday date
+- Easter via Anonymous Gregorian algorithm (cross-validated against frontend)
+
+5 integration points:
+1. `main.py` — startup log with holiday name + next trading day
+2. `core/health.py` — `check_strategy_evaluations()` skips DEGRADED on holidays
+3. `data/databento_data_service.py` — heartbeat logs holiday context instead of WARNING
+4. `core/orchestrator.py` — `_is_market_hours()` returns False on holidays
+5. `api/routes/market.py` — `GET /api/v1/market/status` endpoint (no auth required)
+
+**Key learning:** ARGUS had no awareness of market holidays. The April 3 incident consumed diagnostic effort before the root cause (closed market) was identified. Backend now detects holidays at startup and at every market-hours guard. Early market close days (e.g., day before Thanksgiving) are NOT yet detected.
+
+---
+
 ## Sprint Statistics
 
-- **Total sprints:** 32 full + 43 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9, 27.5, 27.6, 27.65, 27.7, 27.75, 27.8, 27.9, 27.95, 28.5, 28.75, 29, 29.5, 32.5, 32.75, 32.8, 32.9, 32.95)
-- **Total sessions:** ~538+ Claude Code sessions
-- **Total tests:** ~4,582 pytest + 846 Vitest = ~5,428 total
-- **Total decisions:** 381 (DEC-001 through DEC-381; no new DECs in Sprints 29.5, 32, 32.5, 32.75, 32.8, 32.9, or 32.95)
-- **Calendar days (active dev):** ~48 (Feb 14 – Apr 2, 2026)
+- **Total sprints:** 32 full + 43 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9, 27.5, 27.6, 27.65, 27.7, 27.75, 27.8, 27.9, 27.95, 28.5, 28.75, 29, 29.5, 32.5, 32.75, 32.8, 32.9, 32.95) + 1 impromptu (Good Friday Apr 3)
+- **Total sessions:** ~540+ Claude Code sessions
+- **Total tests:** ~4,674 pytest + 846 Vitest = ~5,520 total
+- **Total decisions:** 381 (DEC-001 through DEC-381; no new DECs in Sprints 29.5, 32, 32.5, 32.75, 32.8, 32.9, 32.95, or Apr 3 hotfix)
+- **Calendar days (active dev):** ~49 (Feb 14 – Apr 3, 2026)
 - **Largest sprint:** 22 (9 implementation + 5 fix + 9 reviews, largest scope)
 - **Cleanest sprint:** 23 (11 sessions, 0 regressions, 0 scope gaps requiring follow-up)
 - **Most test-dense:** Sprint 22 (286 new tests), Sprint 24 (209 new tests), Sprint 23.2 (188 new tests), Sprint 28 (179 new tests), Sprint 27.6 (171 new tests), Sprint 23 (141 new tests across 23+23.05), Sprint 28.5 (110 new tests)
