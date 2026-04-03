@@ -118,7 +118,7 @@ These foundations are correct and remain:
 
 ARGUS completed 21 sprints + sub-sprints in ~17 calendar days of active development (Feb 14 – Mar 5). Average sprint: ~0.8 calendar days. However, sprint complexity has been increasing — early sprints (1–5) were dense single-day affairs, while later sprints (21a–21d, 21.5) span multiple days. The roadmap below assumes sprint durations of 1–4 days each depending on complexity, with some parallelism where noted.
 
-**Current state:** Sprint 31A.5 complete (April 3, 2026). 4,811 pytest + 846 Vitest. 13 live + 2 shadow (15 total) strategies. Full infrastructure stack operational: BacktestEngine + Evaluation Framework + Regime Intelligence (11-field RegimeVector) + Counterfactual Engine + VIX Data Service + Quality Engine + NLP Catalyst Pipeline + Universe Manager + AI Copilot + Learning Loop V1 + Exit Management + MFE/MAE Tracking + **Experiment Pipeline** (enabled, pattern factory, parameter fingerprinting, exit params as variant dimensions, BacktestEngine all 10 patterns, variant spawning, backtest pre-filter, autonomous promotion/demotion) + **The Arena** (real-time multi-position visualization — 10th Command Center page) + **Operational Hardening** (EOD flatten synchronous verification, margin circuit breaker, pre-EOD signal cutoff, max concurrent positions cap) + **Historical Query Service** (DuckDB read-only analytical layer over Parquet cache, config-gated, `validate_symbol_coverage()` for sweep pre-filtering). Ten-page Command Center. Live Databento + IBKR paper trading. ABCD + Flat-Top Breakout in shadow mode awaiting optimization. Phase 6 Gate met (15 strategies). Next: 31A.75 Sweep Tooling Impromptu → Sprint 31.5 (Parallel Sweep Infrastructure) → universe-aware sweeps → Sprint 30 (Short Selling).
+**Current state:** Sprint 31A.75 complete (April 3, 2026). 4,823 pytest + 846 Vitest. 13 live + 2 shadow (15 total) strategies. Full infrastructure stack operational: BacktestEngine + Evaluation Framework + Regime Intelligence (11-field RegimeVector) + Counterfactual Engine + VIX Data Service + Quality Engine + NLP Catalyst Pipeline + Universe Manager + AI Copilot + Learning Loop V1 + Exit Management + MFE/MAE Tracking + **Experiment Pipeline** (enabled, pattern factory, parameter fingerprinting, exit params as variant dimensions, BacktestEngine all 10 patterns, variant spawning, backtest pre-filter, autonomous promotion/demotion) + **The Arena** (real-time multi-position visualization — 10th Command Center page) + **Operational Hardening** (EOD flatten synchronous verification, margin circuit breaker, pre-EOD signal cutoff, max concurrent positions cap) + **Historical Query Service** (DuckDB read-only analytical layer over Parquet cache, config-gated, `validate_symbol_coverage()` for sweep pre-filtering) + **Universe-Aware Sweep Flags** (`--symbols`/`--universe-filter` on `run_experiment.py`, `UniverseFilterConfig`, DuckDB coverage validation, DEF-145 resolved). Ten-page Command Center. Live Databento + IBKR paper trading. ABCD + Flat-Top Breakout in shadow mode awaiting optimization. Phase 6 Gate met (15 strategies). Next: Sprint 31.5 (Parallel Sweep Infrastructure) → universe-aware sweeps → Sprint 30 (Short Selling).
 
 ---
 
@@ -595,9 +595,9 @@ Reconciliation redesign with broker-confirmed positions (DEC-369). Overflow rout
 
 ---
 
-### Sprint 31A.75: Universe-Aware Sweep Tooling (NEXT — resolves DEF-145)
+### Sprint 31A.75: Universe-Aware Sweep Tooling ✅ COMPLETE (Apr 3, 2026 — resolves DEF-145)
 **Prerequisite:** Sprint 31A complete ✅ + Sprint 31A.5 complete ✅
-**Target:** ~0.5 days (1–2 sessions)
+**Target:** ~0.5 days (1–2 sessions) — completed in 1 session
 
 **Scope:**
 - Add `--symbols` flag to `scripts/run_experiment.py` (explicit symbol list, comma-separated or file path)
@@ -610,7 +610,7 @@ Reconciliation redesign with broker-confirmed positions (DEC-369). Overflow rout
 **Tests:** ~15 new.
 
 ### Sprint 31.5: Parallel Sweep Infrastructure (DEC-379)
-**Prerequisites:** Sprint 31A complete ✅, Sprint 31A.5 complete ✅, Sweep Tooling Impromptu complete.
+**Prerequisites:** Sprint 31A complete ✅, Sprint 31A.5 complete ✅, Sweep Tooling Impromptu complete ✅.
 **Target:** ~3–4 days
 
 **Scope (backend):**
