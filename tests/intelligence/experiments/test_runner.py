@@ -1,19 +1,23 @@
-"""Tests for ExperimentRunner — Sprint 32 Session 6."""
+"""Tests for ExperimentRunner — Sprint 32 Session 6 + Sprint 31.5 Session 1."""
 
 from __future__ import annotations
 
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, date, datetime
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from pydantic import ValidationError
 
+from argus.intelligence.experiments.config import ExperimentConfig
 from argus.intelligence.experiments.models import ExperimentRecord, ExperimentStatus
 from argus.intelligence.experiments.runner import (
     ExperimentRunner,
     _compute_fingerprint,
     _generate_param_values,
+    _run_single_backtest,
 )
 from argus.strategies.patterns.base import CandleBar, PatternDetection, PatternModule, PatternParam
 
@@ -763,3 +767,384 @@ def test_experiments_yaml_loads_without_parse_error() -> None:
     # Pydantic validation — will raise ValidationError on field mismatches
     config = ExperimentConfig(**raw)
     assert config.enabled is True or config.enabled is False
+
+
+# ---------------------------------------------------------------------------
+# Sprint 31.5 S1 — Parallel Sweep Infrastructure tests
+# ---------------------------------------------------------------------------
+
+
+def _mock_worker_result(args_dict: dict) -> dict:
+    """Synchronous mock for _run_single_backtest — returns a completed result."""
+    return {
+        "fingerprint": args_dict["fingerprint"],
+        "experiment_id": args_dict["experiment_id"],
+        "created_at": args_dict["created_at"],
+        "params": args_dict["params"],
+        "pattern_name": args_dict["pattern_name"],
+        "status": "completed",
+        "backtest_result": {"expectancy_per_trade": 0.5, "total_trades": 20},
+        "error": None,
+    }
+
+
+def _mock_worker_fail(args_dict: dict) -> dict:
+    """Synchronous mock for _run_single_backtest — always returns failed."""
+    return {
+        "fingerprint": args_dict["fingerprint"],
+        "experiment_id": args_dict["experiment_id"],
+        "created_at": args_dict["created_at"],
+        "params": args_dict["params"],
+        "pattern_name": args_dict["pattern_name"],
+        "status": "failed",
+        "backtest_result": None,
+        "error": "simulated worker failure",
+    }
+
+
+# 1. test_run_sweep_parallel_distributes_work
+@pytest.mark.asyncio
+async def test_run_sweep_parallel_distributes_work() -> None:
+    """workers=2: all 4 grid points complete when workers > 1."""
+    store = _make_store_mock()
+    runner = ExperimentRunner(
+        store=store,
+        config={
+            "backtest_min_expectancy": 0.0,
+            "backtest_min_trades": 1,
+            "backtest_start_date": "2025-01-01",
+            "backtest_end_date": "2025-12-31",
+        },
+    )
+
+    with (
+        patch(
+            "argus.intelligence.experiments.runner.get_pattern_class",
+            return_value=_TwoParamPattern,
+        ),
+        patch(
+            "argus.intelligence.experiments.runner._run_single_backtest",
+            side_effect=_mock_worker_result,
+        ),
+        patch(
+            "argus.intelligence.experiments.runner.ProcessPoolExecutor",
+            ThreadPoolExecutor,
+        ),
+    ):
+        records = await runner.run_sweep(
+            pattern_name="bull_flag",
+            cache_dir="/tmp/cache",
+            param_subset=["int_param"],
+            date_range=("2025-01-01", "2025-12-31"),
+            workers=2,
+        )
+
+    # _TwoParamPattern with param_subset=["int_param"] → 2 grid points
+    assert len(records) == 2
+    assert all(r.status == ExperimentStatus.COMPLETED for r in records)
+    assert store.save_experiment.call_count == 2
+
+
+# 2. test_run_sweep_parallel_worker_error_isolated
+@pytest.mark.asyncio
+async def test_run_sweep_parallel_worker_error_isolated() -> None:
+    """A failed worker result yields FAILED status; other grid points unaffected."""
+    store = _make_store_mock()
+    runner = ExperimentRunner(
+        store=store,
+        config={
+            "backtest_min_expectancy": 0.0,
+            "backtest_min_trades": 1,
+            "backtest_start_date": "2025-01-01",
+            "backtest_end_date": "2025-12-31",
+        },
+    )
+
+    call_count: list[int] = [0]
+
+    def _alternating_worker(args_dict: dict) -> dict:
+        call_count[0] += 1
+        if call_count[0] == 1:
+            return _mock_worker_fail(args_dict)
+        return _mock_worker_result(args_dict)
+
+    with (
+        patch(
+            "argus.intelligence.experiments.runner.get_pattern_class",
+            return_value=_TwoParamPattern,
+        ),
+        patch(
+            "argus.intelligence.experiments.runner._run_single_backtest",
+            side_effect=_alternating_worker,
+        ),
+        patch(
+            "argus.intelligence.experiments.runner.ProcessPoolExecutor",
+            ThreadPoolExecutor,
+        ),
+    ):
+        records = await runner.run_sweep(
+            pattern_name="bull_flag",
+            cache_dir="/tmp/cache",
+            param_subset=["int_param"],
+            date_range=("2025-01-01", "2025-12-31"),
+            workers=2,
+        )
+
+    assert len(records) == 2
+    statuses = {r.status for r in records}
+    assert ExperimentStatus.FAILED in statuses
+    assert ExperimentStatus.COMPLETED in statuses
+
+
+# 3. test_run_sweep_sequential_identical
+@pytest.mark.asyncio
+async def test_run_sweep_sequential_identical() -> None:
+    """workers=1 uses sequential path and produces the same record structure."""
+    store = _make_store_mock()
+    runner = ExperimentRunner(
+        store=store,
+        config={
+            "backtest_min_expectancy": 0.0,
+            "backtest_min_trades": 1,
+        },
+    )
+
+    mock_engine = _make_engine_mock(expectancy=0.5, total_trades=20)
+
+    with (
+        patch(
+            "argus.intelligence.experiments.runner.get_pattern_class",
+            return_value=_TwoParamPattern,
+        ),
+        patch(
+            "argus.intelligence.experiments.runner.BacktestEngine",
+            return_value=mock_engine,
+        ),
+    ):
+        records = await runner.run_sweep(
+            pattern_name="bull_flag",
+            cache_dir="/tmp/cache",
+            param_subset=[],
+            date_range=("2025-01-01", "2025-12-31"),
+            workers=1,
+        )
+
+    assert len(records) == 1
+    assert records[0].status == ExperimentStatus.COMPLETED
+    store.save_experiment.assert_called_once()
+
+
+# 4. test_run_sweep_parallel_skips_existing_fingerprints
+@pytest.mark.asyncio
+async def test_run_sweep_parallel_skips_existing_fingerprints() -> None:
+    """Parallel path: fingerprints already in store are skipped before dispatch."""
+    now = datetime.now(UTC)
+    # Pre-compute both fingerprints _TwoParamPattern with param_subset=["int_param"] produces
+    fp_int2 = _compute_fingerprint({"int_param": 2, "float_param": 0.2})
+    fp_int4 = _compute_fingerprint({"int_param": 4, "float_param": 0.2})
+    existing_records = [
+        ExperimentRecord(
+            experiment_id="existing-1",
+            pattern_name="bull_flag",
+            parameter_fingerprint=fp_int2,
+            parameters={"int_param": 2, "float_param": 0.2},
+            status=ExperimentStatus.COMPLETED,
+            backtest_result=None,
+            shadow_trades=0,
+            shadow_expectancy=None,
+            is_baseline=False,
+            created_at=now,
+            updated_at=now,
+        ),
+        ExperimentRecord(
+            experiment_id="existing-2",
+            pattern_name="bull_flag",
+            parameter_fingerprint=fp_int4,
+            parameters={"int_param": 4, "float_param": 0.2},
+            status=ExperimentStatus.COMPLETED,
+            backtest_result=None,
+            shadow_trades=0,
+            shadow_expectancy=None,
+            is_baseline=False,
+            created_at=now,
+            updated_at=now,
+        ),
+    ]
+
+    store = _make_store_mock(existing_records=existing_records)
+    runner = ExperimentRunner(
+        store=store,
+        config={
+            "backtest_min_expectancy": 0.0,
+            "backtest_min_trades": 1,
+        },
+    )
+
+    worker_cls = MagicMock()
+
+    with (
+        patch(
+            "argus.intelligence.experiments.runner.get_pattern_class",
+            return_value=_TwoParamPattern,
+        ),
+        patch(
+            "argus.intelligence.experiments.runner._run_single_backtest",
+            side_effect=_mock_worker_result,
+        ),
+        patch(
+            "argus.intelligence.experiments.runner.ProcessPoolExecutor",
+            ThreadPoolExecutor,
+        ),
+    ):
+        records = await runner.run_sweep(
+            pattern_name="bull_flag",
+            cache_dir="/tmp/cache",
+            param_subset=["int_param"],
+            date_range=("2025-01-01", "2025-12-31"),
+            workers=2,
+        )
+
+    # Both fingerprints exist → nothing dispatched, no records created
+    assert records == []
+    store.save_experiment.assert_not_called()
+
+
+# 5. test_run_sweep_dry_run_no_workers
+@pytest.mark.asyncio
+async def test_run_sweep_dry_run_no_workers() -> None:
+    """dry_run=True with workers > 1 returns empty list without spawning processes."""
+    store = _make_store_mock()
+    runner = ExperimentRunner(store=store, config={})
+
+    executor_cls = MagicMock()
+
+    with (
+        patch(
+            "argus.intelligence.experiments.runner.get_pattern_class",
+            return_value=_TwoParamPattern,
+        ),
+        patch(
+            "argus.intelligence.experiments.runner.ProcessPoolExecutor",
+            executor_cls,
+        ),
+    ):
+        records = await runner.run_sweep(
+            pattern_name="two_param",
+            cache_dir="/tmp/cache",
+            date_range=("2025-01-01", "2025-12-31"),
+            dry_run=True,
+            workers=4,
+        )
+
+    assert records == []
+    executor_cls.assert_not_called()
+    store.save_experiment.assert_not_called()
+
+
+# 6. test_run_sweep_parallel_store_writes_main_process
+@pytest.mark.asyncio
+async def test_run_sweep_parallel_store_writes_main_process() -> None:
+    """store.save_experiment is called for each completed future in main process."""
+    store = _make_store_mock()
+    runner = ExperimentRunner(
+        store=store,
+        config={
+            "backtest_min_expectancy": 0.0,
+            "backtest_min_trades": 1,
+            "backtest_start_date": "2025-01-01",
+            "backtest_end_date": "2025-12-31",
+        },
+    )
+
+    with (
+        patch(
+            "argus.intelligence.experiments.runner.get_pattern_class",
+            return_value=_TwoParamPattern,
+        ),
+        patch(
+            "argus.intelligence.experiments.runner._run_single_backtest",
+            side_effect=_mock_worker_result,
+        ),
+        patch(
+            "argus.intelligence.experiments.runner.ProcessPoolExecutor",
+            ThreadPoolExecutor,
+        ),
+    ):
+        records = await runner.run_sweep(
+            pattern_name="bull_flag",
+            cache_dir="/tmp/cache",
+            param_subset=["int_param"],
+            date_range=("2025-01-01", "2025-12-31"),
+            workers=3,
+        )
+
+    # 2 grid points → 2 store writes, all from main process (ThreadPoolExecutor is sync)
+    assert store.save_experiment.call_count == len(records)
+    assert all(isinstance(r, ExperimentRecord) for r in records)
+
+
+# 7. test_config_max_workers_field
+def test_config_max_workers_field() -> None:
+    """ExperimentConfig.max_workers validates correctly."""
+    # Default
+    cfg = ExperimentConfig()
+    assert cfg.max_workers == 4
+
+    # Explicit valid
+    cfg2 = ExperimentConfig(max_workers=8)
+    assert cfg2.max_workers == 8
+
+    # Below lower bound
+    with pytest.raises(ValidationError):
+        ExperimentConfig(max_workers=0)
+
+    # Above upper bound
+    with pytest.raises(ValidationError):
+        ExperimentConfig(max_workers=33)
+
+
+# 8. test_run_single_backtest_returns_dict
+def test_run_single_backtest_returns_dict() -> None:
+    """_run_single_backtest returns a correctly structured dict."""
+    mock_result = MagicMock()
+    mock_result.expectancy = 0.8
+    mock_result.total_trades = 30
+
+    mock_mor = MagicMock()
+    mock_mor.to_dict.return_value = {"expectancy_per_trade": 0.8, "total_trades": 30}
+
+    mock_engine_instance = MagicMock()
+    mock_engine_instance.run = AsyncMock(return_value=mock_result)
+    mock_engine_instance.to_multi_objective_result = AsyncMock(return_value=mock_mor)
+
+    args: dict[str, Any] = {
+        "strategy_type_value": "bull_flag",
+        "strategy_id": "strat_bull_flag",
+        "symbols": None,
+        "start_date": "2025-01-01",
+        "end_date": "2025-12-31",
+        "cache_dir": "/tmp/cache",
+        "detection_params": {},
+        "params": {"int_param": 4},
+        "fingerprint": "abc123def456abcd",
+        "pattern_name": "bull_flag",
+        "min_expectancy": 0.0,
+        "min_trades": 10,
+        "experiment_id": "test-experiment-id",
+        "created_at": "2025-01-01T00:00:00+00:00",
+    }
+
+    with patch(
+        "argus.backtest.engine.BacktestEngine",
+        return_value=mock_engine_instance,
+    ):
+        result = _run_single_backtest(args)
+
+    assert isinstance(result, dict)
+    assert result["fingerprint"] == "abc123def456abcd"
+    assert result["experiment_id"] == "test-experiment-id"
+    assert result["pattern_name"] == "bull_flag"
+    assert result["status"] in ("completed", "failed")
+    assert "backtest_result" in result
+    assert "error" in result
+    assert result["params"] == {"int_param": 4}

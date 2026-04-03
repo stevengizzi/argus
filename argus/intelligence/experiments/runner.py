@@ -10,10 +10,12 @@ Sprint 32, Session 6.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import itertools
 import json
 import logging
+from concurrent.futures import ProcessPoolExecutor
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
@@ -50,6 +52,89 @@ _PATTERN_TO_STRATEGY_TYPE: dict[str, StrategyType] = {
     "vwap_bounce": StrategyType.VWAP_BOUNCE,
     "narrow_range_breakout": StrategyType.NARROW_RANGE_BREAKOUT,
 }
+
+
+def _run_single_backtest(args: dict) -> dict:
+    """Worker function — runs one BacktestEngine grid point in a subprocess.
+
+    Module-level (not a method) so it is picklable by ProcessPoolExecutor.
+    Never raises — all exceptions are caught and returned as error dicts.
+    Does NOT import or use ExperimentStore or any SQLite connection.
+
+    Args:
+        args: Dict with keys: strategy_type_value, strategy_id, symbols,
+              start_date, end_date, cache_dir, detection_params, params,
+              fingerprint, pattern_name, min_expectancy, min_trades,
+              experiment_id, created_at.
+
+    Returns:
+        Dict with keys: fingerprint, status ("completed" | "failed"),
+        backtest_result (dict | None), error (str | None),
+        experiment_id, created_at, params, pattern_name.
+    """
+    import asyncio as _asyncio  # noqa: PLC0415
+
+    fingerprint: str = args["fingerprint"]
+
+    async def _execute() -> dict:
+        from datetime import date as _date  # noqa: PLC0415
+        from pathlib import Path as _Path  # noqa: PLC0415
+
+        from argus.backtest.config import (  # noqa: PLC0415
+            BacktestEngineConfig as _BEConfig,
+            StrategyType as _StrategyType,
+        )
+        from argus.backtest.engine import BacktestEngine as _BacktestEngine  # noqa: PLC0415
+
+        engine_config = _BEConfig(
+            strategy_type=_StrategyType(args["strategy_type_value"]),
+            strategy_id=args["strategy_id"],
+            symbols=args.get("symbols"),
+            start_date=_date.fromisoformat(args["start_date"]),
+            end_date=_date.fromisoformat(args["end_date"]),
+            cache_dir=_Path(args["cache_dir"]),
+            config_overrides=args["detection_params"],
+        )
+        engine = _BacktestEngine(engine_config)
+        result = await engine.run()
+
+        passes_filter = (
+            result.expectancy >= args["min_expectancy"]
+            and result.total_trades >= args["min_trades"]
+        )
+
+        try:
+            mor = await engine.to_multi_objective_result(
+                result, parameter_hash=fingerprint
+            )
+            backtest_result: dict[str, Any] = mor.to_dict()
+        except Exception:
+            backtest_result = _backtest_result_to_dict(result)
+
+        return {
+            "fingerprint": fingerprint,
+            "experiment_id": args["experiment_id"],
+            "created_at": args["created_at"],
+            "params": args["params"],
+            "pattern_name": args["pattern_name"],
+            "status": "completed" if passes_filter else "failed",
+            "backtest_result": backtest_result,
+            "error": None,
+        }
+
+    try:
+        return _asyncio.run(_execute())
+    except Exception as exc:
+        return {
+            "fingerprint": fingerprint,
+            "experiment_id": args.get("experiment_id", ""),
+            "created_at": args.get("created_at", datetime.now(UTC).isoformat()),
+            "params": args.get("params", {}),
+            "pattern_name": args.get("pattern_name", ""),
+            "status": "failed",
+            "backtest_result": None,
+            "error": str(exc),
+        }
 
 
 class ExperimentRunner:
@@ -199,6 +284,7 @@ class ExperimentRunner:
         symbols: list[str] | None = None,
         dry_run: bool = False,
         exit_sweep_params: list[ExitSweepParam] | None = None,
+        workers: int = 1,
     ) -> list[ExperimentRecord]:
         """Run BacktestEngine for every point in the parameter grid.
 
@@ -225,6 +311,11 @@ class ExperimentRunner:
             dry_run: Log grid size and sample configs; skip all backtest runs.
             exit_sweep_params: Optional exit-management parameters to sweep.
                 When present, grid includes exit dimensions.
+            workers: Number of parallel OS processes to use.  When ``1``
+                (default), uses the existing sequential loop.  When ``> 1``,
+                dispatches non-duplicate grid points to a
+                ``ProcessPoolExecutor``.  Fingerprint dedup and all
+                ``ExperimentStore`` writes always occur in the main process.
 
         Returns:
             List of ExperimentRecord for all processed grid points (skipped
@@ -250,6 +341,140 @@ class ExperimentRunner:
         records: list[ExperimentRecord] = []
         total = len(grid)
 
+        # ---------------------------------------------------------------------------
+        # Parallel path — ProcessPoolExecutor with fingerprint dedup in main process
+        # ---------------------------------------------------------------------------
+        if workers > 1:
+            # Step 1: Fingerprint dedup and unsupported-pattern handling in main process
+            pending_args: list[dict[str, Any]] = []
+            for i, params in enumerate(grid):
+                if "detection_params" in params:
+                    detection_params: dict[str, Any] = params["detection_params"]
+                else:
+                    detection_params = params
+
+                fingerprint = _compute_fingerprint(params)
+                existing = await self._store.get_by_fingerprint(pattern_name, fingerprint)
+                if existing is not None:
+                    logger.info(
+                        "[%d/%d] pattern=%s fingerprint=%s status=SKIPPED (already exists)",
+                        i + 1,
+                        total,
+                        pattern_name,
+                        fingerprint,
+                    )
+                    continue
+
+                now = datetime.now(UTC)
+                if strategy_type is None:
+                    record = ExperimentRecord(
+                        experiment_id=generate_id(),
+                        pattern_name=pattern_name,
+                        parameter_fingerprint=fingerprint,
+                        parameters=params,
+                        status=ExperimentStatus.FAILED,
+                        backtest_result={
+                            "error": (
+                                f"Pattern '{pattern_name}' is not yet supported by "
+                                "BacktestEngine. See DEF-121."
+                            )
+                        },
+                        shadow_trades=0,
+                        shadow_expectancy=None,
+                        is_baseline=False,
+                        created_at=now,
+                        updated_at=now,
+                    )
+                    await self._store.save_experiment(record)
+                    records.append(record)
+                    logger.info(
+                        "[%d/%d] pattern=%s fingerprint=%s status=FAILED (unsupported pattern)",
+                        i + 1,
+                        total,
+                        pattern_name,
+                        fingerprint,
+                    )
+                    continue
+
+                pending_args.append(
+                    {
+                        "strategy_type_value": str(strategy_type),
+                        "strategy_id": f"strat_{pattern_name}",
+                        "symbols": symbols,
+                        "start_date": start_date.isoformat(),
+                        "end_date": end_date.isoformat(),
+                        "cache_dir": str(cache_dir),
+                        "detection_params": detection_params,
+                        "params": params,
+                        "fingerprint": fingerprint,
+                        "pattern_name": pattern_name,
+                        "min_expectancy": self._min_expectancy,
+                        "min_trades": self._min_trades,
+                        "experiment_id": generate_id(),
+                        "created_at": now.isoformat(),
+                    }
+                )
+
+            # Step 2: Dispatch to worker processes; all store writes in main process
+            total_pending = len(pending_args)
+            completed_count = 0
+            executor = ProcessPoolExecutor(max_workers=workers)
+            try:
+                loop = asyncio.get_running_loop()
+                pending_futures = [
+                    loop.run_in_executor(executor, _run_single_backtest, args_dict)
+                    for args_dict in pending_args
+                ]
+                for coro in asyncio.as_completed(pending_futures):
+                    result_dict: dict[str, Any] = await coro
+                    completed_count += 1
+
+                    result_now = datetime.now(UTC)
+                    record = ExperimentRecord(
+                        experiment_id=result_dict["experiment_id"],
+                        pattern_name=result_dict["pattern_name"],
+                        parameter_fingerprint=result_dict["fingerprint"],
+                        parameters=result_dict["params"],
+                        status=(
+                            ExperimentStatus.COMPLETED
+                            if result_dict["status"] == "completed"
+                            else ExperimentStatus.FAILED
+                        ),
+                        backtest_result=result_dict["backtest_result"],
+                        shadow_trades=0,
+                        shadow_expectancy=None,
+                        is_baseline=False,
+                        created_at=datetime.fromisoformat(result_dict["created_at"]),
+                        updated_at=result_now,
+                    )
+                    await self._store.save_experiment(record)
+                    records.append(record)
+                    logger.info(
+                        "[%d/%d] pattern=%s fingerprint=%s status=%s (%d workers)",
+                        completed_count,
+                        total_pending,
+                        pattern_name,
+                        result_dict["fingerprint"],
+                        record.status,
+                        workers,
+                    )
+            except KeyboardInterrupt:
+                logger.warning(
+                    "Parallel sweep interrupted after %d/%d grid points — "
+                    "partial results saved.",
+                    completed_count,
+                    total_pending,
+                )
+                executor.shutdown(wait=False, cancel_futures=True)
+                return records
+            else:
+                executor.shutdown(wait=True)
+
+            return records
+
+        # ---------------------------------------------------------------------------
+        # Sequential path (existing, unchanged)
+        # ---------------------------------------------------------------------------
         for i, params in enumerate(grid):
             # Support both detection-only (flat dict) and exit-sweep (structured dict)
             if "detection_params" in params:
