@@ -38,6 +38,7 @@
 | AD — Experiment Pipeline Completion | 32.5 | Apr 1, 2026 | Exit params as variant dimensions, BacktestEngine all 7 patterns, Shadow Trades tab, Experiments 9th page, allocation intelligence vision |
 | AE — The Arena + UI/Operational Sweep | 32.75 | Apr 2, 2026 | 10th Command Center page (The Arena), strategy identity system, Dashboard overhaul, Arena REST + WebSocket, IBC setup guide |
 | AF — Arena Latency + UI Polish Sweep | 32.8 | Apr 2, 2026 | Arena TickEvent subscription, arena_tick_price, pre-market candles, VitalsStrip, Dashboard 4-row layout, Trades unification, DEF-137/138 resolved |
+| AG — Operational Hardening | 32.9 | Apr 2, 2026 | EOD flatten sync verification, zombie fix, margin circuit breaker, signal cutoff, quality recalibration, strategy shadow demotion, experiment pipeline enabled |
 
 ---
 
@@ -2399,12 +2400,59 @@
 
 ---
 
+## Sprint 32.9: Operational Hardening + Position Safety + Quality Recalibration (April 2, 2026)
+
+**Goal:** Fix two high-priority operational bugs (DEF-139/140), implement margin safety circuit breaker, fix intelligence polling crash, recalibrate quality engine grade distribution, and tighten operational constraints.
+
+**Starting state:** 4,539 pytest + 846 Vitest. 12 active strategies (all live).
+**Ending state:** 4,579 pytest + 846 Vitest (+40 pytest, +0 Vitest). 10 live + 2 shadow strategies.
+**Sessions:** 3 (S1 ∥ S3 parallel, then S2)
+**Execution mode:** Human-in-the-loop
+**New DECs:** None — all changes followed established patterns.
+**DEF items resolved:** DEF-139 (zombie flatten queue), DEF-140 (EOD flatten), DEF-141 (intelligence polling crash), DEF-142 (quality engine grade compression)
+**New files:** 2 (tests/execution/test_order_manager_sprint329.py, tests/strategies/test_signal_cutoff.py)
+**Modified files:** ~15 (order_manager.py, main.py, config.py, startup.py, 7 config YAMLs, 3 existing test files, pre-live-transition-checklist.md)
+
+**Session 1 (S1): EOD Flatten + Startup Zombie Fix (DEF-139, DEF-140)**
+- **Root cause:** `getattr(pos, "qty", 0)` → `getattr(pos, "shares", 0)` in 4 locations in `order_manager.py`. The Position model uses `shares` but four code paths read `qty`, always returning 0. This silently broke zombie classification, EOD flatten Pass 2, reconstruction known-position share count, and flatten-pending timeout re-query.
+- **EOD flatten synchronous verification:** `eod_flatten()` now uses `asyncio.Event` per symbol, waits for fill/reject/cancel callbacks with configurable timeout (30s), retries rejected orders once with re-queried broker qty, runs Pass 2 for broker-only cleanup, and only starts auto-shutdown timer AFTER verification.
+- **Config:** `eod_flatten_timeout_seconds: 30`, `eod_flatten_retry_rejected: true` on `OrderManagerConfig` (`config/order_manager.yaml`).
+- 13 new tests. DEF-139 RESOLVED. DEF-140 RESOLVED.
+
+**Session 2 (S2): Margin Circuit Breaker + Intelligence Fix (DEF-141, DEF-142 scope)**
+- **Margin circuit breaker (permanent safety feature):** Tracks IBKR Error 201 margin rejections on entry orders. Opens circuit after 10 rejections (`margin_rejection_threshold`), blocking new entry orders (publishes `SignalRejectedEvent`, routes to counterfactual). Flattens, bracket legs, stop resubmissions bypass. Auto-resets when position count drops below `margin_circuit_reset_positions: 20`. Daily reset.
+- **Config:** `margin_rejection_threshold: 10`, `margin_circuit_reset_positions: 20` on `OrderManagerConfig` (`config/order_manager.yaml`).
+- **DEF-141 fix:** Intelligence polling crash — `symbols: list[str] = []` initialization before conditional branch in `startup.py`. Added `try/except` with `exc_info=True` around polling loop body.
+- **Last `qty` fix:** `main.py` reconciliation loop (`~line 1400`) read `getattr(pos, "qty", 0)` → fixed to `getattr(pos, "shares", 0)`. This was silently building an empty `broker_positions` dict, breaking reconciliation accuracy. No remaining Position-object `qty` reads in the codebase (one Order-object read at `order_manager.py:1971` is correct).
+- 12 new tests. DEF-141 RESOLVED.
+
+**Session 3 (S3): Position Safety + Quality Recalibration + Strategy Triage**
+- **Pre-EOD signal cutoff:** Configurable `signal_cutoff_time: "15:30"` (ET) stops new signal processing after 3:30 PM. Strategies still evaluate but approved signals are discarded. Logs once per session. Config-gated via `signal_cutoff_enabled: true` on `OrchestratorConfig` (`config/orchestrator.yaml`).
+- **Max concurrent positions enabled:** `max_concurrent_positions: 50` in `risk_limits.yaml` activates existing DEC-367 check.
+- **Overflow capacity aligned:** `broker_capacity: 60` → `50` in `overflow.yaml` to match position cap.
+- **Quality engine recalibration (DEF-142):** `historical_match` weight zeroed (was 0.15 — stub returning constant 50). Weight redistributed to `pattern_strength: 0.375` (was 0.30) and `volume_profile: 0.275` (was 0.20). Grade thresholds recalibrated from theoretical 0–100 range to actual ~35–77 range (`a_plus: 72`, `a: 66`, `a_minus: 61`, `b_plus: 56`, `b: 51`, `b_minus: 46`, `c_plus: 40`). Result: grades now span A through C instead of clustering in B.
+- **Strategy shadow demotion:** ABCD and Flat-Top Breakout set to `mode: shadow`. Both continue generating counterfactual data. 10 strategies remain in live mode.
+- **Experiment pipeline enabled:** `experiments.yaml` `enabled: true` with `variants: {}` (no-op — infrastructure initializes, spawns 0 variants, sits ready for future variant configuration).
+- **Pre-live checklist updated:** 12 new items covering all Sprint 32.9 config additions.
+- 15 new tests. DEF-142 RESOLVED. No new DECs.
+
+**Key decisions:** None — all changes followed established patterns (additive config fields, existing circuit breaker pattern, shadow mode via DEC-375, signal cutoff follows DEC-300 pattern).
+**Sessions:** 3 implementation (S1, S2, S3 — S1 and S3 ran in parallel, S2 after)
+**Test counts:** S1(+13), S2(+12), S3(+15) = +40 new pytest, +0 Vitest
+**DEF items resolved:** DEF-139, DEF-140, DEF-141, DEF-142
+
+**Key learnings:**
+- `getattr(pos, "qty", 0)` silently returns 0 on Position objects — the model uses `shares`. The default fallback to 0 masked the bug entirely; logs showed "success" while no flattens were queued. When writing defensive attribute access on domain model objects, prefer `pos.shares` directly to expose type errors at development time.
+- Quality engine grade compression (all signals scoring B) was caused by two weight-heavy stubs both returning constant 50: `historical_match` (0.15 weight) and `catalyst_quality` (0.25 weight) consumed 40% of the score with neutral values. Weight distribution should match data availability — zero unused stubs.
+
+---
+
 ## Sprint Statistics
 
-- **Total sprints:** 32 full + 41 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9, 27.5, 27.6, 27.65, 27.7, 27.75, 27.8, 27.9, 27.95, 28.5, 28.75, 29, 29.5, 32.5, 32.75, 32.8)
-- **Total sessions:** ~497+ Claude Code sessions
-- **Total tests:** ~4,539 pytest + 846 Vitest = ~5,385 total
-- **Total decisions:** 381 (DEC-001 through DEC-381; no new DECs in Sprints 29.5, 32, 32.5, 32.75, or 32.8)
+- **Total sprints:** 32 full + 42 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9, 27.5, 27.6, 27.65, 27.7, 27.75, 27.8, 27.9, 27.95, 28.5, 28.75, 29, 29.5, 32.5, 32.75, 32.8, 32.9)
+- **Total sessions:** ~537+ Claude Code sessions
+- **Total tests:** ~4,579 pytest + 846 Vitest = ~5,425 total
+- **Total decisions:** 381 (DEC-001 through DEC-381; no new DECs in Sprints 29.5, 32, 32.5, 32.75, 32.8, or 32.9)
 - **Calendar days (active dev):** ~48 (Feb 14 – Apr 2, 2026)
 - **Largest sprint:** 22 (9 implementation + 5 fix + 9 reviews, largest scope)
 - **Cleanest sprint:** 23 (11 sessions, 0 regressions, 0 scope gaps requiring follow-up)

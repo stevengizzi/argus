@@ -706,11 +706,11 @@ Refactor Performance page from fixed 5-tab layout to customizable widget grid us
 
 ## Deferred Items From Sprint 32.8
 
-### DEF-139 — Startup zombie flatten queue not draining at market open [MEDIUM]
-Pre-market zombie positions queued in `_startup_flatten_queue` may not drain correctly at market open if the Order Manager poll loop timing doesn't align with the 9:30 ET check. Deferred to dedicated operational fixes sprint. Location: `argus/execution/order_manager.py` — `_drain_startup_flatten_queue()`.
+### ~~DEF-139~~ — ~~Startup zombie flatten queue not draining at market open~~ [RESOLVED — Sprint 32.9 S1]
+Root cause: `getattr(pos, "qty", 0)` in 4 Order Manager paths always returned 0 (Position model uses `shares`). Fixed to `getattr(pos, "shares", 0)`.
 
-### DEF-140 — EOD flatten reports positions closed but broker retains them [MEDIUM]
-EOD flatten Pass 1 may log a successful close but the broker (IBKR paper) retains the position in some edge cases. Pass 2 (broker-only sweep) intended to catch this but timing issues may cause false-positives. Deferred to dedicated operational fixes sprint. Location: `argus/execution/order_manager.py` — `eod_flatten()`.
+### ~~DEF-140~~ — ~~EOD flatten reports positions closed but broker retains them~~ [RESOLVED — Sprint 32.9 S1]
+Root cause: same `qty`/`shares` mismatch in Pass 2 + fire-and-forget order submission. Fixed attribute + added synchronous fill verification with asyncio.Event per symbol.
 
 ### Outstanding Code-Level Items (Low Priority)
 - Live Trades quick filter missing no-op guard on double-click (`TradeFilters.tsx` — `handleQuickFilter`)

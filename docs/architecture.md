@@ -2464,7 +2464,7 @@ Real-time multi-position visualization — 10th Command Center page. Shows all o
 ### 13.5.1 Arena REST API (`api/routes/arena.py`)
 
 **Endpoints:**
-- `GET /api/v1/arena/positions` — Returns all open managed positions from `OrderManager.get_managed_positions()`. No pagination — maximum is `overflow.broker_capacity` (typically 60). Includes entry_price, current_price, unrealized_pnl, r_multiple, trail_stop_price (if active), strategy_id, symbol, share_count.
+- `GET /api/v1/arena/positions` — Returns all open managed positions from `OrderManager.get_managed_positions()`. No pagination — maximum is `overflow.broker_capacity` (50 as of Sprint 32.9, aligned with `max_concurrent_positions`). Includes entry_price, current_price, unrealized_pnl, r_multiple, trail_stop_price (if active), strategy_id, symbol, share_count.
 - `GET /api/v1/arena/candles/{symbol}` — Returns historical OHLCV bars from `IntradayCandleStore` for the given symbol (up to 390 bars = full trading day). Used to seed MiniChart on card load. JWT-protected.
 
 ### 13.5.2 Arena WebSocket (`/ws/v1/arena`)

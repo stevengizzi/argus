@@ -2060,6 +2060,9 @@ class ArgusSystem:
             if self._catalyst_storage is not None:
                 catalyst_db_path = str(Path(data_dir_str) / "catalyst.db")
 
+            counterfactual_db_path = str(Path(data_dir_str) / "counterfactual.db")
+            experiment_db_path = str(Path(data_dir_str) / "experiments.db")
+
             export_path = await export_debrief_data(
                 session_date=session_date,
                 db=self._db,
@@ -2068,6 +2071,9 @@ class ArgusSystem:
                 broker=self._broker,
                 orchestrator=self._orchestrator,
                 output_dir="logs",
+                counterfactual_db_path=counterfactual_db_path,
+                experiment_db_path=experiment_db_path,
+                order_manager=self._order_manager,
             )
             if export_path:
                 logger.info("Debrief data exported: %s", export_path)

@@ -83,10 +83,14 @@ async def test_export_creates_json_file(tmp_path: Path) -> None:
         "orchestrator_decisions",
         "evaluation_summary",
         "quality_history",
+        "quality_distribution",
         "trades",
         "catalyst_summary",
         "account_state",
         "regime",
+        "counterfactual_summary",
+        "experiment_summary",
+        "safety_summary",
     }
     assert expected_keys == set(payload.keys())
     assert payload["session_date"] == SESSION_DATE
@@ -237,3 +241,184 @@ async def test_export_json_serializes_datetimes(tmp_path: Path) -> None:
     assert len(decisions) == 1
     # Datetime must have been serialized to a string by json.dumps(default=str)
     assert isinstance(decisions[0]["created_at"], str)
+
+
+@pytest.mark.asyncio
+async def test_export_safety_summary_with_order_manager(tmp_path: Path) -> None:
+    """safety_summary reads margin circuit state from the order_manager via getattr."""
+    db = _make_db_mock()
+    eval_store = _make_eval_store_mock()
+    broker = _make_broker_mock()
+    orchestrator = _make_orchestrator_mock()
+
+    order_manager = MagicMock()
+    order_manager._margin_circuit_open = True
+    order_manager._margin_rejection_count = 12
+    order_manager._config = MagicMock()
+    order_manager._config.margin_rejection_threshold = 10
+    order_manager._config.eod_flatten_timeout_seconds = 30
+
+    result_path = await export_debrief_data(
+        session_date=SESSION_DATE,
+        db=db,
+        eval_store=eval_store,
+        catalyst_db_path=None,
+        broker=broker,
+        orchestrator=orchestrator,
+        output_dir=str(tmp_path),
+        order_manager=order_manager,
+    )
+
+    assert result_path is not None
+    payload = json.loads(Path(result_path).read_text(encoding="utf-8"))
+
+    safety = payload["safety_summary"]
+    assert safety["margin_circuit_breaker"]["triggered"] is True
+    assert safety["margin_circuit_breaker"]["rejection_count"] == 12
+    assert safety["margin_circuit_breaker"]["rejection_threshold"] == 10
+    assert safety["eod_flatten"]["timeout_seconds"] == 30
+    # Non-tracked fields must be null
+    assert safety["margin_circuit_breaker"]["open_time"] is None
+    assert safety["eod_flatten"]["pass1_filled"] is None
+    assert safety["signal_cutoff"]["signals_skipped"] is None
+
+
+@pytest.mark.asyncio
+async def test_export_safety_summary_without_order_manager(tmp_path: Path) -> None:
+    """safety_summary returns defaults when order_manager is None."""
+    db = _make_db_mock()
+    eval_store = _make_eval_store_mock()
+    broker = _make_broker_mock()
+    orchestrator = _make_orchestrator_mock()
+
+    result_path = await export_debrief_data(
+        session_date=SESSION_DATE,
+        db=db,
+        eval_store=eval_store,
+        catalyst_db_path=None,
+        broker=broker,
+        orchestrator=orchestrator,
+        output_dir=str(tmp_path),
+    )
+
+    assert result_path is not None
+    payload = json.loads(Path(result_path).read_text(encoding="utf-8"))
+
+    safety = payload["safety_summary"]
+    assert safety["margin_circuit_breaker"]["triggered"] is False
+    assert safety["margin_circuit_breaker"]["rejection_count"] == 0
+
+
+@pytest.mark.asyncio
+async def test_export_counterfactual_summary_missing_db(tmp_path: Path) -> None:
+    """Nonexistent counterfactual_db_path produces an error key in counterfactual_summary."""
+    db = _make_db_mock()
+    eval_store = _make_eval_store_mock()
+    broker = _make_broker_mock()
+    orchestrator = _make_orchestrator_mock()
+
+    result_path = await export_debrief_data(
+        session_date=SESSION_DATE,
+        db=db,
+        eval_store=eval_store,
+        catalyst_db_path=None,
+        broker=broker,
+        orchestrator=orchestrator,
+        output_dir=str(tmp_path),
+        counterfactual_db_path=str(tmp_path / "no_cf.db"),
+    )
+
+    assert result_path is not None
+    payload = json.loads(Path(result_path).read_text(encoding="utf-8"))
+    assert "error" in payload["counterfactual_summary"]
+    # Other sections unaffected
+    assert "safety_summary" in payload
+    assert "experiment_summary" in payload
+
+
+@pytest.mark.asyncio
+async def test_export_experiment_summary_missing_db(tmp_path: Path) -> None:
+    """Nonexistent experiment_db_path produces an error key in experiment_summary."""
+    db = _make_db_mock()
+    eval_store = _make_eval_store_mock()
+    broker = _make_broker_mock()
+    orchestrator = _make_orchestrator_mock()
+
+    result_path = await export_debrief_data(
+        session_date=SESSION_DATE,
+        db=db,
+        eval_store=eval_store,
+        catalyst_db_path=None,
+        broker=broker,
+        orchestrator=orchestrator,
+        output_dir=str(tmp_path),
+        experiment_db_path=str(tmp_path / "no_exp.db"),
+    )
+
+    assert result_path is not None
+    payload = json.loads(Path(result_path).read_text(encoding="utf-8"))
+    assert "error" in payload["experiment_summary"]
+    assert "counterfactual_summary" in payload
+
+
+@pytest.mark.asyncio
+async def test_export_counterfactual_summary_with_live_db(tmp_path: Path) -> None:
+    """counterfactual_summary returns structured keys when a valid DB exists."""
+    import aiosqlite
+
+    db_path = tmp_path / "counterfactual.db"
+    async with aiosqlite.connect(str(db_path)) as conn:
+        await conn.execute(
+            """CREATE TABLE counterfactual_positions (
+                position_id TEXT PRIMARY KEY,
+                symbol TEXT, strategy_id TEXT,
+                entry_price REAL, stop_price REAL, target_price REAL,
+                time_stop_seconds INTEGER, rejection_stage TEXT, rejection_reason TEXT,
+                quality_score REAL, quality_grade TEXT, regime_vector_snapshot TEXT,
+                signal_metadata TEXT, opened_at TEXT, closed_at TEXT,
+                exit_price REAL, exit_reason TEXT, theoretical_pnl REAL,
+                theoretical_r_multiple REAL, duration_seconds REAL,
+                max_adverse_excursion REAL, max_favorable_excursion REAL,
+                bars_monitored INTEGER, variant_id TEXT
+            )"""
+        )
+        await conn.execute(
+            "INSERT INTO counterfactual_positions VALUES "
+            "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                "pos1", "AAPL", "strat_abcd",
+                150.0, 148.0, 154.0,
+                300, "shadow", "shadow_mode",
+                65.0, "B+", None, "{}", f"{SESSION_DATE}T10:00:00",
+                f"{SESSION_DATE}T11:00:00", 154.0, "target_hit",
+                4.0, 2.0, 3600.0, 0.5, 4.0, 10, None,
+            ),
+        )
+        await conn.commit()
+
+    db = _make_db_mock()
+    eval_store = _make_eval_store_mock()
+    broker = _make_broker_mock()
+    orchestrator = _make_orchestrator_mock()
+
+    result_path = await export_debrief_data(
+        session_date=SESSION_DATE,
+        db=db,
+        eval_store=eval_store,
+        catalyst_db_path=None,
+        broker=broker,
+        orchestrator=orchestrator,
+        output_dir=str(tmp_path),
+        counterfactual_db_path=str(db_path),
+    )
+
+    assert result_path is not None
+    payload = json.loads(Path(result_path).read_text(encoding="utf-8"))
+
+    cf = payload["counterfactual_summary"]
+    assert cf["total_positions_opened"] == 1
+    assert cf["total_positions_closed"] == 1
+    assert "strat_abcd" in cf["by_strategy"]
+    assert cf["by_strategy"]["strat_abcd"]["wins"] == 1
+    assert cf["by_rejection_stage"]["shadow"] == 1
+    assert cf["by_exit_reason"]["target_hit"] == 1

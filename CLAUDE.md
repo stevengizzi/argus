@@ -1,13 +1,13 @@
 # ARGUS — Claude Code Context
 
 > Dense, actionable context for Claude Code sessions. No history — see `docs/` for that.
-> Last updated: April 2, 2026 (Sprint 32.8 doc sync — Arena Latency + UI Polish Sweep)
+> Last updated: April 2, 2026 (Sprint 32.9 doc sync — Operational Hardening + Position Safety + Quality Recalibration)
 
 ## Active Sprint
 
 **Active sprint: 31A (Pattern Expansion III — reach 15 strategies).**
 
-Last completed sprint: **32.8 (Arena Latency + UI Polish Sweep)** — Arena TickEvent subscription (bypasses 1s throttle, new `arena_tick_price` message type), pre-market candle context (4 AM ET), Arena/Dashboard/Trades visual polish, VitalsStrip component, Dashboard 4-row layout, Trades unified styling + Shadow Trades features. +9 pytest, +41 Vitest. No new DECs. DEF-137 + DEF-138 resolved.
+Last completed sprint: **32.9 (Operational Hardening + Position Safety + Quality Recalibration)** — EOD flatten synchronous verification + zombie queue fix (DEF-139/140 resolved, root cause: `qty`/`shares` mismatch in 4 Order Manager code paths), margin circuit breaker (IBKR Error 201 tracking, 10-rejection threshold, auto-reset on position drop), intelligence polling crash fix (DEF-141), quality engine recalibration (historical_match weight zeroed, grade thresholds recalibrated to actual score range 35–77), pre-EOD signal cutoff at 3:30 PM ET, max_concurrent_positions: 50 enabled, overflow broker_capacity 60→50, ABCD + Flat-Top demoted to shadow mode, experiment pipeline enabled. +40 pytest. No new DECs. DEF-139/140/141/142 resolved.
 
 ### Roadmap Amendments Adopted (DEC-357, DEC-358)
 Two roadmap amendments adopted March 23, 2026 adding 5 new sprint slots:
@@ -17,7 +17,7 @@ Two roadmap amendments adopted March 23, 2026 adding 5 new sprint slots:
 - **32.5** (Experiment Registry + Promotion Pipeline): Partitioned SQLite registry, cohort-based promotion, simulated-paper screening, overnight experiment queue, kill switches, anti-fragility
 - **33.5** (Adversarial Stress Testing): Historical crisis replay + synthetic stress scenarios as PromotionPipeline gate
 Amendment docs: `docs/amendments/roadmap-amendment-experiment-infrastructure.md`, `docs/amendments/roadmap-amendment-intelligence-architecture.md`
-Build track: ~~21.6~~ ✅ → ~~27.5~~ ✅ → ~~27.6~~ ✅ → ~~27.7~~ ✅ → ~~27.75~~ ✅ → ~~27.8~~ ✅ → ~~27.9~~ ✅ → ~~27.95~~ ✅ → ~~28~~ ✅ → ~~28.5~~ ✅ → ~~28.75~~ ✅ → ~~29~~ ✅ → ~~29.5~~ ✅ → ~~32~~ ✅ → ~~32.5~~ ✅ → ~~32.75~~ ✅ → ~~32.8~~ ✅ → **31A** → 30 → 31.5 → 33 → 33.5 → 34 → 35–41
+Build track: ~~21.6~~ ✅ → ~~27.5~~ ✅ → ~~27.6~~ ✅ → ~~27.7~~ ✅ → ~~27.75~~ ✅ → ~~27.8~~ ✅ → ~~27.9~~ ✅ → ~~27.95~~ ✅ → ~~28~~ ✅ → ~~28.5~~ ✅ → ~~28.75~~ ✅ → ~~29~~ ✅ → ~~29.5~~ ✅ → ~~32~~ ✅ → ~~32.5~~ ✅ → ~~32.75~~ ✅ → ~~32.8~~ ✅ → ~~32.9~~ ✅ → **31A** → 30 → 31.5 → 33 → 33.5 → 34 → 35–41
 DEC ranges reserved: 396–402 (33.5)
 DEF items: DEF-129 (non-PatternModule variant support), DEF-130 (intraday parameter adaptation)
 RSK items: RSK-049 (shadow variant throughput impact), RSK-050 (promotion oscillation)
@@ -26,15 +26,15 @@ RSK items: RSK-049 (shadow variant throughput impact), RSK-050 (promotion oscill
 - **FMP Starter plan restriction:** FMP news endpoints return 403 on Starter plan ($22/mo). `fmp_news.enabled: false` in `system_live.yaml`. FMP circuit breaker (DEC-323) prevents spam if accidentally enabled.
 - **Pre-existing xdist failures (DEF-048):** 4 test_main.py tests fail under `-n auto` (same `load_dotenv`/`AIConfig` race): `test_both_strategies_created`, `test_multi_strategy_health_status`, `test_candle_event_routing_subscribed`, `test_12_phase_startup_creates_orchestrator`. Pre-existing on clean HEAD. Priority: LOW.
 - **Test isolation (DEF-049):** `test_orchestrator_uses_strategies_from_registry` fails when run in isolation but passes in full suite. Pre-existing.
-- **Startup zombie flatten queue not draining (DEF-139):** Pre-market zombie positions queued in `_startup_flatten_queue` may not drain at market open if the poll loop timing is off. Deferred to operational fixes sprint. Priority: MEDIUM.
-- **EOD flatten reports positions closed but broker retains them (DEF-140):** EOD flatten Pass 2 may not catch all broker-retained positions after Pass 1. Deferred to operational fixes sprint. Priority: MEDIUM.
+- ~~**Startup zombie flatten queue not draining (DEF-139):**~~ RESOLVED Sprint 32.9 S1 — root cause was `getattr(pos, "qty", 0)` returning 0 (Position model uses `shares`). Fixed to `getattr(pos, "shares", 0)` in 4 locations.
+- ~~**EOD flatten reports positions closed but broker retains them (DEF-140):**~~ RESOLVED Sprint 32.9 S1 — same `qty`/`shares` mismatch + fire-and-forget order submission. Added synchronous fill verification with asyncio.Event per symbol.
 
 ## Current State
 
 - **Active sprint:** 31A (Pattern Expansion III — reach 15 strategies)
-- **Tests:** ~4,539 pytest + 846 Vitest (0 pre-existing failures)
-- **Strategies:** 12 active (ORB Breakout, ORB Scalp, VWAP Reclaim, Afternoon Momentum, Red-to-Green, Bull Flag, Flat-Top Breakout, Dip-and-Rip, HOD Break, Gap-and-Go, ABCD, Pre-Market High Break)
-- **Infrastructure:** Databento EQUS.MINI (live) + IBKR paper trading (Account U24619949) + FMP Starter (scanning + reference data + daily bars for regime) + Finnhub (news + analyst recs) + Claude API (Copilot + Catalyst Classification) + Universe Manager (config-gated) + Catalyst Pipeline (config-gated) + Intelligence Polling Loop (config-gated) + Reference Data Cache + Quality Engine (config-gated) + Dynamic Position Sizer + Strategy Evaluation Telemetry (ring buffer + SQLite persistence) + Debrief Export (shutdown automation) + Evaluation Framework (MultiObjectiveResult, EnsembleResult, comparison API, slippage model) + Regime Intelligence (RegimeVector 11-field, 8 calculators, config-gated, Sprints 27.6 + 27.9) + VIX Data Service (yfinance daily VIX/SPX, 5 derived metrics, SQLite cache, config-gated, Sprint 27.9) + Counterfactual Engine (shadow position tracking, filter accuracy, shadow strategy mode, overflow routing, config-gated, Sprints 27.7 + 27.95) + Learning Loop V1 (OutcomeCollector, WeightAnalyzer, ThresholdAnalyzer, CorrelationAnalyzer, LearningService, ConfigProposalManager, LearningStore, config-gated, Sprint 28) + Exit Management (trailing stops ATR/percent/fixed, exit escalation, belt-and-suspenders, config-gated per strategy, Sprint 28.5) + ThrottledLogger (log rate-limiting, Sprint 27.75) + Paper trading config overrides (10x risk reduction, throttle disabled, $10 min risk floor, Sprint 27.75) + Broker-confirmed reconciliation (Sprint 27.95) + Overflow routing (config-gated, Sprint 27.95)
+- **Tests:** ~4,579 pytest + 846 Vitest (0 pre-existing failures)
+- **Strategies:** 10 live + 2 shadow (12 total): live — ORB Breakout, ORB Scalp, VWAP Reclaim, Afternoon Momentum, Red-to-Green, Bull Flag, Dip-and-Rip, HOD Break, Gap-and-Go, Pre-Market High Break; shadow — Flat-Top Breakout, ABCD (demoted Sprint 32.9 S3 for optimization)
+- **Infrastructure:** Databento EQUS.MINI (live) + IBKR paper trading (Account U24619949) + FMP Starter (scanning + reference data + daily bars for regime) + Finnhub (news + analyst recs) + Claude API (Copilot + Catalyst Classification) + Universe Manager (config-gated) + Catalyst Pipeline (config-gated) + Intelligence Polling Loop (config-gated) + Reference Data Cache + Quality Engine (config-gated) + Dynamic Position Sizer + Strategy Evaluation Telemetry (ring buffer + SQLite persistence) + Debrief Export (shutdown automation) + Evaluation Framework (MultiObjectiveResult, EnsembleResult, comparison API, slippage model) + Regime Intelligence (RegimeVector 11-field, 8 calculators, config-gated, Sprints 27.6 + 27.9) + VIX Data Service (yfinance daily VIX/SPX, 5 derived metrics, SQLite cache, config-gated, Sprint 27.9) + Counterfactual Engine (shadow position tracking, filter accuracy, shadow strategy mode, overflow routing, config-gated, Sprints 27.7 + 27.95) + Learning Loop V1 (OutcomeCollector, WeightAnalyzer, ThresholdAnalyzer, CorrelationAnalyzer, LearningService, ConfigProposalManager, LearningStore, config-gated, Sprint 28) + Exit Management (trailing stops ATR/percent/fixed, exit escalation, belt-and-suspenders, config-gated per strategy, Sprint 28.5) + ThrottledLogger (log rate-limiting, Sprint 27.75) + Paper trading config overrides (10x risk reduction, throttle disabled, $10 min risk floor, Sprint 27.75) + Broker-confirmed reconciliation (Sprint 27.95) + Overflow routing (config-gated, Sprint 27.95) + EOD flatten synchronous verification (Sprint 32.9) + Margin circuit breaker (IBKR Error 201, Sprint 32.9) + Pre-EOD signal cutoff 3:30 PM ET (config-gated, Sprint 32.9) + Experiment Pipeline (enabled: true, Sprint 32.9)
 - **Frontend:** 10-page Command Center (Arena page added Sprint 32.75, Experiments page added Sprint 32.5, Shadow Trades tab added to Trade Log) + AI Copilot + Universe Status Card + Intelligence Brief View (all active), Tauri desktop + PWA mobile. Pages: Dashboard, Trade Log, Performance, The Arena, Orchestrator, Pattern Library, The Debrief, System, Observatory, Experiments. Keyboard shortcuts: 1–9 + 0 (0 = Experiments). All 12 strategies have unique colors, badges, single-letter identifiers.
 
 ## Project Structure
@@ -370,16 +370,18 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 | ~~DEF-136~~ | ~~GoalTracker.test.tsx — 3 pre-existing Vitest failures~~ | — | **RESOLVED** (Sprint 32.75): `vi.useFakeTimers` date mock applied; `getByText` ambiguity fixed with `getByTestId`. |
 | ~~DEF-137~~ | ~~`test_history_store_migration` hardcoded date decay~~ | — | **RESOLVED** (Sprint 32.8): Replaced hardcoded `"2026-03-25"` with `datetime.now(UTC) - timedelta(days=1)` in `tests/core/test_regime_vector_expansion.py`. |
 | ~~DEF-138~~ | ~~`ArenaPage.test.tsx` WebSocket mock missing~~ | — | **RESOLVED** (Sprint 32.8): `vi.mock` for `useArenaWebSocket` added to `ArenaPage.test.tsx`. `vitest.config.ts` `testTimeout`/`hookTimeout` set to 10s. |
-| DEF-139 | Startup zombie flatten queue not draining at market open | Unscheduled | `_startup_flatten_queue` in Order Manager may not drain at 9:30 ET if poll loop timing is off. Deferred to operational fixes sprint. Priority: MEDIUM. |
-| DEF-140 | EOD flatten reports positions closed but broker retains them | Unscheduled | EOD flatten Pass 1 may log success while broker retains position; Pass 2 may miss edge cases. Deferred to operational fixes sprint. Priority: MEDIUM. |
+| ~~DEF-139~~ | ~~Startup zombie flatten queue not draining at market open~~ | — | **RESOLVED** (Sprint 32.9 S1): Root cause: `getattr(pos, "qty", 0)` in 4 Order Manager paths always returned 0 (Position model uses `shares`). Fixed to `getattr(pos, "shares", 0)`. |
+| ~~DEF-140~~ | ~~EOD flatten reports positions closed but broker retains them~~ | — | **RESOLVED** (Sprint 32.9 S1): Same `qty`/`shares` mismatch in Pass 2 + fire-and-forget submission. Fixed attribute + added synchronous fill verification with asyncio.Event per symbol (30s timeout, 1 retry). |
+| ~~DEF-141~~ | ~~Intelligence polling crash: unbound `symbols` variable~~ | — | **RESOLVED** (Sprint 32.9 S2): `symbols: list[str] = []` initialization before conditional branch in `startup.py`. Added try/except with `exc_info=True` around polling loop body. |
+| ~~DEF-142~~ | ~~Quality engine grade compression — all signals scoring B~~ | — | **RESOLVED** (Sprint 32.9 S3): Root cause: `historical_match` stub (constant 50) + `catalyst_quality` (mostly 50) consuming 40% of weight. Fixed: `historical_match` weight zeroed, redistribution to `pattern_strength` (0.375) + `volume_profile` (0.275). Grade thresholds recalibrated to actual score range 35–77 (a_plus: 72, a: 66, a_minus: 61, b_plus: 56, b: 51, b_minus: 46, c_plus: 40). |
 
 ## Reference
 
 | Document | What It Covers |
 |----------|---------------|
-| `docs/decision-log.md` | All 381 DEC entries with full rationale (no new DECs in Sprints 32–32.75 — all design decisions followed established patterns) |
+| `docs/decision-log.md` | All 381 DEC entries with full rationale (no new DECs in Sprints 32–32.9 — all design decisions followed established patterns) |
 | `docs/dec-index.md` | Quick-reference index with status markers |
-| `docs/sprint-history.md` | Complete sprint history (1–29.5 + 32–32.75 + sub-sprints) |
+| `docs/sprint-history.md` | Complete sprint history (1–29.5 + 32–32.9 + sub-sprints) |
 | `docs/pre-live-transition-checklist.md` | Config + test values to restore before live trading |
 | `docs/process-evolution.md` | Workflow evolution narrative |
 | `docs/live-operations.md` | Live trading procedures |

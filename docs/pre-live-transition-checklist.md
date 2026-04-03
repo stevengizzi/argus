@@ -79,9 +79,9 @@ After restoring all values:
 
 ### config/overflow.yaml — Broker Capacity
 Review and tune `broker_capacity` for live account equity:
-- Paper: `broker_capacity: 60` (raised from 30 in Sprint 32.75 for paper trading capacity)
-- Live: Evaluate based on actual account equity and margin requirements — 60 may be too high for a small live account; consider reducing to 10–20 for initial live sessions
-- Note: At 60, paper trading rarely hits the overflow cap; live trading with real buying-power constraints will likely need a lower cap
+- Paper: `broker_capacity: 50` (aligned with `max_concurrent_positions: 50` in Sprint 32.9)
+- Live: Evaluate based on actual account equity and margin requirements — 50 is the paper cap; live trading with real buying-power constraints will likely need a lower cap (10–20 for initial live sessions)
+- Note: At 50, paper trading rarely hits the overflow cap; `max_concurrent_positions` and `broker_capacity` should be kept in sync
 
 ### config/system.yaml / config/system_live.yaml — Startup Zombie Flatten
 Confirm desired behavior for live:

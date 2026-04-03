@@ -5,6 +5,8 @@ the broker to produce a single JSON file containing everything the
 market session debrief protocol needs.
 
 Sprint 25.7 — DEF-079.
+Sprint 32.9+ — Added counterfactual_summary, experiment_summary, safety_summary,
+quality_distribution sections (Phase 4b/4c protocol additions).
 """
 
 from __future__ import annotations
@@ -34,6 +36,9 @@ async def export_debrief_data(
     broker: Broker | None,
     orchestrator: Orchestrator | None,
     output_dir: str = "logs",
+    counterfactual_db_path: str | None = None,
+    experiment_db_path: str | None = None,
+    order_manager: object | None = None,
 ) -> str | None:
     """Export debrief data to a JSON file for post-session analysis.
 
@@ -48,6 +53,9 @@ async def export_debrief_data(
         broker: Broker instance for account state.
         orchestrator: Orchestrator for regime/allocation state.
         output_dir: Directory to write the output file.
+        counterfactual_db_path: Path to counterfactual.db (Sprint 32.9+).
+        experiment_db_path: Path to experiments.db (Sprint 32.9+).
+        order_manager: OrderManager instance for margin circuit state (Sprint 32.9+).
 
     Returns:
         File path on success, None on failure.
@@ -71,6 +79,11 @@ async def export_debrief_data(
         # --- Quality History ---
         result["quality_history"] = await _export_quality_history(db, session_date)
 
+        # --- Quality Distribution (Sprint 32.9+) ---
+        result["quality_distribution"] = await _export_quality_distribution(
+            db, session_date
+        )
+
         # --- Trades ---
         result["trades"] = await _export_trades(db, session_date)
 
@@ -84,6 +97,19 @@ async def export_debrief_data(
 
         # --- Regime ---
         result["regime"] = _export_regime(orchestrator)
+
+        # --- Counterfactual Summary (Sprint 32.9+) ---
+        result["counterfactual_summary"] = await _export_counterfactual_summary(
+            counterfactual_db_path, session_date
+        )
+
+        # --- Experiment Summary (Sprint 32.9+) ---
+        result["experiment_summary"] = await _export_experiment_summary(
+            experiment_db_path, session_date
+        )
+
+        # --- Safety Summary (Sprint 32.9+) ---
+        result["safety_summary"] = _export_safety_summary(order_manager, orchestrator)
 
         # Write to file
         output_path = Path(output_dir)
@@ -333,6 +359,277 @@ async def _export_account_state(
 
     except Exception as e:
         logger.warning("Debrief export: account_state failed: %s", e)
+        return {"error": str(e)}
+
+
+async def _export_quality_distribution(
+    db: DatabaseManager, session_date: str
+) -> dict[str, Any]:
+    """Query quality_history for grade distribution and dimension averages."""
+    try:
+        summary: dict[str, Any] = {}
+
+        # Grade counts
+        rows = await db.fetch_all(
+            "SELECT grade, COUNT(*) FROM quality_history "
+            "WHERE created_at >= ? GROUP BY grade ORDER BY grade",
+            (session_date,),
+        )
+        summary["grade_counts"] = {r[0]: r[1] for r in rows}
+
+        # Grade-outcome correlation (only for trades that completed)
+        rows = await db.fetch_all(
+            "SELECT grade, COUNT(*) as signals, "
+            "SUM(CASE WHEN outcome_r_multiple > 0 THEN 1 ELSE 0 END) as wins, "
+            "AVG(outcome_r_multiple) as avg_r "
+            "FROM quality_history "
+            "WHERE created_at >= ? AND outcome_trade_id IS NOT NULL "
+            "GROUP BY grade ORDER BY grade",
+            (session_date,),
+        )
+        summary["grade_outcomes"] = {
+            r[0]: {
+                "trades": r[1],
+                "win_rate": round(r[2] / r[1], 3) if r[1] > 0 else 0.0,
+                "avg_r": round(r[3], 3) if r[3] is not None else None,
+            }
+            for r in rows
+        }
+
+        # Dimension averages
+        rows = await db.fetch_all(
+            "SELECT AVG(pattern_strength), AVG(catalyst_quality), "
+            "AVG(volume_profile), AVG(historical_match), AVG(regime_alignment), "
+            "AVG(composite_score) "
+            "FROM quality_history WHERE created_at >= ?",
+            (session_date,),
+        )
+        if rows and rows[0][0] is not None:
+            r = rows[0]
+            summary["dimension_averages"] = {
+                "pattern_strength": round(r[0], 1) if r[0] is not None else None,
+                "catalyst_quality": round(r[1], 1) if r[1] is not None else None,
+                "volume_profile": round(r[2], 1) if r[2] is not None else None,
+                "historical_match": round(r[3], 1) if r[3] is not None else None,
+                "regime_alignment": round(r[4], 1) if r[4] is not None else None,
+                "composite_score": round(r[5], 1) if r[5] is not None else None,
+            }
+        else:
+            summary["dimension_averages"] = None
+
+        return summary
+
+    except Exception as e:
+        logger.warning("Debrief export: quality_distribution failed: %s", e)
+        return {"error": str(e)}
+
+
+async def _export_counterfactual_summary(
+    counterfactual_db_path: str | None, session_date: str
+) -> dict[str, Any]:
+    """Query counterfactual.db for shadow/rejected position performance."""
+    if counterfactual_db_path is None:
+        return {"error": "counterfactual_db_path not provided"}
+
+    try:
+        db_path = Path(counterfactual_db_path)
+        if not db_path.exists():
+            return {"error": f"counterfactual.db not found at {counterfactual_db_path}"}
+
+        async with aiosqlite.connect(str(db_path)) as conn:
+            conn.row_factory = aiosqlite.Row
+
+            # Total volume
+            cursor = await conn.execute(
+                "SELECT COUNT(*), "
+                "SUM(CASE WHEN closed_at IS NOT NULL THEN 1 ELSE 0 END) "
+                "FROM counterfactual_positions WHERE date(opened_at) = ?",
+                (session_date,),
+            )
+            row = await cursor.fetchone()
+            total_opened = row[0] if row else 0
+            total_closed = row[1] if row else 0
+
+            # Per-strategy stats
+            cursor = await conn.execute(
+                "SELECT strategy_id, "
+                "COUNT(*) as total, "
+                "SUM(CASE WHEN closed_at IS NOT NULL THEN 1 ELSE 0 END) as closed, "
+                "SUM(CASE WHEN theoretical_r_multiple > 0 AND closed_at IS NOT NULL "
+                "    THEN 1 ELSE 0 END) as wins, "
+                "AVG(CASE WHEN closed_at IS NOT NULL THEN theoretical_r_multiple ELSE NULL END) as avg_r, "
+                "AVG(CASE WHEN closed_at IS NOT NULL THEN theoretical_pnl ELSE NULL END) as avg_pnl "
+                "FROM counterfactual_positions WHERE date(opened_at) = ? "
+                "GROUP BY strategy_id",
+                (session_date,),
+            )
+            by_strategy: dict[str, Any] = {}
+            for r in await cursor.fetchall():
+                closed = r["closed"] or 0
+                by_strategy[r["strategy_id"]] = {
+                    "positions_opened": r["total"],
+                    "positions_closed": closed,
+                    "wins": r["wins"] or 0,
+                    "losses": closed - (r["wins"] or 0),
+                    "avg_r": round(r["avg_r"], 3) if r["avg_r"] is not None else None,
+                    "avg_pnl": round(r["avg_pnl"], 2) if r["avg_pnl"] is not None else None,
+                }
+
+            # By rejection stage
+            cursor = await conn.execute(
+                "SELECT rejection_stage, COUNT(*) "
+                "FROM counterfactual_positions WHERE date(opened_at) = ? "
+                "GROUP BY rejection_stage ORDER BY COUNT(*) DESC",
+                (session_date,),
+            )
+            by_rejection_stage = {r[0]: r[1] for r in await cursor.fetchall()}
+
+            # By exit reason (closed positions only)
+            cursor = await conn.execute(
+                "SELECT exit_reason, COUNT(*) "
+                "FROM counterfactual_positions "
+                "WHERE date(opened_at) = ? AND closed_at IS NOT NULL "
+                "GROUP BY exit_reason ORDER BY COUNT(*) DESC",
+                (session_date,),
+            )
+            by_exit_reason = {str(r[0]): r[1] for r in await cursor.fetchall()}
+
+            return {
+                "total_positions_opened": total_opened,
+                "total_positions_closed": total_closed,
+                "by_strategy": by_strategy,
+                "by_rejection_stage": by_rejection_stage,
+                "by_exit_reason": by_exit_reason,
+            }
+
+    except Exception as e:
+        logger.warning("Debrief export: counterfactual_summary failed: %s", e)
+        return {"error": str(e)}
+
+
+async def _export_experiment_summary(
+    experiment_db_path: str | None, session_date: str
+) -> dict[str, Any]:
+    """Query experiments.db for variant and promotion activity."""
+    if experiment_db_path is None:
+        return {"error": "experiment_db_path not provided"}
+
+    try:
+        db_path = Path(experiment_db_path)
+        if not db_path.exists():
+            return {"error": f"experiments.db not found at {experiment_db_path}"}
+
+        async with aiosqlite.connect(str(db_path)) as conn:
+            conn.row_factory = aiosqlite.Row
+
+            # Total spawned variants
+            cursor = await conn.execute("SELECT COUNT(*) FROM variants")
+            row = await cursor.fetchone()
+            variants_spawned = row[0] if row else 0
+
+            # Variants by pattern
+            cursor = await conn.execute(
+                "SELECT base_pattern, GROUP_CONCAT(variant_id, ',') "
+                "FROM variants GROUP BY base_pattern"
+            )
+            variants_by_pattern: dict[str, list[str]] = {}
+            for r in await cursor.fetchall():
+                variants_by_pattern[r[0]] = r[1].split(",") if r[1] else []
+
+            # Variant shadow trade stats from experiments table
+            cursor = await conn.execute(
+                "SELECT experiment_id, pattern_name, shadow_trades, "
+                "shadow_expectancy, status "
+                "FROM experiments WHERE is_baseline = 0 "
+                "ORDER BY shadow_trades DESC"
+            )
+            variant_shadow_trades: dict[str, Any] = {}
+            for r in await cursor.fetchall():
+                variant_shadow_trades[r["experiment_id"]] = {
+                    "pattern_name": r["pattern_name"],
+                    "trades": r["shadow_trades"],
+                    "expectancy": round(r["shadow_expectancy"], 3)
+                    if r["shadow_expectancy"] is not None
+                    else None,
+                    "status": r["status"],
+                }
+
+            # Promotion events today
+            cursor = await conn.execute(
+                "SELECT COUNT(*) FROM promotion_events WHERE date(timestamp) = ?",
+                (session_date,),
+            )
+            row = await cursor.fetchone()
+            promotion_events_today = row[0] if row else 0
+
+            return {
+                "variants_spawned": variants_spawned,
+                "variants_by_pattern": variants_by_pattern,
+                "variant_shadow_trades": variant_shadow_trades,
+                "promotion_events_today": promotion_events_today,
+            }
+
+    except Exception as e:
+        logger.warning("Debrief export: experiment_summary failed: %s", e)
+        return {"error": str(e)}
+
+
+def _export_safety_summary(
+    order_manager: object | None,
+    orchestrator: object | None,
+) -> dict[str, Any]:
+    """Read safety-critical state from OrderManager and Orchestrator config.
+
+    Margin circuit fields are read via getattr from the OrderManager instance.
+    Fields not tracked in-memory (EOD flatten pass counts, signal skip count,
+    peak concurrent positions) are reported as null — derive them from the JSONL
+    log using the Phase 6 queries in the debrief protocol.
+    """
+    try:
+        # Margin circuit breaker state
+        circuit_open = bool(getattr(order_manager, "_margin_circuit_open", False))
+        rejection_count = int(getattr(order_manager, "_margin_rejection_count", 0))
+
+        # Signal cutoff config (duck-typed from orchestrator config)
+        orchestrator_cfg = getattr(orchestrator, "_config", None) if orchestrator is not None else None
+        cutoff_enabled = bool(getattr(orchestrator_cfg, "signal_cutoff_enabled", False))
+        cutoff_time = str(getattr(orchestrator_cfg, "signal_cutoff_time", "15:30"))
+
+        # Risk limits config (duck-typed for max_concurrent_positions)
+        om_config = getattr(order_manager, "_config", None) if order_manager is not None else None
+        eod_timeout = getattr(om_config, "eod_flatten_timeout_seconds", None)
+        margin_threshold = getattr(om_config, "margin_rejection_threshold", None)
+
+        return {
+            "margin_circuit_breaker": {
+                "triggered": circuit_open,
+                "rejection_count": rejection_count,
+                "rejection_threshold": int(margin_threshold) if margin_threshold is not None else None,
+                # open_time/reset_time/entries_blocked: not tracked in-memory — derive from JSONL log
+                "open_time": None,
+                "reset_time": None,
+                "entries_blocked": None,
+            },
+            "eod_flatten": {
+                # Pass counts not tracked in-memory — derive from JSONL log (Phase 6)
+                "timeout_seconds": int(eod_timeout) if eod_timeout is not None else None,
+                "pass1_filled": None,
+                "pass1_rejected": None,
+                "pass1_timed_out": None,
+                "pass2_orphans_found": None,
+                "pass2_filled": None,
+                "positions_remaining_after": None,
+            },
+            "signal_cutoff": {
+                "active": cutoff_enabled,
+                "cutoff_time": cutoff_time,
+                # signals_skipped: not counted in-memory — derive from JSONL log
+                "signals_skipped": None,
+            },
+        }
+
+    except Exception as e:
+        logger.warning("Debrief export: safety_summary failed: %s", e)
         return {"error": str(e)}
 
 

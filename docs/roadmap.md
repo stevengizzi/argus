@@ -1,7 +1,7 @@
 # ARGUS — Strategic Roadmap
 
 > From artisanal strategies to ensemble alpha — the complete path
-> **v3.0 — April 1, 2026** (Sprint 32 complete — Parameterized Templates + Experiment Pipeline)
+> **v3.1 — April 2, 2026** (Sprint 32.9 complete — Operational Hardening + Position Safety + Quality Recalibration)
 > **Status:** CANONICAL — this is the single source of truth for ARGUS's strategic direction and sprint queue.
 > **Supersedes:** `docs/research/ARGUS_Expanded_Roadmap.md` (Feb 26), `docs/argus_unified_vision_roadmap.md` (Mar 5), `docs/10_PHASE3_SPRINT_PLAN.md` (all forward-looking sections)
 
@@ -118,7 +118,7 @@ These foundations are correct and remain:
 
 ARGUS completed 21 sprints + sub-sprints in ~17 calendar days of active development (Feb 14 – Mar 5). Average sprint: ~0.8 calendar days. However, sprint complexity has been increasing — early sprints (1–5) were dense single-day affairs, while later sprints (21a–21d, 21.5) span multiple days. The roadmap below assumes sprint durations of 1–4 days each depending on complexity, with some parallelism where noted.
 
-**Current state:** Sprint 32.75 complete (April 2, 2026). ~4,530 pytest + 805 Vitest. Twelve active strategies. Full infrastructure stack operational: BacktestEngine + Evaluation Framework + Regime Intelligence (11-field RegimeVector) + Counterfactual Engine + VIX Data Service + Quality Engine + NLP Catalyst Pipeline + Universe Manager + AI Copilot + Learning Loop V1 + Exit Management + MFE/MAE Tracking + **Experiment Pipeline** (pattern factory, parameter fingerprinting, exit params as variant dimensions, BacktestEngine all 7 patterns, variant spawning, backtest pre-filter, autonomous promotion/demotion) + **The Arena** (real-time multi-position visualization — 10th Command Center page). Ten-page Command Center. Live Databento + IBKR paper trading. Phase 7 Gate pending (post-32.5). Next: Sprint 31A (Pattern Expansion III — reach 15 strategies).
+**Current state:** Sprint 32.9 complete (April 2, 2026). ~4,579 pytest + 846 Vitest. 10 live + 2 shadow (12 total) strategies. Full infrastructure stack operational: BacktestEngine + Evaluation Framework + Regime Intelligence (11-field RegimeVector) + Counterfactual Engine + VIX Data Service + Quality Engine + NLP Catalyst Pipeline + Universe Manager + AI Copilot + Learning Loop V1 + Exit Management + MFE/MAE Tracking + **Experiment Pipeline** (enabled, pattern factory, parameter fingerprinting, exit params as variant dimensions, BacktestEngine all 7 patterns, variant spawning, backtest pre-filter, autonomous promotion/demotion) + **The Arena** (real-time multi-position visualization — 10th Command Center page) + **Operational Hardening** (EOD flatten synchronous verification, margin circuit breaker, pre-EOD signal cutoff, max concurrent positions cap). Ten-page Command Center. Live Databento + IBKR paper trading. ABCD + Flat-Top Breakout in shadow mode awaiting optimization. Phase 7 Gate pending (post-32.5). Next: Sprint 31A (Pattern Expansion III — reach 15 strategies).
 
 ---
 

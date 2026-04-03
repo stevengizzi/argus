@@ -1,6 +1,6 @@
 # ARGUS — Project Knowledge (Claude Context)
 
-> *Tier A operational context for Claude Code and Claude.ai. Last updated: April 2, 2026 (Sprint 32.8 doc sync — Arena Latency + UI Polish Sweep).*
+> *Tier A operational context for Claude Code and Claude.ai. Last updated: April 2, 2026 (Sprint 32.9 doc sync — Operational Hardening + Position Safety + Quality Recalibration).*
 > *Full decision rationale: `docs/decision-log.md` | Sprint details: `docs/sprint-history.md` | DEC index: `docs/dec-index.md`*
 
 ---
@@ -11,8 +11,8 @@ ARGUS is a fully automated, AI-enhanced multi-strategy day trading system for US
 
 ## Current State
 
-**Tests:** ~4,539 pytest + 846 Vitest (0 pre-existing failures)
-**Sprints completed:** 1 through 29 + 21.6 + 25.9 + 27.5 + 27.6 + 27.65 + 27.7 + 27.75 + 27.8 + 27.9 + 27.95 + 28.5 + 28.75 + 29.5 + 32 + 32.5 + 32.75 + 32.8 (32 full sprints + 41 sub-sprints)
+**Tests:** ~4,579 pytest + 846 Vitest (0 pre-existing failures)
+**Sprints completed:** 1 through 29 + 21.6 + 25.9 + 27.5 + 27.6 + 27.65 + 27.7 + 27.75 + 27.8 + 27.9 + 27.95 + 28.5 + 28.75 + 29.5 + 32 + 32.5 + 32.75 + 32.8 + 32.9 (32 full sprints + 42 sub-sprints)
 **Active sprint:** 31A (Pattern Expansion III — reach 15 strategies)
 **GitHub:** `https://github.com/stevengizzi/argus.git` (public)
 
@@ -86,12 +86,13 @@ ARGUS is a fully automated, AI-enhanced multi-strategy day trading system for US
 | 32.5 | Experiment Pipeline Completion + Visibility | 4489+711V | Apr 1 | — (no new DECs) |
 | 32.75 | The Arena + UI/Operational Sweep | 4530+805V | Apr 2 | — (no new DECs) |
 | 32.8 | Arena Latency + UI Polish Sweep | 4539+846V | Apr 2 | — (no new DECs) |
+| 32.9 | Operational Hardening + Position Safety + Quality Recalibration | 4579+846V | Apr 2 | — (no new DECs) |
 
 *Full sprint scopes and session details: `docs/sprint-history.md`*
 
 ### Build Track Queue
 
-~~26~~ ✅ → ~~27~~ ✅ → ~~21.6~~ ✅ → ~~25.9~~ ✅ → ~~27.5~~ ✅ → ~~27.6~~ ✅ → ~~27.7~~ ✅ → ~~27.75~~ ✅ → ~~27.8~~ ✅ → ~~27.9~~ ✅ → ~~27.95~~ ✅ → ~~28~~ ✅ → ~~28.5~~ ✅ → ~~28.75~~ ✅ → ~~29~~ ✅ → ~~29.5~~ ✅ → ~~32~~ ✅ → ~~32.5~~ ✅ → ~~32.75~~ ✅ → ~~32.8~~ ✅ → **31A (Pattern Expansion III — reach 15 strategies)** → 30 (Short Selling + Parabolic Short — deferred until longs profitable) → 31.5 (Parallel Sweep Infrastructure) → 31B (Research Console — deferred per DEC-379) → 33 (Statistical Validation) → **33.5 (Adversarial Stress Testing)** → 34–35 (Systematic Search ★, Ensemble Analysis) → 36–42 (Cross-Family Search, Ensemble Orchestrator V2, Synapse, Learning Loop V2, Continuous Discovery, Performance Workbench). Sprint 32.75 complete: 10th Command Center page (The Arena — real-time multi-chart position visualization), 13 UI bugs/polish items, 5 operational fixes, strategy identity system (unique colors/badges/letters for all 12 strategies), Dashboard overhaul, Arena REST + WebSocket, IBC setup guide (docs/ibc-setup.md). No new DECs. Sprint 32.8 complete: Arena TickEvent subscription (bypasses 1s throttle), `arena_tick_price` message type, pre-market candle context (4 AM ET), ArenaCard/MiniChart polish (entry marker, auto-zoom, no border), VitalsStrip component, Dashboard 4-row layout, Trades unified styling + Shadow Trades features (outcome toggle, time presets, infinite scroll, sortable columns). DEF-137 + DEF-138 resolved. No new DECs. CPA consultation removed from all gates per DEC-380. Tax Intelligence Automation added to post-revenue horizon (DEC-380). Order Flow Model deferred to post-revenue (DEC-238). Historical data purchase deferred indefinitely (DEC-353); 96 months of OHLCV-1m available at $0 via XNAS.ITCH + XNYS.PILLAR (DEC-358). Full roadmap: `docs/roadmap.md`.
+~~26~~ ✅ → ~~27~~ ✅ → ~~21.6~~ ✅ → ~~25.9~~ ✅ → ~~27.5~~ ✅ → ~~27.6~~ ✅ → ~~27.7~~ ✅ → ~~27.75~~ ✅ → ~~27.8~~ ✅ → ~~27.9~~ ✅ → ~~27.95~~ ✅ → ~~28~~ ✅ → ~~28.5~~ ✅ → ~~28.75~~ ✅ → ~~29~~ ✅ → ~~29.5~~ ✅ → ~~32~~ ✅ → ~~32.5~~ ✅ → ~~32.75~~ ✅ → ~~32.8~~ ✅ → ~~32.9~~ ✅ → **31A (Pattern Expansion III — reach 15 strategies)** → 30 (Short Selling + Parabolic Short — deferred until longs profitable) → 31.5 (Parallel Sweep Infrastructure) → 31B (Research Console — deferred per DEC-379) → 33 (Statistical Validation) → **33.5 (Adversarial Stress Testing)** → 34–35 (Systematic Search ★, Ensemble Analysis) → 36–42 (Cross-Family Search, Ensemble Orchestrator V2, Synapse, Learning Loop V2, Continuous Discovery, Performance Workbench). Sprint 32.75 complete: 10th Command Center page (The Arena — real-time multi-chart position visualization), 13 UI bugs/polish items, 5 operational fixes, strategy identity system (unique colors/badges/letters for all 12 strategies), Dashboard overhaul, Arena REST + WebSocket, IBC setup guide (docs/ibc-setup.md). No new DECs. Sprint 32.8 complete: Arena TickEvent subscription (bypasses 1s throttle), `arena_tick_price` message type, pre-market candle context (4 AM ET), ArenaCard/MiniChart polish (entry marker, auto-zoom, no border), VitalsStrip component, Dashboard 4-row layout, Trades unified styling + Shadow Trades features (outcome toggle, time presets, infinite scroll, sortable columns). DEF-137 + DEF-138 resolved. No new DECs. Sprint 32.9 complete: EOD flatten synchronous verification + zombie queue fix (root cause: `qty`/`shares` mismatch), margin circuit breaker (IBKR Error 201), intelligence polling crash fix, quality engine weight recalibration + grade threshold recalibration, pre-EOD signal cutoff, max_concurrent_positions: 50 enabled, overflow broker_capacity 60→50, ABCD + Flat-Top demoted to shadow mode, experiment pipeline enabled. DEF-139/140/141/142 resolved. No new DECs. CPA consultation removed from all gates per DEC-380. Tax Intelligence Automation added to post-revenue horizon (DEC-380). Order Flow Model deferred to post-revenue (DEC-238). Historical data purchase deferred indefinitely (DEC-353); 96 months of OHLCV-1m available at $0 via XNAS.ITCH + XNYS.PILLAR (DEC-358). Full roadmap: `docs/roadmap.md`.
 
 ### Validation Track
 
@@ -235,7 +236,11 @@ Per-trade risk: 0.5–1% of strategy allocation. Daily loss limit: 3–5%. Weekl
 - **FMP Starter plan news restriction:** FMP news endpoints (`stock_news`, `press_releases`) return HTTP 403 on Starter plan ($22/mo). `fmp_news.enabled: false` in `system_live.yaml`. FMP news circuit breaker (DEC-323) prevents request spam if accidentally enabled. Upgrade to Premium ($59/mo) would resolve.
 - **Audit:** Every action logged immutably.
 - **Paper trading config overrides (Sprint 27.75):** Risk tiers reduced 10x in `quality_engine.yaml` and `system_live.yaml`, `consecutive_loss_throttle: 999` in `orchestrator.yaml`, `min_position_risk_dollars: 10.0` in `risk_limits.yaml`. These must be restored before live trading — see `docs/pre-live-transition-checklist.md`.
-- **Overflow routing (Sprint 27.95):** When open positions reach `overflow.broker_capacity` (default 60, raised from 30 in Sprint 32.75 for paper trading capacity), approved signals route to CounterfactualTracker as shadow positions instead of IBKR. Config: `overflow.enabled`, `overflow.broker_capacity` in `config/overflow.yaml`. Preserves learning data. Bypassed for SimulatedBroker. Note: evaluate `broker_capacity` before live trading — see `docs/pre-live-transition-checklist.md`.
+- **Overflow routing (Sprint 27.95):** When open positions reach `overflow.broker_capacity` (50 as of Sprint 32.9, aligned with `max_concurrent_positions`), approved signals route to CounterfactualTracker as shadow positions instead of IBKR. Config: `overflow.enabled`, `overflow.broker_capacity` in `config/overflow.yaml`. Preserves learning data. Bypassed for SimulatedBroker. Note: evaluate `broker_capacity` before live trading — see `docs/pre-live-transition-checklist.md`.
+- **Max concurrent positions (Sprint 32.9):** `max_concurrent_positions: 50` in `risk_limits.yaml` activates the DEC-367 position count check. New entries are rejected when 50 positions are open.
+- **Pre-EOD signal cutoff (Sprint 32.9):** `signal_cutoff_time: "15:30"` (ET) on OrchestratorConfig stops new signal processing after 3:30 PM. Strategies still evaluate but approved signals are discarded. Config-gated via `signal_cutoff_enabled: true` in `orchestrator.yaml`.
+- **Margin circuit breaker (Sprint 32.9):** Order Manager tracks IBKR Error 201 margin rejections on entry orders. Circuit opens after `margin_rejection_threshold: 10` rejections, blocking new entry orders. Bypassed for flattens/stops/bracket legs. Auto-resets when position count drops below `margin_circuit_reset_positions: 20`. Daily reset at market open.
+- **Strategy shadow mode (Sprint 32.9):** ABCD and Flat-Top Breakout set to `mode: shadow`. Both generate counterfactual data via CounterfactualTracker but do not place live orders. 10 strategies remain in live mode.
 - **Paper trading data-capture overrides (Sprint 29.5):** `daily_loss_limit_pct: 1.0`, `weekly_loss_limit_pct: 1.0`, `throttler_suspend_enabled: false`, `orb_family_mutual_exclusion: false`. All documented in `docs/pre-live-transition-checklist.md` for restoration before live trading.
 - **Reconciliation safety (Sprint 27.95):** Broker-confirmed positions (with IBKR entry fill callbacks) are NEVER auto-closed by reconciliation. `auto_cleanup_unconfirmed: false` by default (warn-only). See `docs/pre-live-transition-checklist.md` for live trading config decisions.
 
@@ -361,9 +366,9 @@ Universal protocols, templates, and the runner live in the `workflow/` submodule
 | `docs/architecture.md` | Technical blueprint — how |
 | `docs/roadmap.md` | Strategic vision + sprint queue (DEC-262) |
 | `docs/sprint-campaign.md` | Operational sprint choreography |
-| `docs/decision-log.md` | All 381 DEC entries with full rationale (no new DECs in Sprints 32–32.8 — all design decisions followed established patterns) |
+| `docs/decision-log.md` | All 381 DEC entries with full rationale (no new DECs in Sprints 32–32.9 — all design decisions followed established patterns) |
 | `docs/dec-index.md` | Quick-reference DEC index with status |
-| `docs/sprint-history.md` | Complete sprint history (1–29.5 + 32–32.8 + sub-sprints) |
+| `docs/sprint-history.md` | Complete sprint history (1–29.5 + 32–32.9 + sub-sprints) |
 | `docs/pre-live-transition-checklist.md` | Config + test values to restore before live trading |
 | `docs/process-evolution.md` | Workflow evolution narrative |
 | `docs/risk-register.md` | Assumptions and risks |
@@ -387,6 +392,7 @@ Universal protocols, templates, and the runner live in the `workflow/` submodule
 - **Spec default values frequently diverge from actual constructor defaults.** Cross-validation tests that programmatically compare PatternParam metadata against Pydantic config field defaults catch these discrepancies at test time. Always trust constructor defaults over spec when they conflict. Sprint 32 found 7 such discrepancies.
 - **Pydantic Field bounds must be validated against PatternParam ranges.** A Pydantic bound (ge/le/gt/lt) that is tighter than a PatternParam min_value/max_value silently rejects valid sweep values. Add cross-validation tests when adding new PatternParam entries.
 - **Parameter fingerprint uses detection params only.** SHA-256 of canonical JSON (sorted keys, compact separators) of detection params — non-detection fields (strategy_id, name, enabled, operating_window) are excluded to avoid spurious fingerprint differences across variant instances of the same parameters.
+- **`getattr(pos, "qty", 0)` silently returns 0 on Position objects.** The Position model uses `shares`, not `qty`. The `qty` attribute exists on Order objects. Four Order Manager code paths used `getattr(pos, "qty", 0)` which returned the default 0 rather than the Position's actual share count — silently breaking zombie classification, EOD flatten Pass 2, reconstruction, and flatten-pending retry. Always use `pos.shares` directly on Position objects. (Sprint 32.9, DEF-139/140 root cause.)
 
 ---
 
