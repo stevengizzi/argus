@@ -190,7 +190,7 @@ class ExperimentStore:
                         record.parameter_fingerprint,
                         json.dumps(record.parameters),
                         str(record.status),
-                        json.dumps(record.backtest_result)
+                        json.dumps(record.backtest_result, default=str)
                         if record.backtest_result is not None
                         else None,
                         record.shadow_trades,

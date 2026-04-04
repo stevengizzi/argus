@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 import aiosqlite
 import pytest
@@ -349,3 +349,33 @@ async def test_experiment_with_backtest_result_serializes_correctly(
     assert retrieved is not None
     assert retrieved.backtest_result == exp.backtest_result
     assert retrieved.status == ExperimentStatus.COMPLETED
+
+
+@pytest.mark.asyncio
+async def test_save_experiment_with_date_objects_in_backtest_result(
+    store: ExperimentStore,
+) -> None:
+    """DEF-151 regression: date objects in backtest_result must not raise TypeError.
+
+    MultiObjectiveResult.to_dict() produces datetime.date values for
+    start_date/end_date. save_experiment must serialize them without crashing.
+    The dates are stored as ISO-format strings and round-trip correctly.
+    """
+    exp = _make_experiment(status=ExperimentStatus.COMPLETED)
+    exp.backtest_result = {
+        "start_date": date(2025, 1, 1),
+        "end_date": date(2025, 12, 31),
+        "sharpe_ratio": 1.5,
+        "win_rate": 0.48,
+    }
+
+    # Must not raise TypeError: Object of type date is not JSON serializable
+    await store.save_experiment(exp)
+
+    retrieved = await store.get_experiment(exp.experiment_id)
+    assert retrieved is not None
+    assert retrieved.backtest_result is not None
+    # Dates are stored as ISO strings
+    assert retrieved.backtest_result["start_date"] == "2025-01-01"
+    assert retrieved.backtest_result["end_date"] == "2025-12-31"
+    assert retrieved.backtest_result["sharpe_ratio"] == pytest.approx(1.5)
