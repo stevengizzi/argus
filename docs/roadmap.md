@@ -1,7 +1,7 @@
 # ARGUS — Strategic Roadmap
 
 > From artisanal strategies to ensemble alpha — the complete path
-> **v3.4 — April 3, 2026** (Sprint 31.5 complete — Parallel Sweep Infrastructure; DEF-146 resolved; all 10 PatternModule patterns have universe filter configs; +34 pytest)
+> **v3.5 — April 5, 2026** (DEF-151 fix + Sweep Impromptu complete; small-sample sweeps across 9 patterns; 2 micro_pullback variants promotable; DEF-152/153/154 confirmed; full-universe re-sweeps pending)
 > **Status:** CANONICAL — this is the single source of truth for ARGUS's strategic direction and sprint queue.
 > **Supersedes:** `docs/research/ARGUS_Expanded_Roadmap.md` (Feb 26), `docs/argus_unified_vision_roadmap.md` (Mar 5), `docs/10_PHASE3_SPRINT_PLAN.md` (all forward-looking sections)
 
@@ -118,7 +118,7 @@ These foundations are correct and remain:
 
 ARGUS completed 21 sprints + sub-sprints in ~17 calendar days of active development (Feb 14 – Mar 5). Average sprint: ~0.8 calendar days. However, sprint complexity has been increasing — early sprints (1–5) were dense single-day affairs, while later sprints (21a–21d, 21.5) span multiple days. The roadmap below assumes sprint durations of 1–4 days each depending on complexity, with some parallelism where noted.
 
-**Current state:** Sprint 31.5 complete (April 3, 2026). 4,857 pytest + 846 Vitest. 13 live + 2 shadow (15 total) strategies. Full infrastructure stack operational: BacktestEngine + Evaluation Framework + Regime Intelligence (11-field RegimeVector) + Counterfactual Engine + VIX Data Service + Quality Engine + NLP Catalyst Pipeline + Universe Manager + AI Copilot + Learning Loop V1 + Exit Management + MFE/MAE Tracking + **Experiment Pipeline** (enabled, pattern factory, parameter fingerprinting, exit params as variant dimensions, BacktestEngine all 10 patterns, variant spawning, backtest pre-filter, autonomous promotion/demotion) + **The Arena** (real-time multi-position visualization — 10th Command Center page) + **Operational Hardening** (EOD flatten synchronous verification, margin circuit breaker, pre-EOD signal cutoff, max concurrent positions cap) + **Historical Query Service** (DuckDB read-only analytical layer over Parquet cache, config-gated, `validate_symbol_coverage()` for sweep pre-filtering) + **Universe-Aware Sweep Flags** (`--symbols`/`--universe-filter` on `run_experiment.py`, `UniverseFilterConfig`, DuckDB coverage validation, DEF-145 resolved) + **Parallel Sweep Infrastructure** (`ProcessPoolExecutor` parallel execution in ExperimentRunner, `workers`/`universe_filter` params on `run_sweep()`, `max_workers` config, `--workers` CLI flag, DEF-146 resolved, all 10 PatternModule patterns have universe filter YAMLs). Ten-page Command Center. Live Databento + IBKR paper trading. ABCD + Flat-Top Breakout in shadow mode awaiting optimization. Phase 6 Gate met (15 strategies). Next: universe-aware sweeps → Sweep Analysis Impromptu → Sprint 30 (Short Selling).
+**Current state:** DEF-151 fix + Sweep Impromptu complete (April 5, 2026). 4,858 pytest + 846 Vitest. 13 live + 2 shadow (15 total) strategies. Full infrastructure stack operational: BacktestEngine + Evaluation Framework + Regime Intelligence (11-field RegimeVector) + Counterfactual Engine + VIX Data Service + Quality Engine + NLP Catalyst Pipeline + Universe Manager + AI Copilot + Learning Loop V1 + Exit Management + MFE/MAE Tracking + **Experiment Pipeline** (enabled, pattern factory, parameter fingerprinting, exit params as variant dimensions, BacktestEngine all 10 patterns, variant spawning, backtest pre-filter, autonomous promotion/demotion) + **The Arena** (real-time multi-position visualization — 10th Command Center page) + **Operational Hardening** (EOD flatten synchronous verification, margin circuit breaker, pre-EOD signal cutoff, max concurrent positions cap) + **Historical Query Service** (DuckDB read-only analytical layer over Parquet cache, config-gated, `validate_symbol_coverage()` for sweep pre-filtering) + **Universe-Aware Sweep Flags** (`--symbols`/`--universe-filter` on `run_experiment.py`, `UniverseFilterConfig`, DuckDB coverage validation, DEF-145 resolved) + **Parallel Sweep Infrastructure** (`ProcessPoolExecutor` parallel execution in ExperimentRunner, `workers`/`universe_filter` params on `run_sweep()`, `max_workers` config, `--workers` CLI flag, DEF-146 resolved, all 10 PatternModule patterns have universe filter YAMLs). Ten-page Command Center. Live Databento + IBKR paper trading. ABCD + Flat-Top Breakout in shadow mode awaiting optimization. Phase 6 Gate met (15 strategies). **Small-sample sweeps complete (Apr 5):** 2 micro_pullback variants promotable; PMH conditional; bull_flag + flat_top confirmed dead on tested universe; gap_and_go blocked by DEF-152; VWAP Bounce needs parameter rework (DEF-154). Full-universe re-sweeps (800–1,500 symbols per pattern) pending infrastructure hardening (DEF-152/153/154 blockers). Next: Sweep Infrastructure Hardening → Sweep Analysis Impromptu → Sprint 30.
 
 ---
 
@@ -545,14 +545,27 @@ Reconciliation redesign with broker-confirmed positions (DEC-369). Overflow rout
 - **16 strategies/patterns active (15 long + 1 short).**
 - **Tests:** ~80 new.
 
-### Impromptu: Sweep Analysis (post-Sprint 31.5 sweeps)
-**Prerequisite:** Sprint 31.5 complete + universe-aware sweeps finished executing.
+### Impromptu: Sweep Infrastructure Hardening (pre-full-universe re-sweeps)
+**Prerequisite:** Sweep Impromptu complete ✅ (Apr 5)
+**Target:** ~1 day
+
+**Context:** Small-sample sweeps (Apr 3–5) revealed three blockers that must be resolved before full-universe re-sweeps are practical and trustworthy:
+
+**Scope:**
+- **DEF-152 fix (MEDIUM):** gap_and_go stop-price bug — `stop_price = entry_price` when `breakout_margin_pct` near zero. Fix: minimum non-zero guard on `breakout_margin_pct` calculation. All gap_and_go sweep results invalid until fixed.
+- **DEF-153 fix (MEDIUM):** `config_fingerprint` NULL in all BacktestEngine trades — wire `parameter_hash` from `ExperimentRunner` through `BacktestEngine` → `TradeLogger` so per-run DBs correctly identify which parameter config produced each trade. Required for automated result-to-config mapping.
+- **DEF-154 fix (LOW):** VWAP Bounce sweep axes — add `min_prior_trend_bars` floor ≥20, `vwap_approach_distance_pct` parameter, `min_prior_trend_slope` filter, and max-signals-per-day cap to control signal density before re-sweeping.
+- **DuckDB persistence (LOW):** Formalize pre-resolved symbol list workflow (`@symbols.txt`) or add persisted DuckDB database to avoid VIEW initialization delay on every sweep invocation.
+
+### Impromptu: Sweep Analysis (post-full-universe re-sweeps)
+**Prerequisite:** Sweep Infrastructure Hardening complete + full-universe re-sweeps executed.
 **Target:** ~0.5 days
 
 **Scope:**
-- Analyze sweep results for all 10 patterns against their natural populations (universe_filter.yaml)
+- Analyze full-universe sweep results for all 10 patterns against their natural populations (universe_filter.yaml, 800–1,500 symbols per pattern)
 - Identify qualifying variants by pattern type (Sharpe ≥ 1.5, expectancy > 0, trades ≥ 30)
 - Update `config/experiments.yaml` with qualifying variants in shadow mode
+- Promote 2 micro_pullback variants (already identified from small-sample sweeps)
 - Update `docs/sprint-history.md` sweep results table
 - Any new DEF items from sweep findings
 
@@ -623,6 +636,10 @@ Reconciliation redesign with broker-confirmed positions (DEC-369). Overflow rout
 **State after:** Universe-aware sweeps can launch across all 10 patterns against their natural populations. Sprint 30 runs in parallel.
 
 **Tests:** 4,823 → 4,857 pytest (+34).
+
+**Follow-on (Apr 3–5):**
+- **DEF-151 fix (Apr 4):** `json.dumps(record.backtest_result, default=str)` in `store.py:193`. Root cause of Night 1 data loss (143 grid points computed, zero saved). +1 pytest. Commit: 3a48bcf.
+- **Sweep Impromptu (Apr 3–5):** Small-sample universe-aware sweeps (24–50 symbols per pattern) across 9 patterns. Key results: Micro Pullback — 2 promotable variants; PMH — conditional; Bull Flag + Flat-Top — confirmed dead on tested universes; Gap-and-Go — invalid (DEF-152); VWAP Bounce — wrong axes swept (DEF-154). DEF-152, DEF-153, DEF-154 opened. Full-universe re-sweeps pending Sweep Infrastructure Hardening.
 
 ### Sprint 31B: Research Console (NEW PAGE) — Deferred post-32 (DEC-379)
 **Target:** ~3 days

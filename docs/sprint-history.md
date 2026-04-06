@@ -46,6 +46,8 @@
 | AK — Historical Query Layer | 31A.5 | Apr 3, 2026 | DuckDB analytical layer over Parquet cache; HistoricalQueryService; CLI + REST; duckdb>=1.0,<2 dependency (+50 pytest) |
 | AL — Universe-Aware Sweep Flags | 31A.75 | Apr 3, 2026 | `--symbols`/`--universe-filter` flags on `run_experiment.py`; `UniverseFilterConfig`; DuckDB coverage validation; DEF-145 resolved (+12 pytest) |
 | AM — Parallel Sweep Infrastructure | 31.5 | Apr 3, 2026 | `ProcessPoolExecutor` parallel sweep execution; `workers` + `universe_filter` params on `run_sweep()`; `--workers` CLI flag; 2 new universe filter YAMLs; DEF-146 resolved (+34 pytest) |
+| — | DEF-151 Fix Impromptu | Apr 4, 2026 | `json.dumps(record.backtest_result, default=str)` in `store.py:193`; DEF-151 resolved; +1 pytest (4,858 total) |
+| AN — Sweep Impromptu | Universe-Aware Parameter Sweeps | Apr 3–5, 2026 | Small-sample sweeps across 9 patterns; 2 micro_pullback variants promotable; DEF-152/153/154 confirmed; no code changes |
 
 ---
 
@@ -2665,13 +2667,68 @@ New module — pure algorithmic NYSE holiday calendar, ported from frontend `ui/
 
 ---
 
+## DEF-151 Fix Impromptu (April 4, 2026)
+
+**Type:** Hotfix — single commit, not a formal sprint.
+**Tests:** 4,857 → 4,858 pytest (+1); Vitest 846 → 846 (+0)
+**Commit:** `3a48bcf fix(experiments): DEF-151 — date serialization in ExperimentStore`
+
+**Root cause:** `ExperimentStore.save_experiment()` called `json.dumps(record.backtest_result)` without a `default` handler. `MultiObjectiveResult.to_dict()` produces `datetime.date` objects from `BacktestResult.start_date` / `end_date` fields. `json.dumps()` raises `TypeError` on unserializable `date` objects — caught by the fire-and-forget WARNING log pattern, silently dropping results.
+
+**Fix:** Added `default=str` to the `json.dumps(record.backtest_result)` call in `argus/intelligence/experiments/store.py:193`.
+
+**Impact:** All Night 1 sweep results (Apr 3–4) — 143 grid points computed, zero saved to ExperimentStore. Per-run DBs in `data/backtest_runs/` survived and were used for analysis. DEF-151 was fixed before Night 2 re-runs (Apr 4–5).
+
+**Changes:**
+- `argus/intelligence/experiments/store.py` — `default=str` added to `json.dumps(record.backtest_result)`.
+- `tests/intelligence/experiments/test_store.py` — Regression test for date object serialization.
+
+**DEF status:** DEF-151 ✅ RESOLVED
+
+---
+
+## Sweep Impromptu — Universe-Aware Parameter Sweeps (April 3–5, 2026)
+
+**Type:** Operational activity — no code changes beyond DEF-151 fix. Not a formal sprint.
+**Tests:** 4,858 pytest + 846 Vitest (no change — no code modifications)
+**New DEFs opened:** DEF-152, DEF-153, DEF-154
+
+**Context:** Ran universe-aware parameter sweeps for 9 of 10 PatternModule patterns (skipping dip_and_rip which already had 2 qualifying variants from Sprint 31A). Sweeps used Sprint 31.5 infrastructure (`--workers 4`, `--universe-filter`) against pre-resolved symbol lists from DuckDB-filtered Parquet cache.
+
+**Symbol count caveat:** Due to DuckDB VIEW initialization slowness over the full 44 GB Parquet cache, the overnight agent pre-resolved small "representative" symbol lists (24–50 symbols per pattern) rather than the full target universe (expected 800–1,500 symbols per pattern after filtering). Results are directional but not definitive. Full-universe re-sweeps are a follow-up task.
+
+**Night 1 data loss:** DEF-151 (date serialization bug) caused ALL Night 1 sweep results (Apr 3–4) to fail to persist to ExperimentStore. 143 grid points computed, zero saved. Per-run DBs in `data/backtrack_runs/` survived and were used for analysis. DEF-151 was fixed before Night 2 re-runs.
+
+**Pattern verdicts (from analysis of 339 per-run DBs):**
+
+| Pattern | Verdict | Best avg R | Key Finding |
+|---------|---------|:----------:|-------------|
+| micro_pullback | PROMOTE 2 variants | 0.334 | mip=0.06/mib=15 (298 trades, 53.4% WR) and mip=0.05/mib=15 (658 trades, 52.4% WR) |
+| premarket_high_break | CONDITIONAL | 0.408 | Only 16 of 24 target symbols had cache coverage; NVDA=29% of trades with outsized 0.889 avg R |
+| hod_break | Inconclusive | 0.077 | Killed mid-sweep Night 1; Night 2 re-run had only 4/30 pass pre-filter |
+| abcd | Below threshold | 0.057 | Full 25-point grid completed; near-zero edge |
+| narrow_range_breakout | Below threshold | 0.031 | Too selective on momentum stocks; most configs produced 1 trade |
+| vwap_bounce | Wrong axes swept | 0.214 | 2–22 signals/symbol/day = noise; detection fires on every VWAP oscillation |
+| flat_top_breakout | Dead (this range) | −0.037 | 44 qualifying configs, 0 positive; near-50% WR suggests target_ratio is the issue |
+| bull_flag | Dead (this universe) | −0.101 | 55 qualifying configs, 0 positive; momentum universe not suitable for trend-following pattern |
+| gap_and_go | Corrupt | — | DEF-152 stop-price bug produces degenerate R-multiples; all results invalid |
+
+**Bugs confirmed by sweeps (all pre-existing, now independently validated):**
+- **DEF-152:** gap_and_go stop-price bug — `stop_price = entry_price` when `breakout_margin_pct` near zero, producing degenerate R-multiples. All gap_and_go sweep results invalid.
+- **DEF-153:** `config_fingerprint` NULL in all BacktestEngine trades — `parameter_hash` not flowing from `ExperimentRunner` to `TradeLogger`. Per-run DBs cannot map trades back to parameter configs without filename inference.
+- **DEF-154:** VWAP Bounce sweep axes inadequate — `vwap_touch_tolerance_pct × min_prior_trend_bars` doesn't control signal density. Configs produce 2–22 signals/symbol/day.
+
+**Analysis reports:** `data/sweep_logs/sweep_analysis_20260404.md`, `data/sweep_logs/sweep_summary_20260404.md`
+
+---
+
 ## Sprint Statistics
 
-- **Total sprints:** 34 full + 44 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9, 27.5, 27.6, 27.65, 27.7, 27.75, 27.8, 27.9, 27.95, 28.5, 28.75, 29, 29.5, 32.5, 32.75, 32.8, 32.9, 32.95, 31.5) + 3 impromptus (Good Friday Apr 3, 31A.5 Apr 3, 31A.75 Apr 3)
+- **Total sprints:** 34 full + 44 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9, 27.5, 27.6, 27.65, 27.7, 27.75, 27.8, 27.9, 27.95, 28.5, 28.75, 29, 29.5, 32.5, 32.75, 32.8, 32.9, 32.95, 31.5) + 5 impromptus (Good Friday Apr 3, 31A.5 Apr 3, 31A.75 Apr 3, DEF-151 Fix Apr 4, Sweep Impromptu Apr 3–5)
 - **Total sessions:** ~551+ Claude Code sessions
-- **Total tests:** 4,857 pytest + 846 Vitest = 5,703 total
-- **Total decisions:** 381 (DEC-001 through DEC-381; no new DECs in Sprints 29.5, 32, 32.5, 32.75, 32.8, 32.9, 32.95, Apr 3 hotfix, 31A, 31A.5, 31A.75, or 31.5)
-- **Calendar days (active dev):** ~49 (Feb 14 – Apr 3, 2026)
+- **Total tests:** 4,858 pytest + 846 Vitest = 5,704 total
+- **Total decisions:** 381 (DEC-001 through DEC-381; no new DECs in Sprints 29.5, 32, 32.5, 32.75, 32.8, 32.9, 32.95, Apr 3 hotfix, 31A, 31A.5, 31A.75, 31.5, DEF-151 fix, or Sweep Impromptu)
+- **Calendar days (active dev):** ~51 (Feb 14 – Apr 5, 2026)
 - **Largest sprint:** 22 (9 implementation + 5 fix + 9 reviews, largest scope)
 - **Cleanest sprint:** 23 (11 sessions, 0 regressions, 0 scope gaps requiring follow-up)
 - **Most test-dense:** Sprint 22 (286 new tests), Sprint 24 (209 new tests), Sprint 23.2 (188 new tests), Sprint 28 (179 new tests), Sprint 27.6 (171 new tests), Sprint 23 (141 new tests across 23+23.05), Sprint 28.5 (110 new tests)
