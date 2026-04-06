@@ -82,3 +82,27 @@ variants:
         min_dip_percent: 0.03
         min_recovery_volume_ratio: 2.0
         target_ratio: 1.5
+  
+  micro_pullback:
+    # v2: Moderate impulse filter — best trade-count / edge-quality balance.
+    # Rationale: Tightens min_impulse_percent from default 0.03 to 0.05 (requires
+    # a more meaningful impulse move) and caps max_impulse_bars at 15 (vs default 20),
+    # filtering out slow drifts that aren't true impulses.
+    # Sweep (2025, 38 symbols): trades=658, WR=52.4%, avg_R=0.235, P&L=$116,813
+    # Signal density: ~2.6 trades/symbol/year — deployable frequency.
+    - variant_id: "strat_micro_pullback__v2_tight_impulse"
+      mode: "shadow"
+      params:
+        min_impulse_percent: 0.05
+        max_impulse_bars: 15
+
+    # v3: Strict impulse filter — highest edge quality, fewer signals.
+    # Rationale: Pushes min_impulse_percent to 0.06 (top quartile of impulse moves).
+    # Same 15-bar cap. A/B pair with v2 to observe selectivity tradeoff in shadow.
+    # Sweep (2025, 38 symbols): trades=298, WR=53.4%, avg_R=0.334, P&L=$76,863
+    # Signal density: ~1.2 trades/symbol/year — highly selective.
+    - variant_id: "strat_micro_pullback__v3_strict_impulse"
+      mode: "shadow"
+      params:
+        min_impulse_percent: 0.06
+        max_impulse_bars: 15
