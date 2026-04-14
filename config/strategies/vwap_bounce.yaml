@@ -17,8 +17,11 @@ vwap_approach_distance_pct: 0.005
 vwap_touch_tolerance_pct: 0.002
 min_bounce_bars: 2
 min_bounce_volume_ratio: 1.3
-min_prior_trend_bars: 10
+min_prior_trend_bars: 15
 min_price_above_vwap_pct: 0.003
+min_approach_distance_pct: 0.003
+min_bounce_follow_through_bars: 2
+max_signals_per_symbol: 3
 stop_buffer_atr_mult: 0.5
 target_ratio: 2.0
 min_score_threshold: 0.0

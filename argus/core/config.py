@@ -1612,7 +1612,7 @@ class VwapBounceConfig(StrategyConfig):
     min_bounce_volume_ratio: float = Field(default=1.3, gt=0, le=10.0)
 
     # Prior trend requirements
-    min_prior_trend_bars: int = Field(default=10, ge=5, le=20)
+    min_prior_trend_bars: int = Field(default=15, ge=10, le=30)
     min_price_above_vwap_pct: float = Field(default=0.003, gt=0, le=0.010)
 
     # Stop and target
@@ -1626,6 +1626,11 @@ class VwapBounceConfig(StrategyConfig):
     target_1_r: float = Field(default=1.0, gt=0)
     target_2_r: float = Field(default=2.0, gt=0)
     time_stop_minutes: int = Field(default=30, ge=1)
+
+    # Signal density controls (DEF-154)
+    min_approach_distance_pct: float = Field(default=0.003, gt=0, le=0.010)
+    min_bounce_follow_through_bars: int = Field(default=2, ge=0, le=5)
+    max_signals_per_symbol: int = Field(default=3, ge=1, le=10)
 
 
 class NarrowRangeBreakoutConfig(StrategyConfig):

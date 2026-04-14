@@ -56,14 +56,16 @@ def _build_vwap_bounce_candles(
     avg_volume: float = 1000.0,
     bounce_volume_mult: float = 1.5,
     touch_low_offset: float = 0.001,
+    follow_through_bars: int = 2,
 ) -> list[CandleBar]:
     """Build a candle sequence with a detectable prior-trend → approach → touch → bounce.
 
     Structure:
-        - prior_trend_bars bars clearly above VWAP (close = vwap * 1.01)
-        - approach_bars bars approaching VWAP (close descending toward vwap * 1.002)
+        - prior_trend_bars bars clearly above VWAP (close = vwap * 1.012)
+        - approach_bars bars approaching VWAP (close descending toward vwap * 1.003)
         - 1 touch bar: close near vwap, low within vwap_touch_tolerance_pct of VWAP
         - 2 bounce bars: close > vwap, first with high volume
+        - follow_through_bars bars closing above VWAP after bounce confirmation
 
     Args:
         vwap: VWAP level.
@@ -72,14 +74,15 @@ def _build_vwap_bounce_candles(
         avg_volume: Average volume for non-bounce bars.
         bounce_volume_mult: Multiplier on avg_volume for bounce bar.
         touch_low_offset: Fractional offset from VWAP for touch low (0 = exact touch).
+        follow_through_bars: Follow-through bars closing above VWAP after bounce.
 
     Returns:
-        List of CandleBar (oldest first, bounce bars last).
+        List of CandleBar (oldest first, follow-through bars last).
     """
     candles: list[CandleBar] = []
     minute = 0
 
-    # Prior uptrend: clearly above VWAP
+    # Prior uptrend: clearly above VWAP (>= min_approach_distance_pct=0.003)
     for _ in range(prior_trend_bars):
         price = vwap * 1.012
         candles.append(_bar(price, volume=avg_volume, offset_minutes=minute))
@@ -124,6 +127,18 @@ def _build_vwap_bounce_candles(
             offset_minutes=minute,
         )
     )
+    minute += 1
+
+    # Follow-through bars: close above VWAP after bounce confirmation
+    for i in range(follow_through_bars):
+        candles.append(
+            _bar(
+                close=vwap * (1.007 + 0.001 * i),
+                volume=avg_volume,
+                offset_minutes=minute,
+            )
+        )
+        minute += 1
 
     return candles
 
@@ -371,12 +386,12 @@ def test_score_higher_for_strong_prior_trend_and_volume() -> None:
 
 
 def test_get_default_params_returns_correct_count() -> None:
-    """get_default_params() returns 11 PatternParam entries."""
+    """get_default_params() returns 14 PatternParam entries (11 original + 3 DEF-154)."""
     pattern = VwapBouncePattern()
     params = pattern.get_default_params()
 
     assert isinstance(params, list)
-    assert len(params) == 11
+    assert len(params) == 14
     assert all(isinstance(p, PatternParam) for p in params)
 
 
@@ -581,7 +596,7 @@ def test_factory_resolves_vwap_bounce_pascal_case() -> None:
 def test_detect_uses_indicators_vwap_not_candle_average() -> None:
     """detect() returns None if vwap not in indicators, even with valid candles."""
     pattern = VwapBouncePattern(min_prior_trend_bars=10)
-    # Build candles that look fine relative to 100.0
+    # Build candles that look fine relative to 100.0 (includes follow-through bars)
     candles = _build_vwap_bounce_candles(vwap=100.0)
     # Pass indicators with a completely different VWAP — pattern should not infer its own
     result_no_vwap = pattern.detect(candles, {})
@@ -590,3 +605,217 @@ def test_detect_uses_indicators_vwap_not_candle_average() -> None:
     # With correct VWAP in indicators, should detect
     result_with_vwap = pattern.detect(candles, {"vwap": 100.0, "atr": 0.5})
     assert result_with_vwap is not None
+
+
+# ---------------------------------------------------------------------------
+# Tests 15–24: DEF-154 — signal density controls
+# ---------------------------------------------------------------------------
+
+
+def test_detect_rejects_no_approach_distance() -> None:
+    """detect() returns None when price never >= 0.3% above VWAP before touch."""
+    pattern = VwapBouncePattern(
+        min_approach_distance_pct=0.003,
+        min_prior_trend_bars=5,
+        min_bounce_follow_through_bars=2,
+    )
+    vwap = 100.0
+    candles: list[CandleBar] = []
+    minute = 0
+
+    # Many bars clearly above VWAP — satisfy prior trend check
+    for _ in range(15):
+        candles.append(_bar(vwap * 1.005, volume=1000.0, offset_minutes=minute))
+        minute += 1
+
+    # 12 bars only 0.1% above VWAP — within approach_window before touch, below 0.3% threshold
+    for _ in range(12):
+        candles.append(_bar(vwap * 1.001, volume=1000.0, offset_minutes=minute))
+        minute += 1
+
+    # Touch bar
+    candles.append(_bar(vwap * 1.0005, volume=1000.0, offset_minutes=minute, low=vwap * 0.999))
+    minute += 1
+
+    # Bounce bars (high volume on first)
+    candles.append(_bar(vwap * 1.004, volume=2000.0, offset_minutes=minute))
+    minute += 1
+    candles.append(_bar(vwap * 1.006, volume=1000.0, offset_minutes=minute))
+    minute += 1
+
+    # Follow-through bars
+    candles.append(_bar(vwap * 1.007, volume=1000.0, offset_minutes=minute))
+    minute += 1
+    candles.append(_bar(vwap * 1.008, volume=1000.0, offset_minutes=minute))
+
+    result = pattern.detect(candles, {"vwap": vwap, "atr": 0.5})
+    assert result is None
+
+
+def test_detect_requires_approach_distance() -> None:
+    """detect() returns detection when price was >= 0.3% above VWAP before approach."""
+    pattern = VwapBouncePattern(
+        min_approach_distance_pct=0.003,
+        min_prior_trend_bars=5,
+        min_bounce_follow_through_bars=2,
+    )
+    vwap = 100.0
+    # Prior trend bars at vwap * 1.012 — well above 0.3% threshold in approach window
+    candles = _build_vwap_bounce_candles(vwap=vwap, prior_trend_bars=10, approach_bars=2)
+    result = pattern.detect(candles, {"vwap": vwap, "atr": 0.5})
+    assert result is not None
+
+
+def test_detect_requires_bounce_follow_through() -> None:
+    """detect() returns None when a follow-through bar closes below VWAP."""
+    pattern = VwapBouncePattern(
+        min_bounce_follow_through_bars=2,
+        min_prior_trend_bars=5,
+        min_bounce_bars=2,
+        min_bounce_volume_ratio=1.3,
+    )
+    vwap = 100.0
+    candles: list[CandleBar] = []
+    minute = 0
+
+    # Prior trend
+    for _ in range(10):
+        candles.append(_bar(vwap * 1.012, volume=1000.0, offset_minutes=minute))
+        minute += 1
+
+    # Approach bars (above 0.3% threshold in window)
+    for _ in range(3):
+        candles.append(_bar(vwap * 1.004, volume=1000.0, offset_minutes=minute))
+        minute += 1
+
+    # Touch bar
+    candles.append(_bar(vwap * 1.0005, volume=1000.0, offset_minutes=minute, low=vwap * 0.999))
+    minute += 1
+
+    # Bounce bars: both above VWAP, first with high volume
+    candles.append(_bar(vwap * 1.004, volume=2000.0, offset_minutes=minute))
+    minute += 1
+    candles.append(_bar(vwap * 1.006, volume=1000.0, offset_minutes=minute))
+    minute += 1
+
+    # Follow-through bar 1: above VWAP ✓
+    candles.append(_bar(vwap * 1.003, volume=1000.0, offset_minutes=minute))
+    minute += 1
+
+    # Follow-through bar 2: BELOW VWAP ✗ — follow-through fails
+    candles.append(_bar(vwap * 0.998, volume=1000.0, offset_minutes=minute))
+
+    result = pattern.detect(candles, {"vwap": vwap, "atr": 0.5})
+    assert result is None
+
+
+def test_detect_with_follow_through() -> None:
+    """detect() returns detection with entry_price at last follow-through bar."""
+    pattern = VwapBouncePattern(
+        min_bounce_follow_through_bars=2,
+        min_prior_trend_bars=5,
+        min_bounce_bars=2,
+        min_bounce_volume_ratio=1.3,
+    )
+    vwap = 100.0
+    candles = _build_vwap_bounce_candles(vwap=vwap, prior_trend_bars=10, follow_through_bars=2)
+    result = pattern.detect(candles, {"vwap": vwap, "atr": 0.5})
+
+    assert result is not None
+    # Entry must be at the last follow-through bar (last candle in the sequence)
+    assert result.entry_price == candles[-1].close
+
+
+def test_max_signals_per_symbol_cap() -> None:
+    """detect() returns None after max_signals_per_symbol detections for same symbol."""
+    pattern = VwapBouncePattern(max_signals_per_symbol=3, min_prior_trend_bars=5)
+    vwap = 100.0
+    candles = _build_vwap_bounce_candles(vwap=vwap, prior_trend_bars=10)
+    indicators = {"vwap": vwap, "atr": 0.5, "symbol": "TSLA"}
+
+    # First 3 calls should detect
+    for i in range(3):
+        result = pattern.detect(candles, indicators)
+        assert result is not None, f"Expected detection on call {i + 1}"
+
+    # 4th call must be capped
+    result = pattern.detect(candles, indicators)
+    assert result is None
+
+
+def test_max_signals_per_symbol_different_symbols() -> None:
+    """Signal cap is per-symbol, not global — exhausting TSLA does not cap AAPL."""
+    pattern = VwapBouncePattern(max_signals_per_symbol=2, min_prior_trend_bars=5)
+    vwap = 100.0
+    candles = _build_vwap_bounce_candles(vwap=vwap, prior_trend_bars=10)
+
+    # Exhaust cap for TSLA
+    for _ in range(2):
+        pattern.detect(candles, {"vwap": vwap, "atr": 0.5, "symbol": "TSLA"})
+
+    # TSLA is now capped
+    assert pattern.detect(candles, {"vwap": vwap, "atr": 0.5, "symbol": "TSLA"}) is None
+
+    # AAPL still has full capacity
+    assert pattern.detect(candles, {"vwap": vwap, "atr": 0.5, "symbol": "AAPL"}) is not None
+
+
+def test_reset_session_state() -> None:
+    """reset_session_state() clears signal counts so the cap resets for a new session."""
+    pattern = VwapBouncePattern(max_signals_per_symbol=1, min_prior_trend_bars=5)
+    vwap = 100.0
+    candles = _build_vwap_bounce_candles(vwap=vwap, prior_trend_bars=10)
+    indicators = {"vwap": vwap, "atr": 0.5, "symbol": "TSLA"}
+
+    # Exhaust the cap
+    assert pattern.detect(candles, indicators) is not None
+    assert pattern.detect(candles, indicators) is None
+
+    # Reset and verify the cap is lifted
+    pattern.reset_session_state()
+    assert pattern.detect(candles, indicators) is not None
+
+
+def test_min_prior_trend_bars_floor() -> None:
+    """PatternParam min_value for min_prior_trend_bars must be 10 (raised from 5, DEF-154)."""
+    pattern = VwapBouncePattern()
+    params = {p.name: p for p in pattern.get_default_params()}
+    assert params["min_prior_trend_bars"].min_value == 10
+
+
+def test_new_params_in_default_params() -> None:
+    """All 3 DEF-154 PatternParams appear with correct names and bounds."""
+    pattern = VwapBouncePattern()
+    params = {p.name: p for p in pattern.get_default_params()}
+
+    assert "min_approach_distance_pct" in params
+    p_approach = params["min_approach_distance_pct"]
+    assert p_approach.min_value == 0.001
+    assert p_approach.max_value == 0.010
+
+    assert "min_bounce_follow_through_bars" in params
+    p_follow = params["min_bounce_follow_through_bars"]
+    assert p_follow.min_value == 0
+    assert p_follow.max_value == 5
+
+    assert "max_signals_per_symbol" in params
+    p_cap = params["max_signals_per_symbol"]
+    assert p_cap.min_value == 1
+    assert p_cap.max_value == 10
+
+
+def test_min_detection_bars_includes_follow_through() -> None:
+    """min_detection_bars accounts for follow-through bars: prior + bounce + follow + 3."""
+    pattern = VwapBouncePattern(
+        min_prior_trend_bars=15,
+        min_bounce_bars=2,
+        min_bounce_follow_through_bars=2,
+    )
+    assert pattern.min_detection_bars == 22  # 15 + 2 + 2 + 3
+
+    pattern2 = VwapBouncePattern(
+        min_prior_trend_bars=10,
+        min_bounce_bars=3,
+        min_bounce_follow_through_bars=4,
+    )
+    assert pattern2.min_detection_bars == 20  # 10 + 3 + 4 + 3

@@ -30,17 +30,26 @@ class VwapBouncePattern(PatternModule):
     Pattern anatomy:
         1. Prior uptrend: >= min_prior_trend_bars bars with close > VWAP,
            average distance above VWAP >= min_price_above_vwap_pct
-        2. Approach: price moves within vwap_approach_distance_pct of VWAP
+        2. Approach distance: price must have been >= min_approach_distance_pct
+           above VWAP in the 10 bars before the touch (filters oscillation noise)
+        3. Approach: price moves within vwap_approach_distance_pct of VWAP
            from above — confirms intentional test, not random drop
-        3. Touch: candle low within vwap_touch_tolerance_pct * VWAP of VWAP
+        4. Touch: candle low within vwap_touch_tolerance_pct * VWAP of VWAP
            (slight undershoot allowed — wicks through VWAP are acceptable)
-        4. Bounce: min_bounce_bars consecutive closes above VWAP, first bounce
+        5. Bounce: min_bounce_bars consecutive closes above VWAP, first bounce
            bar volume >= min_bounce_volume_ratio * recent average volume
-        5. Entry: close of the last bounce confirmation bar
-        6. Stop: VWAP - ATR * stop_buffer_atr_mult
+        6. Follow-through: min_bounce_follow_through_bars additional bars closing
+           above VWAP after bounce confirmation
+        7. Entry: close of the last follow-through bar (after confirmation)
+        8. Stop: VWAP - ATR * stop_buffer_atr_mult
 
     VWAP must come from indicators["vwap"] — never computed from candle data
     because VWAP requires cumulative price * volume from market open.
+
+    Session-state note: _signal_counts tracks per-symbol detection counts within
+    a session. PatternBasedStrategy creates a new pattern instance per
+    BacktestEngine run, so counts naturally reset between days. If the same
+    instance is reused across days, call reset_session_state() at session start.
 
     Args:
         vwap_approach_distance_pct: Distance from VWAP to start monitoring (0.5%).
@@ -54,6 +63,11 @@ class VwapBouncePattern(PatternModule):
         target_1_r: First target R-multiple.
         target_2_r: Second target R-multiple.
         min_score_threshold: Min confidence to emit detection (0 = all).
+        min_approach_distance_pct: Min distance price must be above VWAP (in the 10
+            bars before the touch) to confirm a true pullback vs. oscillation (DEF-154).
+        min_bounce_follow_through_bars: Bars after bounce that must close above VWAP
+            before entry is confirmed. Entry is at the last follow-through bar (DEF-154).
+        max_signals_per_symbol: Max detections per symbol per session (DEF-154).
     """
 
     def __init__(
@@ -62,13 +76,16 @@ class VwapBouncePattern(PatternModule):
         vwap_touch_tolerance_pct: float = 0.002,
         min_bounce_bars: int = 2,
         min_bounce_volume_ratio: float = 1.3,
-        min_prior_trend_bars: int = 10,
+        min_prior_trend_bars: int = 15,
         min_price_above_vwap_pct: float = 0.003,
         stop_buffer_atr_mult: float = 0.5,
         target_ratio: float = 2.0,
         target_1_r: float = 1.0,
         target_2_r: float = 2.0,
         min_score_threshold: float = 0.0,
+        min_approach_distance_pct: float = 0.003,
+        min_bounce_follow_through_bars: int = 2,
+        max_signals_per_symbol: int = 3,
     ) -> None:
         self._vwap_approach_distance_pct = vwap_approach_distance_pct
         self._vwap_touch_tolerance_pct = vwap_touch_tolerance_pct
@@ -81,6 +98,10 @@ class VwapBouncePattern(PatternModule):
         self._target_1_r = target_1_r
         self._target_2_r = target_2_r
         self._min_score_threshold = min_score_threshold
+        self._min_approach_distance_pct = min_approach_distance_pct
+        self._min_bounce_follow_through_bars = min_bounce_follow_through_bars
+        self._max_signals_per_symbol = max_signals_per_symbol
+        self._signal_counts: dict[str, int] = {}
 
     @property
     def name(self) -> str:
@@ -89,13 +110,23 @@ class VwapBouncePattern(PatternModule):
 
     @property
     def lookback_bars(self) -> int:
-        """Number of recent candles needed for detection."""
-        return 30
+        """Number of recent candles needed for detection.
+
+        Set to 50 to accommodate max parameter combinations:
+        max(min_prior_trend_bars)=30 + max(min_bounce_bars)=5 +
+        max(min_bounce_follow_through_bars)=5 + 3 = 43, with headroom.
+        """
+        return 50
 
     @property
     def min_detection_bars(self) -> int:
         """Minimum candle count before detection is attempted."""
-        return self._min_prior_trend_bars + self._min_bounce_bars + 3
+        return (
+            self._min_prior_trend_bars
+            + self._min_bounce_bars
+            + self._min_bounce_follow_through_bars
+            + 3
+        )
 
     def detect(
         self,
@@ -120,6 +151,12 @@ class VwapBouncePattern(PatternModule):
 
         atr = indicators.get("atr", 0.0)
 
+        # Session-state cap: max detections per symbol per session (DEF-154)
+        # indicators["symbol"] is a str when provided by PatternBasedStrategy
+        symbol = str(indicators.get("symbol", ""))
+        if symbol and self._signal_counts.get(symbol, 0) >= self._max_signals_per_symbol:
+            return None
+
         if len(candles) < self.min_detection_bars:
             return None
 
@@ -127,7 +164,20 @@ class VwapBouncePattern(PatternModule):
         if not self._check_prior_uptrend(candles, vwap):
             return None
 
-        return self._scan_for_bounce(candles, vwap, atr)
+        result = self._scan_for_bounce(candles, vwap, atr)
+
+        if result is not None and symbol:
+            self._signal_counts[symbol] = self._signal_counts.get(symbol, 0) + 1
+
+        return result
+
+    def reset_session_state(self) -> None:
+        """Reset per-session state (call at start of each trading day).
+
+        Clears the per-symbol signal count so the max_signals_per_symbol cap
+        starts fresh for the new session.
+        """
+        self._signal_counts.clear()
 
     def _check_prior_uptrend(self, candles: list[CandleBar], vwap: float) -> bool:
         """Verify the stock was trending above VWAP before the approach.
@@ -169,9 +219,9 @@ class VwapBouncePattern(PatternModule):
         """
         n = len(candles)
 
-        # Touch must leave room for min_bounce_bars after it
+        # Touch must leave room for min_bounce_bars + follow-through bars after it
         earliest_touch = self._min_prior_trend_bars
-        latest_touch = n - self._min_bounce_bars - 1
+        latest_touch = n - self._min_bounce_bars - self._min_bounce_follow_through_bars - 1
 
         for touch_idx in range(latest_touch, earliest_touch - 1, -1):
             touch_candle = candles[touch_idx]
@@ -185,6 +235,15 @@ class VwapBouncePattern(PatternModule):
             if touch_candle.close > vwap * (1 + self._vwap_approach_distance_pct * 3):
                 continue
 
+            # Approach distance gate — price must have been meaningfully above
+            # VWAP before pulling back to it (DEF-154)
+            approach_window = candles[max(0, touch_idx - 10):touch_idx]
+            if not any(
+                c.close >= vwap * (1 + self._min_approach_distance_pct)
+                for c in approach_window
+            ):
+                continue
+
             # Approach: at least one bar before touch was in approach zone
             if not self._check_approach_zone(candles, touch_idx, vwap):
                 continue
@@ -196,8 +255,16 @@ class VwapBouncePattern(PatternModule):
 
             bounce_end_idx, bounce_volume_ratio = bounce_result
 
-            # Entry / stop / targets
-            entry_candle = candles[bounce_end_idx]
+            # Bounce follow-through — bars after bounce must stay above VWAP (DEF-154)
+            follow_end = min(bounce_end_idx + self._min_bounce_follow_through_bars, n - 1)
+            follow_bars = candles[bounce_end_idx + 1 : follow_end + 1]
+            if len(follow_bars) < self._min_bounce_follow_through_bars:
+                continue  # Not enough bars yet for follow-through
+            if not all(c.close > vwap for c in follow_bars):
+                continue  # Follow-through failed
+
+            # Entry / stop / targets — entry is after follow-through confirmation
+            entry_candle = candles[follow_end]
             entry_price = entry_candle.close
 
             stop_buffer = atr * self._stop_buffer_atr_mult if atr > 0 else vwap * 0.005
@@ -487,8 +554,8 @@ class VwapBouncePattern(PatternModule):
                 name="min_prior_trend_bars",
                 param_type=int,
                 default=self._min_prior_trend_bars,
-                min_value=5,
-                max_value=20,
+                min_value=10,  # was 5 — too low allows noise (DEF-154)
+                max_value=30,  # was 20 — wider range for sweeps
                 step=5,
                 description="Min bars price was above VWAP before approach",
                 category="detection",
@@ -552,5 +619,35 @@ class VwapBouncePattern(PatternModule):
                 step=10.0,
                 description="Minimum confidence to emit detection",
                 category="scoring",
+            ),
+            PatternParam(
+                name="min_approach_distance_pct",
+                param_type=float,
+                default=self._min_approach_distance_pct,
+                min_value=0.001,
+                max_value=0.010,
+                step=0.001,
+                description="Min distance price must be above VWAP before approach counts (fraction)",
+                category="detection",
+            ),
+            PatternParam(
+                name="min_bounce_follow_through_bars",
+                param_type=int,
+                default=self._min_bounce_follow_through_bars,
+                min_value=0,
+                max_value=5,
+                step=1,
+                description="Bars after bounce that must close above VWAP",
+                category="detection",
+            ),
+            PatternParam(
+                name="max_signals_per_symbol",
+                param_type=int,
+                default=self._max_signals_per_symbol,
+                min_value=1,
+                max_value=10,
+                step=1,
+                description="Max detections per symbol per session (prevents over-signaling)",
+                category="filtering",
             ),
         ]
