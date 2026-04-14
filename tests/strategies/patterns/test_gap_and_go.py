@@ -386,11 +386,11 @@ class TestPatternParams:
     """Test get_default_params() completeness."""
 
     def test_pattern_param_completeness(self) -> None:
-        """T11: All 14 PatternParam entries present including string entry_mode."""
+        """T11: All 15 PatternParam entries present including string entry_mode."""
         pattern = GapAndGoPattern()
         params = pattern.get_default_params()
 
-        assert len(params) == 14
+        assert len(params) == 15
         assert all(isinstance(p, PatternParam) for p in params)
 
         names = {p.name for p in params}
@@ -565,3 +565,81 @@ class TestEdgeCases:
         result = pattern.detect(candles, indicators)
         # Just verify no exception — result can be None or PatternDetection
         assert result is None or result.pattern_type == "gap_and_go"
+
+
+class TestMinRiskGuard:
+    """Tests for DEF-152: GapAndGo minimum risk-per-share guard.
+
+    The standard _build_gap_and_go_candles helper produces:
+      - entry_price ≈ 106.0 (re-entry close at bar 6)
+      - five_min_low ≈ 103.75 (bar 0 low)
+    With stop_mode="tighter" (default), stop = max(vwap, five_min_low).
+    Setting vwap close to entry lets us control risk precisely.
+    """
+
+    def test_detect_rejects_near_zero_risk(self) -> None:
+        """Detect returns None when vwap is $0.05 below entry (risk < min 0.10) (DEF-152)."""
+        # entry ≈ 106.0, vwap = 105.95 → risk = 0.05 < min_risk_per_share = 0.10
+        pattern = GapAndGoPattern(min_risk_per_share=0.10, entry_mode="first_pullback")
+        pattern.set_reference_data({"prior_closes": {"TSLA": 100.0}})
+
+        candles, indicators = _build_gap_and_go_candles(vwap=105.95)
+        result = pattern.detect(candles, indicators)
+
+        assert result is None
+
+    def test_detect_rejects_zero_breakout_margin(self) -> None:
+        """Detect returns None when risk is below an elevated min_risk_per_share (DEF-152)."""
+        # entry ≈ 106.0, vwap = 105.85 → risk = 0.15 < min_risk_per_share = 0.20
+        pattern = GapAndGoPattern(min_risk_per_share=0.20, entry_mode="first_pullback")
+        pattern.set_reference_data({"prior_closes": {"TSLA": 100.0}})
+
+        candles, indicators = _build_gap_and_go_candles(vwap=105.85)
+        result = pattern.detect(candles, indicators)
+
+        assert result is None
+
+    def test_detect_passes_adequate_risk(self) -> None:
+        """Detect returns PatternDetection when risk >= min_risk_per_share (DEF-152)."""
+        # entry ≈ 106.0, vwap = 105.0 → risk = 1.0 >> min_risk_per_share = 0.10
+        pattern = GapAndGoPattern(min_risk_per_share=0.10, entry_mode="first_pullback")
+        pattern.set_reference_data({"prior_closes": {"TSLA": 100.0}})
+
+        candles, indicators = _build_gap_and_go_candles(vwap=105.0)
+        result = pattern.detect(candles, indicators)
+
+        assert result is not None
+        assert result.pattern_type == "gap_and_go"
+        assert result.entry_price - result.stop_price >= 0.10
+
+    def test_min_risk_per_share_in_default_params(self) -> None:
+        """min_risk_per_share PatternParam is present with correct bounds (DEF-152)."""
+        pattern = GapAndGoPattern(min_risk_per_share=0.15)
+        params = pattern.get_default_params()
+
+        names = {p.name for p in params}
+        assert "min_risk_per_share" in names
+
+        param = next(p for p in params if p.name == "min_risk_per_share")
+        assert param.param_type is float
+        assert param.default == pytest.approx(0.15)
+        assert param.min_value is not None and param.min_value > 0
+        assert param.max_value is not None and param.max_value > param.min_value
+        assert param.step is not None and param.step > 0
+        assert param.category == "filtering"
+
+    def test_detect_rejects_risk_below_atr_threshold(self) -> None:
+        """Risk < 10% of ATR rejects even when absolute min is met (DEF-152).
+
+        entry ≈ 106.0, vwap = 105.85 → risk = 0.15 >= min_risk_per_share = 0.10.
+        atr = 5.0 → 10% threshold = 0.50 > 0.15 = risk → rejected by ATR check.
+        """
+        pattern = GapAndGoPattern(min_risk_per_share=0.10, entry_mode="first_pullback")
+        pattern.set_reference_data({"prior_closes": {"TSLA": 100.0}})
+
+        candles, indicators = _build_gap_and_go_candles(vwap=105.85)
+        indicators["atr"] = 5.0  # 10% = 0.50 > risk of 0.15 → rejected
+
+        result = pattern.detect(candles, indicators)
+
+        assert result is None

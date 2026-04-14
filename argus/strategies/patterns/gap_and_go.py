@@ -63,6 +63,7 @@ class GapAndGoPattern(PatternModule):
         volume_score_cap: float = 5.0,
         vwap_hold_score_divisor: float = 8.0,
         catalyst_base_score: float = 10.0,
+        min_risk_per_share: float = 0.10,
     ) -> None:
         self._min_gap_percent = min_gap_percent
         self._min_relative_volume = min_relative_volume
@@ -78,6 +79,7 @@ class GapAndGoPattern(PatternModule):
         self._volume_score_cap = volume_score_cap
         self._vwap_hold_score_divisor = vwap_hold_score_divisor
         self._catalyst_base_score = catalyst_base_score
+        self._min_risk_per_share = min_risk_per_share
 
         # Prior closes populated via set_reference_data()
         self._prior_closes: dict[str, float] = {}
@@ -215,6 +217,16 @@ class GapAndGoPattern(PatternModule):
         if stop_price >= entry_price:
             stop_price = five_min_low
         if stop_price >= entry_price:
+            return None
+
+        # Minimum risk guard — prevent degenerate R-multiples (DEF-152)
+        risk_per_share = entry_price - stop_price
+        if risk_per_share < self._min_risk_per_share:
+            return None
+
+        # ATR-relative minimum: risk must be at least 10% of ATR
+        atr = indicators.get("atr", 0.0)
+        if atr > 0 and risk_per_share < atr * 0.1:
             return None
 
         # --- Target ---
@@ -524,5 +536,15 @@ class GapAndGoPattern(PatternModule):
                 step=5.0,
                 description="Base catalyst score when no quality data available",
                 category="scoring",
+            ),
+            PatternParam(
+                name="min_risk_per_share",
+                param_type=float,
+                default=self._min_risk_per_share,
+                min_value=0.05,
+                max_value=0.50,
+                step=0.05,
+                description="Minimum absolute risk (entry - stop) to emit signal",
+                category="filtering",
             ),
         ]

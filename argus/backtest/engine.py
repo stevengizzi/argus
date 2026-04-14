@@ -367,6 +367,13 @@ class BacktestEngine:
         self._strategy = self._create_strategy(config_dir)
         self._strategy.allocated_capital = self._config.initial_cash
 
+        # Register config fingerprint for trade-level tracking (DEF-153)
+        if self._config.config_fingerprint and self._order_manager is not None:
+            strategy_id = self._strategy.strategy_id if self._strategy else self._config.strategy_id
+            self._order_manager.register_strategy_fingerprint(
+                strategy_id, self._config.config_fingerprint
+            )
+
         # Subscribe engine's candle handler to SyncEventBus
         self._event_bus.subscribe(CandleEvent, self._on_candle_event)
 

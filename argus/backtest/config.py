@@ -206,3 +206,13 @@ class BacktestEngineConfig(BaseModel):
     # When True, uses RegimeClassifierV2 with all calculators as None
     # (backtest mode — trend+vol only). Produces identical regime tags to V1.
     use_regime_v2: bool = False
+
+    # Config fingerprint for experiment tracking (DEF-153)
+    config_fingerprint: str | None = Field(
+        default=None,
+        description=(
+            "16-char hex fingerprint from compute_parameter_fingerprint(). "
+            "When set, registered with OrderManager so trades carry the "
+            "fingerprint in the trades table."
+        ),
+    )

@@ -110,6 +110,7 @@ def _run_single_backtest(args: dict[str, Any]) -> dict[str, Any]:
             end_date=_date.fromisoformat(args["end_date"]),
             cache_dir=_Path(args["cache_dir"]),
             config_overrides=args["detection_params"],
+            config_fingerprint=fingerprint,
         )
         engine = _BacktestEngine(engine_config)
         result = await engine.run()

@@ -1167,6 +1167,7 @@ class GapAndGoConfig(StrategyConfig):
     volume_score_cap: float = Field(default=5.0, gt=0, le=20.0)
     vwap_hold_score_divisor: float = Field(default=8.0, gt=0, le=15.0)
     catalyst_base_score: float = Field(default=10.0, ge=0, le=25.0)
+    min_risk_per_share: float = Field(default=0.10, gt=0, le=0.50)
 
     # Targets and stops
     target_1_r: float = Field(default=1.0, gt=0)

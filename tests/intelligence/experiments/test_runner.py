@@ -1150,6 +1150,55 @@ def test_run_single_backtest_returns_dict() -> None:
     assert result["params"] == {"int_param": 4}
 
 
+def test_run_single_backtest_passes_fingerprint() -> None:
+    """_run_single_backtest passes config_fingerprint=fingerprint to BacktestEngineConfig (DEF-153)."""
+    from argus.backtest.config import BacktestEngineConfig  # noqa: PLC0415
+
+    captured_configs: list[BacktestEngineConfig] = []
+
+    mock_result = MagicMock()
+    mock_result.expectancy = 0.8
+    mock_result.total_trades = 30
+
+    mock_mor = MagicMock()
+    mock_mor.to_dict.return_value = {"expectancy_per_trade": 0.8, "total_trades": 30}
+
+    def _capture_engine(config: BacktestEngineConfig) -> MagicMock:
+        captured_configs.append(config)
+        instance = MagicMock()
+        instance.run = AsyncMock(return_value=mock_result)
+        instance.to_multi_objective_result = AsyncMock(return_value=mock_mor)
+        return instance
+
+    expected_fingerprint = "cafebabe12345678"
+
+    args: dict[str, Any] = {
+        "strategy_type_value": "bull_flag",
+        "strategy_id": "strat_bull_flag",
+        "symbols": None,
+        "start_date": "2025-01-01",
+        "end_date": "2025-12-31",
+        "cache_dir": "/tmp/cache",
+        "detection_params": {},
+        "params": {"int_param": 4},
+        "fingerprint": expected_fingerprint,
+        "pattern_name": "bull_flag",
+        "min_expectancy": 0.0,
+        "min_trades": 10,
+        "experiment_id": "test-experiment-id",
+        "created_at": "2025-01-01T00:00:00+00:00",
+    }
+
+    with patch(
+        "argus.backtest.engine.BacktestEngine",
+        side_effect=_capture_engine,
+    ):
+        _run_single_backtest(args)
+
+    assert len(captured_configs) == 1
+    assert captured_configs[0].config_fingerprint == expected_fingerprint
+
+
 # ---------------------------------------------------------------------------
 # Sprint 31.5 S2 — Universe filter tests (DEF-146)
 # ---------------------------------------------------------------------------
