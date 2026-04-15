@@ -1,0 +1,7 @@
+# Bull Flag — trend-following universe (lower beta, higher market cap)
+# Hypothesis: bull flags may work better on steadier trend-following names
+# vs the high-momentum universe where they were confirmed dead.
+# Compare results against bull_flag.yaml (momentum: $10–500, 500K vol).
+min_price: 20.0
+max_price: 300.0
+min_avg_volume: 300000

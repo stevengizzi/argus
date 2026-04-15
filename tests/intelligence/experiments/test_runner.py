@@ -1449,16 +1449,18 @@ def test_resolve_universe_symbols_static_filters() -> None:
 # 6. test_cli_delegates_filter_to_runner
 @pytest.mark.asyncio
 async def test_cli_delegates_filter_to_runner() -> None:
-    """When --universe-filter is active, CLI passes universe_filter to run_sweep().
+    """When --universe-filter is active, CLI resolves symbols inline and passes
+    resolved symbols (not a UniverseFilterConfig) to run_sweep().
 
-    Verifies that the main run() path does NOT call _apply_universe_filter() inline
-    but instead delegates filtering to the runner via the universe_filter argument.
+    S3a change: inline resolution in CLI script before parallel workers start.
+    _apply_universe_filter() is called inline; filter_config is set to None
+    before run_sweep() is invoked so workers receive a pre-resolved symbol list.
     """
     import sys
     from pathlib import Path
 
     sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
-    from scripts.run_experiment import _apply_universe_filter, run
+    from scripts.run_experiment import run
 
     args = MagicMock()
     args.pattern = "narrow_range_breakout"
@@ -1468,18 +1470,22 @@ async def test_cli_delegates_filter_to_runner() -> None:
     args.date_range = "2025-01-01,2025-12-31"
     args.symbols = None
     args.universe_filter = "narrow_range_breakout"
+    args.rebuild = False
+    args.persist_db = None
+    args.workers = None
 
-    # Capture the universe_filter kwarg that run_sweep() receives
-    received_filter: list[object] = []
+    # Capture kwargs that run_sweep() receives
+    received_kwargs: list[dict] = []
 
     async def _fake_run_sweep(**kwargs: object) -> list:
-        received_filter.append(kwargs.get("universe_filter"))
+        received_kwargs.append(dict(kwargs))
         return []
 
     with (
         patch("scripts.run_experiment.ExperimentStore"),
         patch("scripts.run_experiment.ExperimentRunner") as mock_runner_cls,
-        patch("scripts.run_experiment._apply_universe_filter") as mock_inline_filter,
+        patch("scripts.run_experiment._apply_universe_filter", return_value=["AAPL", "NVDA"]) as mock_inline_filter,
+        patch("scripts.run_experiment._validate_coverage", return_value=["AAPL", "NVDA"]),
     ):
         mock_runner_instance = MagicMock()
         mock_runner_instance.generate_parameter_grid.return_value = [{"p": 1}]
@@ -1493,9 +1499,10 @@ async def test_cli_delegates_filter_to_runner() -> None:
 
         await run(args)
 
-    # universe_filter must be a UniverseFilterConfig (not None)
-    assert len(received_filter) == 1
-    assert isinstance(received_filter[0], UniverseFilterConfig)
+    # S3a behavior: inline filter WAS called, symbols resolved before runner
+    mock_inline_filter.assert_called_once()
 
-    # Inline filter function must NOT have been called
-    mock_inline_filter.assert_not_called()
+    # run_sweep receives resolved symbols, not a UniverseFilterConfig
+    assert len(received_kwargs) == 1
+    assert received_kwargs[0].get("symbols") == ["AAPL", "NVDA"]
+    assert received_kwargs[0].get("universe_filter") is None
