@@ -3,12 +3,13 @@
 Creates minimal Parquet test fixtures in temp directories using pandas/pyarrow.
 No production cache files are used.
 
-Sprint 31A.5, Session 1.
+Sprint 31A.5, Session 1. Persistent mode tests added Sprint 31.75, Session 3a.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import patch
 
 import pandas as pd
 import pyarrow as pa
@@ -325,3 +326,96 @@ class TestClose:
         svc.close()
         with pytest.raises(ServiceUnavailableError):
             svc.query("SELECT 1")
+
+
+# ---------------------------------------------------------------------------
+# Persistent mode tests (Sprint 31.75 Session 3a)
+# ---------------------------------------------------------------------------
+
+
+class TestPersistentMode:
+    def test_persistent_mode_creates_db_file(
+        self, cache_dir: Path, tmp_path: Path
+    ) -> None:
+        """Instantiating with persist_path creates a DuckDB file on disk."""
+        db_file = tmp_path / "test.duckdb"
+        config = HistoricalQueryConfig(
+            enabled=True,
+            cache_dir=str(cache_dir),
+            persist_path=str(db_file),
+        )
+        svc = HistoricalQueryService(config)
+        assert svc.is_available
+        svc.close()
+        assert db_file.exists()
+
+    def test_persistent_mode_reuses_view(
+        self, cache_dir: Path, tmp_path: Path
+    ) -> None:
+        """Second instantiation with same persist_path skips _initialize_view."""
+        db_file = tmp_path / "test_reuse.duckdb"
+        config = HistoricalQueryConfig(
+            enabled=True,
+            cache_dir=str(cache_dir),
+            persist_path=str(db_file),
+        )
+        # First instantiation creates the VIEW
+        svc1 = HistoricalQueryService(config)
+        assert svc1.is_available
+        svc1.close()
+
+        # Second instantiation: VIEW already exists — _initialize_view must NOT be called
+        with patch.object(HistoricalQueryService, "_initialize_view") as mock_init_view:
+            svc2 = HistoricalQueryService(config)
+            assert svc2.is_available
+            mock_init_view.assert_not_called()
+            svc2.close()
+
+    def test_memory_mode_unchanged(self, cache_dir: Path) -> None:
+        """persist_path=None uses in-memory DuckDB (legacy behavior)."""
+        config = HistoricalQueryConfig(
+            enabled=True,
+            cache_dir=str(cache_dir),
+            persist_path=None,
+        )
+        svc = HistoricalQueryService(config)
+        assert svc.is_available
+        # Can execute queries in memory mode
+        df = svc.query("SELECT COUNT(*) AS cnt FROM historical")
+        assert not df.empty
+        svc.close()
+
+    def test_rebuild_recreates_view(
+        self, cache_dir: Path, tmp_path: Path
+    ) -> None:
+        """rebuild() recreates the VIEW and leaves service available."""
+        db_file = tmp_path / "test_rebuild.duckdb"
+        config = HistoricalQueryConfig(
+            enabled=True,
+            cache_dir=str(cache_dir),
+            persist_path=str(db_file),
+        )
+        svc = HistoricalQueryService(config)
+        assert svc.is_available
+        svc.rebuild()
+        assert svc.is_available
+        # Data still queryable after rebuild
+        df = svc.query("SELECT COUNT(*) AS cnt FROM historical")
+        assert int(df.iloc[0]["cnt"]) > 0
+        svc.close()
+
+    def test_config_persist_path_field(self) -> None:
+        """HistoricalQueryConfig accepts persist_path as str or None."""
+        config_none = HistoricalQueryConfig(persist_path=None)
+        assert config_none.persist_path is None
+
+        config_str = HistoricalQueryConfig(persist_path="/tmp/test.duckdb")
+        assert config_str.persist_path == "/tmp/test.duckdb"
+
+    def test_gitignore_has_duckdb(self) -> None:
+        """Both *.duckdb and *.duckdb.wal patterns are present in .gitignore."""
+        gitignore = Path(".gitignore")
+        assert gitignore.exists(), ".gitignore not found"
+        content = gitignore.read_text()
+        assert "*.duckdb" in content
+        assert "*.duckdb.wal" in content

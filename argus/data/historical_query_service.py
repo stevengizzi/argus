@@ -85,7 +85,11 @@ class HistoricalQueryService:
             return
 
         cache_path = Path(config.cache_dir)
-        if not cache_path.exists():
+
+        # For in-memory mode, check cache_path existence upfront (legacy behavior).
+        # For persistent mode, the VIEW may already exist — skip the cache check
+        # until we confirm whether the VIEW needs to be created.
+        if config.persist_path is None and not cache_path.exists():
             logger.info(
                 "HistoricalQueryService: cache_dir does not exist: %s — service unavailable",
                 config.cache_dir,
@@ -95,12 +99,41 @@ class HistoricalQueryService:
         try:
             import duckdb  # lazy import — only used by this module
 
-            conn = duckdb.connect(database=":memory:")
+            if config.persist_path is not None:
+                db_path = str(Path(config.persist_path))
+                conn = duckdb.connect(database=db_path)
+            else:
+                conn = duckdb.connect(database=":memory:")
+
             conn.execute(f"SET memory_limit='{config.max_memory_mb}MB'")
             conn.execute(f"SET threads TO {config.default_threads}")
             self._conn = conn
 
-            self._initialize_view(cache_path)
+            if config.persist_path is not None:
+                existing = conn.execute(
+                    "SELECT count(*) FROM duckdb_views() WHERE view_name = 'historical'"
+                ).fetchone()[0]
+                if existing:
+                    self._available = True
+                    logger.info(
+                        "HistoricalQueryService: persistent DB opened — VIEW already exists (%s)",
+                        db_path,
+                    )
+                else:
+                    if not cache_path.exists():
+                        logger.info(
+                            "HistoricalQueryService: cache_dir does not exist: %s — service unavailable",
+                            config.cache_dir,
+                        )
+                        return
+                    logger.info(
+                        "HistoricalQueryService: using persistent DB at %s",
+                        db_path,
+                    )
+                    self._initialize_view(cache_path)
+            else:
+                self._initialize_view(cache_path)
+
         except ImportError:
             logger.error(
                 "HistoricalQueryService: duckdb package not installed — "
@@ -404,6 +437,25 @@ class HistoricalQueryService:
             "cache_dir": cache_dir,
             "cache_size_bytes": cache_size_bytes,
         }
+
+    def rebuild(self) -> None:
+        """Force recreation of the historical VIEW.
+
+        Use when the Parquet cache has been updated and the persistent
+        DB's VIEW is stale. Only meaningful for persistent mode.
+
+        Raises:
+            ServiceUnavailableError: If service is not initialized or cache
+                directory is missing.
+        """
+        if not self._conn:
+            raise ServiceUnavailableError("Service not initialized")
+        cache_path = Path(self._config.cache_dir)
+        if not cache_path.exists():
+            raise ServiceUnavailableError(f"Cache dir missing: {cache_path}")
+        self._available = False
+        self._symbols_cache = None
+        self._initialize_view(cache_path)
 
     # ------------------------------------------------------------------
     # Lifecycle

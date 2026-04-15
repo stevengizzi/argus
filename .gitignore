@@ -65,6 +65,8 @@ logs/
 *.sqlite3
 *.db-shm
 *.db-wal
+*.duckdb
+*.duckdb.wal
 
 # Runtime data (DB, caches, Parquet files)
 /data/

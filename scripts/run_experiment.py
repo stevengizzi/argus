@@ -25,7 +25,7 @@ import yaml
 
 from argus.core.config import UniverseFilterConfig
 from argus.data.historical_query_config import HistoricalQueryConfig
-from argus.data.historical_query_service import HistoricalQueryService
+from argus.data.historical_query_service import HistoricalQueryService, ServiceUnavailableError
 from argus.intelligence.experiments.config import ExperimentConfig
 from argus.intelligence.experiments.runner import ExperimentRunner
 from argus.intelligence.experiments.store import ExperimentStore
@@ -144,6 +144,17 @@ Examples:
         default=None,
         help="Number of parallel workers (default: from config max_workers, fallback 4)",
     )
+    parser.add_argument(
+        "--persist-db",
+        type=str,
+        default=None,
+        help="Path to persistent DuckDB file (speeds up repeated runs)",
+    )
+    parser.add_argument(
+        "--rebuild",
+        action="store_true",
+        help="Rebuild the persistent DuckDB VIEW (use after cache updates)",
+    )
     return parser.parse_args(argv)
 
 
@@ -212,6 +223,7 @@ def _apply_universe_filter(
     start_date: str,
     end_date: str,
     candidate_symbols: list[str] | None = None,
+    persist_path: str | None = None,
 ) -> list[str]:
     """Query the Parquet cache via DuckDB and apply static universe filters.
 
@@ -226,12 +238,14 @@ def _apply_universe_filter(
         end_date: Inclusive end date (YYYY-MM-DD) for price/volume averages.
         candidate_symbols: When provided, restrict results to this set
             (intersection with cache contents).
+        persist_path: Optional path to a persistent DuckDB file. When set,
+            reuses an existing VIEW rather than rebuilding from scratch.
 
     Returns:
         Sorted list of symbols that pass all applicable static filters.
     """
     service = HistoricalQueryService(
-        HistoricalQueryConfig(enabled=True, cache_dir=cache_dir)
+        HistoricalQueryConfig(enabled=True, cache_dir=cache_dir, persist_path=persist_path)
     )
 
     if not service.is_available:
@@ -293,6 +307,7 @@ def _validate_coverage(
     start_date: str,
     end_date: str,
     min_bars: int = 100,
+    persist_path: str | None = None,
 ) -> list[str]:
     """Drop symbols without sufficient historical bar coverage.
 
@@ -302,12 +317,14 @@ def _validate_coverage(
         start_date: Inclusive start date (YYYY-MM-DD).
         end_date: Inclusive end date (YYYY-MM-DD).
         min_bars: Minimum bar count required to pass (default 100).
+        persist_path: Optional path to a persistent DuckDB file. When set,
+            reuses an existing VIEW rather than rebuilding from scratch.
 
     Returns:
         Subset of *symbols* that meet the minimum bar threshold.
     """
     service = HistoricalQueryService(
-        HistoricalQueryConfig(enabled=True, cache_dir=cache_dir)
+        HistoricalQueryConfig(enabled=True, cache_dir=cache_dir, persist_path=persist_path)
     )
 
     if not service.is_available:
@@ -401,6 +418,32 @@ async def run(args: argparse.Namespace) -> int:
         else None
     )
 
+    # Determine persistent DB path. Auto-default to a project-local file when
+    # --universe-filter is used and --persist-db was not explicitly supplied.
+    persist_db: str | None = args.persist_db
+    if persist_db is None and args.universe_filter is not None:
+        persist_db = "data/historical_query.duckdb"
+
+    # --rebuild: recreate the persistent VIEW then exit without running sweeps.
+    if args.rebuild:
+        effective_db = persist_db or "data/historical_query.duckdb"
+        service = HistoricalQueryService(
+            HistoricalQueryConfig(
+                enabled=True,
+                cache_dir=cache_dir,
+                persist_path=effective_db,
+            )
+        )
+        try:
+            service.rebuild()
+        except ServiceUnavailableError as exc:
+            print(f"ERROR: {exc}")
+            service.close()
+            return 1
+        service.close()
+        print(f"Rebuilt DuckDB VIEW at: {effective_db}")
+        return 0
+
     # Resolve date range (needed for symbol filtering and run_sweep).
     date_range: tuple[str, str] | None = None
     start_date_str: str | None = None
@@ -474,6 +517,27 @@ async def run(args: argparse.Namespace) -> int:
 
     # Initialize store for real run
     await store.initialize()
+
+    # Pre-filter symbols via the persistent DB when --universe-filter is active.
+    # This resolves the symbol list before launching parallel workers, avoiding
+    # per-worker cold DuckDB initialization inside the runner.
+    if filter_config is not None and start_date_str is not None and end_date_str is not None:
+        symbols = _apply_universe_filter(
+            filter_config,
+            cache_dir,
+            start_date_str,
+            end_date_str,
+            candidate_symbols=symbols,
+            persist_path=persist_db,
+        )
+        symbols = _validate_coverage(
+            symbols,
+            cache_dir,
+            start_date_str,
+            end_date_str,
+            persist_path=persist_db,
+        )
+        filter_config = None  # Already resolved; pass symbol list directly to runner
 
     print(f"\nStarting sweep against cache at: {cache_dir}")
     print("(This may take several minutes...)\n")

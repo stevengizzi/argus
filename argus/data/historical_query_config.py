@@ -29,6 +29,15 @@ class HistoricalQueryConfig(BaseModel):
     max_memory_mb: int = Field(default=2048, gt=0, description="DuckDB memory limit in MB")
     default_threads: int = Field(default=4, gt=0, description="DuckDB worker thread count")
 
+    persist_path: str | None = Field(
+        default=None,
+        description=(
+            "Path to persistent DuckDB database file. When set, the VIEW is "
+            "created once and survives across invocations. When None, uses "
+            "in-memory mode (legacy behavior)."
+        ),
+    )
+
     @field_validator("cache_dir")
     @classmethod
     def validate_cache_dir_non_empty(cls, v: str) -> str:
