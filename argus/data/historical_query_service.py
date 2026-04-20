@@ -1,17 +1,23 @@
 """Historical Query Service — read-only DuckDB layer over the Parquet cache.
 
 Provides SQL access to ARGUS's existing Databento Parquet cache
-(`data/databento_cache/`) without ever modifying it.  A DuckDB in-memory
-connection is created at startup; the Parquet files are the sole persistent
-store.
+(`data/databento_cache/`) without ever modifying it.
 
 Cache directory layout expected:
     {cache_dir}/{SYMBOL}/{YYYY-MM}.parquet
 
-The VIEW exposes columns: symbol, ts_event, date, open, high, low, close, volume.
-Symbol is extracted from the directory path; date is CAST(ts_event AS DATE).
+Two modes:
+- **In-memory** (``persist_path=None``): Creates a lazy VIEW that re-scans
+  Parquet files on every query.  Fast to initialize, slow to query.
+- **Persistent** (``persist_path`` set): Creates a materialized TABLE on first
+  run (30-60 min for ~1M Parquet files).  Subsequent opens are instant;
+  queries return in seconds.
 
-Sprint 31A.5, Session 1.
+The TABLE/VIEW exposes columns: symbol, ts_event, date, open, high, low, close,
+volume.  Symbol is extracted from the directory path; date is
+CAST(ts_event AS DATE).
+
+Sprint 31A.5, Session 1.  Persistent TABLE materialization: Sprint 31.75 S4 fix.
 """
 
 from __future__ import annotations
@@ -56,10 +62,9 @@ _SYMBOLS_TTL_SECONDS = 60.0
 class HistoricalQueryService:
     """Read-only DuckDB query layer over the Parquet historical cache.
 
-    Initializes an in-memory DuckDB connection and creates a VIEW named
-    ``historical`` that unions all Parquet files in the cache directory.
-    The symbol column is derived from the directory structure; the raw
-    Parquet files are never written to.
+    In-memory mode creates a lazy VIEW; persistent mode materializes a
+    DuckDB-native TABLE on first run (subsequent opens skip
+    materialization).  The raw Parquet files are never written to.
 
     Args:
         config: HistoricalQueryConfig with resource limits and cache path.
@@ -111,18 +116,21 @@ class HistoricalQueryService:
 
             if config.persist_path is not None:
                 existing = conn.execute(
-                    "SELECT count(*) FROM duckdb_views() WHERE view_name = 'historical'"
+                    "SELECT count(*) FROM duckdb_tables() "
+                    "WHERE table_name = 'historical'"
                 ).fetchone()[0]
                 if existing:
                     self._available = True
                     logger.info(
-                        "HistoricalQueryService: persistent DB opened — VIEW already exists (%s)",
+                        "HistoricalQueryService: persistent DB opened "
+                        "— TABLE already materialized (%s)",
                         db_path,
                     )
                 else:
                     if not cache_path.exists():
                         logger.info(
-                            "HistoricalQueryService: cache_dir does not exist: %s — service unavailable",
+                            "HistoricalQueryService: cache_dir does not "
+                            "exist: %s — service unavailable",
                             config.cache_dir,
                         )
                         return
@@ -130,7 +138,7 @@ class HistoricalQueryService:
                         "HistoricalQueryService: using persistent DB at %s",
                         db_path,
                     )
-                    self._initialize_view(cache_path)
+                    self._initialize_table(cache_path)
             else:
                 self._initialize_view(cache_path)
 
@@ -219,13 +227,100 @@ class HistoricalQueryService:
                 exc_info=True,
             )
 
+    def _initialize_table(self, cache_path: Path) -> None:
+        """Create a materialized ``historical`` TABLE from all Parquet files.
+
+        Unlike ``_initialize_view()`` (which creates a lazy VIEW that re-scans
+        Parquet on every query), this creates a DuckDB-native TABLE that stores
+        data once.  Only used in persistent mode.  Takes 30-60 min on first
+        run; subsequent opens skip this entirely.
+
+        Args:
+            cache_path: Absolute or relative path to the Parquet cache root.
+        """
+        parquet_files = list(cache_path.glob("**/*.parquet"))
+        if not parquet_files:
+            logger.warning(
+                "HistoricalQueryService: cache_dir contains no Parquet "
+                "files (%s) — service unavailable",
+                cache_path,
+            )
+            return
+
+        first_file = str(parquet_files[0])
+        try:
+            schema_df = self._conn.execute(  # type: ignore[union-attr]
+                f"DESCRIBE SELECT * FROM read_parquet('{first_file}')"
+            ).fetchdf()
+            col_names = (
+                schema_df["column_name"].tolist()
+                if "column_name" in schema_df.columns
+                else []
+            )
+            logger.info(
+                "HistoricalQueryService: discovered Parquet schema "
+                "— columns: %s",
+                col_names,
+            )
+        except Exception:
+            logger.warning(
+                "HistoricalQueryService: could not inspect Parquet "
+                "schema of %s",
+                first_file,
+            )
+
+        glob_pattern = str(cache_path.resolve()) + "/**/*.parquet"
+
+        table_sql = f"""
+        CREATE TABLE historical AS
+        SELECT
+            regexp_extract(
+                filename, '.*/([^/]+)/[^/]+\\.parquet$', 1
+            ) AS symbol,
+            "timestamp" AS ts_event,
+            CAST("timestamp" AS DATE) AS date,
+            "open",
+            "high",
+            "low",
+            "close",
+            "volume"
+        FROM read_parquet(
+            '{glob_pattern}', filename=true, union_by_name=true
+        )
+        """
+
+        try:
+            logger.info(
+                "HistoricalQueryService: materializing TABLE from %d "
+                "Parquet files — this may take 30-60 minutes on first "
+                "run...",
+                len(parquet_files),
+            )
+            self._conn.execute(table_sql)  # type: ignore[union-attr]
+            row_count = self._conn.execute(  # type: ignore[union-attr]
+                "SELECT COUNT(*) FROM historical"
+            ).fetchone()[0]
+            self._available = True
+            logger.info(
+                "HistoricalQueryService: TABLE 'historical' "
+                "materialized — %d rows from %d Parquet files",
+                row_count,
+                len(parquet_files),
+            )
+        except Exception:
+            logger.warning(
+                "HistoricalQueryService: failed to materialize TABLE "
+                "— service unavailable",
+                exc_info=True,
+            )
+
     # ------------------------------------------------------------------
     # Properties
     # ------------------------------------------------------------------
 
     @property
     def is_available(self) -> bool:
-        """True when the DuckDB VIEW is initialized and queryable."""
+        """True when the DuckDB TABLE/VIEW is initialized and queryable."""
         return self._available
 
     # ------------------------------------------------------------------
@@ -439,10 +534,10 @@ class HistoricalQueryService:
         }
 
     def rebuild(self) -> None:
-        """Force recreation of the historical VIEW.
+        """Force recreation of the historical TABLE or VIEW.
 
-        Use when the Parquet cache has been updated and the persistent
-        DB's VIEW is stale. Only meaningful for persistent mode.
+        Drops the existing TABLE/VIEW and re-creates from the Parquet
+        cache.  For persistent mode, this re-materializes the TABLE.
 
         Raises:
             ServiceUnavailableError: If service is not initialized or cache
@@ -455,7 +550,19 @@ class HistoricalQueryService:
             raise ServiceUnavailableError(f"Cache dir missing: {cache_path}")
         self._available = False
         self._symbols_cache = None
-        self._initialize_view(cache_path)
+        try:
+            self._conn.execute(  # type: ignore[union-attr]
+                "DROP TABLE IF EXISTS historical"
+            )
+            self._conn.execute(  # type: ignore[union-attr]
+                "DROP VIEW IF EXISTS historical"
+            )
+        except Exception:
+            pass
+        if self._config.persist_path:
+            self._initialize_table(cache_path)
+        else:
+            self._initialize_view(cache_path)
 
     # ------------------------------------------------------------------
     # Lifecycle

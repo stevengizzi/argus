@@ -349,26 +349,28 @@ class TestPersistentMode:
         svc.close()
         assert db_file.exists()
 
-    def test_persistent_mode_reuses_view(
+    def test_persistent_mode_reuses_table(
         self, cache_dir: Path, tmp_path: Path
     ) -> None:
-        """Second instantiation with same persist_path skips _initialize_view."""
+        """Second instantiation with same persist_path skips _initialize_table."""
         db_file = tmp_path / "test_reuse.duckdb"
         config = HistoricalQueryConfig(
             enabled=True,
             cache_dir=str(cache_dir),
             persist_path=str(db_file),
         )
-        # First instantiation creates the VIEW
+        # First instantiation materializes the TABLE
         svc1 = HistoricalQueryService(config)
         assert svc1.is_available
         svc1.close()
 
-        # Second instantiation: VIEW already exists — _initialize_view must NOT be called
-        with patch.object(HistoricalQueryService, "_initialize_view") as mock_init_view:
+        # Second instantiation: TABLE already exists — _initialize_table must NOT be called
+        with patch.object(
+            HistoricalQueryService, "_initialize_table"
+        ) as mock_init_table:
             svc2 = HistoricalQueryService(config)
             assert svc2.is_available
-            mock_init_view.assert_not_called()
+            mock_init_table.assert_not_called()
             svc2.close()
 
     def test_memory_mode_unchanged(self, cache_dir: Path) -> None:
@@ -385,10 +387,10 @@ class TestPersistentMode:
         assert not df.empty
         svc.close()
 
-    def test_rebuild_recreates_view(
+    def test_rebuild_recreates_table(
         self, cache_dir: Path, tmp_path: Path
     ) -> None:
-        """rebuild() recreates the VIEW and leaves service available."""
+        """rebuild() recreates the TABLE and leaves service available."""
         db_file = tmp_path / "test_rebuild.duckdb"
         config = HistoricalQueryConfig(
             enabled=True,
