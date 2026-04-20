@@ -75,6 +75,7 @@ logs/
 docs/IBKR-disclosures/
 
 # Frontend (React)
+node_modules/
 argus/ui/node_modules/
 argus/ui/dist/
 
