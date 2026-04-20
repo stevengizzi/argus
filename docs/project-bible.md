@@ -118,15 +118,18 @@ Not all Phase 2 patterns will prove to have a backtestable edge. Each goes throu
 Every strategy follows a formalized lifecycle:
 
 1. **Concept** — Idea is defined and documented in a Strategy Spec Sheet
-2. **Exploration** — Parameter sweeps via VectorBT to identify promising configurations
-3. **Validation** — Full-fidelity testing via the Replay Harness, which feeds historical data through the actual production code (Event Bus, Strategy, Risk Manager, SimulatedBroker) using FixedClock injection. Walk-forward analysis validates that parameters generalize beyond the optimization period (DEC-047).
-4. **Ecosystem Replay** — Strategy added to the full system and tested via the Replay Harness against historical data alongside other active strategies
-5. **Paper Trading** — Live paper trading for minimum 20–30 trading days
-6. **Live (Minimum Size)** — Real money, minimum position sizes, for minimum 20 trading days
-7. **Live (Full Size)** — Promoted to full allocation within the Orchestrator
-8. **Active Monitoring** — Ongoing performance tracking; may be throttled or suspended
-9. **Suspended** — Temporarily removed from active trading; can be reactivated
-10. **Retired** — Permanently deactivated; archived for reference
+2. **Quick Reject** — Fast backtest screen: 50 representative symbols × 3–6 months, seconds per config. Rejects configurations with zero signals, negative expectancy, or win rate below 35%. This is a pre-filter, not a validation gate. (Replaces "Exploration" — DEC-382, Sprint 31.75.)
+3. **Shadow** — Survivors deployed as shadow variants via `experiments.yaml`. CounterfactualTracker monitors theoretical outcomes on live market data. This is the real validation gate. Minimum 20 trading days, 30+ trades. Shadow is free (no capital risk, minimal compute). (New stage — DEC-382, Sprint 31.75.)
+4. **Promotion Gate** — PromotionEvaluator analyzes shadow performance with statistical significance tests (Sprint 33). Positive expectancy, adequate trade count, acceptable drawdown. Configs that pass are promoted to live paper trading.
+5. **Paper Trading** — Promoted from shadow to live paper trading (IBKR paper account). Validates execution quality, fill assumptions, and system integration.
+6. **Deep Backtest (Optional)** — Full-universe, multi-year exhaustive analysis for shadow-proven configs only. Informs allocation sizing, regime robustness, and tail risk characterization. Not required for promotion — reserved for capital allocation decisions. (Replaces "Validation" + "Ecosystem Replay" — DEC-382.)
+7. **Live (Minimum Size)** — Real money, minimum position sizes, for minimum 20 trading days
+8. **Live (Full Size)** — Promoted to full allocation within the Orchestrator
+9. **Active Monitoring** — Ongoing performance tracking; may be throttled or suspended
+10. **Suspended** — Temporarily removed from active trading; can be reactivated
+11. **Retired** — Permanently deactivated; archived for reference
+
+**Validation philosophy (DEC-382):** Validation cost scales with capital risk. Shadow costs nothing → cheap validation. Live trading risks capital → expensive validation. Backtesting is a quick-reject pre-filter, not the primary validation gate. A config showing positive expectancy on 20 days of real market data is a stronger signal than 8 years of historical simulation (regime non-stationarity, curve-fitting, unrealistic fills).
 
 The Strategy Lab section of the Command Center dashboard tracks every strategy's position in this pipeline.
 

@@ -4665,6 +4665,37 @@ DEC-382 range remains reserved but unused.
 
 ---
 
+## Sprint 31.75 — Sweep Infrastructure Hardening
+
+### DEC-382 | Validation Pipeline Reframe — Shadow-First Model
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-04-20 |
+| **Context** | Sprint 31.75 built exhaustive sweep infrastructure (DuckDB persistence, parallel execution, universe filtering, batch orchestration) then attempted to run full-universe parameter sweeps across 10 patterns × 800–4,000 symbols × 8 years of data. Multiple failures: DuckDB materialization too slow (16+ hours for 983K Parquet files), full cartesian grids too large (10⁹–10¹³ points), concurrent execution crashed the computer, sequential execution estimated at 4–5 days. Meanwhile, the existing CounterfactualTracker infrastructure (Sprint 27.7) already provides real-market shadow validation at zero capital risk and minimal compute cost. |
+| **Decision** | Adopt a 4-stage validation pipeline that matches validation cost to capital risk: (1) **Quick reject** — fast backtest, 50 symbols × 3 months, seconds per config, rejects obvious garbage; (2) **Shadow** — CounterfactualTracker on live market data, 20+ trading days, the real promotion gate; (3) **Promotion** — statistical significance on shadow results (Sprint 33), not backtest results; (4) **Deep backtest** — full-universe, multi-year analysis reserved for allocation sizing of shadow-proven configs only. The existing Incubator Pipeline (§4.3 project-bible.md) stages 2–4 are reinterpreted: Exploration becomes quick-reject, a new Shadow stage is inserted, and Validation operates on shadow data rather than backtests. |
+| **Alternatives** | (1) Continue with exhaustive grid sweeps as primary validation — rejected: 4–5 days of compute for a pre-filter is misaligned with the system's own validation philosophy; shadow performance is explicitly the promotion gate per the expanded vision (DEC-163). (2) Abandon backtesting entirely — rejected: quick-reject backtests are valuable for filtering obvious garbage before consuming shadow slots. (3) Hybrid: backtest first, shadow only for top configs — rejected: this delays shadow data collection for configs that might prove excellent in live conditions but mediocre in backtests. |
+| **Rationale** | ARGUS's expanded vision (DEC-163, DEC-262) explicitly states "backtesting is a pre-filter" and "the real validation gate is live shadow performance via CounterfactualTracker." Sprint 31.75's failed sweep attempts made this concrete: the infrastructure cost of exhaustive backtesting is enormous while shadow testing is essentially free. A config that shows positive expectancy on 20 days of real market data is a stronger signal than positive expectancy on 8 years of historical data (regime non-stationarity, curve-fitting, unrealistic fills). Validation cost should scale with capital at risk: shadow costs nothing → cheap validation; live trading risks capital → expensive validation via deep backtests. |
+| **Impact** | Sprint 33 (Statistical Validation): scope changes from "analyze grid sweep outputs" to "analyze shadow performance data with confidence intervals." Sprint 31B (Research Console): reframed as Variant Factory — generate configs → quick-reject → push to shadow. Sprint 33.5 (Adversarial Stress Testing): applies to shadow-proven configs, not the entire parameter space. All future parameter optimization sprints scope to the 4-stage model. |
+| **Cross-References** | DEC-163 (expanded vision), DEC-262 (roadmap consolidation), DEC-383 (shadow fleet deployment), Sprint 27.7 (CounterfactualTracker), Sprint 32 (experiment pipeline) |
+| **Status** | Active |
+
+---
+
+### DEC-383 | Shadow Variant Fleet — 22 Variants Deployed
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-04-20 |
+| **Context** | Sprint 31.75 S4 pivoted from exhaustive grid sweeps to immediate shadow deployment per DEC-382. 4 variants already existed (2 dip_and_rip, 2 micro_pullback from April 3–5 small-sample sweeps). 8 patterns had zero shadow coverage. |
+| **Decision** | Deploy 18 new shadow variants across 8 patterns (22 total) in `config/experiments.yaml`, chosen from domain knowledge and directional small-sample sweep results. Raise `max_variants_per_pattern` from 5 to 8. All variants in `mode: shadow`. Patterns: hod_break (3 variants), gap_and_go (3, first valid configs post-DEF-152 fix), premarket_high_break (2), vwap_bounce (2, first valid configs post-DEF-154 fix), narrow_range_breakout (2), abcd (2), bull_flag (2), flat_top_breakout (2). PromotionEvaluator assesses after 20+ trading days of CounterfactualTracker data. |
+| **Alternatives** | (1) Wait for exhaustive sweep results (4–5 days of compute) before deploying shadows — rejected per DEC-382: delays shadow data collection with no improvement in final answer quality. (2) Deploy only patterns with proven small-sample results — rejected: shadow is free, deploying all patterns immediately starts the evaluation clock for patterns with zero prior data. (3) Use defaults only — rejected: 2–3 variants per pattern enables A/B comparison of parameter sensitivity in shadow. |
+| **Rationale** | Shadow testing costs nothing (no capital risk, minimal compute — just price tracking against stops/targets). Every trading day without shadow data is wasted evaluation time. The configs chosen are not random — they're informed by the April 3–5 sweep results (directional signals), DEF-152/154 fixes (previously-broken patterns now functional), and domain knowledge of each pattern's mechanics. 20 trading days × 22 variants will produce enough data for the PromotionEvaluator to make statistically grounded decisions. |
+| **Cross-References** | DEC-382 (validation pipeline reframe), DEC-163 (expanded vision), Sprint 32 (experiment pipeline), Sprint 27.7 (CounterfactualTracker) |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
-*Next DEC: 382*
-*Last updated: 2026-04-20 (Sprint 31.8 doc sync — no new DECs)*
+*Next DEC: 384*
+*Last updated: 2026-04-20 (Sprint 31.75 doc sync — DEC-382 validation pipeline reframe, DEC-383 shadow fleet deployment)*

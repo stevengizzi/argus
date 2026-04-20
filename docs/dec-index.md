@@ -1,7 +1,7 @@
 # ARGUS — Decision Index
 
-> 381 decisions (DEC-001 through DEC-381)
-> Generated: April 20, 2026 (Sprint 31.8 doc sync — no new DECs in Sprint 31.8) | Source: `docs/decision-log.md`
+> 383 decisions (DEC-001 through DEC-383)
+> Generated: April 20, 2026 (Sprint 31.75 doc sync — DEC-382, DEC-383) | Source: `docs/decision-log.md`
 > Legend: ● Active | ○ Superseded | △ Amended | ✗ Duplicate entry
 
 
@@ -488,4 +488,9 @@ No new DECs across any of the four sessions. All design decisions followed estab
 - **Session 3 — DEF-158 Duplicate SELL:** broker-state-query-before-resubmit pattern; per-symbol order cancellation before startup flatten (vs `reqGlobalCancel()` which would affect unrelated positions); stop-fill and flatten-fill now cancel concurrent pending flattens.
 - **Session 4 — DEF-159 Reconstruction Trade Logging:** added `entry_price_known` boolean column (smallest blast radius of three options); detection via `entry_price == 0.0` rather than `strategy_id` check for broader coverage.
 
-Next DEC: 382.
+## Sprint 31.75 — Sweep Infrastructure Hardening
+
+- ● **DEC-382**: Validation Pipeline Reframe — Shadow-First Model (4-stage: quick-reject → shadow → promotion → deep backtest; exhaustive sweeps reserved for allocation sizing of shadow-proven configs; changes Sprint 33/31B/33.5 scope)
+- ● **DEC-383**: Shadow Variant Fleet — 22 Variants Deployed (18 new across 8 patterns, `max_variants_per_pattern` 5→8, all shadow mode, PromotionEvaluator after 20+ days)
+
+Next DEC: 384.

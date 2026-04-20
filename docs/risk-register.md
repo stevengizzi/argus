@@ -1020,4 +1020,18 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 
 ---
 
+### RSK-051 — DuckDB Unusable on 983K-File Parquet Cache
+| Field | Value |
+|-------|-------|
+| **Date Identified** | 2026-04-20 |
+| **Category** | Research Infrastructure |
+| **Severity** | Medium |
+| **Likelihood** | Confirmed |
+| **Description** | 983K individual monthly Parquet files make all DuckDB query paths unusable. `CREATE VIEW` scans every file on every query (60+ minutes for `COUNT DISTINCT`). `CREATE TABLE` materialization estimated 16+ hours. Blocks Research Console SQL features (Sprint 31B) and any future analytical queries against the full historical cache. |
+| **Mitigation** | Interim: `scripts/resolve_symbols_fast.py` (pyarrow-based symbol resolution, 41s for 24K symbols) bypasses DuckDB entirely for the symbol-resolution use case. Strategic: DEF-161 tracks the permanent fix — merge monthly files into per-symbol files (983K → 24K), making DuckDB queries viable. Pre-filtered symbol lists (`@symbols.txt`) work for sweeps. |
+| **Owner** | Sprint 31B (Research Console / Variant Factory) |
+| **Status** | Open |
+
+---
+
 *End of Risk & Assumptions Register v1.7*

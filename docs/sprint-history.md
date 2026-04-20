@@ -2724,6 +2724,86 @@ New module — pure algorithmic NYSE holiday calendar, ported from frontend `ui/
 
 **Analysis reports:** `data/sweep_logs/sweep_analysis_20260404.md`, `data/sweep_logs/sweep_summary_20260404.md`
 
+---
+
+## Sprint 31.75 — Sweep Infrastructure Hardening
+
+**Type:** Impromptu (4 code sessions + operational) | **Tests:** +41 pytest (4,858 → 4,899; Sprint 31.8 further increased to 4,919) | **New DEFs:** 161 (DuckDB Parquet consolidation) | **DEFs resolved:** 152, 153, 154 | **New DECs:** 382 (validation pipeline reframe), 383 (shadow fleet deployment) | **All Tier 2 verdicts:** CLEAR
+
+Sprint artifacts: `docs/sprints/sprint-31.75/`
+
+### Session 1 — DEF-152 + DEF-153 Bug Fixes
+
+**Tests:** +10 (4,858 → 4,868) | **Tier 2 verdict:** CLEAR
+
+- **DEF-152:** GapAndGo `min_risk_per_share` parameter (default $0.10). Rejects signals where `entry - stop < min_risk_per_share` (absolute floor) or where risk < 10% of ATR (relative floor). New PatternParam for sweep grid. Also added to `GapAndGoConfig` Pydantic model (required by existing cross-validation tests).
+- **DEF-153:** `config_fingerprint` field on `BacktestEngineConfig`. Registered with OrderManager in `_setup()` after strategy creation. `_run_single_backtest()` worker passes fingerprint from ExperimentRunner. Live pipeline unchanged.
+
+### Session 2 — DEF-154 VWAP Bounce Parameter Rework
+
+**Tests:** +10 (4,868 → 4,878) | **Tier 2 verdict:** CLEAR
+
+Four signal density controls added to VwapBouncePattern:
+1. `min_approach_distance_pct` (0.3%): requires price to be meaningfully above VWAP before approach counts
+2. `min_bounce_follow_through_bars` (2): bars after bounce must close above VWAP; entry at last follow-through bar
+3. `max_signals_per_symbol` (3): per-instance session-state cap with `reset_session_state()` method
+4. `min_prior_trend_bars` default raised 10→15, PatternParam min 5→10, max 20→30
+
+`lookback_bars` increased 30→50 (max `min_detection_bars` is 43). `min_detection_bars` updated to include follow-through. Fixture updated to satisfy stricter conditions (no assertions weakened).
+
+### Session 3a — DuckDB Persistence
+
+**Tests:** +6 (4,878 → 4,884) | **Tier 2 verdict:** CLEAR
+
+- `persist_path: str | None` on `HistoricalQueryConfig` (default None, backward compatible)
+- Persistent mode: `duckdb.connect(database=path)`, checks `duckdb_tables()` for existing TABLE, skips materialization if present
+- `_initialize_table()` method: `CREATE TABLE` (not VIEW) for persistent mode — materializes Parquet data into DuckDB native format
+- `rebuild()` drops TABLE and re-materializes
+- `--persist-db` and `--rebuild` CLI flags on `run_experiment.py`
+- Auto-defaults to persistent mode when `--universe-filter` is used
+- `.duckdb` + `.duckdb.wal` added to `.gitignore`
+
+**Note:** DuckDB materialization over 983K Parquet files proved too slow (16+ hours estimated). See S4 discovery below.
+
+### Session 3b — Sweep Tooling Scripts
+
+**Tests:** +15 (4,884 → 4,899) | **Tier 2 verdict:** CLEAR (FINAL session — full suite)
+
+- `scripts/resolve_sweep_symbols.py`: DuckDB-based symbol resolution (single service instance in `--all-patterns` mode)
+- `scripts/run_sweep_batch.sh`: sequential overnight orchestrator (output redirection only, `|| { continue }` error isolation, progress sentinels per pattern)
+- `config/universe_filters/bull_flag_trend.yaml`: trend-following universe ($20–300, 300K vol) for bull flag comparison
+- `scripts/analyze_sweeps.py`: relocated from `data/sweep_logs/`
+- Fixed `test_cli_delegates_filter_to_runner` (broken by S3a inline-filtering change)
+
+### Session 4 — Operational (Symbol Resolution + Sweep Launch)
+
+No code sessions. Operational execution using S1–S3b infrastructure.
+
+**DuckDB materialization gap discovered:** `HistoricalQueryService` with persistent TABLE mode over 983K Parquet files estimated 16+ hours for `CREATE TABLE AS SELECT`. DuckDB `CREATE VIEW` also unusable (60+ minutes per `COUNT DISTINCT` query). Root cause: 983K individual file opens regardless of materialization approach.
+
+**Workaround:** `scripts/resolve_symbols_fast.py` — pyarrow-based symbol resolution that reads 3 sample Parquet files per symbol (early/mid/late in date range). Completed in 41 seconds for all 24,321 symbols. Volume aggregation to daily level required (per-bar Parquet volume ≠ daily volume).
+
+**Grid size discovery:** Full cartesian product of all PatternParams produces 10⁹–10¹³ grid points per pattern. `--params` restriction to 2–3 key dimensions required (20–200 grid points).
+
+**Concurrent execution crash:** 11 patterns launched simultaneously (22+ Python processes) crashed the computer. Sequential execution (one pattern at a time) required.
+
+**Strategic pivot:** Exhaustive multi-day grid sweeps are misaligned with ARGUS's shadow-first validation philosophy. Backtests should be quick-reject pre-filters (seconds per config); shadow performance via CounterfactualTracker is the real promotion gate (20+ trading days). 18 shadow variants added across 8 patterns (22 total) for immediate market data collection.
+
+**DEF-161 opened:** DuckDB Parquet consolidation — merge monthly files into per-symbol files (24K instead of 983K) to make DuckDB queries viable. Prerequisite for Sprint 31B Research Console.
+
+### Sprint 31.75 Statistics
+
+- **Sprint total:** 4 code sessions + operational work
+- **Files created:** `test_engine_fingerprint.py`, `resolve_sweep_symbols.py`, `run_sweep_batch.sh`, `bull_flag_trend.yaml`, `resolve_symbols_fast.py`, `test_resolve_sweep_symbols.py`
+- **Files modified:** `gap_and_go.py`, `vwap_bounce.py`, `historical_query_service.py`, `historical_query_config.py`, `run_experiment.py`, `engine.py` (backtest), `config.py` (backtest + core), `runner.py` (experiments), `.gitignore`, `experiments.yaml`
+- **Tests added:** +41 pytest
+- **DEFs resolved:** 152, 153, 154
+- **DEFs opened:** 161
+- **DECs added:** 382 (validation pipeline reframe), 383 (shadow fleet deployment)
+- **Shadow variants deployed:** 22 (4 existing + 18 new)
+
+---
+
 ## Sprint 31.8 — April 20, 2026 Impromptus (Consolidated)
 
 Sessions AS–AV (Lifespan Hang, Eval DB VACUUM, DEF-158 Duplicate SELL, DEF-159 Reconstruction Trades) are collectively Sprint 31.8. All four completed on April 20, 2026 after a 17-day absence (Costa Rica). Sprint artifacts consolidated in `docs/sprints/sprint-31.8/`. All Tier 2 verdicts: CLEAR.
@@ -2753,11 +2833,11 @@ Sessions AS–AV (Lifespan Hang, Eval DB VACUUM, DEF-158 Duplicate SELL, DEF-159
 
 ## Sprint Statistics
 
-- **Total sprints:** 34 full + 44 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9, 27.5, 27.6, 27.65, 27.7, 27.75, 27.8, 27.9, 27.95, 28.5, 28.75, 29, 29.5, 32.5, 32.75, 32.8, 32.9, 32.95, 31.5) + 9 impromptus (Good Friday Apr 3, 31A.5 Apr 3, 31A.75 Apr 3, DEF-151 Fix Apr 4, Sweep Impromptu Apr 3–5, Lifespan Hang Apr 20, Eval DB VACUUM Apr 20, DEF-158 Duplicate SELL Apr 20, DEF-159 Reconstruction Trade Fix Apr 20)
+- **Total sprints:** 34 full + 45 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9, 27.5, 27.6, 27.65, 27.7, 27.75, 27.8, 27.9, 27.95, 28.5, 28.75, 29, 29.5, 32.5, 32.75, 32.8, 32.9, 32.95, 31.5, 31.75) + 9 impromptus (Good Friday Apr 3, 31A.5 Apr 3, 31A.75 Apr 3, DEF-151 Fix Apr 4, Sweep Impromptu Apr 3–5, Lifespan Hang Apr 20, Eval DB VACUUM Apr 20, DEF-158 Duplicate SELL Apr 20, DEF-159 Reconstruction Trade Fix Apr 20)
 - **Total sessions:** ~554+ Claude Code sessions
 - **Total tests:** 4,919 pytest + 846 Vitest = 5,765 total
 - **Total decisions:** 381 (DEC-001 through DEC-381; no new DECs in Sprints 29.5, 32, 32.5, 32.75, 32.8, 32.9, 32.95, Apr 3 hotfix, 31A, 31A.5, 31A.75, 31.5, DEF-151 fix, Sweep Impromptu, DEF-158 fix, or DEF-159 fix)
-- **Calendar days (active dev):** ~52 (Feb 14 – Apr 5, 2026 + Apr 20, 2026)
+- **Calendar days (active dev):** ~53 (Feb 14 – Apr 5, 2026 + Apr 14, Apr 20, 2026)
 - **Largest sprint:** 22 (9 implementation + 5 fix + 9 reviews, largest scope)
 - **Cleanest sprint:** 23 (11 sessions, 0 regressions, 0 scope gaps requiring follow-up)
 - **Most test-dense:** Sprint 22 (286 new tests), Sprint 24 (209 new tests), Sprint 23.2 (188 new tests), Sprint 28 (179 new tests), Sprint 27.6 (171 new tests), Sprint 23 (141 new tests across 23+23.05), Sprint 28.5 (110 new tests)

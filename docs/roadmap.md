@@ -641,10 +641,17 @@ Reconciliation redesign with broker-confirmed positions (DEC-369). Overflow rout
 - **DEF-151 fix (Apr 4):** `json.dumps(record.backtest_result, default=str)` in `store.py:193`. Root cause of Night 1 data loss (143 grid points computed, zero saved). +1 pytest. Commit: 3a48bcf.
 - **Sweep Impromptu (Apr 3–5):** Small-sample universe-aware sweeps (24–50 symbols per pattern) across 9 patterns. Key results: Micro Pullback — 2 promotable variants; PMH — conditional; Bull Flag + Flat-Top — confirmed dead on tested universes; Gap-and-Go — invalid (DEF-152); VWAP Bounce — wrong axes swept (DEF-154). DEF-152, DEF-153, DEF-154 opened. Full-universe re-sweeps pending Sweep Infrastructure Hardening.
 
-### Sprint 31B: Research Console (NEW PAGE) — Deferred post-32 (DEC-379)
+### Sprint 31B: Research Console / Variant Factory — Deferred post-31.75 (DEC-379)
 **Target:** ~3 days
 
-**Note:** Deferred from original Sprint 31 position to after Sprint 32. Research Console is developer UX for strategy research visibility — valuable but not on the optimization critical path (32 → 33 → 33.5 → 34).
+**Note:** Deferred from original Sprint 31 position. Reframed in Sprint 31.75 as a **Variant Factory** — the primary interface for generating configs, running quick-reject backtests (seconds per config), and pushing survivors to shadow. The Research Console visualization features (heatmaps, 3D parameter landscape) are secondary to the operational workflow. **Prerequisite:** DEF-161 (Parquet consolidation) for DuckDB-backed SQL queries; interim workaround is `resolve_symbols_fast.py` (pyarrow sampling).
+
+**Core workflow (Sprint 31.75 reframe):**
+1. Pick a pattern → generate N random/grid configs (seconds)
+2. Quick-reject backtest: 50 symbols × 3 months per config (seconds each)
+3. Show results table: trades, expectancy, win rate, Sharpe
+4. One-click push survivors to shadow via experiments.yaml
+5. CounterfactualTracker validates over 20+ trading days
 
 **Scope (frontend):** **Research Console** — Command Center page 9. Mission control for strategy research.
 - **Run Manager:** Shows backtest runs in progress (progress bar, ETA), queued runs, completed runs. Each completed run: equity curve thumbnail, Sharpe, win rate, max drawdown, trade count.

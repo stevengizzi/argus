@@ -23,7 +23,11 @@ Gap-up continuation pattern. Detects stocks gapping up ≥3% from prior close, v
 Gap magnitude (30) + Volume (25) + VWAP hold (25) + Entry quality (20)
 
 ## Parameters
-14 PatternParams. Categories: detection, filtering, trade.
+15 PatternParams. Categories: detection, filtering, trade, scoring.
+
+Key additions (Sprint 31.75 S1, DEF-152): `min_risk_per_share` (default $0.10) — minimum absolute distance between entry and stop to prevent degenerate R-multiples. Also rejects signals where risk < 10% of ATR.
+
+**Note on prior sweep results:** April 3–5 small-sample sweep results for gap_and_go are invalid — pre-DEF-152 fix had degenerate R-multiples when `breakout_margin_pct` was near zero. First valid shadow data will come from the 3 new shadow variants deployed in Sprint 31.75 (`strat_gap_and_go__*`).
 
 ## Exit Management
 Trailing stop (percent-based), escalation phases. Override in strategy YAML.
