@@ -2722,14 +2722,25 @@ New module — pure algorithmic NYSE holiday calendar, ported from frontend `ui/
 
 **Analysis reports:** `data/sweep_logs/sweep_analysis_20260404.md`, `data/sweep_logs/sweep_summary_20260404.md`
 
+## DEF-158 Duplicate SELL Fix Impromptu (April 20, 2026)
+
+**Type:** Impromptu (single session) | **Tests:** +5 pytest (4,910 → 4,915) | **New DEFs:** 158 (resolved), 159, 160 | **New DECs:** 0 | **Tier 2 verdict:** pending
+
+**Root cause:** Three independent paths could place duplicate SELL orders for the same position:
+1. `_check_flatten_pending_timeouts` resubmitted after 120s when IBKR paper fills were delayed — the original order had already filled at the broker but the fill callback hadn't arrived yet.
+2. `_flatten_unknown_position` (startup cleanup) placed MARKET SELL without cancelling residual bracket orders from prior sessions.
+3. `_handle_stop_fill` didn't cancel concurrent flatten orders placed by the time-stop or trail-stop paths.
+
+**Fix:** (a) Always query broker position before timeout resubmission; skip if position is 0. (b) Cancel all open orders for symbol before startup flatten. (c) Cancel pending flatten orders when stop fills. (d) Cancel stale duplicate flatten orders when any flatten fill arrives.
+
 ---
 
 ## Sprint Statistics
 
-- **Total sprints:** 34 full + 44 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9, 27.5, 27.6, 27.65, 27.7, 27.75, 27.8, 27.9, 27.95, 28.5, 28.75, 29, 29.5, 32.5, 32.75, 32.8, 32.9, 32.95, 31.5) + 7 impromptus (Good Friday Apr 3, 31A.5 Apr 3, 31A.75 Apr 3, DEF-151 Fix Apr 4, Sweep Impromptu Apr 3–5, Lifespan Hang Apr 20, Eval DB VACUUM Apr 20)
-- **Total sessions:** ~553+ Claude Code sessions
-- **Total tests:** 4,910 pytest + 846 Vitest = 5,756 total
-- **Total decisions:** 381 (DEC-001 through DEC-381; no new DECs in Sprints 29.5, 32, 32.5, 32.75, 32.8, 32.9, 32.95, Apr 3 hotfix, 31A, 31A.5, 31A.75, 31.5, DEF-151 fix, or Sweep Impromptu)
+- **Total sprints:** 34 full + 44 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9, 27.5, 27.6, 27.65, 27.7, 27.75, 27.8, 27.9, 27.95, 28.5, 28.75, 29, 29.5, 32.5, 32.75, 32.8, 32.9, 32.95, 31.5) + 8 impromptus (Good Friday Apr 3, 31A.5 Apr 3, 31A.75 Apr 3, DEF-151 Fix Apr 4, Sweep Impromptu Apr 3–5, Lifespan Hang Apr 20, Eval DB VACUUM Apr 20, DEF-158 Duplicate SELL Apr 20)
+- **Total sessions:** ~554+ Claude Code sessions
+- **Total tests:** 4,915 pytest + 846 Vitest = 5,761 total
+- **Total decisions:** 381 (DEC-001 through DEC-381; no new DECs in Sprints 29.5, 32, 32.5, 32.75, 32.8, 32.9, 32.95, Apr 3 hotfix, 31A, 31A.5, 31A.75, 31.5, DEF-151 fix, Sweep Impromptu, or DEF-158 fix)
 - **Calendar days (active dev):** ~51 (Feb 14 – Apr 5, 2026)
 - **Largest sprint:** 22 (9 implementation + 5 fix + 9 reviews, largest scope)
 - **Cleanest sprint:** 23 (11 sessions, 0 regressions, 0 scope gaps requiring follow-up)

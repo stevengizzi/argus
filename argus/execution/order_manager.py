@@ -1290,7 +1290,12 @@ class OrderManager:
     async def _handle_stop_fill(
         self, pending: PendingManagedOrder, event: OrderFilledEvent
     ) -> None:
-        """Stop loss triggered. Close position (or remaining shares)."""
+        """Stop loss triggered. Close position (or remaining shares).
+
+        DEF-158 fix: Also cancels any pending flatten orders for this symbol.
+        If a time-stop or trail flatten was placed concurrently with the stop
+        triggering, the flatten order must be cancelled to prevent a short.
+        """
         positions = self._managed_positions.get(pending.symbol, [])
         position = self._find_position_by_stop_order(positions, event.order_id)
         if position is None:
@@ -1321,6 +1326,23 @@ class OrderManager:
             self._pending_orders.pop(position.t2_order_id, None)
             position.t2_order_id = None
 
+        # DEF-158: Cancel any pending flatten orders for this symbol.
+        # A concurrent time-stop or trail flatten may have placed a SELL that
+        # would create a short now that the stop has closed the position.
+        flatten_entry = self._flatten_pending.get(pending.symbol)
+        if flatten_entry is not None:
+            flatten_oid = flatten_entry[0]
+            try:
+                await self._broker.cancel_order(flatten_oid)
+            except Exception:
+                logger.debug(
+                    "Could not cancel concurrent flatten %s after stop fill for %s",
+                    flatten_oid,
+                    pending.symbol,
+                )
+            self._pending_orders.pop(flatten_oid, None)
+            self._flatten_pending.pop(pending.symbol, None)
+
         await self._close_position(position, event.fill_price, ExitReason.STOP_LOSS)
 
         logger.info(
@@ -1334,7 +1356,13 @@ class OrderManager:
     async def _handle_flatten_fill(
         self, pending: PendingManagedOrder, event: OrderFilledEvent
     ) -> None:
-        """Market order to flatten position has filled."""
+        """Market order to flatten position has filled.
+
+        DEF-158 fix: After closing the position, cancels any OTHER pending
+        flatten orders for the same symbol that may still be at the broker
+        (e.g., from timeout resubmission). This prevents duplicate SELLs
+        from creating a short position.
+        """
         positions = self._managed_positions.get(pending.symbol, [])
         # Find the position that was being flattened, matching by strategy_id
         position = next(
@@ -1375,6 +1403,25 @@ class OrderManager:
             exit_reason = ExitReason.TRAILING_STOP
 
         await self._close_position(position, event.fill_price, exit_reason)
+
+        # DEF-158: Cancel any OTHER pending flatten orders for this symbol
+        # that may still be live at the broker (from timeout resubmission).
+        # The position is now closed — any additional SELL would go short.
+        stale_flatten_ids = [
+            oid for oid, p in self._pending_orders.items()
+            if p.symbol == pending.symbol and p.order_type == "flatten"
+            and oid != event.order_id
+        ]
+        for stale_id in stale_flatten_ids:
+            try:
+                await self._broker.cancel_order(stale_id)
+            except Exception:
+                logger.debug(
+                    "Could not cancel stale flatten order %s for %s",
+                    stale_id,
+                    pending.symbol,
+                )
+            self._pending_orders.pop(stale_id, None)
 
     # ---------------------------------------------------------------------------
     # Fallback Poll Loop
@@ -1827,6 +1874,10 @@ class OrderManager:
         queues the flatten for execution at market open instead of
         submitting immediately (Sprint 29.5 R4).
 
+        DEF-158 fix: Cancels any open orders for the symbol before placing
+        the flatten SELL to prevent bracket legs from firing after the
+        flatten and creating a short position.
+
         Args:
             symbol: The ticker symbol.
             qty: Number of shares to sell.
@@ -1852,6 +1903,32 @@ class OrderManager:
                 abs(qty),
             )
             return
+
+        # DEF-158: Cancel any open orders for this symbol before placing
+        # the flatten SELL. Without this, residual bracket orders (stop/T1/T2)
+        # from a prior session can trigger additional SELLs after the flatten,
+        # creating a short position.
+        try:
+            open_orders = await self._broker.get_open_orders()
+            for order in open_orders:
+                if getattr(order, "symbol", "") == symbol:
+                    order_id = getattr(order, "order_id", None) or getattr(
+                        order, "orderId", None
+                    )
+                    if order_id:
+                        try:
+                            await self._broker.cancel_order(str(order_id))
+                        except Exception:
+                            logger.debug(
+                                "Could not cancel pre-existing order %s for %s",
+                                order_id,
+                                symbol,
+                            )
+        except Exception:
+            logger.warning(
+                "Startup cleanup: could not query/cancel open orders for %s",
+                symbol,
+            )
 
         try:
             sell_order = Order(
@@ -2143,6 +2220,10 @@ class OrderManager:
         Iterates over _flatten_pending entries. If any entry has exceeded
         flatten_pending_timeout_seconds, cancel the stale order and resubmit
         a fresh market sell. Stops retrying after max_flatten_retries.
+
+        DEF-158 fix: Before resubmitting, queries broker position to confirm
+        shares still exist. If broker position is 0, the original order filled
+        (fill callback may be delayed) — clears pending without resubmitting.
         """
         timeout = self._config.flatten_pending_timeout_seconds
         max_retries = self._config.max_flatten_retries
@@ -2209,41 +2290,44 @@ class OrderManager:
                 self._flatten_pending.pop(symbol, None)
                 continue
 
-            # Re-query broker qty if error 404 was flagged (Sprint 29.5 R1)
+            # DEF-158: Always verify broker position before resubmitting.
+            # The original order may have filled at IBKR even though the fill
+            # callback hasn't arrived yet. Resubmitting would create a short.
             sell_qty = position.shares_remaining
+            # Clear error_404 flag if set (Sprint 29.5 R1 compat)
             broker_404_symbols = getattr(self._broker, "error_404_symbols", None)
-            if broker_404_symbols is not None and symbol in broker_404_symbols:
+            if broker_404_symbols is not None:
                 broker_404_symbols.discard(symbol)
-                try:
-                    broker_positions = await self._broker.get_positions()
-                    broker_qty = 0
-                    for bp in broker_positions:
-                        if getattr(bp, "symbol", "") == symbol:
-                            broker_qty = abs(int(getattr(bp, "shares", 0)))
-                            break
-                    if broker_qty == 0:
-                        logger.info(
-                            "IBKR position already closed for %s — "
-                            "removing from flatten pending",
-                            symbol,
-                        )
-                        self._flatten_pending.pop(symbol, None)
-                        continue
-                    if broker_qty != position.shares_remaining:
-                        logger.warning(
-                            "Flatten qty mismatch for %s: ARGUS=%d, IBKR=%d "
-                            "— using IBKR qty",
-                            symbol,
-                            position.shares_remaining,
-                            broker_qty,
-                        )
-                        sell_qty = broker_qty
-                except Exception:
+            try:
+                broker_positions = await self._broker.get_positions()
+                broker_qty = 0
+                for bp in broker_positions:
+                    if getattr(bp, "symbol", "") == symbol:
+                        broker_qty = abs(int(getattr(bp, "shares", 0)))
+                        break
+                if broker_qty == 0:
+                    logger.info(
+                        "Flatten timeout: IBKR position already closed for %s "
+                        "— original order likely filled (DEF-158 guard)",
+                        symbol,
+                    )
+                    self._flatten_pending.pop(symbol, None)
+                    continue
+                if broker_qty != position.shares_remaining:
                     logger.warning(
-                        "Broker re-query failed for %s — using ARGUS qty %d",
+                        "Flatten qty mismatch for %s: ARGUS=%d, IBKR=%d "
+                        "— using IBKR qty",
                         symbol,
                         position.shares_remaining,
+                        broker_qty,
                     )
+                    sell_qty = broker_qty
+            except Exception:
+                logger.warning(
+                    "Broker position query failed for %s — using ARGUS qty %d",
+                    symbol,
+                    position.shares_remaining,
+                )
 
             # Resubmit fresh market sell
             try:
