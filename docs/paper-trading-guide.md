@@ -107,9 +107,7 @@ If this fails, check:
 
 ### 3.1 Pre-Market (Before 9:30 AM ET)
 
-**What time zone are you in?** All market times are Eastern Time (ET). Adjust accordingly. Market hours are 9:30 AM – 4:00 PM ET.
-
-- For Cape Town (SAST/UTC+2): Market hours are **3:30 PM – 10:00 PM** during EDT and **4:30 PM – 11:00 PM** during EST. Trading happens during afternoon and evening hours.
+**What time zone are you in?** All market times are Eastern Time (ET). Market hours are 9:30 AM – 4:00 PM ET. The operator is on the US East Coast (ET) — no timezone conversion needed.
 
 **Start Argus 15–30 minutes before market open:**
 

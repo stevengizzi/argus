@@ -66,7 +66,7 @@
 
 2. **ATR passed on SignalEvent (`atr_value: float | None`).** Strategies already compute ATR. No new coupling into Order Manager. Backtest/counterfactual compatible (ATR travels with signal). Fallback: if atr_value is None, trail uses percent-based mode.
 
-3. **Server-side trailing stops (not IBKR native trailing orders).** Order Manager tracks trail internally, flattens via market sell when triggered. Avoids IBKR amendment churn (DEC-372/373 lessons). Enables progressive tightening (impossible with broker-side trails). Cape Town latency (~250ms) negligible for 5–60 min holds.
+3. **Server-side trailing stops (not IBKR native trailing orders).** Order Manager tracks trail internally, flattens via market sell when triggered. Avoids IBKR amendment churn (DEC-372/373 lessons). Enables progressive tightening (impossible with broker-side trails). Latency negligible for 5–60 min holds.
 
 4. **Belt-and-suspenders pattern.** After T1 fill: broker safety stop remains at breakeven (crash protection), server-side trail operates above it. If trail triggers → cancel broker stop → flatten. If server crashes → broker stop protects at breakeven.
 

@@ -390,7 +390,7 @@ All sessions ≤ 13. **Total: 4 sessions, ~2 days.**
 
 ### The Problem
 
-The BacktestEngine uses a fixed slippage model (DEC-054). Real execution has variable slippage depending on: time of day, order size relative to volume, bid-ask spread, latency from Cape Town (~200ms), and strategy type (momentum entries have worse fills than mean-reversion entries because you're buying into strength).
+The BacktestEngine uses a fixed slippage model (DEC-054). Real execution has variable slippage depending on: time of day, order size relative to volume, bid-ask spread, network latency, and strategy type (momentum entries have worse fills than mean-reversion entries because you're buying into strength).
 
 If the BacktestEngine overestimates fill quality, every `MultiObjectiveResult` is inflated. Strategies that pass Pareto dominance in backtest may fail in reality. The experiment infrastructure promotes strategies based on backtests that don't reflect real execution costs.
 

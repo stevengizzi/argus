@@ -7,7 +7,7 @@
 
 ## What Is ARGUS
 
-ARGUS is a fully automated, AI-enhanced multi-strategy day trading system for US equities. It combines rules-based strategy execution with planned AI-powered setup quality grading, NLP catalyst analysis, and dynamic position sizing. Built in Python (FastAPI backend) with a React/TypeScript Command Center frontend (Tauri desktop + PWA mobile). The user is building this to generate household income for his family. He operates from Cape Town, South Africa, trading US markets during afternoon/evening hours (~3:30 PM–11:00 PM local time), making mobile access critical. He can code in Python and has trading experience but no prior algorithmic trading system.
+ARGUS is a fully automated, AI-enhanced multi-strategy day trading system for US equities. It combines rules-based strategy execution with planned AI-powered setup quality grading, NLP catalyst analysis, and dynamic position sizing. Built in Python (FastAPI backend) with a React/TypeScript Command Center frontend (Tauri desktop + PWA mobile). The user is building this to generate household income for his family. He operates from the US East Coast (ET), trading US markets during regular hours. He can code in Python and has trading experience but no prior algorithmic trading system.
 
 ## Current State
 
@@ -248,7 +248,7 @@ Per-trade risk: 0.5–1% of strategy allocation. Daily loss limit: 3–5%. Weekl
 - **Pre-Databento backtests provisional:** All pre-Databento parameter optimization requires re-validation (DEC-132). PARTIALLY RESOLVED (Sprint 21.6) — pipeline proven end-to-end, Bull Flag validated (Sharpe 2.78), 6 strategies pending full-universe re-validation. **Data blocker removed** (March 2026): full-universe Parquet cache populated with 24,321 symbols across 96 months (3 datasets). Re-validation runs can proceed using `--cache-dir data/databento_cache`.
 - **No live L2/L3 on Standard plan:** Requires Plus tier $1,399/mo (DEC-237).
 - **Databento EQUS.MINI historical lag:** Multi-day lag for daily bars (DEC-247). **Resolved by Sprint 21.7:** FMP Scanner now provides dynamic pre-market symbol selection via gainers/losers/actives endpoints.
-- **Latency from Cape Town:** ~200–250ms to US exchanges. Scalping has structural disadvantages; longer-duration strategies (5–30 min holds) preferred.
+- **Latency:** Minimal from US East Coast (<10ms). No longer a structural concern for any strategy type.
 - **Secrets:** All API keys in encrypted secrets manager, never in code/git.
 - **FMP Starter plan news restriction:** FMP news endpoints (`stock_news`, `press_releases`) return HTTP 403 on Starter plan ($22/mo). `fmp_news.enabled: false` in `system_live.yaml`. FMP news circuit breaker (DEC-323) prevents request spam if accidentally enabled. Upgrade to Premium ($59/mo) would resolve.
 - **Audit:** Every action logged immutably.

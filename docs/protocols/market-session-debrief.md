@@ -39,7 +39,7 @@ for line in open('logs/argus_YYYYMMDD.jsonl'):
 - How many start/stop cycles? Multiple means crashes or restarts.
 - Was each shutdown graceful ("Auto-shutdown initiated", "EOD flatten triggered") or a crash ("Fatal error")?
 - If crashed: what was the fatal error message? Was it recovered?
-- Total market time covered: compare first "fully live" timestamp to shutdown timestamp against market hours (9:30 AM – 4:00 PM ET / 3:30 PM – 10:00 PM SAST).
+- Total market time covered: compare first "fully live" timestamp to shutdown timestamp against market hours (9:30 AM – 4:00 PM ET).
 
 **Red flags:**
 - More than 2 start/stop cycles in a day

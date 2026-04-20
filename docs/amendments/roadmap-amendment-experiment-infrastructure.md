@@ -30,7 +30,7 @@ Three principles distinguish this from naive autoresearch:
 
 1. **The ensemble is the unit of evaluation, not the individual strategy.** A hyper-specialized micro-strategy that trades 3 times per month cannot be individually validated. But 50 such strategies collectively generating 150 trades in 20 days? That's a meaningful sample. Evaluation and promotion operate at cohort level.
 
-2. **The system improves around the clock.** US market hours are 3:30 PM – 11:00 PM SAST. The other 16.5 hours per day are compute time. The experiment queue and background worker are designed for overnight BacktestEngine sweeps from Sprint 32.5, even though the AI-driven hypothesis generation (Sprint 41) comes later.
+2. **The system improves around the clock.** US market hours are 9:30 AM – 4:00 PM ET. The other 17.5 hours per day are compute time. The experiment queue and background worker are designed for overnight BacktestEngine sweeps from Sprint 32.5, even though the AI-driven hypothesis generation (Sprint 41) comes later.
 
 3. **Validation speed scales with strategy specificity.** High-frequency strategies (50+ trades/month) get individual paper validation. Hyper-specialized strategies get ensemble-level validation via simulated-paper, then real paper at cohort level. Without this tiering, paper validation becomes a multi-year bottleneck that kills the entire vision.
 
@@ -478,8 +478,8 @@ QueuedExperiment:
 ```
 
 **Worker behavior:**
-- During market hours (9:30 AM – 4:00 PM ET / 3:30 PM – 10:00 PM SAST): Worker is **paused**. CPU is reserved for live trading, data processing, and paper validation.
-- During off-market hours (4:00 PM – 9:30 AM ET / 10:00 PM – 3:30 PM SAST): Worker processes the queue. Each item = one BacktestEngine run producing a MultiObjectiveResult.
+- During market hours (9:30 AM – 4:00 PM ET): Worker is **paused**. CPU is reserved for live trading, data processing, and paper validation.
+- During off-market hours (4:00 PM – 9:30 AM ET): Worker processes the queue. Each item = one BacktestEngine run producing a MultiObjectiveResult.
 - Priority ordering: `learning_loop` > `systematic_search` > `discovery_pipeline` > `manual`. Within same source, FIFO.
 - The worker is a simple asyncio task that drains the queue. Sophisticated scheduling (parallelism, cloud burst) comes in Sprint 31 (Parallel Sweep Infrastructure). For now, sequential is fine — BacktestEngine on 7 strategies × 3 years × 1 parameter set takes ~2–5 minutes per run. At 5 min/run × 16.5 hours overnight = ~200 experiments per night. That's sufficient for Learning Loop and early systematic search.
 
@@ -739,7 +739,7 @@ With both amendments adopted, here's the ARGUS improvement loop at steady state 
 ┌──────────────────────────────────────────────────────────────────────┐
 │                    CONTINUOUS IMPROVEMENT LOOP                        │
 │                                                                      │
-│  OVERNIGHT (10 PM – 3:30 PM SAST)          MARKET HOURS (3:30-11 PM)│
+│  OVERNIGHT (4 PM – 9:30 AM ET)             MARKET HOURS (9:30-4 PM) │
 │  ┌─────────────────────────────┐           ┌───────────────────────┐ │
 │  │  ExperimentQueue processes: │           │  Live ensemble trades  │ │
 │  │  • Parameter variations     │           │  Paper cohorts trade   │ │

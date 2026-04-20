@@ -562,7 +562,8 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 | **Severity** | Medium |
 | **Likelihood** | Medium |
 | **Mitigation** | Longer-duration strategies (VWAP Reclaim, Afternoon Momentum) are structurally advantaged. Monitor fill quality per strategy. Consider deactivating ORB Scalp if fill rates are poor. |
-| **Status** | Open |
+| **Status** | Closed |
+| **Closed** | 2026-04-20 — Operator relocated to US East Coast (ET). Latency is now minimal (<10ms). No longer a structural concern. |
 
 ---
 
@@ -780,7 +781,7 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 | **Basis** | AWS SLA guarantees 99.99% for EC2. us-east-1 is their most mature region. |
 | **If Wrong** | Positions unmanaged during outage. Broker-side stops remain active but no dynamic management. |
 | **Contingency** | All stops placed at broker level. Dead man's switch alerts user if system goes silent. Recovery procedure targets <5 minutes. Consider multi-AZ if single instance proves unreliable. |
-| **Closed** | 2026-03-06 — ARGUS now runs locally (previously Taipei, currently Cape Town), not on AWS VPS. Assumption no longer applies. |
+| **Closed** | 2026-03-06 — ARGUS now runs locally (previously Taipei, then Cape Town, now US East Coast), not on AWS VPS. Assumption no longer applies. |
 
 ---
 

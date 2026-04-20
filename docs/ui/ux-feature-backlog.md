@@ -38,7 +38,7 @@ The **AI Copilot** is a persistent slide-out chat panel (desktop: right 35%, mob
 2. **Ambient awareness.** Sparklines, gauges, and heatmaps provide trend information at a glance — the Dashboard should answer its question in under 2 seconds.
 3. **Progressive disclosure.** Summary → detail → deep dive. Never force the user to leave context. Intelligence features enrich existing views (DEC-168) — quality scores appear as badges, not separate pages.
 4. **Motion with purpose.** Every animation completes in <500ms and never blocks interaction. Staggered entries feel assembled. P&L flash confirms real-time data.
-5. **Mobile as primary trading surface.** Steven trades US markets from Cape Town during afternoon/evening hours (3:30 PM – 11:00 PM local). The iPhone PWA is the primary monitoring interface during market hours.
+5. **Mobile as primary trading surface.** The iPhone PWA is the primary monitoring interface during market hours when away from the desktop.
 6. **Research lab aesthetics.** ARGUS is a "strategy research laboratory that also trades live." Advanced visualizations (optimization landscapes, heatmaps, correlation matrices) feel like scientific tools.
 7. **AI everywhere, not siloed (DEC-170).** The Copilot is contextual — it knows what page you're on and what you're looking at. No separate "AI page" exists.
 
@@ -408,7 +408,7 @@ Dismissable. Can be pinned to Learning Journal via one click.
 ### 22-C. Pre-Market Briefing Generation [P1]
 
 **Automated briefing populates Dashboard pre-market mode and The Debrief.**
-Claude generates pre-market briefing from overnight data: regime assessment, ranked watchlist with catalyst summaries, key levels, suggested position sizes. Delivered at configurable time (default 8:00 AM ET / 2:00 PM Cape Town during EDT). Push notification to mobile.
+Claude generates pre-market briefing from overnight data: regime assessment, ranked watchlist with catalyst summaries, key levels, suggested position sizes. Delivered at configurable time (default 8:00 AM ET). Push notification to mobile.
 
 Briefing appears in: Dashboard pre-market mode (live), The Debrief briefings section (stored permanently).
 
