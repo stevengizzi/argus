@@ -2,7 +2,7 @@
 # Enabled Sprint 32.9. Variants added Sprint 31A after parameter sweep.
 enabled: true
 auto_promote: false  # When true, PromotionEvaluator runs autonomously at session end
-max_variants_per_pattern: 5  # Caps total variants per pattern (shadow + live)
+max_variants_per_pattern: 8  # Caps total variants per pattern (shadow + live)
 backtest_min_trades: 20
 backtest_min_expectancy: 0.0
 promotion_min_shadow_days: 5
@@ -13,6 +13,14 @@ max_workers: 4
 
 # Variant definitions — each pattern can have multiple named variants.
 # Variants not defined here use the base strategy config only.
+#
+# Shadow expansion (Sprint 31.75 S4): Added 18 variants across 8 patterns
+# for immediate shadow data collection. Configs chosen based on:
+# - April 3-5 small-sample sweep results (directional signals)
+# - Domain knowledge of pattern mechanics
+# - DEF-152/154 fixes enabling previously-broken patterns
+# Validation model: shadow performance is the promotion gate, not backtests.
+# CounterfactualTracker data over 20+ trading days determines promotion.
 #
 # Sprint 31A sweep methodology:
 # - 24 representative momentum symbols (AAPL, NVDA, AMD, TSLA, MARA, RIOT, COIN, HOOD,
@@ -106,3 +114,166 @@ variants:
       params:
         min_impulse_percent: 0.06
         max_impulse_bars: 15
+
+  hod_break:
+    # v1: Tighter consolidation — hypothesis: narrower range before breakout
+    # = higher quality setup. Reduces noise from wide-range chop.
+    - variant_id: "strat_hod_break__v1_tight_consolidation"
+      mode: "shadow"
+      params:
+        consolidation_max_range_atr: 0.5
+        consolidation_min_bars: 8
+
+    # v2: Volume conviction — higher breakout volume requirement filters
+    # out low-conviction breaks that tend to fade.
+    - variant_id: "strat_hod_break__v2_volume_conviction"
+      mode: "shadow"
+      params:
+        min_breakout_volume_ratio: 2.0
+        min_hold_bars: 3
+
+    # v3: Combined tighter setup — both consolidation and volume filters.
+    - variant_id: "strat_hod_break__v3_tight_and_volume"
+      mode: "shadow"
+      params:
+        consolidation_max_range_atr: 0.5
+        consolidation_min_bars: 8
+        min_breakout_volume_ratio: 2.0
+
+  gap_and_go:
+    # v1: Defaults — first valid shadow test since DEF-152 fix.
+    # Prior sweep results were all invalid due to degenerate stops.
+    - variant_id: "strat_gap_and_go__v1_defaults"
+      mode: "shadow"
+      params:
+        min_gap_percent: 3.0
+        entry_mode: "first_pullback"
+
+    # v2: Higher gap threshold — only strong 5%+ gappers.
+    # Hypothesis: bigger gaps have more continuation momentum.
+    - variant_id: "strat_gap_and_go__v2_big_gap"
+      mode: "shadow"
+      params:
+        min_gap_percent: 5.0
+        min_relative_volume: 2.5
+
+    # v3: Direct breakout entry — enters on 5-min high break instead of
+    # waiting for pullback. Faster entry, potentially more noise.
+    - variant_id: "strat_gap_and_go__v3_direct_entry"
+      mode: "shadow"
+      params:
+        min_gap_percent: 3.0
+        entry_mode: "direct_breakout"
+
+  premarket_high_break:
+    # v1: Defaults — had Sharpe 2.788 in backtest but 0 live trades on Apr 2.
+    # DEF-152 lookback/reference data now fixed. Needs live shadow validation.
+    - variant_id: "strat_premarket_high_break__v1_defaults"
+      mode: "shadow"
+      params:
+        min_pm_candles: 3
+        min_breakout_volume_ratio: 1.5
+
+    # v2: Stricter PM activity — requires more pre-market volume to filter
+    # low-liquidity PM sessions that produce unreliable highs.
+    - variant_id: "strat_premarket_high_break__v2_strict_pm"
+      mode: "shadow"
+      params:
+        min_pm_volume: 25000.0
+        min_breakout_volume_ratio: 2.0
+        min_pm_candles: 5
+
+  vwap_bounce:
+    # v1: Defaults with new DEF-154 signal density controls.
+    # Previous sweeps had 2-22 signals/symbol/day (useless).
+    # New controls: min_approach_distance_pct, follow_through_bars, signal cap.
+    - variant_id: "strat_vwap_bounce__v1_density_controlled"
+      mode: "shadow"
+      params:
+        min_approach_distance_pct: 0.003
+        min_bounce_follow_through_bars: 2
+        min_prior_trend_bars: 15
+
+    # v2: Stricter approach — price must be further above VWAP before
+    # pullback counts, longer prior trend required. Fewer but higher
+    # quality setups.
+    - variant_id: "strat_vwap_bounce__v2_strict_approach"
+      mode: "shadow"
+      params:
+        min_approach_distance_pct: 0.005
+        min_prior_trend_bars: 20
+        min_bounce_follow_through_bars: 3
+        min_bounce_volume_ratio: 1.5
+
+  narrow_range_breakout:
+    # v1: Defaults — was "too selective" on momentum universe (2 trades
+    # in 4 months). Larger universe (2,047 symbols) should produce more signals.
+    - variant_id: "strat_narrow_range_breakout__v1_defaults"
+      mode: "shadow"
+      params:
+        nr_lookback: 7
+        consolidation_max_range_atr: 0.8
+
+    # v2: Extended compression — longer lookback and more narrowing bars
+    # required. Hypothesis: more established compression = stronger breakout.
+    - variant_id: "strat_narrow_range_breakout__v2_deep_compression"
+      mode: "shadow"
+      params:
+        nr_lookback: 10
+        min_narrowing_bars: 5
+        consolidation_max_range_atr: 0.6
+
+  abcd:
+    # v1: Defaults — near-zero edge (0.057 R) in small-sample sweep.
+    # Shadow will determine if the pattern has any real edge.
+    # Already in shadow mode at strategy level; this adds experiment tracking.
+    - variant_id: "strat_abcd__v1_defaults"
+      mode: "shadow"
+      params:
+        fib_b_min: 0.382
+        fib_b_max: 0.618
+
+    # v2: Golden zone — tighter Fibonacci retracement at B point.
+    # Hypothesis: 50-61.8% retracements are higher quality than 38.2%.
+    - variant_id: "strat_abcd__v2_golden_zone"
+      mode: "shadow"
+      params:
+        fib_b_min: 0.50
+        fib_b_max: 0.618
+        leg_price_ratio_min: 0.9
+
+  bull_flag:
+    # v1: Defaults — dead on 24-symbol momentum universe, but untested on
+    # the 793-symbol filtered universe. Shadow will tell us.
+    - variant_id: "strat_bull_flag__v1_defaults"
+      mode: "shadow"
+      params:
+        pole_min_move_pct: 0.03
+        flag_max_bars: 20
+
+    # v2: Strong pole — requires 5% pole move instead of 3%.
+    # Hypothesis: bigger poles produce more reliable flags.
+    - variant_id: "strat_bull_flag__v2_strong_pole"
+      mode: "shadow"
+      params:
+        pole_min_move_pct: 0.05
+        flag_max_bars: 15
+        breakout_volume_multiplier: 1.5
+
+  flat_top_breakout:
+    # v1: Defaults — dead in sweeps but untested with proper universe.
+    # Already in shadow at strategy level; this adds experiment tracking.
+    - variant_id: "strat_flat_top_breakout__v1_defaults"
+      mode: "shadow"
+      params:
+        resistance_touches: 3
+        resistance_tolerance_pct: 0.002
+
+    # v2: Stricter resistance — requires more touches and tighter tolerance.
+    # Hypothesis: more confirmed resistance = stronger breakout signal.
+    - variant_id: "strat_flat_top_breakout__v2_strict_resistance"
+      mode: "shadow"
+      params:
+        resistance_touches: 4
+        resistance_tolerance_pct: 0.001
+        consolidation_min_bars: 15
