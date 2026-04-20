@@ -4653,6 +4653,18 @@ DEC-382–395 range reserved during planning is released back to the pool for fu
 
 ---
 
+## Sprint 31.8 — April 20, 2026 Impromptus (Lifespan Hang + Eval DB VACUUM + DEF-158 + DEF-159)
+
+No new DECs. All four sessions' design decisions followed established patterns:
+- Backgrounding blocking init via `asyncio.create_task(asyncio.to_thread(...))` (established in Sprint 25.9 trust-cache-on-startup)
+- Close→sync VACUUM→reopen for aiosqlite VACUUM limitation (new pattern, but implementation-detail level — doesn't warrant a DEC)
+- Broker-state query before order resubmission (conservative safety pattern, consistent with DEC-369 reconciliation philosophy)
+- Boolean column addition for analytics filtering (smallest blast radius, follows existing schema extension patterns)
+
+DEC-382 range remains reserved but unused.
+
+---
+
 *End of Decision Log v1.0*
 *Next DEC: 382*
-*Last updated: 2026-03-30 (Strategic Check-In doc sync — 4 new DECs, DEC-378–381)*
+*Last updated: 2026-04-20 (Sprint 31.8 doc sync — no new DECs)*

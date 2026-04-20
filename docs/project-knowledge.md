@@ -1,6 +1,6 @@
 # ARGUS — Project Knowledge (Claude Context)
 
-> *Tier A operational context for Claude Code and Claude.ai. Last updated: April 3, 2026 (Sprint 31A.75 doc sync — Universe-Aware Sweep Flags).*
+> *Tier A operational context for Claude Code and Claude.ai. Last updated: April 20, 2026 (Sprint 31.8 doc sync — 4 impromptus: lifespan hang, eval DB VACUUM, DEF-158 duplicate SELL, DEF-159 reconstruction trades).*
 > *Full decision rationale: `docs/decision-log.md` | Sprint details: `docs/sprint-history.md` | DEC index: `docs/dec-index.md`*
 
 ---
@@ -11,8 +11,8 @@ ARGUS is a fully automated, AI-enhanced multi-strategy day trading system for US
 
 ## Current State
 
-**Tests:** 4,858 pytest + 846 Vitest (0 pre-existing failures)
-**Sprints completed:** 1 through 29 + 21.6 + 25.9 + 27.5 + 27.6 + 27.65 + 27.7 + 27.75 + 27.8 + 27.9 + 27.95 + 28.5 + 28.75 + 29.5 + 32 + 32.5 + 32.75 + 32.8 + 32.9 + 32.95 + impromptu hotfix Apr 3 + 31A + 31A.5 + 31A.75 + 31.5 (34 full sprints + 44 sub-sprints + 3 impromptus)
+**Tests:** 4,919 pytest + 846 Vitest (0 pre-existing failures)
+**Sprints completed:** 1 through 29 + 21.6 + 25.9 + 27.5 + 27.6 + 27.65 + 27.7 + 27.75 + 27.8 + 27.9 + 27.95 + 28.5 + 28.75 + 29.5 + 32 + 32.5 + 32.75 + 32.8 + 32.9 + 32.95 + impromptu hotfix Apr 3 + 31A + 31A.5 + 31A.75 + 31.5 + 31.8 (34 full sprints + 44 sub-sprints + 9 impromptus)
 **Active sprint:** Sweep Analysis Impromptu — pending universe-aware sweep execution
 **GitHub:** `https://github.com/stevengizzi/argus.git` (public)
 
@@ -94,6 +94,7 @@ ARGUS is a fully automated, AI-enhanced multi-strategy day trading system for US
 | 31A.75 | Universe-Aware Sweep Flags (Impromptu) | 4823+846V | Apr 3 | — (no new DECs) |
 | 31.5 | Parallel Sweep Infrastructure | 4857+846V | Apr 3 | — (no new DECs) |
 | (Impromptu) | DEF-151 Fix + Sweep Impromptu — date serialization fix, universe-aware sweeps (small-sample) across 9 patterns | 4858+846V | Apr 3–5 | — (no new DECs) |
+| 31.8 | April 20 Impromptus (Lifespan Hang + VACUUM + Dup-SELL + Recon-Trades) | 4919+846V | Apr 20 | — (no new DECs) |
 
 *Full sprint scopes and session details: `docs/sprint-history.md`*
 
@@ -423,6 +424,9 @@ Universal protocols, templates, and the runner live in the `workflow/` submodule
 - **DEF-151 data loss pattern: `json.dumps()` without `default=str` silently drops results when dataclasses contain `date` objects.** The fire-and-forget write pattern (WARNING log only) meant 143 grid points of overnight compute were lost before the bug was noticed. Always test serialization round-trips for any new data pathway that writes `MultiObjectiveResult` or other dataclass containing `datetime.date` fields.
 - **Sweep symbol representativeness matters: a 38-symbol "representative" subset is not a substitute for a full-universe sweep (800–1,500 symbols).** The DuckDB VIEW initialization bottleneck over the 44 GB Parquet cache needs to be solved so full-universe runs are practical. Pre-resolved symbol files (`@symbols.txt`) are an effective workaround until a persisted DuckDB database or formalized pre-resolution step is built.
 - **Sweep axis selection is critical: always verify that swept parameters actually affect the metric you care about.** VWAP Bounce swept `vwap_touch_tolerance_pct × min_prior_trend_bars` — dimensions that don't control signal density. The result was 2–22 signals/symbol/day, making the sweep noise. Before committing overnight compute, verify that the swept parameters affect signal frequency, quality, and selectivity, not just one dimension.
+- **Lifespan handlers must never call synchronous I/O that blocks indefinitely.** Any filesystem scan, network call, or DB init that could exceed a few seconds must be backgrounded via `asyncio.create_task(asyncio.to_thread(...))` with shutdown cleanup. `_wait_for_port()` in main.py is the reference pattern for gating health signals on actual port bind. (Sprint 31.8 S1.)
+- **SQLite retention DELETE must be followed by VACUUM or file size grows unbounded.** aiosqlite cannot VACUUM — use close→sync VACUUM via `asyncio.to_thread()`→reopen pattern. (Sprint 31.8 S2, `evaluation.db` grew to 4 GB.)
+- **Exit order paths must coordinate: multiple safety mechanisms can independently place flatten/SELL orders for the same position.** Always query broker state before resubmitting orders. Stop fills must cancel concurrent flatten orders, and startup cleanup must cancel residual bracket orders before placing new flatten orders. Without these cross-checks, positions flip short. (Sprint 31.8 S3, DEF-158.)
 
 ---
 

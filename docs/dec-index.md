@@ -1,7 +1,7 @@
 # ARGUS — Decision Index
 
 > 381 decisions (DEC-001 through DEC-381)
-> Generated: April 2, 2026 (Sprint 32.75 doc sync — no new DECs in Sprints 32.5 or 32.75) | Source: `docs/decision-log.md`
+> Generated: April 20, 2026 (Sprint 31.8 doc sync — no new DECs in Sprint 31.8) | Source: `docs/decision-log.md`
 > Legend: ● Active | ○ Superseded | △ Amended | ✗ Duplicate entry
 
 
@@ -477,4 +477,15 @@ No new DECs. All design decisions followed established patterns (Arena WS follow
 
 ## Sprints 32.8, 32.9, 32.95, Good Friday Impromptu (Apr 3), Sprint 31A, Sprint 31A.5
 
-No new DECs across any of these sprints/impromptus. All design decisions followed established patterns (DEC-088 threading, DEC-300 config-gating, DEC-345 DB store pattern, DEC-358 BacktestEngine factory, DEC-379 sprint decomposition, quality engine recalibration is a config value adjustment not requiring a DEC, DuckDB in-memory connection is an implementation detail). Next DEC: 382.
+No new DECs across any of these sprints/impromptus. All design decisions followed established patterns (DEC-088 threading, DEC-300 config-gating, DEC-345 DB store pattern, DEC-358 BacktestEngine factory, DEC-379 sprint decomposition, quality engine recalibration is a config value adjustment not requiring a DEC, DuckDB in-memory connection is an implementation detail).
+
+## Sprint 31.8 — April 20, 2026 Impromptus (Lifespan Hang + Eval DB VACUUM + DEF-158 + DEF-159)
+
+No new DECs across any of the four sessions. All design decisions followed established patterns:
+
+- **Session 1 — Lifespan Hang fix:** `asyncio.create_task(asyncio.to_thread(...))` pattern for backgrounding HQS init + `_wait_for_port()` TCP probe for health signal gating.
+- **Session 2 — Eval DB VACUUM:** close→sync VACUUM→reopen pattern required by aiosqlite limitations; class-level constants over new YAML config (maintenance tuning doesn't warrant config proliferation).
+- **Session 3 — DEF-158 Duplicate SELL:** broker-state-query-before-resubmit pattern; per-symbol order cancellation before startup flatten (vs `reqGlobalCancel()` which would affect unrelated positions); stop-fill and flatten-fill now cancel concurrent pending flattens.
+- **Session 4 — DEF-159 Reconstruction Trade Logging:** added `entry_price_known` boolean column (smallest blast radius of three options); detection via `entry_price == 0.0` rather than `strategy_id` check for broader coverage.
+
+Next DEC: 382.

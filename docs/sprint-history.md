@@ -1,7 +1,7 @@
 # ARGUS — Sprint History
 
 > Complete record of all sprints from project inception through current state.
-> Active development began February 14, 2026. As of April 3, 2026 (~49 calendar days), 34 full sprints + 44 sub-sprints + 3 impromptus completed.
+> Active development began February 14, 2026. As of April 20, 2026 (~66 calendar days), 34 full sprints + 44 sub-sprints + 9 impromptus completed.
 
 ---
 
@@ -50,6 +50,8 @@
 | AN — Sweep Impromptu | Universe-Aware Parameter Sweeps | Apr 3–5, 2026 | Small-sample sweeps across 9 patterns; 2 micro_pullback variants promotable; DEF-152/153/154 confirmed; no code changes |
 | AS — Lifespan Hang Impromptu | Startup Reliability | Apr 20, 2026 | HistoricalQueryService init backgrounded (was blocking lifespan 12 min); `api_server → healthy` gated on actual port bind; `start_live.sh` post-startup health probe; evaluation.db bloat investigated (DEF-157); DEF-155/156 resolved (+6 pytest, 4,905 total) |
 | AT — Eval DB VACUUM Impromptu | DB Maintenance | Apr 20, 2026 | VACUUM after retention DELETE in EvaluationEventStore (close→sync VACUUM→reopen); startup reclaim path (freelist >50% + size >500 MB); observability logging (size/freelist at init); manual VACUUM 3.7 GB → 209 MB; DEF-157 resolved (+5 pytest, 4,910 total) |
+| AU — DEF-158 Duplicate SELL Fix | Execution Safety | Apr 20, 2026 | 3 independent duplicate-SELL root causes fixed (flatten timeout resubmit, startup cleanup, stop-fill race); broker-state query before resubmit; DEF-158 resolved (+5 pytest, 4,915 total) |
+| AV — DEF-159 Reconstruction Trades | Analytics Integrity | Apr 20, 2026 | `entry_price_known` column on trades table; analytics exclude unrecoverable-entry trades; migration script for 10 existing rows; DEF-159 resolved (+4 pytest, 4,919 total) |
 
 ---
 
@@ -2722,9 +2724,13 @@ New module — pure algorithmic NYSE holiday calendar, ported from frontend `ui/
 
 **Analysis reports:** `data/sweep_logs/sweep_analysis_20260404.md`, `data/sweep_logs/sweep_summary_20260404.md`
 
-## DEF-158 Duplicate SELL Fix Impromptu (April 20, 2026)
+## Sprint 31.8 — April 20, 2026 Impromptus (Consolidated)
 
-**Type:** Impromptu (single session) | **Tests:** +5 pytest (4,910 → 4,915) | **New DEFs:** 158 (resolved), 159, 160 | **New DECs:** 0 | **Tier 2 verdict:** pending
+Sessions AS–AV (Lifespan Hang, Eval DB VACUUM, DEF-158 Duplicate SELL, DEF-159 Reconstruction Trades) are collectively Sprint 31.8. All four completed on April 20, 2026 after a 17-day absence (Costa Rica). Sprint artifacts consolidated in `docs/sprints/sprint-31.8/`. All Tier 2 verdicts: CLEAR.
+
+### Session 3 — DEF-158 Duplicate SELL Fix (AU)
+
+**Type:** Impromptu (single session) | **Tests:** +5 pytest (4,910 → 4,915) | **New DEFs:** 158 (resolved), 159, 160 | **New DECs:** 0 | **Tier 2 verdict:** CLEAR
 
 **Root cause:** Three independent paths could place duplicate SELL orders for the same position:
 1. `_check_flatten_pending_timeouts` resubmitted after 120s when IBKR paper fills were delayed — the original order had already filled at the broker but the fill callback hadn't arrived yet.
@@ -2735,9 +2741,9 @@ New module — pure algorithmic NYSE holiday calendar, ported from frontend `ui/
 
 ---
 
-## DEF-159 Reconstruction Trade Logging Fix Impromptu (April 20, 2026)
+### Session 4 — DEF-159 Reconstruction Trade Logging Fix (AV)
 
-**Type:** Impromptu (single session) | **Tests:** +4 pytest (4,915 → 4,919) | **New DEFs:** 0 | **New DECs:** 0 | **Tier 2 verdict:** pending
+**Type:** Impromptu (single session) | **Tests:** +4 pytest (4,915 → 4,919) | **New DEFs:** 0 | **New DECs:** 0 | **Tier 2 verdict:** CLEAR
 
 **Root cause:** Reconstructed positions with unrecoverable entry prices (broker returns `avg_entry_price=0.0` when internal state is lost after restart) were logged as trades with `entry_price=0.0`. The Trade model's `model_post_init` computed `outcome=WIN` because `exit_price > 0`, producing bogus multi-thousand-dollar "wins" (10 rows totalling ~$34K fake P&L on Apr 20).
 
@@ -2751,7 +2757,7 @@ New module — pure algorithmic NYSE holiday calendar, ported from frontend `ui/
 - **Total sessions:** ~554+ Claude Code sessions
 - **Total tests:** 4,919 pytest + 846 Vitest = 5,765 total
 - **Total decisions:** 381 (DEC-001 through DEC-381; no new DECs in Sprints 29.5, 32, 32.5, 32.75, 32.8, 32.9, 32.95, Apr 3 hotfix, 31A, 31A.5, 31A.75, 31.5, DEF-151 fix, Sweep Impromptu, DEF-158 fix, or DEF-159 fix)
-- **Calendar days (active dev):** ~51 (Feb 14 – Apr 5, 2026)
+- **Calendar days (active dev):** ~52 (Feb 14 – Apr 5, 2026 + Apr 20, 2026)
 - **Largest sprint:** 22 (9 implementation + 5 fix + 9 reviews, largest scope)
 - **Cleanest sprint:** 23 (11 sessions, 0 regressions, 0 scope gaps requiring follow-up)
 - **Most test-dense:** Sprint 22 (286 new tests), Sprint 24 (209 new tests), Sprint 23.2 (188 new tests), Sprint 28 (179 new tests), Sprint 27.6 (171 new tests), Sprint 23 (141 new tests across 23+23.05), Sprint 28.5 (110 new tests)
