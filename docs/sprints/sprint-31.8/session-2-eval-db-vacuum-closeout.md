@@ -12,7 +12,7 @@
 | CLAUDE.md | modified | DEF-157 marked RESOLVED |
 | docs/sprint-history.md | modified | AT entry + statistics update |
 | dev-logs/2026-04-20_eval-db-vacuum.md | added | Dev log |
-| docs/sprints/impromptu-2026-04-20-eval-db-vacuum/session-1-closeout.md | added | This file |
+| docs/sprints/sprint-31.8/session-2-eval-db-vacuum-closeout.md | added | This file |
 
 ### Judgment Calls
 - **Close-reopen pattern for VACUUM**: aiosqlite cannot execute VACUUM ("SQL statements in progress") and holds WAL locks preventing file truncation by external connections. Solution: close the aiosqlite connection, VACUUM via a synchronous `sqlite3.connect(isolation_level=None)` in `asyncio.to_thread()`, then reopen and re-configure (WAL, row_factory). This is a one-time expensive operation (seconds) that only runs after retention DELETE finds rows to delete.
@@ -79,7 +79,7 @@ GREEN — single-pass implementation, well within context limits.
   "files_created": [
     "tests/strategies/test_telemetry_store_vacuum.py",
     "dev-logs/2026-04-20_eval-db-vacuum.md",
-    "docs/sprints/impromptu-2026-04-20-eval-db-vacuum/session-1-closeout.md"
+    "docs/sprints/sprint-31.8/session-2-eval-db-vacuum-closeout.md"
   ],
   "files_modified": [
     "argus/strategies/telemetry_store.py",

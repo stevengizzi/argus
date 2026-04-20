@@ -15,7 +15,7 @@
 | CLAUDE.md | modified | DEF-155, DEF-156, DEF-157 logged |
 | docs/sprint-history.md | modified | AS entry for this impromptu |
 | dev-logs/2026-04-20_lifespan-hang.md | added | Dev log summary |
-| docs/sprints/impromptu-2026-04-20-lifespan-hang/session-1-closeout.md | added | This file |
+| docs/sprints/sprint-31.8/session-1-lifespan-hang-closeout.md | added | This file |
 
 ### Judgment Calls
 - **Background task over timeout**: Chose `asyncio.create_task(asyncio.to_thread(...))` for the HQS init rather than `asyncio.wait_for(..., timeout=N)` because the HQS is useful when it eventually completes — killing it after 30s would make it permanently unavailable until next restart. Background fire-and-forget preserves eventual availability.
@@ -79,7 +79,7 @@ GREEN — session completed well within context limits, single-pass implementati
     "tests/api/test_lifespan_startup.py",
     "tests/scripts/test_start_live_probe.py",
     "dev-logs/2026-04-20_lifespan-hang.md",
-    "docs/sprints/impromptu-2026-04-20-lifespan-hang/session-1-closeout.md"
+    "docs/sprints/sprint-31.8/session-1-lifespan-hang-closeout.md"
   ],
   "files_modified": [
     "argus/api/server.py",

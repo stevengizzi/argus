@@ -28,7 +28,7 @@ No protected files were modified. `git diff HEAD~1 --name-only` shows exactly 6 
 - `argus/execution/order_manager.py` (the fix)
 - `dev-logs/2026-04-20_duplicate-sell.md` (new)
 - `docs/sprint-history.md` (doc update)
-- `docs/sprints/impromptu-2026-04-20-duplicate-sell/session-1-closeout.md` (new)
+- `docs/sprints/Sprint 31.8 S3 — DEF-158 Duplicate SELL/session-1-closeout.md` (new)
 - `tests/execution/test_order_manager_def158.py` (new)
 
 None of the protected files (server.py, main.py, start_live.sh, telemetry_store.py, strategies/*, experiments/*, etc.) appear in the diff.
@@ -97,7 +97,7 @@ The fix is well-reasoned, addresses three independent root causes with evidence-
 ```json:structured-verdict
 {
   "schema_version": "1.0",
-  "sprint": "impromptu-2026-04-20-duplicate-sell",
+  "sprint": "Sprint 31.8 S3 — DEF-158 Duplicate SELL",
   "session": "S1",
   "verdict": "CLEAR",
   "findings": [],

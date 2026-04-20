@@ -12,7 +12,7 @@
 | CLAUDE.md | modified | DEF-158 resolved, DEF-159 logged (stretch deferred), DEF-160 logged (no fix) |
 | docs/sprint-history.md | modified | AU entry for DEF-158 impromptu |
 | dev-logs/2026-04-20_duplicate-sell.md | added | Dev log with root cause analysis |
-| docs/sprints/impromptu-2026-04-20-duplicate-sell/session-1-closeout.md | added | This file |
+| docs/sprints/sprint-31.8/session-3-duplicate-sell-closeout.md | added | This file |
 
 ### Judgment Calls
 - **Always query broker instead of only on error_404:** The old code only queried broker position when `error_404_symbols` was flagged. The new code always queries, since the IBKR fill callback delay is the core problem, not specific error codes. Preserved `error_404_symbols.discard()` for backwards compatibility with Sprint 29.5 R1 test expectations.
@@ -65,7 +65,7 @@
 ```json:structured-closeout
 {
   "schema_version": "1.0",
-  "sprint": "impromptu-2026-04-20-duplicate-sell",
+  "sprint": "Sprint 31.8 S3 — DEF-158 Duplicate SELL",
   "session": "S1",
   "verdict": "COMPLETE",
   "tests": {
@@ -79,7 +79,7 @@
   "files_created": [
     "tests/execution/test_order_manager_def158.py",
     "dev-logs/2026-04-20_duplicate-sell.md",
-    "docs/sprints/impromptu-2026-04-20-duplicate-sell/session-1-closeout.md"
+    "docs/sprints/sprint-31.8/session-3-duplicate-sell-closeout.md"
   ],
   "files_modified": [
     "argus/execution/order_manager.py",
