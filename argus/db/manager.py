@@ -123,6 +123,15 @@ class DatabaseManager:
         except Exception:
             pass  # Column already exists
 
+        # Migration: add entry_price_known column to trades (DEF-159)
+        try:
+            await self._connection.execute(
+                "ALTER TABLE trades ADD COLUMN entry_price_known INTEGER NOT NULL DEFAULT 1"
+            )
+            await self._connection.commit()
+        except Exception:
+            pass  # Column already exists
+
     @asynccontextmanager
     async def connection(self) -> AsyncIterator[aiosqlite.Connection]:
         """Get a database connection context manager.

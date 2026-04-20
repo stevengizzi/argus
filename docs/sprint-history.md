@@ -2735,12 +2735,22 @@ New module — pure algorithmic NYSE holiday calendar, ported from frontend `ui/
 
 ---
 
+## DEF-159 Reconstruction Trade Logging Fix Impromptu (April 20, 2026)
+
+**Type:** Impromptu (single session) | **Tests:** +4 pytest (4,915 → 4,919) | **New DEFs:** 0 | **New DECs:** 0 | **Tier 2 verdict:** pending
+
+**Root cause:** Reconstructed positions with unrecoverable entry prices (broker returns `avg_entry_price=0.0` when internal state is lost after restart) were logged as trades with `entry_price=0.0`. The Trade model's `model_post_init` computed `outcome=WIN` because `exit_price > 0`, producing bogus multi-thousand-dollar "wins" (10 rows totalling ~$34K fake P&L on Apr 20).
+
+**Fix:** Added `entry_price_known` boolean column to trades table (INTEGER, default 1). `_close_position()` sets it to `False` when `entry_price == 0.0`. Analytics consumers (`compute_metrics`, `get_todays_pnl`, `get_todays_trade_count`, `get_daily_summary`) exclude trades with `entry_price_known=0`. Migration script (`scripts/migrate_def159_bogus_trades.py`) retroactively marked 10 affected rows. Schema migration in `DatabaseManager.initialize()`.
+
+---
+
 ## Sprint Statistics
 
-- **Total sprints:** 34 full + 44 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9, 27.5, 27.6, 27.65, 27.7, 27.75, 27.8, 27.9, 27.95, 28.5, 28.75, 29, 29.5, 32.5, 32.75, 32.8, 32.9, 32.95, 31.5) + 8 impromptus (Good Friday Apr 3, 31A.5 Apr 3, 31A.75 Apr 3, DEF-151 Fix Apr 4, Sweep Impromptu Apr 3–5, Lifespan Hang Apr 20, Eval DB VACUUM Apr 20, DEF-158 Duplicate SELL Apr 20)
+- **Total sprints:** 34 full + 44 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9, 27.5, 27.6, 27.65, 27.7, 27.75, 27.8, 27.9, 27.95, 28.5, 28.75, 29, 29.5, 32.5, 32.75, 32.8, 32.9, 32.95, 31.5) + 9 impromptus (Good Friday Apr 3, 31A.5 Apr 3, 31A.75 Apr 3, DEF-151 Fix Apr 4, Sweep Impromptu Apr 3–5, Lifespan Hang Apr 20, Eval DB VACUUM Apr 20, DEF-158 Duplicate SELL Apr 20, DEF-159 Reconstruction Trade Fix Apr 20)
 - **Total sessions:** ~554+ Claude Code sessions
-- **Total tests:** 4,915 pytest + 846 Vitest = 5,761 total
-- **Total decisions:** 381 (DEC-001 through DEC-381; no new DECs in Sprints 29.5, 32, 32.5, 32.75, 32.8, 32.9, 32.95, Apr 3 hotfix, 31A, 31A.5, 31A.75, 31.5, DEF-151 fix, Sweep Impromptu, or DEF-158 fix)
+- **Total tests:** 4,919 pytest + 846 Vitest = 5,765 total
+- **Total decisions:** 381 (DEC-001 through DEC-381; no new DECs in Sprints 29.5, 32, 32.5, 32.75, 32.8, 32.9, 32.95, Apr 3 hotfix, 31A, 31A.5, 31A.75, 31.5, DEF-151 fix, Sweep Impromptu, DEF-158 fix, or DEF-159 fix)
 - **Calendar days (active dev):** ~51 (Feb 14 – Apr 5, 2026)
 - **Largest sprint:** 22 (9 implementation + 5 fix + 9 reviews, largest scope)
 - **Cleanest sprint:** 23 (11 sessions, 0 regressions, 0 scope gaps requiring follow-up)

@@ -208,6 +208,7 @@ class Trade(BaseModel):
     mfe_price: float | None = None
     mae_price: float | None = None
     config_fingerprint: str | None = None
+    entry_price_known: bool = True  # False when entry price unrecoverable (DEF-159)
 
     def model_post_init(self, __context: object) -> None:
         """Calculate derived fields after initialization."""

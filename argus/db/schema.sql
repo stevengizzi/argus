@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS trades (
     quality_grade TEXT,              -- e.g., 'B+', 'A-', '' for legacy
     quality_score REAL,              -- 0-100, NULL for legacy trades
     config_fingerprint TEXT,         -- 16-char SHA-256 prefix of detection params (Sprint 32)
+    entry_price_known INTEGER NOT NULL DEFAULT 1,  -- 0 when entry price unrecoverable (DEF-159)
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 

@@ -69,8 +69,8 @@ class TradeLogger:
                 hold_duration_seconds, outcome, rationale, notes,
                 quality_grade, quality_score,
                 mfe_r, mae_r, mfe_price, mae_price,
-                config_fingerprint
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                config_fingerprint, entry_price_known
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
 
         params = (
@@ -102,6 +102,7 @@ class TradeLogger:
             trade.mfe_price,
             trade.mae_price,
             trade.config_fingerprint,
+            1 if trade.entry_price_known else 0,
         )
 
         await self._db.execute(sql, params)
@@ -267,7 +268,9 @@ class TradeLogger:
         Returns:
             The daily summary.
         """
-        trades = await self.get_trades_by_date(date, strategy_id)
+        all_trades = await self.get_trades_by_date(date, strategy_id)
+        # Exclude trades with unrecoverable entry prices (DEF-159)
+        trades = [t for t in all_trades if t.entry_price_known]
 
         if not trades:
             return DailySummary(date=date, strategy_id=strategy_id)
@@ -313,7 +316,10 @@ class TradeLogger:
         et_tz = ZoneInfo("America/New_York")
         today_et = datetime.now(et_tz).date().isoformat()
 
-        sql = "SELECT COALESCE(SUM(net_pnl), 0) as total FROM trades WHERE date(exit_time) = ?"
+        sql = (
+            "SELECT COALESCE(SUM(net_pnl), 0) as total FROM trades "
+            "WHERE date(exit_time) = ? AND entry_price_known = 1"
+        )
         row = await self._db.fetch_one(sql, (today_et,))
 
         if row is None:
@@ -333,7 +339,7 @@ class TradeLogger:
         et_tz = ZoneInfo("America/New_York")
         today_et = datetime.now(et_tz).date().isoformat()
 
-        sql = "SELECT COUNT(*) as count FROM trades WHERE date(exit_time) = ?"
+        sql = "SELECT COUNT(*) as count FROM trades WHERE date(exit_time) = ? AND entry_price_known = 1"
         row = await self._db.fetch_one(sql, (today_et,))
 
         if row is None:
@@ -803,4 +809,5 @@ class TradeLogger:
             mfe_price=float(r["mfe_price"]) if r.get("mfe_price") is not None else None,
             mae_price=float(r["mae_price"]) if r.get("mae_price") is not None else None,
             config_fingerprint=r.get("config_fingerprint"),
+            entry_price_known=bool(r.get("entry_price_known", 1)),
         )

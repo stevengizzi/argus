@@ -2695,6 +2695,9 @@ class OrderManager:
 
                 config_fingerprint = self._fingerprint_registry.get(position.strategy_id)
 
+                # DEF-159: Mark trades with unrecoverable entry prices
+                entry_known = position.entry_price != 0.0
+
                 trade = Trade(
                     strategy_id=position.strategy_id,
                     symbol=position.symbol,
@@ -2711,6 +2714,7 @@ class OrderManager:
                     quality_grade=position.quality_grade,
                     quality_score=position.quality_score,
                     config_fingerprint=config_fingerprint,
+                    entry_price_known=entry_known,
                     # mfe_price/mae_price are initialized to entry_price (non-zero) for real trades.
                     # The 0.0 check catches reconciliation/synthetic positions that were never
                     # through _handle_entry_fill and should store NULL instead of misleading 0.0.

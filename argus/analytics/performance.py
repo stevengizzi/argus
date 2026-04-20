@@ -56,8 +56,11 @@ def compute_metrics(trades: list[dict]) -> PerformanceMetrics:
     Returns:
         PerformanceMetrics with computed values.
     """
-    # Filter to closed trades only
-    closed_trades = [t for t in trades if t.get("exit_price") is not None]
+    # Filter to closed trades only, excluding unrecoverable-entry trades (DEF-159)
+    closed_trades = [
+        t for t in trades
+        if t.get("exit_price") is not None and t.get("entry_price_known", 1)
+    ]
 
     if not closed_trades:
         return PerformanceMetrics()
