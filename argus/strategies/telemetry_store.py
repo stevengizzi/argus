@@ -9,10 +9,13 @@ Sprint 24.5, Session 3.5.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
+import sqlite3
 import time
 from datetime import datetime, timedelta
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import aiosqlite
@@ -59,9 +62,20 @@ class EvaluationEventStore:
 
     Attributes:
         RETENTION_DAYS: Number of days of history to keep.
+        VACUUM_AFTER_CLEANUP: Whether to VACUUM after retention DELETE.
+        STARTUP_RECLAIM_FREELIST_RATIO: Trigger startup VACUUM when freelist
+            exceeds this fraction of total pages.
+        STARTUP_RECLAIM_MIN_SIZE_MB: Only consider startup VACUUM when file
+            exceeds this size in MB.
+        SIZE_WARNING_THRESHOLD_MB: Log WARNING if DB exceeds this size after
+            maintenance.
     """
 
     RETENTION_DAYS: int = 7
+    VACUUM_AFTER_CLEANUP: bool = True
+    STARTUP_RECLAIM_FREELIST_RATIO: float = 0.5
+    STARTUP_RECLAIM_MIN_SIZE_MB: int = 500
+    SIZE_WARNING_THRESHOLD_MB: int = 2000
     _WARNING_INTERVAL_SECONDS: float = 60.0
 
     def __init__(self, db_path: str) -> None:
@@ -75,7 +89,11 @@ class EvaluationEventStore:
         self._last_warning_time: float = 0.0
 
     async def initialize(self) -> None:
-        """Create the evaluation_events table and indexes if they don't exist."""
+        """Create the evaluation_events table and indexes if they don't exist.
+
+        Also logs DB size/freelist stats at startup and triggers a VACUUM
+        if the DB is bloated (freelist ratio exceeds threshold).
+        """
         self._conn = await aiosqlite.connect(self._db_path)
         self._conn.row_factory = aiosqlite.Row
         await self._conn.execute("PRAGMA journal_mode = WAL")
@@ -83,7 +101,47 @@ class EvaluationEventStore:
         await self._conn.execute(_CREATE_IDX_DATE_STRATEGY)
         await self._conn.execute(_CREATE_IDX_DATE_SYMBOL)
         await self._conn.commit()
-        logger.info("EvaluationEventStore initialized: %s", self._db_path)
+
+        # Observability: log DB size and freelist ratio at startup
+        size_mb = self._get_db_size_mb()
+        freelist_ratio = await self._get_freelist_ratio()
+        logger.info(
+            "EvaluationEventStore initialized: %s (size=%.1f MB, freelist=%.1f%%)",
+            self._db_path,
+            size_mb,
+            freelist_ratio * 100,
+        )
+
+        # Startup reclaim: VACUUM if DB is bloated
+        if (
+            size_mb >= self.STARTUP_RECLAIM_MIN_SIZE_MB
+            and freelist_ratio >= self.STARTUP_RECLAIM_FREELIST_RATIO
+        ):
+            logger.warning(
+                "EvaluationEventStore: DB bloated (%.1f MB, %.1f%% freelist) "
+                "— running startup VACUUM to reclaim space",
+                size_mb,
+                freelist_ratio * 100,
+            )
+            await self._vacuum()
+            new_size_mb = self._get_db_size_mb()
+            logger.info(
+                "EvaluationEventStore: startup VACUUM complete "
+                "(%.1f MB -> %.1f MB, freed %.1f MB)",
+                size_mb,
+                new_size_mb,
+                size_mb - new_size_mb,
+            )
+
+        # Post-init size warning
+        final_size_mb = self._get_db_size_mb()
+        if final_size_mb >= self.SIZE_WARNING_THRESHOLD_MB:
+            logger.warning(
+                "EvaluationEventStore: DB size %.1f MB exceeds %d MB threshold "
+                "— investigate write volume",
+                final_size_mb,
+                self.SIZE_WARNING_THRESHOLD_MB,
+            )
 
     async def write_event(self, event: EvaluationEvent) -> None:
         """Persist a single evaluation event.
@@ -202,23 +260,95 @@ class EvaluationEventStore:
         return await cursor.fetchall()
 
     async def cleanup_old_events(self) -> None:
-        """Delete events older than RETENTION_DAYS.
+        """Delete events older than RETENTION_DAYS and optionally VACUUM.
 
-        Uses ET date for the retention boundary.
+        Uses ET date for the retention boundary. When VACUUM_AFTER_CLEANUP is
+        True (default), runs VACUUM after DELETE to reclaim disk space.
         """
         if self._conn is None:
             return
         cutoff = (datetime.now(_ET) - timedelta(days=self.RETENTION_DAYS)).strftime(
             "%Y-%m-%d"
         )
+        size_before_mb = self._get_db_size_mb()
         cursor = await self._conn.execute(
             "DELETE FROM evaluation_events WHERE trading_date < ?",
             (cutoff,),
         )
         await self._conn.commit()
         deleted = cursor.rowcount
-        if deleted > 0:
-            logger.info("Cleaned up %d old evaluation events (before %s)", deleted, cutoff)
+
+        if deleted > 0 and self.VACUUM_AFTER_CLEANUP:
+            await self._vacuum()
+            size_after_mb = self._get_db_size_mb()
+            logger.info(
+                "EvaluationEventStore: retention deleted %d rows (before %s), "
+                "db size %.1f MB -> %.1f MB (freed %.1f MB)",
+                deleted,
+                cutoff,
+                size_before_mb,
+                size_after_mb,
+                size_before_mb - size_after_mb,
+            )
+        elif deleted > 0:
+            logger.info(
+                "Cleaned up %d old evaluation events (before %s)", deleted, cutoff
+            )
+
+    def _get_db_size_mb(self) -> float:
+        """Return the database file size in MB, or 0 if file does not exist."""
+        path = Path(self._db_path)
+        if path.exists():
+            return path.stat().st_size / (1024 * 1024)
+        return 0.0
+
+    async def _get_freelist_ratio(self) -> float:
+        """Return the ratio of freelist pages to total pages (0.0–1.0).
+
+        Returns 0.0 if the connection is not open or page_count is 0.
+        """
+        if self._conn is None:
+            return 0.0
+        cursor = await self._conn.execute("PRAGMA freelist_count")
+        row = await cursor.fetchone()
+        freelist = row[0] if row else 0
+
+        cursor = await self._conn.execute("PRAGMA page_count")
+        row = await cursor.fetchone()
+        page_count = row[0] if row else 0
+
+        if page_count == 0:
+            return 0.0
+        return freelist / page_count
+
+    async def _vacuum(self) -> None:
+        """Run VACUUM to reclaim freed pages.
+
+        VACUUM cannot run inside aiosqlite (raises "SQL statements in progress")
+        and the file cannot be truncated while an aiosqlite WAL lock is held.
+        Solution: close the aiosqlite connection, VACUUM via a synchronous
+        sqlite3 connection with autocommit, then reopen aiosqlite.
+        """
+        if self._conn is None:
+            return
+
+        # Close aiosqlite to release WAL locks
+        await self._conn.close()
+        self._conn = None
+
+        def _sync_vacuum() -> None:
+            conn = sqlite3.connect(self._db_path, isolation_level=None)
+            try:
+                conn.execute("VACUUM")
+            finally:
+                conn.close()
+
+        await asyncio.to_thread(_sync_vacuum)
+
+        # Reopen aiosqlite connection
+        self._conn = await aiosqlite.connect(self._db_path)
+        self._conn.row_factory = aiosqlite.Row
+        await self._conn.execute("PRAGMA journal_mode = WAL")
 
     async def close(self) -> None:
         """Close the database connection."""

@@ -49,6 +49,7 @@
 | — | DEF-151 Fix Impromptu | Apr 4, 2026 | `json.dumps(record.backtest_result, default=str)` in `store.py:193`; DEF-151 resolved; +1 pytest (4,858 total) |
 | AN — Sweep Impromptu | Universe-Aware Parameter Sweeps | Apr 3–5, 2026 | Small-sample sweeps across 9 patterns; 2 micro_pullback variants promotable; DEF-152/153/154 confirmed; no code changes |
 | AS — Lifespan Hang Impromptu | Startup Reliability | Apr 20, 2026 | HistoricalQueryService init backgrounded (was blocking lifespan 12 min); `api_server → healthy` gated on actual port bind; `start_live.sh` post-startup health probe; evaluation.db bloat investigated (DEF-157); DEF-155/156 resolved (+6 pytest, 4,905 total) |
+| AT — Eval DB VACUUM Impromptu | DB Maintenance | Apr 20, 2026 | VACUUM after retention DELETE in EvaluationEventStore (close→sync VACUUM→reopen); startup reclaim path (freelist >50% + size >500 MB); observability logging (size/freelist at init); manual VACUUM 3.7 GB → 209 MB; DEF-157 resolved (+5 pytest, 4,910 total) |
 
 ---
 
@@ -2725,9 +2726,9 @@ New module — pure algorithmic NYSE holiday calendar, ported from frontend `ui/
 
 ## Sprint Statistics
 
-- **Total sprints:** 34 full + 44 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9, 27.5, 27.6, 27.65, 27.7, 27.75, 27.8, 27.9, 27.95, 28.5, 28.75, 29, 29.5, 32.5, 32.75, 32.8, 32.9, 32.95, 31.5) + 5 impromptus (Good Friday Apr 3, 31A.5 Apr 3, 31A.75 Apr 3, DEF-151 Fix Apr 4, Sweep Impromptu Apr 3–5)
-- **Total sessions:** ~551+ Claude Code sessions
-- **Total tests:** 4,858 pytest + 846 Vitest = 5,704 total
+- **Total sprints:** 34 full + 44 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9, 27.5, 27.6, 27.65, 27.7, 27.75, 27.8, 27.9, 27.95, 28.5, 28.75, 29, 29.5, 32.5, 32.75, 32.8, 32.9, 32.95, 31.5) + 7 impromptus (Good Friday Apr 3, 31A.5 Apr 3, 31A.75 Apr 3, DEF-151 Fix Apr 4, Sweep Impromptu Apr 3–5, Lifespan Hang Apr 20, Eval DB VACUUM Apr 20)
+- **Total sessions:** ~553+ Claude Code sessions
+- **Total tests:** 4,910 pytest + 846 Vitest = 5,756 total
 - **Total decisions:** 381 (DEC-001 through DEC-381; no new DECs in Sprints 29.5, 32, 32.5, 32.75, 32.8, 32.9, 32.95, Apr 3 hotfix, 31A, 31A.5, 31A.75, 31.5, DEF-151 fix, or Sweep Impromptu)
 - **Calendar days (active dev):** ~51 (Feb 14 – Apr 5, 2026)
 - **Largest sprint:** 22 (9 implementation + 5 fix + 9 reviews, largest scope)
