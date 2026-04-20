@@ -464,28 +464,45 @@ def create_app(app_state: AppState) -> FastAPI:
             logger.info("Experiment pipeline disabled")
 
         # Initialize Historical Query Service if enabled (Sprint 31A.5)
+        # NOTE: The HQS constructor scans the entire Parquet cache directory
+        # (potentially hundreds of thousands of files), which can take minutes.
+        # To avoid blocking the lifespan handler, we run it in a background task.
         historical_query_initialized_here = False
+        hqs_init_task: asyncio.Task[None] | None = None
         if (
             app_state.config is not None
             and app_state.config.historical_query is not None
             and app_state.config.historical_query.enabled
         ):
-            try:
-                from argus.data.historical_query_service import HistoricalQueryService
+            hqs_config = app_state.config.historical_query
 
-                historical_query_service = HistoricalQueryService(
-                    config=app_state.config.historical_query
-                )
-                app_state.historical_query_service = historical_query_service
-                historical_query_initialized_here = True
-                if historical_query_service.is_available:
-                    logger.info("Historical Query Service initialized (DuckDB)")
-                else:
-                    logger.warning(
-                        "Historical Query Service enabled but cache unavailable"
+            async def _init_historical_query_service() -> None:
+                """Background task: construct HQS in a thread (blocking I/O)."""
+                try:
+                    from argus.data.historical_query_service import (
+                        HistoricalQueryService,
                     )
-            except Exception as e:
-                logger.error("Failed to initialize Historical Query Service: %s", e)
+
+                    service = await asyncio.to_thread(
+                        HistoricalQueryService, hqs_config
+                    )
+                    app_state.historical_query_service = service
+                    if service.is_available:
+                        logger.info("Historical Query Service initialized (DuckDB)")
+                    else:
+                        logger.warning(
+                            "Historical Query Service enabled but cache unavailable"
+                        )
+                except Exception as e:
+                    logger.error(
+                        "Failed to initialize Historical Query Service: %s", e
+                    )
+
+            hqs_init_task = asyncio.create_task(_init_historical_query_service())
+            historical_query_initialized_here = True
+            logger.info(
+                "Historical Query Service initialization started (background)"
+            )
         elif (
             app_state.config is not None
             and app_state.config.historical_query is not None
@@ -560,10 +577,17 @@ def create_app(app_state: AppState) -> FastAPI:
             logger.info("ExperimentStore cleaned up")
 
         # Cleanup Historical Query Service if we initialized it here
-        if historical_query_initialized_here and app_state.historical_query_service is not None:
-            app_state.historical_query_service.close()
-            app_state.historical_query_service = None
-            logger.info("Historical Query Service closed")
+        if historical_query_initialized_here:
+            # Cancel background init task if still running
+            if hqs_init_task is not None and not hqs_init_task.done():
+                hqs_init_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await hqs_init_task
+                logger.info("Historical Query Service init task cancelled")
+            if app_state.historical_query_service is not None:
+                app_state.historical_query_service.close()
+                app_state.historical_query_service = None
+                logger.info("Historical Query Service closed")
 
         # Cleanup telemetry store (only if created by lifespan, not main.py)
         if telemetry_store is not None and telemetry_store is not _pre_initialized_store:

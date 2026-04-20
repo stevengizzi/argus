@@ -1288,16 +1288,38 @@ class ArgusSystem:
                     self._api_task = await run_server(
                         api_app, config.system.api.host, config.system.api.port
                     )
-                    logger.info(
-                        "API server started on %s:%d",
-                        config.system.api.host,
-                        config.system.api.port,
+                    # Wait for the port to actually be bound before marking healthy.
+                    # run_server() returns a task immediately; the lifespan handler
+                    # may still be executing. Probe the port with a timeout.
+                    api_host = config.system.api.host
+                    api_port = config.system.api.port
+                    api_ready = await self._wait_for_port(
+                        api_host if api_host != "0.0.0.0" else "127.0.0.1",
+                        api_port,
+                        timeout_seconds=60,
                     )
-                    self._health_monitor.update_component(
-                        "api_server",
-                        ComponentStatus.HEALTHY,
-                        message=f"http://{config.system.api.host}:{config.system.api.port}",
-                    )
+                    if api_ready:
+                        logger.info(
+                            "API server started on %s:%d",
+                            api_host,
+                            api_port,
+                        )
+                        self._health_monitor.update_component(
+                            "api_server",
+                            ComponentStatus.HEALTHY,
+                            message=f"http://{api_host}:{api_port}",
+                        )
+                    else:
+                        logger.error(
+                            "API server task started but port %d never became "
+                            "reachable within 60s — marking DEGRADED",
+                            api_port,
+                        )
+                        self._health_monitor.update_component(
+                            "api_server",
+                            ComponentStatus.DEGRADED,
+                            message=f"Port {api_port} not reachable after 60s",
+                        )
                 except Exception as e:
                     # Import here to avoid circular import
                     from argus.api.server import PortInUseError
@@ -1381,6 +1403,35 @@ class ArgusSystem:
             title="Argus Started",
             body=f"Watching {watch_count} symbols. Mode: {mode}",
         )
+
+    @staticmethod
+    async def _wait_for_port(
+        host: str, port: int, timeout_seconds: int = 60
+    ) -> bool:
+        """Poll a TCP port until it accepts connections or timeout.
+
+        Args:
+            host: Host to probe.
+            port: Port number to probe.
+            timeout_seconds: Maximum seconds to wait.
+
+        Returns:
+            True if the port became reachable, False on timeout.
+        """
+        import socket
+
+        deadline = asyncio.get_event_loop().time() + timeout_seconds
+        while asyncio.get_event_loop().time() < deadline:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(1)
+            try:
+                sock.connect((host, port))
+                sock.close()
+                return True
+            except (ConnectionRefusedError, OSError):
+                sock.close()
+            await asyncio.sleep(0.5)
+        return False
 
     async def _evaluation_health_check_loop(self) -> None:
         """Periodic check for strategies with zero evaluation events.

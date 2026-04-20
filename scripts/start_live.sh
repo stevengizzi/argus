@@ -97,6 +97,17 @@ if [[ -f "$PID_FILE" ]]; then
         rm -f "$PID_FILE"
     fi
 fi
+
+# Check for orphaned Vite dev server processes on ports 5173-5175
+ORPHAN_PIDS=$(lsof -ti :5173,:5174,:5175 2>/dev/null || true)
+if [[ -n "$ORPHAN_PIDS" ]]; then
+    log_warn "Found orphaned node/vite processes on ports 5173-5175: $ORPHAN_PIDS"
+    log_warn "Killing orphaned processes..."
+    echo "$ORPHAN_PIDS" | xargs kill 2>/dev/null || true
+    sleep 1
+    log_info "  Orphaned processes cleared"
+fi
+
 log_info "  No existing process found"
 
 # ─────────────────────────────────────────────────────────────
@@ -124,6 +135,42 @@ if ! kill -0 "$ARGUS_PID" 2>/dev/null; then
     log_error "ARGUS failed to start. Check log: $LOG_FILE"
     rm -f "$PID_FILE"
     tail -20 "$LOG_FILE"
+    exit 1
+fi
+
+log_info "ARGUS process alive (PID: $ARGUS_PID). Waiting for API health..."
+
+# ─────────────────────────────────────────────────────────────
+# Post-startup: Probe API health endpoint
+# ─────────────────────────────────────────────────────────────
+API_PORT="${ARGUS_API_PORT:-8000}"
+API_PROBE_RETRIES="${ARGUS_API_PROBE_RETRIES:-15}"
+API_PROBE_INTERVAL=1
+
+api_healthy=false
+for i in $(seq 1 "$API_PROBE_RETRIES"); do
+    if curl -sf "http://127.0.0.1:${API_PORT}/api/v1/market/status" > /dev/null 2>&1; then
+        api_healthy=true
+        break
+    fi
+    # Also check the process is still alive
+    if ! kill -0 "$ARGUS_PID" 2>/dev/null; then
+        log_error "ARGUS process died during startup. Check log: $LOG_FILE"
+        rm -f "$PID_FILE"
+        tail -20 "$LOG_FILE"
+        exit 1
+    fi
+    sleep "$API_PROBE_INTERVAL"
+done
+
+if [[ "$api_healthy" != "true" ]]; then
+    log_error "API failed to become healthy within ${API_PROBE_RETRIES}s"
+    log_error "The lifespan handler may be blocked. Check log: $LOG_FILE"
+    log_error "Killing ARGUS process (PID: $ARGUS_PID)..."
+    kill "$ARGUS_PID" 2>/dev/null || true
+    sleep 2
+    kill -9 "$ARGUS_PID" 2>/dev/null || true
+    rm -f "$PID_FILE"
     exit 1
 fi
 

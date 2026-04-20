@@ -48,6 +48,7 @@
 | AM — Parallel Sweep Infrastructure | 31.5 | Apr 3, 2026 | `ProcessPoolExecutor` parallel sweep execution; `workers` + `universe_filter` params on `run_sweep()`; `--workers` CLI flag; 2 new universe filter YAMLs; DEF-146 resolved (+34 pytest) |
 | — | DEF-151 Fix Impromptu | Apr 4, 2026 | `json.dumps(record.backtest_result, default=str)` in `store.py:193`; DEF-151 resolved; +1 pytest (4,858 total) |
 | AN — Sweep Impromptu | Universe-Aware Parameter Sweeps | Apr 3–5, 2026 | Small-sample sweeps across 9 patterns; 2 micro_pullback variants promotable; DEF-152/153/154 confirmed; no code changes |
+| AS — Lifespan Hang Impromptu | Startup Reliability | Apr 20, 2026 | HistoricalQueryService init backgrounded (was blocking lifespan 12 min); `api_server → healthy` gated on actual port bind; `start_live.sh` post-startup health probe; evaluation.db bloat investigated (DEF-157); DEF-155/156 resolved (+6 pytest, 4,905 total) |
 
 ---
 
