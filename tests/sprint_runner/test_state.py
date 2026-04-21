@@ -10,11 +10,13 @@ import pytest
 from scripts.sprint_runner.config import RunnerConfig
 from scripts.sprint_runner.state import (
     GitState,
+    ReviewVerdict,
     RunPhase,
     RunState,
     RunStatus,
     SessionPlanEntry,
     SessionPlanStatus,
+    SessionResult,
 )
 
 
@@ -111,6 +113,35 @@ class TestRunState:
         state.halt_reason = "Test halt"
         assert state.status == RunStatus.HALTED
         assert state.halt_reason == "Test halt"
+
+
+class TestSessionResult:
+    """Tests for SessionResult."""
+
+    def test_review_verdict_string_assignment_is_coerced_to_enum(self) -> None:
+        """Raw string assignments (from parsed review payloads) must coerce."""
+        result = SessionResult()
+        result.review_verdict = "CLEAR"  # type: ignore[assignment]
+
+        assert isinstance(result.review_verdict, ReviewVerdict)
+        assert result.review_verdict is ReviewVerdict.CLEAR
+
+    def test_model_dump_json_emits_no_serializer_warning(self) -> None:
+        """Serializing a string-assigned verdict must not warn (DEF-034)."""
+        import warnings
+
+        result = SessionResult()
+        result.review_verdict = "CLEAR"  # type: ignore[assignment]
+
+        with warnings.catch_warnings(record=True) as captured:
+            warnings.simplefilter("always")
+            payload = result.model_dump_json()
+
+        serializer_warnings = [
+            w for w in captured if "Pydantic serializer" in str(w.message)
+        ]
+        assert serializer_warnings == [], serializer_warnings
+        assert '"review_verdict":"CLEAR"' in payload
 
 
 class TestSessionPlanEntry:
