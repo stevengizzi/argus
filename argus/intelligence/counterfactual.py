@@ -31,6 +31,7 @@ if TYPE_CHECKING:
     from argus.core.config import ExitManagementConfig
     from argus.core.events import CandleEvent, SignalEvent
     from argus.data.intraday_candle_store import IntradayCandleStore
+    from argus.intelligence.config import QualityEngineConfig
 
 logger = logging.getLogger(__name__)
 
@@ -115,6 +116,12 @@ class CounterfactualPosition:
     max_favorable_excursion: float
     bars_monitored: int
 
+    # Scoring-context fingerprint (FIX-01 audit 2026-04-21).
+    # Captures the live QualityEngineConfig state at position-open time so
+    # PromotionEvaluator can separate pre-fix and post-fix shadow data.
+    # Defaults to None for backwards-compat with in-memory instances.
+    scoring_fingerprint: str | None = None
+
 
 @dataclass
 class _OpenPosition:
@@ -156,6 +163,9 @@ class _OpenPosition:
     exit_config: ExitManagementConfig | None = None
     atr_value: float | None = None
 
+    # Scoring-context fingerprint captured at position open (FIX-01).
+    scoring_fingerprint: str | None = None
+
 
 class CounterfactualTracker:
     """Tracks rejected signals as shadow positions using bar-level fill model.
@@ -177,6 +187,7 @@ class CounterfactualTracker:
         eod_close_time: str = "16:00",
         no_data_timeout_seconds: int = 300,
         exit_configs: dict[str, ExitManagementConfig] | None = None,
+        quality_config: QualityEngineConfig | None = None,
     ) -> None:
         """Initialize the counterfactual tracker.
 
@@ -186,17 +197,32 @@ class CounterfactualTracker:
             no_data_timeout_seconds: Timeout before marking position as EXPIRED.
             exit_configs: Per-strategy ExitManagementConfig, keyed by strategy_id.
                 Used to set trail/escalation state on shadow positions.
+            quality_config: Optional live QualityEngineConfig. When provided,
+                the tracker stamps each new shadow position with a fingerprint
+                of the current scoring context (FIX-01 audit 2026-04-21).
         """
         self._candle_store = candle_store
         hours, minutes = eod_close_time.split(":")
         self._eod_close_time = dt_time(int(hours), int(minutes))
         self._no_data_timeout_seconds = no_data_timeout_seconds
         self._exit_configs: dict[str, ExitManagementConfig] = exit_configs or {}
+        self._quality_config = quality_config
 
         self._open_positions: dict[str, _OpenPosition] = {}
         self._closed_positions: list[CounterfactualPosition] = []
         self._symbols_to_positions: dict[str, set[str]] = {}
         self._store: object | None = None  # CounterfactualStore, set via set_store()
+
+        if self._quality_config is not None:
+            from argus.intelligence.scoring_fingerprint import (
+                compute_scoring_fingerprint,
+            )
+
+            fingerprint = compute_scoring_fingerprint(self._quality_config)
+            logger.info(
+                "CounterfactualTracker initialized with scoring fingerprint %s",
+                fingerprint,
+            )
 
     def track(
         self,
@@ -246,6 +272,16 @@ class CounterfactualTracker:
         # Look up exit config for this strategy
         exit_cfg = self._exit_configs.get(signal.strategy_id)
 
+        # Capture scoring-context fingerprint at open time (FIX-01). Recomputed
+        # per call so future mid-session config mutations are distinguishable.
+        fingerprint: str | None = None
+        if self._quality_config is not None:
+            from argus.intelligence.scoring_fingerprint import (
+                compute_scoring_fingerprint,
+            )
+
+            fingerprint = compute_scoring_fingerprint(self._quality_config)
+
         pos = _OpenPosition(
             position_id=position_id,
             symbol=signal.symbol,
@@ -269,6 +305,7 @@ class CounterfactualTracker:
             high_watermark=signal.entry_price,
             exit_config=exit_cfg,
             atr_value=signal.atr_value,
+            scoring_fingerprint=fingerprint,
         )
 
         # Set initial trail activation based on mode
@@ -337,6 +374,7 @@ class CounterfactualTracker:
                 max_adverse_excursion=0.0,
                 max_favorable_excursion=0.0,
                 bars_monitored=0,
+                scoring_fingerprint=pos.scoring_fingerprint,
             )
             try:
                 asyncio.get_running_loop().create_task(self._store.write_open(open_snapshot))
@@ -640,6 +678,7 @@ class CounterfactualTracker:
             max_adverse_excursion=pos.max_adverse_excursion,
             max_favorable_excursion=pos.max_favorable_excursion,
             bars_monitored=pos.bars_monitored,
+            scoring_fingerprint=pos.scoring_fingerprint,
         )
 
         self._closed_positions.append(closed)

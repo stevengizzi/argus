@@ -163,3 +163,18 @@ None listed for P1-D1.
   - **Session A (weekend-only, CRITICAL config + DB sync):** C1 + C2 + C3 + M1 + M2 — unified "quality pipeline DB + config sync" fix. Requires full test baseline and paper-trading pause. High-risk because it touches live sizing.
   - **Session B (weekend-only, semantic tightening):** M3 + M4 + M5 + M10 + M11 + M12 + M13 + L1 + L6 + L14. Mostly intelligence-layer internals; low regression surface.
   - **Session C (safe-during-trading, hygiene):** M6 + M7 + M8 + M9 + L2–L5, L7–L13, X1–X8. Docs/comments/logging/type-hint cleanup. Can land weekdays.
+
+---
+
+## FIX-01 Resolution (2026-04-21)
+
+The CRITICAL P1-D1 C1 / C2 and LOW L1 findings were resolved in
+`FIX-01-catalyst-db-quality-pipeline`:
+
+- **C1** ~~Phase 10.25 `CatalystStorage(argus.db)`~~ → **RESOLVED FIX-01-catalyst-db-quality-pipeline**. `argus/main.py:1119` now constructs `CatalystStorage` against `catalyst.db` (the file the intelligence pipeline writes to). Regression guard: `tests/test_fix01_catalyst_db_path.py`.
+- **C2** ~~`quality_engine.yaml` dead at runtime~~ → **RESOLVED FIX-01-catalyst-db-quality-pipeline** via **Option B** (DEC-384). `load_config()` now deep-merges registered standalone YAMLs over the system block (precedence standalone > live > base); `_STANDALONE_SYSTEM_OVERLAYS` is the extensible registry. `config/quality_engine.yaml` is now the authoritative source for quality weights + thresholds. Regression guard: `tests/test_fix01_load_config_merge.py` (6 tests).
+- **L1** ~~`_score_historical_match()` returns 50.0~~ → **RESOLVED FIX-01-catalyst-db-quality-pipeline**. Stub hardened to `return 0.0` with a dormancy comment; composite cannot pick up a hidden +7.5 bias if the weight is bumped without a real implementation.
+
+**C3** (`overflow.broker_capacity` divergence) is deferred to FIX-02, which will extend `_STANDALONE_SYSTEM_OVERLAYS` to include `overflow.yaml`. Under DEC-384 the resolution is a one-tuple-entry addition — no new load logic.
+
+Scoring-context fingerprint infrastructure (new `argus/intelligence/scoring_fingerprint.py`, `CounterfactualStore.scoring_fingerprint` column, `CounterfactualTracker` wiring, `PromotionEvaluator` optional filter, 4 new tests) landed in the same commit to tag pre-fix vs post-fix shadow data cleanly for the `PromotionEvaluator`.

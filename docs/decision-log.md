@@ -4696,6 +4696,21 @@ DEC-382 range remains reserved but unused.
 
 ---
 
+### DEC-384 | `load_config()` Standalone YAML Overlay (Option B)
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-04-21 |
+| **Context** | FIX-01 audit finding DEF-142 surfaced that `config/quality_engine.yaml` — updated during Sprint 32.9 with recalibrated weights + thresholds — never reached runtime. `load_config()` read only `system.yaml` / `system_live.yaml`, ignoring the standalone file. Consequence: 97% of live signals graded B (thresholds tuned for a score distribution the weights no longer produced). The same class of drift applied to `config/overflow.yaml` (FIX-02). |
+| **Decision** | Extend `load_config()` to deep-merge a registered set of standalone `config/<name>.yaml` files over the corresponding top-level key of the loaded system block, with precedence `standalone > live > base`. The registry is a module-scope tuple `_STANDALONE_SYSTEM_OVERLAYS` in `argus/core/config.py`; initial entry is `quality_engine.yaml`. Deep merge uses the existing `deep_update()` helper so keys present in `system_live.yaml` but absent from the standalone survive, and vice versa. An INFO log at startup enumerates which sections were merged. |
+| **Alternatives** | (1) **Option A** — copy weights/thresholds from `quality_engine.yaml` into `system.yaml` + `system_live.yaml`. Rejected: creates a 3-file value sync with no enforcement; the same drift reappears on the next edit. (2) Delete `quality_engine.yaml` and keep values only in system YAMLs. Rejected: forces per-subsystem details into a monolithic config, harder for operators to diff. (3) Pydantic-level multi-source merge via `BaseSettings`. Rejected: heavier refactor, breaks the current BaseModel (not BaseSettings) posture (DEC-032). |
+| **Rationale** | The standalone YAML becomes the single source of truth for its subsystem; the system block holds cross-subsystem wiring and per-profile (paper vs live) overrides. Paper-trading deltas that *do* belong in `system_live.yaml` (e.g., 10× reduced `risk_tiers`) still win over the standalone because the overlay only fills in the sections operators point it at. Adding a new standalone overlay in a future sprint (e.g., FIX-02's `overflow.yaml`) requires one tuple-entry change — no new load logic, no new tests for the load path itself. |
+| **Impact** | `config/quality_engine.yaml` is now the authoritative file for the quality-engine block. The weights + thresholds in `config/system.yaml` / `config/system_live.yaml` remain as documentation / fallback but no longer need to be synced. FIX-02 extends the overlay tuple to include `overflow.yaml`. Operators reading startup logs will see `load_config: standalone overlays merged into system block — quality_engine`. |
+| **Cross-References** | FIX-01-catalyst-db-quality-pipeline (audit 2026-04-21), DEF-142, DEF-082, FIX-02 (overflow.yaml follow-up), DEC-032 (Pydantic BaseModel config posture), `deep_update()` helper in `argus/core/config.py` |
+| **Status** | Active |
+
+---
+
 *End of Decision Log v1.0*
-*Next DEC: 384*
-*Last updated: 2026-04-20 (Sprint 31.75 doc sync — DEC-382 validation pipeline reframe, DEC-383 shadow fleet deployment)*
+*Next DEC: 385*
+*Last updated: 2026-04-21 (FIX-01 audit 2026-04-21 — DEC-384 load_config standalone overlay / Option B)*

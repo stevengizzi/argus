@@ -6,12 +6,15 @@ All tunable parameters live in YAML config files, never hardcoded.
 
 from __future__ import annotations
 
+import logging
 from enum import StrEnum
 from pathlib import Path
 from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+logger = logging.getLogger(__name__)
 
 from argus.ai.config import AIConfig
 from argus.core.exit_math import StopToLevel
@@ -1318,6 +1321,23 @@ def load_yaml_file(path: Path) -> dict[str, Any]:
     return data if data is not None else {}
 
 
+# Standalone YAML files that override their corresponding top-level keys
+# inside the loaded system config (Option B, DEC-384 / FIX-01 audit 2026-04-21).
+#
+# When a file listed here exists at ``config/<filename>``, its contents are
+# deep-merged over the matching top-level key of the system config with
+# precedence ``standalone > live > base``. This keeps per-subsystem configs
+# (e.g. ``quality_engine.yaml``) as a single source of truth without forcing
+# operators to keep values duplicated across ``system.yaml`` / ``system_live.yaml``.
+#
+# The key must match the top-level key in the system YAML exactly. Extend this
+# list — do NOT edit ``load_config()`` logic — when a new standalone config is
+# introduced (e.g., FIX-02 will add ``overflow.yaml``).
+_STANDALONE_SYSTEM_OVERLAYS: tuple[tuple[str, str], ...] = (
+    ("quality_engine", "quality_engine.yaml"),
+)
+
+
 def load_config(config_dir: Path, system_config_file: Path | None = None) -> ArgusConfig:
     """Load the complete Argus configuration from a directory of YAML files.
 
@@ -1329,6 +1349,13 @@ def load_config(config_dir: Path, system_config_file: Path | None = None) -> Arg
         - notifications.yaml
 
     Missing files use defaults. Extra fields in YAML are ignored.
+
+    **Standalone overlays** (DEC-384 / FIX-01 audit 2026-04-21). Files listed
+    in ``_STANDALONE_SYSTEM_OVERLAYS`` — currently just ``quality_engine.yaml``
+    — are deep-merged over the corresponding top-level key of the loaded
+    system config. Precedence: ``standalone > live > base``. This lets a
+    per-subsystem YAML serve as the single source of truth for its block
+    without duplicating values into ``system.yaml`` / ``system_live.yaml``.
 
     Args:
         config_dir: Path to the configuration directory.
@@ -1368,6 +1395,30 @@ def load_config(config_dir: Path, system_config_file: Path | None = None) -> Arg
             filepath = config_dir / filename
             if filepath.exists():
                 raw[key] = load_yaml_file(filepath)
+
+    # Apply standalone YAML overlays over the system block (DEC-384).
+    system_block = raw.get("system")
+    if isinstance(system_block, dict):
+        merged_sections: list[str] = []
+        for section_key, overlay_filename in _STANDALONE_SYSTEM_OVERLAYS:
+            overlay_path = config_dir / overlay_filename
+            if not overlay_path.exists():
+                continue
+            overlay = load_yaml_file(overlay_path)
+            if not isinstance(overlay, dict):
+                continue
+            existing = system_block.get(section_key)
+            if isinstance(existing, dict):
+                system_block[section_key] = deep_update(existing, overlay)
+            else:
+                system_block[section_key] = overlay
+            merged_sections.append(section_key)
+        if merged_sections:
+            logger.info(
+                "load_config: standalone overlays merged into system block — %s",
+                ", ".join(merged_sections),
+            )
+        raw["system"] = system_block
 
     return ArgusConfig(**raw)
 

@@ -73,8 +73,9 @@ INSERT INTO counterfactual_positions (
     position_id, symbol, strategy_id, entry_price, stop_price,
     target_price, time_stop_seconds, rejection_stage, rejection_reason,
     quality_score, quality_grade, regime_vector_snapshot, signal_metadata,
-    opened_at, max_adverse_excursion, max_favorable_excursion, bars_monitored
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    opened_at, max_adverse_excursion, max_favorable_excursion, bars_monitored,
+    scoring_fingerprint
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 """
 
 _UPDATE_CLOSE = """\
@@ -135,6 +136,22 @@ class CounterfactualStore:
         except Exception:
             pass  # Column already exists
 
+        # Migration: add scoring_fingerprint column (FIX-01 audit 2026-04-21).
+        # Pre-fix shadow rows retain NULL; post-fix rows carry the fingerprint
+        # of the active QualityEngineConfig at position-open time, letting
+        # PromotionEvaluator separate scoring contexts when the pipeline changes.
+        async with self._conn.execute(
+            "SELECT name FROM pragma_table_info('counterfactual_positions') "
+            "WHERE name = 'scoring_fingerprint'"
+        ) as cur:
+            fingerprint_row = await cur.fetchone()
+        if fingerprint_row is None:
+            await self._conn.execute(
+                "ALTER TABLE counterfactual_positions "
+                "ADD COLUMN scoring_fingerprint TEXT"
+            )
+            await self._conn.commit()
+
         logger.info("CounterfactualStore initialized: %s", self._db_path)
 
     async def write_open(self, position: CounterfactualPosition) -> None:
@@ -173,6 +190,7 @@ class CounterfactualStore:
                     position.max_adverse_excursion,
                     position.max_favorable_excursion,
                     position.bars_monitored,
+                    position.scoring_fingerprint,
                 ),
             )
             await self._conn.commit()
@@ -222,6 +240,7 @@ class CounterfactualStore:
         strategy_id: str | None = None,
         rejection_stage: str | None = None,
         quality_grade: str | None = None,
+        scoring_fingerprint: str | None = None,
         limit: int = 1000,
     ) -> list[dict[str, object]]:
         """Query counterfactual positions with optional filters.
@@ -232,6 +251,9 @@ class CounterfactualStore:
             strategy_id: Filter by strategy_id.
             rejection_stage: Filter by rejection_stage.
             quality_grade: Filter by quality_grade.
+            scoring_fingerprint: Filter by scoring_fingerprint (FIX-01 audit
+                2026-04-21). When set, returns only positions tagged with the
+                given QualityEngineConfig fingerprint; when None, no filter.
             limit: Maximum rows to return.
 
         Returns:
@@ -258,6 +280,9 @@ class CounterfactualStore:
         if quality_grade is not None:
             conditions.append("quality_grade = ?")
             params.append(quality_grade)
+        if scoring_fingerprint is not None:
+            conditions.append("scoring_fingerprint = ?")
+            params.append(scoring_fingerprint)
 
         where = " AND ".join(conditions) if conditions else "1=1"
         params.append(limit)

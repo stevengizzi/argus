@@ -1,7 +1,7 @@
 # ARGUS — Decision Index
 
-> 383 decisions (DEC-001 through DEC-383)
-> Generated: April 20, 2026 (Sprint 31.85 doc sync — no new DECs) | Source: `docs/decision-log.md`
+> 384 decisions (DEC-001 through DEC-384)
+> Generated: April 21, 2026 (FIX-01 audit — DEC-384 load_config standalone overlay) | Source: `docs/decision-log.md`
 > Legend: ● Active | ○ Superseded | △ Amended | ✗ Duplicate entry
 
 
@@ -492,6 +492,7 @@ No new DECs across any of the four sessions. All design decisions followed estab
 
 - ● **DEC-382**: Validation Pipeline Reframe — Shadow-First Model (4-stage: quick-reject → shadow → promotion → deep backtest; exhaustive sweeps reserved for allocation sizing of shadow-proven configs; changes Sprint 33/31B/33.5 scope)
 - ● **DEC-383**: Shadow Variant Fleet — 22 Variants Deployed (18 new across 8 patterns, `max_variants_per_pattern` 5→8, all shadow mode, PromotionEvaluator after 20+ days)
+- ● **DEC-384**: `load_config()` Standalone YAML Overlay (Option B) — `config/quality_engine.yaml` now deep-merged over the system block with precedence standalone > live > base; extensible via `_STANDALONE_SYSTEM_OVERLAYS` (FIX-01 audit 2026-04-21)
 
 ## Sprint 31.85 — Parquet Cache Consolidation (April 20, 2026 Impromptu)
 

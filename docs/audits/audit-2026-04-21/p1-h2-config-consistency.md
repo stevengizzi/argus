@@ -336,3 +336,14 @@ The prompt's inventory said "42 YAMLs". **The actual count is 44.** Specifically
 The Pydantic-module inventory in the prompt was accurate for file count, though the "9-module" universe in this report includes `argus/intelligence/learning/models.py` (where `LearningLoopConfig` actually lives) which the prompt listed as the 8th module's separate module. Minor bookkeeping difference.
 
 The prompt's prediction that "`config/system_paper.yaml`, `config/system_backtest.yaml`, `config/ai.yaml`, `config/ibkr.yaml`, `config/intelligence.yaml` — NOT found" is confirmed. Paper overrides live inline; AI/IBKR/intelligence live as sub-sections of `system.yaml` / `system_live.yaml`.
+
+---
+
+## FIX-01 Resolution (2026-04-21)
+
+- **D-01** (`quality_engine.weights.pattern_strength`): **RESOLVED FIX-01-catalyst-db-quality-pipeline** via **Option B** (DEC-384). `config/quality_engine.yaml` now wins at runtime via `load_config()` overlay merge.
+- **D-02** (`quality_engine.weights.historical_match`): **RESOLVED FIX-01-catalyst-db-quality-pipeline**. Overlay merge + stub hardened to `return 0.0` so the dimension is a strict no-op. Grade compression from this source cannot recur.
+- **D-03** (`quality_engine.thresholds.a_plus`): **RESOLVED FIX-01-catalyst-db-quality-pipeline**. Runtime now reads threshold 72 from `quality_engine.yaml`.
+- **DEAD05** (`quality_engine.yaml` dead): **RESOLVED FIX-01-catalyst-db-quality-pipeline** — file is now authoritative under Option B, not deleted. The "dead YAML" class of finding is the motivation behind DEC-384's extensible `_STANDALONE_SYSTEM_OVERLAYS` registry.
+
+The companion `overflow.yaml` / `system_live.yaml` divergence (C3 / related D-0x rows in this report) is deferred to FIX-02, which extends the overlay registry with a one-tuple entry.

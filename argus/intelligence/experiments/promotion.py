@@ -83,12 +83,23 @@ class PromotionEvaluator:
     # Public API
     # ---------------------------------------------------------------------------
 
-    async def evaluate_all_variants(self) -> list[PromotionEvent]:
+    async def evaluate_all_variants(
+        self,
+        scoring_fingerprint: str | None = None,
+    ) -> list[PromotionEvent]:
         """Evaluate all active variants for promotion or demotion.
 
         Groups variants by ``base_pattern``, then for each pattern evaluates
         shadow variants for promotion and non-baseline live variants for
         demotion.
+
+        Args:
+            scoring_fingerprint: Optional QualityEngineConfig fingerprint to
+                scope shadow-position queries (FIX-01 audit 2026-04-21). When
+                set, only shadow positions tagged with this fingerprint
+                contribute to promotion/demotion decisions. When None (the
+                default), all shadow positions are considered — the legacy
+                behavior.
 
         Returns:
             All PromotionEvents generated during this evaluation pass.
@@ -108,7 +119,9 @@ class PromotionEvaluator:
 
             for shadow_variant in shadow_variants:
                 event = await self._evaluate_for_promotion(
-                    shadow_variant, live_variants
+                    shadow_variant,
+                    live_variants,
+                    scoring_fingerprint=scoring_fingerprint,
                 )
                 if event is not None:
                     events.append(event)
@@ -142,6 +155,7 @@ class PromotionEvaluator:
         self,
         shadow_variant: VariantDefinition,
         live_variants: list[VariantDefinition],
+        scoring_fingerprint: str | None = None,
     ) -> PromotionEvent | None:
         """Evaluate whether a shadow variant should be promoted to live.
 
@@ -156,6 +170,8 @@ class PromotionEvaluator:
         Args:
             shadow_variant: The shadow variant to evaluate.
             live_variants: Current live variants for the same base pattern.
+            scoring_fingerprint: Optional QualityEngineConfig fingerprint to
+                scope shadow-data queries (FIX-01 audit 2026-04-21).
 
         Returns:
             PromotionEvent with action="promote", or None if promotion
@@ -165,7 +181,10 @@ class PromotionEvaluator:
         if shadow_variant.mode == "live":
             return None
 
-        shadow_result = await self._build_result_from_shadow(shadow_variant.variant_id)
+        shadow_result = await self._build_result_from_shadow(
+            shadow_variant.variant_id,
+            scoring_fingerprint=scoring_fingerprint,
+        )
         if shadow_result is None:
             return None
 
@@ -179,7 +198,10 @@ class PromotionEvaluator:
             )
             return None
 
-        shadow_days = await self._count_shadow_trading_days(shadow_variant.variant_id)
+        shadow_days = await self._count_shadow_trading_days(
+            shadow_variant.variant_id,
+            scoring_fingerprint=scoring_fingerprint,
+        )
         if shadow_days < self._min_shadow_days:
             logger.debug(
                 "Shadow variant %s below min days threshold (%d < %d)",
@@ -365,11 +387,17 @@ class PromotionEvaluator:
     async def _build_result_from_shadow(
         self,
         strategy_id: str,
+        scoring_fingerprint: str | None = None,
     ) -> MultiObjectiveResult | None:
         """Build a MultiObjectiveResult from shadow (counterfactual) data.
 
         Args:
             strategy_id: Strategy ID to query shadow positions for.
+            scoring_fingerprint: Optional QualityEngineConfig fingerprint to
+                scope the query (FIX-01 audit 2026-04-21). When set, only
+                shadow positions tagged with this fingerprint contribute;
+                when None, the default, all shadow positions for the strategy
+                are considered (legacy behavior).
 
         Returns:
             MultiObjectiveResult, or None if counterfactual store is unavailable
@@ -378,7 +406,9 @@ class PromotionEvaluator:
         if self._counterfactual_store is None:
             return None
         positions = await self._counterfactual_store.query(
-            strategy_id=strategy_id, limit=self._query_limit
+            strategy_id=strategy_id,
+            scoring_fingerprint=scoring_fingerprint,
+            limit=self._query_limit,
         )
         closed = [
             p for p in positions
@@ -390,11 +420,18 @@ class PromotionEvaluator:
         r_multiples = [float(p["theoretical_r_multiple"]) for p in closed]
         return self._compute_result(strategy_id, r_multiples)
 
-    async def _count_shadow_trading_days(self, strategy_id: str) -> int:
+    async def _count_shadow_trading_days(
+        self,
+        strategy_id: str,
+        scoring_fingerprint: str | None = None,
+    ) -> int:
         """Count unique trading days with shadow positions for a strategy.
 
         Args:
             strategy_id: Strategy ID to count trading days for.
+            scoring_fingerprint: Optional QualityEngineConfig fingerprint filter
+                (FIX-01 audit 2026-04-21). When set, only positions tagged with
+                the given fingerprint are counted.
 
         Returns:
             Number of unique calendar dates with at least one shadow position,
@@ -403,7 +440,9 @@ class PromotionEvaluator:
         if self._counterfactual_store is None:
             return 0
         positions = await self._counterfactual_store.query(
-            strategy_id=strategy_id, limit=self._query_limit
+            strategy_id=strategy_id,
+            scoring_fingerprint=scoring_fingerprint,
+            limit=self._query_limit,
         )
         unique_days: set[str] = set()
         for pos in positions:

@@ -152,7 +152,14 @@ class SetupQualityEngine:
         return 50.0
 
     def _score_historical_match(self) -> float:
-        return 50.0
+        # Dormant stub (FIX-01 audit 2026-04-21 / P1-D1-L01). Paired with the
+        # historical_match weight of 0.0 in config/quality_engine.yaml and the
+        # system*.yaml files (DEF-142 sync) so this dimension is a no-op until
+        # a real implementation lands (Learning Loop V2). Returning 0.0 rather
+        # than 50.0 means that if anyone bumps the weight above 0 without
+        # replacing this stub, the composite score will visibly collapse
+        # instead of picking up a hidden constant bias.
+        return 0.0
 
     def _score_regime_alignment(
         self, regime: MarketRegime, allowed_regimes: list[str]

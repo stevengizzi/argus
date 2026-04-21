@@ -1104,12 +1104,19 @@ class ArgusSystem:
         if qe_config.enabled and config.system.broker_source != BrokerSource.SIMULATED:
             self._quality_engine = SetupQualityEngine(qe_config, db_manager=self._db)
             self._position_sizer = DynamicPositionSizer(qe_config)
-            # Create CatalystStorage for quality lookups (catalyst data)
+            # Create CatalystStorage for quality lookups (catalyst data).
+            # FIX-01 (audit 2026-04-21 DEF-082 / P1-D1 C1): path is catalyst.db
+            # — the same DB the intelligence pipeline writes into via
+            # argus/intelligence/startup.py. Previously this pointed at
+            # argus.db, which CatalystStorage.initialize() would populate
+            # with an empty catalyst_events table, causing the quality
+            # engine's _score_catalyst_quality() to return the neutral
+            # default (50.0) for every signal.
             if self._catalyst_storage is None:
                 try:
                     from argus.intelligence.storage import CatalystStorage
 
-                    db_path = Path(config.system.data_dir) / "argus.db"
+                    db_path = Path(config.system.data_dir) / "catalyst.db"
                     self._catalyst_storage = CatalystStorage(str(db_path))
                     await self._catalyst_storage.initialize()
                 except Exception:

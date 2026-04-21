@@ -185,10 +185,18 @@ def test_volume_profile_interpolation():
 # ---------------------------------------------------------------------------
 
 
-def test_historical_match_returns_50():
+def test_historical_match_returns_dormant_zero():
+    """historical_match is a dormant stub (FIX-01 / DEF-142 / P1-D1-L01).
+
+    Until a real implementation lands (Learning Loop V2) the dimension returns
+    0.0 and the system*.yaml weight is pinned to 0.0, so the dimension
+    contributes nothing to composite. If anyone bumps the weight without
+    replacing the stub, composite visibly drops instead of picking up the
+    previous constant +7.5 bias.
+    """
     engine = make_engine()
     result = engine.score_setup(make_signal(), [], None, DEFAULT_REGIME, DEFAULT_ALLOWED)
-    assert result.components["historical_match"] == 50.0
+    assert result.components["historical_match"] == 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -279,8 +287,9 @@ def test_risk_tier_matches_grade():
 
 def test_score_setup_full_pipeline():
     engine = make_engine()
-    # PS=80, CQ=80 (catalyst), VP=55 (rvol=1.5), HM=50 (stub), RA=80 (in allowed)
-    # Score = 0.2 * (80 + 80 + 55 + 50 + 80) = 0.2 * 345 = 69.0 → A-
+    # PS=80, CQ=80 (catalyst), VP=55 (rvol=1.5), HM=0 (dormant stub, FIX-01),
+    # RA=80 (in allowed)
+    # Score = 0.2 * (80 + 80 + 55 + 0 + 80) = 0.2 * 295 = 59.0 → B (default thresholds)
     catalysts = [make_catalyst(quality_score=80.0)]
     result = engine.score_setup(
         make_signal(pattern_strength=80.0),
@@ -289,9 +298,9 @@ def test_score_setup_full_pipeline():
         MarketRegime.BULLISH_TRENDING,
         ["bullish_trending"],
     )
-    assert result.score == pytest.approx(69.0)
-    assert result.grade == "B+"
-    assert result.risk_tier == "B+"
+    assert result.score == pytest.approx(59.0)
+    assert result.grade == "B"
+    assert result.risk_tier == "B"
     assert len(result.components) == 5
 
 

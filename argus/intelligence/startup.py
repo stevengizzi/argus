@@ -209,10 +209,20 @@ async def build_counterfactual_tracker(
     store = CounterfactualStore(db_path="data/counterfactual.db")
     await store.initialize()
 
+    # Attach live QualityEngineConfig so the tracker can stamp each shadow
+    # position with a scoring-context fingerprint (FIX-01 audit 2026-04-21).
+    # isinstance-gated — tests that pass a MagicMock config must not crash
+    # the fingerprint code path when they don't exercise it.
+    from argus.intelligence.config import QualityEngineConfig
+
+    raw_qe = getattr(config, "quality_engine", None)
+    quality_config = raw_qe if isinstance(raw_qe, QualityEngineConfig) else None
+
     tracker = CounterfactualTracker(
         candle_store=candle_store,
         eod_close_time=cf_config.eod_close_time,
         no_data_timeout_seconds=cf_config.no_data_timeout_seconds,
+        quality_config=quality_config,
     )
     tracker.set_store(store)
 
