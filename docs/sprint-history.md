@@ -1,7 +1,7 @@
 # ARGUS — Sprint History
 
 > Complete record of all sprints from project inception through current state.
-> Active development began February 14, 2026. As of April 20, 2026 (~66 calendar days), 34 full sprints + 44 sub-sprints + 9 impromptus completed.
+> Active development began February 14, 2026. As of April 20, 2026 (~66 calendar days), 34 full sprints + 45 sub-sprints + 10 impromptus completed.
 
 ---
 
@@ -52,6 +52,7 @@
 | AT — Eval DB VACUUM Impromptu | DB Maintenance | Apr 20, 2026 | VACUUM after retention DELETE in EvaluationEventStore (close→sync VACUUM→reopen); startup reclaim path (freelist >50% + size >500 MB); observability logging (size/freelist at init); manual VACUUM 3.7 GB → 209 MB; DEF-157 resolved (+5 pytest, 4,910 total) |
 | AU — DEF-158 Duplicate SELL Fix | Execution Safety | Apr 20, 2026 | 3 independent duplicate-SELL root causes fixed (flatten timeout resubmit, startup cleanup, stop-fill race); broker-state query before resubmit; DEF-158 resolved (+5 pytest, 4,915 total) |
 | AV — DEF-159 Reconstruction Trades | Analytics Integrity | Apr 20, 2026 | `entry_price_known` column on trades table; analytics exclude unrecoverable-entry trades; migration script for 10 existing rows; DEF-159 resolved (+4 pytest, 4,919 total) |
+| AW — Parquet Cache Consolidation | 31.85 | Apr 20, 2026 | `scripts/consolidate_parquet_cache.py` (758 lines, `ProcessPoolExecutor`, atomic `.tmp → rename`, non-bypassable row-count validation, DuckDB `--verify` benchmark); `docs/operations/parquet-cache-layout.md` (canonical Cache Separation table); derived `data/databento_cache_consolidated/` (~24K per-symbol files, embedded `symbol` column) while original cache stays read-only for `BacktestEngine`; `HistoricalQueryService` repoint is an operator action, not an in-sprint change. DEF-161 resolved, DEF-162/163 opened (+15 pytest, 4,934 total) |
 
 ---
 
@@ -2831,12 +2832,73 @@ Sessions AS–AV (Lifespan Hang, Eval DB VACUUM, DEF-158 Duplicate SELL, DEF-159
 
 ---
 
+## Sprint 31.85 — Parquet Cache Consolidation (Impromptu, AW)
+
+**Type:** Impromptu (single session) | **Tests:** +15 pytest (4,919 → 4,934) | **New DEFs:** 162 (monthly re-consolidation cron), 163 (date-decay test hygiene batch) | **DEFs resolved:** 161 | **New DECs:** 0 | **Tier 2 verdict:** CLEAR
+
+**Motivation:** Sprint 31.75 S4 discovered that DuckDB is unusable against the original Databento Parquet cache because of its 983K-file granularity (VIEW scans take hours; `CREATE TABLE AS SELECT` estimated 16+ hours). This blocks Research Console SQL features (Sprint 31B) and any future analytical queries. DEF-161 was opened to track the permanent fix.
+
+**Scope:** One-time consolidation script plus operator reference; no runtime code paths changed.
+
+### Deliverables
+
+- `scripts/consolidate_parquet_cache.py` (758 lines). Per-symbol `ProcessPoolExecutor` orchestrator. Reads each `{SYMBOL}/{YYYY-MM}.parquet` file, concatenates in timestamp order (no dedup), validates `consolidated_row_count == sum(monthly_row_counts)`, writes `.parquet.tmp` with zstd compression, atomically renames to `{SYMBOL}/{SYMBOL}.parquet` under `data/databento_cache_consolidated/`. Non-bypassable row-count validation (the rename is unreachable on mismatch; the `.tmp` is unlinked). Disk preflight refuses to start with less than 60 GB free (`--force-no-disk-check` test-only). `--verify`/`--verify-only` runs a three-query DuckDB benchmark suite (Q1 COUNT DISTINCT, Q2 single-symbol range, Q3 batch coverage across 100 deterministically-sampled symbols) and writes a Markdown report to `data/consolidation_benchmark_{YYYYMMDD_HHMMSS}.md`.
+- `tests/scripts/test_consolidate_parquet_cache.py` (15 new tests). Covers happy path, `--resume` (row-count-validated, not existence-only), `--force`, `--symbols` and `--limit`, `--dry-run`, disk preflight, `symbol` column correctness per-row, atomic-write cleanup on IO failure, grep-style bypass-token guard (`test_no_bypass_flag_exists` asserts absence of `--skip-validation`/`--no-validate`/`SKIP_VALIDATION`), and `test_original_cache_is_unmodified` snapshotting `(st_size, st_mtime_ns, st_ino)` before and after the run.
+- `docs/operations/parquet-cache-layout.md`. Canonical Cache Separation table (Original vs Consolidated), script synopsis and flag reference, re-run guidance, operator handoff for repointing `config/historical_query.yaml`, known limitations (`os.rename` filesystem atomicity, per-worker memory ceiling), and explicit statement that row-count validation is non-bypassable.
+
+### Out of Scope (Explicit)
+
+- `config/historical_query.yaml` is **unchanged** — repointing `cache_dir` from `data/databento_cache` to `data/databento_cache_consolidated` is a post-sprint operator action.
+- `HistoricalQueryService`, `HistoricalQueryConfig`, `BacktestEngine`, and every existing script (`resolve_symbols_fast.py`, `populate_historical_cache.py`, `run_experiment.py`, `data_fetcher.py`) are unchanged.
+- Monthly re-consolidation cron scheduling — logged as DEF-162, companion to DEF-097 (the `populate_historical_cache.py --update` cron).
+
+### Design Choices (No New DECs)
+
+All choices followed established patterns:
+
+- **Output layout `{SYMBOL}/{SYMBOL}.parquet`** — preserves the existing `regexp_extract(filename, '.*/([^/]+)/[^/]+\\.parquet$', 1)` pattern in `HistoricalQueryService`, so zero service-code changes are required after the operator repoint.
+- **Embedded `symbol` column** — self-describing Parquet, eliminates `regexp_extract` overhead on every DuckDB query.
+- **zstd compression** — matches typical Databento compression; good size/speed balance.
+- **Sort by `timestamp` ascending, no dedup** — original cache is authoritative; preserve duplicates if present rather than silently drop rows.
+- **Atomic write** — `.tmp` + `os.rename` *after* row-count validation; corrupted files cannot land on disk.
+- **Resume is row-count-validated** — `dest_final.exists()` triggers the check, but the skip decision requires `existing_rows == source_row_count`.
+
+### Operator Handoff (5-Step Checklist)
+
+After merge and CLEAR verdict:
+
+1. `python scripts/consolidate_parquet_cache.py` (30–60 min wall clock on the real 983K-file cache).
+2. Review benchmark report at `data/consolidation_benchmark_*.md` — expect sub-5-second Q2 (single symbol) and sub-60-second Q1 (COUNT DISTINCT).
+3. Edit `config/historical_query.yaml`: change `cache_dir` from `data/databento_cache` to `data/databento_cache_consolidated`.
+4. Restart ARGUS (`./scripts/stop_live.sh && ./scripts/start_live.sh`).
+5. Verify startup log contains `HistoricalQueryService: VIEW 'historical' created over data/databento_cache_consolidated (~24000 Parquet files found)`.
+
+### Pre-Existing Failures Reconfirmed
+
+The Tier 2 reviewer confirmed three pre-existing failures are unrelated to Sprint 31.85:
+
+- `tests/analytics/test_def159_entry_price_known.py::test_get_todays_pnl_excludes_unrecoverable` (DEF-163 — date decay).
+- `tests/core/test_regime_vector_expansion.py::TestHistoryStoreMigration::test_history_store_migration` (DEF-163 — date decay; reconfirmed despite Sprint 32.8 partial fix).
+- `tests/sprint_runner/test_notifications.py::TestReminderEscalation::test_check_reminder_sends_after_interval` (DEF-150 — flaky under `-n auto`).
+
+### Sprint 31.85 Statistics
+
+- **Sprint total:** 1 code session (impromptu, between-sprints)
+- **Files created:** `scripts/consolidate_parquet_cache.py`, `tests/scripts/test_consolidate_parquet_cache.py`, `docs/operations/parquet-cache-layout.md`
+- **Files modified:** none
+- **Tests added:** +15 pytest
+- **DEFs resolved:** 161
+- **DEFs opened:** 162, 163
+- **DECs added:** none
+
+---
+
 ## Sprint Statistics
 
-- **Total sprints:** 34 full + 45 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9, 27.5, 27.6, 27.65, 27.7, 27.75, 27.8, 27.9, 27.95, 28.5, 28.75, 29, 29.5, 32.5, 32.75, 32.8, 32.9, 32.95, 31.5, 31.75) + 9 impromptus (Good Friday Apr 3, 31A.5 Apr 3, 31A.75 Apr 3, DEF-151 Fix Apr 4, Sweep Impromptu Apr 3–5, Lifespan Hang Apr 20, Eval DB VACUUM Apr 20, DEF-158 Duplicate SELL Apr 20, DEF-159 Reconstruction Trade Fix Apr 20)
-- **Total sessions:** ~554+ Claude Code sessions
-- **Total tests:** 4,919 pytest + 846 Vitest = 5,765 total
-- **Total decisions:** 381 (DEC-001 through DEC-381; no new DECs in Sprints 29.5, 32, 32.5, 32.75, 32.8, 32.9, 32.95, Apr 3 hotfix, 31A, 31A.5, 31A.75, 31.5, DEF-151 fix, Sweep Impromptu, DEF-158 fix, or DEF-159 fix)
+- **Total sprints:** 34 full + 45 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9, 27.5, 27.6, 27.65, 27.7, 27.75, 27.8, 27.9, 27.95, 28.5, 28.75, 29, 29.5, 32.5, 32.75, 32.8, 32.9, 32.95, 31.5, 31.75) + 10 impromptus (Good Friday Apr 3, 31A.5 Apr 3, 31A.75 Apr 3, DEF-151 Fix Apr 4, Sweep Impromptu Apr 3–5, Lifespan Hang Apr 20, Eval DB VACUUM Apr 20, DEF-158 Duplicate SELL Apr 20, DEF-159 Reconstruction Trade Fix Apr 20, Parquet Cache Consolidation Apr 20)
+- **Total sessions:** ~555+ Claude Code sessions
+- **Total tests:** 4,934 pytest + 846 Vitest = 5,780 total
+- **Total decisions:** 383 (DEC-001 through DEC-383; no new DECs in Sprints 29.5, 32, 32.5, 32.75, 32.8, 32.9, 32.95, Apr 3 hotfix, 31A, 31A.5, 31A.75, 31.5, DEF-151 fix, Sweep Impromptu, 31.8 impromptus, or 31.85 Parquet consolidation)
 - **Calendar days (active dev):** ~53 (Feb 14 – Apr 5, 2026 + Apr 14, Apr 20, 2026)
 - **Largest sprint:** 22 (9 implementation + 5 fix + 9 reviews, largest scope)
 - **Cleanest sprint:** 23 (11 sessions, 0 regressions, 0 scope gaps requiring follow-up)

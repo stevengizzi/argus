@@ -1131,10 +1131,25 @@ Pure algorithmic NYSE holiday detection. No external dependencies. Cached per-ye
 
 Read-only analytical query layer over the Databento Parquet cache using DuckDB. Config-gated via `historical_query.enabled`. Provides SQL access to the 44.73 GB cache without any data import or ETL.
 
+#### Cache Separation (Sprint 31.85)
+
+ARGUS maintains **two Parquet caches** after Sprint 31.85. Confusing them is a latent data-integrity risk; this table is the canonical reference (full operator guide: `docs/operations/parquet-cache-layout.md`).
+
+| Cache | Path | Layout | Consumers | Writable? |
+|-------|------|--------|-----------|-----------|
+| **Original** | `data/databento_cache/` | `{SYMBOL}/{YYYY-MM}.parquet` (~983K files) | `BacktestEngine` via `HistoricalDataFeed`; `scripts/resolve_symbols_fast.py`; `scripts/populate_historical_cache.py`; `scripts/run_experiment.py --cache-dir`; `argus/backtest/data_fetcher.py` | **NO — read-only. Source of truth.** |
+| **Consolidated** | `data/databento_cache_consolidated/` | `{SYMBOL}/{SYMBOL}.parquet` (~24K files) with embedded `symbol` column | `HistoricalQueryService` (DuckDB) via `config/historical_query.yaml` | Rebuilt by `scripts/consolidate_parquet_cache.py`. Derived artifact. |
+
+**Invariant:** `BacktestEngine` must never be pointed at the consolidated cache — it expects per-month files and will silently miss data if pointed elsewhere. Conversely, `HistoricalQueryService` should be pointed at the consolidated cache for query performance; pointing it at the original cache is functionally correct but impractically slow (VIEW scans take hours, TABLE materialization takes 16+ hours — the DEF-161 motivating observation).
+
+**Consolidation tooling:** `scripts/consolidate_parquet_cache.py` merges the original cache's per-month files into one file per symbol with an embedded `symbol` column. Runs per-symbol under `ProcessPoolExecutor`, validates `consolidated_row_count == sum(monthly_row_counts)` (non-bypassable — no `--skip-validation` flag exists, and the `.tmp → rename` sequence is unreachable without passing validation), and optionally runs a three-query DuckDB benchmark suite via `--verify`/`--verify-only`. The original cache is read-only throughout (enforced by `test_original_cache_is_unmodified` snapshotting `st_size`/`st_mtime_ns`/`st_ino` per file). Repointing `config/historical_query.yaml` from `data/databento_cache` to `data/databento_cache_consolidated` is an operator action after first consolidation run.
+
+#### Service Design
+
 **Design:**
 - In-memory DuckDB connection (`:memory:`) — no persistent DuckDB file. The Parquet cache IS the persistent store.
 - Lazy initialization: DuckDB is imported and connected only on first query call.
-- `CREATE VIEW` over Parquet directories using `regexp_extract` on file paths to extract symbol names from Databento path conventions (e.g., `TSLA_2025-06.parquet` → `TSLA`).
+- `CREATE VIEW` over Parquet directories using `regexp_extract` on file paths to extract symbol names from Databento path conventions (e.g., `TSLA_2025-06.parquet` → `TSLA`). The consolidated layout `{SYMBOL}/{SYMBOL}.parquet` preserves this pattern unchanged.
 - **Databento schema note:** Parquet files use `timestamp` column (not `ts_event`). The VIEW aliases appropriately.
 
 **6 query methods:**

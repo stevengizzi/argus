@@ -1028,9 +1028,9 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 | **Severity** | Medium |
 | **Likelihood** | Confirmed |
 | **Description** | 983K individual monthly Parquet files make all DuckDB query paths unusable. `CREATE VIEW` scans every file on every query (60+ minutes for `COUNT DISTINCT`). `CREATE TABLE` materialization estimated 16+ hours. Blocks Research Console SQL features (Sprint 31B) and any future analytical queries against the full historical cache. |
-| **Mitigation** | Interim: `scripts/resolve_symbols_fast.py` (pyarrow-based symbol resolution, 41s for 24K symbols) bypasses DuckDB entirely for the symbol-resolution use case. Strategic: DEF-161 tracks the permanent fix — merge monthly files into per-symbol files (983K → 24K), making DuckDB queries viable. Pre-filtered symbol lists (`@symbols.txt`) work for sweeps. |
-| **Owner** | Sprint 31B (Research Console / Variant Factory) |
-| **Status** | Open |
+| **Mitigation** | **Resolved by Sprint 31.85 (DEF-161).** `scripts/consolidate_parquet_cache.py` produces a derived `data/databento_cache_consolidated/` cache with ~24K per-symbol files, an embedded `symbol` column, non-bypassable row-count validation, and a DuckDB benchmark harness. `HistoricalQueryService` is repointed to the consolidated cache via operator edit of `config/historical_query.yaml` (unchanged in-sprint). Original cache remains read-only source of truth for `BacktestEngine`. Interim `scripts/resolve_symbols_fast.py` retained for symbol resolution; consolidated cache supersedes it for general DuckDB queries. |
+| **Owner** | Sprint 31.85 (resolved); post-sprint operator runs the consolidation and repoints the config. |
+| **Status** | **Mitigated — pending operator activation.** Code path closed; risk drops to Low after first successful consolidation run and config repoint. |
 
 ---
 

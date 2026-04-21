@@ -1,7 +1,7 @@
 # ARGUS — Decision Index
 
 > 383 decisions (DEC-001 through DEC-383)
-> Generated: April 20, 2026 (Sprint 31.75 doc sync — DEC-382, DEC-383) | Source: `docs/decision-log.md`
+> Generated: April 20, 2026 (Sprint 31.85 doc sync — no new DECs) | Source: `docs/decision-log.md`
 > Legend: ● Active | ○ Superseded | △ Amended | ✗ Duplicate entry
 
 
@@ -492,5 +492,15 @@ No new DECs across any of the four sessions. All design decisions followed estab
 
 - ● **DEC-382**: Validation Pipeline Reframe — Shadow-First Model (4-stage: quick-reject → shadow → promotion → deep backtest; exhaustive sweeps reserved for allocation sizing of shadow-proven configs; changes Sprint 33/31B/33.5 scope)
 - ● **DEC-383**: Shadow Variant Fleet — 22 Variants Deployed (18 new across 8 patterns, `max_variants_per_pattern` 5→8, all shadow mode, PromotionEvaluator after 20+ days)
+
+## Sprint 31.85 — Parquet Cache Consolidation (April 20, 2026 Impromptu)
+
+No new DECs. DEF-161 resolved via one-time consolidation tooling; all design choices followed established patterns:
+
+- **Two-cache separation** follows the existing derived-artifact pattern (e.g., DEC-345 per-feature SQLite DB separation). Original `data/databento_cache/` is the authoritative source of truth for `BacktestEngine`; `data/databento_cache_consolidated/` is a rebuildable derived artifact for `HistoricalQueryService`.
+- **Output layout `{SYMBOL}/{SYMBOL}.parquet`** was chosen specifically to preserve the existing `regexp_extract(filename, ...)` pattern in `HistoricalQueryService._initialize_view()` / `_initialize_table()` — zero service-code changes required after operator repoint.
+- **Non-bypassable row-count validation** is a design posture, not a DEC — there is no `--skip-validation` flag, no env var, and no `except ValueError` that could swallow a mismatch. A regression test greps the script source for forbidden tokens to prevent the bypass from being re-introduced.
+- **Atomic write order** (validate → `.tmp` write → `os.rename`) makes a consolidated file with a row-count mismatch physically unable to land on disk.
+- **Repointing `config/historical_query.yaml`** is an operator action (no in-sprint code change); `HistoricalQueryService`, `HistoricalQueryConfig`, and the config file are untouched.
 
 Next DEC: 384.
