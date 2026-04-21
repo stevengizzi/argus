@@ -1,6 +1,6 @@
 historical_query:
   enabled: true
-  cache_dir: "data/databento_cache"
+  cache_dir: "data/databento_cache_consolidated"
   max_memory_mb: 2048
   default_threads: 4
   persist_path: null  # Set to "data/historical_query.duckdb" for persistent mode
