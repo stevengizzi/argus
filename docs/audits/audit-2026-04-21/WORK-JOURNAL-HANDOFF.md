@@ -1,5 +1,13 @@
 # Work Journal Handoff — Audit 2026-04-21 Phase 3 Remediation
 
+> ⚠️ **SUPERSEDED — 2026-04-21.** This handoff covers the audit track only. The audit Phase 3 has been absorbed into a larger campaign (Sprint 31.9 Health & Hardening) that also includes 2 impromptu sessions resolving bugs from the 2026-04-21 market session debrief.
+>
+> **Use [`docs/sprints/sprint-31.9/WORK-JOURNAL-HANDOFF.md`](../../sprints/sprint-31.9/WORK-JOURNAL-HANDOFF.md) as the canonical handoff for the Work Journal conversation.** That document covers both tracks (audit + impromptu) as a single coordinated campaign with one running register.
+>
+> This file remains for reference: it is the original audit-scoped handoff, kept to preserve the audit track's self-contained planning trail. The audit scope and stage plan in this file are all reflected unchanged in the superseding handoff.
+
+---
+
 > **Paste this as the opening message of a fresh Claude.ai conversation titled "Audit 2026-04-21 — Work Journal". Project knowledge: same as your normal ARGUS project (CLAUDE.md + bootstrap-index.md). This document tells the Work Journal chat what this campaign is, what it will receive, and what it must produce.**
 
 ---
