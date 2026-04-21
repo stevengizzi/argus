@@ -30,12 +30,14 @@ Gap-down reversal strategy that enters long when price tests and holds a key sup
 
 | Condition | Required Value |
 |-----------|---------------|
-| Market Regime | Bullish Trending, Range-Bound |
+| Market Regime | Bullish Trending, Bearish Trending, Range-Bound |
 | VIX Range | < 35 |
 | SPY Trend | Not in Crisis mode |
 | Other | None |
 
 Rationale: Gap-down reversals work best in stable or bullish markets where institutional buyers step in at support. In crisis regimes, gap-downs tend to cascade rather than reverse.
+
+**DEC-360 alignment (2026-04-21):** Red-to-Green hardcodes `allowed_regimes = ["bullish_trending", "bearish_trending", "range_bound"]` in the strategy class itself. This table now matches the code.
 
 ---
 

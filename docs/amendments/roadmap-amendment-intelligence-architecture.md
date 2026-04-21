@@ -1,6 +1,7 @@
 # ARGUS Roadmap Amendment Proposal: Intelligence Architecture
 
-> **Status:** Proposal — not yet adopted
+> **Status:** ADOPTED (partial) — Sprint 27.6 (RegimeVector) and Sprint 27.7 (Counterfactual Engine) shipped. Sprint 33.5 (Adversarial Stress Testing) PENDING; DEC 396–402 reserved. See DEC-358 for amendment ratification.
+> **Adoption note:** Header status updated 2026-04-21 via audit FIX-15 back-annotation. Preserved in place (not archived) because this document contains fuller decision rationale than the terser sprint-history entries.
 > **Author:** Claude.ai strategic planning conversation, March 23, 2026
 > **Context:** Sprint 27 (BacktestEngine Core) complete. The Experiment Infrastructure amendment (companion document) builds the evaluate → track → promote loop. This amendment builds the **six intelligence layers** that feed that loop with high-quality data, protect it from tail risks, generate targeted hypotheses, and make the system stronger under stress.
 > **Roadmap version:** v2.0 (March 22, 2026)

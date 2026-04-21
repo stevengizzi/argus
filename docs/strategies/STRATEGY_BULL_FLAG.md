@@ -30,11 +30,13 @@ Bull flag continuation pattern strategy that identifies strong upward moves (pol
 
 | Condition | Required Value |
 |-----------|---------------|
-| Market Regime | Bullish Trending, Range-Bound |
+| Market Regime | Bullish Trending, Bearish Trending, Range-Bound |
 | VIX Range | < 35 |
 | SPY Trend | Not in Crisis mode |
 
 Rationale: Continuation patterns work best in markets with established trends. In crisis regimes, breakouts frequently fail.
+
+**DEC-360 alignment (2026-04-21):** `bearish_trending` is present in `allowed_regimes` for every PatternBasedStrategy via `config/strategies/bull_flag.yaml`. This table now matches the config.
 
 ---
 

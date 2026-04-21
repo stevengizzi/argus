@@ -1,5 +1,7 @@
-# ARGUS - Historical Data Inventory
+# ARGUS - Historical Data Inventory [ARCHIVED]
 
+> **ARCHIVED 2026-04-21.** Describes the Alpaca IEX free-tier data feed — superseded by Databento EQUS.MINI (DEC-248). Current cache layout and operator procedures: [docs/operations/parquet-cache-layout.md](../operations/parquet-cache-layout.md) (Sprint 31.85 canonical reference).
+>
 > *Auto-generated after running the data fetcher. Update by re-running.*
 > *Last updated: February 17, 2026*
 

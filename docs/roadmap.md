@@ -3,7 +3,7 @@
 > From artisanal strategies to ensemble alpha — the complete path
 > **v3.5 — April 5, 2026** (DEF-151 fix + Sweep Impromptu complete; small-sample sweeps across 9 patterns; 2 micro_pullback variants promotable; DEF-152/153/154 confirmed; full-universe re-sweeps pending)
 > **Status:** CANONICAL — this is the single source of truth for ARGUS's strategic direction and sprint queue.
-> **Supersedes:** `docs/research/ARGUS_Expanded_Roadmap.md` (Feb 26), `docs/argus_unified_vision_roadmap.md` (Mar 5), `docs/10_PHASE3_SPRINT_PLAN.md` (all forward-looking sections)
+> **Supersedes:** `docs/archived/ARGUS_Expanded_Roadmap.md` (Feb 26), `docs/archived/argus_unified_vision_roadmap.md` (Mar 5), `docs/archived/10_PHASE3_SPRINT_PLAN.md` (all forward-looking sections)
 
 ---
 

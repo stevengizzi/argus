@@ -1,5 +1,13 @@
-# ARGUS — Process Evolution
+# ARGUS — Process Evolution [FROZEN]
 
+> **FROZEN 2026-04-21 — historical reference only, narrative ends at Sprint 21.5 (2026-02-27).**
+> The workflow-evolution story captured here covers Phases A through E (Sprints 1–21.5) as of
+> early March 2026. Sprints 22 through 31.85 (~52 days, ~40 sprints + sub-sprints) are
+> intentionally NOT continued in this document; the workflow has since stabilized around the
+> patterns documented in `workflow/` (the metarepo submodule) and in `docs/sprint-history.md`.
+> See those for current-era process. Preserved in place as a snapshot of the early-phase
+> process evolution that established the patterns still in use today.
+>
 > How the ARGUS development workflow evolved across five phases and 21+ sprints.
 > Derived from meta-analysis conducted March 3, 2026.
 

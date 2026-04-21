@@ -3,6 +3,12 @@
 > IBC (Interactive Brokers Controller) automates IB Gateway startup and keeps it
 > running across reboots. This guide covers installation, configuration, macOS
 > auto-start via launchd, and verification.
+>
+> **See also:** [pre-live-transition-checklist.md](pre-live-transition-checklist.md)
+> documents the Sprint 32.75 post-reconnect 3-second hardcoded delay in the IBKR
+> broker client. That behavior is enforced in code (not configurable from IBC)
+> but is noted here for operator awareness when correlating reconnect events
+> with Gateway restarts.
 
 ---
 

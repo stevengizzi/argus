@@ -27,49 +27,49 @@ Verdicts: **CURRENT** / **STALE-SALVAGE** (stale but salvageable with targeted u
 
 | File | Size | Last Meaningful Update | Verdict | Top Issue |
 |---|---:|---|---|---|
-| [project-bible.md](docs/project-bible.md) | 40 KB | Feb 20 v1.0 / Apr 20 refresh | **CURRENT** | §4.2 strategy roster missing Micro Pullback, VWAP Bounce, Narrow Range Breakout; §4.3 incubator pipeline uses old 10-stage terminology instead of DEC-382 shadow-first. Not invariant violation, just list drift. |
-| [roadmap.md](docs/roadmap.md) | 105 KB | Apr 5 v3.5 | **CURRENT** | Line 6 has 2 broken supersession refs (missing `archived/` prefix). Build-track aligned with CLAUDE.md; DEC refs valid. |
-| [decision-log.md](docs/decision-log.md) | 412 KB | Apr 20 | **CURRENT** | DEC-001 → DEC-383; all 5 supersessions marked. Line 2907 has same 2 broken refs as roadmap.md + 1 never-existed file. |
+| [project-bible.md](docs/project-bible.md) | 40 KB | Feb 20 v1.0 / Apr 20 refresh | **CURRENT** | ~~§4.2 strategy roster missing Micro Pullback, VWAP Bounce, Narrow Range Breakout; §4.3 incubator pipeline uses old 10-stage terminology instead of DEC-382 shadow-first. Not invariant violation, just list drift.~~ **RESOLVED FIX-15-docs-supporting** |
+| [roadmap.md](docs/roadmap.md) | 105 KB | Apr 5 v3.5 | **CURRENT** | ~~Line 6 has 2 broken supersession refs (missing `archived/` prefix). Build-track aligned with CLAUDE.md; DEC refs valid.~~ **RESOLVED FIX-15-docs-supporting** |
+| [decision-log.md](docs/decision-log.md) | 412 KB | Apr 20 | **CURRENT** | ~~DEC-001 → DEC-383; all 5 supersessions marked. Line 2907 has same 2 broken refs as roadmap.md + 1 never-existed file.~~ **RESOLVED FIX-15-docs-supporting** |
 | [dec-index.md](docs/dec-index.md) | 39 KB | Apr 20 | **CURRENT** | Perfect 1:1 sync with decision-log; superseded DECs marked with ○ consistently. |
 | [sprint-history.md](docs/sprint-history.md) | 228 KB | Apr 20 | **CURRENT** | Fully updated through Sprint 31.85. No missing sprints. |
-| [sprint-campaign.md](docs/sprint-campaign.md) | 111 KB | Apr 1 | **STALE-SALVAGE** | Header says "Updated: Sprint 28 complete, Sprint 28.5 next" — 21 days + ~15 sprints stale. Doc is a *process template*, not a sprint queue, so role separation is correct, but the header misleads. |
+| [sprint-campaign.md](docs/sprint-campaign.md) | 111 KB | Apr 1 | **STALE-SALVAGE** | ~~Header says "Updated: Sprint 28 complete, Sprint 28.5 next" — 21 days + ~15 sprints stale. Doc is a *process template*, not a sprint queue, so role separation is correct, but the header misleads.~~ **RESOLVED FIX-15-docs-supporting** |
 | [risk-register.md](docs/risk-register.md) | 71 KB | Apr 20 | **CURRENT** | 17 ASM + 63 RSK entries. 1 past-due review date (ASM-015 Feb 26) but marked CLOSED Feb 28 with DEC-236. No unresolved stale entries. |
-| [live-operations.md](docs/live-operations.md) | 21 KB | Apr 20 v1.3 | **CURRENT** | Matches `scripts/start_live.sh` + Sprint 32.9 state. Databento + IBKR paper. |
-| [paper-trading-guide.md](docs/paper-trading-guide.md) | 20 KB | Feb 16 v1.0 | **STALE-REWRITE** | **CRITICAL drift.** 33 Alpaca references; `python -m argus.main --paper` flag (Alpaca-specific legacy); `ALPACA_BASE_URL=https://paper-api.alpaca.markets`; Alpaca dashboard validation. Whole doc presumes the demoted broker. |
+| [live-operations.md](docs/live-operations.md) | 21 KB | Apr 20 v1.3 | **CURRENT** | ~~Matches `scripts/start_live.sh` + Sprint 32.9 state. Databento + IBKR paper.~~ **RESOLVED FIX-15-docs-supporting** |
+| [paper-trading-guide.md](docs/paper-trading-guide.md) | 20 KB | Feb 16 v1.0 | **STALE-REWRITE** | ~~**CRITICAL drift.** 33 Alpaca references; `python -m argus.main --paper` flag (Alpaca-specific legacy); `ALPACA_BASE_URL=https://paper-api.alpaca.markets`; Alpaca dashboard validation. Whole doc presumes the demoted broker.~~ **RESOLVED FIX-15-docs-supporting** |
 | [pre-live-transition-checklist.md](docs/pre-live-transition-checklist.md) | 11 KB | Apr 2 | **CURRENT** | All Sprint 27.75 paper overrides (10× risk, throttle disabled, $10 floor) documented; signal_cutoff_time 15:30 documented. No Alpaca refs. |
-| [process-evolution.md](docs/process-evolution.md) | 13 KB | Mar 6 | **FREEZE** | Stops at Sprint 21.5. Missing Sprints 22–31.85 (~52 days). Historical narrative that never got a lifecycle decision. Freeze with explicit header, or refresh. |
-| [strategy-template.md](docs/strategy-template.md) | 6 KB | Feb 15 | **CURRENT** | Still the template for all 15 strategy docs. Missing optional sections for Shadow Mode status, Experiment Variant ID, Quality Grade calibration — non-blocking but would improve variant tracking (e.g. Dip-and-Rip's 2 shadow variants have no template field). |
-| [ibc-setup.md](docs/ibc-setup.md) | 7.6 KB | Apr 1 | **CURRENT** | Current, IBKR-only. Minor: does not mention the Sprint 32.75 post-reconnect 3s hardcoded delay (documented in pre-live-checklist instead). |
+| [process-evolution.md](docs/process-evolution.md) | 13 KB | Mar 6 | **FREEZE** | ~~Stops at Sprint 21.5. Missing Sprints 22–31.85 (~52 days). Historical narrative that never got a lifecycle decision. Freeze with explicit header, or refresh.~~ **RESOLVED FIX-15-docs-supporting** |
+| [strategy-template.md](docs/strategy-template.md) | 6 KB | Feb 15 | **CURRENT** | ~~Still the template for all 15 strategy docs. Missing optional sections for Shadow Mode status, Experiment Variant ID, Quality Grade calibration — non-blocking but would improve variant tracking (e.g. Dip-and-Rip's 2 shadow variants have no template field).~~ **RESOLVED FIX-15-docs-supporting** |
+| [ibc-setup.md](docs/ibc-setup.md) | 7.6 KB | Apr 1 | **CURRENT** | ~~Current, IBKR-only. Minor: does not mention the Sprint 32.75 post-reconnect 3s hardcoded delay (documented in pre-live-checklist instead).~~ **RESOLVED FIX-15-docs-supporting** |
 
 ### Strategy docs (15) — detail in Section 2
 
 | File | Verdict | Top Issue |
 |---|---|---|
-| [STRATEGY_ABCD.md](docs/strategies/STRATEGY_ABCD.md) | STALE-SALVAGE | Stub; no PROVISIONAL marker; Sprint 32.9 shadow demotion aware |
-| [STRATEGY_AFTERNOON_MOMENTUM.md](docs/strategies/STRATEGY_AFTERNOON_MOMENTUM.md) | STALE-REWRITE | Regime section omits bearish_trending (DEC-360) |
-| [STRATEGY_BULL_FLAG.md](docs/strategies/STRATEGY_BULL_FLAG.md) | STALE-REWRITE | Regime section omits bearish_trending |
-| [STRATEGY_DIP_AND_RIP.md](docs/strategies/STRATEGY_DIP_AND_RIP.md) | STALE-SALVAGE | Stub; no mention of 2 shadow variants (v2/v3) in experiments.yaml |
-| [STRATEGY_FLAT_TOP_BREAKOUT.md](docs/strategies/STRATEGY_FLAT_TOP_BREAKOUT.md) | STALE-SALVAGE | Aware of Sprint 32.9 shadow demotion; backtest placeholder unfilled |
-| [STRATEGY_GAP_AND_GO.md](docs/strategies/STRATEGY_GAP_AND_GO.md) | STALE-SALVAGE | Stub; notes pre-DEF-152 sweep invalid; no updated validation |
-| [STRATEGY_HOD_BREAK.md](docs/strategies/STRATEGY_HOD_BREAK.md) | STALE-SALVAGE | Stub; no backtest results; no PROVISIONAL caveat |
-| [STRATEGY_MICRO_PULLBACK.md](docs/strategies/STRATEGY_MICRO_PULLBACK.md) | STALE-SALVAGE | Stub; Sprint 31A S3 aware; 24-sym sweep noted non-qualifying |
-| [STRATEGY_NARROW_RANGE_BREAKOUT.md](docs/strategies/STRATEGY_NARROW_RANGE_BREAKOUT.md) | STALE-SALVAGE | Stub; Sprint 31A S5 aware; 2-trade sweep noted |
+| [STRATEGY_ABCD.md](docs/strategies/STRATEGY_ABCD.md) | STALE-SALVAGE | ~~Stub; no PROVISIONAL marker; Sprint 32.9 shadow demotion aware~~ **RESOLVED FIX-15-docs-supporting** |
+| [STRATEGY_AFTERNOON_MOMENTUM.md](docs/strategies/STRATEGY_AFTERNOON_MOMENTUM.md) | STALE-REWRITE | ~~Regime section omits bearish_trending (DEC-360)~~ **RESOLVED FIX-15-docs-supporting** |
+| [STRATEGY_BULL_FLAG.md](docs/strategies/STRATEGY_BULL_FLAG.md) | STALE-REWRITE | ~~Regime section omits bearish_trending~~ **RESOLVED FIX-15-docs-supporting** |
+| [STRATEGY_DIP_AND_RIP.md](docs/strategies/STRATEGY_DIP_AND_RIP.md) | STALE-SALVAGE | ~~Stub; no mention of 2 shadow variants (v2/v3) in experiments.yaml~~ **RESOLVED FIX-15-docs-supporting** |
+| [STRATEGY_FLAT_TOP_BREAKOUT.md](docs/strategies/STRATEGY_FLAT_TOP_BREAKOUT.md) | STALE-SALVAGE | ~~Aware of Sprint 32.9 shadow demotion; backtest placeholder unfilled~~ **RESOLVED FIX-15-docs-supporting** |
+| [STRATEGY_GAP_AND_GO.md](docs/strategies/STRATEGY_GAP_AND_GO.md) | STALE-SALVAGE | ~~Stub; notes pre-DEF-152 sweep invalid; no updated validation~~ **RESOLVED FIX-15-docs-supporting** |
+| [STRATEGY_HOD_BREAK.md](docs/strategies/STRATEGY_HOD_BREAK.md) | STALE-SALVAGE | ~~Stub; no backtest results; no PROVISIONAL caveat~~ **RESOLVED FIX-15-docs-supporting** |
+| [STRATEGY_MICRO_PULLBACK.md](docs/strategies/STRATEGY_MICRO_PULLBACK.md) | STALE-SALVAGE | ~~Stub; Sprint 31A S3 aware; 24-sym sweep noted non-qualifying~~ **RESOLVED FIX-15-docs-supporting** |
+| [STRATEGY_NARROW_RANGE_BREAKOUT.md](docs/strategies/STRATEGY_NARROW_RANGE_BREAKOUT.md) | STALE-SALVAGE | ~~Stub; Sprint 31A S5 aware; 2-trade sweep noted~~ **RESOLVED FIX-15-docs-supporting** |
 | [STRATEGY_ORB_BREAKOUT.md](docs/strategies/STRATEGY_ORB_BREAKOUT.md) | **CURRENT** | Most comprehensive; PROVISIONAL caveat present; extensive WFE |
-| [STRATEGY_ORB_SCALP.md](docs/strategies/STRATEGY_ORB_SCALP.md) | STALE-SALVAGE | VectorBT results mixed; no walk-forward; PROVISIONAL present |
-| [STRATEGY_PREMARKET_HIGH_BREAK.md](docs/strategies/STRATEGY_PREMARKET_HIGH_BREAK.md) | STALE-SALVAGE | Stub; no backtest validation |
-| [STRATEGY_RED_TO_GREEN.md](docs/strategies/STRATEGY_RED_TO_GREEN.md) | STALE-REWRITE | Regime section omits bearish_trending (code has it hardcoded) |
-| [STRATEGY_VWAP_BOUNCE.md](docs/strategies/STRATEGY_VWAP_BOUNCE.md) | STALE-SALVAGE | Stub; DEF-154 param rework documented; no PROVISIONAL |
-| [STRATEGY_VWAP_RECLAIM.md](docs/strategies/STRATEGY_VWAP_RECLAIM.md) | STALE-SALVAGE | Full template; backtest placeholders unfilled; PROVISIONAL present |
+| [STRATEGY_ORB_SCALP.md](docs/strategies/STRATEGY_ORB_SCALP.md) | STALE-SALVAGE | ~~VectorBT results mixed; no walk-forward; PROVISIONAL present~~ **RESOLVED FIX-15-docs-supporting** |
+| [STRATEGY_PREMARKET_HIGH_BREAK.md](docs/strategies/STRATEGY_PREMARKET_HIGH_BREAK.md) | STALE-SALVAGE | ~~Stub; no backtest validation~~ **RESOLVED FIX-15-docs-supporting** |
+| [STRATEGY_RED_TO_GREEN.md](docs/strategies/STRATEGY_RED_TO_GREEN.md) | STALE-REWRITE | ~~Regime section omits bearish_trending (code has it hardcoded)~~ **RESOLVED FIX-15-docs-supporting** |
+| [STRATEGY_VWAP_BOUNCE.md](docs/strategies/STRATEGY_VWAP_BOUNCE.md) | STALE-SALVAGE | ~~Stub; DEF-154 param rework documented; no PROVISIONAL~~ **RESOLVED FIX-15-docs-supporting** |
+| [STRATEGY_VWAP_RECLAIM.md](docs/strategies/STRATEGY_VWAP_RECLAIM.md) | STALE-SALVAGE | ~~Full template; backtest placeholders unfilled; PROVISIONAL present~~ **RESOLVED FIX-15-docs-supporting** |
 
 ### Subdirectory docs (15)
 
 | File | Verdict | Top Issue |
 |---|---|---|
-| [amendments/roadmap-amendment-experiment-infrastructure.md](docs/amendments/roadmap-amendment-experiment-infrastructure.md) | **STALE-SALVAGE** | Header says "Proposal — not yet adopted" but 27.5 + 32.5 shipped |
-| [amendments/roadmap-amendment-intelligence-architecture.md](docs/amendments/roadmap-amendment-intelligence-architecture.md) | **STALE-SALVAGE** | Same "not yet adopted" stamp; 27.6 + 27.7 shipped; 33.5 pending |
+| [amendments/roadmap-amendment-experiment-infrastructure.md](docs/amendments/roadmap-amendment-experiment-infrastructure.md) | **STALE-SALVAGE** | ~~Header says "Proposal — not yet adopted" but 27.5 + 32.5 shipped~~ **RESOLVED FIX-15-docs-supporting** |
+| [amendments/roadmap-amendment-intelligence-architecture.md](docs/amendments/roadmap-amendment-intelligence-architecture.md) | **STALE-SALVAGE** | ~~Same "not yet adopted" stamp; 27.6 + 27.7 shipped; 33.5 pending~~ **RESOLVED FIX-15-docs-supporting** |
 | [architecture/allocation-intelligence-vision.md](docs/architecture/allocation-intelligence-vision.md) | **CURRENT** | Vision doc (DEF-133); Phase 1 ~Sprint 34-35 target; aligned |
-| [backtesting/BACKTEST_RUN_LOG.md](docs/backtesting/BACKTEST_RUN_LOG.md) | **ARCHIVE** | Final entry Run 8 (Feb 17). Pre-live artifact, 63 days stale |
-| [backtesting/DATA_INVENTORY.md](docs/backtesting/DATA_INVENTORY.md) | **ARCHIVE** | Feb 17. Describes Alpaca IEX feed; superseded by Databento + Sprint 31.85 parquet-cache-layout.md |
+| [backtesting/BACKTEST_RUN_LOG.md](docs/backtesting/BACKTEST_RUN_LOG.md) | **ARCHIVE** | ~~Final entry Run 8 (Feb 17). Pre-live artifact, 63 days stale~~ **RESOLVED FIX-15-docs-supporting** |
+| [backtesting/DATA_INVENTORY.md](docs/backtesting/DATA_INVENTORY.md) | **ARCHIVE** | ~~Feb 17. Describes Alpaca IEX feed; superseded by Databento + Sprint 31.85 parquet-cache-layout.md~~ **RESOLVED FIX-15-docs-supporting** |
 | [backtesting/PARAMETER_VALIDATION_REPORT.md](docs/backtesting/PARAMETER_VALIDATION_REPORT.md) | **CURRENT** | ORB validation; extended walk-forward; DEC-076 params still live |
 | [guides/autonomous-process-guide.md](docs/guides/autonomous-process-guide.md) | **CURRENT** | Autonomous runner infra; mode valid though rarely used. Scripts still exist |
 | [guides/human-in-the-loop-process-guide.md](docs/guides/human-in-the-loop-process-guide.md) | **CURRENT** | Primary active mode |
@@ -88,7 +88,7 @@ Verdicts: **CURRENT** / **STALE-SALVAGE** (stale but salvageable with targeted u
 | [archived/02_PROJECT_KNOWLEDGE.md](docs/archived/02_PROJECT_KNOWLEDGE.md) | **OK-ARCHIVED** | Superseded by `docs/project-knowledge.md` |
 | [archived/07_PHASE1_SPRINT_PLAN.md](docs/archived/07_PHASE1_SPRINT_PLAN.md) | **OK-ARCHIVED** | Superseded by `sprint-history.md` |
 | [archived/09_PHASE2_SPRINT_PLAN.md](docs/archived/09_PHASE2_SPRINT_PLAN.md) | **OK-ARCHIVED** | Superseded by `sprint-history.md` |
-| [archived/10_PHASE3_SPRINT_PLAN.md](docs/archived/10_PHASE3_SPRINT_PLAN.md) | **OK-ARCHIVED-W/NOTE** | Still referenced by 43 historical sprint files (1-21.5); add "Last active: Sprint 21.5" note in archived index |
+| [archived/10_PHASE3_SPRINT_PLAN.md](docs/archived/10_PHASE3_SPRINT_PLAN.md) | **OK-ARCHIVED-W/NOTE** | ~~Still referenced by 43 historical sprint files (1-21.5); add "Last active: Sprint 21.5" note in archived index~~ **RESOLVED FIX-15-docs-supporting** |
 | [archived/ARGUS_Expanded_Roadmap.md](docs/archived/ARGUS_Expanded_Roadmap.md) | **OK-ARCHIVED** | Superseded by `roadmap.md` (DEC-375) |
 | [archived/argus-retrofit-advisory.md](docs/archived/argus-retrofit-advisory.md) | **OK-ARCHIVED** | Completed advisory |
 | [archived/argus-retrofit-execution-guide.md](docs/archived/argus-retrofit-execution-guide.md) | **OK-ARCHIVED** | Completed guide |
@@ -294,12 +294,12 @@ Both autonomous and human-in-the-loop modes are still operational. Autonomous ru
 
 | Source | Line | Target | Actual Location | Impact |
 |---|---|---|---|---|
-| [docs/roadmap.md](docs/roadmap.md) | 6 | `docs/research/ARGUS_Expanded_Roadmap.md` | `docs/archived/ARGUS_Expanded_Roadmap.md` | HIGH (canonical doc) |
-| [docs/roadmap.md](docs/roadmap.md) | 6 | `docs/argus_unified_vision_roadmap.md` | `docs/archived/argus_unified_vision_roadmap.md` | HIGH (canonical doc) |
-| [docs/roadmap.md](docs/roadmap.md) | 6 | `docs/10_PHASE3_SPRINT_PLAN.md` | `docs/archived/10_PHASE3_SPRINT_PLAN.md` | HIGH (canonical doc) |
-| [docs/decision-log.md](docs/decision-log.md) | 2907 | `docs/research/ARGUS_Expanded_Roadmap.md` | `docs/archived/ARGUS_Expanded_Roadmap.md` | MEDIUM |
-| [docs/decision-log.md](docs/decision-log.md) | 2907 | `docs/argus_unified_vision_roadmap.md` | `docs/archived/argus_unified_vision_roadmap.md` | MEDIUM |
-| [docs/decision-log.md](docs/decision-log.md) | 2907 | `docs/argus_master_sprint_plan.md` | **NEVER EXISTED** | LOW (listed as consolidated but was a placeholder) |
+| [docs/roadmap.md](docs/roadmap.md) | 6 | `docs/research/ARGUS_Expanded_Roadmap.md` | `docs/archived/ARGUS_Expanded_Roadmap.md` | ~~HIGH (canonical doc)~~ **RESOLVED FIX-15-docs-supporting** |
+| [docs/roadmap.md](docs/roadmap.md) | 6 | `docs/argus_unified_vision_roadmap.md` | `docs/archived/argus_unified_vision_roadmap.md` | ~~HIGH (canonical doc)~~ **RESOLVED FIX-15-docs-supporting** |
+| [docs/roadmap.md](docs/roadmap.md) | 6 | `docs/10_PHASE3_SPRINT_PLAN.md` | `docs/archived/10_PHASE3_SPRINT_PLAN.md` | ~~HIGH (canonical doc)~~ **RESOLVED FIX-15-docs-supporting** |
+| [docs/decision-log.md](docs/decision-log.md) | 2907 | `docs/research/ARGUS_Expanded_Roadmap.md` | `docs/archived/ARGUS_Expanded_Roadmap.md` | ~~MEDIUM~~ **RESOLVED FIX-15-docs-supporting** |
+| [docs/decision-log.md](docs/decision-log.md) | 2907 | `docs/argus_unified_vision_roadmap.md` | `docs/archived/argus_unified_vision_roadmap.md` | ~~MEDIUM~~ **RESOLVED FIX-15-docs-supporting** |
+| [docs/decision-log.md](docs/decision-log.md) | 2907 | `docs/argus_master_sprint_plan.md` | **NEVER EXISTED** | ~~LOW (listed as consolidated but was a placeholder)~~ **RESOLVED FIX-15-docs-supporting** |
 | [docs/sprints/*.md](docs/sprints/) (43 files) | various | `docs/01_PROJECT_BIBLE.md` | `docs/project-bible.md` | LOW (artifact trail) |
 | [docs/sprints/*.md](docs/sprints/) (43 files) | various | `docs/03_ARCHITECTURE.md` | `docs/architecture.md` | LOW |
 | [docs/sprints/*.md](docs/sprints/) (43 files) | various | `docs/04_STRATEGY_TEMPLATE.md` | `docs/strategy-template.md` | LOW |

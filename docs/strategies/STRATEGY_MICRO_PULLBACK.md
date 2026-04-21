@@ -6,6 +6,11 @@
 **File:** `argus/strategies/patterns/micro_pullback.py`
 **Config:** `config/strategies/micro_pullback.yaml`
 **Universe filter:** `config/universe_filters/micro_pullback.yaml` (min_avg_volume: 500K)
+**Mode:** `live`
+**Status:** PROVISIONAL — non-qualifying on 24-symbol momentum sweep (Sprint 31A; see Sweep Results). Universe-aware re-sweep required via the Sprint 31.5 parallel sweep infrastructure (DEF-145). Live trading is currently accepted for telemetry only; no allocation decisions should rely on this strategy's evidence until the re-sweep lands.
+
+## Shadow Variants (Sprint 31.75 sweep results)
+2 micro_pullback variants were identified as promotable from the April small-sample sweep. See `config/experiments.yaml` and the Experiments page in the Command Center for the live variant list and promotion state.
 
 ## Overview
 Detects EMA-based impulse moves followed by shallow pullbacks and bounce entries. Self-contained EMA computation (no external indicator dependency). Targets stocks with established momentum making brief pauses before continuation.

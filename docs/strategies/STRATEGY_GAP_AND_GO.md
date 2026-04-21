@@ -5,6 +5,8 @@
 **Family:** Continuation
 **File:** `argus/strategies/patterns/gap_and_go.py`
 **Config:** `config/strategies/gap_and_go.yaml`
+**Mode:** `live`
+**Status:** PROVISIONAL — pre-DEF-152 sweep results invalidated (degenerate R-multiples when `breakout_margin_pct` was near zero). Post-fix validation **PENDING** — first valid evidence will come from the 3 shadow variants deployed in Sprint 31.75 (`strat_gap_and_go__*`). Do not treat this strategy's P&L as load-bearing until that evidence accumulates.
 
 ## Overview
 Gap-up continuation pattern. Detects stocks gapping up ≥3% from prior close, validates VWAP hold, offers two entry modes (first pullback, direct breakout). First pattern to use `set_reference_data()` hook for prior close.

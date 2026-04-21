@@ -1,6 +1,7 @@
 # ARGUS Roadmap Amendment Proposal: Experiment Infrastructure
 
-> **Status:** Proposal — not yet adopted (v2 revision)
+> **Status:** ADOPTED — shipped as Sprint 27.5 (Evaluation Framework) and Sprint 32.5 (Experiment Registry + Promotion Pipeline). See DEC-357 for amendment ratification.
+> **Adoption note:** Header status updated 2026-04-21 via audit FIX-15 back-annotation. Preserved in place (not archived) because this document contains fuller decision rationale than the terser sprint-history entries.
 > **Author:** Claude.ai strategic planning conversation, March 23, 2026
 > **Context:** Sprint 27 (BacktestEngine Core) complete. Autoresearch pattern analysis (March 13 conversation) identified that the roadmap builds evaluation capabilities late — optimization loops don't close until Sprint 40. This amendment inserts the connective tissue that turns individual capabilities into a self-improving system.
 > **Roadmap version:** v2.0 (March 22, 2026)

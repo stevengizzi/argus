@@ -163,30 +163,30 @@ All positions closed at market by 3:50 PM ET.
 
 ---
 
-## Backtest Results
+## Backtest Results — PENDING full-universe re-validation
 
-*To be filled after Sprint 19 VectorBT sweep and walk-forward analysis.*
+**Status (2026-04-21):** VWAP Reclaim is one of 6 strategies listed in CLAUDE.md as "pending full-universe re-validation" after the Databento pipeline was proven end-to-end in Sprint 21.6. Placeholders below are explicit PENDING markers — not "TBD" — to avoid ambiguity about whether sweep results are missing vs. done-and-unrecorded. Universe-aware sweep is unlocked by the Sprint 31.85 consolidated Parquet cache once operator activation lands.
 
 ### VectorBT Parameter Exploration
 | Parameter Set | Win Rate | Avg R | Profit Factor | Max DD | Sharpe | Notes |
 |---------------|----------|-------|---------------|--------|--------|-------|
-| TBD | | | | | | |
+| PENDING | — | — | — | — | — | Awaits universe-aware sweep post-consolidation |
 
-**Parameter Sensitivity:** TBD
-**Selected Parameters:** TBD
+**Parameter Sensitivity:** PENDING — awaits Sprint 31.5 parallel sweep infrastructure run against consolidated cache.
+**Selected Parameters:** Current live parameters are the Sprint 19 defaults in `config/strategies/vwap_reclaim.yaml`; they are the starting point for the re-sweep, not a validated selection.
 
 ### Replay Harness Validation
 | Metric | Value |
 |--------|-------|
-| Period Tested | TBD |
-| Total Trades | TBD |
+| Period Tested | PENDING |
+| Total Trades | PENDING |
 
 ### Walk-Forward Analysis
 | Window | IS Period | OOS Period | IS Return | OOS Return | WF Efficiency |
 |--------|-----------|------------|-----------|------------|---------------|
-| TBD | | | | | |
+| PENDING | — | — | — | — | — |
 
-**Walk-Forward Assessment:** TBD. Note: All pre-Databento results are provisional (DEC-132).
+**Walk-Forward Assessment:** PENDING. All pre-Databento results are provisional (DEC-132). This strategy runs live under the DEC-132 provisional regime pending re-sweep.
 
 ---
 

@@ -219,7 +219,7 @@ Position size formula: `shares = (allocated_capital × 0.01) / (entry_price − 
 
 ### Walk-Forward Analysis
 
-*Not yet completed for ORB Scalp. The VectorBT sweep is directional guidance; serious validation requires replay harness walk-forward similar to ORB Breakout (DEC-073).*
+**WALK-FORWARD PENDING (2026-04-21).** Not yet completed for ORB Scalp. The VectorBT sweep is directional guidance; serious validation requires replay harness walk-forward similar to ORB Breakout (DEC-073). Placeholder is explicit so the gap is not confused with "completed and unrecorded." Track as part of the Phase 3 completion gate.
 
 ---
 

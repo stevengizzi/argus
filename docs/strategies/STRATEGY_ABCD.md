@@ -5,6 +5,8 @@
 **Family:** Harmonic
 **File:** `argus/strategies/patterns/abcd.py`
 **Config:** `config/strategies/abcd.yaml`
+**Mode:** `shadow` (demoted Sprint 32.9; awaits parameter optimization via shadow variants and O(n³) swing-detection fix per DEF-122)
+**Status:** PROVISIONAL — no backtest validation yet; pre-Databento sweeps do not satisfy DEC-132. Live promotion requires shadow-variant evidence per the Incubator Pipeline (DEC-382).
 
 ## Overview
 Harmonic ABCD pattern detection. Identifies swing points (local peaks/valleys), validates Fibonacci retracement at B (38.2–61.8%) and optionally C, checks leg ratio in price and time dimensions, calculates completion zone for entry. Highest parameterization density — ideal Sprint 32 candidate.

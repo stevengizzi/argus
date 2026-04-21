@@ -5,6 +5,8 @@
 **Family:** Breakout
 **File:** `argus/strategies/patterns/hod_break.py`
 **Config:** `config/strategies/hod_break.yaml`
+**Mode:** `live`
+**Status:** PROVISIONAL — no backtest validation yet; no walk-forward evidence. Backtest pending. Operates under DEC-132 provisional regime until a universe-aware sweep with DuckDB-pre-filtered Parquet cache produces statistically significant evidence.
 
 ## Overview
 Tracks dynamic high-of-day, detects consolidation near HOD with ATR-based range check, confirms breakout with volume and hold-bar duration. Primary midday signal coverage provider.

@@ -6,6 +6,8 @@
 **File:** `argus/strategies/patterns/vwap_bounce.py`
 **Config:** `config/strategies/vwap_bounce.yaml`
 **Universe filter:** `config/universe_filters/vwap_bounce.yaml` (min_avg_volume: 500K)
+**Mode:** `live`; 2 shadow variants collecting CounterfactualTracker data (see Sweep Results)
+**Status:** PROVISIONAL — initial Sprint 31A sweep produced inadequate signal density (2–22 signals/symbol/day); DEF-154 signal-density rework resolved in Sprint 31.75. Shadow variants are the first post-rework evidence. Do not treat this strategy's P&L as load-bearing until shadow variants accumulate 20+ trading days per the DEC-382 Incubator Pipeline.
 
 ## Overview
 Detects stocks approaching VWAP from above (uptrend continuation), touching or briefly dipping below VWAP, then bouncing with volume confirmation. Requires VWAP from the shared `indicators` dict (provided by IndicatorEngine). Targets stocks with established intraday uptrends using VWAP as dynamic support.

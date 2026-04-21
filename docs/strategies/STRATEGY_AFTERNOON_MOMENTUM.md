@@ -29,12 +29,14 @@ Consolidation breakout strategy that identifies stocks from the morning gap watc
 
 | Condition | Required Value |
 |-----------|---------------|
-| Market Regime | Bullish Trending, High Volatility |
+| Market Regime | Bullish Trending, Bearish Trending, Range-Bound, High Volatility |
 | VIX Range | < 30 |
 | SPY Trend | Not in Crisis mode |
 | Other | None |
 
 Rationale: Momentum breakouts thrive in trending conditions and moderate-to-high volatility where afternoon moves have follow-through. Excluded during Crisis regime where afternoon reversals are common and institutional flows are unpredictable.
+
+**DEC-360 alignment (2026-04-21):** `bearish_trending` is present in every strategy's `allowed_regimes` list in code (`config/strategies/afternoon_momentum.yaml`) and was added to the regime table above so this doc no longer contradicts the config.
 
 ---
 

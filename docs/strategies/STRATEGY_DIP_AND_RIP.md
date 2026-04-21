@@ -5,6 +5,18 @@
 **Family:** Reversal
 **File:** `argus/strategies/patterns/dip_and_rip.py`
 **Config:** `config/strategies/dip_and_rip.yaml`
+**Mode:** `live` (base strategy); 2 shadow variants active (see below)
+**Status:** PROVISIONAL — backtest evidence from 24-symbol momentum set (April 2025); universe-aware re-sweep pending (DEF-145). Shadow variants collecting CounterfactualTracker data.
+
+## Shadow Variants (Sprint 31A sweep, deployed via `config/experiments.yaml`)
+
+| Variant ID | Sharpe | Win Rate | Notes |
+|---|---|---|---|
+| `strat_dip_and_rip__v2_tight_dip_quality` | 1.996 | 45.6% | Tighter dip-quality thresholds |
+| `strat_dip_and_rip__v3_strict_volume` | 2.628 | 45.0% | Stricter recovery-volume ratio |
+
+Both variants run in shadow mode alongside the live base strategy. See
+`docs/project-knowledge.md` and CLAUDE.md "Experiment Variants" for the promotion queue.
 
 ## Overview
 Detects sharp intraday dips followed by rapid recovery with volume confirmation and VWAP/support level interaction. Differentiated from Red-to-Green: intraday dip only (no gap-based), dip must occur after 9:35 AM ET.

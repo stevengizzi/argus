@@ -98,12 +98,12 @@ Every strategy defines:
 **Phase 2 — Planned (Sprints 26–32, DEC-167):**
 5. Red-to-Green — 9:45–11:00 AM, gap-down reversal
 6. Bull Flag — All day, consolidation breakout after sharp move
-7. Flat-Top Breakout — All day, multiple rejections then clean break
+7. Flat-Top Breakout — All day, multiple rejections then clean break (shadow mode post Sprint 32.9)
 8. Dip-and-Rip — 9:45–11:30 AM, sharp dip then aggressive bounce
 9. HOD Break — All day, new high-of-day with volume
 10. Pre-Market High Break — 9:30–10:30 AM
 11. Gap-and-Go — 9:30–10:00 AM, immediate gap continuation
-12. ABCD Reversal — 10:00 AM–2:00 PM, four-point reversal
+12. ABCD Reversal — 10:00 AM–2:00 PM, four-point reversal (shadow mode post Sprint 32.9)
 13. Sympathy Play — 9:45–11:30 AM, secondary sector mover
 14. Parabolic Short — 10:00 AM–3:00 PM (first short strategy, DEC-166)
 15. Power Hour Reversal — 3:00–3:45 PM
@@ -111,7 +111,12 @@ Every strategy defines:
 17. Volume Shelf Bounce — All day, bounce off VPOC
 18. Micro Float Runner — 9:30–11:30 AM, ultra-low float extreme RVOL
 
-Not all Phase 2 patterns will prove to have a backtestable edge. Each goes through the full Incubator Pipeline. The goal is 10–12 validated patterns running simultaneously.
+**Phase 2 additions — PatternModule expansion (Sprint 31A):**
+19. **Micro Pullback** — 10:00 AM–2:00 PM, EMA-based continuation after shallow pullback (live; PROVISIONAL)
+20. **VWAP Bounce** — 10:30 AM–3:00 PM, bounce off rising VWAP (live; PROVISIONAL; DEF-154 parameter rework)
+21. **Narrow Range Breakout** — 10:00 AM–3:00 PM, volatility-compression breakout (live; PROVISIONAL)
+
+Not all Phase 2 patterns will prove to have a backtestable edge. Each goes through the full Incubator Pipeline. The goal is 10–12 validated patterns running simultaneously. As of Sprint 31.85, the live roster is 13 + 2 shadow (ABCD, Flat-Top Breakout demoted to shadow mode in Sprint 32.9 pending optimization).
 
 ### 4.3 Strategy Incubator Pipeline
 

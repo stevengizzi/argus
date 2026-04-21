@@ -1,184 +1,247 @@
 # ARGUS — Paper Trading Validation Guide
 
-> *Version 1.0 | February 16, 2026*
-> *A practical, step-by-step guide for validating the Argus trading system on Alpaca paper trading. Keep this open on your desk during market hours.*
+> *Version 2.0 | April 21, 2026 (audit FIX-15 rewrite)*
+> *Supersedes v1.0 (Feb 16, 2026), which documented the retired Alpaca paper-trading stack.*
+> *ARGUS paper trading is now Databento (market data) + IBKR paper (execution). See also:
+> [live-operations.md](live-operations.md) for the full daily runbook and
+> [pre-live-transition-checklist.md](pre-live-transition-checklist.md) for the config
+> values that must be restored before live trading.*
 
 ---
 
 ## 1. What Paper Trading Is and Why It Matters
 
-Paper trading is simulated trading with fake money against real market data. Alpaca provides a dedicated paper trading environment that mirrors their live API — same endpoints, same WebSocket streams, same order types — but with a virtual account balance and no real money at risk.
+Paper trading is simulated trading with fake money against real market data. ARGUS connects to
+**IBKR paper** (via IB Gateway on port 4002) for order routing and to **Databento EQUS.MINI** for
+market data. IBKR paper accounts mirror the live API — same order types, same WebSocket streams,
+same bracket-order semantics — but with a virtual balance and no real money at risk.
 
-This is not optional. Paper trading is the bridge between "all tests pass" and "I trust this system with real capital." You are validating that:
+This is not optional. Paper trading is the bridge between "all tests pass" and "I trust this
+system with real capital." You are validating that:
 
 - The system runs without crashing for an entire trading session (9:30 AM – 4:00 PM ET)
-- Orders that appear in your database match what Alpaca shows in their dashboard
-- The ORB strategy identifies reasonable setups (not garbage stocks, not phantom breakouts)
-- Risk limits actually prevent excessive exposure
-- Stops, breakeven moves, and EOD flatten work as designed
-- The system recovers gracefully from the inevitable weird things that happen with live data (gaps, halts, thin liquidity, WebSocket disconnections)
+- Orders in `data/argus.db` match what IBKR Gateway and TWS show
+- Strategies identify reasonable setups (not garbage stocks, not phantom breakouts)
+- Risk limits, circuit breakers, and the quality engine actually gate the signals they should
+- Stops, trailing stops, partial profit-taking on T1, time stops, and EOD flatten all work
+- The system recovers gracefully from the inevitable weirdness of live data (gaps, halts,
+  thin liquidity, Databento reconnections, IBKR 201/202 errors, startup zombie positions)
 
-**Minimum validation period:** 3 trading days. **Recommended:** 5–10 trading days before considering any Phase 3 live work.
+**Minimum validation period:** 3 trading days. **Recommended:** 5–10 trading days before any
+live-capital work. After any config change that affects order flow or risk, reset the counter.
 
-**Success criteria:** Zero crashes, zero unlogged trades, zero missed EOD flattens, risk limits never exceeded, and at least a few complete trade lifecycles observed (entry → stop management → exit).
+**Success criteria:** Zero crashes, zero unlogged trades, zero missed EOD flattens, risk limits
+never exceeded, and at least several complete trade lifecycles observed across strategies
+(entry → stop/T1 partial/trail → exit).
 
 ---
 
-## 2. Setting Up Your Alpaca Paper Trading Environment
+## 2. Setting Up Your IBKR Paper Trading Environment
 
-### 2.1 Create Your Alpaca Account
+### 2.1 IBKR Paper Account
 
-1. Go to https://alpaca.markets and sign up for a free account.
-2. After email verification, you'll land on the Alpaca dashboard.
-3. You do NOT need to fund the account or provide banking info for paper trading.
+Paper trading requires an Interactive Brokers account with paper-trading enabled. If you don't
+already have one:
 
-### 2.2 Get Your Paper Trading API Keys
+1. Sign up at [interactivebrokers.com](https://www.interactivebrokers.com/) for an individual
+   account. A live account is required to access paper trading (IBKR ties the paper login to
+   a live identity).
+2. Once the live account is approved, log in to Client Portal and enable the paper trading
+   account. You will be issued a separate paper username (prefixed `DU…`).
+3. Paper accounts start with $1,000,000 in virtual funds by default.
 
-1. In the Alpaca dashboard, look for the "Paper Trading" toggle or environment selector. Make sure you're in the **Paper** environment, not Live.
-2. Navigate to API Keys (usually under your account or a sidebar menu).
-3. Click "Generate New Key" or "Regenerate."
-4. You'll get two values:
-   - **API Key ID** — looks like `PKXXXXXXXXXXXXXXXX`
-   - **API Secret Key** — a longer alphanumeric string. **Copy this immediately.** Alpaca only shows it once. If you lose it, regenerate.
-5. Note the **Base URL** for paper trading: `https://paper-api.alpaca.markets`
+You do NOT need to fund the live account to paper-trade. ARGUS never places live orders from
+the paper configuration as long as the Gateway is running in paper mode and ports are correct.
 
-### 2.3 Configure Argus
+### 2.2 IB Gateway + IBC
 
-Create a `.env` file in your project root (this file is gitignored — never commit it):
+ARGUS connects to IB Gateway (not TWS) on port **4002** (paper) / **4001** (live).
+Install and configure IB Gateway plus IBC (the controller that keeps it up) per
+[ibc-setup.md](ibc-setup.md).
 
-```env
-ALPACA_API_KEY=PKXXXXXXXXXXXXXXXX
-ALPACA_API_SECRET=your_secret_key_here
-ALPACA_BASE_URL=https://paper-api.alpaca.markets
+Verify after setup:
+- Gateway shows "Paper Trading" in the login banner
+- Account number shown in Gateway starts with `DU` (paper indicator)
+- API Settings: "Enable ActiveX and Socket Clients" = checked
+- Socket port = **4002**
+- Read-Only API = unchecked
+- "Allow connections from localhost only" = checked
+
+### 2.3 Databento Market Data
+
+ARGUS uses Databento EQUS.MINI for intraday OHLCV and ticks. Sign up at
+[databento.com](https://databento.com/) and generate an API key. EQUS.MINI is the canonical
+dataset (DEC-248).
+
+The daily reference data and regime SPY bars come from FMP Starter plan; pre-market scanning
+also runs through FMP. You will need both keys.
+
+### 2.4 Configure ARGUS
+
+Create `.env` in the project root (gitignored — never commit):
+
+```bash
+# Databento market data
+DATABENTO_API_KEY=db-your_key_here
+
+# FMP (pre-market scanner, reference data, daily SPY bars)
+FMP_API_KEY=your_fmp_key_here
+
+# API JWT secret (generate with: python -m argus.api.setup_password)
+ARGUS_JWT_SECRET=your_secure_secret_here
+
+# Optional — AI Copilot. Disabled gracefully if unset.
+ANTHROPIC_API_KEY=sk-ant-your_key_here
+
+# Finnhub (optional — news + analyst recs for catalyst pipeline)
+FINNHUB_API_KEY=your_finnhub_key_here
 ```
 
-Verify your config files exist and are reasonable:
+IBKR credentials are handled by IB Gateway (not `.env`). ARGUS connects to localhost:4002 with
+no credentials — Gateway-side auth is sufficient.
+
+Verify the config files that ARGUS reads for paper trading (config/system_live.yaml is the
+authoritative file for paper + live):
 
 ```
 config/
-├── system.yaml          # System-level config (health, logging)
-├── risk.yaml            # Risk limits (daily loss, weekly loss, etc.)
-├── broker.yaml          # Broker connection settings
-├── orb_breakout.yaml    # ORB strategy parameters
-├── scanner.yaml         # Scanner universe and filters
-└── order_manager.yaml   # Position management settings
+├── system_live.yaml          # Top-level: Databento + IBKR paper (THIS is what paper uses)
+├── system.yaml               # Alpaca incubator legacy — NOT used for paper
+├── brokers.yaml              # IBKR host, port 4002, client_id
+├── risk_limits.yaml          # Daily/weekly loss limits (10x relaxed for paper)
+├── orchestrator.yaml         # Regime, scheduling, throttle (paper: throttle disabled)
+├── quality_engine.yaml       # Risk tiers (paper: 10x reduced risk per tier)
+├── strategies/*.yaml         # Per-strategy config, includes `mode: live` or `mode: shadow`
+├── experiments.yaml          # Variant spawning (enabled: true in paper)
+├── historical_query.yaml     # DuckDB cache dir for research queries
+└── ...
 ```
 
-### 2.4 Set Up Monitoring (Optional but Recommended)
+The paper-trading overrides that differ from live are documented in
+[pre-live-transition-checklist.md](pre-live-transition-checklist.md) — restore those values
+before live trading.
 
-**Healthchecks.io (heartbeat monitoring):**
-1. Go to https://healthchecks.io and create a free account.
-2. Create a new check. Set the period to 2 minutes, grace period to 5 minutes.
-3. Copy the ping URL (looks like `https://hc-ping.com/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`).
-4. Add it to `config/system.yaml` under `health.heartbeat_url`.
-5. When Argus is running, this URL gets pinged every 60 seconds. If pings stop, Healthchecks.io alerts you (email by default).
+### 2.5 Monitoring (recommended)
 
-**Discord webhook (critical alerts):**
-1. In Discord, go to a server you control → Server Settings → Integrations → Webhooks.
-2. Create a webhook, name it "Argus Alerts", pick a channel.
-3. Copy the webhook URL.
-4. Add it to `config/system.yaml` under `health.alert_webhook_url`.
-5. Argus will POST alerts here for circuit breakers, stale data, and system errors.
+**Healthchecks.io heartbeat:** See [live-operations.md §Monitoring](live-operations.md) for
+`health.heartbeat_url_env`/`health.alert_webhook_url_env` wiring. URLs live in `.env`, not in
+the YAML (DEF-005 resolved).
 
-### 2.5 Verify Your Setup
+**Discord webhook:** Same mechanism — `alert_webhook_url_env` points at an environment variable
+name.
 
-Run the dry-run first:
+### 2.6 Verify Your Setup (Dry Run)
 
 ```bash
 python -m argus.main --dry-run
 ```
 
 This should:
-- Load all config files without errors
-- Connect to Alpaca's paper trading API
-- Report your account balance (Alpaca paper accounts typically start with $100,000)
-- Initialize all components (you'll see log lines for each startup phase)
+- Load `config/system_live.yaml` without errors
+- Connect to IB Gateway at localhost:4002 and read account info (`DU…`)
+- Connect to Databento and validate the API key
+- Initialize all components through the 17-phase startup sequence
 - Shut down cleanly without streaming data or placing orders
 
-If this fails, check:
-- `.env` file exists and has correct keys
-- You're using paper trading keys, not live keys
-- Your internet connection is working
-- Alpaca's status page (https://status.alpaca.markets/) shows no outages
+If dry-run fails:
+- Confirm IB Gateway is running in paper mode on port 4002
+- Confirm `.env` has a valid `DATABENTO_API_KEY` and `FMP_API_KEY`
+- Confirm Databento is operational (status at databento.com)
+- Check `logs/` for the startup-phase log messages
 
 ---
 
 ## 3. Your First Trading Day
 
-### 3.1 Pre-Market (Before 9:30 AM ET)
+### 3.1 Pre-Market (before 9:30 AM ET)
 
-**What time zone are you in?** All market times are Eastern Time (ET). Market hours are 9:30 AM – 4:00 PM ET. The operator is on the US East Coast (ET) — no timezone conversion needed.
+All market times are Eastern Time (ET). Market hours are 9:30 AM – 4:00 PM ET. The system's
+EOD flatten fires at 3:55 PM ET by default; pre-EOD signal cutoff is 3:30 PM ET (Sprint 32.9).
 
-**Start Argus 15–30 minutes before market open:**
+> ⚠️ **Do not start ARGUS between ~22:30 ET and pre-market open (DEF-164).** Time-based
+> after-hours auto-shutdown can collide with in-flight service init. Safe start windows:
+> pre-market (≥ 04:00 ET) through standard shutdown.
+
+Start 15–30 minutes before market open using the standard launcher, which runs 4 pre-flight
+checks (IB Gateway port, `.env`, `DATABENTO_API_KEY`, no existing ARGUS process):
 
 ```bash
-python -m argus.main --paper
+./scripts/start_live.sh            # backend only
+./scripts/start_live.sh --with-ui  # backend + Command Center UI
 ```
 
-Watch the startup logs. You should see:
-1. Config loaded
-2. Database connected
-3. Broker connected (account info printed)
-4. Health monitor started
-5. Risk Manager initialized (state reconstructed if not the first day)
-6. Data service connected
-7. Scanner running pre-market scan
-8. Strategy initialized
-9. Order Manager ready
-10. Streaming started
+Watch for the 17-phase startup sequence in the terminal. The "API server healthy" signal fires
+only after the port is actually bound (Sprint 31.8 DEF-155 fix), so if it flips green, the
+system really is ready.
 
-**The scanner runs at startup.** It looks for stocks gapping up in pre-market. Check the logs for the watchlist — you should see something like:
+Pre-market scanner results appear as log lines similar to:
 
 ```
-INFO: AlpacaScanner found 5 candidates: TSLA (+3.2%), NVDA (+2.8%), ...
+INFO - UniverseManager resolved 3,812 viable symbols
+INFO - FMP pre-market scan: 24 gapping candidates (gap > 2%)
+INFO - Watchlist: TSLA +3.2%, NVDA +2.8%, AMD +2.1%, ...
 ```
 
-If the scanner finds zero candidates, that's possible on quiet mornings — the strategy simply won't trade that day. If it consistently finds zero, your scanner filters (min gap%, price range, volume) may be too restrictive.
+If the scanner finds zero candidates on a quiet morning, strategies simply won't trade. If it
+consistently finds zero, widen scanner filters in `config/scanner.yaml` or inspect FMP API
+responses via `scripts/diagnose_databento.py` / FMP API logs.
 
 ### 3.2 Market Open (9:30 AM ET)
 
-The first 15 minutes (9:30 – 9:45 AM ET) is the **opening range formation period** for the ORB strategy. Argus is watching but NOT trading during this window. It's building the opening range (high and low of the first N minutes, configured in `orb_breakout.yaml`).
+ORB strategies build their opening range during the first N minutes (per-strategy config).
+Non-ORB strategies gate entries on their own per-strategy activation windows (VWAP Reclaim,
+Afternoon Momentum, Red-to-Green, Bull Flag, Dip-and-Rip, HOD Break, Gap-and-Go, Pre-Market
+High Break, Micro Pullback, VWAP Bounce, Narrow Range Breakout).
 
-In the logs, you should see candle events arriving every minute and the strategy tracking the opening range internally.
+In the logs, you should see candle events arriving every minute and strategies tracking their
+internal state.
 
-### 3.3 Active Trading Window (9:45 AM – 11:30 AM ET)
+### 3.3 Active Trading Window
 
-This is when the ORB strategy is active. If a stock breaks above its opening range high with confirmation (volume > 1.5x average, price > VWAP, candle close above OR high), the strategy generates a SignalEvent.
-
-**What you'll see in logs for a trade:**
+Sample log sequence for a valid entry under the quality pipeline:
 
 ```
-INFO: OrbBreakout signal: BUY TSLA @ 245.30 (stop 243.80, targets [247.30, 249.30])
-INFO: RiskManager approved signal for TSLA (200 shares)
-INFO: OrderManager placing bracket order for TSLA
-INFO: AlpacaBroker order submitted: <order_id>
-INFO: AlpacaBroker order filled: TSLA 200 @ 245.32
-INFO: Position opened: TSLA 200 shares @ 245.32
+INFO - OrbBreakout signal: BUY TSLA @ 245.30 (stop 243.80, targets [247.30, 249.30])
+INFO - SetupQualityEngine grade=A, composite_score=72 (pattern=30, volume=28, regime=14)
+INFO - DynamicPositionSizer shares=80 (risk_pct=0.003 paper, risk_per_share=$1.50)
+INFO - RiskManager approved signal for TSLA (80 shares)
+INFO - OrderManager placing bracket for TSLA (entry + stop + T1 + T2)
+INFO - IBKRBroker bracket submitted: parent=12345, stop=12346, t1=12347, t2=12348
+INFO - IBKRBroker order filled: TSLA 80 @ 245.32
+INFO - Position opened: TSLA 80 shares @ 245.32
 ```
 
 After a position opens, the Order Manager monitors it via tick data:
-- **T1 hit:** First profit target reached. Partial exit, stop moves to breakeven.
-- **T2 hit:** Second profit target reached. Full exit. Trade complete.
-- **Stop hit:** Price hits stop loss. Full exit at a loss.
-- **Time stop:** Position held too long (configurable). Exit at market.
-- **EOD flatten:** 3:50 PM ET. Any remaining positions are closed.
+
+- **T1 hit:** First partial exit. Stop moves to breakeven or trail activates (per
+  `config/exit_management.yaml`, `trailing_stop.activation = on_t1` by default).
+- **T2 hit:** Full exit. Trade complete.
+- **Stop hit:** Full exit at loss. Broker-side stop is the safety net; client-side trail check
+  provides belt-and-suspenders.
+- **Time stop:** Per-signal `time_stop_seconds` expired (DEC-122). Exit at market.
+- **Trail stop:** Client-side trail breach flattens the position (Sprint 28.5).
+- **EOD flatten:** 3:55 PM ET. Synchronous fill verification with asyncio.Event per symbol
+  (Sprint 32.9 fix for DEF-140). Pass 1 closes managed positions; Pass 2 flattens any
+  broker-confirmed positions ARGUS didn't manage.
 
 ### 3.4 After Hours
 
-After 4:00 PM ET (or when you stop Argus):
-- Ctrl+C sends SIGINT for graceful shutdown
-- Components shut down in reverse order
-- All pending data is flushed to the database
+- Use `./scripts/stop_live.sh` for graceful shutdown (SIGINT, 60s timeout, force kill fallback).
+- Components shut down in reverse order (17-phase → phase-0).
+- All pending writes are flushed. `evaluation.db` VACUUM runs on startup-reclaim when size
+  exceeds 500 MB and freelist > 50% (Sprint 31.8 DEF-157 fix).
 
 ---
 
 ## 4. Daily Validation Checklist
 
-Run this every day after the trading session ends. This is the most important part of paper trading — you're building confidence that the system works correctly.
+Run this every day after the session. This is the most important part — you're building
+confidence that the system behaves correctly.
 
-### 4.1 Compare Database to Alpaca Dashboard
+### 4.1 Compare Database to IBKR
 
-**Open the Alpaca dashboard:** Go to https://app.alpaca.markets and make sure you're viewing your paper trading account. Navigate to Activity or Order History.
+**IBKR Trader Workstation (TWS) or Client Portal** is the authoritative order/position view.
+Log in with the paper account (`DU…`) and pull up "Account Management" → Activity → Trades.
 
 **Query your local database:**
 
@@ -192,254 +255,298 @@ Useful queries:
 -- All trades from today
 SELECT * FROM trades WHERE date(entry_time) = date('now');
 
--- Summary: how many trades, total P&L
-SELECT 
-    COUNT(*) as num_trades,
-    SUM(CASE WHEN realized_pnl > 0 THEN 1 ELSE 0 END) as wins,
-    SUM(CASE WHEN realized_pnl <= 0 THEN 1 ELSE 0 END) as losses,
-    ROUND(SUM(realized_pnl), 2) as total_pnl
-FROM trades 
-WHERE date(entry_time) = date('now');
+-- Summary: count, wins, losses, P&L
+SELECT
+    COUNT(*) AS num_trades,
+    SUM(CASE WHEN realized_pnl > 0 THEN 1 ELSE 0 END) AS wins,
+    SUM(CASE WHEN realized_pnl < 0 THEN 1 ELSE 0 END) AS losses,
+    ROUND(SUM(realized_pnl), 2) AS total_pnl
+FROM trades
+WHERE date(entry_time) = date('now')
+  AND entry_price_known = 1;   -- excludes DEF-159 reconstructed trades
 
--- Check for any open positions that should have been closed
+-- Open positions (should be empty after EOD)
 SELECT * FROM trades WHERE exit_time IS NULL;
 
--- All daily summaries
+-- Strategy-level daily summaries
 SELECT * FROM strategy_daily_summary ORDER BY date DESC LIMIT 5;
+
+-- Counterfactual (shadow / rejected signals tracked by Sprint 27.7)
+SELECT COUNT(*) FROM counterfactual_positions WHERE date(entry_time) = date('now');
 ```
 
 **What to verify:**
-- Every order shown in Alpaca's dashboard has a corresponding entry in your trades table
-- Fill prices match (within a few cents — paper fills can have minor slippage)
-- No "ghost" trades in the database that don't appear in Alpaca (would indicate a logging bug)
-- No open positions remaining after EOD flatten (the `exit_time IS NULL` query should return nothing after market close)
 
-### 4.2 Check Log Files
+- Every IBKR fill has a corresponding trades row (same symbol, side, quantity, fill time within
+  a second or two)
+- Realized P&L agrees within slippage tolerance
+- No "ghost" trades in `data/argus.db` absent from IBKR (indicates a logging bug or a
+  startup-zombie reconstruction — the `entry_price_known` column filters those out)
+- No open positions after EOD flatten (Pass 1 + Pass 2)
 
-Logs are written to the structured JSON log file (location depends on your `logging_config`). Look for:
+### 4.2 Log files
+
+Logs are structured JSON. Useful filters:
 
 ```bash
-# Errors (anything unexpected)
-grep '"level":"ERROR"' logs/argus.log | tail -20
-
-# Warnings (might be fine, might indicate issues)
+grep '"level":"ERROR"'   logs/argus.log | tail -20
 grep '"level":"WARNING"' logs/argus.log | tail -20
-
-# Circuit breaker events (should be rare in paper trading)
-grep 'circuit_breaker' logs/argus.log
-
-# Stale data alerts (should only appear if data feed had issues)
-grep 'stale_data' logs/argus.log
-
-# Reconnection events (WebSocket dropped and recovered)
-grep 'reconnect' logs/argus.log
+grep 'circuit_breaker'   logs/argus.log
+grep 'margin_circuit'    logs/argus.log      # IBKR error 201 (Sprint 32.9)
+grep 'reconcile'         logs/argus.log
+grep 'reconnect'         logs/argus.log
+grep 'signal_cutoff'     logs/argus.log      # pre-EOD cutoff events
 ```
 
-### 4.3 Check Healthchecks.io
+### 4.3 Debrief export
 
-If you set up heartbeat monitoring, verify:
-- Pings were consistent throughout market hours (no gaps longer than 2–3 minutes)
-- If there are gaps, correlate with your log files to find what happened
+The shutdown path writes `logs/debrief_YYYYMMDD.json` (DEC-348). This includes the
+safety-summary block (margin-circuit status, EOD Pass 1/2 counts, signal-cutoff skips) plus the
+final order/position state. The Command Center Debrief page also renders this data.
 
-### 4.4 Check Discord Alerts
+### 4.4 Trade quality review (subjective)
 
-If you set up Discord alerts, review any messages that came through. Common alerts:
-- Circuit breaker triggered (hit daily loss limit)
-- Stale data detected (no candle for a subscribed symbol in X seconds)
-- Component health degraded (WebSocket reconnecting)
+This is where your trading experience matters. Pull up the charts (TradingView, IBKR's chart,
+or the Command Center Arena page) and look at the trades the system took:
 
-### 4.5 Evaluate Trade Quality (Subjective)
-
-This is where your trading experience matters. Look at the trades the system took:
-- Were these reasonable ORB setups? (Pull up the charts on TradingView or Alpaca's chart)
-- Did the opening range form on a stock that was actually moving, or was it noise?
-- Were stop placements sensible (below the opening range low)?
+- Were these reasonable setups per the strategy spec?
+- Were stop placements sensible?
 - Did any trades get stopped out immediately (possible sign of entering into resistance)?
-- Were the gap stocks the scanner found actually interesting, or junk?
+- Did the quality grades reported by SetupQualityEngine correlate with outcome?
+- Were the gap / PM-high / catalyst stocks the scanner found actually interesting?
 
-You're not judging profitability yet — 3 days is far too little data. You're judging whether the system is making *sensible decisions* based on the strategy logic.
+You're not judging profitability yet — 3–5 days is statistically meaningless. You are judging
+whether the system is making *sensible decisions* based on strategy logic.
+
+### 4.5 Shadow strategies + experiment variants
+
+Sprint 32.5 experiment pipeline and Sprint 27.7 counterfactual engine record shadow trades
+alongside live ones. Check the **Shadow Trades** tab in the Command Center Trade Log and the
+**Experiments** page (keyboard shortcut `0`) for variant and promotion state. With
+`experiments.enabled=true` in paper, 22 shadow variants are actively collecting data.
 
 ---
 
-## 5. What to Watch For (Common Issues)
+## 5. Common Issues
 
 ### 5.1 No Trades Happening
 
-Possible causes:
-- **Scanner finding nothing:** Check your scanner config. If your min_gap_pct is too high or price range is too narrow, you might filter out everything on quiet days. Look at the scanner log output at startup.
-- **No breakouts confirming:** The ORB strategy has three confirmation filters (candle close, volume, VWAP). On low-volatility days, stocks might form an opening range but never break out convincingly. This is the strategy working correctly — not trading is sometimes the right decision.
-- **Risk Manager rejecting everything:** Check if you've hit daily loss limits from prior trades, or if the account is too small for the position sizes the strategy wants. Look for `OrderRejected` events in the logs.
+Likely causes:
 
-If zero trades happen across 3+ trading days, something is probably misconfigured. Common culprits: scanner universe too small, gap thresholds too high, or position sizing requesting more shares than the account can afford.
+- **Scanner finding nothing** — quiet morning, or filters too restrictive in
+  `config/scanner.yaml`. Check FMP response via `grep 'FMP' logs/argus.log`.
+- **Quality engine rejecting signals** — all signals grading B or below in paper mode is
+  expected during calibration; see quality_engine.yaml recalibration notes from Sprint 32.9.
+- **Risk Manager or concentration limits rejecting** — check `OrderRejectedEvent` logs.
+- **Margin circuit breaker open** — Sprint 32.9 margin circuit trips at 10 consecutive IBKR
+  201 rejections; resets after 20 successful fills. Grep for `margin_circuit`.
 
 ### 5.2 Immediate Stop-Outs
 
-If trades consistently get stopped out within seconds or a few minutes:
-- The opening range might be too narrow (tight range = tight stop = easy to hit). Check `orb_breakout.yaml` for the opening range duration.
-- The strategy might be entering on false breakouts (price pokes above OR high then reverses). The confirmation filters should catch most of these, but not all.
-- Slippage on entry might be placing you further from the stop than expected.
+- Opening range too tight → stop too close; review per-strategy ATR/R multipliers
+- False breakouts bypassing confirmation filters → check strategy PatternParams in
+  `config/strategies/*.yaml`
+- Paper-trading IBKR repricing storm (DEF-100) — a thin-book-simulation artifact; ThrottledLogger
+  suppresses the spam but positions still churn
 
-### 5.3 WebSocket Disconnections
+### 5.3 IBKR Gateway Reconnects
 
-Alpaca's WebSocket streams occasionally drop, especially during high-volatility moments (ironically, exactly when you need them most). Argus has reconnection logic with exponential backoff. In the logs, you'll see:
+IBKR paper occasionally drops the client connection, especially during high volatility. ARGUS
+has reconnection logic in IBKRBroker with a 3-second hardcoded post-reconnect delay (Sprint
+32.75) before re-querying the portfolio snapshot:
 
 ```
-WARNING: WebSocket disconnected. Reconnecting in 1s...
-INFO: WebSocket reconnected.
+WARNING - IBKR disconnect. Reconnecting...
+INFO    - IBKR reconnected. Waiting 3s before portfolio snapshot query.
+INFO    - Portfolio snapshot: 2 positions recovered.
 ```
 
-Occasional disconnections (a few per day) are normal. Frequent disconnections (every few minutes) suggest a network issue on your end or an Alpaca outage.
+Occasional reconnects (1–3 per session) are normal. Frequent ones suggest Gateway instability
+— restart IB Gateway and check the IBC launchd log.
 
-**Concern:** If a disconnection happens while you have an open position, you temporarily lose tick-level monitoring. The broker-side bracket order (stop + take-profit) provides safety — those orders live on Alpaca's servers and execute regardless of your connection. You just lose the Order Manager's active management (stop-to-breakeven, time stops) during the outage.
+Broker-side bracket orders (stop + T1 + T2) live on IBKR's servers and continue to execute
+during an ARGUS outage. You only lose client-side active management (trail update, escalation,
+time stops) during a disconnect.
 
 ### 5.4 EOD Flatten Not Firing
 
-The EOD flatten is scheduled for 3:50 PM ET by default (configurable in `order_manager.yaml`). If positions remain after 4:00 PM:
-- Check if the system was still running at 3:50 PM (maybe it crashed earlier)
-- Check logs for EOD flatten attempts — it might have fired but the market-on-close order failed
-- Verify the time zone handling is correct (the system uses the clock protocol, which should use ET for market operations)
+EOD flatten fires at 3:55 PM ET. If positions remain after 4:00 PM:
 
-**Manual cleanup:** If positions remain open after market close during paper trading, you can close them via the Alpaca dashboard directly. Click the position and hit "Close." This isn't a crisis for paper trading, but track it — it would be a problem with real money.
+- Check system uptime — if ARGUS crashed before 3:55 PM, the flatten never ran
+- Check logs for `eod_flatten_pass1_count`, `eod_flatten_pass2_count` (Sprint 31A DEF-144 safety
+  summary attrs)
+- Verify timezone handling — all market comparisons MUST convert UTC → ET (DEC-061)
+- Sprint 32.9 added synchronous fill verification with asyncio.Event per symbol (30s timeout,
+  1 retry) after the Sprint 31.8 DEF-140 root cause (`getattr(pos, "qty", 0)` vs `shares`)
 
-### 5.5 Database/Log Inconsistencies
+**Manual cleanup:** Close stragglers via TWS or Client Portal directly. Track the incident.
 
-If the database shows a trade that Alpaca doesn't, or vice versa:
-- Check if the order was submitted but not filled (partial fills, rejected orders)
-- Check if the WebSocket order update stream missed an event
-- Check if the system crashed between order submission and fill logging
+### 5.5 Duplicate Sells / Position Flips
 
-Document every inconsistency. These are the bugs that matter most for Phase 3.
+Sprint 31.8 DEF-158 fixed three independent duplicate-SELL root causes (flatten-timeout
+resubmit, startup cleanup, stop-fill race). If you see a position flip negative (short) after
+what should have been a close, capture the log sequence around the fills and file a new DEF.
 
----
+### 5.6 DuckDB / HistoricalQueryService Hangs
 
-## 6. The Alpaca Dashboard — What You're Looking At
+If ARGUS start hangs at "Phase 12 HistoricalQueryService init" during non-market hours, see
+DEF-164 (scheduling collision with after-hours shutdown) and DEF-165 (connection close hangs
+when CREATE VIEW is interrupted). Mitigation: start ARGUS only inside the safe window (≥ 04:00
+ET through standard shutdown).
 
-### 6.1 Account Overview
+### 5.7 Database / IBKR Inconsistencies
 
-Shows your paper account balance, equity, buying power, and today's P&L. The initial paper balance is typically $100,000 (Alpaca sets this; you can't change it, but it's enough for testing).
+Investigate every inconsistency — these are the bugs that matter most for live trading:
 
-Key terms:
-- **Equity:** Total account value (cash + market value of positions)
-- **Buying Power:** How much you can buy. For a margin account (Alpaca paper default), this is typically 4x equity for day trades. Argus doesn't use margin (DEC-036), so it self-limits to cash available.
-- **P&L Today:** Realized + unrealized gains/losses for the current session.
-
-### 6.2 Positions
-
-Shows currently open positions. During market hours, you should see positions appear here when Argus opens trades and disappear when they close. After market close, this should be empty (EOD flatten).
-
-### 6.3 Orders
-
-Shows order history. You'll see bracket orders appear as groups — a primary market order (the entry) with attached stop-loss and take-profit orders. Statuses:
-- **New:** Order submitted, waiting to fill
-- **Filled:** Order executed. The fill price and quantity are shown.
-- **Partially Filled:** Only some shares filled (unusual for market orders on liquid stocks)
-- **Canceled:** Order was canceled (by Argus or by you)
-- **Rejected:** Alpaca rejected the order (insufficient buying power, invalid parameters, etc.)
-
-### 6.4 Activity
-
-A chronological log of all account activity — fills, dividends, transfers, etc. This is the most useful view for comparing against your database.
+- Order submitted but not filled (reviewed in `order_manager.log`, `data/argus.db.orders` is
+  not persisted per DEF-031 — reconstruct from IBKR activity)
+- Reconciliation ghost positions (DEF-098/099) — Sprint 27.8 auto-cleanup generates synthetic
+  close records with `ExitReason.RECONCILIATION`; the `entry_price_known` column excludes these
+  from metrics (DEF-159)
+- Startup zombie flatten (Sprint 27.95) — zero-qty ghosts are silently skipped; real zombies
+  are flattened via market order when `startup.flatten_unknown_positions: true`
 
 ---
 
-## 7. Recording Your Observations
+## 6. Recording Your Observations
 
-Keep a daily log. This doesn't need to be fancy — a text file, a notebook, whatever works. For each trading day, record:
+Keep a daily log. For each session record:
 
 ```
 ## Day N — [Date] — [Day of Week]
 
-Market conditions: [Bullish/bearish/choppy? Any major news?]
-Scanner results: [How many candidates? Were they reasonable?]
-Trades taken: [Count, symbols]
-Trades won/lost: [Count each]
-Total P&L: [Dollar amount]
-System uptime: [Did it run the full session? Any restarts?]
+Market regime: [e.g., bullish_trending, range_bound, high_vol]
+Scanner results: [count, quality of candidates]
+Trades taken: [count, symbols, strategies]
+Shadow trades: [counterfactual positions + experiment variant count]
+Trades won/lost: [count each]
+Total P&L: [dollar amount]
+System uptime: [full session? restarts?]
+Safety summary: [margin-circuit trips, EOD pass1/pass2 counts, signal-cutoff skips]
 
 Issues found:
-- [List any bugs, unexpected behavior, or concerns]
+- [...]
 
-Configuration changes needed:
-- [Any parameters that seem wrong based on today's observations]
+Config changes considered:
+- [...]
 
 Questions for later:
-- [Anything you want to investigate or discuss]
+- [...]
 ```
 
-This log becomes input for Phase 2 (backtesting parameter decisions) and Phase 3 (live trading readiness assessment).
+This log feeds into sprint planning and the Performance Workbench.
 
 ---
 
-## 8. When to Stop Paper Trading and Move Forward
+## 7. When to Stop Paper Trading and Move Forward
 
 Paper trading validation is complete when ALL of the following are true:
 
-1. **Stability:** The system has run for 3+ full trading days with zero crashes and zero unhandled exceptions.
-2. **Data integrity:** Every trade in the database matches Alpaca's records. No ghost trades, no missing trades.
-3. **Risk compliance:** Daily loss limits, position sizing, and circuit breakers all work correctly. No limit was exceeded.
-4. **Complete lifecycle:** You've observed at least one trade go through the full lifecycle: entry → stop management (breakeven move on T1) → exit (either T2, stop, time stop, or EOD flatten). Ideally, you've seen multiple exit types.
-5. **EOD flatten:** Works correctly every day. No positions remain after market close.
-6. **Recovery:** If any restarts happened (intentional or due to issues), the system reconstructed its state correctly — Risk Manager daily P&L was accurate, Order Manager recovered open positions.
-7. **Monitoring:** Heartbeat pings are consistent. Alerts fire when they should.
+1. **Stability:** 3+ full sessions with zero crashes and zero unhandled exceptions.
+2. **Data integrity:** Every trade in `data/argus.db` (filtered by `entry_price_known = 1`)
+   matches IBKR's activity history. No ghost trades, no missing trades.
+3. **Risk compliance:** Daily loss limits, weekly loss limits, concentration cap, position
+   sizing, circuit breakers (including margin-circuit Sprint 32.9), and the quality pipeline
+   all functioned correctly. No limit was exceeded.
+4. **Complete lifecycle:** Observed at least one trade through full lifecycle — entry → stop
+   management (breakeven on T1 or trail activation) → exit (T2, stop, time stop, trail, or
+   EOD flatten). Ideally you've seen multiple exit types.
+5. **EOD flatten:** Works correctly every day (Pass 1 + Pass 2). No positions remain after
+   market close.
+6. **Recovery:** If any restarts happened, the system reconstructed its state correctly — Risk
+   Manager daily P&L accurate, Order Manager recovered open positions, reconciliation handled
+   any orphans.
+7. **Monitoring:** Heartbeat pings consistent. Alerts fire when they should. Margin-circuit
+   events surface in Command Center if triggered.
+8. **Before live transition:** Walk through
+   [pre-live-transition-checklist.md](pre-live-transition-checklist.md) and restore every
+   value.
 
-You do NOT need to be profitable. Profitability in 3–5 days is statistically meaningless. You need the system to be *correct* — executing the strategy as designed, logging everything, and maintaining risk limits.
+You do NOT need to be profitable. Profitability in 3–5 days is statistically meaningless.
 
-If issues are found, fix them, reset your validation counter, and run for another 3 days. Don't carry forward partial validation periods where known bugs existed.
+If issues are found, fix them, reset your validation counter, and run for another 3 days.
+Don't carry forward partial validation periods where known bugs existed.
 
 ---
 
-## 9. Useful Commands Reference
+## 8. Useful Commands
 
 ```bash
-# Start paper trading
-python -m argus.main --paper
+# Start paper trading (backend only)
+./scripts/start_live.sh
 
-# Dry run (connect but don't trade)
+# Start paper trading + Command Center UI
+./scripts/start_live.sh --with-ui
+
+# Graceful shutdown
+./scripts/stop_live.sh
+
+# Dry run — connect, validate, don't trade
 python -m argus.main --dry-run
 
-# Query the database
+# Query database
 sqlite3 data/argus.db
 
-# Today's trades
-sqlite3 data/argus.db "SELECT * FROM trades WHERE date(entry_time) = date('now');"
+# Today's trades (excluding reconstruction rows)
+sqlite3 data/argus.db "SELECT * FROM trades \
+  WHERE date(entry_time) = date('now') AND entry_price_known = 1;"
 
 # Open positions (should be empty after market close)
 sqlite3 data/argus.db "SELECT * FROM trades WHERE exit_time IS NULL;"
 
-# Total P&L for a date range
-sqlite3 data/argus.db "SELECT ROUND(SUM(realized_pnl), 2) FROM trades WHERE entry_time >= '2026-02-16';"
+# Counterfactual positions (shadow + rejected signals)
+sqlite3 data/counterfactual.db "SELECT COUNT(*) FROM counterfactual_positions \
+  WHERE date(entry_time) = date('now');"
 
-# Check the logs for errors
+# Errors in today's log
 grep '"level":"ERROR"' logs/argus.log
 
-# Check scanner results
-grep 'Scanner' logs/argus.log | head -20
+# Margin-circuit events (Sprint 32.9)
+grep 'margin_circuit' logs/argus.log
 
-# Check for rejected orders
-grep 'rejected' logs/argus.log
-
-# Watch logs in real time (while system runs)
+# Watch logs in real time
 tail -f logs/argus.log | python -m json.tool
+
+# Diagnose Databento
+python scripts/diagnose_databento.py
+
+# Integration sanity checks
+python scripts/test_session8_integration.py
 ```
 
 ---
 
-## 10. Troubleshooting Quick Reference
+## 9. Troubleshooting Quick Reference
 
 | Symptom | Likely Cause | Fix |
 |---------|-------------|-----|
-| System won't start | Missing `.env` or bad API keys | Check `.env` values, regenerate keys if needed |
-| "Connection refused" on startup | Alpaca outage or network issue | Check https://status.alpaca.markets/ |
-| Scanner finds 0 stocks | Filters too restrictive or pre-market hasn't opened | Widen gap%/price/volume filters in `scanner.yaml` |
-| No trades after hours of running | No breakouts confirming, or risk rejecting all signals | Check logs for SignalEvent and OrderRejected events |
-| Trades in Alpaca but not in DB | Logging bug or crash between fill and log | Check logs around the fill timestamp for errors |
-| Trades in DB but not in Alpaca | Should not happen — investigate immediately | This would indicate a serious bug in order submission |
-| EOD flatten missed | System crashed before 3:50 PM ET | Check system uptime; manually close positions in Alpaca dashboard |
-| Constant WebSocket disconnects | Network instability | Check your internet; consider a wired connection |
-| "Insufficient buying power" | Position size too large for account | Check position sizing in ORB config; verify account balance |
-| Circuit breaker triggered | Hit daily loss limit | Working as designed. Review the trades that caused the losses. |
+| System won't start | Missing `.env` / bad Databento or FMP key | Check `.env`; `python -m argus.main --dry-run` |
+| IBKR connection refused | Gateway not running in paper mode on port 4002 | Start IB Gateway; verify port + paper indicator (`DU…`) |
+| "Connection refused" to Databento | API key invalid or Databento outage | Check `DATABENTO_API_KEY`; [databento.com status](https://databento.com/) |
+| Scanner finds 0 stocks | Pre-market filters too restrictive OR FMP 403 | Widen filters; confirm FMP Starter plan is active |
+| No trades across hours | Quality engine grading all B, or risk rejecting | Check SetupQualityEngine log lines + OrderRejectedEvent |
+| Trades in IBKR but not in DB | Logging bug or crash between fill and log | Check `logs/argus.log` around the fill timestamp |
+| Trades in DB but not IBKR | Reconstruction (`entry_price_known=0`) or bug | Filter by `entry_price_known=1`; investigate remainder |
+| EOD flatten missed | Crash before 3:55 PM ET | Check uptime; manually flatten via TWS |
+| Constant IBKR reconnects | Gateway instability / network | Restart Gateway; check IBC log |
+| Margin circuit open | 10 consecutive IBKR 201 rejections | Inspect buying power; circuit resets after 20 fills |
+| Circuit breaker triggered | Daily / weekly loss limit hit | Working as designed — review losing trades |
+| DuckDB hang on start | DEF-164 scheduling collision | Start only in safe window (≥ 04:00 ET) |
 
 ---
 
-*End of Paper Trading Validation Guide v1.0*
-*Update this document based on discoveries during the validation period.*
+## 10. Cross-References
+
+- [live-operations.md](live-operations.md) — Full daily runbook for Databento + IBKR paper
+- [pre-live-transition-checklist.md](pre-live-transition-checklist.md) — Config values to
+  restore before live
+- [ibc-setup.md](ibc-setup.md) — IB Gateway + IBC launchd setup
+- [operations/parquet-cache-layout.md](operations/parquet-cache-layout.md) — Cache separation
+  (Sprint 31.85 canonical reference)
+- `.claude/rules/risk-rules.md`, `.claude/rules/architecture.md`, `.claude/rules/testing.md`
+  — Invariants this guide assumes
+
+---
+
+*End of Paper Trading Validation Guide v2.0 (2026-04-21 audit FIX-15 rewrite).*
+*Supersedes v1.0 (Alpaca-based, Feb 16, 2026).*

@@ -5,6 +5,8 @@
 **Family:** Breakout
 **File:** `argus/strategies/patterns/premarket_high_break.py`
 **Config:** `config/strategies/premarket_high_break.yaml`
+**Mode:** `live`
+**Status:** PROVISIONAL — no backtest validation yet; backtest pending. Universe-aware sweep required once the `consolidate_parquet_cache.py` derived cache is activated operationally. Operates under DEC-132 provisional regime.
 
 ## Overview
 Detects breakouts above the pre-market high. PM high computed from candle deque (4:00–9:30 AM ET via timestamp conversion), validated with PM volume qualification and hold-bar confirmation. Uses `set_reference_data()` for gap context scoring from prior close.

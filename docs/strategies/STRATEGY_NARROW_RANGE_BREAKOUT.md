@@ -6,6 +6,8 @@
 **File:** `argus/strategies/patterns/narrow_range_breakout.py`
 **Config:** `config/strategies/narrow_range_breakout.yaml`
 **Universe filter:** `config/universe_filters/narrow_range_breakout.yaml` (min_avg_volume: 300K)
+**Mode:** `live`
+**Status:** PROVISIONAL — 2-trade sweep result (Sprint 31A) is a pattern-universe mismatch artifact, not validation. Universe-aware re-sweep required (DEF-145). Do not treat this strategy's signals as load-bearing until a representative-universe sweep produces statistically significant evidence. Operates under DEC-132 provisional regime.
 
 ## Overview
 Detects intraday narrowing range (volatility contraction) followed by a breakout above the consolidation high with volume expansion. Self-contained ATR computation (no external indicator dependency). Long-only gate: only fires when price is above the lookback midpoint. Targets stocks coiling before a directional move.

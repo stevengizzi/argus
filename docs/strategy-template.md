@@ -234,4 +234,50 @@ All positions closed at market by [time].
 
 ---
 
+## Optional Sections (add when applicable)
+
+The sections below are not mandatory at Concept stage but should be added as a strategy
+progresses through the Incubator Pipeline. Leaving them out is fine for a brand-new spec;
+adding them incorrectly (as empty placeholders) is NOT fine — only include these sections
+once the underlying state exists.
+
+### Shadow Mode Status *(required when `mode: shadow` in strategy YAML)*
+
+| Field | Value |
+|-------|-------|
+| **Mode** | `shadow` |
+| **Demoted / promoted on** | (sprint reference, e.g., Sprint 32.9 demotion) |
+| **Demotion reason** | (e.g., "awaits parameter optimization", "O(n³) swing-detection fix pending per DEF-NNN") |
+| **CounterfactualTracker status** | (e.g., "active — XX trades collected over YY sessions") |
+| **Promotion criteria** | (what would need to be true to move back to `live`) |
+
+### Experiment Variants *(required when this strategy has entries in `config/experiments.yaml`)*
+
+List each active variant with its fingerprint ID, overrides, and current shadow-trading results.
+Table format:
+
+| Variant ID | Overrides | Shadow Trades | Sharpe | Win Rate | Promotion State |
+|---|---|---|---|---|---|
+| `strat_<name>__v<N>_<descriptor>` | (key param deltas) | (count) | | | (SHADOW / PROMOTION_PENDING / PROMOTED / KILLED) |
+
+Cross-reference CLAUDE.md "Experiment Variants" section and the Experiments page in the
+Command Center (keyboard shortcut `0`).
+
+### Quality Grade Calibration *(optional — include when the strategy's grade distribution has been tuned)*
+
+If the SetupQualityEngine weights or thresholds have been tuned specifically for this strategy
+(e.g., via `config/quality_engine.yaml` per-strategy overrides or through Sprint 28 Learning
+Loop proposals that landed), document:
+
+- Current weight distribution (pattern_strength, volume_profile, regime_alignment, etc.)
+- Grade thresholds used (A+, A, A-, B+, B, B-, C+, C)
+- Last recalibration sprint / date
+- Observed grade distribution over the last 30 days (A% / B% / C% split)
+- Pending Learning Loop proposals that would adjust weights (PENDING / APPROVED / APPLIED)
+
+Do not fill this section with default values from the global `quality_engine.yaml` — include
+it only when the strategy has strategy-specific tuning worth documenting.
+
+---
+
 *End of Strategy Spec Sheet*

@@ -50,6 +50,17 @@ ANTHROPIC_API_KEY=sk-ant-your_key_here
 ./scripts/start_live.sh --with-ui
 ```
 
+> ⚠️ **DO NOT start ARGUS between ~22:30 ET and pre-market open (DEF-164).**
+> Time-based after-hours auto-shutdown fires during this window and can
+> collide with in-flight service initialization (notably `HistoricalQueryService`
+> DuckDB VIEW creation). A 2026-04-20 operator-initiated start at 23:30 ET
+> triggered shutdown 51 seconds into init and hung the process at 70% CPU /
+> 40% memory until force-killed. See DEF-164 (scheduling collision) and
+> DEF-165 (DuckDB close hangs when VIEW creation is interrupted) for details.
+> Safe start windows: pre-market (≥ 04:00 ET) through standard shutdown.
+> Code-level fix is weekend-only; this operator warning is the current
+> mitigation.
+
 ### Step 4: Verify Startup
 
 Watch the terminal for the 12-phase startup sequence:

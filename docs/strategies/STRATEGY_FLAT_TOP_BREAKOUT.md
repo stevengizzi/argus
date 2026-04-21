@@ -15,8 +15,10 @@
 | **Author** | Steven + Claude |
 | **Created** | 2026-03-21 |
 | **Last Updated** | 2026-03-22 |
-| **Pipeline Stage** | Exploration (Sprint 26) |
+| **Pipeline Stage** | Shadow (demoted Sprint 32.9; awaits parameter optimization) |
 | **Family** | Breakout |
+| **Mode** | `shadow` |
+| **Status** | PROVISIONAL — backtest results **pending** (section below is an explicit placeholder, not forgotten). Demoted to shadow per Sprint 32.9. CounterfactualTracker collecting data; no live capital deployed. |
 
 ---
 
@@ -130,12 +132,14 @@ All positions closed at market by 3:50 PM ET.
 
 ---
 
-## Backtest Results
+## Backtest Results — PENDING
 
-*Generic PatternBacktester infrastructure ready. Awaiting historical data for full sweep + walk-forward validation.*
+**Status:** Pending. Not forgotten. The placeholder is explicit to distinguish "we haven't done it yet" from "we did it and the results are unrecorded."
+
+Generic PatternBacktester infrastructure is ready (Sprint 32 integration). Universe-aware sweep is blocked on the Sprint 31.85 consolidated Parquet cache being activated operationally (`config/historical_query.yaml` repoint). Once the consolidated cache is live, a representative-universe sweep + walk-forward is the prerequisite for promoting this strategy back to `live` mode.
 
 ### Walk-Forward Analysis
-TBD. All pre-Databento results are provisional (DEC-132).
+PENDING. All pre-Databento results are provisional (DEC-132). Post-consolidation sweep will be the first valid evidence for this strategy.
 
 ---
 

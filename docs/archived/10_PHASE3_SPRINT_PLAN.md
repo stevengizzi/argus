@@ -1,5 +1,7 @@
-# ARGUS — Active Sprint Plan (Parallel Tracks)
+# ARGUS — Active Sprint Plan (Parallel Tracks) [ARCHIVED]
 
+> **ARCHIVED — last active: Sprint 21.5 (2026-02-27).** Superseded by [docs/roadmap.md](../roadmap.md) per DEC-375. Still referenced by 43 historical sprint files (Sprints 1–21.5) as authoritative context for the era in which they were written; not cited by any sprint artifact after 21.5. Do not use as current planning source — see `docs/roadmap.md`.
+>
 > *Version 2.0 | February 19, 2026*
 > *Supersedes Phase 3 Sprint Plan v1.0. Implements DEC-079 (parallel development tracks).*
 > *Previous sprint plans (07, 09) are historical reference.*

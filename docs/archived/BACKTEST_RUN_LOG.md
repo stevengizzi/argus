@@ -1,5 +1,7 @@
-# ARGUS — Backtest Run Log
+# ARGUS — Backtest Run Log [ARCHIVED]
 
+> **ARCHIVED 2026-04-21 — last entry Run 8 (2026-02-17).** Pre-live backtest log from the Alpaca/VectorBT era. Current backtest provenance lives in `data/experiments.db` (Experiment Registry, Sprint 32.5) and `data/backtest_runs/run_*.db` (BacktestEngine, Sprint 27). See also: [docs/operations/parquet-cache-layout.md](../operations/parquet-cache-layout.md) and [docs/backtesting/PARAMETER_VALIDATION_REPORT.md](../backtesting/PARAMETER_VALIDATION_REPORT.md).
+>
 > Logs every backtest run with parameters, results, and observations.
 > Created during Sprint 10 (February 17, 2026).
 

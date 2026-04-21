@@ -1,8 +1,18 @@
 # ARGUS Development Campaign — Master Sprint Plan
 
+> **This document is a process template, not a rolling sprint queue.** It describes the
+> workflow choreography (protocols, skills, agents) to invoke for each class of sprint. The
+> live sprint queue and current status live in `docs/roadmap.md` and `CLAUDE.md` ("Active
+> Sprint" section). Do not treat the per-sprint entries below as the current plan — they were
+> written during Sprint 28 planning and represent the sprint cadence pattern, not current
+> sprint allocations.
+>
 > From Sprint 21.5 to Full Vision — every step mapped
 > March 29, 2026 | Based on Unified Vision Roadmap v2.8 + Metarepo Workflow System v1.2
-> Updated: Sprint 28 complete (Learning Loop V1), Sprint 28.5 next
+> Last template refresh: Sprint 28 planning (2026-03-29). Current live sprint state as of
+> 2026-04-21: between sprints; 22 shadow variants collecting CounterfactualTracker data; next
+> planned sprint is 31B (Research Console / Variant Factory). See `CLAUDE.md` "Active Sprint"
+> for authoritative state.
 
 ---
 
