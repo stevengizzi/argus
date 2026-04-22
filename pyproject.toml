@@ -41,8 +41,9 @@ dev = [
     "pytest>=7.4,<9",
     "pytest-asyncio>=0.23,<1",
     "pytest-cov>=4.1,<6",
+    "pytest-xdist>=3.5,<4",  # parallel test execution via `pytest -n auto`
     "ruff>=0.2,<1",
-    "httpx>=0.26,<1",  # Test client for API tests (Sprint 14)
+    "httpx>=0.26,<1",
 ]
 
 backtest = [
