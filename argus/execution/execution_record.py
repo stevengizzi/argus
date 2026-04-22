@@ -7,13 +7,16 @@ enabling slippage model validation and calibration (DEC-358 §5.1).
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
-
-_ET = ZoneInfo("America/New_York")
 
 from argus.core.ids import generate_id
 from argus.db.manager import DatabaseManager
+
+# FIX-04 P1-C1-L04: module-level constants live below all imports,
+# matching the CLAUDE.md "all imports at top" rule, and we use the
+# project-standard datetime.UTC rather than datetime.timezone.utc.
+_ET = ZoneInfo("America/New_York")
 
 
 @dataclass(frozen=True)
@@ -110,7 +113,7 @@ def create_execution_record(
         bid_ask_spread_bps=bid_ask_spread_bps,
         latency_ms=latency_ms,
         slippage_vs_model=slippage_vs_model,
-        created_at=datetime.now(timezone.utc).isoformat(),
+        created_at=datetime.now(UTC).isoformat(),
     )
 
 

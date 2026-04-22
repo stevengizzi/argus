@@ -5,10 +5,10 @@
 > at every stage barrier. Survives compaction — read this file to hydrate
 > a fresh Claude.ai conversation.
 >
-> **Last updated:** 2026-04-22, IMPROMPTU-def172-173-175 complete (between Stage 2 and Stage 3)
-> **Campaign HEAD:** `24755ac` (register) + impromptu commits pending
+> **Last updated:** 2026-04-22, FIX-04 complete (Stage 3 Wave 2)
+> **Campaign HEAD:** (FIX-04 commit pending)
 > **Workflow submodule:** `942c53a`
-> **Baseline tests:** 4,964 pytest + 859 Vitest + 0 failures (pre-impromptu); +1 pytest after impromptu (4,965)
+> **Baseline tests:** 4,984 pytest + 859 Vitest (pre-FIX-04) → 4,985 pytest + 859 Vitest (post-FIX-04, 0 failures)
 
 ---
 
@@ -31,8 +31,9 @@
 | Stage 2 Pass 1 | FIX-02 (config drift via DEC-384 extension) | ✅ CLEAR |
 | Stage 2 Pass 2 | FIX-03 (main.py lifecycle — biggest session of campaign to date) | ✅ CONCERNS → RESOLVED in-session |
 | **Stage 2 Pass 3** | **FIX-12 + FIX-19 + FIX-21 (parallel)** | ✅ **ALL CLEAR** |
-| IMPROMPTU (between 2 and 3) | DEF-172 verify + DEF-173 fix + DEF-175 open | ✅ CLEAR (this session) |
-| Stage 3 | FIX-04 (Rule-4 serial, order_manager.py) + FIX-16 + FIX-14 | ⏸ PENDING |
+| IMPROMPTU (between 2 and 3) | DEF-172 verify + DEF-173 fix + DEF-175 open | ✅ CLEAR |
+| Stage 3 Wave 1 | FIX-14 + FIX-16 | ✅ CLEAR (prior sessions) |
+| **Stage 3 Wave 2** | **FIX-04 (Rule-4 serial, order_manager.py)** | ⚠ MINOR_DEVIATIONS (this session) |
 | Stage 4 | FIX-05 (core: orchestrator+risk+regime) + FIX-18 + FIX-10 | ⏸ PENDING |
 | Stage 5 | FIX-06 (data) + FIX-07 (intelligence) | ⏸ PENDING |
 | Stage 6 | FIX-08 solo | ⏸ PENDING |
@@ -59,9 +60,12 @@
 | FIX-21 (ops cron) | `8ccac67` + `3a6c71d` | CLEAN | CLEAR | 0 (docs-only) | Stage 2 Pass 3 |
 | FIX-19 (strategies) | `a2c2512` + `e60cb47` | MINOR_DEVIATIONS | CLEAR | +18 | Stage 2 Pass 3 |
 | FIX-12 (frontend) | `db2818b` + `f57a965` | MINOR_DEVIATIONS | CLEAR | Vitest +13 | Stage 2 Pass 3 |
-| IMPROMPTU-def172-173-175 | (pending) | MINOR_DEVIATIONS | (pending) | +1 | Between Stage 2 and Stage 3; DEF-172 verify-close, DEF-173 code fix, DEF-175 opened + DISCOVERY.md seeded |
+| IMPROMPTU-def172-173-175 | `873738a` | MINOR_DEVIATIONS | CLEAR | +1 | Between Stage 2 and Stage 3; DEF-172 verify-close, DEF-173 code fix, DEF-175 opened + DISCOVERY.md seeded |
+| FIX-14 (primary Claude context docs) | `8c36bef` + `f57d7fc` | CLEAN | CLEAR | 0 | Stage 3 Wave 1 |
+| FIX-16 (config consistency sweep) | `563ae13` + `942cf05` | MINOR_DEVIATIONS | CLEAR | +19 | Stage 3 Wave 1 |
+| FIX-04 (execution layer) | (this session) | MINOR_DEVIATIONS | (pending) | +1 | Stage 3 Wave 2 (Rule-4 serial). 2 CRITICAL + 7 MEDIUM + 10 LOW; F11 P1-D1-M03 deferred (DEF-177 — cross-domain RejectionStage edit outside scope); F10 partial (DEF-176 — test-migration blocker) |
 
-Baseline progression: 4,934 (pre-campaign) → 4,858 (actual pytest at campaign start after FIX-03's CLAUDE.md strikethrough) → 4,944 (post-FIX-11) → 4,946 (post-FIX-02) → 4,964 (post-Stage-2) → **4,965 (post-IMPROMPTU-def172-173-175)**. Vitest: 846 → **859**.
+Baseline progression: 4,934 (pre-campaign) → 4,858 (actual pytest at campaign start after FIX-03's CLAUDE.md strikethrough) → 4,944 (post-FIX-11) → 4,946 (post-FIX-02) → 4,964 (post-Stage-2) → 4,965 (post-IMPROMPTU-def172-173-175) → 4,984 (post-FIX-16) → **4,985 (post-FIX-04)**. Vitest: 846 → **859**.
 
 ---
 
@@ -79,8 +83,8 @@ Baseline progression: 4,934 (pre-campaign) → 4,858 (actual pytest at campaign 
 | DEF-097 | Monthly cache update cron (`populate_historical_cache.py --update`) | FIX-21 | `8ccac67` |
 | DEF-142 | `quality_engine.yaml` / `system*.yaml` drift | FIX-01 (via DEC-384) | `59bb100` |
 | DEF-162 | Monthly re-consolidation cron (`consolidate_parquet_cache.py --resume`) — paired with DEF-097 | FIX-21 | `8ccac67` |
-| DEF-172 | Duplicate `CatalystStorage` instances — RESOLVED-VERIFIED (behavioral): dual close paths both fire; SQLite WAL enables safe concurrent reads; structural dedup deferred to DEF-175 | IMPROMPTU-def172-173-175 | (pending) |
-| DEF-173 | `LearningStore.enforce_retention()` never called — RESOLVED: wired in `argus/api/server.py::_init_learning_loop` mirroring FIX-03's ExperimentStore pattern; +1 regression test | IMPROMPTU-def172-173-175 | (pending) |
+| DEF-172 | Duplicate `CatalystStorage` instances — RESOLVED-VERIFIED (behavioral): dual close paths both fire; SQLite WAL enables safe concurrent reads; structural dedup deferred to DEF-175 | IMPROMPTU-def172-173-175 | `873738a` |
+| DEF-173 | `LearningStore.enforce_retention()` never called — RESOLVED: wired in `argus/api/server.py::_init_learning_loop` mirroring FIX-03's ExperimentStore pattern; +1 regression test | IMPROMPTU-def172-173-175 | `873738a` |
 
 ### Partially resolved
 
@@ -98,6 +102,8 @@ Baseline progression: 4,934 (pre-campaign) → 4,858 (actual pytest at campaign 
 | DEF-171 | `test_all_ulids_mapped_bidirectionally` xdist flake | LOW | **FIX-13 (Stage 8)** |
 | DEF-174 | Tauri desktop wrapper never integrated; `platform.ts` deleted as misleading dead code | LOW / opportunistic | Deferred (only if desktop packaging becomes a requirement) |
 | DEF-175 | Component ownership consolidation — `CatalystStorage`, `SetupQualityEngine`, `DynamicPositionSizer`, `ExperimentStore`, `LearningStore` constructed in both `main.py` and `api/server.py` lifespan phases; broader pattern behind DEF-172/173 | MEDIUM | **Dedicated post-Sprint-31.9 sprint** (~2–3 sessions). Pre-sprint discovery at `docs/sprints/post-31.9-component-ownership/DISCOVERY.md`. Blocked on Sprint 31.9 closure. |
+| DEF-176 | Full removal of deprecated `OrderManager(auto_cleanup_orphans=...)` kwarg — FIX-04 added DeprecationWarning; 3 reconciliation test files still pass the kwarg and were outside FIX-04 scope | LOW | Opportunistic / next execution-layer cleanup sprint |
+| DEF-177 | `RejectionStage.MARGIN_CIRCUIT` — FIX-04 P1-D1-M03 deferred; requires cross-domain edit (intelligence/counterfactual.py enum + counterfactual_positions schema + order_manager.py:485 emitted stage) that exceeded FIX-04's execution-only scope | MEDIUM | **FIX-06 or dedicated cross-domain session** (FilterAccuracy by_stage analysis masks margin-incident signal today) |
 
 ---
 

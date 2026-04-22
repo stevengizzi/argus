@@ -105,6 +105,12 @@ class IBKRBroker(Broker):
         self._ulid_to_ibkr: dict[str, int] = {}
         self._ibkr_to_ulid: dict[int, str] = {}
 
+        # Trade index keyed by IBKR orderId (FIX-04 P1-C1-L02). Populated
+        # from every orderStatusEvent and dropped on Cancelled/Filled/
+        # Inactive so _find_trade_by_order_id is O(1) instead of an O(n)
+        # scan over _ib.trades().
+        self._trades_by_order_id: dict[int, Trade] = {}
+
         # Contract resolver
         self._contracts = IBKRContractResolver()
 
@@ -224,6 +230,12 @@ class IBKRBroker(Broker):
 
         status = trade.orderStatus.status
 
+        # FIX-04 P1-C1-L02: maintain parallel dict[int, Trade] so
+        # _find_trade_by_order_id is O(1). Populate for any live status;
+        # terminal statuses drop the entry below.
+        if status not in ("Filled", "Cancelled", "Inactive"):
+            self._trades_by_order_id[ib_order_id] = trade
+
         if status == "Filled":
             avg_fill_price = trade.orderStatus.avgFillPrice
             filled_qty = int(trade.orderStatus.filled)
@@ -284,6 +296,11 @@ class IBKRBroker(Broker):
             # PendingSubmit, PendingCancel — transient states, log only
             logger.debug("Order status: %s → %s", ulid, status)
 
+        # FIX-04 P1-C1-L02: drop terminal-status entries from the orderId
+        # → Trade index so it doesn't grow unbounded over a session.
+        if status in ("Filled", "Cancelled", "Inactive"):
+            self._trades_by_order_id.pop(ib_order_id, None)
+
     def _on_error(
         self,
         req_id: int,
@@ -343,6 +360,10 @@ class IBKRBroker(Broker):
 
         # Error 404: qty mismatch on SELL order (Sprint 29.5 R1).
         # Track the symbol so Order Manager can re-query broker qty on next retry.
+        # FIX-04 P1-C1-M05: previously early-returned; now falls through to
+        # the shared is_order_rejection branch below so an
+        # OrderCancelledEvent is published without depending on IBKR's
+        # downstream orderStatusEvent(Cancelled) arriving.
         if error_code == 404:
             symbol = contract.symbol if contract else "unknown"
             self.error_404_symbols.add(symbol)
@@ -352,7 +373,6 @@ class IBKRBroker(Broker):
                 req_id,
                 error_string,
             )
-            return
 
         if error_info.severity == IBKRErrorSeverity.CRITICAL:
             logger.critical("IBKR error %d: %s", error_code, error_string)
@@ -597,7 +617,7 @@ class IBKRBroker(Broker):
         if not self.is_connected:
             return OrderResult(
                 order_id="",
-                status="rejected",
+                status=OrderStatus.REJECTED,
                 message="Not connected to IB Gateway",
             )
 
@@ -632,7 +652,7 @@ class IBKRBroker(Broker):
         return OrderResult(
             order_id=ulid,
             broker_order_id=str(actual_id),
-            status="submitted",
+            status=OrderStatus.SUBMITTED,
         )
 
     async def place_bracket_order(
@@ -643,15 +663,23 @@ class IBKRBroker(Broker):
     ) -> BracketOrderResult:
         """Submit a bracket order to IBKR with native multi-leg support (DEC-093).
 
-        IBKR brackets: parent (entry) + children (stop + targets) linked via parentId.
-        All children are submitted atomically. If parent is cancelled, all children
-        are auto-cancelled by IBKR.
+        IBKR brackets: parent (entry) + children (stop + targets) linked via
+        ``parentId``. The group is submitted sequentially via
+        ``_ib.placeOrder`` for each leg, but the transmit-flag pattern
+        ensures IBKR only activates the group once the last child lands:
 
-        The transmit flag pattern ensures atomic submission:
-        - parent.transmit = False
-        - stop.transmit = False (if targets exist) or True (if no targets)
-        - targets[:-1].transmit = False
-        - targets[-1].transmit = True (triggers atomic submission of entire group)
+        - ``parent.transmit = False``
+        - ``stop.transmit = False`` (if targets exist) or ``True`` (if no targets)
+        - ``targets[:-1].transmit = False``
+        - ``targets[-1].transmit = True`` (triggers activation of the group)
+
+        If any child-build step raises between parent submission and the
+        final transmit (e.g., missing ``limit_price``, IBKR connection
+        blip), the parent order is cancelled before the exception
+        propagates so no ``PendingSubmit`` parent is left orphaned with
+        ``transmit=False`` (FIX-04 P1-C1-M01). Submission is therefore
+        rollback-protected but NOT truly atomic in a distributed-systems
+        sense — IBKR sees each leg as a separate API call.
 
         Args:
             entry: Entry order (market or limit).
@@ -664,7 +692,7 @@ class IBKRBroker(Broker):
         if not self.is_connected:
             error_result = OrderResult(
                 order_id="",
-                status="rejected",
+                status=OrderStatus.REJECTED,
                 message="Not connected to IB Gateway",
             )
             return BracketOrderResult(
@@ -694,61 +722,87 @@ class IBKRBroker(Broker):
         entry_result = OrderResult(
             order_id=entry_ulid,
             broker_order_id=str(parent_id),
-            status="submitted",
+            status=OrderStatus.SUBMITTED,
         )
 
-        # --- Build stop-loss child ---
-        stop_ulid = generate_id()
-        if stop.stop_price is None:
-            raise ValueError("Stop order requires stop_price")
-        stop_ib = StopOrder(exit_action, stop.quantity, self._round_price(stop.stop_price))
-        stop_ib.parentId = parent_id
-        stop_ib.tif = "DAY"
-        stop_ib.outsideRth = False
-        stop_ib.orderRef = stop_ulid
+        # FIX-04 P1-C1-M01: if any leg fails below, cancel the parent so
+        # it doesn't sit at IBKR in PendingSubmit/transmit=False forever.
+        try:
+            # --- Build stop-loss child ---
+            stop_ulid = generate_id()
+            if stop.stop_price is None:
+                raise ValueError("Stop order requires stop_price")
+            stop_ib = StopOrder(exit_action, stop.quantity, self._round_price(stop.stop_price))
+            stop_ib.parentId = parent_id
+            stop_ib.tif = "DAY"
+            stop_ib.outsideRth = False
+            stop_ib.orderRef = stop_ulid
 
-        # Determine if stop is the last order (transmit=True) or not
-        has_targets = len(targets) > 0
-        stop_ib.transmit = not has_targets  # Transmit only if no targets follow
+            # Determine if stop is the last order (transmit=True) or not
+            has_targets = len(targets) > 0
+            stop_ib.transmit = not has_targets  # Transmit only if no targets follow
 
-        stop_trade = self._ib.placeOrder(contract, stop_ib)
-        stop_actual_id = stop_trade.order.orderId
-        self._ulid_to_ibkr[stop_ulid] = stop_actual_id
-        self._ibkr_to_ulid[stop_actual_id] = stop_ulid
+            stop_trade = self._ib.placeOrder(contract, stop_ib)
+            stop_actual_id = stop_trade.order.orderId
+            self._ulid_to_ibkr[stop_ulid] = stop_actual_id
+            self._ibkr_to_ulid[stop_actual_id] = stop_ulid
 
-        stop_result = OrderResult(
-            order_id=stop_ulid,
-            broker_order_id=str(stop_actual_id),
-            status="submitted",
-        )
-
-        # --- Build target children (T1, optionally T2) ---
-        target_results: list[OrderResult] = []
-        for i, target in enumerate(targets):
-            t_ulid = generate_id()
-            is_last = i == len(targets) - 1
-
-            if target.limit_price is None:
-                raise ValueError("Target order requires limit_price")
-            t_ib = LimitOrder(exit_action, target.quantity, self._round_price(target.limit_price))
-            t_ib.parentId = parent_id
-            t_ib.tif = "DAY"
-            t_ib.outsideRth = False
-            t_ib.orderRef = t_ulid
-            t_ib.transmit = is_last  # Last child transmits the entire bracket
-
-            t_trade = self._ib.placeOrder(contract, t_ib)
-            t_actual_id = t_trade.order.orderId
-            self._ulid_to_ibkr[t_ulid] = t_actual_id
-            self._ibkr_to_ulid[t_actual_id] = t_ulid
-
-            target_results.append(
-                OrderResult(
-                    order_id=t_ulid,
-                    broker_order_id=str(t_actual_id),
-                    status="submitted",
-                )
+            stop_result = OrderResult(
+                order_id=stop_ulid,
+                broker_order_id=str(stop_actual_id),
+                status=OrderStatus.SUBMITTED,
             )
+
+            # --- Build target children (T1, optionally T2) ---
+            target_results: list[OrderResult] = []
+            for i, target in enumerate(targets):
+                t_ulid = generate_id()
+                is_last = i == len(targets) - 1
+
+                if target.limit_price is None:
+                    raise ValueError("Target order requires limit_price")
+                t_ib = LimitOrder(exit_action, target.quantity, self._round_price(target.limit_price))
+                t_ib.parentId = parent_id
+                t_ib.tif = "DAY"
+                t_ib.outsideRth = False
+                t_ib.orderRef = t_ulid
+                t_ib.transmit = is_last  # Last child transmits the entire bracket
+
+                t_trade = self._ib.placeOrder(contract, t_ib)
+                t_actual_id = t_trade.order.orderId
+                self._ulid_to_ibkr[t_ulid] = t_actual_id
+                self._ibkr_to_ulid[t_actual_id] = t_ulid
+
+                target_results.append(
+                    OrderResult(
+                        order_id=t_ulid,
+                        broker_order_id=str(t_actual_id),
+                        status=OrderStatus.SUBMITTED,
+                    )
+                )
+        except Exception as e:
+            # Rollback: cancel the untransmitted parent so it cannot be
+            # left at IBKR as an orphan. Errors during cancel are logged
+            # and swallowed so the original exception propagates.
+            try:
+                self._ib.cancelOrder(parent_trade.order)
+                logger.warning(
+                    "place_bracket_order failed after parent submit for %s "
+                    "(IBKR #%d); cancelled parent to avoid orphan: %s",
+                    entry.symbol,
+                    parent_id,
+                    e,
+                )
+            except Exception as cancel_err:
+                logger.error(
+                    "place_bracket_order rollback FAILED for %s (IBKR #%d); "
+                    "parent may be orphaned. Original: %s; cancel error: %s",
+                    entry.symbol,
+                    parent_id,
+                    e,
+                    cancel_err,
+                )
+            raise
 
         # Build log message
         target_ulids = [r.order_id for r in target_results]
@@ -814,7 +868,7 @@ class IBKRBroker(Broker):
         if ib_order_id is None:
             return OrderResult(
                 order_id=order_id,
-                status="rejected",
+                status=OrderStatus.REJECTED,
                 message="Unknown order",
             )
 
@@ -822,7 +876,7 @@ class IBKRBroker(Broker):
         if trade is None:
             return OrderResult(
                 order_id=order_id,
-                status="rejected",
+                status=OrderStatus.REJECTED,
                 message="Trade not found",
             )
 
@@ -844,7 +898,7 @@ class IBKRBroker(Broker):
         logger.info("Order modified: %s — %s", order_id, modifications)
         return OrderResult(
             order_id=order_id,
-            status="submitted",
+            status=OrderStatus.SUBMITTED,
             message="Order modification submitted",
         )
 
@@ -1103,7 +1157,7 @@ class IBKRBroker(Broker):
                 OrderResult(
                     order_id=ulid,
                     broker_order_id=str(trade.order.orderId),
-                    status="submitted",
+                    status=OrderStatus.SUBMITTED,
                     message=f"Emergency close: {action} {quantity} {ib_pos.contract.symbol}",
                 )
             )
@@ -1229,10 +1283,14 @@ class IBKRBroker(Broker):
     # --- Helper Methods ---
 
     def _find_trade_by_order_id(self, ib_order_id: int) -> Trade | None:
-        """Find a Trade object by IBKR order ID from ib_async's cache.
+        """Find a Trade object by IBKR order ID.
 
-        Scans all trades in ib_async's cache to find the one matching
-        the given IBKR order ID.
+        O(1) via ``self._trades_by_order_id`` (populated from every
+        orderStatusEvent, pruned on terminal statuses). Falls back to an
+        O(n) scan of ``self._ib.trades()`` if the index miss happens to
+        occur before any status update has reached the index — this can
+        happen for a trade that was just submitted and has not yet
+        received its first ``orderStatusEvent``. FIX-04 P1-C1-L02.
 
         Args:
             ib_order_id: The IBKR integer order ID.
@@ -1240,6 +1298,9 @@ class IBKRBroker(Broker):
         Returns:
             The Trade object if found, None otherwise.
         """
+        cached = self._trades_by_order_id.get(ib_order_id)
+        if cached is not None:
+            return cached
         for trade in self._ib.trades():
             if trade.order.orderId == ib_order_id:
                 return trade

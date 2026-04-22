@@ -235,7 +235,11 @@ IBKR_ERROR_MAP: dict[int, IBKRErrorInfo] = {
 OVERNIGHT_MAINTENANCE_CODES: frozenset[int] = frozenset({1100, 1102, 2107, 2157})
 
 # Error codes that indicate order rejection
-_ORDER_REJECTION_CODES: frozenset[int] = frozenset({110, 200, 201, 203})
+# 404 added FIX-04 P1-C1-M05: treat "qty mismatch / held while securities
+# located" as a rejection so _on_error publishes an OrderCancelledEvent
+# instead of relying solely on a subsequent orderStatusEvent(Cancelled)
+# from IBKR — which can be delayed or dropped.
+_ORDER_REJECTION_CODES: frozenset[int] = frozenset({110, 200, 201, 203, 404})
 
 # Error codes that indicate connection problems
 _CONNECTION_ERROR_CODES: frozenset[int] = frozenset({502, 504, 1100})

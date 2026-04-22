@@ -17,8 +17,9 @@ import asyncio
 import contextlib
 import logging
 import time as _time
+import warnings
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, time
+from datetime import UTC, datetime, time, timedelta
 from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
 
@@ -214,6 +215,19 @@ class OrderManager:
         self._trade_logger = trade_logger
         self._db_manager = db_manager
         self._broker_source = broker_source
+        # FIX-04 P1-C1-L10: emit a DeprecationWarning when the legacy
+        # kwarg is used. Full parameter removal deferred — reconciliation
+        # test modules (outside FIX-04 scope) still pass the kwarg, so
+        # removing it requires a test-migration sprint. Production
+        # (argus/main.py) passes reconciliation_config directly and does
+        # NOT use the kwarg.
+        if auto_cleanup_orphans and reconciliation_config is None:
+            warnings.warn(
+                "OrderManager(auto_cleanup_orphans=...) is deprecated; "
+                "pass reconciliation_config=ReconciliationConfig(...) instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
         # Reconciliation config: prefer typed config, fall back to legacy bool
         self._reconciliation_config = reconciliation_config or ReconciliationConfig(
             auto_cleanup_orphans=auto_cleanup_orphans,
@@ -962,11 +976,12 @@ class OrderManager:
         t2_price = target_prices[1] if len(target_prices) >= 2 else 0.0
 
         # Use bracket order IDs from pending (DEC-117)
+        entry_fill_time = self._clock.now()
         position = ManagedPosition(
             symbol=pending.symbol,
             strategy_id=pending.strategy_id,
             entry_price=event.fill_price,
-            entry_time=self._clock.now(),
+            entry_time=entry_fill_time,
             shares_total=filled_shares,
             shares_remaining=filled_shares,
             stop_price=signal.stop_price,
@@ -986,6 +1001,13 @@ class OrderManager:
             atr_value=signal.atr_value,
             mfe_price=event.fill_price,
             mae_price=event.fill_price,
+            # FIX-04 P1-C1-L09: initialize mfe_time/mae_time at entry
+            # (mirroring mfe_price/mae_price). Previously these stayed
+            # None until the first tick with a price-change; an instant
+            # reversal left mfe_time=None forever and surfaced as "null"
+            # in analytics.
+            mfe_time=entry_fill_time,
+            mae_time=entry_fill_time,
         )
 
         # Add to managed positions
@@ -1373,22 +1395,19 @@ class OrderManager:
             ),
             None,
         )
-        # Fallback: if no strategy_id match, use first open position (for backwards compat)
+        # FIX-04 P1-C1-L08: tighten the strategy_id-mismatch path from a
+        # silent fallback to a hard error. The fallback existed for
+        # positions opened before PendingManagedOrder tracked strategy_id;
+        # after 89 sprints that legacy shape should no longer exist. An
+        # ERROR here surfaces routing bugs instead of letting the fill
+        # accrue silently to the wrong position's P&L.
         if position is None:
-            position = next(
-                (p for p in positions if p.shares_remaining > 0),
-                None,
+            logger.error(
+                "Flatten fill for %s strategy_id=%s has no matching open "
+                "position (tightened from fallback in FIX-04 P1-C1-L08).",
+                pending.symbol,
+                pending.strategy_id,
             )
-            if position is not None:
-                logger.warning(
-                    "Flatten fill for %s strategy_id mismatch: expected %s, "
-                    "falling back to position from %s",
-                    pending.symbol,
-                    pending.strategy_id,
-                    position.strategy_id,
-                )
-        if position is None:
-            logger.warning("Flatten fill for %s but no open position", pending.symbol)
             return
 
         flatten_pnl = (event.fill_price - position.entry_price) * event.fill_quantity
@@ -1427,6 +1446,20 @@ class OrderManager:
     # Fallback Poll Loop
     # ---------------------------------------------------------------------------
 
+    def _now_et(self, now: datetime) -> datetime:
+        """Convert the current clock time to the configured EOD timezone (ET).
+
+        Tolerant of naive datetimes from test clocks — an unaware value is
+        assumed to already be in the configured timezone, consistent with
+        pre-existing behavior in both the EOD and startup-drain blocks.
+        Introduced in FIX-04 P1-C1-L06 to collapse the duplicate ET
+        conversion that previously lived in both poll-loop branches.
+        """
+        et_tz = ZoneInfo(self._config.eod_flatten_timezone)
+        if now.tzinfo is not None:
+            return now.astimezone(et_tz)
+        return now.replace(tzinfo=et_tz)
+
     async def _poll_loop(self) -> None:
         """Runs every N seconds. Handles time-based exits and EOD flatten."""
         while self._running:
@@ -1436,32 +1469,21 @@ class OrderManager:
                     break
 
                 now = self._clock.now()
+                now_et = self._now_et(now)
 
                 # Check EOD flatten (MD-4b-2)
                 if not self._flattened_today:
-                    et_tz = ZoneInfo(self._config.eod_flatten_timezone)
-                    # Convert to ET for comparison
-                    if now.tzinfo is not None:
-                        now_et = now.astimezone(et_tz)
-                    else:
-                        now_et = now.replace(tzinfo=et_tz)
                     flatten_time = time.fromisoformat(self._config.eod_flatten_time)
                     if now_et.time() >= flatten_time:
+                        # FIX-04 P1-C1-L05: _flattened_today is set inside
+                        # eod_flatten() itself; the post-call assignment
+                        # here was a redundant double-write.
                         await self.eod_flatten()
-                        self._flattened_today = True
                         continue
 
                 # Drain startup flatten queue at market open (Sprint 29.5 R4)
                 if self._startup_flatten_queue:
-                    # Separate ET time for startup queue drain — distinct from
-                    # eod_flatten's et_tz/now_et which are inside a conditional
-                    # guard and may not be in scope.
-                    et_tz2 = ZoneInfo("America/New_York")
-                    if now.tzinfo is not None:
-                        now_et2 = now.astimezone(et_tz2)
-                    else:
-                        now_et2 = now.replace(tzinfo=et_tz2)
-                    if now_et2.time() >= time(9, 30):
+                    if now_et.time() >= time(9, 30):
                         await self._drain_startup_flatten_queue()
 
                 # Margin circuit breaker auto-reset: check broker position count (Sprint 32.9 S2)
@@ -1908,27 +1930,7 @@ class OrderManager:
         # the flatten SELL. Without this, residual bracket orders (stop/T1/T2)
         # from a prior session can trigger additional SELLs after the flatten,
         # creating a short position.
-        try:
-            open_orders = await self._broker.get_open_orders()
-            for order in open_orders:
-                if getattr(order, "symbol", "") == symbol:
-                    order_id = getattr(order, "order_id", None) or getattr(
-                        order, "orderId", None
-                    )
-                    if order_id:
-                        try:
-                            await self._broker.cancel_order(str(order_id))
-                        except Exception:
-                            logger.debug(
-                                "Could not cancel pre-existing order %s for %s",
-                                order_id,
-                                symbol,
-                            )
-        except Exception:
-            logger.warning(
-                "Startup cleanup: could not query/cancel open orders for %s",
-                symbol,
-            )
+        await self._cancel_open_orders_for_symbol(symbol)
 
         try:
             sell_order = Order(
@@ -1952,11 +1954,48 @@ class OrderManager:
                 e,
             )
 
+    async def _cancel_open_orders_for_symbol(self, symbol: str) -> None:
+        """Cancel any open broker-side orders for a given symbol.
+
+        Shared helper used before flattening an unknown/zombie position so
+        residual bracket orders (stop/T1/T2) from a prior session cannot
+        fire after the flatten SELL and produce a short (DEF-158). Called
+        from the direct flatten path and from the startup-queue drain
+        (FIX-04 P1-C1-M02).
+        """
+        try:
+            open_orders = await self._broker.get_open_orders()
+        except Exception:
+            logger.warning(
+                "Startup cleanup: could not query open orders for %s",
+                symbol,
+            )
+            return
+        for order in open_orders:
+            if getattr(order, "symbol", "") != symbol:
+                continue
+            order_id = getattr(order, "order_id", None) or getattr(
+                order, "orderId", None
+            ) or getattr(order, "id", None)
+            if not order_id:
+                continue
+            try:
+                await self._broker.cancel_order(str(order_id))
+            except Exception:
+                logger.debug(
+                    "Could not cancel pre-existing order %s for %s",
+                    order_id,
+                    symbol,
+                )
+
     async def _drain_startup_flatten_queue(self) -> None:
         """Execute queued startup zombie flattens (Sprint 29.5 R4).
 
         Called from the poll loop when market opens. Drains the entire
-        queue and submits market sell orders for each entry.
+        queue and submits market sell orders for each entry. Before each
+        SELL, cancels any pre-existing bracket orders for the symbol
+        (FIX-04 P1-C1-M02) to prevent residual stop/T1/T2 from firing
+        between market-open and the queued SELL.
         """
         if not self._startup_flatten_queue:
             return
@@ -1968,6 +2007,7 @@ class OrderManager:
             "Draining startup flatten queue: %d positions", len(queue)
         )
         for symbol, qty in queue:
+            await self._cancel_open_orders_for_symbol(symbol)
             try:
                 sell_order = Order(
                     strategy_id="startup_cleanup",
@@ -2001,7 +2041,7 @@ class OrderManager:
             qty: Number of shares.
             pos: The broker position object.
         """
-        avg_entry = float(getattr(pos, "avg_entry_price", 0.0))
+        avg_entry = float(getattr(pos, "entry_price", 0.0))
         managed = ManagedPosition(
             symbol=symbol,
             strategy_id="reconstructed",
@@ -2036,7 +2076,7 @@ class OrderManager:
         """
         symbol = getattr(pos, "symbol", str(pos))
         qty = int(getattr(pos, "shares", 0))
-        avg_entry = float(getattr(pos, "avg_entry_price", 0.0))
+        avg_entry = float(getattr(pos, "entry_price", 0.0))
 
         # Find matching stop order
         stop_price = 0.0
@@ -2058,14 +2098,26 @@ class OrderManager:
             if "limit" in order_type:
                 t1_price = float(getattr(order, "limit_price", 0) or 0)
                 t1_order_id = str(getattr(order, "id", ""))
-                t1_shares = int(getattr(order, "qty", 0) or 0)
+                t1_shares = int(getattr(order, "quantity", 0) or 0)
                 break
 
+        # FIX-04 P1-C1-M06: true entry_time is not recoverable from broker
+        # state. Bias reconstructed entry_time earlier by half the global
+        # max_position_duration so the fallback time-stop fires at roughly
+        # the expected point post-restart rather than granting a fresh
+        # full-duration lease. Per-signal time_stop_seconds is not
+        # reconstructed (unavailable from broker state); EOD flatten
+        # provides a hard upper bound regardless. A durable fix (persist
+        # entry_time in the trades-DB sidecar and restore it here) is out
+        # of scope for this session.
+        reconstructed_entry_time = self._clock.now() - timedelta(
+            minutes=self._config.max_position_duration_minutes // 2
+        )
         managed = ManagedPosition(
             symbol=symbol,
             strategy_id="reconstructed",
             entry_price=avg_entry,
-            entry_time=self._clock.now(),  # Approximation
+            entry_time=reconstructed_entry_time,
             shares_total=qty,
             shares_remaining=qty,
             stop_price=stop_price,
@@ -2736,7 +2788,12 @@ class OrderManager:
             positions.remove(position)
         if not positions:
             self._managed_positions.pop(position.symbol, None)
-            # Clean up reconciliation tracking when no positions remain for symbol
+            # Clean up reconciliation tracking when no positions remain for symbol.
+            # FIX-04 P1-C1-L07: these per-symbol maps are ALSO cleared wholesale
+            # in reset_daily_state(); the per-close pop() here is intentional
+            # defense-in-depth so state is not carried across an intraday
+            # close-reopen of the same symbol (ALLOW_ALL duplicate stock
+            # policy, DEC-121/160).
             self._broker_confirmed.pop(position.symbol, None)
             self._reconciliation_miss_count.pop(position.symbol, None)
             # Clean up stop retry, amended prices, and fill dedup state (Sprint 27.95 S2)

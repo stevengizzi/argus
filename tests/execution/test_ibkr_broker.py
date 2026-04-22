@@ -2321,7 +2321,15 @@ class TestIBKRLogNoiseReduction:
     async def test_ibkr_error_404_logged_at_warning(
         self, mock_ib: MagicMock, ibkr_config: IBKRConfig, event_bus: EventBus
     ) -> None:
-        """Verify error 404 is re-logged through Argus logger at WARNING."""
+        """Verify error 404 is re-logged through Argus logger at WARNING.
+
+        FIX-04 P1-C1-M05: 404 no longer early-returns; it falls through to
+        the shared is_order_rejection branch which publishes an
+        OrderCancelledEvent. The WARNING log now fires twice: once for
+        the symbol-specific "IBKR error 404 (qty mismatch) for %s" line
+        and once for the generic "IBKR error %d: %s" line from the
+        severity branch. Both are expected.
+        """
         import logging
 
         with patch("argus.execution.ibkr_broker.IB", return_value=mock_ib):
@@ -2336,9 +2344,10 @@ class TestIBKRLogNoiseReduction:
             ) as mock_warn:
                 broker._on_error(12345, 404, "Order held while securities are located", contract)
 
-            mock_warn.assert_called_once()
-            call_args = mock_warn.call_args
-            assert "404" in str(call_args)
+            assert mock_warn.call_count == 2
+            all_args = str(mock_warn.call_args_list)
+            assert "404" in all_args
+            assert "AAPL" in all_args
 
 
 # ---------------------------------------------------------------------------

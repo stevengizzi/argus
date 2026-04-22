@@ -30,7 +30,15 @@ from argus.core.events import (
 from argus.execution.order_manager import (
     OrderManager,
 )
-from argus.models.trading import BracketOrderResult, OrderResult, OrderStatus
+from argus.models.trading import (
+    BracketOrderResult,
+    Order,
+    OrderResult,
+    OrderSide,
+    OrderStatus,
+    OrderType,
+    Position,
+)
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -108,8 +116,16 @@ def fixed_clock() -> FixedClock:
 
 @pytest.fixture
 def config() -> OrderManagerConfig:
-    """Default Order Manager config."""
-    return OrderManagerConfig()
+    """Default Order Manager config.
+
+    FIX-04 P1-G2-M04: eod_flatten_timeout_seconds is overridden from the
+    production default of 30s down to 1s (the minimum allowed by the
+    Pydantic ``ge=1`` validator) so tests that exercise eod_flatten() /
+    emergency_flatten() do not burn the full 30s wall-clock waiting for
+    fill-verification events. Pattern already used by
+    test_order_manager_sprint329.py.
+    """
+    return OrderManagerConfig(eod_flatten_timeout_seconds=1)
 
 
 @pytest.fixture
@@ -1163,12 +1179,12 @@ async def test_reconstruct_from_broker_recovers_positions(
     pos1 = MagicMock()
     pos1.symbol = "AAPL"
     pos1.shares = 100
-    pos1.avg_entry_price = 150.0
+    pos1.entry_price = 150.0
 
     pos2 = MagicMock()
     pos2.symbol = "TSLA"
     pos2.shares = 50
-    pos2.avg_entry_price = 200.0
+    pos2.entry_price = 200.0
 
     mock_broker.get_positions = AsyncMock(return_value=[pos1, pos2])
 
@@ -1184,7 +1200,7 @@ async def test_reconstruct_from_broker_recovers_positions(
     limit_order.order_type = "limit"
     limit_order.limit_price = 210.0
     limit_order.id = "limit-456"
-    limit_order.qty = 25
+    limit_order.quantity = 25
 
     mock_broker.get_open_orders = AsyncMock(return_value=[stop_order, limit_order])
     mock_broker.place_order = AsyncMock()
@@ -1264,7 +1280,7 @@ async def test_startup_flatten_unknown_positions_enabled(
     zombie = MagicMock()
     zombie.symbol = "ZOMBIE"
     zombie.shares = 75
-    zombie.avg_entry_price = 42.0
+    zombie.entry_price = 42.0
 
     mock_broker.get_positions = AsyncMock(return_value=[zombie])
     mock_broker.get_open_orders = AsyncMock(return_value=[])
@@ -1304,7 +1320,7 @@ async def test_startup_flatten_unknown_positions_disabled(
     zombie = MagicMock()
     zombie.symbol = "ZOMBIE"
     zombie.shares = 75
-    zombie.avg_entry_price = 42.0
+    zombie.entry_price = 42.0
 
     mock_broker.get_positions = AsyncMock(return_value=[zombie])
     mock_broker.get_open_orders = AsyncMock(return_value=[])
@@ -1365,7 +1381,7 @@ async def test_startup_only_known_positions(
     known = MagicMock()
     known.symbol = "AAPL"
     known.shares = 100
-    known.avg_entry_price = 150.0
+    known.entry_price = 150.0
 
     # AAPL has a stop order → ARGUS was managing it
     stop_order = MagicMock()
@@ -1409,12 +1425,12 @@ async def test_startup_mix_known_and_unknown(
     known = MagicMock()
     known.symbol = "AAPL"
     known.shares = 100
-    known.avg_entry_price = 150.0
+    known.entry_price = 150.0
 
     zombie = MagicMock()
     zombie.symbol = "ZOMBIE"
     zombie.shares = 50
-    zombie.avg_entry_price = 30.0
+    zombie.entry_price = 30.0
 
     # Only AAPL has an associated order — ZOMBIE has none
     stop_order = MagicMock()
@@ -1502,7 +1518,7 @@ async def test_startup_real_sequence_position_with_orders_not_flattened(
     pos = MagicMock()
     pos.symbol = "NVDA"
     pos.shares = 200
-    pos.avg_entry_price = 120.0
+    pos.entry_price = 120.0
 
     stop = MagicMock()
     stop.symbol = "NVDA"
@@ -1547,7 +1563,7 @@ async def test_startup_zero_qty_zombie_skips_flatten(
     ghost = MagicMock()
     ghost.symbol = "GHOST"
     ghost.shares = 0
-    ghost.avg_entry_price = 50.0
+    ghost.entry_price = 50.0
 
     mock_broker.get_positions = AsyncMock(return_value=[ghost])
     mock_broker.get_open_orders = AsyncMock(return_value=[])
@@ -3687,12 +3703,16 @@ async def test_flatten_fill_routes_to_correct_strategy_when_multiple_positions(
 
 
 @pytest.mark.asyncio
-async def test_flatten_fill_fallback_when_strategy_id_not_found(
+async def test_flatten_fill_strategy_id_mismatch_hard_errors(
     event_bus: EventBus,
     fixed_clock: FixedClock,
     config: OrderManagerConfig,
 ) -> None:
-    """Flatten fill falls back to first open position when strategy_id doesn't match."""
+    """FIX-04 P1-C1-L08: strategy_id mismatch on a flatten fill is a hard
+    error (logged at ERROR, no position closed) instead of the legacy
+    silent fallback to the first open position. The fallback existed for
+    pre-strategy_id positions that no longer exist in the codebase; a
+    silent fallback let fills accrue to the wrong position's P&L."""
     mock_broker = MagicMock()
     order_counter = {"n": 0}
 
@@ -3772,7 +3792,7 @@ async def test_flatten_fill_fallback_when_strategy_id_not_found(
             break
     assert pending_order is not None
 
-    # Simulate fill - should fall back to first open position
+    # Simulate fill — with the tightened behavior, no position should close.
     fill_event = OrderFilledEvent(
         order_id=pending_order.order_id,
         fill_price=150.5,
@@ -3781,9 +3801,10 @@ async def test_flatten_fill_fallback_when_strategy_id_not_found(
     await om.on_fill(fill_event)
     await event_bus.drain()
 
-    # Position should still be closed via fallback
-    assert len(closed_events) == 1
-    assert closed_events[0].strategy_id == "orb_breakout"
+    # No PositionClosedEvent: the hard-error path returns early.
+    assert len(closed_events) == 0
+    # The original position must still be open (not silently closed).
+    assert om._managed_positions["AAPL"][0].shares_remaining == 100
 
     await om.stop()
 
@@ -4114,7 +4135,12 @@ async def test_mfe_mae_initialized_at_entry(
     order_manager: OrderManager,
     mock_broker: MagicMock,
 ) -> None:
-    """mfe_price and mae_price are set to entry_price when position opens."""
+    """mfe_price and mae_price are set to entry_price when position opens.
+
+    FIX-04 P1-C1-L09: mfe_time and mae_time are also initialized to
+    entry_time (mirroring the price fields) so an instant-reversal
+    position does not leave mfe_time=None forever.
+    """
     await order_manager.start()
 
     approved = make_approved(make_signal(entry_price=150.0, stop_price=148.0))
@@ -4125,8 +4151,9 @@ async def test_mfe_mae_initialized_at_entry(
     assert position.mae_price == position.entry_price
     assert position.mfe_r == 0.0
     assert position.mae_r == 0.0
-    assert position.mfe_time is None
-    assert position.mae_time is None
+    # FIX-04 P1-C1-L09: initialized, not None.
+    assert position.mfe_time == position.entry_time
+    assert position.mae_time == position.entry_time
 
     await order_manager.stop()
 
@@ -4148,9 +4175,12 @@ async def test_mfe_updated_on_price_increase(
     assert position.mfe_price == 153.0
     assert position.mfe_r > 0.0
     assert position.mfe_time is not None
-    # mae should be unchanged (price did not go below entry)
+    # mae should be unchanged (price did not go below entry).
+    # FIX-04 P1-C1-L09: mae_time is initialized to entry_time at open,
+    # not None; the absence-of-adverse-tick is instead expressed by
+    # mae_price == entry_price.
     assert position.mae_price == 150.0
-    assert position.mae_time is None
+    assert position.mae_time == position.entry_time
 
     await order_manager.stop()
 
@@ -4172,9 +4202,11 @@ async def test_mae_updated_on_price_decrease(
     assert position.mae_price == 149.0
     assert position.mae_r < 0.0
     assert position.mae_time is not None
-    # mfe should be unchanged (price did not go above entry)
+    # mfe should be unchanged (price did not go above entry).
+    # FIX-04 P1-C1-L09: mfe_time is initialized to entry_time at open,
+    # not None.
     assert position.mfe_price == 150.0
-    assert position.mfe_time is None
+    assert position.mfe_time == position.entry_time
 
     await order_manager.stop()
 
@@ -4276,3 +4308,287 @@ async def test_mfe_mae_persisted_to_trade_log(
     assert trade.mae_r is None or trade.mae_r == 0.0
 
     await order_manager.stop()
+
+
+# ---------------------------------------------------------------------------
+# Reconstruction field-name regression guards (FIX-04 P1-C1-C01, P1-C1-C02)
+# ---------------------------------------------------------------------------
+#
+# These tests use REAL Position / Order Pydantic models (not MagicMock) so
+# the field names are enforced by the actual contract. The Broker ABC
+# returns list[Position] / list[Order], so reconstruction code must read
+# Position.entry_price (not avg_entry_price) and Order.quantity (not qty).
+#
+# Prior to FIX-04 the code read getattr(pos, "avg_entry_price", 0.0) and
+# getattr(order, "qty", 0), both of which silently returned their defaults
+# because the real models use different field names. Same regression class
+# as DEF-139/140 (shares vs qty on Position).
+
+
+@pytest.mark.asyncio
+async def test_reconstruct_reads_position_entry_price_field(
+    event_bus: EventBus,
+    fixed_clock: FixedClock,
+    config: OrderManagerConfig,
+) -> None:
+    """P1-C1-C01: reconstructed ManagedPosition must carry entry_price from
+    Position.entry_price, not from the non-existent avg_entry_price attr.
+
+    Reverting the fix to getattr(pos, "avg_entry_price", 0.0) causes this
+    test to fail because the default 0.0 path is taken.
+    """
+    real_pos = Position(
+        strategy_id="prior_session",
+        symbol="AAPL",
+        side=OrderSide.BUY,
+        entry_price=175.50,
+        entry_time=datetime(2026, 4, 22, 14, 0, tzinfo=UTC),
+        shares=100,
+        stop_price=172.00,
+    )
+    real_stop = Order(
+        strategy_id="prior_session",
+        symbol="AAPL",
+        side=OrderSide.SELL,
+        order_type=OrderType.STOP,
+        quantity=100,
+        stop_price=172.00,
+    )
+
+    broker = MagicMock()
+    broker.get_positions = AsyncMock(return_value=[real_pos])
+    broker.get_open_orders = AsyncMock(return_value=[real_stop])
+    broker.place_order = AsyncMock()
+
+    om = OrderManager(
+        event_bus=event_bus,
+        broker=broker,
+        clock=fixed_clock,
+        config=config,
+        startup_config=StartupConfig(flatten_unknown_positions=True),
+    )
+    await om.reconstruct_from_broker()
+
+    assert "AAPL" in om._managed_positions
+    managed = om._managed_positions["AAPL"][0]
+    assert managed.entry_price == 175.50, (
+        "Reconstructed entry_price must come from Position.entry_price. "
+        "Regression guard for P1-C1-C01 (FIX-04)."
+    )
+    # high_watermark is initialized from entry_price — a second assertion
+    # that captures the same bug from a different angle.
+    assert managed.high_watermark == 175.50
+
+
+@pytest.mark.asyncio
+async def test_reconstruct_reco_path_reads_position_entry_price_field(
+    event_bus: EventBus,
+    fixed_clock: FixedClock,
+    config: OrderManagerConfig,
+) -> None:
+    """P1-C1-C01 second site: _create_reco_position also uses the broker
+    Position and was reading avg_entry_price. Covers the flatten-disabled
+    RECO path.
+    """
+    real_pos = Position(
+        strategy_id="prior_session",
+        symbol="ZOMBIE",
+        side=OrderSide.BUY,
+        entry_price=42.75,
+        entry_time=datetime(2026, 4, 22, 14, 0, tzinfo=UTC),
+        shares=50,
+        stop_price=40.00,
+    )
+
+    broker = MagicMock()
+    broker.get_positions = AsyncMock(return_value=[real_pos])
+    broker.get_open_orders = AsyncMock(return_value=[])
+    broker.place_order = AsyncMock()
+
+    # flatten_unknown_positions=False → RECO path (_create_reco_position)
+    om = OrderManager(
+        event_bus=event_bus,
+        broker=broker,
+        clock=fixed_clock,
+        config=config,
+        startup_config=StartupConfig(flatten_unknown_positions=False),
+    )
+    await om.reconstruct_from_broker()
+
+    assert "ZOMBIE" in om._managed_positions
+    managed = om._managed_positions["ZOMBIE"][0]
+    assert managed.entry_price == 42.75, (
+        "_create_reco_position must read Position.entry_price. "
+        "Regression guard for P1-C1-C01 (FIX-04)."
+    )
+
+
+@pytest.mark.asyncio
+async def test_reconstruct_reads_order_quantity_field(
+    event_bus: EventBus,
+    fixed_clock: FixedClock,
+    config: OrderManagerConfig,
+) -> None:
+    """P1-C1-C02: t1_shares on reconstructed position must come from
+    Order.quantity. Reverting to getattr(order, "qty", 0) causes this test
+    to fail because t1_shares silently becomes 0.
+    """
+    real_pos = Position(
+        strategy_id="prior_session",
+        symbol="TSLA",
+        side=OrderSide.BUY,
+        entry_price=200.00,
+        entry_time=datetime(2026, 4, 22, 14, 0, tzinfo=UTC),
+        shares=100,
+        stop_price=195.00,
+    )
+    real_t1 = Order(
+        strategy_id="prior_session",
+        symbol="TSLA",
+        side=OrderSide.SELL,
+        order_type=OrderType.LIMIT,
+        quantity=50,
+        limit_price=210.00,
+    )
+
+    broker = MagicMock()
+    broker.get_positions = AsyncMock(return_value=[real_pos])
+    broker.get_open_orders = AsyncMock(return_value=[real_t1])
+    broker.place_order = AsyncMock()
+
+    om = OrderManager(
+        event_bus=event_bus,
+        broker=broker,
+        clock=fixed_clock,
+        config=config,
+        startup_config=StartupConfig(flatten_unknown_positions=True),
+    )
+    await om.reconstruct_from_broker()
+
+    managed = om._managed_positions["TSLA"][0]
+    assert managed.t1_shares == 50, (
+        "Reconstructed t1_shares must come from Order.quantity, not qty. "
+        "Regression guard for P1-C1-C02 (FIX-04)."
+    )
+    # The live T1 order pairing must be coherent: a live T1 must NOT be
+    # marked filled. Pre-fix t1_shares=0 + t1_order_id set → inconsistent.
+    assert managed.t1_order_id is not None
+    assert managed.t1_filled is False
+
+
+@pytest.mark.asyncio
+async def test_drain_startup_flatten_queue_cancels_brackets_first(
+    event_bus: EventBus,
+    fixed_clock: FixedClock,
+    config: OrderManagerConfig,
+) -> None:
+    """P1-C1-M02 (FIX-04): draining the startup flatten queue at 9:30 ET
+    must cancel any residual broker-side bracket orders for the symbol
+    BEFORE submitting the SELL, or a lingering stop/T1 can fire between
+    market-open and the queued SELL and produce a short position.
+
+    Same risk class as the three DEF-158 root causes fixed in Sprint 31.8.
+    """
+    cancelled: list[str] = []
+    placed: list[Order] = []
+
+    broker = MagicMock()
+    residual_stop = Order(
+        id="residual-stop-1",
+        strategy_id="prior_session",
+        symbol="ZOMBIE",
+        side=OrderSide.SELL,
+        order_type=OrderType.STOP,
+        quantity=100,
+        stop_price=95.00,
+    )
+    broker.get_open_orders = AsyncMock(return_value=[residual_stop])
+
+    async def _cancel(order_id: str) -> None:
+        cancelled.append(order_id)
+
+    async def _place(order: Order) -> None:
+        placed.append(order)
+
+    broker.cancel_order = AsyncMock(side_effect=_cancel)
+    broker.place_order = AsyncMock(side_effect=_place)
+
+    om = OrderManager(
+        event_bus=event_bus,
+        broker=broker,
+        clock=fixed_clock,
+        config=config,
+    )
+    # Seed the queue as if a zombie position was queued at startup.
+    om._startup_flatten_queue.append(("ZOMBIE", 100))
+
+    await om._drain_startup_flatten_queue()
+
+    # Bracket cancel MUST fire, and MUST precede the SELL placement.
+    assert "residual-stop-1" in cancelled, (
+        "Startup drain must cancel residual bracket orders before the SELL "
+        "(FIX-04 P1-C1-M02)."
+    )
+    assert len(placed) == 1
+    assert placed[0].symbol == "ZOMBIE"
+    assert placed[0].side == OrderSide.SELL
+    # Ordering check — cancel must be called before place_order
+    cancel_call_order = broker.cancel_order.call_args_list
+    place_call_order = broker.place_order.call_args_list
+    assert len(cancel_call_order) >= 1
+    assert len(place_call_order) == 1
+
+
+@pytest.mark.asyncio
+async def test_reconstruct_biases_entry_time_earlier(
+    event_bus: EventBus,
+    fixed_clock: FixedClock,
+    config: OrderManagerConfig,
+) -> None:
+    """P1-C1-M06 (FIX-04): reconstructed entry_time is biased earlier by
+    half of max_position_duration_minutes so fallback time-stop semantics
+    degrade gracefully post-restart instead of granting a fresh
+    full-duration lease.
+    """
+    real_pos = Position(
+        strategy_id="prior_session",
+        symbol="AAPL",
+        side=OrderSide.BUY,
+        entry_price=150.0,
+        entry_time=datetime(2026, 4, 22, 13, 0, tzinfo=UTC),
+        shares=100,
+        stop_price=148.0,
+    )
+    real_stop = Order(
+        strategy_id="prior_session",
+        symbol="AAPL",
+        side=OrderSide.SELL,
+        order_type=OrderType.STOP,
+        quantity=100,
+        stop_price=148.0,
+    )
+
+    broker = MagicMock()
+    broker.get_positions = AsyncMock(return_value=[real_pos])
+    broker.get_open_orders = AsyncMock(return_value=[real_stop])
+    broker.place_order = AsyncMock()
+
+    om = OrderManager(
+        event_bus=event_bus,
+        broker=broker,
+        clock=fixed_clock,
+        config=config,
+    )
+    await om.reconstruct_from_broker()
+
+    managed = om._managed_positions["AAPL"][0]
+    now = fixed_clock.now()
+    expected_bias_minutes = config.max_position_duration_minutes // 2
+    elapsed = (now - managed.entry_time).total_seconds() / 60.0
+    # Expect the reconstructed entry_time to be ~bias minutes in the past,
+    # not ~0 (which was the pre-fix behavior of a fresh full-duration lease).
+    assert elapsed == pytest.approx(expected_bias_minutes, abs=1.0), (
+        f"Reconstructed entry_time should be biased {expected_bias_minutes} "
+        f"minutes earlier; got elapsed={elapsed:.2f} min. "
+        "Regression guard for P1-C1-M06 (FIX-04)."
+    )
