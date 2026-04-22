@@ -468,8 +468,12 @@ class TestRMRejectionUnaffected:
 class TestOverflowConfigCapacity:
     """Tests that overflow.yaml broker_capacity is set to 50 (Sprint 32.9 S3)."""
 
-    def test_overflow_yaml_broker_capacity_is_60(self) -> None:
-        """overflow.yaml broker_capacity must be 50 after Sprint 32.9 reduction."""
+    def test_overflow_yaml_broker_capacity_is_50(self) -> None:
+        """overflow.yaml broker_capacity must be 50 after Sprint 32.9 reduction.
+
+        overflow.yaml is flattened (bare fields at top level) as of FIX-02
+        (audit 2026-04-21, DEC-384 registry extension).
+        """
         import yaml
         from pathlib import Path
 
@@ -477,8 +481,8 @@ class TestOverflowConfigCapacity:
         with config_path.open() as fh:
             data = yaml.safe_load(fh)
 
-        assert data["overflow"]["broker_capacity"] == 50, (
-            f"Expected broker_capacity=50 but got {data['overflow']['broker_capacity']}"
+        assert data["broker_capacity"] == 50, (
+            f"Expected broker_capacity=50 but got {data['broker_capacity']}"
         )
 
     def test_overflow_config_loads_with_capacity_60(self) -> None:

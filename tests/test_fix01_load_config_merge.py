@@ -2,8 +2,8 @@
 
 ``load_config()`` deep-merges standalone ``config/<name>.yaml`` files over
 the corresponding top-level key of the system config with precedence
-``standalone > live > base``. ``config/quality_engine.yaml`` is the
-first overlay; FIX-02 will add ``config/overflow.yaml``.
+``standalone > live > base``. ``config/quality_engine.yaml`` is the first
+overlay; ``config/overflow.yaml`` was added by FIX-02.
 
 These tests use ``tmp_path`` + synthetic YAML files so they never touch
 the real ``config/`` tree in the repo.
@@ -11,6 +11,7 @@ the real ``config/`` tree in the repo.
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import pytest
@@ -217,3 +218,83 @@ def test_quality_engine_is_registered_overlay() -> None:
     extends this tuple to add overflow.yaml without touching load_config()."""
     keys = {section_key for section_key, _filename in _STANDALONE_SYSTEM_OVERLAYS}
     assert "quality_engine" in keys
+
+
+# ---------------------------------------------------------------------------
+# 7. FIX-02 — the overlay registry must include overflow
+# ---------------------------------------------------------------------------
+
+
+def test_registry_includes_overflow_after_fix02() -> None:
+    """The overlay registry lists overflow.yaml as the second entry (FIX-02,
+    DEC-384). Order does not matter to load_config() but the tuple pair must
+    be present."""
+    assert ("overflow", "overflow.yaml") in _STANDALONE_SYSTEM_OVERLAYS
+
+
+# ---------------------------------------------------------------------------
+# 8. FIX-02 — overflow.yaml bare fields merge into system.overflow block
+# ---------------------------------------------------------------------------
+
+
+def test_overflow_broker_capacity_loaded_from_standalone(tmp_path: Path) -> None:
+    """End-to-end: a flattened config/overflow.yaml (bare fields, no
+    ``overflow:`` wrapper) drives ``config.system.overflow.broker_capacity``
+    without an ``overflow:`` block in system.yaml — just like the real repo
+    after FIX-02."""
+    # system.yaml carries no overflow: block (matches the repo after FIX-02).
+    _write_system_yaml(tmp_path, _BASE_SYSTEM_YAML)
+
+    # Standalone overflow.yaml, bare fields at top level.
+    overlay_path = tmp_path / "overflow.yaml"
+    overlay_path.write_text(
+        yaml.safe_dump({"enabled": True, "broker_capacity": 50})
+    )
+
+    config = load_config(tmp_path)
+
+    assert config.system.overflow.enabled is True
+    assert config.system.overflow.broker_capacity == 50
+
+
+# ---------------------------------------------------------------------------
+# 9. FIX-02 hardening — non-dict overlay logs a warning and is skipped
+# ---------------------------------------------------------------------------
+
+
+def test_non_dict_standalone_overlay_emits_warning(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A standalone YAML that parses to something other than a dict (e.g. a
+    list) is skipped with a WARNING log — silent skip is no longer acceptable.
+
+    Uses overflow.yaml because it's a registered overlay. The malformed file
+    must not crash load_config(); the resulting config falls back to whatever
+    is in system.yaml (or model defaults if system.yaml also lacks the block).
+    """
+    _write_system_yaml(tmp_path, _BASE_SYSTEM_YAML)
+
+    # A YAML list at top level — parses cleanly but is not a dict.
+    overlay_path = tmp_path / "overflow.yaml"
+    overlay_path.write_text("- enabled: true\n- broker_capacity: 50\n")
+
+    with caplog.at_level(logging.WARNING, logger="argus.core.config"):
+        config = load_config(tmp_path)
+
+    # Warning was emitted referencing overflow.yaml.
+    warnings = [
+        record
+        for record in caplog.records
+        if record.levelno == logging.WARNING
+        and "overflow.yaml" in record.getMessage()
+        and "not a dict" in record.getMessage()
+    ]
+    assert warnings, (
+        f"Expected WARNING about overflow.yaml not being a dict; got "
+        f"{[r.getMessage() for r in caplog.records]}"
+    )
+
+    # Config still loads — the malformed overlay is skipped, defaults apply.
+    assert config.system.overflow.enabled is True
+    # Model default is 30; no system.yaml block and no valid overlay.
+    assert config.system.overflow.broker_capacity == 30

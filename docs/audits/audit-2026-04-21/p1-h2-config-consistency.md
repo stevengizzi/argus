@@ -346,4 +346,11 @@ The prompt's prediction that "`config/system_paper.yaml`, `config/system_backtes
 - **D-03** (`quality_engine.thresholds.a_plus`): **RESOLVED FIX-01-catalyst-db-quality-pipeline**. Runtime now reads threshold 72 from `quality_engine.yaml`.
 - **DEAD05** (`quality_engine.yaml` dead): **RESOLVED FIX-01-catalyst-db-quality-pipeline** — file is now authoritative under Option B, not deleted. The "dead YAML" class of finding is the motivation behind DEC-384's extensible `_STANDALONE_SYSTEM_OVERLAYS` registry.
 
-The companion `overflow.yaml` / `system_live.yaml` divergence (C3 / related D-0x rows in this report) is deferred to FIX-02, which extends the overlay registry with a one-tuple entry.
+The companion `overflow.yaml` / `system_live.yaml` divergence (C3 / related D-0x rows in this report) is **RESOLVED FIX-02-config-drift-critical** — see FIX-02 Resolution section below.
+
+## FIX-02 Resolution (2026-04-21)
+
+- **D-05** (`overflow.broker_capacity` 30 vs 50 drift): **RESOLVED FIX-02-config-drift-critical** via the DEC-384 registry extension. `config/overflow.yaml` is flattened to bare-field shape and registered as the second `_STANDALONE_SYSTEM_OVERLAYS` entry; `config/system.yaml` and `config/system_live.yaml` no longer carry an `overflow:` block. Runtime now reads `broker_capacity: 50` from `overflow.yaml`, matching `risk_limits.yaml`'s `max_concurrent_positions: 50`. The 20-position drift window is closed.
+- **DEAD-04** (`config/overflow.yaml` dead): **RESOLVED FIX-02-config-drift-critical** — file is now authoritative under Option B, not deleted. Same motivation as DEAD-05: the "dead YAML" class of finding is what `_STANDALONE_SYSTEM_OVERLAYS` exists to cure.
+
+Stage 1 deferred pickup (FIX-01 review INFO): `load_config()` now emits a WARNING when a registered standalone overlay parses to a non-dict value (e.g., a YAML list); previously a silent skip. Regression test added alongside the FIX-02 guards in `tests/test_fix01_load_config_merge.py`.

@@ -170,11 +170,9 @@ counterfactual:
   no_data_timeout_seconds: 300
   eod_close_time: "16:00"
 
-# Overflow Management (Sprint 27.95)
-# Routes excess signals to counterfactual tracking when broker capacity is reached.
-overflow:
-  enabled: true
-  broker_capacity: 30
+# Overflow Management (Sprint 27.95) — authoritative config is config/overflow.yaml
+# (standalone overlay via DEC-384 / FIX-02 audit 2026-04-21). Do NOT re-add an
+# `overflow:` block here; it would diverge from the standalone file.
 
 # Controls handling of unknown IBKR positions found at startup.
 startup:

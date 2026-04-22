@@ -1335,14 +1335,21 @@ def load_yaml_file(path: Path) -> dict[str, Any]:
 # When a file listed here exists at ``config/<filename>``, its contents are
 # deep-merged over the matching top-level key of the system config with
 # precedence ``standalone > live > base``. This keeps per-subsystem configs
-# (e.g. ``quality_engine.yaml``) as a single source of truth without forcing
-# operators to keep values duplicated across ``system.yaml`` / ``system_live.yaml``.
+# as a single source of truth without forcing operators to keep values
+# duplicated across ``system.yaml`` / ``system_live.yaml``.
 #
-# The key must match the top-level key in the system YAML exactly. Extend this
-# list — do NOT edit ``load_config()`` logic — when a new standalone config is
-# introduced (e.g., FIX-02 will add ``overflow.yaml``).
+# **File shape convention**: bare fields at the top level — do NOT wrap the
+# contents in a ``<section_key>:`` block. The registry's ``section_key``
+# (e.g. ``"overflow"``) tells ``load_config()`` which top-level key of the
+# system config this file overlays; the file itself contains only the fields
+# (e.g. ``enabled: true`` / ``broker_capacity: 50``). ``quality_engine.yaml``
+# is the reference; ``overflow.yaml`` follows the same shape (FIX-02).
+#
+# Extend this tuple — do NOT edit ``load_config()`` logic — when a new
+# standalone config is introduced.
 _STANDALONE_SYSTEM_OVERLAYS: tuple[tuple[str, str], ...] = (
     ("quality_engine", "quality_engine.yaml"),
+    ("overflow", "overflow.yaml"),
 )
 
 
@@ -1358,12 +1365,13 @@ def load_config(config_dir: Path, system_config_file: Path | None = None) -> Arg
 
     Missing files use defaults. Extra fields in YAML are ignored.
 
-    **Standalone overlays** (DEC-384 / FIX-01 audit 2026-04-21). Files listed
-    in ``_STANDALONE_SYSTEM_OVERLAYS`` — currently just ``quality_engine.yaml``
-    — are deep-merged over the corresponding top-level key of the loaded
-    system config. Precedence: ``standalone > live > base``. This lets a
-    per-subsystem YAML serve as the single source of truth for its block
-    without duplicating values into ``system.yaml`` / ``system_live.yaml``.
+    **Standalone overlays** (DEC-384 / FIX-01 audit 2026-04-21; extended by
+    FIX-02). Files listed in ``_STANDALONE_SYSTEM_OVERLAYS`` — currently
+    ``quality_engine.yaml`` and ``overflow.yaml`` — are deep-merged over the
+    corresponding top-level key of the loaded system config. Precedence:
+    ``standalone > live > base``. This lets a per-subsystem YAML serve as
+    the single source of truth for its block without duplicating values into
+    ``system.yaml`` / ``system_live.yaml``.
 
     Args:
         config_dir: Path to the configuration directory.
@@ -1414,6 +1422,12 @@ def load_config(config_dir: Path, system_config_file: Path | None = None) -> Arg
                 continue
             overlay = load_yaml_file(overlay_path)
             if not isinstance(overlay, dict):
+                logger.warning(
+                    "load_config: standalone overlay %s is not a dict "
+                    "(got %s) — skipping",
+                    overlay_filename,
+                    type(overlay).__name__,
+                )
                 continue
             existing = system_block.get(section_key)
             if isinstance(existing, dict):

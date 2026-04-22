@@ -222,9 +222,13 @@ class TestConfigFileValues:
         assert raw["account"]["max_concurrent_positions"] == 50
 
     def test_overflow_capacity_loaded(self) -> None:
-        """overflow.yaml broker_capacity is 50."""
+        """overflow.yaml broker_capacity is 50.
+
+        overflow.yaml is flattened (bare fields at top level) as of FIX-02
+        (audit 2026-04-21, DEC-384 registry extension).
+        """
         raw = yaml.safe_load((_CONFIG_DIR / "overflow.yaml").read_text())
-        assert raw["overflow"]["broker_capacity"] == 50
+        assert raw["broker_capacity"] == 50
 
     def test_strategy_abcd_shadow_mode(self) -> None:
         """abcd.yaml mode is 'shadow'."""
