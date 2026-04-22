@@ -626,4 +626,55 @@ The Observatory page's Session Vitals Bar displays regime dimensions in real-tim
 
 ---
 
-*End of Live Operations Guide v1.3*
+## 12. Scheduled Maintenance Tasks
+
+*Added 2026-04-22 (FIX-21). Closes DEF-097 + DEF-162.*
+
+### Monthly Parquet Cache Refresh
+
+The historical data cache has two sides (see `docs/operations/parquet-cache-layout.md`):
+
+- `data/databento_cache/` — read-only source of truth for `BacktestEngine`. Populated by `scripts/populate_historical_cache.py`, which pulls Databento OHLCV-1m Parquet files month-by-month for three datasets (EQUS.MINI, XNAS.ITCH, XNYS.PILLAR).
+- `data/databento_cache_consolidated/` — derived per-symbol cache used by `HistoricalQueryService` (DuckDB). Produced by `scripts/consolidate_parquet_cache.py`, which merges the monthly files into one Parquet per symbol with an embedded `symbol` column.
+
+Both must be refreshed monthly as Databento publishes new calendar months. The two scripts are designed to run as a chained pair: `--update` pulls only months newer than what's already cached, and `--resume` (the consolidator's default) re-runs only symbols whose source row count grew.
+
+**Recommended cron line** (runs 02:00 ET on the 2nd of each month — gives Databento time to publish the prior month):
+
+```
+0 2 2 * * cd "/Users/stevengizzi/Documents/Coding Projects/argus" && python3 scripts/populate_historical_cache.py --update >> logs/cache_update.log 2>&1 && python3 scripts/consolidate_parquet_cache.py --resume >> logs/cache_consolidate.log 2>&1
+```
+
+The `&&` chain means consolidation only runs if population succeeded. Failures of either step land in a distinct log file so the operator can diagnose them independently.
+
+**Prerequisites:**
+
+- Mac awake at the scheduled time (either system always-on, or pmset schedule a wake — cron does not wake a sleeping Mac).
+- Both caches are local under `data/` in the repo. No external drive is required. (The populate script's fallback list still includes `/Volumes/LaCie/argus-cache` for legacy reasons, but the local candidate is resolved first.)
+- `DATABENTO_API_KEY` available in the environment or in `.env` at repo root.
+- Enough free disk on the destination filesystem — `consolidate_parquet_cache.py` enforces a 60 GB preflight and refuses to start below that.
+
+**Install:**
+
+```bash
+crontab -e            # append the line above
+crontab -l            # verify it registered
+```
+
+**Verify it ran:**
+
+```bash
+tail -50 logs/cache_update.log
+tail -50 logs/cache_consolidate.log
+```
+
+A successful run ends with a download summary (populate) and an atomic-rename confirmation per consolidated symbol (consolidate). If either log ends mid-sentence or reports a Python traceback, halt and re-run manually before the next scheduled invocation.
+
+**Expected runtime:**
+
+- `populate --update`: ~5–15 min for one new month across the three datasets.
+- `consolidate --resume`: ~2–5 min for just the symbols whose source row count changed. First-time full consolidation after Sprint 31.85 was ~45 min for ~24K symbols — `--resume` is dramatically faster on steady-state monthly deltas.
+
+---
+
+*End of Live Operations Guide v1.4*
