@@ -163,3 +163,17 @@ DEC-149 becomes a supersede candidate only after M5 (walk-forward migration) com
 - Estimated Phase 3 fix effort (T1 tier): **1 session, ~90 minutes** (mechanical deletions + 3 import swaps in test_runtime_wiring.py + 1 CLAUDE.md edit + 4 doc references + full test run to verify baseline drop is intentional and net LOC reduction confirmed)
 - T2 tier effort: +1 session, ~60 minutes (chained after T1)
 - T3 tier effort: 1 new DEF → dedicated sprint, 3-5 sessions (out of audit scope)
+
+---
+
+## FIX-10 Resolution (2026-04-22)
+
+FIX-10-backtest-legacy-cleanup addressed the 3 findings routed to this session (C1, L1, L2). M1–M5 were out of FIX-10's declared scope and remain open for future sessions.
+
+| Finding | Resolution |
+|---|---|
+| **C1** | **RESOLVED** — Partial fix applied. M1/M2 preconditions for the "drop direct vectorbt_*.py invocations" part of the suggested fix were not met (report_generator.py + vectorbt_pattern.py both still live). Instead, the Backtesting section of `CLAUDE.md` was split into two sub-headings: "operational wrappers (primary entrypoints)" — `scripts/revalidate_strategy.py`, `scripts/validate_all_strategies.py`, `scripts/run_experiment.py` — and "direct module CLIs (invoked internally by wrappers above)" retaining the pre-existing `python -m argus.backtest.*` lines. This addresses the cosmetic developer-confusion concern without over-reaching into M1/M2 scope. |
+| **L1** | **RESOLVED-VERIFIED** — Verified DEC-149 remains `Status = Active` at `docs/decision-log.md:1656`. No code change per `read-only-no-fix-needed`. DEC-149 retirement still gated on M5 (walk-forward migration DEF). |
+| **L2** | **RESOLVED-VERIFIED** — Verified M2 not adopted (`argus/backtest/report_generator.py` still exists at 37 KB). Per suggested fix's "Otherwise leave alone" clause, the 3 HTML files (`orb_baseline_defaults.html`, `orb_baseline_relaxed.html`, `orb_final_validation.html`) in `reports/` are retained. Revisit once M2 lands. |
+
+Remaining P1-E2 findings (M1, M2, M3, M4, M5, L3, C2) are routed to FIX-09-backtest-engine or tracked as Phase 3 follow-on (T2/T3 tiers per the Deletion Safety Matrix above). M5 is additionally tracked as a new DEF candidate per the DEC-149 Recommendation section.

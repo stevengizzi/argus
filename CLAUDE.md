@@ -91,7 +91,12 @@ python -m argus.main --dev               # Dev mode (mock data, no external conn
 python -m argus.main --config system.yaml # Alpaca incubator mode (legacy)
 python -m argus.main --config config/system_live.yaml  # Live mode (Databento + IBKR)
 
-# Backtesting
+# Backtesting — operational wrappers (primary entrypoints)
+python scripts/revalidate_strategy.py --strategy orb --start 2025-06-01 --end 2025-12-31
+python scripts/validate_all_strategies.py --cache-dir data/databento_cache
+python scripts/run_experiment.py --pattern bull_flag
+
+# Backtesting — direct module CLIs (invoked internally by wrappers above)
 python -m argus.backtest.data_fetcher --symbols TSLA,NVDA --start 2025-03-01 --end 2026-02-01
 python -m argus.backtest.replay_harness --data-dir data/historical/1m --start 2025-06-01 --end 2025-12-31
 python -m argus.backtest.vectorbt_orb --data-dir data/historical/1m --symbols TSLA,NVDA --start 2025-06-01 --end 2025-12-31
