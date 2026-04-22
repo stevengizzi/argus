@@ -451,6 +451,18 @@ async def _init_learning_loop(app_state: AppState) -> Teardown | None:
 
         learning_store = LearningStore(db_path=str(Path(data_dir) / "learning.db"))
         await learning_store.initialize()
+        # DEF-173: mirror the experiment-store retention pattern so learning.db
+        # doesn't grow unbounded. Protected APPLIED/REVERTED proposal reports
+        # are skipped by enforce_retention's SQL (Amendment 11). See
+        # docs/sprints/post-31.9-component-ownership/DISCOVERY.md for why
+        # this component will move out of api/server.py lifespan into main.py
+        # in the post-31.9 sprint (DEF-175).
+        try:
+            await learning_store.enforce_retention(ll_config.report_retention_days)
+        except Exception:
+            logger.warning(
+                "LearningStore retention enforcement failed", exc_info=True
+            )
 
         outcome_collector = OutcomeCollector(
             argus_db_path=str(Path(data_dir) / "argus.db"),

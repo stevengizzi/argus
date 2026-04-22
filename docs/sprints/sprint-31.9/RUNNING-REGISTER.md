@@ -5,10 +5,10 @@
 > at every stage barrier. Survives compaction — read this file to hydrate
 > a fresh Claude.ai conversation.
 >
-> **Last updated:** 2026-04-22, end of Stage 2 (Pass 3 barrier closed)
-> **Campaign HEAD:** `f57a965` (docs FIX-12) / code HEAD `db2818b`
+> **Last updated:** 2026-04-22, IMPROMPTU-def172-173-175 complete (between Stage 2 and Stage 3)
+> **Campaign HEAD:** `24755ac` (register) + impromptu commits pending
 > **Workflow submodule:** `942c53a`
-> **Baseline tests:** 4,964 pytest + 859 Vitest + 0 failures (at f57a965)
+> **Baseline tests:** 4,964 pytest + 859 Vitest + 0 failures (pre-impromptu); +1 pytest after impromptu (4,965)
 
 ---
 
@@ -31,6 +31,7 @@
 | Stage 2 Pass 1 | FIX-02 (config drift via DEC-384 extension) | ✅ CLEAR |
 | Stage 2 Pass 2 | FIX-03 (main.py lifecycle — biggest session of campaign to date) | ✅ CONCERNS → RESOLVED in-session |
 | **Stage 2 Pass 3** | **FIX-12 + FIX-19 + FIX-21 (parallel)** | ✅ **ALL CLEAR** |
+| IMPROMPTU (between 2 and 3) | DEF-172 verify + DEF-173 fix + DEF-175 open | ✅ CLEAR (this session) |
 | Stage 3 | FIX-04 (Rule-4 serial, order_manager.py) + FIX-16 + FIX-14 | ⏸ PENDING |
 | Stage 4 | FIX-05 (core: orchestrator+risk+regime) + FIX-18 + FIX-10 | ⏸ PENDING |
 | Stage 5 | FIX-06 (data) + FIX-07 (intelligence) | ⏸ PENDING |
@@ -58,8 +59,9 @@
 | FIX-21 (ops cron) | `8ccac67` + `3a6c71d` | CLEAN | CLEAR | 0 (docs-only) | Stage 2 Pass 3 |
 | FIX-19 (strategies) | `a2c2512` + `e60cb47` | MINOR_DEVIATIONS | CLEAR | +18 | Stage 2 Pass 3 |
 | FIX-12 (frontend) | `db2818b` + `f57a965` | MINOR_DEVIATIONS | CLEAR | Vitest +13 | Stage 2 Pass 3 |
+| IMPROMPTU-def172-173-175 | (pending) | MINOR_DEVIATIONS | (pending) | +1 | Between Stage 2 and Stage 3; DEF-172 verify-close, DEF-173 code fix, DEF-175 opened + DISCOVERY.md seeded |
 
-Baseline progression: 4,934 (pre-campaign) → 4,858 (actual pytest at campaign start after FIX-03's CLAUDE.md strikethrough) → 4,944 (post-FIX-11) → 4,946 (post-FIX-02) → **4,964 (post-Stage-2)**. Vitest: 846 → **859**.
+Baseline progression: 4,934 (pre-campaign) → 4,858 (actual pytest at campaign start after FIX-03's CLAUDE.md strikethrough) → 4,944 (post-FIX-11) → 4,946 (post-FIX-02) → 4,964 (post-Stage-2) → **4,965 (post-IMPROMPTU-def172-173-175)**. Vitest: 846 → **859**.
 
 ---
 
@@ -77,6 +79,8 @@ Baseline progression: 4,934 (pre-campaign) → 4,858 (actual pytest at campaign 
 | DEF-097 | Monthly cache update cron (`populate_historical_cache.py --update`) | FIX-21 | `8ccac67` |
 | DEF-142 | `quality_engine.yaml` / `system*.yaml` drift | FIX-01 (via DEC-384) | `59bb100` |
 | DEF-162 | Monthly re-consolidation cron (`consolidate_parquet_cache.py --resume`) — paired with DEF-097 | FIX-21 | `8ccac67` |
+| DEF-172 | Duplicate `CatalystStorage` instances — RESOLVED-VERIFIED (behavioral): dual close paths both fire; SQLite WAL enables safe concurrent reads; structural dedup deferred to DEF-175 | IMPROMPTU-def172-173-175 | (pending) |
+| DEF-173 | `LearningStore.enforce_retention()` never called — RESOLVED: wired in `argus/api/server.py::_init_learning_loop` mirroring FIX-03's ExperimentStore pattern; +1 regression test | IMPROMPTU-def172-173-175 | (pending) |
 
 ### Partially resolved
 
@@ -93,18 +97,7 @@ Baseline progression: 4,934 (pre-campaign) → 4,858 (actual pytest at campaign 
 | DEF-170 | VIX regime calculators inert in production (RegimeClassifierV2 built pre-VIX; `attach_vix_service` doesn't rewire calculators) | MEDIUM | **FIX-05 (Stage 4)** |
 | DEF-171 | `test_all_ulids_mapped_bidirectionally` xdist flake | LOW | **FIX-13 (Stage 8)** |
 | DEF-174 | Tauri desktop wrapper never integrated; `platform.ts` deleted as misleading dead code | LOW / opportunistic | Deferred (only if desktop packaging becomes a requirement) |
-
-### Open with NO NATURAL OWNER — gap to resolve
-
-| DEF # | Description | Priority | Blocker |
-|---|---|---|---|
-| **DEF-172** | Duplicate `CatalystStorage` instances — close-path symmetry restored by FIX-03; full dedup requires `argus/api/server.py` lifespan consolidation | LOW | Requires `argus/api/server.py` lifespan session. FIX-11 (Stage 1) already consumed that scope and is closed. No Stage 2–8 session has this file in scope. |
-| **DEF-173** | `LearningStore.enforce_retention()` never called — `ExperimentStore` side wired by FIX-03; `LearningStore` constructed in `argus/api/server.py` lifespan | LOW | Same as DEF-172. |
-
-**Recommended resolution paths** (decide at Stage 3 gate):
-- **Option A (preferred):** Schedule a 30-min impromptu session between Stage 3 and Stage 4 covering only `argus/api/server.py` lifespan — closes both DEFs together.
-- **Option B:** Verify whether IMPROMPTU-02 (Stage 9B) scope organically touches api/server.py. If yes, bundle there.
-- **Option C:** Accept as long-lived open DEFs, close as post-campaign work.
+| DEF-175 | Component ownership consolidation — `CatalystStorage`, `SetupQualityEngine`, `DynamicPositionSizer`, `ExperimentStore`, `LearningStore` constructed in both `main.py` and `api/server.py` lifespan phases; broader pattern behind DEF-172/173 | MEDIUM | **Dedicated post-Sprint-31.9 sprint** (~2–3 sessions). Pre-sprint discovery at `docs/sprints/post-31.9-component-ownership/DISCOVERY.md`. Blocked on Sprint 31.9 closure. |
 
 ---
 
@@ -170,7 +163,7 @@ Per STAGE-FLOW.md:
 **Recommended order:** FIX-04 solo first (Rule-4 serial; unlocks IMPROMPTU-02 scoping). Read FIX-16 and FIX-14 prompts after FIX-04 lands; decide parallelism based on file-overlap analysis.
 
 **Pre-Stage-3 decisions needed:**
-1. Handle DEF-172 + DEF-173 via impromptu session before Stage 3? (Option A from above.)
+1. ~~Handle DEF-172 + DEF-173 via impromptu session before Stage 3? (Option A from above.)~~ ✅ Handled by IMPROMPTU-def172-173-175 — DEF-172 RESOLVED-VERIFIED, DEF-173 RESOLVED, DEF-175 opened for dedicated post-31.9 sprint.
 2. Kick off FIX-04 immediately, or pause for operator rest?
 
 ---

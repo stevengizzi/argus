@@ -641,6 +641,13 @@ Reconciliation redesign with broker-confirmed positions (DEC-369). Overflow rout
 - **DEF-151 fix (Apr 4):** `json.dumps(record.backtest_result, default=str)` in `store.py:193`. Root cause of Night 1 data loss (143 grid points computed, zero saved). +1 pytest. Commit: 3a48bcf.
 - **Sweep Impromptu (Apr 3–5):** Small-sample universe-aware sweeps (24–50 symbols per pattern) across 9 patterns. Key results: Micro Pullback — 2 promotable variants; PMH — conditional; Bull Flag + Flat-Top — confirmed dead on tested universes; Gap-and-Go — invalid (DEF-152); VWAP Bounce — wrong axes swept (DEF-154). DEF-152, DEF-153, DEF-154 opened. Full-universe re-sweeps pending Sweep Infrastructure Hardening.
 
+### Post-Sprint-31.9 (immediately following): Component Ownership Consolidation
+**Target:** 2–3 sessions
+
+Architectural refactor migrating component construction from `argus/api/server.py` `_init_*` lifespan phases into `argus/main.py` Phase 9.x so ArgusSystem becomes the sole owner of `CatalystStorage`, `SetupQualityEngine`, `DynamicPositionSizer`, `ExperimentStore`, and `LearningStore`. `argus/api/server.py` becomes a pure REST/WS adapter that reads pre-populated components from `AppState`. Resolves DEF-175 and structurally resolves DEF-172 (which was closed as RESOLVED-VERIFIED via behavioral proof; this sprint removes the duplication at the source). Relocates the DEF-173 `LearningStore.enforce_retention()` wiring next to the existing `ExperimentStore` retention call in `main.py`.
+
+Pre-sprint discovery captured in `docs/sprints/post-31.9-component-ownership/DISCOVERY.md`. Entry criteria include Sprint 31.9 closure and stable baseline test suite. Follow sprint-planning protocol (Phase A deep-think → Phase B design summary → Phase C spec → Phase D execution) — do NOT execute as impromptus.
+
 ### Sprint 31B: Research Console / Variant Factory — Deferred post-31.75 (DEC-379)
 **Target:** ~3 days
 
