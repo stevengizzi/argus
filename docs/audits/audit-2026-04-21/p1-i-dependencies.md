@@ -276,3 +276,25 @@ Recommendation: **None required.** Both ends of the cache-maintenance pair are a
 ### FIX-18 follow-up (2026-04-22, post-CI-first-run)
 
 P1-I-M06's CI workflow (`.github/workflows/ci.yml`) runs `pytest -n auto`, which requires `pytest-xdist`. The first CI execution failed because `pytest-xdist` was not declared in `[dev]` extras. Fixed by adding `pytest-xdist>=3.5,<4` to `[dev]`. Gap was invisible during the Tier 2 review because every local environment in the project had `pytest-xdist` installed from pre-pyproject.toml history.
+
+### FIX-18 follow-up #2 (2026-04-22, post-xdist CI run)
+
+After the pytest-xdist fix enabled CI to execute the full suite, four additional
+clean-install bugs were uncovered:
+
+1. **`workflow/` submodule not fetched in CI.** `.gitmodules` declares the
+   `claude-workflow` submodule, but `actions/checkout@v4` defaults to
+   `submodules: false`. Fixed by adding `submodules: recursive` to the checkout
+   step in both `pytest` and `vitest` jobs.
+2. **`tests/execution/test_order_manager_safety.py:511` used `import jwt`
+   (PyJWT-style)** while production uses `from jose import jwt`. Fixed by
+   correcting the test to match production.
+3. **`seaborn` undeclared dep.** Used by
+   `argus/backtest/vectorbt_orb.py:1024` for heatmap rendering. Added
+   `seaborn>=0.13,<1` to `[backtest]` extras.
+4. **5 walk-forward tests require local cache fixtures.** Marked as
+   `pytest.mark.integration` (activating FIX-18's C-03 marker addition that
+   was previously unused) and excluded from CI via `-m "not integration"`.
+
+Collectively these removed all 38 CI test failures. No flakes were involved —
+the four known-flake DEFs (150/163/167/171) did NOT fire during this CI run.

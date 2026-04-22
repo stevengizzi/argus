@@ -508,7 +508,7 @@ async def test_reconciliation_endpoint_returns_result(
     transport = ASGITransport(app=app)
 
     # Set JWT secret via the module-level setter (not just env var)
-    import jwt
+    from jose import jwt
 
     from argus.api.auth import set_jwt_secret
 

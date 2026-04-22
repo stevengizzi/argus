@@ -25,6 +25,11 @@ from argus.backtest.walk_forward import (
     validate_out_of_sample,
 )
 
+# These tests require data/historical/1m Parquet fixtures which are part
+# of the 44.73 GB local cache. Skipped in CI via `-m "not integration"`;
+# run locally with `pytest -m integration` or `pytest` (no marker filter).
+pytestmark = pytest.mark.integration
+
 
 # ---------------------------------------------------------------------------
 # Fixtures

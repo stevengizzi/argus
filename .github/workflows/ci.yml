@@ -13,6 +13,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
@@ -33,7 +35,7 @@ jobs:
           ANTHROPIC_API_KEY: ""
           ARGUS_JWT_SECRET: "ci-test-secret-do-not-use-in-prod"
         run: |
-          python -m pytest --ignore=tests/test_main.py -n auto -q
+          python -m pytest --ignore=tests/test_main.py -n auto -q -m "not integration"
 
   vitest:
     name: vitest (frontend)
@@ -44,6 +46,8 @@ jobs:
         working-directory: argus/ui
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Set up Node 20
         uses: actions/setup-node@v4
