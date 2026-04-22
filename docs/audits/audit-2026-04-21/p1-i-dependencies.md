@@ -270,3 +270,9 @@ Recommendation: **None required.** Both ends of the cache-maintenance pair are a
   - **Session β (weekend-only):** M2 (python-jose → PyJWT) + M3 (passlib retirement) → 1 session (auth refactor + 6 import rewrites + fixture touch-ups)
   - **Session γ (safe-during-trading, can stack with α):** M6 (GitHub Actions minimal CI) → ~0.5 session depending on matrix appetite
 - DEFs to open: **0** (monthly-cron pair already tracked as DEF-097 + DEF-162).
+
+---
+
+### FIX-18 follow-up (2026-04-22, post-CI-first-run)
+
+P1-I-M06's CI workflow (`.github/workflows/ci.yml`) runs `pytest -n auto`, which requires `pytest-xdist`. The first CI execution failed because `pytest-xdist` was not declared in `[dev]` extras. Fixed by adding `pytest-xdist>=3.5,<4` to `[dev]`. Gap was invisible during the Tier 2 review because every local environment in the project had `pytest-xdist` installed from pre-pyproject.toml history.
