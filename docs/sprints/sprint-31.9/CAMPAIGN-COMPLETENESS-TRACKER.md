@@ -175,3 +175,18 @@ On close of any session that closes DEFs or lands findings:
 If a new DEF is opened, add it to the appropriate section based on ownership plan.
 If a new session is added or removed, update Stage progress + Sessions remaining.
 If a retrospective item is identified, append to the P# table.
+
+## How to hydrate a fresh Claude.ai conversation
+
+Paste at new-conversation-start:
+1. This file (`CAMPAIGN-COMPLETENESS-TRACKER.md`)
+2. Current `RUNNING-REGISTER.md`
+3. Most recent FIX-NN close-out + Tier 2 review artifacts (the immediate prior session)
+4. Next session's spec file from `docs/audits/audit-2026-04-21/phase-3-prompts/`
+
+Project knowledge files (persistent in the Claude.ai project):
+- `bootstrap-index.md` (workflow metarepo pointer)
+- `ARGUS — Project Knowledge` (architecture + current state)
+- `My Day Trading Manifesto` (personal context)
+
+Starter prompt should reference the campaign HEAD SHA and the target session.
