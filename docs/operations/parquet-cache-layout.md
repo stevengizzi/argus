@@ -93,15 +93,20 @@ The 100 sample symbols in Q3 are chosen deterministically: every
 
 ## Activating the Consolidated Cache
 
-> **This is an operator action, not part of Sprint 31.85.**
+> **Activated by FIX-06 (audit 2026-04-21, P1-C2-1 CRITICAL).** The
+> `config/historical_query.yaml` `cache_dir` field now reads
+> `data/databento_cache_consolidated`; the Python default in
+> `argus/data/historical_query_config.py` matches so a missing overlay still
+> lands on the fast path. Re-running the procedure below is only required if
+> you manually revert the file to the old path.
 
-After a successful consolidation run and acceptable benchmark results:
+If you ever need to re-consolidate from scratch and re-activate:
 
 1. **Confirm the benchmark report** at `data/consolidation_benchmark_*.md` is
    reasonable (sub-10s single-symbol queries, sub-60s COUNT DISTINCT).
-2. **Edit `config/historical_query.yaml`** and change `cache_dir` from
-   `data/databento_cache` to `data/databento_cache_consolidated`. Leave every
-   other field unchanged.
+2. **Verify `config/historical_query.yaml`** — `cache_dir` must be
+   `data/databento_cache_consolidated`. If a local edit reverted it, restore
+   the consolidated path.
 3. **Restart ARGUS** (`./scripts/stop_live.sh && ./scripts/start_live.sh`).
 4. **Verify the startup log** contains an entry like:
    `HistoricalQueryService: VIEW 'historical' created over data/databento_cache_consolidated (~24000 Parquet files found)`

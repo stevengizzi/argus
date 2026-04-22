@@ -94,9 +94,16 @@ class FMPScannerSource(Scanner):
         """Scan for candidates using FMP biggest-gainers/losers/actives.
 
         Args:
-            criteria_list: Scanner criteria from active strategies. Currently unused —
-                FMP endpoints are pre-filtered. Strategy-specific filtering deferred
-                to Sprint 23+ (see DEF-032).
+            criteria_list: Scanner criteria from active strategies. Currently
+                unused — FMP biggest-gainers / biggest-losers / most-actives
+                endpoints are pre-filtered on the API side and do not accept
+                ARGUS-level criteria. Strategy-specific filtering happens
+                downstream at the UniverseManager routing layer.
+
+                Tracked by DEF-032 (re-verified FIX-06 audit 2026-04-21,
+                P1-C2-14): will be wired when the Premium FMP screener
+                endpoint is integrated or when an FMP-volume-aware
+                scanner source is added.
 
         Returns:
             List of WatchlistItems sorted by gap percentage descending.

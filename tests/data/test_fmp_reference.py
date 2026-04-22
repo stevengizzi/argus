@@ -551,6 +551,47 @@ class TestFMPReferenceClientCacheFreshness:
         result = client.get_cached("AAPL")
         assert result is None
 
+    def test_known_symbols_returns_cache_keys(self) -> None:
+        """FIX-06 audit 2026-04-21 (P1-C2-9): public accessor replacing
+        ``_reference_client._cache.keys()`` reach-ins from UniverseManager.
+        """
+        client = FMPReferenceClient(FMPReferenceConfig(rate_limit_delay_seconds=0))
+
+        assert client.known_symbols() == []
+
+        client._cache = {
+            "AAPL": SymbolReferenceData(symbol="AAPL"),
+            "MSFT": SymbolReferenceData(symbol="MSFT"),
+            "NVDA": SymbolReferenceData(symbol="NVDA"),
+        }
+
+        assert set(client.known_symbols()) == {"AAPL", "MSFT", "NVDA"}
+
+    def test_redact_masks_api_key_in_error_strings(self) -> None:
+        """FIX-06 audit 2026-04-21 (P1-C2-11 / DEF-037): ``_redact`` must
+        replace the active API key wherever it appears inside an error
+        string, so aiohttp ClientError reprs that embed the URL don't
+        leak the key into logs."""
+        client = FMPReferenceClient(FMPReferenceConfig(rate_limit_delay_seconds=0))
+        client._api_key = "sk-test-12345"
+
+        err = (
+            "ClientConnectorError: Cannot connect to host "
+            "https://financialmodelingprep.com/stable/stock-list"
+            "?apikey=sk-test-12345"
+        )
+
+        redacted = client._redact(err)
+        assert "sk-test-12345" not in redacted
+        assert "[REDACTED]" in redacted
+
+    def test_redact_noop_when_api_key_not_set(self) -> None:
+        """No api_key → redact is a pass-through (still returns str)."""
+        client = FMPReferenceClient(FMPReferenceConfig(rate_limit_delay_seconds=0))
+        # Simulated exception object.
+        redacted = client._redact(RuntimeError("boom"))
+        assert "boom" in redacted
+
 
 class TestFMPReferenceClientOTCDetection:
     """Tests for OTC exchange detection."""

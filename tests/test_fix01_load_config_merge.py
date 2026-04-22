@@ -301,3 +301,83 @@ def test_non_dict_standalone_overlay_emits_warning(
     assert config.system.overflow.enabled is True
     # Model default is 30; no system.yaml block and no valid overlay.
     assert config.system.overflow.broker_capacity == 30
+
+
+# ---------------------------------------------------------------------------
+# 10. FIX-06 audit 2026-04-21 (P1-C2-1 CRITICAL) — historical_query overlay
+# drives cache_dir through load_config() into the resolved ArgusConfig
+# ---------------------------------------------------------------------------
+
+
+def test_historical_query_overlay_resolves_consolidated_cache(
+    tmp_path: Path,
+) -> None:
+    """End-to-end proof that a bare-field ``historical_query.yaml`` standalone
+    overlay surfaces through ``load_config()`` as
+    ``config.system.historical_query.cache_dir``.
+
+    Prior to FIX-16 the yaml was never loaded at runtime, so a Sprint 31.85
+    operator repoint did not take effect. FIX-06 follow-through: assert the
+    full pipeline — yaml value → overlay merge → Pydantic validation →
+    resolved field — lands on the consolidated cache.
+    """
+    _write_system_yaml(tmp_path, _BASE_SYSTEM_YAML)
+
+    overlay_path = tmp_path / "historical_query.yaml"
+    overlay_path.write_text(
+        yaml.safe_dump(
+            {
+                "enabled": True,
+                "cache_dir": "data/databento_cache_consolidated",
+                "max_memory_mb": 2048,
+                "default_threads": 4,
+                "persist_path": None,
+            }
+        )
+    )
+
+    config = load_config(tmp_path)
+
+    assert config.system.historical_query.enabled is True
+    assert (
+        config.system.historical_query.cache_dir
+        == "data/databento_cache_consolidated"
+    )
+
+
+def test_historical_query_default_is_consolidated_when_overlay_missing(
+    tmp_path: Path,
+) -> None:
+    """Regression guard for FIX-06 P1-C2-6: if the overlay is absent (or
+    cleared), the Pydantic default must still land on the consolidated
+    cache — not the old slow path. Without this, a missing overlay would
+    silently re-route DuckDB queries at ~983K monthly Parquet files.
+    """
+    _write_system_yaml(tmp_path, _BASE_SYSTEM_YAML)
+    # Deliberately no historical_query.yaml.
+
+    config = load_config(tmp_path)
+
+    assert (
+        config.system.historical_query.cache_dir
+        == "data/databento_cache_consolidated"
+    )
+
+
+def test_real_historical_query_yaml_points_at_consolidated() -> None:
+    """Guard the *real* repo config file against regression — if an operator
+    or a future sprint accidentally points cache_dir back at the original
+    cache, this test flips red. Loads the actual file from config/ — no
+    tmp_path indirection.
+    """
+    yaml_path = Path("config/historical_query.yaml")
+    assert yaml_path.exists(), f"YAML file not found: {yaml_path}"
+
+    with open(yaml_path) as f:
+        data = yaml.safe_load(f)
+
+    assert data["cache_dir"] == "data/databento_cache_consolidated", (
+        "config/historical_query.yaml.cache_dir must point at the "
+        "consolidated cache; pointing HistoricalQueryService at "
+        "data/databento_cache/ (983K files) causes hours-long DuckDB scans."
+    )

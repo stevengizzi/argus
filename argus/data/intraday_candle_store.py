@@ -4,9 +4,17 @@ Subscribes to CandleEvent on the Event Bus and accumulates bars per symbol
 during market hours. Provides a queryable API for the bars endpoint and
 pattern strategy backfill.
 
-Thread safety: CandleEvents arrive via call_soon_threadsafe (DEC-088), so
-the callback runs on the asyncio thread. All access is single-threaded
-asyncio — no additional locking needed.
+Thread safety (FIX-06 audit 2026-04-21, P1-C2-4): writes come via
+``call_soon_threadsafe`` (DEC-088), so ``on_candle`` runs on the asyncio
+thread. The query methods (``get_bars``, ``get_latest``, ``has_bars``,
+``bar_count``, ``symbols_with_bars``) are synchronous ``def`` — FastAPI
+dispatches sync route handlers in a threadpool, so reads CAN happen on a
+worker thread concurrent with the asyncio writer. This is safe on CPython
+because ``deque.append`` / ``deque.popleft`` with ``maxlen`` are GIL-atomic
+against ``list(deque)`` snapshots — no additional locking needed. If a
+future caller needs a stronger consistency guarantee (e.g. coherent
+multi-field snapshot across helpers), introduce an ``asyncio.Lock`` at
+that caller rather than here.
 """
 
 from __future__ import annotations
@@ -62,12 +70,20 @@ class IntradayCandleStore:
         if event.timeframe != "1m":
             return
 
-        # Convert timestamp to ET for market hours check (DEC-061)
+        # Convert timestamp to ET for market hours check (DEC-061). FIX-06
+        # audit 2026-04-21 (P1-C2-8): fail-fast on naive timestamps — the
+        # production Databento path always emits UTC-aware timestamps, so
+        # a naive ts means a test fixture or synthetic event forgot
+        # ``tzinfo`` and would otherwise be silently mis-bucketed as ET.
         ts = event.timestamp
         if ts.tzinfo is None:
-            ts_et = ts.replace(tzinfo=ET)
-        else:
-            ts_et = ts.astimezone(ET)
+            raise ValueError(
+                f"IntradayCandleStore.on_candle requires timezone-aware "
+                f"timestamps; received naive {ts!r} for symbol "
+                f"{event.symbol}. CandleEvent producers must attach "
+                f"tzinfo (UTC for Databento, ET for replay)."
+            )
+        ts_et = ts.astimezone(ET)
 
         current_time = ts_et.time()
         if current_time < _MARKET_OPEN or current_time >= _MARKET_CLOSE:

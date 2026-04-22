@@ -28,6 +28,7 @@ from argus.core.events import (
     DataResumedEvent,
     DataStaleEvent,
     IndicatorEvent,
+    SystemAlertEvent,
     TickEvent,
 )
 from argus.data.databento_utils import normalize_databento_df
@@ -110,7 +111,15 @@ class DatabentoDataService(DataService):
         # When None, all symbols are processed (backward compatibility)
         self._viable_universe: set[str] | None = None
 
-        # Databento record class references (stored in start() to avoid hot-path imports)
+        # Databento record class references — stored here (not imported at
+        # module top) so the ``import databento`` call only runs once when
+        # ``_connect_live_session()`` fires. Callback registration in that
+        # method is the ONLY site that should invoke ``_dispatch_record``,
+        # so the None → type ordering is safe in practice. If a future change
+        # registers the callback before the record classes are populated,
+        # ``isinstance(record, None)`` will raise ``TypeError`` — treat that
+        # as an invariant violation, not a bug-in-isinstance (see
+        # FIX-06 audit 2026-04-21, P1-C2-13).
         self._OHLCVMsg: type | None = None
         self._TradeMsg: type | None = None
         self._SymbolMappingMsg: type | None = None
@@ -254,11 +263,31 @@ class DatabentoDataService(DataService):
             # Reconnection logic
             retries += 1
             if retries > self._config.reconnect_max_retries:
-                logger.critical(
-                    "Databento max reconnection retries (%d) exceeded. "
-                    "Data feed is DEAD. Manual intervention required.",
-                    self._config.reconnect_max_retries,
+                message = (
+                    f"Databento max reconnection retries "
+                    f"({self._config.reconnect_max_retries}) exceeded. "
+                    f"Data feed is DEAD. Manual intervention required."
                 )
+                logger.critical(message)
+                # FIX-06 audit 2026-04-21 (P1-C2 F5 / DEF-014) — publish a
+                # SystemAlertEvent so HealthMonitor (and any future Command
+                # Center subscriber) can react to the dead feed. Published
+                # via the asyncio loop directly since this coroutine already
+                # runs on the asyncio thread.
+                try:
+                    await self._event_bus.publish(
+                        SystemAlertEvent(
+                            source="databento_feed",
+                            alert_type="max_retries_exceeded",
+                            message=message,
+                            severity="critical",
+                        )
+                    )
+                except Exception:
+                    logger.exception(
+                        "Failed to publish SystemAlertEvent for "
+                        "Databento feed exhaustion"
+                    )
                 break
 
             delay = min(
@@ -738,17 +767,25 @@ class DatabentoDataService(DataService):
         self, candle_event: CandleEvent, indicator_events: list[IndicatorEvent]
     ) -> None:
         """Schedule CandleEvent and IndicatorEvent publishes as asyncio tasks."""
-        asyncio.ensure_future(self._event_bus.publish(candle_event))
+        # FIX-06 audit 2026-04-21 (P1-C2-15): use the stored loop reference
+        # rather than ``asyncio.ensure_future`` (which resolves the loop via
+        # ``get_event_loop()`` — deprecated outside a running loop in 3.12+).
+        # Called via ``call_soon_threadsafe`` so ``self._loop`` is guaranteed
+        # non-None by the time these fire.
+        assert self._loop is not None  # set in start()
+        self._loop.create_task(self._event_bus.publish(candle_event))
         for ind_event in indicator_events:
-            asyncio.ensure_future(self._event_bus.publish(ind_event))
+            self._loop.create_task(self._event_bus.publish(ind_event))
 
     def _schedule_tick_publish(self, tick_event: TickEvent) -> None:
         """Schedule TickEvent publish as an asyncio task."""
-        asyncio.ensure_future(self._event_bus.publish(tick_event))
+        assert self._loop is not None  # set in start()
+        self._loop.create_task(self._event_bus.publish(tick_event))
 
     def _schedule_stale_event_publish(self, event: DataStaleEvent | DataResumedEvent) -> None:
         """Schedule stale/resumed event publish as an asyncio task."""
-        asyncio.ensure_future(self._event_bus.publish(event))
+        assert self._loop is not None  # set in start()
+        self._loop.create_task(self._event_bus.publish(event))
 
     # ──────────────────────────────────────────────
     # Indicator Computation
@@ -1109,7 +1146,13 @@ class DatabentoDataService(DataService):
 
         Cache structure: {cache_dir}/{symbol}/{timeframe}/{YYYY-MM}.parquet
 
-        Returns None if not cached or partial coverage.
+        Returns None if any required month file is missing — partial
+        coverage is treated as a miss so callers re-fetch the whole range
+        rather than receive a silently-truncated frame.
+
+        FIX-06 audit 2026-04-21 (P1-C2-12): was previously single-month only;
+        now walks every month in [start, end], concatenates, and returns None
+        on any missing month (fail-closed on incomplete coverage).
         """
         cache_dir = Path(self._config.historical_cache_dir)
         if not cache_dir.exists():
@@ -1119,26 +1162,47 @@ class DatabentoDataService(DataService):
         if not symbol_dir.exists():
             return None
 
-        # For simplicity, check if we have a file covering the date range
-        # Full implementation would merge multiple monthly files
-        start_month = start.strftime("%Y-%m")
-        cache_file = symbol_dir / f"{start_month}.parquet"
+        # Enumerate every month covered by [start, end] in chronological order.
+        months: list[str] = []
+        cursor = datetime(start.year, start.month, 1, tzinfo=start.tzinfo)
+        last_month = datetime(end.year, end.month, 1, tzinfo=end.tzinfo)
+        while cursor <= last_month:
+            months.append(cursor.strftime("%Y-%m"))
+            if cursor.month == 12:
+                cursor = cursor.replace(year=cursor.year + 1, month=1)
+            else:
+                cursor = cursor.replace(month=cursor.month + 1)
 
-        if not cache_file.exists():
+        frames: list[pd.DataFrame] = []
+        for month_key in months:
+            cache_file = symbol_dir / f"{month_key}.parquet"
+            if not cache_file.exists():
+                # Partial coverage — force caller to re-fetch the range.
+                return None
+            try:
+                frames.append(pd.read_parquet(cache_file))
+            except Exception as e:
+                logger.warning("Error reading cache file %s: %s", cache_file, e)
+                return None
+
+        if not frames:
             return None
 
-        try:
-            df = pd.read_parquet(cache_file)
-            # Filter to requested range
-            if "timestamp" in df.columns:
-                df = df[(df["timestamp"] >= start) & (df["timestamp"] <= end)]
-                if not df.empty:
-                    logger.debug("Cache hit for %s %s %s", symbol, timeframe, start_month)
-                    return df
-        except Exception as e:
-            logger.warning("Error reading cache file %s: %s", cache_file, e)
+        df = pd.concat(frames, ignore_index=True) if len(frames) > 1 else frames[0]
+        if "timestamp" not in df.columns:
+            return None
 
-        return None
+        df = df[(df["timestamp"] >= start) & (df["timestamp"] <= end)]
+        if df.empty:
+            return None
+
+        logger.debug(
+            "Cache hit for %s %s across %d month(s)",
+            symbol,
+            timeframe,
+            len(months),
+        )
+        return df.sort_values("timestamp").reset_index(drop=True)
 
     def _save_parquet_cache(
         self, symbol: str, timeframe: str, start: datetime, end: datetime, df: pd.DataFrame
@@ -1198,6 +1262,12 @@ class DatabentoDataService(DataService):
             return None
 
         url = "https://financialmodelingprep.com/stable/historical-price-eod/full"
+        # WARNING (FIX-06 audit 2026-04-21, P1-C2-11 / DEF-037): ``params``
+        # carries the FMP API key. The error handlers below intentionally
+        # log ONLY ``symbol`` and ``response.status`` / ``str(e)`` — never
+        # ``response.url`` or ``params``. Adding URL/params to any error
+        # log here would leak the key into logs. Mirror-safe redaction
+        # now lives in argus/data/fmp_reference.py::_safe_error_context.
         params = {"symbol": symbol, "apikey": api_key}
 
         try:

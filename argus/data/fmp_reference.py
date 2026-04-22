@@ -260,11 +260,15 @@ class FMPReferenceClient:
                     logger.info("FMP canary test passed — API schema validated")
 
         except aiohttp.ClientError as e:
-            logger.warning("FMP canary test failed — network error: %s", e)
+            logger.warning(
+                "FMP canary test failed — network error: %s", self._redact(e)
+            )
         except TimeoutError:
             logger.warning("FMP canary test failed — request timeout")
         except Exception as e:
-            logger.warning("FMP canary test failed — unexpected error: %s", e)
+            logger.warning(
+                "FMP canary test failed — unexpected error: %s", self._redact(e)
+            )
 
     async def stop(self) -> None:
         """Clean up client resources and save cache.
@@ -342,10 +346,10 @@ class FMPReferenceClient:
                     return symbols
 
         except aiohttp.ClientError as e:
-            logger.error("FMP stock-list network error: %s", e)
+            logger.error("FMP stock-list network error: %s", self._redact(e))
             return []
         except Exception as e:
-            logger.error("FMP stock-list unexpected error: %s", e)
+            logger.error("FMP stock-list unexpected error: %s", self._redact(e))
             return []
 
     async def fetch_reference_data(
@@ -844,6 +848,33 @@ class FMPReferenceClient:
             Number of cached symbols.
         """
         return len(self._cache)
+
+    def known_symbols(self) -> list[str]:
+        """Return the list of symbols currently in the internal cache.
+
+        Provides a stable, public accessor so consumers (e.g. UniverseManager)
+        don't need to reach into ``self._cache``. Added by FIX-06 audit
+        2026-04-21 (P1-C2-9).
+
+        Returns:
+            List of symbol strings (order is insertion order, not sorted).
+        """
+        return list(self._cache.keys())
+
+    def _redact(self, text: object) -> str:
+        """Return ``str(text)`` with the active API key masked to ``[REDACTED]``.
+
+        aiohttp's ``ClientError`` repr can contain the full request URL —
+        including ``apikey=...`` query params — so any ``logger.error("%s", e)``
+        risked leaking the key into disk/CloudWatch logs. FIX-06 audit
+        2026-04-21 (P1-C2-11 / DEF-037): all FMP error-path logs now route
+        through this helper before emission.
+        """
+        rendered = str(text)
+        key = self._api_key
+        if key:
+            rendered = rendered.replace(key, "[REDACTED]")
+        return rendered
 
     def save_cache(self) -> None:
         """Save the internal reference cache to a JSON file.

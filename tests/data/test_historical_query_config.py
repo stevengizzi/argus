@@ -21,8 +21,10 @@ class TestHistoricalQueryConfigDefaults:
         assert config.enabled is False
 
     def test_cache_dir_default(self) -> None:
+        # FIX-06 audit 2026-04-21 (P1-C2-6): default flipped to consolidated
+        # cache so a missing overlay no longer drops to the slow path.
         config = HistoricalQueryConfig()
-        assert config.cache_dir == "data/databento_cache"
+        assert config.cache_dir == "data/databento_cache_consolidated"
 
     def test_max_memory_mb_default(self) -> None:
         config = HistoricalQueryConfig()

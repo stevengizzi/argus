@@ -11,6 +11,7 @@ import sys
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pandas as pd
 import pytest
 
 from argus.core.clock import FixedClock
@@ -3015,3 +3016,76 @@ class TestSymbolMappingObservability:
 
         assert "SymbolMappingMsg progress" not in caplog.text
         assert "First SymbolMappingMsg" not in caplog.text
+
+
+class TestCheckParquetCacheMultiMonth:
+    """FIX-06 audit 2026-04-21 (P1-C2-12): ``_check_parquet_cache`` must
+    concatenate monthly Parquet files when the requested range spans more
+    than one month, and fail closed (return None) when any month is missing.
+
+    Consolidated into a single test function to avoid a pandas/pyarrow
+    period-extension re-registration issue that fires when ``to_parquet`` is
+    invoked across multiple pytest test functions in the same worker.
+    """
+
+    def test_multi_month_concat_single_and_missing_coverage(
+        self, mock_databento, event_bus, databento_config, data_config, tmp_path
+    ):
+        from argus.data.databento_data_service import DatabentoDataService
+
+        databento_config.historical_cache_dir = str(tmp_path)
+        service = DatabentoDataService(
+            event_bus=event_bus,
+            config=databento_config,
+            data_config=data_config,
+        )
+
+        def write_month(year: int, month: int, rows: int = 3) -> None:
+            symbol_dir = tmp_path / "AAPL" / "1m"
+            symbol_dir.mkdir(parents=True, exist_ok=True)
+            ts_base = datetime(year, month, 1)
+            frame = pd.DataFrame(
+                {
+                    "timestamp": [
+                        ts_base + timedelta(days=i) for i in range(rows)
+                    ],
+                    "open": [100.0 + i for i in range(rows)],
+                    "high": [101.0 + i for i in range(rows)],
+                    "low": [99.0 + i for i in range(rows)],
+                    "close": [100.5 + i for i in range(rows)],
+                    "volume": [1000 * (i + 1) for i in range(rows)],
+                }
+            )
+            frame.to_parquet(
+                symbol_dir / f"{year:04d}-{month:02d}.parquet", index=False
+            )
+
+        # --- Case 1: multi-month span with full coverage.
+        write_month(2026, 2, rows=3)
+        write_month(2026, 3, rows=3)
+
+        result = service._check_parquet_cache(
+            "AAPL", "1m", datetime(2026, 2, 1), datetime(2026, 3, 4)
+        )
+        assert result is not None
+        assert len(result) >= 4
+        timestamps = list(result["timestamp"])
+        assert timestamps == sorted(timestamps), (
+            "concat must preserve chronological order"
+        )
+
+        # --- Case 2: single-month query still works (regression guard).
+        result = service._check_parquet_cache(
+            "AAPL", "1m", datetime(2026, 2, 1), datetime(2026, 2, 28)
+        )
+        assert result is not None
+        assert len(result) == 3
+
+        # --- Case 3: missing middle month → fail-closed None.
+        # Request spans Feb through April but April is not on disk.
+        result = service._check_parquet_cache(
+            "AAPL", "1m", datetime(2026, 2, 1), datetime(2026, 4, 1)
+        )
+        assert result is None, (
+            "partial coverage MUST return None rather than a truncated frame"
+        )

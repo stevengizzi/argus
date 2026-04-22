@@ -619,6 +619,34 @@ class TestUniverseFilterConfig:
         with pytest.raises(ValidationError):
             UniverseFilterConfig(sectors="Technology")  # type: ignore[arg-type]
 
+    def test_min_relative_volume_rejects_negative(self) -> None:
+        """FIX-06 audit 2026-04-21 (P1-C2-3): Sprint 29 field rejects negative."""
+        with pytest.raises(ValidationError):
+            UniverseFilterConfig(min_relative_volume=-0.5)
+
+    def test_min_premarket_volume_rejects_negative(self) -> None:
+        """FIX-06 audit 2026-04-21 (P1-C2-3): Sprint 29 field rejects negative."""
+        with pytest.raises(ValidationError):
+            UniverseFilterConfig(min_premarket_volume=-100)
+
+    def test_min_gap_percent_rejects_out_of_range(self) -> None:
+        """FIX-06 audit 2026-04-21 (P1-C2-3): gap percent is bounded [-100, 100]."""
+        with pytest.raises(ValidationError):
+            UniverseFilterConfig(min_gap_percent=150.0)
+        with pytest.raises(ValidationError):
+            UniverseFilterConfig(min_gap_percent=-200.0)
+
+    def test_sprint_29_fields_accept_valid_bounds(self) -> None:
+        """FIX-06 audit 2026-04-21 (P1-C2-3): zero-lower-bound accepted at bound."""
+        config = UniverseFilterConfig(
+            min_relative_volume=0.0,
+            min_gap_percent=-100.0,
+            min_premarket_volume=0,
+        )
+        assert config.min_relative_volume == 0.0
+        assert config.min_gap_percent == -100.0
+        assert config.min_premarket_volume == 0
+
 
 class TestUniverseManagerConfig:
     """Tests for UniverseManagerConfig (Sprint 23)."""

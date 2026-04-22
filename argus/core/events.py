@@ -401,6 +401,29 @@ class DataResumedEvent(Event):
     provider: str = ""  # "databento", "alpaca", etc.
 
 
+@dataclass(frozen=True)
+class SystemAlertEvent(Event):
+    """Operational alert requiring human attention.
+
+    Broader-purpose than DataStaleEvent — covers fatal/unrecoverable
+    conditions where the system can no longer self-correct (e.g. data
+    feed reconnection retries exhausted, IBKR session terminated by
+    broker, database unreachable). Consumers: HealthMonitor, Command
+    Center alert pane.
+
+    Emission sites are intentionally sparse — SystemAlertEvent is the
+    "page the operator" signal, not a generic warning channel. Resolves
+    DEF-014 on the emitter side (FIX-06 audit 2026-04-21, P1-C2 F5);
+    HealthMonitor subscription + Command Center surface to follow when
+    the P1-A1 M9 expansion lands.
+    """
+
+    source: str = ""  # "databento_feed", "ibkr_broker", etc.
+    alert_type: str = ""  # "max_retries_exceeded", "auth_failure", etc.
+    message: str = ""
+    severity: str = "critical"  # "critical" | "error" | "warning"
+
+
 # ---------------------------------------------------------------------------
 # Account Events (Sprint 27.65 S4)
 # ---------------------------------------------------------------------------

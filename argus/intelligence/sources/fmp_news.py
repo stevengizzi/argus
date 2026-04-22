@@ -11,7 +11,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import aiohttp
@@ -23,6 +23,12 @@ from argus.intelligence.sources import CatalystSource
 logger = logging.getLogger(__name__)
 
 _ET = ZoneInfo("America/New_York")
+
+# FIX-06 audit 2026-04-21 (P1-D1-M04): auth failures disable FMP news for
+# this long before the next retry. Keeps the DEC-323 "circuit breaker"
+# framing honest — prior behaviour reset the flag every poll cycle and
+# produced a fresh ERROR log per cycle on a 401/403 storm.
+_AUTH_FAILURE_BACKOFF = timedelta(hours=1)
 
 
 class FMPNewsClient(CatalystSource):
@@ -57,7 +63,12 @@ class FMPNewsClient(CatalystSource):
         self._config = config
         self._session: aiohttp.ClientSession | None = None
         self._api_key: str | None = None
+        # Set True after an auth failure (401/403). Remains True for the
+        # current poll cycle AND blocks subsequent polls until
+        # ``_auth_disabled_until`` elapses.
         self._disabled_for_cycle = False
+        self._auth_disabled_until: datetime | None = None
+        self._firehose_skip_logged = False
 
     @property
     def source_name(self) -> str:
@@ -82,6 +93,8 @@ class FMPNewsClient(CatalystSource):
             timeout=aiohttp.ClientTimeout(total=30.0, sock_connect=10.0, sock_read=20.0),
         )
         self._disabled_for_cycle = False
+        self._auth_disabled_until = None
+        self._firehose_skip_logged = False
 
         logger.info("FMPNewsClient started")
 
@@ -98,11 +111,16 @@ class FMPNewsClient(CatalystSource):
     ) -> list[CatalystRawItem]:
         """Fetch news and press releases for the given symbols.
 
-        Resets the circuit breaker at the start of each cycle. If a 403
-        (plan restriction) is encountered, remaining symbols are skipped
-        for this cycle only — the next call retries from scratch.
+        Circuit breaker is sticky (FIX-06 audit 2026-04-21, P1-D1-M04):
+        once a 401/403 trips ``_disabled_for_cycle``, the disabled state
+        persists for ``_AUTH_FAILURE_BACKOFF`` (1 hour) so subsequent
+        polls early-return without re-hitting the API or re-logging the
+        auth error. ``reset_disabled_flag()`` forces an immediate retry.
 
-        FMP has no firehose endpoint — returns empty list when firehose=True.
+        Firehose mode (FIX-06 P1-D1-M05): FMP has no firehose endpoint,
+        so the firehose branch returns empty. Logs once per session so
+        operators toggling ``fmp_news.enabled=true`` under a firehose
+        poller see an explanation.
 
         Args:
             symbols: List of stock ticker symbols.
@@ -110,9 +128,17 @@ class FMPNewsClient(CatalystSource):
 
         Returns:
             List of CatalystRawItem from news and press releases, or empty
-            list when firehose=True.
+            list when firehose=True or when the auth-backoff is active.
         """
         if firehose:
+            if not self._firehose_skip_logged:
+                logger.info(
+                    "FMPNewsClient: firehose mode requested but FMP has no "
+                    "market-wide feed endpoint — this source contributes 0 "
+                    "items while firehose=True (set firehose=False in the "
+                    "polling loop to enable per-symbol fetches)."
+                )
+                self._firehose_skip_logged = True
             return []
 
         if not self._session:
@@ -126,7 +152,24 @@ class FMPNewsClient(CatalystSource):
         if not symbols:
             return []
 
-        # Reset circuit breaker at start of each poll cycle
+        # Auth-backoff: if a previous cycle hit 401/403, stay disabled until
+        # the backoff window elapses. Reset via reset_disabled_flag().
+        now = datetime.now(_ET)
+        if self._auth_disabled_until is not None:
+            if now < self._auth_disabled_until:
+                logger.debug(
+                    "FMPNewsClient: auth-backoff active until %s, skipping poll",
+                    self._auth_disabled_until.isoformat(),
+                )
+                return []
+            # Backoff elapsed — clear and try once.
+            logger.info(
+                "FMPNewsClient: auth-backoff elapsed, attempting one retry"
+            )
+            self._auth_disabled_until = None
+
+        # Reset the per-cycle flag; the sticky auth-backoff above is the
+        # across-cycles gate now.
         self._disabled_for_cycle = False
 
         catalysts: list[CatalystRawItem] = []
@@ -274,16 +317,28 @@ class FMPNewsClient(CatalystSource):
                         return None
 
                     if response.status == 401:
-                        logger.error("FMP API key invalid (HTTP 401)")
+                        logger.error(
+                            "FMP API key invalid (HTTP 401) — disabling "
+                            "FMP news source for %s",
+                            _AUTH_FAILURE_BACKOFF,
+                        )
                         self._disabled_for_cycle = True
+                        self._auth_disabled_until = (
+                            datetime.now(_ET) + _AUTH_FAILURE_BACKOFF
+                        )
                         return None
 
                     if response.status == 403:
                         logger.error(
-                            "FMP API key invalid (HTTP 403) — disabling "
-                            "FMP news source for this poll cycle"
+                            "FMP plan restriction (HTTP 403) — disabling "
+                            "FMP news source for %s (likely Starter-plan "
+                            "limitation on news endpoints)",
+                            _AUTH_FAILURE_BACKOFF,
                         )
                         self._disabled_for_cycle = True
+                        self._auth_disabled_until = (
+                            datetime.now(_ET) + _AUTH_FAILURE_BACKOFF
+                        )
                         return None
 
                     if response.status == 429:
@@ -407,5 +462,11 @@ class FMPNewsClient(CatalystSource):
             return None
 
     def reset_disabled_flag(self) -> None:
-        """Reset the disabled-for-cycle flag (for testing)."""
+        """Reset the disabled-for-cycle flag and auth backoff.
+
+        Used by tests and by operators wanting to force an immediate retry
+        after resolving a plan/key issue without waiting for
+        ``_AUTH_FAILURE_BACKOFF`` to elapse.
+        """
         self._disabled_for_cycle = False
+        self._auth_disabled_until = None

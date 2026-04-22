@@ -376,10 +376,15 @@ class TestFMPNewsClient:
         await client.stop()
 
     @pytest.mark.asyncio
-    async def test_circuit_breaker_resets_between_cycles(
+    async def test_circuit_breaker_sticky_across_cycles(
         self, config: FMPNewsConfig
     ) -> None:
-        """Circuit breaker resets at start of each fetch_catalysts cycle."""
+        """FIX-06 audit 2026-04-21 (P1-D1-M04): the circuit breaker is sticky
+        across poll cycles for the auth-backoff window. After a 401/403, the
+        next ``fetch_catalysts`` call short-circuits without hitting the API
+        and without re-logging the error. ``reset_disabled_flag()`` forces an
+        immediate retry.
+        """
         config = FMPNewsConfig(
             api_key_env_var="FMP_API_KEY",
             endpoints=["press_releases"],
@@ -394,7 +399,7 @@ class TestFMPNewsClient:
             if call_count <= 1:
                 # First cycle: 403
                 return _MockContextManager(_create_mock_response(403, None))
-            # Second cycle: 200 with empty list
+            # Second cycle (only reached after reset): 200 with empty list
             return _MockContextManager(_create_mock_response(200, []))
 
         mock_session = MagicMock()
@@ -408,16 +413,81 @@ class TestFMPNewsClient:
             await client._session.close()
         client._session = mock_session
 
-        # Cycle 1: triggers 403
+        # Cycle 1: triggers 403 → auth-backoff armed.
         result1 = await client.fetch_catalysts(["AAPL"])
         assert result1 == []
         assert client._disabled_for_cycle is True
+        assert client._auth_disabled_until is not None
 
-        # Cycle 2: should retry (flag reset)
+        # Cycle 2: backoff still active → no API call, returns empty.
         result2 = await client.fetch_catalysts(["AAPL"])
-        assert call_count == 2  # Second call was made (not skipped)
+        assert result2 == []
+        assert call_count == 1, (
+            "sticky circuit breaker must skip the API call while backoff active"
+        )
+
+        # Operator resets → next cycle retries.
+        client.reset_disabled_flag()
+        assert client._auth_disabled_until is None
+        result3 = await client.fetch_catalysts(["AAPL"])
+        assert result3 == []
+        assert call_count == 2, "reset must allow the retry to hit the API"
 
         await client.stop()
+
+    @pytest.mark.asyncio
+    async def test_firehose_mode_logs_once_and_returns_empty(
+        self, config: FMPNewsConfig
+    ) -> None:
+        """FIX-06 audit 2026-04-21 (P1-D1-M05): FMP has no firehose endpoint,
+        so ``firehose=True`` returns empty. Log fires ONCE per session — not
+        per poll — so the operator sees the explanation but not log spam."""
+        import logging
+
+        client = FMPNewsClient(config)
+
+        with patch.dict("os.environ", {"FMP_API_KEY": "test_key"}):
+            await client.start()
+
+        with self._caplog_at_info() as records:
+            r1 = await client.fetch_catalysts(["AAPL"], firehose=True)
+            r2 = await client.fetch_catalysts(["AAPL"], firehose=True)
+
+        assert r1 == []
+        assert r2 == []
+        # Exactly one explanatory log line, not two.
+        firehose_logs = [
+            rec for rec in records
+            if "firehose mode" in rec.getMessage().lower()
+        ]
+        assert len(firehose_logs) == 1
+
+        await client.stop()
+
+    def _caplog_at_info(self):
+        import logging
+        from contextlib import contextmanager
+
+        @contextmanager
+        def _ctx():
+            logger_ = logging.getLogger("argus.intelligence.sources.fmp_news")
+            captured: list[logging.LogRecord] = []
+
+            class _Handler(logging.Handler):
+                def emit(self, record: logging.LogRecord) -> None:
+                    captured.append(record)
+
+            handler = _Handler(level=logging.INFO)
+            prev_level = logger_.level
+            logger_.addHandler(handler)
+            logger_.setLevel(logging.INFO)
+            try:
+                yield captured
+            finally:
+                logger_.removeHandler(handler)
+                logger_.setLevel(prev_level)
+
+        return _ctx()
 
     @pytest.mark.asyncio
     async def test_fetch_catalysts_empty_symbols_returns_empty(

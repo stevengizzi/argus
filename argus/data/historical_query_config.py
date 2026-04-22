@@ -25,7 +25,12 @@ class HistoricalQueryConfig(BaseModel):
     """
 
     enabled: bool = False
-    cache_dir: str = "data/databento_cache"
+    # Sprint 31.85 activation (FIX-06 audit 2026-04-21, P1-C2-6): default points
+    # at the consolidated cache so that if the ``historical_query.yaml`` overlay
+    # is ever missing or cleared, the runtime still lands on the fast path.
+    # ``data/databento_cache/`` is the read-only source of truth for
+    # ``BacktestEngine`` only — never point ``HistoricalQueryService`` at it.
+    cache_dir: str = "data/databento_cache_consolidated"
     max_memory_mb: int = Field(default=2048, gt=0, description="DuckDB memory limit in MB")
     default_threads: int = Field(default=4, gt=0, description="DuckDB worker thread count")
 

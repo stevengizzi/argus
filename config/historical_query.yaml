@@ -8,10 +8,12 @@
 # This file is authoritative when present; system.yaml / system_live.yaml no
 # longer carry a `historical_query:` block.
 #
-# Sprint 31.85 operator activation: when the consolidated cache is ready,
-# repoint cache_dir to "data/databento_cache_consolidated".
+# Sprint 31.85 operator activation: consolidated cache is active (FIX-06
+# audit 2026-04-21, P1-C2-1). `data/databento_cache/` remains the read-only
+# source of truth for `BacktestEngine`; `data/databento_cache_consolidated/`
+# is the DuckDB query target. See docs/operations/parquet-cache-layout.md.
 enabled: true
-cache_dir: "data/databento_cache"
+cache_dir: "data/databento_cache_consolidated"
 max_memory_mb: 2048
 default_threads: 4
 persist_path: null  # Set to "data/historical_query.duckdb" for persistent mode

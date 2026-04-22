@@ -1,23 +1,33 @@
 """Historical Query Service — read-only DuckDB layer over the Parquet cache.
 
-Provides SQL access to ARGUS's existing Databento Parquet cache
-(`data/databento_cache/`) without ever modifying it.
+Provides SQL access to ARGUS's Databento Parquet caches without ever
+modifying them. The service is cache-layout-agnostic thanks to the grandparent-
+directory regex extraction (see ``_initialize_view`` / ``_initialize_table``).
 
-Cache directory layout expected:
-    {cache_dir}/{SYMBOL}/{YYYY-MM}.parquet
+Supported cache layouts:
 
-Two modes:
-- **In-memory** (``persist_path=None``): Creates a lazy VIEW that re-scans
-  Parquet files on every query.  Fast to initialize, slow to query.
-- **Persistent** (``persist_path`` set): Creates a materialized TABLE on first
-  run (30-60 min for ~1M Parquet files).  Subsequent opens are instant;
-  queries return in seconds.
+- **Consolidated** (Sprint 31.85, production default):
+  ``{cache_dir}/{SYMBOL}/{SYMBOL}.parquet`` — one file per symbol, with an
+  embedded ``symbol`` column. ~24K files. Sub-second DuckDB queries. This is
+  what ``config/historical_query.yaml`` points at (FIX-06 audit 2026-04-21).
+- **Original** (pre-Sprint-31.85):
+  ``{cache_dir}/{SYMBOL}/{YYYY-MM}.parquet`` — per-month files. ~983K files.
+  Hours-long scans; do NOT point ``HistoricalQueryService`` at this layout
+  in production. ``BacktestEngine`` still consumes it via a different path.
 
-The TABLE/VIEW exposes columns: symbol, ts_event, date, open, high, low, close,
-volume.  Symbol is extracted from the directory path; date is
+See ``docs/operations/parquet-cache-layout.md`` for the operator reference.
+
+Two runtime modes:
+- **In-memory** (``persist_path=None``): lazy VIEW, re-scans on every query.
+- **Persistent** (``persist_path`` set): materialized TABLE, slow first init,
+  instant subsequent opens.
+
+The TABLE/VIEW exposes: symbol, ts_event, date, open, high, low, close, volume.
+Symbol is extracted from the parent directory name; date is
 CAST(ts_event AS DATE).
 
-Sprint 31A.5, Session 1.  Persistent TABLE materialization: Sprint 31.75 S4 fix.
+Sprint 31A.5 Session 1. Persistent TABLE: Sprint 31.75 S4 fix.
+Consolidated cache activation + docstring: FIX-06 audit 2026-04-21 (P1-C2-5).
 """
 
 from __future__ import annotations
@@ -57,6 +67,12 @@ class QueryExecutionError(Exception):
 # ---------------------------------------------------------------------------
 
 _SYMBOLS_TTL_SECONDS = 60.0
+
+# Regex extracting the parent directory name (``{SYMBOL}``) from a Parquet
+# file path under any supported cache layout. Raw-string literal resolves
+# the P1-C2-17 readability nit from the FIX-06 audit. Embedded verbatim
+# in SQL — DuckDB gets ``.*/([^/]+)/[^/]+\.parquet$``.
+_SYMBOL_FROM_FILENAME_REGEX = r".*/([^/]+)/[^/]+\.parquet$"
 
 
 class HistoricalQueryService:
@@ -193,12 +209,16 @@ class HistoricalQueryService:
         # Build the glob pattern for all Parquet files in the cache
         glob_pattern = str(cache_path.resolve()) + "/**/*.parquet"
 
-        # The VIEW extracts symbol from the parent directory name.
-        # Path layout: {cache_dir}/{SYMBOL}/{YYYY-MM}.parquet
+        # The VIEW extracts symbol from the parent directory name. Regex
+        # works for both supported layouts (FIX-06 audit 2026-04-21,
+        # P1-C2-5 / P1-C2-17):
+        #   Consolidated: {cache_dir}/{SYMBOL}/{SYMBOL}.parquet
+        #   Original:     {cache_dir}/{SYMBOL}/{YYYY-MM}.parquet
+        # See docs/operations/parquet-cache-layout.md.
         view_sql = f"""
         CREATE OR REPLACE VIEW historical AS
         SELECT
-            regexp_extract(filename, '.*/([^/]+)/[^/]+\\.parquet$', 1) AS symbol,
+            regexp_extract(filename, '{_SYMBOL_FROM_FILENAME_REGEX}', 1) AS symbol,
             "timestamp" AS ts_event,
             CAST("timestamp" AS DATE) AS date,
             "open",
@@ -271,11 +291,13 @@ class HistoricalQueryService:
 
         glob_pattern = str(cache_path.resolve()) + "/**/*.parquet"
 
+        # Regex matches both consolidated and original cache layouts; see
+        # FIX-06 audit 2026-04-21 (P1-C2-5 / P1-C2-17).
         table_sql = f"""
         CREATE TABLE historical AS
         SELECT
             regexp_extract(
-                filename, '.*/([^/]+)/[^/]+\\.parquet$', 1
+                filename, '{_SYMBOL_FROM_FILENAME_REGEX}', 1
             ) AS symbol,
             "timestamp" AS ts_event,
             CAST("timestamp" AS DATE) AS date,
@@ -569,12 +591,33 @@ class HistoricalQueryService:
     # ------------------------------------------------------------------
 
     def close(self) -> None:
-        """Close the DuckDB connection. Idempotent."""
+        """Close the DuckDB connection. Idempotent.
+
+        Calls ``conn.interrupt()`` before ``conn.close()`` so a mid-flight
+        ``CREATE VIEW`` / ``CREATE TABLE`` on a large Parquet glob is
+        cancelled cleanly rather than hanging the close path. Observed as
+        DEF-165 during the DEF-164 late-night activation incident;
+        resolved by FIX-06 audit 2026-04-21 (P1-C2-7).
+        """
         if self._conn is not None:
+            # Best-effort interrupt of any in-flight statement. Some DuckDB
+            # builds / connection states don't expose ``interrupt()``, so
+            # swallow AttributeError alongside any engine-level error.
+            try:
+                self._conn.interrupt()  # type: ignore[union-attr]
+            except Exception:
+                logger.debug(
+                    "HistoricalQueryService: conn.interrupt() failed "
+                    "(non-fatal — close() will still proceed)",
+                    exc_info=True,
+                )
             try:
                 self._conn.close()  # type: ignore[union-attr]
             except Exception:
-                logger.debug("HistoricalQueryService: error closing DuckDB connection", exc_info=True)
+                logger.debug(
+                    "HistoricalQueryService: error closing DuckDB connection",
+                    exc_info=True,
+                )
             finally:
                 self._conn = None
                 self._available = False

@@ -216,3 +216,24 @@ async def test_candle_store_max_bars_increased() -> None:
 
     # All bars within the 4 AM–4 PM window should be stored (up to 720)
     assert store.bar_count("AAPL") == 720
+
+
+@pytest.mark.asyncio
+async def test_candle_store_rejects_naive_timestamp() -> None:
+    """FIX-06 audit 2026-04-21 (P1-C2-8): naive timestamps are a test-fixture
+    smell — production always carries tzinfo. Fail-fast with ValueError so
+    a silent ET-misinterpretation never slips through."""
+    store = IntradayCandleStore()
+    naive_event = CandleEvent(
+        symbol="AAPL",
+        timeframe="1m",
+        open=150.0,
+        high=150.5,
+        low=149.5,
+        close=150.1,
+        volume=1000,
+        timestamp=datetime(2026, 3, 25, 10, 0, 0),  # naive — no tzinfo
+    )
+
+    with pytest.raises(ValueError, match="timezone-aware"):
+        await store.on_candle(naive_event)

@@ -374,6 +374,12 @@ class UniverseFilterConfig(BaseModel):
 
     Defines the criteria a strategy uses to filter the viable universe
     for symbols matching its requirements.
+
+    The Sprint 29 fields (``min_relative_volume``, ``min_gap_percent``,
+    ``min_premarket_volume``) are NOT enforced at the UniverseManager
+    routing layer — they are intentionally applied at the strategy
+    detection layer, where the live price/volume state is available.
+    See ``UniverseManager._symbol_matches_filter()``.
     """
 
     min_price: float | None = None
@@ -382,9 +388,12 @@ class UniverseFilterConfig(BaseModel):
     max_market_cap: float | None = None  # USD
     min_float: float | None = None  # shares
     min_avg_volume: int | None = None
-    min_relative_volume: float | None = None  # minimum relative volume (RVOL)
-    min_gap_percent: float | None = None  # minimum gap-up/gap-down percent
-    min_premarket_volume: int | None = None  # minimum pre-market volume
+    # FIX-06 audit 2026-04-21 (P1-C2-3): add ge= bounds to the Sprint 29
+    # fields so Pydantic rejects silently-negative configuration values.
+    # Applied at strategy detection layer, not the UM routing layer.
+    min_relative_volume: float | None = Field(default=None, ge=0.0)
+    min_gap_percent: float | None = Field(default=None, ge=-100.0, le=100.0)
+    min_premarket_volume: int | None = Field(default=None, ge=0)
     sectors: list[str] = Field(default_factory=list)  # empty = all sectors
     exclude_sectors: list[str] = Field(default_factory=list)  # empty = no exclusions
 

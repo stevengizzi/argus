@@ -120,8 +120,10 @@ class UniverseManager:
                 len(symbols),
             )
         else:
-            # Use reference client's existing cache if available
-            symbols = list(self._reference_client._cache.keys())
+            # Use reference client's existing cache if available (FIX-06
+            # audit 2026-04-21, P1-C2-9: swap private-attr reach-in for the
+            # public ``known_symbols()`` accessor).
+            symbols = self._reference_client.known_symbols()
             if not symbols:
                 logger.warning(
                     "No initial symbols provided and reference cache is empty"

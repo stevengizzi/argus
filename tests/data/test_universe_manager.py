@@ -754,6 +754,9 @@ class TestEmptyUniverse:
     ) -> None:
         """No initial symbols and empty cache returns empty set."""
         mock_reference_client._cache = {}
+        # FIX-06 audit 2026-04-21 (P1-C2-9): UM now calls known_symbols()
+        # instead of reaching into _cache.keys().
+        mock_reference_client.known_symbols = MagicMock(return_value=[])
 
         manager = UniverseManager(mock_reference_client, default_config, mock_scanner)
 
