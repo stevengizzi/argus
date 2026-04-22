@@ -69,7 +69,8 @@ const OPEN_POSITION: ArenaPosition = {
   r_multiple: 0.6,
   hold_duration_seconds: 300,
   quality_grade: 'B',
-  entry_time: '2024-01-15T09:30:00Z',
+  // Relative to "now" to prevent hardcoded-date decay (DEF-167).
+  entry_time: new Date().toISOString(),
 };
 
 function makeMiniChartHandle(): MiniChartHandle {

@@ -15,7 +15,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
-from jose import JWTError
+from jose import JWTError, jwt
 
 from argus.api.auth import get_jwt_secret
 from argus.api.serializers import serialize_event
@@ -353,7 +353,35 @@ class WebSocketBridge:
                 try:
                     client.send_queue.put_nowait(message)
                 except asyncio.QueueFull:
-                    logger.warning("WebSocket send queue full for client, dropping message")
+                    # Client is too slow — they've fallen behind the server.
+                    # Drain the queue and replace with a state_desync marker
+                    # so the client reconnects/refreshes instead of drifting.
+                    logger.warning(
+                        "WebSocket send queue full for client, signalling state_desync"
+                    )
+                    while not client.send_queue.empty():
+                        try:
+                            client.send_queue.get_nowait()
+                        except asyncio.QueueEmpty:
+                            break
+                    try:
+                        client.send_queue.put_nowait(
+                            {
+                                "type": "state_desync",
+                                "data": {
+                                    "reason": "send_queue_full",
+                                    "dropped_type": ws_type,
+                                },
+                                "sequence": 0,
+                                "timestamp": datetime.now(UTC).isoformat(),
+                            }
+                        )
+                    except asyncio.QueueFull:
+                        # Queue was just drained — this should never happen,
+                        # but log and move on rather than crash.
+                        logger.error(
+                            "Failed to enqueue state_desync marker for client"
+                        )
 
     async def _heartbeat_loop(self) -> None:
         """Send periodic heartbeat messages to all clients."""
@@ -390,9 +418,6 @@ class WebSocketBridge:
             try:
                 await asyncio.sleep(interval)
                 if not self._running or self._broker is None:
-                    break
-
-                if not hasattr(self._broker, "get_account"):
                     break
 
                 account = await self._broker.get_account()
@@ -452,8 +477,6 @@ async def websocket_endpoint(
         websocket: The WebSocket connection.
         token: JWT token for authentication (query parameter).
     """
-    from jose import jwt
-
     # 1. Authenticate
     try:
         jwt_secret = get_jwt_secret()

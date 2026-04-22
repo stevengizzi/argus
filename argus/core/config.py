@@ -295,7 +295,15 @@ class ExitManagementConfig(BaseModel):
 
 
 class ApiConfig(BaseModel):
-    """Configuration for the Command Center API server (Sprint 14)."""
+    """Configuration for the Command Center API server (Sprint 14).
+
+    ``cors_origins`` default is ``["http://localhost:5173"]`` (Vite dev
+    server). Tauri desktop and PWA mobile deployments use different origins
+    (``tauri://localhost``, the deployed hostname, etc.) and MUST override
+    ``api.cors_origins`` in ``system_live.yaml`` before shipping. The dev
+    default exists only to keep ``python -m argus.main`` usable during
+    frontend development.
+    """
 
     enabled: bool = True
     host: str = "0.0.0.0"

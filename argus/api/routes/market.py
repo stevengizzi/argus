@@ -6,6 +6,7 @@ import hashlib
 import logging
 import random
 from datetime import datetime, timedelta, UTC
+from typing import Literal
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Query
@@ -70,12 +71,23 @@ class BarData(BaseModel):
 
 
 class BarsResponse(BaseModel):
-    """Response containing intraday bars for a symbol."""
+    """Response containing intraday bars for a symbol.
+
+    The ``source`` field discloses provenance so the frontend can gate
+    real-trading UI behind ``live``/``historical`` data:
+
+    * ``live`` — served from the in-memory IntradayCandleStore (current session).
+    * ``historical`` — served from the DataService historical Parquet cache.
+    * ``synthetic`` — generated deterministically from the symbol name.
+      Only returned when no real data is available for the requested window
+      (e.g., pre-market, data-feed outage). Treat as illustrative only.
+    """
 
     symbol: str
     timeframe: str
     bars: list[BarData]
     count: int
+    source: Literal["live", "historical", "synthetic"]
 
 
 def _generate_synthetic_bars(symbol: str, limit: int) -> list[BarData]:
@@ -85,7 +97,9 @@ def _generate_synthetic_bars(symbol: str, limit: int) -> list[BarData]:
 
     Args:
         symbol: The stock symbol (used for seeding).
-        limit: Number of bars to generate (max 390 for a full trading day).
+        limit: Number of bars to generate. Capped at 390 (a full RTH
+            trading day) — real-data paths may return up to the full
+            route ``limit`` query param, but synthetic is session-bounded.
 
     Returns:
         List of BarData with synthetic OHLCV values.
@@ -213,6 +227,7 @@ async def get_symbol_bars(
             timeframe=timeframe,
             bars=bars,
             count=len(bars),
+            source="live",
         )
 
     # --- Priority 2: DataService historical candles ---
@@ -269,6 +284,7 @@ async def get_symbol_bars(
                     timeframe=timeframe,
                     bars=bars,
                     count=len(bars),
+                    source="historical",
                 )
             else:
                 logger.debug(
@@ -284,10 +300,20 @@ async def get_symbol_bars(
             )
 
     # --- Priority 3: Synthetic fallback ---
-    bars = _generate_synthetic_bars(upper_symbol, min(limit, 390))
+    # Synthetic is capped at 390 (one RTH session) regardless of the
+    # route `limit` query param. The `source="synthetic"` flag on the
+    # response lets the frontend gate real-trading UI away from fake bars.
+    synthetic_limit = min(limit, 390)
+    bars = _generate_synthetic_bars(upper_symbol, synthetic_limit)
+    logger.warning(
+        "Returning %d SYNTHETIC bars for %s (no real data available)",
+        len(bars),
+        upper_symbol,
+    )
     return BarsResponse(
         symbol=upper_symbol,
         timeframe=timeframe,
         bars=bars,
         count=len(bars),
+        source="synthetic",
     )

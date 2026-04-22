@@ -11,11 +11,21 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel, Field
 
 from argus.api.auth import require_auth
 from argus.api.dependencies import AppState, get_app_state
 from argus.data.historical_query_service import ServiceUnavailableError
+
+
+class ValidateCoverageRequest(BaseModel):
+    """Request body for POST /historical/validate-coverage."""
+
+    symbols: list[str] = Field(..., min_length=1)
+    start_date: str
+    end_date: str
+    min_bars: int = Field(default=100, ge=1)
 
 router = APIRouter()
 
@@ -198,14 +208,14 @@ async def get_bars(
 
 @router.post("/validate-coverage")
 async def validate_coverage(
-    body: dict = Body(...),  # noqa: B008
+    request: ValidateCoverageRequest,
     _auth: dict = Depends(require_auth),  # noqa: B008
     state: AppState = Depends(get_app_state),  # noqa: B008
 ) -> dict:
     """Check whether each symbol has enough bars in the date range.
 
     Request body:
-        symbols: List of ticker symbols.
+        symbols: List of ticker symbols (must be non-empty).
         start_date: Inclusive start date (YYYY-MM-DD).
         end_date: Inclusive end date (YYYY-MM-DD).
         min_bars: Minimum bar threshold (default 100).
@@ -215,35 +225,19 @@ async def validate_coverage(
     """
     svc = _get_service(state)
 
-    symbols = body.get("symbols", [])
-    if not isinstance(symbols, list):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="'symbols' must be a list",
-        )
-
-    start_date = body.get("start_date")
-    end_date = body.get("end_date")
-    if not start_date or not end_date:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="'start_date' and 'end_date' are required",
-        )
-
-    start = _parse_date(str(start_date), "start_date")
-    end = _parse_date(str(end_date), "end_date")
-    min_bars = int(body.get("min_bars", 100))
+    start = _parse_date(request.start_date, "start_date")
+    end = _parse_date(request.end_date, "end_date")
 
     try:
         results = svc.validate_symbol_coverage(
-            symbols=symbols,
+            symbols=request.symbols,
             start_date=start,
             end_date=end,
-            min_bars=min_bars,
+            min_bars=request.min_bars,
         )
         return {
             "results": results,
-            "min_bars": min_bars,
+            "min_bars": request.min_bars,
             "timestamp": datetime.now(UTC).isoformat(),
         }
     except ServiceUnavailableError as exc:

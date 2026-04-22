@@ -6,7 +6,7 @@ dependencies for protecting routes.
 Usage:
     # Verify password on login
     if verify_password(plain_password, stored_hash):
-        token, expires_at = create_access_token(jwt_secret, expires_hours=24)
+        token, expires_at = create_access_token(jwt_secret, expires_hours=api_config.jwt_expiry_hours)
 
     # Protect a route
     @router.get("/protected")
@@ -102,12 +102,13 @@ def hash_password(password: str) -> str:
     return hashed.decode("utf-8")
 
 
-def create_access_token(jwt_secret: str, expires_hours: int = 24) -> tuple[str, datetime]:
+def create_access_token(jwt_secret: str, expires_hours: int) -> tuple[str, datetime]:
     """Create a JWT access token.
 
     Args:
         jwt_secret: The secret key for signing the token.
-        expires_hours: Hours until the token expires. Default 24.
+        expires_hours: Hours until the token expires. Required — every call
+            site passes ``api_config.jwt_expiry_hours``; no implicit default.
 
     Returns:
         Tuple of (token string, expiration datetime).

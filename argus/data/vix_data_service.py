@@ -683,3 +683,20 @@ class VIXDataService:
                     )
 
         self._update_task = asyncio.create_task(_update_loop())
+
+    async def shutdown(self) -> None:
+        """Cancel the background update task and await its termination.
+
+        Public cleanup hook for lifespan handlers. Prefer this over reaching
+        into ``_update_task`` from outside the service (DEF-091 contract).
+        Safe to call when no task is running.
+        """
+        import contextlib
+
+        task = self._update_task
+        if task is None:
+            return
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+        self._update_task = None

@@ -45,7 +45,8 @@ describe('useQualityScore', () => {
       grade: 'A',
       risk_tier: '2.0%',
       components: { ps: 80, cq: 70, vp: 90, hm: 85, ra: 75 },
-      scored_at: '2026-03-14T10:00:00Z',
+      // Relative to "now" to prevent hardcoded-date decay (DEF-167).
+      scored_at: new Date().toISOString(),
     };
 
     mockFetch.mockResolvedValue({

@@ -126,7 +126,7 @@ async def test_account_market_status_during_hours(app_state, jwt_secret):
     app = create_app(app_state)
     app.state.app_state = app_state
 
-    token, _ = create_access_token(jwt_secret)
+    token, _ = create_access_token(jwt_secret, expires_hours=24)
     headers = {"Authorization": f"Bearer {token}"}
 
     async with AsyncClient(
@@ -155,7 +155,7 @@ async def test_account_market_status_after_hours(app_state, jwt_secret):
     app = create_app(app_state)
     app.state.app_state = app_state
 
-    token, _ = create_access_token(jwt_secret)
+    token, _ = create_access_token(jwt_secret, expires_hours=24)
     headers = {"Authorization": f"Bearer {token}"}
 
     async with AsyncClient(

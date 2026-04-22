@@ -2,14 +2,16 @@
 
 Each module defines a router that is aggregated into the main api_router.
 All routes are mounted under /api/v1 prefix.
+
+Note: ``observatory`` is not aggregated here — it is conditionally mounted
+in ``argus/api/server.py`` when ``observatory.enabled`` is true.
 """
 
 from fastapi import APIRouter
 
 from argus.api.routes.account import router as account_router
-from argus.api.routes.arena import router as arena_router
-from argus.api.routes.historical import router as historical_router
 from argus.api.routes.ai import router as ai_router
+from argus.api.routes.arena import router as arena_router
 from argus.api.routes.auth import router as auth_router
 from argus.api.routes.briefings import router as briefings_router
 from argus.api.routes.config import router as config_router
@@ -18,11 +20,12 @@ from argus.api.routes.counterfactual import router as counterfactual_router
 from argus.api.routes.dashboard import router as dashboard_router
 from argus.api.routes.debrief_search import router as debrief_search_router
 from argus.api.routes.documents import router as documents_router
-from argus.api.routes.health import router as health_router
-from argus.api.routes.intelligence import router as intelligence_router
 from argus.api.routes.experiments import router as experiments_router
-from argus.api.routes.learning import router as learning_router
+from argus.api.routes.health import router as health_router
+from argus.api.routes.historical import router as historical_router
+from argus.api.routes.intelligence import router as intelligence_router
 from argus.api.routes.journal import router as journal_router
+from argus.api.routes.learning import router as learning_router
 from argus.api.routes.market import router as market_router
 from argus.api.routes.orchestrator import router as orchestrator_router
 from argus.api.routes.performance import router as performance_router

@@ -202,7 +202,7 @@ async def test_strategies_open_positions_count(
 
     from argus.api.auth import create_access_token
 
-    token, _ = create_access_token(jwt_secret)
+    token, _ = create_access_token(jwt_secret, expires_hours=24)
     headers = {"Authorization": f"Bearer {token}"}
 
     async with AsyncClient(

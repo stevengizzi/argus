@@ -44,6 +44,13 @@ class TokenResponse(BaseModel):
     expires_at: str  # ISO 8601 UTC timestamp
 
 
+class UserInfoResponse(BaseModel):
+    """Response for GET /auth/me."""
+
+    user: str
+    timestamp: str  # ISO 8601 UTC timestamp
+
+
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
@@ -129,10 +136,10 @@ async def refresh(
     )
 
 
-@router.get("/me")
+@router.get("/me", response_model=UserInfoResponse)
 async def get_current_user(
     _auth: dict = Depends(require_auth),  # noqa: B008
-) -> dict:
+) -> UserInfoResponse:
     """Get current authenticated user info.
 
     This is a simple endpoint to verify authentication works.
@@ -142,9 +149,9 @@ async def get_current_user(
         _auth: Decoded token payload (validated by require_auth).
 
     Returns:
-        Dict with user info and timestamp.
+        UserInfoResponse with user info and timestamp.
     """
-    return {
-        "user": _auth.get("sub", "unknown"),
-        "timestamp": datetime.now(UTC).isoformat(),
-    }
+    return UserInfoResponse(
+        user=_auth.get("sub", "unknown"),
+        timestamp=datetime.now(UTC).isoformat(),
+    )

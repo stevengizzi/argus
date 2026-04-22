@@ -386,7 +386,7 @@ async def get_strategy_decisions(
     limit: int = Query(100, ge=1, le=500),
     date: str | None = Query(None, description="Date (YYYY-MM-DD) for historical query"),
     state: AppState = Depends(get_app_state),  # noqa: B008
-    _user: dict = Depends(require_auth),  # noqa: B008
+    _auth: dict = Depends(require_auth),  # noqa: B008
 ) -> list[dict[str, object]]:
     """Get recent evaluation events from a strategy's decision buffer.
 

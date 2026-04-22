@@ -10,9 +10,11 @@ Usage:
 from __future__ import annotations
 
 import getpass
+import os
 import secrets
 import string
 import sys
+from pathlib import Path
 
 from argus.api.auth import hash_password
 
@@ -64,8 +66,26 @@ def main() -> int:
     # Generate hash
     password_hash = hash_password(password)
 
-    # Generate a suggested JWT secret
+    # Generate a suggested JWT secret and write it to .env.example with
+    # owner-only permissions (0600). Printing the secret to stdout would
+    # leak it via shell history, screen-sharing, or terminal multiplexer
+    # logs — so we write it to a file and tell the operator where to find it.
     jwt_secret = generate_jwt_secret()
+    env_example_path = Path.cwd() / ".env.example"
+    try:
+        # Write file then chmod 0600 (owner read/write only)
+        env_example_path.write_text(
+            f'ARGUS_JWT_SECRET="{jwt_secret}"\n',
+            encoding="utf-8",
+        )
+        os.chmod(env_example_path, 0o600)
+        jwt_secret_written = True
+    except OSError as exc:
+        print(
+            f"\nWarning: Could not write {env_example_path}: {exc}",
+            file=sys.stderr,
+        )
+        jwt_secret_written = False
 
     print()
     print("=" * 60)
@@ -79,10 +99,25 @@ def main() -> int:
     print()
     print("-" * 60)
     print()
-    print("2. Set the JWT secret as an environment variable.")
-    print("   Add this to your .env file or shell profile:")
-    print()
-    print(f'   export ARGUS_JWT_SECRET="{jwt_secret}"')
+    if jwt_secret_written:
+        print(f"2. A JWT secret was written to: {env_example_path}")
+        print("   (permissions: 0600 — owner read/write only).")
+        print()
+        print("   Copy this line into your .env file or shell profile:")
+        print()
+        print(f"     cat {env_example_path}")
+        print()
+        print("   Then delete .env.example (or keep it as a template")
+        print("   with the secret rotated out).")
+    else:
+        print("2. Could not write .env.example.")
+        print("   Generate a JWT secret manually (recommended):")
+        print()
+        print("     python -c 'import secrets, string; "
+              "print(\"\".join(secrets.choice(string.ascii_letters + string.digits) "
+              "for _ in range(64)))'")
+        print()
+        print("   Store the output as ARGUS_JWT_SECRET in your .env file.")
     print()
     print("-" * 60)
     print()

@@ -27,7 +27,8 @@ vi.mock('framer-motion', () => ({
 
 function makeEvent(overrides: Partial<EvaluationEvent> = {}): EvaluationEvent {
   return {
-    timestamp: '2026-03-16T10:30:00-04:00',
+    // Relative to "now" to prevent hardcoded-date decay (DEF-167).
+    timestamp: new Date().toISOString(),
     symbol: 'AAPL',
     strategy_id: 'strat_orb_breakout',
     event_type: 'CANDLE_CHECK',

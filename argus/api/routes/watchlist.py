@@ -77,22 +77,21 @@ async def get_watchlist(
     # - Strategy state (which symbols each strategy is tracking)
     # - Data service (current prices, sparkline data)
     # - VWAP Reclaim strategy state (vwap position)
-
-    # For now, return mock data that will be populated by dev_state.py
-    # when running in dev mode, or from real scanner in production
+    #
+    # Tests may monkey-patch a ``_mock_watchlist`` list of
+    # ``WatchlistItem`` onto AppState to exercise the response shape
+    # without a full data_service stack. The getattr() is intentionally
+    # permissive — production paths always hit the ``cached_watchlist``
+    # branch below because ``data_service`` is always wired in main.py.
 
     watchlist_items: list[WatchlistItem] = []
 
-    # Check if we have a scanner and data service
-    # In dev mode, these may be None, and mock data is returned instead
-    if state.data_service is None:
-        # Dev mode: return mock data from state if available
-        # The mock data is injected via state extension in dev_state.py
-        mock_watchlist = getattr(state, "_mock_watchlist", None)
-        if mock_watchlist is not None:
-            watchlist_items = mock_watchlist
+    # Test-only injection: monkey-patched list of WatchlistItem
+    mock_watchlist = getattr(state, "_mock_watchlist", None)
+    if mock_watchlist is not None:
+        watchlist_items = mock_watchlist
     else:
-        # Production mode: aggregate from scanner's cached watchlist
+        # Production: aggregate from scanner's cached watchlist
         for core_item in state.cached_watchlist:
             watchlist_items.append(
                 WatchlistItem(

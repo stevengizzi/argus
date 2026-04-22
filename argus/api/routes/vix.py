@@ -44,16 +44,20 @@ async def get_vix_current(
             "timestamp": datetime.now(UTC).isoformat(),
         }
 
-    # Build regime classifications from VIX calculators if available
+    # Build regime classifications from VIX calculators if available.
+    # Uses the public ``regime_classifier_v2`` property on Orchestrator and
+    # the ``vol_phase_calc`` / ``vol_momentum_calc`` / ``term_structure_calc``
+    # / ``vrp_calc`` properties on RegimeClassifierV2 (DEF-091 contract —
+    # no reaching into private attributes).
     regime: dict = {}
     orchestrator = state.orchestrator
     if orchestrator is not None:
-        regime_v2 = getattr(orchestrator, "_regime_classifier_v2", None)
+        regime_v2 = getattr(orchestrator, "regime_classifier_v2", None)
         if regime_v2 is not None:
-            vol_phase_calc = getattr(regime_v2, "_vol_phase_calc", None)
-            vol_momentum_calc = getattr(regime_v2, "_vol_momentum_calc", None)
-            term_structure_calc = getattr(regime_v2, "_term_structure_calc", None)
-            vrp_calc = getattr(regime_v2, "_vrp_calc", None)
+            vol_phase_calc = getattr(regime_v2, "vol_phase_calc", None)
+            vol_momentum_calc = getattr(regime_v2, "vol_momentum_calc", None)
+            term_structure_calc = getattr(regime_v2, "term_structure_calc", None)
+            vrp_calc = getattr(regime_v2, "vrp_calc", None)
 
             if vol_phase_calc is not None:
                 phase = vol_phase_calc.classify()

@@ -706,6 +706,39 @@ class RegimeClassifierV2:
                 vix_data_service, vix_config.vrp_boundaries
             )
 
+    def attach_vix_service(self, vix_data_service: VIXDataService) -> None:
+        """Attach a VIX data service post-construction.
+
+        Mirrors ``Orchestrator.attach_vix_service``. Called by the API
+        lifespan handler when the VIX service is initialized lazily after
+        the classifier. Calculators are NOT re-instantiated here —
+        constructor-time wiring remains the canonical path; this setter
+        is for the specific case where the classifier was built without
+        VIX (e.g., VIX service came up later) and only needs the raw
+        service reference for ``latest_vix`` reads.
+        """
+        self._vix_data_service = vix_data_service
+
+    @property
+    def vol_phase_calc(self):  # type: ignore[no-untyped-def]
+        """VolRegimePhaseCalculator instance (or None if not wired)."""
+        return self._vol_phase_calc
+
+    @property
+    def vol_momentum_calc(self):  # type: ignore[no-untyped-def]
+        """VolRegimeMomentumCalculator instance (or None if not wired)."""
+        return self._vol_momentum_calc
+
+    @property
+    def term_structure_calc(self):  # type: ignore[no-untyped-def]
+        """TermStructureRegimeCalculator instance (or None if not wired)."""
+        return self._term_structure_calc
+
+    @property
+    def vrp_calc(self):  # type: ignore[no-untyped-def]
+        """VarianceRiskPremiumCalculator instance (or None if not wired)."""
+        return self._vrp_calc
+
     def classify(self, indicators: RegimeIndicators) -> MarketRegime:
         """Classify market regime — delegates entirely to V1.
 

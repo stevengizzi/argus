@@ -16,12 +16,19 @@ pytestmark = pytest.mark.asyncio
 class TestTradeReplayEndpoint:
     """Tests for GET /api/v1/trades/{trade_id}/replay."""
 
-    async def test_valid_trade_returns_replay_data(
+    async def test_valid_trade_returns_501_until_def029(
         self,
         client_with_trades: AsyncClient,
         auth_headers: dict[str, str],
     ) -> None:
-        """Valid trade ID returns trade data with bars and indices."""
+        """Valid trade ID returns 501 until DEF-029 (persist candle data) lands.
+
+        FIX-11 (P1-F1-10): the endpoint used to return a stub with empty
+        bars in live mode (and synthetic bars in dev mode, now retired).
+        Until IntradayCandleStore persistence lands (DEF-029), the endpoint
+        surfaces its unimplemented state via 501 instead of a misleading
+        empty payload. The 404 path is still meaningful and tested below.
+        """
         # First get a trade ID from the seeded data
         response = await client_with_trades.get(
             "/api/v1/trades?limit=1",
@@ -30,30 +37,14 @@ class TestTradeReplayEndpoint:
         assert response.status_code == 200
         trade_id = response.json()["trades"][0]["id"]
 
-        # Now fetch the replay
+        # Now fetch the replay — should return 501 with DEF-029 note
         response = await client_with_trades.get(
             f"/api/v1/trades/{trade_id}/replay",
             headers=auth_headers,
         )
 
-        assert response.status_code == 200
-        data = response.json()
-
-        # Check response structure
-        assert "trade" in data
-        assert "bars" in data
-        assert "entry_bar_index" in data
-        assert "exit_bar_index" in data
-        assert "vwap" in data
-        assert "timestamp" in data
-
-        # Trade should match the requested ID
-        assert data["trade"]["id"] == trade_id
-
-        # In test mode (not dev mode), bars may be empty
-        # But the structure should be correct
-        assert isinstance(data["bars"], list)
-        assert isinstance(data["entry_bar_index"], int)
+        assert response.status_code == 501
+        assert "DEF-029" in response.json()["detail"]
 
     async def test_nonexistent_trade_returns_404(
         self,

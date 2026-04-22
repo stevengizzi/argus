@@ -133,6 +133,33 @@ class Orchestrator:
         self._holiday_name: str | None = None
 
     # -------------------------------------------------------------------------
+    # Public accessors (avoid private-attribute access from outside)
+    # -------------------------------------------------------------------------
+
+    def attach_vix_service(self, vix_data_service: object) -> None:
+        """Attach a VIX data service after construction (API lifespan wiring).
+
+        The API lifespan handler instantiates ``VIXDataService`` lazily after
+        Orchestrator construction (``system.yaml`` vs ``vix_regime.yaml`` load
+        order). This setter lets that wiring happen without reaching into the
+        private ``_vix_data_service`` attribute and also forwards the
+        reference to ``RegimeClassifierV2`` if it is present.
+
+        Args:
+            vix_data_service: The ``VIXDataService`` instance (typed ``object``
+                to keep the orchestrator decoupled from the concrete class).
+        """
+        self._vix_data_service = vix_data_service
+        regime_v2 = self._regime_classifier_v2
+        if regime_v2 is not None and hasattr(regime_v2, "attach_vix_service"):
+            regime_v2.attach_vix_service(vix_data_service)
+
+    @property
+    def regime_classifier_v2(self) -> object | None:
+        """Return the V2 regime classifier (read-only accessor)."""
+        return self._regime_classifier_v2
+
+    # -------------------------------------------------------------------------
     # Lifecycle
     # -------------------------------------------------------------------------
 

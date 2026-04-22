@@ -1713,6 +1713,22 @@ POST   /api/v1/orchestrator/rebalance  — Trigger manual rebalance
 GET    /api/v1/session-summary         — Session recap (P&L, wins/losses, best/worst trade, regime, strategies). Query: ?date=YYYY-MM-DD
 GET    /api/v1/dashboard/summary       — Aggregate endpoint returning all Dashboard card data (account, today_stats, goals, market, regime, deployment, orchestrator) in single response. Sprint 21d (DEC-222).
 
+# ⚠️  CATALOG IS DRIFTED (audit 2026-04-21 P1-F1-8, DEF-168).
+#    Several paths below are wrong or missing. Known drift:
+#      - /api/v1/catalysts* is actually mounted at /api/v1/intelligence/catalysts*
+#      - /api/v1/catalysts/refresh does NOT exist
+#      - /api/v1/intelligence/briefings paths differ from code
+#      - /api/v1/ai/briefing|report|analyze POSTs do NOT exist in ai.py
+#      - /api/v1/performance/replay/{id} is actually /api/v1/trades/{id}/replay
+#        (and now returns 501 until DEF-029 lands)
+#      - /api/v1/market/{symbol}/bars serves REAL data first, synthetic only
+#        as a last-resort fallback with source="synthetic" flag (FIX-11)
+#      - /api/v1/arena/positions DOES require JWT (doc says otherwise)
+#      - Experiments (7), Watchlist, Controls (5), Trades stats/batch/export/csv,
+#        and /historical/{symbols,coverage,bars,validate-coverage} are undocumented
+#    Regeneration backlog item: DEF-168 — mechanically dump from FastAPI app.
+#    Treat `argus/api/routes/` as the source of truth, not this catalog.
+#
 # Intelligence endpoints — Sprint 23.5 ✅ (Catalyst), Sprint 24+ (remaining)
 GET  /api/v1/catalysts                   # List all catalysts (with filters: symbol, category, since) — Sprint 23.5 ✅
 GET  /api/v1/catalysts/{symbol}          # Catalysts for a symbol — Sprint 23.5 ✅

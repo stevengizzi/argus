@@ -292,11 +292,31 @@ async def arena_websocket(websocket: WebSocket) -> None:
             try:
                 send_queue.put_nowait(msg)
             except asyncio.QueueFull:
+                # Client is too slow — drain and replace with state_desync
+                # so the client reconnects/refreshes instead of drifting.
                 logger.warning(
-                    "Arena WS send queue full, dropping %s for %s",
+                    "Arena WS send queue full, signalling state_desync "
+                    "(dropped %s for %s)",
                     msg.get("type"),
                     msg.get("symbol", ""),
                 )
+                while not send_queue.empty():
+                    try:
+                        send_queue.get_nowait()
+                    except asyncio.QueueEmpty:
+                        break
+                try:
+                    send_queue.put_nowait(
+                        {
+                            "type": "state_desync",
+                            "reason": "send_queue_full",
+                            "dropped_type": msg.get("type"),
+                        }
+                    )
+                except asyncio.QueueFull:
+                    logger.error(
+                        "Failed to enqueue Arena state_desync marker"
+                    )
 
         # --- Event handlers ---------------------------------------------------
 

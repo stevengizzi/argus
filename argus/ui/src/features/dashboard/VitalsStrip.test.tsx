@@ -43,12 +43,17 @@ vi.mock('../../hooks/useSparklineData', () => ({
   }),
 }));
 
+// Relative dates computed at module-load time — prevents hardcoded-date
+// decay (DEF-167 — same root cause class as pytest DEF-163).
+const _TODAY = new Date().toISOString().slice(0, 10);
+const _NOW_ISO = new Date().toISOString();
+
 vi.mock('../../hooks/useVixData', () => ({
   useVixData: () => ({
     data: {
       status: 'ok',
       vix_close: 18.42,
-      data_date: '2026-04-02',
+      data_date: _TODAY,
       is_stale: false,
       regime: {
         vol_regime_phase: 'calm',
@@ -56,7 +61,7 @@ vi.mock('../../hooks/useVixData', () => ({
         vrp_tier: 'normal',
         term_structure_regime: null,
       },
-      timestamp: '2026-04-02T09:30:00Z',
+      timestamp: _NOW_ISO,
     },
     isLoading: false,
   }),

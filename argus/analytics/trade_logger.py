@@ -48,6 +48,19 @@ class TradeLogger:
         """
         self._db = db
 
+    @property
+    def db_manager(self) -> DatabaseManager:
+        """Return the underlying DatabaseManager.
+
+        Public accessor so callers (AI services, DebriefService, quality
+        engine) can share the same DB without reaching into the private
+        ``_db`` attribute. DEC-034 still designates TradeLogger as the sole
+        persistence interface for trades — this accessor exists to let
+        sibling services that already require a DatabaseManager reuse the
+        same connection instead of opening their own.
+        """
+        return self._db
+
     async def log_trade(self, trade: Trade) -> str:
         """Log a completed trade to the database.
 

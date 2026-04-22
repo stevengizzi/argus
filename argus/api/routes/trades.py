@@ -8,8 +8,7 @@ from __future__ import annotations
 import csv
 import io
 import json
-import random
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -428,127 +427,6 @@ class TradeReplayResponse(BaseModel):
     timestamp: str
 
 
-def _generate_synthetic_replay_bars(
-    trade: dict,
-    bar_count: int = 50,
-) -> tuple[list[ReplayBar], int, int | None, list[float] | None]:
-    """Generate synthetic 1-minute bars for a plausible trade scenario.
-
-    Creates a realistic trade pattern:
-    - Gap up at open
-    - Consolidation in opening range (first 5 bars)
-    - Breakout with volume surge (bar 15)
-    - Run to target (bar 25-30)
-    - Pullback/continuation
-
-    Args:
-        trade: Trade data dict with entry_price, stop_price, etc.
-        bar_count: Number of bars to generate.
-
-    Returns:
-        Tuple of (bars, entry_bar_index, exit_bar_index, vwap_values).
-    """
-    entry_price = trade["entry_price"]
-    stop_price = trade.get("stop_price") or entry_price * 0.99
-    exit_price = trade.get("exit_price") or entry_price * 1.01
-    entry_time_str = trade["entry_time"]
-    exit_time_str = trade.get("exit_time")
-
-    # Parse entry time
-    entry_time = datetime.fromisoformat(entry_time_str.replace("Z", "+00:00"))
-    # Start 15 bars before entry
-    start_time = entry_time - timedelta(minutes=15)
-
-    # Calculate price levels
-    risk = entry_price - stop_price
-    or_high = entry_price - risk * 0.1  # OR high just below entry
-    or_low = stop_price + risk * 0.3  # OR low above stop
-    pre_open_price = or_low - risk * 0.5  # Previous close
-
-    bars: list[ReplayBar] = []
-    vwap_values: list[float] = []
-    entry_bar_idx = 15  # Bar 15 is entry
-    exit_bar_idx: int | None = None
-
-    # Track VWAP computation
-    cum_volume = 0.0
-    cum_pv = 0.0  # price * volume
-
-    for i in range(bar_count):
-        bar_time = start_time + timedelta(minutes=i)
-
-        # Generate price based on phase
-        if i < 5:
-            # Pre-market / opening gap
-            base = pre_open_price + (or_low - pre_open_price) * (i / 5)
-            volatility = risk * 0.15
-        elif i < 15:
-            # Opening range consolidation
-            base = or_low + (or_high - or_low) * (0.5 + 0.3 * random.random())
-            volatility = risk * 0.1
-        elif i == 15:
-            # Breakout bar
-            base = entry_price
-            volatility = risk * 0.2
-        elif i < 25:
-            # Run towards target
-            progress = (i - 15) / 10
-            target_price = entry_price + risk * 2  # Assume 2R target
-            base = entry_price + (target_price - entry_price) * progress
-            volatility = risk * 0.08
-        elif i < 30:
-            # Near exit / target hit
-            if exit_time_str and exit_bar_idx is None:
-                exit_time = datetime.fromisoformat(exit_time_str.replace("Z", "+00:00"))
-                if bar_time >= exit_time:
-                    exit_bar_idx = i
-            base = exit_price if exit_price else entry_price + risk * 1.5
-            volatility = risk * 0.1
-        else:
-            # Post-trade continuation
-            base = exit_price if exit_price else entry_price + risk * 1.2
-            volatility = risk * 0.12
-
-        # Generate OHLC
-        noise = random.uniform(-volatility, volatility)
-        open_price = base + noise
-        close_price = base + random.uniform(-volatility, volatility)
-        high_price = max(open_price, close_price) + random.uniform(0, volatility * 0.5)
-        low_price = min(open_price, close_price) - random.uniform(0, volatility * 0.5)
-
-        # Volume surge on breakout
-        if i == 15 or i == 16:
-            volume = random.randint(50000, 150000)
-        elif i < 5:
-            volume = random.randint(5000, 15000)
-        else:
-            volume = random.randint(15000, 50000)
-
-        bars.append(
-            ReplayBar(
-                timestamp=bar_time.isoformat(),
-                open=round(open_price, 2),
-                high=round(high_price, 2),
-                low=round(low_price, 2),
-                close=round(close_price, 2),
-                volume=float(volume),
-            )
-        )
-
-        # Update VWAP
-        typical_price = (high_price + low_price + close_price) / 3
-        cum_volume += volume
-        cum_pv += typical_price * volume
-        vwap = cum_pv / cum_volume if cum_volume > 0 else typical_price
-        vwap_values.append(round(vwap, 2))
-
-    # Set exit bar if not found
-    if exit_bar_idx is None and exit_time_str:
-        exit_bar_idx = 25
-
-    return bars, entry_bar_idx, exit_bar_idx, vwap_values
-
-
 @router.get("/{trade_id}/replay", response_model=TradeReplayResponse)
 async def get_trade_replay(
     trade_id: str,
@@ -557,11 +435,10 @@ async def get_trade_replay(
 ) -> TradeReplayResponse:
     """Get historical bars for replaying a trade.
 
-    Returns the trade data along with 1-minute bars for the time window
-    around the trade (entry_time - 15 min to exit_time + 5 min).
-
-    In dev mode, generates synthetic bars that create a plausible trade scenario.
-    In live mode, queries the DataService for historical bars (stub for now).
+    This endpoint is NOT YET IMPLEMENTED in live mode. It remains as a
+    503-gated stub until DEF-029 (persist candle data for post-session
+    replay) lands. Returning 501 surfaces the unimplemented state to the
+    frontend instead of silently serving empty bars.
 
     Args:
         trade_id: The ULID of the trade to replay.
@@ -570,63 +447,22 @@ async def get_trade_replay(
         Trade data with historical bars, entry/exit bar indices, and VWAP values.
 
     Raises:
-        HTTPException: 404 if trade not found.
+        HTTPException: 404 if trade not found, 501 if replay not implemented.
     """
-    # Fetch the trade
+    # Fetch the trade to produce a 404 when the trade_id is bogus —
+    # the operator should learn about bad IDs before the 501.
     trades_data = await state.trade_logger.get_trades_by_ids([trade_id])
     if not trades_data:
         raise HTTPException(status_code=404, detail=f"Trade {trade_id} not found")
 
-    trade_row = trades_data[0]
-
-    # Parse target_prices from JSON string
-    target_prices_raw = trade_row.get("target_prices")
-    target_prices = (
-        json.loads(target_prices_raw) if target_prices_raw else None
-    )
-
-    # Build trade response
-    trade = TradeResponse(
-        id=trade_row["id"],
-        strategy_id=trade_row["strategy_id"],
-        symbol=trade_row["symbol"],
-        side=trade_row["side"],
-        entry_price=trade_row["entry_price"],
-        entry_time=trade_row["entry_time"],
-        exit_price=trade_row.get("exit_price"),
-        exit_time=trade_row.get("exit_time"),
-        shares=trade_row["shares"],
-        pnl_dollars=trade_row.get("net_pnl"),
-        pnl_r_multiple=trade_row.get("r_multiple"),
-        exit_reason=trade_row.get("exit_reason"),
-        hold_duration_seconds=trade_row.get("hold_duration_seconds"),
-        commission=trade_row.get("commission", 0.0),
-        market_regime=trade_row.get("market_regime"),
-        stop_price=trade_row.get("stop_price"),
-        target_prices=target_prices,
-        quality_grade=trade_row.get("quality_grade") or None,
-        quality_score=trade_row.get("quality_score"),
-    )
-
-    # Check if we're in dev mode (has _mock_watchlist attribute)
-    is_dev_mode = hasattr(state, "_mock_watchlist")
-
-    if is_dev_mode:
-        # Generate synthetic bars for dev mode
-        bars, entry_idx, exit_idx, vwap = _generate_synthetic_replay_bars(trade_row)
-    else:
-        # Live mode: stub implementation
-        # In the future, this would query DataService for historical bars
-        bars = []
-        entry_idx = 0
-        exit_idx = None
-        vwap = None
-
-    return TradeReplayResponse(
-        trade=trade,
-        bars=bars,
-        entry_bar_index=entry_idx,
-        exit_bar_index=exit_idx,
-        vwap=vwap,
-        timestamp=datetime.now(UTC).isoformat(),
+    # DEF-029: post-session candle replay not yet implemented. Surface as
+    # 501 Not Implemented so the frontend can render a clear "unavailable"
+    # state instead of a misleading empty chart.
+    raise HTTPException(
+        status_code=501,
+        detail=(
+            "Trade replay not implemented — DEF-029 (persist candle data "
+            "for post-session replay) is still open. The trade record is "
+            "valid but no historical bars are available."
+        ),
     )

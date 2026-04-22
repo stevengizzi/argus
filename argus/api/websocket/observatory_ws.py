@@ -136,10 +136,18 @@ async def observatory_websocket(websocket: WebSocket) -> None:
                     elapsed * 1000,
                     interval_ms,
                 )
-                # Update tracked state even on skip so next diff is accurate
-                previous_tiers = current_tiers
-                previous_eval_count = current_summary.get("total_evaluations", 0)
-                previous_signal_count = current_summary.get("total_signals", 0)
+                # Signal interval_skipped so the client can re-fetch on demand;
+                # tier transitions during this slow interval would otherwise be
+                # silently dropped. Tracked state is NOT advanced here — the
+                # next successful push will compute the full diff.
+                await websocket.send_json({
+                    "type": "interval_skipped",
+                    "timestamp": datetime.now(UTC).isoformat(),
+                    "data": {
+                        "elapsed_ms": round(elapsed * 1000, 1),
+                        "interval_ms": interval_ms,
+                    },
+                })
                 continue
 
             now_iso = datetime.now(UTC).isoformat()
