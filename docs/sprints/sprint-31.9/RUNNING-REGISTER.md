@@ -5,10 +5,10 @@
 > at every stage barrier. Survives compaction — read this file to hydrate
 > a fresh Claude.ai conversation.
 >
-> **Last updated:** 2026-04-22, FIX-04 complete (Stage 3 Wave 2)
-> **Campaign HEAD:** `4cfd8b4` (FIX-04 close-out + review docs)
+> **Last updated:** 2026-04-22 — Stage 4 Wave 1 complete + CI green
+> **Campaign HEAD:** `793d4fd` (clean-install hotfix)
 > **Workflow submodule:** `942c53a`
-> **Baseline tests:** 4,984 pytest + 859 Vitest (pre-FIX-04) → 4,985 pytest + 859 Vitest (post-FIX-04, 0 failures)
+> **Baseline tests:** 4,985 pytest + 859 Vitest (local) / 4,977 pytest + 859 Vitest (CI `-m "not integration"`), 0 failures
 
 ---
 
@@ -34,7 +34,8 @@
 | IMPROMPTU (between 2 and 3) | DEF-172 verify + DEF-173 fix + DEF-175 open | ✅ CLEAR |
 | Stage 3 Wave 1 | FIX-14 + FIX-16 | ✅ CLEAR (prior sessions) |
 | Stage 3 Wave 2 | FIX-04 (Rule-4 serial, order_manager.py) | ✅ CLEAR |
-| Stage 4 | FIX-05 (core: orchestrator+risk+regime) + FIX-18 + FIX-10 | ⏸ PENDING |
+| Stage 4 Wave 1 | FIX-10 + FIX-18 (parallel) | ✅ CLEAR |
+| Stage 4 Wave 2 | FIX-05 solo (next) | ⏸ PENDING |
 | Stage 5 | FIX-06 (data) + FIX-07 (intelligence) | ⏸ PENDING |
 | Stage 6 | FIX-08 solo | ⏸ PENDING |
 | Stage 7 | FIX-09 solo | ⏸ PENDING |
@@ -64,8 +65,12 @@
 | FIX-14 (primary Claude context docs) | `8c36bef` + `f57d7fc` | CLEAN | CLEAR | 0 | Stage 3 Wave 1 |
 | FIX-16 (config consistency sweep) | `563ae13` + `942cf05` | MINOR_DEVIATIONS | CLEAR | +19 | Stage 3 Wave 1 |
 | FIX-04 (execution layer) | `b2c55e5` + `4cfd8b4` | MINOR_DEVIATIONS | CLEAR | +1 | Stage 3 Wave 2 (Rule-4 serial). 2 CRITICAL + 7 MEDIUM + 10 LOW. Both CRITICALs landed with gold-standard revert-and-fail proof by Tier 2. F11 P1-D1-M03 deferred (DEF-177 — cross-domain RejectionStage edit outside scope); F10 partial (DEF-176 — test-migration blocker). |
+| FIX-10 (backtest legacy cleanup) | `675bf78` + `3efac5a` | CLEAN | CLEAR | 0 (docs-only) | Stage 4 Wave 1 (parallel with FIX-18). 3 findings, trivial. |
+| FIX-18 (deps + infra hardening) | `7aabb96` + `5fe4d1d` | MINOR_DEVIATIONS | CLEAR | 0 | Stage 4 Wave 1 (parallel with FIX-10). 15 findings (2 CVE + 9M + 4L + 2 cosmetic). CI workflow (`.github/workflows/ci.yml`) introduced. Cleanup tracker #2 + #3 RESOLVED. |
+| HOTFIX pytest-xdist | `d261e7b` + `a896985` | — | — | 0 | Post-FIX-18: CI surfaced missing `pytest-xdist` in `[dev]` extras. Declared + annotated FIX-18 follow-up. |
+| HOTFIX clean-install | `793d4fd` | — | — | 0 | First full CI run unmasked 4 clean-install bugs (submodule init, seaborn for report generator, jwt→jose shim in one test, walk-forward integration marking). All fixed. |
 
-Baseline progression: 4,934 (pre-campaign) → 4,858 (actual pytest at campaign start after FIX-03's CLAUDE.md strikethrough) → 4,944 (post-FIX-11) → 4,946 (post-FIX-02) → 4,964 (post-Stage-2) → 4,965 (post-IMPROMPTU-def172-173-175) → 4,984 (post-FIX-16) → **4,985 (post-FIX-04)**. Vitest: 846 → **859**.
+Baseline progression: 4,934 (pre-campaign) → 4,858 (actual pytest at campaign start after FIX-03's CLAUDE.md strikethrough) → 4,944 (post-FIX-11) → 4,946 (post-FIX-02) → 4,964 (post-Stage-2) → 4,965 (post-IMPROMPTU-def172-173-175) → 4,984 (post-FIX-16) → **4,985 (post-FIX-04, holds through Stage 4 Wave 1 + hotfixes)**. Vitest: 846 → **859**.
 
 ---
 
@@ -104,6 +109,10 @@ Baseline progression: 4,934 (pre-campaign) → 4,858 (actual pytest at campaign 
 | DEF-175 | Component ownership consolidation — `CatalystStorage`, `SetupQualityEngine`, `DynamicPositionSizer`, `ExperimentStore`, `LearningStore` constructed in both `main.py` and `api/server.py` lifespan phases; broader pattern behind DEF-172/173 | MEDIUM | **Dedicated post-Sprint-31.9 sprint** (~2–3 sessions). Pre-sprint discovery at `docs/sprints/post-31.9-component-ownership/DISCOVERY.md`. Blocked on Sprint 31.9 closure. |
 | DEF-176 | Full removal of deprecated `OrderManager(auto_cleanup_orphans=...)` kwarg — FIX-04 added DeprecationWarning; 3 reconciliation test files still pass the kwarg and were outside FIX-04 scope | LOW | Opportunistic / next execution-layer cleanup sprint |
 | DEF-177 | `RejectionStage.MARGIN_CIRCUIT` — FIX-04 P1-D1-M03 deferred; requires cross-domain edit (intelligence/counterfactual.py enum + counterfactual_positions schema + order_manager.py:485 emitted stage) that exceeded FIX-04's execution-only scope | MEDIUM | **FIX-06 or dedicated cross-domain session** (FilterAccuracy by_stage analysis masks margin-incident signal today) |
+| DEF-178 | `alpaca-py` still in core `[project.dependencies]` despite DEC-086 demoting Alpaca to incubator-only — FIX-18 left constraint in place with inline pointer; full fix moves to `[project.optional-dependencies].incubator` + feature-detect at 4 call sites | LOW | Opportunistic / execution-layer cleanup sprint |
+| DEF-179 | `python-jose` → `PyJWT` migration — FIX-18 bumped bound to `>=3.4.0,<4` to mitigate CVE-2024-33663 (fixed in 3.4.0); full migration is single-session weekend work across 5 import sites + 2 test fixtures | LOW — CVE already mitigated | Opportunistic / next API-layer cleanup sprint |
+| DEF-180 | No Python lockfile — CI workflow from FIX-18 P1-I-M06 installs from version ranges; lockfile (`uv.lock` recommended) would give CI + operator identical resolved trees | LOW-MEDIUM | Dedicated single-session sprint (~30-60 min) |
+| DEF-181 | Node 20 deprecation in GitHub Actions — `actions/checkout@v4`, `actions/setup-python@v5`, `actions/setup-node@v4` all run on Node.js 20 which will be forced to Node.js 24 on 2026-06-02 and removed 2026-09-16. First CI runs on 2026-04-22 surfaced the warning. | LOW | Before 2026-06-02 — bump action pins in `.github/workflows/ci.yml` |
 
 ---
 
@@ -166,19 +175,29 @@ Plus the IMPROMPTU-def172-173-175 session between Stage 2 and Stage 3 (DEF-172 R
 
 Test progression: 4,965 → 4,984 (FIX-16 +19) → 4,985 (FIX-04 +1). Vitest unchanged at 859.
 
-## Stage 4 preview
+## Stage 4 Wave 1 complete (2026-04-22)
 
-Per STAGE-FLOW.md, three sessions covering core orchestrator+risk+regime, deps/infra, and backtest legacy cleanup:
+FIX-10 + FIX-18 landed in parallel, both CLEAR. FIX-18 introduced the first `.github/workflows/ci.yml`, which triggered two hotfix cycles:
+
+1. **`d261e7b` + `a896985`** — CI run surfaced that `pytest-xdist` was missing from `[dev]` extras (local envs had it via system pip; clean install did not). Declared in `pyproject.toml`, FIX-18 close-out annotated.
+2. **`793d4fd`** — First fully passing CI after clean-install bugs: (a) git submodule init missing, (b) seaborn missing for report generator import, (c) one `jwt` import shim missing in a test under jose-3.5 line, (d) walk-forward validation needed `@pytest.mark.integration` marking.
+
+## CI infrastructure status
+
+First fully passing CI run achieved at commit `793d4fd`:
+
+- **pytest:** 4,977 passing + 0 failing + 0 errors (CI runs with `-m "not integration"`)
+- **Vitest:** 859 passing + 0 failing
+- **Known-flake DEFs:** none fired (DEF-150, DEF-163 × 2, DEF-167, DEF-171 — all four dormant)
+- **Workflow file:** `.github/workflows/ci.yml` (added by FIX-18 P1-I-M06)
+- **Clean-install bugs unmasked and fixed:** pytest-xdist in `[dev]`, submodule init, seaborn, jwt-import shim, walk-forward integration marking
+- **Known deprecation warning:** Node 20 on three GitHub Actions — tracked as **DEF-181** (June 2, 2026 deadline)
+
+## Stage 4 Wave 2 preview (FIX-05 next)
 
 | Session | Findings | Scope | Safety | Parallelism |
 |---|---|---|---|---|
 | FIX-05 | 37 (2C + 18M + 17L) | `argus/core/*` + tests + `config/vix_regime.yaml` + `docs/architecture.md` | weekend-only | Solo (size + safety-critical) |
-| FIX-18 | 15 (2 CVE + 9M + 4L + 2 cosmetic) | `pyproject.toml` + CI config + 1 script + `.env.example` | weekend-only | Parallelizable (no runtime paths) |
-| FIX-10 | 3 (1 cosmetic + 2L) | `CLAUDE.md` + `docs/decision-log.md` + `reports/` | safe-during-trading | Parallelizable (trivially tiny) |
-
-**Planned order:**
-- **Wave 1 (parallel):** FIX-10 + FIX-18 — file-disjoint, safe to run concurrently
-- **Wave 2 (solo):** FIX-05 — 37 findings demands undivided attention; two CRITICALs in risk-manager circuit breaker coverage gaps; covers DEF-170 resolution (VIX calculator rewiring)
 
 FIX-05 completes DEF-170 (VIX regime calculators inert in production). All other Sprint 31.9 DEF-opens either route through later stages or land in a post-Sprint-31.9 sprint.
 

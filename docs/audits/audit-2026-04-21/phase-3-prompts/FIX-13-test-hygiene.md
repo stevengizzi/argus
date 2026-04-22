@@ -5,6 +5,21 @@
 ## Scope
 
 **Findings addressed:** 25
+
+## Scope additions (added 2026-04-22 post-CI-green)
+
+Beyond the original DEF-150 + DEF-163 coverage, this session now also covers:
+
+- **DEF-167** (Vitest hardcoded dates decay over time — partially resolved by
+  FIX-11 which converted 4 flagged files to `new Date().toISOString()`; this
+  session completes the scan of the remaining files)
+- **DEF-171** (ULID xdist race — dormant locally pre-CI, now live with CI
+  running xdist. Has flaked 3× under xdist locally during Sprint 31.9 reviews)
+
+Both DEFs are known flakes that did NOT fire in the first green CI run
+(`793d4fd`), but the four-DEF flake inventory should be cleared as a single
+batch to consolidate test-hygiene work.
+
 **Files touched:** `6 order-manager flatten tests at ~30.0s each = ~180s wall-cl`, `[tests/](tests/) class-vs-function mix`, `[tests/execution/test_order_manager_*.py](tests/execution/) `, `[tests/unit/](tests/unit/) subtree (2 subdirs: `core/`, `str`, `argus/ai/prompts.py`, `argus/api/__main__.py`, `argus/core/logging_config.py`, `pyproject.toml`, `tests/accounting/__init__.py`, `tests/analytics/test_def159_entry_price_known.py`, `tests/api/conftest.py`, `tests/api/test_observatory_ws.py`, `tests/core/test_clock.py`, `tests/data/test_alpaca_data_service.py`, `tests/intelligence/test_startup.py`, `tests/sprint_runner/test_notifications.py`, `tests/strategies/test_orb_breakout.py`, `tests/strategies/test_shadow_mode.py`, `tests/test_integration_sprint2.py`, `tests/test_integration_sprint26.py`, `tests/utils/test_log_throttle.py`
 **Safety tag:** `safe-during-trading`
 **Theme:** Test-suite hygiene: flaky test stabilization, unmocked async deps, stale skips, and xdist race conditions.
