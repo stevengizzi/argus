@@ -25,6 +25,7 @@ import signal
 import time
 from dataclasses import replace
 from pathlib import Path
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 from dotenv import load_dotenv
@@ -38,10 +39,10 @@ from argus.analytics.trade_logger import TradeLogger
 from argus.core.clock import SystemClock
 from argus.core.config import (
     AlpacaScannerConfig,
+    ArgusConfig,
     BrokerSource,
     DataServiceConfig,
     DataSource,
-    OrchestratorConfig,
     load_afternoon_momentum_config,
     load_bull_flag_config,
     load_config,
@@ -91,7 +92,6 @@ from argus.db.manager import DatabaseManager
 from argus.core.regime import MarketRegime
 from argus.intelligence.position_sizer import DynamicPositionSizer
 from argus.intelligence.quality_engine import SetupQualityEngine
-from argus.execution.alpaca_broker import AlpacaBroker
 from argus.execution.order_manager import OrderManager
 from argus.strategies.afternoon_momentum import AfternoonMomentumStrategy
 from argus.strategies.pattern_strategy import PatternBasedStrategy
@@ -106,15 +106,18 @@ from argus.strategies.orb_base import OrbBaseStrategy
 from argus.strategies.orb_breakout import OrbBreakoutStrategy
 from argus.strategies.orb_scalp import OrbScalpStrategy
 from argus.strategies.vwap_reclaim import VwapReclaimStrategy
+from argus.utils.log_throttle import ThrottledLogger
 # fmt: on
 
 if TYPE_CHECKING:
     from argus.core.clock import Clock
+    from argus.core.regime_history import RegimeHistoryStore
     from argus.data.scanner import Scanner
     from argus.data.service import DataService
     from argus.execution.broker import Broker
 
 logger = logging.getLogger(__name__)
+_throttled = ThrottledLogger(logger)
 
 
 class ArgusSystem:
@@ -157,17 +160,20 @@ class ArgusSystem:
         self._health_monitor: HealthMonitor | None = None
         self._orchestrator: Orchestrator | None = None
         self._api_task: asyncio.Task[None] | None = None
-        self._config: object | None = None  # Store config for API access
-        self._cached_watchlist: list = []  # Scanner results for API watchlist endpoint
+        self._config: ArgusConfig | None = None  # Store config for API access
+        self._cached_watchlist: list[Any] = []  # Scanner results for API watchlist endpoint
         self._universe_manager: UniverseManager | None = None  # Sprint 23: Universe Manager
-        self._strategies: dict = {}  # Strategy dict for candle routing
+        # Strategy dict for candle routing (BaseStrategy per value via isinstance narrowing)
+        self._strategies: dict[str, Any] = {}
         # Sprint 24: Quality pipeline components (initialized after DB + config)
         self._quality_engine: SetupQualityEngine | None = None
         self._position_sizer: DynamicPositionSizer | None = None
         self._catalyst_storage: object | None = None  # CatalystStorage, if pipeline active
+        self._regime_history_store: RegimeHistoryStore | None = None  # Sprint 27.6, closed on shutdown
         self._eval_check_task: asyncio.Task[None] | None = None  # Sprint 25.5: eval health check
         self._eval_store: EvaluationEventStore | None = None  # Sprint 25.6: reused in health check
-        self._regime_task: asyncio.Task[None] | None = None  # Sprint 25.6 S2: periodic regime reclass
+        # _run_regime_reclassification task removed FIX-03 P1-A1-M10 / DEF-074 —
+        # Orchestrator._poll_loop already runs the same reclassify cadence.
         self._regime_check_count: int = 0  # Sprint 25.9: counter for INFO logging cadence
         self._bg_refresh_task: asyncio.Task[None] | None = None  # Sprint 25.9: background cache refresh
         self._reconciliation_task: asyncio.Task[None] | None = None  # Sprint 27.65: position recon
@@ -178,24 +184,51 @@ class ArgusSystem:
         self._counterfactual_task: asyncio.Task[None] | None = None  # Sprint 27.7: maintenance task
         self._promotion_evaluator: object | None = None  # Sprint 32 S7: PromotionEvaluator
         self._experiments_auto_promote: bool = False  # Sprint 32 S7: auto_promote config flag
-        self._cutoff_logged: bool = False  # Sprint 32.9: one-shot log per session for signal cutoff
+        # Sprint 32.9 / FIX-03 P1-A1-L05: one-shot log per session for signal
+        # cutoff, keyed on the ET session date so multi-day runs re-log.
+        self._cutoff_logged_date: str | None = None
+        # Closure-captured CandleEvent handlers (FIX-03 P1-A1-L01).
+        self._breadth_candle_handler: Callable[[CandleEvent], Any] | None = None
+        self._intraday_candle_handler: Callable[[CandleEvent], Any] | None = None
+        # Variant exit overrides collected during spawning (FIX-03 P1-D2-M01).
+        self._variant_exit_overrides: dict[str, dict[str, Any]] = {}
 
     async def start(self) -> None:
         """Initialize and start all components in dependency order.
 
-        Order matters:
+        Live phase sequence (see ``docs/architecture.md`` §3.9 for the full
+        per-phase breakdown). Twelve primary phases plus five config-gated
+        sub-phases bolted on as features landed:
+
         1. Config + Clock + EventBus (no dependencies)
-        2. Database + TradeLogger (needs config)
-        3. Broker (needs config, event_bus)
-        4. HealthMonitor (needs event_bus, clock, broker)
-        5. RiskManager (needs event_bus, clock, config, broker)
-        6. DataService (needs config, event_bus, clock)
-        7. Scanner (needs config)
-        8. Strategy (needs config, clock) — instance created, NOT activated
-        9. Orchestrator (needs event_bus, clock, trade_logger, broker, data_service)
-        10. OrderManager (needs event_bus, broker, clock, config, trade_logger)
-        11. Start data service streaming
-        12. API Server (optional, needs all components)
+        2. Database + TradeLogger + AI persistence (needs config)
+        3. Broker connection (IBKR / Alpaca / Simulated — lazy-imported)
+        4. HealthMonitor
+        5. RiskManager (+ state reconstruction from trade log)
+        6. DataService (Databento or Alpaca)
+        7. Scanner (pre-market scan)
+        7.5. Universe Manager (config-gated, non-simulated only)
+        8. Strategies (ORB + ORB Scalp + VWAP Reclaim + Afternoon Momentum +
+           Red-to-Green + table-driven PatternBasedStrategy roster)
+        8.5. Regime Intelligence V2 (config-gated)
+        9. Orchestrator (+ experiment-variant spawning + telemetry-store
+           wiring + run_pre_market). Mid-day restart state rehydrates via
+           PatternBasedStrategy.backfill_candles() from IntradayCandleStore
+           and strategy.reconstruct_state(trade_logger); the prior separate
+           _reconstruct_strategy_state replay path was removed (audit
+           2026-04-21 FIX-03 P1-A1-C01).
+        9.5. Build routing table (UM-gated)
+        10. OrderManager (+ per-strategy exit overrides, including any
+            experiment-variant overrides collected during spawning)
+        10.25. Quality Pipeline (config-gated)
+        10.3. Telemetry Store — initialized in phase 9 (see P1-A1-M08);
+              retained as a numbering anchor for architecture.md
+        10.4. Event Routing (renumbered from 10.5 per audit)
+        10.7. Counterfactual Engine (config-gated)
+        11. Start data streaming + background loops
+        12. API Server (optional, in-process FastAPI)
+
+        Regime reclassification cadence is owned by Orchestrator._poll_loop.
         """
         logger.info("=" * 60)
         logger.info("ARGUS TRADING SYSTEM — STARTING")
@@ -216,9 +249,11 @@ class ArgusSystem:
         await self._db.initialize()
         self._trade_logger = TradeLogger(self._db)
 
-        # Initialize AI persistence tables
-        # NOTE: Shares SQLite write lock with Trade Logger. Monitor latency during
-        # active trading + chat. See RSK-NEW-5.
+        # Initialize AI persistence tables.
+        # NOTE: AI writes (conversations, messages, proposals, usage) share the
+        # argus.db SQLite write lock with TradeLogger. If latency spikes during
+        # active trading + chat, consider WAL mode or a separate ai.db file.
+        # (FIX-03 P1-A1-L08: dangling "RSK-NEW-5" reference removed.)
         self._conversation_manager = ConversationManager(self._db)
         await self._conversation_manager.initialize()
         self._usage_tracker = UsageTracker(self._db)
@@ -250,6 +285,10 @@ class ArgusSystem:
                 event_bus=self._event_bus,
             )
         elif config.system.broker_source == BrokerSource.ALPACA:
+            # FIX-03 P1-C1-M03: lazy-import to match IBKR/Simulated pattern so
+            # alpaca-py is only required on Alpaca incubator deployments.
+            from argus.execution.alpaca_broker import AlpacaBroker
+
             logger.info("Using Alpaca broker (paper/incubator)")
             self._broker = AlpacaBroker(
                 event_bus=self._event_bus,
@@ -444,8 +483,22 @@ class ArgusSystem:
                 self._universe_manager = None
                 use_universe_manager = False
                 warmup_symbols = symbols
+            # FIX-03 P1-A1-M09: surface subsystem state to /health.
+            if self._universe_manager is not None:
+                self._health_monitor.update_component(
+                    "universe_manager", ComponentStatus.HEALTHY
+                )
+            else:
+                self._health_monitor.update_component(
+                    "universe_manager",
+                    ComponentStatus.DEGRADED,
+                    message="build failed — scanner fallback",
+                )
         else:
             logger.info("Universe Manager disabled or simulated broker mode")
+            self._health_monitor.update_component(
+                "universe_manager", ComponentStatus.DEGRADED, message="disabled"
+            )
 
         # --- Phase 8: Strategy Instances ---
         # Create strategy instances but do NOT activate (Orchestrator handles activation)
@@ -519,200 +572,42 @@ class ArgusSystem:
                 r2g_strategy.set_watchlist(symbols)
             strategies_created.append("RedToGreen")
 
-        # Bull Flag (optional — PatternBasedStrategy wrapping BullFlagPattern)
-        bull_flag_strategy: PatternBasedStrategy | None = None
-        bull_flag_yaml = self._config_dir / "strategies" / "bull_flag.yaml"
-        if bull_flag_yaml.exists():
-            bull_flag_config = load_bull_flag_config(bull_flag_yaml)
-            bull_flag_pattern = build_pattern_from_config(bull_flag_config, "bull_flag")
-            bull_flag_strategy = PatternBasedStrategy(
-                pattern=bull_flag_pattern,
-                config=bull_flag_config,
-                data_service=self._data_service,
-                clock=self._clock,
-            )
-            bull_flag_strategy._config_fingerprint = compute_parameter_fingerprint(
-                bull_flag_config, get_pattern_class("bull_flag")
-            )
-            if not use_universe_manager:
-                bull_flag_strategy.set_watchlist(symbols)
-            strategies_created.append("BullFlag")
+        # PatternBasedStrategy roster (DEC-275 collapse, FIX-03 P1-A1-M04/M05).
+        # Adding a new pattern = one row here. The prior code cloned this 18-line
+        # block ten times and again in the register cascade + variant spawner.
+        pattern_definitions: list[tuple[str, str, Callable[[Path], Any]]] = [
+            ("bull_flag", "BullFlag", load_bull_flag_config),
+            ("flat_top_breakout", "FlatTopBreakout", load_flat_top_breakout_config),
+            ("dip_and_rip", "DipAndRip", load_dip_and_rip_config),
+            ("hod_break", "HODBreak", load_hod_break_config),
+            ("abcd", "ABCD", load_abcd_config),
+            ("gap_and_go", "GapAndGo", load_gap_and_go_config),
+            ("premarket_high_break", "PreMarketHighBreak", load_premarket_high_break_config),
+            ("micro_pullback", "MicroPullback", load_micro_pullback_config),
+            ("vwap_bounce", "VwapBounce", load_vwap_bounce_config),
+            ("narrow_range_breakout", "NarrowRangeBreakout", load_narrow_range_breakout_config),
+        ]
 
-        # Flat-Top Breakout (optional — PatternBasedStrategy wrapping FlatTopBreakoutPattern)
-        flat_top_strategy: PatternBasedStrategy | None = None
-        flat_top_yaml = self._config_dir / "strategies" / "flat_top_breakout.yaml"
-        if flat_top_yaml.exists():
-            flat_top_config = load_flat_top_breakout_config(flat_top_yaml)
-            flat_top_pattern = build_pattern_from_config(flat_top_config, "flat_top_breakout")
-            flat_top_strategy = PatternBasedStrategy(
-                pattern=flat_top_pattern,
-                config=flat_top_config,
+        pattern_strategies: dict[str, PatternBasedStrategy] = {}
+        for pattern_name, display_name, loader in pattern_definitions:
+            yaml_path = self._config_dir / "strategies" / f"{pattern_name}.yaml"
+            if not yaml_path.exists():
+                continue
+            pattern_config = loader(yaml_path)
+            pattern = build_pattern_from_config(pattern_config, pattern_name)
+            strategy = PatternBasedStrategy(
+                pattern=pattern,
+                config=pattern_config,
                 data_service=self._data_service,
                 clock=self._clock,
             )
-            flat_top_strategy._config_fingerprint = compute_parameter_fingerprint(
-                flat_top_config, get_pattern_class("flat_top_breakout")
+            strategy.set_config_fingerprint(
+                compute_parameter_fingerprint(pattern_config, get_pattern_class(pattern_name))
             )
             if not use_universe_manager:
-                flat_top_strategy.set_watchlist(symbols)
-            strategies_created.append("FlatTopBreakout")
-
-        # Dip-and-Rip (optional — PatternBasedStrategy wrapping DipAndRipPattern)
-        dip_and_rip_strategy: PatternBasedStrategy | None = None
-        dip_and_rip_yaml = self._config_dir / "strategies" / "dip_and_rip.yaml"
-        if dip_and_rip_yaml.exists():
-            dip_and_rip_config = load_dip_and_rip_config(dip_and_rip_yaml)
-            dip_and_rip_pattern = build_pattern_from_config(dip_and_rip_config, "dip_and_rip")
-            dip_and_rip_strategy = PatternBasedStrategy(
-                pattern=dip_and_rip_pattern,
-                config=dip_and_rip_config,
-                data_service=self._data_service,
-                clock=self._clock,
-            )
-            dip_and_rip_strategy._config_fingerprint = compute_parameter_fingerprint(
-                dip_and_rip_config, get_pattern_class("dip_and_rip")
-            )
-            if not use_universe_manager:
-                dip_and_rip_strategy.set_watchlist(symbols)
-            strategies_created.append("DipAndRip")
-
-        # HOD Break (optional — PatternBasedStrategy wrapping HODBreakPattern)
-        hod_break_strategy: PatternBasedStrategy | None = None
-        hod_break_yaml = self._config_dir / "strategies" / "hod_break.yaml"
-        if hod_break_yaml.exists():
-            hod_break_config = load_hod_break_config(hod_break_yaml)
-            hod_break_pattern = build_pattern_from_config(hod_break_config, "hod_break")
-            hod_break_strategy = PatternBasedStrategy(
-                pattern=hod_break_pattern,
-                config=hod_break_config,
-                data_service=self._data_service,
-                clock=self._clock,
-            )
-            hod_break_strategy._config_fingerprint = compute_parameter_fingerprint(
-                hod_break_config, get_pattern_class("hod_break")
-            )
-            if not use_universe_manager:
-                hod_break_strategy.set_watchlist(symbols)
-            strategies_created.append("HODBreak")
-
-        # ABCD Harmonic (optional — PatternBasedStrategy wrapping ABCDPattern)
-        abcd_strategy: PatternBasedStrategy | None = None
-        abcd_yaml = self._config_dir / "strategies" / "abcd.yaml"
-        if abcd_yaml.exists():
-            abcd_config = load_abcd_config(abcd_yaml)
-            abcd_pattern = build_pattern_from_config(abcd_config, "abcd")
-            abcd_strategy = PatternBasedStrategy(
-                pattern=abcd_pattern,
-                config=abcd_config,
-                data_service=self._data_service,
-                clock=self._clock,
-            )
-            abcd_strategy._config_fingerprint = compute_parameter_fingerprint(
-                abcd_config, get_pattern_class("abcd")
-            )
-            if not use_universe_manager:
-                abcd_strategy.set_watchlist(symbols)
-            strategies_created.append("ABCD")
-
-        # Gap-and-Go (optional — PatternBasedStrategy wrapping GapAndGoPattern)
-        gap_and_go_strategy: PatternBasedStrategy | None = None
-        gap_and_go_yaml = self._config_dir / "strategies" / "gap_and_go.yaml"
-        if gap_and_go_yaml.exists():
-            gap_and_go_config = load_gap_and_go_config(gap_and_go_yaml)
-            gap_and_go_pattern = build_pattern_from_config(gap_and_go_config, "gap_and_go")
-            gap_and_go_strategy = PatternBasedStrategy(
-                pattern=gap_and_go_pattern,
-                config=gap_and_go_config,
-                data_service=self._data_service,
-                clock=self._clock,
-            )
-            gap_and_go_strategy._config_fingerprint = compute_parameter_fingerprint(
-                gap_and_go_config, get_pattern_class("gap_and_go")
-            )
-            if not use_universe_manager:
-                gap_and_go_strategy.set_watchlist(symbols)
-            strategies_created.append("GapAndGo")
-
-        # Pre-Market High Break (optional — PatternBasedStrategy wrapping
-        # PreMarketHighBreakPattern)
-        pm_high_break_strategy: PatternBasedStrategy | None = None
-        pm_high_yaml = (
-            self._config_dir / "strategies" / "premarket_high_break.yaml"
-        )
-        if pm_high_yaml.exists():
-            pm_high_config = load_premarket_high_break_config(pm_high_yaml)
-            pm_high_pattern = build_pattern_from_config(pm_high_config, "premarket_high_break")
-            pm_high_break_strategy = PatternBasedStrategy(
-                pattern=pm_high_pattern,
-                config=pm_high_config,
-                data_service=self._data_service,
-                clock=self._clock,
-            )
-            pm_high_break_strategy._config_fingerprint = compute_parameter_fingerprint(
-                pm_high_config, get_pattern_class("premarket_high_break")
-            )
-            if not use_universe_manager:
-                pm_high_break_strategy.set_watchlist(symbols)
-            strategies_created.append("PreMarketHighBreak")
-
-        # Micro Pullback (optional — PatternBasedStrategy wrapping MicroPullbackPattern)
-        micro_pullback_strategy: PatternBasedStrategy | None = None
-        micro_pullback_yaml = self._config_dir / "strategies" / "micro_pullback.yaml"
-        if micro_pullback_yaml.exists():
-            micro_pullback_config = load_micro_pullback_config(micro_pullback_yaml)
-            micro_pullback_pattern = build_pattern_from_config(micro_pullback_config, "micro_pullback")
-            micro_pullback_strategy = PatternBasedStrategy(
-                pattern=micro_pullback_pattern,
-                config=micro_pullback_config,
-                data_service=self._data_service,
-                clock=self._clock,
-            )
-            micro_pullback_strategy._config_fingerprint = compute_parameter_fingerprint(
-                micro_pullback_config, get_pattern_class("micro_pullback")
-            )
-            if not use_universe_manager:
-                micro_pullback_strategy.set_watchlist(symbols)
-            strategies_created.append("MicroPullback")
-
-        # VWAP Bounce (optional — PatternBasedStrategy wrapping VwapBouncePattern)
-        vwap_bounce_strategy: PatternBasedStrategy | None = None
-        vwap_bounce_yaml = self._config_dir / "strategies" / "vwap_bounce.yaml"
-        if vwap_bounce_yaml.exists():
-            vwap_bounce_config = load_vwap_bounce_config(vwap_bounce_yaml)
-            vwap_bounce_pattern = build_pattern_from_config(vwap_bounce_config, "vwap_bounce")
-            vwap_bounce_strategy = PatternBasedStrategy(
-                pattern=vwap_bounce_pattern,
-                config=vwap_bounce_config,
-                data_service=self._data_service,
-                clock=self._clock,
-            )
-            vwap_bounce_strategy._config_fingerprint = compute_parameter_fingerprint(
-                vwap_bounce_config, get_pattern_class("vwap_bounce")
-            )
-            if not use_universe_manager:
-                vwap_bounce_strategy.set_watchlist(symbols)
-            strategies_created.append("VwapBounce")
-
-        # Narrow Range Breakout (optional — PatternBasedStrategy wrapping NarrowRangeBreakoutPattern)
-        narrow_range_breakout_strategy: PatternBasedStrategy | None = None
-        narrow_range_breakout_yaml = self._config_dir / "strategies" / "narrow_range_breakout.yaml"
-        if narrow_range_breakout_yaml.exists():
-            narrow_range_breakout_config = load_narrow_range_breakout_config(narrow_range_breakout_yaml)
-            narrow_range_breakout_pattern = build_pattern_from_config(
-                narrow_range_breakout_config, "narrow_range_breakout"
-            )
-            narrow_range_breakout_strategy = PatternBasedStrategy(
-                pattern=narrow_range_breakout_pattern,
-                config=narrow_range_breakout_config,
-                data_service=self._data_service,
-                clock=self._clock,
-            )
-            narrow_range_breakout_strategy._config_fingerprint = compute_parameter_fingerprint(
-                narrow_range_breakout_config, get_pattern_class("narrow_range_breakout")
-            )
-            if not use_universe_manager:
-                narrow_range_breakout_strategy.set_watchlist(symbols)
-            strategies_created.append("NarrowRangeBreakout")
+                strategy.set_watchlist(symbols)
+            pattern_strategies[pattern_name] = strategy
+            strategies_created.append(display_name)
 
         # Note: is_active and allocated_capital set by Orchestrator in Phase 9
         self._health_monitor.update_component(
@@ -736,8 +631,7 @@ class ArgusSystem:
             from argus.core.regime import RegimeClassifierV2
             from argus.core.sector_rotation import SectorRotationAnalyzer
 
-            orchestrator_yaml_pre = load_yaml_file(self._config_dir / "orchestrator.yaml")
-            orchestrator_config_pre = OrchestratorConfig(**orchestrator_yaml_pre)
+            orchestrator_config_pre = config.orchestrator
 
             # Create dimension calculators
             breadth_calc = BreadthCalcImpl(regime_config.breadth) if regime_config.breadth.enabled else None
@@ -783,14 +677,22 @@ class ArgusSystem:
                 history_db_path = str(Path(config.system.data_dir) / "regime_history.db")
                 regime_history_store = RegimeHistoryStore(db_path=history_db_path)
                 await regime_history_store.initialize()
+                self._regime_history_store = regime_history_store
                 logger.info("RegimeHistoryStore initialized: %s", history_db_path)
 
             logger.info("Regime intelligence V2 ready")
+            self._health_monitor.update_component(
+                "regime_classifier_v2", ComponentStatus.HEALTHY
+            )
+        else:
+            # FIX-03 P1-A1-M09: report disabled subsystems explicitly.
+            self._health_monitor.update_component(
+                "regime_classifier_v2", ComponentStatus.DEGRADED, message="disabled"
+            )
 
         # --- Phase 9: Orchestrator ---
         logger.info("[9/12] Initializing orchestrator...")
-        orchestrator_yaml = load_yaml_file(self._config_dir / "orchestrator.yaml")
-        orchestrator_config = OrchestratorConfig(**orchestrator_yaml)
+        orchestrator_config = config.orchestrator
         OrbBaseStrategy.mutual_exclusion_enabled = orchestrator_config.orb_family_mutual_exclusion
         logger.info(
             "[9/12] ORB family mutual exclusion: %s",
@@ -817,26 +719,8 @@ class ArgusSystem:
             self._orchestrator.register_strategy(afternoon_strategy)
         if r2g_strategy is not None:
             self._orchestrator.register_strategy(r2g_strategy)
-        if bull_flag_strategy is not None:
-            self._orchestrator.register_strategy(bull_flag_strategy)
-        if flat_top_strategy is not None:
-            self._orchestrator.register_strategy(flat_top_strategy)
-        if dip_and_rip_strategy is not None:
-            self._orchestrator.register_strategy(dip_and_rip_strategy)
-        if hod_break_strategy is not None:
-            self._orchestrator.register_strategy(hod_break_strategy)
-        if abcd_strategy is not None:
-            self._orchestrator.register_strategy(abcd_strategy)
-        if gap_and_go_strategy is not None:
-            self._orchestrator.register_strategy(gap_and_go_strategy)
-        if pm_high_break_strategy is not None:
-            self._orchestrator.register_strategy(pm_high_break_strategy)
-        if micro_pullback_strategy is not None:
-            self._orchestrator.register_strategy(micro_pullback_strategy)
-        if vwap_bounce_strategy is not None:
-            self._orchestrator.register_strategy(vwap_bounce_strategy)
-        if narrow_range_breakout_strategy is not None:
-            self._orchestrator.register_strategy(narrow_range_breakout_strategy)
+        for pattern_strategy in pattern_strategies.values():
+            self._orchestrator.register_strategy(pattern_strategy)
 
         # --- Experiment Variant Spawning (Sprint 32, Session 5) ---
         # Config-gated: skipped entirely when experiments.enabled is false (default).
@@ -850,66 +734,28 @@ class ArgusSystem:
                     from argus.intelligence.experiments.spawner import VariantSpawner
 
                     # Map pattern snake_case name → (config, strategy) for each
-                    # registered base PatternBasedStrategy
+                    # registered base PatternBasedStrategy.
                     _base_pattern_strategies: dict[
                         str, tuple[Any, PatternBasedStrategy]
-                    ] = {}
-                    if bull_flag_strategy is not None:
-                        _base_pattern_strategies["bull_flag"] = (
-                            bull_flag_strategy.config,
-                            bull_flag_strategy,
-                        )
-                    if flat_top_strategy is not None:
-                        _base_pattern_strategies["flat_top_breakout"] = (
-                            flat_top_strategy.config,
-                            flat_top_strategy,
-                        )
-                    if dip_and_rip_strategy is not None:
-                        _base_pattern_strategies["dip_and_rip"] = (
-                            dip_and_rip_strategy.config,
-                            dip_and_rip_strategy,
-                        )
-                    if hod_break_strategy is not None:
-                        _base_pattern_strategies["hod_break"] = (
-                            hod_break_strategy.config,
-                            hod_break_strategy,
-                        )
-                    if abcd_strategy is not None:
-                        _base_pattern_strategies["abcd"] = (
-                            abcd_strategy.config,
-                            abcd_strategy,
-                        )
-                    if gap_and_go_strategy is not None:
-                        _base_pattern_strategies["gap_and_go"] = (
-                            gap_and_go_strategy.config,
-                            gap_and_go_strategy,
-                        )
-                    if pm_high_break_strategy is not None:
-                        _base_pattern_strategies["premarket_high_break"] = (
-                            pm_high_break_strategy.config,
-                            pm_high_break_strategy,
-                        )
-                    if micro_pullback_strategy is not None:
-                        _base_pattern_strategies["micro_pullback"] = (
-                            micro_pullback_strategy.config,
-                            micro_pullback_strategy,
-                        )
-                    if vwap_bounce_strategy is not None:
-                        _base_pattern_strategies["vwap_bounce"] = (
-                            vwap_bounce_strategy.config,
-                            vwap_bounce_strategy,
-                        )
-                    if narrow_range_breakout_strategy is not None:
-                        _base_pattern_strategies["narrow_range_breakout"] = (
-                            narrow_range_breakout_strategy.config,
-                            narrow_range_breakout_strategy,
-                        )
+                    ] = {
+                        name: (strat.config, strat)
+                        for name, strat in pattern_strategies.items()
+                    }
 
                     _experiment_db_path = str(
                         Path(config.system.data_dir) / "experiments.db"
                     )
                     _experiment_store = ExperimentStore(db_path=_experiment_db_path)
                     await _experiment_store.initialize()
+                    # FIX-03 P1-D2-M03: mirror the counterfactual retention
+                    # pattern so experiments.db doesn't grow unbounded.
+                    try:
+                        await _experiment_store.enforce_retention(max_age_days=90)
+                    except Exception:
+                        logger.warning(
+                            "ExperimentStore retention enforcement failed",
+                            exc_info=True,
+                        )
                     self._experiments_auto_promote = bool(
                         _experiments_yaml.get("auto_promote", False)
                     )
@@ -923,8 +769,18 @@ class ArgusSystem:
                         clock=self._clock,
                     )
 
+                    # FIX-03 P1-D2-M01: collect variant exit overrides so they
+                    # flow into OrderManager's strategy_exit_overrides when it
+                    # is built in Phase 10. Otherwise a variant with
+                    # `exit_overrides:` in experiments.yaml silently gets the
+                    # base pattern's exit config.
                     for _variant_strategy in _variant_strategies:
                         self._orchestrator.register_strategy(_variant_strategy)
+                        _var_exit = getattr(_variant_strategy, "_exit_overrides", None)
+                        if _var_exit:
+                            self._variant_exit_overrides[
+                                _variant_strategy.strategy_id
+                            ] = _var_exit
 
                     # Wire promotion evaluator (Sprint 32 S7).
                     # Counterfactual store and trade logger may be None if
@@ -954,6 +810,31 @@ class ArgusSystem:
 
         await self._orchestrator.start()
 
+        # --- Phase 10.3: Telemetry store (moved earlier, FIX-03 P1-A1-M08) ---
+        # Used to live after run_pre_market(), which meant any ENTRY_EVALUATION
+        # emitted during mid-day reconstruction replay hit an in-memory ring
+        # buffer with no store attached and was lost on the next buffer wrap.
+        # Init the store and wire it into every registered strategy before
+        # pre-market can emit anything.
+        logger.info("[10.3/12] Initializing telemetry store...")
+        try:
+            eval_db_path = str(Path(config.system.data_dir) / "evaluation.db")
+            self._eval_store = EvaluationEventStore(eval_db_path)
+            await self._eval_store.initialize()
+            await self._eval_store.cleanup_old_events()
+            for strategy in self._orchestrator.get_strategies().values():
+                strategy.eval_buffer.set_store(self._eval_store)
+            logger.info("EvaluationEventStore initialized: %s", eval_db_path)
+            self._health_monitor.update_component(
+                "evaluation_store", ComponentStatus.HEALTHY
+            )
+        except Exception as e:
+            logger.error("Failed to initialize EvaluationEventStore: %s", e)
+            self._eval_store = None
+            self._health_monitor.update_component(
+                "evaluation_store", ComponentStatus.DEGRADED, message=str(e)
+            )
+
         # Run V2 pre-market (correlation + sector rotation, concurrent)
         if regime_v2 is not None:
             try:
@@ -969,8 +850,11 @@ class ArgusSystem:
             except Exception:
                 logger.warning("V2 pre-market failed — V1 will proceed normally", exc_info=True)
 
-        # Run pre-market routine (sets regime, allocations, activates strategies)
-        # If mid-day restart, strategies reconstruct their own state
+        # Run pre-market routine (sets regime, allocations, activates strategies).
+        # Mid-day restart: PatternBasedStrategy.backfill_candles() rehydrates from
+        # IntradayCandleStore on first candle per symbol (DEC-368). Trade counts /
+        # daily P&L rehydrated by strategy.reconstruct_state(trade_logger) inside
+        # orchestrator.run_pre_market() step 0.
         await self._orchestrator.run_pre_market()
         self._health_monitor.update_component("orchestrator", ComponentStatus.HEALTHY)
 
@@ -1067,6 +951,12 @@ class ArgusSystem:
                         "exit_management"
                     ]
 
+        # Merge in experiment-variant exit overrides collected during spawning
+        # (FIX-03 P1-D2-M01). Variant overrides take precedence over any YAML
+        # override sharing the same strategy_id since a variant is intentionally
+        # configured to differ from its base.
+        strategy_exit_overrides.update(self._variant_exit_overrides)
+
         # Read reconciliation and startup configs from typed Pydantic models
         reconciliation_config = config.system.reconciliation
         startup_config = config.system.startup
@@ -1100,6 +990,7 @@ class ArgusSystem:
         self._risk_manager.set_order_manager(self._order_manager)
 
         # --- Phase 10.25: Quality Pipeline (Sprint 24) ---
+        logger.info("[10.25/12] Initializing quality pipeline...")
         qe_config = config.system.quality_engine
         if qe_config.enabled and config.system.broker_source != BrokerSource.SIMULATED:
             self._quality_engine = SetupQualityEngine(qe_config, db_manager=self._db)
@@ -1113,15 +1004,26 @@ class ArgusSystem:
             # engine's _score_catalyst_quality() to return the neutral
             # default (50.0) for every signal.
             if self._catalyst_storage is None:
+                db_path = Path(config.system.data_dir) / "catalyst.db"
                 try:
                     from argus.intelligence.storage import CatalystStorage
 
-                    db_path = Path(config.system.data_dir) / "catalyst.db"
                     self._catalyst_storage = CatalystStorage(str(db_path))
                     await self._catalyst_storage.initialize()
                 except Exception:
-                    logger.warning("CatalystStorage not available for quality pipeline")
+                    # FIX-03 P1-A1-M07 / P1-D1-M02: include exception + db_path
+                    # so a misconfigured/locked/missing catalyst DB is diagnosable.
+                    logger.warning(
+                        "CatalystStorage not available for quality pipeline "
+                        "(db_path=%s); catalyst_quality scoring will default.",
+                        db_path,
+                        exc_info=True,
+                    )
             logger.info("Quality pipeline initialized (engine + sizer)")
+            # FIX-03 P1-A1-M09: health visibility for optional subsystem.
+            self._health_monitor.update_component(
+                "quality_engine", ComponentStatus.HEALTHY
+            )
         else:
             logger.info(
                 "Quality pipeline disabled (enabled=%s, broker=%s)",
@@ -1129,27 +1031,18 @@ class ArgusSystem:
                 config.system.broker_source,
             )
 
-        # --- Phase 10.3: Telemetry Store (Sprint 25.6) ---
-        # Create EvaluationEventStore early so health check + API share one instance
-        try:
-            eval_db_path = str(Path(config.system.data_dir) / "evaluation.db")
-            self._eval_store = EvaluationEventStore(eval_db_path)
-            await self._eval_store.initialize()
-            await self._eval_store.cleanup_old_events()
-
-            # Wire store into each strategy's evaluation buffer
-            for strategy in self._strategies.values():
-                strategy.eval_buffer.set_store(self._eval_store)
-
-            logger.info("EvaluationEventStore initialized: %s", eval_db_path)
-        except Exception as e:
-            logger.error("Failed to initialize EvaluationEventStore: %s", e)
-            self._eval_store = None
-
-        # --- Phase 10.5: Event Routing ---
+        # --- Phase 10.4: Event Routing ---
+        # FIX-03 P1-A1-L07: renumbered from 10.5 to free the 10.5 slot for
+        # architecture.md §3.9's "Set viable universe on DataService" (now
+        # lives in Phase 11 streaming prep).
+        logger.info("[10.4/12] Wiring event routing...")
         # IntradayCandleStore — parallel CandleEvent subscriber (Sprint 27.65 S4)
         self._candle_store = IntradayCandleStore()
         self._event_bus.subscribe(CandleEvent, self._candle_store.on_candle)
+        # FIX-03 P1-A1-M09: health visibility.
+        self._health_monitor.update_component(
+            "candle_store", ComponentStatus.HEALTHY
+        )
 
         # Wire candle store into PatternBasedStrategy instances for auto-backfill
         for strategy in self._strategies.values():
@@ -1165,12 +1058,15 @@ class ArgusSystem:
 
         # Subscribe regime intelligence calculators to CandleEvent (Sprint 27.6)
         # EventBus requires async handlers; wrap sync on_candle methods
+        # FIX-03 P1-A1-L01: retain handler refs on self so a future restart-in-place
+        # path can unsubscribe them from the event bus.
         if breadth_calc is not None:
             _bc = breadth_calc
 
             async def _breadth_on_candle(event: CandleEvent) -> None:
                 _bc.on_candle(event)
 
+            self._breadth_candle_handler = _breadth_on_candle
             self._event_bus.subscribe(CandleEvent, _breadth_on_candle)
             logger.info("BreadthCalculator subscribed to CandleEvent")
         if intraday_detector is not None:
@@ -1179,10 +1075,12 @@ class ArgusSystem:
             async def _intraday_on_candle(event: CandleEvent) -> None:
                 _id.on_candle(event)
 
+            self._intraday_candle_handler = _intraday_on_candle
             self._event_bus.subscribe(CandleEvent, _intraday_on_candle)
             logger.info("IntradayCharacterDetector subscribed to CandleEvent")
 
         # --- Phase 10.7: Counterfactual Engine (Sprint 27.7) ---
+        logger.info("[10.7/12] Initializing counterfactual engine...")
         from argus.intelligence.startup import build_counterfactual_tracker
 
         cf_result = await build_counterfactual_tracker(
@@ -1208,6 +1106,14 @@ class ArgusSystem:
             # Retention enforcement (once per boot)
             await self._counterfactual_store.enforce_retention(
                 config.system.counterfactual.retention_days
+            )
+            # FIX-03 P1-A1-M09: health visibility.
+            self._health_monitor.update_component(
+                "counterfactual_tracker", ComponentStatus.HEALTHY
+            )
+        else:
+            self._health_monitor.update_component(
+                "counterfactual_tracker", ComponentStatus.DEGRADED, message="disabled"
             )
 
         # --- Phase 11: Start streaming ---
@@ -1372,10 +1278,10 @@ class ArgusSystem:
             self._evaluation_health_check_loop()
         )
 
-        # Start periodic regime reclassification (Sprint 25.6 S2)
-        self._regime_task = asyncio.create_task(
-            self._run_regime_reclassification()
-        )
+        # Regime reclassification cadence is owned by Orchestrator._poll_loop
+        # (FIX-03 P1-A1-M10 / DEF-074). The main.py 300s task that used to run
+        # here duplicated _poll_loop's work verbatim — same reclassify_regime()
+        # call, same DB write path, same RegimeChangeEvent emission.
 
         # Start periodic position reconciliation (Sprint 27.65)
         self._reconciliation_task = asyncio.create_task(
@@ -1454,6 +1360,9 @@ class ArgusSystem:
         market_close = dt_time(16, 0)
 
         while True:
+            # FIX-03 P1-A1-L06: sleep-first (aligned with other loops), avoids
+            # a boot-time burst before dependencies are fully warm.
+            await asyncio.sleep(60)
             try:
                 now = self._clock.now()
                 now_et = (
@@ -1476,55 +1385,6 @@ class ArgusSystem:
                         )
             except Exception as e:
                 logger.error("Evaluation health check error: %s", e)
-
-            await asyncio.sleep(60)
-
-    async def _run_regime_reclassification(self) -> None:
-        """Periodic regime reclassification during market hours.
-
-        Runs every 5 minutes (300s). Calls the orchestrator's reclassify_regime()
-        method and logs the result at appropriate levels.
-        """
-        from datetime import time as dt_time
-        from zoneinfo import ZoneInfo
-
-        et_tz = ZoneInfo("America/New_York")
-        market_open = dt_time(9, 30)
-        market_close = dt_time(16, 0)
-
-        while True:
-            await asyncio.sleep(300)
-            try:
-                now = self._clock.now()
-                now_et = (
-                    now.replace(tzinfo=et_tz) if now.tzinfo is None
-                    else now.astimezone(et_tz)
-                )
-                current_time = now_et.time()
-
-                if market_open <= current_time <= market_close:
-                    if self._orchestrator is not None:
-                        old, new = await self._orchestrator.reclassify_regime()
-                        self._regime_check_count += 1
-                        if old != new:
-                            logger.info(
-                                "Regime reclassified: %s → %s",
-                                old.value,
-                                new.value,
-                            )
-                        elif self._regime_check_count % 6 == 0:
-                            indicators = self._orchestrator.current_indicators
-                            vol = indicators.spy_realized_vol_20d if indicators else None
-                            logger.info(
-                                "Regime unchanged: %s (check #%d, SPY vol: %s)",
-                                new.value,
-                                self._regime_check_count,
-                                f"{vol:.4f}" if vol is not None else "N/A",
-                            )
-                        else:
-                            logger.debug("Regime unchanged: %s", new.value)
-            except Exception as e:
-                logger.error("Regime reclassification error: %s", e)
 
     async def _run_position_reconciliation(self) -> None:
         """Periodic position reconciliation during market hours.
@@ -1693,13 +1553,14 @@ class ArgusSystem:
             now_et = _clock.now().astimezone(et_tz)
             cutoff = dt_time.fromisoformat(orchestrator_cfg.signal_cutoff_time)
             if now_et.time() >= cutoff:
-                if not self._cutoff_logged:
+                session_date = now_et.strftime("%Y-%m-%d")
+                if self._cutoff_logged_date != session_date:
                     logger.info(
                         "Pre-EOD signal cutoff active at %s ET — "
                         "no new entries until next session",
                         now_et.time().isoformat()[:5],
                     )
-                    self._cutoff_logged = True
+                    self._cutoff_logged_date = session_date
                 if self._order_manager is not None:
                     self._order_manager.increment_signal_cutoff()
                 return
@@ -1709,7 +1570,7 @@ class ArgusSystem:
             getattr(strategy, 'config', None), 'mode', 'live'
         )
         if strategy_mode == "shadow":
-            if self._counterfactual_enabled:
+            if getattr(self, '_counterfactual_enabled', False):
                 regime_snapshot = self._capture_regime_snapshot()
                 await self._event_bus.publish(SignalRejectedEvent(
                     signal=signal,
@@ -1749,7 +1610,20 @@ class ArgusSystem:
                         signal.symbol, limit=10
                     )
                 except Exception:
-                    logger.debug("Catalyst lookup failed for %s", signal.symbol)
+                    # FIX-03 P1-A1-M06: downgraded from debug to throttled
+                    # warning so a DB outage is visible without flooding logs.
+                    _throttled.warn_throttled(
+                        key=f"catalyst_lookup:{signal.symbol}",
+                        message=(
+                            f"Catalyst lookup failed for {signal.symbol} — "
+                            f"quality scoring will default catalyst_quality"
+                        ),
+                    )
+                    logger.debug(
+                        "Catalyst lookup traceback for %s",
+                        signal.symbol,
+                        exc_info=True,
+                    )
 
             regime = (
                 self._orchestrator.current_regime
@@ -2121,74 +1995,6 @@ class ArgusSystem:
                     exc_info=True,
                 )
 
-    async def _reconstruct_strategy_state(self, symbols: list[str]) -> None:
-        """Reconstruct strategy state if restarting mid-day.
-
-        1. Check if we're within market hours.
-        2. If yes, fetch today's historical 1m bars for all symbols.
-        3. Replay them through all strategies to rebuild opening ranges.
-        4. If fetch fails, log warning and continue.
-
-        Args:
-            symbols: List of symbols to reconstruct.
-        """
-        from datetime import time as dt_time
-        from zoneinfo import ZoneInfo
-
-        if not self._clock or not self._data_service or not self._orchestrator:
-            return
-
-        strategies = self._orchestrator.get_strategies()
-        if not strategies:
-            return
-
-        et_tz = ZoneInfo("America/New_York")
-        now = self._clock.now()
-        now_et = now.replace(tzinfo=et_tz) if now.tzinfo is None else now.astimezone(et_tz)
-
-        market_open = dt_time(9, 30)
-        market_close = dt_time(16, 0)
-
-        if not (market_open <= now_et.time() <= market_close):
-            logger.info("Outside market hours — no strategy reconstruction needed")
-            return
-
-        # Only reconstruct if it's past the OR window (9:45+ for 15min window)
-        if now_et.time() < dt_time(9, 45):
-            logger.info("Before OR window ends — no reconstruction needed")
-            return
-
-        logger.info("Mid-day start detected. Reconstructing %d strategies...", len(strategies))
-
-        try:
-            if hasattr(self._data_service, "fetch_todays_bars"):
-                todays_bars = await self._data_service.fetch_todays_bars(symbols)
-
-                if todays_bars:
-                    # Replay bars through all strategies
-                    for bar in todays_bars:
-                        for strategy in strategies.values():
-                            await strategy.on_candle(bar)
-
-                    logger.info(
-                        "Strategy state reconstructed from %d historical bars for %d strategies",
-                        len(todays_bars),
-                        len(strategies),
-                    )
-                else:
-                    logger.warning("No historical bars available — strategies starting fresh")
-            else:
-                logger.warning("DataService doesn't support fetch_todays_bars — skipping")
-
-        except Exception as e:
-            logger.error("Strategy reconstruction failed: %s. Continuing anyway.", e)
-            if self._health_monitor:
-                self._health_monitor.update_component(
-                    "strategy",
-                    ComponentStatus.DEGRADED,
-                    message=f"Reconstruction failed: {e}",
-                )
-
     async def shutdown(self) -> None:
         """Graceful shutdown sequence.
 
@@ -2276,7 +2082,6 @@ class ArgusSystem:
         task_names: list[str] = []
         for task, name in [
             (self._eval_check_task, "evaluation health check"),
-            (self._regime_task, "regime reclassification"),
             (self._reconciliation_task, "position reconciliation"),
             (self._bg_refresh_task, "background cache refresh"),
             (self._counterfactual_task, "counterfactual maintenance"),
@@ -2349,6 +2154,23 @@ class ArgusSystem:
         if self._health_monitor:
             logger.info("Stopping health monitor...")
             await self._health_monitor.stop()
+
+        # 5a. Close analytical SQLite stores (symmetric with counterfactual/eval).
+        # FIX-03 P1-A1-M03 / P1-D1-M01: previously relied on process teardown.
+        if self._catalyst_storage is not None:
+            try:
+                await self._catalyst_storage.close()
+                logger.info("CatalystStorage closed")
+            except Exception:
+                logger.warning("CatalystStorage close failed", exc_info=True)
+            self._catalyst_storage = None
+        if self._regime_history_store is not None:
+            try:
+                await self._regime_history_store.close()
+                logger.info("RegimeHistoryStore closed")
+            except Exception:
+                logger.warning("RegimeHistoryStore close failed", exc_info=True)
+            self._regime_history_store = None
 
         # 6. Close database
         if self._db:

@@ -147,3 +147,11 @@ None. No active bugs, silent data loss, or violated risk-path invariants found i
   - 1 weekend session for event-bus semantics tightening (L2, L3, L6)
   - 1 opportunistic session for L1/L4/L5/L8/L9/L10 + cosmetic pass
   - **Total: ~6 sessions** (4 weekday + 2 weekend)
+
+---
+
+## FIX-03 Resolution (2026-04-21)
+
+- **L-07** ~~Triple regime-recheck cadence (main.py `_run_regime_reclassification` vs `Orchestrator._poll_loop`)~~ → **RESOLVED FIX-03-main-py**. `argus/main.py._run_regime_reclassification` method, `self._regime_task` attribute, create_task call, and shutdown-sweep entry all deleted. `Orchestrator._poll_loop` is now the sole regime-reclassification cadence owner. Also closes DEF-074. Two orphan tests in `tests/core/test_orchestrator.py` deleted (intent covered by existing `_run_regime_recheck` tests); `tests/test_shutdown_tasks.py` fixture updated. See `p1-a1-main-py.md` M10 for full context.
+
+`Orchestrator._latest_regime_vector` typing tightened as a side-effect of closing DEF-093: annotation changed from `object | None` to `RegimeVector | None` via `TYPE_CHECKING` import. Other P1-A2 findings (orchestrator.py rest, config.py, event_bus.py) unchanged — those remain FIX-05 scope.

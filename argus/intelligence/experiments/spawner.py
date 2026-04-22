@@ -254,7 +254,7 @@ class VariantSpawner:
                     data_service=data_service,
                     clock=clock,
                 )
-                variant_strategy._config_fingerprint = variant_fingerprint
+                variant_strategy.set_config_fingerprint(variant_fingerprint)
                 # Nested exit overrides stored for OrderManager registration by caller
                 variant_strategy._exit_overrides = exit_overrides_nested
 

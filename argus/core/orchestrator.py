@@ -35,6 +35,7 @@ from argus.core.throttle import PerformanceThrottler, StrategyAllocation, Thrott
 
 if TYPE_CHECKING:
     from argus.analytics.trade_logger import TradeLogger
+    from argus.core.regime import RegimeVector
     from argus.core.regime_history import RegimeHistoryStore
     from argus.data.service import DataService
     from argus.data.vix_data_service import VIXDataService
@@ -126,7 +127,7 @@ class Orchestrator:
         self._spy_unavailable_count: int = 0
 
         # V2 regime vector (Sprint 27.6)
-        self._latest_regime_vector: object | None = None
+        self._latest_regime_vector: RegimeVector | None = None
 
         # Market holiday state (set during pre-market routine)
         self._market_holiday: bool = False

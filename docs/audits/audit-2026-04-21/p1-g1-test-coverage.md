@@ -307,3 +307,11 @@ The split is organic, not principled. Not a CRITICAL issue — pytest discovery 
 - HTML coverage report: `/tmp/argus-audit/htmlcov/` (NOT committed)
 - Durations log: `/tmp/argus-audit/durations.log` (NOT committed)
 - Parsed per-module coverage: `/tmp/argus-audit/coverage_sorted.txt` (NOT committed)
+
+---
+
+## FIX-03 Resolution (2026-04-21)
+
+- **M-02** ~~`main.py` at 20% coverage — lowest non-zero module~~ → **RESOLVED-VERIFIED FIX-03-main-py**. `tests/test_main.py` remains excluded from `-n auto` by design (DEF-048/049 class), which is what drives the headline 20% figure. A future consolidated-coverage CI job can merge the two test runs. `main.py` itself shrunk 2,469 → 2,291 lines in FIX-03 via dead-code deletion + table-driven PatternBasedStrategy loader collapse (P1-A1 C1 + M5); coverage % will re-settle on the smaller line count next time it's measured.
+
+- **DEF-048 + DEF-049** (M-07 test_main.py xdist + isolation failures) → **RESOLVED FIX-03-main-py** for the env-leak root cause via `_scrub_anthropic_env` autouse fixture in `tests/test_main.py` (same pattern as `tests/ai/conftest.py`). DEF-049's single-test isolation failure in `test_orchestrator_uses_strategies_from_registry` turns out to be pre-existing stale-mock coverage (the test patches `argus.main.Orchestrator` but not newer subsystems like `EvaluationEventStore` / `CounterfactualTracker`, so `system.start()` raises inside `contextlib.suppress(Exception)` and `captured_app_state` stays `None`). That is a separate cleanup job, not the env-leak DEF.

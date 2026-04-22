@@ -273,3 +273,11 @@ Answered in Q5.1. **Alpaca code is reachable via YAML but not active in any ship
 
 ### Cleanup Tracker Cross-Reference
 No items from the Sprint 31.75 cleanup tracker fall in this scope (items 1-3 are in backtest/engine.py and scripts/; item 4 is in tests/).
+
+---
+
+## FIX-03 Resolution (2026-04-21)
+
+- **M-03** ~~`from argus.execution.alpaca_broker import AlpacaBroker` unconditional at module top~~ → **RESOLVED FIX-03-main-py**. Import moved inside the `elif config.system.broker_source == BrokerSource.ALPACA` branch in `argus/main.py`, matching the lazy-import pattern used for IBKR and Simulated. 15 `patch("argus.main.AlpacaBroker", ...)` sites in `tests/test_main.py` repointed to `patch("argus.execution.alpaca_broker.AlpacaBroker", ...)`. See the full FIX-03 resolution section in `p1-a1-main-py.md` for context.
+
+Remaining P1-C1 findings (M-04 BrokerRouter delete, M-05 IBKR 404, M-06 reconstruction entry_time, M-01 bracket rollback, L-01..L-09, etc.) unchanged — those live in `argus/execution/` and are FIX-04's scope.

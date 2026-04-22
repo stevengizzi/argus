@@ -19,6 +19,21 @@ import pytest
 os.environ["ANTHROPIC_API_KEY"] = ""
 
 
+@pytest.fixture(autouse=True)
+def _scrub_anthropic_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ensure ANTHROPIC_API_KEY is empty for every test in this file.
+
+    Fix for DEF-046 + DEF-048 + DEF-049 (audit 2026-04-21 FIX-03 P1-A1-...
+    Finding 31): under ``-n auto``, xdist workers may import ``argus.main``
+    before this module's module-level assignment runs. ``argus.main`` calls
+    ``load_dotenv()`` which re-populates ``ANTHROPIC_API_KEY`` from ``.env``,
+    which in turn flips ``AIConfig.auto_detect_enabled`` to True, which
+    causes the "AI disabled" assertions here to fail. Mirrors the autouse
+    fixture already present in ``tests/ai/conftest.py``.
+    """
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "")
+
+
 @pytest.fixture
 def mock_config_dir(tmp_path: Path) -> Path:
     """Create a temporary config directory with minimal config files."""
@@ -161,7 +176,7 @@ class TestArgusSystemWiring:
             patch("argus.main.ConversationManager") as mock_conv_class,
             patch("argus.main.UsageTracker") as mock_usage_class,
             patch("argus.main.ActionManager") as mock_action_class,
-            patch("argus.main.AlpacaBroker") as mock_broker_class,
+            patch("argus.execution.alpaca_broker.AlpacaBroker") as mock_broker_class,
             patch("argus.main.HealthMonitor") as mock_health_class,
             patch("argus.main.RiskManager") as mock_risk_class,
             patch("argus.main.AlpacaDataService") as mock_data_class,
@@ -273,7 +288,7 @@ class TestArgusSystemWiring:
             patch("argus.main.DatabaseManager") as mock_db_class,
             patch("argus.main.ConversationManager") as mock_conv_class,
             patch("argus.main.UsageTracker") as mock_usage_class,
-            patch("argus.main.AlpacaBroker") as mock_broker_class,
+            patch("argus.execution.alpaca_broker.AlpacaBroker") as mock_broker_class,
         ):
             mock_db = MagicMock()
             mock_db.initialize = AsyncMock()
@@ -321,7 +336,7 @@ class TestArgusSystemWiring:
             patch("argus.main.DatabaseManager") as mock_db_class,
             patch("argus.main.ConversationManager") as mock_conv_class,
             patch("argus.main.UsageTracker") as mock_usage_class,
-            patch("argus.main.AlpacaBroker") as mock_broker_class,
+            patch("argus.execution.alpaca_broker.AlpacaBroker") as mock_broker_class,
             patch("argus.main.HealthMonitor") as mock_health_class,
             patch("argus.main.RiskManager") as mock_risk_class,
             patch("argus.main.AlpacaDataService") as mock_data_class,
@@ -513,7 +528,7 @@ class TestOrchestratorIntegration:
             patch("argus.main.DatabaseManager") as mock_db_class,
             patch("argus.main.ConversationManager") as mock_conv_class,
             patch("argus.main.UsageTracker") as mock_usage_class,
-            patch("argus.main.AlpacaBroker") as mock_broker_class,
+            patch("argus.execution.alpaca_broker.AlpacaBroker") as mock_broker_class,
             patch("argus.main.HealthMonitor") as mock_health_class,
             patch("argus.main.RiskManager") as mock_risk_class,
             patch("argus.main.AlpacaDataService") as mock_data_class,
@@ -593,7 +608,7 @@ class TestOrchestratorIntegration:
 
         with (
             patch("argus.main.DatabaseManager") as mock_db_class,
-            patch("argus.main.AlpacaBroker") as mock_broker_class,
+            patch("argus.execution.alpaca_broker.AlpacaBroker") as mock_broker_class,
             patch("argus.main.HealthMonitor") as mock_health_class,
             patch("argus.main.RiskManager") as mock_risk_class,
             patch("argus.main.AlpacaDataService") as mock_data_class,
@@ -696,7 +711,7 @@ api:
             patch("argus.main.DatabaseManager") as mock_db_class,
             patch("argus.main.ConversationManager") as mock_conv_class,
             patch("argus.main.UsageTracker") as mock_usage_class,
-            patch("argus.main.AlpacaBroker") as mock_broker_class,
+            patch("argus.execution.alpaca_broker.AlpacaBroker") as mock_broker_class,
             patch("argus.main.HealthMonitor") as mock_health_class,
             patch("argus.main.RiskManager") as mock_risk_class,
             patch("argus.main.AlpacaDataService") as mock_data_class,
@@ -855,7 +870,7 @@ api:
             patch("argus.main.DatabaseManager") as mock_db_class,
             patch("argus.main.ConversationManager") as mock_conv_class,
             patch("argus.main.UsageTracker") as mock_usage_class,
-            patch("argus.main.AlpacaBroker") as mock_broker_class,
+            patch("argus.execution.alpaca_broker.AlpacaBroker") as mock_broker_class,
             patch("argus.main.HealthMonitor") as mock_health_class,
             patch("argus.main.RiskManager") as mock_risk_class,
             patch("argus.main.AlpacaDataService") as mock_data_class,
@@ -951,7 +966,7 @@ max_hold_seconds: 120
             patch("argus.main.DatabaseManager") as mock_db_class,
             patch("argus.main.ConversationManager") as mock_conv_class,
             patch("argus.main.UsageTracker") as mock_usage_class,
-            patch("argus.main.AlpacaBroker") as mock_broker_class,
+            patch("argus.execution.alpaca_broker.AlpacaBroker") as mock_broker_class,
             patch("argus.main.HealthMonitor") as mock_health_class,
             patch("argus.main.RiskManager") as mock_risk_class,
             patch("argus.main.AlpacaDataService") as mock_data_class,
@@ -1052,7 +1067,7 @@ max_hold_seconds: 120
             patch("argus.main.DatabaseManager") as mock_db_class,
             patch("argus.main.ConversationManager") as mock_conv_class,
             patch("argus.main.UsageTracker") as mock_usage_class,
-            patch("argus.main.AlpacaBroker") as mock_broker_class,
+            patch("argus.execution.alpaca_broker.AlpacaBroker") as mock_broker_class,
             patch("argus.main.HealthMonitor") as mock_health_class,
             patch("argus.main.RiskManager") as mock_risk_class,
             patch("argus.main.AlpacaDataService") as mock_data_class,
@@ -1137,7 +1152,7 @@ max_hold_seconds: 120
             patch("argus.main.DatabaseManager") as mock_db_class,
             patch("argus.main.ConversationManager") as mock_conv_class,
             patch("argus.main.UsageTracker") as mock_usage_class,
-            patch("argus.main.AlpacaBroker") as mock_broker_class,
+            patch("argus.execution.alpaca_broker.AlpacaBroker") as mock_broker_class,
             patch("argus.main.HealthMonitor") as mock_health_class,
             patch("argus.main.RiskManager") as mock_risk_class,
             patch("argus.main.AlpacaDataService") as mock_data_class,
@@ -1212,7 +1227,7 @@ max_hold_seconds: 120
             patch("argus.main.ConversationManager") as mock_conv_class,
             patch("argus.main.UsageTracker") as mock_usage_class,
             patch("argus.main.ActionManager") as mock_action_class,
-            patch("argus.main.AlpacaBroker") as mock_broker_class,
+            patch("argus.execution.alpaca_broker.AlpacaBroker") as mock_broker_class,
             patch("argus.main.HealthMonitor") as mock_health_class,
             patch("argus.main.RiskManager") as mock_risk_class,
             patch("argus.main.AlpacaDataService") as mock_data_class,
@@ -1306,7 +1321,7 @@ max_hold_seconds: 120
             patch("argus.main.DatabaseManager") as mock_db_class,
             patch("argus.main.ConversationManager") as mock_conv_class,
             patch("argus.main.UsageTracker") as mock_usage_class,
-            patch("argus.main.AlpacaBroker") as mock_broker_class,
+            patch("argus.execution.alpaca_broker.AlpacaBroker") as mock_broker_class,
             patch("argus.main.HealthMonitor") as mock_health_class,
             patch("argus.main.RiskManager") as mock_risk_class,
             patch("argus.main.AlpacaDataService") as mock_data_class,
@@ -1399,7 +1414,7 @@ max_hold_seconds: 120
             patch("argus.main.DatabaseManager") as mock_db_class,
             patch("argus.main.ConversationManager") as mock_conv_class,
             patch("argus.main.UsageTracker") as mock_usage_class,
-            patch("argus.main.AlpacaBroker") as mock_broker_class,
+            patch("argus.execution.alpaca_broker.AlpacaBroker") as mock_broker_class,
             patch("argus.main.HealthMonitor") as mock_health_class,
             patch("argus.main.RiskManager") as mock_risk_class,
             patch("argus.main.AlpacaDataService") as mock_data_class,
@@ -1742,7 +1757,7 @@ universe_manager:
             patch("argus.main.ConversationManager") as mock_conv_class,
             patch("argus.main.UsageTracker") as mock_usage_class,
             patch("argus.main.ActionManager") as mock_action_class,
-            patch("argus.main.AlpacaBroker") as mock_broker_class,
+            patch("argus.execution.alpaca_broker.AlpacaBroker") as mock_broker_class,
             patch("argus.main.HealthMonitor") as mock_health_class,
             patch("argus.main.RiskManager") as mock_risk_class,
             patch("argus.main.AlpacaDataService") as mock_data_class,
@@ -2717,7 +2732,7 @@ universe_manager:
             patch("argus.main.ConversationManager") as mock_conv_class,
             patch("argus.main.UsageTracker") as mock_usage_class,
             patch("argus.main.ActionManager") as mock_action_class,
-            patch("argus.main.AlpacaBroker") as mock_broker_class,
+            patch("argus.execution.alpaca_broker.AlpacaBroker") as mock_broker_class,
             patch("argus.main.HealthMonitor") as mock_health_class,
             patch("argus.main.RiskManager") as mock_risk_class,
             patch("argus.main.AlpacaDataService") as mock_data_class,

@@ -1602,73 +1602,10 @@ async def test_reclassify_regime_retains_current_with_insufficient_data(
     assert new == MarketRegime.RANGE_BOUND
 
 
-@pytest.mark.asyncio
-async def test_regime_reclassification_task_only_runs_during_market_hours() -> None:
-    """Test that _run_regime_reclassification only calls orchestrator during market hours."""
-    from unittest.mock import patch
-
-    from argus.main import ArgusSystem
-
-    system = ArgusSystem.__new__(ArgusSystem)
-
-    # Clock set to 7:00 AM ET (12:00 UTC) — before market open
-    system._clock = FixedClock(datetime(2026, 2, 24, 12, 0, tzinfo=UTC))
-
-    mock_orchestrator = AsyncMock()
-    mock_orchestrator.reclassify_regime = AsyncMock(
-        return_value=(MarketRegime.RANGE_BOUND, MarketRegime.RANGE_BOUND)
-    )
-    system._orchestrator = mock_orchestrator
-
-    # Patch asyncio.sleep to run only one iteration then cancel
-    call_count = 0
-
-    async def mock_sleep(seconds: float) -> None:
-        nonlocal call_count
-        call_count += 1
-        if call_count > 1:
-            raise asyncio.CancelledError
-
-    with patch("asyncio.sleep", side_effect=mock_sleep):
-        with pytest.raises(asyncio.CancelledError):
-            await system._run_regime_reclassification()
-
-    # Orchestrator should NOT have been called (outside market hours)
-    mock_orchestrator.reclassify_regime.assert_not_called()
-
-
-@pytest.mark.asyncio
-async def test_regime_reclassification_task_runs_during_market_hours() -> None:
-    """Test that _run_regime_reclassification calls orchestrator during market hours."""
-    from unittest.mock import patch
-
-    from argus.main import ArgusSystem
-
-    system = ArgusSystem.__new__(ArgusSystem)
-
-    # Clock set to 10:30 AM ET (15:30 UTC) — during market hours
-    system._clock = FixedClock(datetime(2026, 2, 24, 15, 30, tzinfo=UTC))
-
-    mock_orchestrator = AsyncMock()
-    mock_orchestrator.reclassify_regime = AsyncMock(
-        return_value=(MarketRegime.RANGE_BOUND, MarketRegime.BULLISH_TRENDING)
-    )
-    system._orchestrator = mock_orchestrator
-
-    call_count = 0
-
-    async def mock_sleep(seconds: float) -> None:
-        nonlocal call_count
-        call_count += 1
-        if call_count > 1:
-            raise asyncio.CancelledError
-
-    with patch("asyncio.sleep", side_effect=mock_sleep):
-        with pytest.raises(asyncio.CancelledError):
-            await system._run_regime_reclassification()
-
-    # Orchestrator SHOULD have been called (during market hours)
-    mock_orchestrator.reclassify_regime.assert_called_once()
+# test_regime_reclassification_task_{only_runs,_runs}_during_market_hours —
+# deleted FIX-03 P1-A1-M10 / DEF-074. The main.py-side _run_regime_reclassification
+# method tested here has been removed; Orchestrator._poll_loop owns the cadence
+# and is exercised by the _run_regime_recheck + _poll_loop tests above.
 
 
 @pytest.mark.asyncio

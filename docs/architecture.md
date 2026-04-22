@@ -1182,25 +1182,29 @@ ARGUS maintains **two Parquet caches** after Sprint 31.85. Confusing them is a l
 
 ### 3.9 System Entry Point (`main.py`)
 
-Wires all components together with a 12-phase startup sequence:
+Wires all components together. The live sequence today has 17 phases (12 primary + 5 sub-phases). Sub-phases were bolted on as features landed (Universe Manager, Regime V2, Quality Pipeline, Telemetry, Counterfactual) without renumbering the spine; this drift is cosmetic but worth the full enumeration below so the doc actually matches `argus/main.py` (FIX-03 P1-A1-M01 reconciliation, audit 2026-04-21).
 
 1. Config + Clock + EventBus
-2. Database + TradeLogger
-3. Broker connection
+2. Database + TradeLogger (+ AI persistence tables: ConversationManager, UsageTracker, optional ActionManager)
+3. Broker connection (IBKR / Alpaca / Simulated — lazy-imported per selection)
 4. HealthMonitor
 5. RiskManager (with state reconstruction)
 6. DataService (Databento or Alpaca)
 7. Scanner (pre-market scan)
-7.5. FMPReferenceClient start (if Universe Manager enabled)
-8. Build viable universe (if UM enabled, using scanner symbols)
-9. Strategies (with mid-day reconstruction if applicable)
+7.5. Universe Manager (if `universe_manager.enabled` and non-simulated broker): FMPReferenceClient start + viable-universe build
+8. Strategy instantiation (ORB, ORB Scalp, VWAP Reclaim, Afternoon Momentum, Red-to-Green, plus PatternBasedStrategy roster built from declarative table at top of phase — FIX-03 P1-A1-M05)
+8.5. Regime Intelligence V2 (if `regime_intelligence.enabled`): breadth / correlation / sector / intraday calculators + optional RegimeHistoryStore
+9. Orchestrator construction + strategy registration + experiment-variant spawning (if `experiments.enabled`); then `orchestrator.start()`, telemetry-store wiring (moved earlier per FIX-03 P1-A1-M08 so ENTRY_EVALUATION events emitted during mid-day replay are not lost), regime V2 pre-market, and `orchestrator.run_pre_market()` (mid-day strategy-state reconstruction happens here via `PatternBasedStrategy.backfill_candles()` from IntradayCandleStore + `strategy.reconstruct_state(trade_logger)` — no separate mid-day replay path; the prior `_reconstruct_strategy_state` was orphaned and has been removed per FIX-03 P1-A1-C01)
 9.5. Build routing table (if UM enabled, from strategy configs); populate each strategy's watchlist from UM routing via `strategy.set_watchlist(symbols, source="universe_manager")` (DEC-343, Sprint 25.5)
-10. OrderManager (with broker position reconstruction)
-10.5. Set viable universe on DataService (if UM enabled)
-11. Start data streaming
+10. OrderManager (+ broker position reconstruction, strategy fingerprint registration, per-strategy `strategy_exit_overrides` including any experiment-variant overrides collected during spawning — FIX-03 P1-D2-M01)
+10.25. Quality Pipeline (if `quality_engine.enabled` and non-simulated broker): SetupQualityEngine + DynamicPositionSizer + CatalystStorage against `data/catalyst.db`
+10.3. Telemetry Store — actually initialized in phase 9 (above), retained as a numbering anchor for this doc; see P1-A1-M08
+10.4. Event Routing (renumbered from 10.5 per FIX-03 P1-A1-L07 to free the 10.5 slot): IntradayCandleStore subscribes to CandleEvent; wire candle store into PatternBasedStrategy instances; subscribe the routing dispatcher + PositionClosedEvent + ShutdownRequestedEvent; regime V2 calculators subscribe to CandleEvent
+10.7. Counterfactual Engine (if `counterfactual.enabled`): CounterfactualTracker + CounterfactualStore + 90-day retention enforcement
+11. Start data streaming (set viable universe on DataService if UM enabled, warm up symbols, register background loops: evaluation health check, position reconciliation, counterfactual maintenance, optional background cache refresh). Regime reclassification cadence is owned by `Orchestrator._poll_loop` — the prior main.py-side 300s duplicate task was removed per FIX-03 P1-A1-M10 / DEF-074.
 12. API server (in-process FastAPI)
 
-Shutdown runs in reverse order. SIGINT/SIGTERM trigger graceful shutdown.
+Shutdown runs in reverse order. SIGINT/SIGTERM trigger graceful shutdown. Before the DB close, shutdown now closes `CatalystStorage` and `RegimeHistoryStore` symmetrically with the counterfactual and evaluation stores (FIX-03 P1-A1-M03 / P1-D1-M01). `ExperimentStore.enforce_retention(90d)` runs at boot alongside the counterfactual enforcement (FIX-03 P1-D2-M03); `LearningStore` retention is tracked in DEF-173.
 
 **CLI:**
 ```

@@ -42,6 +42,7 @@ async def test_shutdown_tasks_cancelled_cleanly() -> None:
     system._quality_engine = None
     system._position_sizer = None
     system._catalyst_storage = None
+    system._regime_history_store = None
     system._counterfactual_tracker = None
     system._counterfactual_store = None
     system._candle_store = None
@@ -56,16 +57,16 @@ async def test_shutdown_tasks_cancelled_cleanly() -> None:
             await asyncio.sleep(3600)
 
     eval_task = asyncio.create_task(infinite_loop())
-    regime_task = asyncio.create_task(infinite_loop())
     recon_task = asyncio.create_task(infinite_loop())
     bg_task = asyncio.create_task(infinite_loop())
     cf_task = asyncio.create_task(infinite_loop())
 
     system._eval_check_task = eval_task
-    system._regime_task = regime_task
     system._reconciliation_task = recon_task
     system._bg_refresh_task = bg_task
     system._counterfactual_task = cf_task
+    # _regime_task removed FIX-03 P1-A1-M10 / DEF-074 — Orchestrator._poll_loop
+    # owns regime reclassification cadence.
 
     # Patch the debrief export import inside shutdown
     with patch(
@@ -78,7 +79,6 @@ async def test_shutdown_tasks_cancelled_cleanly() -> None:
     # All tasks should be done (cancelled)
     for task, name in [
         (eval_task, "eval_check"),
-        (regime_task, "regime"),
         (recon_task, "reconciliation"),
         (bg_task, "bg_refresh"),
         (cf_task, "counterfactual"),

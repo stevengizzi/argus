@@ -228,3 +228,12 @@ See M-05 for an asymmetry in how redistribution drift is tracked (or not) in `co
 - Estimated Phase 3 fix effort: **~3 sessions** (one weekend-only for M-01+L-03 in main.py+OrderManager+runner.py, one weekend-only for M-02+M-05 in runner.py+config_proposal_manager.py, one safe-during-trading for M-03+M-04+L-01 in main.py+threshold_analyzer.py+models.py)
 
 **Context State: GREEN** — session well within context limits; single pass over every listed file.
+
+---
+
+## FIX-03 Resolution (2026-04-21)
+
+- **M-01** ~~Variant `_exit_overrides` set on strategy instance by spawner but never wired to OrderManager~~ → **RESOLVED FIX-03-main-py**. `argus/main.py` now collects each spawned variant's `_exit_overrides` into `self._variant_exit_overrides`; those are merged into `strategy_exit_overrides` in Phase 10 before `OrderManager` is constructed. `argus/intelligence/experiments/spawner.py` was switched from the private-attribute assignment to the new `PatternBasedStrategy.set_config_fingerprint()` method introduced for P1-A1 M4.
+- **M-03** ~~`enforce_retention` exists on `ExperimentStore` and `LearningStore` but never called~~ → **PARTIALLY RESOLVED FIX-03-main-py**. `ExperimentStore.enforce_retention(max_age_days=90)` now runs once at boot in the variant-spawning try/except (mirroring the counterfactual pattern). `LearningStore.enforce_retention` is deferred as DEF-173 because `LearningStore` is constructed in `argus/api/server.py` lifespan (FIX-11 territory, already closed).
+
+See `p1-a1-main-py.md` for the full FIX-03 resolution section.

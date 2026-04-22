@@ -141,6 +141,17 @@ class PatternBasedStrategy(BaseStrategy):
         """
         return self._config_fingerprint
 
+    def set_config_fingerprint(self, fingerprint: str) -> None:
+        """Record the parameter fingerprint that identifies this strategy instance.
+
+        Callers compute the fingerprint from the canonical detection params
+        (see ``compute_parameter_fingerprint``) and pass it here so the
+        ``config_fingerprint`` property returns a stable value for the life
+        of the instance. Exposed as a method rather than direct attribute
+        assignment so renames don't silently break call sites.
+        """
+        self._config_fingerprint = fingerprint
+
     def set_candle_store(self, store: object) -> None:
         """Set the IntradayCandleStore reference for auto-backfill.
 
