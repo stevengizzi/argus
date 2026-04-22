@@ -7,6 +7,21 @@
 
 ---
 
+## FIX-14 Resolution (2026-04-22)
+
+All 20 findings (H1A-01 through H1A-20) addressed by FIX-14-docs-primary-context (see `docs/sprints/sprint-31.9/FIX-14-closeout.md`).
+
+**Line-count delta:**
+- CLAUDE.md: 450 → 418 (−32, −7%) — conservative cut; DEF table detail preserved as load-bearing, prompt-relevant signal for active sessions.
+- project-knowledge.md: 447 → 314 (−133, −30%) — aggressive trim (Key Components megalines compressed, Key Active Decisions subsections deduped against `dec-index.md`, Sprint History collapsed to last 20 rows, File Structure + Build Track + completed-infrastructure megalines pointed at canonical sources).
+- architecture.md: 2,839 → ~2,746 (−93, −3%) — high-value removals applied (§10 NotificationService spec replaced by Deferred Components pointer, §11 "Shadow System" parallel-process concept removed as superseded by `StrategyMode.SHADOW`, §16 Tech Stack Summary replaced by pointer, §12 Config Files collapsed to pointer, stale "Future Module: intelligence" block removed, stale "Not yet implemented" Sprint 14 block removed, 2FA stale claim fixed, "Seven pages" → "Ten pages", version footer updated). H1A-18 (§3.9 startup phase sequence) was already resolved by FIX-03 — verified and marked `RESOLVED-VERIFIED`. H1A-19's aggressive target (~1,500 lines) deferred — see close-out notes.
+
+**Sprint-31.9 campaign hygiene preserved:** DEF-172, DEF-173 strikethrough entries and DEF-175 live entry (all from IMPROMPTU 2026-04-22) untouched by this session. Impromptu changes verified post-edit via `grep -nE "DEF-(172|173|175)"`.
+
+**Scope adherence:** Only the three files listed in the Scope block were modified. `workflow/` submodule + `docs/sprints/post-31.9-component-ownership/*` untouched.
+
+---
+
 ## Executive Summary
 
 1. **Architecture.md (2,819L) is the #1 compression target.** It is ~40–50% narrative archaeology (sprint-tagged mini-changelogs inside every section, resolved DEFs written up in the present tense, a "Future Module: `argus/intelligence/`" section talking about work completed 9+ months ago). Target trim: ~1,100 lines (-39%). Biggest single win: §3.4.x strategy write-ups duplicate `docs/strategies/STRATEGY_*.md` — replace 150 lines with a pointer table.

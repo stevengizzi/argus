@@ -1690,16 +1690,6 @@ Tier 1 exposes a REST + WebSocket API for the Command Center. In-process with th
 - WebSocket bridge (EventBus → client streaming)
 - Dev mode with mock data
 
-**Not yet implemented (future sprints):**
-- PUT strategies (config updates)
-- POST strategies pause/resume
-- Orchestrator status
-- Risk status details
-- Emergency controls (flatten, pause, resume)
-- Approval workflow endpoints
-- Learning journal
-- Claude API integration endpoints
-
 ### REST Endpoints (Implemented)
 ```
 POST   /api/v1/auth/login              — Password login, returns JWT
@@ -1829,7 +1819,7 @@ ws://host/ws/v1/arena?token={jwt}                          # Sprint 32.75
 
 ### Implementation Status (Sprint 21d)
 
-Seven pages delivered with responsive design across four breakpoints (DEC-169). Single React codebase targeting web, Tauri desktop (v2), and PWA mobile (DEC-080). Full animation system (Framer Motion), skeleton loading, emergency controls, trade detail panel, CSV export. Desktop icon sidebar with group dividers. Mobile 5-tab + More bottom sheet (DEC-211, DEC-216). AI Copilot shell panel (DEC-212). 1712 pytest + 257 Vitest tests.
+Ten pages delivered with responsive design across four breakpoints (DEC-169 expanded in Sprint 25, 32.5, 32.75). Single React codebase targeting web and PWA mobile (Tauri desktop was scoped but never integrated — see DEF-174). Full animation system (Framer Motion), skeleton loading, emergency controls, trade detail panel, CSV export. Desktop icon sidebar with group dividers. Mobile 5-tab + More bottom sheet (DEC-211, DEC-216). AI Copilot shell panel (DEC-212). Test counts live in `CLAUDE.md` § Current State; pages enumerated in the next subsection.
 
 ### Pages
 
@@ -2113,16 +2103,6 @@ scripts/
 config/
 └── runner.yaml                   # Runner configuration
 
-### Future Module: `argus/intelligence/`
-Planned for Build Track near-term (Tier 1, Sprint 17) and Build Track later (Tiers 2–3). Will contain:
-- `calendar.py` — Economic and earnings calendar ingestion
-- `news_feed.py` — News API subscription and symbol matching
-- `classifier.py` — Catalyst type classification (keyword → ML pipeline)
-- `edgar.py` — SEC EDGAR filing crawler (8-K, Form 4, 13F)
-- `sentiment.py` — Claude API sentiment analysis (Tier 3)
-
-Not yet implemented. Interface will publish `CatalystEvent` to the Event Bus for consumption by Scanner, Risk Manager, and Learning Journal.
-
 ---
 
 ## 6. Command Center (Tier 2)
@@ -2370,7 +2350,7 @@ Each executor validates inputs against schema bounds (e.g., allocation 0–100%,
 - Production: consider AWS Secrets Manager or HashiCorp Vault
 
 ### 8.2 Authentication
-- Dashboard protected by JWT authentication with 2FA
+- Dashboard protected by single-factor JWT authentication (bcrypt-hashed password + `HTTPBearer`, DEC-102 / DEC-351). 2FA is not implemented.
 - API server validates JWT on every request
 - Mobile access uses same authentication
 - Session timeout configurable (default: 24h, re-auth required)
@@ -2417,65 +2397,17 @@ Each executor validates inputs against schema bounds (e.g., allocation 0–100%,
 
 ---
 
-## 10. Notification Service (`notifications/service.py`)
+## 10. Deferred Components (post-revenue or never-built)
 
-```python
-class NotificationService:
-    async def send(self, alert: Alert) -> None:
-        """Route alert to appropriate channels based on alert.category and config."""
-
-    channels: list[NotificationChannel]  # Push, Email, Telegram, Discord
-
-class Alert:
-    category: str       # 'critical', 'informational', 'periodic'
-    title: str
-    body: str
-    data: dict          # Structured data for rich notifications
-    timestamp: datetime
-```
-
-**Channel Implementations:**
-- `PushChannel` — via Firebase Cloud Messaging or similar (for Tauri/mobile)
-- `EmailChannel` — via SendGrid, SES, or SMTP
-- `TelegramChannel` — via Telegram Bot API
-- `DiscordChannel` — via Discord webhook
-
----
-
-## 11. Shadow System (`core/shadow.py`)
-
-A parallel instance of the full trading engine running in paper mode. Uses the same live data feed but submits orders to `SimulatedBroker` instead of real broker.
-
-**Purpose:** Continuous validation that the live system and shadow system produce identical signals. Divergence indicates execution issues (slippage, partial fills, timing) and is reported.
-
-**Implementation:** Runs as a separate process on the same VPS. Shares the Data Service (read-only) but has its own strategy instances, Risk Manager, and Order Manager.
+- **NotificationService** (scoped but never built) — `argus/notifications/` contains `__init__.py` only. Alerts today flow through `HealthMonitor` webhook fields and logging. If reinstated, the abstraction lives here. See `.claude/rules/architecture.md` § Abstraction Layers.
+- **OrderFlowAnalyzer** — post-revenue (DEC-238). Requires L2/L3 data (Databento Plus, $1,399/mo).
+- **§11 "Shadow System" as a parallel process** — superseded by `StrategyMode.SHADOW` + `CounterfactualTracker` (Sprint 27.7). Individual strategies now run in shadow mode within the single ARGUS process; the separate-process design was never built.
 
 ---
 
 ## 12. Configuration Files
 
-All tunable parameters live in YAML files, not in code.
-
-```
-config/
-├── system.yaml           # Global settings (timezone, market hours, logging level)
-├── brokers.yaml          # Broker connections and routing rules
-├── risk_limits.yaml      # All three levels of risk parameters
-├── orchestrator.yaml     # Allocation rules, regime thresholds, throttling rules
-├── regime.yaml           # Regime Intelligence V2 config — 6 dimensions, per-dimension enable flags (Sprint 27.6)
-├── counterfactual.yaml   # Counterfactual Engine config — enabled, retention, timeout, EOD close time (Sprint 27.7)
-├── learning_loop.yaml    # Learning Loop V1 config — enabled, window_days, auto_trigger, max_weight_change, correlation threshold (Sprint 28)
-├── notifications.yaml    # Channel configs, alert routing, schedule
-├── strategies/
-│   ├── orb_breakout.yaml
-│   ├── orb_scalp.yaml
-│   ├── vwap_reclaim.yaml
-│   ├── afternoon_momentum.yaml
-│   ├── red_to_green.yaml
-│   ├── bull_flag.yaml
-│   └── flat_top_breakout.yaml
-└── ui.yaml               # Dashboard preferences, default views
-```
+All tunable parameters live in YAML files under `config/` — read the directory directly for the current set. Major standalone overlays are registered in `_STANDALONE_SYSTEM_OVERLAYS` in `argus/core/config.py` (DEC-384): `quality_engine.yaml`, `overflow.yaml`. Per-strategy configs live under `config/strategies/`; per-pattern universe filters under `config/universe_filters/`. See `.claude/rules/architecture.md` § Config-Gating for the overlay pattern.
 
 ---
 
@@ -2807,33 +2739,8 @@ scripts/
 
 ## 16. Technology Stack Summary
 
-| Component | Technology |
-|-----------|-----------|
-| Language | Python 3.11+ |
-| Async Runtime | asyncio |
-| Broker SDKs | alpaca-py>=0.30, ib_async>=1.0.0 |
-| Environment | python-dotenv>=1.0 |
-| Data Manipulation | pandas, numpy |
-| Technical Indicators | pandas-ta or ta-lib |
-| Backtesting (fast) | VectorBT |
-| Backtesting (full) | Replay Harness (production code replay) |
-| Database | SQLite (production: consider PostgreSQL for scale) |
-| API Server | FastAPI (REST + WebSocket) |
-| Desktop App | Tauri v2 |
-| Frontend | React 18+ / TypeScript / Tailwind CSS |
-| Charts (time-series) | Lightweight Charts (TradingView) |
-| Charts (standard) | Recharts |
-| Charts (custom viz) | D3 (sparingly — treemaps, heatmaps) |
-| 3D Visualization | Three.js r128 (Observatory Funnel/Radar views, code-split) |
-| Animation | Framer Motion + CSS transitions |
-| AI Integration | Anthropic Claude API |
-| Scheduling | APScheduler |
-| Notifications | Firebase/Telegram Bot API/SendGrid/Discord Webhook |
-| Deployment | AWS EC2 / systemd / Nginx |
-| Version Control | Git |
-| Secrets | age-encryption or SOPS (production: AWS Secrets Manager) |
-| ID Generation | python-ulid (ULIDs) |
+See `docs/project-knowledge.md` § Tech Stack — authoritative. This section previously duplicated that content with drift (Deployment + Notifications rows were aspirational, not shipped) and is retained as a pointer.
 
 ---
 
-*End of Architecture Document v1.3 (updated Sprint 28 — Learning Loop V1)*
+*End of Architecture Document. Version marker retired (Sprint 28 tag was ~18 sprints stale). Major updates are tracked in `docs/sprint-history.md`; architectural decisions in `docs/decision-log.md`.*
