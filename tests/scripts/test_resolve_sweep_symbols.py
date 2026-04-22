@@ -293,3 +293,107 @@ def test_run_sweep_batch_uses_continue_not_exit() -> None:
     assert "|| exit" not in script_content, (
         "run_sweep_batch.sh must not use '|| exit' in the sweep loop"
     )
+
+
+# ---------------------------------------------------------------------------
+# 6. FIX-18 regression guards (M-08 parametrized SQL, M-09 decoupled from VIEW)
+# ---------------------------------------------------------------------------
+
+
+def test_apply_static_filters_parametrizes_having_clauses() -> None:
+    """FIX-18 M-08: numeric HAVING clauses must use '?' placeholders, not f-strings.
+
+    Defense-in-depth against future filter additions (e.g., string-typed
+    expressions). The SQL passed to service.query() must contain only
+    '?' bind markers for min_price / max_price / min_avg_volume, and the
+    params list must carry the concrete values.
+    """
+    filter_config = UniverseFilterConfig(
+        min_price=10.0,
+        max_price=500.0,
+        min_avg_volume=1_000_000,
+    )
+    mock_service = MagicMock()
+    mock_service.query.return_value = pd.DataFrame({"symbol": []})
+
+    _apply_static_filters(
+        service=mock_service,
+        filter_config=filter_config,
+        start_date="2025-01-01",
+        end_date="2025-12-31",
+    )
+
+    mock_service.query.assert_called_once()
+    sql_arg, params_arg = mock_service.query.call_args.args
+
+    # No numeric literals interpolated into the SQL text
+    assert "10.0" not in sql_arg
+    assert "500.0" not in sql_arg
+    assert "1000000" not in sql_arg
+    # Bind markers present in the HAVING clause
+    assert "AVG(close) >= ?" in sql_arg
+    assert "AVG(close) <= ?" in sql_arg
+    assert "AVG(volume) >= ?" in sql_arg
+
+    # Params list carries the three filter values after (start_date, end_date)
+    assert params_arg[:2] == ["2025-01-01", "2025-12-31"]
+    assert params_arg[2:] == [10.0, 500.0, 1_000_000]
+
+
+def test_apply_static_filters_param_count_matches_placeholders() -> None:
+    """FIX-18 M-08: placeholder count must equal param count regardless of which
+    filters are set (absent filters do not consume a placeholder)."""
+    filter_config = UniverseFilterConfig(min_price=25.0)  # only one filter set
+    mock_service = MagicMock()
+    mock_service.query.return_value = pd.DataFrame({"symbol": []})
+
+    _apply_static_filters(
+        service=mock_service,
+        filter_config=filter_config,
+        start_date="2025-01-01",
+        end_date="2025-12-31",
+    )
+    sql_arg, params_arg = mock_service.query.call_args.args
+    # Two WHERE placeholders + one HAVING placeholder = 3
+    assert sql_arg.count("?") == len(params_arg) == 3
+
+
+def test_count_cache_symbols_uses_public_api_not_view_name() -> None:
+    """FIX-18 M-09: must call service.get_date_coverage() rather than query
+    the hardcoded 'historical' VIEW directly. Decouples the script from the
+    DuckDB schema layout so a rename during the cache-consolidation cutover
+    does not silently return 0."""
+    mock_service = MagicMock()
+    mock_service.get_date_coverage.return_value = {"symbol_count": 42}
+
+    result = _count_cache_symbols(mock_service)
+
+    assert result == 42
+    mock_service.get_date_coverage.assert_called_once_with()
+    # Verify no raw FROM-historical SQL was issued
+    mock_service.query.assert_not_called()
+
+
+def test_count_cache_symbols_returns_zero_on_service_error() -> None:
+    """FIX-18 M-09: exceptions from get_date_coverage() degrade to 0, matching
+    prior behavior — the script reports cache_total but never aborts on it."""
+    mock_service = MagicMock()
+    mock_service.get_date_coverage.side_effect = RuntimeError("boom")
+
+    assert _count_cache_symbols(mock_service) == 0
+
+
+def test_resolve_sweep_symbols_script_has_no_fstring_sql_injection() -> None:
+    """FIX-18 M-08 grep-guard: HAVING-clause filter values must not re-appear
+    as f-string interpolations in the script source. Prevents regression
+    to the pre-FIX-18 pattern where AVG() comparators used f-string literals."""
+    script_source = Path("scripts/resolve_sweep_symbols.py").read_text()
+    banned_patterns = [
+        'f"AVG(close) >= {',
+        'f"AVG(close) <= {',
+        'f"AVG(volume) >= {',
+    ]
+    for pat in banned_patterns:
+        assert pat not in script_source, (
+            f"FIX-18 M-08 regression: {pat!r} reintroduces f-string SQL interpolation"
+        )

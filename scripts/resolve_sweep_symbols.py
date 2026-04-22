@@ -159,7 +159,11 @@ def _discover_patterns() -> list[str]:
 
 
 def _count_cache_symbols(service: HistoricalQueryService) -> int:
-    """Count distinct symbols present in the historical VIEW.
+    """Count distinct symbols present in the cache.
+
+    Uses the service's public ``get_date_coverage()`` API instead of a
+    hardcoded ``FROM historical`` SQL against the internal VIEW name.
+    Decouples this script from the DuckDB schema layout (FIX-18 M-09).
 
     Args:
         service: Initialized HistoricalQueryService.
@@ -168,10 +172,7 @@ def _count_cache_symbols(service: HistoricalQueryService) -> int:
         Number of distinct symbols, or 0 if the query fails.
     """
     try:
-        df = service.query("SELECT COUNT(DISTINCT symbol) AS n FROM historical", [])
-        if df.empty:
-            return 0
-        return int(df.iloc[0]["n"])
+        return int(service.get_date_coverage().get("symbol_count", 0))
     except Exception:
         logger.debug("Could not count cache symbols", exc_info=True)
         return 0
@@ -207,13 +208,21 @@ def _apply_static_filters(
                 field_name,
             )
 
+    # Build HAVING clauses with DuckDB parameter binding (FIX-18 M-08):
+    # Pydantic already enforces float/int types, but defense-in-depth
+    # against future filter additions (e.g., string-typed expressions)
+    # requires parametrized SQL rather than f-string interpolation.
     having_clauses: list[str] = ["1=1"]
+    having_params: list[float] = []
     if filter_config.min_price is not None:
-        having_clauses.append(f"AVG(close) >= {filter_config.min_price}")
+        having_clauses.append("AVG(close) >= ?")
+        having_params.append(filter_config.min_price)
     if filter_config.max_price is not None:
-        having_clauses.append(f"AVG(close) <= {filter_config.max_price}")
+        having_clauses.append("AVG(close) <= ?")
+        having_params.append(filter_config.max_price)
     if filter_config.min_avg_volume is not None:
-        having_clauses.append(f"AVG(volume) >= {filter_config.min_avg_volume}")
+        having_clauses.append("AVG(volume) >= ?")
+        having_params.append(filter_config.min_avg_volume)
 
     having_sql = " AND ".join(having_clauses)
     sql = (
@@ -224,7 +233,7 @@ def _apply_static_filters(
         f"HAVING {having_sql}"
     )
 
-    df = service.query(sql, [start_date, end_date])
+    df = service.query(sql, [start_date, end_date, *having_params])
     if df.empty:
         return []
     return sorted(df["symbol"].tolist())

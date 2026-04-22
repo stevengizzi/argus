@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  pytest:
+    name: pytest (backend)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install runtime + dev dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,backtest]"
+
+      - name: Run pytest
+        env:
+          # Tests that read env vars during import-time (AIConfig, ApiConfig)
+          # expect these to be absent or deterministic under -n auto.
+          ANTHROPIC_API_KEY: ""
+          ARGUS_JWT_SECRET: "ci-test-secret-do-not-use-in-prod"
+        run: |
+          python -m pytest --ignore=tests/test_main.py -n auto -q
+
+  vitest:
+    name: vitest (frontend)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: argus/ui
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: argus/ui/package-lock.json
+
+      - name: Install UI dependencies
+        run: npm ci
+
+      - name: Run vitest
+        run: npm run test
