@@ -34,6 +34,7 @@ ENV/
 .idea/
 .vscode/
 .claude/settings.json
+.claude/scheduled_tasks.lock
 *.swp
 *.swo
 
