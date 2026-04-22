@@ -80,7 +80,11 @@ class ABCDPattern(PatternModule):
 
     @property
     def lookback_bars(self) -> int:
-        """Number of recent candles needed for detection."""
+        """Number of recent candles needed for detection.
+
+        60 bars: accommodates up to ~3 ABCD legs (~10-20 bars each) plus
+        Fibonacci-retracement headroom (FIX-19 P1-B-C03).
+        """
         return 60
 
     # ------------------------------------------------------------------

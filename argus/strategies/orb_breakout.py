@@ -193,8 +193,19 @@ class OrbBreakoutStrategy(OrbBaseStrategy):
         )
 
     def get_market_conditions_filter(self) -> MarketConditionsFilter:
-        """Return market conditions for ORB activation."""
+        """Return market conditions for ORB activation.
+
+        Honors ``self._config.allowed_regimes`` when set (FIX-19 P1-B-M03),
+        else uses the default regime list.
+        """
+        default_regimes = [
+            "bullish_trending",
+            "bearish_trending",
+            "range_bound",
+            "high_volatility",
+        ]
+        regimes = self._config.allowed_regimes or default_regimes
         return MarketConditionsFilter(
-            allowed_regimes=["bullish_trending", "bearish_trending", "range_bound", "high_volatility"],
+            allowed_regimes=regimes,
             max_vix=35.0,
         )

@@ -85,7 +85,11 @@ class DipAndRipPattern(PatternModule):
 
     @property
     def lookback_bars(self) -> int:
-        """Number of recent candles needed for detection."""
+        """Number of recent candles needed for detection.
+
+        30 bars covers dip formation (~10-15 bars) plus rip confirmation
+        window with ATR headroom (FIX-19 P1-B-C03).
+        """
         return 30
 
     def detect(

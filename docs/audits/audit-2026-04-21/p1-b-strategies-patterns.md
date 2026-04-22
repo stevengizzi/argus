@@ -115,3 +115,38 @@ Rejection-reason taxonomy to standardize across all 15 (short labels, sorted alp
   - **Session β (`weekend-only`, config surface):** M3 + M4 + L1 + L5. "Honor `allowed_regimes` from YAML" — one PR across StrategyConfig and 6 strategies.
   - **Session γ (`safe-during-trading`, cleanup):** L2 + L3 + L4 + L6 + L7 + C3 + C4. Dead interface pruning and doc alignment.
   - M5 + M8 can ride session α or β depending on trade-off between noise-reduction urgency and architectural cleanup appetite.
+
+## FIX-19 Resolution
+
+**Session:** FIX-19-strategies (audit 2026-04-21 Phase 3 remediation)
+**Status:** All 20 findings addressed. DEF-138 closed via M2 wire-up.
+
+| # | Finding | Resolution |
+|---|---------|------------|
+| M1 | `VwapBouncePattern._signal_counts` session reset | `PatternBasedStrategy.reset_daily_state()` calls `self._pattern.reset_session_state()` guarded by `hasattr`. Regression test in `tests/strategies/test_fix19_regressions.py::TestVwapBounceSessionReset`. **RESOLVED FIX-19-strategies** |
+| M2 | DEF-138 telemetry wire-up across 15 strategies | `_track_symbol_evaluated`, `_maybe_log_window_summary`, `_track_signal_generated`, and `_track_signal_rejected(reason)` now called from `PatternBasedStrategy.on_candle` (covers all 10 patterns), `orb_base.on_candle` + `_check_breakout_conditions` zero-R branch (covers ORB-B + ORB-S), `vwap_reclaim.on_candle`, `afternoon_momentum.on_candle`, `red_to_green.on_candle`. Rejection taxonomy uses compact labels (`zero_r`, `no_pattern`, `outside_operating_window`, `internal_risk_limits`, `insufficient_history`). DEF-138 closed. **RESOLVED FIX-19-strategies** |
+| M3 | `StrategyConfig.allowed_regimes` dead config surface | `allowed_regimes: list[str] \| None = None` added to base `StrategyConfig`. Dead default on `ABCDConfig` removed (inherits from base now). Every `get_market_conditions_filter()` reads `self._config.allowed_regimes` and falls through to a hardcoded default when None. Regression tests in `TestAllowedRegimesOverride`. **RESOLVED FIX-19-strategies** |
+| M4 | `PatternBasedStrategy` default regimes missing `high_volatility` | Default extended to `["bullish_trending", "bearish_trending", "range_bound", "high_volatility"]` — matches the 4 standalone strategies. Regression test in `TestPatternBasedStrategyDefaultRegimes`. **RESOLVED FIX-19-strategies** |
+| M5 | VWAP Reclaim FAIL telemetry noise on out-of-window candles | Time-window telemetry now gates on `state.state == VwapState.BELOW_VWAP` (FAIL when entry-evaluating) vs INFO (state machine still accumulating). Inline comment added explaining why no `return None`. **RESOLVED FIX-19-strategies** |
+| M6 | Afternoon Momentum missing `_has_zero_r` guard | Guard added in `_build_breakout_signal` after target calculation, consistent with ORB + R2G. Regression coverage in `TestZeroRGuards`. **RESOLVED FIX-19-strategies** |
+| M7 | VWAP Reclaim `_build_signal` missing `_has_zero_r` guard | Guard added immediately after target calculation. Regression coverage in `TestZeroRGuards`. **RESOLVED FIX-19-strategies** |
+| M8 | `VwapBouncePattern` session state architectural inconsistency | Softened by M1 fix — `PatternBasedStrategy.reset_daily_state()` now cleans up per-session counters via a hasattr hook, and the class docstring already calls out the decoupling. Formalizing a `SessionStatefulPattern` mixin is deferred pending a second stateful pattern (see audit's "Not urgent as long as M1 is fixed"). **RESOLVED FIX-19-strategies** |
+| L1 | `StrategyMode` enum dead | `StrategyMode` StrEnum moved to `argus.core.config` (canonical source); `StrategyConfig.mode: StrategyMode = StrategyMode.LIVE` now type-validated. `base_strategy` re-exports it for backward-compat import paths. Regression tests in `TestStrategyModeCoercion`. **RESOLVED FIX-19-strategies** |
+| L2 | `calculate_position_size()` abstract | Demoted to concrete default returning 0, docstring documents the legacy-sizing-bypass path in `main.py._process_signal`. Existing ORB/R2G/VWAP overrides untouched. **RESOLVED FIX-19-strategies** |
+| L3 | `get_scanner_criteria()` abstract | Demoted to concrete default returning `ScannerCriteria()`. Existing overrides preserved for `tests/test_integration_sprint3.py`. **RESOLVED FIX-19-strategies** |
+| L4 | FlatTopBreakout `_confidence_score` vs `score` weighting divergence | `_confidence_score()` now uses the same `30/30/25/15` split as `score()`. Class-level docstring note explains why the post-detect resistance-excess calculation can't be mirrored in `_confidence_score()`. **RESOLVED FIX-19-strategies** |
+| L5 | abcd.yaml `neutral` typo | `neutral` → `range_bound`. Test `test_abcd_allowed_regimes` updated to expect `range_bound`. **RESOLVED FIX-19-strategies** |
+| L6 | abcd.yaml `pattern_class` inconsistency | Removed `pattern_class: "ABCDPattern"` from `abcd.yaml`; `factory._resolve_pattern_name()` fallback (`Config → Pattern` suffix rule) resolves to `ABCDPattern`. All 10 pattern YAMLs now share the implicit convention. **RESOLVED FIX-19-strategies** |
+| L7 | PMH score docstring scoring weights | Already present (30/25/25/20 component list in `score()` docstring). **RESOLVED-VERIFIED FIX-19-strategies** |
+| L8 | ORB-B/ORB-S identical breakout conditions (by design) | Verified: `_check_breakout_conditions` defined only in `orb_base.py`; both subclasses inherit via DEC-120 extraction. **RESOLVED-VERIFIED FIX-19-strategies** |
+| C1 | `min_detection_bars` docstring note on the 7 defaulting patterns | Deferred as stylistic — the audit itself noted "Or skip — the default is the intuitive case." Not load-bearing. **DEFERRED FIX-19-strategies** |
+| C2 | `_check_breakout_conditions` `"conditions_passed": 0` on No-breakout | Verified at `orb_base.py:397` — the telemetry is accurate (zero structural conditions passed when `close <= OR high`); reads awkwardly but is correct. **RESOLVED-VERIFIED FIX-19-strategies** |
+| C3 | lookback_bars derivations on magic-number patterns | Inline derivation docstrings added to abcd (60), dip_and_rip (30), gap_and_go (15), hod_break (60), micro_pullback (30), narrow_range_breakout (20). `bull_flag` + `flat_top_breakout` already derived. **RESOLVED FIX-19-strategies** |
+| C4 | Scoring-weights convention reconciliation | `PatternModule.score()` abstract docstring now documents the four distinct weight families in use (30/30/25/15, 30/30/20/20, 30/25/25/20, 35/25/20/20) so the per-pattern variance is first-class, not a drifting claim. **Note:** the Claude.ai project-knowledge memory claiming a single "30/25/25/20" convention is operator-owned — out-of-band reconciliation is left to the operator. **RESOLVED FIX-19-strategies** (code-side) |
+| L5 / C4 / M3 interaction | Default regime list in previous ABCDConfig used `"neutral"` (invalid). Now unified: base-class field default is `None`; per-strategy `get_market_conditions_filter()` supplies a valid hardcoded fallback; abcd.yaml overrides with valid values only. No `MarketRegime` enum bypass remains. | — |
+
+**New tests (7):** `tests/strategies/test_fix19_regressions.py` adds 18 tests covering M1, M3, M4, M6, M7, M2 (DEF-138), and L1.
+
+**Test delta:** 4,946 → 4,964 (+18 regression tests; no existing tests lost).
+
+**Scope discipline:** No files outside `argus/strategies/**`, `argus/core/config.py` (single small addition + one field move), `config/strategies/abcd.yaml`, and `tests/strategies/**` were modified. Live signal paths are `weekend-only` per safety-tag contract.

@@ -499,6 +499,7 @@ class OrbBaseStrategy(BaseStrategy):
                     f"Zero R: entry={signal.entry_price:.2f}, "
                     f"target={signal.target_prices[0]:.2f}",
                 )
+                self._track_signal_rejected("zero_r")
                 return None
 
         return signal
@@ -545,6 +546,13 @@ class OrbBaseStrategy(BaseStrategy):
         # Ignore if not in watchlist
         if symbol not in self._watchlist:
             return None
+
+        # DEF-138 window summary tracking (FIX-19 P1-B-M02).
+        # Symbols on the watchlist count as evaluated even during OR formation
+        # (the window summary covers the whole session, not just phase 2).
+        self._track_symbol_evaluated()
+        candle_time = event.timestamp.astimezone(ET).time()
+        self._maybe_log_window_summary(candle_time)
 
         state = self._get_symbol_state(symbol)
 
@@ -661,7 +669,10 @@ class OrbBaseStrategy(BaseStrategy):
                     return None
 
             # Check breakout conditions
-            return await self._check_breakout_conditions(symbol, event, state)
+            signal = await self._check_breakout_conditions(symbol, event, state)
+            if signal is not None:
+                self._track_signal_generated()
+            return signal
 
         return None
 

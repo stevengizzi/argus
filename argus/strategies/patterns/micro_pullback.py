@@ -83,7 +83,12 @@ class MicroPullbackPattern(PatternModule):
 
     @property
     def lookback_bars(self) -> int:
-        """Number of recent candles needed for detection."""
+        """Number of recent candles needed for detection.
+
+        30 bars covers the EMA-9 warm-up plus sufficient history to
+        identify the prior leg, pullback-depth, and bounce confirmation
+        (FIX-19 P1-B-C03).
+        """
         return 30
 
     def _compute_ema(self, closes: list[float]) -> list[float]:

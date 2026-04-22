@@ -753,6 +753,19 @@ class BacktestSummaryConfig(BaseModel):
     last_run: str | None = None
 
 
+class StrategyMode(StrEnum):
+    """Operating mode for a strategy (Sprint 27.7).
+
+    Defined here (rather than in ``argus.strategies.base_strategy``) to let
+    ``StrategyConfig.mode`` be a typed enum field without a circular import.
+    ``base_strategy`` re-exports it for callers who still reference the old
+    import path (FIX-19 P1-B-L01).
+    """
+
+    LIVE = "live"      # Signals flow through the quality + risk pipeline.
+    SHADOW = "shadow"  # Signals routed to CounterfactualTracker only.
+
+
 class StrategyConfig(BaseModel):
     """Base configuration for any strategy. Individual strategies
     extend this with strategy-specific parameters."""
@@ -761,7 +774,7 @@ class StrategyConfig(BaseModel):
     name: str
     version: str = "1.0.0"
     enabled: bool = True
-    mode: str = "live"  # StrategyMode — "live" or "shadow" (Sprint 27.7)
+    mode: StrategyMode = StrategyMode.LIVE  # "live" | "shadow" (Sprint 27.7)
     asset_class: str = "us_stocks"
     pipeline_stage: str = "concept"
     family: str = "uncategorized"
@@ -773,6 +786,11 @@ class StrategyConfig(BaseModel):
     benchmarks: PerformanceBenchmarks = PerformanceBenchmarks()
     universe_filter: UniverseFilterConfig | None = None
     operating_conditions: RegimeOperatingConditions | None = None
+    # Regime filter override — when non-None, overrides the hardcoded default in
+    # `get_market_conditions_filter()`. Values must be valid `MarketRegime` enum
+    # members (bullish_trending, bearish_trending, range_bound, high_volatility,
+    # crisis). See FIX-19 P1-B-M03.
+    allowed_regimes: list[str] | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -1223,15 +1241,7 @@ class ABCDConfig(StrategyConfig):
     target_2_r: float = Field(default=2.0, gt=0)
     time_stop_minutes: int = Field(default=60, ge=1)
 
-    # Allowed market regimes
-    allowed_regimes: list[str] = Field(
-        default_factory=lambda: [
-            "bullish_trending",
-            "bearish_trending",
-            "neutral",
-            "high_volatility",
-        ]
-    )
+    # allowed_regimes inherited from StrategyConfig (FIX-19 P1-B-M03).
 
 
 class PreMarketHighBreakConfig(StrategyConfig):

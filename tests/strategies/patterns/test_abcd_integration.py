@@ -111,7 +111,7 @@ class TestABCDConfigYAML:
         """Allowed regimes populated from YAML."""
         yaml_path = Path("config/strategies/abcd.yaml")
         config = load_abcd_config(yaml_path)
-        expected = {"bullish_trending", "bearish_trending", "neutral", "high_volatility"}
+        expected = {"bullish_trending", "bearish_trending", "range_bound", "high_volatility"}
         assert set(config.allowed_regimes) == expected
 
 

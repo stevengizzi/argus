@@ -262,10 +262,15 @@ class PatternBasedStrategy(BaseStrategy):
             SignalEvent if pattern detected and all conditions met, None otherwise.
         """
         symbol = event.symbol
+        candle_time = event.timestamp.astimezone(ET).time()
 
-        # Check watchlist
+        # Check watchlist — untracked symbols never increment counters
         if symbol not in self._watchlist:
             return None
+
+        # DEF-138 window summary tracking (FIX-19 P1-B-M02)
+        self._track_symbol_evaluated()
+        self._maybe_log_window_summary(candle_time)
 
         # Auto-backfill from IntradayCandleStore on first candle per symbol
         self._try_backfill_from_store(symbol)
@@ -285,6 +290,7 @@ class PatternBasedStrategy(BaseStrategy):
                 f"Outside operating window "
                 f"({self._earliest_entry_time}–{self._latest_entry_time})",
             )
+            self._track_signal_rejected("outside_operating_window")
             return None
 
         # Check internal risk limits
@@ -295,6 +301,7 @@ class PatternBasedStrategy(BaseStrategy):
                 EvaluationResult.FAIL,
                 "Internal risk limits hit",
             )
+            self._track_signal_rejected("internal_risk_limits")
             return None
 
         # Need min_detection_bars before detecting patterns
@@ -331,6 +338,7 @@ class PatternBasedStrategy(BaseStrategy):
                     EvaluationResult.FAIL,
                     f"Insufficient history ({bar_count}/{lookback})",
                 )
+            self._track_signal_rejected("insufficient_history")
             return None
 
         # Build indicators from data service
@@ -354,6 +362,7 @@ class PatternBasedStrategy(BaseStrategy):
                 EvaluationResult.FAIL,
                 f"No {self._pattern.name} pattern detected",
             )
+            self._track_signal_rejected("no_pattern")
             return None
 
         # Score the detection
@@ -390,6 +399,7 @@ class PatternBasedStrategy(BaseStrategy):
                 f"Zero R: entry={detection.entry_price:.2f}, "
                 f"target={target_prices[0]:.2f}",
             )
+            self._track_signal_rejected("zero_r")
             return None
 
         # ATR(14) on 1-min bars per AMD-9 standardization
@@ -433,6 +443,7 @@ class PatternBasedStrategy(BaseStrategy):
             f"{detection.entry_price:.2f}, score={score:.1f}",
             metadata=signal_metadata,
         )
+        self._track_signal_generated()
 
         logger.info(
             "%s: %s pattern signal - entry=%.2f, stop=%.2f, score=%.1f",
@@ -506,13 +517,25 @@ class PatternBasedStrategy(BaseStrategy):
         )
 
     def get_market_conditions_filter(self) -> MarketConditionsFilter:
-        """Return market conditions filter with sensible defaults.
+        """Return market conditions filter.
+
+        Reads ``self._config.allowed_regimes`` when set (FIX-19 P1-B-M03);
+        otherwise falls back to the default list — matched to the four
+        standalone strategies so pattern-based strategies are not silently
+        excluded from high-volatility regimes (FIX-19 P1-B-M04).
 
         Returns:
-            MarketConditionsFilter allowing bullish and range-bound regimes.
+            MarketConditionsFilter honoring YAML override or the default list.
         """
+        default_regimes = [
+            "bullish_trending",
+            "bearish_trending",
+            "range_bound",
+            "high_volatility",
+        ]
+        regimes = self._config.allowed_regimes or default_regimes
         return MarketConditionsFilter(
-            allowed_regimes=["bullish_trending", "bearish_trending", "range_bound"],
+            allowed_regimes=regimes,
             max_vix=35.0,
         )
 
@@ -522,6 +545,12 @@ class PatternBasedStrategy(BaseStrategy):
         self._candle_windows.clear()
         self._last_score = 50.0
         self._last_context = {}
+        # Forward session-state reset to patterns that carry per-session
+        # counters (e.g., VwapBouncePattern._signal_counts). Patterns without
+        # this hook are stateless and need no cleanup (FIX-19 P1-B-M01).
+        reset_hook = getattr(self._pattern, "reset_session_state", None)
+        if callable(reset_hook):
+            reset_hook()
         logger.debug(
             "%s: PatternBasedStrategy daily state reset", self.strategy_id
         )

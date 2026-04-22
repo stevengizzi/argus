@@ -224,6 +224,11 @@ class AfternoonMomentumStrategy(BaseStrategy):
         if symbol not in self._watchlist:
             return None
 
+        # DEF-138 window summary tracking (FIX-19 P1-B-M02)
+        self._track_symbol_evaluated()
+        candle_time_et = event.timestamp.astimezone(ET).time()
+        self._maybe_log_window_summary(candle_time_et)
+
         # Observability: Log window open/close status
         self._log_window_status(event)
 
@@ -255,7 +260,10 @@ class AfternoonMomentumStrategy(BaseStrategy):
             return None
 
         # State machine transitions
-        return await self._process_state_machine(symbol, event, state, atr)
+        signal = await self._process_state_machine(symbol, event, state, atr)
+        if signal is not None:
+            self._track_signal_generated()
+        return signal
 
     def _log_window_status(self, candle: CandleEvent) -> None:
         """Log window open/close status for observability.
@@ -1012,6 +1020,18 @@ class AfternoonMomentumStrategy(BaseStrategy):
             candle, state, consolidation_high, atr
         )
 
+        # Zero-R guard: suppress signals with no profit potential
+        # Consistent with ORB / R2G / PatternBasedStrategy (FIX-19 P1-B-M06).
+        if self._has_zero_r(symbol, entry_price, t1):
+            self.record_evaluation(
+                symbol,
+                EvaluationEventType.ENTRY_EVALUATION,
+                EvaluationResult.FAIL,
+                f"Zero R: entry={entry_price:.2f}, t1={t1:.2f}",
+            )
+            self._track_signal_rejected("zero_r")
+            return None
+
         # Build signal (use consolidation_high for the rationale, not updated midday_high)
         signal = SignalEvent(
             strategy_id=self.strategy_id,
@@ -1156,8 +1176,15 @@ class AfternoonMomentumStrategy(BaseStrategy):
         Works well in trending conditions and higher volatility where
         afternoon momentum moves are present.
         """
+        default_regimes = [
+            "bullish_trending",
+            "bearish_trending",
+            "range_bound",
+            "high_volatility",
+        ]
+        regimes = self._config.allowed_regimes or default_regimes
         return MarketConditionsFilter(
-            allowed_regimes=["bullish_trending", "bearish_trending", "range_bound", "high_volatility"],
+            allowed_regimes=regimes,
             max_vix=30.0,
         )
 

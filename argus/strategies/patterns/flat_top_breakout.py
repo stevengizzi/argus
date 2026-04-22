@@ -252,23 +252,31 @@ class FlatTopBreakoutPattern(PatternModule):
 
         Returns:
             Confidence score 0-100.
-        """
-        # Resistance touches (0-25): more touches = stronger
-        touch_score = min((touch_count - 1) / 4.0, 1.0) * 25
 
-        # Consolidation quality (0-25): lower ratio = tighter
-        consol_score = max(0.0, (1.0 - range_narrowing_ratio)) * 25
+        Note:
+            ``_confidence_score()`` operates on the raw detection frame (no
+            persisted metadata yet) and therefore does NOT have access to the
+            post-detect resistance-excess calculation used in ``score()``. To
+            keep both weightings internally consistent it uses the same
+            ``30/30/25/15`` split as ``score()`` — touches, consolidation
+            tightness, volume, and breakout-candle structure (FIX-19 P1-B-L04).
+        """
+        # Resistance touches (0-30): more touches = stronger
+        touch_score = min((touch_count - 1) / 4.0, 1.0) * 30
+
+        # Consolidation quality (0-30): lower ratio = tighter
+        consol_score = max(0.0, (1.0 - range_narrowing_ratio)) * 30
 
         # Volume spike (0-25): higher ratio above threshold
         vol_score = min((volume_ratio - 1.0) / 2.0, 1.0) * 25
 
-        # Breakout candle quality (0-25): close near high, body > wick
+        # Breakout candle quality (0-15): close near high, body > wick
         candle_range = breakout_candle.high - breakout_candle.low
         if candle_range > 0:
             body = abs(breakout_candle.close - breakout_candle.open)
             close_near_high = 1.0 - (breakout_candle.high - breakout_candle.close) / candle_range
             body_ratio = body / candle_range
-            bo_score = (close_near_high * 0.5 + body_ratio * 0.5) * 25
+            bo_score = (close_near_high * 0.5 + body_ratio * 0.5) * 15
         else:
             bo_score = 0.0
 

@@ -180,6 +180,11 @@ class VwapReclaimStrategy(BaseStrategy):
         if symbol not in self._watchlist:
             return None
 
+        # DEF-138 window summary tracking (FIX-19 P1-B-M02)
+        self._track_symbol_evaluated()
+        candle_time = event.timestamp.astimezone(ET).time()
+        self._maybe_log_window_summary(candle_time)
+
         state = self._get_symbol_state(symbol)
 
         # Track volume for all bars
@@ -195,14 +200,26 @@ class VwapReclaimStrategy(BaseStrategy):
             )
             return None
 
-        # Time window check — outside operating window
+        # Time window check — gate the telemetry so only BELOW_VWAP (actually
+        # evaluating entry) records a FAIL. States earlier in the pullback
+        # machine (WATCHING / ABOVE_VWAP) still need to advance regardless of
+        # window, so the entry gate lives inside ``_check_reclaim_entry()`` and
+        # this is intentionally NOT a ``return None`` (FIX-19 P1-B-M05).
         if not self._is_in_entry_window(event):
-            self.record_evaluation(
-                symbol,
-                EvaluationEventType.TIME_WINDOW_CHECK,
-                EvaluationResult.FAIL,
-                "Outside VWAP Reclaim operating window",
-            )
+            if state.state == VwapState.BELOW_VWAP:
+                self.record_evaluation(
+                    symbol,
+                    EvaluationEventType.TIME_WINDOW_CHECK,
+                    EvaluationResult.FAIL,
+                    "Outside VWAP Reclaim operating window",
+                )
+            else:
+                self.record_evaluation(
+                    symbol,
+                    EvaluationEventType.STATE_TRANSITION,
+                    EvaluationResult.INFO,
+                    "State machine still accumulating (outside entry window)",
+                )
 
         # Get VWAP from data service
         vwap: float | None = None
@@ -214,7 +231,10 @@ class VwapReclaimStrategy(BaseStrategy):
             return None
 
         # State machine transitions
-        return await self._process_state_machine(symbol, event, state, vwap)
+        signal = await self._process_state_machine(symbol, event, state, vwap)
+        if signal is not None:
+            self._track_signal_generated()
+        return signal
 
     async def _process_state_machine(
         self,
@@ -726,6 +746,18 @@ class VwapReclaimStrategy(BaseStrategy):
         t1 = entry_price + risk_per_share * self._vwap_config.target_1_r
         t2 = entry_price + risk_per_share * self._vwap_config.target_2_r
 
+        # Zero-R guard: suppress signals with no profit potential
+        # Consistent with ORB / R2G / PatternBasedStrategy (FIX-19 P1-B-M07).
+        if self._has_zero_r(symbol, entry_price, t1):
+            self.record_evaluation(
+                symbol,
+                EvaluationEventType.ENTRY_EVALUATION,
+                EvaluationResult.FAIL,
+                f"Zero R: entry={entry_price:.2f}, t1={t1:.2f}",
+            )
+            self._track_signal_rejected("zero_r")
+            return None
+
         # Calculate pattern strength (share_count deferred to Dynamic Sizer, Sprint 24 S6a)
         pattern_strength, signal_context = self._calculate_pattern_strength(candle, state, vwap)
 
@@ -866,8 +898,15 @@ class VwapReclaimStrategy(BaseStrategy):
         Works well in trending and range-bound conditions where mean-reversion
         patterns are present.
         """
+        default_regimes = [
+            "bullish_trending",
+            "bearish_trending",
+            "range_bound",
+            "high_volatility",
+        ]
+        regimes = self._config.allowed_regimes or default_regimes
         return MarketConditionsFilter(
-            allowed_regimes=["bullish_trending", "bearish_trending", "range_bound", "high_volatility"],
+            allowed_regimes=regimes,
             max_vix=35.0,
         )
 

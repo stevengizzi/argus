@@ -90,7 +90,12 @@ class NarrowRangeBreakoutPattern(PatternModule):
 
     @property
     def lookback_bars(self) -> int:
-        """Number of recent candles needed for detection."""
+        """Number of recent candles needed for detection.
+
+        20 bars = deque capacity; detection begins once ``min_detection_bars``
+        is reached. Sized to hold a full narrow-range compression window
+        plus ATR-normalization headroom (FIX-19 P1-B-C03).
+        """
         return 20
 
     @property

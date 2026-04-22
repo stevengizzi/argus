@@ -13,14 +13,13 @@ operating_window:
   latest_entry: "15:00"
   force_close: "15:50"
 # Pattern detection parameters (delegated to ABCDPattern defaults)
-pattern_class: "ABCDPattern"
 target_1_r: 1.0
 target_2_r: 2.0
 time_stop_minutes: 60
 allowed_regimes:
   - bullish_trending
   - bearish_trending
-  - neutral
+  - range_bound
   - high_volatility
 risk_limits:
   max_loss_per_trade_pct: 0.01

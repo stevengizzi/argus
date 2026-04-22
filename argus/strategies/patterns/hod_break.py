@@ -76,7 +76,12 @@ class HODBreakPattern(PatternModule):
 
     @property
     def lookback_bars(self) -> int:
-        """Number of recent candles needed for detection."""
+        """Number of recent candles needed for detection.
+
+        60 bars covers the full post-open window required to establish a
+        meaningful intraday high plus ATR(14) computation headroom
+        (FIX-19 P1-B-C03).
+        """
         return 60
 
     def _compute_atr(self, candles: list[CandleBar]) -> float:

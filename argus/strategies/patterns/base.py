@@ -138,7 +138,18 @@ class PatternModule(ABC):
     def score(self, detection: PatternDetection) -> float:
         """Score the quality of a detected pattern (0–100).
 
-        Used as pattern_strength input to Quality Engine.
+        Used as ``pattern_strength`` input to the Quality Engine.
+
+        Scoring-weight convention is deliberately *per-pattern* — different
+        patterns warrant different component weightings (FIX-19 P1-B-C04).
+        Current splits in use (see each pattern's ``score()`` docstring for
+        the authoritative list):
+
+        - ``30/30/25/15`` — BullFlag, FlatTopBreakout, HodBreak
+        - ``30/30/20/20`` — GapAndGo
+        - ``30/25/25/20`` — MicroPullback, NarrowRangeBreakout, VwapBounce,
+          DipAndRip, PreMarketHighBreak
+        - ``35/25/20/20`` — ABCD
 
         Args:
             detection: A previously detected pattern.

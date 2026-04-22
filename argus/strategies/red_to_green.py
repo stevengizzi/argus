@@ -184,6 +184,11 @@ class RedToGreenStrategy(BaseStrategy):
         if symbol not in self._watchlist:
             return None
 
+        # DEF-138 window summary tracking (FIX-19 P1-B-M02)
+        self._track_symbol_evaluated()
+        candle_time_et = event.timestamp.astimezone(ET).time()
+        self._maybe_log_window_summary(candle_time_et)
+
         state = self._get_symbol_state(symbol)
 
         # Track volume for all bars
@@ -213,6 +218,8 @@ class RedToGreenStrategy(BaseStrategy):
         if state.state == RedToGreenState.TESTING_LEVEL:
             new_state, signal = self._handle_testing_level(symbol, event, state)
             state.state = new_state
+            if signal is not None:
+                self._track_signal_generated()
             return signal
 
         return None
@@ -998,12 +1005,15 @@ class RedToGreenStrategy(BaseStrategy):
 
         R2G works in bullish trending (gap-down reversal in strong market)
         and range-bound conditions. Avoid extreme volatility environments.
+        Honors ``self._config.allowed_regimes`` when set (FIX-19 P1-B-M03).
 
         Returns:
             MarketConditionsFilter with allowed regimes.
         """
+        default_regimes = ["bullish_trending", "bearish_trending", "range_bound"]
+        regimes = self._config.allowed_regimes or default_regimes
         return MarketConditionsFilter(
-            allowed_regimes=["bullish_trending", "bearish_trending", "range_bound"],
+            allowed_regimes=regimes,
             max_vix=35.0,
         )
 

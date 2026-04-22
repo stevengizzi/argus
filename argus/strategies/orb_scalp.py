@@ -194,9 +194,17 @@ class OrbScalpStrategy(OrbBaseStrategy):
         """Return market conditions for ORB Scalp activation.
 
         Same regimes as ORB Breakout - works well in trending and volatile
-        conditions where momentum is present.
+        conditions where momentum is present. Honors
+        ``self._config.allowed_regimes`` when set (FIX-19 P1-B-M03).
         """
+        default_regimes = [
+            "bullish_trending",
+            "bearish_trending",
+            "range_bound",
+            "high_volatility",
+        ]
+        regimes = self._config.allowed_regimes or default_regimes
         return MarketConditionsFilter(
-            allowed_regimes=["bullish_trending", "bearish_trending", "range_bound", "high_volatility"],
+            allowed_regimes=regimes,
             max_vix=35.0,
         )

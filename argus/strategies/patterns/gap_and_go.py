@@ -91,7 +91,12 @@ class GapAndGoPattern(PatternModule):
 
     @property
     def lookback_bars(self) -> int:
-        """Number of recent candles needed for detection."""
+        """Number of recent candles needed for detection.
+
+        15 bars = first ~15 minutes of the session after the 9:30 open —
+        the window in which gap-and-go follow-through must materialize
+        (FIX-19 P1-B-C03).
+        """
         return 15
 
     def set_reference_data(self, data: dict[str, Any]) -> None:

@@ -15,12 +15,11 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from datetime import datetime, time
-from enum import StrEnum
 from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
 from argus.core.clock import Clock, SystemClock
-from argus.core.config import StrategyConfig
+from argus.core.config import StrategyConfig, StrategyMode
 from argus.core.events import CandleEvent, SignalEvent, TickEvent
 from argus.models.strategy import (
     ExitRules,
@@ -40,11 +39,10 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class StrategyMode(StrEnum):
-    """Operating mode for a strategy (Sprint 27.7)."""
-
-    LIVE = "live"      # Normal execution — signals go through quality + risk pipeline
-    SHADOW = "shadow"  # Shadow mode — signals routed to CounterfactualTracker
+# StrategyMode is re-exported from argus.core.config (FIX-19 P1-B-L01) so
+# StrategyConfig can type-check ``mode`` without a circular import. Kept here
+# for backward compatibility with callers that import it from this module.
+__all__ = ["BaseStrategy", "StrategyMode"]
 
 
 class BaseStrategy(ABC):
@@ -131,20 +129,31 @@ class BaseStrategy(ABC):
             event: The tick event with current price data.
         """
 
-    @abstractmethod
     def get_scanner_criteria(self) -> ScannerCriteria:
         """Return scanner filter criteria for this strategy's stock selection.
+
+        Legacy hook (Sprint 3) retained only for `tests/test_integration_sprint3.py`.
+        Production scanning flows through `config/universe_filters/*.yaml` via
+        Universe Manager (Sprint 23+). Strategies that still care may override
+        this; new strategies can rely on the default empty criteria (FIX-19
+        P1-B-L03).
 
         Returns:
             ScannerCriteria defining the filters for pre-market scanning.
         """
+        return ScannerCriteria()
 
-    @abstractmethod
     def calculate_position_size(self, entry_price: float, stop_price: float) -> int:
         """Calculate number of shares for a trade.
 
-        Uses the universal formula: shares = risk_dollars / (entry - stop)
-        Risk dollars = allocated_capital * risk_per_trade_pct
+        Legacy universal formula: ``shares = allocated_capital *
+        max_loss_per_trade_pct / (entry - stop)``. Quality Engine superseded
+        this in Sprint 24 S6a — ``share_count=0`` flows into
+        ``DynamicPositionSizer``. The method is still used by the legacy-sizing
+        bypass in ``main.py._process_signal`` when quality_engine is disabled
+        or broker is SIMULATED, and by ORB tests. New strategies without a
+        legacy-bypass requirement can rely on the default ``0`` (FIX-19
+        P1-B-L02).
 
         Args:
             entry_price: Expected entry price.
@@ -154,6 +163,7 @@ class BaseStrategy(ABC):
             Number of shares (integer, floored). Returns 0 if calculation
             is invalid (e.g., stop_price >= entry_price for longs).
         """
+        return 0
 
     @abstractmethod
     def get_exit_rules(self) -> ExitRules:
