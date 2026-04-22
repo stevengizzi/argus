@@ -4,3 +4,9 @@ market_close: "16:00"
 log_level: "DEBUG"
 heartbeat_interval_seconds: 10
 data_dir: "/tmp/argus_test_data"
+
+# Command Center API disabled for test fixture — avoids H2-H10 password_hash
+# validator (FIX-16, audit 2026-04-21). Production system.yaml /
+# system_live.yaml set api.enabled: true with a bcrypt hash.
+api:
+  enabled: false

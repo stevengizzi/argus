@@ -255,8 +255,14 @@ async def test_enforce_retention_deletes_old_records(store: CounterfactualStore)
 
 
 def test_config_yaml_keys_match_pydantic_fields() -> None:
-    """All YAML keys under counterfactual match CounterfactualConfig fields."""
-    yaml_path = Path("config/counterfactual.yaml")
+    """All YAML keys under counterfactual match CounterfactualConfig fields.
+
+    Sources from ``system_live.yaml``'s ``counterfactual:`` block — the
+    standalone ``config/counterfactual.yaml`` was removed by FIX-16
+    (audit 2026-04-21, H2-DEAD04) because it duplicated the system YAML
+    values without being wired into ``load_config()``.
+    """
+    yaml_path = Path("config/system_live.yaml")
     with open(yaml_path) as f:
         raw = yaml.safe_load(f)
 

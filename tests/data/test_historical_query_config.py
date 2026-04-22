@@ -69,25 +69,29 @@ class TestHistoricalQueryConfigYaml:
     """Verify the YAML file cross-validates with the Pydantic model."""
 
     def test_yaml_loads_into_config(self) -> None:
+        """historical_query.yaml is a bare-field standalone overlay (FIX-16).
+
+        Previously had a `historical_query:` wrapper; flattened by FIX-16
+        (audit 2026-04-21, H2-D06) to match the DEC-384 / FIX-02 convention.
+        """
         yaml_path = Path("config/historical_query.yaml")
         assert yaml_path.exists(), f"YAML file not found: {yaml_path}"
 
         with open(yaml_path) as f:
             data = yaml.safe_load(f)
 
-        assert "historical_query" in data
-        section = data["historical_query"]
-        config = HistoricalQueryConfig(**section)
+        # No top-level wrapper — fields live at the root.
+        config = HistoricalQueryConfig(**data)
         assert config.enabled is True
 
     def test_all_yaml_keys_are_recognized(self) -> None:
+        """Bare-field YAML keys all map to HistoricalQueryConfig fields."""
         yaml_path = Path("config/historical_query.yaml")
         with open(yaml_path) as f:
             data = yaml.safe_load(f)
 
-        section = data["historical_query"]
         model_fields = set(HistoricalQueryConfig.model_fields.keys())
-        yaml_keys = set(section.keys())
+        yaml_keys = set(data.keys())
 
         unrecognized = yaml_keys - model_fields
         assert not unrecognized, (

@@ -32,8 +32,6 @@ class FMPScannerConfig:
         api_key_env_var: Environment variable name for the API key.
         min_price: Minimum stock price filter.
         max_price: Maximum stock price filter.
-        min_volume: Reserved for future use (screener endpoint, Sprint 23+).
-            Current FMP endpoints do not return volume data.
         max_symbols_returned: Maximum candidates to return.
         fallback_symbols: Static symbol list used when FMP API fails.
     """
@@ -42,7 +40,11 @@ class FMPScannerConfig:
     api_key_env_var: str = "FMP_API_KEY"
     min_price: float = 10.0
     max_price: float = 500.0
-    min_volume: int = 500_000  # Reserved for future use
+    # ``min_volume`` removed by FIX-16 (audit 2026-04-21, H2-S10): the field
+    # was always ignored — current FMP endpoints do not return volume — but
+    # appeared editable in scanner.yaml, misleading operators tuning a value
+    # that had no runtime effect. Restore when an FMP volume-aware endpoint
+    # (Premium screener, Sprint 23+) is integrated.
     max_symbols_returned: int = 15
     fallback_symbols: list[str] = field(default_factory=list)
 

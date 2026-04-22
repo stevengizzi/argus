@@ -3,7 +3,9 @@ name: "ORB Breakout"
 version: "1.0.0"
 enabled: true
 mode: live  # "live" or "shadow" (Sprint 27.7)
-# VIX regime dimensions: not yet constrained (match-any). Activate post-Sprint 28.
+# VIX regime dimensions intentionally unconstrained (match-any). Use the optional
+# operating_conditions: block to gate by VIX regime when needed (Sprint 27.9).
+# allowed_regimes: above is the primary regime gate (FIX-19, audit 2026-04-21).
 asset_class: "us_stocks"
 pipeline_stage: "paper_trading"
 family: "orb_family"

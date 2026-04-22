@@ -301,3 +301,166 @@ async def test_variant_receives_same_watchlist_as_base(
     )
     assert len(spawned) == 1
     assert sorted(spawned[0].watchlist) == sorted(base_watchlist)
+
+
+# ---------------------------------------------------------------------------
+# FIX-16 / H2-S02 + H2-S04 (audit 2026-04-21): variant key + shape validation
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_unknown_param_key_typo_is_rejected_not_silently_dropped(
+    experiment_store: ExperimentStore,
+    base_strategies: dict[str, tuple[BullFlagConfig, PatternBasedStrategy]],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """H2-S02: misspelled variant param key fails loudly, not silently.
+
+    Prior bug: strategy configs don't use ``extra="forbid"`` so unknown keys
+    were dropped by model_dump()+model_validate(). The variant would collapse
+    onto base defaults with no operator-visible signal. The spawner now
+    explicitly validates ``variant_params`` keys against the config class's
+    ``model_fields``.
+    """
+    import logging
+
+    config = {
+        "max_variants_per_pattern": 5,
+        "variants": {
+            "bull_flag": [
+                # `flag_retrace_pct` is a typo of `flag_max_retrace_pct`.
+                {
+                    "variant_id": "strat_bull_flag__typo",
+                    "mode": "shadow",
+                    "params": {"flag_retrace_pct": 0.35},
+                },
+                # Valid sibling still spawns — typo is skipped, not fatal.
+                {
+                    "variant_id": "strat_bull_flag__valid",
+                    "mode": "shadow",
+                    "params": {"flag_max_retrace_pct": 0.35},
+                },
+            ]
+        },
+    }
+    with caplog.at_level(logging.ERROR):
+        spawner = VariantSpawner(experiment_store, config)
+        spawned = await spawner.spawn_variants(
+            base_strategies,
+            data_service=None,  # type: ignore[arg-type]
+            clock=None,  # type: ignore[arg-type]
+        )
+
+    assert len(spawned) == 1
+    assert spawned[0].strategy_id == "strat_bull_flag__valid"
+    # The error log must name the typo'd key so operators can act on it.
+    assert any(
+        "flag_retrace_pct" in record.message
+        and "strat_bull_flag__typo" in record.message
+        for record in caplog.records
+    ), f"Expected ERROR log naming the typo; saw: {[r.message for r in caplog.records]}"
+
+
+@pytest.mark.asyncio
+async def test_non_dict_variant_entry_is_rejected(
+    experiment_store: ExperimentStore,
+    base_strategies: dict[str, tuple[BullFlagConfig, PatternBasedStrategy]],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """H2-S04: variant entry that is not a dict is rejected with a clear log.
+
+    Prior bug: the spawner implicitly trusted each list element was a
+    ``dict`` (via ``.get("variant_id", "")``). A scalar or list entry from a
+    malformed YAML caused an AttributeError deep in the loop rather than a
+    clear operator-facing message.
+    """
+    import logging
+
+    config = {
+        "max_variants_per_pattern": 5,
+        "variants": {
+            "bull_flag": [
+                "strat_bull_flag__oops_this_is_a_string",
+                {
+                    "variant_id": "strat_bull_flag__valid",
+                    "mode": "shadow",
+                    "params": {"flag_max_retrace_pct": 0.35},
+                },
+            ]
+        },
+    }
+    with caplog.at_level(logging.ERROR):
+        spawner = VariantSpawner(experiment_store, config)
+        spawned = await spawner.spawn_variants(
+            base_strategies,
+            data_service=None,  # type: ignore[arg-type]
+            clock=None,  # type: ignore[arg-type]
+        )
+
+    assert len(spawned) == 1
+    assert spawned[0].strategy_id == "strat_bull_flag__valid"
+    assert any(
+        "variant entry" in record.message and "must be a dict" in record.message
+        for record in caplog.records
+    ), f"Expected ERROR log about non-dict variant entry; saw: {[r.message for r in caplog.records]}"
+
+
+def test_existing_experiments_yaml_has_no_typos_in_variant_params() -> None:
+    """Guard: the 22 shadow variants in config/experiments.yaml are all valid.
+
+    Run as a fleet-sanity check: every ``params`` key in every variant must
+    resolve to a real Pydantic field on the matching ``*Config`` class. If
+    this test fails, a typo has been introduced in experiments.yaml that
+    would be silently dropped in pre-FIX-16 code (H2-S02).
+    """
+    import yaml
+    from pathlib import Path
+
+    from argus.core.config import (
+        ABCDConfig,
+        BullFlagConfig,
+        DipAndRipConfig,
+        FlatTopBreakoutConfig,
+        GapAndGoConfig,
+        HODBreakConfig,
+        MicroPullbackConfig,
+        NarrowRangeBreakoutConfig,
+        PreMarketHighBreakConfig,
+        VwapBounceConfig,
+    )
+
+    pattern_config_map = {
+        "dip_and_rip": DipAndRipConfig,
+        "micro_pullback": MicroPullbackConfig,
+        "hod_break": HODBreakConfig,
+        "gap_and_go": GapAndGoConfig,
+        "premarket_high_break": PreMarketHighBreakConfig,
+        "vwap_bounce": VwapBounceConfig,
+        "narrow_range_breakout": NarrowRangeBreakoutConfig,
+        "abcd": ABCDConfig,
+        "bull_flag": BullFlagConfig,
+        "flat_top_breakout": FlatTopBreakoutConfig,
+    }
+
+    path = Path("config/experiments.yaml")
+    assert path.exists(), "config/experiments.yaml must exist"
+    with path.open() as f:
+        cfg = yaml.safe_load(f)
+
+    bad: list[tuple[str, str, str]] = []
+    for pattern_name, variants in (cfg.get("variants") or {}).items():
+        config_cls = pattern_config_map.get(pattern_name)
+        assert config_cls is not None, (
+            f"experiments.yaml references unknown pattern '{pattern_name}'"
+        )
+        fields = set(config_cls.model_fields.keys())
+        for variant in variants:
+            variant_id = variant.get("variant_id", "<missing>")
+            for key in (variant.get("params") or {}):
+                if key not in fields:
+                    bad.append((pattern_name, variant_id, key))
+
+    assert not bad, (
+        f"Typo'd variant param keys found in config/experiments.yaml: {bad}. "
+        f"These would be silently dropped in pre-FIX-16 code (H2-S02)."
+    )

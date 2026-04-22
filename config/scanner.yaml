@@ -17,10 +17,12 @@ static_symbols:
   - "GOOGL"
 
 # FMP scanner configuration (used when scanner_type = "fmp")
+# `min_volume` removed by FIX-16 (audit 2026-04-21, H2-S10) — field was
+# always ignored (FMP endpoints do not return volume). Restore when an
+# FMP volume-aware endpoint is wired (Sprint 23+).
 fmp_scanner:
   min_price: 10.0
   max_price: 500.0
-  min_volume: 500000
   max_symbols_returned: 15
   fallback_symbols:
     - "AAPL"

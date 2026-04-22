@@ -1,6 +1,17 @@
-historical_query:
-  enabled: true
-  cache_dir: "data/databento_cache_consolidated"
-  max_memory_mb: 2048
-  default_threads: 4
-  persist_path: null  # Set to "data/historical_query.duckdb" for persistent mode
+# Historical Query Service — DuckDB Parquet layer (Sprint 31A.5)
+# Read-only SQL access over the Databento Parquet cache.
+#
+# Standalone overlay convention (DEC-384 / FIX-02 / FIX-16):
+# Bare fields at the top level (no `historical_query:` wrapper). The
+# section_key in _STANDALONE_SYSTEM_OVERLAYS ("historical_query") tells
+# load_config() which top-level key of the system config this file overlays.
+# This file is authoritative when present; system.yaml / system_live.yaml no
+# longer carry a `historical_query:` block.
+#
+# Sprint 31.85 operator activation: when the consolidated cache is ready,
+# repoint cache_dir to "data/databento_cache_consolidated".
+enabled: true
+cache_dir: "data/databento_cache"
+max_memory_mb: 2048
+default_threads: 4
+persist_path: null  # Set to "data/historical_query.duckdb" for persistent mode

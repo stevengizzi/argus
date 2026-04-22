@@ -1,9 +1,0 @@
-# Counterfactual Engine (Sprint 27.7)
-# Tracks theoretical outcomes of rejected signals for filter accuracy analysis.
-# Config-gated: set enabled: false to disable entirely (zero overhead).
-
-counterfactual:
-  enabled: true
-  retention_days: 90
-  no_data_timeout_seconds: 300
-  eod_close_time: "16:00"

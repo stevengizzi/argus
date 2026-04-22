@@ -436,81 +436,8 @@ class TestOrderManagerExitConfig:
 
 
 # ---------------------------------------------------------------------------
-# 6. AMD-10: Deprecated config warning
+# Section removed by FIX-16 (audit 2026-04-21, DEF-109): AMD-10 deprecation
+# warning for enable_trailing_stop / trailing_stop_atr_multiplier is gone —
+# those fields were removed from OrderManagerConfig entirely. Trailing stops
+# now live in config/exit_management.yaml via ExitManagementConfig (Sprint 28.5).
 # ---------------------------------------------------------------------------
-
-
-class TestDeprecatedConfigWarning:
-    """AMD-10: Legacy trailing stop fields trigger a deprecation warning."""
-
-    def test_warning_logged_when_enable_trailing_stop_true(
-        self, caplog: pytest.LogCaptureFixture
-    ) -> None:
-        """enable_trailing_stop=true in order_manager.yaml triggers warning."""
-        fake_om_yaml: dict[str, object] = {
-            "eod_flatten_time": "15:50",
-            "eod_flatten_timezone": "America/New_York",
-            "fallback_poll_interval_seconds": 5,
-            "enable_stop_to_breakeven": True,
-            "breakeven_buffer_pct": 0.001,
-            "enable_trailing_stop": True,
-            "trailing_stop_atr_multiplier": 2.0,
-            "max_position_duration_minutes": 120,
-            "entry_timeout_seconds": 30,
-            "t1_position_pct": 0.5,
-            "stop_retry_max": 1,
-            "stop_cancel_retry_max": 3,
-        }
-
-        # Replicate the AMD-10 check from main.py
-        with caplog.at_level(logging.WARNING):
-            if fake_om_yaml.get("enable_trailing_stop") is True or (
-                fake_om_yaml.get("trailing_stop_atr_multiplier", 2.0) != 2.0
-            ):
-                logging.getLogger("argus.main").warning(
-                    "Legacy trailing stop config detected (enable_trailing_stop / "
-                    "trailing_stop_atr_multiplier). These fields are deprecated — use "
-                    "config/exit_management.yaml instead. Legacy fields are ignored."
-                )
-
-        assert any("Legacy trailing stop config detected" in r.message for r in caplog.records)
-
-    def test_no_warning_when_legacy_fields_at_defaults(
-        self, caplog: pytest.LogCaptureFixture
-    ) -> None:
-        """Default values should NOT trigger warning."""
-        fake_om_yaml: dict[str, object] = {
-            "enable_trailing_stop": False,
-            "trailing_stop_atr_multiplier": 2.0,
-        }
-
-        with caplog.at_level(logging.WARNING):
-            if fake_om_yaml.get("enable_trailing_stop") is True or (
-                fake_om_yaml.get("trailing_stop_atr_multiplier", 2.0) != 2.0
-            ):
-                logging.getLogger("argus.main").warning(
-                    "Legacy trailing stop config detected"
-                )
-
-        assert not any("Legacy trailing stop" in r.message for r in caplog.records)
-
-    def test_warning_when_atr_multiplier_differs(
-        self, caplog: pytest.LogCaptureFixture
-    ) -> None:
-        """Non-default atr_multiplier also triggers warning."""
-        fake_om_yaml: dict[str, object] = {
-            "enable_trailing_stop": False,
-            "trailing_stop_atr_multiplier": 3.0,
-        }
-
-        with caplog.at_level(logging.WARNING):
-            if fake_om_yaml.get("enable_trailing_stop") is True or (
-                fake_om_yaml.get("trailing_stop_atr_multiplier", 2.0) != 2.0
-            ):
-                logging.getLogger("argus.main").warning(
-                    "Legacy trailing stop config detected (enable_trailing_stop / "
-                    "trailing_stop_atr_multiplier). These fields are deprecated — use "
-                    "config/exit_management.yaml instead. Legacy fields are ignored."
-                )
-
-        assert any("Legacy trailing stop config detected" in r.message for r in caplog.records)

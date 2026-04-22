@@ -12,9 +12,9 @@ fallback_poll_interval_seconds: 5
 enable_stop_to_breakeven: true
 breakeven_buffer_pct: 0.001  # 0.1% above entry
 
-# Trailing stop (disabled for V1)
-enable_trailing_stop: false
-trailing_stop_atr_multiplier: 2.0
+# Trailing stops configured in config/exit_management.yaml (Sprint 28.5).
+# Legacy fields `enable_trailing_stop` / `trailing_stop_atr_multiplier`
+# removed by FIX-16 (audit 2026-04-21, DEF-109).
 
 # Time stop - close position if open too long
 max_position_duration_minutes: 120

@@ -223,8 +223,8 @@ class TestBuildPatternFromConfig:
         assert param_map["flag_max_bars"] == 30
 
     def test_explicit_pattern_name_overrides_inference(self) -> None:
-        # ABCDConfig has pattern_class="ABCDPattern" — passing an explicit name
-        # should still work and win over the config field.
+        # Explicit pattern_name arg wins over class-name inference. ABCDConfig
+        # → ABCDPattern via inference; explicit "abcd" snake_case alias also works.
         config = _abcd_config()
         pattern = build_pattern_from_config(config, pattern_name="abcd")
         assert isinstance(pattern, ABCDPattern)
@@ -234,10 +234,19 @@ class TestBuildPatternFromConfig:
         with pytest.raises(ValueError, match="Unknown pattern"):
             build_pattern_from_config(config, pattern_name="phantom_pattern")
 
-    def test_abcd_config_uses_pattern_class_field(self) -> None:
-        """ABCDConfig.pattern_class drives resolution without an explicit arg."""
+    def test_abcd_config_resolves_via_class_name_inference(self) -> None:
+        """ABCDConfig → ABCDPattern via class-name inference (no pattern_class field).
+
+        FIX-16 (audit 2026-04-21, H2-S08) removed the pattern_class field
+        from ABCDConfig — it was the only config that had it, and an operator
+        adding ``pattern_class:`` to any other pattern YAML would see it
+        silently dropped. Class-name inference (``ABCDConfig`` →
+        ``ABCDPattern``) now applies uniformly across all 10 patterns.
+        """
         config = _abcd_config()
-        assert config.pattern_class == "ABCDPattern"
+        assert not hasattr(config, "pattern_class"), (
+            "ABCDConfig.pattern_class should have been removed by FIX-16"
+        )
         pattern = build_pattern_from_config(config)
         assert isinstance(pattern, ABCDPattern)
 

@@ -158,9 +158,9 @@ universe_manager:
   trust_cache_on_startup: true  # Load cache immediately; refresh stale in background (DEC-362)
 
 # VIX Regime Intelligence (Sprint 27.9)
-# VIX landscape dimension of regime intelligence. Detailed params in vix_regime.yaml.
-vix_regime:
-  enabled: true
+# Authoritative config is config/vix_regime.yaml (standalone overlay via
+# DEC-384 / FIX-16 audit 2026-04-21). Do NOT re-add a `vix_regime:` block
+# here; it would diverge from the standalone file.
 
 # Counterfactual Engine (Sprint 27.7)
 # Shadow-tracks rejected signals to measure filter accuracy.
@@ -195,9 +195,6 @@ observatory:
 
 
 # Historical Query Service (Sprint 31A.5 — DuckDB Parquet layer)
-# Read-only SQL access over the Databento Parquet cache.
-historical_query:
-  enabled: true
-  cache_dir: "data/databento_cache"
-  max_memory_mb: 2048
-  default_threads: 4
+# Authoritative config is config/historical_query.yaml (standalone overlay
+# via DEC-384 / FIX-16 audit 2026-04-21). Do NOT re-add a `historical_query:`
+# block here; it would diverge from the standalone file.

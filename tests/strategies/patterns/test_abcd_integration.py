@@ -100,7 +100,11 @@ class TestABCDConfigYAML:
 
         config = load_abcd_config(yaml_path)
         assert config.strategy_id == "strat_abcd"
-        assert config.pattern_class == "ABCDPattern"
+        # `pattern_class` field removed by FIX-16 (audit 2026-04-21, H2-S08).
+        # Pattern resolution now flows through factory class-name inference
+        # for all 10 patterns. ABCDConfig → ABCDPattern via the factory.
+        from argus.strategies.patterns.factory import _resolve_pattern_name
+        assert _resolve_pattern_name(config, None) == "ABCDPattern"
         assert config.operating_window.earliest_entry == "10:00"
         assert config.operating_window.latest_entry == "15:00"
         assert config.target_1_r == 1.0
@@ -300,7 +304,10 @@ class TestABCDConfigModel:
     def test_default_values(self) -> None:
         """ABCDConfig has correct defaults."""
         config = _make_abcd_config()
-        assert config.pattern_class == "ABCDPattern"
+        # `pattern_class` removed by FIX-16 (H2-S08); class-name inference
+        # in factory yields ABCDPattern uniformly.
+        from argus.strategies.patterns.factory import _resolve_pattern_name
+        assert _resolve_pattern_name(config, None) == "ABCDPattern"
         assert config.target_1_r == 1.0
         assert config.target_2_r == 2.0
         assert config.time_stop_minutes == 60

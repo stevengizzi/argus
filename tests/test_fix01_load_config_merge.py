@@ -31,6 +31,9 @@ _BASE_SYSTEM_YAML = {
     "data_dir": "data",
     "data_source": "alpaca",
     "broker_source": "simulated",
+    # api.enabled: false avoids tripping the H2-H10 password_hash validator
+    # added in FIX-16 (audit 2026-04-21).
+    "api": {"enabled": False},
     "quality_engine": {
         "enabled": True,
         "weights": {

@@ -308,13 +308,42 @@ class ApiConfig(BaseModel):
     enabled: bool = True
     host: str = "0.0.0.0"
     port: int = Field(default=8000, ge=1, le=65535)
-    password_hash: str = ""  # bcrypt hash — use setup_password CLI to generate
+    # Empty default is a sentinel for "not yet configured". Runtime boot
+    # calls ``validate_password_hash_set()`` and fails loudly if
+    # ``enabled=True`` and the hash is still empty — without that check an
+    # operator booting system.yaml (Alpaca incubator) would get a silently
+    # broken JWT login path (H2-H10 audit 2026-04-21). The check lives at
+    # runtime (not as a ``model_validator``) so that ``ApiConfig()`` stays
+    # usable in test contexts where the API is not exercised.
+    # Generate a real hash via ``python -m argus.api.setup_password``.
+    password_hash: str = ""
     jwt_secret_env: str = "ARGUS_JWT_SECRET"  # env var name for JWT signing key
     jwt_expiry_hours: int = Field(default=24, ge=1)
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173"])
     ws_heartbeat_interval_seconds: int = Field(default=30, ge=5)
     ws_tick_throttle_ms: int = Field(default=1000, ge=100)
     static_dir: str = ""  # path to built React app; empty = don't serve static
+
+    def validate_password_hash_set(self) -> None:
+        """Fail loudly if the API is enabled with no password hash (H2-H10).
+
+        Called by ``load_config()`` at boot time. Not a Pydantic
+        ``model_validator`` — tests routinely construct ``ApiConfig()`` /
+        ``SystemConfig()`` with defaults and are not exercising the JWT
+        path, so tripping the check there would force every test to thread
+        a dummy hash.
+
+        Raises:
+            ValueError: If ``enabled=True`` and ``password_hash`` is empty.
+        """
+        if self.enabled and not self.password_hash:
+            raise ValueError(
+                "api.password_hash is empty but api.enabled is true. "
+                "Generate a bcrypt hash with "
+                "`python -m argus.api.setup_password` and set "
+                "api.password_hash in your system YAML, or set "
+                "api.enabled: false to disable the Command Center API."
+            )
 
 
 class GoalsConfig(BaseModel):
@@ -743,6 +772,15 @@ class BacktestSummaryConfig(BaseModel):
 
     Tracks the validation status and key metrics from parameter sweeps
     and walk-forward analysis.
+
+    Documentary fields (``data_source``, ``universe_size``, ``universe_note``,
+    ``avg_win_rate``, ``avg_profit_factor``, ``data_range``,
+    ``prior_baseline``) added by FIX-16 (audit 2026-04-21, H2-S03): all 15
+    strategy YAMLs already carried these in the ``backtest_summary`` block,
+    but the model only modelled the original 6 fields, so the rest were
+    silently dropped at load time. The frontend currently consumes only the
+    base 6, but the documentary fields belong on the strategy spec sheet
+    and now survive the load.
     """
 
     status: str = "not_validated"
@@ -751,6 +789,18 @@ class BacktestSummaryConfig(BaseModel):
     total_trades: int | None = None
     data_months: int | None = None
     last_run: str | None = None
+    # Documentary fields preserved from strategy YAML for spec-sheet display
+    # (FIX-16, audit 2026-04-21, H2-S03). ``prior_baseline`` is a free-form
+    # dict (e.g. ``{source, oos_sharpe, wfe_pnl, total_trades}``) — modelled
+    # as ``dict[str, Any]`` rather than a sub-Pydantic model so that schema
+    # drift in old strategy YAMLs does not cause load failure.
+    data_source: str | None = None
+    universe_size: int | None = None
+    universe_note: str | None = None
+    data_range: str | None = None
+    avg_win_rate: float | None = None
+    avg_profit_factor: float | None = None
+    prior_baseline: dict[str, Any] | None = None
 
 
 class StrategyMode(StrEnum):
@@ -810,15 +860,14 @@ class DataServiceConfig(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Scanner Config (Sprint 3)
+# Scanner Config — ScannerConfig + load_scanner_config removed by FIX-16
+# (audit 2026-04-21, H2-S06). The shim only modelled scanner_type +
+# static_symbols; the 3 nested provider blocks in config/scanner.yaml
+# (fmp_scanner, alpaca_scanner, databento_scanner) were silently dropped.
+# Production code in argus/main.py reads scanner.yaml directly and builds
+# provider-specific configs (FMPScannerConfig, DatabentoScannerConfig,
+# AlpacaScannerConfig) from each block.
 # ---------------------------------------------------------------------------
-
-
-class ScannerConfig(BaseModel):
-    """Configuration for the Scanner."""
-
-    scanner_type: str = "static"  # "static" or "alpaca"
-    static_symbols: list[str] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -838,8 +887,9 @@ class OrderManagerConfig(BaseModel):
     fallback_poll_interval_seconds: int = Field(default=5, ge=1)
     enable_stop_to_breakeven: bool = True
     breakeven_buffer_pct: float = Field(default=0.001, ge=0, le=0.1)  # 0.1%
-    enable_trailing_stop: bool = False  # V1: disabled by default
-    trailing_stop_atr_multiplier: float = Field(default=2.0, gt=0)
+    # Trailing stop config moved to exit_management.yaml / ExitManagementConfig
+    # in Sprint 28.5. Legacy V1 fields (enable_trailing_stop,
+    # trailing_stop_atr_multiplier) removed by FIX-16 (audit 2026-04-21, DEF-109).
     max_position_duration_minutes: int = Field(default=120, ge=1)  # Hard time stop
     entry_timeout_seconds: int = Field(default=30, ge=1)
     t1_position_pct: float = Field(default=0.5, gt=0, le=1.0)  # 50% at T1
@@ -1212,8 +1262,11 @@ class ABCDConfig(StrategyConfig):
     Operates 10:00 AM - 3:00 PM ET.
     """
 
-    # Pattern class identifier for registry lookup
-    pattern_class: str = Field(default="ABCDPattern")
+    # ``pattern_class`` field removed by FIX-16 (audit 2026-04-21, H2-S08):
+    # only ABCDConfig had it, so an operator adding ``pattern_class:`` to any
+    # other pattern YAML would see it silently dropped. Pattern resolution
+    # now flows uniformly through factory class-name inference for all 10
+    # patterns (``ABCDConfig`` → ``ABCDPattern``).
 
     # Swing detection parameters
     swing_lookback: int = Field(default=5, ge=2, le=20)
@@ -1360,6 +1413,18 @@ def load_yaml_file(path: Path) -> dict[str, Any]:
 _STANDALONE_SYSTEM_OVERLAYS: tuple[tuple[str, str], ...] = (
     ("quality_engine", "quality_engine.yaml"),
     ("overflow", "overflow.yaml"),
+    # FIX-16 (audit 2026-04-21) — wired the four previously-dead YAMLs that
+    # operators were editing under the assumption they took effect:
+    #   H2-H13 / H2-DEAD01 → learning_loop.yaml
+    #   H2-H15 / H2-DEAD02 → regime.yaml
+    #   H2-DEAD06          → vix_regime.yaml
+    #   H2-D06             → historical_query.yaml (operator-owned cache_dir)
+    # Each file already had bare-field shape (no top-level wrapper), matching
+    # the DEC-384 / FIX-02 convention.
+    ("learning_loop", "learning_loop.yaml"),
+    ("regime_intelligence", "regime.yaml"),
+    ("vix_regime", "vix_regime.yaml"),
+    ("historical_query", "historical_query.yaml"),
 )
 
 
@@ -1452,7 +1517,14 @@ def load_config(config_dir: Path, system_config_file: Path | None = None) -> Arg
             )
         raw["system"] = system_block
 
-    return ArgusConfig(**raw)
+    argus_config = ArgusConfig(**raw)
+
+    # H2-H10 (audit 2026-04-21): fail loudly on empty password_hash when
+    # api.enabled is true. Runs only on real load_config() — bare
+    # ApiConfig() / SystemConfig() in tests remains unaffected.
+    argus_config.system.api.validate_password_hash_set()
+
+    return argus_config
 
 
 def load_strategy_config(path: Path) -> StrategyConfig:
@@ -1798,23 +1870,6 @@ def load_narrow_range_breakout_config(path: Path) -> NarrowRangeBreakoutConfig:
     """
     data = load_yaml_file(path)
     return NarrowRangeBreakoutConfig(**data)
-
-
-def load_scanner_config(path: Path) -> ScannerConfig:
-    """Load scanner configuration from a YAML file.
-
-    Args:
-        path: Path to the scanner YAML file.
-
-    Returns:
-        Validated ScannerConfig instance.
-
-    Raises:
-        FileNotFoundError: If the file does not exist.
-        pydantic.ValidationError: If validation fails.
-    """
-    data = load_yaml_file(path)
-    return ScannerConfig(**data)
 
 
 def load_data_service_config(path: Path) -> DataServiceConfig:

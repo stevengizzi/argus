@@ -331,7 +331,7 @@ Track items that are intentionally postponed. Each item has a trigger condition.
 | DEF-106 | `models.py from_dict()` has ~8 assert statements | Unscheduled | Replace with `if/raise` guards. Priority: LOW. |
 | DEF-107 | Unused `raiseRec` destructured variable in LearningInsightsPanel.tsx L388 | Unscheduled | Harmless, cosmetic. Priority: LOW. |
 | DEF-108 | R2G `_build_signal` sync limitation (atr_value=None) | Unscheduled | R2G currently uses percent fallback. Priority: LOW. |
-| DEF-109 | V1 trailing-stop config dead code on OrderManagerConfig | Unscheduled | Legacy fields no longer referenced. Priority: LOW. |
+| ~~DEF-109~~ | ~~V1 trailing-stop config dead code on OrderManagerConfig~~ | — | **RESOLVED** (audit 2026-04-21 FIX-16-config-consistency): `enable_trailing_stop` and `trailing_stop_atr_multiplier` removed from `OrderManagerConfig`; AMD-10 deprecation warning removed from `main.py`; legacy fields removed from `config/order_manager.yaml`; `TestDeprecatedConfigWarning` test class removed. Trailing stops live entirely in `config/exit_management.yaml` via `ExitManagementConfig` (Sprint 28.5). |
 | DEF-110 | Exit reason misattribution on escalation-failure + trail-active | Unscheduled | Cosmetic — position closes correctly. Priority: LOW. |
 | ~~DEF-111~~ | ~~Trail stops not firing in live session~~ | — | **RESOLVED** (Sprint 28.75 S1): config timing, not code. |
 | ~~DEF-112~~ | ~~Flatten-pending orders hang indefinitely~~ | — | **RESOLVED** (Sprint 28.75 S1): flatten_pending_timeout + max_flatten_retries. |

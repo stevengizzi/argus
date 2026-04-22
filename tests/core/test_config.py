@@ -18,7 +18,6 @@ from argus.core.config import (
     OrbBreakoutConfig,
     OrbScalpConfig,
     OrchestratorConfig,
-    ScannerConfig,
     StrategyConfig,
     OrderManagerConfig,
     StartupConfig,
@@ -30,7 +29,6 @@ from argus.core.config import (
     load_config,
     load_orb_config,
     load_orb_scalp_config,
-    load_scanner_config,
     load_strategy_config,
     load_vwap_reclaim_config,
     load_yaml_file,
@@ -105,7 +103,11 @@ class TestArgusConfig:
 
     def test_missing_optional_files_use_defaults(self, tmp_path: Path) -> None:
         """Missing YAML files result in default values, not errors."""
-        # Empty directory — all configs use defaults
+        # Minimal system.yaml with api.enabled: false so the H2-H10
+        # validator (FIX-16, audit 2026-04-21) does not trip — default
+        # ApiConfig has enabled=True + empty password_hash, which is the
+        # sentinel rejected at load time in production.
+        (tmp_path / "system.yaml").write_text("api:\n  enabled: false\n")
         config = load_config(tmp_path)
         assert config.system.timezone == "America/New_York"
         assert config.risk.account.daily_loss_limit_pct == 0.03
@@ -175,25 +177,12 @@ class TestDataServiceConfig:
             DataServiceConfig(stale_data_timeout_seconds=0)
 
 
-class TestScannerConfig:
-    """Tests for Scanner configuration."""
-
-    def test_defaults_are_valid(self) -> None:
-        """ScannerConfig can be created with all defaults."""
-        config = ScannerConfig()
-        assert config.scanner_type == "static"
-        assert config.static_symbols == []
-
-    def test_loads_from_yaml(self) -> None:
-        """Scanner config loads from scanner.yaml."""
-        config = load_scanner_config(Path("config/scanner.yaml"))
-        assert config.scanner_type == "fmp"  # Sprint 21.7: FMP scanner for production
-        assert "AAPL" in config.static_symbols
-
-    def test_custom_symbols(self) -> None:
-        """Custom symbol list can be specified."""
-        config = ScannerConfig(static_symbols=["SPY", "QQQ"])
-        assert config.static_symbols == ["SPY", "QQQ"]
+# TestScannerConfig removed by FIX-16 (audit 2026-04-21, H2-S06): the
+# ScannerConfig Pydantic class only modelled scanner_type + static_symbols;
+# the 3 nested provider blocks in config/scanner.yaml (fmp_scanner,
+# alpaca_scanner, databento_scanner) were silently dropped. Production code
+# reads scanner.yaml directly in argus/main.py — each provider block feeds
+# into its own dedicated config class.
 
 
 class TestOrbBreakoutConfig:
@@ -725,6 +714,9 @@ class TestSystemConfigUniverseManager:
         # Note: system.yaml content goes directly into the file without "system:" wrapper
         yaml_content = """
 timezone: America/New_York
+# api.enabled: false avoids tripping the H2-H10 password_hash validator
+api:
+  enabled: false
 universe_manager:
   enabled: true
   min_price: 10.0
@@ -946,11 +938,14 @@ class TestUniverseManagerSystemYamlIntegration:
     def test_system_yaml_missing_universe_manager(self, tmp_path: Path) -> None:
         """Missing universe_manager section in YAML → defaults apply."""
         # Create minimal system.yaml without universe_manager section
+        # (api.enabled: false avoids tripping the H2-H10 password_hash validator)
         yaml_content = """
 timezone: America/New_York
 market_open: "09:30"
 market_close: "16:00"
 log_level: INFO
+api:
+  enabled: false
 """
         (tmp_path / "system.yaml").write_text(yaml_content)
 
@@ -1237,3 +1232,131 @@ class TestStartupConfigAlignment:
         model_fields = set(StartupConfig.model_fields.keys())
         unrecognized = yaml_keys - model_fields
         assert unrecognized == set(), f"Unrecognized keys: {unrecognized}"
+
+
+# ---------------------------------------------------------------------------
+# H2-S01 (audit 2026-04-21): benchmarks.min_sharpe YAML key was silently
+# dropped (Pydantic field is min_sharpe_ratio). Guard that the configured
+# 0.3 value reaches PerformanceBenchmarks for every strategy YAML.
+# ---------------------------------------------------------------------------
+
+
+class TestStrategyBenchmarkMinSharpeRatioWires:
+    """Every strategy YAML's benchmarks.min_sharpe_ratio reaches the Pydantic model."""
+
+    @pytest.mark.parametrize(
+        "yaml_name",
+        sorted(
+            p.name for p in Path("config/strategies").glob("*.yaml")
+        ),
+    )
+    def test_min_sharpe_ratio_loads_nonzero(self, yaml_name: str) -> None:
+        """YAML value must flow to PerformanceBenchmarks.min_sharpe_ratio.
+
+        Prior bug (H2-S01, audit 2026-04-21): 12 of 15 strategy YAMLs spelled
+        the field as ``min_sharpe`` — silently dropped by Pydantic, leaving
+        the benchmark gate at the default 0.0. Renaming to ``min_sharpe_ratio``
+        in FIX-16 restores the configured threshold.
+        """
+        from argus.core.config import load_strategy_config
+
+        path = Path("config/strategies") / yaml_name
+        raw = yaml.safe_load(path.read_text())
+        yaml_value = (raw.get("benchmarks") or {}).get("min_sharpe_ratio")
+
+        # Only run the guard on strategies that declare the field in YAML.
+        # (Not all YAMLs must carry it — defaults remain valid.)
+        if yaml_value is None:
+            pytest.skip(f"{yaml_name} does not declare benchmarks.min_sharpe_ratio")
+
+        config = load_strategy_config(path)
+        assert config.benchmarks.min_sharpe_ratio == yaml_value, (
+            f"{yaml_name}: benchmarks.min_sharpe_ratio in YAML "
+            f"({yaml_value}) does not match loaded value "
+            f"({config.benchmarks.min_sharpe_ratio}) — H2-S01 regression"
+        )
+        # Guard that nobody regresses back to the pre-fix spelling.
+        assert "min_sharpe" not in raw.get("benchmarks", {}) or (
+            "min_sharpe_ratio" in raw.get("benchmarks", {})
+        ), f"{yaml_name} uses deprecated 'min_sharpe' spelling"
+
+    def test_no_yaml_uses_deprecated_min_sharpe_key(self) -> None:
+        """Regression guard: no strategy YAML may use the pre-fix 'min_sharpe' spelling."""
+        offenders: list[str] = []
+        for path in Path("config/strategies").glob("*.yaml"):
+            raw = yaml.safe_load(path.read_text())
+            benchmarks = raw.get("benchmarks") or {}
+            if "min_sharpe" in benchmarks and "min_sharpe_ratio" not in benchmarks:
+                offenders.append(path.name)
+        assert not offenders, (
+            f"Strategy YAMLs using deprecated 'min_sharpe' (should be "
+            f"'min_sharpe_ratio'): {offenders}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# H2-H10 (audit 2026-04-21): ApiConfig.password_hash empty-sentinel behavior.
+# Empty hash + enabled=true would silently break JWT login. load_config()
+# now fails loudly via ApiConfig.validate_password_hash_set().
+# ---------------------------------------------------------------------------
+
+
+class TestApiPasswordHashLoadTimeCheck:
+    """FIX-16 H2-H10: load_config rejects empty password_hash when API enabled."""
+
+    def test_validate_password_hash_set_raises_when_enabled_and_empty(self) -> None:
+        """Direct unit test on the runtime validator."""
+        from argus.core.config import ApiConfig
+
+        cfg = ApiConfig(enabled=True, password_hash="")
+        with pytest.raises(ValueError, match="api.password_hash is empty"):
+            cfg.validate_password_hash_set()
+
+    def test_validate_password_hash_set_passes_when_hash_present(self) -> None:
+        """Non-empty hash: no error."""
+        from argus.core.config import ApiConfig
+
+        cfg = ApiConfig(enabled=True, password_hash="$2b$12$somehashvalue")
+        # Does not raise
+        cfg.validate_password_hash_set()
+
+    def test_validate_password_hash_set_passes_when_api_disabled(self) -> None:
+        """If API is disabled, empty hash is OK."""
+        from argus.core.config import ApiConfig
+
+        cfg = ApiConfig(enabled=False, password_hash="")
+        # Does not raise
+        cfg.validate_password_hash_set()
+
+    def test_load_config_fails_on_empty_password_hash(
+        self, tmp_path: Path
+    ) -> None:
+        """Writing a minimal system.yaml with empty hash + enabled=true → load fails."""
+        system_yaml = tmp_path / "system.yaml"
+        system_yaml.write_text(
+            'api:\n'
+            '  enabled: true\n'
+            '  password_hash: ""\n'
+        )
+        with pytest.raises(ValueError, match="api.password_hash is empty"):
+            load_config(tmp_path)
+
+    def test_load_config_passes_on_api_disabled(self, tmp_path: Path) -> None:
+        """Empty hash + enabled=false → load succeeds."""
+        system_yaml = tmp_path / "system.yaml"
+        system_yaml.write_text(
+            'api:\n'
+            '  enabled: false\n'
+            '  password_hash: ""\n'
+        )
+        config = load_config(tmp_path)
+        assert config.system.api.enabled is False
+        assert config.system.api.password_hash == ""
+
+    def test_ApiConfig_can_still_be_constructed_with_defaults(self) -> None:
+        """Bare ApiConfig() must remain usable in tests (no validator at construct)."""
+        from argus.core.config import ApiConfig
+
+        cfg = ApiConfig()
+        assert cfg.enabled is True
+        assert cfg.password_hash == ""

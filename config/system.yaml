@@ -55,7 +55,10 @@ api:
   enabled: true
   host: "0.0.0.0"
   port: 8000
-  password_hash: ""  # Run: python -m argus.api.setup_password
+  # Dev bcrypt hash — password "argus". For production, regenerate via
+  # `python -m argus.api.setup_password`. Empty hash with api.enabled=true
+  # is rejected at load_config() (H2-H10 audit 2026-04-21).
+  password_hash: "$2b$12$Qs2VsacIbZZhDwtA50vQ8eqnJtihmK8AOisBqpwPRPxXMH2MiCsdC"
   jwt_secret_env: "ARGUS_JWT_SECRET"
   jwt_expiry_hours: 24
   cors_origins:
@@ -158,9 +161,9 @@ quality_engine:
   min_grade_to_trade: "C+"
 
 # VIX Regime Intelligence (Sprint 27.9)
-# VIX landscape dimension of regime intelligence. Detailed params in vix_regime.yaml.
-vix_regime:
-  enabled: true
+# Authoritative config is config/vix_regime.yaml (standalone overlay via
+# DEC-384 / FIX-16 audit 2026-04-21). Do NOT re-add a `vix_regime:` block
+# here; it would diverge from the standalone file.
 
 # Counterfactual Engine (Sprint 27.7)
 # Shadow-tracks rejected signals to measure filter accuracy.
@@ -186,9 +189,6 @@ observatory:
 
 
 # Historical Query Service (Sprint 31A.5 — DuckDB Parquet layer)
-# Read-only SQL access over the Databento Parquet cache.
-historical_query:
-  enabled: true
-  cache_dir: "data/databento_cache"
-  max_memory_mb: 2048
-  default_threads: 4
+# Authoritative config is config/historical_query.yaml (standalone overlay
+# via DEC-384 / FIX-16 audit 2026-04-21). Do NOT re-add a `historical_query:`
+# block here; it would diverge from the standalone file.

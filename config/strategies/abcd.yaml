@@ -29,7 +29,7 @@ risk_limits:
 benchmarks:
   min_win_rate: 0.45
   min_profit_factor: 1.1
-  min_sharpe: 0.3
+  min_sharpe_ratio: 0.3
   max_drawdown_pct: 0.12
 backtest_summary:
   status: "pending"

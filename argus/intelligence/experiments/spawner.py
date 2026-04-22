@@ -153,6 +153,18 @@ class VariantSpawner:
                     )
                     break
 
+                # H2-S04 (audit 2026-04-21): variants list-element shape.
+                # Each entry must be a dict with at least a variant_id; list
+                # or scalar entries indicate operator YAML drift.
+                if not isinstance(variant_def, dict):
+                    logger.error(
+                        "VariantSpawner: variant entry for pattern '%s' must be "
+                        "a dict (got %s) — skipping",
+                        pattern_name,
+                        type(variant_def).__name__,
+                    )
+                    continue
+
                 variant_id: str = variant_def.get("variant_id", "")
                 variant_mode: str = variant_def.get("mode", "shadow")
                 variant_params: dict[str, Any] = variant_def.get("params") or {}
@@ -175,15 +187,17 @@ class VariantSpawner:
                     )
                     continue
 
-                # Apply and validate detection param overrides
+                # Apply and validate detection param overrides.
+                # ValueError: unknown key typo (H2-S02 audit 2026-04-21).
+                # ValidationError: value out of range / wrong type.
                 try:
                     params_config = self._apply_variant_params(
                         base_config, variant_params
                     )
-                except ValidationError as exc:
-                    logger.warning(
+                except (ValueError, ValidationError) as exc:
+                    logger.error(
                         "VariantSpawner: invalid params for variant '%s' "
-                        "(pattern='%s') — skipping. Validation error: %s",
+                        "(pattern='%s') — skipping. Error: %s",
                         variant_id,
                         pattern_name,
                         exc,
@@ -320,6 +334,14 @@ class VariantSpawner:
         Validates the resulting config via Pydantic model_validate to catch
         invalid parameter values early.
 
+        Also validates that every ``variant_params`` key is a known field on
+        the strategy config class. Strategy configs do not use
+        ``extra="forbid"`` (existing YAMLs carry documentary fields that
+        Pydantic would reject), so an unknown variant key would otherwise be
+        silently dropped by ``model_dump()`` + ``model_validate()`` and the
+        variant would collapse onto base defaults without warning. This
+        explicit key check is the H2-S02 fix (audit 2026-04-21).
+
         Args:
             base_config: The base strategy Pydantic config to copy from.
             variant_params: Dict of detection parameter overrides.
@@ -328,8 +350,18 @@ class VariantSpawner:
             New StrategyConfig instance with variant params applied.
 
         Raises:
+            ValueError: If any key in ``variant_params`` is not a known field
+                on the strategy config class.
             ValidationError: If any variant param fails Pydantic validation.
         """
+        base_fields = set(type(base_config).model_fields.keys())
+        unknown_keys = sorted(k for k in variant_params if k not in base_fields)
+        if unknown_keys:
+            raise ValueError(
+                f"Unknown variant param keys {unknown_keys} for "
+                f"{type(base_config).__name__}. Valid keys: "
+                f"{sorted(base_fields)}"
+            )
         base_dict = base_config.model_dump()
         base_dict.update(variant_params)
         return type(base_config).model_validate(base_dict)
