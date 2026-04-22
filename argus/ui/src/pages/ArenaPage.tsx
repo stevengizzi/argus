@@ -20,6 +20,10 @@ import { ArenaCard } from '../features/arena';
 import { useArenaWebSocket } from '../features/arena/useArenaWebSocket';
 import { useArenaData, sortPositions, filterPositions } from '../hooks/useArenaData';
 import type { ArenaSortMode } from '../features/arena/ArenaControls';
+import {
+  ARENA_PRIORITY_RECOMPUTE_MS,
+  ARENA_PRIORITY_SPAN_THRESHOLD,
+} from '../constants/arena';
 
 export type { ArenaSortMode };
 
@@ -96,14 +100,14 @@ export function ArenaPage() {
         const currentPrice = overlay?.current_price ?? latestClose;
         const t1Price = pos.target_prices[0] ?? 0;
         const score = computePriorityScore(currentPrice, pos.entry_price, pos.stop_price, t1Price);
-        next[key] = score > 0.7 ? 2 : 1;
+        next[key] = score > ARENA_PRIORITY_SPAN_THRESHOLD ? 2 : 1;
       });
 
       setPrioritySpans(next);
     }
 
     recomputeSpans();
-    const intervalId = setInterval(recomputeSpans, 2000);
+    const intervalId = setInterval(recomputeSpans, ARENA_PRIORITY_RECOMPUTE_MS);
     return () => clearInterval(intervalId);
   }, []); // Stable: reads via refs to avoid stale closure
 

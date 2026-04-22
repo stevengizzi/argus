@@ -6,10 +6,19 @@
 
 import { describe, it, expect } from 'vitest';
 import {
+  STRATEGY_DISPLAY,
+  STRATEGY_BADGE_CLASSES,
+  STRATEGY_BAR_CLASSES,
+  STRATEGY_BORDER_CLASSES,
+  STRATEGY_AMBER_BADGE_CLASS,
   getStrategyDisplay,
   getStrategyColor,
   getStrategyBorderClass,
   getStrategyBarClass,
+  getStrategyBadgeClass,
+  getStrategyLetter,
+  getStrategyShortName,
+  getStrategyName,
 } from './strategyConfig';
 
 describe('strategyConfig', () => {
@@ -107,6 +116,73 @@ describe('strategyConfig', () => {
       }
     });
 
+    it('returns correct config for Sprint 31A strategies (audit FIX-12 P1-F2-C01)', () => {
+      const microPullback = getStrategyDisplay('strat_micro_pullback');
+      expect(microPullback.name).toBe('Micro Pullback');
+      expect(microPullback.shortName).toBe('MICRO');
+      expect(microPullback.letter).toBe('M');
+      expect(microPullback.color).toBe('#818cf8');
+      expect(microPullback.tailwindColor).toBe('indigo-400');
+
+      const vwapBounce = getStrategyDisplay('strat_vwap_bounce');
+      expect(vwapBounce.name).toBe('VWAP Bounce');
+      expect(vwapBounce.shortName).toBe('VWB');
+      expect(vwapBounce.letter).toBe('B');
+      expect(vwapBounce.color).toBe('#e879f9');
+      expect(vwapBounce.tailwindColor).toBe('fuchsia-400');
+
+      const narrowRange = getStrategyDisplay('strat_narrow_range_breakout');
+      expect(narrowRange.name).toBe('Narrow Range Breakout');
+      expect(narrowRange.shortName).toBe('NRB');
+      expect(narrowRange.letter).toBe('N');
+      expect(narrowRange.color).toBe('#4ade80');
+      expect(narrowRange.tailwindColor).toBe('green-400');
+    });
+
+    it('all 15 live-universe strategies have non-grey color + unique letter', () => {
+      const liveStrategyIds = [
+        'strat_orb_breakout',
+        'strat_orb_scalp',
+        'strat_vwap_reclaim',
+        'strat_afternoon_momentum',
+        'strat_red_to_green',
+        'strat_bull_flag',
+        'strat_flat_top_breakout',
+        'strat_dip_and_rip',
+        'strat_hod_break',
+        'strat_gap_and_go',
+        'strat_abcd',
+        'strat_premarket_high_break',
+        'strat_micro_pullback',
+        'strat_vwap_bounce',
+        'strat_narrow_range_breakout',
+      ];
+      const seenLetters = new Set<string>();
+      const seenShortNames = new Set<string>();
+      for (const id of liveStrategyIds) {
+        const config = getStrategyDisplay(id);
+        expect(config.color, `${id} must not be grey`).not.toBe('#6b7280');
+        expect(seenLetters.has(config.letter), `letter ${config.letter} duplicated at ${id}`).toBe(
+          false,
+        );
+        expect(
+          seenShortNames.has(config.shortName),
+          `shortName ${config.shortName} duplicated at ${id}`,
+        ).toBe(false);
+        seenLetters.add(config.letter);
+        seenShortNames.add(config.shortName);
+      }
+      expect(seenLetters.size).toBe(15);
+      expect(seenShortNames.size).toBe(15);
+    });
+
+    it('STRATEGY_DISPLAY, border/bar/badge maps all cover the same keys (single source of truth)', () => {
+      const displayKeys = Object.keys(STRATEGY_DISPLAY).sort();
+      expect(Object.keys(STRATEGY_BORDER_CLASSES).sort()).toEqual(displayKeys);
+      expect(Object.keys(STRATEGY_BAR_CLASSES).sort()).toEqual(displayKeys);
+      expect(Object.keys(STRATEGY_BADGE_CLASSES).sort()).toEqual(displayKeys);
+    });
+
     it('returns grey fallback for unknown strategies', () => {
       const unknownConfig = getStrategyDisplay('unknown_strategy');
 
@@ -178,6 +254,52 @@ describe('strategyConfig', () => {
 
     it('returns grey fallback for unknown strategies', () => {
       expect(getStrategyBarClass('unknown')).toBe('bg-gray-400');
+    });
+  });
+
+  describe('getStrategyBadgeClass', () => {
+    it('returns strategy-specific badge class for known strategies', () => {
+      expect(getStrategyBadgeClass('strat_orb_breakout')).toBe('text-blue-400 bg-blue-400/15');
+      expect(getStrategyBadgeClass('strat_micro_pullback')).toBe(
+        'text-indigo-400 bg-indigo-400/15',
+      );
+      expect(getStrategyBadgeClass('strat_vwap_bounce')).toBe(
+        'text-fuchsia-400 bg-fuchsia-400/15',
+      );
+      expect(getStrategyBadgeClass('strat_narrow_range_breakout')).toBe(
+        'text-green-400 bg-green-400/15',
+      );
+    });
+
+    it('returns amber-safe class when onAmber is true', () => {
+      expect(getStrategyBadgeClass('strat_orb_breakout', true)).toBe(STRATEGY_AMBER_BADGE_CLASS);
+      // Even unknown strategies get the amber-safe class
+      expect(getStrategyBadgeClass('unknown_xyz', true)).toBe(STRATEGY_AMBER_BADGE_CLASS);
+    });
+
+    it('returns fallback class for unknown strategies (not onAmber)', () => {
+      expect(getStrategyBadgeClass('unknown_xyz')).toBe('text-argus-text-dim bg-argus-surface-2');
+    });
+  });
+
+  describe('helper accessors', () => {
+    it('getStrategyLetter returns the configured letter', () => {
+      expect(getStrategyLetter('strat_orb_breakout')).toBe('O');
+      expect(getStrategyLetter('strat_micro_pullback')).toBe('M');
+      expect(getStrategyLetter('strat_vwap_bounce')).toBe('B');
+      expect(getStrategyLetter('strat_narrow_range_breakout')).toBe('N');
+    });
+
+    it('getStrategyShortName returns the configured short name', () => {
+      expect(getStrategyShortName('strat_orb_breakout')).toBe('ORB');
+      expect(getStrategyShortName('strat_afternoon_momentum')).toBe('PM');
+      expect(getStrategyShortName('strat_micro_pullback')).toBe('MICRO');
+    });
+
+    it('getStrategyName returns the configured full name', () => {
+      expect(getStrategyName('strat_orb_breakout')).toBe('ORB Breakout');
+      expect(getStrategyName('strat_vwap_bounce')).toBe('VWAP Bounce');
+      expect(getStrategyName('strat_narrow_range_breakout')).toBe('Narrow Range Breakout');
     });
   });
 });

@@ -13,6 +13,7 @@ import { useNavigate } from 'react-router-dom';
 import { RegimeBadge } from '../../components/Badge';
 import { useOrchestratorStatus } from '../../hooks';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
+import { formatPercent } from '../../utils/format';
 
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat('en-US', {
@@ -21,10 +22,6 @@ function formatCurrency(value: number): string {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(value);
-}
-
-function formatPercent(value: number): string {
-  return `${(value * 100).toFixed(1)}%`;
 }
 
 export function OrchestratorStatusStrip() {

@@ -684,7 +684,7 @@ Refactor Performance page from fixed 5-tab layout to customizable widget grid us
 - **Lightweight Charts** (integrated): Equity curves, candlestick, area, histograms.
 - **Recharts** (integrated): Donut/bar charts, radar charts, simple histograms.
 - **D3** (Sprint 21d+): Treemaps, heatmaps, correlation matrices, sunbursts. Use sparingly.
-- **Three.js r128** (Sprint 25): Observatory Funnel/Radar 3D views. Code-split via React.lazy. InstancedMesh for symbol particles, CSS2DRenderer for labels. Shared-scene pattern (Funnel+Radar share one scene with camera presets).
+- **Three.js** (Sprint 25, installed as `three` npm package — current major per `package.json`): Observatory Funnel/Radar 3D views. Code-split via React.lazy. InstancedMesh for symbol particles, CSS2DRenderer for labels. Shared-scene pattern (Funnel+Radar share one scene with camera presets).
 
 ### Mobile-First Patterns
 - Detail panels → full-screen modals on mobile

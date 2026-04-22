@@ -2,7 +2,10 @@
  * Unified strategy display configuration.
  *
  * Centralizes all strategy display metadata (names, colors, Tailwind classes)
- * to avoid duplication across components.
+ * to avoid duplication across components. This module is the single source of
+ * truth for strategy identity — `components/Badge.tsx` derives its maps from
+ * the helpers exported here, and `ArenaCard.tsx` renders through the shared
+ * `<StrategyBadge>` component rather than its own inline span.
  *
  * IMPORTANT: Tailwind classes must be full static strings — dynamic class
  * construction (e.g., `border-l-${color}`) breaks Tailwind's purge.
@@ -37,7 +40,7 @@ export const STRATEGY_DISPLAY: Record<string, StrategyDisplayConfig> = {
   },
   strat_orb_scalp: {
     name: 'ORB Scalp',
-    shortName: 'Scalp',
+    shortName: 'SCALP',
     letter: 'S',
     color: '#c084fc',
     tailwindColor: 'purple-400',
@@ -123,6 +126,30 @@ export const STRATEGY_DISPLAY: Record<string, StrategyDisplayConfig> = {
     tailwindColor: 'lime-400',
     badgeId: 'strat_premarket_high_break',
   },
+  strat_micro_pullback: {
+    name: 'Micro Pullback',
+    shortName: 'MICRO',
+    letter: 'M',
+    color: '#818cf8',
+    tailwindColor: 'indigo-400',
+    badgeId: 'strat_micro_pullback',
+  },
+  strat_vwap_bounce: {
+    name: 'VWAP Bounce',
+    shortName: 'VWB',
+    letter: 'B',
+    color: '#e879f9',
+    tailwindColor: 'fuchsia-400',
+    badgeId: 'strat_vwap_bounce',
+  },
+  strat_narrow_range_breakout: {
+    name: 'Narrow Range Breakout',
+    shortName: 'NRB',
+    letter: 'N',
+    color: '#4ade80',
+    tailwindColor: 'green-400',
+    badgeId: 'strat_narrow_range_breakout',
+  },
 };
 
 /**
@@ -142,6 +169,9 @@ export const STRATEGY_BORDER_CLASSES: Record<string, string> = {
   strat_gap_and_go: 'border-l-sky-400',
   strat_abcd: 'border-l-pink-400',
   strat_premarket_high_break: 'border-l-lime-400',
+  strat_micro_pullback: 'border-l-indigo-400',
+  strat_vwap_bounce: 'border-l-fuchsia-400',
+  strat_narrow_range_breakout: 'border-l-green-400',
 };
 
 /**
@@ -161,11 +191,69 @@ export const STRATEGY_BAR_CLASSES: Record<string, string> = {
   strat_gap_and_go: 'bg-sky-400',
   strat_abcd: 'bg-pink-400',
   strat_premarket_high_break: 'bg-lime-400',
+  strat_micro_pullback: 'bg-indigo-400',
+  strat_vwap_bounce: 'bg-fuchsia-400',
+  strat_narrow_range_breakout: 'bg-green-400',
 };
 
 /**
+ * Tailwind badge (text + tinted background) classes by strategy ID.
+ * Full static strings so Tailwind's purge keeps both `text-*-400` and
+ * `bg-*-400/15` variants in the production bundle.
+ */
+export const STRATEGY_BADGE_CLASSES: Record<string, string> = {
+  strat_orb_breakout: 'text-blue-400 bg-blue-400/15',
+  strat_orb_scalp: 'text-purple-400 bg-purple-400/15',
+  strat_vwap_reclaim: 'text-teal-400 bg-teal-400/15',
+  strat_afternoon_momentum: 'text-amber-400 bg-amber-400/15',
+  strat_red_to_green: 'text-orange-400 bg-orange-400/15',
+  strat_bull_flag: 'text-cyan-400 bg-cyan-400/15',
+  strat_flat_top_breakout: 'text-violet-400 bg-violet-400/15',
+  strat_dip_and_rip: 'text-rose-400 bg-rose-400/15',
+  strat_hod_break: 'text-emerald-400 bg-emerald-400/15',
+  strat_gap_and_go: 'text-sky-400 bg-sky-400/15',
+  strat_abcd: 'text-pink-400 bg-pink-400/15',
+  strat_premarket_high_break: 'text-lime-400 bg-lime-400/15',
+  strat_micro_pullback: 'text-indigo-400 bg-indigo-400/15',
+  strat_vwap_bounce: 'text-fuchsia-400 bg-fuchsia-400/15',
+  strat_narrow_range_breakout: 'text-green-400 bg-green-400/15',
+};
+
+/** Fallback badge class for unrecognized strategies. */
+export const STRATEGY_FALLBACK_BADGE_CLASS = 'text-argus-text-dim bg-argus-surface-2';
+
+/** High-contrast badge class used when the badge sits on an amber/yellow surface. */
+export const STRATEGY_AMBER_BADGE_CLASS = 'text-white bg-slate-700';
+
+/**
+ * Legacy short-form strategy-id aliases. The Watchlist sidebar and some
+ * older telemetry paths emit bare short names (`'orb'`, `'scalp'`,
+ * `'vwap'`, `'momentum'`) rather than the canonical `strat_<full>` form.
+ * The original `Badge.tsx` hand-coded these duplicates; now they resolve
+ * through this single alias layer.
+ */
+const STRATEGY_LEGACY_ALIASES: Record<string, string> = {
+  strat_orb: 'strat_orb_breakout',
+  strat_scalp: 'strat_orb_scalp',
+  strat_vwap: 'strat_vwap_reclaim',
+  strat_momentum: 'strat_afternoon_momentum',
+};
+
+/**
+ * Normalize strategy ID to the canonical `strat_<name>` form.
+ * Lowercase, replaces hyphens, adds `strat_` prefix if missing, resolves
+ * legacy short-form aliases.
+ */
+function normalizeStrategyId(strategyId: string): string {
+  const normalized = strategyId.toLowerCase().replace(/-/g, '_');
+  const prefixed = normalized.startsWith('strat_') ? normalized : `strat_${normalized}`;
+  return STRATEGY_LEGACY_ALIASES[prefixed] ?? prefixed;
+}
+
+/**
  * Get strategy display config with fallback for unknown strategies.
- * Handles both prefixed ('strat_orb_breakout') and non-prefixed ('orb_breakout') IDs.
+ * Handles both prefixed ('strat_orb_breakout') and non-prefixed ('orb_breakout') IDs,
+ * and resolves legacy short-form aliases ('orb', 'scalp', 'vwap', 'momentum').
  */
 export function getStrategyDisplay(strategyId: string): StrategyDisplayConfig {
   // Normalize: lowercase, replace hyphens with underscores
@@ -182,6 +270,12 @@ export function getStrategyDisplay(strategyId: string): StrategyDisplayConfig {
     return STRATEGY_DISPLAY[prefixedId];
   }
 
+  // Legacy short-form aliases (e.g. 'orb' → 'strat_orb_breakout')
+  const aliasTarget = STRATEGY_LEGACY_ALIASES[prefixedId];
+  if (aliasTarget && STRATEGY_DISPLAY[aliasTarget]) {
+    return STRATEGY_DISPLAY[aliasTarget];
+  }
+
   // Grey fallback for unknown strategies: title-case the ID
   return {
     name: strategyId.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
@@ -191,14 +285,6 @@ export function getStrategyDisplay(strategyId: string): StrategyDisplayConfig {
     tailwindColor: 'gray-400',
     badgeId: strategyId,
   };
-}
-
-/**
- * Normalize strategy ID to handle both prefixed and non-prefixed formats.
- */
-function normalizeStrategyId(strategyId: string): string {
-  const normalized = strategyId.toLowerCase().replace(/-/g, '_');
-  return normalized.startsWith('strat_') ? normalized : `strat_${normalized}`;
 }
 
 /**
@@ -218,9 +304,35 @@ export function getStrategyBarClass(strategyId: string): string {
 }
 
 /**
+ * Get badge class (text + tinted background) for a strategy.
+ * When `onAmber` is true, returns a high-contrast slate class suitable for
+ * amber/yellow parent backgrounds instead of the strategy-specific tint.
+ */
+export function getStrategyBadgeClass(strategyId: string, onAmber = false): string {
+  if (onAmber) return STRATEGY_AMBER_BADGE_CLASS;
+  const normalized = normalizeStrategyId(strategyId);
+  return STRATEGY_BADGE_CLASSES[normalized] ?? STRATEGY_FALLBACK_BADGE_CLASS;
+}
+
+/**
  * Get strategy hex color with fallback.
  */
 export function getStrategyColor(strategyId: string): string {
   const normalized = normalizeStrategyId(strategyId);
   return STRATEGY_DISPLAY[normalized]?.color ?? STRATEGY_DISPLAY[strategyId]?.color ?? '#6b7280';
+}
+
+/** Get the short display label (e.g., "ORB", "PM", "VWB"). */
+export function getStrategyShortName(strategyId: string): string {
+  return getStrategyDisplay(strategyId).shortName;
+}
+
+/** Get the single-letter badge identifier (e.g., "O", "V", "M"). */
+export function getStrategyLetter(strategyId: string): string {
+  return getStrategyDisplay(strategyId).letter;
+}
+
+/** Get the full human-readable strategy name (e.g., "ORB Breakout"). */
+export function getStrategyName(strategyId: string): string {
+  return getStrategyDisplay(strategyId).name;
 }

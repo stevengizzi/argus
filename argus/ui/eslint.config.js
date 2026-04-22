@@ -19,5 +19,14 @@ export default defineConfig([
       ecmaVersion: 2020,
       globals: globals.browser,
     },
+    rules: {
+      // Flag unused imports / bindings at lint time. Prefix a name with `_`
+      // (e.g. `_unused`, function args you need to keep for signature parity)
+      // to opt out intentionally.
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+      ],
+    },
   },
 ])

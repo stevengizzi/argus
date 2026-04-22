@@ -1,19 +1,26 @@
 /**
  * Badge component with semantic variants.
  *
- * Extended variants (17-D from UX Feature Backlog):
- * - exit_reason: existing T1, T2, SL, TIME, EOD badges
- * - strategy: ORB=blue, Scalp=purple, VWAP=teal, Momentum=amber
+ * Strategy identity (colors, short labels, single letters) is derived from
+ * `utils/strategyConfig.ts` — the single source of truth. This module only
+ * owns regime / risk / throttle / base-variant styling.
+ *
+ * Variants:
+ * - base: info / success / warning / danger / neutral
+ * - strategy: colors + short labels resolved via strategyConfig
  * - regime: Bullish=green, Bearish=red, Range=yellow, HighVol=orange, Crisis=red-600
  * - risk: Normal=green, Approaching=yellow, AtLimit=red
  * - throttle: Active=green, Reduced=yellow, Suspended=red
  */
 
+import {
+  getStrategyBadgeClass,
+  getStrategyLetter,
+  getStrategyShortName,
+} from '../utils/strategyConfig';
+
 // Base variant types (original)
 type BaseVariant = 'info' | 'success' | 'warning' | 'danger' | 'neutral';
-
-// Strategy identifiers
-type StrategyId = 'orb' | 'orb_breakout' | 'scalp' | 'orb_scalp' | 'vwap' | 'vwap_reclaim' | 'momentum' | 'afternoon_momentum' | 'red_to_green' | 'bull_flag' | 'flat_top_breakout' | 'dip_and_rip' | 'hod_break' | 'gap_and_go' | 'abcd' | 'premarket_high_break';
 
 // Market regime identifiers
 type RegimeId = 'bullish' | 'bullish_trending' | 'bearish' | 'bearish_trending' | 'range' | 'range_bound' | 'high_vol' | 'crisis';
@@ -23,26 +30,6 @@ type RiskLevelId = 'normal' | 'approaching' | 'at_limit';
 
 // Throttle status identifiers
 type ThrottleId = 'active' | 'reduced' | 'suspended';
-
-// Color mapping for strategies
-const strategyColors: Record<StrategyId, string> = {
-  orb: 'text-blue-400 bg-blue-400/15',
-  orb_breakout: 'text-blue-400 bg-blue-400/15',
-  scalp: 'text-purple-400 bg-purple-400/15',
-  orb_scalp: 'text-purple-400 bg-purple-400/15',
-  vwap: 'text-teal-400 bg-teal-400/15',
-  vwap_reclaim: 'text-teal-400 bg-teal-400/15',
-  momentum: 'text-amber-400 bg-amber-400/15',
-  afternoon_momentum: 'text-amber-400 bg-amber-400/15',
-  red_to_green: 'text-orange-400 bg-orange-400/15',
-  bull_flag: 'text-cyan-400 bg-cyan-400/15',
-  flat_top_breakout: 'text-violet-400 bg-violet-400/15',
-  dip_and_rip: 'text-rose-400 bg-rose-400/15',
-  hod_break: 'text-emerald-400 bg-emerald-400/15',
-  gap_and_go: 'text-sky-400 bg-sky-400/15',
-  abcd: 'text-pink-400 bg-pink-400/15',
-  premarket_high_break: 'text-lime-400 bg-lime-400/15',
-};
 
 // Color mapping for market regimes
 const regimeColors: Record<RegimeId, string> = {
@@ -77,46 +64,6 @@ const baseVariantClasses: Record<BaseVariant, string> = {
   warning: 'text-argus-warning bg-argus-warning-dim',
   danger: 'text-argus-loss bg-argus-loss-dim',
   neutral: 'text-argus-text-dim bg-argus-surface-2',
-};
-
-// Display labels for strategies
-const strategyLabels: Record<string, string> = {
-  orb: 'ORB',
-  orb_breakout: 'ORB',
-  scalp: 'SCALP',
-  orb_scalp: 'SCALP',
-  vwap: 'VWAP',
-  vwap_reclaim: 'VWAP',
-  momentum: 'MOM',
-  afternoon_momentum: 'MOM',
-  red_to_green: 'R2G',
-  bull_flag: 'FLAG',
-  flat_top_breakout: 'FLAT',
-  dip_and_rip: 'DIP',
-  hod_break: 'HOD',
-  gap_and_go: 'GAP',
-  abcd: 'ABCD',
-  premarket_high_break: 'PMH',
-};
-
-// Single-letter labels for compact badges
-const strategyLetters: Record<string, string> = {
-  orb: 'O',
-  orb_breakout: 'O',
-  scalp: 'S',
-  orb_scalp: 'S',
-  vwap: 'V',
-  vwap_reclaim: 'V',
-  momentum: 'A', // Afternoon Momentum → A
-  afternoon_momentum: 'A',
-  red_to_green: 'R',
-  bull_flag: 'F',
-  flat_top_breakout: 'T',
-  dip_and_rip: 'D',
-  hod_break: 'H',
-  gap_and_go: 'G',
-  abcd: 'X',
-  premarket_high_break: 'P',
 };
 
 // Display labels for regimes
@@ -154,6 +101,8 @@ interface StrategyBadgeProps {
   strategyId: string;
   /** Use high-contrast styling for amber/yellow backgrounds */
   onAmber?: boolean;
+  /** Optional test hook — passed through to the rendered span. */
+  'data-testid'?: string;
 }
 
 interface RegimeBadgeProps {
@@ -179,37 +128,36 @@ export function Badge({ children, variant }: BaseBadgeProps) {
   );
 }
 
-// Strategy badge - shows strategy type with color coding
-export function StrategyBadge({ strategyId, onAmber = false }: StrategyBadgeProps) {
-  // Normalize: lowercase, replace hyphens, strip "strat_" prefix
-  const normalizedId = strategyId.toLowerCase().replace(/-/g, '_').replace(/^strat_/, '') as StrategyId;
-  const label = strategyLabels[normalizedId] || strategyId.toUpperCase().slice(0, 4);
-
-  // On amber backgrounds, use dark bg with white text for contrast
-  const colorClass = onAmber
-    ? 'text-white bg-slate-700'
-    : strategyColors[normalizedId] || 'text-argus-text-dim bg-argus-surface-2';
+// Strategy badge - shows strategy type with color coding derived from strategyConfig.
+export function StrategyBadge({
+  strategyId,
+  onAmber = false,
+  'data-testid': testId,
+}: StrategyBadgeProps) {
+  const label = getStrategyShortName(strategyId);
+  const colorClass = getStrategyBadgeClass(strategyId, onAmber);
 
   return (
     <span
       className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${colorClass}`}
+      data-testid={testId}
     >
       {label}
     </span>
   );
 }
 
-// Compact strategy badge - single-letter pill for dense layouts (watchlist sidebar)
+// Compact strategy badge - single-letter pill for dense layouts (watchlist sidebar).
+// Title is the short label (e.g. "ORB", "SCALP") so dense hover tooltips stay
+// compact and match the main StrategyBadge's visible text.
 export function CompactStrategyBadge({ strategyId }: { strategyId: string }) {
-  // Normalize: lowercase, replace hyphens, strip "strat_" prefix
-  const normalizedId = strategyId.toLowerCase().replace(/-/g, '_').replace(/^strat_/, '') as StrategyId;
-  const letter = strategyLetters[normalizedId] || strategyId.charAt(0).toUpperCase();
-  const colorClass = strategyColors[normalizedId] || 'text-argus-text-dim bg-argus-surface-2';
+  const letter = getStrategyLetter(strategyId);
+  const colorClass = getStrategyBadgeClass(strategyId);
 
   return (
     <span
       className={`inline-flex items-center justify-center w-5 h-[18px] rounded-full text-xs font-semibold ${colorClass}`}
-      title={strategyLabels[normalizedId] || strategyId}
+      title={getStrategyShortName(strategyId)}
     >
       {letter}
     </span>

@@ -262,7 +262,9 @@ describe('CompactStrategyBadge', () => {
   it('renders single letter for Momentum strategy', () => {
     render(<CompactStrategyBadge strategyId="afternoon_momentum" />);
 
-    const badge = screen.getByTitle('MOM');
+    // Audit FIX-12 P1-F2-M01 consolidation: Badge.tsx now derives label from
+    // strategyConfig.ts, which uses 'PM' as the canonical shortName.
+    const badge = screen.getByTitle('PM');
     expect(badge).toBeInTheDocument();
     expect(badge).toHaveTextContent('A');
   });

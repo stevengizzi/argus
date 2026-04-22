@@ -20,7 +20,10 @@ describe('StrategyBadge', () => {
     expect(screen.getByText('VWAP')).toBeInTheDocument();
 
     rerender(<StrategyBadge strategyId="strat_afternoon_momentum" />);
-    expect(screen.getByText('MOM')).toBeInTheDocument();
+    // Consolidated source-of-truth (audit FIX-12 P1-F2-M01): Badge.tsx
+    // now derives labels from strategyConfig.ts, which uses 'PM' for
+    // afternoon_momentum. Pre-consolidation Badge.tsx hardcoded 'MOM'.
+    expect(screen.getByText('PM')).toBeInTheDocument();
 
     rerender(<StrategyBadge strategyId="strat_red_to_green" />);
     expect(screen.getByText('R2G')).toBeInTheDocument();
@@ -81,9 +84,43 @@ describe('StrategyBadge', () => {
 
   it('falls back gracefully for unknown strategy IDs', () => {
     render(<StrategyBadge strategyId="strat_unknown_xyz" />);
-    // Badge uses strategyId.toUpperCase().slice(0,4) as fallback on the original ID
-    // 'strat_unknown_xyz'.toUpperCase().slice(0,4) = 'STRA'
+    // strategyConfig.getStrategyDisplay() uses strategyId.slice(0,4).toUpperCase()
+    // on the original ID as the fallback shortName: 'strat_unknown_xyz'.slice(0,4) = 'stra'
     expect(screen.getByText('STRA')).toBeInTheDocument();
+  });
+
+  it('renders correct label for Sprint 31A strategies (audit FIX-12 P1-F2-C01)', () => {
+    const cases: [string, string][] = [
+      ['strat_micro_pullback', 'MICRO'],
+      ['strat_vwap_bounce', 'VWB'],
+      ['strat_narrow_range_breakout', 'NRB'],
+    ];
+    for (const [id, expectedLabel] of cases) {
+      const { unmount } = render(<StrategyBadge strategyId={id} />);
+      expect(screen.getByText(expectedLabel)).toBeInTheDocument();
+      unmount();
+    }
+  });
+
+  it('applies non-grey color class for Sprint 31A strategies (audit FIX-12 P1-F2-C01)', () => {
+    const cases: [string, string][] = [
+      ['strat_micro_pullback', 'indigo-400'],
+      ['strat_vwap_bounce', 'fuchsia-400'],
+      ['strat_narrow_range_breakout', 'green-400'],
+    ];
+    for (const [id, expectedColor] of cases) {
+      const { container, unmount } = render(<StrategyBadge strategyId={id} />);
+      const badge = container.querySelector('span');
+      expect(badge?.className).toContain(expectedColor);
+      expect(badge?.className).not.toContain('argus-surface-2');
+      unmount();
+    }
+  });
+
+  it('supports data-testid pass-through for test integration', () => {
+    render(<StrategyBadge strategyId="strat_orb_breakout" data-testid="test-badge" />);
+    expect(screen.getByTestId('test-badge')).toBeInTheDocument();
+    expect(screen.getByTestId('test-badge')).toHaveTextContent('ORB');
   });
 });
 
@@ -95,6 +132,19 @@ describe('CompactStrategyBadge', () => {
       ['strat_gap_and_go', 'G'],
       ['strat_abcd', 'X'],
       ['strat_premarket_high_break', 'P'],
+    ];
+    for (const [id, expectedLetter] of cases) {
+      const { unmount } = render(<CompactStrategyBadge strategyId={id} />);
+      expect(screen.getByText(expectedLetter)).toBeInTheDocument();
+      unmount();
+    }
+  });
+
+  it('renders correct letter for Sprint 31A strategies (audit FIX-12 P1-F2-C01)', () => {
+    const cases: [string, string][] = [
+      ['strat_micro_pullback', 'M'],
+      ['strat_vwap_bounce', 'B'],
+      ['strat_narrow_range_breakout', 'N'],
     ];
     for (const [id, expectedLetter] of cases) {
       const { unmount } = render(<CompactStrategyBadge strategyId={id} />);

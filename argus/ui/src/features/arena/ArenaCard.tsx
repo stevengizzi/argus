@@ -9,7 +9,7 @@ import { useRef, useEffect, useState, useMemo } from 'react';
 import { MiniChart } from './MiniChart';
 import type { MiniChartHandle, CandleData } from './MiniChart';
 import type { UTCTimestamp } from 'lightweight-charts';
-import { getStrategyDisplay } from '../../utils/strategyConfig';
+import { StrategyBadge } from '../../components/Badge';
 
 export interface ArenaCardProps {
   symbol: string;
@@ -105,7 +105,6 @@ export function ArenaCard({
     [target_prices.join(',')],
   );
 
-  const strategyConfig = getStrategyDisplay(strategy_id);
   const pnlPositive = pnl >= 0;
   const t1Price = stableTargetPrices[0] ?? 0;
   const latestClose = candles[candles.length - 1]?.close ?? entry_price;
@@ -124,16 +123,7 @@ export function ArenaCard({
       {/* Header row: strategy badge + symbol (left), P&L + R (right) */}
       <div className="flex items-center justify-between px-3 pt-2 pb-1">
         <div className="flex items-center gap-2">
-          <span
-            className="text-xs font-semibold px-1.5 py-0.5 rounded"
-            style={{
-              backgroundColor: `${strategyConfig.color}22`,
-              color: strategyConfig.color,
-            }}
-            data-testid="strategy-badge"
-          >
-            {strategyConfig.shortName}
-          </span>
+          <StrategyBadge strategyId={strategy_id} data-testid="strategy-badge" />
           <span className="text-sm font-bold text-argus-text" data-testid="symbol-label">
             {symbol}
           </span>

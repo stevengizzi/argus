@@ -12,5 +12,9 @@ export default defineConfig({
     css: true,
     testTimeout: 10_000,
     hookTimeout: 10_000,
+    // Explicit worker pool: fork per-file, isolated jsdom environments.
+    // If workers ever orphan (stuck process after a cancelled run), reap with:
+    //   pkill -f 'vitest/dist/workers'
+    pool: 'forks',
   },
 });

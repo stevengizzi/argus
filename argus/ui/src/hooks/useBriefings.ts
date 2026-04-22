@@ -16,15 +16,22 @@ import {
   type UpdateBriefingData,
 } from '../api/client';
 import type { BriefingsListResponse, Briefing } from '../api/types';
+import { isMarketOpen } from '../utils/marketTime';
 
 /**
  * Fetch list of briefings with optional filters.
+ *
+ * Briefings are operator-authored journal entries and change only on direct
+ * edits (which invalidate the query via mutation callbacks). A slow poll
+ * during market hours catches concurrent edits from another session;
+ * off-hours polling is disabled since nothing else touches the list.
  */
 export function useBriefings(filters?: BriefingsParams) {
   return useQuery<BriefingsListResponse, Error>({
     queryKey: ['briefings', filters],
     queryFn: () => fetchBriefings(filters),
-    refetchInterval: 30_000, // 30 seconds
+    refetchInterval: () => (isMarketOpen() ? 60_000 : false),
+    refetchOnWindowFocus: true,
   });
 }
 
