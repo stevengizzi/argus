@@ -5,10 +5,10 @@
 > at every stage barrier. Survives compaction — read this file to hydrate
 > a fresh Claude.ai conversation.
 >
-> **Last updated:** 2026-04-22 — Stage 4 Wave 2 (FIX-05) complete
-> **Campaign HEAD:** `4590859` (FIX-05 feat) + pending docs
+> **Last updated:** 2026-04-22 — Stage 4 complete
+> **Campaign HEAD:** `f0283d3` (FIX-05 reviewer artifact; feat=`4590859`, docs=`2fec7ca`)
 > **Workflow submodule:** `942c53a`
-> **Baseline tests:** 5,000 pytest + 859 Vitest (local) / CI `-m "not integration"` rebaselines at next CI run, 0 failures
+> **Baseline tests:** 5,000 pytest + 859 Vitest (local) / 4,992 pytest + 859 Vitest (CI `-m "not integration"`), 0 failures
 
 ---
 
@@ -36,6 +36,7 @@
 | Stage 3 Wave 2 | FIX-04 (Rule-4 serial, order_manager.py) | ✅ CLEAR |
 | Stage 4 Wave 1 | FIX-10 + FIX-18 (parallel) | ✅ CLEAR |
 | Stage 4 Wave 2 | FIX-05 solo | ✅ CLEAR |
+| **Stage 4** | **(complete)** | **✅ COMPLETE** |
 | Stage 5 | FIX-06 (data) + FIX-07 (intelligence) | ⏸ PENDING |
 | Stage 6 | FIX-08 solo | ⏸ PENDING |
 | Stage 7 | FIX-09 solo | ⏸ PENDING |
@@ -69,7 +70,7 @@
 | FIX-18 (deps + infra hardening) | `7aabb96` + `5fe4d1d` | MINOR_DEVIATIONS | CLEAR | 0 | Stage 4 Wave 1 (parallel with FIX-10). 15 findings (2 CVE + 9M + 4L + 2 cosmetic). CI workflow (`.github/workflows/ci.yml`) introduced. Cleanup tracker #2 + #3 RESOLVED. |
 | HOTFIX pytest-xdist | `d261e7b` + `a896985` | — | — | 0 | Post-FIX-18: CI surfaced missing `pytest-xdist` in `[dev]` extras. Declared + annotated FIX-18 follow-up. |
 | HOTFIX clean-install | `793d4fd` | — | — | 0 | First full CI run unmasked 4 clean-install bugs (submodule init, seaborn for report generator, jwt→jose shim in one test, walk-forward integration marking). All fixed. |
-| FIX-05 (core: orchestrator + risk + regime) | `4590859` + `<pending docs>` | CLEAN | TBD | +10 | Stage 4 Wave 2. 37 findings (2 CRITICAL + 18 MEDIUM + 17 LOW). Both CRITICALs landed with regression tests exercising uncovered lines. Closed DEF-091/092/104/163/170. Opened DEF-182 (weekly reconciliation). |
+| FIX-05 (core: orchestrator + risk + regime) | `4590859` + `2fec7ca` + `f0283d3` | CLEAN | CLEAR | +10 | Stage 4 Wave 2. 37 findings (2 CRITICAL + 18 MEDIUM + 17 LOW). Both CRITICALs landed with regression tests exercising uncovered lines. Closed DEF-091/092/104/163/170. Opened DEF-182 (weekly reconciliation). |
 
 Baseline progression: 4,934 (pre-campaign) → 4,858 (actual pytest at campaign start after FIX-03's CLAUDE.md strikethrough) → 4,944 (post-FIX-11) → 4,946 (post-FIX-02) → 4,964 (post-Stage-2) → 4,965 (post-IMPROMPTU-def172-173-175) → 4,984 (post-FIX-16) → 4,985 (post-FIX-04, holds through Stage 4 Wave 1 + hotfixes) → **5,000 (post-FIX-05)**. Vitest: 846 → **859**.
 
@@ -91,6 +92,11 @@ Baseline progression: 4,934 (pre-campaign) → 4,858 (actual pytest at campaign 
 | DEF-162 | Monthly re-consolidation cron (`consolidate_parquet_cache.py --resume`) — paired with DEF-097 | FIX-21 | `8ccac67` |
 | DEF-172 | Duplicate `CatalystStorage` instances — RESOLVED-VERIFIED (behavioral): dual close paths both fire; SQLite WAL enables safe concurrent reads; structural dedup deferred to DEF-175 | IMPROMPTU-def172-173-175 | `873738a` |
 | DEF-173 | `LearningStore.enforce_retention()` never called — RESOLVED: wired in `argus/api/server.py::_init_learning_loop` mirroring FIX-03's ExperimentStore pattern; +1 regression test | IMPROMPTU-def172-173-175 | `873738a` |
+| DEF-091 | Public accessors for V1 RegimeClassifier + VIXDataService private attrs — `compute_trend_score()` + `vol_low_threshold`/`vol_high_threshold` properties on V1; `config` property on VIXDataService | FIX-05 | `4590859` |
+| DEF-092 | Unused Protocol types in `argus/core/regime.py` — four orphaned Protocol classes deleted | FIX-05 | `4590859` |
+| DEF-104 | Dual ExitReason enums drift risk — `argus.core.events.ExitReason` now re-exports from `argus.models.trading` (single source of truth) | FIX-05 | `4590859` |
+| DEF-163 | Timezone-boundary + hardcoded-date Python tests — ET alignment in `test_get_todays_pnl_excludes_unrecoverable`, ET capture in `test_history_store_migration`, relative `computed_at` in `_make_vector()`. Vitest side remains under DEF-167 (FIX-13). | FIX-05 | `4590859` |
+| DEF-170 | VIX regime calculators inert in production — `RegimeClassifierV2.attach_vix_service()` re-instantiates all four VIX calculators from the injected service | FIX-05 | `4590859` |
 
 ### Partially resolved
 
@@ -104,7 +110,6 @@ Baseline progression: 4,934 (pre-campaign) → 4,858 (actual pytest at campaign 
 |---|---|---|---|
 | DEF-168 | `docs/architecture.md` API catalog drift | LOW | P1-H1a (not yet scheduled as FIX-NN) |
 | DEF-169 | `--dev` mode retired (informational only) | INFO | Ongoing (no owner needed) |
-| DEF-170 | VIX regime calculators inert in production (RegimeClassifierV2 built pre-VIX; `attach_vix_service` doesn't rewire calculators) | MEDIUM | **FIX-05 (Stage 4)** |
 | DEF-171 | `test_all_ulids_mapped_bidirectionally` xdist flake | LOW | **FIX-13 (Stage 8)** |
 | DEF-174 | Tauri desktop wrapper never integrated; `platform.ts` deleted as misleading dead code | LOW / opportunistic | Deferred (only if desktop packaging becomes a requirement) |
 | DEF-175 | Component ownership consolidation — `CatalystStorage`, `SetupQualityEngine`, `DynamicPositionSizer`, `ExperimentStore`, `LearningStore` constructed in both `main.py` and `api/server.py` lifespan phases; broader pattern behind DEF-172/173 | MEDIUM | **Dedicated post-Sprint-31.9 sprint** (~2–3 sessions). Pre-sprint discovery at `docs/sprints/post-31.9-component-ownership/DISCOVERY.md`. Blocked on Sprint 31.9 closure. |
@@ -114,6 +119,7 @@ Baseline progression: 4,934 (pre-campaign) → 4,858 (actual pytest at campaign 
 | DEF-179 | `python-jose` → `PyJWT` migration — FIX-18 bumped bound to `>=3.4.0,<4` to mitigate CVE-2024-33663 (fixed in 3.4.0); full migration is single-session weekend work across 5 import sites + 2 test fixtures | LOW — CVE already mitigated | Opportunistic / next API-layer cleanup sprint |
 | DEF-180 | No Python lockfile — CI workflow from FIX-18 P1-I-M06 installs from version ranges; lockfile (`uv.lock` recommended) would give CI + operator identical resolved trees | LOW-MEDIUM | Dedicated single-session sprint (~30-60 min) |
 | DEF-181 | Node 20 deprecation in GitHub Actions — `actions/checkout@v4`, `actions/setup-python@v5`, `actions/setup-node@v4` all run on Node.js 20 which will be forced to Node.js 24 on 2026-06-02 and removed 2026-09-16. First CI runs on 2026-04-22 surfaced the warning. | LOW | Before 2026-06-02 — bump action pins in `.github/workflows/ci.yml` |
+| DEF-182 | Weekly reconciliation full implementation — `HealthMonitor._run_weekly_reconciliation()` has been a placeholder since Sprint 5; FIX-05 upgraded log level and pointed at this DEF. Full fix needs broker `get_order_history(days=7)` pairing with `TradeLogger.get_trades_by_date_range(...)` + discrepancy alerts. | LOW | Opportunistic / operations sprint |
 
 ---
 
@@ -194,11 +200,19 @@ First fully passing CI run achieved at commit `793d4fd`:
 - **Clean-install bugs unmasked and fixed:** pytest-xdist in `[dev]`, submodule init, seaborn, jwt-import shim, walk-forward integration marking
 - **Known deprecation warning:** Node 20 on three GitHub Actions — tracked as **DEF-181** (June 2, 2026 deadline)
 
+## Stage 4 complete (2026-04-22)
+
+Stage 4 sealed with FIX-05 Wave 2 CLEAR. Both waves landed with zero scope violations:
+- **Wave 1 (parallel):** FIX-10 (backtest legacy, 0 tests) + FIX-18 (deps + CI workflow, +0 tests, two hotfix cycles)
+- **Wave 2 (solo):** FIX-05 (core orchestrator/risk/regime, +10 tests, 5 DEFs closed, 1 opened)
+
+FIX-05 closed DEF-091, DEF-092, DEF-104, DEF-163 (Python-side), and DEF-170 via `attach_vix_service()` re-instantiation. DEF-182 (Weekly reconciliation stub) opened as an opportunistic operations-sprint item.
+
+Post-Stage-4 expected CI baseline: 4,992 pytest (+15 over 793d4fd's 4,977 after FIX-05's +10 + FIX-16's +19 minus integration filter adjustments) + 859 Vitest.
+
 ## Stage 5 preview (FIX-06 + FIX-07 next)
 
-Stage 4 Wave 2 (FIX-05) complete. Next up is Stage 5: FIX-06 (data layer) + FIX-07 (intelligence layer).
-
-FIX-05 closed DEF-170 (VIX regime calculators inert in production) via `attach_vix_service()` re-instantiation. 5 DEFs total closed this session (DEF-091, DEF-092, DEF-104, DEF-163 Python-side, DEF-170); 1 new DEF opened (DEF-182 Weekly reconciliation). All Stage 4 Wave 2 findings landed with zero scope boundary violations.
+Next up: FIX-06 (data layer) + FIX-07 (intelligence layer). See the master tracker at `docs/sprints/sprint-31.9/CAMPAIGN-COMPLETENESS-TRACKER.md` for the full remaining-session + DEF matrix.
 
 ---
 
