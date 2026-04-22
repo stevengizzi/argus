@@ -1,21 +1,8 @@
-"""Core components: config, event bus, orchestrator, risk manager."""
+"""Core components: config, event bus, orchestrator, risk manager.
 
-from argus.core.config import (
-    AfternoonMomentumConfig,
-    BrokerSource,
-    DataSource,
-    IBKRConfig,
-    VwapReclaimConfig,
-    load_afternoon_momentum_config,
-    load_vwap_reclaim_config,
-)
-
-__all__ = [
-    "AfternoonMomentumConfig",
-    "BrokerSource",
-    "DataSource",
-    "IBKRConfig",
-    "VwapReclaimConfig",
-    "load_afternoon_momentum_config",
-    "load_vwap_reclaim_config",
-]
+FIX-05 (P1-A2-M05): the previous partial re-export surface (7 symbols) was
+removed. Import strategy/infrastructure configs directly from their
+fully-qualified paths — ``from argus.core.config import XxxConfig``. The
+curated re-export had drifted stale (nothing from Sprint 26 onward was
+mirrored here) and downstream code already used fully-qualified imports.
+"""

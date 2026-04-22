@@ -82,12 +82,16 @@ class FixedClock:
     or date boundaries.
     """
 
-    def __init__(self, fixed_time: datetime):
+    def __init__(self, fixed_time: datetime, timezone: str = "America/New_York"):
         """Initialize the fixed clock.
 
         Args:
             fixed_time: The datetime to freeze the clock at. Should be
                         timezone-aware (UTC).
+            timezone: IANA timezone string. ``today()`` converts the fixed
+                      time into this zone before taking the date portion,
+                      matching ``SystemClock.today()``'s semantics (FIX-05
+                      P1-A2-L05). Defaults to ``America/New_York``.
 
         Raises:
             ValueError: If fixed_time is not timezone-aware.
@@ -95,6 +99,7 @@ class FixedClock:
         if fixed_time.tzinfo is None:
             raise ValueError("fixed_time must be timezone-aware (use datetime.now(UTC))")
         self._time = fixed_time
+        self._timezone = ZoneInfo(timezone)
 
     def now(self) -> datetime:
         """Return the fixed datetime.
@@ -105,12 +110,14 @@ class FixedClock:
         return self._time
 
     def today(self) -> date:
-        """Return the date portion of the fixed datetime.
+        """Return the date portion of the fixed datetime in the configured timezone.
 
-        Returns:
-            Date portion of the fixed datetime.
+        Matches ``SystemClock.today()`` — the fixed datetime is converted to
+        the configured timezone before taking the date portion so a
+        ``FixedClock(datetime(2026, 4, 21, 3, 0, UTC))`` returns
+        ``2026-04-20`` in ET, not ``2026-04-21`` (FIX-05 P1-A2-L05).
         """
-        return self._time.date()
+        return self._time.astimezone(self._timezone).date()
 
     def advance(self, **kwargs) -> None:
         """Advance time by a timedelta.

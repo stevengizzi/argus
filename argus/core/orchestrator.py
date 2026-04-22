@@ -16,7 +16,7 @@ import asyncio
 import contextlib
 import logging
 from datetime import datetime, time, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
 
 from argus.core.clock import Clock
@@ -261,17 +261,17 @@ class Orchestrator:
     def latest_regime_vector_summary(self) -> dict | None:
         """Get the latest V2 regime vector as a dict summary.
 
-        Uses duck-typing to avoid importing RegimeVector directly,
-        maintaining the S6 circular-import avoidance pattern.
+        FIX-05 (P1-A2-L08 / DEF-093): ``_latest_regime_vector`` is typed
+        ``RegimeVector | None`` via the ``TYPE_CHECKING`` import block — the
+        duck-type ``hasattr(..., "to_dict")`` guard the S6 pattern required
+        is no longer necessary.
 
         Returns:
             Dict representation of the regime vector, or None if unavailable.
         """
-        if self._latest_regime_vector is not None and hasattr(
-            self._latest_regime_vector, "to_dict"
-        ):
-            return self._latest_regime_vector.to_dict()
-        return None
+        if self._latest_regime_vector is None:
+            return None
+        return self._latest_regime_vector.to_dict()
 
     @property
     def pre_market_complete(self) -> bool:
@@ -306,22 +306,9 @@ class Orchestrator:
             self._config.spy_symbol, lookback_days=60
         )
 
-        # 2. Classify regime
+        # 2. Classify regime (shared helper — FIX-05 P1-A2-M04 dedup with reclassify_regime)
         if spy_bars is not None and len(spy_bars) >= 20:
-            indicators = self._regime_classifier.compute_indicators(spy_bars)
-            new_regime = self._regime_classifier.classify(indicators)
-            self._current_indicators = indicators
-            self._spy_unavailable_count = 0
-
-            # V2: compute regime vector and persist (fire-and-forget)
-            if self._regime_classifier_v2 is not None:
-                try:
-                    vector = self._regime_classifier_v2.compute_regime_vector(indicators)
-                    self._latest_regime_vector = vector
-                    if self._regime_history is not None:
-                        asyncio.create_task(self._regime_history.record(vector))
-                except Exception:
-                    logger.warning("V2 regime vector computation failed", exc_info=True)
+            new_regime = self._compute_and_apply_regime(spy_bars)
         else:
             self._spy_unavailable_count += 1
             if self._spy_unavailable_count <= 1 or self._spy_unavailable_count % 6 == 0:
@@ -336,12 +323,13 @@ class Orchestrator:
         self._current_regime = new_regime
 
         if old_regime != new_regime:
-            # Enrich with V2 regime vector summary if available
-            vector_summary = None
-            if self._latest_regime_vector is not None and hasattr(
-                self._latest_regime_vector, "to_dict"
-            ):
-                vector_summary = self._latest_regime_vector.to_dict()
+            # Enrich with V2 regime vector summary if available.
+            # FIX-05 (P1-A2-L08): typed access, no duck-type hasattr.
+            vector_summary = (
+                self._latest_regime_vector.to_dict()
+                if self._latest_regime_vector is not None
+                else None
+            )
 
             await self._event_bus.publish(
                 RegimeChangeEvent(
@@ -742,6 +730,44 @@ class Orchestrator:
                 except Exception:
                     logger.exception("EOD review failed")
 
+    def _compute_and_apply_regime(self, spy_bars: Any) -> MarketRegime:
+        """Classify regime from SPY bars and update classifier-side state.
+
+        FIX-05 (P1-A2-M04): shared bookkeeping block previously duplicated
+        between ``run_pre_market`` and ``reclassify_regime``. Updates:
+
+        - ``self._current_indicators`` → latest indicators.
+        - ``self._spy_unavailable_count = 0`` (SPY data was present).
+        - ``self._latest_regime_vector`` and fire-and-forget record to
+          ``self._regime_history`` when V2 is wired.
+
+        Does NOT update ``self._current_regime`` or ``self._last_regime_check``
+        — the callers own those because they publish RegimeChangeEvent and
+        manage the re-check cadence differently.
+
+        Args:
+            spy_bars: SPY daily OHLCV bars (same shape used by V1).
+
+        Returns:
+            The newly classified ``MarketRegime``.
+        """
+        indicators = self._regime_classifier.compute_indicators(spy_bars)
+        new_regime = self._regime_classifier.classify(indicators)
+        self._current_indicators = indicators
+        self._spy_unavailable_count = 0
+
+        # V2: compute regime vector and persist (fire-and-forget)
+        if self._regime_classifier_v2 is not None:
+            try:
+                vector = self._regime_classifier_v2.compute_regime_vector(indicators)
+                self._latest_regime_vector = vector
+                if self._regime_history is not None:
+                    asyncio.create_task(self._regime_history.record(vector))
+            except Exception:
+                logger.warning("V2 regime vector computation failed", exc_info=True)
+
+        return new_regime
+
     async def reclassify_regime(self) -> tuple[MarketRegime, MarketRegime]:
         """Re-evaluate market regime using current SPY data.
 
@@ -767,22 +793,9 @@ class Orchestrator:
             self._last_regime_check = self._clock.now()
             return (old_regime, old_regime)
 
-        indicators = self._regime_classifier.compute_indicators(spy_bars)
-        new_regime = self._regime_classifier.classify(indicators)
-        self._current_indicators = indicators
+        new_regime = self._compute_and_apply_regime(spy_bars)
         self._current_regime = new_regime
         self._last_regime_check = self._clock.now()
-        self._spy_unavailable_count = 0
-
-        # V2: compute regime vector and persist (fire-and-forget)
-        if self._regime_classifier_v2 is not None:
-            try:
-                vector = self._regime_classifier_v2.compute_regime_vector(indicators)
-                self._latest_regime_vector = vector
-                if self._regime_history is not None:
-                    asyncio.create_task(self._regime_history.record(vector))
-            except Exception:
-                logger.warning("V2 regime vector computation failed", exc_info=True)
 
         return (old_regime, new_regime)
 
@@ -794,11 +807,12 @@ class Orchestrator:
             logger.info("Regime changed intraday: %s → %s", old_regime.value, new_regime.value)
 
             # Enrich with V2 regime vector summary if available
-            vector_summary = None
-            if self._latest_regime_vector is not None and hasattr(
-                self._latest_regime_vector, "to_dict"
-            ):
-                vector_summary = self._latest_regime_vector.to_dict()
+            # (FIX-05 P1-A2-L08: typed access, no duck-type hasattr).
+            vector_summary = (
+                self._latest_regime_vector.to_dict()
+                if self._latest_regime_vector is not None
+                else None
+            )
 
             await self._event_bus.publish(
                 RegimeChangeEvent(

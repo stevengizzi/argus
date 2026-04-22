@@ -31,11 +31,17 @@ from argus.core.events import Event
 
 logger = logging.getLogger(__name__)
 
-# Type alias for an async event handler
-EventHandler = Callable[[Any], Coroutine[Any, Any, None]]
-
 # TypeVar for event types
 T = TypeVar("T", bound=Event)
+
+# Type aliases for async event handlers.
+# FIX-05 (P1-A2-L06): ``TypedEventHandler[T]`` ties the handler signature to
+# the event type for Pylance-level enforcement when using
+# ``subscribe(event_type, handler)``. ``EventHandler`` remains the backward
+# compatible Any-shaped alias used internally by the bus (handlers of
+# heterogeneous types are stored in one list).
+TypedEventHandler = Callable[[T], Coroutine[Any, Any, None]]
+EventHandler = Callable[[Any], Coroutine[Any, Any, None]]
 
 
 class EventBus:
@@ -53,11 +59,14 @@ class EventBus:
         self._pending: set[asyncio.Task[None]] = set()
         self._lock: asyncio.Lock = asyncio.Lock()
 
-    def subscribe(self, event_type: type[T], handler: EventHandler) -> None:
+    def subscribe(self, event_type: type[T], handler: TypedEventHandler[T]) -> None:
         """Register a handler for an event type.
 
         The handler will be called with every event of this type (or subtype)
-        published to the bus. Handlers are called in subscription order (FIFO).
+        published to the bus. Handlers are called in subscription order (FIFO
+        at enqueue time; note: once ``await`` points appear inside handlers
+        the individual handler tasks may interleave — FIX-05 P1-A2-L02).
+        Handler-level serialization is the handler's responsibility.
 
         Args:
             event_type: The event class to subscribe to.
@@ -66,7 +75,7 @@ class EventBus:
         self._subscribers[event_type].append(handler)
         logger.debug("Subscribed %s to %s", handler.__qualname__, event_type.__name__)
 
-    def unsubscribe(self, event_type: type[T], handler: EventHandler) -> None:
+    def unsubscribe(self, event_type: type[T], handler: TypedEventHandler[T]) -> None:
         """Remove a handler for an event type.
 
         Args:
@@ -155,7 +164,15 @@ class EventBus:
         """Clear all subscriptions and reset sequence counter.
 
         Intended for testing only. Do not call during live trading.
+
+        FIX-05 (P1-A2-L03): any pending handler tasks are cancelled before
+        the tracking set is cleared. The previous ``_pending.clear()``-only
+        implementation left in-flight tasks running, which could fire after
+        a test had torn down fixtures (orphan-task flakiness).
         """
+        for task in self._pending:
+            if not task.done():
+                task.cancel()
         self._subscribers.clear()
         self._sequence = 0
         self._pending.clear()

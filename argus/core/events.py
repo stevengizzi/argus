@@ -37,20 +37,13 @@ class OrderType(StrEnum):
     STOP_LIMIT = "stop_limit"
 
 
-class ExitReason(StrEnum):
-    """Why a position was closed."""
-
-    TARGET_1 = "target_1"
-    TARGET_2 = "target_2"
-    TARGET_3 = "target_3"
-    STOP_LOSS = "stop_loss"
-    TRAILING_STOP = "trailing_stop"
-    TIME_STOP = "time_stop"
-    EOD_FLATTEN = "eod"
-    MANUAL = "manual"
-    CIRCUIT_BREAKER = "circuit_breaker"
-    EMERGENCY = "emergency"
-    RECONCILIATION = "reconciliation"
+# ExitReason is the canonical persistence enum — re-exported here so existing
+# ``from argus.core.events import ExitReason`` imports remain stable while
+# eliminating the dual-definition drift risk (DEF-104 / FIX-05). The single
+# source of truth lives in ``argus.models.trading``; a prior duplicate
+# definition here caused 336 Pydantic validation errors in Sprint 27.8 when
+# the two copies drifted.
+from argus.models.trading import ExitReason as ExitReason  # noqa: E402
 
 
 class CircuitBreakerLevel(StrEnum):
@@ -208,7 +201,12 @@ class SignalRejectedEvent(Event):
 
     signal: SignalEvent | None = None
     rejection_reason: str = ""
-    rejection_stage: str = ""  # RejectionStage value: "QUALITY_FILTER", "POSITION_SIZER", "RISK_MANAGER", "SHADOW", "BROKER_OVERFLOW"
+    # RejectionStage value (lowercase — StrEnum): "quality_filter", "position_sizer",
+    # "risk_manager", "shadow", "broker_overflow". See argus.intelligence.counterfactual
+    # .RejectionStage. FIX-05 (P1-D1-M07): prior docstring listed uppercase values,
+    # which would raise in main.py:_on_signal_rejected_for_counterfactual's
+    # RejectionStage(event.rejection_stage) cast.
+    rejection_stage: str = ""
     quality_score: float | None = None
     quality_grade: str | None = None
     regime_vector_snapshot: dict[str, Any] | None = None  # RegimeVector.to_dict() if available
@@ -305,11 +303,18 @@ class PositionClosedEvent(Event):
 # ---------------------------------------------------------------------------
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class CircuitBreakerEvent(Event):
-    """A circuit breaker has been triggered."""
+    """A circuit breaker has been triggered.
 
-    level: CircuitBreakerLevel = CircuitBreakerLevel.ACCOUNT
+    FIX-05 (P1-A2-L14): ``level`` is required (no default). Emitting a
+    breaker without specifying the scope silently misattributed
+    strategy-level / cross-strategy events as account-level before.
+    ``kw_only=True`` keeps the dataclass compatible with ``Event``'s
+    defaulted fields while forcing explicit ``level=`` at every call site.
+    """
+
+    level: CircuitBreakerLevel
     reason: str = ""
     strategies_affected: tuple[str, ...] = ()
 

@@ -15,7 +15,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any, Optional, Protocol
+from typing import TYPE_CHECKING, Any
 
 import pandas as pd
 
@@ -150,11 +150,11 @@ class RegimeVector:
     intraday_character: str | None = None  # "trending", "choppy", "reversal", "breakout"
 
     # Dimension 7: VIX Landscape (Sprint 27.9)
-    vol_regime_phase: Optional[VolRegimePhase] = None
-    vol_regime_momentum: Optional[VolRegimeMomentum] = None
-    term_structure_regime: Optional[TermStructureRegime] = None
-    variance_risk_premium: Optional[VRPTier] = None
-    vix_close: Optional[float] = None
+    vol_regime_phase: VolRegimePhase | None = None
+    vol_regime_momentum: VolRegimeMomentum | None = None
+    term_structure_regime: TermStructureRegime | None = None
+    variance_risk_premium: VRPTier | None = None
+    vix_close: float | None = None
 
     # Backward compatibility + confidence
     primary_regime: MarketRegime = MarketRegime.RANGE_BOUND
@@ -334,46 +334,10 @@ class RegimeOperatingConditions:
     intraday_character: list[str] | None = None
 
     # VIX landscape enum constraints (Sprint 27.9)
-    vol_regime_phase: Optional[VolRegimePhase] = None
-    vol_regime_momentum: Optional[VolRegimeMomentum] = None
-    term_structure_regime: Optional[TermStructureRegime] = None
-    variance_risk_premium: Optional[VRPTier] = None
-
-
-class BreadthCalculator(Protocol):
-    """Protocol for breadth dimension calculators."""
-
-    def compute(self, indicators: RegimeIndicators) -> tuple[float | None, bool | None]:
-        """Compute breadth score and thrust flag."""
-        ...
-
-
-class CorrelationCalculator(Protocol):
-    """Protocol for correlation dimension calculators."""
-
-    def compute(self, indicators: RegimeIndicators) -> tuple[float | None, str | None]:
-        """Compute average correlation and regime string."""
-        ...
-
-
-class SectorRotationCalculator(Protocol):
-    """Protocol for sector rotation dimension calculators."""
-
-    def compute(
-        self, indicators: RegimeIndicators
-    ) -> tuple[str | None, list[str], list[str]]:
-        """Compute rotation phase, leading sectors, lagging sectors."""
-        ...
-
-
-class IntradayCalculator(Protocol):
-    """Protocol for intraday character dimension calculators."""
-
-    def compute(
-        self, indicators: RegimeIndicators
-    ) -> tuple[float | None, float | None, float | None, int | None, str | None]:
-        """Compute opening_drive, range_ratio, vwap_slope, direction_changes, character."""
-        ...
+    vol_regime_phase: VolRegimePhase | None = None
+    vol_regime_momentum: VolRegimeMomentum | None = None
+    term_structure_regime: TermStructureRegime | None = None
+    variance_risk_premium: VRPTier | None = None
 
 
 class RegimeClassifier:
@@ -402,6 +366,16 @@ class RegimeClassifier:
             config: Orchestrator configuration containing volatility thresholds.
         """
         self._config = config
+
+    @property
+    def vol_low_threshold(self) -> float:
+        """Public accessor for the low-volatility threshold (FIX-05, DEF-091)."""
+        return self._config.vol_low_threshold
+
+    @property
+    def vol_high_threshold(self) -> float:
+        """Public accessor for the high-volatility threshold (FIX-05, DEF-091)."""
+        return self._config.vol_high_threshold
 
     def compute_indicators(self, daily_bars: pd.DataFrame) -> RegimeIndicators:
         """Compute regime indicators from SPY daily OHLCV bars.
@@ -538,6 +512,18 @@ class RegimeClassifier:
 
         # Default: range-bound
         return MarketRegime.RANGE_BOUND
+
+    def compute_trend_score(self, indicators: RegimeIndicators) -> int:
+        """Compute trend score based on SPY position vs SMAs.
+
+        Public API (FIX-05, DEF-091/DEF-170). RegimeClassifierV2 previously
+        reached into the private ``_compute_trend_score``; this is the
+        supported entry point.
+
+        Returns:
+            Score from -2 (strong bear) to +2 (strong bull).
+        """
+        return self._compute_trend_score(indicators)
 
     def _compute_trend_score(self, indicators: RegimeIndicators) -> int:
         """Compute trend score based on SPY position vs SMAs.
@@ -680,44 +666,51 @@ class RegimeClassifierV2:
         self._vrp_calc = None
 
         if vix_data_service is not None and regime_config.vix_calculators_enabled:
-            from argus.core.vix_calculators import (
-                TermStructureRegimeCalculator,
-                VarianceRiskPremiumCalculator,
-                VolRegimeMomentumCalculator,
-                VolRegimePhaseCalculator,
-            )
-            from argus.data.vix_config import VixRegimeConfig
+            self._build_vix_calculators(vix_data_service)
 
-            # Get VIX config from the service for boundary access
-            vix_config: VixRegimeConfig = vix_data_service._config
+    def _build_vix_calculators(self, vix_data_service: VIXDataService) -> None:
+        """Instantiate the four VIX-dimension calculators from the service's config.
 
-            self._vol_phase_calc = VolRegimePhaseCalculator(
-                vix_data_service, vix_config.vol_regime_boundaries
-            )
-            self._vol_momentum_calc = VolRegimeMomentumCalculator(
-                vix_data_service,
-                vix_config.momentum_window,
-                vix_config.momentum_threshold,
-            )
-            self._term_structure_calc = TermStructureRegimeCalculator(
-                vix_data_service, vix_config.term_structure_boundaries
-            )
-            self._vrp_calc = VarianceRiskPremiumCalculator(
-                vix_data_service, vix_config.vrp_boundaries
-            )
+        Uses the public ``VIXDataService.config`` property (FIX-05, DEF-091).
+        Safe to call multiple times — later calls replace earlier calculators.
+        """
+        from argus.core.vix_calculators import (
+            TermStructureRegimeCalculator,
+            VarianceRiskPremiumCalculator,
+            VolRegimeMomentumCalculator,
+            VolRegimePhaseCalculator,
+        )
+
+        vix_config = vix_data_service.config
+        self._vol_phase_calc = VolRegimePhaseCalculator(
+            vix_data_service, vix_config.vol_regime_boundaries
+        )
+        self._vol_momentum_calc = VolRegimeMomentumCalculator(
+            vix_data_service,
+            vix_config.momentum_window,
+            vix_config.momentum_threshold,
+        )
+        self._term_structure_calc = TermStructureRegimeCalculator(
+            vix_data_service, vix_config.term_structure_boundaries
+        )
+        self._vrp_calc = VarianceRiskPremiumCalculator(
+            vix_data_service, vix_config.vrp_boundaries
+        )
 
     def attach_vix_service(self, vix_data_service: VIXDataService) -> None:
         """Attach a VIX data service post-construction.
 
-        Mirrors ``Orchestrator.attach_vix_service``. Called by the API
-        lifespan handler when the VIX service is initialized lazily after
-        the classifier. Calculators are NOT re-instantiated here —
-        constructor-time wiring remains the canonical path; this setter
-        is for the specific case where the classifier was built without
-        VIX (e.g., VIX service came up later) and only needs the raw
-        service reference for ``latest_vix`` reads.
+        FIX-05 (DEF-170): when the classifier was built without a VIX service
+        (e.g., ``main.py`` constructs V2 before the API lifespan hands the
+        service in), this method wires the service in AND re-instantiates the
+        four dimension calculators. Prior behavior stored the reference only,
+        leaving ``vol_phase``/``vol_momentum``/``term_structure``/``vrp`` as
+        ``None`` in production — the VIX regime dimension silently stayed
+        inert. The re-instantiation honors ``regime_config.vix_calculators_enabled``.
         """
         self._vix_data_service = vix_data_service
+        if self._regime_config.vix_calculators_enabled:
+            self._build_vix_calculators(vix_data_service)
 
     @property
     def vol_phase_calc(self):  # type: ignore[no-untyped-def]
@@ -806,7 +799,8 @@ class RegimeClassifierV2:
         primary_regime = self._v1_classifier.classify(indicators)
 
         # Trend dimension: normalize V1 trend score to [-1, 1]
-        raw_trend = self._v1_classifier._compute_trend_score(indicators)
+        # FIX-05 (DEF-091): use V1's public compute_trend_score() (was _compute_trend_score).
+        raw_trend = self._v1_classifier.compute_trend_score(indicators)
         trend_score = max(-1.0, min(1.0, raw_trend / 2.0))
 
         # Trend conviction: based on agreement of SMA signals
@@ -857,11 +851,11 @@ class RegimeClassifierV2:
             intraday_char = snap.get("intraday_character")
 
         # VIX landscape dimension (Sprint 27.9)
-        vol_regime_phase: Optional[VolRegimePhase] = None
-        vol_regime_momentum: Optional[VolRegimeMomentum] = None
-        term_structure_regime: Optional[TermStructureRegime] = None
-        variance_risk_premium: Optional[VRPTier] = None
-        vix_close: Optional[float] = None
+        vol_regime_phase: VolRegimePhase | None = None
+        vol_regime_momentum: VolRegimeMomentum | None = None
+        term_structure_regime: TermStructureRegime | None = None
+        variance_risk_premium: VRPTier | None = None
+        vix_close: float | None = None
 
         if self._vol_phase_calc is not None:
             vol_regime_phase = self._vol_phase_calc.classify()
@@ -969,9 +963,10 @@ class RegimeClassifierV2:
         if vol is None:
             return 0.0
 
-        # Normalize against midpoint of normal range
-        midpoint = (self._v1_classifier._config.vol_low_threshold
-                    + self._v1_classifier._config.vol_high_threshold) / 2.0
+        # Normalize against midpoint of normal range.
+        # FIX-05 (DEF-091): use V1's public threshold properties.
+        midpoint = (self._v1_classifier.vol_low_threshold
+                    + self._v1_classifier.vol_high_threshold) / 2.0
         if midpoint <= 0:
             return 0.0
 

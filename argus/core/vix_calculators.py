@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import logging
 import math
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from argus.data.vix_config import (
     TermStructureRegime,
@@ -53,7 +53,7 @@ class VolRegimePhaseCalculator:
         self._vix_service = vix_service
         self._boundaries = boundaries
 
-    def classify(self) -> Optional[VolRegimePhase]:
+    def classify(self) -> VolRegimePhase | None:
         """Classify the current vol regime phase.
 
         Returns:
@@ -114,7 +114,7 @@ class VolRegimeMomentumCalculator:
         self._momentum_window = momentum_window
         self._momentum_threshold = momentum_threshold
 
-    def classify(self) -> Optional[VolRegimeMomentum]:
+    def classify(self) -> VolRegimeMomentum | None:
         """Classify vol regime momentum direction.
 
         Returns:
@@ -183,7 +183,7 @@ class TermStructureRegimeCalculator:
         self._vix_service = vix_service
         self._boundaries = boundaries
 
-    def classify(self) -> Optional[TermStructureRegime]:
+    def classify(self) -> TermStructureRegime | None:
         """Classify the current term structure regime.
 
         Returns:
@@ -240,7 +240,7 @@ class VarianceRiskPremiumCalculator:
         """Last computed VRP value (continuous), or None if unavailable."""
         return self._latest_vrp
 
-    def classify(self) -> Optional[VRPTier]:
+    def classify(self) -> VRPTier | None:
         """Classify the current VRP tier.
 
         Returns:

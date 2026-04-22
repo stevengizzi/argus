@@ -1,11 +1,36 @@
-"""Risk Manager — Three-level gate for all trade signals.
+"""Risk Manager — gating layer for all trade signals.
 
-Phase 1 implements account-level checks only. Strategy-level checks are
-handled inside strategies (Sprint 3). Cross-strategy checks require
-multiple strategies (Phase 4).
+Every SignalEvent must pass through ``RiskManager.evaluate_signal()`` before
+reaching the broker. No exceptions. No shortcuts.
 
-Every SignalEvent must pass through evaluate_signal() before reaching
-the broker. No exceptions. No shortcuts.
+The manager runs a fixed-order chain of defensive guards grouped into four
+bands. Each guard either rejects or accepts; two bands (concentration, cash
+reserve, buying power) can also approve-with-modification by reducing the
+share count.
+
+Band A — Defensive guard (Sprint 24):
+    0. Defensive share-count guard (``share_count <= 0`` → reject).
+
+Band B — Account-level:
+    1. Circuit breaker (rejects while ``_circuit_breaker_active``).
+    2. Daily loss limit (``_daily_realized_pnl`` vs config).
+    3. Weekly loss limit (``_weekly_realized_pnl`` vs config).
+    4. Max concurrent positions (broker position count vs config).
+
+Band C — Cross-strategy (Sprint 17+):
+    5. Single-stock concentration (DEC-249; approve-with-modification).
+    6. Duplicate stock policy (DEC-121/160; hard reject).
+
+Band D — Capital:
+    7. Cash reserve (DEC-037; approve-with-modification).
+    8. Buying power (approve-with-modification).
+    9. PDT compliance (margin accounts below the FINRA threshold).
+
+Reductions under the approve-with-modification bands cascade: concentration
+can trim first, then cash reserve, then buying power. At each reduction step
+the post-reduction position risk is checked against
+``min_position_risk_dollars`` (DEC-249/DEC-250, default $100) — reductions
+below that floor are rejected rather than silently accepted.
 """
 
 from __future__ import annotations
@@ -126,25 +151,38 @@ class IntegrityReport:
 
 
 class RiskManager:
-    """Three-level risk gate for all trade signals.
+    """Gating layer for all trade signals.
 
-    Every signal must pass through evaluate_signal() before reaching the
-    broker. The Risk Manager can approve (with or without modifications),
-    reject, or trigger circuit breakers.
+    Every signal must pass through ``evaluate_signal()`` before reaching the
+    broker. The manager can approve (with or without modifications), reject
+    a signal outright, or — in the post-close and evaluate-time paths —
+    trigger the account-level circuit breaker.
 
-    Phase 1 implements account-level checks only:
-    - Daily loss limit
-    - Weekly loss limit
-    - Max concurrent positions
-    - Cash reserve enforcement
-    - Buying power check
-    - PDT compliance
+    Full guard chain (see module docstring for band-level grouping):
+
+    0. Defensive share-count guard (Sprint 24).
+    1. Circuit breaker active (rejects while set).
+    2. Daily loss limit.
+    3. Weekly loss limit.
+    4. Max concurrent positions (account-level).
+    5. Single-stock concentration (approve-with-modification, DEC-249).
+    6. Duplicate stock policy (hard reject, DEC-121/160).
+    7. Cash reserve (approve-with-modification, DEC-037).
+    8. Buying power (approve-with-modification).
+    9. PDT compliance (margin accounts below the FINRA threshold).
+
+    Public surface:
+    - ``evaluate_signal(signal)`` — the hot-path gate.
+    - ``daily_integrity_check()`` — diagnostic pass at daily boundaries.
+    - ``reset_daily_state()`` / ``reconstruct_state()`` — lifecycle hooks.
+    - ``set_order_manager()`` — post-construction wiring.
 
     Args:
         config: Risk configuration.
         broker: Broker for account state queries.
         event_bus: EventBus for publishing circuit breaker events.
         clock: Clock for time access. Defaults to SystemClock() if not provided.
+        order_manager: Optional OrderManager for cross-strategy exposure checks.
     """
 
     def __init__(
@@ -203,24 +241,29 @@ class RiskManager:
         )
 
     async def evaluate_signal(self, signal: SignalEvent) -> OrderApprovedEvent | OrderRejectedEvent:
-        """Evaluate a trade signal against account-level risk limits.
+        """Evaluate a trade signal against the full risk-guard chain.
 
-        Checks performed in order (fail-fast):
-        1. Circuit breaker active? → Reject
-        2. Daily loss limit breached? → Reject
-        3. Weekly loss limit breached? → Reject
-        4. Max concurrent positions exceeded? → Reject
-        4.5a. Single-stock concentration limit (DEC-249) → Modify share count or reject
-        4.5b. Duplicate stock policy (DEC-121) → Reject
-        5. Cash reserve enforcement → Reject or modify share count
-        6. Buying power check → Reject or modify share count
-        7. PDT check (margin accounts under threshold) → Reject
+        Checks run in order (fail-fast). The numbering matches the module /
+        class docstring bands (A: defensive; B: account; C: cross-strategy;
+        D: capital).
 
-        Steps 4.5a, 5, and 6 can each reduce share count (approve-with-modification).
-        Reductions cascade: concentration may reduce first, then cash reserve or buying
-        power may reduce further. All reduction reasons are accumulated and reported.
-        At each stage, the minimum risk floor is checked — if reduced position's total
-        risk < min_position_risk_dollars (default $100), reject as not worth taking.
+        0. Defensive share-count guard (``share_count <= 0``) → reject.
+        1. Circuit breaker active? → reject.
+        2. Daily loss limit breached? → reject.
+        3. Weekly loss limit breached? → reject.
+        4. Max concurrent positions exceeded? → reject.
+        5. Single-stock concentration (DEC-249) → modify share count or reject.
+        6. Duplicate stock policy (DEC-121/160) → hard reject if non-ALLOW_ALL.
+        7. Cash reserve enforcement → modify share count or reject.
+        8. Buying power check → modify share count or reject.
+        9. PDT compliance (margin accounts under threshold) → reject.
+
+        Steps 5, 7, and 8 can each reduce share count (approve-with-modification).
+        Reductions cascade: concentration may reduce first, then cash reserve
+        or buying power may reduce further. All reduction reasons are
+        accumulated and reported. At each stage, the minimum risk floor is
+        checked — if reduced position's total risk <
+        ``min_position_risk_dollars`` (default $100), reject as not worth taking.
 
         Args:
             signal: The SignalEvent to evaluate.
@@ -301,8 +344,8 @@ class RiskManager:
                 reason=f"Max concurrent positions ({max_pos}) reached",
             )
 
-        # 4.5a. Single-stock concentration limit (DEC-121, DEC-249)
-        # This can reduce shares (approve-with-modification), unlike duplicate policy
+        # 5. Single-stock concentration limit (DEC-121, DEC-249)
+        # This can reduce shares (approve-with-modification), unlike duplicate policy.
         max_conc_shares = self._get_concentration_limit_shares(signal, account.equity)
         modified_shares: int | None = None
         modification_reasons: list[str] = []
@@ -347,8 +390,8 @@ class RiskManager:
                 max_conc_shares,
             )
 
-        # 4.5b. Duplicate stock policy check (DEC-121, DEC-124)
-        # This is a hard reject — reducing shares won't help
+        # 6. Duplicate stock policy check (DEC-121, DEC-124)
+        # This is a hard reject — reducing shares won't help.
         dup_reason = await self._check_duplicate_stock_policy(signal)
         if dup_reason:
             logger.warning(
@@ -359,7 +402,7 @@ class RiskManager:
             )
             return OrderRejectedEvent(signal=signal, reason=dup_reason)
 
-        # 5. Cash reserve enforcement (DEC-037: use start-of-day equity)
+        # 7. Cash reserve enforcement (DEC-037: use start-of-day equity)
         # Fall back to live equity if start-of-day equity not yet snapshotted
         equity_for_reserve = (
             self._start_of_day_equity if self._start_of_day_equity > 0 else account.equity
@@ -398,7 +441,7 @@ class RiskManager:
             modified_shares = reduced
             modification_reasons.append("cash reserve constraint")
 
-        # 6. Buying power check (recalculate cost with effective shares)
+        # 8. Buying power check (recalculate cost with effective shares)
         effective_shares = modified_shares if modified_shares is not None else signal.share_count
         cost = signal.entry_price * effective_shares
         if cost > account.buying_power:
@@ -420,7 +463,7 @@ class RiskManager:
             modified_shares = reduced
             modification_reasons.append("buying power constraint")
 
-        # 7. PDT check
+        # 9. PDT check
         if self._config.pdt.enabled:
             remaining = self._pdt_tracker.day_trades_remaining(self._clock.today(), account.equity)
             if remaining <= 0:

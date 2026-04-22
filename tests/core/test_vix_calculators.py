@@ -209,6 +209,9 @@ class TestRegimeClassifierV2VixIntegration:
                 {"vol_of_vol_ratio": 1.05, "vix_percentile": 0.50},
             ],
         )
+        # FIX-05 (DEF-091): RegimeClassifierV2 now uses svc.config (public);
+        # keep svc._config for any remaining legacy paths.
+        type(svc).config = PropertyMock(return_value=vix_config)
         svc._config = vix_config
 
         classifier = RegimeClassifierV2(

@@ -135,8 +135,16 @@ async def test_performance_calculator_excludes_unrecoverable_entries() -> None:
 
 @pytest.mark.asyncio
 async def test_get_todays_pnl_excludes_unrecoverable(trade_logger: TradeLogger) -> None:
-    """get_todays_pnl does not include trades with entry_price_known=False."""
-    now = datetime.now(UTC)
+    """get_todays_pnl does not include trades with entry_price_known=False.
+
+    FIX-05 (DEF-163): ``now`` is ET-aligned so ``exit_time``'s date matches
+    the ET "today" used by ``get_todays_pnl``. The prior UTC-based ``now``
+    failed deterministically during the ~4h window when UTC date drifted
+    one day ahead of ET date.
+    """
+    from zoneinfo import ZoneInfo
+
+    now = datetime.now(UTC).astimezone(ZoneInfo("America/New_York"))
 
     # Log a normal trade
     normal = Trade(

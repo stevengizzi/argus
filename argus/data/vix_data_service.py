@@ -249,6 +249,16 @@ class VIXDataService:
             conn.close()
 
     @property
+    def config(self) -> VixRegimeConfig:
+        """Public read-only access to the underlying VixRegimeConfig.
+
+        Added FIX-05 (DEF-091/DEF-170): RegimeClassifierV2 previously reached
+        into ``_config`` to extract boundary parameters. This property
+        replaces that private-attr access with a supported surface.
+        """
+        return self._config
+
+    @property
     def is_ready(self) -> bool:
         """True after initial data load is complete."""
         return self._ready

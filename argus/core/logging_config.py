@@ -8,6 +8,9 @@ import logging
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
+
+_ET = ZoneInfo("America/New_York")
 
 
 class JsonFormatter(logging.Formatter):
@@ -64,7 +67,10 @@ class ConsoleFormatter(logging.Formatter):
         color = self.COLORS.get(record.levelname, "")
         reset = self.RESET if color else ""
 
-        timestamp = datetime.now().strftime("%H:%M:%S")
+        # FIX-05 (P1-A2-L10): operator-facing console timestamps are ET per
+        # DEC-276. Prior ``datetime.now().strftime(...)`` used machine-local
+        # time, which drifted between developer machines.
+        timestamp = datetime.now(_ET).strftime("%H:%M:%S")
         return (
             f"{color}{timestamp} [{record.levelname:>8}]{reset} "
             f"{record.name}: {record.getMessage()}"
@@ -106,7 +112,10 @@ def setup_logging(
     # File handler — JSON structured
     # Default to same level as log_level (INFO for production)
     effective_file_level = file_level or log_level
-    log_file = log_dir / f"argus_{datetime.now().strftime('%Y%m%d')}.jsonl"
+    # FIX-05 (P1-A2-L10): log files rotate on UTC date (machine logs are UTC
+    # per project convention). Prior ``datetime.now().strftime('%Y%m%d')``
+    # used machine-local date.
+    log_file = log_dir / f"argus_{datetime.now(UTC).strftime('%Y%m%d')}.jsonl"
     file_handler = logging.FileHandler(log_file, encoding="utf-8")
     file_handler.setFormatter(JsonFormatter())
     file_handler.setLevel(getattr(logging, effective_file_level.upper(), logging.INFO))

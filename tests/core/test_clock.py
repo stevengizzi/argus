@@ -1,6 +1,6 @@
 """Tests for the Clock abstraction (SystemClock and FixedClock)."""
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -139,12 +139,36 @@ class TestFixedClock:
         assert clock.now() == expected
 
     def test_advance_across_date_boundary(self):
-        """FixedClock.advance() should correctly handle date boundary crossing."""
+        """FixedClock.advance() should correctly handle date boundary crossing.
+
+        FIX-05 (P1-A2-L05): ``today()`` now converts to the configured
+        timezone before taking the date portion, so this test pins the
+        clock's timezone to UTC to exercise the pure UTC date advance.
+        ``test_fixed_clock_today_uses_configured_timezone`` below covers the
+        ET default.
+        """
         fixed_time = datetime(2026, 2, 15, 23, 30, 0, tzinfo=UTC)
-        clock = FixedClock(fixed_time)
+        clock = FixedClock(fixed_time, timezone="UTC")
 
         clock.advance(hours=2)
 
         expected = datetime(2026, 2, 16, 1, 30, 0, tzinfo=UTC)
         assert clock.now() == expected
         assert clock.today() == expected.date()
+
+    def test_fixed_clock_today_uses_configured_timezone(self):
+        """FixedClock.today() converts to configured timezone (FIX-05 P1-A2-L05).
+
+        A FixedClock at 03:00 UTC on 2026-04-21 is 23:00 ET on 2026-04-20 —
+        ET date should win when the default timezone is used, matching
+        SystemClock behavior.
+        """
+        fixed_time = datetime(2026, 4, 21, 3, 0, 0, tzinfo=UTC)
+
+        # Default timezone = America/New_York → ET date wins
+        et_clock = FixedClock(fixed_time)
+        assert et_clock.today() == date(2026, 4, 20)
+
+        # Explicit UTC → UTC date wins
+        utc_clock = FixedClock(fixed_time, timezone="UTC")
+        assert utc_clock.today() == date(2026, 4, 21)

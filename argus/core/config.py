@@ -79,7 +79,20 @@ class AccountType(StrEnum):
 
 
 class DuplicateStockPolicy(StrEnum):
-    """Policy when multiple strategies want the same stock."""
+    """Policy when multiple strategies want the same stock.
+
+    Values:
+        ALLOW_ALL: Default (DEC-121/160). No cross-strategy duplicate check.
+        BLOCK_ALL: Hard reject if any other strategy already holds the symbol.
+        FIRST_SIGNAL: Same effective behavior as BLOCK_ALL (the strategy that
+            already holds the position wins the symbol).
+        PRIORITY_BY_WIN_RATE: **Deprecated alias for BLOCK_ALL.** The original
+            V1 intent was to compare win rates and let the better strategy win,
+            but the win-rate comparison was never implemented (Sprint 17+).
+            Selecting this policy today logs a WARNING and hard-rejects like
+            BLOCK_ALL. FIX-05 (P1-A2-L13) kept the enum value to preserve
+            config compatibility — callers should migrate to ``BLOCK_ALL``.
+    """
 
     PRIORITY_BY_WIN_RATE = "priority_by_win_rate"
     FIRST_SIGNAL = "first_signal"
@@ -1367,8 +1380,87 @@ class MicroPullbackConfig(StrategyConfig):
     time_stop_minutes: int = Field(default=30, ge=1)
 
 
+class VwapBounceConfig(StrategyConfig):
+    """VWAP Bounce continuation pattern strategy configuration (Sprint 31A).
+
+    Detects a pullback to VWAP from above followed by a bounce with volume
+    confirmation — a continuation entry complementing VWAP Reclaim.
+    Operates 10:30 AM – 15:00 ET.
+    """
+
+    # VWAP proximity thresholds
+    vwap_approach_distance_pct: float = Field(default=0.005, gt=0, le=0.015)
+    vwap_touch_tolerance_pct: float = Field(default=0.002, gt=0, le=0.005)
+
+    # Bounce confirmation
+    min_bounce_bars: int = Field(default=2, ge=1, le=5)
+    min_bounce_volume_ratio: float = Field(default=1.3, gt=0, le=10.0)
+
+    # Prior trend requirements
+    min_prior_trend_bars: int = Field(default=15, ge=10, le=30)
+    min_price_above_vwap_pct: float = Field(default=0.003, gt=0, le=0.010)
+
+    # Stop and target
+    stop_buffer_atr_mult: float = Field(default=0.5, gt=0, le=2.0)
+    target_ratio: float = Field(default=2.0, gt=0, le=5.0)
+
+    # Scoring gate
+    min_score_threshold: float = Field(default=0.0, ge=0, le=100.0)
+
+    # Targets
+    target_1_r: float = Field(default=1.0, gt=0)
+    target_2_r: float = Field(default=2.0, gt=0)
+    time_stop_minutes: int = Field(default=30, ge=1)
+
+    # Signal density controls (DEF-154)
+    min_approach_distance_pct: float = Field(default=0.003, gt=0, le=0.010)
+    min_bounce_follow_through_bars: int = Field(default=2, ge=0, le=5)
+    max_signals_per_symbol: int = Field(default=3, ge=1, le=10)
+
+
+class NarrowRangeBreakoutConfig(StrategyConfig):
+    """Narrow Range Breakout pattern strategy configuration (Sprint 31A).
+
+    Detects volatility compression via progressively narrowing bar ranges,
+    then enters on a volume-confirmed breakout above the consolidation high.
+    Operates 10:00 AM – 15:00 ET.
+    """
+
+    # Narrowing-sequence detection
+    nr_lookback: int = Field(default=7, ge=4, le=15)
+    min_narrowing_bars: int = Field(default=3, ge=2, le=7)
+    range_decay_tolerance: float = Field(default=1.05, ge=1.0, le=1.15)
+
+    # Breakout confirmation
+    breakout_margin_percent: float = Field(default=0.001, gt=0, le=0.005)
+    min_breakout_volume_ratio: float = Field(default=1.5, gt=0, le=10.0)
+
+    # Consolidation quality gate
+    consolidation_max_range_atr: float = Field(default=0.8, gt=0, le=2.0)
+
+    # Stop and target
+    stop_buffer_atr_mult: float = Field(default=0.5, gt=0, le=2.0)
+    target_ratio: float = Field(default=2.0, gt=0, le=5.0)
+
+    # Scoring gate
+    min_score_threshold: float = Field(default=0.0, ge=0, le=100.0)
+
+    # Targets
+    target_1_r: float = Field(default=1.0, gt=0)
+    target_2_r: float = Field(default=2.0, gt=0)
+    time_stop_minutes: int = Field(default=30, ge=1)
+
+
 # ---------------------------------------------------------------------------
 # Config Loader
+#
+# FIX-05 (P1-A2-M06): VwapBounceConfig and NarrowRangeBreakoutConfig were
+# previously appended below the loader section divider, intermingled with
+# ``load_*`` functions. They now live with the rest of the strategy-config
+# block above. The ``load_micro_pullback_config`` /
+# ``load_vwap_bounce_config`` / ``load_narrow_range_breakout_config``
+# loaders remain at the bottom of the file; reordering those is a larger
+# reflow reserved for a future refactor.
 # ---------------------------------------------------------------------------
 
 
@@ -1748,77 +1840,6 @@ def load_premarket_high_break_config(
     """
     data = load_yaml_file(path)
     return PreMarketHighBreakConfig(**data)
-
-
-class VwapBounceConfig(StrategyConfig):
-    """VWAP Bounce continuation pattern strategy configuration (Sprint 31A).
-
-    Detects a pullback to VWAP from above followed by a bounce with volume
-    confirmation — a continuation entry complementing VWAP Reclaim.
-    Operates 10:30 AM – 15:00 ET.
-    """
-
-    # VWAP proximity thresholds
-    vwap_approach_distance_pct: float = Field(default=0.005, gt=0, le=0.015)
-    vwap_touch_tolerance_pct: float = Field(default=0.002, gt=0, le=0.005)
-
-    # Bounce confirmation
-    min_bounce_bars: int = Field(default=2, ge=1, le=5)
-    min_bounce_volume_ratio: float = Field(default=1.3, gt=0, le=10.0)
-
-    # Prior trend requirements
-    min_prior_trend_bars: int = Field(default=15, ge=10, le=30)
-    min_price_above_vwap_pct: float = Field(default=0.003, gt=0, le=0.010)
-
-    # Stop and target
-    stop_buffer_atr_mult: float = Field(default=0.5, gt=0, le=2.0)
-    target_ratio: float = Field(default=2.0, gt=0, le=5.0)
-
-    # Scoring gate
-    min_score_threshold: float = Field(default=0.0, ge=0, le=100.0)
-
-    # Targets
-    target_1_r: float = Field(default=1.0, gt=0)
-    target_2_r: float = Field(default=2.0, gt=0)
-    time_stop_minutes: int = Field(default=30, ge=1)
-
-    # Signal density controls (DEF-154)
-    min_approach_distance_pct: float = Field(default=0.003, gt=0, le=0.010)
-    min_bounce_follow_through_bars: int = Field(default=2, ge=0, le=5)
-    max_signals_per_symbol: int = Field(default=3, ge=1, le=10)
-
-
-class NarrowRangeBreakoutConfig(StrategyConfig):
-    """Narrow Range Breakout pattern strategy configuration (Sprint 31A).
-
-    Detects volatility compression via progressively narrowing bar ranges,
-    then enters on a volume-confirmed breakout above the consolidation high.
-    Operates 10:00 AM – 15:00 ET.
-    """
-
-    # Narrowing-sequence detection
-    nr_lookback: int = Field(default=7, ge=4, le=15)
-    min_narrowing_bars: int = Field(default=3, ge=2, le=7)
-    range_decay_tolerance: float = Field(default=1.05, ge=1.0, le=1.15)
-
-    # Breakout confirmation
-    breakout_margin_percent: float = Field(default=0.001, gt=0, le=0.005)
-    min_breakout_volume_ratio: float = Field(default=1.5, gt=0, le=10.0)
-
-    # Consolidation quality gate
-    consolidation_max_range_atr: float = Field(default=0.8, gt=0, le=2.0)
-
-    # Stop and target
-    stop_buffer_atr_mult: float = Field(default=0.5, gt=0, le=2.0)
-    target_ratio: float = Field(default=2.0, gt=0, le=5.0)
-
-    # Scoring gate
-    min_score_threshold: float = Field(default=0.0, ge=0, le=100.0)
-
-    # Targets
-    target_1_r: float = Field(default=1.0, gt=0)
-    target_2_r: float = Field(default=2.0, gt=0)
-    time_stop_minutes: int = Field(default=30, ge=1)
 
 
 def load_micro_pullback_config(path: Path) -> MicroPullbackConfig:

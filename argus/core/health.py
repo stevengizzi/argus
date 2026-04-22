@@ -478,20 +478,21 @@ class HealthMonitor:
 
         logger.info("Running weekly reconciliation...")
         try:
-            # Implementation depends on broker's get_closed_orders() method.
-            # For Sprint 5, this is a placeholder that logs a reminder.
-            # Full reconciliation requires:
-            #   broker_trades = await self._broker.get_order_history(days=7)
-            #   logged_trades = await self._trade_logger.get_trades(days=7)
-            #   Compare and report discrepancies.
-            #
-            # The Alpaca API provides get_orders(status="closed") for this.
-            # Implementing the full comparison is the task here.
-
-            logger.info("Weekly reconciliation: TODO — implement full comparison")
-            # For now, just verify broker is accessible
+            # FIX-05 (P1-A2-L11): the full broker/trade-log comparison is
+            # tracked under DEF-182 — Weekly reconciliation implementation.
+            # The Sprint-5-era stub here has been firing a weekly WARNING
+            # since Sprint 5 without actually comparing trades. Until
+            # DEF-182 lands, this call is explicitly a liveness probe only
+            # (the broker accessibility check still has operational value).
+            logger.warning(
+                "Weekly reconciliation: liveness probe only "
+                "(full trade comparison tracked under DEF-182)"
+            )
             account = await self._broker.get_account()
-            logger.info("Weekly reconciliation: Broker accessible. Account equity: %s", account)
+            logger.info(
+                "Weekly reconciliation: broker accessible. Account equity: %s",
+                account,
+            )
 
         except Exception as e:
             logger.error("Weekly reconciliation failed: %s", e)

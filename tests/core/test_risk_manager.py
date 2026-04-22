@@ -1899,3 +1899,222 @@ class TestWeeklyLimitThrottling:
             assert len(weekly_warnings) == 1
         finally:
             rm_logger.removeHandler(handler)
+
+
+class TestPostCloseCircuitBreaker:
+    """Regression tests for the post-close circuit-breaker trigger path.
+
+    Audit finding P1-G1-C01 (FIX-05): _check_circuit_breaker_after_close() is
+    one of two paths that flip _circuit_breaker_active True (the other is
+    inline in evaluate_signal). Prior tests set _daily_realized_pnl directly
+    and called evaluate_signal() — they never exercised the PositionClosedEvent
+    → _on_position_closed → _check_circuit_breaker_after_close path, which is
+    how the breaker actually fires in live trading (realized P&L only exists
+    after closes).
+    """
+
+    @pytest.mark.asyncio
+    async def test_cumulative_close_losses_trigger_circuit_breaker(self) -> None:
+        """Realized losses past the daily limit (via PositionClosedEvent) must fire the CB.
+
+        Covers risk_manager.py:618-638. After cumulative close losses exceed
+        the daily loss limit, assert (a) CircuitBreakerEvent published,
+        (b) _circuit_breaker_active True, (c) subsequent signals rejected.
+        """
+        broker = SimulatedBroker(initial_cash=100_000)
+        await broker.connect()
+        bus = EventBus()
+        config = make_risk_config(daily_loss_limit_pct=0.03)  # $3,000 limit
+        rm = RiskManager(config=config, broker=broker, event_bus=bus)
+        await rm.initialize()
+
+        breaker_events: list[CircuitBreakerEvent] = []
+        bus.subscribe(CircuitBreakerEvent, lambda e: breaker_events.append(e))
+
+        # Close 3 losing positions totaling -$3,100 (crosses $3,000 limit)
+        for idx, pnl in enumerate((-1000.0, -1000.0, -1100.0)):
+            await bus.publish(
+                PositionClosedEvent(
+                    position_id=f"pos-{idx}",
+                    exit_price=147.0,
+                    realized_pnl=pnl,
+                )
+            )
+        await bus.drain()
+
+        # Breaker tripped via the post-close path
+        assert rm.circuit_breaker_active is True
+        assert len(breaker_events) == 1
+        assert breaker_events[0].level.value == "account"
+        assert "daily loss" in breaker_events[0].reason.lower()
+
+        # Subsequent signals rejected with circuit-breaker reason
+        result = await rm.evaluate_signal(make_signal())
+        assert isinstance(result, OrderRejectedEvent)
+        assert "circuit breaker" in result.reason.lower()
+
+    @pytest.mark.asyncio
+    async def test_post_close_check_noop_when_breaker_already_active(self) -> None:
+        """If the CB is already active, _check_circuit_breaker_after_close() must early-return.
+
+        Covers the early-return at risk_manager.py:621 — daily P&L still
+        accumulates, but no second CircuitBreakerEvent is published.
+        """
+        broker = SimulatedBroker(initial_cash=100_000)
+        await broker.connect()
+        bus = EventBus()
+        config = make_risk_config(daily_loss_limit_pct=0.03)
+        rm = RiskManager(config=config, broker=broker, event_bus=bus)
+        await rm.initialize()
+
+        breaker_events: list[CircuitBreakerEvent] = []
+        bus.subscribe(CircuitBreakerEvent, lambda e: breaker_events.append(e))
+
+        # Pre-set CB active (as if triggered via evaluate_signal earlier)
+        rm._circuit_breaker_active = True
+
+        # A subsequent losing close that would otherwise trip the breaker
+        await bus.publish(
+            PositionClosedEvent(
+                position_id="pos-already-active",
+                exit_price=147.0,
+                realized_pnl=-5000.0,
+            )
+        )
+        await bus.drain()
+
+        # No duplicate event; state consistent
+        assert rm.circuit_breaker_active is True
+        assert len(breaker_events) == 0
+        assert rm.daily_realized_pnl == -5000.0
+
+
+class _LowBuyingPowerBroker(SimulatedBroker):
+    """SimulatedBroker with a configurable buying_power < cash (margin-style).
+
+    SimulatedBroker reports buying_power == cash (V1, no margin), which makes
+    the buying-power reject-after-reduction branch unreachable in tests that
+    use the stock broker. This subclass lets a test express
+    "buying power has been depleted below cash" without modifying the base.
+    """
+
+    def __init__(self, initial_cash: float, buying_power: float) -> None:
+        super().__init__(initial_cash=initial_cash)
+        self._override_buying_power = buying_power
+
+    async def get_account(self):  # type: ignore[override]
+        acc = await super().get_account()
+        # Re-build the AccountInfo with the overridden buying_power.
+        from argus.models.trading import AccountInfo
+
+        return AccountInfo(
+            equity=acc.equity,
+            cash=acc.cash,
+            buying_power=self._override_buying_power,
+            positions_value=acc.positions_value,
+            daily_pnl=acc.daily_pnl,
+        )
+
+
+class TestPositionSizingRejectAfterReduction:
+    """Regression tests for 'reduce-to-fit → below-min-floor → reject' branches.
+
+    Audit finding P1-G1-C02 (FIX-05): happy-path reductions (share_count
+    dropped to fit cash reserve / buying power) were covered, but the
+    reduction-then-reject branches (when the reduced position's total risk
+    falls below min_position_risk_dollars) were uncovered. These branches
+    uphold the DEC-249/DEC-250 floor invariant — a silent break would turn
+    rejects into accepts for undersized positions.
+    """
+
+    @pytest.mark.asyncio
+    async def test_cash_reserve_reduced_below_min_floor_rejects(self) -> None:
+        """Cash-reserve-reduced shares with risk < min_position_risk_dollars are rejected.
+
+        Covers risk_manager.py:386-394. Construct a signal with a very tight
+        stop (tiny risk_per_share) so that even a successful cash-reserve
+        reduction yields total risk below the $100 floor.
+        """
+        broker = SimulatedBroker(initial_cash=10_000)
+        await broker.connect()
+        bus = EventBus()
+        # Reserve = 5K of 10K → available = 5K (cash_reserve_pct ≤ 0.5 max)
+        config = make_risk_config(
+            cash_reserve_pct=0.50,
+            min_position_risk_dollars=100.0,
+        )
+        rm = RiskManager(config=config, broker=broker, event_bus=bus)
+        await rm.initialize()
+
+        # risk_per_share = 150.0 - 149.80 = 0.20 (very tight)
+        # cost = 100 * 150 = 15_000 > available 5_000
+        # reduced = int(5000 / 150) = 33 shares
+        # reduced_risk = 33 * 0.20 = 6.60 < 100 floor → REJECT
+        signal = make_signal(
+            share_count=100,
+            entry_price=150.0,
+            stop_price=149.80,
+        )
+        result = await rm.evaluate_signal(signal)
+
+        assert isinstance(result, OrderRejectedEvent)
+        assert "cash reserve" in result.reason.lower()
+        assert "$100 minimum" in result.reason
+
+    @pytest.mark.asyncio
+    async def test_buying_power_reduced_below_min_floor_rejects(self) -> None:
+        """Buying-power-reduced shares with risk < min_position_risk_dollars are rejected.
+
+        Covers risk_manager.py:405-421. Requires buying_power < cash so step 6
+        can fire after step 5 passes or reduces without rejection.
+        """
+        # cash=5_000, buying_power=150 (margin-depleted), reserve=0
+        # signal: 100 shares @ $150, stop $140 → risk_per_share=10, cost=15_000
+        # Step 5 (cash reserve, available=cash=5K): reduce to int(5000/150)=33
+        #   reduced_risk = 33 * 10 = $330 >= $100 floor → modified_shares=33
+        # Step 6 (buying power): cost=33*150=4_950 > buying_power=150
+        #   reduce to int(150/150)=1, reduced_risk = 1 * 10 = $10 < $100 → REJECT
+        broker = _LowBuyingPowerBroker(initial_cash=5_000, buying_power=150.0)
+        await broker.connect()
+        bus = EventBus()
+        config = make_risk_config(
+            cash_reserve_pct=0.0,
+            min_position_risk_dollars=100.0,
+        )
+        rm = RiskManager(config=config, broker=broker, event_bus=bus)
+        await rm.initialize()
+
+        signal = make_signal(
+            share_count=100,
+            entry_price=150.0,
+            stop_price=140.0,
+        )
+        result = await rm.evaluate_signal(signal)
+
+        assert isinstance(result, OrderRejectedEvent)
+        assert "buying power" in result.reason.lower()
+        assert "$100 minimum" in result.reason
+
+
+class TestIntegrityCheckZeroEquity:
+    """Regression test for the zero-equity integrity-report branch (P1-G1-M08).
+
+    Covers risk_manager.py:733. A zero-equity broker state is a real failure
+    mode; the existing TestRiskManagerIntegrityCheck only covers the passing
+    (equity > 0) path.
+    """
+
+    @pytest.mark.asyncio
+    async def test_integrity_check_fails_on_zero_equity(self) -> None:
+        """Integrity check must fail (passed=False) when account equity <= 0."""
+        broker = SimulatedBroker(initial_cash=0)  # equity == 0
+        await broker.connect()
+        bus = EventBus()
+        config = make_risk_config()
+        rm = RiskManager(config=config, broker=broker, event_bus=bus)
+        await rm.initialize()
+
+        report = await rm.daily_integrity_check()
+
+        assert report.passed is False
+        assert any("zero or negative" in issue.lower() for issue in report.issues)

@@ -31,9 +31,15 @@ from argus.data.vix_config import (
 
 
 def _make_vector(**overrides: object) -> RegimeVector:
-    """Create a RegimeVector with sensible defaults."""
+    """Create a RegimeVector with sensible defaults.
+
+    FIX-05 (P1-G1-M06 / P1-G2-L01): ``computed_at`` defaults to one hour ago
+    rather than the hardcoded ``2026-03-26`` that Sprint 32.8 left behind.
+    The slight offset into the past keeps "now"-based assertions (e.g.
+    retention queries) consistent across test runs.
+    """
     defaults: dict[str, object] = {
-        "computed_at": datetime(2026, 3, 26, 14, 0, 0, tzinfo=UTC),
+        "computed_at": datetime.now(UTC) - timedelta(hours=1),
         "trend_score": 0.5,
         "trend_conviction": 0.7,
         "volatility_level": 0.15,
@@ -238,13 +244,23 @@ class TestHistoryStoreMigration:
 
         Insert new row with vix_close → read back correctly.
         Read old row → vix_close is None.
+
+        FIX-05 (P1-G2-M01): date strings are captured via ET (``America/New_York``)
+        to match ``RegimeHistoryStore.record()``'s internal ET-based
+        ``trading_date`` computation. Prior UTC-based capture produced a
+        deterministic failure during the ~4h window when UTC date drifts one day
+        ahead of ET date (misdiagnosed as an xdist race in Sprint 31.75).
         """
         from pathlib import Path
+        from zoneinfo import ZoneInfo
 
+        _ET = ZoneInfo("America/New_York")
         db_path = str(Path(str(tmp_path)) / "test_regime_history.db")
-        old_date = (datetime.now(UTC) - timedelta(days=1)).strftime("%Y-%m-%d")
-        old_ts = (datetime.now(UTC) - timedelta(days=1)).strftime("%Y-%m-%dT10:00:00-04:00")
-        new_date = datetime.now(UTC).strftime("%Y-%m-%d")
+        old_date = (datetime.now(UTC).astimezone(_ET) - timedelta(days=1)).strftime("%Y-%m-%d")
+        old_ts = (datetime.now(UTC).astimezone(_ET) - timedelta(days=1)).strftime(
+            "%Y-%m-%dT10:00:00-04:00"
+        )
+        new_date = datetime.now(UTC).astimezone(_ET).strftime("%Y-%m-%d")
 
         # Step 1: Create DB with OLD schema (no vix_close column)
         db = await aiosqlite.connect(db_path)
@@ -299,7 +315,8 @@ class TestHistoryStoreMigration:
         await store.initialize()
 
         # Step 3: Insert a new row WITH vix_close via record()
-        vector = _make_vector(computed_at=datetime.now(UTC))
+        # FIX-05 (P1-G2-M01): keep computed_at aligned to ET trading date.
+        vector = _make_vector(computed_at=datetime.now(UTC).astimezone(_ET))
         await store.record(vector, vix_close=22.5)
 
         # Step 4: Read back all rows
@@ -327,3 +344,104 @@ class TestHistoryStoreMigration:
         store2 = RegimeHistoryStore(db_path=db_path)
         await store2.initialize()
         await store2.close()
+
+
+class TestAttachVixServiceRewiresCalculators:
+    """Regression test for DEF-170 / FIX-05.
+
+    ``main.py`` constructs ``RegimeClassifierV2`` in Phase 8.5 without a VIX
+    service (the VIX service is started later in the API lifespan). Before
+    FIX-05, ``attach_vix_service()`` only stored the reference — the four VIX
+    dimension calculators stayed ``None`` in production. This test locks in
+    the new behavior: attaching a service post-construction MUST build the
+    calculators, matching what constructor-time wiring produces.
+    """
+
+    def _make_v2(self, *, with_service_at_construction: bool) -> tuple[object, object]:
+        """Build (classifier, vix_service) with a minimal test-double service."""
+        from argus.core.config import OrchestratorConfig, RegimeIntelligenceConfig
+        from argus.core.regime import RegimeClassifierV2
+
+        regime_cfg = RegimeIntelligenceConfig(enabled=True, vix_calculators_enabled=True)
+
+        # A minimal stub for VIXDataService — only `config` and
+        # `get_latest_daily` are exercised by calculator construction /
+        # the classify paths we call indirectly here.
+        class _StubVixService:
+            def __init__(self) -> None:
+                from argus.data.vix_config import VixRegimeConfig
+
+                self._cfg = VixRegimeConfig()
+
+            @property
+            def config(self):  # type: ignore[no-untyped-def]
+                return self._cfg
+
+            def get_latest_daily(self):  # type: ignore[no-untyped-def]
+                return None
+
+            def get_history(self, days_back: int):  # type: ignore[no-untyped-def]
+                return None
+
+        stub_service = _StubVixService()
+
+        classifier = RegimeClassifierV2(
+            config=OrchestratorConfig(),
+            regime_config=regime_cfg,
+            vix_data_service=stub_service if with_service_at_construction else None,
+        )
+        return classifier, stub_service
+
+    def test_calculators_none_when_constructed_without_service(self) -> None:
+        """Baseline: constructing V2 without a VIX service leaves calculators None."""
+        classifier, _ = self._make_v2(with_service_at_construction=False)
+        assert classifier.vol_phase_calc is None
+        assert classifier.vol_momentum_calc is None
+        assert classifier.term_structure_calc is None
+        assert classifier.vrp_calc is None
+
+    def test_attach_service_post_construction_builds_calculators(self) -> None:
+        """FIX-05: ``attach_vix_service()`` must instantiate all four calculators."""
+        classifier, stub_service = self._make_v2(with_service_at_construction=False)
+        assert classifier.vol_phase_calc is None  # pre-condition
+
+        classifier.attach_vix_service(stub_service)
+
+        assert classifier.vol_phase_calc is not None
+        assert classifier.vol_momentum_calc is not None
+        assert classifier.term_structure_calc is not None
+        assert classifier.vrp_calc is not None
+
+    def test_attach_service_is_idempotent(self) -> None:
+        """Calling ``attach_vix_service()`` multiple times must not error."""
+        classifier, stub_service = self._make_v2(with_service_at_construction=False)
+        classifier.attach_vix_service(stub_service)
+        first_vol_phase = classifier.vol_phase_calc
+        classifier.attach_vix_service(stub_service)
+        # Re-instantiation is allowed — just ensure the field remains populated.
+        assert classifier.vol_phase_calc is not None
+        # And the service reference is still wired (for vix_close reads).
+        assert classifier._vix_data_service is stub_service
+        # Quiet the unused-var linter.
+        assert first_vol_phase is not None
+
+    def test_attach_service_respects_vix_calculators_disabled(self) -> None:
+        """When vix_calculators_enabled is False, attach must leave calculators None."""
+        from argus.core.config import OrchestratorConfig, RegimeIntelligenceConfig
+        from argus.core.regime import RegimeClassifierV2
+
+        regime_cfg = RegimeIntelligenceConfig(
+            enabled=True, vix_calculators_enabled=False
+        )
+        classifier = RegimeClassifierV2(
+            config=OrchestratorConfig(),
+            regime_config=regime_cfg,
+        )
+        _, stub_service = self._make_v2(with_service_at_construction=False)
+        classifier.attach_vix_service(stub_service)
+        # Service ref stored, but calculators remain None (config disabled).
+        assert classifier._vix_data_service is stub_service
+        assert classifier.vol_phase_calc is None
+        assert classifier.vol_momentum_calc is None
+        assert classifier.term_structure_calc is None
+        assert classifier.vrp_calc is None

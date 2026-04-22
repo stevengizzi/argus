@@ -41,6 +41,8 @@ class SyncEventBus:
     def subscribe(self, event_type: type[T], handler: EventHandler) -> None:
         """Register an async handler for an event type."""
         self._subscribers[event_type].append(handler)
+        # FIX-05 (P1-A2-L04): mirror EventBus debug log for parity.
+        logger.debug("Subscribed %s to %s", handler.__qualname__, event_type.__name__)
 
     def unsubscribe(self, event_type: type[T], handler: EventHandler) -> None:
         """Remove a handler for an event type.
@@ -50,6 +52,9 @@ class SyncEventBus:
         """
         try:
             self._subscribers[event_type].remove(handler)
+            logger.debug(
+                "Unsubscribed %s from %s", handler.__qualname__, event_type.__name__
+            )
         except ValueError:
             raise ValueError(
                 f"Handler {handler.__qualname__} is not subscribed to {event_type.__name__}"
