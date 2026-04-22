@@ -397,3 +397,17 @@ Verdict distribution: 3 OBSOLETE / 11 SUPERSEDED-BY-FINDING / 8 PROMOTABLE-uniqu
 Suspicious strikethroughs: 1 CONFIRMED via live DB query (DEF-142)."
 git push origin main
 ```
+
+---
+
+## FIX-05 Resolution (2026-04-22)
+
+DEFs closed in this session:
+- **DEF-091** ~~V1/V2 RegimeClassifier private-attribute access + VIXDataService private attrs~~ → **RESOLVED FIX-05-core-orchestrator-risk-regime**. Public accessors: `VIXDataService.config`, `RegimeClassifier.compute_trend_score()`, `RegimeClassifier.vol_low_threshold` / `.vol_high_threshold`.
+- **DEF-092** ~~Unused Protocol types in regime.py~~ → **RESOLVED FIX-05-core-orchestrator-risk-regime**. All 4 Protocol classes deleted.
+- **DEF-104** ~~Dual ExitReason enums~~ → **RESOLVED FIX-05-core-orchestrator-risk-regime**. Single source of truth in `argus.models.trading`; re-export from `argus.core.events`.
+- **DEF-163** ~~Timezone-boundary bugs (Python side)~~ → **RESOLVED FIX-05-core-orchestrator-risk-regime**. Vitest remainder tracked under DEF-167 (FIX-13).
+- **DEF-170** ~~VIX regime calculators stay None in production~~ → **RESOLVED FIX-05-core-orchestrator-risk-regime**. `attach_vix_service()` re-instantiates calculators.
+
+New DEFs opened:
+- **DEF-182** — Weekly reconciliation full implementation (promoted from P1-A2-L11 stub).

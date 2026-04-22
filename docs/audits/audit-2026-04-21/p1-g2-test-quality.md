@@ -246,3 +246,13 @@ Per §9 of the prompt, reconciling with G1:
 - **`test_shadow_mode.py` C1 refactor is architectural.** If `_process_signal` stays in `ArgusSystem` and the test-double pattern remains, the risk persists. Consider extracting `_process_signal` into a `SignalProcessor` service class as part of the Sprint 31B or later refactor pipeline. P1-A1 (main.py audit) may have an overlapping recommendation; cross-reference before opening as a standalone DEF.
 - **`test_divergence_documented` (M2) — one-file delete or one-line replace.** Lowest cost, highest clarity win in this report. Recommend folding into Session A.
 - **Historical integration tests (M10) — favor keeping over deleting.** Sprint 18/19/20/26 all exercise current behavior. Only Sprint 2/3/4a/4b/13 are candidates for deprecation/deletion, and only after per-file Phase 3 coverage diffing.
+
+---
+
+## FIX-05 Resolution (2026-04-22)
+
+- **M1** ~~`test_history_store_migration` is NOT an xdist race — UTC-vs-ET timezone boundary~~ → **RESOLVED FIX-05-core-orchestrator-risk-regime**. Lines 245, 247, and 302 now capture dates via `datetime.now(UTC).astimezone(ZoneInfo("America/New_York"))`, aligning with `RegimeHistoryStore.record()`'s ET-based `trading_date` computation. CLAUDE.md DEF-163 row updated to reflect Python-side resolution.
+- **L1** ~~`_make_vector()` hardcodes `computed_at=datetime(2026, 3, 26, 14, 0, 0, tzinfo=UTC)` as default~~ → **RESOLVED FIX-05-core-orchestrator-risk-regime**. Default replaced with `datetime.now(UTC) - timedelta(hours=1)` — slight past-offset preserves "now"-based assertions.
+- **M6 (from p1-g1)** ~~11+ tests mutate RiskManager private attributes~~ → **NOT ADDRESSED FIX-05-core-orchestrator-risk-regime**. Left as-is in this session; a full migration to event-driven setup would add churn to the CRITICAL test additions and is better bundled with a dedicated test-layout pass. The new FIX-05 regression tests for C1/C2/M08 use the event-driven path (`PositionClosedEvent` pubsub, broker subclass) to avoid perpetuating the pattern.
+
+Remaining G2 findings (M2 `test_divergence_documented`, M3 `test_speed_benchmark` tautological, M10 historical integration tests, L2+ etc.) are outside FIX-05 scope.

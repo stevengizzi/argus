@@ -107,7 +107,7 @@ IndicatorEvent(symbol, indicator_name, value, timestamp)
 
 # Scanner events
 WatchlistEvent(date, symbols: list[WatchlistItem])
-UniverseUpdateEvent(viable_count, routing_table_size, cache_age_minutes, per_strategy_counts)
+UniverseUpdateEvent(viable_count, total_fetched)
 
 # Strategy events
 SignalEvent(strategy_id, symbol, side, entry_price, stop_price, target_prices, share_count, rationale, atr_value)
@@ -130,7 +130,12 @@ PositionClosedEvent(position_id, exit_price, realized_pnl, exit_reason, hold_dur
 # System events
 CircuitBreakerEvent(level, reason, strategies_affected)
 HeartbeatEvent(timestamp, system_status)
-RegimeChangeEvent(old_regime, new_regime, indicators)
+RegimeChangeEvent(old_regime, new_regime, indicators, regime_vector_summary)
+ShutdownRequestedEvent(reason)
+DataStaleEvent(symbol, last_tick_age_seconds)
+DataResumedEvent(symbol, stale_duration_seconds)
+AccountUpdateEvent(equity, cash, buying_power, positions_value, daily_pnl)
+SessionEndEvent(trading_day, trades_count, counterfactual_count)
 
 # Orchestrator events
 AllocationUpdateEvent(strategy_id, new_allocation_pct, reason)
@@ -146,8 +151,17 @@ ApprovalDeniedEvent(action_id, reason)
 CatalystEvent(symbol, category, quality_score, headline, source, timestamp)
 OrderFlowEvent(symbol, imbalance_ratio, ask_thin_rate, tape_speed, bid_stack_score, composite_score, timestamp)
 QualitySignalEvent(symbol, score, grade, risk_tier, components, rationale)
-LearningInsightEvent(insight_type, finding, confidence, period)
 ```
+
+<!-- FIX-05 (P1-A2-M03): catalog previously listed a non-existent
+`LearningInsightEvent`, omitted `ShutdownRequestedEvent` /
+`DataStaleEvent` / `DataResumedEvent` / `AccountUpdateEvent` /
+`SessionEndEvent`, and mis-described `UniverseUpdateEvent`
+(actually two fields: `viable_count`, `total_fetched`). DEF-168 still
+tracks the broader API-catalog drift; this block was regenerated from
+`argus/core/events.py` but a full FastAPI-introspection rebuild remains
+open. -->
+
 
 ### 3.2 Data Service (`data/service.py`)
 
@@ -743,7 +757,7 @@ Backward-compatible: `primary_regime` field provides the same `MarketRegime` enu
 - `TermStructureRegimeCalculator`: Classifies VIX term structure proxy into CONTANGO_LOW/CONTANGO_HIGH/BACKWARDATION_LOW/BACKWARDATION_HIGH using configurable thresholds from TermStructureBoundaries. Returns None when unavailable.
 - `VarianceRiskPremiumCalculator`: Classifies VIX minus realized vol as COMPRESSED/NORMAL/ELEVATED/EXTREME using VRPBoundaries thresholds, also provides continuous VRP value. Returns None when unavailable.
 
-**RegimeHistoryStore** (`core/regime_history.py`): SQLite persistence in `data/regime_history.db`. Fire-and-forget writes — exceptions logged, never disrupt trading. 7-day retention with automatic pruning. Stores serialized `RegimeVector` with computed_at timestamp. Schema: `regime_history` table with `id`, `computed_at`, `vector_json`, `primary_regime`, `regime_confidence`, `vix_close REAL` (nullable, added Sprint 27.9 via idempotent ALTER TABLE).
+**RegimeHistoryStore** (`core/regime_history.py`): SQLite persistence in `data/regime_history.db`. Fire-and-forget writes — exceptions logged, never disrupt trading. 7-day retention with automatic pruning. Stores serialized `RegimeVector` with computed_at timestamp. Schema: `regime_snapshots` table (`id` TEXT PK, `timestamp` TEXT ISO8601 UTC, `trading_date` TEXT ET YYYY-MM-DD, `primary_regime`, `regime_confidence`, `trend_score`, `trend_conviction`, `volatility_level`, `volatility_direction`, `universe_breadth_score`, `breadth_thrust`, `avg_correlation`, `correlation_regime`, `sector_rotation_phase`, `intraday_character`, `regime_vector_json` full `RegimeVector.to_dict()`, `vix_close REAL` nullable added Sprint 27.9 via idempotent ALTER TABLE). Indexes: `idx_regime_trading_date` on `trading_date`, `idx_regime_primary_date` on `(primary_regime, trading_date)`. FIX-05 (P1-A2-M08): schema block previously listed a non-existent `regime_history` table with ~6 columns.
 
 **BacktestEngine Integration:** `use_regime_v2: bool` flag on `BacktestEngineConfig`. When enabled, BacktestEngine uses `RegimeClassifierV2` for regime tagging in `to_multi_objective_result()`.
 

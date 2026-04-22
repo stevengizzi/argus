@@ -155,3 +155,46 @@ None. No active bugs, silent data loss, or violated risk-path invariants found i
 - **L-07** ~~Triple regime-recheck cadence (main.py `_run_regime_reclassification` vs `Orchestrator._poll_loop`)~~ → **RESOLVED FIX-03-main-py**. `argus/main.py._run_regime_reclassification` method, `self._regime_task` attribute, create_task call, and shutdown-sweep entry all deleted. `Orchestrator._poll_loop` is now the sole regime-reclassification cadence owner. Also closes DEF-074. Two orphan tests in `tests/core/test_orchestrator.py` deleted (intent covered by existing `_run_regime_recheck` tests); `tests/test_shutdown_tasks.py` fixture updated. See `p1-a1-main-py.md` M10 for full context.
 
 `Orchestrator._latest_regime_vector` typing tightened as a side-effect of closing DEF-093: annotation changed from `object | None` to `RegimeVector | None` via `TYPE_CHECKING` import. Other P1-A2 findings (orchestrator.py rest, config.py, event_bus.py) unchanged — those remain FIX-05 scope.
+
+---
+
+## FIX-05 Resolution (2026-04-22)
+
+All remaining P1-A2 findings resolved in session `FIX-05-core-orchestrator-risk-regime`.
+
+**MEDIUMs:**
+- **M1** ~~Risk Manager class docstring and public-method surface are stale~~ → **RESOLVED FIX-05-core-orchestrator-risk-regime**. Module docstring + class docstring now enumerate the full 0–9 guard chain grouped into bands (defensive / account / cross-strategy / capital). Architecture.md §3.5 cross-reference unchanged — the docstring is now the authoritative surface.
+- **M2** ~~Check numbering gap (4.5a / 4.5b retrofit)~~ → **RESOLVED FIX-05-core-orchestrator-risk-regime**. `evaluate_signal` docstring + inline comments renumbered contiguously 0–9. Semantics unchanged.
+- **M3** ~~Event-type inventory drift in architecture.md §3.1~~ → **RESOLVED FIX-05-core-orchestrator-risk-regime**. Catalog regenerated to match `argus/core/events.py`: `LearningInsightEvent` removed, `ShutdownRequestedEvent` / `DataStaleEvent` / `DataResumedEvent` / `AccountUpdateEvent` / `SessionEndEvent` added, `UniverseUpdateEvent` field list corrected.
+- **M4** ~~Regime classification logic duplicated between `run_pre_market()` and `reclassify_regime()`~~ → **RESOLVED FIX-05-core-orchestrator-risk-regime**. `_compute_and_apply_regime(spy_bars)` helper extracted. Both paths now delegate to the shared helper; `_current_regime` / `_last_regime_check` are still owned by the caller to preserve publish-event semantics.
+- **M5** ~~Partial re-export surface in `core/__init__.py`~~ → **RESOLVED FIX-05-core-orchestrator-risk-regime**. Per spec option (a), the 7-symbol re-export block deleted. Downstream code already used fully-qualified `argus.core.config.XxxConfig` imports.
+- **M6** ~~Sprint-31A strategy configs appended after the loader section divider~~ → **RESOLVED FIX-05-core-orchestrator-risk-regime**. `VwapBounceConfig` + `NarrowRangeBreakoutConfig` moved into the strategy-config block next to `MicroPullbackConfig`. Loader registry collapse deferred (spec option b, larger reflow).
+- **M7** ~~7 `RegimeVector` fields computed + persisted but never consumed~~ → **RESOLVED-VERIFIED FIX-05-core-orchestrator-risk-regime**. Verification: `grep -rn "opening_drive_strength\|first_30min_range_ratio\|vwap_slope\|direction_change_count\|leading_sectors\|lagging_sectors\|breadth_thrust" argus/` returns only producer/test/serializer sites — confirmed no trading-logic consumer. Observation stands; no code change needed (the fields remain pre-provisioned for Research Console / strategy-sensitivity filters).
+- **M8** ~~SQLite table name drift (`regime_history` vs `regime_snapshots`)~~ → **RESOLVED FIX-05-core-orchestrator-risk-regime**. `docs/architecture.md` schema block regenerated to match the 17-column `regime_snapshots` DDL including both indexes.
+- **M9** ~~PF-01 + PF-02 dead packages (`argus/accounting/` + `argus/notifications/`)~~ → **RESOLVED FIX-05-core-orchestrator-risk-regime**. Both packages deleted. Grep confirmed zero importers.
+- **M10** ~~`RegimeClassifierV2` reaches into `VIXDataService._config`~~ → **RESOLVED FIX-05-core-orchestrator-risk-regime**. `VIXDataService.config` public property added; V2 uses `vix_data_service.config` in both `__init__` and `attach_vix_service`. Paired with DEF-170 resolution (see below).
+
+**LOWs:**
+- **L1** ~~4 unused Protocol classes in regime.py~~ → **RESOLVED FIX-05-core-orchestrator-risk-regime**. `BreadthCalculator`, `CorrelationCalculator`, `SectorRotationCalculator`, `IntradayCalculator` deleted; `typing.Protocol` import dropped. Closes DEF-092.
+- **L2** ~~"FIFO delivery per subscriber" guarantee weaker than advertised~~ → **RESOLVED FIX-05-core-orchestrator-risk-regime**. Per spec option (b), EventBus `subscribe` docstring updated to note that sequence-number order is preserved but handler-level serialization is the handler's responsibility. Option (a) (per-subscriber single-consumer queue) deferred as higher-risk.
+- **L3** ~~`EventBus.reset()` clears `_pending` without cancelling tasks~~ → **RESOLVED FIX-05-core-orchestrator-risk-regime**. `reset()` now cancels in-flight handler tasks before clearing the tracking set.
+- **L4** ~~`SyncEventBus` silently omits subscribe/unsubscribe debug logs~~ → **RESOLVED FIX-05-core-orchestrator-risk-regime**. Mirrored EventBus's `Subscribed %s to %s` / `Unsubscribed %s from %s` debug lines verbatim.
+- **L5** ~~`FixedClock.today()` ignores timezone~~ → **RESOLVED FIX-05-core-orchestrator-risk-regime**. `FixedClock.__init__` gained a `timezone` kwarg (default `America/New_York`). `today()` now matches `SystemClock` semantics. `test_advance_across_date_boundary` pinned to `timezone="UTC"`; new `test_fixed_clock_today_uses_configured_timezone` covers the ET default.
+- **L6** ~~`subscribe()` type parameter `T` is unused~~ → **RESOLVED FIX-05-core-orchestrator-risk-regime**. `TypedEventHandler[T] = Callable[[T], Coroutine[Any, Any, None]]` generic alias added; `subscribe()` / `unsubscribe()` signatures now use `TypedEventHandler[T]`. Legacy `EventHandler` kept for internal storage (heterogeneous types).
+- **L7** ~~Triple regime-recheck cadence~~ → **already RESOLVED FIX-03-main-py** (no-op here).
+- **L8** ~~`_latest_regime_vector: object \| None`~~ → **RESOLVED FIX-05-core-orchestrator-risk-regime**. Typing was already `RegimeVector | None` (FIX-03 side-effect); the lingering `hasattr(..., "to_dict")` defensive guards on three paths in `orchestrator.py` simplified to direct typed access.
+- **L9** ~~`Optional[X]` vs `X \| None` inconsistency~~ → **RESOLVED FIX-05-core-orchestrator-risk-regime**. `argus/core/regime.py` and `argus/core/vix_calculators.py` rewritten to `X | None`; `Optional` dropped from both `typing` import lines.
+- **L10** ~~Naive `datetime.now()` in log machinery~~ → **RESOLVED FIX-05-core-orchestrator-risk-regime**. `ConsoleFormatter.format()` now uses `datetime.now(ET).strftime("%H:%M:%S")` (DEC-276). Log-file name uses `datetime.now(UTC).strftime("%Y%m%d")` (machine logs are UTC).
+- **L11** ~~Weekly reconciliation stub~~ → **RESOLVED FIX-05-core-orchestrator-risk-regime**. Placeholder log level bumped to WARNING with explicit DEF reference; **DEF-182** opened for the full comparison implementation.
+- **L12** ~~`import asyncio` after third-party imports~~ → **RESOLVED FIX-05-core-orchestrator-risk-regime**. Moved to stdlib block at top of `market_correlation.py`.
+- **L13** ~~`PRIORITY_BY_WIN_RATE` documented-as-V1-simplified but hard-rejects~~ → **RESOLVED FIX-05-core-orchestrator-risk-regime**. Docstring on `DuplicateStockPolicy` now explicitly notes `PRIORITY_BY_WIN_RATE` is a deprecated alias for `BLOCK_ALL` (behavior unchanged to preserve config compatibility). Full removal deferred.
+- **L14** ~~`CircuitBreakerEvent.level` defaults to `ACCOUNT`~~ → **RESOLVED FIX-05-core-orchestrator-risk-regime**. Default removed via `@dataclass(frozen=True, kw_only=True)`. Both existing call sites already pass `level=` explicitly.
+- **L15** ~~`RegimeClassifierV2` accesses private `_compute_trend_score` / `_config` of V1~~ → **RESOLVED FIX-05-core-orchestrator-risk-regime**. V1 exposes `compute_trend_score()` (public) and `vol_low_threshold` / `vol_high_threshold` properties. V2 uses the public surface. Closes the V1→V2 half of DEF-091.
+
+**Test coverage added:** +10 regression tests (5 for CRITICAL-tagged risk-manager coverage gaps in sibling `p1-g1-test-coverage.md` G1-C1/C2/M08, 4 for DEF-170 `attach_vix_service` re-wiring, 1 for FIX-05 `FixedClock` ET-default).
+
+**Net pytest delta:** baseline 4990 → 5000 (+10, zero regressions). Vitest 859 unchanged.
+
+**New DEF entries:** DEF-182 (weekly reconciliation full implementation).
+
+**DEFs closed:** DEF-091, DEF-092, DEF-104, DEF-163 (Python side), DEF-170.

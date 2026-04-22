@@ -5,10 +5,10 @@
 > at every stage barrier. Survives compaction — read this file to hydrate
 > a fresh Claude.ai conversation.
 >
-> **Last updated:** 2026-04-22 — Stage 4 Wave 1 complete + CI green
-> **Campaign HEAD:** `793d4fd` (clean-install hotfix)
+> **Last updated:** 2026-04-22 — Stage 4 Wave 2 (FIX-05) complete
+> **Campaign HEAD:** `4590859` (FIX-05 feat) + pending docs
 > **Workflow submodule:** `942c53a`
-> **Baseline tests:** 4,985 pytest + 859 Vitest (local) / 4,977 pytest + 859 Vitest (CI `-m "not integration"`), 0 failures
+> **Baseline tests:** 5,000 pytest + 859 Vitest (local) / CI `-m "not integration"` rebaselines at next CI run, 0 failures
 
 ---
 
@@ -35,7 +35,7 @@
 | Stage 3 Wave 1 | FIX-14 + FIX-16 | ✅ CLEAR (prior sessions) |
 | Stage 3 Wave 2 | FIX-04 (Rule-4 serial, order_manager.py) | ✅ CLEAR |
 | Stage 4 Wave 1 | FIX-10 + FIX-18 (parallel) | ✅ CLEAR |
-| Stage 4 Wave 2 | FIX-05 solo (next) | ⏸ PENDING |
+| Stage 4 Wave 2 | FIX-05 solo | ✅ CLEAR |
 | Stage 5 | FIX-06 (data) + FIX-07 (intelligence) | ⏸ PENDING |
 | Stage 6 | FIX-08 solo | ⏸ PENDING |
 | Stage 7 | FIX-09 solo | ⏸ PENDING |
@@ -69,8 +69,9 @@
 | FIX-18 (deps + infra hardening) | `7aabb96` + `5fe4d1d` | MINOR_DEVIATIONS | CLEAR | 0 | Stage 4 Wave 1 (parallel with FIX-10). 15 findings (2 CVE + 9M + 4L + 2 cosmetic). CI workflow (`.github/workflows/ci.yml`) introduced. Cleanup tracker #2 + #3 RESOLVED. |
 | HOTFIX pytest-xdist | `d261e7b` + `a896985` | — | — | 0 | Post-FIX-18: CI surfaced missing `pytest-xdist` in `[dev]` extras. Declared + annotated FIX-18 follow-up. |
 | HOTFIX clean-install | `793d4fd` | — | — | 0 | First full CI run unmasked 4 clean-install bugs (submodule init, seaborn for report generator, jwt→jose shim in one test, walk-forward integration marking). All fixed. |
+| FIX-05 (core: orchestrator + risk + regime) | `4590859` + `<pending docs>` | CLEAN | TBD | +10 | Stage 4 Wave 2. 37 findings (2 CRITICAL + 18 MEDIUM + 17 LOW). Both CRITICALs landed with regression tests exercising uncovered lines. Closed DEF-091/092/104/163/170. Opened DEF-182 (weekly reconciliation). |
 
-Baseline progression: 4,934 (pre-campaign) → 4,858 (actual pytest at campaign start after FIX-03's CLAUDE.md strikethrough) → 4,944 (post-FIX-11) → 4,946 (post-FIX-02) → 4,964 (post-Stage-2) → 4,965 (post-IMPROMPTU-def172-173-175) → 4,984 (post-FIX-16) → **4,985 (post-FIX-04, holds through Stage 4 Wave 1 + hotfixes)**. Vitest: 846 → **859**.
+Baseline progression: 4,934 (pre-campaign) → 4,858 (actual pytest at campaign start after FIX-03's CLAUDE.md strikethrough) → 4,944 (post-FIX-11) → 4,946 (post-FIX-02) → 4,964 (post-Stage-2) → 4,965 (post-IMPROMPTU-def172-173-175) → 4,984 (post-FIX-16) → 4,985 (post-FIX-04, holds through Stage 4 Wave 1 + hotfixes) → **5,000 (post-FIX-05)**. Vitest: 846 → **859**.
 
 ---
 
@@ -193,13 +194,11 @@ First fully passing CI run achieved at commit `793d4fd`:
 - **Clean-install bugs unmasked and fixed:** pytest-xdist in `[dev]`, submodule init, seaborn, jwt-import shim, walk-forward integration marking
 - **Known deprecation warning:** Node 20 on three GitHub Actions — tracked as **DEF-181** (June 2, 2026 deadline)
 
-## Stage 4 Wave 2 preview (FIX-05 next)
+## Stage 5 preview (FIX-06 + FIX-07 next)
 
-| Session | Findings | Scope | Safety | Parallelism |
-|---|---|---|---|---|
-| FIX-05 | 37 (2C + 18M + 17L) | `argus/core/*` + tests + `config/vix_regime.yaml` + `docs/architecture.md` | weekend-only | Solo (size + safety-critical) |
+Stage 4 Wave 2 (FIX-05) complete. Next up is Stage 5: FIX-06 (data layer) + FIX-07 (intelligence layer).
 
-FIX-05 completes DEF-170 (VIX regime calculators inert in production). All other Sprint 31.9 DEF-opens either route through later stages or land in a post-Sprint-31.9 sprint.
+FIX-05 closed DEF-170 (VIX regime calculators inert in production) via `attach_vix_service()` re-instantiation. 5 DEFs total closed this session (DEF-091, DEF-092, DEF-104, DEF-163 Python-side, DEF-170); 1 new DEF opened (DEF-182 Weekly reconciliation). All Stage 4 Wave 2 findings landed with zero scope boundary violations.
 
 ---
 

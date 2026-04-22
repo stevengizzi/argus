@@ -187,3 +187,9 @@ Scoring-context fingerprint infrastructure (new `argus/intelligence/scoring_fing
 - **M-02** ~~CatalystStorage init error masked~~ → **RESOLVED FIX-03-main-py**. `logger.warning(..., exc_info=True)` with the actual `db_path` interpolated in the message.
 - **M-06** ~~inconsistent `_counterfactual_enabled` access pattern~~ → **RESOLVED FIX-03-main-py** (all-getattr convention chosen). Audit offered two options; FIX-03 converged on `getattr(self, '_counterfactual_enabled', False)` at all five sites. Rationale: ~20 integration tests construct `ArgusSystem.__new__(ArgusSystem)` without running `__init__`, so direct access (which the audit nominally preferred) crashes them at AttributeError. See `p1-a1-main-py.md` P1-D1-M06 entry for full context.
 - **M-13** ~~two `CatalystStorage` instances active concurrently~~ → **PARTIALLY RESOLVED FIX-03-main-py**. Close-path symmetry restored (same as M-01). Full deduplication logged as DEF-172 — requires `argus/api/server.py` edit (FIX-11 territory, already closed).
+
+## FIX-05 Resolution (2026-04-22)
+
+- **M7** ~~`SignalRejectedEvent.rejection_stage` docstring lists uppercase values~~ → **RESOLVED FIX-05-core-orchestrator-risk-regime**. `argus/core/events.py` comment on the `rejection_stage` field rewritten to list lowercase StrEnum values with a cross-reference to `argus.intelligence.counterfactual.RejectionStage`.
+
+M3 (MARGIN_CIRCUIT enum value) remains open (DEF-177) — cross-domain fix outside FIX-05 scope.
