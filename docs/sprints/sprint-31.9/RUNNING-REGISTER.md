@@ -5,10 +5,10 @@
 > at every stage barrier. Survives compaction — read this file to hydrate
 > a fresh Claude.ai conversation.
 >
-> **Last updated:** 2026-04-22 — Stage 4 complete
-> **Campaign HEAD:** `f0283d3` (FIX-05 reviewer artifact; feat=`4590859`, docs=`2fec7ca`)
+> **Last updated:** 2026-04-22 — Stage 5 complete
+> **Campaign HEAD:** `7b70390` (FIX-07 single commit; post-barrier becomes current HEAD)
 > **Workflow submodule:** `942c53a`
-> **Baseline tests:** 5,000 pytest + 859 Vitest (local) / 4,992 pytest + 859 Vitest (CI `-m "not integration"`), 0 failures
+> **Baseline tests:** 5,029 pytest + 859 Vitest (local) / 5,028+ pytest + 859 Vitest (CI, -m "not integration"), 0 failures
 
 ---
 
@@ -37,7 +37,9 @@
 | Stage 4 Wave 1 | FIX-10 + FIX-18 (parallel) | ✅ CLEAR |
 | Stage 4 Wave 2 | FIX-05 solo | ✅ CLEAR |
 | **Stage 4** | **(complete)** | **✅ COMPLETE** |
-| Stage 5 | FIX-06 (data) + FIX-07 (intelligence) | ⏸ PENDING |
+| Stage 5 Wave 1 | FIX-06 (data layer) | ✅ CLEAR |
+| Stage 5 Wave 2 | FIX-07 (intelligence/catalyst/quality) | ✅ CLEAR |
+| **Stage 5** | **(complete)** | **✅ COMPLETE** |
 | Stage 6 | FIX-08 solo | ⏸ PENDING |
 | Stage 7 | FIX-09 solo | ⏸ PENDING |
 | Stage 8 | FIX-13 + IMPROMPTU-01 (LIVE OK parallel) | ⏸ PENDING |
@@ -71,8 +73,10 @@
 | HOTFIX pytest-xdist | `d261e7b` + `a896985` | — | — | 0 | Post-FIX-18: CI surfaced missing `pytest-xdist` in `[dev]` extras. Declared + annotated FIX-18 follow-up. |
 | HOTFIX clean-install | `793d4fd` | — | — | 0 | First full CI run unmasked 4 clean-install bugs (submodule init, seaborn for report generator, jwt→jose shim in one test, walk-forward integration marking). All fixed. |
 | FIX-05 (core: orchestrator + risk + regime) | `4590859` + `2fec7ca` + `f0283d3` | CLEAN | CLEAR | +10 | Stage 4 Wave 2. 37 findings (2 CRITICAL + 18 MEDIUM + 17 LOW). Both CRITICALs landed with regression tests exercising uncovered lines. Closed DEF-091/092/104/163/170. Opened DEF-182 (weekly reconciliation). |
+| FIX-06 (data layer) | `4ea09a7` + `49fef3b` | MINOR_DEVIATIONS | CLEAR | +17 | Stage 5 Wave 1. 26 findings (1 CRITICAL + 8 MEDIUM + rest LOW/COSMETIC). F25 CRITICAL resolved via FIX-16-compatible overlay path (spec option (b) moot post-FIX-16); three-layer revert-proof regression defense. SystemAlertEvent added to core/events.py as documented scope expansion. DEF-037/165 closed; DEF-014 PARTIAL (emitter side landed; HealthMonitor subscription awaits P1-A1 M9); DEF-032 re-verified; DEF-183 opened (Alpaca retirement). |
+| FIX-07 (intelligence/catalyst/quality) | `7b70390` | MINOR_DEVIATIONS | CLEAR | +12 | Stage 5 Wave 2 (serial). 23 findings (7 MEDIUM + rest LOW, no CRITICAL). Finding 5 (RejectionStage split) deferred to DEF-184, coordinated with DEF-177. Two scope expansions ratified: `argus/core/protocols.py` (new file, FIX-06 precedent) + `argus/intelligence/learning/models.py` (actual DEF-106 location; spec cited wrong file). DEC-311 received Amendment 1 (kept[-1] dedup anchor pinned via option (c) — preserves in-flight paper-trading counts). DEF-096 + DEF-106 closed; DEF-184 opened. |
 
-Baseline progression: 4,934 (pre-campaign) → 4,858 (actual pytest at campaign start after FIX-03's CLAUDE.md strikethrough) → 4,944 (post-FIX-11) → 4,946 (post-FIX-02) → 4,964 (post-Stage-2) → 4,965 (post-IMPROMPTU-def172-173-175) → 4,984 (post-FIX-16) → 4,985 (post-FIX-04, holds through Stage 4 Wave 1 + hotfixes) → **5,000 (post-FIX-05)**. Vitest: 846 → **859**.
+Baseline progression: 4,934 (pre-campaign) → 4,858 (actual pytest at campaign start after FIX-03's CLAUDE.md strikethrough) → 4,944 (post-FIX-11) → 4,946 (post-FIX-02) → 4,964 (post-Stage-2) → 4,965 (post-IMPROMPTU-def172-173-175) → 4,984 (post-FIX-16) → 4,985 (post-FIX-04, holds through Stage 4 Wave 1 + hotfixes) → 5,000 (post-FIX-05) → 5,017 (post-FIX-06) → **5,029 (post-FIX-07)**. Vitest: 846 → **859**.
 
 ---
 
@@ -97,12 +101,18 @@ Baseline progression: 4,934 (pre-campaign) → 4,858 (actual pytest at campaign 
 | DEF-104 | Dual ExitReason enums drift risk — `argus.core.events.ExitReason` now re-exports from `argus.models.trading` (single source of truth) | FIX-05 | `4590859` |
 | DEF-163 | Timezone-boundary + hardcoded-date Python tests — ET alignment in `test_get_todays_pnl_excludes_unrecoverable`, ET capture in `test_history_store_migration`, relative `computed_at` in `_make_vector()`. Vitest side remains under DEF-167 (FIX-13). | FIX-05 | `4590859` |
 | DEF-170 | VIX regime calculators inert in production — `RegimeClassifierV2.attach_vix_service()` re-instantiates all four VIX calculators from the injected service | FIX-05 | `4590859` |
+| DEF-032 | `criteria_list` parameter ignored on FMP scanner — RESOLVED-VERIFIED: DEF-032 still accurate; inline pointer comment added at call site | FIX-06 | `4ea09a7` |
+| DEF-037 | FMP API key redaction in error logs — `_redact()` helper threaded through 4 FMP network-error log sites | FIX-06 | `4ea09a7` |
+| DEF-165 | DuckDB conn close hang when CREATE VIEW interrupted — `self._conn.interrupt()` before `.close()` | FIX-06 | `4ea09a7` |
+| DEF-096 | Protocol type for duck-typed candle store + store references — `argus/core/protocols.py` with `CandleStoreProtocol` + `CounterfactualStoreProtocol` | FIX-07 | `7b70390` |
+| DEF-106 | `models.py from_dict()` assert isinstance batch — 8 sites in `intelligence/learning/models.py` + 1 in `routes/counterfactual.py` converted to `if not isinstance: raise TypeError` | FIX-07 | `7b70390` |
 
 ### Partially resolved
 
 | DEF # | Description | Status | Owner |
 |---|---|---|---|
 | DEF-167 | Vitest hardcoded-date decay | PARTIAL (FIX-11 addressed some; broader sweep pending) | FIX-13 (Stage 8) |
+| DEF-014 | SystemAlertEvent for dead data feed — PARTIAL: emitter side wired at `databento_data_service._run_with_reconnection()` with max-retries-exceeded emission; HealthMonitor subscription + Command Center alert-pane surface await P1-A1 M9 expansion. 3 additional TODO emitter sites at `ibkr_broker.py:453,531` and `alpaca_data_service.py:593` remain (execution/data layer, cross-domain). | PARTIAL (FIX-06 emitter side) | P1-A1 M9 (subscription) + execution-layer session (remaining emitters) |
 
 ### Open with planned owner
 
@@ -114,12 +124,15 @@ Baseline progression: 4,934 (pre-campaign) → 4,858 (actual pytest at campaign 
 | DEF-174 | Tauri desktop wrapper never integrated; `platform.ts` deleted as misleading dead code | LOW / opportunistic | Deferred (only if desktop packaging becomes a requirement) |
 | DEF-175 | Component ownership consolidation — `CatalystStorage`, `SetupQualityEngine`, `DynamicPositionSizer`, `ExperimentStore`, `LearningStore` constructed in both `main.py` and `api/server.py` lifespan phases; broader pattern behind DEF-172/173 | MEDIUM | **Dedicated post-Sprint-31.9 sprint** (~2–3 sessions). Pre-sprint discovery at `docs/sprints/post-31.9-component-ownership/DISCOVERY.md`. Blocked on Sprint 31.9 closure. |
 | DEF-176 | Full removal of deprecated `OrderManager(auto_cleanup_orphans=...)` kwarg — FIX-04 added DeprecationWarning; 3 reconciliation test files still pass the kwarg and were outside FIX-04 scope | LOW | Opportunistic / next execution-layer cleanup sprint |
-| DEF-177 | `RejectionStage.MARGIN_CIRCUIT` — FIX-04 P1-D1-M03 deferred; requires cross-domain edit (intelligence/counterfactual.py enum + counterfactual_positions schema + order_manager.py:485 emitted stage) that exceeded FIX-04's execution-only scope | MEDIUM | **FIX-06 or dedicated cross-domain session** (FilterAccuracy by_stage analysis masks margin-incident signal today) |
+| DEF-177 | `RejectionStage.MARGIN_CIRCUIT` — FIX-04 P1-D1-M03 deferred; requires cross-domain edit (intelligence/counterfactual.py enum + counterfactual_positions schema + order_manager.py:485 emitted stage) that exceeded FIX-04's execution-only scope | MEDIUM | **Dedicated cross-domain session, must coordinate with DEF-184** (both want to modify the same RejectionStage enum in orthogonal directions) |
 | DEF-178 | `alpaca-py` still in core `[project.dependencies]` despite DEC-086 demoting Alpaca to incubator-only — FIX-18 left constraint in place with inline pointer; full fix moves to `[project.optional-dependencies].incubator` + feature-detect at 4 call sites | LOW | Opportunistic / execution-layer cleanup sprint |
 | DEF-179 | `python-jose` → `PyJWT` migration — FIX-18 bumped bound to `>=3.4.0,<4` to mitigate CVE-2024-33663 (fixed in 3.4.0); full migration is single-session weekend work across 5 import sites + 2 test fixtures | LOW — CVE already mitigated | Opportunistic / next API-layer cleanup sprint |
 | DEF-180 | No Python lockfile — CI workflow from FIX-18 P1-I-M06 installs from version ranges; lockfile (`uv.lock` recommended) would give CI + operator identical resolved trees | LOW-MEDIUM | Dedicated single-session sprint (~30-60 min) |
 | DEF-181 | Node 20 deprecation in GitHub Actions — `actions/checkout@v4`, `actions/setup-python@v5`, `actions/setup-node@v4` all run on Node.js 20 which will be forced to Node.js 24 on 2026-06-02 and removed 2026-09-16. First CI runs on 2026-04-22 surfaced the warning. | LOW | Before 2026-06-02 — bump action pins in `.github/workflows/ci.yml` |
 | DEF-182 | Weekly reconciliation full implementation — `HealthMonitor._run_weekly_reconciliation()` has been a placeholder since Sprint 5; FIX-05 upgraded log level and pointed at this DEF. Full fix needs broker `get_order_history(days=7)` pairing with `TradeLogger.get_trades_by_date_range(...)` + discrepancy alerts. | LOW | Opportunistic / operations sprint |
+| DEF-183 | Full Alpaca code+test retirement — delete `alpaca_data_service.py`, `alpaca_scanner.py`, associated tests, and config branches; simplify `main.py:301-317` / `:339-346` to a single live path. Pairs with DEF-178 (dependency-removal half). | LOW | Opportunistic / execution-layer cleanup sprint |
+| DEF-184 | `RejectionStage` → `RejectionStage` + `TrackingReason` split — shadow-mode and overflow routing aren't really "rejections." Current `RejectionStage.SHADOW` appears in `FilterAccuracy.by_stage` breakdowns as a rejection category, which is semantically wrong. Touches the enum, FilterAccuracy cut logic, REST serialization on `/counterfactual/accuracy`, `counterfactual_positions.rejection_stage` SQLite schema, and every `SignalRejectedEvent(stage=SHADOW)` emission site. | MEDIUM | **Dedicated cross-domain session, must coordinate with DEF-177** (both want to modify RejectionStage in orthogonal directions) |
+| DEF-185 | Analytics-layer `assert isinstance` anti-pattern (DEF-106 follow-on) — 5 remaining sites in `analytics/ensemble_evaluation.py` × 3 + `intelligence/learning/outcome_collector.py` × 2. | LOW | Opportunistic / next analytics-layer cleanup sprint |
 
 ---
 
