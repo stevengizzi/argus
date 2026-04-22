@@ -6,7 +6,7 @@
 > a fresh Claude.ai conversation.
 >
 > **Last updated:** 2026-04-22, FIX-04 complete (Stage 3 Wave 2)
-> **Campaign HEAD:** (FIX-04 commit pending)
+> **Campaign HEAD:** `4cfd8b4` (FIX-04 close-out + review docs)
 > **Workflow submodule:** `942c53a`
 > **Baseline tests:** 4,984 pytest + 859 Vitest (pre-FIX-04) → 4,985 pytest + 859 Vitest (post-FIX-04, 0 failures)
 
@@ -33,7 +33,7 @@
 | **Stage 2 Pass 3** | **FIX-12 + FIX-19 + FIX-21 (parallel)** | ✅ **ALL CLEAR** |
 | IMPROMPTU (between 2 and 3) | DEF-172 verify + DEF-173 fix + DEF-175 open | ✅ CLEAR |
 | Stage 3 Wave 1 | FIX-14 + FIX-16 | ✅ CLEAR (prior sessions) |
-| **Stage 3 Wave 2** | **FIX-04 (Rule-4 serial, order_manager.py)** | ⚠ MINOR_DEVIATIONS (this session) |
+| Stage 3 Wave 2 | FIX-04 (Rule-4 serial, order_manager.py) | ✅ CLEAR |
 | Stage 4 | FIX-05 (core: orchestrator+risk+regime) + FIX-18 + FIX-10 | ⏸ PENDING |
 | Stage 5 | FIX-06 (data) + FIX-07 (intelligence) | ⏸ PENDING |
 | Stage 6 | FIX-08 solo | ⏸ PENDING |
@@ -63,7 +63,7 @@
 | IMPROMPTU-def172-173-175 | `873738a` | MINOR_DEVIATIONS | CLEAR | +1 | Between Stage 2 and Stage 3; DEF-172 verify-close, DEF-173 code fix, DEF-175 opened + DISCOVERY.md seeded |
 | FIX-14 (primary Claude context docs) | `8c36bef` + `f57d7fc` | CLEAN | CLEAR | 0 | Stage 3 Wave 1 |
 | FIX-16 (config consistency sweep) | `563ae13` + `942cf05` | MINOR_DEVIATIONS | CLEAR | +19 | Stage 3 Wave 1 |
-| FIX-04 (execution layer) | (this session) | MINOR_DEVIATIONS | (pending) | +1 | Stage 3 Wave 2 (Rule-4 serial). 2 CRITICAL + 7 MEDIUM + 10 LOW; F11 P1-D1-M03 deferred (DEF-177 — cross-domain RejectionStage edit outside scope); F10 partial (DEF-176 — test-migration blocker) |
+| FIX-04 (execution layer) | `b2c55e5` + `4cfd8b4` | MINOR_DEVIATIONS | CLEAR | +1 | Stage 3 Wave 2 (Rule-4 serial). 2 CRITICAL + 7 MEDIUM + 10 LOW. Both CRITICALs landed with gold-standard revert-and-fail proof by Tier 2. F11 P1-D1-M03 deferred (DEF-177 — cross-domain RejectionStage edit outside scope); F10 partial (DEF-176 — test-migration blocker). |
 
 Baseline progression: 4,934 (pre-campaign) → 4,858 (actual pytest at campaign start after FIX-03's CLAUDE.md strikethrough) → 4,944 (post-FIX-11) → 4,946 (post-FIX-02) → 4,964 (post-Stage-2) → 4,965 (post-IMPROMPTU-def172-173-175) → 4,984 (post-FIX-16) → **4,985 (post-FIX-04)**. Vitest: 846 → **859**.
 
@@ -156,21 +156,31 @@ Items too small/cosmetic to promote to DEF, but worth surfacing at the appropria
 
 ---
 
-## Stage 3 preview
+## Stage 3 complete (2026-04-22)
 
-Per STAGE-FLOW.md:
+All three Stage 3 sessions landed cleanly. Executed in two waves:
+- **Wave 1 (parallel):** FIX-14 (docs) + FIX-16 (config) — both CLEAR
+- **Wave 2 (solo Rule-4 serial):** FIX-04 (execution) — CLEAR with gold-standard revert-and-fail proof
 
-| Session | Scope | Safety | Parallelism |
-|---|---|---|---|
-| FIX-04 | `argus/execution/order_manager.py` cleanup | weekend-only | Rule-4 serial (solo) |
-| FIX-16 | TBD — need to read prompt | TBD | TBD |
-| FIX-14 | TBD — need to read prompt | TBD | TBD |
+Plus the IMPROMPTU-def172-173-175 session between Stage 2 and Stage 3 (DEF-172 RESOLVED-VERIFIED, DEF-173 RESOLVED, DEF-175 opened for post-31.9 sprint).
 
-**Recommended order:** FIX-04 solo first (Rule-4 serial; unlocks IMPROMPTU-02 scoping). Read FIX-16 and FIX-14 prompts after FIX-04 lands; decide parallelism based on file-overlap analysis.
+Test progression: 4,965 → 4,984 (FIX-16 +19) → 4,985 (FIX-04 +1). Vitest unchanged at 859.
 
-**Pre-Stage-3 decisions needed:**
-1. ~~Handle DEF-172 + DEF-173 via impromptu session before Stage 3? (Option A from above.)~~ ✅ Handled by IMPROMPTU-def172-173-175 — DEF-172 RESOLVED-VERIFIED, DEF-173 RESOLVED, DEF-175 opened for dedicated post-31.9 sprint.
-2. Kick off FIX-04 immediately, or pause for operator rest?
+## Stage 4 preview
+
+Per STAGE-FLOW.md, three sessions covering core orchestrator+risk+regime, deps/infra, and backtest legacy cleanup:
+
+| Session | Findings | Scope | Safety | Parallelism |
+|---|---|---|---|---|
+| FIX-05 | 37 (2C + 18M + 17L) | `argus/core/*` + tests + `config/vix_regime.yaml` + `docs/architecture.md` | weekend-only | Solo (size + safety-critical) |
+| FIX-18 | 15 (2 CVE + 9M + 4L + 2 cosmetic) | `pyproject.toml` + CI config + 1 script + `.env.example` | weekend-only | Parallelizable (no runtime paths) |
+| FIX-10 | 3 (1 cosmetic + 2L) | `CLAUDE.md` + `docs/decision-log.md` + `reports/` | safe-during-trading | Parallelizable (trivially tiny) |
+
+**Planned order:**
+- **Wave 1 (parallel):** FIX-10 + FIX-18 — file-disjoint, safe to run concurrently
+- **Wave 2 (solo):** FIX-05 — 37 findings demands undivided attention; two CRITICALs in risk-manager circuit breaker coverage gaps; covers DEF-170 resolution (VIX calculator rewiring)
+
+FIX-05 completes DEF-170 (VIX regime calculators inert in production). All other Sprint 31.9 DEF-opens either route through later stages or land in a post-Sprint-31.9 sprint.
 
 ---
 
