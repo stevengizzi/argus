@@ -125,11 +125,11 @@ re-parses cleanly.
 ### ThrottledLogger for High-Volume Logs (Sprint 27.75, DEC-363)
 
 Any log line that can fire more than ~1× per second in normal operation
-MUST use [argus/utils/throttled_logger.py](argus/utils/throttled_logger.py)
+MUST use [argus/utils/log_throttle.py](argus/utils/log_throttle.py)
 with a per-key suppression window. The pattern:
 
 ```python
-from argus.utils.throttled_logger import ThrottledLogger
+from argus.utils.log_throttle import ThrottledLogger
 
 _throttled = ThrottledLogger(logger, suppression_seconds=60)
 _throttled.warning(f"flatten already pending for {symbol}", key=symbol)

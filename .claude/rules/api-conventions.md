@@ -118,9 +118,8 @@ replaces client-side aggregation from paginated subsets.
 ## OrderManager Query Surface
 
 ```python
-def get_managed_positions(self) -> list[ManagedPosition]: ...
-def get_managed_position(self, symbol: str) -> ManagedPosition | None: ...
-async def close_position(self, symbol: str) -> None: ...   # DEC-352, Sprint 25.8
+def get_managed_positions(self) -> dict[str, list[ManagedPosition]]: ...
+async def close_position(self, symbol: str, reason: str = "api_close") -> bool: ...   # DEC-352, Sprint 25.8
 ```
 
 Routes that expose position-close functionality MUST route through

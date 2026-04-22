@@ -36,7 +36,7 @@ Consolidation breakout strategy that identifies stocks from the morning gap watc
 
 Rationale: Momentum breakouts thrive in trending conditions and moderate-to-high volatility where afternoon moves have follow-through. Excluded during Crisis regime where afternoon reversals are common and institutional flows are unpredictable.
 
-**DEC-360 alignment (2026-04-21):** `bearish_trending` is present in every strategy's `allowed_regimes` list in code (`config/strategies/afternoon_momentum.yaml`) and was added to the regime table above so this doc no longer contradicts the config.
+**DEC-360 alignment (2026-04-21):** `bearish_trending` is present in this strategy's `allowed_regimes` list in code (`argus/strategies/afternoon_momentum.py:1160`) and was added to the regime table above so this doc no longer contradicts the source.
 
 ---
 

@@ -36,7 +36,7 @@ Bull flag continuation pattern strategy that identifies strong upward moves (pol
 
 Rationale: Continuation patterns work best in markets with established trends. In crisis regimes, breakouts frequently fail.
 
-**DEC-360 alignment (2026-04-21):** `bearish_trending` is present in `allowed_regimes` for every PatternBasedStrategy via `config/strategies/bull_flag.yaml`. This table now matches the config.
+**DEC-360 alignment (2026-04-21):** `bearish_trending` is present in `allowed_regimes` for every PatternBasedStrategy via `argus/strategies/pattern_strategy.py:504`. This table now matches the source.
 
 ---
 

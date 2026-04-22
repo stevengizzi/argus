@@ -504,4 +504,4 @@ No new DECs. DEF-161 resolved via one-time consolidation tooling; all design cho
 - **Atomic write order** (validate → `.tmp` write → `os.rename`) makes a consolidated file with a row-count mismatch physically unable to land on disk.
 - **Repointing `config/historical_query.yaml`** is an operator action (no in-sprint code change); `HistoricalQueryService`, `HistoricalQueryConfig`, and the config file are untouched.
 
-Next DEC: 384.
+Next DEC: 385.
