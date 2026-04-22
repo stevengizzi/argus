@@ -27,6 +27,62 @@ class ValidateCoverageRequest(BaseModel):
     end_date: str
     min_bars: int = Field(default=100, ge=1)
 
+
+# Response models (FIX-07 P1-F1-5). Routes previously returned bare
+# ``dict`` which meant OpenAPI docs were untyped and response-shape
+# drift went uncaught. The models below mirror the existing payloads
+# one-for-one — no shape changes.
+
+
+class SymbolsResponse(BaseModel):
+    """Response for GET /historical/symbols."""
+
+    symbols: list[str]
+    count: int
+    timestamp: str
+
+
+class CoverageResponse(BaseModel):
+    """Response for GET /historical/coverage.
+
+    Shape is a superset because the endpoint returns either per-symbol
+    coverage (with ``symbol`` + per-symbol fields) or aggregate cache
+    health (with ``total_bars`` / ``cache_size_bytes`` fields). All
+    non-timestamp fields are optional so the single model covers both
+    payload shapes.
+    """
+
+    symbol: str | None = None
+    first_date: str | None = None
+    last_date: str | None = None
+    total_bars: int | None = None
+    trading_days: int | None = None
+    cache_size_bytes: int | None = None
+    symbols_cached: int | None = None
+    timestamp: str
+
+    model_config = {"extra": "allow"}
+
+
+class BarsResponse(BaseModel):
+    """Response for GET /historical/bars/{symbol}."""
+
+    symbol: str
+    start_date: str
+    end_date: str
+    count: int
+    bars: list[dict[str, object]]
+    timestamp: str
+
+
+class ValidateCoverageResponse(BaseModel):
+    """Response for POST /historical/validate-coverage."""
+
+    results: dict[str, bool]
+    min_bars: int
+    timestamp: str
+
+
 router = APIRouter()
 
 _MAX_BARS_PER_REQUEST = 50_000
@@ -66,7 +122,7 @@ def _parse_date(value: str, param_name: str) -> str:
         )
 
 
-@router.get("/symbols")
+@router.get("/symbols", response_model=SymbolsResponse)
 async def get_symbols(
     _auth: dict = Depends(require_auth),  # noqa: B008
     state: AppState = Depends(get_app_state),  # noqa: B008
@@ -96,7 +152,7 @@ async def get_symbols(
         ) from exc
 
 
-@router.get("/coverage")
+@router.get("/coverage", response_model=CoverageResponse)
 async def get_coverage(
     symbol: str | None = Query(default=None, description="Ticker symbol for per-symbol coverage"),
     _auth: dict = Depends(require_auth),  # noqa: B008
@@ -137,7 +193,7 @@ async def get_coverage(
         ) from exc
 
 
-@router.get("/bars/{symbol}")
+@router.get("/bars/{symbol}", response_model=BarsResponse)
 async def get_bars(
     symbol: str,
     start_date: str = Query(..., description="Start date YYYY-MM-DD (inclusive)"),
@@ -206,7 +262,7 @@ async def get_bars(
     }
 
 
-@router.post("/validate-coverage")
+@router.post("/validate-coverage", response_model=ValidateCoverageResponse)
 async def validate_coverage(
     request: ValidateCoverageRequest,
     _auth: dict = Depends(require_auth),  # noqa: B008

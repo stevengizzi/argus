@@ -85,6 +85,49 @@ class ChangeHistoryEntry(BaseModel):
     report_id: str | None
 
 
+# Response envelopes (FIX-07 P1-F1-5). Routes below previously returned
+# bare ``dict`` which left OpenAPI docs untyped. Shapes mirror the
+# payloads one-for-one.
+
+
+class ReportsListResponse(BaseModel):
+    """Response for GET /reports."""
+
+    reports: list[dict[str, object]]
+    count: int
+    timestamp: str
+
+
+class ReportDetailResponse(BaseModel):
+    """Response for GET /reports/{report_id}."""
+
+    report: dict[str, object]
+    timestamp: str
+
+
+class ProposalsListResponse(BaseModel):
+    """Response for GET /proposals."""
+
+    proposals: list[dict[str, object]]
+    count: int
+    timestamp: str
+
+
+class ProposalActionResponse(BaseModel):
+    """Response for POST /proposals/{id}/approve|dismiss|revert."""
+
+    proposal: dict[str, object]
+    timestamp: str
+
+
+class ConfigHistoryResponse(BaseModel):
+    """Response for GET /config-history."""
+
+    changes: list[dict[str, object]]
+    count: int
+    timestamp: str
+
+
 # --- Helper functions ---
 
 
@@ -161,7 +204,7 @@ async def trigger_analysis(
     )
 
 
-@router.get("/reports")
+@router.get("/reports", response_model=ReportsListResponse)
 async def list_reports(
     start_date: str | None = Query(default=None),
     end_date: str | None = Query(default=None),
@@ -197,7 +240,7 @@ async def list_reports(
     }
 
 
-@router.get("/reports/{report_id}")
+@router.get("/reports/{report_id}", response_model=ReportDetailResponse)
 async def get_report(
     report_id: str,
     _auth: dict = Depends(require_auth),  # noqa: B008
@@ -217,7 +260,7 @@ async def get_report(
     }
 
 
-@router.get("/proposals")
+@router.get("/proposals", response_model=ProposalsListResponse)
 async def list_proposals(
     status_filter: str | None = Query(default=None, alias="status"),
     report_id: str | None = Query(default=None),
@@ -250,7 +293,7 @@ async def list_proposals(
     }
 
 
-@router.post("/proposals/{proposal_id}/approve")
+@router.post("/proposals/{proposal_id}/approve", response_model=ProposalActionResponse)
 async def approve_proposal(
     proposal_id: str,
     body: ApproveRequest | None = None,
@@ -301,7 +344,7 @@ async def approve_proposal(
     }
 
 
-@router.post("/proposals/{proposal_id}/dismiss")
+@router.post("/proposals/{proposal_id}/dismiss", response_model=ProposalActionResponse)
 async def dismiss_proposal(
     proposal_id: str,
     body: ApproveRequest | None = None,
@@ -352,7 +395,7 @@ async def dismiss_proposal(
     }
 
 
-@router.post("/proposals/{proposal_id}/revert")
+@router.post("/proposals/{proposal_id}/revert", response_model=ProposalActionResponse)
 async def revert_proposal(
     proposal_id: str,
     body: ApproveRequest | None = None,
@@ -415,7 +458,7 @@ async def revert_proposal(
     }
 
 
-@router.get("/config-history")
+@router.get("/config-history", response_model=ConfigHistoryResponse)
 async def get_config_history(
     start_date: str | None = Query(default=None),
     end_date: str | None = Query(default=None),

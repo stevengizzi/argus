@@ -46,7 +46,13 @@ class SECEdgarClient(CatalystSource):
         await client.stop()
     """
 
-    # SEC EDGAR base URLs
+    # SEC EDGAR base URLs. These are SEC-owned constants, not operator
+    # tunables — they do not belong in YAML config. The global rule in
+    # ``.claude/rules/architecture.md`` ("All tunable parameters live
+    # in YAML") applies to values an operator might reasonably want to
+    # change; changing these would mean the SEC moved its public API,
+    # which is a code-level migration event, not a config flip
+    # (FIX-07 P1-D1-L13).
     _TICKERS_URL = "https://www.sec.gov/files/company_tickers.json"
     _SUBMISSIONS_URL = "https://data.sec.gov/submissions/CIK{cik}.json"
     _FILING_URL = "https://www.sec.gov/Archives/edgar/data/{cik}/{accession}/{doc}"

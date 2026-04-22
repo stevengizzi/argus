@@ -261,9 +261,30 @@ class CatalystPipeline:
     ) -> list[ClassifiedCatalyst]:
         """Remove semantically duplicate catalysts within a time window.
 
-        Groups catalysts by (symbol, category) and within each group, removes
-        items published within dedup_window_minutes of each other, keeping
-        the one with the highest quality_score.
+        Groups catalysts by (symbol, category) and within each group,
+        removes items published within ``dedup_window_minutes`` of each
+        other, keeping the one with the highest ``quality_score``.
+
+        Dedup anchor semantics (DEC-311, pinned FIX-07 P1-D1-M12):
+        each new catalyst is compared to the *last kept* item in the
+        group (``kept[-1]``), NOT to a sliding cluster midpoint or the
+        first-seen anchor. The trade-off:
+
+        - If scores within a window *decrease* over time, some
+          later-arriving items may fall outside the window of the
+          first-seen item but still within the window of the
+          last-kept item; those are correctly deduped.
+        - If scores within a window *increase* over time, the kept
+          item moves forward chronologically and a slightly later
+          arrival may land outside the new window even though it
+          would have been inside the first-seen item's window.
+          This is the documented limitation; in practice catalysts
+          within a 30-min window have similar quality scores and
+          the effect is marginal.
+
+        Changing this semantic would alter dedup counts across
+        ongoing paper-trading data collection; pinned current
+        behavior to preserve continuity.
 
         Args:
             catalysts: List of classified catalysts.

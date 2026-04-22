@@ -9,7 +9,7 @@ Sprint 27.7, Session 4.
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
@@ -22,6 +22,10 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+# UTC is the canonical wire-format timezone for the Command Center API.
+# The ET zone is retained only for display/payload fields that were
+# historically ET-tagged (Sprint 25 onward). Timestamps returned by this
+# file match every other route in the API (FIX-07 P1-F1-6).
 _ET = ZoneInfo("America/New_York")
 
 
@@ -54,10 +58,20 @@ class FilterAccuracyResponse(BaseModel):
     by_regime: list[BreakdownResponse]
 
 
+class CounterfactualPositionsResponse(BaseModel):
+    """Response for GET /counterfactual/positions (FIX-07 P1-F1-5)."""
+
+    positions: list[dict[str, object]]
+    total_count: int
+    limit: int
+    offset: int
+    timestamp: str
+
+
 # --- Endpoints ---
 
 
-@router.get("/positions")
+@router.get("/positions", response_model=CounterfactualPositionsResponse)
 async def get_counterfactual_positions(
     strategy_id: str | None = Query(default=None, description="Filter by strategy ID"),
     date_from: str | None = Query(default=None, description="ISO 8601 start date for opened_at"),
@@ -91,7 +105,7 @@ async def get_counterfactual_positions(
             "total_count": 0,
             "limit": limit,
             "offset": offset,
-            "timestamp": datetime.now(_ET).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
     try:
@@ -121,7 +135,7 @@ async def get_counterfactual_positions(
         "total_count": total_count,
         "limit": limit,
         "offset": offset,
-        "timestamp": datetime.now(_ET).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
     }
 
 
@@ -201,7 +215,14 @@ async def get_counterfactual_accuracy(
     def _breakdown_to_response(b: object) -> BreakdownResponse:
         """Convert a FilterAccuracyBreakdown to response model."""
         from argus.intelligence.filter_accuracy import FilterAccuracyBreakdown
-        assert isinstance(b, FilterAccuracyBreakdown)
+
+        # DEF-106 / FIX-07 P1-F1-7 — `assert isinstance` strips under
+        # `python -O`, silently allowing any object through. Raise
+        # explicitly so the guard survives optimization builds.
+        if not isinstance(b, FilterAccuracyBreakdown):
+            raise TypeError(
+                f"Expected FilterAccuracyBreakdown, got {type(b).__name__}"
+            )
         return BreakdownResponse(
             category=b.category,
             total_rejections=b.total_rejections,

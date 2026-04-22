@@ -174,6 +174,14 @@ class InsightResponse(BaseModel):
     message: str | None = None
 
 
+class ContextDebugResponse(BaseModel):
+    """Response for GET /ai/context/{page} (FIX-07 P1-F1-5)."""
+
+    page: str
+    context: dict[str, Any]
+    timestamp: str
+
+
 # --- Helper Functions ---
 
 
@@ -518,7 +526,7 @@ async def get_conversation(
     )
 
 
-@router.get("/context/{page}")
+@router.get("/context/{page}", response_model=ContextDebugResponse)
 async def get_context(
     page: str,
     _auth: dict = Depends(require_auth),  # noqa: B008

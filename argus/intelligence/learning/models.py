@@ -251,7 +251,12 @@ class LearningReport:
             Reconstructed LearningReport.
         """
         dq_raw = d["data_quality"]
-        assert isinstance(dq_raw, dict)
+        # DEF-106 / FIX-07 P1-D1-L14 — `assert isinstance` strips under
+        # `python -O`, silently allowing the wrong shape through.
+        if not isinstance(dq_raw, dict):
+            raise TypeError(
+                f"LearningReport.data_quality: expected dict, got {type(dq_raw).__name__}"
+            )
         data_quality = DataQualityPreamble(
             trading_days_count=int(dq_raw["trading_days_count"]),
             total_trades=int(dq_raw["total_trades"]),
@@ -263,32 +268,58 @@ class LearningReport:
         )
 
         weight_recs_raw = d.get("weight_recommendations", [])
-        assert isinstance(weight_recs_raw, list)
+        if not isinstance(weight_recs_raw, list):
+            raise TypeError(
+                f"LearningReport.weight_recommendations: expected list, "
+                f"got {type(weight_recs_raw).__name__}"
+            )
         weight_recs = [_parse_weight_rec(wr) for wr in weight_recs_raw]
 
         threshold_recs_raw = d.get("threshold_recommendations", [])
-        assert isinstance(threshold_recs_raw, list)
+        if not isinstance(threshold_recs_raw, list):
+            raise TypeError(
+                f"LearningReport.threshold_recommendations: expected list, "
+                f"got {type(threshold_recs_raw).__name__}"
+            )
         threshold_recs = [_parse_threshold_rec(tr) for tr in threshold_recs_raw]
 
         cr_raw = d.get("correlation_result")
         correlation_result: CorrelationResult | None = None
         if cr_raw is not None:
-            assert isinstance(cr_raw, dict)
+            if not isinstance(cr_raw, dict):
+                raise TypeError(
+                    f"LearningReport.correlation_result: expected dict, "
+                    f"got {type(cr_raw).__name__}"
+                )
             # Restore tuple keys from "a|b" string keys
             raw_matrix = cr_raw.get("correlation_matrix", {})
-            assert isinstance(raw_matrix, dict)
+            if not isinstance(raw_matrix, dict):
+                raise TypeError(
+                    f"correlation_matrix: expected dict, "
+                    f"got {type(raw_matrix).__name__}"
+                )
             matrix: dict[tuple[str, str], float] = {}
             for key_str, val in raw_matrix.items():
-                assert isinstance(key_str, str)
+                if not isinstance(key_str, str):
+                    raise TypeError(
+                        f"correlation_matrix key: expected str, "
+                        f"got {type(key_str).__name__}"
+                    )
                 parts = key_str.split("|")
                 matrix[(parts[0], parts[1])] = float(val)
 
             raw_pairs = cr_raw.get("strategy_pairs", [])
-            assert isinstance(raw_pairs, list)
+            if not isinstance(raw_pairs, list):
+                raise TypeError(
+                    f"strategy_pairs: expected list, got {type(raw_pairs).__name__}"
+                )
             strategy_pairs = [(p[0], p[1]) for p in raw_pairs]
 
             raw_flagged = cr_raw.get("flagged_pairs", [])
-            assert isinstance(raw_flagged, list)
+            if not isinstance(raw_flagged, list):
+                raise TypeError(
+                    f"flagged_pairs: expected list, got {type(raw_flagged).__name__}"
+                )
             flagged_pairs = [(p[0], p[1]) for p in raw_flagged]
 
             raw_overlap = cr_raw.get("overlap_counts", {})
@@ -442,7 +473,11 @@ def _parse_dt_required(val: object) -> datetime:
 def _parse_weight_rec(raw: dict[str, object]) -> WeightRecommendation:
     """Parse a WeightRecommendation from a dict."""
     regime_breakdown = raw.get("regime_breakdown", {})
-    assert isinstance(regime_breakdown, dict)
+    if not isinstance(regime_breakdown, dict):
+        raise TypeError(
+            f"WeightRecommendation.regime_breakdown: expected dict, "
+            f"got {type(regime_breakdown).__name__}"
+        )
     return WeightRecommendation(
         dimension=str(raw["dimension"]),
         current_weight=float(raw["current_weight"]),

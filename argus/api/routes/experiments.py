@@ -47,6 +47,43 @@ class RunSweepResponse(BaseModel):
     timestamp: str
 
 
+# Response envelopes (FIX-07 P1-F1-5). Routes below previously returned
+# bare ``dict`` which left OpenAPI docs untyped.
+
+
+class ExperimentsListResponse(BaseModel):
+    """Response for GET /experiments."""
+
+    experiments: list[dict[str, object]]
+    count: int
+    timestamp: str
+
+
+class ExperimentDetailResponse(BaseModel):
+    """Response for GET /experiments/{experiment_id} and /baseline/{pattern}."""
+
+    experiment: dict[str, object]
+    timestamp: str
+
+
+class VariantsListResponse(BaseModel):
+    """Response for GET /experiments/variants."""
+
+    variants: list[dict[str, object]]
+    count: int
+    timestamp: str
+
+
+class PromotionsListResponse(BaseModel):
+    """Response for GET /experiments/promotions."""
+
+    events: list[dict[str, object]]
+    total_count: int
+    limit: int
+    offset: int
+    timestamp: str
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -97,7 +134,7 @@ def _record_to_dict(record: object) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-@router.get("")
+@router.get("", response_model=ExperimentsListResponse)
 async def list_experiments(
     pattern: str | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=200),
@@ -118,7 +155,7 @@ async def list_experiments(
     }
 
 
-@router.get("/baseline/{pattern_name}")
+@router.get("/baseline/{pattern_name}", response_model=ExperimentDetailResponse)
 async def get_baseline(
     pattern_name: str,
     _auth: dict = Depends(require_auth),  # noqa: B008
@@ -142,7 +179,7 @@ async def get_baseline(
     }
 
 
-@router.get("/variants")
+@router.get("/variants", response_model=VariantsListResponse)
 async def list_variants_with_metrics(
     _auth: dict = Depends(require_auth),  # noqa: B008
     state: AppState = Depends(get_app_state),  # noqa: B008
@@ -169,7 +206,7 @@ async def list_variants_with_metrics(
     }
 
 
-@router.get("/promotions")
+@router.get("/promotions", response_model=PromotionsListResponse)
 async def list_promotion_events(
     limit: int = Query(default=100, ge=1, le=500, description="Max results per page"),
     offset: int = Query(default=0, ge=0, description="Rows to skip for pagination"),
@@ -204,7 +241,7 @@ async def list_promotion_events(
     }
 
 
-@router.get("/{experiment_id}")
+@router.get("/{experiment_id}", response_model=ExperimentDetailResponse)
 async def get_experiment(
     experiment_id: str,
     _auth: dict = Depends(require_auth),  # noqa: B008

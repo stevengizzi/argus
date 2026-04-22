@@ -235,7 +235,7 @@ class CatalystClassifier:
             daily_total = await self._get_daily_cost()
 
         logger.info(
-            "Classification cycle cost: $%.4f "
+            "Classification batch cost: $%.4f "
             "(%d via Claude, %d via fallback, %d cached)",
             cycle_cost,
             claude_count,
@@ -295,7 +295,7 @@ class CatalystClassifier:
             return self._parse_claude_response(response, len(batch)), call_cost
 
         except Exception as e:
-            logger.error("Error calling Claude API: %s", e)
+            logger.error("Error calling Claude API: %s", e, exc_info=True)
             return None, 0.0
 
     def _parse_claude_response(

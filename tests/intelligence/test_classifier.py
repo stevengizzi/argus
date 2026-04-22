@@ -602,10 +602,10 @@ class TestRecordUsageCalled:
 
 
 class TestCycleCostLogging:
-    """Tests for cycle cost logging output."""
+    """Tests for batch cost logging output."""
 
     @pytest.mark.asyncio
-    async def test_cycle_cost_logged_with_counts(
+    async def test_batch_cost_logged_with_counts(
         self,
         mock_client: MagicMock,
         mock_usage_tracker: MagicMock,
@@ -613,7 +613,12 @@ class TestCycleCostLogging:
         config: CatalystConfig,
         raw_item: CatalystRawItem,
     ) -> None:
-        """Cycle cost log includes dollar amount and Claude/fallback counts."""
+        """Batch cost log includes dollar amount and Claude/fallback counts.
+
+        Log message renamed from "cycle cost" to "batch cost" in
+        FIX-07 P1-D1-L12 — each ``classify_batch()`` call is one
+        batch, not one poll cycle.
+        """
         response, usage = _make_claude_response([
             {
                 "category": "earnings",
@@ -629,11 +634,11 @@ class TestCycleCostLogging:
         with patch("argus.intelligence.classifier.logger") as mock_logger:
             await classifier.classify_batch([raw_item])
 
-            # Find the info call with cycle cost
+            # Find the info call with batch cost
             info_calls = mock_logger.info.call_args_list
             cost_log = [
                 c for c in info_calls
-                if "Classification cycle cost" in str(c)
+                if "Classification batch cost" in str(c)
             ]
             assert len(cost_log) == 1
             log_msg = cost_log[0][0][0] % cost_log[0][0][1:]

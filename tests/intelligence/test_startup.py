@@ -538,7 +538,17 @@ class TestRunPollingLoop:
     async def test_polling_loop_timeout_catches_hanging_poll(
         self, mock_pipeline: MagicMock, polling_config: CatalystConfig, caplog
     ) -> None:
-        """When pipeline.run_poll hangs past timeout, TimeoutError is caught and logged."""
+        """An unexpected TimeoutError from run_poll is caught by the outer exception handler.
+
+        FIX-07 P1-D1-M09 removed the double-wrapped outer
+        ``asyncio.wait_for(120)``. ``CatalystPipeline.run_poll()``
+        already owns the timeout (DEC-319) and returns ``[]`` on
+        timeout — so the typical timeout path does NOT raise to the
+        polling loop at all. This regression test pins the remaining
+        behavior: if ``run_poll`` somehow still raises, the generic
+        ``except Exception`` handler catches it and the loop
+        continues to the sleep on the next iteration.
+        """
         import asyncio
         import logging
         from unittest.mock import patch
@@ -546,7 +556,9 @@ class TestRunPollingLoop:
         symbols = ["AAPL", "TSLA"]
         iteration_count = 0
 
-        # Make run_poll raise TimeoutError (simulating what wait_for does)
+        # Make run_poll raise TimeoutError — bubbles up because FIX-07
+        # removed the outer wait_for(120) that would have converted it
+        # to the prior "Poll cycle timed out after 120s" critical log.
         mock_pipeline.run_poll = AsyncMock(side_effect=asyncio.TimeoutError())
         mock_pipeline._sources = [MagicMock(), MagicMock()]
 
@@ -556,14 +568,9 @@ class TestRunPollingLoop:
             if iteration_count >= 1:
                 raise asyncio.CancelledError()
 
-        # Patch wait_for to propagate the TimeoutError from run_poll
-        async def passthrough_wait_for(coro, *, timeout):
-            return await coro
-
         with (
             patch("argus.intelligence.startup.asyncio.sleep", side_effect=mock_sleep),
-            patch("argus.intelligence.startup.asyncio.wait_for", side_effect=passthrough_wait_for),
-            caplog.at_level(logging.CRITICAL, logger="argus.intelligence.startup"),
+            caplog.at_level(logging.ERROR, logger="argus.intelligence.startup"),
         ):
             task = asyncio.create_task(
                 run_polling_loop(
@@ -577,10 +584,11 @@ class TestRunPollingLoop:
             with pytest.raises(asyncio.CancelledError):
                 await task
 
-        # Verify CRITICAL was logged with timeout message
-        assert "Poll cycle timed out after 120s" in caplog.text
-
-        # Loop continued after timeout (reached sleep)
+        # The generic Exception handler logs "Poll cycle failed:" —
+        # TimeoutError is a subclass of Exception, so this is where
+        # an escaped timeout lands post-FIX-07.
+        assert "Poll cycle failed" in caplog.text
+        # Loop continued (reached sleep)
         assert iteration_count == 1
 
     @pytest.mark.asyncio

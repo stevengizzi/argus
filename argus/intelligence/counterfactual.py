@@ -30,12 +30,43 @@ from argus.core.fill_model import FillExitReason, ExitResult, evaluate_bar_exit
 if TYPE_CHECKING:
     from argus.core.config import ExitManagementConfig
     from argus.core.events import CandleEvent, SignalEvent
-    from argus.data.intraday_candle_store import IntradayCandleStore
+    from argus.core.protocols import (
+        CandleStoreProtocol,
+        CounterfactualStoreProtocol,
+    )
     from argus.intelligence.config import QualityEngineConfig
 
 logger = logging.getLogger(__name__)
 
 _ET = ZoneInfo("America/New_York")
+
+# Zero-R epsilon (FIX-07 P1-D1-M11). Strategies that arithmetically derive
+# a stop from entry (e.g. `stop = entry - 0.10`) can produce a float
+# representation where entry != stop but `risk_per_share ~ 1e-15`. That
+# would poison the R-multiple average with a 1e15 outlier. Sub-penny
+# tolerance is tighter than any real equity tick, so rejecting here costs
+# no real signals.
+_ZERO_R_EPSILON = 0.0001
+
+
+def _log_fire_and_forget_failure(
+    task: asyncio.Task[None], *, context: str
+) -> None:
+    """done_callback that surfaces exceptions from fire-and-forget tasks.
+
+    ``asyncio.create_task(...)`` without a reference swallows exceptions
+    into the default event-loop handler (FIX-07 P1-D1-L06). Attaching
+    this callback guarantees that write_open/write_close failures are
+    visible in the log even when the outer try/except in the store
+    itself does not catch them.
+    """
+    if task.cancelled():
+        return
+    exc = task.exception()
+    if exc is not None:
+        logger.warning(
+            "Counterfactual %s task raised: %s", context, exc, exc_info=exc
+        )
 
 
 class RejectionStage(StrEnum):
@@ -183,7 +214,7 @@ class CounterfactualTracker:
 
     def __init__(
         self,
-        candle_store: IntradayCandleStore | None = None,
+        candle_store: CandleStoreProtocol | None = None,
         eod_close_time: str = "16:00",
         no_data_timeout_seconds: int = 300,
         exit_configs: dict[str, ExitManagementConfig] | None = None,
@@ -211,7 +242,7 @@ class CounterfactualTracker:
         self._open_positions: dict[str, _OpenPosition] = {}
         self._closed_positions: list[CounterfactualPosition] = []
         self._symbols_to_positions: dict[str, set[str]] = {}
-        self._store: object | None = None  # CounterfactualStore, set via set_store()
+        self._store: CounterfactualStoreProtocol | None = None
 
         if self._quality_config is not None:
             from argus.intelligence.scoring_fingerprint import (
@@ -255,7 +286,7 @@ class CounterfactualTracker:
             )
             return None
 
-        if signal.entry_price == signal.stop_price:
+        if abs(signal.entry_price - signal.stop_price) < _ZERO_R_EPSILON:
             logger.warning(
                 "Zero-R signal skipped for counterfactual tracking: %s %s",
                 signal.strategy_id, signal.symbol,
@@ -295,7 +326,7 @@ class CounterfactualTracker:
             quality_score=signal.quality_score if signal.quality_score is not None else None,
             quality_grade=signal.quality_grade if signal.quality_grade else None,
             regime_vector_snapshot=(
-                metadata.get("regime_vector_snapshot")  # type: ignore[union-attr]
+                metadata.get("regime_vector_snapshot")
                 if metadata and "regime_vector_snapshot" in metadata
                 else None
             ),
@@ -349,7 +380,7 @@ class CounterfactualTracker:
                 )
 
         # Fire-and-forget persistence for open position
-        if self._store is not None and hasattr(self._store, "write_open"):
+        if self._store is not None:
             open_snapshot = CounterfactualPosition(
                 position_id=pos.position_id,
                 symbol=pos.symbol,
@@ -377,7 +408,12 @@ class CounterfactualTracker:
                 scoring_fingerprint=pos.scoring_fingerprint,
             )
             try:
-                asyncio.get_running_loop().create_task(self._store.write_open(open_snapshot))
+                write_task = asyncio.get_running_loop().create_task(
+                    self._store.write_open(open_snapshot)
+                )
+                write_task.add_done_callback(
+                    lambda t: _log_fire_and_forget_failure(t, context="write_open")
+                )
             except RuntimeError:
                 pass  # No event loop — skip persistence
 
@@ -481,11 +517,14 @@ class CounterfactualTracker:
         """Number of closed counterfactual positions."""
         return len(self._closed_positions)
 
-    def set_store(self, store: object) -> None:
+    def set_store(self, store: CounterfactualStoreProtocol) -> None:
         """Attach a CounterfactualStore for persistence.
 
         Args:
-            store: A CounterfactualStore instance (duck-typed to avoid circular import).
+            store: A CounterfactualStore (or any object satisfying
+                ``CounterfactualStoreProtocol`` — structural typing avoids
+                the circular import that would come from naming the
+                concrete class here).
         """
         self._store = store
 
@@ -692,9 +731,14 @@ class CounterfactualTracker:
                 del self._symbols_to_positions[pos.symbol]
 
         # Fire-and-forget persistence
-        if self._store is not None and hasattr(self._store, "write_close"):
+        if self._store is not None:
             try:
-                asyncio.get_running_loop().create_task(self._store.write_close(closed))
+                write_task = asyncio.get_running_loop().create_task(
+                    self._store.write_close(closed)
+                )
+                write_task.add_done_callback(
+                    lambda t: _log_fire_and_forget_failure(t, context="write_close")
+                )
             except RuntimeError:
                 pass  # No event loop — skip persistence (e.g., tests)
 

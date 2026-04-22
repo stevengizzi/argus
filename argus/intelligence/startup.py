@@ -236,6 +236,18 @@ async def shutdown_intelligence(components: IntelligenceComponents) -> None:
     Stops the pipeline and closes storage connections. Safe to call
     even if components were not fully started.
 
+    Ordering note (FIX-07 P1-D1-L11): the caller MUST cancel the
+    polling task held by ``app_state.intelligence_polling_task`` (or
+    equivalent) BEFORE invoking this function. This call only winds
+    down the pipeline's per-source sessions and storage handle; it
+    does not interrupt an in-flight ``run_poll(...)`` invocation.
+    Correct shutdown order is:
+        1. ``polling_task.cancel()`` / ``await polling_task`` with
+           ``asyncio.CancelledError`` suppression,
+        2. ``await shutdown_intelligence(components)``.
+    ``api/server.py``'s lifespan handler already honors this order;
+    document it here for future callers.
+
     Args:
         components: The intelligence components to shut down.
     """
@@ -310,12 +322,17 @@ async def run_polling_loop(
                     # Initialize symbols here so it is always defined in except blocks
                     # even when firehose=True skips the get_symbols() assignment path
                     symbols: list[str] = []
+                    # Inner `CatalystPipeline.run_poll()` already wraps the
+                    # `gather(*fetch_tasks)` in a 120s timeout (DEC-319) and
+                    # returns `[]` if it fires. FIX-07 P1-D1-M09 removed the
+                    # redundant outer wait_for(120) that used to re-wrap
+                    # this call — a single timeout owner (the one with
+                    # source visibility) is less confusing at diagnostic
+                    # time. CatalystPipeline logs its own `.critical(...)`
+                    # if the inner timer trips.
                     if firehose:
                         logger.info("Polling in firehose mode (market-wide)")
-                        await asyncio.wait_for(
-                            pipeline.run_poll(symbols=[], firehose=True),
-                            timeout=120.0,
-                        )
+                        await pipeline.run_poll(symbols=[], firehose=True)
                     else:
                         symbols = get_symbols()
                         if not symbols:
@@ -329,17 +346,7 @@ async def run_polling_loop(
                                 len(symbols),
                                 symbols[:5],
                             )
-                            await asyncio.wait_for(
-                                pipeline.run_poll(symbols),
-                                timeout=120.0,
-                            )
-                except asyncio.TimeoutError:
-                    logger.critical(
-                        "Poll cycle timed out after 120s waiting for source fetches "
-                        "(%d sources, %d symbols)",
-                        len(pipeline._sources),
-                        len(symbols),
-                    )
+                            await pipeline.run_poll(symbols)
                 except asyncio.CancelledError:
                     logger.info("Polling loop cancelled")
                     raise

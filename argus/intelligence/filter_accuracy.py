@@ -28,10 +28,21 @@ _ET = ZoneInfo("America/New_York")
 class FilterAccuracyBreakdown:
     """Accuracy metric for a single filter category.
 
+    Correctness definition (FIX-07 P1-D1-L03): a rejection is deemed
+    "correct" when ``theoretical_pnl <= 0`` — i.e. a zero-P&L or
+    negative-P&L outcome counts as the filter having correctly
+    filtered out a non-winner. Breakeven outcomes are included in the
+    "correct" bucket rather than being treated as inconclusive. This
+    biases reported accuracy slightly upward compared to a strict
+    ``< 0`` definition; consumers reading ``accuracy`` should interpret
+    it as "fraction of rejections that did not make money."
+
     Attributes:
         category: The category value (e.g., "quality_filter", "B+", "orb_breakout").
         total_rejections: Total closed positions in this category.
-        correct_rejections: Would have lost money (theoretical_pnl <= 0).
+        correct_rejections: Would not have made money (theoretical_pnl <= 0).
+            Breakeven trades (pnl == 0) count as correct per the
+            definition above.
         incorrect_rejections: Would have made money (theoretical_pnl > 0).
         accuracy: correct / total (0.0-1.0).
         avg_theoretical_pnl: Average P&L of all rejected signals in this category.
@@ -164,12 +175,24 @@ async def compute_filter_accuracy(
     computes accuracy breakdowns by stage, reason, grade, strategy,
     and regime.
 
+    Sample-count note (FIX-07 P1-D1-L04): ``min_sample_count`` defaults
+    to 10 here (UI visualization threshold), while the Learning Loop's
+    analogous threshold is ``learning_loop.min_sample_count`` in
+    ``config/learning_loop.yaml`` and currently defaults to 30
+    (action-triggering threshold). The two intentionally diverge —
+    this function feeds a visual sample-sufficiency flag on a
+    counterfactual-accuracy dashboard, whereas the Learning Loop
+    gates config proposals that actually move weights. If the two are
+    ever unified behind a single config, update
+    ``config/learning_loop.yaml`` to own both.
+
     Args:
         store: CounterfactualStore to query.
         start_date: Start of analysis period (defaults to 30 days ago).
         end_date: End of analysis period (defaults to now).
         strategy_id: Optional strategy filter.
-        min_sample_count: Minimum sample count for sample_sufficient flag.
+        min_sample_count: Minimum sample count for ``sample_sufficient``
+            flag. Dashboard default 10; see docstring note.
 
     Returns:
         FilterAccuracyReport with all breakdowns.

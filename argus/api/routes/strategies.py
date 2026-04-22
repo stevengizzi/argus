@@ -28,6 +28,18 @@ _ET = ZoneInfo("America/New_York")
 router = APIRouter()
 
 
+class StrategyDecisionEvent(BaseModel):
+    """One entry from a strategy's decision ring buffer / telemetry store.
+
+    Shape is permissive (extra fields allowed) because the payload is
+    produced by ``dataclasses.asdict(event)`` on a dataclass whose
+    fields expand over time as new telemetry dimensions are added
+    (FIX-07 P1-F1-5).
+    """
+
+    model_config = {"extra": "allow"}
+
+
 class PerformanceSummary(BaseModel):
     """Summary of a strategy's live trading performance."""
 
@@ -379,7 +391,7 @@ async def get_strategy_spec(
     return StrategySpecResponse(strategy_id=strategy_id, documents=documents)
 
 
-@router.get("/{strategy_id}/decisions")
+@router.get("/{strategy_id}/decisions", response_model=list[StrategyDecisionEvent])
 async def get_strategy_decisions(
     strategy_id: str,
     symbol: str | None = Query(None),

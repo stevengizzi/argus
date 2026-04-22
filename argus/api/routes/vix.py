@@ -11,14 +11,55 @@ from __future__ import annotations
 from datetime import UTC, date, datetime, timedelta
 
 from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel
 
 from argus.api.auth import require_auth
 from argus.api.dependencies import AppState, get_app_state
 
+
+# Response models (FIX-07 P1-F1-5). Shape mirrors the existing payload
+# one-for-one; the ``extra: allow`` hatch preserves the "unavailable"
+# status payload which has a different shape than the normal response.
+
+
+class VixCurrentResponse(BaseModel):
+    """Response for GET /vix/current."""
+
+    status: str
+    timestamp: str
+    message: str | None = None
+    data_date: str | None = None
+    vix_close: float | None = None
+    vol_of_vol_ratio: float | None = None
+    vix_percentile: float | None = None
+    term_structure_proxy: float | None = None
+    realized_vol_20d: float | None = None
+    variance_risk_premium: float | None = None
+    regime: dict[str, object] | None = None
+    is_stale: bool | None = None
+    last_updated: str | None = None
+
+    model_config = {"extra": "allow"}
+
+
+class VixHistoryResponse(BaseModel):
+    """Response for GET /vix/history."""
+
+    status: str
+    count: int
+    data: list[dict[str, object]]
+    timestamp: str
+    start_date: str | None = None
+    end_date: str | None = None
+    message: str | None = None
+
+    model_config = {"extra": "allow"}
+
+
 router = APIRouter()
 
 
-@router.get("/current")
+@router.get("/current", response_model=VixCurrentResponse)
 async def get_vix_current(
     _auth: dict = Depends(require_auth),  # noqa: B008
     state: AppState = Depends(get_app_state),  # noqa: B008
@@ -90,7 +131,7 @@ async def get_vix_current(
     }
 
 
-@router.get("/history")
+@router.get("/history", response_model=VixHistoryResponse)
 async def get_vix_history(
     _auth: dict = Depends(require_auth),  # noqa: B008
     state: AppState = Depends(get_app_state),  # noqa: B008

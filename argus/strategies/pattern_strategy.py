@@ -33,6 +33,7 @@ if TYPE_CHECKING:
     from typing import Any
 
     from argus.analytics.trade_logger import TradeLogger
+    from argus.core.protocols import CandleStoreProtocol
     from argus.data.fmp_reference import SymbolReferenceData
     from argus.data.service import DataService
 
@@ -94,7 +95,7 @@ class PatternBasedStrategy(BaseStrategy):
         self._candle_windows: dict[str, deque[CandleBar]] = {}
         self._last_score: float = 50.0
         self._last_context: dict[str, object] = {}
-        self._candle_store: object | None = None  # IntradayCandleStore, set post-init
+        self._candle_store: CandleStoreProtocol | None = None
         self._backfilled_symbols: set[str] = set()  # Track symbols already backfilled
         self._config_fingerprint: str | None = None
 
@@ -152,11 +153,14 @@ class PatternBasedStrategy(BaseStrategy):
         """
         self._config_fingerprint = fingerprint
 
-    def set_candle_store(self, store: object) -> None:
+    def set_candle_store(self, store: CandleStoreProtocol) -> None:
         """Set the IntradayCandleStore reference for auto-backfill.
 
         Args:
-            store: IntradayCandleStore instance (duck-typed to avoid import).
+            store: An ``IntradayCandleStore`` (or any object satisfying
+                ``CandleStoreProtocol`` — structural typing avoids
+                the circular import that would come from naming the
+                concrete class here).
         """
         self._candle_store = store
 
@@ -201,14 +205,12 @@ class PatternBasedStrategy(BaseStrategy):
         if self._candle_store is None:
             return
 
-        store = self._candle_store
-        if not hasattr(store, "get_bars") or not hasattr(store, "has_bars"):
+        # Protocol-typed since FIX-07 (P1-D1-L14 / DEF-096) — previous
+        # hasattr() probing was needed when the attribute was `object`.
+        if not self._candle_store.has_bars(symbol):
             return
 
-        if not store.has_bars(symbol):
-            return
-
-        bars = store.get_bars(symbol)
+        bars = self._candle_store.get_bars(symbol)
         if bars:
             self.backfill_candles(symbol, bars)
 

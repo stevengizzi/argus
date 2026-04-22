@@ -125,10 +125,16 @@ class SetupQualityEngine:
         return max(0.0, min(100.0, signal.pattern_strength))
 
     def _score_catalyst_quality(self, catalysts: list[ClassifiedCatalyst]) -> float:
+        # Intelligence-layer convention (FIX-07 P1-D1-M10): catalyst
+        # timestamps in ``catalyst.db`` are ET (see ``storage.py`` write
+        # path). Naive timestamps must therefore be localized to ET
+        # before the "last 24h" window comparison; localizing to UTC
+        # shifted the cutoff by 4-5h depending on DST and silently
+        # filtered out legitimate pre-market catalysts on DST-edge days.
         cutoff = datetime.now(UTC) - timedelta(hours=24)
         recent = [
             c for c in catalysts
-            if (c.published_at if c.published_at.tzinfo else c.published_at.replace(tzinfo=UTC))
+            if (c.published_at if c.published_at.tzinfo else c.published_at.replace(tzinfo=_ET))
             >= cutoff
         ]
         if not recent:
@@ -193,6 +199,14 @@ class SetupQualityEngine:
         return "C"
 
     def _risk_tier_from_grade(self, grade: str) -> str:
+        # V1: risk_tier is a direct alias of `grade` (FIX-07 P1-D1-L02).
+        # The SetupQuality dataclass and the quality_history table
+        # carry both fields because Sprint 24 anticipated a later
+        # many-to-one mapping (e.g., A+/A/A- all mapping to tier
+        # "aggressive"). That indirection was never needed — both
+        # DynamicPositionSizer and the DB-side consumers read grade
+        # directly. Keeping the two fields identical preserves the
+        # schema without pretending they carry different information.
         return grade
 
     def _build_rationale(

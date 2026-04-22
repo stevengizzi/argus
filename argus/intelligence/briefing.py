@@ -13,7 +13,11 @@ from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
-from argus.intelligence.models import ClassifiedCatalyst, IntelligenceBrief
+from argus.intelligence.models import (
+    CatalystClassification,
+    ClassifiedCatalyst,
+    IntelligenceBrief,
+)
 
 if TYPE_CHECKING:
     from argus.ai.client import ClaudeClient
@@ -243,7 +247,9 @@ class BriefingGenerator:
             return full_content, usage.estimated_cost_usd
 
         except Exception as e:
-            logger.error("Error generating brief with Claude: %s", e)
+            logger.error(
+                "Error generating brief with Claude: %s", e, exc_info=True
+            )
             return self._generate_fallback(catalysts, date), 0.0
 
     def _group_by_category(
@@ -252,6 +258,10 @@ class BriefingGenerator:
     ) -> dict[str, list[ClassifiedCatalyst]]:
         """Group catalysts by category.
 
+        Categories are sourced from ``CatalystClassification.VALID_CATEGORIES``
+        so adding a new category in one place does not silently route to
+        ``"other"`` here (FIX-07 P1-D1-L08).
+
         Args:
             catalysts: List of catalysts to group.
 
@@ -259,14 +269,7 @@ class BriefingGenerator:
             Dict mapping category name to list of catalysts.
         """
         grouped: dict[str, list[ClassifiedCatalyst]] = {
-            "earnings": [],
-            "insider_trade": [],
-            "analyst_action": [],
-            "regulatory": [],
-            "corporate_event": [],
-            "sec_filing": [],
-            "news_sentiment": [],
-            "other": [],
+            category: [] for category in sorted(CatalystClassification.VALID_CATEGORIES)
         }
 
         for catalyst in catalysts:
@@ -285,9 +288,14 @@ class BriefingGenerator:
     ) -> str:
         """Build the user prompt with catalyst data.
 
+        ``date`` is embedded once in the opening sentence so Claude
+        anchors its response to the correct trading day (the system
+        prompt is date-agnostic and reusable across sessions; noted
+        in FIX-07 P1-D1-L09 audit).
+
         Args:
             grouped: Catalysts grouped by category.
-            date: Trading date.
+            date: Trading date anchored in the opening sentence.
 
         Returns:
             Formatted prompt string.

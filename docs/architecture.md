@@ -1424,24 +1424,25 @@ Events published: `OrderFlowEvent(symbol, imbalance_ratio, ask_thin_rate, tape_s
 Throttling: configurable interval (default 100ms)
 **Status:** Deferred to post-revenue. Historical backtesting can proceed on Standard plan.
 
-#### CatalystPipeline (`intelligence/catalyst/pipeline.py`) — Sprint 23.5 ✅
+#### CatalystPipeline (`intelligence/__init__.py`) — Sprint 23.5 ✅
 
-Orchestrates catalyst ingestion, classification, and storage from three data sources (DEC-164, DEC-304).
+Orchestrates catalyst ingestion, classification, and storage from three data sources (DEC-164, DEC-304). The `intelligence/` directory is flat (there is no nested `intelligence/catalyst/` subdirectory); `CatalystPipeline` itself lives in the package `__init__.py`. Path references in earlier drafts of this section pointed at `intelligence/catalyst/...` paths that do not exist; corrected FIX-07 P1-D1-M08 (audit 2026-04-21).
 
 **Data Sources:**
-- `SECEdgarSource` (`intelligence/catalyst/sources/sec_edgar.py`): 8-K filings, Form 4 insider transactions
-- `FMPNewsSource` (`intelligence/catalyst/sources/fmp_news.py`): Stock news, press releases
-- `FinnhubSource` (`intelligence/catalyst/sources/finnhub.py`): Company news, analyst recommendations (DEC-306). Finnhub 403 responses downgraded from ERROR to WARNING with per-cycle request/403 counters and cycle summary log (Sprint 24.5 S6).
+- `SECEdgarClient` (`intelligence/sources/sec_edgar.py`): 8-K filings, Form 4 insider transactions
+- `FMPNewsClient` (`intelligence/sources/fmp_news.py`): Stock news, press releases
+- `FinnhubClient` (`intelligence/sources/finnhub.py`): Company news, analyst recommendations (DEC-306). Finnhub 403 responses downgraded from ERROR to WARNING with per-cycle request/403 counters and cycle summary log (Sprint 24.5 S6).
 
 **Core Components:**
-- `CatalystClassifier` (`intelligence/catalyst/classifier.py`): Claude API classification with rule-based fallback (DEC-301). Categories: earnings, insider, guidance, analyst, regulatory, partnership, product, restructuring, other.
-- `CatalystStorage` (`intelligence/catalyst/storage.py`): SQLite persistence with headline hash (SHA-256) deduplication (DEC-302).
-- `BriefingGenerator` (`intelligence/catalyst/briefing.py`): Pre-market intelligence brief generation with $5/day cost ceiling via UsageTracker (DEC-303).
+- `CatalystClassifier` (`intelligence/classifier.py`): Claude API classification with rule-based fallback (DEC-301). Categories: earnings, insider_trade, sec_filing, analyst_action, corporate_event, news_sentiment, regulatory, other (source of truth: `CatalystClassification.VALID_CATEGORIES` in `intelligence/models.py`).
+- `CatalystStorage` (`intelligence/storage.py`): SQLite persistence with headline hash (SHA-256) deduplication (DEC-302).
+- `BriefingGenerator` (`intelligence/briefing.py`): Pre-market intelligence brief generation with per-day cost ceiling via UsageTracker (DEC-303).
 
-Interface:
-- `async run(symbols: list[str]) -> list[Catalyst]`
-- `async classify(headline: str, symbol: str) -> CatalystClassification`
-- `async generate_briefing(symbols: list[str]) -> IntelligenceBrief`
+Interface (on `CatalystPipeline`):
+- `async start()` / `async stop()` — lifecycle for all sources.
+- `async run_poll(symbols: list[str], firehose: bool = False) -> list[ClassifiedCatalyst]` — single poll cycle (source fetch → headline-dedup → classify → semantic-dedup → batch-store → publish). Wraps source fetches in a single 120s safety-net `asyncio.wait_for(...)` (DEC-319); the caller in `intelligence/startup.py::run_polling_loop()` no longer double-wraps (FIX-07 P1-D1-M09).
+
+`BriefingGenerator.generate_brief(symbols, date=None) -> IntelligenceBrief` is the separate pre-market brief entrypoint (distinct from `CatalystPipeline`).
 
 Config: `catalyst.enabled` in system.yaml (default: false). Config-gated (DEC-300).
 
