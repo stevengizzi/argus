@@ -481,20 +481,36 @@ class TestGetClientImportGuard:
         with pytest.raises(ImportError, match="anthropic.*package is required"):
             client._get_client()
 
-    def test_get_client_caches_instance(self, enabled_config: AIConfig) -> None:
+    def test_get_client_caches_instance(
+        self,
+        enabled_config: AIConfig,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
         """Second call returns the cached client rather than re-instantiating.
 
-        This covers line 85-86 (``self._client = AsyncAnthropic(...)`` +
-        ``return self._client``) and the short-circuit on the cached branch.
+        Covers lines 85-86 (``self._client = AsyncAnthropic(...)`` + return)
+        and the cached short-circuit at line 77.
+
+        Injects a fake ``anthropic`` module into ``sys.modules`` so the test
+        runs in environments where the real package is not installed (notably
+        CI — ``anthropic`` is an optional runtime dep not listed in
+        pyproject.toml).
         """
+        fake_anthropic = MagicMock()
+        fake_anthropic.AsyncAnthropic = MagicMock(
+            side_effect=lambda **kwargs: MagicMock(name="AsyncAnthropicInstance")
+        )
+        monkeypatch.setitem(sys.modules, "anthropic", fake_anthropic)
+
         client = ClaudeClient(enabled_config)
         assert client._client is None
 
         first = client._get_client()
         second = client._get_client()
 
-        assert first is second
+        assert first is second, "Second _get_client() call should return the cached instance"
         assert client._client is first
+        assert fake_anthropic.AsyncAnthropic.call_count == 1
 
 
 class TestSendMessageRetryPaths:
