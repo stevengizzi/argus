@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from argus.core.config import StrategyConfig
+from argus.core.config import BrokerSource, StrategyConfig
 from argus.core.event_bus import EventBus
 from argus.core.events import (
     Event,
@@ -97,15 +97,16 @@ def _build_system(
         system._orchestrator.latest_regime_vector = None
 
     # Config
+    # _process_signal() checks `broker_source == BrokerSource.SIMULATED` to
+    # decide the legacy-sizing bypass. Use a real non-SIMULATED enum value
+    # (IBKR) so the comparison exercises the enum equality path rather than
+    # a MagicMock __eq__ tautology. (F6 / P1-G2-M07.)
     mock_config = MagicMock()
+    mock_config.system.broker_source = BrokerSource.IBKR
     if quality_enabled:
-        mock_config.system.broker_source = MagicMock()
-        mock_config.system.broker_source.__eq__ = lambda self, other: False
         mock_config.system.quality_engine.enabled = True
         mock_config.system.quality_engine.min_grade_to_trade = "C+"
     else:
-        mock_config.system.broker_source = MagicMock()
-        mock_config.system.broker_source.__eq__ = lambda self, other: False
         mock_config.system.quality_engine.enabled = False
     system._config = mock_config
 

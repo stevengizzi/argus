@@ -375,7 +375,7 @@ class TestExitManagementConfigLoading:
         from argus.core.config import ExitManagementConfig, load_yaml_file
 
         yaml_path = (
-            Path(__file__).resolve().parents[3] / "config" / "exit_management.yaml"
+            Path(__file__).resolve().parents[2] / "config" / "exit_management.yaml"
         )
         data = load_yaml_file(yaml_path)
         config = ExitManagementConfig(**data)

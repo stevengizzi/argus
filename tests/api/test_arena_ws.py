@@ -18,6 +18,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from starlette.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
 
 from argus.api.auth import create_access_token, set_jwt_secret
 from argus.api.dependencies import AppState
@@ -70,11 +71,11 @@ async def test_arena_ws_requires_auth_message(
 
     app = _build_app(app_state)
     client = TestClient(app)
-    try:
+    with pytest.raises(WebSocketDisconnect) as exc_info:
         with client.websocket_connect("/ws/v1/arena") as ws:
             ws.send_json({"type": "not_auth"})
-    except Exception:
-        pass  # Expected: server closes with 4001
+            ws.receive_json()  # observes server close
+    assert exc_info.value.code == 4001
 
 
 @pytest.mark.asyncio
@@ -88,11 +89,11 @@ async def test_arena_ws_rejects_invalid_token(
 
     app = _build_app(app_state)
     client = TestClient(app)
-    try:
+    with pytest.raises(WebSocketDisconnect) as exc_info:
         with client.websocket_connect("/ws/v1/arena") as ws:
             ws.send_json({"type": "auth", "token": "not-a-valid-jwt"})
-    except Exception:
-        pass  # Expected: connection closed with 4001
+            ws.receive_json()
+    assert exc_info.value.code == 4001
 
 
 @pytest.mark.asyncio

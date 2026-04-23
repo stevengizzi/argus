@@ -26,7 +26,7 @@ from argus.core.exit_math import StopToLevel
 # Paths
 # ---------------------------------------------------------------------------
 
-_CONFIG_DIR = Path(__file__).resolve().parents[3] / "config"
+_CONFIG_DIR = Path(__file__).resolve().parents[2] / "config"
 _EXIT_YAML = _CONFIG_DIR / "exit_management.yaml"
 
 

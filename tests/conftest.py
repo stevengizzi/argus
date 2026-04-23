@@ -1,5 +1,29 @@
 """Shared test fixtures for the Argus test suite."""
 
+# DEF-190: pyarrow registers pandas extension types (e.g. ``pandas.period``)
+# lazily on first DataFrame→Arrow conversion. Under xdist two workers that
+# both hit that first conversion simultaneously can race on
+# ``register_extension_type`` and raise
+# ``pyarrow.lib.ArrowKeyError: A type extension with name pandas.period
+# already defined``. Forcing the conversion here — at conftest import
+# time, once per worker process, before any test module executes —
+# pre-registers the extension types on the worker and eliminates the
+# race.
+import pandas as _pandas  # noqa: E402
+import pyarrow as _pyarrow  # noqa: E402
+
+
+def _prewarm_pyarrow_pandas_extensions() -> None:
+    try:
+        df = _pandas.DataFrame({"_p": [_pandas.Period("2024-01", freq="M")]})
+        _pyarrow.Table.from_pandas(df)
+    except Exception:
+        # Prewarm is best-effort; a failure here should never break tests.
+        pass
+
+
+_prewarm_pyarrow_pandas_extensions()
+
 from collections.abc import AsyncGenerator
 from pathlib import Path
 

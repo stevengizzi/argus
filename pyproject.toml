@@ -65,6 +65,21 @@ markers = [
     "unit: pure unit tests (no I/O, no async fixtures)",
 ]
 
+[tool.coverage.run]
+source = ["argus"]
+branch = true
+omit = [
+    "argus/api/setup_password.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "if __name__",
+]
+
 [tool.ruff]
 line-length = 100
 target-version = "py311"

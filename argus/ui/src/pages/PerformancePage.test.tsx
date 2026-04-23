@@ -63,10 +63,21 @@ vi.mock('../features/debrief/QualityOutcomeScatter', () => ({
 
 import { usePerformance, usePreviousPeriodPerformance } from '../hooks/usePerformance';
 
+const _today = new Date().toISOString().slice(0, 10);
+const _dayMinus27 = new Date(Date.now() - 27 * 24 * 3600 * 1000)
+  .toISOString()
+  .slice(0, 10);
+const _dayMinus26 = new Date(Date.now() - 26 * 24 * 3600 * 1000)
+  .toISOString()
+  .slice(0, 10);
+const _dayMinus25 = new Date(Date.now() - 25 * 24 * 3600 * 1000)
+  .toISOString()
+  .slice(0, 10);
+
 const mockPerformanceData = {
   period: 'month',
-  date_from: '2026-02-01',
-  date_to: '2026-02-28',
+  date_from: _dayMinus27,
+  date_to: _today,
   metrics: {
     total_trades: 45,
     win_rate: 0.65,
@@ -84,9 +95,9 @@ const mockPerformanceData = {
     consecutive_losses_max: 2,
   },
   daily_pnl: [
-    { date: '2026-02-01', pnl: 100, trades: 2 },
-    { date: '2026-02-02', pnl: 150, trades: 3 },
-    { date: '2026-02-03', pnl: -50, trades: 1 },
+    { date: _dayMinus27, pnl: 100, trades: 2 },
+    { date: _dayMinus26, pnl: 150, trades: 3 },
+    { date: _dayMinus25, pnl: -50, trades: 1 },
   ],
   by_strategy: {
     strat_orb_breakout: {
@@ -96,7 +107,7 @@ const mockPerformanceData = {
       profit_factor: 2.4,
     },
   },
-  timestamp: '2026-02-28T12:00:00Z',
+  timestamp: new Date().toISOString(),
 };
 
 function createQueryClient() {

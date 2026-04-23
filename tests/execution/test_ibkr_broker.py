@@ -7,6 +7,7 @@ cancel/modify, account queries, and flatten operations.
 from __future__ import annotations
 
 import asyncio
+import itertools
 from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -75,7 +76,14 @@ def mock_ib() -> MagicMock:
     # connectAsync returns a coroutine
     ib.connectAsync = AsyncMock()
 
-    # placeOrder returns a Trade object
+    # DEF-171: orderId previously derived from `id(order) % 10000`, which
+    # could collide when multiple orders share the low 13 bits of their
+    # memory address — particularly under xdist where the test_all_ulids_
+    # mapped_bidirectionally test places 4 bracket orders back-to-back.
+    # A fixture-scoped monotonic counter guarantees unique IDs across all
+    # orders placed inside a single test case.
+    order_id_counter = itertools.count(1)
+
     def make_trade(contract: Stock, order: IBOrder) -> MagicMock:
         trade = MagicMock()
         trade.order = order
@@ -86,9 +94,8 @@ def mock_ib() -> MagicMock:
         trade.orderStatus.remaining = order.totalQuantity
         trade.orderStatus.avgFillPrice = 0.0
         trade.fills = []
-        # Assign orderId if not set
         if not hasattr(order, "_mock_order_id"):
-            order._mock_order_id = id(order) % 10000
+            order._mock_order_id = next(order_id_counter)
             order.orderId = order._mock_order_id
         return trade
 

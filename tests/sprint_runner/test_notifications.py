@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -309,10 +309,10 @@ class TestReminderEscalation:
         )
         manager = NotificationManager(config)
 
-        # Simulate HALTED sent 2 minutes ago
-        manager.last_halted_notification = datetime.now(UTC).replace(
-            minute=(datetime.now(UTC).minute - 2) % 60
-        )
+        # Simulate HALTED sent 2 minutes ago (DEF-150: prior arithmetic
+        # `(minute - 2) % 60` moved the timestamp into the future when
+        # minute ∈ {0,1}, causing check_reminder to skip the send).
+        manager.last_halted_notification = datetime.now(UTC) - timedelta(minutes=2)
 
         with patch.object(manager, "send", return_value=True) as mock_send:
             result = manager.check_reminder()

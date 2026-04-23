@@ -23,7 +23,7 @@ const mockFilesystemDoc: ResearchDocument = {
   is_editable: false,
   created_at: null,
   updated_at: null,
-  last_modified: '2026-02-20T10:00:00Z',
+  last_modified: new Date().toISOString(),
 };
 
 // Mock database document (editable)
@@ -38,8 +38,8 @@ const mockDatabaseDoc: ResearchDocument = {
   reading_time_min: 5,
   source: 'database',
   is_editable: true,
-  created_at: '2026-02-25T14:00:00Z',
-  updated_at: '2026-02-26T09:00:00Z',
+  created_at: new Date(Date.now() - 2 * 86400_000).toISOString(),
+  updated_at: new Date(Date.now() - 86400_000).toISOString(),
   last_modified: null,
 };
 

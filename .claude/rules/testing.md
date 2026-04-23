@@ -9,6 +9,13 @@ argus/strategies/orb.py       → tests/strategies/test_orb.py
 argus/execution/broker.py     → tests/execution/test_broker.py
 ```
 
+## Test Organization Style
+
+Either class-based (`class TestFoo: def test_bar(self): ...`) or
+function-based (`def test_bar(): ...`) organization is acceptable. The
+suite currently mixes both. New tests should align with the file's
+existing style; do not bulk-rewrite files to convert between styles.
+
 ## Naming
 
 Test functions describe behavior and expected outcome:

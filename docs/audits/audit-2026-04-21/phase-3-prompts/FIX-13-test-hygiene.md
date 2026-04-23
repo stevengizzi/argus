@@ -89,6 +89,19 @@ Findings below are ordered to minimize file churn (edits to the same file are ad
 
 ## Findings to Fix
 
+## FIX-13 Split Notice (2026-04-23)
+
+Per operator direction, this 25-finding audit prompt has been split into
+two sessions to keep each session sized correctly:
+
+- **FIX-13a-test-hygiene-tactical** (executed 2026-04-23): ~15 tactical
+  findings + 4 scope-added DEFs. Back-annotations land here with
+  `**RESOLVED FIX-13a-test-hygiene-tactical**` or
+  `**RESOLVED-VERIFIED FIX-13a-test-hygiene-tactical**`.
+- **FIX-13b-test-hygiene-refactors** (pending): 8 larger refactor
+  findings (F5, F7, F8, F9, F11, F13, F18, F21, F23). Back-annotated
+  here as `**DEFERRED TO FIX-13b-test-hygiene-refactors**`.
+
 ### Finding 1: `P1-G1-L03` [LOW]
 
 **File/line:** [tests/accounting/__init__.py](tests/accounting/__init__.py), [tests/notifications/__init__.py](tests/notifications/__init__.py)
@@ -115,6 +128,8 @@ Findings below are ordered to minimize file churn (edits to the same file are ad
 3. If the fix adds new behavior, add a test that would fail without
    the fix. If it removes code, grep-verify no other call sites remain.
 4. Update the audit report row with `**RESOLVED FIX-13-test-hygiene**`.
+
+> **STATUS:** RESOLVED FIX-13a-test-hygiene-tactical (deleted tests/accounting/ and tests/notifications/; grep-verified no import references).
 
 ### Finding 2: `P1-G2-L07` [LOW]
 
@@ -143,6 +158,8 @@ Findings below are ordered to minimize file churn (edits to the same file are ad
    the fix. If it removes code, grep-verify no other call sites remain.
 4. Update the audit report row with `**RESOLVED FIX-13-test-hygiene**`.
 
+> **STATUS:** RESOLVED FIX-13a-test-hygiene-tactical (duplicate of Finding 1; single deletion resolves both).
+
 ### Finding 3: `P1-G1-M07` [MEDIUM]
 
 **File/line:** [tests/sprint_runner/test_notifications.py:302-321](tests/sprint_runner/test_notifications.py#L302-L321)
@@ -169,6 +186,8 @@ Findings below are ordered to minimize file churn (edits to the same file are ad
 3. If the fix adds new behavior, add a test that would fail without
    the fix. If it removes code, grep-verify no other call sites remain.
 4. Update the audit report row with `**RESOLVED FIX-13-test-hygiene**`.
+
+> **STATUS:** RESOLVED FIX-13a-test-hygiene-tactical (one-line fix in tests/sprint_runner/test_notifications.py:313 — `datetime.now(UTC) - timedelta(minutes=2)` replaces the `(minute - 2) % 60` arithmetic). Closes DEF-150.
 
 ### Finding 4: `DEF-150` [LOW]
 
@@ -199,6 +218,8 @@ Findings below are ordered to minimize file churn (edits to the same file are ad
    the fix. If it removes code, grep-verify no other call sites remain.
 4. Update the audit report row with `**RESOLVED FIX-13-test-hygiene**`.
 
+> **STATUS:** RESOLVED FIX-13a-test-hygiene-tactical (same fix as Finding 3). Closes DEF-150.
+
 ### Finding 5: `P1-G2-C01` [CRITICAL]
 
 **File/line:** [tests/strategies/test_shadow_mode.py:83-147](tests/strategies/test_shadow_mode.py#L83-L147)
@@ -228,6 +249,8 @@ Findings below are ordered to minimize file churn (edits to the same file are ad
    the fix. If it removes code, grep-verify no other call sites remain.
 4. Update the audit report row with `**RESOLVED FIX-13-test-hygiene**`.
 
+> **STATUS:** DEFERRED TO FIX-13b-test-hygiene-refactors (full `_build_system()` refactor — 13 test classes affected; band-aid hasattr guards would be discarded by FIX-13b's proper fix).
+
 ### Finding 6: `P1-G2-M07` [MEDIUM]
 
 **File/line:** [tests/strategies/test_shadow_mode.py:108](tests/strategies/test_shadow_mode.py#L108)
@@ -254,6 +277,8 @@ Findings below are ordered to minimize file churn (edits to the same file are ad
 3. If the fix adds new behavior, add a test that would fail without
    the fix. If it removes code, grep-verify no other call sites remain.
 4. Update the audit report row with `**RESOLVED FIX-13-test-hygiene**`.
+
+> **STATUS:** RESOLVED FIX-13a-test-hygiene-tactical (lambda `__eq__` monkeypatch at tests/strategies/test_shadow_mode.py:103,108 replaced with real `BrokerSource.IBKR` enum value — preserves non-SIMULATED test semantics; kickoff's SIMULATED wording and audit's DATABENTO wording were both incorrect (BrokerSource has ALPACA/IBKR/SIMULATED, no DATABENTO)).
 
 ### Finding 7: `P1-G1-L01` [LOW]
 
@@ -282,6 +307,8 @@ Findings below are ordered to minimize file churn (edits to the same file are ad
    the fix. If it removes code, grep-verify no other call sites remain.
 4. Update the audit report row with `**RESOLVED FIX-13-test-hygiene**`.
 
+> **STATUS:** DEFERRED TO FIX-13b-test-hygiene-refactors (10 files, 93 tests — per-file triage required).
+
 ### Finding 8: `P1-G2-M10` [MEDIUM]
 
 **File/line:** [tests/test_integration_sprint2.py](tests/test_integration_sprint2.py), [tests/test_integration_sprint3.py](tests/test_integration_sprint3.py), [tests/test_integration_sprint4a.py](tests/test_integration_sprint4a.py), [tests/test_integration_sprint4b.py](tests/test_integration_sprint4b.py), [tests/test_integration_sprint5.py](tests/test_integration_sprint5.py), [tests/test_integration_sprint13.py](tests/test_integration_sprint13.py) — 6 historical files
@@ -308,6 +335,8 @@ Findings below are ordered to minimize file churn (edits to the same file are ad
 3. If the fix adds new behavior, add a test that would fail without
    the fix. If it removes code, grep-verify no other call sites remain.
 4. Update the audit report row with `**RESOLVED FIX-13-test-hygiene**`.
+
+> **STATUS:** DEFERRED TO FIX-13b-test-hygiene-refactors (6-file sprint-dated integration triage — per-file judgment required).
 
 ### Finding 9: `P1-G1-M04` [MEDIUM]
 
@@ -336,6 +365,8 @@ Findings below are ordered to minimize file churn (edits to the same file are ad
    the fix. If it removes code, grep-verify no other call sites remain.
 4. Update the audit report row with `**RESOLVED FIX-13-test-hygiene**`.
 
+> **STATUS:** DEFERRED TO FIX-13b-test-hygiene-refactors (6 flatten tests at 30s each — fixture debugging on Sprint 32.9 sync fill-verification path).
+
 ### Finding 10: `P1-G2-M09` [MEDIUM]
 
 **File/line:** [tests/](tests/) class-vs-function mix
@@ -362,6 +393,8 @@ Findings below are ordered to minimize file churn (edits to the same file are ad
 3. If the fix adds new behavior, add a test that would fail without
    the fix. If it removes code, grep-verify no other call sites remain.
 4. Update the audit report row with `**RESOLVED FIX-13-test-hygiene**`.
+
+> **STATUS:** RESOLVED FIX-13a-test-hygiene-tactical (added `## Test Organization Style` note to `.claude/rules/testing.md` codifying that both styles are acceptable; no bulk rewrites).
 
 ### Finding 11: `P1-G1-M09` [MEDIUM]
 
@@ -390,6 +423,8 @@ Findings below are ordered to minimize file churn (edits to the same file are ad
    the fix. If it removes code, grep-verify no other call sites remain.
 4. Update the audit report row with `**RESOLVED FIX-13-test-hygiene**`.
 
+> **STATUS:** DEFERRED TO FIX-13b-test-hygiene-refactors (13 files, 233 tests — subpackage consolidation with many imports to update).
+
 ### Finding 12: `P1-G1-L02` [LOW]
 
 **File/line:** [tests/unit/](tests/unit/) subtree (2 subdirs: `core/`, `strategies/`)
@@ -416,6 +451,8 @@ Findings below are ordered to minimize file churn (edits to the same file are ad
 3. If the fix adds new behavior, add a test that would fail without
    the fix. If it removes code, grep-verify no other call sites remain.
 4. Update the audit report row with `**RESOLVED FIX-13-test-hygiene**`.
+
+> **STATUS:** RESOLVED FIX-13a-test-hygiene-tactical (moved `tests/unit/core/test_exit_management_config.py`, `tests/unit/core/test_exit_math.py`, `tests/unit/strategies/test_atr_emission.py` into `tests/core/` and `tests/strategies/`; adjusted two `parents[3] → parents[2]` path offsets; deleted `tests/unit/` subtree).
 
 ### Finding 13: `P1-G1-L05` [LOW]
 
@@ -444,6 +481,8 @@ Findings below are ordered to minimize file churn (edits to the same file are ad
    the fix. If it removes code, grep-verify no other call sites remain.
 4. Update the audit report row with `**RESOLVED FIX-13-test-hygiene**`.
 
+> **STATUS:** DEFERRED TO FIX-13b-test-hygiene-refactors (20-40 new AI Copilot tests — sprint-scale effort).
+
 ### Finding 14: `P1-G1-M11` [MEDIUM]
 
 **File/line:** [argus/api/__main__.py](argus/api/__main__.py) (0% coverage, 34/34 missed), [argus/api/setup_password.py](argus/api/setup_password.py) (0% coverage)
@@ -470,6 +509,8 @@ Findings below are ordered to minimize file churn (edits to the same file are ad
 3. If the fix adds new behavior, add a test that would fail without
    the fix. If it removes code, grep-verify no other call sites remain.
 4. Update the audit report row with `**RESOLVED FIX-13-test-hygiene**`.
+
+> **STATUS:** RESOLVED FIX-13a-test-hygiene-tactical with spec adjustment: `argus/api/__main__.py` does NOT exist in the tree (P12 verification); only `argus/api/setup_password.py` added to `[tool.coverage.run].omit`. Folded into Finding 16.
 
 ### Finding 15: `P1-G1-M03` [MEDIUM]
 
@@ -498,6 +539,8 @@ Findings below are ordered to minimize file churn (edits to the same file are ad
    the fix. If it removes code, grep-verify no other call sites remain.
 4. Update the audit report row with `**RESOLVED FIX-13-test-hygiene**`.
 
+> **STATUS:** RESOLVED FIX-13a-test-hygiene-tactical (new `tests/core/test_logging_config.py` with 6 tests covering JsonFormatter core fields + extra fields + exception traceback, ConsoleFormatter, and `setup_logging()` file creation + third-party noise suppression).
+
 ### Finding 16: `P1-G1-M10` [MEDIUM]
 
 **File/line:** [pyproject.toml](pyproject.toml) / missing `.coveragerc`
@@ -524,6 +567,8 @@ Findings below are ordered to minimize file churn (edits to the same file are ad
 3. If the fix adds new behavior, add a test that would fail without
    the fix. If it removes code, grep-verify no other call sites remain.
 4. Update the audit report row with `**RESOLVED FIX-13-test-hygiene**`.
+
+> **STATUS:** RESOLVED FIX-13a-test-hygiene-tactical (added `[tool.coverage.run]` + `[tool.coverage.report]` sections to pyproject.toml with `source=["argus"]`, `branch=true`, 4 `exclude_lines`, and `omit=['argus/api/setup_password.py']`; `fail_under` skipped per kickoff — post-31.9 opt-in).
 
 ### Finding 17: `P1-G1-M05` [MEDIUM]
 
@@ -552,6 +597,8 @@ Findings below are ordered to minimize file churn (edits to the same file are ad
    the fix. If it removes code, grep-verify no other call sites remain.
 4. Update the audit report row with `**RESOLVED FIX-13-test-hygiene**`.
 
+> **STATUS:** RESOLVED-VERIFIED FIX-13a-test-hygiene-tactical: already resolved by IMPROMPTU-03 (commit 354be7f, 2026-04-22). Test rewritten to use fixed 15:00 ET exit_time; SQL-side UTC normalization window doesn't fire for real trades because market closes 16:00 ET. Latent production concern tracked as DEF-191.
+
 ### Finding 18: `P1-G2-L03` [LOW]
 
 **File/line:** [tests/api/conftest.py:247-486](tests/api/conftest.py#L247-L486)
@@ -579,6 +626,8 @@ Findings below are ordered to minimize file churn (edits to the same file are ad
    the fix. If it removes code, grep-verify no other call sites remain.
 4. Update the audit report row with `**RESOLVED FIX-13-test-hygiene**`.
 
+> **STATUS:** DEFERRED TO FIX-13b-test-hygiene-refactors (240→50 LOC fixture refactor with cross-test impact).
+
 ### Finding 19: `P1-G2-M08` [MEDIUM]
 
 **File/line:** [tests/api/test_observatory_ws.py:210, 232, 396, 443, 555, 610](tests/api/test_observatory_ws.py) [tests/api/test_arena_ws.py:76, 94](tests/api/test_arena_ws.py)
@@ -605,6 +654,8 @@ Findings below are ordered to minimize file churn (edits to the same file are ad
 3. If the fix adds new behavior, add a test that would fail without
    the fix. If it removes code, grep-verify no other call sites remain.
 4. Update the audit report row with `**RESOLVED FIX-13-test-hygiene**`.
+
+> **STATUS:** RESOLVED FIX-13a-test-hygiene-tactical (8 `except Exception: pass` sites replaced across tests/api/test_observatory_ws.py and tests/api/test_arena_ws.py; 4 auth-rejection sites narrowed to `pytest.raises(WebSocketDisconnect) as exc_info` + `ws.receive_json()` + `assert exc_info.value.code == 4001`; 3 receive-loop sites narrowed to `except WebSocketDisconnect: break`; 1 route-disabled site narrowed to `pytest.raises((WebSocketDisconnect, RuntimeError))` — the previous broad catch would have swallowed `pytest.fail()`).
 
 ### Finding 20: `P1-G2-L05` [LOW]
 
@@ -646,6 +697,8 @@ Findings below are ordered to minimize file churn (edits to the same file are ad
    anticipates): **STOP**, log a note here, and escalate to the
    operator rather than silently applying an invented fix.
 
+> **STATUS:** RESOLVED-VERIFIED FIX-13a-test-hygiene-tactical: `test_now_returns_current_utc_time` and `test_today_returns_current_date_in_configured_timezone` verified at tests/core/test_clock.py:14,24. Assertions remain bounded (`before <= result <= after`) — legitimate SystemClock verification. No change.
+
 ### Finding 21: `P1-G2-M05` [MEDIUM]
 
 **File/line:** [tests/data/test_alpaca_data_service.py:505-557](tests/data/test_alpaca_data_service.py#L505-L557)
@@ -672,6 +725,8 @@ Findings below are ordered to minimize file churn (edits to the same file are ad
 3. If the fix adds new behavior, add a test that would fail without
    the fix. If it removes code, grep-verify no other call sites remain.
 4. Update the audit report row with `**RESOLVED FIX-13-test-hygiene**`.
+
+> **STATUS:** DEFERRED TO FIX-13b-test-hygiene-refactors (requires production-code change — injected poll interval on `_stale_data_monitor`).
 
 ### Finding 22: `P1-G2-L06` [LOW]
 
@@ -713,6 +768,8 @@ Findings below are ordered to minimize file churn (edits to the same file are ad
    anticipates): **STOP**, log a note here, and escalate to the
    operator rather than silently applying an invented fix.
 
+> **STATUS:** RESOLVED-VERIFIED FIX-13a-test-hygiene-tactical: verified 6 `@patch` / `with patch` sites in tests/intelligence/test_startup.py (audit observation said 9, actual count lower). All are legitimate factory-wiring patches. No change.
+
 ### Finding 23: `P1-G2-L02` [LOW]
 
 **File/line:** [tests/strategies/test_orb_breakout.py:16-53](tests/strategies/test_orb_breakout.py#L16-L53)
@@ -739,6 +796,8 @@ Findings below are ordered to minimize file churn (edits to the same file are ad
 3. If the fix adds new behavior, add a test that would fail without
    the fix. If it removes code, grep-verify no other call sites remain.
 4. Update the audit report row with `**RESOLVED FIX-13-test-hygiene**`.
+
+> **STATUS:** DEFERRED TO FIX-13b-test-hygiene-refactors (make_orb_config 14-parameter helper → pytest.fixture; strategy-test scope).
 
 ### Finding 24: `P1-G2-L08` [LOW]
 
@@ -767,6 +826,8 @@ Findings below are ordered to minimize file churn (edits to the same file are ad
    the fix. If it removes code, grep-verify no other call sites remain.
 4. Update the audit report row with `**RESOLVED FIX-13-test-hygiene**`.
 
+> **STATUS:** RESOLVED-VERIFIED FIX-13a-test-hygiene-tactical: spec observation stale. grep confirms `AfternoonMomentumStrategy` IS used at tests/test_integration_sprint26.py:120 (as `strategies.append(AfternoonMomentumStrategy(...))`) and 290. Import is not dead. No change.
+
 ### Finding 25: `P1-G2-L04` [LOW]
 
 **File/line:** [tests/utils/test_log_throttle.py](tests/utils/test_log_throttle.py), [tests/api/test_lifespan_startup.py](tests/api/test_lifespan_startup.py)
@@ -793,6 +854,8 @@ Findings below are ordered to minimize file churn (edits to the same file are ad
 3. If the fix adds new behavior, add a test that would fail without
    the fix. If it removes code, grep-verify no other call sites remain.
 4. Update the audit report row with `**RESOLVED FIX-13-test-hygiene**`.
+
+> **STATUS:** RESOLVED FIX-13a-test-hygiene-tactical (verified both sites are intentional: `test_log_throttle.py` tests a `time.monotonic()`-based rate limiter (≤20ms sleeps) and `test_lifespan_startup.py` simulates a slow HistoricalQueryService constructor for DEF-155/156 regression (5s sleep inside a SlowHistoricalQueryService mock, with the test docstring already explaining why). Added module docstring note on tests/utils/test_log_throttle.py pointing at testing.md §"Tests that use real asyncio.sleep" for the reasoning.)
 
 ## Post-Session Verification (before commit)
 

@@ -1,4 +1,10 @@
-"""Tests for argus.utils.log_throttle — ThrottledLogger utility."""
+"""Tests for argus.utils.log_throttle — ThrottledLogger utility.
+
+Note: ``ThrottledLogger`` gates emissions on ``time.monotonic()``, so a
+subset of tests here intentionally use real ``time.sleep`` (≤20 ms) to
+advance past the suppression window. See ``.claude/rules/testing.md``
+§"Tests that use real asyncio.sleep" — the same reasoning applies.
+"""
 
 from __future__ import annotations
 

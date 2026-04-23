@@ -16,6 +16,7 @@ import aiosqlite
 import pytest
 from httpx import ASGITransport, AsyncClient
 from starlette.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
 
 from argus.analytics.config import ObservatoryConfig
 from argus.analytics.observatory_service import ObservatoryService
@@ -201,14 +202,13 @@ async def test_observatory_ws_requires_auth(
     app, obs_conn, temp_db = await _build_observatory_app(tmp_path)
 
     client = TestClient(app)
-    try:
+    # Server closes with 4001 on missing/invalid auth; Starlette's TestClient
+    # surfaces that as WebSocketDisconnect once the client attempts to receive.
+    with pytest.raises(WebSocketDisconnect) as exc_info:
         with client.websocket_connect("/ws/v1/observatory") as ws:
-            # Send a non-auth message
             ws.send_json({"type": "not_auth"})
-            # Server should close with 4001
-            # Starlette TestClient raises WebSocketDisconnect on close
-    except Exception:
-        pass  # Expected: connection closed
+            ws.receive_json()
+    assert exc_info.value.code == 4001
 
     await obs_conn.close()
     await temp_db.close()
@@ -226,11 +226,11 @@ async def test_observatory_ws_rejects_invalid_token(
     app, obs_conn, temp_db = await _build_observatory_app(tmp_path)
 
     client = TestClient(app)
-    try:
+    with pytest.raises(WebSocketDisconnect) as exc_info:
         with client.websocket_connect("/ws/v1/observatory") as ws:
             ws.send_json({"type": "auth", "token": "invalid-token-here"})
-    except Exception:
-        pass  # Expected: connection closed with 4001
+            ws.receive_json()
+    assert exc_info.value.code == 4001
 
     await obs_conn.close()
     await temp_db.close()
@@ -393,7 +393,7 @@ async def test_observatory_ws_tier_transition_detected(
             try:
                 msg = ws.receive_json()
                 messages.append(msg)
-            except Exception:
+            except WebSocketDisconnect:
                 break
 
         # Should contain a tier_transition for NVDA
@@ -440,7 +440,7 @@ async def test_observatory_ws_evaluation_summary_counts(
             try:
                 msg = ws.receive_json()
                 messages.append(msg)
-            except Exception:
+            except WebSocketDisconnect:
                 break
 
         summary_msgs = [m for m in messages if m["type"] == "evaluation_summary"]
@@ -546,14 +546,14 @@ async def test_observatory_ws_disabled_config(
     )
 
     client = TestClient(app)
-    # Attempting to connect to observatory WS should fail
-    # when the route is not mounted
-    try:
-        with client.websocket_connect("/ws/v1/observatory") as ws:
-            # If we get here, the endpoint is erroneously mounted
+    # Route not mounted when observatory.enabled=false. Starlette raises
+    # WebSocketDisconnect on handshake failure; a narrower catch also guards
+    # against the previous except-Exception swallowing a pytest.fail() inside
+    # the with-block.
+    with pytest.raises((WebSocketDisconnect, RuntimeError)):
+        with client.websocket_connect("/ws/v1/observatory"):
+            # If we get here, the endpoint is erroneously mounted.
             pytest.fail("Observatory WS should not be available when disabled")
-    except Exception:
-        pass  # Expected: route not found
 
     await obs_conn.close()
     await temp_db.close()
@@ -607,7 +607,7 @@ async def test_observatory_ws_slow_query_no_backlog(
             try:
                 msg = ws.receive_json()
                 messages.append(msg)
-            except Exception:
+            except WebSocketDisconnect:
                 break
 
         # We should eventually get messages — the key assertion is

@@ -1062,7 +1062,7 @@ def generate_heatmaps(
             y=pivot1.index.tolist(),
             colorscale="RdYlGn",
             zmid=0,
-            text=pivot1_trades.values.astype(int),
+            text=np.nan_to_num(pivot1_trades.values, nan=0).astype(int),
             texttemplate="%{text}",
             hovertemplate=(
                 "Consolidation ATR Ratio: %{x}<br>"
@@ -1100,7 +1100,7 @@ def generate_heatmaps(
             y=pivot2.index.tolist(),
             colorscale="RdYlGn",
             zmid=0,
-            text=pivot2_trades.values.astype(int),
+            text=np.nan_to_num(pivot2_trades.values, nan=0).astype(int),
             texttemplate="%{text}",
             hovertemplate=(
                 "Target R: %{x}<br>"
@@ -1138,7 +1138,7 @@ def generate_heatmaps(
             y=pivot3.index.tolist(),
             colorscale="RdYlGn",
             zmid=0,
-            text=pivot3_trades.values.astype(int),
+            text=np.nan_to_num(pivot3_trades.values, nan=0).astype(int),
             texttemplate="%{text}",
             hovertemplate=(
                 "Target R: %{x}<br>"
