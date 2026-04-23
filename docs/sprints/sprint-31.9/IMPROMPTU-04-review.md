@@ -188,6 +188,17 @@ python -m pytest --ignore=tests/test_main.py -n auto -q
 - The A1 fix correctly identifies that the mechanism lives in the FILTER, not the IMPLEMENTATION (`_flatten_unknown_position` unchanged). This keeps the fix reversible and the implementation reusable for a future shorting feature.
 - Operator attention: DEF-194/195/196 (causal upstream of DEF-199) are still open. The A1 fix is the EOD safety gate; it doesn't address the session-long reconnect cascade that produced the 50 shorts in the first place. A fresh IBKR reconnect cascade on the next paper session could still leave shorts at EOD — the new fix will skip them + log ERROR rather than double them, which is the correct defensive posture, but it doesn't prevent the shorts from forming. Full closure of the reconnect-recovery cluster is scoped to a separate post-31.9 sprint.
 
+## Verdict Upgrade Addendum (2026-04-23, post-IMPROMPTU-CI)
+
+**Verdict: CONCERNS → CLEAR** as of IMPROMPTU-CI commit `b6e569b` (third consecutive green CI run on the observatory_ws disconnect-watcher fix — see `IMPROMPTU-CI-closeout.md` §CI Attestation).
+
+The two CONCERNS items in this review have both been resolved:
+
+1. **commits_not_pushed** — `0623801` + `af7b899` are on `origin/main` (visible in `git log origin/main` at review time via `f97e255`, which is a descendant). No longer open.
+2. **ci_green_url_missing** — IMPROMPTU-CI closed DEF-193 + DEF-200 via the disconnect-watcher fix at `argus/api/websocket/observatory_ws.py:116-148` plus a 100ms pre-disconnect guard on 4 observatory_ws tests. Three consecutive green CI runs attained on commits `4c805c6` / `ec98a5b` / `b6e569b`. The DEF-193 flake that was expected to trip IMPROMPTU-04's own CI was the same mechanism and is now closed.
+
+**Paper trading readiness: CONDITIONAL_GO_PENDING_PUSH_AND_CI → GO.** The fix was always sound; CI verification has now confirmed the wider campaign's P25 green-CI rule is satisfied. Operator may resume paper trading per the kickoff's ARGUS restart window guidance.
+
 ---END-REVIEW---
 
 ```json:structured-verdict
@@ -195,7 +206,12 @@ python -m pytest --ignore=tests/test_main.py -n auto -q
   "schema_version": "1.0",
   "sprint": "sprint-31.9-health-and-hardening",
   "session": "IMPROMPTU-04-eod-short-flip-and-log-hygiene",
-  "verdict": "CONCERNS",
+  "verdict": "CLEAR",
+  "verdict_history": [
+    {"date": "2026-04-23", "verdict": "CONCERNS", "note": "Initial review — commits not pushed; CI green URL missing."},
+    {"date": "2026-04-23", "verdict": "CLEAR", "note": "Upgraded post-IMPROMPTU-CI (commit b6e569b). Both CONCERNS items resolved: commits on origin/main; 3× green CI attained."}
+  ],
+  "verdict_original": "CONCERNS",
   "commit_reviewed": "0623801",
   "docs_commit": "af7b899",
   "baseline_head": "c655cb3",
