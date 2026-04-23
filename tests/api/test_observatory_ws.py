@@ -259,7 +259,14 @@ async def test_observatory_ws_sends_initial_state(
     monkeypatch.setenv("ARGUS_JWT_SECRET", TEST_JWT_SECRET)
     set_jwt_secret(TEST_JWT_SECRET)
 
-    app, obs_conn, temp_db = await _build_observatory_app(tmp_path)
+    # ws_update_interval_ms=200 (default would be 1000). FIX-13a CI regression:
+    # default 1s interval leaves the server task in ``await asyncio.sleep(1.0)``
+    # when the client disconnects; on Linux under xdist that stalls the
+    # TestClient portal teardown. 200ms matches the pattern used by the
+    # already-passing test_observatory_ws_interval_configurable.
+    app, obs_conn, temp_db = await _build_observatory_app(
+        tmp_path, ws_update_interval_ms=200,
+    )
 
     client = TestClient(app)
     with client.websocket_connect("/ws/v1/observatory") as ws:
@@ -293,7 +300,11 @@ async def test_observatory_ws_pipeline_update_format(
     monkeypatch.setenv("ARGUS_JWT_SECRET", TEST_JWT_SECRET)
     set_jwt_secret(TEST_JWT_SECRET)
 
-    app, obs_conn, temp_db = await _build_observatory_app(tmp_path)
+    # ws_update_interval_ms=200 — see test_observatory_ws_sends_initial_state
+    # above for the FIX-13a CI regression rationale.
+    app, obs_conn, temp_db = await _build_observatory_app(
+        tmp_path, ws_update_interval_ms=200,
+    )
 
     client = TestClient(app)
     with client.websocket_connect("/ws/v1/observatory") as ws:
@@ -480,7 +491,11 @@ async def test_observatory_ws_graceful_disconnect(
     monkeypatch.setenv("ARGUS_JWT_SECRET", TEST_JWT_SECRET)
     set_jwt_secret(TEST_JWT_SECRET)
 
-    app, obs_conn, temp_db = await _build_observatory_app(tmp_path)
+    # ws_update_interval_ms=200 — see test_observatory_ws_sends_initial_state
+    # above for the FIX-13a CI regression rationale.
+    app, obs_conn, temp_db = await _build_observatory_app(
+        tmp_path, ws_update_interval_ms=200,
+    )
 
     client = TestClient(app)
     with client.websocket_connect("/ws/v1/observatory") as ws:
@@ -512,7 +527,11 @@ async def test_observatory_ws_independent_from_ai_ws(
     monkeypatch.setenv("ARGUS_JWT_SECRET", TEST_JWT_SECRET)
     set_jwt_secret(TEST_JWT_SECRET)
 
-    app, obs_conn, temp_db = await _build_observatory_app(tmp_path)
+    # ws_update_interval_ms=200 — see test_observatory_ws_sends_initial_state
+    # above for the FIX-13a CI regression rationale.
+    app, obs_conn, temp_db = await _build_observatory_app(
+        tmp_path, ws_update_interval_ms=200,
+    )
 
     client = TestClient(app)
 
