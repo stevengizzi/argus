@@ -42,6 +42,7 @@ dev = [
     "pytest-asyncio>=0.23,<1",
     "pytest-cov>=4.1,<6",
     "pytest-xdist>=3.5,<4",  # parallel test execution via `pytest -n auto`
+    "pytest-timeout>=2.3,<3",  # per-test hang defense (see [tool.pytest.ini_options] timeout)
     "ruff>=0.2,<1",
     "httpx>=0.26,<1",
 ]
@@ -59,6 +60,12 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]
+# Per-test timeout. Thread method works under xdist. Generous — almost all
+# tests finish in <1s; the longest known ~3s wall-clock integration case
+# still fits. Converts a future hang from "entire CI job timeout with no
+# info" into "one test failed with traceback."
+timeout = 120
+timeout_method = "thread"
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: end-to-end / integration tests (broker, DB, pipeline)",
