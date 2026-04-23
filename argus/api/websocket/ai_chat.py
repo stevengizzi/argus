@@ -14,7 +14,8 @@ from zoneinfo import ZoneInfo
 from typing import Any
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-from jose import JWTError, jwt
+import jwt
+from jwt import PyJWTError
 
 from argus.ai.tools import ARGUS_TOOLS, requires_approval
 from argus.api.auth import get_jwt_secret
@@ -82,7 +83,7 @@ async def ai_chat_websocket(websocket: WebSocket) -> None:
         try:
             jwt_secret = get_jwt_secret()
             jwt.decode(token, jwt_secret, algorithms=["HS256"])
-        except (JWTError, Exception):
+        except (PyJWTError, Exception):
             await websocket.close(code=4001)
             return
 

@@ -23,7 +23,8 @@ from typing import TYPE_CHECKING
 import bcrypt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from jose import JWTError, jwt
+import jwt
+from jwt import PyJWTError
 
 if TYPE_CHECKING:
     from argus.core.config import ApiConfig
@@ -138,7 +139,7 @@ def verify_token(token: str, jwt_secret: str) -> dict:
     """
     try:
         return jwt.decode(token, jwt_secret, algorithms=[ALGORITHM])
-    except JWTError:
+    except PyJWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired token",

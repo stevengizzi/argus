@@ -140,7 +140,7 @@ class TestTokenVerification:
 
     def test_verify_token_expired(self) -> None:
         """verify_token raises HTTPException for expired token."""
-        from jose import jwt
+        import jwt
 
         secret = "test-secret-for-expired-token-test"
         # Create an already-expired token
@@ -305,7 +305,7 @@ class TestAuthRoutes:
     @pytest.mark.asyncio
     async def test_expired_token_rejected(self, client, jwt_secret) -> None:
         """Expired token returns 401."""
-        from jose import jwt as jose_jwt
+        import jwt as jwt_module
 
         # Create an already-expired token
         expired_payload = {
@@ -313,7 +313,7 @@ class TestAuthRoutes:
             "iat": datetime.now(UTC) - timedelta(hours=2),
             "sub": "operator",
         }
-        expired_token = jose_jwt.encode(expired_payload, jwt_secret, algorithm="HS256")
+        expired_token = jwt_module.encode(expired_payload, jwt_secret, algorithm="HS256")
 
         response = await client.get(
             "/api/v1/auth/me",
@@ -357,7 +357,7 @@ class TestAuthRoutes:
     @pytest.mark.asyncio
     async def test_refresh_with_expired_token(self, client, jwt_secret) -> None:
         """Refresh endpoint with expired token returns 401."""
-        from jose import jwt as jose_jwt
+        import jwt as jwt_module
 
         # Create an already-expired token
         expired_payload = {
@@ -365,7 +365,7 @@ class TestAuthRoutes:
             "iat": datetime.now(UTC) - timedelta(hours=2),
             "sub": "operator",
         }
-        expired_token = jose_jwt.encode(expired_payload, jwt_secret, algorithm="HS256")
+        expired_token = jwt_module.encode(expired_payload, jwt_secret, algorithm="HS256")
 
         response = await client.post(
             "/api/v1/auth/refresh",

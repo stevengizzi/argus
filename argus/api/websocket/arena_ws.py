@@ -17,7 +17,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-from jose import jwt
+import jwt
 
 from argus.api.auth import get_jwt_secret
 from argus.api.dependencies import AppState

@@ -25,10 +25,10 @@ dependencies = [
     # Command Center API (Sprint 14)
     "fastapi>=0.109,<1",
     "uvicorn[standard]>=0.27,<1",
-    # python-jose: lower bound 3.4.0 excludes CVE-2024-33663
-    # (algorithm confusion, affects <3.4.0). Migration to PyJWT tracked
-    # via DEF-179.
-    "python-jose[cryptography]>=3.4.0,<4",
+    # PyJWT: replaces python-jose (retired IMPROMPTU-05, DEF-179).
+    # python-jose was abandoned after CVE-2024-33663; PyJWT is the
+    # actively-maintained successor. API-compatible subset for HS256.
+    "PyJWT>=2.8,<3",
     # bcrypt: direct runtime dep (argus/api/auth.py imports bcrypt). Replaces
     # the abandoned passlib[bcrypt] wrapper removed 2026-04-22 (FIX-18 M-03).
     "bcrypt>=4.1,<6",

@@ -67,11 +67,12 @@ DATASETS = {
     },
 }
 
-# Candidate cache directory paths (local repo default, legacy external drive fallbacks)
+# Candidate cache directory paths. Legacy external-drive fallbacks
+# removed IMPROMPTU-05 (2026-04-23, DEF-180 session) — consolidated
+# cache now lives at `data/databento_cache_consolidated/` per
+# Sprint 31.85.
 CANDIDATE_CACHE_DIRS = [
     str(Path(__file__).resolve().parent.parent / "data" / "databento_cache"),
-    "/Volumes/LaCie/argus-cache",
-    "/LaCie/argus-cache",
 ]
 
 logging.basicConfig(

@@ -48,7 +48,7 @@ and this document can be archived to `docs/sprints/archive/`.
 | **Stage 8** | **(complete — Waves 1/2/3 all CLEAR; IMPROMPTU-01/02 placeholders re-homed into Stage 9 campaign-close sessions)** | ✅ COMPLETE | 2026-04-23 |
 | Stage 9A | IMPROMPTU-04 (safety: A1 + C1 + startup invariant) | ✅ CODE LANDED — commit `0623801`; Tier 2 pending | 2026-04-23 |
 | Stage 8.5 | IMPROMPTU-CI (observatory_ws disconnect watcher — DEF-200 + DEF-193) | ✅ CLEAR | 2026-04-23 |
-| Stage 9B | IMPROMPTU-05 (deps & infra: DEF-180/181/179) | ⏸ PENDING | TBD |
+| Stage 9B | IMPROMPTU-05 (deps & infra: DEF-180/181/179) | ✅ CLEAR — code landed; Tier 2 pending | 2026-04-23 |
 | Stage 9B | IMPROMPTU-06 (test-debt: DEF-176/185/192/166/048/049) | ⏸ PENDING | TBD |
 | Stage 9B | IMPROMPTU-07 (doc-hygiene + UI fixes; + Apr 21 F-05/F-06/F-08) | ⏸ PENDING | TBD |
 | Stage 9B | IMPROMPTU-08 (architecture.md API catalog regeneration) | ⏸ PENDING | TBD |

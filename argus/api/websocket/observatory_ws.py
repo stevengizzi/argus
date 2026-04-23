@@ -16,7 +16,8 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-from jose import JWTError, jwt
+import jwt
+from jwt import PyJWTError
 
 from argus.api.auth import get_jwt_secret
 from argus.api.dependencies import AppState
@@ -69,7 +70,7 @@ async def observatory_websocket(websocket: WebSocket) -> None:
         try:
             jwt_secret = get_jwt_secret()
             jwt.decode(token, jwt_secret, algorithms=["HS256"])
-        except (JWTError, Exception):
+        except (PyJWTError, Exception):
             await websocket.close(code=4001)
             return
 

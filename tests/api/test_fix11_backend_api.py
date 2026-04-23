@@ -10,7 +10,7 @@ Guards the fixes applied in FIX-11 against silent rollback:
 - F1-10: GET /trades/{id}/replay returns 501 (DEF-029 gate)
 - F1-12: /strategies/{id}/decisions uses _auth (not _user) parameter name
 - F1-14: Broker.get_account() is on the ABC (hasattr check removed)
-- F1-23: jose.jwt is imported at module level in websocket/live.py
+- F1-23: jwt (PyJWT) is imported at module level in websocket/live.py
 - F1-19/25: route imports alphabetical, observatory noted as conditional
 - F1-13: QueueFull emits state_desync message
 - F1-4: Orchestrator.attach_vix_service / regime_classifier_v2 public API
@@ -181,10 +181,10 @@ def test_broker_abc_declares_get_account() -> None:
 
 
 def test_live_ws_imports_jwt_at_module_level() -> None:
-    """jose.jwt is imported at module scope, not inside the endpoint (F1-23)."""
+    """jwt (PyJWT) is imported at module scope, not inside the endpoint (F1-23)."""
     from argus.api.websocket import live as live_module
 
-    # Module-level symbol, not fetched from jose inside a function body.
+    # Module-level symbol, not fetched inside a function body.
     assert hasattr(live_module, "jwt")
 
 
