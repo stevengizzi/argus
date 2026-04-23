@@ -71,6 +71,20 @@ markers = [
     "integration: end-to-end / integration tests (broker, DB, pipeline)",
     "unit: pure unit tests (no I/O, no async fixtures)",
 ]
+# DEF-192 (IMPROMPTU-06): suppress transitive / test-fixture warnings that
+# are not actionable from within argus. Do NOT add blanket filters here —
+# each entry below is justified by a specific upstream or fixture cause.
+filterwarnings = [
+    # argus does not import `websockets` directly (IMPROMPTU-06 grep-audit).
+    # The legacy-submodule deprecation is emitted by uvicorn[standard]'s
+    # transitive dep. Suppress until upstream migrates off .legacy.
+    "ignore:websockets\\.legacy is deprecated:DeprecationWarning",
+    # InsecureKeyLengthWarning fires for JWT secrets <32 bytes. Test
+    # fixtures intentionally use short, readable secrets (e.g.
+    # "testpassword123"); production uses ARGUS_JWT_SECRET which is
+    # operator-supplied and expected to be ≥32 bytes.
+    "ignore::jwt.warnings.InsecureKeyLengthWarning",
+]
 
 [tool.coverage.run]
 source = ["argus"]

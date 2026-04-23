@@ -140,24 +140,8 @@ class TestOverflowConfigDefaults:
             OverflowConfig(broker_capacity=-1)
 
 
-class TestOverflowConfigYamlAlignment:
-    """Verify overflow YAML keys align with OverflowConfig model fields."""
-
-    def test_yaml_overflow_loads_into_config(self) -> None:
-        """system.yaml overflow section parses cleanly into OverflowConfig."""
-        raw = yaml.safe_load(_SYSTEM_YAML.read_text())
-        overflow_data = raw.get("overflow", {})
-        cfg = OverflowConfig(**overflow_data)
-        assert cfg.enabled is True
-        assert cfg.broker_capacity == 30
-
-    def test_yaml_overflow_keys_all_recognized_by_model(self) -> None:
-        """No YAML key under overflow: should be absent from OverflowConfig model."""
-        raw = yaml.safe_load(_SYSTEM_YAML.read_text())
-        overflow_yaml = raw.get("overflow", {})
-        yaml_keys = set(overflow_yaml.keys())
-        model_keys = set(OverflowConfig.model_fields.keys())
-        unrecognized = yaml_keys - model_keys
-        assert not unrecognized, (
-            f"YAML keys not present in OverflowConfig model: {sorted(unrecognized)}"
-        )
+# IMPROMPTU-06: TestOverflowConfigYamlAlignment deleted. The overflow section
+# was removed from config/system.yaml in Sprint 32.x — the authoritative file
+# is config/overflow.yaml. Both tests in the deleted class passed vacuously
+# against an empty `raw.get("overflow", {})` and asserted nothing about
+# real-world alignment.

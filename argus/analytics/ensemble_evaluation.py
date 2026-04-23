@@ -186,14 +186,20 @@ class EnsembleResult:
             EnsembleResult instance.
         """
         data_range_raw = d["data_range"]
-        assert isinstance(data_range_raw, list)
+        if not isinstance(data_range_raw, list):
+            raise TypeError(
+                f"Expected list for data_range, got {type(data_range_raw).__name__}"
+            )
         data_range = (
             date.fromisoformat(str(data_range_raw[0])),
             date.fromisoformat(str(data_range_raw[1])),
         )
 
         mc_raw = d.get("marginal_contributions", {})
-        assert isinstance(mc_raw, dict)
+        if not isinstance(mc_raw, dict):
+            raise TypeError(
+                f"Expected dict for marginal_contributions, got {type(mc_raw).__name__}"
+            )
         marginal_contributions = {
             k: MarginalContribution.from_dict(v) for k, v in mc_raw.items()
         }
@@ -201,7 +207,10 @@ class EnsembleResult:
         baseline_raw = d.get("baseline_ensemble")
         baseline: EnsembleResult | None = None
         if baseline_raw is not None:
-            assert isinstance(baseline_raw, dict)
+            if not isinstance(baseline_raw, dict):
+                raise TypeError(
+                    f"Expected dict for baseline_ensemble, got {type(baseline_raw).__name__}"
+                )
             baseline = EnsembleResult.from_dict(baseline_raw)
 
         return cls(

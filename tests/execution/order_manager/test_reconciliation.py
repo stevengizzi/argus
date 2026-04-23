@@ -14,7 +14,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from argus.core.clock import FixedClock
-from argus.core.config import OrderManagerConfig
+from argus.core.config import OrderManagerConfig, ReconciliationConfig
 from argus.core.event_bus import EventBus
 from argus.core.events import (
     ExitReason,
@@ -115,13 +115,20 @@ def _make_order_manager(
     config: OrderManagerConfig,
     auto_cleanup_orphans: bool = False,
 ) -> OrderManager:
-    """Create Order Manager with configurable auto_cleanup_orphans."""
+    """Create Order Manager with configurable auto_cleanup_orphans.
+
+    DEF-176: the legacy ``auto_cleanup_orphans=`` OrderManager kwarg has been
+    removed. Tests now construct a ``ReconciliationConfig`` and route it via
+    the typed ``reconciliation_config=`` parameter.
+    """
     return OrderManager(
         event_bus=event_bus,
         broker=mock_broker,
         clock=fixed_clock,
         config=config,
-        auto_cleanup_orphans=auto_cleanup_orphans,
+        reconciliation_config=ReconciliationConfig(
+            auto_cleanup_orphans=auto_cleanup_orphans,
+        ),
     )
 
 

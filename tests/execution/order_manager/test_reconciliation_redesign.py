@@ -535,18 +535,23 @@ def test_reconciliation_config_yaml_keys_match_model() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Test 11: Legacy auto_cleanup_orphans still works (backwards compat)
+# Test 11: ReconciliationConfig(auto_cleanup_orphans=True) triggers immediate cleanup
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_legacy_auto_cleanup_orphans_still_works(
+async def test_reconciliation_config_auto_cleanup_orphans_true(
     event_bus: EventBus,
     mock_broker: MagicMock,
     fixed_clock: FixedClock,
     config: OrderManagerConfig,
 ) -> None:
-    """Legacy auto_cleanup_orphans=True still triggers immediate cleanup for unconfirmed."""
+    """ReconciliationConfig(auto_cleanup_orphans=True) triggers immediate cleanup for unconfirmed.
+
+    DEF-176: the legacy ``auto_cleanup_orphans=`` OrderManager kwarg has been
+    removed. This test now covers the same behavior via the typed
+    ``ReconciliationConfig`` field directly.
+    """
     recon = ReconciliationConfig(
         auto_cleanup_orphans=True,
         auto_cleanup_unconfirmed=False,
@@ -563,7 +568,7 @@ async def test_legacy_auto_cleanup_orphans_still_works(
     await om.start()
     _inject_unconfirmed_position(om, clock=fixed_clock)
 
-    # Single reconciliation cycle should clean up immediately (legacy behavior)
+    # Single reconciliation cycle should clean up immediately
     await om.reconcile_positions({})
     await event_bus.drain()
 

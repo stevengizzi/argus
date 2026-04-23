@@ -17,7 +17,6 @@ import asyncio
 import contextlib
 import logging
 import time as _time
-import warnings
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, time, timedelta
 from typing import TYPE_CHECKING, Any
@@ -183,7 +182,6 @@ class OrderManager:
         trade_logger: Any | None = None,
         db_manager: Any | None = None,
         broker_source: BrokerSource = BrokerSource.SIMULATED,
-        auto_cleanup_orphans: bool = False,
         reconciliation_config: ReconciliationConfig | None = None,
         startup_config: StartupConfig | None = None,
         exit_config: ExitManagementConfig | None = None,
@@ -199,9 +197,6 @@ class OrderManager:
             trade_logger: Optional TradeLogger for persistence.
             db_manager: Optional DatabaseManager for execution record persistence.
             broker_source: Broker type, used to skip amendment for SimulatedBroker.
-            auto_cleanup_orphans: When True, reconciliation auto-closes orphaned
-                positions (internal_qty > 0, broker_qty == 0). Deprecated — use
-                reconciliation_config.auto_cleanup_orphans instead.
             reconciliation_config: Typed reconciliation settings (Sprint 27.95).
             startup_config: Startup behavior settings (Sprint 27.95 S4).
             exit_config: Exit management config (trailing stops, escalation). Sprint 28.5.
@@ -215,23 +210,7 @@ class OrderManager:
         self._trade_logger = trade_logger
         self._db_manager = db_manager
         self._broker_source = broker_source
-        # FIX-04 P1-C1-L10: emit a DeprecationWarning when the legacy
-        # kwarg is used. Full parameter removal deferred — reconciliation
-        # test modules (outside FIX-04 scope) still pass the kwarg, so
-        # removing it requires a test-migration sprint. Production
-        # (argus/main.py) passes reconciliation_config directly and does
-        # NOT use the kwarg.
-        if auto_cleanup_orphans and reconciliation_config is None:
-            warnings.warn(
-                "OrderManager(auto_cleanup_orphans=...) is deprecated; "
-                "pass reconciliation_config=ReconciliationConfig(...) instead.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-        # Reconciliation config: prefer typed config, fall back to legacy bool
-        self._reconciliation_config = reconciliation_config or ReconciliationConfig(
-            auto_cleanup_orphans=auto_cleanup_orphans,
-        )
+        self._reconciliation_config = reconciliation_config or ReconciliationConfig()
         # Startup config (Sprint 27.95 S4)
         self._startup_config = startup_config or StartupConfig()
         # Exit management config (trailing stops, escalation — Sprint 28.5)

@@ -206,7 +206,10 @@ class OutcomeCollector:
                     r = dict(row)  # type: ignore[arg-type]
                     dimension_scores = self._extract_dimension_scores(r)
                     exit_time_str = r["exit_time"]
-                    assert isinstance(exit_time_str, str)
+                    if not isinstance(exit_time_str, str):
+                        raise TypeError(
+                            f"Expected str for exit_time, got {type(exit_time_str).__name__}"
+                        )
 
                     records.append(OutcomeRecord(
                         symbol=str(r["symbol"]),
@@ -300,7 +303,10 @@ class OutcomeCollector:
                         r.get("regime_vector_snapshot")
                     )
                     closed_at_str = r["closed_at"]
-                    assert isinstance(closed_at_str, str)
+                    if not isinstance(closed_at_str, str):
+                        raise TypeError(
+                            f"Expected str for closed_at, got {type(closed_at_str).__name__}"
+                        )
 
                     records.append(OutcomeRecord(
                         symbol=str(r["symbol"]),

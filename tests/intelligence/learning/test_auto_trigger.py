@@ -186,9 +186,17 @@ async def test_timeout_enforcement(
         counterfactual_count=3,
     )
 
-    # Patch the timeout to be very short for the test
+    # Patch the timeout to be very short for the test.
+    # Close the coroutine that the handler passes in so it doesn't leak as
+    # "coroutine was never awaited" (DEF-192 category ii). Raising
+    # TimeoutError directly would skip the close().
+    def _close_and_timeout(coro, *args, **kwargs):  # type: ignore[no-untyped-def]
+        if hasattr(coro, "close"):
+            coro.close()
+        raise asyncio.TimeoutError()
+
     with patch("argus.intelligence.learning.learning_service.asyncio.wait_for") as mock_wait:
-        mock_wait.side_effect = asyncio.TimeoutError()
+        mock_wait.side_effect = _close_and_timeout
         await event_bus.publish(event)
         await asyncio.sleep(0.05)
         # Should have called wait_for and caught the timeout
