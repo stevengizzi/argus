@@ -5,10 +5,11 @@
 > at every stage barrier. Survives compaction — read this file to hydrate
 > a fresh Claude.ai conversation.
 >
-> **Last updated:** 2026-04-23 — Stage 8 Wave 3 (FIX-13c) complete
-> **Campaign HEAD:** `fe64ad2` (FIX-13c consolidated commit)
+> **Last updated:** 2026-04-23 — Phase 1a campaign-close drafting complete (pre-IMPROMPTU-04)
+> **Campaign HEAD:** `053b6f8` (April 22 paper session debrief triage committed)
 > **Workflow submodule:** `942c53a`
-> **Baseline tests:** 5,039 pytest + 859 Vitest (+52 from FIX-13b)
+> **Baseline tests:** 5,039 pytest (local) / 5,026 pytest (CI, `-m "not integration"`) + 859 Vitest
+> **Master plan:** `docs/sprints/sprint-31.9/CAMPAIGN-CLOSE-PLAN.md` — this is the canonical source of truth for Stage 9/10 execution. Read it before acting on any remaining session.
 
 ---
 
@@ -47,10 +48,13 @@
 | Stage 8 Wave 1 | FIX-13a (test hygiene — tactical, solo) | ✅ CLEAR |
 | Stage 8 Wave 2 | FIX-13b (test hygiene — refactors, solo, 7 findings) | ✅ CONCERNS_RESOLVED |
 | Stage 8 Wave 3 | FIX-13c (ai-copilot-coverage, solo, F13 carry-over) | ✅ CLEAR |
-| Stage 8 Parallel | IMPROMPTU-01 (LIVE OK, parallel with either wave if scope-safe) | ⏸ PENDING |
-| **Stage 8** | **(complete when both waves close)** | ⏸ PENDING |
-| Stage 9A | IMPROMPTU-02 scoping (read-only) | ⏸ PENDING |
-| Stage 9B | IMPROMPTU-02 fix (weekend-only) | ⏸ PENDING |
+| FIX-13a-CI-hotfix | pytest-timeout + 4 WS test patches; DEF-193 opened | ✅ CLEAN (informal) |
+| April 22 debrief | DEF-194 through DEF-199 logged; A1 safety bug identified | ✅ Triage committed (053b6f8) |
+| **Stage 8** | **(complete; IMPROMPTU-01/02 placeholders re-homed into Stage 9 plan)** | **✅ COMPLETE** |
+| Stage 9A | IMPROMPTU-04 (safety: A1 + C1 + startup invariant) | ⏸ PENDING (kickoff drafted, not yet pushed) |
+| Stage 9B | IMPROMPTU-05 (deps & infra), IMPROMPTU-06 (test-debt), IMPROMPTU-07 (doc-hygiene + UI), IMPROMPTU-08 (architecture.md catalog) | ⏸ PENDING |
+| Stage 9C | IMPROMPTU-09 (verification sweep, read-only) + RETRO-FOLD (P1-P25 into workflow/) | ⏸ PENDING |
+| Stage 10 | SPRINT-CLOSE (summary + seal + archive + 3 DISCOVERY.md) | ⏸ PENDING |
 
 ---
 
@@ -156,6 +160,13 @@ Baseline progression: 4,934 (pre-campaign) → 4,858 (actual pytest at campaign 
 | DEF-187 | Migrate walk-forward IS path from VectorBT to BacktestEngine (retire walk_forward.py + 4 vectorbt_*.py files, ~6,713 LOC + ~4,108 test LOC) | MEDIUM | Sprint 33+ (validation-tooling sprint) |
 | DEF-189 | `scripts/revalidate_strategy.py:383` config_overrides param-name mismatch — operational bug, revalidation runs have used default params rather than intended overrides | MEDIUM | post-31.9 (standalone micro-fix) |
 | DEF-191 | Latent `TradeLogger.get_todays_pnl()` SQL-side UTC normalization — would bite after-hours trading support | LOW | post-31.9 |
+| DEF-193 | Observatory WS push-only loop doesn't detect client disconnect on Linux | MEDIUM | post-31.9-component-ownership sprint |
+| DEF-194 | IBKR `ib_async` stale position cache after reconnect (PURR 1.00× outlier Apr 22) | MEDIUM | post-31.9-reconnect-recovery-and-rejectionstage sprint |
+| DEF-195 | `max_concurrent_positions` diverges from broker state; 8% BITO concentration bypass | HIGH-live / MEDIUM-paper | post-31.9-reconnect-recovery-and-rejectionstage sprint |
+| DEF-196 | 32 DEC-372 stop-retry-exhaustion cascade after IBKR reconnect (9:40–9:59 ET Apr 22) | MEDIUM | post-31.9-reconnect-recovery-and-rejectionstage sprint |
+| DEF-197 | `data/evaluation.db` 4.78 GB at boot (retention likely not executing) | MEDIUM | post-31.9-component-ownership sprint |
+| DEF-198 | Boot phase labels `[N/12]` contradict FIX-03 handoff's claimed 17-phase sequence | LOW | IMPROMPTU-07 |
+| DEF-199 | `_flatten_unknown_position()` systematically doubles short positions at EOD — **CRITICAL SAFETY** | **CRITICAL** | **IMPROMPTU-04** (blocks next paper session) |
 
 ---
 
@@ -266,3 +277,5 @@ This document is the external survival buffer for the campaign state. **Update a
 The goal is that anyone (or any fresh Claude.ai conversation) can read this file and know exactly where the campaign stands without reading every prior close-out and review document.
 
 **Hydration pattern for a fresh Claude.ai conversation:** paste this file contents + attach the most recent FIX-NN close-out and review — that plus project knowledge is enough to resume.
+
+**For Stage 9/10 campaign-close work specifically:** paste `CAMPAIGN-CLOSE-PLAN.md` instead of the most recent close-out. That doc carries the full Loop-Closure Matrix + session plan + reboot instructions for the remaining 8 sessions. The plan doc is the authoritative source for what to do next; this register is the operational state snapshot.

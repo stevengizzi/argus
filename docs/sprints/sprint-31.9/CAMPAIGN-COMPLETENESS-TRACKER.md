@@ -1,17 +1,24 @@
 # Sprint 31.9 + Post-31.9 Campaign — Completeness Tracker
 
-<!-- last-updated: 2026-04-23 (Stage 8 Wave 3 / FIX-13c complete) -->
+<!-- last-updated: 2026-04-23 (Phase 1a drafted — Stage 9/10 planned, IMPROMPTU-04 kickoff drafted) -->
 <!-- canonical-source: true — this is the single master tracker; hydrate new conversations from here -->
+<!-- companion doc: CAMPAIGN-CLOSE-PLAN.md (Loop-Closure Matrix + session plan + reboot instructions) -->
 
 ## Purpose
 
 This document tracks EVERY outstanding item across Sprint 31.9 Health &
-Hardening and the planned post-31.9 Component Ownership Consolidation sprint.
+Hardening and the three planned post-31.9 sprints (Component Ownership,
+Reconnect-Recovery-and-RejectionStage, Alpaca Retirement).
 The definition of "campaign complete" is that every line in every table below
 is either RESOLVED, PLANNED-WITH-SESSION-ASSIGNED, or EXPLICITLY-DEFERRED with
 a named future sprint.
 
 Zero orphans, zero "we'll get to it eventually" items.
+
+**As of Phase 1a (2026-04-23):** the full Loop-Closure Matrix and remaining
+session plan live in `CAMPAIGN-CLOSE-PLAN.md`. This tracker retains operational
+state (stage progress, DEF register movement, process notes); the companion
+plan doc is the source of truth for disposition of every open item.
 
 When the entire tracker shows RESOLVED for every row, the campaign is complete
 and this document can be archived to `docs/sprints/archive/`.
@@ -38,11 +45,19 @@ and this document can be archived to `docs/sprints/archive/`.
 | Stage 8 Wave 1 | FIX-13a (test hygiene — tactical, solo) | ✅ CLEAR | 2026-04-23 |
 | Stage 8 Wave 2 | FIX-13b (test hygiene — refactors, solo, 7 findings) | ✅ CONCERNS_RESOLVED | 2026-04-23 |
 | Stage 8 Wave 3 | FIX-13c (ai-copilot-coverage, solo, F13 carry-over) | ✅ CLEAR | 2026-04-23 |
-| Stage 8 Parallel | IMPROMPTU-01 (LIVE OK, parallel if scope-safe) | ⏸ PENDING | TBD |
-| **Stage 8** | **(complete when both waves close)** | ⏸ PENDING | TBD |
-| Stage 9A/B | IMPROMPTU-02 (scope TBD) | ⏸ PENDING | TBD |
+| **Stage 8** | **(complete — Waves 1/2/3 all CLEAR; IMPROMPTU-01/02 placeholders re-homed into Stage 9 campaign-close sessions)** | ✅ COMPLETE | 2026-04-23 |
+| Stage 9A | IMPROMPTU-04 (safety: A1 + C1 + startup invariant) | ⏸ PENDING (kickoff drafted 2026-04-23) | TBD |
+| Stage 9B | IMPROMPTU-05 (deps & infra: DEF-180/181/179) | ⏸ PENDING | TBD |
+| Stage 9B | IMPROMPTU-06 (test-debt: DEF-176/185/192/166/048/049) | ⏸ PENDING | TBD |
+| Stage 9B | IMPROMPTU-07 (doc-hygiene + UI fixes; + Apr 21 F-05/F-06/F-08) | ⏸ PENDING | TBD |
+| Stage 9B | IMPROMPTU-08 (architecture.md API catalog regeneration) | ⏸ PENDING | TBD |
+| Stage 9C | IMPROMPTU-09 (Apr 22 verification sweep, read-only) | ⏸ PENDING (post-IMPROMPTU-04 dependency) | TBD |
+| Stage 9C | RETRO-FOLD (P1-P25 into workflow/) | ⏸ PENDING | TBD |
+| Stage 10 | SPRINT-CLOSE (summary + seal + archive + 3 DISCOVERY.md) | ⏸ PENDING | TBD |
 | **Sprint 31.9** | | ⏸ IN PROGRESS | |
-| Post-31.9 | Component Ownership Consolidation (DEF-175) | ⏸ PLANNED | After 31.9 closes |
+| Post-31.9 | Component Ownership Consolidation (DEF-175 + DEF-182 + DEF-193 + DEF-197 + DEF-014 HealthMonitor + C7) | ⏸ PLANNED | After 31.9 closes |
+| Post-31.9 | Reconnect-Recovery + RejectionStage (DEF-177 + DEF-184 + DEF-194 + DEF-195 + DEF-196 + DEF-014 IBKR TODOs + Apr 21 F-04) | ⏸ PLANNED (DISCOVERY.md drafted in SPRINT-CLOSE) | After 31.9 closes |
+| Post-31.9 | Alpaca Retirement (DEF-178 + DEF-183 + DEF-014 Alpaca TODO) | ⏸ PLANNED (DISCOVERY.md drafted in SPRINT-CLOSE) | After 31.9 closes |
 | **Campaign** | | ⏸ IN PROGRESS | |
 
 ## CI infrastructure status
@@ -58,60 +73,117 @@ First fully passing CI at commit `793d4fd` (2026-04-22).
 
 ## Sessions remaining (Sprint 31.9)
 
-| Session | Scope | Stage |
+Full scope breakdown per session lives in `CAMPAIGN-CLOSE-PLAN.md` §"Session Plan".
+This table is the operational summary.
+
+| Session | Scope summary | Stage | Safe-during-trading? | Tier 2 profile |
+|---|---|---|---|---|
+| ~~FIX-13a~~ | ~~Test hygiene — tactical~~ | ~~Stage 8 Wave 1~~ ✅ CLEAR |  |  |
+| ~~FIX-13b~~ | ~~Test hygiene — refactors (7 findings)~~ | ~~Stage 8 Wave 2~~ ✅ CONCERNS_RESOLVED |  |  |
+| ~~FIX-13c~~ | ~~Test hygiene — AI Copilot coverage (Finding 13)~~ | ~~Stage 8 Wave 3~~ ✅ CLEAR |  |  |
+| IMPROMPTU-04 | Safety: DEF-199 A1 fix + Apr 22 C1 log hygiene + startup invariant | Stage 9A | Yes (code changes don't hot-reload; restart controls cutover) | **Adversarial** |
+| IMPROMPTU-05 | Deps & infra: DEF-180 lockfile, DEF-181 Node 20 bump, DEF-179 PyJWT migration | Stage 9B | Yes | Standard |
+| IMPROMPTU-06 | Test-debt: DEF-176/185/192/166/048/049 | Stage 9B | Yes | Standard |
+| IMPROMPTU-07 | Doc-hygiene + UI fixes: DEF-198/189/164/191/169 + Apr 21 F-05/F-06/F-08 + cosmetics + shadow-variant badge + 22-vs-15 reconcile | Stage 9B | Yes | Standard |
+| IMPROMPTU-08 | `architecture.md` API catalog regeneration (DEF-168) | Stage 9B | Yes | Standard |
+| IMPROMPTU-09 | Apr 22 verification sweep (read-only, 8 SQL/grep checks) | Stage 9C | Yes (read-only) | None |
+| RETRO-FOLD | P1–P25 fold into `workflow/` metarepo protocols | Stage 9C | Yes (docs) | None |
+| SPRINT-CLOSE | Final summary + register SEAL + tracker archive + 3 DISCOVERY.md | Stage 10 | Yes (docs) | Standard |
+
+**Apr 21 impromptu-01/02 placeholder files** (`impromptu-01-log-ui-hygiene.md`,
+`impromptu-02-scoping.md`, `impromptu-02-fix.md`) — scope has been rehomed:
+F-01 → IMPROMPTU-04 C1 (same bug); F-05/F-06/F-08 → IMPROMPTU-07; F-03 → DEF-095
+(Sprint 33.5); F-04 → post-31.9-reconnect-recovery; F-10 → DEF-196
+(post-31.9-reconnect-recovery). Files archived during SPRINT-CLOSE.
+
+## Open DEF items — disposition summary
+
+The full Loop-Closure Matrix (every DEF, every disposition, every rationale)
+lives in `CAMPAIGN-CLOSE-PLAN.md`. This section is the tracker's operational
+cut.
+
+### Will resolve within Sprint 31.9 (SCHEDULED)
+
+| DEF | Title | Owner session |
 |---|---|---|
-| ~~FIX-13a~~ | ~~Test hygiene — tactical~~ | ~~Stage 8 Wave 1~~ ✅ CLEAR |
-| ~~FIX-13b~~ | ~~Test hygiene — refactors (7 findings)~~ | ~~Stage 8 Wave 2~~ ✅ CONCERNS_RESOLVED |
-| ~~FIX-13c~~ | ~~Test hygiene — AI Copilot coverage (Finding 13)~~ | ~~Stage 8 Wave 3~~ ✅ CLEAR |
-| IMPROMPTU-01 | (scope TBD — Stage 8 Parallel slot) | Stage 8 Parallel |
-| IMPROMPTU-02 | (scope TBD — 9A scoping + 9B fix) | Stage 9A / 9B |
-| Sprint 31.9 seal | Final barrier + retrospective fold into `workflow/` | Stage 10 / sprint-close |
+| DEF-048 | test_main.py xdist failures (4 tests) | IMPROMPTU-06 |
+| DEF-049 | test_orchestrator isolation failure | IMPROMPTU-06 |
+| DEF-164 | Late-night boot collides with auto-shutdown | IMPROMPTU-07 |
+| DEF-166 | test_speed_benchmark flaky under pytest-cov | IMPROMPTU-06 |
+| DEF-168 | architecture.md API catalog drift | IMPROMPTU-08 |
+| DEF-169 | `--dev` mode retired (reclassify as closed) | IMPROMPTU-07 |
+| DEF-176 | `auto_cleanup_orphans` kwarg removal | IMPROMPTU-06 |
+| DEF-179 | python-jose → PyJWT migration | IMPROMPTU-05 |
+| DEF-180 | Python lockfile via uv | IMPROMPTU-05 |
+| DEF-181 | Node 20 GitHub Actions deprecation (deadline 2026-06-02) | IMPROMPTU-05 |
+| DEF-185 | Analytics-layer assert isinstance (5 sites) | IMPROMPTU-06 |
+| DEF-189 | revalidate_strategy.py config_overrides param-name (bug fix only; re-run → Sprint 33) | IMPROMPTU-07 |
+| DEF-191 | Latent SQL-side UTC normalization (doc-only) | IMPROMPTU-07 |
+| DEF-192 | Test runtime warning cleanup (categories i–iv; category v stays MONITOR per RULE-018) | IMPROMPTU-06 |
+| DEF-198 | Boot phase labels `/12` vs handoff-claimed `/17` | IMPROMPTU-07 |
+| DEF-199 | `_flatten_unknown_position()` doubles shorts [SAFETY CRITICAL] | **IMPROMPTU-04** |
 
-## Open DEF items — every known DEF with resolution assignment
+### Named-horizon deferred — post-31.9 Component Ownership sprint
 
-### Will resolve within Sprint 31.9
+| DEF | Title |
+|---|---|
+| DEF-175 | Component ownership consolidation (core) |
+| DEF-182 | Weekly reconciliation stub |
+| DEF-193 | Observatory WS push-only disconnect detection |
+| DEF-197 | evaluation.db 4.78 GB retention not executing |
+| DEF-014 PARTIAL | HealthMonitor subscription (remaining emitter TODOs split across post-31.9 sprints) |
+| debrief §C7 | Post-shutdown IBKR reconnect + 16 asyncio Task-destroyed warnings |
 
-| DEF | Title | Owner Session |
+### Named-horizon deferred — post-31.9 Reconnect-Recovery + RejectionStage sprint
+
+| DEF | Title |
+|---|---|
+| DEF-177 | `RejectionStage.MARGIN_CIRCUIT` addition |
+| DEF-184 | RejectionStage → RejectionStage + TrackingReason split |
+| DEF-194 | IBKR `ib_async` stale position cache after reconnect |
+| DEF-195 | `max_concurrent_positions` diverges from broker state (+ BITO 8% concentration bypass) |
+| DEF-196 | 32 DEC-372 stop-retry-exhaustion cascade after IBKR reconnect |
+| DEF-014 partial | IBKR emitter TODOs (`ibkr_broker.py:453,531`) |
+| Apr 21 debrief F-04 | Flatten-retry loop against non-existent positions (distinct from DEF-158 + DEF-199) |
+
+### Named-horizon deferred — post-31.9 Alpaca Retirement sprint
+
+| DEF | Title |
+|---|---|
+| DEF-178 | `alpaca-py` core dep → `[incubator]` extras |
+| DEF-183 | Full Alpaca code+test retirement |
+| DEF-014 partial | Alpaca emitter TODO (`alpaca_data_service.py:593`) |
+
+### Named-horizon deferred — other Sprints
+
+| DEF | Title | Sprint |
 |---|---|---|
-| DEF-192 | Test runtime warning cleanup (partial: numpy cast closed; 5 categories remain — TestBaseline blocked on workflow submodule per RULE-018) | FIX-13a (partial) → opportunistic cleanup |
-| DEF-177 | `RejectionStage.MARGIN_CIRCUIT` addition | FIX-06 or cross-domain session |
+| DEF-128 | IBKR err 404 multi-position qty divergence prevention | Sprint 30 (Short Selling) |
+| DEF-147 | DuckDB Research Console backend | Sprint 31B |
+| DEF-095 | Submit-before-cancel bracket amendment pattern (+ Apr 21 F-03) | Sprint 33.5 |
+| DEF-098 | Dashboard trade count inconsistency | Sprint 33+ |
+| DEF-099 PARTIAL | Ghost positions monitor | Sprint 33+ |
+| DEF-105 | Reconciliation trades inflate total_trades | Sprint 33+ |
+| DEF-122 | ABCD swing detection O(n³) | Sprint 33+ |
+| DEF-186 | BacktestEngine private-attr reach-in remainder | Sprint 33+ validation-tooling |
+| DEF-187 | Migrate walk-forward IS from VectorBT to BacktestEngine | Sprint 33+ validation-tooling |
+| DEF-189 re-run | Re-run contaminated revalidations on fixed code | Sprint 33 (Statistical Validation) |
+| DEF-148 | FRED macro regime service | Sprint 34 |
+| DEF-149 | FRED VIX backup source (VIXCLS) | Sprint 34 (bundle with DEF-148) |
+| DEF-017 | Performance-weighted + correlation-adjusted allocation V2 | Sprint 34–35 (Adaptive Capital Intelligence Phase 1) |
+| DEF-023 PARTIAL | Watchlist endpoint remaining fields | Sprint 34–35 or 36+ |
+| DEF-044 PARTIAL | Regime-aware strategy behavior | Sprint 34–35 |
+| DEF-126 | Regime-strategy interaction profiles | Sprint 34–35 |
+| DEF-125 | Time-of-day signal conditioning | Sprint 36+ |
+| DEF-064 | Warm-up 78% failure rate mid-session boot | Next major main.py/data-layer session |
 
-### FIX-13b refactor queue
+### Monitor-only — no action pending (explicit trigger conditions)
 
-> **All 7 findings RESOLVED in Stage 8 Wave 2** (F5, F7+F8 linked, F9, F11,
-> F18, F21, F23 — see "Already resolved during campaign" below). **F13 (AI
-> Copilot coverage) RESOLVED in Stage 8 Wave 3 as FIX-13c-ai-copilot-coverage**
-> — all FIX-13 family findings now closed.
-
-### Will resolve in dedicated post-31.9 sprint
-
-| DEF | Title | Owner |
-|---|---|---|
-| DEF-175 | Component ownership consolidation (lifespan phase duplication) | Post-31.9 sprint (2-3 sessions) |
-| DEF-180 | Python lockfile via uv | Dedicated single-session sprint, post-31.9 |
-| DEF-184 | RejectionStage → RejectionStage + TrackingReason split (coordinates with DEF-177) | Dedicated cross-domain session, post-31.9 |
-
-### Opportunistic — no dedicated session, will fold into next touching session
-
-| DEF | Title | Trigger |
-|---|---|---|
-| DEF-168 | `architecture.md` API catalog drift | If FIX-09 naturally touches API surfaces; otherwise scheduled post-campaign |
-| DEF-174 | Tauri wrapper deprecated | When desktop-packaging decision is made |
-| DEF-176 | `auto_cleanup_orphans` kwarg removal | Next Order Manager touch |
-| DEF-178 | `alpaca-py` → `[incubator]` extras | Next dependency session |
-| DEF-179 | `python-jose` → `PyJWT` migration | Next auth session |
-| DEF-181 | Node 20 action deprecation (deadline 2026-06-02) | Before June 2, 2026; bump checkout/setup-python/setup-node |
-| DEF-182 | Weekly Monday reconciliation stub (FIX-05 spawn) | Next ops/reconciliation session |
-| DEF-183 | Full Alpaca code+test retirement (pairs with DEF-178) | Next execution-layer cleanup sprint |
-| DEF-185 | Analytics-layer assert isinstance anti-pattern (5 sites, DEF-106 follow-on) | Next analytics-layer cleanup sprint |
-
-### Monitor only — no action pending
-
-| DEF | Title | Rationale |
-|---|---|---|
-| DEF-064 | Warm-up failure rate on mid-session boot | Unscheduled; observed but not triggering action |
-| DEF-135 | Visual verification Shadow Trades/Experiments | Blocked on live-data accumulation (non-campaign) |
-| DEF-169 | `--dev` mode retired | No action needed; informational |
+See `CAMPAIGN-CLOSE-PLAN.md` §"Category 3 — MONITOR-ONLY" for the 33-item list
+with per-item trigger conditions and rationale for current non-action. Items
+include: DEF-006, 007, 011, 012, 018 PARTIAL, 019, 020, 021, 022, 025, 028,
+031, 032, 033, 035, 038, 039, 040, 047, 084, 094, 100, 103, 108, 110, 127,
+135, 160, 174, 192 category (v), plus 3 non-DEF RUNNING-REGISTER items.
 
 ### Already resolved during campaign (for completeness)
 
@@ -191,21 +263,29 @@ seals. Recommended: add them to the retrospective section of the final Sprint
 
 ## Acceptance criteria for "campaign complete"
 
+Full acceptance criteria live in `CAMPAIGN-CLOSE-PLAN.md` §"Acceptance Criteria".
+Summary below for operational reference.
+
 Sprint 31.9 is complete when:
-- [ ] Every session in "Sessions remaining" table has landed with CLEAR or MINOR_DEVIATIONS verdict
-- [ ] Every DEF in "Will resolve within Sprint 31.9" table is strikethrough in CLAUDE.md
-- [ ] CI remains green (4,992+ pytest, 859 Vitest, zero flakes firing during session runs)
-- [ ] Every audit-2026-04-21 finding has a "FIX-NN Resolution" annotation in its audit doc
-- [ ] Retrospective items (P1-P11) folded into `workflow/` metarepo
-- [ ] Final Sprint 31.9 summary doc written
-- [ ] RUNNING-REGISTER.md marked SEALED
+- [ ] IMPROMPTU-04 through SPRINT-CLOSE all landed with CLEAR / MINOR_DEVIATIONS / CONCERNS_RESOLVED verdicts
+- [ ] Every DEF in "Will resolve within Sprint 31.9" table strikethrough in CLAUDE.md with commit SHA
+- [ ] CI remains green; every session close-out cites a green CI run URL for its final commit (P25 rule)
+- [ ] Every audit-2026-04-21 finding has a "RESOLVED FIX-NN" or "FIX-NN Resolution" annotation (Phase 2 audit docs or Phase 3 prompts)
+- [ ] Retrospective items (P1-P25) folded into `workflow/` metarepo
+- [ ] `SPRINT-31.9-SUMMARY.md` written
+- [ ] `RUNNING-REGISTER.md` marked SEALED with final HEAD SHA
+- [ ] This tracker moved to `docs/sprints/archive/sprint-31.9-campaign-tracker.md`
+- [ ] `CAMPAIGN-CLOSE-PLAN.md` moved to `docs/sprints/archive/`
+- [ ] Three post-31.9 sprint DISCOVERY.md files exist + linked from summary
 
 Post-31.9 campaign is complete when:
-- [ ] Component Ownership Consolidation sprint complete
-- [ ] DEF-175 strikethrough in CLAUDE.md
-- [ ] All "Opportunistic" DEFs have either fired their trigger session or been explicitly deferred to a NAMED post-campaign horizon
-- [ ] All "Monitor only" DEFs have been re-evaluated for promotion or explicit close
-- [ ] This tracker itself is moved to `docs/sprints/archive/sprint-31.9-campaign-tracker.md`
+- [ ] post-31.9-component-ownership sprint complete
+- [ ] post-31.9-reconnect-recovery-and-rejectionstage sprint complete
+- [ ] post-31.9-alpaca-retirement sprint complete
+- [ ] DEF-175, 177, 178, 182, 183, 184, 193, 194, 195, 196, 197 strikethrough in CLAUDE.md
+- [ ] DEF-014 fully resolved (all 3 emitter sites + HealthMonitor subscription)
+- [ ] Named-horizon Category 2 items remain open but are in their target sprint's active scope
+- [ ] Monitor-only Category 3 items re-evaluated (still-valid trigger conditions vs explicit close)
 
 ## How to update this doc
 
