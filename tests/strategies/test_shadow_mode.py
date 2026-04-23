@@ -6,6 +6,7 @@ config parsing, and end-to-end counterfactual tracking.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -81,8 +82,19 @@ def _build_system(
     grade_meets_minimum: bool = True,
     orchestrator_regime_vector: object | None = None,
 ) -> ArgusSystem:
-    """Build ArgusSystem with mocked components for _process_signal testing."""
-    system = object.__new__(ArgusSystem)
+    """Build ArgusSystem with mocked components for _process_signal testing.
+
+    Uses the real ``ArgusSystem.__init__`` (pure attribute-init; no I/O) so any
+    future instance attribute added to the constructor gets a safe default
+    even if this fixture forgets to mock it. Explicit attribute assignments
+    below override the None defaults for the components ``_process_signal``
+    actually touches. (FIX-13b F5 / P1-G2-C01.)
+    """
+    system = ArgusSystem(
+        config_dir=Path("/tmp/argus-test-fixture"),
+        dry_run=True,
+        enable_api=False,
+    )
 
     # Core components
     system._event_bus = event_bus
