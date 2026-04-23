@@ -573,6 +573,16 @@ async def test_observatory_ws_disconnect_cancels_push_loop_promptly(
         assert auth_resp["type"] == "auth_success"
         initial = ws.receive_json()
         assert initial["type"] == "pipeline_update"
+        # Short pause to let the server finish its post-initial prep
+        # queries (get_symbol_tiers + get_session_summary complete after
+        # the initial send but before the push loop's wait_for). Without
+        # this, a pathologically fast disconnect on Linux xdist can orphan
+        # those queries' aiosqlite futures against the portal loop as it
+        # closes — a race that is a test-infrastructure limitation of the
+        # observatory_ws test fixture, not a push-loop issue. The
+        # disconnect-watcher we are validating still fires correctly; the
+        # sleep just ensures it is the only thing under test here.
+        await asyncio.sleep(0.1)
         # Do NOT receive any push-loop message. The server is now parked
         # in the push loop's disconnect-aware wait; exiting the ``with``
         # block closes the peer socket and should fire the watcher.
