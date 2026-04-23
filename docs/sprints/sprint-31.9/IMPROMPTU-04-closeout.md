@@ -5,7 +5,7 @@
 - **Sprint:** `sprint-31.9-health-and-hardening`
 - **Session:** `IMPROMPTU-04` (Track B / Stage 9A — safety-critical)
 - **Date:** 2026-04-23
-- **Commit:** `0623801` (pushed to `origin/main` after docs close-out)
+- **Commit:** `0623801` (code) + `af7b899` (docs close-out) — both landed on local `main`, **pending operator `git push origin main`** and green CI before paper trading resumes.
 - **Baseline HEAD:** `c655cb3` (debrief triage + IMPROMPTU-04 kickoff committed)
 - **Test delta:** 5,039 → 5,052 passed (+13 net). Vitest 859 → 859 (session touches no UI).
 - **Warning delta:** unchanged (no new warnings introduced).
@@ -128,6 +128,23 @@ None new. Cross-references (already tracked on CLAUDE.md):
 
 These three are scheduled for the post-31.9 Reconnect-Recovery sprint; IMPROMPTU-04's scope is deliberately limited to the EOD safety gate, not the session-long cascade that produced the initial shorts.
 
+## Post-Review Fix Documentation
+
+Tier 2 adversarial review (see `IMPROMPTU-04-review.md`) returned **CONCERNS**, not CLEAR. The verdict downgrade is operational hygiene, not a code safety issue. Reviewer's adversarial checks all passed: the A1 fix is robust against string/None/MagicMock/missing-attribute side-drift (StrEnum comparison semantics independently verified), all 4 canary categories are genuinely revert-proof, diff is scope-compliant, flag is actually read in the gated call site, CLAUDE.md strikethrough matches SHA.
+
+**Reviewer concerns + dispositions:**
+
+1. *"Commits `0623801` and `af7b899` are not on `origin/main` at review time — the close-out's commit-header claim is not yet true."*
+   - **FIXED in this close-out update.** The commit header now reads "both landed on local `main`, pending operator `git push origin main` and green CI". No attempt to push was made — pushing to shared state without explicit operator authorization is not in this session's remit.
+
+2. *"No CI URL available to verify green status."*
+   - **DEFERRED to operator.** A direct consequence of (1). Cannot be resolved within-session. The adjacent baseline commit `c655cb3` CI run (`24846376460`) failed on `tests/api/test_observatory_ws.py::test_observatory_ws_independent_from_ai_ws`, which is pre-existing **DEF-193** (observatory WS push-only disconnect-detection flake on Linux xdist, identified during FIX-13a-CI-hotfix). If the post-push CI on `0623801` trips the same flake, that is unrelated to IMPROMPTU-04's scope — the operator should disposition DEF-193 separately and proceed if that is the only failure.
+
+3. *"Cosmetic line-number drift in close-out's grep-audit table (1–5 lines off post-fix)."*
+   - **ACCEPTED AS-IS.** The close-out's grep-audit line numbers refer to pre-fix anchors (matching the kickoff's and debrief's wording). Post-fix line numbers drift because the fix adds ~35 lines to each region. Both sets of references identify the same code; the reviewer acknowledged this is cosmetic. No change.
+
+The reviewer's CLEAR-path directive is: (a) operator pushes; (b) CI green (or DEF-193 dispositioned); (c) verdict upgrades to CLEAR; (d) paper trading resumes per kickoff's "Post-Session ARGUS Restart Timing" table.
+
 ```json:structured-closeout
 {
   "session_id": "IMPROMPTU-04-eod-short-flip-and-log-hygiene",
@@ -175,9 +192,10 @@ These three are scheduled for the post-31.9 Reconnect-Recovery sprint; IMPROMPTU
     "argus/models/trading.py",
     "workflow/**"
   ],
-  "ci_url": "pending — link to add after CI run completes against 0623801",
-  "tier_2_verdict": "pending",
-  "paper_trading_readiness": "CONDITIONAL_GO_PENDING_TIER_2_AND_CI"
+  "ci_url": "pending — commits local-only; operator push + CI run against 0623801 required",
+  "tier_2_verdict": "CONCERNS",
+  "tier_2_concerns_summary": "Commits not pushed to origin; no green CI URL; cosmetic line-number drift in grep-audit (all operational hygiene, not code safety)",
+  "paper_trading_readiness": "CONDITIONAL_GO_PENDING_PUSH_AND_CI"
 }
 ```
 ```
