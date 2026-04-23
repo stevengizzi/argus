@@ -375,9 +375,13 @@ class TestEodFlattenBrokerOnly:
         event_bus: EventBus,
         mock_broker: MagicMock,
         market_hours_clock: FixedClock,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """eod_flatten queries broker, sells untracked positions."""
         om = _make_om(event_bus, mock_broker, market_hours_clock)
+        # FIX-13b F9: drop flatten fill-wait to 0.1s so the never-arriving
+        # mock-broker fill callback stops burning the 30s production default.
+        monkeypatch.setattr(om._config, "eod_flatten_timeout_seconds", 0.1)
 
         # Create one tracked position
         await _open_position(om, mock_broker)

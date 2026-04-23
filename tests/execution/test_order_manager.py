@@ -658,6 +658,7 @@ async def test_time_stop_closes_position(
 async def test_eod_flatten_closes_all_positions(
     mock_broker: MagicMock,
     event_bus: EventBus,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """At 3:50 PM ET, all positions closed."""
     # Set clock to 3:50 PM ET
@@ -674,6 +675,9 @@ async def test_eod_flatten_closes_all_positions(
         clock=eod_clock,
         config=config,
     )
+    # FIX-13b F9: drop flatten fill-wait to 0.1s so the mock broker's
+    # never-arriving fill callback stops burning the 30s production default.
+    monkeypatch.setattr(om._config, "eod_flatten_timeout_seconds", 0.1)
 
     await om.start()
 
@@ -722,8 +726,12 @@ async def test_eod_flatten_no_positions_is_noop(
 async def test_emergency_flatten_closes_everything(
     order_manager: OrderManager,
     mock_broker: MagicMock,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Immediate close all."""
+    # FIX-13b F9: drop flatten fill-wait to 0.1s (fixture default is 1s;
+    # production default 30s). Mock broker never fires fill callbacks.
+    monkeypatch.setattr(order_manager._config, "eod_flatten_timeout_seconds", 0.1)
     await order_manager.start()
 
     # Setup position via bracket order (DEC-117)
@@ -748,8 +756,11 @@ async def test_emergency_flatten_closes_everything(
 async def test_emergency_flatten_cancels_open_orders(
     order_manager: OrderManager,
     mock_broker: MagicMock,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """All pending orders cancelled first."""
+    # FIX-13b F9: drop flatten fill-wait to 0.1s.
+    monkeypatch.setattr(order_manager._config, "eod_flatten_timeout_seconds", 0.1)
     await order_manager.start()
 
     # Setup position via bracket order (DEC-117)
@@ -1136,8 +1147,11 @@ async def test_circuit_breaker_triggers_emergency_flatten(
     order_manager: OrderManager,
     mock_broker: MagicMock,
     event_bus: EventBus,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """CircuitBreakerEvent triggers emergency flatten."""
+    # FIX-13b F9: drop flatten fill-wait to 0.1s.
+    monkeypatch.setattr(order_manager._config, "eod_flatten_timeout_seconds", 0.1)
     await order_manager.start()
 
     # Setup position via bracket order (DEC-117)
@@ -2333,8 +2347,11 @@ async def test_bracket_with_simulated_broker_sync_fill(
 async def test_bracket_flatten_cancels_bracket_orders(
     order_manager: OrderManager,
     mock_broker: MagicMock,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Emergency flatten cancels stop + T1 + T2 orders from bracket."""
+    # FIX-13b F9: drop flatten fill-wait to 0.1s.
+    monkeypatch.setattr(order_manager._config, "eod_flatten_timeout_seconds", 0.1)
     await order_manager.start()
 
     approved = make_approved()
