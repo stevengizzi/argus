@@ -13,44 +13,60 @@ from argus.strategies.orb_breakout import OrbBreakoutStrategy
 ET = ZoneInfo("America/New_York")
 
 
-def make_orb_config(
-    strategy_id: str = "strat_orb_breakout",
-    orb_window_minutes: int = 15,
-    volume_threshold_rvol: float = 2.0,
-    target_1_r: float = 1.0,
-    target_2_r: float = 2.0,
-    time_stop_minutes: int = 30,
-    min_range_atr_ratio: float = 0.5,
-    max_range_atr_ratio: float = 2.0,
-    chase_protection_pct: float = 0.005,
-    breakout_volume_multiplier: float = 1.5,
-    max_trades_per_day: int = 6,
-    max_daily_loss_pct: float = 0.03,
-    max_loss_per_trade_pct: float = 0.01,
-    max_concurrent_positions: int = 2,
-    latest_entry: str = "11:30",
-) -> OrbBreakoutConfig:
-    """Create an OrbBreakoutConfig for testing."""
-    return OrbBreakoutConfig(
-        strategy_id=strategy_id,
-        name="ORB Breakout",
-        orb_window_minutes=orb_window_minutes,
-        volume_threshold_rvol=volume_threshold_rvol,
-        target_1_r=target_1_r,
-        target_2_r=target_2_r,
-        time_stop_minutes=time_stop_minutes,
-        min_range_atr_ratio=min_range_atr_ratio,
-        max_range_atr_ratio=max_range_atr_ratio,
-        chase_protection_pct=chase_protection_pct,
-        breakout_volume_multiplier=breakout_volume_multiplier,
-        risk_limits=StrategyRiskLimits(
-            max_trades_per_day=max_trades_per_day,
-            max_daily_loss_pct=max_daily_loss_pct,
-            max_loss_per_trade_pct=max_loss_per_trade_pct,
-            max_concurrent_positions=max_concurrent_positions,
-        ),
-        operating_window=OperatingWindow(latest_entry=latest_entry),
-    )
+@pytest.fixture
+def orb_config_factory():
+    """Factory fixture for OrbBreakoutConfig with test-friendly defaults.
+
+    FIX-13b F23: replaces the former module-level ``make_orb_config`` helper
+    with a pytest fixture returning a callable. All prior keyword arguments
+    preserved exactly; call-site ergonomics unchanged beyond the
+    ``orb_config_factory`` fixture-injection parameter. File-local scope
+    (other ORB strategies have their own config shapes).
+    """
+    def _build(
+        strategy_id: str = "strat_orb_breakout",
+        orb_window_minutes: int = 15,
+        volume_threshold_rvol: float = 2.0,
+        target_1_r: float = 1.0,
+        target_2_r: float = 2.0,
+        time_stop_minutes: int = 30,
+        min_range_atr_ratio: float = 0.5,
+        max_range_atr_ratio: float = 2.0,
+        chase_protection_pct: float = 0.005,
+        breakout_volume_multiplier: float = 1.5,
+        max_trades_per_day: int = 6,
+        max_daily_loss_pct: float = 0.03,
+        max_loss_per_trade_pct: float = 0.01,
+        max_concurrent_positions: int = 2,
+        latest_entry: str = "11:30",
+    ) -> OrbBreakoutConfig:
+        return OrbBreakoutConfig(
+            strategy_id=strategy_id,
+            name="ORB Breakout",
+            orb_window_minutes=orb_window_minutes,
+            volume_threshold_rvol=volume_threshold_rvol,
+            target_1_r=target_1_r,
+            target_2_r=target_2_r,
+            time_stop_minutes=time_stop_minutes,
+            min_range_atr_ratio=min_range_atr_ratio,
+            max_range_atr_ratio=max_range_atr_ratio,
+            chase_protection_pct=chase_protection_pct,
+            breakout_volume_multiplier=breakout_volume_multiplier,
+            risk_limits=StrategyRiskLimits(
+                max_trades_per_day=max_trades_per_day,
+                max_daily_loss_pct=max_daily_loss_pct,
+                max_loss_per_trade_pct=max_loss_per_trade_pct,
+                max_concurrent_positions=max_concurrent_positions,
+            ),
+            operating_window=OperatingWindow(latest_entry=latest_entry),
+        )
+    return _build
+
+
+@pytest.fixture
+def default_orb_config(orb_config_factory) -> OrbBreakoutConfig:
+    """Default OrbBreakoutConfig for tests that need no overrides. (FIX-13b F23.)"""
+    return orb_config_factory()
 
 
 def make_candle(
@@ -130,9 +146,9 @@ class TestOrbOpeningRangeFormation:
     """Tests for opening range formation."""
 
     @pytest.mark.asyncio
-    async def test_accumulates_candles_during_or_window(self) -> None:
+    async def test_accumulates_candles_during_or_window(self, orb_config_factory) -> None:
         """Candles during OR window are accumulated."""
-        config = make_orb_config(orb_window_minutes=15)
+        config = orb_config_factory(orb_window_minutes=15)
         strategy = OrbBreakoutStrategy(config)
         strategy.allocated_capital = 100_000
         strategy.set_watchlist(["AAPL"])
@@ -147,9 +163,9 @@ class TestOrbOpeningRangeFormation:
         assert not state.or_complete
 
     @pytest.mark.asyncio
-    async def test_finalizes_or_after_window(self) -> None:
+    async def test_finalizes_or_after_window(self, orb_config_factory) -> None:
         """OR is finalized after the first candle past the window."""
-        config = make_orb_config(orb_window_minutes=15)
+        config = orb_config_factory(orb_window_minutes=15)
         strategy = OrbBreakoutStrategy(config)
         strategy.allocated_capital = 100_000
         strategy.set_watchlist(["AAPL"])
@@ -173,9 +189,9 @@ class TestOrbOpeningRangeFormation:
         assert state.or_midpoint == 100.0
 
     @pytest.mark.asyncio
-    async def test_or_too_tight_rejected(self) -> None:
+    async def test_or_too_tight_rejected(self, orb_config_factory) -> None:
         """OR with range too tight relative to ATR is rejected."""
-        config = make_orb_config(min_range_atr_ratio=0.5)
+        config = orb_config_factory(min_range_atr_ratio=0.5)
         mock_data_service = AsyncMock()
         mock_data_service.get_indicator.return_value = 5.0  # ATR = 5.0
 
@@ -202,9 +218,9 @@ class TestOrbOpeningRangeFormation:
         assert "too tight" in state.or_rejection_reason.lower()
 
     @pytest.mark.asyncio
-    async def test_or_too_wide_rejected(self) -> None:
+    async def test_or_too_wide_rejected(self, orb_config_factory) -> None:
         """OR with range too wide relative to ATR is rejected."""
-        config = make_orb_config(max_range_atr_ratio=2.0)
+        config = orb_config_factory(max_range_atr_ratio=2.0)
         mock_data_service = AsyncMock()
         mock_data_service.get_indicator.return_value = 1.0  # ATR = 1.0
 
@@ -256,9 +272,9 @@ class TestOrbBreakoutDetection:
         await strategy.on_candle(post_or)
 
     @pytest.mark.asyncio
-    async def test_breakout_above_or_high_emits_signal(self) -> None:
+    async def test_breakout_above_or_high_emits_signal(self, orb_config_factory) -> None:
         """Candle closing above OR high with volume emits signal."""
-        config = make_orb_config(breakout_volume_multiplier=1.5, chase_protection_pct=0.02)
+        config = orb_config_factory(breakout_volume_multiplier=1.5, chase_protection_pct=0.02)
         mock_data_service = AsyncMock()
         mock_data_service.get_indicator.side_effect = lambda s, i: {
             "atr_14": 2.0,
@@ -291,9 +307,9 @@ class TestOrbBreakoutDetection:
         assert signal.stop_price == 100.0  # Midpoint of OR
 
     @pytest.mark.asyncio
-    async def test_wick_above_or_high_no_signal(self) -> None:
+    async def test_wick_above_or_high_no_signal(self, orb_config_factory) -> None:
         """Candle with wick above OR high but close below does not emit signal."""
-        config = make_orb_config()
+        config = orb_config_factory()
         mock_data_service = AsyncMock()
         mock_data_service.get_indicator.return_value = 2.0
 
@@ -317,9 +333,9 @@ class TestOrbBreakoutDetection:
         assert signal is None
 
     @pytest.mark.asyncio
-    async def test_low_volume_breakout_no_signal(self) -> None:
+    async def test_low_volume_breakout_no_signal(self, orb_config_factory) -> None:
         """Breakout with insufficient volume does not emit signal."""
-        config = make_orb_config(breakout_volume_multiplier=1.5)
+        config = orb_config_factory(breakout_volume_multiplier=1.5)
         mock_data_service = AsyncMock()
         mock_data_service.get_indicator.return_value = 100.0  # VWAP
 
@@ -343,9 +359,9 @@ class TestOrbBreakoutDetection:
         assert signal is None
 
     @pytest.mark.asyncio
-    async def test_below_vwap_no_signal(self) -> None:
+    async def test_below_vwap_no_signal(self, orb_config_factory) -> None:
         """Breakout below VWAP does not emit signal."""
-        config = make_orb_config()
+        config = orb_config_factory()
         mock_data_service = AsyncMock()
         mock_data_service.get_indicator.side_effect = lambda s, i: {
             "atr_14": 2.0,
@@ -369,9 +385,9 @@ class TestOrbBreakoutDetection:
         assert signal is None
 
     @pytest.mark.asyncio
-    async def test_chase_protection_no_signal(self) -> None:
+    async def test_chase_protection_no_signal(self, orb_config_factory) -> None:
         """Breakout past chase protection threshold does not emit signal."""
-        config = make_orb_config(chase_protection_pct=0.005)  # 0.5%
+        config = orb_config_factory(chase_protection_pct=0.005)  # 0.5%
         mock_data_service = AsyncMock()
         mock_data_service.get_indicator.side_effect = lambda s, i: {
             "atr_14": 2.0,
@@ -400,9 +416,9 @@ class TestSignalCorrectness:
     """Tests for correct signal values."""
 
     @pytest.mark.asyncio
-    async def test_signal_entry_price_is_candle_close(self) -> None:
+    async def test_signal_entry_price_is_candle_close(self, orb_config_factory) -> None:
         """Signal entry price equals candle close."""
-        config = make_orb_config(chase_protection_pct=0.05)  # Looser chase protection
+        config = orb_config_factory(chase_protection_pct=0.05)  # Looser chase protection
         mock_data_service = AsyncMock()
         mock_data_service.get_indicator.side_effect = lambda s, i: {
             "atr_14": 2.0,
@@ -437,9 +453,9 @@ class TestSignalCorrectness:
         assert signal.entry_price == 101.5
 
     @pytest.mark.asyncio
-    async def test_signal_stop_is_or_midpoint(self) -> None:
+    async def test_signal_stop_is_or_midpoint(self, orb_config_factory) -> None:
         """Signal stop price equals OR midpoint."""
-        config = make_orb_config(chase_protection_pct=0.05)
+        config = orb_config_factory(chase_protection_pct=0.05)
         mock_data_service = AsyncMock()
         mock_data_service.get_indicator.side_effect = lambda s, i: {
             "atr_14": 2.0,
@@ -473,9 +489,9 @@ class TestSignalCorrectness:
         assert signal.stop_price == 101.0  # Midpoint
 
     @pytest.mark.asyncio
-    async def test_signal_targets_are_correct(self) -> None:
+    async def test_signal_targets_are_correct(self, orb_config_factory) -> None:
         """Signal targets are calculated correctly from R-multiples."""
-        config = make_orb_config(target_1_r=1.0, target_2_r=2.0, chase_protection_pct=0.05)
+        config = orb_config_factory(target_1_r=1.0, target_2_r=2.0, chase_protection_pct=0.05)
         mock_data_service = AsyncMock()
         mock_data_service.get_indicator.side_effect = lambda s, i: {
             "atr_14": 2.0,
@@ -517,9 +533,9 @@ class TestRiskLimits:
     """Tests for risk limit enforcement."""
 
     @pytest.mark.asyncio
-    async def test_max_trades_reached_no_signal(self) -> None:
+    async def test_max_trades_reached_no_signal(self, orb_config_factory) -> None:
         """No signal after max_trades_per_day reached."""
-        config = make_orb_config(max_trades_per_day=2, chase_protection_pct=0.05)
+        config = orb_config_factory(max_trades_per_day=2, chase_protection_pct=0.05)
         mock_data_service = AsyncMock()
         mock_data_service.get_indicator.return_value = 100.0
 
@@ -554,9 +570,9 @@ class TestRiskLimits:
         assert signal is None
 
     @pytest.mark.asyncio
-    async def test_max_daily_loss_reached_no_signal(self) -> None:
+    async def test_max_daily_loss_reached_no_signal(self, orb_config_factory) -> None:
         """No signal after max daily loss reached."""
-        config = make_orb_config(max_daily_loss_pct=0.03, chase_protection_pct=0.05)
+        config = orb_config_factory(max_daily_loss_pct=0.03, chase_protection_pct=0.05)
         mock_data_service = AsyncMock()
         mock_data_service.get_indicator.return_value = 100.0
 
@@ -593,9 +609,9 @@ class TestTimeWindow:
     """Tests for time window enforcement."""
 
     @pytest.mark.asyncio
-    async def test_after_latest_entry_no_signal(self) -> None:
+    async def test_after_latest_entry_no_signal(self, orb_config_factory) -> None:
         """No signal after latest entry time."""
-        config = make_orb_config(latest_entry="11:30", chase_protection_pct=0.05)
+        config = orb_config_factory(latest_entry="11:30", chase_protection_pct=0.05)
         mock_data_service = AsyncMock()
         mock_data_service.get_indicator.return_value = 100.0
 
@@ -626,9 +642,9 @@ class TestTimeWindow:
         assert signal is None
 
     @pytest.mark.asyncio
-    async def test_during_or_formation_no_signal(self) -> None:
+    async def test_during_or_formation_no_signal(self, orb_config_factory) -> None:
         """No signal during OR formation period."""
-        config = make_orb_config()
+        config = orb_config_factory()
         strategy = OrbBreakoutStrategy(config)
         strategy.allocated_capital = 100_000
         strategy.set_watchlist(["AAPL"])
@@ -649,9 +665,9 @@ class TestTimeWindow:
 class TestStateManagement:
     """Tests for state management."""
 
-    def test_reset_daily_state_clears_symbol_state(self) -> None:
+    def test_reset_daily_state_clears_symbol_state(self, orb_config_factory) -> None:
         """reset_daily_state clears all symbol state."""
-        config = make_orb_config()
+        config = orb_config_factory()
         strategy = OrbBreakoutStrategy(config)
 
         # Add some state
@@ -669,9 +685,9 @@ class TestMultiSymbol:
     """Tests for multi-symbol handling."""
 
     @pytest.mark.asyncio
-    async def test_independent_or_tracking(self) -> None:
+    async def test_independent_or_tracking(self, orb_config_factory) -> None:
         """Each symbol has independent OR tracking."""
-        config = make_orb_config()
+        config = orb_config_factory()
         mock_data_service = AsyncMock()
         mock_data_service.get_indicator.return_value = 2.0
 
@@ -716,9 +732,9 @@ class TestMultiSymbol:
 class TestPositionSizing:
     """Tests for position sizing calculation."""
 
-    def test_position_size_formula(self) -> None:
+    def test_position_size_formula(self, orb_config_factory) -> None:
         """Position size uses correct formula."""
-        config = make_orb_config(max_loss_per_trade_pct=0.01)
+        config = orb_config_factory(max_loss_per_trade_pct=0.01)
         strategy = OrbBreakoutStrategy(config)
         strategy.allocated_capital = 100_000
 
@@ -728,9 +744,9 @@ class TestPositionSizing:
         shares = strategy.calculate_position_size(102.0, 100.0)
         assert shares == 500
 
-    def test_position_size_zero_capital(self) -> None:
+    def test_position_size_zero_capital(self, orb_config_factory) -> None:
         """Returns 0 if no capital allocated."""
-        config = make_orb_config()
+        config = orb_config_factory()
         strategy = OrbBreakoutStrategy(config)
 
         shares = strategy.calculate_position_size(102.0, 100.0)
@@ -751,9 +767,9 @@ class TestTimezoneHandling:
     - 11:30 AM ET = 16:30 UTC
     """
 
-    def test_utc_candle_at_market_open_recognized_as_in_or_window(self) -> None:
+    def test_utc_candle_at_market_open_recognized_as_in_or_window(self, orb_config_factory) -> None:
         """A candle at 14:30 UTC (9:30 AM ET) should be in the OR window."""
-        config = make_orb_config(orb_window_minutes=15)
+        config = orb_config_factory(orb_window_minutes=15)
         strategy = OrbBreakoutStrategy(config)
 
         # 14:30 UTC = 9:30 AM ET (market open, in OR window)
@@ -765,9 +781,9 @@ class TestTimezoneHandling:
         assert strategy._is_in_or_window(candle) is True
         assert strategy._is_past_or_window(candle) is False
 
-    def test_utc_candle_at_or_end_recognized_as_past_window(self) -> None:
+    def test_utc_candle_at_or_end_recognized_as_past_window(self, orb_config_factory) -> None:
         """A candle at 14:45 UTC (9:45 AM ET) should be past a 15-min OR window."""
-        config = make_orb_config(orb_window_minutes=15)  # OR ends at 9:45 AM ET
+        config = orb_config_factory(orb_window_minutes=15)  # OR ends at 9:45 AM ET
         strategy = OrbBreakoutStrategy(config)
 
         # 13:45 UTC = 9:45 AM EDT (past 15-min OR window)
@@ -779,9 +795,9 @@ class TestTimezoneHandling:
         assert strategy._is_in_or_window(candle) is False
         assert strategy._is_past_or_window(candle) is True
 
-    def test_utc_candle_mid_or_window(self) -> None:
+    def test_utc_candle_mid_or_window(self, orb_config_factory) -> None:
         """A candle at 13:37 UTC (9:37 AM EDT) should be in the OR window."""
-        config = make_orb_config(orb_window_minutes=15)
+        config = orb_config_factory(orb_window_minutes=15)
         strategy = OrbBreakoutStrategy(config)
 
         # 13:37 UTC = 9:37 AM EDT
@@ -793,9 +809,9 @@ class TestTimezoneHandling:
         assert strategy._is_in_or_window(candle) is True
         assert strategy._is_past_or_window(candle) is False
 
-    def test_utc_candle_before_latest_entry(self) -> None:
+    def test_utc_candle_before_latest_entry(self, orb_config_factory) -> None:
         """A candle before latest entry time is correctly identified."""
-        config = make_orb_config(latest_entry="11:30")  # 11:30 AM ET
+        config = orb_config_factory(latest_entry="11:30")  # 11:30 AM ET
         strategy = OrbBreakoutStrategy(config)
 
         # 15:00 UTC = 10:00 AM ET (before 11:30 AM ET)
@@ -806,9 +822,9 @@ class TestTimezoneHandling:
 
         assert strategy._is_before_latest_entry(candle) is True
 
-    def test_utc_candle_after_latest_entry(self) -> None:
+    def test_utc_candle_after_latest_entry(self, orb_config_factory) -> None:
         """A candle after latest entry time is correctly identified."""
-        config = make_orb_config(latest_entry="11:30")  # 11:30 AM ET
+        config = orb_config_factory(latest_entry="11:30")  # 11:30 AM ET
         strategy = OrbBreakoutStrategy(config)
 
         # 16:00 UTC = 12:00 PM EDT (after 11:30 AM ET)
@@ -820,7 +836,7 @@ class TestTimezoneHandling:
         assert strategy._is_before_latest_entry(candle) is False
 
     @pytest.mark.asyncio
-    async def test_or_forms_correctly_with_utc_timestamps(self) -> None:
+    async def test_or_forms_correctly_with_utc_timestamps(self, orb_config_factory) -> None:
         """Feed UTC-timestamped candles through on_candle, verify OR forms.
 
         This is the key regression test for DEF-008. Prior to the fix,
@@ -829,7 +845,7 @@ class TestTimezoneHandling:
         """
         from datetime import timedelta
 
-        config = make_orb_config(orb_window_minutes=15)
+        config = orb_config_factory(orb_window_minutes=15)
         mock_data_service = AsyncMock()
         mock_data_service.get_indicator.return_value = 2.0  # ATR
 
@@ -874,11 +890,11 @@ class TestTimezoneHandling:
         assert state.or_midpoint == 100.0
 
     @pytest.mark.asyncio
-    async def test_breakout_signal_with_utc_timestamps(self) -> None:
+    async def test_breakout_signal_with_utc_timestamps(self, orb_config_factory) -> None:
         """Full pipeline test: OR formation and breakout with UTC timestamps."""
         from datetime import timedelta
 
-        config = make_orb_config(
+        config = orb_config_factory(
             orb_window_minutes=15,
             breakout_volume_multiplier=1.5,
             chase_protection_pct=0.02,
@@ -933,7 +949,7 @@ class TestTimezoneHandling:
         assert signal.entry_price == 102.0
         assert signal.stop_price == 100.0  # OR midpoint
 
-    def test_dst_transition_edt_to_est(self) -> None:
+    def test_dst_transition_edt_to_est(self, orb_config_factory) -> None:
         """Verify correct handling across DST boundary (EDT→EST).
 
         In early November, clocks "fall back". A timestamp at 14:30 UTC is:
@@ -942,7 +958,7 @@ class TestTimezoneHandling:
 
         The strategy should handle both correctly based on the actual date.
         """
-        config = make_orb_config(orb_window_minutes=15)
+        config = orb_config_factory(orb_window_minutes=15)
         strategy = OrbBreakoutStrategy(config)
 
         # November 3, 2025 is after DST ends (EST, UTC-5)
@@ -971,7 +987,7 @@ class TestEarliestEntryEnforcement:
     """
 
     @pytest.mark.asyncio
-    async def test_first_post_or_candle_is_eligible(self) -> None:
+    async def test_first_post_or_candle_is_eligible(self, orb_config_factory) -> None:
         """First candle at OR end (09:45 ET) is eligible since earliest_entry=09:45.
 
         With 15-min OR window, OR ends at 09:45. Default earliest_entry is 09:45.
@@ -980,7 +996,7 @@ class TestEarliestEntryEnforcement:
         from datetime import timedelta
 
         # Use default operating window (earliest_entry=09:45)
-        config = make_orb_config(
+        config = orb_config_factory(
             orb_window_minutes=15,
             chase_protection_pct=0.02,
         )
@@ -1036,7 +1052,7 @@ class TestOrbFamilyExclusion:
     """
 
     @pytest.mark.asyncio
-    async def test_orb_breakout_firing_blocks_orb_scalp(self) -> None:
+    async def test_orb_breakout_firing_blocks_orb_scalp(self, orb_config_factory) -> None:
         """When ORB Breakout fires on AAPL, ORB Scalp should not also fire on AAPL."""
         from argus.core.config import OrbScalpConfig
         from argus.strategies.orb_base import OrbBaseStrategy
@@ -1047,7 +1063,7 @@ class TestOrbFamilyExclusion:
         OrbBaseStrategy._orb_family_triggered_symbols.clear()
 
         # Create ORB Breakout strategy
-        breakout_config = make_orb_config(
+        breakout_config = orb_config_factory(
             strategy_id="strat_orb_breakout",
             orb_window_minutes=15,
             chase_protection_pct=0.02,
@@ -1127,7 +1143,7 @@ class TestOrbFamilyExclusion:
         OrbBaseStrategy._orb_family_triggered_symbols.clear()
 
     @pytest.mark.asyncio
-    async def test_orb_exclusion_allows_different_symbols(self) -> None:
+    async def test_orb_exclusion_allows_different_symbols(self, orb_config_factory) -> None:
         """ORB exclusion only blocks same symbol, not different symbols."""
         from argus.core.config import OrbScalpConfig
         from argus.strategies.orb_base import OrbBaseStrategy
@@ -1138,7 +1154,7 @@ class TestOrbFamilyExclusion:
         OrbBaseStrategy._orb_family_triggered_symbols.clear()
 
         # Create strategies
-        breakout_config = make_orb_config(
+        breakout_config = orb_config_factory(
             strategy_id="strat_orb_breakout",
             orb_window_minutes=15,
             chase_protection_pct=0.02,
@@ -1230,7 +1246,7 @@ class TestOrbFamilyExclusion:
         # Clean up
         OrbBaseStrategy._orb_family_triggered_symbols.clear()
 
-    def test_reset_daily_state_clears_orb_family_exclusion(self) -> None:
+    def test_reset_daily_state_clears_orb_family_exclusion(self, orb_config_factory) -> None:
         """reset_daily_state clears the ORB family exclusion set."""
         from argus.strategies.orb_base import OrbBaseStrategy
 
@@ -1239,14 +1255,14 @@ class TestOrbFamilyExclusion:
         OrbBaseStrategy._orb_family_triggered_symbols.add("NVDA")
 
         # Create a strategy and reset daily state
-        config = make_orb_config()
+        config = orb_config_factory()
         strategy = OrbBreakoutStrategy(config)
         strategy.reset_daily_state()
 
         # Exclusion set should be cleared
         assert len(OrbBaseStrategy._orb_family_triggered_symbols) == 0
 
-    def test_exclusion_set_is_class_level_shared(self) -> None:
+    def test_exclusion_set_is_class_level_shared(self, orb_config_factory) -> None:
         """Exclusion set is shared across all OrbBaseStrategy subclasses."""
         from argus.core.config import OrbScalpConfig
         from argus.strategies.orb_base import OrbBaseStrategy
@@ -1256,7 +1272,7 @@ class TestOrbFamilyExclusion:
         OrbBaseStrategy._orb_family_triggered_symbols.clear()
 
         # Create both strategy types
-        breakout_config = make_orb_config(strategy_id="strat_breakout")
+        breakout_config = orb_config_factory(strategy_id="strat_breakout")
         scalp_config = OrbScalpConfig(
             strategy_id="strat_scalp",
             name="ORB Scalp",
@@ -1288,7 +1304,7 @@ class TestOrbFamilyExclusion:
         OrbBaseStrategy._orb_family_triggered_symbols.clear()
 
     @pytest.mark.asyncio
-    async def test_orb_exclusion_enabled_blocks_scalp(self) -> None:
+    async def test_orb_exclusion_enabled_blocks_scalp(self, orb_config_factory) -> None:
         """With mutual_exclusion_enabled=True, Breakout fires and Scalp is blocked."""
         from argus.core.config import OrbScalpConfig
         from argus.strategies.orb_base import OrbBaseStrategy
@@ -1298,7 +1314,7 @@ class TestOrbFamilyExclusion:
         OrbBaseStrategy._orb_family_triggered_symbols.clear()
         OrbBaseStrategy.mutual_exclusion_enabled = True
 
-        breakout_config = make_orb_config(
+        breakout_config = orb_config_factory(
             strategy_id="strat_breakout",
             orb_window_minutes=15,
             chase_protection_pct=0.02,
@@ -1362,7 +1378,7 @@ class TestOrbFamilyExclusion:
         OrbBaseStrategy.mutual_exclusion_enabled = True
 
     @pytest.mark.asyncio
-    async def test_orb_exclusion_disabled_both_fire(self) -> None:
+    async def test_orb_exclusion_disabled_both_fire(self, orb_config_factory) -> None:
         """With mutual_exclusion_enabled=False, both strategies can fire on same symbol."""
         from argus.core.config import OrbScalpConfig
         from argus.strategies.orb_base import OrbBaseStrategy
@@ -1372,7 +1388,7 @@ class TestOrbFamilyExclusion:
         OrbBaseStrategy._orb_family_triggered_symbols.clear()
         OrbBaseStrategy.mutual_exclusion_enabled = False
 
-        breakout_config = make_orb_config(
+        breakout_config = orb_config_factory(
             strategy_id="strat_breakout",
             orb_window_minutes=15,
             chase_protection_pct=0.02,
