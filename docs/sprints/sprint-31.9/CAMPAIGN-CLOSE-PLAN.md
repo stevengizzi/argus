@@ -1,6 +1,6 @@
 # Sprint 31.9 Campaign-Close Plan
 
-<!-- last-updated: 2026-04-23 (Phase 1a drafted — pre-IMPROMPTU-04) -->
+<!-- last-updated: 2026-04-23 (Phase 2 drafted — IMPROMPTU-CI inserted + IMPROMPTU-09/RETRO-FOLD/SPRINT-CLOSE kickoffs landed) -->
 <!-- canonical-source: true — companion to CAMPAIGN-COMPLETENESS-TRACKER.md; this doc
      captures the session plan, the Loop-Closure Matrix, and reboot instructions.
      When the two conflict, this file governs. -->
@@ -299,7 +299,8 @@ IMPROMPTU-04   safety (A1 + C1 + startup invariant)          [BLOCKS PAPER TRADI
 | Session | Safety tag | Scope files | Tier 2 profile | Depends on |
 |---|---|---|---|---|
 | IMPROMPTU-04 | safe-during-trading (code changes don't hot-reload; post-session restart controls cutover) | `argus/execution/order_manager.py`, `argus/strategies/pattern_strategy.py`, `argus/main.py`, tests | **Adversarial** | — |
-| IMPROMPTU-05 | safe-during-trading | `pyproject.toml`, `.github/workflows/ci.yml`, `argus/api/auth.py`, `argus/api/websocket/*.py`, tests | Standard | — |
+| IMPROMPTU-CI | safe-during-trading (observatory WS is diagnostic read-only UI; teardown-race fix doesn't touch trading) | `argus/api/websocket/observatory_ws.py`, `tests/api/test_observatory_ws.py` | Standard | IMPROMPTU-04 pushed + CI observed red on `test_observatory_ws_sends_initial_state` |
+| IMPROMPTU-05 | safe-during-trading | `pyproject.toml`, `.github/workflows/ci.yml`, `argus/api/auth.py`, `argus/api/websocket/*.py`, tests | Standard | IMPROMPTU-CI CI green |
 | IMPROMPTU-06 | safe-during-trading | `tests/execution/order_manager/*`, `tests/analytics/`, `argus/analytics/ensemble_evaluation.py`, `argus/intelligence/learning/outcome_collector.py`, `argus/execution/order_manager.py` (kwarg removal only), test infra | Standard | — |
 | IMPROMPTU-07 | safe-during-trading | `argus/main.py`, `scripts/revalidate_strategy.py`, `argus/analytics/trade_logger.py`, `argus/api/routes/counterfactual.py`, `argus/ui/src/features/trades/ShadowTradesTab.tsx`, `argus/ui/src/api/types.ts`, `argus/ui/src/utils/strategyConfig.ts`, `argus/ui/src/features/*/Badge.tsx`, `argus/core/risk_manager.py`, docs | Standard | — |
 | IMPROMPTU-08 | safe-during-trading | `docs/architecture.md` + possibly new `scripts/regenerate_api_catalog.py` | Standard | — |
