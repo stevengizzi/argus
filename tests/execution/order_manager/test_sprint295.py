@@ -37,6 +37,7 @@ from argus.execution.order_manager import ManagedPosition, OrderManager
 from argus.models.trading import (
     BracketOrderResult,
     OrderResult,
+    OrderSide,
     OrderStatus,
     Position,
 )
@@ -386,13 +387,17 @@ class TestEodFlattenBrokerOnly:
         # Create one tracked position
         await _open_position(om, mock_broker)
 
-        # Broker reports tracked AAPL + untracked TSLA
+        # Broker reports tracked AAPL + untracked TSLA.
+        # IMPROMPTU-04 DEF-199 requires side=OrderSide.BUY so the Pass 2
+        # side-check treats these as long positions eligible for flatten.
         aapl_pos = MagicMock()
         aapl_pos.symbol = "AAPL"
         aapl_pos.shares = 50
+        aapl_pos.side = OrderSide.BUY
         tsla_pos = MagicMock()
         tsla_pos.symbol = "TSLA"
         tsla_pos.shares = 200
+        tsla_pos.side = OrderSide.BUY
 
         # Reset place_order to track new calls
         mock_broker.place_order = AsyncMock(
@@ -431,10 +436,11 @@ class TestEodFlattenBrokerOnly:
         )
         om = _make_om(event_bus, mock_broker, after_close_clock)
 
-        # Broker reports an untracked position
+        # Broker reports an untracked long position (DEF-199 side-check).
         tsla_pos = MagicMock()
         tsla_pos.symbol = "TSLA"
         tsla_pos.shares = 200
+        tsla_pos.side = OrderSide.BUY
 
         mock_broker.get_positions = AsyncMock(return_value=[tsla_pos])
         mock_broker.place_order = AsyncMock(

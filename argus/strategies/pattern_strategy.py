@@ -315,7 +315,13 @@ class PatternBasedStrategy(BaseStrategy):
             # 50% threshold: log warm-up progress so strategy isn't silent
             min_partial = (lookback + 1) // 2
             if bar_count >= min_partial:
-                logger.info(
+                # IMPROMPTU-04 C1: downgraded from INFO → DEBUG.
+                # Fired per-candle × per-strategy × per-symbol during warm-up;
+                # Apr 22 paper session produced 778,293 of 895,543 (87%) log
+                # lines from this single site. DEF-138 window summaries
+                # already provide INFO-level "not silent during warm-up"
+                # visibility.
+                logger.debug(
                     "%s: evaluating %s with partial history (%d/%d)",
                     self.strategy_id,
                     symbol,

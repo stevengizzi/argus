@@ -556,3 +556,96 @@ def test_initialize_reference_data_empty_ref_data_is_no_op() -> None:
 
     strategy.initialize_reference_data({})
     assert call_count == 0, "set_reference_data should not be called for empty ref_data"
+
+
+# ---------------------------------------------------------------------------
+# Warm-up log-level regression (Sprint 31.9 IMPROMPTU-04, Debrief §C1)
+# ---------------------------------------------------------------------------
+#
+# On the Apr 22 2026 paper session, this single log line accounted for
+# 778,293 of 895,543 total log lines (87% of a 184 MB log file):
+#
+#     pattern_strategy.py:318 —
+#         logger.info("%s: evaluating %s with partial history (%d/%d)", ...)
+#
+# It fires per-candle × per-strategy × per-symbol during warm-up. DEF-138
+# window summaries already provide INFO-level "not silent during warm-up"
+# visibility. Downgrading to DEBUG reduces log volume ~7–10× immediately.
+#
+# Revert-proof: if the level is reverted to INFO, the INFO caplog filter
+# below will capture a record matching "partial history" and the test fails.
+
+
+import logging as _logging  # noqa: E402
+
+
+@pytest.mark.asyncio
+async def test_warmup_partial_history_log_does_not_fire_at_info_level(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """REVERT-PROOF (DEF-199 C1): the warm-up log must not fire at INFO.
+
+    Reverting pattern_strategy.py:318 from logger.debug back to logger.info
+    causes this test to FAIL because the INFO-level caplog filter will
+    capture a record matching "partial history".
+    """
+    # Pattern needs enough lookback that we hit the warm-up window (bar_count
+    # between min_partial and lookback). lookback=10 → min_partial=5.
+    pattern = MockPattern(
+        detection=None,
+        score_value=75.0,
+        lookback=10,
+    )
+    config = _make_config()
+    strategy = PatternBasedStrategy(pattern=pattern, config=config)
+    strategy.set_watchlist(["AAPL"])
+
+    with caplog.at_level(_logging.INFO, logger="argus.strategies.pattern_strategy"):
+        # Feed bars up to 5 (min_partial) → 9 (just below lookback) so each
+        # on_candle hits the partial-history branch and would have triggered
+        # the pre-fix INFO log.
+        for i in range(9):
+            await strategy.on_candle(_make_candle(time_offset_minutes=i))
+
+    matching = [
+        rec for rec in caplog.records
+        if rec.levelno >= _logging.INFO
+        and "partial history" in rec.getMessage()
+    ]
+    assert not matching, (
+        "Warm-up partial-history log fired at INFO level — DEF-199 C1 regression. "
+        f"Got {len(matching)} records: {[r.getMessage() for r in matching[:3]]}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_warmup_partial_history_log_still_fires_at_debug_level(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Non-regression: the log content IS preserved, just at DEBUG level.
+
+    Ensures we downgraded rather than deleted — operators who raise the log
+    level to DEBUG for debugging still see the warm-up evaluation trace.
+    """
+    pattern = MockPattern(
+        detection=None,
+        score_value=75.0,
+        lookback=10,
+    )
+    config = _make_config()
+    strategy = PatternBasedStrategy(pattern=pattern, config=config)
+    strategy.set_watchlist(["AAPL"])
+
+    with caplog.at_level(_logging.DEBUG, logger="argus.strategies.pattern_strategy"):
+        for i in range(9):
+            await strategy.on_candle(_make_candle(time_offset_minutes=i))
+
+    matching = [
+        rec for rec in caplog.records
+        if rec.levelno == _logging.DEBUG
+        and "partial history" in rec.getMessage()
+    ]
+    assert matching, (
+        "Expected DEBUG-level 'partial history' log records during warm-up. "
+        "If the log was deleted instead of downgraded, this test fails."
+    )

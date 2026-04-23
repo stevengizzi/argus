@@ -143,11 +143,19 @@ async def _open_position(om: OrderManager, symbol: str = "AAPL") -> ManagedPosit
     return positions[0]
 
 
-def _make_broker_position(symbol: str, shares: int) -> MagicMock:
-    """Create a mock broker Position object with a `shares` attribute."""
+def _make_broker_position(
+    symbol: str, shares: int, side: OrderSide = OrderSide.BUY,
+) -> MagicMock:
+    """Create a mock broker Position object with a `shares` attribute.
+
+    IMPROMPTU-04 DEF-199: side defaults to BUY so the Pass 2 side-check
+    treats these mocks as long positions eligible for flatten. Shorts can
+    be produced by passing ``side=OrderSide.SELL`` explicitly.
+    """
     pos = MagicMock(spec=Position)
     pos.symbol = symbol
     pos.shares = shares
+    pos.side = side
     return pos
 
 

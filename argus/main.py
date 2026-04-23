@@ -120,6 +120,47 @@ logger = logging.getLogger(__name__)
 _throttled = ThrottledLogger(logger)
 
 
+def check_startup_position_invariant(
+    positions: list[Any],
+) -> tuple[bool, list[str]]:
+    """Long-only startup invariant for broker-reported positions (DEF-199 defense).
+
+    ARGUS is long-only today. If the broker returns any position whose
+    ``side`` is not ``OrderSide.BUY``, the invariant is violated and caller
+    MUST disable auto startup-cleanup — a blind SELL of a short doubles it
+    (the DEF-199 mechanism, now blocked at the EOD filter level too).
+
+    Fails closed: a position object that is missing a ``side`` attribute
+    entirely (novel broker adapter drift) is treated as a violation rather
+    than silently passed through.
+
+    Args:
+        positions: Output of ``broker.get_positions()`` — list of Position
+            or Position-shaped duck objects.
+
+    Returns:
+        ``(ok, violations)`` where ``ok`` is True iff every position has
+        ``side == OrderSide.BUY``, and ``violations`` is a list of short
+        descriptor strings suitable for logging.
+    """
+    from argus.models.trading import OrderSide
+
+    violations: list[str] = []
+    for pos in positions:
+        symbol = getattr(pos, "symbol", "?")
+        shares = getattr(pos, "shares", "?")
+        # Use a sentinel that is definitely not OrderSide.BUY so missing-attr
+        # cases fail closed (below).
+        _sentinel = object()
+        side = getattr(pos, "side", _sentinel)
+        if side is _sentinel:
+            violations.append(f"{symbol}(shares={shares}, side=MISSING)")
+            continue
+        if side != OrderSide.BUY:
+            violations.append(f"{symbol}({shares} shares, side={side!r})")
+    return (len(violations) == 0, violations)
+
+
 class ArgusSystem:
     """Top-level system container. Owns all components and their lifecycle."""
 
@@ -153,6 +194,11 @@ class ArgusSystem:
         self._conversation_manager: ConversationManager | None = None
         self._usage_tracker: UsageTracker | None = None
         self._broker: Broker | None = None
+        # DEF-199 defense: set True in startup() when check_startup_position_invariant
+        # detects any non-long broker position at connect time. Gates the
+        # reconstruct_from_broker auto-cleanup call to prevent the DEF-199
+        # double-short scenario (blind SELL against an existing short).
+        self._startup_flatten_disabled: bool = False
         self._data_service: DataService | None = None
         self._scanner: Scanner | None = None
         self._risk_manager: RiskManager | None = None
@@ -304,6 +350,40 @@ class ArgusSystem:
 
         account = await self._broker.get_account()
         logger.info("Broker connected. Account equity: %s", account.equity if account else "N/A")
+
+        # DEF-199 defense: post-connect long-only invariant check.
+        # ARGUS is long-only today. If the broker returns any short position at
+        # connect, something has gone wrong upstream (prior session zombie,
+        # manual short, DEF-199 residue) and auto startup-cleanup must NOT run —
+        # a blind SELL against a short doubles it. Fail-closed on any exception.
+        try:
+            startup_positions = await self._broker.get_positions()
+            ok, violations = check_startup_position_invariant(startup_positions)
+            if ok:
+                self._startup_flatten_disabled = False
+                if startup_positions:
+                    logger.info(
+                        "Startup invariant: %d broker positions at connect, "
+                        "all long — auto-cleanup enabled.",
+                        len(startup_positions),
+                    )
+            else:
+                self._startup_flatten_disabled = True
+                logger.error(
+                    "STARTUP INVARIANT VIOLATED: broker returned %d non-long "
+                    "position(s) at connect: %s. ARGUS is long-only; auto "
+                    "startup-cleanup DISABLED for this session. Investigate "
+                    "and cover manually before next startup.",
+                    len(violations),
+                    ", ".join(violations),
+                )
+        except Exception as e:
+            # Fail-closed: if we can't verify, disable auto-cleanup.
+            self._startup_flatten_disabled = True
+            logger.error(
+                "STARTUP INVARIANT check failed (%s). Disabling auto "
+                "startup-cleanup for this session.", e,
+            )
 
         # --- Phase 4: Health Monitor ---
         logger.info("[4/12] Starting health monitor...")
@@ -969,8 +1049,21 @@ class ArgusSystem:
             strategy_exit_overrides=strategy_exit_overrides,
         )
         await self._order_manager.start()
-        # Reconstruct open positions from broker
-        await self._order_manager.reconstruct_from_broker()
+        # Reconstruct open positions from broker — gated by the startup
+        # invariant (DEF-199 defense). If any short was detected at connect
+        # time, skip the entire reconstruction path. This is conservative:
+        # legit bracket-equipped long positions also won't be reconstructed,
+        # but the operator must investigate manually anyway (any short is a
+        # red flag), and the alternative — per-position flatten-decision
+        # plumbing through the Order Manager — has broader blast radius.
+        if self._startup_flatten_disabled:
+            logger.warning(
+                "Skipping Order Manager reconstruct_from_broker — startup "
+                "invariant violated. Reconstruct manually after investigating "
+                "the short positions flagged above."
+            )
+        else:
+            await self._order_manager.reconstruct_from_broker()
         self._health_monitor.update_component("order_manager", ComponentStatus.HEALTHY)
 
         # Wire strategy fingerprints into Order Manager (Sprint 32 scope gap fix)

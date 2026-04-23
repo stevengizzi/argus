@@ -1671,7 +1671,8 @@ class OrderManager:
                 len(timed_out),
             )
 
-            # Retry timed-out positions once with re-queried broker qty (Sprint 32.9)
+            # Retry timed-out positions once with re-queried broker qty
+            # (Sprint 32.9 + IMPROMPTU-04 DEF-199 side-check)
             if timed_out and self._config.eod_flatten_retry_rejected:
                 try:
                     retry_positions = await self._broker.get_positions()
@@ -1679,24 +1680,51 @@ class OrderManager:
                         getattr(p, "symbol", ""): int(getattr(p, "shares", 0))
                         for p in retry_positions
                     }
+                    broker_side_map: dict[str, Any] = {
+                        getattr(p, "symbol", ""): getattr(p, "side", None)
+                        for p in retry_positions
+                    }
                     for sym in timed_out:
                         retry_qty = broker_qty_map.get(sym, 0)
+                        retry_side = broker_side_map.get(sym, None)
                         if retry_qty > 0:
-                            logger.warning(
-                                "EOD flatten: retrying %s (%d shares from broker)",
-                                sym,
-                                retry_qty,
-                            )
-                            await self._flatten_unknown_position(
-                                sym, retry_qty, force_execute=True
-                            )
+                            # DEF-199: branch on side. A re-queried short must
+                            # NOT be flattened — that doubles the position.
+                            if retry_side == OrderSide.BUY:
+                                logger.warning(
+                                    "EOD flatten: retrying long %s "
+                                    "(%d shares from broker)",
+                                    sym,
+                                    retry_qty,
+                                )
+                                await self._flatten_unknown_position(
+                                    sym, retry_qty, force_execute=True
+                                )
+                            elif retry_side == OrderSide.SELL:
+                                logger.error(
+                                    "EOD flatten (Pass 1 retry): DETECTED "
+                                    "UNEXPECTED SHORT POSITION %s "
+                                    "(%d shares). NOT auto-covering. "
+                                    "Investigate and cover manually via "
+                                    "scripts/ibkr_close_all_positions.py.",
+                                    sym,
+                                    retry_qty,
+                                )
+                            else:
+                                logger.error(
+                                    "EOD flatten (Pass 1 retry): position %s "
+                                    "has unknown side (%r, qty=%d). "
+                                    "Skipping auto-flatten.",
+                                    sym, retry_side, retry_qty,
+                                )
                 except Exception as e:
                     logger.error("EOD flatten: retry pass failed: %s", e)
 
         self._eod_flatten_events = {}
         pass1_filled_set = set(filled)
 
-        # --- Pass 2: Broker-only positions (Sprint 29.5 R3 + Sprint 32.9 shares fix) ---
+        # --- Pass 2: Broker-only positions (Sprint 29.5 R3 + Sprint 32.9 shares fix
+        # + IMPROMPTU-04 DEF-199 side-check) ---
         try:
             broker_positions = await self._broker.get_positions()
             managed_symbols = set(self._managed_positions.keys())
@@ -1704,17 +1732,40 @@ class OrderManager:
             for pos in broker_positions:
                 symbol = getattr(pos, "symbol", str(pos))
                 qty = int(getattr(pos, "shares", 0))
+                side = getattr(pos, "side", None)
                 if symbol not in managed_symbols and symbol not in pass1_filled_set and qty > 0:
-                    p2_submitted += 1
-                    logger.warning(
-                        "EOD flatten: closing untracked broker position "
-                        "%s (%d shares)",
-                        symbol,
-                        qty,
-                    )
-                    await self._flatten_unknown_position(
-                        symbol, qty, force_execute=True,
-                    )
+                    # DEF-199: IBKRBroker.get_positions() returns shares =
+                    # abs(int(pos.position)); long/short lives on side. A blind
+                    # SELL of a short doubles it. Branch on side.
+                    if side == OrderSide.BUY:
+                        p2_submitted += 1
+                        logger.warning(
+                            "EOD flatten: closing untracked long broker "
+                            "position %s (%d shares)",
+                            symbol,
+                            qty,
+                        )
+                        await self._flatten_unknown_position(
+                            symbol, qty, force_execute=True,
+                        )
+                    elif side == OrderSide.SELL:
+                        # ARGUS is long-only. An untracked short MUST NOT be
+                        # auto-flattened — a SELL would double it (DEF-199).
+                        # Operator must cover manually.
+                        logger.error(
+                            "EOD flatten: DETECTED UNEXPECTED SHORT POSITION "
+                            "%s (%d shares). NOT auto-covering. Investigate "
+                            "and cover manually via "
+                            "scripts/ibkr_close_all_positions.py.",
+                            symbol,
+                            qty,
+                        )
+                    else:
+                        logger.error(
+                            "EOD flatten: position %s has unknown side "
+                            "(%r, qty=%d). Skipping auto-flatten.",
+                            symbol, side, qty,
+                        )
             self.eod_flatten_pass2_count = p2_submitted
             if p2_submitted > 0:
                 logger.info(
