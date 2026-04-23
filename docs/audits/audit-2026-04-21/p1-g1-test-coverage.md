@@ -4,6 +4,12 @@
 **Scope:** Full pytest suite coverage analysis via `pytest --cov=argus` across 288 test files / ~4,934 tests. Identifies coverage gaps in critical paths and failure-mode branches, not absolute line-coverage scoring.
 **Files examined:** 3 deep (risk_manager.py, order_manager.py, 2 failing tests) / ~30 skimmed (critical-path source files + test files)
 
+> **FIX-09-backtest-engine resolution summary (2026-04-22):**
+>
+> | Finding | Status |
+> |---------|--------|
+> | M1 (P1-G1-M01) — `test_speed_benchmark` flaky + not DEF-tracked | **RESOLVED FIX-09-backtest-engine** (resolved together with G2-M03 — replaced with functional-equivalence test `test_backtest_and_replay_produce_equivalent_results`; NO separate DEF needed since the flake source was eliminated by the refactor itself) |
+
 ---
 
 ## Run Summary

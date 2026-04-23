@@ -16,8 +16,8 @@ from datetime import datetime
 
 import pandas as pd
 
-from argus.core.event_bus import EventBus
 from argus.core.events import CandleEvent, IndicatorEvent, TickEvent
+from argus.core.protocols import EventBusProtocol
 from argus.data.indicator_engine import IndicatorEngine
 from argus.data.service import DataService
 
@@ -36,14 +36,18 @@ class BacktestDataService(DataService):
     a TickEvent and updates the price cache.
 
     Args:
-        event_bus: EventBus for publishing events.
+        event_bus: Event bus for publishing events (either the production
+            async ``EventBus`` used by ReplayHarness or the ``SyncEventBus``
+            used by the BacktestEngine). Typed against ``EventBusProtocol``
+            to accept both without a ``# type: ignore``.
     """
 
-    def __init__(self, event_bus: EventBus) -> None:
+    def __init__(self, event_bus: EventBusProtocol) -> None:
         """Initialize the backtest data service.
 
         Args:
-            event_bus: EventBus for publishing events.
+            event_bus: Event bus for publishing events. See class docstring
+                for the accepted concrete types.
         """
         self._event_bus = event_bus
 

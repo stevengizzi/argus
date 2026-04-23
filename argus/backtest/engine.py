@@ -17,6 +17,7 @@ import argparse
 import asyncio
 import json
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -24,6 +25,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 import pandas as pd
+from dateutil.relativedelta import relativedelta
 
 from argus.analytics.evaluation import (
     MultiObjectiveResult,
@@ -68,11 +70,13 @@ from argus.core.config import (
     RedToGreenConfig,
     RegimeIntelligenceConfig,
     RiskConfig,
+    StrategyRiskLimits,
     VwapReclaimConfig,
     deep_update,
     load_yaml_file,
 )
 from argus.core.events import CandleEvent, OrderFilledEvent
+from argus.core.market_calendar import is_market_holiday
 from argus.core.regime import MarketRegime, RegimeClassifier, RegimeClassifierV2
 from argus.core.risk_manager import RiskManager
 from argus.core.sync_event_bus import SyncEventBus
@@ -92,6 +96,53 @@ from argus.strategies.vwap_reclaim import VwapReclaimStrategy
 logger = logging.getLogger(__name__)
 
 ET = ZoneInfo("America/New_York")
+
+
+def _legacy_max_loss_pct(strategy: BaseStrategy) -> float:
+    """Return ``max_loss_per_trade_pct`` for backtest legacy sizing.
+
+    Used when a strategy emits ``share_count=0`` (the Sprint 24 quality
+    pipeline is not wired into BacktestEngine). Every production strategy
+    carries a ``StrategyConfig`` with a ``StrategyRiskLimits`` submodel,
+    so this is a direct attribute read; 0.01 is retained as a defensive
+    default for any future strategy that does not.
+    """
+    risk_limits = getattr(strategy.config, "risk_limits", None)
+    if isinstance(risk_limits, StrategyRiskLimits):
+        return float(risk_limits.max_loss_per_trade_pct)
+    return 0.01
+
+
+_FALLBACK_AVG_ENTRY_PRICE = 50.0
+
+
+def _weighted_avg_entry_price(trade_objects: list[Any]) -> float:
+    """Volume-weighted average entry price across trades.
+
+    Used by ``_compute_execution_quality_adjustment`` as the denominator
+    for ``slippage_per_share → bps`` conversion. Falls back to a $50
+    midpoint if trade data is empty or malformed — the fallback keeps the
+    calibration step alive even when the trade logger is a stub.
+    """
+    total_notional = 0.0
+    total_shares = 0
+    for trade in trade_objects:
+        entry_price = getattr(trade, "entry_price", None)
+        shares = getattr(trade, "shares", None)
+        if entry_price is None or shares is None:
+            continue
+        try:
+            ep = float(entry_price)
+            sh = int(shares)
+        except (TypeError, ValueError):
+            continue
+        if ep <= 0 or sh <= 0:
+            continue
+        total_notional += ep * sh
+        total_shares += sh
+    if total_shares == 0:
+        return _FALLBACK_AVG_ENTRY_PRICE
+    return total_notional / total_shares
 
 
 @dataclass
@@ -329,8 +380,9 @@ class BacktestEngine:
         )
         await self._broker.connect()
 
-        # Initialize BacktestDataService with SyncEventBus
-        self._data_service = BacktestDataService(self._event_bus)  # type: ignore[arg-type]
+        # Initialize BacktestDataService with SyncEventBus (accepted via
+        # EventBusProtocol — FIX-09 P1-E1-L05).
+        self._data_service = BacktestDataService(self._event_bus)
 
         # Load configs from YAML
         config_dir = Path("config")
@@ -367,11 +419,14 @@ class BacktestEngine:
         self._strategy = self._create_strategy(config_dir)
         self._strategy.allocated_capital = self._config.initial_cash
 
-        # Register config fingerprint for trade-level tracking (DEF-153)
-        if self._config.config_fingerprint and self._order_manager is not None:
-            strategy_id = self._strategy.strategy_id if self._strategy else self._config.strategy_id
+        # Register config fingerprint for trade-level tracking (DEF-153).
+        # Both self._strategy and self._order_manager are non-None at this
+        # point (assigned above; _create_strategy raises on unknown type),
+        # so no defensive None-checks are needed.
+        if self._config.config_fingerprint:
             self._order_manager.register_strategy_fingerprint(
-                strategy_id, self._config.config_fingerprint
+                self._strategy.strategy_id,
+                self._config.config_fingerprint,
             )
 
         # Subscribe engine's candle handler to SyncEventBus
@@ -403,15 +458,7 @@ class BacktestEngine:
             if signal.share_count == 0:
                 risk_per_share = abs(signal.entry_price - signal.stop_price)
                 if risk_per_share > 0:
-                    max_loss_pct = getattr(
-                        getattr(
-                            getattr(self._strategy, "config", None),
-                            "risk_limits",
-                            None,
-                        ),
-                        "max_loss_per_trade_pct",
-                        0.01,
-                    )
+                    max_loss_pct = _legacy_max_loss_pct(self._strategy)
                     shares = int(
                         self._strategy.allocated_capital
                         * max_loss_pct
@@ -469,6 +516,24 @@ class BacktestEngine:
         for df in self._bar_data.values():
             if not df.empty and "trading_date" in df.columns:
                 all_dates.update(df["trading_date"].unique())
+
+        # Defense-in-depth: drop any NYSE holiday dates that slipped into
+        # the cache (Databento EQUS.MINI does not return bars on holidays,
+        # so this is a belt-and-suspenders guard against corrupted or
+        # manually patched caches). FIX-09 P1-E1-L04.
+        holiday_dates: set[date] = set()
+        for candidate in all_dates:
+            is_holiday, name = is_market_holiday(candidate)
+            if is_holiday:
+                holiday_dates.add(candidate)
+                logger.warning(
+                    "Dropping holiday date %s (%s) from trading days — "
+                    "bars present in cache but market was closed.",
+                    candidate,
+                    name,
+                )
+        if holiday_dates:
+            all_dates -= holiday_dates
 
         self._trading_days = sorted(all_dates)
 
@@ -569,10 +634,12 @@ class BacktestEngine:
         if daily_bars.empty:
             return
 
-        # e. Process each bar
-        for _, row in daily_bars.iterrows():
-            symbol: str = row["symbol"]
-            bar_ts = row["timestamp"]
+        # e. Process each bar.
+        # FIX-09 P1-E1-M02: use itertuples (~6× faster than iterrows) to avoid
+        # per-row Series construction. The dispatch semantics are identical.
+        for row in daily_bars.itertuples(index=False):
+            symbol: str = row.symbol
+            bar_ts = row.timestamp
 
             # Normalize timestamp
             if isinstance(bar_ts, pd.Timestamp):
@@ -580,31 +647,35 @@ class BacktestEngine:
             if bar_ts.tzinfo is None:
                 bar_ts = bar_ts.replace(tzinfo=UTC)
 
+            bar_high = float(row.high)
+            bar_low = float(row.low)
+            bar_close = float(row.close)
+
             # i. Advance clock to bar timestamp
             self._clock.set(bar_ts)
 
             # ii. Set broker price (for market order fills)
-            self._broker.set_price(symbol, float(row["close"]))
+            self._broker.set_price(symbol, bar_close)
 
             # iii. Feed bar to data_service (publishes CandleEvent +
             #      IndicatorEvents via SyncEventBus)
             await self._data_service.feed_bar(
                 symbol=symbol,
                 timestamp=bar_ts,
-                open_=float(row["open"]),
-                high=float(row["high"]),
-                low=float(row["low"]),
-                close=float(row["close"]),
-                volume=int(row["volume"]),
+                open_=float(row.open),
+                high=bar_high,
+                low=bar_low,
+                close=bar_close,
+                volume=int(row.volume),
             )
 
             # iv. After event dispatch: check bracket orders against
             #     this bar's OHLC
             await self._check_bracket_orders(
                 symbol=symbol,
-                bar_high=float(row["high"]),
-                bar_low=float(row["low"]),
-                bar_close=float(row["close"]),
+                bar_high=bar_high,
+                bar_low=bar_low,
+                bar_close=bar_close,
                 bar_timestamp=bar_ts,
             )
 
@@ -1018,14 +1089,14 @@ class BacktestEngine:
     def _create_strategy(self, config_dir: Path) -> BaseStrategy:
         """Create strategy instance from config.strategy_type.
 
-        Handles all 7 strategy types:
-        - ORB_BREAKOUT -> OrbBreakoutStrategy
-        - ORB_SCALP -> OrbScalpStrategy
-        - VWAP_RECLAIM -> VwapReclaimStrategy
-        - AFTERNOON_MOMENTUM -> AfternoonMomentumStrategy
-        - RED_TO_GREEN -> RedToGreenStrategy
-        - BULL_FLAG -> PatternBasedStrategy(BullFlagPattern(), ...)
-        - FLAT_TOP_BREAKOUT -> PatternBasedStrategy(FlatTopBreakoutPattern(), ...)
+        Handles all 15 strategy types:
+
+        - 5 standalone: ORB_BREAKOUT, ORB_SCALP, VWAP_RECLAIM,
+          AFTERNOON_MOMENTUM, RED_TO_GREEN.
+        - 10 PatternModule (via ``PatternBasedStrategy``): BULL_FLAG,
+          FLAT_TOP_BREAKOUT, DIP_AND_RIP, HOD_BREAK, ABCD, GAP_AND_GO,
+          PREMARKET_HIGH_BREAK, MICRO_PULLBACK, VWAP_BOUNCE,
+          NARROW_RANGE_BREAKOUT.
 
         Args:
             config_dir: Path to the config directory.
@@ -1034,42 +1105,35 @@ class BacktestEngine:
             Initialized strategy instance.
 
         Raises:
-            ValueError: If strategy_type is not recognized.
+            ValueError: If strategy_type is not in the dispatch table.
         """
-        strategy_type = self._config.strategy_type
+        # Dispatch table keyed by StrategyType. Adding a 16th strategy is a
+        # single entry here plus the corresponding _create_*_strategy().
+        dispatch: dict[StrategyType, Callable[[Path], BaseStrategy]] = {
+            StrategyType.ORB_BREAKOUT: self._create_orb_breakout_strategy,
+            StrategyType.ORB_SCALP: self._create_orb_scalp_strategy,
+            StrategyType.VWAP_RECLAIM: self._create_vwap_reclaim_strategy,
+            StrategyType.AFTERNOON_MOMENTUM: self._create_afternoon_momentum_strategy,
+            StrategyType.RED_TO_GREEN: self._create_red_to_green_strategy,
+            StrategyType.BULL_FLAG: self._create_bull_flag_strategy,
+            StrategyType.FLAT_TOP_BREAKOUT: self._create_flat_top_breakout_strategy,
+            StrategyType.DIP_AND_RIP: self._create_dip_and_rip_strategy,
+            StrategyType.HOD_BREAK: self._create_hod_break_strategy,
+            StrategyType.ABCD: self._create_abcd_strategy,
+            StrategyType.GAP_AND_GO: self._create_gap_and_go_strategy,
+            StrategyType.PREMARKET_HIGH_BREAK: self._create_premarket_high_break_strategy,
+            StrategyType.MICRO_PULLBACK: self._create_micro_pullback_strategy,
+            StrategyType.VWAP_BOUNCE: self._create_vwap_bounce_strategy,
+            StrategyType.NARROW_RANGE_BREAKOUT: self._create_narrow_range_breakout_strategy,
+        }
 
-        if strategy_type == StrategyType.ORB_BREAKOUT:
-            return self._create_orb_breakout_strategy(config_dir)
-        elif strategy_type == StrategyType.ORB_SCALP:
-            return self._create_orb_scalp_strategy(config_dir)
-        elif strategy_type == StrategyType.VWAP_RECLAIM:
-            return self._create_vwap_reclaim_strategy(config_dir)
-        elif strategy_type == StrategyType.AFTERNOON_MOMENTUM:
-            return self._create_afternoon_momentum_strategy(config_dir)
-        elif strategy_type == StrategyType.RED_TO_GREEN:
-            return self._create_red_to_green_strategy(config_dir)
-        elif strategy_type == StrategyType.BULL_FLAG:
-            return self._create_bull_flag_strategy(config_dir)
-        elif strategy_type == StrategyType.FLAT_TOP_BREAKOUT:
-            return self._create_flat_top_breakout_strategy(config_dir)
-        elif strategy_type == StrategyType.DIP_AND_RIP:
-            return self._create_dip_and_rip_strategy(config_dir)
-        elif strategy_type == StrategyType.HOD_BREAK:
-            return self._create_hod_break_strategy(config_dir)
-        elif strategy_type == StrategyType.ABCD:
-            return self._create_abcd_strategy(config_dir)
-        elif strategy_type == StrategyType.GAP_AND_GO:
-            return self._create_gap_and_go_strategy(config_dir)
-        elif strategy_type == StrategyType.PREMARKET_HIGH_BREAK:
-            return self._create_premarket_high_break_strategy(config_dir)
-        elif strategy_type == StrategyType.MICRO_PULLBACK:
-            return self._create_micro_pullback_strategy(config_dir)
-        elif strategy_type == StrategyType.VWAP_BOUNCE:
-            return self._create_vwap_bounce_strategy(config_dir)
-        elif strategy_type == StrategyType.NARROW_RANGE_BREAKOUT:
-            return self._create_narrow_range_breakout_strategy(config_dir)
-        else:
-            raise ValueError(f"Unknown strategy type: {strategy_type}")
+        strategy_type = self._config.strategy_type
+        try:
+            return dispatch[strategy_type](config_dir)
+        except KeyError as exc:
+            raise ValueError(
+                f"Unknown strategy type: {strategy_type}"
+            ) from exc
 
     # --- Strategy factory methods ---
 
@@ -1541,8 +1605,18 @@ class BacktestEngine:
     def _apply_config_overrides(self, config: object) -> object:
         """Apply config_overrides from BacktestEngineConfig to a strategy config.
 
-        Overrides are dot-separated keys mapping to strategy config fields.
-        For example: {"opening_range_minutes": 15} sets config.opening_range_minutes = 15.
+        Keys may be either flat (e.g., ``{"orb_window_minutes": 15}`` to set
+        a top-level field) or dot-separated paths into nested Pydantic
+        submodels (e.g., ``{"risk_limits.max_loss_per_trade_pct": 0.01}``).
+
+        Dot-path semantics: every segment before the leaf MUST resolve to a
+        nested dict on the target config. If any intermediate segment is
+        missing or not a dict, the override is skipped with a WARNING log —
+        the caller's dot-path is honored literally. There is no flat-key
+        fallback on an unresolvable dot-path (FIX-09 P1-E1-M01 fix). A typo
+        like ``{"risk_limit.x": ...}`` (missing the trailing 's') will log
+        and no-op rather than silently routing to a same-name field at the
+        top level.
 
         Args:
             config: The strategy config model to modify.
@@ -1555,7 +1629,6 @@ class BacktestEngine:
 
         config_dict = config.model_dump()  # type: ignore[union-attr]
         for key, value in self._config.config_overrides.items():
-            # Support dot-separated keys for nested config
             parts = key.split(".")
             target = config_dict
             for part in parts[:-1]:
@@ -1566,9 +1639,15 @@ class BacktestEngine:
             else:
                 target[parts[-1]] = value
                 continue
-            # Flat key — set directly if it exists
-            if parts[-1] in config_dict:
-                config_dict[parts[-1]] = value
+            # Dot-path did not resolve. Do NOT fall back to a flat key —
+            # that was the silent mis-routing bug fixed by FIX-09.
+            logger.warning(
+                "config_overrides key %r did not resolve as a dot-path on %s "
+                "— skipping. Dot-path requires every intermediate segment to "
+                "be a nested dict on the target config.",
+                key,
+                config.__class__.__name__,
+            )
 
         return config.__class__(**config_dict)  # type: ignore[return-value]
 
@@ -1774,14 +1853,9 @@ class BacktestEngine:
             verify_zero_cost=False,
         )
 
-        # Load with generous margin for SMA-50 lookback
-        margin_start = date(
-            start_date.year if start_date.month > 3
-            else start_date.year - 1,
-            start_date.month - 3 if start_date.month > 3
-            else start_date.month + 9,
-            1,
-        )
+        # Load with generous margin for SMA-50 lookback: the first of the
+        # month three months before start_date.
+        margin_start = start_date.replace(day=1) - relativedelta(months=3)
 
         data = await feed.load(["SPY"], margin_start, end_date)
 
@@ -1971,6 +2045,7 @@ class BacktestEngine:
         """
         # Get trades from the trade logger
         trades: list[dict[str, object]] = []
+        trade_objects: list[Any] = []
         if self._trade_logger is not None:
             trade_objects = await self._trade_logger.get_trades_by_date_range(
                 result.start_date, result.end_date, result.strategy_id
@@ -2043,7 +2118,7 @@ class BacktestEngine:
         # A positive delta_bps means real slippage exceeds the backtest
         # assumption, so the Sharpe adjustment is negative (penalizes).
         mor.execution_quality_adjustment = self._compute_execution_quality_adjustment(
-            result
+            result, trade_objects
         )
 
         return mor
@@ -2051,6 +2126,7 @@ class BacktestEngine:
     def _compute_execution_quality_adjustment(
         self,
         result: BacktestResult,
+        trade_objects: list[Any] | None = None,
     ) -> float | None:
         """Compute Sharpe adjustment from calibrated vs assumed slippage.
 
@@ -2060,10 +2136,17 @@ class BacktestEngine:
 
         Args:
             result: Completed BacktestResult.
+            trade_objects: Trades from the run (used to volume-weight the
+                slippage-to-bps conversion denominator). Defaults to the
+                $50 midpoint fallback when omitted — callers that don't
+                have trade-level data (e.g., unit tests, ad-hoc CLI) stay
+                on the pre-FIX-09 approximation.
 
         Returns:
             Estimated annualized Sharpe impact, or None.
         """
+        if trade_objects is None:
+            trade_objects = []
         if self._slippage_model is None:
             return None
         if self._slippage_model.confidence == SlippageConfidence.INSUFFICIENT:
@@ -2071,14 +2154,12 @@ class BacktestEngine:
         if result.total_trades == 0 or len(self._trading_days) == 0:
             return None
 
-        # Default slippage assumption in bps (from config)
-        # Approximate: slippage_per_share / avg_entry_price * 10_000
-        # Use result's avg trade P&L to estimate avg entry price range.
-        # Simpler: use slippage_per_share directly with a representative price.
-        # For intraday equities, ~$50 is a reasonable midpoint placeholder.
-        # More accurate: derive from actual trade data if available.
-        # TODO: derive avg_entry_price from actual trade data for higher accuracy
-        avg_entry_price = 50.0  # Conservative midpoint for US equities
+        # Volume-weighted avg entry price from actual trades: the denominator
+        # for slippage-per-share → bps conversion. Falls back to a $50
+        # midpoint if trade data is unavailable (e.g., logger not wired).
+        # FIX-09 P1-E1-L03: removes the $50 hardcode that could be off by
+        # 3× on a real basket (NVDA $900, GME $15).
+        avg_entry_price = _weighted_avg_entry_price(trade_objects)
 
         default_slippage_bps = (
             self._config.slippage_per_share / avg_entry_price * 10_000
@@ -2186,7 +2267,7 @@ class BacktestEngine:
         metadata = {
             "engine_type": "backtest_engine",
             "fill_model": "bar_level_worst_case",
-            "strategy_type": str(self._config.strategy_type),
+            "strategy_type": self._config.strategy_type.value,
             "strategy_id": self._config.strategy_id,
             "start_date": self._config.start_date.isoformat(),
             "end_date": self._config.end_date.isoformat(),

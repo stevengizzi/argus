@@ -33,12 +33,15 @@ from dateutil.relativedelta import relativedelta
 from argus.backtest.config import BacktestConfig, BacktestEngineConfig, StrategyType
 from argus.backtest.engine import BacktestEngine
 from argus.backtest.replay_harness import ReplayHarness
-from argus.backtest.vectorbt_afternoon_momentum import AfternoonSweepConfig
+from argus.backtest.vectorbt_afternoon_momentum import (
+    AfternoonSweepConfig,
+    compute_qualifying_days,
+    load_symbol_data,
+    run_single_symbol_sweep,
+)
 from argus.backtest.vectorbt_orb import SweepConfig, run_sweep
 from argus.backtest.vectorbt_orb_scalp import ScalpSweepConfig
 from argus.backtest.vectorbt_orb_scalp import run_sweep as run_scalp_sweep
-from argus.backtest.vectorbt_red_to_green import R2GSweepConfig
-from argus.backtest.vectorbt_red_to_green import run_sweep as run_r2g_sweep
 from argus.backtest.vectorbt_vwap_reclaim import VwapReclaimSweepConfig
 from argus.backtest.vectorbt_vwap_reclaim import run_sweep as run_vwap_reclaim_sweep
 
@@ -118,20 +121,11 @@ class WalkForwardConfig:
     afternoon_time_stop_bars_list: list[int] = field(
         default_factory=lambda: [15, 30, 45, 60]
     )
-
-    # Red-to-Green parameter grid (used when strategy="red_to_green")
-    r2g_min_gap_down_pct_list: list[float] = field(
-        default_factory=lambda: [0.015, 0.02, 0.03, 0.04]
-    )
-    r2g_level_proximity_pct_list: list[float] = field(
-        default_factory=lambda: [0.002, 0.003, 0.005]
-    )
-    r2g_volume_confirmation_multiplier_list: list[float] = field(
-        default_factory=lambda: [1.0, 1.2, 1.5]
-    )
-    r2g_time_stop_minutes_list: list[int] = field(
-        default_factory=lambda: [15, 20, 30]
-    )
+    # Red-to-Green VectorBT IS path was retired by FIX-09 P1-E2-M03 —
+    # the branch was unreachable via revalidate_strategy.py's
+    # ``_WALK_FORWARD_SUPPORTED`` set. R2G backtesting remains available
+    # via BacktestEngine (scripts/revalidate_strategy.py --strategy red_to_green
+    # runs the engine-only path).
 
     # Output
     output_dir: str = "data/backtest_runs/walk_forward"
@@ -287,9 +281,9 @@ async def optimize_in_sample(
         return await _optimize_in_sample_vwap_reclaim(is_start, is_end, config)
     elif config.strategy == "afternoon_momentum":
         return await _optimize_in_sample_afternoon_momentum(is_start, is_end, config)
-    elif config.strategy == "red_to_green":
-        return await _optimize_in_sample_r2g(is_start, is_end, config)
     else:
+        # R2G walk-forward retired by FIX-09 P1-E2-M03; use BacktestEngine
+        # directly via scripts/revalidate_strategy.py for R2G validation.
         return await _optimize_in_sample_orb(is_start, is_end, config)
 
 
@@ -523,12 +517,6 @@ async def _optimize_in_sample_afternoon_momentum(
     config: WalkForwardConfig,
 ) -> tuple[dict[str, Any], dict[str, float]]:
     """Run VectorBT Afternoon Momentum sweep on IS period."""
-    from argus.backtest.vectorbt_afternoon_momentum import (
-        compute_qualifying_days,
-        load_symbol_data,
-        run_single_symbol_sweep,
-    )
-
     sweep_config = AfternoonSweepConfig(
         data_dir=Path(config.data_dir),
         symbols=config.symbols or [],
@@ -619,82 +607,6 @@ async def _optimize_in_sample_afternoon_momentum(
     return best_params, is_metrics
 
 
-async def _optimize_in_sample_r2g(
-    is_start: date,
-    is_end: date,
-    config: WalkForwardConfig,
-) -> tuple[dict[str, Any], dict[str, float]]:
-    """Run VectorBT Red-to-Green sweep on IS period."""
-    sweep_config = R2GSweepConfig(
-        data_dir=Path(config.data_dir),
-        symbols=config.symbols or [],
-        start_date=is_start,
-        end_date=is_end,
-        output_dir=Path(config.output_dir) / "is_sweeps",
-        min_gap_down_pct_list=config.r2g_min_gap_down_pct_list,
-        level_proximity_pct_list=config.r2g_level_proximity_pct_list,
-        volume_confirmation_multiplier_list=config.r2g_volume_confirmation_multiplier_list,
-        time_stop_minutes_list=config.r2g_time_stop_minutes_list,
-    )
-
-    loop = asyncio.get_running_loop()
-    results_df = await loop.run_in_executor(None, run_r2g_sweep, sweep_config)
-
-    if results_df.empty:
-        raise NoQualifyingParamsError("VectorBT R2G sweep produced no results")
-
-    param_cols = [
-        "min_gap_down_pct",
-        "level_proximity_pct",
-        "volume_confirmation_multiplier",
-        "time_stop_minutes",
-    ]
-
-    aggregated = (
-        results_df.groupby(param_cols)
-        .agg(
-            total_trades=("total_trades", "sum"),
-            sharpe_ratio=("sharpe_ratio", "mean"),
-            win_rate=("win_rate", "mean"),
-            profit_factor=("profit_factor", "mean"),
-            total_return_pct=("total_return_pct", "sum"),
-            max_drawdown_pct=("max_drawdown_pct", "max"),
-        )
-        .reset_index()
-    )
-
-    qualifying = aggregated[aggregated["total_trades"] >= config.min_trades]
-
-    if qualifying.empty:
-        max_trades = aggregated["total_trades"].max() if not aggregated.empty else 0
-        raise NoQualifyingParamsError(
-            f"No parameter set meets min_trades={config.min_trades}. "
-            f"Max trades found: {max_trades}"
-        )
-
-    if config.optimization_metric == "sharpe":
-        metric_col = "sharpe_ratio"
-    else:
-        metric_col = config.optimization_metric
-    best_idx = qualifying[metric_col].idxmax()  # type: ignore[union-attr]
-    best_row = qualifying.loc[best_idx]  # type: ignore[call-overload]
-
-    best_params = {col: best_row[col] for col in param_cols}
-
-    total_pnl_dollars = float(best_row["total_return_pct"]) * config.initial_cash / 100.0  # type: ignore[arg-type]
-
-    is_metrics = {
-        "total_trades": int(best_row["total_trades"]),  # type: ignore[arg-type]
-        "sharpe": float(best_row["sharpe_ratio"]),  # type: ignore[arg-type]
-        "win_rate": float(best_row["win_rate"]),  # type: ignore[arg-type]
-        "profit_factor": float(best_row["profit_factor"]),  # type: ignore[arg-type]
-        "total_pnl": total_pnl_dollars,
-        "max_drawdown": float(best_row["max_drawdown_pct"]),  # type: ignore[arg-type]
-    }
-
-    return best_params, is_metrics
-
-
 async def validate_out_of_sample(
     oos_start: date,
     oos_end: date,
@@ -740,19 +652,22 @@ async def validate_out_of_sample(
         return await _validate_oos_vwap_reclaim(oos_start, oos_end, best_params, config)
     elif config.strategy == "afternoon_momentum":
         return await _validate_oos_afternoon_momentum(oos_start, oos_end, best_params, config)
-    elif config.strategy == "red_to_green":
-        return await _validate_oos_r2g(oos_start, oos_end, best_params, config)
     else:
+        # R2G OOS walk-forward retired by FIX-09 P1-E2-M03; use
+        # BacktestEngine directly via scripts/revalidate_strategy.py.
         return await _validate_oos_orb(oos_start, oos_end, best_params, config)
 
 
-# Strategy name → StrategyType mapping for BacktestEngine OOS path
+# Strategy name → StrategyType mapping for BacktestEngine OOS path.
+# R2G removed (FIX-09 P1-E2-M03): walk_forward.py no longer drives R2G
+# IS optimization, so the OOS BacktestEngine path is also unreachable
+# via this module. R2G backtesting is still exposed through the engine-only
+# path in ``scripts/revalidate_strategy.py``.
 _STRATEGY_TYPE_MAP: dict[str, StrategyType] = {
     "orb": StrategyType.ORB_BREAKOUT,
     "orb_scalp": StrategyType.ORB_SCALP,
     "vwap_reclaim": StrategyType.VWAP_RECLAIM,
     "afternoon_momentum": StrategyType.AFTERNOON_MOMENTUM,
-    "red_to_green": StrategyType.RED_TO_GREEN,
     "bull_flag": StrategyType.BULL_FLAG,
     "flat_top_breakout": StrategyType.FLAT_TOP_BREAKOUT,
 }
@@ -869,15 +784,7 @@ def _build_config_overrides(
             "target_1_r": float(best_params["target_r"]),
             "max_hold_minutes": int(best_params["time_stop_bars"]),
         }
-    elif strategy == "red_to_green":
-        return {
-            "min_gap_down_pct": float(best_params["min_gap_down_pct"]),
-            "level_proximity_pct": float(best_params["level_proximity_pct"]),
-            "volume_confirmation_multiplier": float(
-                best_params["volume_confirmation_multiplier"]
-            ),
-            "time_stop_minutes": int(best_params["time_stop_minutes"]),
-        }
+    # R2G branch retired by FIX-09 P1-E2-M03.
     return dict(best_params)
 
 
@@ -1088,68 +995,6 @@ async def _validate_oos_afternoon_momentum(
         afternoon_volume_multiplier=float(best_params["volume_multiplier"]),
         afternoon_max_hold_minutes=max_hold_minutes,
         afternoon_target_1_r=float(best_params["target_r"]),
-    )
-
-    harness = ReplayHarness(backtest_config)
-    result = await harness.run()
-
-    return {
-        "total_trades": result.total_trades,
-        "win_rate": result.win_rate,
-        "profit_factor": result.profit_factor if result.profit_factor != float("inf") else 0.0,
-        "sharpe": result.sharpe_ratio,
-        "total_pnl": result.final_equity - config.initial_cash,
-        "max_drawdown": result.max_drawdown_pct,
-        "avg_r_multiple": result.avg_r_multiple,
-    }
-
-
-async def _validate_oos_r2g(
-    oos_start: date,
-    oos_end: date,
-    best_params: dict[str, Any],
-    config: WalkForwardConfig,
-) -> dict[str, Any]:
-    """Run Replay Harness for Red-to-Green on OOS period.
-
-    Translates VectorBT R2G param names to production config:
-    - min_gap_down_pct -> red_to_green.min_gap_down_pct
-    - level_proximity_pct -> red_to_green.level_proximity_pct
-    - volume_confirmation_multiplier -> red_to_green.volume_confirmation_multiplier
-    - time_stop_minutes -> red_to_green.time_stop_minutes
-    """
-    time_stop_minutes = int(best_params["time_stop_minutes"])
-
-    config_overrides = {
-        "red_to_green.min_gap_down_pct": float(best_params["min_gap_down_pct"]),
-        "red_to_green.level_proximity_pct": float(best_params["level_proximity_pct"]),
-        "red_to_green.volume_confirmation_multiplier": float(
-            best_params["volume_confirmation_multiplier"]
-        ),
-        "red_to_green.time_stop_minutes": time_stop_minutes,
-    }
-
-    # R2G uses gap-down, so scanner gap threshold is the min_gap_down_pct
-    scanner_gap_pct = float(best_params["min_gap_down_pct"])
-
-    backtest_config = BacktestConfig(
-        data_dir=Path(config.data_dir),
-        output_dir=Path(config.output_dir) / "oos_runs",
-        symbols=config.symbols,
-        start_date=oos_start,
-        end_date=oos_end,
-        strategy_id="strat_red_to_green",
-        strategy_type=StrategyType.RED_TO_GREEN,
-        initial_cash=config.initial_cash,
-        slippage_per_share=config.slippage_per_share,
-        scanner_min_gap_pct=scanner_gap_pct,
-        config_overrides=config_overrides,
-        r2g_min_gap_down_pct=float(best_params["min_gap_down_pct"]),
-        r2g_level_proximity_pct=float(best_params["level_proximity_pct"]),
-        r2g_volume_confirmation_multiplier=float(
-            best_params["volume_confirmation_multiplier"]
-        ),
-        r2g_time_stop_minutes=time_stop_minutes,
     )
 
     harness = ReplayHarness(backtest_config)
@@ -1907,12 +1752,6 @@ async def _evaluate_fixed_params_afternoon_momentum(
     config: WalkForwardConfig,
 ) -> dict[str, float]:
     """Evaluate fixed Afternoon Momentum params on IS period using VectorBT."""
-    from argus.backtest.vectorbt_afternoon_momentum import (
-        compute_qualifying_days,
-        load_symbol_data,
-        run_single_symbol_sweep,
-    )
-
     sweep_config = AfternoonSweepConfig(
         data_dir=Path(config.data_dir),
         symbols=config.symbols or [],

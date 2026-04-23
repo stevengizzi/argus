@@ -5,6 +5,18 @@
 **Scope:** Import-graph liveness analysis of 8 large legacy files in `argus/backtest/` (total ~12,000 LOC) to determine which can be safely deleted post-BacktestEngine (Sprint 27) + ExperimentRunner (Sprint 32) absorption.
 **Files examined:** 8 deep / 0 skimmed — grep-heavy, not deep-read.
 
+> **FIX-09-backtest-engine resolution summary (2026-04-22):**
+>
+> | Finding | Status |
+> |---------|--------|
+> | M1 (P1-E2-M01) — `vectorbt_pattern.py` effectively dead | **RESOLVED FIX-09-backtest-engine** (file + `test_vectorbt_pattern.py` deleted; `tests/test_runtime_wiring.py` migrated to `argus/strategies/patterns/factory.py::build_pattern_from_config` + per-pattern YAML loaders) |
+> | M2 (P1-E2-M02) — HTML `report_generator.py` likely dead | **RESOLVED FIX-09-backtest-engine** (operator confirmed retirement 2026-04-22; file + `test_report_generator.py` deleted; CLAUDE.md `python -m argus.backtest.report_generator` line removed) |
+> | M3 (P1-E2-M03) — R2G walk-forward branch unreachable | **RESOLVED FIX-09-backtest-engine** (`_optimize_in_sample_r2g`, `_validate_oos_r2g`, R2G branches in 3 dispatch sites, `r2g_*` config fields, and `R2GSweepConfig`/`run_r2g_sweep` imports excised from `walk_forward.py`; BacktestEngine OOS path for R2G also removed — R2G backtesting remains available through `scripts/revalidate_strategy.py --strategy red_to_green`'s engine-only path) |
+> | M4 (P1-E2-M04) — `vectorbt_red_to_green.py` conditional retirement | **RESOLVED FIX-09-backtest-engine** (file + `test_vectorbt_red_to_green.py` deleted after M1 + M3 landed) |
+> | M5 (P1-E2-M05) — `walk_forward.py` VectorBT→BacktestEngine migration | **RESOLVED FIX-09-backtest-engine** (opened **DEF-187**: Sprint 33+ validation-tooling sprint to retire walk_forward.py + 4 remaining vectorbt_*.py files) |
+> | C2 (P1-E2-C02) — lazy `vectorbt_afternoon_momentum` imports | **RESOLVED FIX-09-backtest-engine** (two lazy imports removed; top-level import at line 36 satisfies both call sites; `tests/backtest/test_walk_forward.py::test_optimize_in_sample_afternoon_momentum_returns_best` updated to patch at the walk_forward lookup site) |
+> | L3 (P1-E2-L03) — `test_vectorbt_data_loading.py` cleanup bundle | **RESOLVED-VERIFIED FIX-09-backtest-engine** (test still live — imports `load_symbol_data` from `vectorbt_orb.py` which remains; obsolete only once DEF-187 lands) |
+
 ---
 
 ## Per-File Verdict Table

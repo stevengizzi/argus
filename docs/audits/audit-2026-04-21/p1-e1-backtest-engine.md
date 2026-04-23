@@ -5,6 +5,31 @@
 **Scope:** Read-only audit of `argus/backtest/engine.py` (2,389 LOC) and its direct dependencies — the Sprint 27 BacktestEngine pipeline that backs walk-forward OOS and the Sprint 32 ExperimentRunner pre-filter.
 **Files examined:** 5 deep / 5 skimmed.
 
+> **FIX-09-backtest-engine resolution summary (2026-04-22):**
+>
+> All P1-E1 findings resolved. The original finding descriptions are
+> retained in the tables below for audit history. Resolution details:
+>
+> | Finding | Status |
+> |---------|--------|
+> | M1 (P1-E1-M01) — `_apply_config_overrides` flat-key mis-routing | **RESOLVED FIX-09-backtest-engine** (option b: dropped flat-key fallback + added WARNING log; regression test `test_config_overrides_unresolvable_dotpath_does_not_flat_fallback`) |
+> | M2 (P1-E1-M02) — `iterrows` in bar dispatch | **RESOLVED FIX-09-backtest-engine** (replaced with `itertuples(index=False)`; benchmark ~87% faster, well above the 15% gate) |
+> | M3 (P1-E1-M03) — `SimulatedBroker._pending_brackets` 5 call-sites | **RESOLVED FIX-09-backtest-engine** (partial — deferred to DEF-186 with F4 + F20 remainder) |
+> | M4 (P1-E1-M04) — `self._strategy._pattern` private access | **RESOLVED FIX-09-backtest-engine** (partial — deferred to DEF-186 with F3 + F20 remainder) |
+> | M5 (P1-E1-M05) — docstring stale | **RESOLVED FIX-09-backtest-engine** (folded into M1 fix — docstring rewritten with nested example + dot-path contract) |
+> | L1 (P1-E1-L01) — unreachable `else` in fingerprint registration | **RESOLVED FIX-09-backtest-engine** |
+> | L2 (P1-E1-L02) — `margin_start` inline conditional | **RESOLVED FIX-09-backtest-engine** (`relativedelta(months=3)`) |
+> | L3 (P1-E1-L03) — hardcoded `avg_entry_price = 50.0` | **RESOLVED FIX-09-backtest-engine** (`_weighted_avg_entry_price` derives volume-weighted avg from trade log; $50 kept as fallback for empty-trade case) |
+> | L4 (P1-E1-L04) — no holiday filter in `_load_data` | **RESOLVED FIX-09-backtest-engine** (regression test `test_load_data_drops_holiday_dates`) |
+> | L5 (P1-E1-L05) — `BacktestDataService` `# type: ignore[arg-type]` | **RESOLVED FIX-09-backtest-engine** (added `EventBusProtocol` to `argus/core/protocols.py`, retyped `BacktestDataService.__init__`, dropped 1 of 4 `# type: ignore`s; remaining 3 in RiskManager + OrderManager sites deferred to DEF-186) |
+> | L6 (P1-E1-L06) — `data_fetcher.py` Alpaca deps | **RESOLVED-VERIFIED FIX-09-backtest-engine** (cross-referenced to DEF-178 + DEF-183 Alpaca retirement cluster) |
+> | L7 (P1-E1-L07) — `ScannerSimulator` redundant `trading_date` | **RESOLVED FIX-09-backtest-engine** (prefer `trading_date` column from `HistoricalDataFeed`; re-derivation fallback retained for test frames) |
+> | C1 (P1-E1-C01) — `_create_strategy` docstring "7 types" | **RESOLVED FIX-09-backtest-engine** (updated to 15 types with 5 standalone + 10 PatternModule breakdown) |
+> | C2 (P1-E1-C02) — long `if/elif` chain | **RESOLVED FIX-09-backtest-engine** (dispatch dict) |
+> | C3 (P1-E1-C03) — `str(StrategyType)` vs `.value` | **RESOLVED FIX-09-backtest-engine** |
+> | C4 (P1-E1-C04) — nested `getattr` legacy sizing | **RESOLVED FIX-09-backtest-engine** (`_legacy_max_loss_pct` helper with `isinstance` narrowing on `StrategyRiskLimits`) |
+> | C5 (P1-E1-C05) — `BacktestConfig` strategy-specific field sprawl | **RESOLVED-VERIFIED FIX-09-backtest-engine** (observation correct; retirement cross-referenced to DEF-187) |
+
 ---
 
 ## Files Covered

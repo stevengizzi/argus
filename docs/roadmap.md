@@ -357,8 +357,8 @@ API auth 401 for unauthenticated requests (DEC-351). Close-position endpoint rou
 - **PatternBasedStrategy** (`argus/strategies/pattern_strategy.py`): Generic wrapper turning any PatternModule into a full BaseStrategy.
 - **BullFlagPattern** (`argus/strategies/patterns/bull_flag.py`): Pole+flag+breakout continuation. Score: 30/30/25/15 weighting.
 - **FlatTopBreakoutPattern** (`argus/strategies/patterns/flat_top_breakout.py`): Resistance cluster breakout. Score: 30/30/25/15 weighting.
-- **VectorBT R2G** (`argus/backtest/vectorbt_red_to_green.py`): Dedicated R2G backtester.
-- **PatternBacktester** (`argus/backtest/vectorbt_pattern.py`): Generic sliding-window backtester for any PatternModule.
+- **VectorBT R2G** (`argus/backtest/vectorbt_red_to_green.py`): Dedicated R2G backtester. *(Retired FIX-09 2026-04-22 — R2G backtesting via BacktestEngine through `scripts/revalidate_strategy.py`.)*
+- **PatternBacktester** (`argus/backtest/vectorbt_pattern.py`): Generic sliding-window backtester for any PatternModule. *(Retired FIX-09 2026-04-22 — superseded by BacktestEngine + ExperimentRunner via the factory in `argus/strategies/patterns/factory.py::build_pattern_from_config`.)*
 - **Integration:** All 3 strategies wired into main.py. Strategy spec sheets created. UI cards added to Pattern Library.
 - **Tests:** 119 new (110 pytest + 9 Vitest). Total: 2,925 pytest + 620 Vitest = 3,545.
 - **13 sessions** (S1–S10, S10f, micro-fix, cleanup). All review verdicts CLEAR.
@@ -513,7 +513,7 @@ Reconciliation redesign with broker-confirmed positions (DEC-369). Overflow rout
 **Delivered:**
 - **Dip-and-Rip**, **HOD Break**, **Gap-and-Go**, **ABCD**, **Pre-Market High Break** (stretch scope delivered) pattern modules. All implement PatternModule ABC.
 - **PatternParam** frozen dataclass (DEF-088 resolved) — `get_default_params()` returns `list[PatternParam]` with type, range, step, description, category. Bull Flag + Flat-Top Breakout retrofitted.
-- **PatternBacktester** grid generation from PatternParam metadata (replaced ±20%/±40% variations).
+- **PatternBacktester** grid generation from PatternParam metadata (replaced ±20%/±40% variations). *(PatternBacktester itself retired FIX-09 2026-04-22; grid metadata still drives ExperimentRunner sweeps.)*
 - `set_reference_data()` hook + `initialize_reference_data()` on PatternBasedStrategy for prior close / PM context.
 - Quality Engine integration automatic via `share_count=0` pipeline. Counterfactual tracking automatic.
 - **No UI changes** (frontend locked for sprint).
@@ -679,7 +679,7 @@ Pre-sprint discovery captured in `docs/sprints/post-31.9-component-ownership/DIS
 - **Pydantic config alignment:** 28 missing detection param fields across 6 pattern configs. 7 default value discrepancies corrected (constructor truth over spec). Cross-validation tests.
 - **Generic pattern factory** (`strategies/patterns/factory.py`): `build_pattern_from_config()` with PatternParam introspection, `compute_parameter_fingerprint()` SHA-256, `extract_detection_params()`. No hardcoded dispatch.
 - **Runtime wiring:** All 7 PatternModule patterns construct via factory in main.py. DEF-124 resolved.
-- **PatternBacktester extension:** `_create_pattern_by_name()` supports all 7 patterns via factory. DEF-121 resolved.
+- **PatternBacktester extension:** `_create_pattern_by_name()` supports all 7 patterns via factory. DEF-121 resolved. *(PatternBacktester retired FIX-09 2026-04-22; the factory in `argus/strategies/patterns/factory.py::build_pattern_from_config` is the canonical construction path.)*
 - **ExperimentStore:** SQLite `data/experiments.db`, 3 tables, 90-day retention. DEC-345 pattern.
 - **VariantSpawner:** Reads `config/experiments.yaml`, deduplicates by fingerprint, registers shadow variants with Orchestrator.
 - **ExperimentRunner (backtest pre-filter):** Grid generation from PatternParam metadata, BacktestEngine pre-filter per grid point. Supports bull_flag + flat_top_breakout (2 of 7) — DEF-134 tracks remaining 5.

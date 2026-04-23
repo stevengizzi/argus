@@ -228,6 +228,10 @@ class ScannerSimulator:
     ) -> dict[str, dict[date, dict[str, float]]]:
         """Extract first open and last close for each symbol per trading day.
 
+        FIX-09 P1-E1-L07: prefer the ``trading_date`` column that
+        ``HistoricalDataFeed.load()`` attaches (ET-localized by the feed).
+        If a caller passes a frame without it, we re-derive as a fallback.
+
         Returns:
             Dict of symbol -> {date -> {"first_open": float, "last_close": float}}
         """
@@ -239,18 +243,19 @@ class ScannerSimulator:
 
             daily_prices[symbol] = {}
 
-            # Ensure timestamp is datetime
-            df = df.copy()
-            if not pd.api.types.is_datetime64_any_dtype(df["timestamp"]):
-                df["timestamp"] = pd.to_datetime(df["timestamp"])
+            if "trading_date" not in df.columns:
+                # Fallback for frames that didn't pass through
+                # HistoricalDataFeed (tests, manual bar assembly).
+                df = df.copy()
+                if not pd.api.types.is_datetime64_any_dtype(df["timestamp"]):
+                    df["timestamp"] = pd.to_datetime(df["timestamp"])
+                if df["timestamp"].dt.tz is None:
+                    df["timestamp"] = df["timestamp"].dt.tz_localize("UTC")
+                df["trading_date"] = (
+                    df["timestamp"].dt.tz_convert(ET).dt.date
+                )
 
-            # Convert to ET for trading day extraction
-            if df["timestamp"].dt.tz is None:
-                df["timestamp"] = df["timestamp"].dt.tz_localize("UTC")
-            df["timestamp_et"] = df["timestamp"].dt.tz_convert(ET)
-            df["trading_date"] = df["timestamp_et"].dt.date
-
-            # Group by trading date
+            # Group by trading date (authoritative column).
             for td_key, group in df.groupby("trading_date"):
                 if len(group) == 0:
                     continue

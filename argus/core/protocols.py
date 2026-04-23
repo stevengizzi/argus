@@ -17,10 +17,12 @@ additive type-safety scope expansion into core/.
 
 from __future__ import annotations
 
+from collections.abc import Callable, Coroutine
 from datetime import datetime
-from typing import TYPE_CHECKING, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
+    from argus.core.events import Event
     from argus.intelligence.counterfactual import CounterfactualPosition
     from argus.strategies.patterns.base import CandleBar
 
@@ -51,6 +53,36 @@ class CandleStoreProtocol(Protocol):
 
 
 @runtime_checkable
+class EventBusProtocol(Protocol):
+    """Structural interface shared by ``EventBus`` and ``SyncEventBus``.
+
+    Backtest components (``BacktestDataService``, ``BacktestEngine``) accept
+    either the production async ``EventBus`` or the ``SyncEventBus`` used by
+    the sprint-27 BacktestEngine path. Before this Protocol, call sites
+    carried ``# type: ignore[arg-type]`` comments because the two concrete
+    classes share no ancestor — even though both expose the same minimum
+    ``subscribe`` + ``publish`` surface. FIX-09 P1-E1-L05 formalizes that
+    shared surface so Pylance sees a real interface.
+
+    Note: only ``BacktestDataService`` was retyped against this Protocol
+    during FIX-09 (execution-layer sites outside FIX-09 scope remain on
+    ``# type: ignore`` and are tracked in DEF-186).
+    """
+
+    def subscribe(
+        self,
+        event_type: type[Event],
+        handler: Callable[[Any], Coroutine[Any, Any, None]],
+    ) -> None:
+        """Register ``handler`` for events of ``event_type``."""
+        ...
+
+    async def publish(self, event: Event) -> None:
+        """Publish ``event`` to all subscribers of its type."""
+        ...
+
+
+@runtime_checkable
 class CounterfactualStoreProtocol(Protocol):
     """Write surface of ``CounterfactualStore`` for fire-and-forget callers.
 
@@ -72,4 +104,5 @@ class CounterfactualStoreProtocol(Protocol):
 __all__ = [
     "CandleStoreProtocol",
     "CounterfactualStoreProtocol",
+    "EventBusProtocol",
 ]

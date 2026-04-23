@@ -269,6 +269,69 @@ async def test_config_overrides_applied(tmp_path: Path) -> None:
         await engine._teardown()
 
 
+@pytest.mark.asyncio
+async def test_config_overrides_unresolvable_dotpath_does_not_flat_fallback(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Regression for FIX-09 P1-E1-M01: an unresolvable dot-path MUST NOT
+    silently route its leaf name to a same-named top-level field.
+
+    Pre-fix, ``{"nonexistent.orb_window_minutes": 99}`` would break on the
+    missing intermediate segment, then fall back to a flat-key set and
+    mutate ``config.orb_window_minutes``. Post-fix, the dot-path is honored
+    literally: it does not resolve, so the override is skipped with a
+    WARNING log.
+    """
+    config = _make_config(
+        tmp_path, StrategyType.ORB_BREAKOUT, "strat_orb_breakout"
+    )
+    config.config_overrides = {"nonexistent.orb_window_minutes": 99}
+    engine = BacktestEngine(config)
+    with caplog.at_level(logging.WARNING, logger="argus.backtest.engine"):
+        await engine._setup()
+    try:
+        assert isinstance(engine._strategy, OrbBreakoutStrategy)
+        # The override value (99) MUST NOT have landed on the top-level
+        # field. (The exact non-99 value depends on whether the YAML config
+        # is loaded or the Pydantic default (15) is used — either way,
+        # the override was correctly ignored.)
+        assert engine._strategy._config.orb_window_minutes != 99
+        # And the skip MUST be visible in the log.
+        assert any(
+            "did not resolve as a dot-path" in rec.message
+            and "nonexistent.orb_window_minutes" in rec.message
+            for rec in caplog.records
+        )
+    finally:
+        await engine._teardown()
+
+
+@pytest.mark.asyncio
+async def test_config_overrides_nested_dotpath_still_resolves(
+    tmp_path: Path,
+) -> None:
+    """Regression for FIX-09 P1-E1-M01: legitimate dot-paths into real nested
+    submodels MUST still resolve (the nested case is orthogonal to the
+    flat-key-fallback removal).
+    """
+    config = _make_config(
+        tmp_path, StrategyType.ORB_BREAKOUT, "strat_orb_breakout"
+    )
+    config.config_overrides = {
+        "risk_limits.max_loss_per_trade_pct": 0.007,
+    }
+    engine = BacktestEngine(config)
+    await engine._setup()
+    try:
+        assert isinstance(engine._strategy, OrbBreakoutStrategy)
+        assert (
+            engine._strategy._config.risk_limits.max_loss_per_trade_pct
+            == 0.007
+        )
+    finally:
+        await engine._teardown()
+
+
 # ---------------------------------------------------------------------------
 # Sprint 27 Session 4: Day loop + fill model tests
 # ---------------------------------------------------------------------------

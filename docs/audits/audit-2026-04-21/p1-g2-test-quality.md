@@ -6,6 +6,13 @@
 
 Where P1-G1 answered "does it cover the path?", this session answers "is the test itself any good?" Findings are confirmations/refinements of G1 or net-new quality flags.
 
+> **FIX-09-backtest-engine resolution summary (2026-04-22) — backtest-related P1-G2 findings only:**
+>
+> | Finding | Status |
+> |---------|--------|
+> | M2 (P1-G2-M02) — `test_divergence_documented` asserts nothing | **RESOLVED FIX-09-backtest-engine** (replaced `assert True` with structural `isinstance(BacktestEngine, type)` + `isinstance(ReplayHarness, type)` assertion — behavioral divergence between engines is documented in `.claude/rules/backtesting.md` and exercised by the functional-equivalence tests in the same file) |
+> | M3 (P1-G2-M03) — `test_speed_benchmark` tautological + flaky | **RESOLVED FIX-09-backtest-engine** (deleted; replaced with `test_backtest_and_replay_produce_equivalent_results` — same-sign P&L + ≤20% trade-count divergence on identical mocked fixtures; mirrors the existing `test_equivalence_*` pattern in the same file) |
+
 ---
 
 ## CRITICAL Findings

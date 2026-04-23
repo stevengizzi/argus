@@ -1080,17 +1080,21 @@ async def test_optimize_in_sample_afternoon_momentum_returns_best():
     # Mock load_symbol_data to return a non-empty DataFrame
     mock_df = pd.DataFrame({"timestamp": [1, 2, 3], "close": [100.0, 101.0, 102.0]})
 
+    # Patch at the lookup site in walk_forward.py. FIX-09 P1-E2-C02
+    # eliminated the lazy in-function imports, so the helpers are now
+    # bound at walk_forward import time — patching the source module
+    # would no longer rebind these references.
     with (
         patch(
-            "argus.backtest.vectorbt_afternoon_momentum.load_symbol_data",
+            "argus.backtest.walk_forward.load_symbol_data",
             return_value=mock_df,
         ),
         patch(
-            "argus.backtest.vectorbt_afternoon_momentum.compute_qualifying_days",
+            "argus.backtest.walk_forward.compute_qualifying_days",
             return_value={date(2025, 3, 15)},
         ),
         patch(
-            "argus.backtest.vectorbt_afternoon_momentum.run_single_symbol_sweep",
+            "argus.backtest.walk_forward.run_single_symbol_sweep",
             return_value=mock_results,
         ),
     ):

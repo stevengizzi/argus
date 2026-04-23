@@ -126,23 +126,29 @@ def test_pattern_strategy_carries_fingerprint(pattern_name: str, config: object)
 
 
 # ---------------------------------------------------------------------------
-# Test 3: _create_pattern_by_name supports all 7 patterns (DEF-121 resolved)
+# Test 3: build_pattern_from_config supports all 7 patterns (DEF-121 resolved)
+# FIX-09 P1-E2-M01: migrated from the now-retired
+# ``argus.backtest.vectorbt_pattern._create_pattern_by_name`` helper to
+# the canonical factory in ``argus.strategies.patterns.factory``.
 # ---------------------------------------------------------------------------
 
 @pytest.mark.parametrize("pattern_name", list(_YAML_LOADERS.keys()))
-def test_create_pattern_by_name_all_7(pattern_name: str) -> None:
-    from argus.backtest.vectorbt_pattern import _create_pattern_by_name
-
+def test_build_pattern_from_config_all_7(pattern_name: str) -> None:
     yaml_path = _CONFIG_DIR / f"{pattern_name}.yaml"
     if not yaml_path.exists():
         pytest.skip(f"Config file not found: {yaml_path}")
 
-    pattern = _create_pattern_by_name(pattern_name, yaml_path)
+    loader = _YAML_LOADERS[pattern_name]
+    config = loader(yaml_path)
+    pattern = build_pattern_from_config(config, pattern_name)
     assert isinstance(pattern, PatternModule)
 
 
 # ---------------------------------------------------------------------------
-# Test 4: _load_pattern_config maps all 7 names to correct config types
+# Test 4: Per-pattern YAML loader returns the correct config type
+# FIX-09 P1-E2-M01: migrated from the now-retired
+# ``argus.backtest.vectorbt_pattern._load_pattern_config`` to the
+# canonical per-pattern ``load_*_config`` functions in argus.core.config.
 # ---------------------------------------------------------------------------
 
 _EXPECTED_CONFIG_TYPES = {
@@ -157,16 +163,15 @@ _EXPECTED_CONFIG_TYPES = {
 
 
 @pytest.mark.parametrize("pattern_name,expected_type", list(_EXPECTED_CONFIG_TYPES.items()))
-def test_load_pattern_config_returns_correct_type(
+def test_yaml_loader_returns_correct_type(
     pattern_name: str, expected_type: type
 ) -> None:
-    from argus.backtest.vectorbt_pattern import _load_pattern_config
-
     yaml_path = _CONFIG_DIR / f"{pattern_name}.yaml"
     if not yaml_path.exists():
         pytest.skip(f"Config file not found: {yaml_path}")
 
-    config = _load_pattern_config(pattern_name, yaml_path)
+    loader = _YAML_LOADERS[pattern_name]
+    config = loader(yaml_path)
     assert isinstance(config, expected_type)
 
 
@@ -269,14 +274,15 @@ def test_fingerprint_sensitive_to_detection_param_change() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Test 9: Unknown pattern name raises ValueError in _create_pattern_by_name
+# Test 9: Unknown pattern name raises ValueError in the canonical factory
+# FIX-09 P1-E2-M01: migrated from the now-retired
+# ``argus.backtest.vectorbt_pattern._create_pattern_by_name`` to the
+# canonical ``get_pattern_class`` in ``argus.strategies.patterns.factory``.
 # ---------------------------------------------------------------------------
 
-def test_create_pattern_by_name_unknown_raises() -> None:
-    from argus.backtest.vectorbt_pattern import _create_pattern_by_name
-
-    with pytest.raises(ValueError, match="Unknown pattern"):
-        _create_pattern_by_name("nonexistent_pattern", _CONFIG_DIR / "bull_flag.yaml")
+def test_get_pattern_class_unknown_raises() -> None:
+    with pytest.raises(ValueError):
+        get_pattern_class("nonexistent_pattern")
 
 
 # ---------------------------------------------------------------------------
